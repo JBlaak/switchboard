@@ -31,13 +31,13 @@ function draw(ctx) {
   // lightened, the background is light: ~18:1 under the labels, and no per-label
   // plates or bands needed to rescue it.
   const gradient = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
-  gradient.addColorStop(0, '#f4f5fa');
-  gradient.addColorStop(1, '#e4e7f2');
+  gradient.addColorStop(0, '#f5f7f6');
+  gradient.addColorStop(1, '#e6ebe9');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
   // Subtle grid dots
-  ctx.fillStyle = 'rgba(40, 44, 80, 0.05)';
+  ctx.fillStyle = 'rgba(20, 40, 34, 0.05)';
   for (let x = 20; x < WIDTH; x += 20) {
     for (let y = 20; y < HEIGHT; y += 20) {
       ctx.beginPath();
@@ -47,7 +47,7 @@ function draw(ctx) {
   }
 
   // Arrow from app icon to Applications
-  ctx.strokeStyle = 'rgba(108, 116, 235, 0.55)';
+  ctx.strokeStyle = 'rgba(47, 143, 116, 0.75)';
   ctx.lineWidth = 2;
   ctx.setLineDash([8, 6]);
   ctx.beginPath();
@@ -57,7 +57,7 @@ function draw(ctx) {
 
   // Arrowhead
   ctx.setLineDash([]);
-  ctx.fillStyle = 'rgba(108, 116, 235, 0.55)';
+  ctx.fillStyle = 'rgba(47, 143, 116, 0.75)';
   ctx.beginPath();
   ctx.moveTo(410, HEIGHT / 2 - 28);
   ctx.lineTo(420, HEIGHT / 2 - 20);
@@ -66,16 +66,16 @@ function draw(ctx) {
   ctx.fill();
 
   // "Drag to install" text
-  ctx.fillStyle = 'rgba(60, 64, 90, 0.65)';
+  ctx.fillStyle = 'rgba(30, 52, 45, 0.7)';
   ctx.font = '13px -apple-system, "Helvetica Neue", sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('Drag to install', WIDTH / 2, HEIGHT / 2 + 15);
 
   // Bottom border accent
   const accentGradient = ctx.createLinearGradient(0, HEIGHT - 2, WIDTH, HEIGHT - 2);
-  accentGradient.addColorStop(0, 'rgba(107, 33, 168, 0.5)');
-  accentGradient.addColorStop(0.5, 'rgba(128, 136, 255, 0.5)');
-  accentGradient.addColorStop(1, 'rgba(13, 148, 136, 0.5)');
+  accentGradient.addColorStop(0, 'rgba(46, 182, 125, 0.75)');
+  accentGradient.addColorStop(0.5, 'rgba(105, 226, 191, 0.75)');
+  accentGradient.addColorStop(1, 'rgba(54, 197, 240, 0.75)');
   ctx.fillStyle = accentGradient;
   ctx.fillRect(0, HEIGHT - 2, WIDTH, 2);
 }

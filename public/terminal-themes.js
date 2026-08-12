@@ -1,10 +1,13 @@
 // --- Terminal themes ---
 const TERMINAL_THEMES = {
+  // The house theme. Background and foreground match --sb-bg-base and --sb-text so the
+  // terminal reads as part of the app rather than a panel dropped into it, and the ANSI
+  // ramp is built from the same brand palette (see :root in style.css).
   switchboard: {
     label: 'Switchboard',
-    background: '#1a1a2e', foreground: '#e0e0e0', cursor: '#e94560', selectionBackground: '#3a3a5e',
-    black: '#1a1a2e', red: '#e94560', green: '#0dff00', yellow: '#f5a623', blue: '#7b68ee', magenta: '#c678dd', cyan: '#56b6c2', white: '#c5c8c6',
-    brightBlack: '#555568', brightRed: '#ff6b81', brightGreen: '#69ff69', brightYellow: '#ffd93d', brightBlue: '#8fa8ff', brightMagenta: '#d19afc', brightCyan: '#7ee8e8', brightWhite: '#eaeaea',
+    background: '#101414', foreground: '#d3d4d5', cursor: '#69e2bf', selectionBackground: '#1f4a3e',
+    black: '#0e1713', red: '#e01e5a', green: '#3ec78d', yellow: '#ecb22e', blue: '#36c5f0', magenta: '#c08ce0', cyan: '#69e2bf', white: '#c6c7c8',
+    brightBlack: '#656b6d', brightRed: '#ff5c85', brightGreen: '#5fe0a8', brightYellow: '#ffcc5c', brightBlue: '#6fd9f7', brightMagenta: '#d6a8f0', brightCyan: '#8aecd0', brightWhite: '#f2f3f3',
   },
   ghostty: {
     label: 'Ghostty',
