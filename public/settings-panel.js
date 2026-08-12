@@ -22,6 +22,10 @@
     } else {
       placeholder.style.display = '';
     }
+    // Terminals had no layout box while the panel covered them, so anything that
+    // changed their metrics in the meantime (font size, line height) could not fit
+    // itself and would leave output running off the right edge until the next resize.
+    if (typeof window._refitOpenTerminals === 'function') window._refitOpenTerminals();
   }
 
   async function openSettingsViewer(scope, projectPath) {
@@ -74,6 +78,9 @@
     const themeValue = fieldValue('terminalTheme', 'switchboard');
     const mcpEmulationValue = fieldValue('mcpEmulation', true);
     const shellProfileValue = fieldValue('shellProfile', 'auto');
+    const fontFamilyValue = fieldValue('terminalFontFamily', '');
+    const fontSizeValue = fieldValue('terminalFontSize', DEFAULT_TERMINAL_FONT_SIZE);
+    const lineHeightValue = fieldValue('terminalLineHeight', DEFAULT_TERMINAL_LINE_HEIGHT);
 
     // Discover available shell profiles
     let shellProfiles = [];
@@ -191,6 +198,37 @@
 
         <div class="settings-field">
           <div class="settings-field-info">
+            <span class="settings-label">Terminal Font</span>
+            <div class="settings-description">Font family for terminal sessions. Leave empty for the default.<span id="sv-font-warning" class="settings-warning"></span></div>
+          </div>
+          <div class="settings-field-control">
+            <!-- value/placeholder set as properties below: font stacks contain quotes, which escapeHtml leaves alone -->
+            <input type="text" class="settings-input" id="sv-font-family" style="width:220px">
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <div class="settings-field-info">
+            <span class="settings-label">Terminal Font Size</span>
+            <div class="settings-description">Font size in pixels for terminal sessions</div>
+          </div>
+          <div class="settings-field-control">
+            <input type="number" class="settings-input settings-input-compact" id="sv-font-size" min="6" max="32" step="1" value="${fontSizeValue}">
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <div class="settings-field-info">
+            <span class="settings-label">Terminal Line Height</span>
+            <div class="settings-description">Line spacing as a multiple of the font size (1 = tightest)</div>
+          </div>
+          <div class="settings-field-control">
+            <input type="number" class="settings-input settings-input-compact" id="sv-line-height" min="1" max="3" step="0.05" value="${lineHeightValue}">
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <div class="settings-field-info">
             <span class="settings-label">Shell Profile</span>
             <div class="settings-description">Shell used for terminal and Claude sessions. Changes take effect for new sessions only.</div>
           </div>
@@ -256,6 +294,23 @@
     </div>
   `;
 
+    const fontFamilyInput = settingsViewerBody.querySelector('#sv-font-family');
+    if (fontFamilyInput) {
+      fontFamilyInput.value = fontFamilyValue;
+      fontFamilyInput.placeholder = DEFAULT_TERMINAL_FONT_FAMILY;
+      // Without this the fallback is invisible: naming a font you don't have installed
+      // looks identical to the setting not working at all.
+      const fontWarning = settingsViewerBody.querySelector('#sv-font-warning');
+      const checkFontAvailable = () => {
+        const name = fontFamilyInput.value.trim();
+        fontWarning.textContent = !name || isFontAvailable(name)
+          ? ''
+          : ` — “${name}” isn't installed; falling back to the default.`;
+      };
+      fontFamilyInput.addEventListener('input', checkFontAvailable);
+      checkFontAvailable();
+    }
+
     // Use-global checkboxes toggle field disabled state
     settingsViewerBody.querySelectorAll('.use-global-cb').forEach(cb => {
       cb.addEventListener('change', () => {
@@ -305,6 +360,15 @@
         settings.terminalTheme = settingsViewerBody.querySelector('#sv-terminal-theme').value || 'switchboard';
         settings.mcpEmulation = settingsViewerBody.querySelector('#sv-mcp-emulation').checked;
         settings.shellProfile = settingsViewerBody.querySelector('#sv-shell-profile').value || 'auto';
+        // Store the family verbatim (empty = follow the default stack, even if that
+        // stack later changes) but store size/line height clamped to what xterm accepts.
+        const font = normalizeTerminalFont({
+          fontSize: settingsViewerBody.querySelector('#sv-font-size').value,
+          lineHeight: settingsViewerBody.querySelector('#sv-line-height').value,
+        });
+        settings.terminalFontFamily = settingsViewerBody.querySelector('#sv-font-family').value.trim();
+        settings.terminalFontSize = font.fontSize;
+        settings.terminalLineHeight = font.lineHeight;
       }
 
       // Merge form values into existing settings to preserve keys not managed by the form
@@ -325,6 +389,13 @@
         }
         if (settings.terminalTheme && typeof window._applyTerminalTheme === 'function') {
           window._applyTerminalTheme(settings.terminalTheme);
+        }
+        if (typeof window._applyTerminalFont === 'function') {
+          window._applyTerminalFont({
+            fontFamily: settings.terminalFontFamily,
+            fontSize: settings.terminalFontSize,
+            lineHeight: settings.terminalLineHeight,
+          });
         }
         if (typeof refreshSidebar === 'function') refreshSidebar();
       }
