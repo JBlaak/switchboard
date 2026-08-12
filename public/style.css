@@ -38,6 +38,21 @@
   --sb-blue:       #36c5f0;
   --sb-red:        #e01e5a;
   --sb-yellow:     #ecb22e;
+
+  /* Outer sidebar gutter: the left edge every stacked block in the sidebar
+     starts from — the tab strip, the filter row, the search field, and the
+     project cards below them. One value so those edges can't drift apart. */
+  --sb-sidebar-gutter: 16px;
+
+  /* Sidebar row grid. Every row in the session tree — project header, worktree
+     header, slug group, session — is a marker gutter followed by text. Holding
+     all three values in one place is what keeps those four row types sharing a
+     left rail and a text column instead of each drifting to its own indent.
+     The gutter is sized to fit a session's pin + status dot (12 + 8 + 6). */
+  --sb-row-inset:  12px;  /* card edge → marker gutter */
+  --sb-row-gutter: 26px;  /* width of the marker gutter */
+  --sb-row-gap:     8px;  /* marker gutter → text */
+  --sb-row-text: calc(var(--sb-row-inset) + var(--sb-row-gutter) + var(--sb-row-gap));
 }
 
 html, body {
@@ -311,7 +326,7 @@ body { display: flex; flex-direction: column; }
 }
 
 #sidebar-header {
-  padding: 16px 20px 12px;
+  padding: 16px var(--sb-sidebar-gutter) 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -429,7 +444,7 @@ body { display: flex; flex-direction: column; }
 
 /* ---- Search ---- */
 #search-bar {
-  padding: 0 16px 14px;
+  padding: 0 var(--sb-sidebar-gutter) 14px;
   position: relative;
 }
 
@@ -518,7 +533,7 @@ body { display: flex; flex-direction: column; }
 
 /* ---- Project groups ---- */
 .project-group {
-  margin: 6px 8px;
+  margin: 6px var(--sb-sidebar-gutter);
   border-radius: 10px;
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.06);
@@ -535,7 +550,7 @@ body { display: flex; flex-direction: column; }
 }
 
 .project-header {
-  padding: 10px 12px;
+  padding: 10px 12px 10px var(--sb-row-inset);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -543,7 +558,7 @@ body { display: flex; flex-direction: column; }
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sb-row-gap);
   user-select: none;
   transition: all 0.15s;
   background: transparent;
@@ -621,7 +636,11 @@ body { display: flex; flex-direction: column; }
 .project-header .arrow {
   font-size: 9px;
   transition: transform 0.2s;
-  display: inline-block;
+  flex-shrink: 0;
+  width: var(--sb-row-gutter);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--sb-accent);
 }
 
@@ -645,15 +664,17 @@ body { display: flex; flex-direction: column; }
   margin-bottom: 2px;
 }
 
+/* Nested one step in (see .worktree-group), but the same rail and column
+   relative to its own box, so it lines up with the sessions it contains. */
 .worktree-header {
-  padding: 5px 10px;
+  padding: 5px 10px 5px var(--sb-row-inset);
   font-size: 11px;
   font-weight: 600;
   color: var(--sb-text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sb-row-gap);
   user-select: none;
   transition: all 0.15s;
 }
@@ -664,8 +685,11 @@ body { display: flex; flex-direction: column; }
 
 .worktree-branch-icon {
   color: var(--sb-green-soft);
+  flex-shrink: 0;
+  width: var(--sb-row-gutter);
   display: flex;
   align-items: center;
+  justify-content: center;
   opacity: 0.7;
 }
 
@@ -724,9 +748,11 @@ body { display: flex; flex-direction: column; }
   display: none;
 }
 
+/* Offset by the pill's own left padding so its label, not its edge, lands on
+   the text column shared by the session titles above it. */
 .sessions-more-toggle {
   padding: 4px 10px;
-  margin: 4px 12px 10px 40px;
+  margin: 4px 12px 10px calc(var(--sb-row-text) - 10px);
   font-size: 11px;
   font-weight: 500;
   color: var(--sb-text-faint);
@@ -746,15 +772,15 @@ body { display: flex; flex-direction: column; }
 /* ---- Slug groups ---- */
 .slug-group { }
 .slug-group-header {
-  padding: 0 12px;
+  padding: 0 6px;
   cursor: pointer;
   user-select: none;
 }
 .slug-group-header .slug-group-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 10px 10px;
+  gap: var(--sb-row-gap);
+  padding: 10px 6px;
   border-radius: 8px;
   transition: background 0.12s;
   border-left: none;
@@ -766,7 +792,7 @@ body { display: flex; flex-direction: column; }
 }
 .slug-group-expand {
   flex-shrink: 0;
-  width: 26px;
+  width: var(--sb-row-gutter);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -852,7 +878,7 @@ body { display: flex; flex-direction: column; }
 .slug-group.collapsed .slug-group-older { display: none; }
 .slug-group-more {
   padding: 4px 10px;
-  margin: 4px 12px 10px 22px;
+  margin: 4px 12px 10px calc(var(--sb-row-text) - 10px);
   font-size: 11px;
   font-weight: 500;
   color: var(--sb-text-faint);
@@ -877,8 +903,10 @@ body { display: flex; flex-direction: column; }
 }
 
 /* ---- Session items ---- */
+/* The row's hover/active pill is inset from the card edge, so the pill's own
+   padding makes up the rest of --sb-row-inset rather than stacking on top of it. */
 .session-item {
-  padding: 0 12px;
+  padding: 0 6px;
   cursor: pointer;
   transition: all 0.12s;
 }
@@ -886,8 +914,8 @@ body { display: flex; flex-direction: column; }
 .session-item .session-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 10px 10px;
+  gap: var(--sb-row-gap);
+  padding: 10px 6px;
   border-radius: 8px;
   transition: background 0.12s;
   position: relative;
