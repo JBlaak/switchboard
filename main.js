@@ -90,9 +90,9 @@ let mainWindow = null;
 
 // Sidebar background — the window controls sit over the sidebar, so the overlay on
 // Windows/Linux has to be painted the same colour or it shows as a lighter block.
-// Kept in sync with #sidebar in style.css.
-const CHROME_BG = '#18181f';
-const CHROME_SYMBOL = '#9090a8';
+// Kept in sync with --sb-bg-panel / --sb-text-muted in style.css.
+const CHROME_BG = '#1b1d21';
+const CHROME_SYMBOL = '#9a9a9c';
 
 // Per-platform frameless window options. macOS keeps its traffic lights and we place
 // them ourselves; Windows/Linux draw their controls into a titleBarOverlay we colour

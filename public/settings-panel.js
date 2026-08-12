@@ -412,8 +412,8 @@
 
       const saveBtn = settingsViewerBody.querySelector('#sv-save-btn');
       saveBtn.textContent = '✓ Saved';
-      saveBtn.style.background = '#2ea043';
-      saveBtn.style.color = '#fff';
+      saveBtn.style.background = 'var(--sb-green)';
+      saveBtn.style.color = 'var(--sb-accent-ink)';
       setTimeout(() => closeSettingsViewer(), 600);
     });
 

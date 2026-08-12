@@ -100,7 +100,7 @@ function renderToolUse(block) {
     try { return renderMcpAction(name, input, block); } catch {}
   }
   // Default: collapsible JSON
-  return toolBlock('#8888a0', name, '', makeCollapsible('jsonl-tool-result', 'Input', input, true));
+  return toolBlock('#9a9a9c', name, '', makeCollapsible('jsonl-tool-result', 'Input', input, true));
 }
 
 function renderMcpAction(name, input, block) {
@@ -157,7 +157,7 @@ const toolRenderers = {
       const start = input.offset || 0;
       range = input.limit ? `:${start}-${start + input.limit}` : `:${start}`;
     }
-    return toolBlock('#8888a0', 'Read', '<code>' + escapeHtml(shortPath(path) + range) + '</code>', null);
+    return toolBlock('#9a9a9c', 'Read', '<code>' + escapeHtml(shortPath(path) + range) + '</code>', null);
   },
 
   Edit(input) {
