@@ -842,6 +842,9 @@ const SETTING_DEFAULTS = {
   visibleSessionCount: 5,
   sidebarWidth: 340,
   terminalTheme: 'switchboard',
+  terminalFontFamily: '',
+  terminalFontSize: 12,
+  terminalLineHeight: 1,
   mcpEmulation: false,
   shellProfile: 'auto',
 };
