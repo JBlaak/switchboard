@@ -361,8 +361,11 @@ window.api.onCliBusyState((sessionId, busy) => {
 });
 
 // --- Single entry point for all sidebar renders ---
-// resort=true: re-sort items by priority+time (use for user-initiated actions)
-// resort=false (default): preserve existing DOM order, new items go to top
+// The sidebar always orders projects and sessions by most recent activity.
+// resort=true: nothing is held back — the open session moves to its true
+//   position too (use for user-initiated actions, e.g. the re-sort button)
+// resort=false (default): the open session keeps the slot it already had, so
+//   the list can't slide out from under the cursor while it reorders
 function refreshSidebar({ resort = false } = {}) {
   // When searching, always use all projects (search ignores archive filter)
   let projects = (searchMatchIds !== null)
