@@ -68,6 +68,9 @@ contextBridge.exposeInMainWorld('api', {
   onStatusUpdate: (callback) => {
     ipcRenderer.on('status-update', (_event, text, type) => callback(text, type));
   },
+  onFullscreenChanged: (callback) => {
+    ipcRenderer.on('fullscreen-changed', (_event, isFullscreen) => callback(isFullscreen));
+  },
 
   // File drag-and-drop
   getPathForFile: (file) => webUtils.getPathForFile(file),
