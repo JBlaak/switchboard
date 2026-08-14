@@ -3028,38 +3028,6 @@ body { display: flex; flex-direction: column; }
   color: var(--sb-accent);
 }
 
-/* Project header schedule button */
-.project-schedule-btn {
-  background: transparent;
-  border: none;
-  color: var(--sb-text-faint);
-  font-size: 16px;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  line-height: 0;
-  transition: all 0.15s;
-  opacity: 0.7;
-}
-
-.project-schedule-btn svg {
-  display: block;
-}
-
-.project-header:hover .project-schedule-btn {
-  opacity: 1;
-}
-
-.project-schedule-btn:hover {
-  background: rgba(255,180,50,0.1);
-  color: #e0a030;
-}
-
 /* Project header gear button */
 .project-settings-btn {
   background: transparent;
