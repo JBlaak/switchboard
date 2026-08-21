@@ -38,6 +38,7 @@ const cleanPtyEnv = Object.fromEntries(
 const { discoverShellProfiles, getShellProfiles, resolveShell, isWindows, isWslShell, windowsToWslPath, shellArgs, quoteArgvForShell } = require('./shell-profiles');
 const { startScheduler } = require('./schedule-runner');
 const { encodeProjectPath } = require('./encode-project-path');
+const { isRemoteProjectPath, remoteProjectPath, parseRemoteProjectPath, normalizeRemoteDir, validateRemoteInput, buildSshArgv } = require('./remote-projects');
 
 
 // --- Auto-updater (only in packaged builds) ---
@@ -390,6 +391,40 @@ ipcMain.handle('remove-project', (_event, projectPath) => {
   } catch (err) {
     return { error: err.message };
   }
+});
+
+// --- IPC: remote (SSH) projects ---
+// Stored in settings (global.remoteProjects) rather than derived from
+// ~/.claude/projects — the session history lives on the remote host, so the
+// only local state is the connection info and which tmux sessions we created.
+ipcMain.handle('add-remote-project', (_event, config) => {
+  const error = validateRemoteInput(config || {});
+  if (error) return { error };
+  const dir = normalizeRemoteDir(config.dir);
+  const remote = { user: config.user, host: config.host, port: Number(config.port) || 22, ...(dir ? { dir } : {}), sessions: [] };
+  const projectPath = remoteProjectPath(remote);
+  const global = getSetting('global') || {};
+  const list = global.remoteProjects || [];
+  if (list.some(r => remoteProjectPath(r) === projectPath)) return { error: 'This remote is already added.' };
+  list.push(remote);
+  global.remoteProjects = list;
+  setSetting('global', global);
+  notifyRendererProjectsChanged();
+  return { ok: true, projectPath };
+});
+
+ipcMain.handle('remove-remote-project', (_event, projectPath) => {
+  const global = getSetting('global') || {};
+  global.remoteProjects = (global.remoteProjects || []).filter(r => remoteProjectPath(r) !== projectPath);
+  setSetting('global', global);
+  // Disconnect any open connections; the remote tmux sessions live on.
+  for (const [, session] of activeSessions) {
+    if (session.projectPath === projectPath && !session.exited) {
+      try { session.pty.kill(); } catch {}
+    }
+  }
+  notifyRendererProjectsChanged();
+  return { ok: true };
 });
 
 // --- IPC: get-projects ---
@@ -1010,11 +1045,12 @@ ipcMain.handle('open-terminal', async (_event, sessionId, projectPath, isNew, se
   }
 
   // Spawn new PTY
-  if (!fs.existsSync(projectPath)) {
+  const isRemote = isRemoteProjectPath(projectPath);
+  if (!isRemote && !fs.existsSync(projectPath)) {
     return { ok: false, error: `project directory no longer exists: ${projectPath}` };
   }
 
-  const isPlainTerminal = sessionOptions?.type === 'terminal';
+  const isPlainTerminal = !isRemote && sessionOptions?.type === 'terminal';
 
   // Resolve shell profile from effective settings
   const effectiveProfileId = (() => {
@@ -1047,7 +1083,7 @@ ipcMain.handle('open-terminal', async (_event, sessionId, projectPath, isNew, se
   let sessionSlug = null;
   let projectFolder = null;
 
-  if (!isPlainTerminal) {
+  if (!isPlainTerminal && !isRemote) {
     // Snapshot existing .jsonl files before spawning (for new session + fork/plan detection)
     projectFolder = encodeProjectPath(projectPath);
     const claudeProjectDir = path.join(PROJECTS_DIR, projectFolder);
@@ -1076,7 +1112,46 @@ ipcMain.handle('open-terminal', async (_event, sessionId, projectPath, isNew, se
   let ptyProcess;
   let mcpServer = null;
   try {
-    if (isPlainTerminal) {
+    if (isRemote) {
+      // Remote (SSH) project: the "session" is a tmux session on the remote
+      // host and the PTY runs ssh attached to it. No local jsonl files, no MCP
+      // server, no shell profile — and no auto-connect: this code only runs
+      // when the user clicks, because auth may need interaction (host key
+      // prompts, 1Password approval, passwords) that renders in the terminal.
+      const remote = parseRemoteProjectPath(projectPath);
+      if (!remote) return { ok: false, error: `invalid remote project: ${projectPath}` };
+
+      // Record the session in settings (or bump lastOpened) so it reappears in
+      // the sidebar after a restart without connecting on its own.
+      const global = getSetting('global') || {};
+      const remoteProject = (global.remoteProjects || []).find(r => remoteProjectPath(r) === projectPath);
+      if (!remoteProject) return { ok: false, error: `remote project no longer exists: ${projectPath}` };
+      remoteProject.sessions = remoteProject.sessions || [];
+      let record = remoteProject.sessions.find(s => s.sessionId === sessionId);
+      if (!record) {
+        record = {
+          sessionId,
+          kind: sessionOptions?.remoteKind === 'shell' ? 'shell' : 'claude',
+          created: new Date().toISOString(),
+        };
+        remoteProject.sessions.push(record);
+      }
+      record.lastOpened = new Date().toISOString();
+      setSetting('global', global);
+      notifyRendererProjectsChanged();
+
+      const sshArgv = buildSshArgv(remote, sessionId, record.kind);
+      log.info(`[remote] ssh ${sshArgv.slice(0, -1).join(' ')} <tmux attach>`);
+      ptyProcess = pty.spawn('ssh', sshArgv, {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 30,
+        cwd: os.homedir(),
+        // cleanPtyEnv keeps SSH_AUTH_SOCK, so agent auth (1Password et al.)
+        // works; ssh also reads ~/.ssh/config itself (IdentityAgent etc.).
+        env: { ...cleanPtyEnv, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
+      });
+    } else if (isPlainTerminal) {
       // Plain terminal: interactive login shell, no claude command
       // Inject a shell function to override `claude` with a helpful message
       const claudeShim = 'claude() { echo "\\033[33mTo start a Claude session, use the + button in the sidebar.\\033[0m"; return 1; }; export -f claude 2>/dev/null;';
