@@ -5,6 +5,7 @@ const { getFolderIndexMtimeMs } = require('./folder-index-state');
 const { deriveProjectPath } = require('./derive-project-path');
 const { readSessionFile } = require('./read-session-file');
 const { encodeProjectPath } = require('./encode-project-path');
+const { remoteProjectPath } = require('./remote-projects');
 
 /**
  * Session cache module.
@@ -273,6 +274,38 @@ function buildProjectsFromCache(showArchived) {
         modified: new Date(session._openedAt).toISOString(),
         created: new Date(session._openedAt).toISOString(),
         type: 'terminal',
+      });
+    }
+  }
+
+  // Remote (SSH) projects — stored in settings, not derived from
+  // ~/.claude/projects. Their session history lives on the remote host;
+  // locally we only track the tmux sessions we created so they can be listed
+  // and re-attached. Star/rename/archive still work through session_meta,
+  // which is keyed by sessionId alone.
+  for (const rp of global.remoteProjects || []) {
+    const projectPath = remoteProjectPath(rp);
+    if (!projectMap.has(projectPath)) {
+      projectMap.set(projectPath, { folder: encodeProjectPath(projectPath), projectPath, sessions: [] });
+    }
+    const proj = projectMap.get(projectPath);
+    proj.remote = true;
+    for (const rs of rp.sessions || []) {
+      const meta = metaMap.get(rs.sessionId);
+      if (!showArchived && meta?.archived) continue;
+      proj.sessions.push({
+        sessionId: rs.sessionId,
+        summary: rs.kind === 'shell' ? 'Remote terminal' : 'Remote Claude',
+        firstPrompt: '',
+        projectPath,
+        name: meta?.name || null,
+        starred: meta?.starred || 0,
+        archived: meta?.archived || 0,
+        messageCount: 0,
+        modified: rs.lastOpened || rs.created,
+        created: rs.created,
+        type: 'remote',
+        remoteKind: rs.kind,
       });
     }
   }

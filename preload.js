@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('api', {
   browseFolder: () => ipcRenderer.invoke('browse-folder'),
   addProject: (projectPath) => ipcRenderer.invoke('add-project', projectPath),
   removeProject: (projectPath) => ipcRenderer.invoke('remove-project', projectPath),
+  addRemoteProject: (config) => ipcRenderer.invoke('add-remote-project', config),
+  removeRemoteProject: (projectPath) => ipcRenderer.invoke('remove-remote-project', projectPath),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   writeClipboard: (text) => ipcRenderer.invoke('clipboard-write-text', text),
 
