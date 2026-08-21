@@ -7,6 +7,9 @@
 // is what lets the work continue after the SSH connection goes away and lets a
 // later connection attach to the same screen.
 
+const path = require('path');
+const { isWindows, shellArgs, quoteArgvForShell } = require('./shell-profiles');
+
 function isRemoteProjectPath(projectPath) {
   return typeof projectPath === 'string' && projectPath.startsWith('ssh://');
 }
@@ -56,11 +59,12 @@ function tmuxSessionName(sessionId) {
   return 'sb-' + String(sessionId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8);
 }
 
-// argv for pty.spawn('ssh', ...). The remote command creates the tmux session
-// detached on first open — so its pane is a login shell and `claude` resolves
-// from the user's real PATH — then attaches. On every later open new-session
-// fails silently and we attach to whatever is there: the remote-desktop
-// behavior. Killing the local ssh only detaches; the tmux session lives on.
+// argv for ssh (handed to the PTY by buildSshSpawn below). The remote command
+// creates the tmux session detached on first open — so its pane is a login
+// shell and `claude` resolves from the user's real PATH — then attaches. On
+// every later open new-session fails silently and we attach to whatever is
+// there: the remote-desktop behavior. Killing the local ssh only detaches;
+// the tmux session lives on.
 //
 // -A forwards the local SSH agent so git on the remote acts as the user.
 // Forwarding gives each connection a fresh socket path, which a long-lived
@@ -94,6 +98,26 @@ function buildSshArgv(remote, sessionId, kind) {
   return argv;
 }
 
+// How to hand that argv to the PTY. ssh runs inside the user's interactive
+// login shell instead of being spawned directly, because a GUI app inherits
+// the desktop session's environment: on macOS launchd sets SSH_AUTH_SOCK to
+// Apple's ssh-agent, not the socket the user's shell profile exports for
+// 1Password (or gpg-agent, keychain, …). Keys that live only in the real agent
+// are then invisible and every connection fails "Permission denied
+// (publickey)" — even though the same ssh works in a terminal. Sourcing the
+// profile also gets the PATH and ssh config wrappers the user actually uses.
+// `exec` replaces the shell with ssh, so the PTY still drives ssh itself and
+// closing the session detaches from tmux exactly as before.
+// Windows spawns ssh directly: ssh.exe reaches its agent over a named pipe, so
+// there is nothing to inherit, and cmd/PowerShell have no exec.
+function buildSshSpawn(sshArgv, { shell, shellExtraArgs = [], windows = isWindows } = {}) {
+  if (windows || !shell) return { file: 'ssh', args: sshArgv };
+  const base = path.basename(shell).toLowerCase();
+  const exec = (base.includes('powershell') || base.includes('pwsh')) ? '' : 'exec ';
+  const cmd = exec + 'ssh ' + quoteArgvForShell(shell, sshArgv);
+  return { file: shell, args: shellArgs(shell, cmd, shellExtraArgs) };
+}
+
 module.exports = {
   isRemoteProjectPath,
   remoteProjectPath,
@@ -102,4 +126,5 @@ module.exports = {
   validateRemoteInput,
   tmuxSessionName,
   buildSshArgv,
+  buildSshSpawn,
 };

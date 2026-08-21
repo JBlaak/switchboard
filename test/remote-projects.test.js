@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const {
   isRemoteProjectPath, remoteProjectPath, parseRemoteProjectPath,
-  normalizeRemoteDir, validateRemoteInput, tmuxSessionName, buildSshArgv,
+  normalizeRemoteDir, validateRemoteInput, tmuxSessionName, buildSshArgv, buildSshSpawn,
 } = require('../remote-projects');
 
 test('remoteProjectPath omits the default port and round-trips through parse', () => {
@@ -87,4 +87,21 @@ test('buildSshArgv creates and starts in the working directory when set', () => 
 
   const noDirCmd = buildSshArgv({ user: 'u', host: 'h', port: 22 }, 'abc12345', 'shell').pop();
   assert.ok(!noDirCmd.includes(' -c '), 'no -c without a working directory');
+});
+
+test('buildSshSpawn runs ssh through the login shell so profile env (SSH_AUTH_SOCK) applies', () => {
+  const argv = buildSshArgv({ user: 'joris', host: '10.10.0.24', port: 22 }, 'abc12345', 'claude');
+  const spawned = buildSshSpawn(argv, { shell: '/bin/zsh', windows: false });
+  assert.strictEqual(spawned.file, '/bin/zsh');
+  // -i is what sources ~/.zshrc, where an agent socket export usually lives
+  assert.deepStrictEqual(spawned.args.slice(0, 3), ['-l', '-i', '-c']);
+  const cmd = spawned.args[3];
+  assert.match(cmd, /^exec ssh /, 'exec keeps the PTY attached to ssh itself');
+  assert.ok(cmd.includes("'joris@10.10.0.24'"), 'argv stays quoted for the shell');
+  assert.ok(cmd.includes('attach-session'), 'the remote command survives quoting');
+
+  // Windows has no exec and finds its agent over a named pipe: spawn ssh directly
+  const onWindows = buildSshSpawn(argv, { shell: 'C:\\Windows\\System32\\cmd.exe', windows: true });
+  assert.strictEqual(onWindows.file, 'ssh');
+  assert.deepStrictEqual(onWindows.args, argv);
 });

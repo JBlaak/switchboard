@@ -38,7 +38,7 @@ const cleanPtyEnv = Object.fromEntries(
 const { discoverShellProfiles, getShellProfiles, resolveShell, isWindows, isWslShell, windowsToWslPath, shellArgs, quoteArgvForShell } = require('./shell-profiles');
 const { startScheduler } = require('./schedule-runner');
 const { encodeProjectPath } = require('./encode-project-path');
-const { isRemoteProjectPath, remoteProjectPath, parseRemoteProjectPath, normalizeRemoteDir, validateRemoteInput, buildSshArgv } = require('./remote-projects');
+const { isRemoteProjectPath, remoteProjectPath, parseRemoteProjectPath, normalizeRemoteDir, validateRemoteInput, buildSshArgv, buildSshSpawn } = require('./remote-projects');
 
 
 // --- Auto-updater (only in packaged builds) ---
@@ -1141,14 +1141,16 @@ ipcMain.handle('open-terminal', async (_event, sessionId, projectPath, isNew, se
       notifyRendererProjectsChanged();
 
       const sshArgv = buildSshArgv(remote, sessionId, record.kind);
-      log.info(`[remote] ssh ${sshArgv.slice(0, -1).join(' ')} <tmux attach>`);
-      ptyProcess = pty.spawn('ssh', sshArgv, {
+      // ssh runs via the user's login shell (see buildSshSpawn) because the
+      // environment this app inherits from the desktop session points at the
+      // wrong ssh-agent; ssh reads ~/.ssh/config itself (IdentityAgent etc.).
+      const sshSpawn = buildSshSpawn(sshArgv, { shell, shellExtraArgs });
+      log.info(`[remote] ssh ${sshArgv.slice(0, -1).join(' ')} <tmux attach> via ${sshSpawn.file}`);
+      ptyProcess = pty.spawn(sshSpawn.file, sshSpawn.args, {
         name: 'xterm-256color',
         cols: 120,
         rows: 30,
         cwd: os.homedir(),
-        // cleanPtyEnv keeps SSH_AUTH_SOCK, so agent auth (1Password et al.)
-        // works; ssh also reads ~/.ssh/config itself (IdentityAgent etc.).
         env: { ...cleanPtyEnv, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
       });
     } else if (isPlainTerminal) {
