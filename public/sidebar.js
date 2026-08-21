@@ -307,12 +307,6 @@ function renderProjects(projects, resort) {
     const shortName = shortProjectPath(project.projectPath);
     header.innerHTML = `<span class="arrow">&#9660;</span> <span class="project-name">${shortName}</span>`;
 
-    const scheduleBtn = document.createElement('button');
-    scheduleBtn.className = 'project-schedule-btn';
-    scheduleBtn.title = 'Create scheduled task';
-    scheduleBtn.innerHTML = ICONS.schedule(16);
-    header.appendChild(scheduleBtn);
-
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'project-settings-btn';
     settingsBtn.title = 'Project settings';
@@ -466,10 +460,6 @@ function rebindSidebarEvents(projects) {
     if (newBtn) {
       newBtn.onclick = (e) => { e.stopPropagation(); showNewSessionPopover(project, newBtn); };
     }
-    const scheduleBtn = header.querySelector('.project-schedule-btn');
-    if (scheduleBtn) {
-      scheduleBtn.onclick = (e) => { e.stopPropagation(); launchScheduleCreator(project); };
-    }
     const settingsBtn = header.querySelector('.project-settings-btn');
     if (settingsBtn) {
       settingsBtn.onclick = (e) => { e.stopPropagation(); openSettingsViewer('project', project.projectPath); };
@@ -483,9 +473,8 @@ function rebindSidebarEvents(projects) {
         const shortName = shortProjectPath(project.projectPath);
         if (!confirm(`Archive all ${sessions.length} session${sessions.length > 1 ? 's' : ''} in ${shortName}?`)) return;
         for (const s of sessions) {
-          if (activePtyIds.has(s.sessionId)) {
-            await window.api.stopSession(s.sessionId);
-          }
+          await window.api.stopSession(s.sessionId);
+          activePtyIds.delete(s.sessionId);
           await window.api.archiveSession(s.sessionId, 1);
           s.archived = 1;
         }
@@ -494,7 +483,7 @@ function rebindSidebarEvents(projects) {
       };
     }
     header.onclick = (e) => {
-      if (e.target.closest('.project-new-btn') || e.target.closest('.project-archive-btn') || e.target.closest('.project-settings-btn') || e.target.closest('.project-schedule-btn')) return;
+      if (e.target.closest('.project-new-btn') || e.target.closest('.project-archive-btn') || e.target.closest('.project-settings-btn')) return;
       header.classList.toggle('collapsed');
     };
   }
@@ -536,7 +525,8 @@ function rebindSidebarEvents(projects) {
           const sid = item.dataset.sessionId;
           const session = sessionMap.get(sid);
           if (!session || session.archived) continue;
-          if (activePtyIds.has(sid)) await window.api.stopSession(sid);
+          await window.api.stopSession(sid);
+          activePtyIds.delete(sid);
           await window.api.archiveSession(sid, 1);
           session.archived = 1;
         }
@@ -651,8 +641,12 @@ function rebindSidebarEvents(projects) {
       archiveBtn.onclick = async (e) => {
         e.stopPropagation();
         const newVal = session.archived ? 0 : 1;
-        if (newVal && activePtyIds.has(session.sessionId)) {
+        if (newVal) {
+          // Stop unconditionally: activePtyIds can lag the real PTY state by up
+          // to the idle poll interval (sessions started by the scheduler or
+          // another window), and stopping a dead session is a no-op.
           await window.api.stopSession(session.sessionId);
+          activePtyIds.delete(session.sessionId);
           pollActiveSessions();
         }
         await window.api.archiveSession(session.sessionId, newVal);
