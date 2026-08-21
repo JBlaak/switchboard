@@ -533,7 +533,11 @@ searchInput.addEventListener('input', () => {
 
 // --- Stop session helper ---
 async function confirmAndStopSession(sessionId) {
-  if (!confirm('Stop this session?')) return;
+  const isRemote = sessionMap.get(sessionId)?.type === 'remote';
+  const prompt = isRemote
+    ? 'Disconnect? The session keeps running on the remote machine.'
+    : 'Stop this session?';
+  if (!confirm(prompt)) return;
   await window.api.stopSession(sessionId);
   activePtyIds.delete(sessionId);
   if (!gridViewActive && activeSessionId === sessionId) {
@@ -828,8 +832,11 @@ async function openSession(session, customOptions) {
   // Create new terminal entry (hidden until showSession)
   const entry = createTerminalEntry(session);
 
-  // Open terminal in main process
-  const resumeOptions = customOptions || await resolveDefaultSessionOptions({ projectPath });
+  // Open terminal in main process. Remote sessions ignore local launch
+  // options — the main process reconnects from its stored session record.
+  const resumeOptions = session.type === 'remote'
+    ? { type: 'remote', remoteKind: session.remoteKind }
+    : (customOptions || await resolveDefaultSessionOptions({ projectPath }));
   const result = await window.api.openTerminal(sessionId, projectPath, false, resumeOptions);
   if (!result.ok) {
     entry.terminal.write(`\r\nError: ${result.error}\r\n`);
@@ -1074,10 +1081,14 @@ loadProjects().then(() => {
   if (localStorage.getItem('gridViewActive') === '1') {
     showGridView();
   }
-  // Restore active session after reload
+  // Restore active session after reload. Remote sessions may need a fresh SSH
+  // connection (auth prompts and all) — never start one without a click;
+  // reattaching to a PTY that is still connected is fine.
   if (activeSessionId && !openSessions.has(activeSessionId)) {
     const session = sessionMap.get(activeSessionId);
-    if (session) openSession(session);
+    if (session && (session.type !== 'remote' || activePtyIds.has(session.sessionId))) {
+      openSession(session);
+    }
   }
 });
 

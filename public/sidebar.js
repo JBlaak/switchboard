@@ -305,13 +305,24 @@ function renderProjects(projects, resort) {
     header.className = 'project-header';
     header.id = 'ph-' + fId;
     const shortName = shortProjectPath(project.projectPath);
-    header.innerHTML = `<span class="arrow">&#9660;</span> <span class="project-name">${shortName}</span>`;
+    const remoteBadge = project.remote ? ' <span class="remote-badge">SSH</span>' : '';
+    header.innerHTML = `<span class="arrow">&#9660;</span> <span class="project-name">${shortName}${remoteBadge}</span>`;
 
-    const settingsBtn = document.createElement('button');
-    settingsBtn.className = 'project-settings-btn';
-    settingsBtn.title = 'Project settings';
-    settingsBtn.innerHTML = ICONS.gear(16);
-    header.appendChild(settingsBtn);
+    if (project.remote) {
+      // Remote projects have no local settings to edit; give them a remove
+      // button instead (settings-stored, so nothing else offers removal).
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'project-remove-btn';
+      removeBtn.title = 'Remove remote project';
+      removeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      header.appendChild(removeBtn);
+    } else {
+      const settingsBtn = document.createElement('button');
+      settingsBtn.className = 'project-settings-btn';
+      settingsBtn.title = 'Project settings';
+      settingsBtn.innerHTML = ICONS.gear(16);
+      header.appendChild(settingsBtn);
+    }
 
     const archiveGroupBtn = document.createElement('button');
     archiveGroupBtn.className = 'project-archive-btn';
@@ -464,6 +475,16 @@ function rebindSidebarEvents(projects) {
     if (settingsBtn) {
       settingsBtn.onclick = (e) => { e.stopPropagation(); openSettingsViewer('project', project.projectPath); };
     }
+    const removeBtn = header.querySelector('.project-remove-btn');
+    if (removeBtn) {
+      removeBtn.onclick = async (e) => {
+        e.stopPropagation();
+        const shortName = shortProjectPath(project.projectPath);
+        if (!confirm(`Remove ${shortName}?\n\nThis disconnects open connections. tmux sessions on the remote machine keep running.`)) return;
+        await window.api.removeRemoteProject(project.projectPath);
+        loadProjects();
+      };
+    }
     const archiveGroupBtn = header.querySelector('.project-archive-btn');
     if (archiveGroupBtn) {
       archiveGroupBtn.onclick = async (e) => {
@@ -483,7 +504,7 @@ function rebindSidebarEvents(projects) {
       };
     }
     header.onclick = (e) => {
-      if (e.target.closest('.project-new-btn') || e.target.closest('.project-archive-btn') || e.target.closest('.project-settings-btn')) return;
+      if (e.target.closest('.project-new-btn') || e.target.closest('.project-archive-btn') || e.target.closest('.project-settings-btn') || e.target.closest('.project-remove-btn')) return;
       header.classList.toggle('collapsed');
     };
   }
@@ -719,7 +740,7 @@ function buildSessionItem(session) {
   shortIdEl.textContent = session.sessionId.split('-')[0];
   metaEl.append(timeEl, shortIdEl);
 
-  if (session.type === 'terminal') {
+  if (session.type === 'terminal' || (session.type === 'remote' && session.remoteKind === 'shell')) {
     const badge = document.createElement('span');
     badge.className = 'terminal-badge';
     badge.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>';
@@ -734,7 +755,7 @@ function buildSessionItem(session) {
 
   const stopBtn = document.createElement('button');
   stopBtn.className = 'session-stop-btn';
-  stopBtn.title = 'Stop session';
+  stopBtn.title = session.type === 'remote' ? 'Disconnect (keeps running on the remote)' : 'Stop session';
   stopBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1"/></svg>';
 
   const archiveBtn = document.createElement('button');
@@ -765,7 +786,11 @@ function buildSessionItem(session) {
 
   actions.appendChild(stopBtn);
   actions.appendChild(unreadBtn);
-  if (session.type !== 'terminal') {
+  if (session.type === 'remote') {
+    // No local jsonl to fork/view/relaunch from. Archive still works — it's
+    // keyed on sessionId in session_meta — and doubles as "forget this one".
+    actions.appendChild(archiveBtn);
+  } else if (session.type !== 'terminal') {
     actions.appendChild(forkBtn);
     actions.appendChild(jsonlBtn);
     actions.appendChild(archiveBtn);

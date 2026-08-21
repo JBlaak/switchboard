@@ -9,6 +9,15 @@
  */
 function shortProjectPath(projectPath) {
   if (!projectPath) return '';
+  // Remote projects render as their connection string ("user@host[:port]"),
+  // plus the last segment of the working directory when one is set.
+  if (projectPath.startsWith('ssh://')) {
+    const rest = projectPath.slice('ssh://'.length);
+    const slash = rest.indexOf('/');
+    if (slash === -1) return rest;
+    const lastSeg = rest.slice(slash + 1).split('/').filter(s => s && s !== '~').pop();
+    return lastSeg ? rest.slice(0, slash) + '/' + lastSeg : rest.slice(0, slash);
+  }
   return projectPath.split(/[\\/]/).filter(Boolean).slice(-2).join('/');
 }
 

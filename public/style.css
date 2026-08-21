@@ -2922,6 +2922,9 @@ body { display: flex; flex-direction: column; }
 
 .add-project-dialog .folder-input-row input {
   flex: 1;
+  /* Flex items refuse to shrink below their intrinsic width by default, which
+     pushed the multi-input remote row outside the dialog. */
+  min-width: 0;
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 6px;
@@ -2999,6 +3002,51 @@ body { display: flex; flex-direction: column; }
   display: none;
 }
 
+/* Local / Remote (SSH) mode toggle in the add-project dialog */
+.add-project-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.add-project-tab {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: var(--sb-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.add-project-tab:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.add-project-tab.active {
+  background: rgba(var(--sb-accent-rgb),0.15);
+  color: var(--sb-accent);
+  border-color: rgba(var(--sb-accent-rgb),0.3);
+}
+
+.add-remote-sep {
+  color: #666;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.add-project-dialog .remote-input-row + .remote-input-row {
+  margin-top: 8px;
+}
+
+.add-project-dialog #add-remote-user {
+  flex: 0 1 90px;
+}
+
+.add-project-dialog #add-remote-port {
+  flex: 0 1 52px;
+}
+
 /* ========== GLOBAL SETTINGS BUTTON ========== */
 #global-settings-btn {
   margin-left: auto;
@@ -3059,6 +3107,51 @@ body { display: flex; flex-direction: column; }
   background: rgba(255,255,255,0.04);
   border-color: rgba(255,255,255,0.12);
   color: #888;
+}
+
+/* Remote (SSH) project header: badge + remove button */
+.remote-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--sb-text-faint);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  vertical-align: 1px;
+}
+
+.project-remove-btn {
+  background: transparent;
+  border: none;
+  color: var(--sb-text-faint);
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 0;
+  transition: all 0.15s;
+  opacity: 0;
+}
+
+.project-remove-btn svg {
+  display: block;
+}
+
+.project-header:hover .project-remove-btn {
+  opacity: 0.7;
+}
+
+.project-remove-btn:hover {
+  background: rgba(255,107,107,0.1);
+  color: #ff6b6b;
+  opacity: 1;
 }
 
 /* ========== SETTINGS VIEWER ========== */
