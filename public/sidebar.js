@@ -1,21 +1,41 @@
 // --- Sidebar rendering ---
+// The session list is flat: one list of sessions across all projects, never
+// grouped by directory. Sessions waiting on the user sort to the top, then the
+// ones that finished unread, then the ones still working, then pinned, then the
+// rest — each block most recent first. Sessions sharing a slug are still folded
+// into a slug group, but only within their own project.
+// Project-level actions (new session, settings, archive all, remove) live in the
+// project picker dialog (dialogs.js), since there are no directory headers left
+// to hang them off.
+//
 // Depends on globals: sidebarContent, openSessions, activeSessionId, activePtyIds,
 // pendingSessions, sessionMap, sortedOrder, searchMatchIds,
 // searchMatchProjectPaths, showStarredOnly, showRunningOnly, showTodayOnly,
-// visibleSessionCount, sessionMaxAgeDays, attentionSessions, responseReadySessions,
-// sessionBusyState, cachedProjects, cachedAllProjects, gridCards, gridViewActive (app.js)
-// Depends on: cleanDisplayName, formatDate, escapeHtml (utils.js), ICONS (icons.js),
-// showSession (terminal-manager.js), confirmAndStopSession, pollActiveSessions,
-// showNewSessionPopover, openSettingsViewer, showResumeSessionDialog,
-// showJsonlViewer, forkSession, openSession, loadProjects, markUnread,
-// clearUnread, refreshSidebar (app.js/dialogs.js)
+// showArchived, visibleSessionCount, sessionMaxAgeDays, attentionSessions,
+// responseReadySessions, sessionBusyState, cachedProjects, cachedAllProjects,
+// gridCards, gridViewActive (app.js)
+// Depends on: cleanDisplayName, formatDate, escapeHtml, shortProjectPath (utils.js),
+// ICONS (icons.js), showSession (terminal-manager.js), confirmAndStopSession,
+// pollActiveSessions, showResumeSessionDialog, showJsonlViewer, forkSession,
+// openSession, loadProjects, markUnread, clearUnread, refreshSidebar
+// (app.js/dialogs.js)
 
-function slugId(slug) {
-  return 'slug-' + slug.replace(/[^a-zA-Z0-9_-]/g, '_');
+const WORKTREE_PATTERN = /^(.+?)\/\.claude\/worktrees\/([^/]+)\/?$/;
+
+// The same slug can exist in two checkouts of the same repo; they stay two
+// groups, so the project has to be part of the element id.
+function slugId(slug, projectPath) {
+  return 'slug-' + (projectPath + '--' + slug).replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
-function folderId(projectPath) {
-  return 'project-' + projectPath.replace(/[^a-zA-Z0-9_-]/g, '_');
+// Label shown on every row now that directory headers are gone. Worktrees read
+// as "parent ⎇ branch" — their raw path ends in .claude/worktrees/<name>, which
+// shortProjectPath would render as the useless "worktrees/<name>".
+function projectLabel(projectPath) {
+  if (!projectPath) return '';
+  const match = projectPath.match(WORKTREE_PATTERN);
+  if (match) return shortProjectPath(match[1]) + ' ⎇ ' + match[2];
+  return shortProjectPath(projectPath);
 }
 
 // Move the entry identified by anchorId back to the index it held in prevIds,
@@ -31,9 +51,9 @@ function anchorToPreviousIndex(items, anchorId, prevIds, getId) {
   items.splice(Math.min(to, items.length), 0, item);
 }
 
-function buildSlugGroup(slug, sessions) {
+function buildSlugGroup(slug, sessions, projectPath) {
   const group = document.createElement('div');
-  const id = slugId(slug);
+  const id = slugId(slug, projectPath);
   const expanded = getExpandedSlugs().has(id);
   group.className = expanded ? 'slug-group' : 'slug-group collapsed';
   group.id = id;
@@ -65,7 +85,7 @@ function buildSlugGroup(slug, sessions) {
 
   const meta = document.createElement('div');
   meta.className = 'slug-group-meta';
-  meta.innerHTML = `<span class="slug-group-dot${hasRunning ? ' running' : ''}"></span><span class="slug-group-count">${sessions.length} sessions</span> ${escapeHtml(timeStr)}`;
+  meta.innerHTML = `<span class="slug-group-dot${hasRunning ? ' running' : ''}"></span><span class="session-project">${escapeHtml(projectLabel(projectPath))}</span><span class="slug-group-count">${sessions.length} sessions</span> ${escapeHtml(timeStr)}`;
 
   const archiveSlugBtn = document.createElement('button');
   archiveSlugBtn.className = 'slug-group-archive-btn';
@@ -95,7 +115,7 @@ function buildSlugGroup(slug, sessions) {
   if (promoted.length > 0) {
     group.classList.add('has-promoted');
     for (const session of promoted) {
-      sessionsContainer.appendChild(buildSessionItem(session));
+      sessionsContainer.appendChild(buildSessionItem(session, projectPath));
     }
     if (rest.length > 0) {
       const moreBtn = document.createElement('div');
@@ -107,7 +127,7 @@ function buildSlugGroup(slug, sessions) {
       olderDiv.className = 'slug-group-older';
       olderDiv.id = 'sgo-' + id;
       for (const session of rest) {
-        olderDiv.appendChild(buildSessionItem(session));
+        olderDiv.appendChild(buildSessionItem(session, projectPath));
       }
 
       sessionsContainer.appendChild(moreBtn);
@@ -115,7 +135,7 @@ function buildSlugGroup(slug, sessions) {
     }
   } else {
     for (const session of sessions) {
-      sessionsContainer.appendChild(buildSessionItem(session));
+      sessionsContainer.appendChild(buildSessionItem(session, projectPath));
     }
   }
 
@@ -124,60 +144,55 @@ function buildSlugGroup(slug, sessions) {
   return group;
 }
 
-function renderProjects(projects, resort) {
+// Sort tiers, highest first. The active block is split by what the session
+// wants from the user: first the ones blocking on input, then the ones that
+// finished and haven't been read, then the ones still working. Those three
+// always outrank pinned and plain recent rows regardless of age.
+const TIER_ATTENTION = 4;
+const TIER_READY = 3;
+const TIER_RUNNING = 2;
+const TIER_PINNED = 1;
+const TIER_REST = 0;
+
+const TIER_ORDER = [TIER_ATTENTION, TIER_READY, TIER_RUNNING, TIER_PINNED, TIER_REST];
+
+const TIER_LABELS = {
+  [TIER_ATTENTION]: 'Needs input',
+  [TIER_READY]: 'Ready',
+  [TIER_RUNNING]: 'Working',
+  [TIER_PINNED]: 'Pinned',
+  [TIER_REST]: 'Recent',
+};
+
+// A live session that isn't spinning has finished its turn, whether or not the
+// user has read it yet — both count as ready. Only a session reported as busy
+// (or one still starting up) is working. Busy state comes from the OSC 0 spinner,
+// so a session idle since before this window opened reads as ready, which is
+// what it is.
+function sessionTier(sessionId) {
+  if (attentionSessions.has(sessionId)) return TIER_ATTENTION;
+  if (responseReadySessions.has(sessionId)) return TIER_READY;
+  if (sessionBusyState.get(sessionId) || pendingSessions.has(sessionId)) return TIER_RUNNING;
+  if (activePtyIds.has(sessionId)) return TIER_READY;
+  return TIER_REST;
+}
+
+// Pinning only decides where a row lands once it has nothing live to say.
+function itemTier(item) {
+  if (item.tier >= TIER_RUNNING) return item.tier;
+  if (item.pinned) return TIER_PINNED;
+  return TIER_REST;
+}
+
+function renderSessionList(projects, resort) {
   const newSidebar = document.createElement('div');
+  const anyFilterActive = showStarredOnly || showRunningOnly || showTodayOnly || showArchived || searchMatchIds !== null;
 
-  // Detect worktree projects and group them under their parent
-  const worktreePattern = /^(.+?)\/\.claude\/worktrees\/([^/]+)\/?$/;
-  const worktreeMap = new Map(); // parentPath → [worktreeProject, ...]
-  const worktreeSet = new Set();
-  for (const project of projects) {
-    const match = project.projectPath.match(worktreePattern);
-    if (match) {
-      const parentPath = match[1];
-      if (!worktreeMap.has(parentPath)) worktreeMap.set(parentPath, []);
-      worktreeMap.get(parentPath).push(project);
-      worktreeSet.add(project.projectPath);
-    }
-  }
-
-  // Order project groups by their most recent activity. A worktree's sessions
-  // count toward its parent, since that's the group they render inside.
-  const projectRecency = (project) => project.sessions.reduce(
-    (max, s) => Math.max(max, new Date(s.modified).getTime() || 0), 0);
-  const groupRecency = new Map();
-  const topLevel = [];
-  for (const project of projects) {
-    if (worktreeSet.has(project.projectPath)) continue;
-    let time = projectRecency(project);
-    for (const wt of worktreeMap.get(project.projectPath) || []) {
-      time = Math.max(time, projectRecency(wt));
-    }
-    groupRecency.set(project.projectPath, time);
-    topLevel.push(project);
-  }
-  topLevel.sort((a, b) => groupRecency.get(b.projectPath) - groupRecency.get(a.projectPath));
-
-  // Hold the group containing the open session in place (see anchorToPreviousIndex)
-  if (!resort && activeSessionId) {
-    const holder = projects.find(p => p.sessions.some(s => s.sessionId === activeSessionId));
-    if (holder) {
-      const wtMatch = holder.projectPath.match(worktreePattern);
-      anchorToPreviousIndex(
-        topLevel,
-        wtMatch ? wtMatch[1] : holder.projectPath,
-        sortedOrder.filter(e => !worktreeSet.has(e.projectPath)).map(e => e.projectPath),
-        p => p.projectPath,
-      );
-    }
-  }
-
-  const newSortedOrder = [];
-
-  // Process a project's sessions: filter, sort, slug-group, order, and truncate.
-  // Returns { filtered, visible, older, sortOrderEntry } or null if project should be skipped.
-  function processProjectSessions(project, resort) {
-    let filtered = project.sessions;
+  function passesFilters(sessions) {
+    let filtered = sessions;
+    // The archive filter is the only way archived sessions surface: when it's on
+    // we show exactly the archived ones, when it's off they're hidden entirely.
+    if (showArchived) filtered = filtered.filter(s => s.archived);
     if (showStarredOnly) filtered = filtered.filter(s => s.starred);
     if (showRunningOnly) filtered = filtered.filter(s => activePtyIds.has(s.sessionId));
     if (showTodayOnly) {
@@ -189,20 +204,19 @@ function renderProjects(projects, resort) {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === todayStr;
       });
     }
-    const anyFilterActive = showStarredOnly || showRunningOnly || showTodayOnly || searchMatchIds !== null;
-    if (filtered.length === 0 && !project._projectMatchedOnly && (project.sessions.length > 0 || anyFilterActive)) return null;
+    return filtered;
+  }
 
-    // Sort
-    filtered = [...filtered].sort((a, b) => {
-      const aRunning = activePtyIds.has(a.sessionId) || pendingSessions.has(a.sessionId);
-      const bRunning = activePtyIds.has(b.sessionId) || pendingSessions.has(b.sessionId);
-      const aPri = (a.starred && aRunning ? 3 : aRunning ? 2 : a.starred ? 1 : 0);
-      const bPri = (b.starred && bRunning ? 3 : bRunning ? 2 : b.starred ? 1 : 0);
-      if (aPri !== bPri) return bPri - aPri;
-      return new Date(b.modified) - new Date(a.modified);
-    });
+  // Flatten every project's sessions into one list of render items. Sessions
+  // sharing a slug still collapse into a slug group, but only within their own
+  // project — the same slug in two checkouts stays two groups.
+  const allItems = [];
+  let activeItemId = null;
+  for (const project of projects) {
+    const projectPath = project.projectPath;
+    const filtered = passesFilters(project.sessions);
+    if (filtered.length === 0) continue;
 
-    // Slug grouping
     const slugMap = new Map();
     const ungrouped = [];
     for (const session of filtered) {
@@ -213,193 +227,111 @@ function renderProjects(projects, resort) {
         ungrouped.push(session);
       }
     }
-    const allItems = [];
-    let activeItemId = null;
+
     for (const session of ungrouped) {
-      const isRunning = activePtyIds.has(session.sessionId) || pendingSessions.has(session.sessionId);
-      const element = buildSessionItem(session);
+      const element = buildSessionItem(session, projectPath);
       if (session.sessionId === activeSessionId) activeItemId = element.id;
-      allItems.push({ sortTime: new Date(session.modified).getTime(), pinned: !!session.starred, running: isRunning, element });
+      allItems.push({
+        sortTime: new Date(session.modified).getTime(),
+        pinned: !!session.starred,
+        tier: sessionTier(session.sessionId),
+        element,
+      });
     }
     for (const [slug, sessions] of slugMap) {
-      const mostRecentTime = Math.max(...sessions.map(s => new Date(s.modified).getTime()));
-      const hasRunning = sessions.some(s => activePtyIds.has(s.sessionId) || pendingSessions.has(s.sessionId));
-      const hasPinned = sessions.some(s => s.starred);
-      const element = sessions.length === 1 ? buildSessionItem(sessions[0]) : buildSlugGroup(slug, sessions);
-      if (sessions.some(s => s.sessionId === activeSessionId)) activeItemId = element.id;
-      allItems.push({ sortTime: mostRecentTime, pinned: hasPinned, running: hasRunning, element });
+      const sorted = [...sessions].sort((a, b) => new Date(b.modified) - new Date(a.modified));
+      const element = sorted.length === 1
+        ? buildSessionItem(sorted[0], projectPath)
+        : buildSlugGroup(slug, sorted, projectPath);
+      if (sorted.some(s => s.sessionId === activeSessionId)) activeItemId = element.id;
+      allItems.push({
+        sortTime: Math.max(...sorted.map(s => new Date(s.modified).getTime())),
+        pinned: sorted.some(s => s.starred),
+        tier: Math.max(...sorted.map(s => sessionTier(s.sessionId))),
+        element,
+      });
     }
-
-    // Sort render items by most recent activity, starred/running floated on top
-    allItems.sort((a, b) => {
-      const aPri = (a.pinned && a.running ? 3 : a.running ? 2 : a.pinned ? 1 : 0);
-      const bPri = (b.pinned && b.running ? 3 : b.running ? 2 : b.pinned ? 1 : 0);
-      if (aPri !== bPri) return bPri - aPri;
-      return b.sortTime - a.sortTime;
-    });
-    if (!resort) {
-      const prevEntry = sortedOrder.find(e => e.projectPath === project.projectPath);
-      anchorToPreviousIndex(allItems, activeItemId, prevEntry?.itemIds, item => item.element.id);
-    }
-
-    // Truncate
-    let visible = [];
-    let older = [];
-    if (searchMatchIds !== null || showStarredOnly || showRunningOnly || showTodayOnly) {
-      visible = allItems;
-    } else {
-      let count = 0;
-      const ageCutoff = Date.now() - sessionMaxAgeDays * 86400000;
-      for (const item of allItems) {
-        if (item.running || item.pinned || item.element.id === activeItemId || (count < visibleSessionCount && item.sortTime >= ageCutoff)) {
-          visible.push(item);
-          count++;
-        } else {
-          older.push(item);
-        }
-      }
-      if (visible.length === 0 && older.length > 0) { visible = older; older = []; }
-    }
-
-    return {
-      filtered, visible, older,
-      sortOrderEntry: { projectPath: project.projectPath, itemIds: allItems.map(item => item.element.id) },
-    };
   }
 
-  // Build the sessions list DOM (shared between projects and worktrees)
-  function buildSessionsList(fId, visible, older) {
-    const sessionsList = document.createElement('div');
-    sessionsList.className = 'project-sessions';
-    sessionsList.id = 'sessions-' + fId;
-    for (const item of visible) sessionsList.appendChild(item.element);
-    if (older.length > 0) {
-      const moreBtn = document.createElement('div');
-      moreBtn.className = 'sessions-more-toggle';
-      moreBtn.id = 'older-' + fId;
-      moreBtn.textContent = `+ ${older.length} older`;
-      const olderList = document.createElement('div');
-      olderList.className = 'sessions-older';
-      olderList.id = 'older-list-' + fId;
-      olderList.style.display = 'none';
-      for (const item of older) olderList.appendChild(item.element);
-      sessionsList.appendChild(moreBtn);
-      sessionsList.appendChild(olderList);
+  // Order: sessions needing input first, then finished-but-unread, then still
+  // working, then pinned, then the rest — most recent first inside each block.
+  // The block holding the open session keeps it parked where the user last saw
+  // it, so the list can't slide out from under the cursor as the rest reorders.
+  const buckets = new Map();
+  for (const item of allItems) {
+    const tier = itemTier(item);
+    if (!buckets.has(tier)) buckets.set(tier, []);
+    buckets.get(tier).push(item);
+  }
+  const ordered = [];
+  for (const tier of TIER_ORDER) {
+    const bucket = buckets.get(tier);
+    if (!bucket) continue;
+    bucket.sort((a, b) => b.sortTime - a.sortTime);
+    // Anchoring only holds while the session stays in the same block: once its
+    // tier changes, the slot it used to occupy belongs to another section, and
+    // holding it there would file the row under the wrong heading.
+    if (!resort && activeItemId) {
+      const prevIds = sortedOrder.filter(e => e.tier === tier).map(e => e.id);
+      anchorToPreviousIndex(bucket, activeItemId, prevIds, item => item.element.id);
     }
-    return sessionsList;
+    for (const item of bucket) ordered.push({ item, tier });
   }
 
-  for (const project of topLevel) {
-    const result = processProjectSessions(project, resort);
-    if (!result) continue;
-    const { filtered, visible, older, sortOrderEntry } = result;
-    newSortedOrder.push(sortOrderEntry);
-    const fId = folderId(project.projectPath);
-
-    // Build DOM
-    const group = document.createElement('div');
-    group.className = 'project-group';
-    group.id = fId;
-
-    const header = document.createElement('div');
-    header.className = 'project-header';
-    header.id = 'ph-' + fId;
-    const shortName = shortProjectPath(project.projectPath);
-    const remoteBadge = project.remote ? ' <span class="remote-badge">SSH</span>' : '';
-    header.innerHTML = `<span class="arrow">&#9660;</span> <span class="project-name">${shortName}${remoteBadge}</span>`;
-
-    if (project.remote) {
-      // Remote projects have no local settings to edit; give them a remove
-      // button instead (settings-stored, so nothing else offers removal).
-      const removeBtn = document.createElement('button');
-      removeBtn.className = 'project-remove-btn';
-      removeBtn.title = 'Remove remote project';
-      removeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-      header.appendChild(removeBtn);
-    } else {
-      const settingsBtn = document.createElement('button');
-      settingsBtn.className = 'project-settings-btn';
-      settingsBtn.title = 'Project settings';
-      settingsBtn.innerHTML = ICONS.gear(16);
-      header.appendChild(settingsBtn);
-    }
-
-    const archiveGroupBtn = document.createElement('button');
-    archiveGroupBtn.className = 'project-archive-btn';
-    archiveGroupBtn.title = 'Archive all sessions';
-    archiveGroupBtn.innerHTML = ICONS.archive(18);
-    header.appendChild(archiveGroupBtn);
-
-    const newBtn = document.createElement('button');
-    newBtn.className = 'project-new-btn';
-    newBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg>';
-    newBtn.title = 'New session';
-    header.appendChild(newBtn);
-
-    const sessionsList = buildSessionsList(fId, visible, older);
-
-    // Auto-collapse if most recent session is older than threshold, or project matched with no sessions
-    if (project._projectMatchedOnly) {
-      header.classList.add('collapsed');
-    } else if (searchMatchIds === null && !showStarredOnly && !showRunningOnly) {
-      const mostRecent = filtered[0]?.modified;
-      if (mostRecent && (Date.now() - new Date(mostRecent)) > sessionMaxAgeDays * 86400000) {
-        header.classList.add('collapsed');
+  // Truncate: live and pinned rows are never hidden, and neither is the open
+  // session; the rest are capped by visibleSessionCount and the age cutoff.
+  let visible = [];
+  let older = [];
+  if (anyFilterActive) {
+    visible = ordered;
+  } else {
+    let count = 0;
+    const ageCutoff = Date.now() - sessionMaxAgeDays * 86400000;
+    for (const entry of ordered) {
+      const { item, tier } = entry;
+      if (tier >= TIER_RUNNING || item.pinned || item.element.id === activeItemId
+          || (count < visibleSessionCount && item.sortTime >= ageCutoff)) {
+        visible.push(entry);
+        count++;
+      } else {
+        older.push(entry);
       }
     }
-
-    group.appendChild(header);
-    group.appendChild(sessionsList);
-
-    // Render nested worktree sub-groups
-    const childWorktrees = worktreeMap.get(project.projectPath) || [];
-    for (const wt of childWorktrees) {
-      const wtResult = processProjectSessions(wt, resort);
-      if (!wtResult) continue;
-      newSortedOrder.push(wtResult.sortOrderEntry);
-
-      const wtName = wt.projectPath.match(worktreePattern)?.[2] || wt.projectPath.split('/').pop();
-      const wtFId = folderId(wt.projectPath);
-
-      const wtGroup = document.createElement('div');
-      wtGroup.className = 'worktree-group';
-      wtGroup.id = wtFId;
-
-      const wtHeader = document.createElement('div');
-      wtHeader.className = 'worktree-header';
-      wtHeader.id = 'ph-' + wtFId;
-      wtHeader.innerHTML = `<span class="worktree-branch-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8c0-2.76-2.46-5-5.5-5S2 5.24 2 8h2l1-1 1 1h4"/><path d="M13 7.14A5.82 5.82 0 0 1 16.5 6c3.04 0 5.5 2.24 5.5 5h-3l-1-1-1 1h-3"/><path d="M5.89 9.71c-2.15 2.15-2.3 5.47-.35 7.43l4.24-4.25.7-.7.71-.71 2.12-2.12c-1.95-1.96-5.27-1.8-7.42.35"/><path d="M11 15.5c.5 2.5-.17 4.5-1 6.5h4c2-5.5-.5-12-1-14"/></svg></span> <span class="worktree-name">${escapeHtml(wtName)}</span>`;
-
-      const wtHideBtn = document.createElement('button');
-      wtHideBtn.className = 'worktree-hide-btn';
-      wtHideBtn.title = 'Hide worktree';
-      wtHideBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-      wtHeader.appendChild(wtHideBtn);
-
-      const wtNewBtn = document.createElement('button');
-      wtNewBtn.className = 'project-new-btn worktree-new-btn';
-      wtNewBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="6" y1="2" x2="6" y2="10"/><line x1="2" y1="6" x2="10" y2="6"/></svg>';
-      wtNewBtn.title = 'New session in worktree';
-      wtHeader.appendChild(wtNewBtn);
-
-      const wtSessionsList = buildSessionsList(wtFId, wtResult.visible, wtResult.older);
-      wtSessionsList.className = 'worktree-sessions';
-
-      // Auto-collapse worktree if stale
-      if (searchMatchIds === null && !showStarredOnly && !showRunningOnly) {
-        const mostRecent = wtResult.filtered[0]?.modified;
-        if (mostRecent && (Date.now() - new Date(mostRecent)) > sessionMaxAgeDays * 86400000) {
-          wtHeader.classList.add('collapsed');
-        }
-      }
-
-      wtGroup.appendChild(wtHeader);
-      wtGroup.appendChild(wtSessionsList);
-      sessionsList.appendChild(wtGroup);
-    }
-
-    newSidebar.appendChild(group);
+    if (visible.length === 0 && older.length > 0) { visible = older; older = []; }
   }
+
+  const list = document.createElement('div');
+  list.className = 'session-list';
+  list.id = 'session-list';
+
+  let lastTier = null;
+  for (const { item, tier } of visible) {
+    if (!anyFilterActive && tier !== lastTier) {
+      const label = document.createElement('div');
+      label.className = 'session-section-label';
+      label.id = 'section-' + tier;
+      label.textContent = TIER_LABELS[tier];
+      list.appendChild(label);
+      lastTier = tier;
+    }
+    list.appendChild(item.element);
+  }
+
+  if (older.length > 0) {
+    const moreBtn = document.createElement('div');
+    moreBtn.className = 'sessions-more-toggle';
+    moreBtn.id = 'older-all';
+    moreBtn.textContent = `+ ${older.length} older`;
+    const olderList = document.createElement('div');
+    olderList.className = 'sessions-older';
+    olderList.id = 'older-list-all';
+    olderList.style.display = 'none';
+    for (const { item } of older) olderList.appendChild(item.element);
+    list.appendChild(moreBtn);
+    list.appendChild(olderList);
+  }
+
+  newSidebar.appendChild(list);
 
   // Re-apply active state
   if (activeSessionId) {
@@ -414,14 +346,7 @@ function renderProjects(projects, resort) {
       if (fromEl.classList.contains('session-item') && fromEl.querySelector('.session-rename-input')) {
         return false;
       }
-      if (fromEl.classList.contains('project-header')) {
-        if (fromEl.classList.contains('collapsed')) {
-          toEl.classList.add('collapsed');
-        } else {
-          toEl.classList.remove('collapsed');
-        }
-      }
-      if (fromEl.classList.contains('slug-group') || fromEl.classList.contains('worktree-header')) {
+      if (fromEl.classList.contains('slug-group')) {
         if (fromEl.classList.contains('collapsed')) {
           toEl.classList.add('collapsed');
         } else {
@@ -448,10 +373,11 @@ function renderProjects(projects, resort) {
     }
   });
 
-  // Save the full sorted order (project order + item order) as source of truth
-  sortedOrder = newSortedOrder;
+  // Save the rendered order (id + the block it landed in) as the source of
+  // truth for the next render
+  sortedOrder = ordered.map(({ item, tier }) => ({ id: item.element.id, tier }));
 
-  rebindSidebarEvents(projects);
+  rebindSidebarEvents();
 
   // Restore terminal focus after morphdom DOM updates, but not if the user is
   // interacting with an input/textarea (search box, rename input, dialogs, etc.)
@@ -462,79 +388,8 @@ function renderProjects(projects, resort) {
   }
 }
 
-function rebindSidebarEvents(projects) {
-  for (const project of projects) {
-    const fId = folderId(project.projectPath);
-    const header = document.getElementById('ph-' + fId);
-    if (!header) continue;
-    const newBtn = header.querySelector('.project-new-btn');
-    if (newBtn) {
-      newBtn.onclick = (e) => { e.stopPropagation(); showNewSessionPopover(project, newBtn); };
-    }
-    const settingsBtn = header.querySelector('.project-settings-btn');
-    if (settingsBtn) {
-      settingsBtn.onclick = (e) => { e.stopPropagation(); openSettingsViewer('project', project.projectPath); };
-    }
-    const removeBtn = header.querySelector('.project-remove-btn');
-    if (removeBtn) {
-      removeBtn.onclick = async (e) => {
-        e.stopPropagation();
-        const shortName = shortProjectPath(project.projectPath);
-        if (!confirm(`Remove ${shortName}?\n\nThis disconnects open connections. tmux sessions on the remote machine keep running.`)) return;
-        await window.api.removeRemoteProject(project.projectPath);
-        loadProjects();
-      };
-    }
-    const archiveGroupBtn = header.querySelector('.project-archive-btn');
-    if (archiveGroupBtn) {
-      archiveGroupBtn.onclick = async (e) => {
-        e.stopPropagation();
-        const sessions = project.sessions.filter(s => !s.archived);
-        if (sessions.length === 0) return;
-        const shortName = shortProjectPath(project.projectPath);
-        if (!confirm(`Archive all ${sessions.length} session${sessions.length > 1 ? 's' : ''} in ${shortName}?`)) return;
-        for (const s of sessions) {
-          await window.api.stopSession(s.sessionId);
-          activePtyIds.delete(s.sessionId);
-          await window.api.archiveSession(s.sessionId, 1);
-          s.archived = 1;
-        }
-        pollActiveSessions();
-        loadProjects();
-      };
-    }
-    header.onclick = (e) => {
-      if (e.target.closest('.project-new-btn') || e.target.closest('.project-archive-btn') || e.target.closest('.project-settings-btn') || e.target.closest('.project-remove-btn')) return;
-      header.classList.toggle('collapsed');
-    };
-  }
-
-  // Bind worktree header events
-  sidebarContent.querySelectorAll('.worktree-header').forEach(wtHeader => {
-    const wtFId = wtHeader.id.replace('ph-', '');
-    const wtProject = projects.find(p => folderId(p.projectPath) === wtFId);
-    if (!wtProject) return;
-
-    const wtNewBtn = wtHeader.querySelector('.worktree-new-btn');
-    if (wtNewBtn) {
-      wtNewBtn.onclick = (e) => { e.stopPropagation(); showNewSessionPopover(wtProject, wtNewBtn); };
-    }
-    const wtHideBtn = wtHeader.querySelector('.worktree-hide-btn');
-    if (wtHideBtn) {
-      wtHideBtn.onclick = async (e) => {
-        e.stopPropagation();
-        const name = wtProject.projectPath.split('/').pop();
-        if (!confirm(`Hide worktree "${name}"?\n\nSession files are not deleted.`)) return;
-        await window.api.removeProject(wtProject.projectPath);
-        loadProjects();
-      };
-    }
-    wtHeader.onclick = (e) => {
-      if (e.target.closest('.worktree-new-btn') || e.target.closest('.worktree-hide-btn')) return;
-      wtHeader.classList.toggle('collapsed');
-    };
-  });
-
+// Session rows and slug groups only; project-level actions live in the picker.
+function rebindSidebarEvents() {
   sidebarContent.querySelectorAll('.slug-group-header').forEach(header => {
     const archiveBtn = header.querySelector('.slug-group-archive-btn');
     if (archiveBtn) {
@@ -688,7 +543,7 @@ function rebindSidebarEvents(projects) {
   }
 }
 
-function buildSessionItem(session) {
+function buildSessionItem(session, projectPath) {
   const item = document.createElement('div');
   item.className = 'session-item';
   item.id = 'si-' + session.sessionId;
@@ -726,9 +581,9 @@ function buildSessionItem(session) {
   summaryEl.className = 'session-summary';
   summaryEl.textContent = displayName;
 
-  // Compact meta line: time + msgs on the left, first UUID segment on the right
-  // (replaces the full-width session-id line). The 30s label ticker in app.js
-  // updates .session-time only, so it must stay its own span.
+  // Compact meta line: project + time + msgs on the left, first UUID segment on
+  // the right. The 30s label ticker in app.js updates .session-time only, so it
+  // must stay its own span.
   const metaEl = document.createElement('div');
   metaEl.className = 'session-meta';
   const timeEl = document.createElement('span');
@@ -738,7 +593,22 @@ function buildSessionItem(session) {
   shortIdEl.className = 'session-short-id';
   shortIdEl.title = session.sessionId;
   shortIdEl.textContent = session.sessionId.split('-')[0];
-  metaEl.append(timeEl, shortIdEl);
+  // The directory is no longer a header above the row, so each row names its
+  // own project (and branch, for worktrees).
+  const path = projectPath || session.projectPath;
+  const label = projectLabel(path);
+  const metaLeft = document.createElement('span');
+  metaLeft.className = 'session-meta-left';
+  if (label) {
+    const projectEl = document.createElement('span');
+    projectEl.className = 'session-project';
+    projectEl.textContent = label;
+    projectEl.title = path || '';
+    if (path && path.startsWith('ssh://')) projectEl.classList.add('is-remote');
+    metaLeft.appendChild(projectEl);
+  }
+  metaLeft.appendChild(timeEl);
+  metaEl.append(metaLeft, shortIdEl);
 
   if (session.type === 'terminal' || (session.type === 'remote' && session.remoteKind === 'shell')) {
     const badge = document.createElement('span');
