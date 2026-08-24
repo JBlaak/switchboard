@@ -44,11 +44,11 @@
      project cards below them. One value so those edges can't drift apart. */
   --sb-sidebar-gutter: 16px;
 
-  /* Sidebar row grid. Every row in the session tree — project header, worktree
-     header, slug group, session — is a marker gutter followed by text. Holding
-     all three values in one place is what keeps those four row types sharing a
-     left rail and a text column instead of each drifting to its own indent.
-     The gutter is sized to fit a session's pin + status dot (12 + 8 + 6). */
+  /* Sidebar row grid. Every row in the session list — section label, slug
+     group, session — is a marker gutter followed by text. Holding all three
+     values in one place is what keeps those row types sharing a left rail and a
+     text column instead of each drifting to its own indent. The gutter is sized
+     to fit a session's pin + status dot (12 + 8 + 6). */
   --sb-row-inset:  12px;  /* card edge → marker gutter */
   --sb-row-gutter: 26px;  /* width of the marker gutter */
   --sb-row-gap:     8px;  /* marker gutter → text */
@@ -531,7 +531,58 @@ body { display: flex; flex-direction: column; }
   padding: 0 0 12px;
 }
 
-/* ---- Project groups ---- */
+/* ---- Flat session list ---- */
+/* Sessions are top-level rows now, so the list carries the gutter the project
+   cards used to: the row pill's own inset still lands on --sb-row-inset. */
+.session-list {
+  padding: 4px var(--sb-sidebar-gutter) 10px;
+}
+
+/* Section headings for the flat list: Needs input / Ready / Working / Pinned /
+   Recent. The label sits on the shared text column, where the project name used
+   to be, so the list keeps one left rail. */
+.session-section-label {
+  padding: 12px 6px 4px var(--sb-row-text);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sb-text-dimmest);
+  user-select: none;
+}
+
+.session-section-label#section-4 { color: #f0a050; }
+.session-section-label#section-3 { color: var(--sb-blue); }
+.session-section-label#section-2 { color: var(--sb-green); }
+.session-section-label#section-1 { color: var(--sb-yellow); }
+
+/* Wraps instead of truncating: the project name is the one part of the row that
+   can be arbitrarily long, and an elided path tells you nothing. */
+.session-meta-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  min-width: 0;
+}
+
+/* Project (and worktree branch) each row belongs to — replaces the directory
+   header the flat list no longer has. */
+.session-project {
+  color: var(--sb-accent);
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
+.session-project.is-remote {
+  color: var(--sb-blue);
+}
+
+.slug-group-meta .session-project {
+  margin-right: 6px;
+}
+
+/* ---- Project groups (agent-files tree; the session list is flat) ---- */
 .project-group {
   margin: 6px var(--sb-sidebar-gutter);
   border-radius: 10px;
@@ -583,56 +634,6 @@ body { display: flex; flex-direction: column; }
   white-space: nowrap;
 }
 
-.project-archive-btn,
-.project-new-btn {
-  background: transparent;
-  color: var(--sb-text-faint);
-  font-size: 16px;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  line-height: 0;
-  transition: all 0.15s;
-  opacity: 0.7;
-}
-
-.project-archive-btn {
-  border: none;
-  margin-left: -2px;
-}
-
-.project-new-btn {
-  border: 1px solid #585e60;
-  width: 18px;
-  height: 18px;
-}
-
-.project-archive-btn svg,
-.project-new-btn svg {
-  display: block;
-}
-
-.project-header:hover .project-archive-btn,
-.project-header:hover .project-new-btn,
-.project-header:hover .project-settings-btn {
-  opacity: 1;
-}
-
-.project-new-btn:hover {
-  background: rgba(76,197,150,0.1);
-  color: var(--sb-green-soft);
-}
-
-.project-archive-btn:hover {
-  background: rgba(var(--sb-accent-rgb),0.1);
-  color: var(--sb-accent);
-}
-
 .project-header .arrow {
   font-size: 9px;
   transition: transform 0.2s;
@@ -653,98 +654,6 @@ body { display: flex; flex-direction: column; }
 }
 
 .project-header.collapsed + .project-sessions {
-  display: none;
-}
-
-/* Worktree nested groups */
-.worktree-group {
-  margin-left: 12px;
-  border-left: 1px solid rgba(var(--sb-accent-rgb), 0.15);
-  margin-top: 2px;
-  margin-bottom: 2px;
-}
-
-/* Nested one step in (see .worktree-group), but the same rail and column
-   relative to its own box, so it lines up with the sessions it contains. */
-.worktree-header {
-  padding: 5px 10px 5px var(--sb-row-inset);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--sb-text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--sb-row-gap);
-  user-select: none;
-  transition: all 0.15s;
-}
-
-.worktree-header:hover {
-  color: var(--sb-text-soft);
-}
-
-.worktree-branch-icon {
-  color: var(--sb-green-soft);
-  flex-shrink: 0;
-  width: var(--sb-row-gutter);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.7;
-}
-
-.worktree-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.worktree-new-btn,
-.worktree-hide-btn {
-  width: 16px;
-  height: 16px;
-  opacity: 0;
-  transition: opacity 0.15s;
-  background: transparent;
-  border: none;
-  color: var(--sb-text-faint);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-radius: 4px;
-}
-
-.worktree-new-btn {
-  border: 1px solid #585e60;
-}
-
-.worktree-header:hover .worktree-new-btn,
-.worktree-header:hover .worktree-hide-btn {
-  opacity: 0.7;
-}
-
-.worktree-new-btn:hover {
-  opacity: 1 !important;
-  background: rgba(76,197,150,0.1);
-  color: var(--sb-green-soft);
-}
-
-.worktree-hide-btn:hover {
-  opacity: 1 !important;
-  background: rgba(255,100,100,0.1);
-  color: #e06060;
-}
-
-.worktree-sessions {
-  padding: 0 0 2px;
-}
-
-.worktree-header.collapsed + .worktree-sessions,
-.worktree-header.collapsed + .project-sessions {
   display: none;
 }
 
@@ -824,8 +733,9 @@ body { display: flex; flex-direction: column; }
   margin-top: 3px;
   font-weight: 450;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 2px 6px;
 }
 .slug-group-dot {
   width: 6px;
@@ -1050,18 +960,20 @@ body { display: flex; flex-direction: column; }
   margin-top: 3px;
 }
 
-/* Sidebar session items: time on the left, short session id on the right */
+/* Sidebar session items: project/time on the left, short session id on the
+   right, wrapping onto further lines rather than clipping anything. */
 .session-item .session-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 2px 8px;
 }
 
 .session-short-id {
   font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
   color: #5c6264;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* ---- Session action buttons ---- */
@@ -1644,23 +1556,6 @@ body { display: flex; flex-direction: column; }
 #terminals.grid-layout::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
 #terminals.grid-layout::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
 #terminals.grid-layout::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
-
-/* Grid project group heading */
-.grid-project-heading {
-  grid-column: 1 / -1;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--sb-text-soft);
-  padding: 8px 10px;
-  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
-  letter-spacing: 0.3px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 6px;
-  margin-top: 20px;
-}
-.grid-project-heading:first-child {
-  margin-top: 0;
-}
 
 /* Grid card wrapper */
 .grid-card {
@@ -2842,6 +2737,7 @@ body { display: flex; flex-direction: column; }
 /* ========== ADD PROJECT BUTTON ========== */
 #grid-toggle-btn,
 #resort-btn,
+#new-session-btn,
 #add-project-btn {
   background: transparent;
   border: 1px solid rgba(255,255,255,0.08);
@@ -2863,6 +2759,7 @@ body { display: flex; flex-direction: column; }
 
 #grid-toggle-btn { margin-left: auto; }
 #resort-btn { margin-left: 2px; }
+#new-session-btn { margin-left: 2px; }
 #add-project-btn { margin-left: 2px; }
 
 #grid-toggle-btn:hover,
@@ -2871,6 +2768,14 @@ body { display: flex; flex-direction: column; }
   background: rgba(255,255,255,0.04);
   border-color: rgba(255,255,255,0.12);
   color: #888;
+}
+
+/* The one button in the row that creates something; tinted so it reads as the
+   primary action next to the view toggles. */
+#new-session-btn:hover {
+  background: rgba(76,197,150,0.12);
+  border-color: rgba(76,197,150,0.3);
+  color: var(--sb-green-soft);
 }
 
 #grid-toggle-btn.active {
@@ -3076,40 +2981,6 @@ body { display: flex; flex-direction: column; }
   color: var(--sb-accent);
 }
 
-/* Project header gear button */
-.project-settings-btn {
-  background: transparent;
-  border: none;
-  color: var(--sb-text-faint);
-  font-size: 16px;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  line-height: 0;
-  transition: all 0.15s;
-  opacity: 0.7;
-}
-
-.project-settings-btn svg {
-  display: block;
-}
-
-.project-header:hover .project-settings-btn {
-  opacity: 1;
-}
-
-.project-settings-btn:hover {
-  background: rgba(255,255,255,0.04);
-  border-color: rgba(255,255,255,0.12);
-  color: #888;
-}
-
-/* Remote (SSH) project header: badge + remove button */
 .remote-badge {
   display: inline-block;
   font-size: 9px;
@@ -3123,35 +2994,147 @@ body { display: flex; flex-direction: column; }
   vertical-align: 1px;
 }
 
-.project-remove-btn {
+/* ========== PROJECT PICKER ========== */
+.project-picker-dialog {
+  width: 520px;
+  max-width: 90vw;
+}
+
+.project-picker-filter {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 7px;
+  color: var(--sb-text);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+  outline: none;
+  margin-bottom: 8px;
+}
+
+.project-picker-filter:focus {
+  border-color: rgba(var(--sb-accent-rgb),0.45);
+}
+
+.project-picker-list {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.project-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.project-picker-row:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.project-picker-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--sb-text-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Characters the fuzzy filter matched, picked out of the project name. */
+.project-picker-match {
+  color: var(--sb-accent);
+  font-weight: 600;
+}
+
+.project-picker-count {
+  font-size: 10px;
+  color: var(--sb-text-faint);
+  flex-shrink: 0;
+}
+
+.project-picker-count.running {
+  color: var(--sb-green);
+}
+
+.project-picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.project-picker-row:hover .project-picker-actions {
+  opacity: 1;
+}
+
+.project-picker-actions button {
   background: transparent;
   border: none;
   color: var(--sb-text-faint);
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 5px;
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  line-height: 0;
-  transition: all 0.15s;
-  opacity: 0;
+  cursor: pointer;
+  position: relative;
 }
 
-.project-remove-btn svg {
+.project-picker-actions button svg {
   display: block;
 }
 
-.project-header:hover .project-remove-btn {
-  opacity: 0.7;
+/* Hover label for the icon-only row actions. It sits to the left of the button
+   because the list scrolls vertically — a tooltip above would be clipped. */
+.project-picker-actions button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sb-text);
+  background: var(--sb-bg-raised);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 5px;
+  padding: 3px 7px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+  z-index: 5;
 }
 
-.project-remove-btn:hover {
-  background: rgba(255,107,107,0.1);
-  color: #ff6b6b;
+.project-picker-actions button[data-tooltip]:hover::after {
   opacity: 1;
+}
+
+.project-picker-actions button:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--sb-text-soft);
+}
+
+.project-picker-actions .picker-hide-btn:hover,
+.project-picker-actions .picker-remove-btn:hover {
+  background: rgba(255,107,107,0.12);
+  color: #ff6b6b;
+}
+
+.project-picker-empty {
+  padding: 14px 10px;
+  font-size: 12px;
+  color: var(--sb-text-faint);
 }
 
 /* ========== SETTINGS VIEWER ========== */

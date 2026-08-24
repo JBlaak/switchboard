@@ -1,7 +1,9 @@
 // --- Dialogs & session launch helpers ---
 // Depends on globals: launchNewSession, cachedProjects, cachedAllProjects, sessionMap,
-// pendingSessions, openSessions, activePtyIds, refreshSidebar, pollActiveSessions (app.js)
-// Depends on: ICONS (icons.js)
+// pendingSessions, openSessions, activePtyIds, refreshSidebar, pollActiveSessions,
+// loadProjects (app.js)
+// Depends on: ICONS (icons.js), fuzzyMatch (utils.js), projectLabel (sidebar.js),
+// openSettingsViewer (settings-panel.js)
 
 // --- New session dialog ---
 async function resolveDefaultSessionOptions(project) {
@@ -431,6 +433,222 @@ async function showResumeSessionDialog(session) {
 // Settings viewer is in settings-panel.js (openSettingsViewer / closeSettingsViewer)
 // Global settings button & add project button bindings are in app.js (need DOM refs)
 
+// Instant hover label. The native `title` tooltip takes a beat to appear and is
+// easy to miss on icon-only buttons, so the picker paints its own.
+function setTooltip(el, text) {
+  el.dataset.tooltip = text;
+  el.setAttribute('aria-label', text);
+}
+
+// --- Project picker ---
+// The session list is flat, so there are no per-directory headers to hang the
+// project actions off. This dialog is where you pick a project to start a
+// session in, and where each project's own actions live.
+function showProjectPickerDialog() {
+  const overlay = document.createElement('div');
+  overlay.className = 'add-project-overlay';
+
+  const dialog = document.createElement('div');
+  dialog.className = 'add-project-dialog project-picker-dialog';
+  dialog.innerHTML = `
+    <h3>New Session</h3>
+    <input type="text" class="project-picker-filter" placeholder="Filter projects..." autocomplete="off" spellcheck="false">
+    <div class="project-picker-list"></div>
+  `;
+
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  const filterInput = dialog.querySelector('.project-picker-filter');
+  const listEl = dialog.querySelector('.project-picker-list');
+
+  function close() {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+
+  function mostRecent(project) {
+    let max = 0;
+    for (const s of project.sessions) {
+      const t = new Date(s.modified).getTime();
+      if (t > max) max = t;
+    }
+    return max;
+  }
+
+  // Paint the label with the fuzzy-matched characters picked out, coalescing
+  // runs so a contiguous match is one span rather than one per character.
+  function paintLabel(el, label, positions) {
+    el.textContent = '';
+    if (!positions || positions.length === 0) { el.textContent = label; return; }
+    const matched = new Set(positions);
+    let i = 0;
+    while (i < label.length) {
+      const isMatch = matched.has(i);
+      let j = i + 1;
+      while (j < label.length && matched.has(j) === isMatch) j++;
+      const part = label.slice(i, j);
+      if (isMatch) {
+        const mark = document.createElement('span');
+        mark.className = 'project-picker-match';
+        mark.textContent = part;
+        el.appendChild(mark);
+      } else {
+        el.appendChild(document.createTextNode(part));
+      }
+      i = j;
+    }
+  }
+
+  function render() {
+    const query = filterInput.value.trim();
+    // Fuzzy: the query's characters just have to appear in order. Matching the
+    // short label is what gets highlighted; the full path is a fallback so
+    // typing a parent directory still finds a project.
+    const matches = [];
+    for (const project of cachedProjects) {
+      const label = projectLabel(project.projectPath);
+      const labelMatch = fuzzyMatch(query, label);
+      const match = labelMatch || fuzzyMatch(query, project.projectPath);
+      if (!match) continue;
+      matches.push({
+        project, label,
+        onLabel: !!labelMatch,
+        score: match.score,
+        positions: labelMatch ? match.positions : [],
+      });
+    }
+    // Anything the label matched comes first, however well a long path happened
+    // to score — "sb" means switchboard, not the /Users/…/website whose path
+    // happens to contain an s before a b. Then best score, then most recent.
+    matches.sort((a, b) =>
+      (b.onLabel - a.onLabel) || (b.score - a.score) || (mostRecent(b.project) - mostRecent(a.project)));
+
+    listEl.innerHTML = '';
+    if (matches.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'project-picker-empty';
+      empty.textContent = 'No matching projects.';
+      listEl.appendChild(empty);
+      return;
+    }
+
+    for (const { project, label, positions } of matches) {
+      const row = document.createElement('div');
+      row.className = 'project-picker-row';
+
+      const name = document.createElement('div');
+      name.className = 'project-picker-name';
+      paintLabel(name, label, query ? positions : null);
+      name.title = project.projectPath;
+      if (project.remote) {
+        const badge = document.createElement('span');
+        badge.className = 'remote-badge';
+        badge.textContent = 'SSH';
+        name.appendChild(badge);
+      }
+
+      const count = document.createElement('span');
+      count.className = 'project-picker-count';
+      const live = project.sessions.filter(s => activePtyIds.has(s.sessionId)).length;
+      const total = project.sessions.length;
+      count.textContent = live > 0 ? `${live} running` : `${total} session${total === 1 ? '' : 's'}`;
+      if (live > 0) count.classList.add('running');
+
+      const actions = document.createElement('div');
+      actions.className = 'project-picker-actions';
+
+      if (project.remote) {
+        // Remote projects have no local settings to edit; give them a remove
+        // button instead (settings-stored, so nothing else offers removal).
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'picker-remove-btn';
+        setTooltip(removeBtn, 'Remove remote project');
+        removeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        removeBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Remove ${projectLabel(project.projectPath)}?\n\nThis disconnects open connections. tmux sessions on the remote machine keep running.`)) return;
+          await window.api.removeRemoteProject(project.projectPath);
+          loadProjects();
+          render();
+        };
+        actions.appendChild(removeBtn);
+      } else {
+        const settingsBtn = document.createElement('button');
+        settingsBtn.className = 'picker-settings-btn';
+        setTooltip(settingsBtn, 'Project settings');
+        settingsBtn.innerHTML = ICONS.gear(16);
+        settingsBtn.onclick = (e) => { e.stopPropagation(); close(); openSettingsViewer('project', project.projectPath); };
+        actions.appendChild(settingsBtn);
+      }
+
+      const archiveBtn = document.createElement('button');
+      archiveBtn.className = 'picker-archive-btn';
+      setTooltip(archiveBtn, 'Archive all sessions in this project');
+      archiveBtn.innerHTML = ICONS.archive(18);
+      archiveBtn.onclick = async (e) => {
+        e.stopPropagation();
+        const sessions = project.sessions.filter(s => !s.archived);
+        if (sessions.length === 0) return;
+        if (!confirm(`Archive all ${sessions.length} session${sessions.length > 1 ? 's' : ''} in ${projectLabel(project.projectPath)}?`)) return;
+        for (const s of sessions) {
+          // Stop unconditionally: activePtyIds can lag the real PTY state, and
+          // stopping a dead session is a no-op.
+          await window.api.stopSession(s.sessionId);
+          activePtyIds.delete(s.sessionId);
+          await window.api.archiveSession(s.sessionId, 1);
+          s.archived = 1;
+        }
+        pollActiveSessions();
+        loadProjects();
+        render();
+      };
+      actions.appendChild(archiveBtn);
+
+      if (/\/\.claude\/worktrees\//.test(project.projectPath)) {
+        const hideBtn = document.createElement('button');
+        hideBtn.className = 'picker-hide-btn';
+        setTooltip(hideBtn, 'Hide worktree');
+        hideBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        hideBtn.onclick = async (e) => {
+          e.stopPropagation();
+          const name = project.projectPath.split('/').pop();
+          if (!confirm(`Hide worktree "${name}"?\n\nSession files are not deleted.`)) return;
+          await window.api.removeProject(project.projectPath);
+          loadProjects();
+          render();
+        };
+        actions.appendChild(hideBtn);
+      }
+
+      row.append(name, count, actions);
+      row.onclick = () => {
+        // Capture the anchor rect before closing — the row is detached by then,
+        // and a detached element measures as 0x0 at the top-left corner.
+        const rect = row.getBoundingClientRect();
+        close();
+        showNewSessionPopover(project, { getBoundingClientRect: () => rect });
+      };
+      listEl.appendChild(row);
+    }
+  }
+
+  filterInput.addEventListener('input', render);
+  filterInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const first = listEl.querySelector('.project-picker-row');
+      if (first) first.click();
+    }
+  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  document.addEventListener('keydown', onKey);
+
+  render();
+  filterInput.focus();
+}
+
 function showAddProjectDialog() {
   const overlay = document.createElement('div');
   overlay.className = 'add-project-overlay';
@@ -445,7 +663,7 @@ function showAddProjectDialog() {
       <button class="add-project-tab" data-mode="remote">Remote (SSH)</button>
     </div>
     <div id="add-project-local">
-      <div class="add-project-hint">Select a folder to create a new project. To start a session in an existing project, use the + on its project header.</div>
+      <div class="add-project-hint">Select a folder to create a new project. To start a session in an existing project, use the + button above the session list.</div>
       <div class="folder-input-row">
         <input type="text" id="add-project-path" placeholder="/path/to/project" autocomplete="off" spellcheck="false">
         <button class="add-project-browse-btn">Browse</button>

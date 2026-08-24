@@ -40,6 +40,7 @@ const terminalArea = document.getElementById('terminal-area');
 const settingsViewer = document.getElementById('settings-viewer');
 const globalSettingsBtn = document.getElementById('global-settings-btn');
 const addProjectBtn = document.getElementById('add-project-btn');
+const newSessionBtn = document.getElementById('new-session-btn');
 const resortBtn = document.getElementById('resort-btn');
 const jsonlViewer = document.getElementById('jsonl-viewer');
 const jsonlViewerTitle = document.getElementById('jsonl-viewer-title');
@@ -76,10 +77,10 @@ let showTodayOnly = false;
 let cachedProjects = [];
 let cachedAllProjects = [];
 let activePtyIds = new Set();
-let sortedOrder = []; // [{ projectPath, itemIds: [itemId, ...] }, ...] — single source of truth for sidebar order
+let sortedOrder = []; // [{ id, tier }, ...] — flat render order of the session list, source of truth between renders
 let activeTab = 'sessions';
 let cachedPlans = [];
-let visibleSessionCount = 10;
+let visibleSessionCount = 25;
 let sessionMaxAgeDays = 3;
 const pendingSessions = new Map(); // sessionId → { session, projectPath, folder }
 
@@ -122,8 +123,14 @@ const sessionBusyState = new Map(); // sessionId → boolean (currently active)
 
 // Central activity dispatcher
 function setActivity(sessionId, active) {
+  // A turn starting again supersedes an unread answer: the row goes back to
+  // working. Only an idle signal is ignored while unread — otherwise a late
+  // idle repaint would clear a mark the user hasn't seen yet.
   if (responseReadySessions.has(sessionId)) {
-    return;
+    if (!active) return;
+    responseReadySessions.delete(sessionId);
+    const readyItem = document.querySelector(`.session-item[data-session-id="${sessionId}"]`);
+    if (readyItem) readyItem.classList.remove('response-ready');
   }
 
   const wasActive = sessionBusyState.get(sessionId) || false;
@@ -146,6 +153,13 @@ function setActivity(sessionId, active) {
     const item = document.querySelector(`.session-item[data-session-id="${sessionId}"]`);
     if (item) item.classList.toggle('cli-busy', active);
   }
+
+  // A busy↔idle flip moves the session between the Working and Ready blocks, and
+  // a row's block is only recomputed by a render — toggling a class alone would
+  // leave it stranded under its old heading. Not a re-sort: the open session
+  // keeps its slot. Only real transitions reach here (the main process dedupes),
+  // so this stays cheap.
+  if (wasActive !== active) refreshSidebar();
 }
 
 function clearUnread(sessionId) {
@@ -361,7 +375,8 @@ window.api.onCliBusyState((sessionId, busy) => {
 });
 
 // --- Single entry point for all sidebar renders ---
-// The sidebar always orders projects and sessions by most recent activity.
+// The sidebar is one flat list of sessions, ordered by what each session wants
+// from the user (see sidebar.js) and by most recent activity inside each block.
 // resort=true: nothing is held back — the open session moves to its true
 //   position too (use for user-initiated actions, e.g. the re-sort button)
 // resort=false (default): the open session keeps the slot it already had, so
@@ -377,21 +392,26 @@ function refreshSidebar({ resort = false } = {}) {
       const hasMatchingSessions = p.sessions.some(s => searchMatchIds.has(s.sessionId));
       const projectMatched = searchMatchProjectPaths && searchMatchProjectPaths.has(p.projectPath);
       if (!hasMatchingSessions && !projectMatched) return null;
+      // A project whose name matches contributes all of its sessions — there
+      // is no directory header left to stand in for the project itself.
       return {
         ...p,
-        sessions: hasMatchingSessions ? p.sessions.filter(s => searchMatchIds.has(s.sessionId)) : [],
-        _projectMatchedOnly: projectMatched && !hasMatchingSessions,
+        sessions: hasMatchingSessions ? p.sessions.filter(s => searchMatchIds.has(s.sessionId)) : p.sessions,
       };
     }).filter(Boolean);
   }
 
-  renderProjects(projects, resort);
+  renderSessionList(projects, resort);
 }
 
 // --- Archive toggle ---
 archiveToggle.innerHTML = ICONS.archive(18);
 archiveToggle.addEventListener('click', () => {
   showArchived = !showArchived;
+  if (showArchived) {
+    showStarredOnly = false; starToggle.classList.remove('active');
+    showRunningOnly = false; runningToggle.classList.remove('active');
+  }
   archiveToggle.classList.toggle('active', showArchived);
   refreshSidebar({ resort: true });
 });
@@ -399,7 +419,10 @@ archiveToggle.addEventListener('click', () => {
 // --- Star filter toggle ---
 starToggle.addEventListener('click', () => {
   showStarredOnly = !showStarredOnly;
-  if (showStarredOnly) { showRunningOnly = false; runningToggle.classList.remove('active'); }
+  if (showStarredOnly) {
+    showRunningOnly = false; runningToggle.classList.remove('active');
+    showArchived = false; archiveToggle.classList.remove('active');
+  }
   starToggle.classList.toggle('active', showStarredOnly);
   refreshSidebar({ resort: true });
 });
@@ -407,7 +430,10 @@ starToggle.addEventListener('click', () => {
 // --- Running filter toggle ---
 runningToggle.addEventListener('click', () => {
   showRunningOnly = !showRunningOnly;
-  if (showRunningOnly) { showStarredOnly = false; starToggle.classList.remove('active'); }
+  if (showRunningOnly) {
+    showStarredOnly = false; starToggle.classList.remove('active');
+    showArchived = false; archiveToggle.classList.remove('active');
+  }
   runningToggle.classList.toggle('active', showRunningOnly);
   refreshSidebar({ resort: true });
 });
@@ -433,6 +459,11 @@ globalSettingsBtn.addEventListener('click', () => {
 // --- Add project button ---
 addProjectBtn.addEventListener('click', () => {
   showAddProjectDialog();
+});
+
+// --- New session: pick the project to start it in ---
+newSessionBtn.addEventListener('click', () => {
+  showProjectPickerDialog();
 });
 
 // --- Search (debounced, per-tab FTS) ---
@@ -729,7 +760,7 @@ async function loadProjects({ resort = false } = {}) {
   renderDefaultStatus();
 }
 
-// Sidebar rendering (slugId, folderId, buildSlugGroup, renderProjects,
+// Sidebar rendering (slugId, projectLabel, buildSlugGroup, renderSessionList,
 // rebindSidebarEvents, buildSessionItem, startRename) → sidebar.js
 
 
@@ -949,7 +980,8 @@ initGridObservers();
 
 
 // Dialogs (resolveDefaultSessionOptions, forkSession, showNewSessionPopover,
-// showNewSessionDialog, showResumeSessionDialog, showAddProjectDialog, launchTerminalSession) → dialogs.js
+// showNewSessionDialog, showResumeSessionDialog, showProjectPickerDialog,
+// showAddProjectDialog, launchTerminalSession) → dialogs.js
 
 
 // --- Sidebar toggle ---
