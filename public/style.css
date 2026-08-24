@@ -3046,6 +3046,12 @@ body { display: flex; flex-direction: column; }
   white-space: nowrap;
 }
 
+/* Characters the fuzzy filter matched, picked out of the project name. */
+.project-picker-match {
+  color: var(--sb-accent);
+  font-weight: 600;
+}
+
 .project-picker-count {
   font-size: 10px;
   color: var(--sb-text-faint);

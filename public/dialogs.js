@@ -2,7 +2,7 @@
 // Depends on globals: launchNewSession, cachedProjects, cachedAllProjects, sessionMap,
 // pendingSessions, openSessions, activePtyIds, refreshSidebar, pollActiveSessions,
 // loadProjects (app.js)
-// Depends on: ICONS (icons.js), projectLabel (sidebar.js),
+// Depends on: ICONS (icons.js), fuzzyMatch (utils.js), projectLabel (sidebar.js),
 // openSettingsViewer (settings-panel.js)
 
 // --- New session dialog ---
@@ -476,14 +476,56 @@ function showProjectPickerDialog() {
     return max;
   }
 
+  // Paint the label with the fuzzy-matched characters picked out, coalescing
+  // runs so a contiguous match is one span rather than one per character.
+  function paintLabel(el, label, positions) {
+    el.textContent = '';
+    if (!positions || positions.length === 0) { el.textContent = label; return; }
+    const matched = new Set(positions);
+    let i = 0;
+    while (i < label.length) {
+      const isMatch = matched.has(i);
+      let j = i + 1;
+      while (j < label.length && matched.has(j) === isMatch) j++;
+      const part = label.slice(i, j);
+      if (isMatch) {
+        const mark = document.createElement('span');
+        mark.className = 'project-picker-match';
+        mark.textContent = part;
+        el.appendChild(mark);
+      } else {
+        el.appendChild(document.createTextNode(part));
+      }
+      i = j;
+    }
+  }
+
   function render() {
-    const query = filterInput.value.trim().toLowerCase();
-    const projects = [...cachedProjects]
-      .filter(p => !query || projectLabel(p.projectPath).toLowerCase().includes(query) || p.projectPath.toLowerCase().includes(query))
-      .sort((a, b) => mostRecent(b) - mostRecent(a));
+    const query = filterInput.value.trim();
+    // Fuzzy: the query's characters just have to appear in order. Matching the
+    // short label is what gets highlighted; the full path is a fallback so
+    // typing a parent directory still finds a project.
+    const matches = [];
+    for (const project of cachedProjects) {
+      const label = projectLabel(project.projectPath);
+      const labelMatch = fuzzyMatch(query, label);
+      const match = labelMatch || fuzzyMatch(query, project.projectPath);
+      if (!match) continue;
+      matches.push({
+        project, label,
+        onLabel: !!labelMatch,
+        score: match.score,
+        positions: labelMatch ? match.positions : [],
+      });
+    }
+    // Anything the label matched comes first, however well a long path happened
+    // to score — "sb" means switchboard, not the /Users/…/website whose path
+    // happens to contain an s before a b. Then best score, then most recent.
+    matches.sort((a, b) =>
+      (b.onLabel - a.onLabel) || (b.score - a.score) || (mostRecent(b.project) - mostRecent(a.project)));
 
     listEl.innerHTML = '';
-    if (projects.length === 0) {
+    if (matches.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'project-picker-empty';
       empty.textContent = 'No matching projects.';
@@ -491,13 +533,13 @@ function showProjectPickerDialog() {
       return;
     }
 
-    for (const project of projects) {
+    for (const { project, label, positions } of matches) {
       const row = document.createElement('div');
       row.className = 'project-picker-row';
 
       const name = document.createElement('div');
       name.className = 'project-picker-name';
-      name.textContent = projectLabel(project.projectPath);
+      paintLabel(name, label, query ? positions : null);
       name.title = project.projectPath;
       if (project.remote) {
         const badge = document.createElement('span');
