@@ -3032,8 +3032,15 @@ body { display: flex; flex-direction: column; }
   transition: background 0.12s;
 }
 
-.project-picker-row:hover {
+.project-picker-row:hover,
+.project-picker-row.selected {
   background: rgba(255,255,255,0.06);
+}
+
+/* The keyboard-selected row. Focus stays in the filter input, so this stripe is
+   the only cue for which row Enter opens. */
+.project-picker-row.selected {
+  box-shadow: inset 2px 0 0 var(--sb-accent);
 }
 
 .project-picker-name {
@@ -3070,7 +3077,8 @@ body { display: flex; flex-direction: column; }
   transition: opacity 0.12s;
 }
 
-.project-picker-row:hover .project-picker-actions {
+.project-picker-row:hover .project-picker-actions,
+.project-picker-row.selected .project-picker-actions {
   opacity: 1;
 }
 
@@ -3698,9 +3706,11 @@ body { display: flex; flex-direction: column; }
   text-align: left;
 }
 
-.popover-option:hover {
+.popover-option:hover,
+.popover-option:focus {
   background: rgba(255,255,255,0.06);
   color: var(--sb-text);
+  outline: none;
 }
 
 .popover-option-icon {
@@ -3723,7 +3733,8 @@ body { display: flex; flex-direction: column; }
   color: var(--sb-green);
 }
 
-.popover-option-terminal:hover {
+.popover-option-terminal:hover,
+.popover-option-terminal:focus {
   background: rgba(46,182,125,0.08);
 }
 

@@ -31,7 +31,7 @@ async function forkSession(session, project) {
   launchNewSession(project, options);
 }
 
-function showNewSessionPopover(project, anchorEl) {
+function showNewSessionPopover(project, anchorEl, { keyboard = false } = {}) {
   // Remove any existing popover
   document.querySelectorAll('.new-session-popover').forEach(el => el.remove());
 
@@ -86,6 +86,27 @@ function showNewSessionPopover(project, anchorEl) {
     }
   }
   setTimeout(() => document.addEventListener('mousedown', onClickOutside), 0);
+
+  // Arrow keys walk the options; the options are real buttons, so Enter and
+  // Space activate whichever one has focus without any help from us.
+  popover.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      popover.remove();
+      document.removeEventListener('mousedown', onClickOutside);
+      return;
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const options = [...popover.querySelectorAll('.popover-option')];
+    const i = options.indexOf(document.activeElement);
+    const step = e.key === 'ArrowDown' ? 1 : -1;
+    options[(i + step + options.length) % options.length].focus();
+  });
+
+  // Opened from the keyboard: land on the first option so Enter starts a
+  // session straight away.
+  if (keyboard) popover.querySelector('.popover-option').focus();
 }
 
 async function launchTerminalSession(project) {
@@ -462,6 +483,19 @@ function showProjectPickerDialog() {
   const filterInput = dialog.querySelector('.project-picker-filter');
   const listEl = dialog.querySelector('.project-picker-list');
 
+  // Keyboard selection. Focus stays in the filter input the whole time so you
+  // can keep typing, so the highlighted row is tracked here rather than with
+  // real DOM focus. `rows` is rebuilt by every render().
+  let rows = [];
+  let selected = 0;
+
+  function setSelected(index, { scroll = true } = {}) {
+    if (rows.length === 0) { selected = 0; return; }
+    selected = Math.max(0, Math.min(index, rows.length - 1));
+    rows.forEach((row, i) => row.el.classList.toggle('selected', i === selected));
+    if (scroll) rows[selected].el.scrollIntoView({ block: 'nearest' });
+  }
+
   function close() {
     overlay.remove();
     document.removeEventListener('keydown', onKey);
@@ -525,6 +559,7 @@ function showProjectPickerDialog() {
       (b.onLabel - a.onLabel) || (b.score - a.score) || (mostRecent(b.project) - mostRecent(a.project)));
 
     listEl.innerHTML = '';
+    rows = [];
     if (matches.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'project-picker-empty';
@@ -622,22 +657,38 @@ function showProjectPickerDialog() {
       }
 
       row.append(name, count, actions);
-      row.onclick = () => {
+      const activate = ({ keyboard = false } = {}) => {
         // Capture the anchor rect before closing — the row is detached by then,
         // and a detached element measures as 0x0 at the top-left corner.
         const rect = row.getBoundingClientRect();
         close();
-        showNewSessionPopover(project, { getBoundingClientRect: () => rect });
+        showNewSessionPopover(project, { getBoundingClientRect: () => rect }, { keyboard });
       };
+      row.onclick = () => activate();
+      // Keep the highlight under the pointer, so the mouse and the arrow keys
+      // never disagree about which row Enter would open.
+      const index = rows.length;
+      row.addEventListener('mouseenter', () => setSelected(index, { scroll: false }));
+      rows.push({ el: row, activate });
       listEl.appendChild(row);
     }
+
+    setSelected(selected, { scroll: false });
   }
 
-  filterInput.addEventListener('input', render);
+  filterInput.addEventListener('input', () => {
+    // A new query reorders everything, so start from the best match again.
+    selected = 0;
+    render();
+  });
   filterInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      const first = listEl.querySelector('.project-picker-row');
-      if (first) first.click();
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (rows.length === 0) return;
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      setSelected((selected + step + rows.length) % rows.length);
+    } else if (e.key === 'Enter') {
+      if (rows[selected]) rows[selected].activate({ keyboard: true });
     }
   });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
