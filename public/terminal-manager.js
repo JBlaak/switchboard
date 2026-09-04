@@ -431,6 +431,8 @@ function destroySession(sessionId) {
   const entry = openSessions.get(sessionId);
   if (!entry) return;
   window.api.closeTerminal(sessionId);
+  // Drop the remote-connection state; the connecting card goes with the element.
+  if (typeof remoteStatus !== 'undefined') remoteStatus.delete(sessionId);
   entry.terminal.dispose();
   entry.element.remove();
   openSessions.delete(sessionId);

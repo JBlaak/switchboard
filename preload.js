@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
   getActiveSessions: () => ipcRenderer.invoke('get-active-sessions'),
   getActiveTerminals: () => ipcRenderer.invoke('get-active-terminals'),
   stopSession: (id) => ipcRenderer.invoke('stop-session', id),
+  reconnectRemote: (id) => ipcRenderer.invoke('reconnect-remote', id),
   toggleStar: (id) => ipcRenderer.invoke('toggle-star', id),
   renameSession: (id, name) => ipcRenderer.invoke('rename-session', id, name),
   archiveSession: (id, archived) => ipcRenderer.invoke('archive-session', id, archived),
@@ -54,6 +55,9 @@ contextBridge.exposeInMainWorld('api', {
   },
   onProcessExited: (callback) => {
     ipcRenderer.on('process-exited', (_event, sessionId, exitCode) => callback(sessionId, exitCode));
+  },
+  onRemoteStatus: (callback) => {
+    ipcRenderer.on('remote-status', (_event, sessionId, status) => callback(sessionId, status));
   },
   onTerminalNotification: (callback) => {
     ipcRenderer.on('terminal-notification', (_event, sessionId, message) => callback(sessionId, message));

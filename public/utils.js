@@ -151,8 +151,35 @@ function shellEscape(path) {
   return "'" + path.replace(/'/g, "'\\''") + "'";
 }
 
+// --- Remote (SSH) connection status rendering ---
+// The live connection state renders as a card over the terminal (see app.js);
+// these are the two text bits that go with it — the scrollback record of each
+// break, and the label that replaces Running/Stopped in the terminal header.
+
+// One line of connection history in the scrollback. Opens its own line so it
+// can't land in the middle of whatever the remote host last printed, and closes
+// it so the next PTY output starts clean.
+function remoteStatusBanner(text, colour) {
+  return `\r\n${colour}── ${text} ──\x1b[0m\r\n`;
+}
+
+// Header label for a remote session mid-connect. Null means the connection is
+// not in flight and the normal running/stopped label applies.
+function remoteStatusLabel(status, now = Date.now()) {
+  if (!status) return null;
+  if (status.phase === 'connecting') return status.attempt ? 'Reconnecting…' : 'Connecting…';
+  if (status.phase === 'retrying') {
+    const secs = Math.max(0, Math.ceil((status.retryAt - now) / 1000));
+    return secs > 0 ? `Reconnecting in ${secs}s` : 'Reconnecting…';
+  }
+  return null;
+}
+
 // Expose pure helpers to Node for unit testing. No-op in the browser, where this
 // file is loaded as a plain <script> and `module` is undefined.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { fuzzyMatch, shortProjectPath, cleanDisplayName, encodeProjectPath };
+  module.exports = {
+    fuzzyMatch, shortProjectPath, cleanDisplayName, encodeProjectPath,
+    remoteStatusBanner, remoteStatusLabel,
+  };
 }
