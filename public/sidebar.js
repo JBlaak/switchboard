@@ -177,6 +177,22 @@ function sessionTier(sessionId) {
   return TIER_REST;
 }
 
+// Whether a row escapes the sidebar's truncation. Live and pinned rows are
+// never hidden, and neither is the open session; everything else is capped by
+// visibleSessionCount and the age cutoff.
+//
+// Remote sessions are exempt from both caps. Their work lives in a tmux session
+// on the remote host that keeps running whether or not Switchboard is connected,
+// and their `modified` only moves when the user opens them — there is no local
+// jsonl whose writes could keep the timestamp current. So a remote session that
+// had been working for days looked stale, aged out of the list, and read as if
+// it had been archived on its own. They are a small, deliberately added set;
+// Archive (or removing the remote) is the only thing that should drop one.
+function rowSurvivesTruncation(item, tier, { count, visibleSessionCount, ageCutoff, isActive }) {
+  if (tier >= TIER_RUNNING || item.pinned || item.remote || isActive) return true;
+  return count < visibleSessionCount && item.sortTime >= ageCutoff;
+}
+
 // Pinning only decides where a row lands once it has nothing live to say.
 function itemTier(item) {
   if (item.tier >= TIER_RUNNING) return item.tier;
@@ -235,6 +251,7 @@ function renderSessionList(projects, resort) {
         sortTime: new Date(session.modified).getTime(),
         pinned: !!session.starred,
         tier: sessionTier(session.sessionId),
+        remote: session.type === 'remote',
         element,
       });
     }
@@ -248,6 +265,7 @@ function renderSessionList(projects, resort) {
         sortTime: Math.max(...sorted.map(s => new Date(s.modified).getTime())),
         pinned: sorted.some(s => s.starred),
         tier: Math.max(...sorted.map(s => sessionTier(s.sessionId))),
+        remote: sorted.some(s => s.type === 'remote'),
         element,
       });
     }
@@ -278,8 +296,6 @@ function renderSessionList(projects, resort) {
     for (const item of bucket) ordered.push({ item, tier });
   }
 
-  // Truncate: live and pinned rows are never hidden, and neither is the open
-  // session; the rest are capped by visibleSessionCount and the age cutoff.
   let visible = [];
   let older = [];
   if (anyFilterActive) {
@@ -289,8 +305,10 @@ function renderSessionList(projects, resort) {
     const ageCutoff = Date.now() - sessionMaxAgeDays * 86400000;
     for (const entry of ordered) {
       const { item, tier } = entry;
-      if (tier >= TIER_RUNNING || item.pinned || item.element.id === activeItemId
-          || (count < visibleSessionCount && item.sortTime >= ageCutoff)) {
+      if (rowSurvivesTruncation(item, tier, {
+        count, visibleSessionCount, ageCutoff,
+        isActive: item.element.id === activeItemId,
+      })) {
         visible.push(entry);
         count++;
       } else {
@@ -718,4 +736,10 @@ function startRename(summaryEl, session) {
       input.replaceWith(restored);
     }
   });
+}
+
+// Expose pure helpers to Node for unit testing. No-op in the browser, where this
+// file is loaded as a plain <script> and `module` is undefined.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { rowSurvivesTruncation, TIER_RUNNING, TIER_REST };
 }
