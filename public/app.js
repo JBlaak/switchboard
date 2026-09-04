@@ -345,6 +345,234 @@ window.api.onProcessExited((sessionId, exitCode) => {
   pollActiveSessions();
 });
 
+// --- Remote (SSH) connection status ---
+// A remote session's terminal is empty until ssh says something, and ssh can
+// take a long time to say anything (a sleeping host, a 1Password approval, a
+// banner exchange that never completes). Without a status of its own the screen
+// is indistinguishable from a frozen app — which is exactly what a slow or
+// failing connect looked like.
+//
+// Two surfaces, deliberately: a card over the terminal carries the live state
+// (what we're doing, to which host, how long it has left, what you can do about
+// it), and the scrollback keeps a one-line record of each break so the reason is
+// still there afterwards. Reconnects are driven by the main process; the
+// renderer only narrates them.
+
+const remoteStatus = new Map(); // sessionId → last status from main
+let remoteTicker = null;
+
+// ssh gives up on a handshake at this point (ConnectTimeout in
+// remote-projects.js), which is what the connecting bar fills toward.
+const REMOTE_CONNECT_TIMEOUT_MS = 10000;
+const CONNECTED_FLASH_MS = 500;
+
+// The card is built per session, lazily — local sessions never pay for it — and
+// lives inside the terminal container so it follows the terminal into a grid
+// card without any extra plumbing.
+function ensureRemoteCard(sessionId) {
+  const entry = openSessions.get(sessionId);
+  if (!entry) return null;
+  if (entry.remoteCard) return entry.remoteCard;
+
+  const el = document.createElement('div');
+  el.className = 'rc';
+  el.hidden = true;
+  el.innerHTML = `
+    <div class="rc-card">
+      <svg class="rc-link" viewBox="0 0 220 58" aria-hidden="true">
+        <rect class="rc-node" x="11" y="18" width="38" height="26" rx="5"/>
+        <circle class="rc-node-mark" cx="30" cy="31" r="4"/>
+        <path class="rc-wire" d="M55 31H165"/>
+        <path class="rc-flow" d="M55 31H165"/>
+        <circle class="rc-spark" cx="55" cy="31" r="3.5"/>
+        <g class="rc-break">
+          <path d="M103 22l14 18"/>
+          <path d="M117 22l-14 18"/>
+        </g>
+        <rect class="rc-node" x="171" y="18" width="38" height="26" rx="5"/>
+        <path class="rc-node-mark" d="M178 25h24M178 31h24M178 37h15"/>
+      </svg>
+      <div class="rc-status"></div>
+      <div class="rc-target"></div>
+      <div class="rc-bar"><i></i></div>
+      <div class="rc-detail"></div>
+      <div class="rc-actions">
+        <button class="rc-retry" type="button">Retry now</button>
+        <button class="rc-cancel" type="button">Stop trying</button>
+      </div>
+    </div>`;
+
+  el.querySelector('.rc-retry').addEventListener('click', () => retryRemote(sessionId));
+  el.querySelector('.rc-cancel').addEventListener('click', () => {
+    // The tmux session on the far end is untouched by this, so there is nothing
+    // to confirm — it only stops Switchboard dialling.
+    window.api.stopSession(sessionId);
+  });
+
+  entry.element.appendChild(el);
+  entry.remoteCard = el;
+  return el;
+}
+
+// "Retry now". While the session is still held by the main process this just
+// short-circuits the backoff; once it has been retired (retries exhausted, so
+// the row went back to Stopped) the only way back is a fresh open.
+async function retryRemote(sessionId) {
+  const entry = openSessions.get(sessionId);
+  if (entry && !entry.closed) {
+    const res = await window.api.reconnectRemote(sessionId).catch(() => null);
+    if (res && res.ok) return;
+  }
+  const session = sessionMap.get(sessionId) || (entry && entry.session);
+  if (session) openSession(session);
+}
+
+function hideRemoteCard(sessionId) {
+  const entry = openSessions.get(sessionId);
+  if (entry && entry.remoteCard) entry.remoteCard.hidden = true;
+}
+
+// Restart a CSS bar animation. Re-assigning a class does not replay keyframes,
+// so the element is swapped for a clone — the one reliable way to retrigger.
+function restartRemoteBar(card, durationMs) {
+  if (!card) return;
+  const bar = card.querySelector('.rc-bar');
+  const fresh = bar.querySelector('i').cloneNode(false);
+  bar.replaceChildren(fresh);
+  bar.style.setProperty('--rc-duration', durationMs + 'ms');
+}
+
+// Everything the card shows is derived from the stored status plus the clock, so
+// the per-second tick is just this function again.
+function renderRemoteCard(sessionId) {
+  const status = remoteStatus.get(sessionId);
+  if (!status) return;
+  const card = ensureRemoteCard(sessionId);
+  if (!card) return;
+
+  const target = status.target || 'the remote host';
+  const attemptOf = status.maxAttempts
+    ? `attempt ${status.attempt} of ${status.maxAttempts}`
+    : '';
+
+  card.classList.remove('is-connecting', 'is-retrying', 'is-failed', 'is-connected');
+  card.querySelector('.rc-target').textContent = target;
+
+  if (status.phase === 'connecting') {
+    const secs = Math.floor((Date.now() - status.startedAt) / 1000);
+    card.classList.add('is-connecting');
+    card.querySelector('.rc-status').textContent = status.attempt ? 'Reconnecting' : 'Connecting';
+    // Counting up toward a limit the user can see coming beats an
+    // indeterminate spinner that could mean anything.
+    card.querySelector('.rc-detail').textContent =
+      [attemptOf, secs >= 1 ? `${secs}s` : ''].filter(Boolean).join(' · ');
+  } else if (status.phase === 'retrying') {
+    const secs = Math.max(0, Math.ceil((status.retryAt - Date.now()) / 1000));
+    card.classList.add('is-retrying');
+    card.querySelector('.rc-status').textContent =
+      secs > 0 ? `Reconnecting in ${secs}s` : 'Reconnecting…';
+    card.querySelector('.rc-detail').textContent =
+      [status.reason, attemptOf].filter(Boolean).join(' · ');
+  } else if (status.phase === 'failed') {
+    card.classList.add('is-failed');
+    card.querySelector('.rc-status').textContent =
+      status.everConnected ? 'Lost connection' : 'Could not connect';
+    card.querySelector('.rc-detail').textContent = status.reason || '';
+  } else if (status.phase === 'connected') {
+    card.classList.add('is-connected');
+    card.querySelector('.rc-status').textContent = 'Connected';
+    card.querySelector('.rc-detail').textContent = '';
+  }
+
+  card.hidden = false;
+}
+
+// One shared tick for every card and the header, running only while some
+// session is mid-connect. Whole seconds are all any of them show.
+function syncRemoteTicker() {
+  const live = [...remoteStatus.values()].some(s => s.phase === 'connecting' || s.phase === 'retrying');
+  if (live && !remoteTicker) {
+    remoteTicker = setInterval(() => {
+      for (const [id, s] of remoteStatus) {
+        if (s.phase === 'connecting' || s.phase === 'retrying') renderRemoteCard(id);
+      }
+      updateTerminalHeader();
+      syncRemoteTicker();
+    }, 1000);
+  } else if (!live && remoteTicker) {
+    clearInterval(remoteTicker);
+    remoteTicker = null;
+  }
+}
+
+// A permanent line in the scrollback, in the same dim rule as the session-exit
+// banner so status reads as chrome rather than output from the remote host.
+function writeTerminalStatusLine(sessionId, text, colour = '\x1b[2m') {
+  const entry = openSessions.get(sessionId);
+  if (!entry) return;
+  try {
+    entry.terminal.write(remoteStatusBanner(text, colour));
+  } catch {}
+}
+
+window.api.onRemoteStatus((sessionId, status) => {
+  const previous = remoteStatus.get(sessionId);
+  const target = status.target || 'the remote host';
+
+  switch (status.phase) {
+    case 'connecting':
+      // startedAt is stamped here so the card can count up without main having
+      // to send a tick every second.
+      remoteStatus.set(sessionId, { ...status, startedAt: Date.now() });
+      renderRemoteCard(sessionId);
+      restartRemoteBar(ensureRemoteCard(sessionId), REMOTE_CONNECT_TIMEOUT_MS);
+      break;
+
+    case 'connected':
+      remoteStatus.set(sessionId, status);
+      // A brief green beat so a reconnect is visibly resolved rather than the
+      // card just vanishing; on a first connect the tmux repaint says it well
+      // enough, so the card goes straight away.
+      if (previous && previous.attempt) {
+        renderRemoteCard(sessionId);
+        writeTerminalStatusLine(sessionId, 'reconnected');
+        setTimeout(() => {
+          if (remoteStatus.get(sessionId)?.phase === 'connected') hideRemoteCard(sessionId);
+        }, CONNECTED_FLASH_MS);
+      } else {
+        hideRemoteCard(sessionId);
+      }
+      break;
+
+    case 'retrying':
+      remoteStatus.set(sessionId, { ...status, retryAt: Date.now() + status.delayMs });
+      // The reason also goes to the scrollback, where it survives the next
+      // reconnect — the card only ever shows the break it is currently on.
+      writeTerminalStatusLine(sessionId, status.everConnected
+        ? `connection lost: ${status.reason}`
+        : `could not reach ${target}: ${status.reason}`, '\x1b[33m');
+      renderRemoteCard(sessionId);
+      restartRemoteBar(ensureRemoteCard(sessionId), status.delayMs);
+      break;
+
+    case 'failed':
+      remoteStatus.set(sessionId, status);
+      writeTerminalStatusLine(sessionId,
+        `gave up ${status.everConnected ? 'reconnecting to' : 'connecting to'} ${target}`,
+        '\x1b[33m');
+      renderRemoteCard(sessionId);
+      break;
+
+    case 'disconnected':
+      remoteStatus.delete(sessionId);
+      hideRemoteCard(sessionId);
+      break;
+  }
+
+  syncRemoteTicker();
+  if (sessionId === activeSessionId) updateTerminalHeader();
+});
+
 // --- Terminal notifications (iTerm2 OSC 9 — "needs attention") ---
 window.api.onTerminalNotification((sessionId, message) => {
   // Only mark as needing attention for "attention" messages, not "waiting for input"
@@ -648,8 +876,16 @@ function updateRunningIndicators() {
 function updateTerminalHeader() {
   if (!activeSessionId) return;
   const running = activePtyIds.has(activeSessionId);
-  terminalHeaderStatus.className = running ? 'running' : 'stopped';
-  terminalHeaderStatus.textContent = running ? 'Running' : 'Stopped';
+  // While a remote session is connecting or waiting out a reconnect it is
+  // neither running nor stopped, and saying either is misleading.
+  const connectingLabel = remoteStatusLabel(remoteStatus.get(activeSessionId), Date.now());
+  if (connectingLabel) {
+    terminalHeaderStatus.className = 'connecting';
+    terminalHeaderStatus.textContent = connectingLabel;
+  } else {
+    terminalHeaderStatus.className = running ? 'running' : 'stopped';
+    terminalHeaderStatus.textContent = running ? 'Running' : 'Stopped';
+  }
   terminalStopBtn.style.display = running ? '' : 'none';
   updatePtyTitle();
 }

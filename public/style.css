@@ -1312,6 +1312,22 @@ body { display: flex; flex-direction: column; }
   box-shadow: 0 0 6px rgba(46,182,125,0.5);
 }
 
+/* Remote sessions sit between running and stopped while ssh connects or the
+   reconnect backoff runs; yellow and pulsing so it reads as "in progress". */
+#terminal-header-status.connecting {
+  color: var(--sb-yellow);
+}
+
+#terminal-header-status.connecting::before {
+  background: var(--sb-yellow);
+  animation: sb-connecting-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes sb-connecting-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
 #terminal-header-status.stopped {
   color: var(--sb-text-faint);
 }
@@ -1361,6 +1377,273 @@ body { display: flex; flex-direction: column; }
 .terminal-container.drag-over {
   outline: 2px solid rgba(var(--sb-accent-rgb), 0.6);
   outline-offset: -2px;
+}
+
+/* --- Remote (SSH) connecting card --- */
+/* Sits over the terminal while a connection is in flight. A scrim rather than
+   an opaque panel: on a reconnect the last screen tmux painted stays readable
+   behind it, so the session still feels like the same session. */
+.rc {
+  position: absolute;
+  inset: 0;
+  /* Above the terminal's find bar (z-index 10): while the link is down the card
+     is the thing that matters, and search can be reopened afterwards. */
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(16, 20, 20, 0.78);
+  backdrop-filter: blur(3px);
+  animation: rc-appear 160ms ease-out;
+}
+
+/* A class selector outranks the UA stylesheet's `[hidden] { display: none }`,
+   so display:flex above would keep the card visible with el.hidden set. */
+.rc[hidden] { display: none; }
+
+@keyframes rc-appear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.rc-card {
+  --rc-accent: var(--sb-yellow);
+  /* Percentages so the card still fits inside a grid card, which is far
+     narrower than the single-terminal view. */
+  width: min(400px, 86%);
+  box-sizing: border-box;
+  padding: 22px 26px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  background: var(--sb-bg-raised);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.rc.is-failed    .rc-card { --rc-accent: var(--sb-red); }
+.rc.is-connected .rc-card { --rc-accent: var(--sb-green); }
+
+/* --- The link diagram: this machine ──── the host --- */
+.rc-link {
+  display: block;
+  width: 190px;
+  max-width: 100%;
+  height: 50px;
+  margin: 0 auto 14px;
+  overflow: visible;
+}
+
+.rc-node,
+.rc-node-mark {
+  fill: none;
+  stroke: var(--sb-text-dimmest);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.rc-node-mark { transition: stroke 200ms ease; }
+.rc.is-connected .rc-node-mark,
+.rc.is-connected .rc-node { stroke: var(--sb-green-soft); }
+
+/* The wire is drawn twice: a static rail, plus a dashed overlay that only
+   moves while a connection is actually being attempted. */
+.rc-wire {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-width: 1.6;
+}
+
+.rc-flow {
+  fill: none;
+  stroke: var(--rc-accent);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 7;
+  opacity: 0;
+}
+
+.rc-spark {
+  fill: var(--rc-accent);
+  opacity: 0;
+}
+
+/* Connecting: dashes crawl toward the host and a pulse runs the wire. */
+.rc.is-connecting .rc-flow {
+  opacity: 0.55;
+  animation: rc-crawl 700ms linear infinite;
+}
+
+.rc.is-connecting .rc-spark {
+  animation: rc-travel 1400ms ease-in-out infinite;
+}
+
+@keyframes rc-crawl {
+  to { stroke-dashoffset: -12; }
+}
+
+/* The wire spans x=55→165 in the viewBox, so 110 units end to end. */
+@keyframes rc-travel {
+  0%        { transform: translateX(0);     opacity: 0; }
+  12%, 88%  {                               opacity: 1; }
+  100%      { transform: translateX(110px); opacity: 0; }
+}
+
+/* Broken: the X only shows once there is nothing in flight. */
+.rc-break path {
+  fill: none;
+  stroke: var(--rc-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.rc-break {
+  opacity: 0;
+  transform-box: view-box;
+  transform-origin: 110px 31px;
+}
+
+.rc.is-retrying .rc-break,
+.rc.is-failed .rc-break {
+  opacity: 1;
+  animation: rc-snap 260ms ease-out;
+}
+
+.rc.is-retrying .rc-wire,
+.rc.is-failed .rc-wire {
+  stroke-dasharray: 4 6;
+}
+
+@keyframes rc-snap {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.rc.is-connected .rc-wire {
+  stroke: var(--sb-green);
+  opacity: 0.7;
+}
+
+/* --- Text --- */
+.rc-status {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--rc-accent);
+  letter-spacing: -0.01em;
+}
+
+.rc-target {
+  margin-top: 3px;
+  font-size: 12px;
+  font-family: 'SF Mono', Menlo, monospace;
+  color: var(--sb-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.rc-detail {
+  margin-top: 8px;
+  min-height: 15px;
+  font-size: 11px;
+  color: var(--sb-text-faint);
+}
+
+/* --- Progress --- */
+/* Determinate in both states, because in both there is a real deadline to
+   show: how long ssh has left on the handshake, and how long until the next
+   attempt. --rc-duration is set per state from JS. */
+.rc-bar {
+  --rc-duration: 10000ms;
+  height: 2px;
+  margin-top: 14px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.rc-bar i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--rc-accent);
+  border-radius: 2px;
+}
+
+.rc.is-connecting .rc-bar i {
+  animation: rc-fill var(--rc-duration) linear forwards;
+}
+
+.rc.is-retrying .rc-bar i {
+  animation: rc-drain var(--rc-duration) linear forwards;
+}
+
+/* Nothing is pending, so an empty track would just be noise. */
+.rc.is-failed .rc-bar,
+.rc.is-connected .rc-bar {
+  visibility: hidden;
+}
+
+@keyframes rc-fill {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+
+@keyframes rc-drain {
+  from { width: 100%; }
+  to   { width: 0; }
+}
+
+/* --- Actions --- */
+.rc-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.rc-actions button {
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--sb-text-soft);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.rc-actions button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--sb-text-strong);
+}
+
+.rc.is-failed .rc-retry {
+  color: var(--sb-accent-ink);
+  background: var(--sb-accent);
+  border-color: transparent;
+}
+
+.rc.is-failed .rc-retry:hover {
+  background: var(--sb-accent-hover);
+  color: var(--sb-accent-ink);
+}
+
+/* Retrying already has a countdown doing the work, so the button is a
+   shortcut rather than the main affordance. Once we've given up it is the only
+   way forward, and there is no backoff left to cancel. */
+.rc.is-connected .rc-actions,
+.rc.is-failed .rc-cancel { display: none; }
+.rc.is-connecting .rc-retry { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rc,
+  .rc-flow,
+  .rc-spark,
+  .rc-break,
+  .rc-bar i { animation: none; }
+  .rc-flow, .rc-spark { opacity: 0.55; }
+  /* Nothing can fill it, and an always-empty track looks broken. The status
+     line still says how many seconds are left. */
+  .rc-bar { visibility: hidden; }
 }
 
 /* Prevent terminal content from rendering under xterm's scrollbar */
