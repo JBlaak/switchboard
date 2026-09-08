@@ -1,0 +1,34 @@
+// Switchboard's stylesheet.
+//
+// Split into partials along the section headings the single style.css already
+// used, and loaded here in that same order — the cascade depends on it, so this
+// list is sequence-significant rather than alphabetical.
+//
+// The colour tokens stay CSS custom properties rather than becoming Sass
+// variables: they are read at runtime (see docs/customizing-colors.md and
+// scripts/apply-theme.ps1), which compile-time variables could not support.
+
+@use 'reset';
+@use 'tokens';
+@use 'chrome';
+@use 'update-toast';
+@use 'status-bar';
+@use 'sidebar';
+@use 'main-area';
+@use 'terminal-search';
+@use 'session-grid';
+@use 'scrollbar';
+@use 'plans';
+@use 'stats-viewer';
+@use 'memory-viewer';
+@use 'markdown-preview';
+@use 'jsonl-viewer';
+@use 'add-project-button';
+@use 'add-project-dialog';
+@use 'global-settings-button';
+@use 'project-picker';
+@use 'settings-viewer';
+@use 'new-session-dialog';
+@use 'new-session-popover';
+@use 'terminal-badge';
+@use 'file-panel';

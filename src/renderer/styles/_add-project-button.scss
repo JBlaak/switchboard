@@ -1,0 +1,49 @@
+/* ========== ADD PROJECT BUTTON ========== */
+#grid-toggle-btn,
+#resort-btn,
+#new-session-btn,
+#add-project-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--sb-text-faint);
+  font-size: 11px;
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#grid-toggle-btn { margin-left: auto; }
+#resort-btn { margin-left: 2px; }
+#new-session-btn { margin-left: 2px; }
+#add-project-btn { margin-left: 2px; }
+
+#grid-toggle-btn:hover,
+#resort-btn:hover,
+#add-project-btn:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.12);
+  color: #888;
+}
+
+/* The one button in the row that creates something; tinted so it reads as the
+   primary action next to the view toggles. */
+#new-session-btn:hover {
+  background: rgba(76,197,150,0.12);
+  border-color: rgba(76,197,150,0.3);
+  color: var(--sb-green-soft);
+}
+
+#grid-toggle-btn.active {
+  background: rgba(var(--sb-accent-rgb),0.1);
+  border-color: rgba(var(--sb-accent-rgb),0.3);
+  color: var(--sb-accent);
+}

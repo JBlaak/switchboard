@@ -4,20 +4,26 @@
   "private": true,
   "description": "A desktop app for browsing, searching, and managing CLI coding sessions",
   "author": "Doctly <support@doctly.ai>",
-  "main": "main.js",
+  "main": "app/main.js",
+  "engines": {
+    "node": ">=18.20"
+  },
   "scripts": {
-    "start": "npm run bundle:codemirror && electron .",
-    "test": "node --test",
+    "start": "npm run build && electron .",
+    "dev": "node scripts/build.mjs --watch & electron .",
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build",
+    "test": "tsx --test test/*.test.ts",
     "electron": "electron .",
     "electron-dev": "SWITCHBOARD_DATA_DIR=\"$HOME/.switchboard-dev\" electron .",
-    "bundle:codemirror": "esbuild public/codemirror-setup.js --bundle --outfile=public/codemirror-bundle.js --format=iife --platform=browser --minify",
     "generate-icons": "node scripts/generate-icons.js && node scripts/generate-dmg-background.js",
-    "build": "npm run bundle:codemirror && electron-builder",
-    "build:mac": "npm run bundle:codemirror && electron-builder --mac && node scripts/postinstall.js",
-    "build:mac:arm64": "npm run bundle:codemirror && electron-builder --mac --arm64 && node scripts/postinstall.js",
-    "build:win": "npm run bundle:codemirror && electron-builder --win",
-    "build:linux": "npm run bundle:codemirror && electron-builder --linux",
-    "release": "npm run bundle:codemirror && electron-builder --publish always",
+    "dist": "npm run build && electron-builder",
+    "build:mac": "npm run build && electron-builder --mac && node scripts/postinstall.js",
+    "build:mac:arm64": "npm run build && electron-builder --mac --arm64 && node scripts/postinstall.js",
+    "build:win": "npm run build && electron-builder --win",
+    "build:linux": "npm run build && electron-builder --linux",
+    "release": "npm run build && electron-builder --publish always",
     "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
@@ -45,20 +51,25 @@
     "@codemirror/view": "^6.39.16",
     "@ddietr/codemirror-themes": "^1.5.2",
     "@napi-rs/canvas": "^0.1.62",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.5.0",
+    "@types/ws": "^8.18.1",
     "codemirror": "^6.0.2",
     "electron": "^41.0.0",
     "electron-builder": "^26.0.0",
     "electron-reloader": "^1.2.3",
     "esbuild": "^0.27.3",
-    "png2icons": "^2.0.1"
+    "png2icons": "^2.0.1",
+    "sass": "^1.104.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
   },
   "build": {
     "appId": "ai.doctly.switchboard",
     "productName": "Switchboard",
     "files": [
-      "*.js",
-      "workers/**/*",
-      "public/**/*",
+      "app/**/*",
+      "build/icon.png",
       "node_modules/**/*"
     ],
     "asarUnpack": [

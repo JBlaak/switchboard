@@ -1,0 +1,48 @@
+/* ========== TERMINAL SEARCH BAR ========== */
+.terminal-search-bar {
+  position: absolute;
+  top: 4px;
+  right: 28px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--sb-bg-raised);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  padding: 4px 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.terminal-search-input {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  color: #cdd6f4;
+  font-size: 12px;
+  padding: 3px 8px;
+  width: 180px;
+  outline: none;
+}
+.terminal-search-input:focus {
+  border-color: rgba(var(--sb-accent-rgb),0.5);
+}
+.terminal-search-count {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  min-width: 20px;
+  text-align: center;
+}
+.terminal-search-bar button {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.terminal-search-bar button:hover {
+  background: rgba(255,255,255,0.1);
+  color: #cdd6f4;
+}

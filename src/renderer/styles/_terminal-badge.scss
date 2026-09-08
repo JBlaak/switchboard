@@ -1,0 +1,16 @@
+/* ========== TERMINAL BADGE ========== */
+.terminal-badge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--sb-green);
+  margin-right: 5px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+}
+
+/* Terminal sessions: green status dot */
+.session-item.is-terminal .session-status-dot.running {
+  background: var(--sb-green);
+  box-shadow: 0 0 6px rgba(46,182,125,0.5);
+}

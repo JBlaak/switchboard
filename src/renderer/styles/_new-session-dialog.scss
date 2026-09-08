@@ -1,0 +1,152 @@
+/* ========== NEW SESSION DIALOG ========== */
+.new-session-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.new-session-dialog {
+  background: var(--sb-bg-raised);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 24px;
+  width: 540px;
+  max-width: 90vw;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+}
+
+.new-session-dialog h3 {
+  font-size: 15px;
+  color: var(--sb-text);
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.new-session-dialog .settings-field {
+  margin-bottom: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.035);
+  background: rgba(255,255,255,0.02);
+  padding: 14px 18px;
+  border-radius: 0;
+}
+
+.new-session-dialog .settings-field:first-of-type {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.new-session-dialog .settings-field:last-of-type {
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+  border-bottom: none;
+  margin-bottom: 16px;
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.permission-option {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--sb-text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.permission-option .perm-name {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.permission-option .perm-desc {
+  display: block;
+  font-size: 10px;
+  color: var(--sb-text-dimmest);
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.permission-option:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.15);
+  color: var(--sb-text-dim);
+}
+
+.permission-option.selected {
+  background: rgba(var(--sb-accent-rgb),0.12);
+  border-color: rgba(var(--sb-accent-rgb),0.4);
+  color: var(--sb-accent);
+}
+
+.permission-option.selected .perm-desc {
+  color: rgba(var(--sb-accent-rgb),0.6);
+}
+
+.permission-option.dangerous.selected {
+  background: rgba(224,30,90,0.12);
+  border-color: rgba(224,30,90,0.4);
+  color: var(--sb-red);
+}
+
+.permission-option.dangerous.selected .perm-desc {
+  color: rgba(224,30,90,0.5);
+}
+
+.new-session-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.new-session-cancel-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--sb-text-muted);
+  font-size: 13px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.new-session-cancel-btn:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--sb-text-muted);
+}
+
+.new-session-start-btn {
+  background: rgba(46,182,125,0.12);
+  border: 1px solid rgba(46,182,125,0.3);
+  color: var(--sb-green);
+  font-size: 13px;
+  padding: 8px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.new-session-start-btn:hover {
+  background: rgba(46,182,125,0.2);
+  border-color: rgba(46,182,125,0.5);
+}

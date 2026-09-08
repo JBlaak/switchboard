@@ -1,0 +1,61 @@
+/* ========== NEW SESSION POPOVER ========== */
+.new-session-popover {
+  position: fixed;
+  z-index: 1001;
+  background: var(--sb-bg-raised);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  min-width: 170px;
+}
+
+.popover-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--sb-text-dim);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s;
+  text-align: left;
+}
+
+.popover-option:hover,
+.popover-option:focus {
+  background: rgba(255,255,255,0.06);
+  color: var(--sb-text);
+  outline: none;
+}
+
+.popover-option-icon {
+  font-size: 11px;
+  color: var(--sb-accent);
+  width: 18px;
+  height: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.popover-option-icon.claude-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.popover-option-terminal .popover-option-icon,
+.terminal-icon {
+  color: var(--sb-green);
+}
+
+.popover-option-terminal:hover,
+.popover-option-terminal:focus {
+  background: rgba(46,182,125,0.08);
+}

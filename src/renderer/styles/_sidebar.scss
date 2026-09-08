@@ -1,0 +1,844 @@
+/* ========== SIDEBAR ========== */
+#sidebar {
+  width: 340px;
+  min-width: 200px;
+  max-width: 600px;
+  background: var(--sb-bg-panel);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  border-right: none;
+  flex-shrink: 0;
+}
+
+#sidebar-resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  height: 100vh;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.15s;
+}
+
+#sidebar-resize-handle:hover,
+#sidebar-resize-handle.dragging {
+  background: rgba(var(--sb-accent-rgb),0.3);
+}
+
+#sidebar-header {
+  padding: 16px var(--sb-sidebar-gutter) 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---- Sidebar tabs ---- */
+#sidebar-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  align-items: center;
+}
+
+.sidebar-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--sb-text-faint);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-tab svg {
+  width: 18px;
+  height: 18px;
+}
+
+.sidebar-tab:hover {
+  color: var(--sb-text-muted);
+}
+
+.sidebar-tab.active {
+  color: var(--sb-text-dim);
+  border-bottom-color: var(--sb-accent);
+}
+
+#session-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#loading-status {
+  font-size: 11px;
+  color: var(--sb-text-muted);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+#loading-status.active {
+  animation: loading-pulse 1.2s ease-in-out infinite;
+}
+
+#star-toggle, #archive-toggle, #running-toggle, #today-toggle {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--sb-text-faint);
+  font-size: 11px;
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  font-weight: 500;
+  line-height: 1;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#star-toggle:hover, #archive-toggle:hover, #running-toggle:hover, #today-toggle:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.12);
+  color: #888;
+}
+
+#star-toggle.active {
+  background: rgba(236,178,46,0.1);
+  border-color: rgba(236,178,46,0.25);
+  color: var(--sb-yellow);
+}
+
+#archive-toggle.active {
+  background: rgba(var(--sb-accent-rgb),0.1);
+  border-color: rgba(var(--sb-accent-rgb),0.25);
+  color: var(--sb-accent);
+}
+
+#running-toggle.active {
+  background: rgba(46,182,125,0.1);
+  border-color: rgba(46,182,125,0.25);
+  color: var(--sb-green);
+}
+
+#today-toggle.active {
+  background: rgba(54,197,240,0.1);
+  border-color: rgba(54,197,240,0.25);
+  color: #50b4ff;
+}
+
+/* ---- Search ---- */
+#search-bar {
+  padding: 0 var(--sb-sidebar-gutter) 14px;
+  position: relative;
+}
+
+#search-input {
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 8px 44px 8px 12px;
+  font-size: 13px;
+  color: var(--sb-text-soft);
+  outline: none;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+#search-clear {
+  position: absolute;
+  right: 40px;
+  top: 0;
+  height: calc(100% - 14px);
+  display: none;
+  align-items: center;
+  background: none;
+  border: none;
+  color: var(--sb-text-faint);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+#search-clear:hover {
+  color: var(--sb-text-dim);
+}
+
+#search-bar.has-query #search-clear {
+  display: flex;
+}
+
+#search-input:focus {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(var(--sb-accent-rgb),0.4);
+  box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb),0.08);
+}
+
+#search-input::placeholder {
+  color: #5c6264;
+}
+
+#search-titles-toggle {
+  position: absolute;
+  right: 22px;
+  top: 0;
+  height: calc(100% - 14px);
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  color: #5c6264;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.15s;
+  letter-spacing: -0.5px;
+}
+
+#search-titles-toggle:hover {
+  color: var(--sb-text-dim);
+}
+
+#search-titles-toggle.active {
+  color: #ffffff;
+}
+
+
+/* ---- Scrollable content ---- */
+#sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 0 12px;
+}
+
+/* ---- Flat session list ---- */
+/* Sessions are top-level rows now, so the list carries the gutter the project
+   cards used to: the row pill's own inset still lands on --sb-row-inset. */
+.session-list {
+  padding: 4px var(--sb-sidebar-gutter) 10px;
+}
+
+/* Section headings for the flat list: Needs input / Ready / Working / Pinned /
+   Recent. The label sits on the shared text column, where the project name used
+   to be, so the list keeps one left rail. */
+.session-section-label {
+  padding: 12px 6px 4px var(--sb-row-text);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sb-text-dimmest);
+  user-select: none;
+}
+
+.session-section-label#section-4 { color: #f0a050; }
+.session-section-label#section-3 { color: var(--sb-blue); }
+.session-section-label#section-2 { color: var(--sb-green); }
+.session-section-label#section-1 { color: var(--sb-yellow); }
+
+/* Wraps instead of truncating: the project name is the one part of the row that
+   can be arbitrarily long, and an elided path tells you nothing. */
+.session-meta-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  min-width: 0;
+}
+
+/* Project (and worktree branch) each row belongs to — replaces the directory
+   header the flat list no longer has. */
+.session-project {
+  color: var(--sb-accent);
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
+
+.session-project.is-remote {
+  color: var(--sb-blue);
+}
+
+.slug-group-meta .session-project {
+  margin-right: 6px;
+}
+
+/* ---- Project groups (agent-files tree; the session list is flat) ---- */
+.project-group {
+  margin: 6px var(--sb-sidebar-gutter);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.project-group:first-child {
+  margin-top: 8px;
+}
+
+.project-group:hover {
+  border-color: rgba(255,255,255,0.10);
+}
+
+.project-header {
+  padding: 10px 12px 10px var(--sb-row-inset);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--sb-text-soft);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--sb-row-gap);
+  user-select: none;
+  transition: all 0.15s;
+  background: transparent;
+  margin: 0;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.project-header:hover {
+  background: rgba(255,255,255,0.03);
+  color: var(--sb-text);
+}
+
+.project-header .project-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-header .arrow {
+  font-size: 9px;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  width: var(--sb-row-gutter);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sb-accent);
+}
+
+.project-header.collapsed .arrow {
+  transform: rotate(-90deg);
+}
+
+.project-sessions {
+  padding: 0 0 4px;
+}
+
+.project-header.collapsed + .project-sessions {
+  display: none;
+}
+
+/* Offset by the pill's own left padding so its label, not its edge, lands on
+   the text column shared by the session titles above it. */
+.sessions-more-toggle {
+  padding: 4px 10px;
+  margin: 4px 12px 10px calc(var(--sb-row-text) - 10px);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sb-text-faint);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s;
+  border-radius: 5px;
+  display: inline-block;
+  background: rgba(255,255,255,0.03);
+}
+
+.sessions-more-toggle:hover {
+  color: var(--sb-accent);
+  background: rgba(var(--sb-accent-rgb),0.08);
+}
+
+/* ---- Slug groups ---- */
+.slug-group { }
+.slug-group-header {
+  padding: 0 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.slug-group-header .slug-group-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sb-row-gap);
+  padding: 10px 6px;
+  border-radius: 8px;
+  transition: background 0.12s;
+  border-left: none;
+}
+.slug-group-header:hover .slug-group-row {
+  background: rgba(255,255,255,0.06);
+}
+.slug-group:not(.collapsed) .slug-group-row {
+}
+.slug-group-expand {
+  flex-shrink: 0;
+  width: var(--sb-row-gutter);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 5px;
+}
+.slug-group-expand .arrow {
+  font-size: 8px;
+  color: var(--sb-accent);
+  transition: transform 0.2s;
+  display: inline-block;
+}
+.slug-group:not(.collapsed) .arrow { transform: rotate(90deg); }
+.slug-group-info {
+  flex: 1;
+  min-width: 0;
+}
+.slug-group-name {
+  font-size: 13px;
+  color: var(--sb-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.45;
+  font-weight: 450;
+}
+.slug-group-meta {
+  font-size: 11px;
+  color: var(--sb-text-dimmest);
+  margin-top: 3px;
+  font-weight: 450;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+}
+.slug-group-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: none;
+}
+.slug-group-dot.running {
+  display: inline-block;
+  background: var(--sb-green);
+  box-shadow: 0 0 6px rgba(46,182,125,0.5);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+.slug-group-count {
+  font-size: 10px;
+  background: rgba(var(--sb-accent-rgb),0.18);
+  color: var(--sb-accent);
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.slug-group-archive-btn {
+  background: transparent;
+  border: 1px solid #585e60;
+  color: var(--sb-text-faint);
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  opacity: 0;
+  margin-top: 3px;
+}
+
+.slug-group-header:hover .slug-group-archive-btn {
+  opacity: 1;
+}
+
+.slug-group-archive-btn:hover {
+  background: rgba(var(--sb-accent-rgb),0.1);
+  color: var(--sb-accent);
+}
+
+.slug-group.collapsed .slug-group-sessions { display: none; }
+.slug-group.collapsed .slug-group-older { display: none; }
+.slug-group-more {
+  padding: 4px 10px;
+  margin: 4px 12px 10px calc(var(--sb-row-text) - 10px);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sb-text-faint);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s;
+  border-radius: 5px;
+  display: none;
+  background: rgba(255,255,255,0.03);
+}
+.slug-group.collapsed .slug-group-more {
+  display: inline-block;
+}
+.slug-group-more:hover {
+  color: var(--sb-accent);
+  background: rgba(var(--sb-accent-rgb),0.08);
+}
+.slug-group-sessions {
+  border-left: 2px solid rgba(var(--sb-accent-rgb),0.12);
+  margin-left: 28px;
+  padding-left: 0;
+}
+
+/* ---- Session items ---- */
+/* The row's hover/active pill is inset from the card edge, so the pill's own
+   padding makes up the rest of --sb-row-inset rather than stacking on top of it. */
+.session-item {
+  padding: 0 6px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.session-item .session-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sb-row-gap);
+  padding: 10px 6px;
+  border-radius: 8px;
+  transition: background 0.12s;
+  position: relative;
+}
+
+.session-item:hover .session-row {
+  background: rgba(255,255,255,0.06);
+}
+
+.session-item.active .session-row {
+  background: rgba(var(--sb-accent-rgb),0.14);
+}
+
+/* ---- Pin ---- */
+.session-pin {
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--sb-text-faint);
+  transition: all 0.15s;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.session-pin:hover {
+  color: var(--sb-yellow);
+  transform: scale(1.15);
+}
+
+.session-pin.pinned {
+  color: var(--sb-yellow);
+}
+
+/* ---- Running dot ---- */
+.session-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 7px;
+  background: rgba(255,255,255,0.18);
+}
+
+.session-status-dot.running {
+  background: var(--sb-green);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ---- CLI busy spinner (braille spinner detected) ---- */
+/* needs-attention takes precedence — when both are set, attention ripple shows */
+.session-item.cli-busy:not(.needs-attention) .session-status-dot,
+.session-item.cli-busy:not(.needs-attention) .session-status-dot.running {
+  background: transparent !important;
+  border: 1.5px solid var(--sb-blue);
+  border-top-color: transparent;
+  animation: spin-dot 0.8s linear infinite !important;
+  box-shadow: none !important;
+}
+
+@keyframes spin-dot {
+  to { transform: rotate(360deg); }
+}
+
+.session-item.cli-busy:not(.needs-attention) .session-summary {
+  background: linear-gradient(110deg, var(--sb-text-strong) 44%, var(--sb-blue) 48%, #ffffff 50%, var(--sb-blue) 52%, var(--sb-text-strong) 56%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 3s linear infinite;
+}
+
+@keyframes shimmer-text {
+  0% { background-position: 200% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* ---- Session info ---- */
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-summary {
+  font-size: 13px;
+  color: var(--sb-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.45;
+  font-weight: 450;
+}
+
+.session-item.active .session-summary {
+  color: var(--sb-text);
+}
+
+.session-rename-input {
+  font-size: 13px;
+  color: var(--sb-text);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(var(--sb-accent-rgb),0.4);
+  border-radius: 5px;
+  padding: 2px 6px;
+  width: 100%;
+  outline: none;
+  font-family: inherit;
+  line-height: 1.45;
+  box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb),0.08);
+}
+
+.session-id {
+  font-size: 10px;
+  color: var(--sb-text-dimmest);
+  margin-top: 2px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-meta {
+  font-size: 10px;
+  color: var(--sb-text-dimmest);
+  margin-top: 3px;
+}
+
+/* Sidebar session items: project/time on the left, short session id on the
+   right, wrapping onto further lines rather than clipping anything. */
+.session-item .session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.session-short-id {
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  color: #5c6264;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ---- Session action buttons ---- */
+.session-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  background: linear-gradient(90deg, transparent, var(--sb-bg-panel) 10%);
+  padding-left: 8px;
+  padding-right: 4px;
+  z-index: 1;
+}
+
+.session-item:hover .session-actions {
+  opacity: 1;
+}
+
+.session-stop-btn,
+.session-launch-config-btn,
+.session-fork-btn,
+.session-jsonl-btn,
+.session-unread-btn,
+.session-archive-btn {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 4px;
+  line-height: 1;
+  transition: all 0.15s;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.session-stop-btn {
+  color: #8f2542;
+}
+
+.session-launch-config-btn {
+  color: #5a7a6a;
+  outline: none;
+}
+
+.session-fork-btn {
+  color: #5a7a6a;
+}
+
+.session-unread-btn {
+  color: #4a7f96;
+}
+
+.session-item.response-ready .session-unread-btn {
+  color: var(--sb-blue);
+}
+
+.session-archive-btn {
+  color: var(--sb-accent-dim);
+}
+
+.session-stop-btn:hover {
+  color: var(--sb-red);
+  background: rgba(224,30,90,0.1);
+}
+
+.session-launch-config-btn:hover {
+  color: var(--sb-green);
+  background: rgba(46,182,125,0.1);
+}
+
+.session-fork-btn:hover {
+  color: var(--sb-green);
+  background: rgba(46,182,125,0.1);
+}
+
+.session-unread-btn:hover {
+  color: var(--sb-blue);
+  background: rgba(54,197,240,0.1);
+}
+
+.session-archive-btn:hover {
+  color: var(--sb-accent);
+  background: rgba(var(--sb-accent-rgb),0.1);
+}
+
+.session-stop-btn {
+  display: none;
+}
+
+.session-item.has-running-pty .session-stop-btn {
+  display: flex;
+}
+
+.session-item.has-running-pty .session-launch-config-btn {
+  display: none;
+}
+
+.session-item.is-terminal .session-fork-btn {
+  display: none;
+}
+
+.session-item.archived-item {
+  opacity: 0.55;
+}
+
+/* ---- Response ready indicator (Claude finished, unread output) ---- */
+.session-item.response-ready .session-status-dot {
+  background: var(--sb-blue);
+  box-shadow: 0 0 8px rgba(54,197,240,0.7);
+  animation: none;
+}
+
+.session-item.response-ready .session-name {
+  color: var(--sb-blue);
+  font-weight: 600;
+}
+
+.session-item.response-ready .session-summary {
+  color: var(--sb-blue);
+}
+
+.session-item.response-ready .session-time {
+  color: rgba(54,197,240,0.6);
+}
+
+/* ---- Needs attention indicator (ripple) ---- */
+.session-item.needs-attention .session-status-dot,
+.session-item.needs-attention .session-status-dot.running {
+  background: #f0a050;
+  box-shadow: none;
+  animation: none;
+  position: relative;
+}
+
+.session-item.needs-attention .session-status-dot::before,
+.session-item.needs-attention .session-status-dot::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(240,160,80,0.7);
+  animation: ripple-out 2s ease-out infinite;
+}
+
+.session-item.needs-attention .session-status-dot::after {
+  animation-delay: 1s;
+}
+
+@keyframes ripple-out {
+  0%   { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(3.5); opacity: 0; }
+}
+
+.session-item.needs-attention .session-summary {
+  color: #f0a050;
+}
+
+.session-item.needs-attention .session-summary::before {
+  display: none;
+}

@@ -167,11 +167,20 @@ The macOS build uses custom entitlements (`build/entitlements.mac.plist`) to all
 ## Project Structure
 
 ```
-main.js            Electron main process
-preload.js         Context bridge (IPC bindings)
-db.js              SQLite session cache & metadata
-public/            Renderer (HTML/CSS/JS)
-scripts/           Build & postinstall scripts
+src/main/          Electron main process (index.ts), SQLite cache, MCP bridge,
+                   session lifecycle, SSH/remote projects, scheduler
+src/preload/       Context bridge — SwitchboardApi is the whole IPC contract
+src/renderer/      Renderer: TypeScript modules bundled into one script
+src/renderer/styles/  SCSS partials, one per UI area
+src/shared/        Types and helpers used by both processes
+src/workers/       Worker threads (project scanner)
+app/               Build output (gitignored) — what Electron actually runs
+test/              Node test-runner suites, run through tsx
+scripts/           Build (esbuild + sass), icon and postinstall scripts
 build/             Icons, entitlements, builder resources
 .github/workflows/ CI/CD
 ```
+
+The app is written in TypeScript (strict) and SCSS. `npm run build` compiles
+everything into `app/` with esbuild and sass; `npm run typecheck` runs `tsc`
+over the whole tree; `npm test` builds and then runs the suites.

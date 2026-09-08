@@ -1,0 +1,100 @@
+/* ========== PLANS ========== */
+#plans-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 16px;
+}
+
+.plans-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--sb-text-dimmest);
+  font-size: 13px;
+}
+
+/* ---- Plan viewer ---- */
+#plan-viewer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sb-bg-base);
+}
+
+/* Shared viewer toolbar (plan, memory, file panel) */
+.viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--sb-bg-panel);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+.viewer-toolbar-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.viewer-toolbar-title {
+  font-size: 13px;
+  color: var(--sb-text-dim);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viewer-toolbar-path {
+  font-size: 10px;
+  color: var(--sb-text-dimmest);
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viewer-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.viewer-toolbar-copy-path {
+  background: none;
+  border: none;
+  color: var(--sb-text-dimmest);
+  cursor: pointer;
+  padding: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.viewer-toolbar-copy-path svg {
+  width: 10px;
+  height: 10px;
+}
+
+.viewer-toolbar-copy-path:hover {
+  color: var(--sb-accent);
+  background: rgba(var(--sb-accent-rgb),0.1);
+}
+
+/* Plan CodeMirror editor */
+.viewer-panel-editor {
+  flex: 1;
+  overflow: hidden;
+}
+
+.viewer-panel-editor .cm-editor {
+  height: 100%;
+}

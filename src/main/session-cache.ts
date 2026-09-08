@@ -1,0 +1,481 @@
+import path from 'node:path';
+import fs from 'node:fs';
+import { Worker } from 'node:worker_threads';
+import type { BrowserWindow } from 'electron';
+import { getFolderIndexMtimeMs } from '../shared/folder-index-state.js';
+import { deriveProjectPath } from '../shared/derive-project-path.js';
+import { readSessionFile } from '../shared/read-session-file.js';
+import { encodeProjectPath } from '../shared/encode-project-path.js';
+import { remoteProjectPath } from './remote-projects.js';
+import type * as dbModule from './db.js';
+import type { ActiveSessionMap } from './session-types.js';
+import type {
+  GlobalSettings, Project, SearchEntry, Session, SessionRow,
+} from '../shared/types.js';
+import type { ScanMessage } from '../workers/scan-projects.js';
+
+export { readSessionFile };
+
+/** The log surface this module uses — electron-log satisfies it. */
+export interface CacheLogger {
+  info(message: string): void;
+}
+
+/** Exactly the db surface this module reaches for — not the whole module. */
+export interface CacheDb {
+  deleteCachedFolder: typeof dbModule.deleteCachedFolder;
+  getCachedByFolder: typeof dbModule.getCachedByFolder;
+  upsertCachedSessions: typeof dbModule.upsertCachedSessions;
+  deleteCachedSession: typeof dbModule.deleteCachedSession;
+  deleteSearchFolder: typeof dbModule.deleteSearchFolder;
+  deleteSearchSession: typeof dbModule.deleteSearchSession;
+  upsertSearchEntries: typeof dbModule.upsertSearchEntries;
+  setFolderMeta: typeof dbModule.setFolderMeta;
+  getAllFolderMeta: typeof dbModule.getAllFolderMeta;
+  getAllMeta: typeof dbModule.getAllMeta;
+  getAllCached: typeof dbModule.getAllCached;
+  getSetting: typeof dbModule.getSetting;
+  getMeta: typeof dbModule.getMeta;
+  setName: typeof dbModule.setName;
+}
+
+export interface CacheContext {
+  PROJECTS_DIR: string;
+  activeSessions: ActiveSessionMap;
+  getMainWindow: () => BrowserWindow | null;
+  log: CacheLogger;
+  db: CacheDb;
+}
+
+/**
+ * Session cache module.
+ * Call init(ctx) once with the shared context object.
+ */
+let PROJECTS_DIR: string;
+let activeSessions: ActiveSessionMap;
+let getMainWindow: CacheContext['getMainWindow'];
+let log: CacheLogger;
+let deleteCachedFolder: typeof dbModule.deleteCachedFolder;
+let getCachedByFolder: typeof dbModule.getCachedByFolder;
+let upsertCachedSessions: typeof dbModule.upsertCachedSessions;
+let deleteCachedSession: typeof dbModule.deleteCachedSession;
+let deleteSearchFolder: typeof dbModule.deleteSearchFolder;
+let deleteSearchSession: typeof dbModule.deleteSearchSession;
+let upsertSearchEntries: typeof dbModule.upsertSearchEntries;
+let setFolderMeta: typeof dbModule.setFolderMeta;
+let getAllFolderMeta: typeof dbModule.getAllFolderMeta;
+let getAllMeta: typeof dbModule.getAllMeta;
+let getAllCached: typeof dbModule.getAllCached;
+let getSetting: typeof dbModule.getSetting;
+let getMeta: typeof dbModule.getMeta;
+let setName: typeof dbModule.setName;
+
+export function init(ctx: CacheContext): void {
+  PROJECTS_DIR = ctx.PROJECTS_DIR;
+  activeSessions = ctx.activeSessions;
+  getMainWindow = ctx.getMainWindow;
+  log = ctx.log;
+  // DB functions
+  deleteCachedFolder = ctx.db.deleteCachedFolder;
+  getCachedByFolder = ctx.db.getCachedByFolder;
+  upsertCachedSessions = ctx.db.upsertCachedSessions;
+  deleteCachedSession = ctx.db.deleteCachedSession;
+  deleteSearchFolder = ctx.db.deleteSearchFolder;
+  deleteSearchSession = ctx.db.deleteSearchSession;
+  upsertSearchEntries = ctx.db.upsertSearchEntries;
+  setFolderMeta = ctx.db.setFolderMeta;
+  getAllFolderMeta = ctx.db.getAllFolderMeta;
+  getAllMeta = ctx.db.getAllMeta;
+  getAllCached = ctx.db.getAllCached;
+  getSetting = ctx.db.getSetting;
+  getMeta = ctx.db.getMeta;
+  setName = ctx.db.setName;
+}
+
+// readSessionFile is imported from ../shared/read-session-file.ts (shared with worker)
+
+/** Read one folder from filesystem by scanning .jsonl files directly */
+export function readFolderFromFilesystem(folder: string): { projectPath: string | null; sessions: Session[] } {
+  const folderPath = path.join(PROJECTS_DIR, folder);
+  const projectPath = deriveProjectPath(folderPath);
+  if (!projectPath) return { projectPath: null, sessions: [] };
+  const sessions: Session[] = [];
+
+  try {
+    const jsonlFiles = fs.readdirSync(folderPath).filter(f => f.endsWith('.jsonl'));
+    for (const file of jsonlFiles) {
+      const s = readSessionFile(path.join(folderPath, file), folder, projectPath);
+      if (s) sessions.push(s);
+    }
+  } catch {}
+
+  return { projectPath, sessions };
+}
+
+/** Refresh a single folder incrementally: only re-read changed/new .jsonl files */
+export function refreshFolder(folder: string): void {
+  const folderPath = path.join(PROJECTS_DIR, folder);
+  if (!fs.existsSync(folderPath)) {
+    deleteCachedFolder(folder);
+    return;
+  }
+
+  const projectPath = deriveProjectPath(folderPath);
+  if (!projectPath) {
+    setFolderMeta(folder, null, getFolderIndexMtimeMs(folderPath));
+    return;
+  }
+
+  // Get what's currently cached for this folder
+  const cachedSessions = getCachedByFolder(folder);
+  const cachedMap = new Map<string, string>(); // sessionId → fileMtime ISO string (invalidation key)
+  for (const row of cachedSessions) {
+    cachedMap.set(row.sessionId, row.fileMtime);
+  }
+
+  // Scan current .jsonl files
+  let jsonlFiles: string[];
+  try {
+    jsonlFiles = fs.readdirSync(folderPath).filter(f => f.endsWith('.jsonl'));
+  } catch { return; }
+
+  const currentIds = new Set<string>();
+  let changed = false;
+
+  // Collect all changes first, then batch DB writes to minimize lock duration
+  const sessionsToUpsert: Session[] = [];
+  const searchEntriesToUpsert: SearchEntry[] = [];
+  const namesToSet: { id: string; name: string }[] = [];
+  const sessionsToDelete: string[] = [];
+
+  for (const file of jsonlFiles) {
+    const filePath = path.join(folderPath, file);
+    const sessionId = path.basename(file, '.jsonl');
+    currentIds.add(sessionId);
+
+    // Check if file mtime changed
+    let fileMtime: string;
+    try { fileMtime = fs.statSync(filePath).mtime.toISOString(); } catch { continue; }
+
+    if (cachedMap.has(sessionId) && cachedMap.get(sessionId) === fileMtime) {
+      continue; // unchanged, skip
+    }
+
+    // File is new or modified — re-read it
+    const s = readSessionFile(filePath, folder, projectPath);
+    if (s) {
+      sessionsToUpsert.push(s);
+      // Title precedence: user rename (session_meta.name) > JSONL custom-title > JSONL ai-title.
+      // Only customTitle (Claude /title) promotes to session_meta.name — AI titles must NEVER
+      // be written there or they'd overwrite the user's UI rename on the next index pass.
+      const name = getMeta(s.sessionId)?.name || s.customTitle || s.aiTitle || '';
+      searchEntriesToUpsert.push({
+        id: s.sessionId, type: 'session', folder: s.folder,
+        title: (name ? name + ' ' : '') + s.summary, body: s.textContent,
+      });
+      if (s.customTitle) namesToSet.push({ id: s.sessionId, name: s.customTitle });
+    }
+    changed = true;
+  }
+
+  // Remove sessions whose .jsonl files were deleted
+  for (const sessionId of cachedMap.keys()) {
+    if (!currentIds.has(sessionId)) {
+      sessionsToDelete.push(sessionId);
+      changed = true;
+    }
+  }
+
+  // Batch all DB writes to reduce lock contention
+  if (sessionsToUpsert.length > 0) {
+    upsertCachedSessions(sessionsToUpsert);
+  }
+  for (const entry of searchEntriesToUpsert) {
+    deleteSearchSession(entry.id);
+  }
+  if (searchEntriesToUpsert.length > 0) {
+    upsertSearchEntries(searchEntriesToUpsert);
+  }
+  for (const { id, name } of namesToSet) {
+    setName(id, name);
+  }
+  for (const sessionId of sessionsToDelete) {
+    deleteCachedSession(sessionId);
+    deleteSearchSession(sessionId);
+  }
+
+  // Update folder mtime
+  setFolderMeta(folder, projectPath, getFolderIndexMtimeMs(folderPath));
+}
+
+/**
+ * Reconcile the cache with the filesystem.
+ *
+ * Re-indexes only folders that are new or whose newest .jsonl is newer than what
+ * we last indexed — a cheap, stat-only gate when nothing changed. This is what
+ * keeps sessions from silently going missing: a project folder that changed while
+ * the app was closed, or that predates the build which first indexed it, is
+ * otherwise never picked up, because the cold-start full scan
+ * (populateCacheViaWorker) only runs when the cache is completely empty.
+ */
+export function reconcileCacheFromFilesystem(): void {
+  try {
+    const metaMap = getAllFolderMeta();
+    const folders = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+      .filter(d => d.isDirectory() && d.name !== '.git')
+      .map(d => d.name);
+
+    for (const folder of folders) {
+      const meta = metaMap.get(folder);
+      const folderPath = path.join(PROJECTS_DIR, folder);
+      if (!meta || getFolderIndexMtimeMs(folderPath) > (meta.indexMtimeMs || 0)) {
+        refreshFolder(folder);
+      }
+    }
+  } catch (err) {
+    console.error('Error reconciling cache:', err);
+  }
+}
+
+/** Build projects response from cached data */
+export function buildProjectsFromCache(showArchived: boolean): Project[] {
+  const metaMap = getAllMeta();
+  const cachedRows = getAllCached();
+  const global = getSetting<GlobalSettings>('global') || {};
+  const hiddenProjects = new Set<string>(global.hiddenProjects || []);
+
+  // Group by projectPath, not on-disk folder name. Multiple ~/.claude/projects/<folder>/
+  // directories can resolve to the same projectPath (Claude Code's folder-name encoding
+  // scheme has changed over time, leaving legacy stragglers around), so we merge them into
+  // a single sidebar group to avoid duplicate-id collisions in the morphdom render.
+  // Only insert a project entry once we have a session that survives the archive filter —
+  // otherwise folders whose sessions are all archived would appear in the sidebar as
+  // undismissable phantom entries.
+  const projectMap = new Map<string, Project>();
+  for (const row of cachedRows) {
+    if (!row.projectPath) continue;
+    if (hiddenProjects.has(row.projectPath)) continue;
+    const meta = metaMap.get(row.sessionId);
+    const s: SessionRow = {
+      sessionId: row.sessionId,
+      summary: row.summary,
+      firstPrompt: row.firstPrompt,
+      created: row.created,
+      modified: row.modified,
+      messageCount: row.messageCount,
+      projectPath: row.projectPath,
+      slug: row.slug || null,
+      aiTitle: row.aiTitle || null,
+      name: meta?.name || null,
+      starred: meta?.starred || 0,
+      archived: meta?.archived || 0,
+    };
+    if (!showArchived && s.archived) continue;
+    if (!projectMap.has(row.projectPath)) {
+      projectMap.set(row.projectPath, {
+        folder: encodeProjectPath(row.projectPath),
+        projectPath: row.projectPath,
+        sessions: [],
+      });
+    }
+    projectMap.get(row.projectPath)!.sessions.push(s);
+  }
+
+  // Include empty project directories (no sessions yet). Resolve folder→projectPath
+  // through cache_meta (populated by the indexer) instead of re-reading a JSONL off
+  // disk for every directory on every render. Fall back to deriveProjectPath only
+  // for folders the indexer hasn't seen yet, and backfill cache_meta so subsequent
+  // renders are pure DB reads.
+  try {
+    const folderMeta = getAllFolderMeta();
+    const dirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true })
+      .filter(d => d.isDirectory() && d.name !== '.git');
+    for (const d of dirs) {
+      let projectPath = folderMeta.get(d.name)?.projectPath;
+      if (!projectPath) {
+        projectPath = deriveProjectPath(path.join(PROJECTS_DIR, d.name));
+        if (projectPath) setFolderMeta(d.name, projectPath, 0);
+      }
+      if (!projectPath) continue;
+      if (hiddenProjects.has(projectPath)) continue;
+      if (!projectMap.has(projectPath)) {
+        projectMap.set(projectPath, {
+          folder: encodeProjectPath(projectPath),
+          projectPath,
+          sessions: [],
+        });
+      }
+    }
+  } catch {}
+
+  // Inject active plain terminal sessions so they participate in sorting
+  for (const [sessionId, session] of activeSessions) {
+    if (session.exited || !session.isPlainTerminal) continue;
+    if (!session.projectPath) continue;
+    if (hiddenProjects.has(session.projectPath)) continue;
+    if (!projectMap.has(session.projectPath)) {
+      projectMap.set(session.projectPath, {
+        folder: encodeProjectPath(session.projectPath),
+        projectPath: session.projectPath,
+        sessions: [],
+      });
+    }
+    const proj = projectMap.get(session.projectPath)!;
+    if (!proj.sessions.some(s => s.sessionId === sessionId)) {
+      proj.sessions.push({
+        sessionId, summary: 'Terminal', firstPrompt: '', projectPath: session.projectPath,
+        name: null, starred: 0, archived: 0, messageCount: 0,
+        modified: new Date(session._openedAt).toISOString(),
+        created: new Date(session._openedAt).toISOString(),
+        type: 'terminal',
+      });
+    }
+  }
+
+  // Remote (SSH) projects — stored in settings, not derived from
+  // ~/.claude/projects. Their session history lives on the remote host;
+  // locally we only track the tmux sessions we created so they can be listed
+  // and re-attached. Star/rename/archive still work through session_meta,
+  // which is keyed by sessionId alone.
+  for (const rp of global.remoteProjects || []) {
+    const projectPath = remoteProjectPath(rp);
+    if (!projectMap.has(projectPath)) {
+      projectMap.set(projectPath, { folder: encodeProjectPath(projectPath), projectPath, sessions: [] });
+    }
+    const proj = projectMap.get(projectPath)!;
+    proj.remote = true;
+    for (const rs of rp.sessions || []) {
+      const meta = metaMap.get(rs.sessionId);
+      if (!showArchived && meta?.archived) continue;
+      proj.sessions.push({
+        sessionId: rs.sessionId,
+        summary: rs.kind === 'shell' ? 'Remote terminal' : 'Remote Claude',
+        firstPrompt: '',
+        projectPath,
+        name: meta?.name || null,
+        starred: meta?.starred || 0,
+        archived: meta?.archived || 0,
+        messageCount: 0,
+        modified: rs.lastOpened || rs.created,
+        created: rs.created,
+        type: 'remote',
+        remoteKind: rs.kind,
+      });
+    }
+  }
+
+  const projects: Project[] = [];
+  for (const proj of projectMap.values()) {
+    proj.sessions.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+    projects.push(proj);
+  }
+
+  projects.sort((a, b) => {
+    // Empty projects go to the bottom
+    if (a.sessions.length === 0 && b.sessions.length > 0) return 1;
+    if (b.sessions.length === 0 && a.sessions.length > 0) return -1;
+    const aDate = a.sessions[0]?.modified || '';
+    const bDate = b.sessions[0]?.modified || '';
+    return new Date(bDate).getTime() - new Date(aDate).getTime();
+  });
+
+  return projects;
+}
+
+
+export function notifyRendererProjectsChanged(): void {
+  const mainWindow = getMainWindow();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('projects-changed');
+  }
+}
+
+export function sendStatus(text: string, type?: string): void {
+  if (text) log.info(`[status] (${type || 'info'}) ${text}`);
+  const mw = getMainWindow();
+  if (mw && !mw.isDestroyed()) {
+    mw.webContents.send('status-update', text, type || 'info');
+  }
+}
+
+// --- Worker-based cache population (non-blocking) ---
+let populatingCache = false;
+
+export function populateCacheViaWorker(): void {
+  if (populatingCache) return;
+  populatingCache = true;
+  sendStatus('Scanning projects\u2026', 'active');
+
+  const worker = new Worker(path.join(__dirname, 'workers', 'scan-projects.js'), {
+    workerData: { projectsDir: PROJECTS_DIR },
+  });
+
+  worker.on('message', (msg: ScanMessage) => {
+    // Progress updates from worker
+    if ('type' in msg) {
+      sendStatus(msg.text, 'active');
+      return;
+    }
+
+    if (!msg.ok) {
+      console.error('Worker scan error:', msg.error);
+      sendStatus('Scan failed: ' + msg.error, 'error');
+      populatingCache = false;
+      return;
+    }
+
+    sendStatus(`Indexing ${msg.results.length} projects\u2026`, 'active');
+
+    // Write results to DB on main thread (fast)
+    let sessionCount = 0;
+    for (const { folder, projectPath, sessions, indexMtimeMs } of msg.results) {
+      deleteCachedFolder(folder);
+      deleteSearchFolder(folder);
+      if (sessions.length > 0) {
+        sessionCount += sessions.length;
+        upsertCachedSessions(sessions);
+        for (const s of sessions) {
+          // Only JSONL custom-title (genuine user title) promotes to the DB name column.
+          // AI titles must not — see refreshFolder for the rationale.
+          if (s.customTitle) setName(s.sessionId, s.customTitle);
+        }
+        upsertSearchEntries(sessions.map(s => {
+          // Search title precedence matches the sidebar: user rename > custom-title > ai-title.
+          const name = getMeta(s.sessionId)?.name || s.customTitle || s.aiTitle || '';
+          return {
+            id: s.sessionId, type: 'session', folder: s.folder,
+            title: (name ? name + ' ' : '') + s.summary,
+            body: s.textContent,
+          };
+        }));
+      }
+      setFolderMeta(folder, projectPath, indexMtimeMs);
+    }
+
+    populatingCache = false;
+    sendStatus(`Indexed ${sessionCount} sessions across ${msg.results.length} projects`, 'done');
+    // Clear status after a few seconds
+    setTimeout(() => sendStatus(''), 5000);
+    notifyRendererProjectsChanged();
+  });
+
+  worker.on('error', (err: Error) => {
+    console.error('Worker error:', err);
+    sendStatus('Worker error: ' + err.message, 'error');
+    populatingCache = false;
+  });
+
+  // If the worker exits abnormally (SIGSEGV, OOM, uncaught exception) without
+  // sending a message, neither the 'message' nor 'error' handler will fire.
+  // Reset the flag here to prevent a permanent lockout where the session list
+  // stays empty because populateCacheViaWorker() returns immediately.
+  worker.on('exit', (code: number) => {
+    if (populatingCache) {
+      populatingCache = false;
+      if (code !== 0) {
+        sendStatus('Scan worker exited unexpectedly', 'error');
+      }
+    }
+  });
+}
+

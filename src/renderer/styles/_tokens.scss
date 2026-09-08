@@ -1,0 +1,71 @@
+/* ========== BRAND PALETTE ==========
+   Switchboard's colors are lifted from the Slack dark workspace theme: green-tinted
+   near-black surfaces, a mint accent, a neutral text ramp, and Slack's brand
+   secondaries for status. Everything below is referenced through these tokens, so
+   re-theming the app means editing this block and nothing else. */
+:root {
+  /* Surfaces, darkest to lightest. Switchboard's own ladder is preserved — the
+     terminal sits on the darkest surface and the sidebar floats above it — but each
+     rung lands on a color sampled straight out of Slack. */
+  --sb-bg-deep:   #0e1713;  /* status bar; Slack's workspace rail */
+  --sb-bg-base:   #101414;  /* app background, terminal, main content */
+  --sb-bg-panel:  #1b1d21;  /* sidebar, headers, toolbars */
+  --sb-bg-raised: #22252a;  /* dialogs, toasts, inputs, cards */
+
+  /* Accent: the mint Slack fills the active channel with. Because it is a light
+     color, anything filled with it takes --sb-accent-ink for its foreground. */
+  --sb-accent:       #69e2bf;
+  --sb-accent-hover: #45c7a3;
+  --sb-accent-dim:   #2f8f74;
+  --sb-accent-ink:   #06231b;
+  --sb-accent-rgb:   105, 226, 191;
+
+  /* Text, brightest to faintest — neutral grey, no purple cast. */
+  --sb-text-strong:  #f2f3f3;
+  --sb-text:         #d3d4d5;
+  --sb-text-soft:    #c6c7c8;
+  --sb-text-dim:     #bcbdbe;
+  --sb-text-muted:   #9a9a9c;
+  --sb-text-faint:   #7e8385;
+  --sb-text-dimmest: #656b6d;
+
+  /* Status, from Slack's brand secondaries. The green sits deliberately below the
+     mint accent in brightness so a running dot never competes with a selection. */
+  --sb-green:      #2eb67d;
+  --sb-green-soft: #4cc596;
+  --sb-blue:       #36c5f0;
+  --sb-red:        #e01e5a;
+  --sb-yellow:     #ecb22e;
+
+  /* Outer sidebar gutter: the left edge every stacked block in the sidebar
+     starts from — the tab strip, the filter row, the search field, and the
+     project cards below them. One value so those edges can't drift apart. */
+  --sb-sidebar-gutter: 16px;
+
+  /* Sidebar row grid. Every row in the session list — section label, slug
+     group, session — is a marker gutter followed by text. Holding all three
+     values in one place is what keeps those row types sharing a left rail and a
+     text column instead of each drifting to its own indent. The gutter is sized
+     to fit a session's pin + status dot (12 + 8 + 6). */
+  --sb-row-inset:  12px;  /* card edge → marker gutter */
+  --sb-row-gutter: 26px;  /* width of the marker gutter */
+  --sb-row-gap:     8px;  /* marker gutter → text */
+  --sb-row-text: calc(var(--sb-row-inset) + var(--sb-row-gutter) + var(--sb-row-gap));
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  background: var(--sb-bg-base);
+  color: var(--sb-text);
+  overflow: hidden;
+}
+
+body { display: flex; flex-direction: column; }
+
+#app-container {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
