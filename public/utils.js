@@ -175,11 +175,40 @@ function remoteStatusLabel(status, now = Date.now()) {
   return null;
 }
 
+// A pending row is one the renderer invents before Claude has written its
+// .jsonl, so there is something on screen while the CLI starts up. It earns that
+// place only while a real session might still turn up: once the PTY is gone and
+// no file was ever written, nothing is coming.
+//
+// Nothing used to evict those. A session that died before its first turn — a CLI
+// that refused its --session-id, a pre-launch command that failed — left a row
+// that pendingSessions pinned to the Working tier (itself exempt from
+// truncation) carrying a client-side `archived: 0` that the archive filter,
+// which reads the injected object rather than the DB, could never hide. The row
+// was unremovable, and clicking it only relaunched the same dead id.
+const PENDING_GRACE_MS = 60000;
+
+function isPendingAbandoned(pending, { running, onScreen, now = Date.now() } = {}) {
+  // Plain terminals are torn down explicitly by onProcessExited, and a remote
+  // row is meant to outlive its connection — archive is the only thing that
+  // should ever drop one.
+  const type = pending.session.type;
+  if (type === 'terminal' || type === 'remote') return false;
+  // Still running, or still on screen with its exit banner: leave it be.
+  if (running || onScreen) return false;
+  if (pending.exitedAt) return now - pending.exitedAt > PENDING_GRACE_MS;
+  // No exit was seen, but nothing is running under that id either — the event
+  // went missing (a reload mid-launch, an openTerminal that failed). Age from
+  // creation so a slow first launch still gets its grace period.
+  const created = new Date(pending.session.created).getTime();
+  return Number.isFinite(created) && now - created > PENDING_GRACE_MS;
+}
+
 // Expose pure helpers to Node for unit testing. No-op in the browser, where this
 // file is loaded as a plain <script> and `module` is undefined.
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     fuzzyMatch, shortProjectPath, cleanDisplayName, encodeProjectPath,
-    remoteStatusBanner, remoteStatusLabel,
+    remoteStatusBanner, remoteStatusLabel, isPendingAbandoned, PENDING_GRACE_MS,
   };
 }

@@ -333,10 +333,12 @@ window.api.onProcessExited((sessionId, exitCode) => {
   // Claude sessions: keep the terminal mounted with the exit banner visible so
   // the user can read what happened. Cleanup is deferred — openSession destroys
   // the closed entry when the user re-clicks the session (existing behavior).
-  // If the session was pending (no .jsonl was written), leave the sidebar
-  // entry in place too so the user has somewhere to relaunch from; it'll be
-  // tidied up by the regular pending-reconciliation pass once it's clear no
-  // real session file is coming.
+  // If the session was pending (no .jsonl was written), leave the sidebar entry
+  // in place too so the user has somewhere to relaunch from; stamping the exit
+  // starts the clock that isPendingAbandoned reads, so it's tidied up by the
+  // reconciliation pass once it's clear no real session file is coming.
+  const pending = pendingSessions.get(sessionId);
+  if (pending && !pending.exitedAt) pending.exitedAt = Date.now();
 
   if (gridViewActive) {
     gridViewerCount.textContent = gridCards.size + ' session' + (gridCards.size !== 1 ? 's' : '');
@@ -950,12 +952,18 @@ async function loadProjects({ resort = false } = {}) {
   dedup(cachedProjects);
   dedup(cachedAllProjects);
 
-  // Reconcile pending sessions: remove ones that now have real data
+  // Reconcile pending sessions: remove ones that now have real data, and the
+  // ones no real data is ever coming for.
   let hasReinjected = false;
   for (const [sid, pending] of [...pendingSessions]) {
     const realExists = allProjects.some(p => p.sessions.some(s => s.sessionId === sid));
     if (realExists) {
       pendingSessions.delete(sid);
+    } else if (isPendingAbandoned(pending, {
+      running: activePtyIds.has(sid),
+      onScreen: activeSessionId === sid,
+    })) {
+      dropPendingSession(sid);
     } else {
       hasReinjected = true;
       // Still pending — re-inject into cached data
@@ -994,6 +1002,53 @@ async function loadProjects({ resort = false } = {}) {
   await pollActiveSessions();
   refreshSidebar({ resort });
   renderDefaultStatus();
+}
+
+function dropPendingSession(sessionId) {
+  pendingSessions.delete(sessionId);
+  sessionMap.delete(sessionId);
+  for (const projList of [cachedProjects, cachedAllProjects]) {
+    for (const proj of projList) {
+      proj.sessions = proj.sessions.filter(s => s.sessionId !== sessionId);
+    }
+  }
+  if (openSessions.has(sessionId)) destroySession(sessionId);
+  // Dropping the row takes its terminal with it, so a header still naming that
+  // pane would be pointing at nothing.
+  if (gridViewActive) {
+    gridViewerCount.textContent = gridCards.size + ' session' + (gridCards.size !== 1 ? 's' : '');
+  } else if (activeSessionId === sessionId) {
+    setActiveSession(null);
+    terminalHeader.style.display = 'none';
+    placeholder.style.display = '';
+  }
+}
+
+// Archiving a session is also how a row gets forgotten, so it has to stop the
+// process first and only hide the row once nothing is running under it. The
+// three call sites (a row, a slug group, a whole project) all come through here
+// so none of them can drift back into hiding a row over a live PTY.
+async function archiveSessionRow(session, archived) {
+  const sessionId = session.sessionId;
+  if (archived) {
+    // Stop unconditionally: activePtyIds can lag the real PTY state by up to
+    // the idle poll interval (sessions started by the scheduler or another
+    // window), and stopping a dead session is a no-op.
+    const result = await window.api.stopSession(sessionId);
+    if (result && result.ok === false) {
+      // The record is still live, so hiding the row would orphan it.
+      alert(`Could not stop this session: ${result.error || 'unknown error'}`);
+      return false;
+    }
+    activePtyIds.delete(sessionId);
+  }
+  await window.api.archiveSession(sessionId, archived);
+  session.archived = archived;
+  // A pending row has no .jsonl to resume from, so archiving it means forgetting
+  // it — and leaving the pending entry behind would re-inject the row on the
+  // next refresh with its own `archived: 0`.
+  if (archived && pendingSessions.has(sessionId)) dropPendingSession(sessionId);
+  return true;
 }
 
 // Sidebar rendering (slugId, projectLabel, buildSlugGroup, renderSessionList,

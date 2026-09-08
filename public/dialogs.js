@@ -627,12 +627,9 @@ function showProjectPickerDialog() {
         if (sessions.length === 0) return;
         if (!confirm(`Archive all ${sessions.length} session${sessions.length > 1 ? 's' : ''} in ${projectLabel(project.projectPath)}?`)) return;
         for (const s of sessions) {
-          // Stop unconditionally: activePtyIds can lag the real PTY state, and
-          // stopping a dead session is a no-op.
-          await window.api.stopSession(s.sessionId);
-          activePtyIds.delete(s.sessionId);
-          await window.api.archiveSession(s.sessionId, 1);
-          s.archived = 1;
+          // One failure stops the sweep rather than silently skipping a session
+          // whose PTY is still running.
+          if (!await archiveSessionRow(s, 1)) break;
         }
         pollActiveSessions();
         loadProjects();

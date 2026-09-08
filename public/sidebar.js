@@ -172,7 +172,12 @@ const TIER_LABELS = {
 function sessionTier(sessionId) {
   if (attentionSessions.has(sessionId)) return TIER_ATTENTION;
   if (responseReadySessions.has(sessionId)) return TIER_READY;
-  if (sessionBusyState.get(sessionId) || pendingSessions.has(sessionId)) return TIER_RUNNING;
+  if (sessionBusyState.get(sessionId)) return TIER_RUNNING;
+  // A pending row counts as working only while a PTY is actually running under
+  // it. Once that's gone it is a placeholder awaiting cleanup, and filing it
+  // under Working both misreports it and — via rowSurvivesTruncation — makes it
+  // impossible to age out of the list.
+  if (pendingSessions.has(sessionId) && activePtyIds.has(sessionId)) return TIER_RUNNING;
   if (activePtyIds.has(sessionId)) return TIER_READY;
   return TIER_REST;
 }
@@ -419,10 +424,9 @@ function rebindSidebarEvents() {
           const sid = item.dataset.sessionId;
           const session = sessionMap.get(sid);
           if (!session || session.archived) continue;
-          await window.api.stopSession(sid);
-          activePtyIds.delete(sid);
-          await window.api.archiveSession(sid, 1);
-          session.archived = 1;
+          // One failure stops the sweep rather than silently skipping a session
+          // whose PTY is still running.
+          if (!await archiveSessionRow(session, 1)) break;
         }
         pollActiveSessions();
         loadProjects();
@@ -535,16 +539,9 @@ function rebindSidebarEvents() {
       archiveBtn.onclick = async (e) => {
         e.stopPropagation();
         const newVal = session.archived ? 0 : 1;
-        if (newVal) {
-          // Stop unconditionally: activePtyIds can lag the real PTY state by up
-          // to the idle poll interval (sessions started by the scheduler or
-          // another window), and stopping a dead session is a no-op.
-          await window.api.stopSession(session.sessionId);
-          activePtyIds.delete(session.sessionId);
-          pollActiveSessions();
-        }
-        await window.api.archiveSession(session.sessionId, newVal);
-        session.archived = newVal;
+        const ok = await archiveSessionRow(session, newVal);
+        if (!ok) return;
+        if (newVal) pollActiveSessions();
         loadProjects();
       };
     }
@@ -741,5 +738,8 @@ function startRename(summaryEl, session) {
 // Expose pure helpers to Node for unit testing. No-op in the browser, where this
 // file is loaded as a plain <script> and `module` is undefined.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { rowSurvivesTruncation, TIER_RUNNING, TIER_REST };
+  module.exports = {
+    rowSurvivesTruncation, sessionTier,
+    TIER_ATTENTION, TIER_READY, TIER_RUNNING, TIER_PINNED, TIER_REST,
+  };
 }
