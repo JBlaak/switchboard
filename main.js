@@ -34,6 +34,11 @@ const cleanPtyEnv = Object.fromEntries(
   )
 );
 
+// Ending a session → session-stop.js
+const {
+  init: initSessionStop, isPtyAlive, signalSessionTree, retireSession,
+  stopSessionTree, findActiveSession,
+} = require('./session-stop');
 // Shell profiles → shell-profiles.js
 const { discoverShellProfiles, getShellProfiles, resolveShell, isWindows, isWslShell, windowsToWslPath, shellArgs, quoteArgvForShell } = require('./shell-profiles');
 const { startScheduler } = require('./schedule-runner');
@@ -93,6 +98,10 @@ const MAX_BUFFER_SIZE = 256 * 1024;
 // Active PTY sessions
 const activeSessions = new Map();
 let mainWindow = null;
+
+initSessionStop({
+  activeSessions, getMainWindow: () => mainWindow, log, shutdownMcpServer,
+});
 
 // Sidebar background — the window controls sit over the sidebar, so the overlay on
 // Windows/Linux has to be painted the same colour or it shows as a lighter block.
@@ -253,11 +262,9 @@ function createWindow() {
     // On macOS the app stays alive in the dock after the last window closes.
     // Kill all running PTY processes so orphaned `claude` processes don't
     // accumulate in the background with no way for the user to interact.
-    for (const [id, session] of activeSessions) {
+    for (const [id, session] of [...activeSessions]) {
       markRemoteDisconnected(session);
-      if (!session.exited) {
-        try { session.pty.kill(); } catch {}
-      }
+      if (!session.exited) signalSessionTree(session, 'SIGTERM');
       activeSessions.delete(id);
     }
     mainWindow = null;
@@ -424,13 +431,13 @@ ipcMain.handle('remove-remote-project', (_event, projectPath) => {
   global.remoteProjects = (global.remoteProjects || []).filter(r => remoteProjectPath(r) !== projectPath);
   setSetting('global', global);
   // Disconnect any open connections; the remote tmux sessions live on.
-  for (const [id, session] of activeSessions) {
+  for (const [id, session] of [...activeSessions]) {
     if (session.projectPath !== projectPath) continue;
     markRemoteDisconnected(session);
     if (!session.exited) {
-      try { session.pty.kill(); } catch {}
+      stopSessionTree(id, session);
     } else {
-      activeSessions.delete(id);
+      retireSession(id, session, 0);
     }
   }
   notifyRendererProjectsChanged();
@@ -960,12 +967,24 @@ ipcMain.handle('get-effective-settings', (_event, projectPath) => {
 // --- IPC: get-active-sessions ---
 ipcMain.handle('get-active-sessions', () => {
   const active = [];
-  for (const [sessionId, session] of activeSessions) {
+  // Snapshot, because a session retired below deletes itself from the map.
+  for (const [sessionId, session] of [...activeSessions]) {
     // A remote session between connections is still live — the tmux session is
     // running and a reconnect is on a timer — so it counts as active. Reporting
     // it stopped would blank its sidebar dot for a second and stop the renderer
     // restoring it after a reload.
-    if (!session.exited || isRemoteReconnecting(session)) active.push(sessionId);
+    if (isRemoteReconnecting(session)) { active.push(sessionId); continue; }
+    if (session.exited) continue;
+    // `exited` is only ever set from the PTY's exit event, so a process that
+    // died without one would keep this row green for the life of the app. The
+    // pid is the ground truth, and checking it lets a stuck row heal itself on
+    // the next poll instead of needing a restart.
+    if (!isPtyAlive(session)) {
+      log.warn(`[active] session=${sessionId} pid=${session.pty && session.pty.pid} gone with no exit event — retiring`);
+      retireSession(sessionId, session, -1);
+      continue;
+    }
+    active.push(sessionId);
   }
   return active;
 });
@@ -982,9 +1001,14 @@ ipcMain.handle('get-active-terminals', () => {
 });
 
 // --- IPC: stop-session ---
+// `ok` means nothing is running under that id any more — either it never was,
+// or it has been retired, or a kill is on its way that will retire it. Callers
+// that hide a row (archive) can rely on that; `ok: false` means the record is
+// still live and the row should stay.
 ipcMain.handle('stop-session', (_event, sessionId) => {
-  const session = activeSessions.get(sessionId);
-  if (!session) return { ok: false, error: 'not running' };
+  const found = findActiveSession(sessionId);
+  if (!found) return { ok: true, alreadyStopped: true };
+  const { key, session } = found;
 
   // Remote sessions: stop reconnecting first, or killing the PTY (or the retry
   // already on a timer) would just dial straight back out.
@@ -994,17 +1018,20 @@ ipcMain.handle('stop-session', (_event, sessionId) => {
     if (wasWaiting) {
       // Nothing to kill — the connection is already down and only the backoff
       // was keeping the session alive. Retire it the way an exit would.
-      sendRemoteStatus(sessionId, { phase: 'disconnected', target: session.remote.target });
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('process-exited', sessionId, 0);
-      }
-      activeSessions.delete(sessionId);
-      return { ok: true };
+      sendRemoteStatus(key, { phase: 'disconnected', target: session.remote.target });
+      retireSession(key, session, 0);
+      return { ok: true, alreadyStopped: true };
     }
   }
 
-  if (session.exited) return { ok: false, error: 'not running' };
-  session.pty.kill();
+  // Dead process, live record: the exit event never landed. Nothing to signal,
+  // but the record still has to go or the row stays on "Running".
+  if (session.exited || !isPtyAlive(session)) {
+    retireSession(key, session, 0);
+    return { ok: true, alreadyStopped: true };
+  }
+
+  stopSessionTree(key, session);
   return { ok: true };
 });
 
@@ -1169,24 +1196,7 @@ function wirePty(session, sessionId, ptyProcess) {
     // the session (and the renderer's terminal) alive and dial again.
     if (session.remote && handleRemoteExit(sessionId, session, exitCode, signal)) return;
 
-    // Clean up MCP server
-    const mcpId = session.realSessionId || sessionId;
-    shutdownMcpServer(mcpId);
-    session.mcpServer = null;
-
-    const realId = session.realSessionId || sessionId;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('process-exited', realId, exitCode);
-      // If a fork/plan-accept transition re-keyed this session under realId
-      // but the PTY exited before transition detection ran, also notify the
-      // renderer for the original sessionId so it doesn't stay stuck as "Running".
-      if (realId !== sessionId && activeSessions.has(sessionId)) {
-        mainWindow.webContents.send('process-exited', sessionId, exitCode);
-      }
-    }
-    activeSessions.delete(realId);
-    // Clean up the original key too in case transition detection hasn't run yet
-    activeSessions.delete(sessionId);
+    retireSession(sessionId, session, exitCode);
   });
 }
 
@@ -1872,9 +1882,9 @@ app.on('before-quit', () => {
   // Kill all PTY processes on quit
   for (const [, session] of activeSessions) {
     markRemoteDisconnected(session);
-    if (!session.exited) {
-      try { session.pty.kill(); } catch {}
-    }
+    // SIGTERM to the group rather than SIGHUP to the shell: the shell is only a
+    // wrapper, and the `claude` underneath it would otherwise be orphaned.
+    if (!session.exited) signalSessionTree(session, 'SIGTERM');
   }
 });
 
