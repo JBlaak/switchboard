@@ -1,0 +1,33 @@
+{
+  // One config covers main, preload, renderer and tests. Splitting it per target
+  // would let the main process stop seeing `document` and the renderer stop
+  // seeing `fs`, but the tests import from both sides, so a single program is
+  // what keeps `npm run typecheck` a single command. The DOM/node overlap is the
+  // price; esbuild, not tsc, decides what each bundle can actually reach.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    // Off deliberately: it would turn every arr[i] into T | undefined, which
+    // across this much index-heavy code buys noise rather than safety.
+    "noUncheckedIndexedAccess": false,
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "useDefineForClassFields": true,
+
+    // tsc only ever typechecks here; esbuild emits.
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*", "test/**/*", "scripts/**/*.mjs"]
+}

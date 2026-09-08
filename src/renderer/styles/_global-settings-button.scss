@@ -1,0 +1,41 @@
+/* ========== GLOBAL SETTINGS BUTTON ========== */
+#global-settings-btn {
+  margin-left: auto;
+  margin-right: 3px;
+  background: transparent;
+  border: none;
+  color: var(--sb-text-faint);
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#global-settings-btn:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.12);
+  color: #888;
+}
+
+#global-settings-btn.active {
+  background: rgba(var(--sb-accent-rgb),0.1);
+  border-color: rgba(var(--sb-accent-rgb),0.25);
+  color: var(--sb-accent);
+}
+
+.remote-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--sb-text-faint);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  vertical-align: 1px;
+}

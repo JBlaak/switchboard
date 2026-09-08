@@ -1,0 +1,157 @@
+/* ========== SESSION GRID ========== */
+#grid-viewer {
+  display: none;
+  flex-shrink: 0;
+}
+
+#grid-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--sb-bg-panel);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+
+#grid-viewer-title {
+  font-size: 13px;
+  color: var(--sb-text-dim);
+  font-weight: 500;
+}
+
+#grid-viewer-count {
+  font-size: 11px;
+  color: var(--sb-text-faint);
+}
+
+.grid-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--sb-bg-panel);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.grid-card-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.grid-card-dot.running {
+  background: var(--sb-green);
+  box-shadow: 0 0 6px rgba(46,182,125,0.5);
+}
+
+.grid-card-dot.stopped { background: var(--sb-text-dimmest); }
+
+.grid-card-dot.busy {
+  background: var(--sb-green);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.grid-card-name {
+  font-size: 12px;
+  color: var(--sb-text-dim);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid-card-project {
+  font-size: 10px;
+  color: var(--sb-text-dimmest);
+  white-space: nowrap;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+}
+
+.grid-card-stop-btn {
+  margin-left: auto;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 3px;
+  line-height: 1;
+  color: #8f2542;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.grid-card:hover .grid-card-stop-btn {
+  opacity: 1;
+}
+
+.grid-card-stop-btn:hover {
+  color: var(--sb-red);
+  background: rgba(224,30,90,0.1);
+}
+
+/* #terminals switches to CSS grid in grid mode */
+#terminals.grid-layout {
+  display: grid;
+  /* grid-template-columns set dynamically by ResizeObserver in app.js */
+  gap: 14px;
+  padding: 14px 20px 14px 14px;
+  overflow-y: scroll;
+  align-content: start;
+}
+
+#terminals.grid-layout::-webkit-scrollbar { width: 8px; }
+#terminals.grid-layout::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
+#terminals.grid-layout::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+#terminals.grid-layout::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+/* Grid card wrapper */
+.grid-card {
+  display: flex;
+  flex-direction: column;
+  height: 450px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.grid-card:hover {
+  border-color: rgba(var(--sb-accent-rgb),0.3);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+}
+
+.grid-card.focused {
+  border-color: rgba(var(--sb-accent-rgb),0.5);
+}
+
+/* Terminal container inside a grid card — fills middle space */
+.terminal-container.grid-mode {
+  display: block !important;
+  position: relative !important;
+  flex: 1;
+  min-height: 0;
+}
+
+.grid-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 10px;
+  color: var(--sb-text-faint);
+  background: var(--sb-bg-panel);
+  border-top: 1px solid rgba(255,255,255,0.04);
+  flex-shrink: 0;
+}

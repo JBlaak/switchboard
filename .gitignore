@@ -3,10 +3,10 @@ dist/
 *.db
 *.db-wal
 *.db-shm
-public/codemirror-bundle.js
 .DS_Store
 .idea/
 *.pem
 .env
 .cache/
 dev-app-update.yml
+app/

@@ -39,7 +39,7 @@ L'interface est livrée avec un **thème sombre** bleu-violet. Comme l'applicati
 
 ## 4. Comprendre la personnalisation (`app.asar`)
 
-La CSS de l'interface se trouve dans `public/style.css`, **empaquetée** dans :
+La CSS de l'interface est compilée depuis les partiels SCSS de `src/renderer/styles/` vers `app/renderer/style.css`, **empaquetée** dans :
 
 ```
 <dossier d'installation>\resources\app.asar
@@ -66,7 +66,7 @@ Ouvrez **PowerShell en administrateur**, puis adaptez le chemin d'installation :
 cd "D:\Program Files\Switchboard\resources"      # adaptez ce chemin
 Copy-Item app.asar app.asar.bak                   # sauvegarde (1re fois seulement)
 npx @electron/asar extract app.asar app_src
-(Get-Content app_src\public\style.css -Raw) -replace '#111118','#1e1e2e' | Set-Content app_src\public\style.css
+(Get-Content app_src\app\renderer\style.css -Raw) -replace '#111118','#1e1e2e' | Set-Content app_src\app\renderer\style.css
 npx @electron/asar pack app_src app.asar --unpack-dir "node_modules/{better-sqlite3,node-pty}"
 ```
 

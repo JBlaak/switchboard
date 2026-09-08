@@ -67,7 +67,7 @@ $resources = Join-Path $InstallDir 'resources'
 $asar      = Join-Path $resources 'app.asar'
 $bak       = Join-Path $resources 'app.asar.bak'
 $appsrc    = Join-Path $resources 'app_src'
-$cssPath   = Join-Path $appsrc   'public\style.css'
+$cssPath   = Join-Path $appsrc   'app\renderer\style.css'
 $exe       = Join-Path $InstallDir 'Switchboard.exe'
 
 Write-Host "Installation : $InstallDir"  -ForegroundColor Cyan

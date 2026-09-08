@@ -1,0 +1,79 @@
+/* ========== STATUS BAR ========== */
+#status-bar {
+  height: 22px;
+  min-height: 22px;
+  background: var(--sb-bg-deep);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 11px;
+  color: var(--sb-text-faint);
+  gap: 12px;
+  z-index: 100;
+}
+
+#status-bar-info {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#status-bar-activity {
+  white-space: nowrap;
+  color: var(--sb-accent);
+}
+
+#status-bar-activity.status-done {
+  color: var(--sb-green-soft);
+}
+
+#status-bar-updater {
+  white-space: nowrap;
+  color: #888;
+  font-style: italic;
+}
+
+#status-bar-quota {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  opacity: 0.95;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: opacity 0.15s;
+}
+/* One bar per limit window; count varies with what the usage API reports. */
+.quota-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.quota-label {
+  color: var(--sb-text-dim);
+  white-space: nowrap;
+}
+#status-bar-quota:hover { opacity: 1; }
+.quota-track {
+  width: 34px;
+  height: 4px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.quota-fill {
+  display: block;
+  height: 100%;
+  background: var(--sb-green);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+.quota-fill.quota-mid { background: #e8a030; }
+.quota-fill.quota-high { background: var(--sb-red); }
+.quota-pct {
+  color: var(--sb-text-dim);
+  white-space: nowrap;
+}

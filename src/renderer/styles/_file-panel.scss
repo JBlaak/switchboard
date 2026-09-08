@@ -1,0 +1,220 @@
+/* ========== FILE PANEL (MCP Bridge) ========== */
+
+#terminal-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+#terminal-split > #terminals {
+  flex: 1;
+  min-width: 200px;
+}
+
+#file-panel-resize-handle {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  display: none;
+  align-self: stretch;
+  border-left: 1px solid rgba(255,255,255,0.06);
+  transition: background 0.15s;
+}
+
+#file-panel-resize-handle:hover,
+#file-panel-resize-handle.dragging {
+  background: rgba(var(--sb-accent-rgb),0.3);
+}
+
+#file-panel {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--sb-bg-base);
+  position: relative;
+}
+
+#file-panel.open {
+  min-width: 280px;
+  border-left: 1px solid rgba(255,255,255,0.06);
+}
+
+
+.fp-toolbar-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--sb-text-muted);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.fp-toolbar-btn:hover {
+  border-color: rgba(var(--sb-accent-rgb),0.3);
+  color: var(--sb-accent);
+  background: rgba(var(--sb-accent-rgb),0.06);
+}
+
+.fp-toolbar-btn.active {
+  border-color: rgba(var(--sb-accent-rgb),0.4);
+  color: var(--sb-accent);
+  background: rgba(var(--sb-accent-rgb),0.12);
+}
+
+.fp-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.fp-save-btn:hover {
+  border-color: rgba(46,182,125,0.3);
+  color: var(--sb-green);
+  background: rgba(46,182,125,0.06);
+}
+
+.fp-close-btn {
+}
+
+.fp-close-btn:hover {
+  border-color: rgba(224,30,90,0.3);
+  color: var(--sb-red);
+  background: rgba(224,30,90,0.06);
+}
+
+#file-panel-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#file-panel-viewer,
+#file-panel-diff {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#file-panel-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+#file-panel-body .cm-editor {
+  height: 100%;
+}
+
+#file-panel-body .cm-merge-view {
+  height: 100%;
+  overflow: auto;
+  font-size: 12.5px;
+}
+
+/* Diff line backgrounds */
+#file-panel-body .cm-merge-a .cm-changedLine,
+#file-panel-body .cm-deletedChunk {
+  background-color: rgba(248, 81, 73, 0.12) !important;
+}
+#file-panel-body .cm-merge-b .cm-changedLine {
+  background-color: rgba(46,182,125, 0.12) !important;
+}
+/* Inner word-level change highlighting (replace underlines with backgrounds) */
+#file-panel-body .cm-merge-a .cm-changedText,
+#file-panel-body .cm-deletedChunk .cm-deletedText {
+  background: rgba(248, 81, 73, 0.35) !important;
+}
+#file-panel-body .cm-merge-b .cm-changedText {
+  background: rgba(46,182,125, 0.35) !important;
+}
+
+#file-panel-actions {
+  display: flex;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(27,29,33, 0.85);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+#file-panel-body:hover ~ #file-panel-actions,
+#file-panel-actions:hover {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#file-panel-actions button {
+  padding: 6px 16px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: all 0.15s;
+}
+
+.file-panel-accept-btn {
+  background: rgba(46,182,125,0.1);
+  color: var(--sb-green);
+  border-color: rgba(46,182,125,0.3) !important;
+}
+
+.file-panel-accept-btn:hover {
+  background: rgba(46,182,125,0.2);
+}
+
+.file-panel-reject-btn {
+  background: transparent;
+  color: var(--sb-red);
+  border-color: rgba(224,30,90,0.3) !important;
+}
+
+.file-panel-reject-btn:hover {
+  background: rgba(224,30,90,0.1);
+}
+
+/* MCP toggle in terminal header */
+.mcp-toggle {
+  font-size: 10px;
+  color: var(--sb-text-faint);
+  margin-right: 8px;
+}
+
+.mcp-toggle.enabled {
+  color: var(--sb-accent);
+}
+
+.mcp-toggle.enabled::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sb-accent);
+  margin-right: 5px;
+  vertical-align: middle;
+}
