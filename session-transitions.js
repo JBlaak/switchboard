@@ -175,6 +175,11 @@ function detectSessionTransitions(folder) {
         session.realSessionId = newId;
         // Update slug from new session
         if (signals.slug) session.sessionSlug = signals.slug;
+        // Remember the id being left behind. A sidebar row (or a second window)
+        // can still be holding it, and a stop aimed at an id the map no longer
+        // knows used to report "not running" while the PTY kept going.
+        session.priorIds = session.priorIds || new Set();
+        session.priorIds.add(sessionId);
         activeSessions.delete(sessionId);
         activeSessions.set(newId, session);
         // Re-key MCP server to match new session ID
