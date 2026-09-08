@@ -1,8 +1,11 @@
 name: Test
 
 on:
+  # Only main on push: a branch with a PR open would otherwise run the whole
+  # matrix twice for one commit, and the concurrency group below cannot dedupe
+  # them because push and pull_request events carry different refs.
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
     branches: [main]
 
