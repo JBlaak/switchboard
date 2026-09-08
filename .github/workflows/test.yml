@@ -60,5 +60,12 @@ jobs:
 
       # `npm test` would rebuild via pretest; the build above already did, and
       # keeping the steps separate says which one broke.
+      #
+      # bash on every runner, Windows included: the default shell there is
+      # PowerShell, which does not expand `test/*.test.ts` into filenames, and
+      # neither Node's test runner (its discovery only matches .js) nor tsx
+      # expands it either — so the glob reached tsx as a literal path and the
+      # step failed with "Could not find …\test\*.test.ts".
       - name: Test
+        shell: bash
         run: npx tsx --test test/*.test.ts
