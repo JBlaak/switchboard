@@ -62,6 +62,9 @@ export const INVOKE = {
   watchFile: 'watch-file',
   unwatchFile: 'unwatch-file',
 
+  // Git
+  gitWorktrees: 'git-worktrees',
+
   // Host
   openExternal: 'open-external',
   writeClipboard: 'clipboard-write-text',
