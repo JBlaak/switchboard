@@ -10,12 +10,12 @@ import { consumeDeferredProjectsChange } from './ipc-listeners';
 import { reloadProjects } from './refresh';
 import { openSessions, view } from '../state/session-store';
 import {
-  gridViewer, memoryContent, memoryViewer, placeholder, planViewer, plansContent,
-  searchBar, searchInput, settingsViewer, sidebarContent, statsContent, statsViewer,
-  terminalArea, terminalHeader, el,
+  gridViewer, memoryContent, placeholder, plansContent,
+  searchBar, searchInput, sidebarContent, statsContent,
+  terminalHeader, el,
 } from '../lib/dom';
 import { fitAndScroll, showSession } from '../features/terminal/terminal-manager';
-import { hideAllViewers } from '../features/panel/viewers';
+import { hideAllViewers, showViewer } from '../features/panel/viewers';
 import { loadPlans } from '../features/plans/plans-view';
 import { loadMemories } from '../features/memory/memory-view';
 import { loadStats } from '../features/stats/stats-view';
@@ -62,7 +62,7 @@ function switchTo(name: TabName): void {
       break;
     case 'stats':
       statsContent.style.display = '';
-      showStatsViewer();
+      showViewer('stats');
       void loadStats();
       break;
     case 'memory':
@@ -91,13 +91,29 @@ function applySearchBox(name: TabName): void {
 /**
  * Back to the sessions tab.
  *
- * Whatever was on screen before comes back: the grid, the open session, or the
- * placeholder. Terminals are refitted because they were hidden while another
- * tab was up, and xterm cannot measure a hidden element.
+ * The sidebar half only; the main area is put back by `showTerminalArea`.
  */
 function showSessions(): void {
   el('session-filters').style.display = '';
   sidebarContent.style.display = '';
+  showTerminalArea();
+
+  // Catch up on changes that arrived while another tab was up.
+  if (consumeDeferredProjectsChange()) void reloadProjects();
+}
+
+/**
+ * Put the terminal back in the main area.
+ *
+ * Whatever was on screen before comes back: the grid, the open session, or the
+ * placeholder. Terminals are refitted because they were hidden while a panel
+ * was up, and xterm cannot measure a hidden element.
+ *
+ * Exported because the code area's back button has to undo a `showViewer` the
+ * same way a tab switch does. Reaching for `hideAllViewers` alone would put the
+ * terminal back unmeasured, so there is one path out of a panel, not two.
+ */
+export function showTerminalArea(): void {
   hideAllViewers();
 
   if (view.gridViewActive) {
@@ -112,16 +128,4 @@ function showSessions(): void {
   } else {
     placeholder.style.display = '';
   }
-
-  // Catch up on changes that arrived while another tab was up.
-  if (consumeDeferredProjectsChange()) void reloadProjects();
-}
-
-function showStatsViewer(): void {
-  placeholder.style.display = 'none';
-  terminalArea.style.display = 'none';
-  planViewer.style.display = 'none';
-  memoryViewer.style.display = 'none';
-  settingsViewer.style.display = 'none';
-  statsViewer.style.display = 'flex';
 }

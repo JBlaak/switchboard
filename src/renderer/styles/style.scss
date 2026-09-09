@@ -13,6 +13,10 @@
 // Before chrome, which owns the platform insets — including the rail's, which
 // has to be able to win over the padding the rail sets for itself.
 @use 'rail';
+// Before chrome as well: chrome owns the window's top strip, and if it ever
+// insets the code area's own bar the way it insets the viewer toolbar above it,
+// that rule has to be the one that wins.
+@use 'code';
 @use 'chrome';
 @use 'update-toast';
 @use 'status-bar';

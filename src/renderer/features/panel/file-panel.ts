@@ -397,6 +397,41 @@ function hidePanel(): void {
   refitActiveTerminal();
 }
 
+/**
+ * Open the split on whichever session the panel is currently showing.
+ *
+ * `showPanel`/`hidePanel` are only reachable through `switchPanel`, which is how
+ * session activation moves the panel between sessions: it decides visibility
+ * from the session's stored state, so a control that just wants the split open
+ * would have to impersonate a session activation to get it. These two write that
+ * state and then act on it, which is what lets the coming `Talk | Split | Code`
+ * control work the split without knowing a session id at all.
+ *
+ * With no tab open the split is empty — the CLI has sent nothing to show yet.
+ * That is deliberate rather than refused: the control asked for the space.
+ */
+export function openFilePanel(): void {
+  if (!currentPanelSessionId) return;
+  const state = getSessionState(currentPanelSessionId);
+  state.panelVisible = true;
+  showPanel(state);
+  renderPanel(currentPanelSessionId);
+}
+
+/**
+ * Collapse the split, keeping what is in it.
+ *
+ * Not the same as the panel's own close button: that one destroys the tab and
+ * rejects a diff the CLI is still waiting on. This only takes the space back, so
+ * reopening shows the same tab — a layout control must not answer the CLI on the
+ * user's behalf.
+ */
+export function closeFilePanel(): void {
+  if (!currentPanelSessionId) return;
+  getSessionState(currentPanelSessionId).panelVisible = false;
+  hidePanel();
+}
+
 export function switchPanel(sessionId: string | null): void {
   currentPanelSessionId = sessionId;
   updateMcpIndicator();
