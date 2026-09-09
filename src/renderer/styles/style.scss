@@ -10,6 +10,9 @@
 
 @use 'reset';
 @use 'tokens';
+// Before chrome, which owns the platform insets — including the rail's, which
+// has to be able to win over the padding the rail sets for itself.
+@use 'rail';
 @use 'chrome';
 @use 'update-toast';
 @use 'status-bar';

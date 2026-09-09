@@ -20,6 +20,7 @@ export function el<T extends HTMLElement = HTMLElement>(id: string): T {
 }
 
 // Sidebar
+export const projectRail = el('project-rail');
 export const sidebarContent = el('sidebar-content');
 export const plansContent = el('plans-content');
 export const statsContent = el('stats-content');

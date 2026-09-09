@@ -16,6 +16,7 @@ import { installShortcuts } from './shortcuts';
 import { installTabRouter } from './tab-router';
 import { installTimeTicker } from './time-ticker';
 import { renderStatusSummary } from './status-bar';
+import { installProjectRail, refreshProjectRail } from '../features/rail/project-rail';
 import { installSidebar } from '../features/sessions/sidebar';
 import { installSidebarFilters } from '../features/sessions/sidebar-filters';
 import { loadProjects } from '../features/sessions/session-list';
@@ -38,6 +39,8 @@ import type { GlobalSettings } from '../../domain/settings/settings';
 export function bootstrap(): void {
   // The refresh events, before anything can fire one.
   installSidebar();
+  // After it, so the rail subscribes to a refresh the sidebar has performed.
+  installProjectRail();
 
   installIpcListeners();
   installTabRouter();
@@ -67,6 +70,9 @@ export function bootstrap(): void {
     // the still-empty list would drop a perfectly good scope.
     reconcileScopeWithProjects(view.cachedAllProjects);
     onSidebarRefresh(() => reconcileScopeWithProjects(view.cachedAllProjects));
+    // The rail's first paint: it draws from the project list, which is empty
+    // until now.
+    refreshProjectRail();
     renderStatusSummary();
     restoreView();
   });
