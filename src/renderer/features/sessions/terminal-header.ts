@@ -1,12 +1,15 @@
 /**
- * The bar above the terminal: which session, whether it is running, and what
- * the process last called itself.
+ * The bar above the terminal: which session, whether it is running, what the
+ * process last called itself, and which half of the window it has.
  */
 import { cleanDisplayName } from '../../../domain/session/title';
 import { remoteStatusLabel } from '../../../domain/remote/remote-status';
 import { remoteStatus } from '../../state/remote-status-store';
 import { openSessions, view } from '../../state/session-store';
 import { el, terminalHeader } from '../../lib/dom';
+import { shortcutLabel } from '../../lib/format';
+import { MAIN_MODES } from '../../app/main-mode-model';
+import type { MainMode } from '../../app/main-mode-model';
 import type { SessionRow } from '../../../domain/session/session';
 
 const headerName = el('terminal-header-name');
@@ -91,4 +94,74 @@ export function setHeaderIdentity(sessionId: string, name?: string | null): void
 /** Hide the header — nothing is on screen. */
 export function hideTerminalHeader(): void {
   terminalHeader.style.display = 'none';
+}
+
+// ── Talk | Split | Code ─────────────────────────────────────────────────────
+
+/** The three buttons, by the mode each one asks for. */
+const modeButtons = new Map<MainMode, HTMLButtonElement>();
+
+/** How each mode reads to someone who has not used ⌘J yet. */
+const MODE_HINTS: Record<MainMode, string> = {
+  talk: `The conversation, full width (${shortcutLabel('J')})`,
+  split: 'The conversation with the side panel out',
+  code: `The code, full width (${shortcutLabel('J')})`,
+};
+
+/**
+ * Build the mode control.
+ *
+ * The flip hands its setter in and calls `paintModeControl` when the mode
+ * moves, rather than this module importing `app/main-mode`. That direction is
+ * deliberate: the flip already reaches the terminal manager and the tab router,
+ * and an import back from a header the terminal manager itself imports would
+ * close a loop across most of the renderer. The header stays a leaf.
+ *
+ * The control names the three states the gesture moves between, which is the
+ * whole reason it exists — ⌘J is unguessable on its own, and a segmented
+ * control that is also the shortcut's label makes it findable. `Split` is only
+ * reachable here, because it is the state ⌘J deliberately does not stop on.
+ */
+export function installModeControl(pick: (mode: MainMode) => void): void {
+  if (modeButtons.size > 0) return;
+  const controls = el('terminal-header-controls');
+
+  const group = document.createElement('div');
+  group.id = 'terminal-header-mode';
+  group.className = 'sb-segmented';
+  group.setAttribute('role', 'group');
+  group.setAttribute('aria-label', 'Which half owns the window');
+
+  for (const mode of MAIN_MODES) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'sb-segment';
+    button.dataset.mode = mode;
+    button.textContent = mode[0].toUpperCase() + mode.slice(1);
+    button.title = MODE_HINTS[mode];
+    button.addEventListener('click', () => pick(mode));
+    group.appendChild(button);
+    modeButtons.set(mode, button);
+  }
+  controls.appendChild(group);
+
+  const hint = document.createElement('span');
+  hint.id = 'terminal-header-flip-hint';
+  hint.textContent = shortcutLabel('J');
+  hint.title = 'Swap the conversation and the code';
+  controls.appendChild(hint);
+}
+
+/**
+ * Show which half currently owns the window.
+ *
+ * Reflecting rather than remembering: the flip owns the mode, and being told it
+ * on every application — not only on a change — is what stops the control and
+ * the window disagreeing after a session switch has restored a different one.
+ */
+export function paintModeControl(mode: MainMode): void {
+  for (const [name, button] of modeButtons) {
+    button.classList.toggle('on', name === mode);
+    button.setAttribute('aria-pressed', String(name === mode));
+  }
 }

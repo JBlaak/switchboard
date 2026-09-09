@@ -13,11 +13,14 @@
  * of the question of what a project is allowed to read.
  *
  * Being a sibling of the terminal area rather than something inside it is the
- * point: a later milestone adds a `Talk | Split | Code` control over two axes —
- * the terminal with the split panel open or closed, or the code area instead of
- * the terminal — and only one of those axes lives inside `#terminal-area`.
+ * point: the `Talk | Split | Code` control moves two axes — the terminal with
+ * the split panel open or closed, or the code area instead of the terminal —
+ * and only one of those axes lives inside `#terminal-area`. `app/main-mode.ts`
+ * owns the pairing; this module owns what is in the panel, and knows nothing
+ * about which half currently has the window.
  */
 import { showViewer } from '../panel/viewers';
+import { setMainMode } from '../../app/main-mode';
 import { showTerminalArea } from '../../app/tab-router';
 import { absolutePathFor, breadcrumbSegments } from './code-path';
 import { codeArea } from '../../lib/dom';
@@ -46,6 +49,7 @@ const NOTE_MS = 4000;
 let crumbsEl: HTMLElement | null = null;
 let noteEl: HTMLElement | null = null;
 let readOnlyEl: HTMLElement | null = null;
+let emptyEl: HTMLElement | null = null;
 let noteTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** The absolute path of the file on screen, or null while the area is closed. */
@@ -67,16 +71,10 @@ export function installCodeArea(): void {
   const header = document.createElement('div');
   header.id = 'code-area-header';
 
-  // Replaced by a fold strip in the milestone that adds `Talk | Split | Code`;
-  // until then this is the only way out of the code area, so it is a button
-  // rather than a gesture.
-  const back = document.createElement('button');
-  back.id = 'code-area-back';
-  back.type = 'button';
-  back.title = 'Back to the session';
-  back.textContent = '← Session';
-  back.addEventListener('click', () => closeCodeArea());
-  header.appendChild(back);
+  // No back button: the way out is the folded conversation strip along the
+  // bottom, or ⌘J. A second control that also left this half would be a second
+  // answer to "where did my session go", and only one of them would have kept
+  // the scroll position.
 
   crumbsEl = document.createElement('div');
   crumbsEl.id = 'code-area-crumbs';
@@ -95,6 +93,16 @@ export function installCodeArea(): void {
   header.appendChild(noteEl);
 
   codeArea.insertBefore(header, codePanel.editorEl);
+
+  // What this half shows before a file has been picked. It exists because the
+  // flip can bring the code side up on its own: ⌘J is a request for the space,
+  // not for a particular file, and an empty panel with no explanation reads as
+  // a broken view rather than an empty one.
+  emptyEl = document.createElement('div');
+  emptyEl.id = 'code-area-empty';
+  emptyEl.textContent = 'Pick a file from Changes or the project tree.';
+  codeArea.insertBefore(emptyEl, codePanel.editorEl.nextSibling);
+  showEmptyState(true);
 
   // ViewerPanel already watches the open file and re-reads it when the watcher
   // fires (see its `_onFileChanged`), and for a read-only buffer that silent
@@ -129,6 +137,7 @@ export function openFileInCodeArea(opts: CodeAreaFile): void {
   // TypeScript. Rebuilding per open is what the file panel does per tab, for the
   // same reason.
   codePanel.destroy();
+  showEmptyState(false);
   showViewer('code');
   codePanel.open(crumbs[crumbs.length - 1] ?? filePath, filePath, opts.content);
 }
@@ -140,6 +149,10 @@ export function openFileInCodeArea(opts: CodeAreaFile): void {
  * registered by `open()` and released by `destroy()`, so leaving the editor
  * standing would leave main watching a file nobody is looking at. The next open
  * rebuilds it.
+ *
+ * Not what ⌘J does: the flip folds this half and keeps it, and closing is the
+ * heavier gesture that throws the buffer away. The mode is dropped to `talk`
+ * first so the flip does not immediately put back what has just been closed.
  */
 export function closeCodeArea(): void {
   // Only the visible panel is ours to close: another viewer may have taken the
@@ -149,7 +162,15 @@ export function closeCodeArea(): void {
   openPath = null;
   clearNote();
   codePanel.destroy();
+  showEmptyState(true);
+  setMainMode('talk');
   showTerminalArea();
+}
+
+/** The panel and the "pick a file" line are alternatives, never both. */
+function showEmptyState(empty: boolean): void {
+  if (emptyEl) emptyEl.hidden = !empty;
+  codePanel.editorEl.style.display = empty ? 'none' : '';
 }
 
 /**

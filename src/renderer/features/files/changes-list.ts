@@ -269,6 +269,80 @@ function rowFor(path: string): { status: string } | undefined {
     ?? payload?.untracked.find(file => file.path === path);
 }
 
+// ── what the folded code strip reads ──────────────────────────────────────────
+//
+// The strip along the bottom of the conversation says the same three things
+// this list's header says — how many files, the diffstat, the base — and offers
+// a chip per changed file. It is the same answer, so it is the same fetch:
+// `getChanges` is a diff of the whole tree plus a walk of the project's
+// transcripts, and a second caller making the same round trip would both cost
+// twice and let the two surfaces disagree about what changed. These five
+// exports are the seam.
+
+type ChangesWatcher = () => void;
+const watchers = new Set<ChangesWatcher>();
+
+/** Be told whenever the answer, or the lack of one, has moved. */
+export function onChangesChanged(fn: ChangesWatcher): () => void {
+  watchers.add(fn);
+  return () => { watchers.delete(fn); };
+}
+
+/**
+ * One that throws is logged and skipped, exactly as the scope store does: a
+ * strip that fails to draw must not stop the list itself from redrawing.
+ */
+function notifyWatchers(): void {
+  for (const watcher of [...watchers]) {
+    try {
+      watcher();
+    } catch (err) {
+      console.error('changes watcher failed', err);
+    }
+  }
+}
+
+/**
+ * The whole answer, unfiltered — what the strip summarises.
+ *
+ * Unfiltered because the sidebar's query and its `Generated` toggle narrow the
+ * *list*, and a strip that quietly counted fewer files than the tree does would
+ * be a second, disagreeing account of the same worktree. Null while there is no
+ * answer: before the first fetch, after a scope change, or when the read failed.
+ */
+export function currentChangesView(): ChangesView | null {
+  return payload === null ? null : buildChangesView(payload);
+}
+
+/** Why the last read failed, for a strip that would otherwise say "nothing". */
+export function changesFailure(): string | null {
+  return failure;
+}
+
+/**
+ * Fetch what changed, unless it is already known or already in flight.
+ *
+ * `showChangesList` is the tab's gesture and refetches every time the tab comes
+ * up, which is the refresh the user is asking for by opening it. The strip is on
+ * screen continuously, so it asks only for what it does not have — otherwise
+ * every redraw would start a diff of the whole tree.
+ */
+export function ensureChangesLoaded(): void {
+  const root = scopeRoot();
+  if (root !== shownRoot) forget();
+  if (root === null) {
+    draw();
+    return;
+  }
+  if (loading || payload !== null || failure !== null) return;
+  void refresh();
+}
+
+/** Open a changed file the same way a click on its row does. */
+export function openChangedFile(path: string): void {
+  void open(path);
+}
+
 // ── drawing ───────────────────────────────────────────────────────────────────
 
 function buildTools(): HTMLElement {
@@ -306,16 +380,19 @@ function buildTools(): HTMLElement {
 }
 
 function draw(): void {
-  if (!section) return;
-
-  if (shownRoot === null) {
-    section.hidden = true;
-    filesContent.classList.remove('changes-crowded');
-    return;
+  if (section) {
+    if (shownRoot === null) {
+      section.hidden = true;
+      filesContent.classList.remove('changes-crowded');
+    } else {
+      section.hidden = false;
+      drawHeader();
+      drawGroups();
+    }
   }
-  section.hidden = false;
-  drawHeader();
-  drawGroups();
+  // Outside the guard: the folded code strip reads the same answer and is on
+  // screen whether or not this section has been built.
+  notifyWatchers();
 }
 
 function drawHeader(): void {

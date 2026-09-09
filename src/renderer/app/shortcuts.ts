@@ -10,6 +10,7 @@
 import { isMac } from '../features/terminal/terminal-manager';
 import { handleSessionNavKey, toggleGridView } from '../features/terminal/grid-view';
 import { el } from '../lib/dom';
+import { flipMainMode } from './main-mode';
 
 /** An event xterm's own handler has already acted on. */
 type MarkedEvent = KeyboardEvent & { _handled?: boolean };
@@ -27,6 +28,16 @@ export function installShortcuts(): void {
     if (e.key === 'g' && mod && e.shiftKey && !e.altKey) {
       e.preventDefault();
       toggleGridView();
+      return;
+    }
+
+    // Cmd/Ctrl+J swaps the conversation and the code. This is the path for
+    // focus anywhere *but* a terminal — xterm marks the event handled and does
+    // the flip from its own key handler, because it also has to stop ^J, which
+    // is a newline, reaching the shell.
+    if (e.key === 'j' && mod && !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      flipMainMode();
       return;
     }
 

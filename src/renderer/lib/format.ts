@@ -16,6 +16,20 @@ export function formatDate(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/**
+ * A shortcut as this platform writes it: `⌘J` on macOS, `Ctrl+J` elsewhere.
+ *
+ * Here rather than next to `isMac` in the terminal manager, because the two
+ * surfaces that print a shortcut — the terminal header and the fold strip — are
+ * both imported *by* the terminal manager or something it reaches, and a label
+ * is not worth an import loop. A key printed with the wrong modifier is a
+ * shortcut nobody on that platform can use, so this is not cosmetic.
+ */
+export function shortcutLabel(key: string): string {
+  const mac = typeof window !== 'undefined' && window.api && window.api.platform === 'darwin';
+  return mac ? `⌘${key.toUpperCase()}` : `Ctrl+${key.toUpperCase()}`;
+}
+
 /** The date part of a timestamp, in the local timezone, as `YYYY-MM-DD`. */
 export function localDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
