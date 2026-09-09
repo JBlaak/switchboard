@@ -1,5 +1,5 @@
 /**
- * The code area: a file on screen with no session behind it.
+ * The code area: what the code half of the window is showing.
  *
  * The existing file panel cannot do this. It is keyed by session — its state is
  * created per session id and only rendered while that session is the panel's
@@ -18,13 +18,54 @@
  * and only one of those axes lives inside `#terminal-area`. `app/main-mode.ts`
  * owns the pairing; this module owns what is in the panel, and knows nothing
  * about which half currently has the window.
+ *
+ * **What it is showing is a mode of its own.** A file has a breadcrumb; a review
+ * has a session asking, a count of what is still waiting, and the two buttons
+ * that answer the CLI; the whole-worktree diff will have its own header again.
+ * They are one enum and one table rather than a flag per surface, because every
+ * one of them is "this region up, that region down" and a pair of booleans goes
+ * wrong the first time a third thing is added. Adding a mode is a row in
+ * `SURFACES` and a branch in the two places that name one.
  */
 import { showViewer } from '../panel/viewers';
-import { setMainMode } from '../../app/main-mode';
+import { setMainMode, onMainModeChange } from '../../app/main-mode';
 import { showTerminalArea } from '../../app/tab-router';
 import { absolutePathFor, breadcrumbSegments } from './code-path';
 import { codeArea } from '../../lib/dom';
 import { codePanel } from '../panel/panels';
+import {
+  hasPendingReview, hasReview, installReviewView, onReviewChange, proposeEdit, refreshReview,
+  showReviewFor,
+} from './review-view';
+import { view } from '../../state/session-store';
+import type { ProposedEdit } from './review-view';
+
+/**
+ * What the code half is showing.
+ *
+ * `empty` is the honest answer to ⌘J with nothing picked: the flip asks for the
+ * space, not for a particular file. The whole-worktree diff joins this list as
+ * `diff` — one more row in `SURFACES`, not a second axis.
+ */
+export type CodeContent = 'empty' | 'file' | 'review';
+
+/** Which regions of the area one mode wants. */
+interface CodeSurfaces {
+  /** The breadcrumb in the header — a file's identity. */
+  crumbs: boolean;
+  /** The review's header strip and its surface below. */
+  review: boolean;
+  /** The shared viewer panel's editor. */
+  editor: boolean;
+  /** The "pick a file" line. */
+  empty: boolean;
+}
+
+const SURFACES: Record<CodeContent, CodeSurfaces> = {
+  empty:  { crumbs: false, review: false, editor: false, empty: true  },
+  file:   { crumbs: true,  review: false, editor: true,  empty: false },
+  review: { crumbs: false, review: true,  editor: false, empty: false },
+};
 
 /** What `openFileInCodeArea` needs to show a file. */
 export interface CodeAreaFile {
@@ -50,9 +91,30 @@ let crumbsEl: HTMLElement | null = null;
 let noteEl: HTMLElement | null = null;
 let readOnlyEl: HTMLElement | null = null;
 let emptyEl: HTMLElement | null = null;
+let reviewHeadEl: HTMLElement | null = null;
+let reviewBodyEl: HTMLElement | null = null;
 let noteTimer: ReturnType<typeof setTimeout> | undefined;
 
-/** The absolute path of the file on screen, or null while the area is closed. */
+let content: CodeContent = 'empty';
+/** Whether the file on screen has its read-only badge — only `file` shows it. */
+let readOnlyBadge = true;
+
+/**
+ * Set while the file on screen is one the user picked themselves.
+ *
+ * A session waiting on an answer otherwise claims this half back on the next
+ * flip, which is right when the review arrived while the user was elsewhere and
+ * wrong the moment they deliberately open a file instead. Cleared by the next
+ * thing the CLI proposes, so the claim comes back with the next request rather
+ * than being given up for good — and cleared by a session switch, because it is
+ * a fact about reading *this* session's code and not a standing preference.
+ */
+let filePicked = false;
+
+/** The session the half was last put in step with, to notice a switch. */
+let syncedSessionId: string | null = null;
+
+/** The absolute path of the file on screen, or null while none is open. */
 let openPath: string | null = null;
 
 /**
@@ -92,6 +154,14 @@ export function installCodeArea(): void {
   noteEl.hidden = true;
   header.appendChild(noteEl);
 
+  // The review's half of the header, filled by the review view and shown only
+  // in that mode. It shares the bar with the breadcrumb rather than adding a
+  // second one, for the chrome reason above.
+  reviewHeadEl = document.createElement('div');
+  reviewHeadEl.id = 'code-area-review';
+  reviewHeadEl.hidden = true;
+  header.appendChild(reviewHeadEl);
+
   codeArea.insertBefore(header, codePanel.editorEl);
 
   // What this half shows before a file has been picked. It exists because the
@@ -102,7 +172,30 @@ export function installCodeArea(): void {
   emptyEl.id = 'code-area-empty';
   emptyEl.textContent = 'Pick a file from Changes or the project tree.';
   codeArea.insertBefore(emptyEl, codePanel.editorEl.nextSibling);
-  showEmptyState(true);
+
+  reviewBodyEl = document.createElement('div');
+  reviewBodyEl.id = 'code-review';
+  reviewBodyEl.hidden = true;
+  codeArea.appendChild(reviewBodyEl);
+  installReviewView({ header: reviewHeadEl, body: reviewBodyEl });
+
+  setCodeContent('empty');
+
+  // A review is per session and this half is not, so the two have to be kept in
+  // step: the mode is re-applied at the end of every `showSession`, which is
+  // the one point at which a session is definitely the one on screen.
+  onMainModeChange(() => {
+    syncToActiveSession();
+    // The flip may have just made this half visible, and a merge view can only
+    // be built once it can be measured.
+    refreshReview();
+  });
+
+  // And when a review changes under us — the CLI withdrawing its last diff is
+  // what takes this half back out of review mode.
+  onReviewChange(sessionId => {
+    if (sessionId === view.activeSessionId) syncToActiveSession();
+  });
 
   // ViewerPanel already watches the open file and re-reads it when the watcher
   // fires (see its `_onFileChanged`), and for a read-only buffer that silent
@@ -114,6 +207,11 @@ export function installCodeArea(): void {
   window.api.onFileChanged((changedPath) => {
     if (changedPath === openPath) showNote('Reloaded — changed on disk');
   });
+}
+
+/** What the code half is showing right now. */
+export function codeContent(): CodeContent {
+  return content;
 }
 
 /**
@@ -129,17 +227,43 @@ export function openFileInCodeArea(opts: CodeAreaFile): void {
 
   renderCrumbs(crumbs);
   clearNote();
-  if (readOnlyEl) readOnlyEl.hidden = opts.readOnly === false;
+  readOnlyBadge = opts.readOnly !== false;
   openPath = filePath;
+  filePicked = true;
 
   // The panel builds its editor once and an `auto` language panel picks the mode
   // while doing so, so reusing it for the next file would highlight Python as
   // TypeScript. Rebuilding per open is what the file panel does per tab, for the
   // same reason.
   codePanel.destroy();
-  showEmptyState(false);
+  setCodeContent('file');
   showViewer('code');
   codePanel.open(crumbs[crumbs.length - 1] ?? filePath, filePath, opts.content);
+}
+
+/**
+ * A session is asking to change a file: put it on the review surface.
+ *
+ * Always recorded, whoever it belongs to — a request that arrived while the
+ * user was in another session is still parked in the bridge, and dropping it
+ * here would leave the CLI waiting on a review nobody can reach. Only drawn
+ * when it belongs to the session on screen, because the surface shows one
+ * session's review and drawing another's under this name is the mix-up the
+ * per-session state exists to prevent.
+ *
+ * Bringing the window round to it is *not* decided here. `app/ipc-listeners.ts`
+ * owns that, because whether a request may take the window depends on what the
+ * user is doing, which is a question about the app rather than about this half.
+ */
+export function openReviewInCodeArea(sessionId: string, edit: ProposedEdit): void {
+  proposeEdit(sessionId, edit);
+  if (sessionId !== view.activeSessionId) return;
+
+  // The next proposal outranks a file the user opened by hand: something is
+  // waiting on them again.
+  filePicked = false;
+  showReviewFor(sessionId);
+  setCodeContent('review');
 }
 
 /**
@@ -149,6 +273,10 @@ export function openFileInCodeArea(opts: CodeAreaFile): void {
  * registered by `open()` and released by `destroy()`, so leaving the editor
  * standing would leave main watching a file nobody is looking at. The next open
  * rebuilds it.
+ *
+ * A review is *not* torn down with it and nothing is answered: a diff the CLI is
+ * still parked on outlives the closing of a panel, exactly as a folded split
+ * outlives ⌘J. The surface comes back with its list intact.
  *
  * Not what ⌘J does: the flip folds this half and keeps it, and closing is the
  * heavier gesture that throws the buffer away. The mode is dropped to `talk`
@@ -160,17 +288,68 @@ export function closeCodeArea(): void {
   if (codeArea.style.display === 'none') return;
 
   openPath = null;
+  filePicked = false;
   clearNote();
   codePanel.destroy();
-  showEmptyState(true);
+  setCodeContent('empty');
   setMainMode('talk');
   showTerminalArea();
 }
 
-/** The panel and the "pick a file" line are alternatives, never both. */
-function showEmptyState(empty: boolean): void {
-  if (emptyEl) emptyEl.hidden = !empty;
-  codePanel.editorEl.style.display = empty ? 'none' : '';
+/**
+ * Put the regions where one mode wants them.
+ *
+ * Every mode goes through here, so "which regions are up" is answered in one
+ * table rather than at each call site — which is what makes a fourth mode a row
+ * rather than an audit of every branch in the file.
+ */
+function setCodeContent(next: CodeContent): void {
+  content = next;
+  const want = SURFACES[next];
+
+  if (crumbsEl) crumbsEl.hidden = !want.crumbs;
+  if (readOnlyEl) readOnlyEl.hidden = !(want.crumbs && readOnlyBadge);
+  if (reviewHeadEl) reviewHeadEl.hidden = !want.review;
+  if (reviewBodyEl) reviewBodyEl.hidden = !want.review;
+  if (emptyEl) emptyEl.hidden = !want.empty;
+  codePanel.editorEl.style.display = want.editor ? '' : 'none';
+
+  // The note is about the open file, so it has no meaning over anything else.
+  if (!want.crumbs) clearNote();
+
+  // Entering review, the merge view may now be buildable; leaving it, this is a
+  // no-op. Either way the review draws itself rather than being drawn from here.
+  if (want.review) refreshReview();
+}
+
+/**
+ * Follow the session the user is now in.
+ *
+ * A session still holding the CLI takes this half: that is the whole point of
+ * the review surface, and invariant 4 — nothing goes quiet — means the request
+ * has to be findable from the session it came from. A review that has been
+ * emptied by the CLI gives the half back to whatever was here before.
+ */
+function syncToActiveSession(): void {
+  const sessionId = view.activeSessionId;
+
+  // A file opened while reading one session says nothing about the next one,
+  // and leaving the flag standing would hide the review the user has just
+  // switched to.
+  if (sessionId !== syncedSessionId) {
+    syncedSessionId = sessionId;
+    filePicked = false;
+  }
+
+  if (sessionId !== null && hasPendingReview(sessionId) && !filePicked) {
+    showReviewFor(sessionId);
+    setCodeContent('review');
+    return;
+  }
+
+  if (content === 'review' && !hasReview(sessionId)) {
+    setCodeContent(openPath === null ? 'empty' : 'file');
+  }
 }
 
 /**

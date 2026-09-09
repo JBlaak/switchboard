@@ -1,0 +1,278 @@
+/* ========== PROPOSAL REVIEW ==========
+   The code area in review mode: a session is asking to make edits and the CLI
+   is parked until somebody answers. Two regions, both owned by review-view.ts —
+   a strip that shares the code area's header bar with the breadcrumb, and the
+   surface below it (the file list, then the merge view).
+
+   Three conventions this file keeps.
+
+   1. Nothing here styles .viewer-toolbar, for the reason _code.scss gives: the
+      toolbar is the window's drag region and _chrome.scss owns it.
+   2. Every colour is a token from _tokens.scss.
+   3. Every container that is hidden by `hidden` also says so at id
+      specificity. A `display: flex` on an id outranks the user agent's
+      [hidden] { display: none }, so a flex region without its own rule would
+      never actually hide. */
+
+/* The header strip. Sits in #code-area-header in place of the breadcrumb, so
+   it inherits that bar's padding and border rather than adding a second one. */
+#code-area-review {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+#code-area-review[hidden] { display: none; }
+
+/* Who is asking. The answer is the whole reason this is not just a diff: an
+   edit is being proposed by a named session, not found in the worktree. */
+.code-review-asking {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+.code-review-session {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sb-text-strong);
+}
+
+.code-review-verb {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--sb-text-muted);
+}
+
+/* The file under review. Named here because a one-file review has no list. */
+.code-review-file {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  color: var(--sb-text);
+}
+
+/* "2 of 5 reviewed". Yellow: something is still waiting on the user, which is
+   the same thing the sidebar's waiting badge says in the same colour. */
+.code-review-progress {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  color: var(--sb-yellow);
+  background: rgba(236, 178, 46, 0.1);
+}
+
+.code-review-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.code-review-btn {
+  padding: 3px 12px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: var(--sb-text-dim);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.code-review-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--sb-text-strong);
+}
+
+.code-review-btn[hidden] { display: none; }
+
+/* Accept and reject keep the file panel's colours: the same two answers, moved.
+   Accept is the filled one because it is the common case, and reject stays an
+   outline so the destructive answer never reads as the default. */
+#code-review-accept,
+#code-review-accept-all {
+  color: var(--sb-green);
+  border-color: rgba(46, 182, 125, 0.3);
+  background: rgba(46, 182, 125, 0.1);
+}
+
+#code-review-accept:hover,
+#code-review-accept-all:hover {
+  background: rgba(46, 182, 125, 0.2);
+  color: var(--sb-green-soft);
+}
+
+#code-review-reject {
+  color: var(--sb-red);
+  border-color: rgba(224, 30, 90, 0.3);
+}
+
+#code-review-reject:hover {
+  background: rgba(224, 30, 90, 0.1);
+  color: var(--sb-red);
+}
+
+/* ── the surface ── */
+
+#code-review {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--sb-bg-base);
+}
+
+#code-review[hidden] { display: none; }
+
+/* The file list, only built when a session proposed more than one. A row of
+   chips rather than a column: the review is read one file at a time and the
+   list is a way back to the others, not a tree. */
+#code-review-files {
+  display: flex;
+  gap: 6px;
+  padding: 6px 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  background: var(--sb-bg-panel);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  scrollbar-width: none;
+}
+
+#code-review-files[hidden] { display: none; }
+
+.code-review-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+  max-width: 260px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--sb-text-muted);
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.code-review-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* The one on screen. Accent, as selection is everywhere else in the app. */
+.code-review-row.current {
+  border-color: rgba(var(--sb-accent-rgb), 0.45);
+  color: var(--sb-text-strong);
+}
+
+.code-review-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Where the file is, for the two files of one review that share a name. Already
+   trimmed to its last segments by review-view.ts. */
+.code-review-row-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sb-text-dimmest);
+  font-size: 10px;
+}
+
+/* The marker says what became of each file, so the list doubles as the
+   progress: hollow while the CLI is still parked on it, filled once answered. */
+.code-review-mark {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  align-self: center;
+  border: 1px solid var(--sb-yellow);
+}
+
+.code-review-accepted .code-review-mark {
+  border-color: var(--sb-green);
+  background: var(--sb-green);
+}
+
+.code-review-rejected .code-review-mark {
+  border-color: var(--sb-red);
+  background: var(--sb-red);
+}
+
+.code-review-accepted,
+.code-review-rejected {
+  opacity: 0.65;
+}
+
+/* The merge view's host. Sized in this file rather than by the editor, which
+   measures whatever box it is given — see review-view.ts on why it is only ever
+   built while that box has a size. */
+#code-review-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* One box per file, so CodeMirror's floating search bar — which is cached on
+   the editor's parent — belongs to that file and not to the surface. */
+.code-review-diff {
+  height: 100%;
+  position: relative;
+}
+
+#code-review-body .cm-editor {
+  height: 100%;
+}
+
+#code-review-body .cm-merge-view {
+  height: 100%;
+  overflow: auto;
+}
+
+/* 12.5px, as every code surface in the app renders a diff. */
+#code-review-body .cm-merge-view,
+#code-review-body .cm-editor {
+  font-size: 12.5px;
+}
+
+/* Changed-line backgrounds, carried over from the file panel unchanged: the
+   deletion side red, the addition side green, and the word-level change inside
+   each a stronger wash of the same. */
+#code-review-body .cm-merge-a .cm-changedLine,
+#code-review-body .cm-deletedChunk {
+  background-color: rgba(248, 81, 73, 0.12) !important;
+}
+
+#code-review-body .cm-merge-b .cm-changedLine {
+  background-color: rgba(46, 182, 125, 0.12) !important;
+}
+
+#code-review-body .cm-merge-a .cm-changedText,
+#code-review-body .cm-deletedChunk .cm-deletedText {
+  background: rgba(248, 81, 73, 0.35) !important;
+}
+
+#code-review-body .cm-merge-b .cm-changedText {
+  background: rgba(46, 182, 125, 0.35) !important;
+}

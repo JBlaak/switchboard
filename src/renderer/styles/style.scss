@@ -17,6 +17,10 @@
 // insets the code area's own bar the way it insets the viewer toolbar above it,
 // that rule has to be the one that wins.
 @use 'code';
+// Immediately after it, and before chrome for the same reason: the review's
+// header strip shares #code-area-header with the breadcrumb, so whatever chrome
+// says about that bar has to keep winning.
+@use 'review';
 // Before chrome for the same reason: the Files tab's button lives in
 // #sidebar-header, which chrome insets for the macOS traffic lights, so nothing
 // the tree brings with it may outrank that.
