@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { decodeOsc52Payload } from '../src/renderer/terminal-input.js';
+import { decodeOsc52Payload } from '../src/renderer/features/terminal/terminal-input';
 
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
 

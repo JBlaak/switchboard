@@ -52,13 +52,13 @@ const targets = [
     external: nodeExternals,
   },
   {
-    // Emitted on its own so the schema-reconciliation test can load the DB
-    // layer under Electron-as-Node without booting the app (see
+    // Emitted on its own so the schema-reconciliation test can open the
+    // database under Electron-as-Node without booting the app (see
     // test/db-schema-reconcile.test.ts). main.js bundles its own copy.
-    name: 'db',
+    name: 'database',
     ...common,
-    entryPoints: [path.join(root, 'src/main/db.ts')],
-    outfile: path.join(out, 'db.js'),
+    entryPoints: [path.join(root, 'src/infrastructure/sqlite/database.ts')],
+    outfile: path.join(out, 'database.js'),
     platform: 'node',
     format: 'cjs',
     external: nodeExternals,

