@@ -50,10 +50,14 @@ export class NodeFileSystem implements FileSystem {
   }
 
   readDir(target: string): DirEntry[] {
+    // withFileTypes reports lstat kinds, so a symlink is a symlink rather than
+    // whatever it points at — which is why all three flags are needed to tell
+    // a link to a directory from a directory.
     return fs.readdirSync(target, { withFileTypes: true }).map(entry => ({
       name: entry.name,
       isFile: entry.isFile(),
       isDirectory: entry.isDirectory(),
+      isSymbolicLink: entry.isSymbolicLink(),
     }));
   }
 

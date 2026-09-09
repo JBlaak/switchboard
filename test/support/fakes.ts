@@ -282,13 +282,19 @@ const FAKE_MTIME_ISO = '2024-01-01T00:00:00.000Z';
  * that it behaves like the real adapter — `readText` on a missing file throws,
  * `writeText` into a directory that was never made throws, `stat` on a missing
  * path is null — so a service that forgets a `makeDir` fails here too.
+ *
+ * `links` seeds symlinks. A listing reports one as neither file nor directory,
+ * which is what `readdirSync(withFileTypes)` does — it reads the link, not what
+ * the link points at — and nothing here follows one, so a link's target is not
+ * modelled at all.
  */
 export function fakeFileSystem(
-  seed: { files?: Record<string, string>; dirs?: string[] } = {},
+  seed: { files?: Record<string, string>; dirs?: string[]; links?: string[] } = {},
 ): FakeFileSystem {
   const homeDir = '/home/test';
   const files = new Map<string, string>();
   const dirs = new Set<string>(['/']);
+  const links = new Set<string>();
   const writes: [string, string][] = [];
   const watchers = new Set<{ target: string; recursive: boolean; listener: WatchListener }>();
 
@@ -329,6 +335,11 @@ export function fakeFileSystem(
     addDirWithAncestors(path.posix.dirname(resolved));
     files.set(resolved, content);
   }
+  for (const link of seed.links ?? []) {
+    const resolved = resolve(link);
+    addDirWithAncestors(path.posix.dirname(resolved));
+    links.add(resolved);
+  }
 
   return {
     writes,
@@ -337,7 +348,7 @@ export function fakeFileSystem(
 
     exists(target) {
       const resolved = resolve(target);
-      return files.has(resolved) || dirs.has(resolved);
+      return files.has(resolved) || dirs.has(resolved) || links.has(resolved);
     },
 
     isDirectory(target) {
@@ -374,12 +385,23 @@ export function fakeFileSystem(
       const entries: DirEntry[] = [];
       for (const file of files.keys()) {
         if (path.posix.dirname(file) === resolved) {
-          entries.push({ name: path.posix.basename(file), isFile: true, isDirectory: false });
+          entries.push({
+            name: path.posix.basename(file), isFile: true, isDirectory: false, isSymbolicLink: false,
+          });
         }
       }
       for (const dir of dirs) {
         if (dir !== resolved && path.posix.dirname(dir) === resolved) {
-          entries.push({ name: path.posix.basename(dir), isFile: false, isDirectory: true });
+          entries.push({
+            name: path.posix.basename(dir), isFile: false, isDirectory: true, isSymbolicLink: false,
+          });
+        }
+      }
+      for (const link of links) {
+        if (path.posix.dirname(link) === resolved) {
+          entries.push({
+            name: path.posix.basename(link), isFile: false, isDirectory: false, isSymbolicLink: true,
+          });
         }
       }
       // Code-point order, not localeCompare: the same on every CI runner.
