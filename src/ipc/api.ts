@@ -7,6 +7,7 @@
  * from the same channel table, so the two sides cannot drift apart silently.
  */
 import type { AgentFileIndex } from '../domain/agent-files/agent-file';
+import type { BrowseFile, BrowseListing } from '../domain/browse/types';
 import type { Worktree } from '../domain/git/types';
 import type { PlanSummary } from '../domain/plans/plan';
 import type { Project } from '../domain/project/project';
@@ -100,6 +101,23 @@ export interface SwitchboardApi {
    * `{ ok: false, error }` envelope, as every invoke does — check for an array.
    */
   gitWorktrees(projectPath: string): Promise<Worktree[]>;
+
+  // ── Browsing a worktree ──
+  /**
+   * One level of the file tree: the direct children of `relPath` inside
+   * `worktreePath` (`''` for the worktree itself), ignored names already
+   * dropped, directories first. A folder that cannot be read answers
+   * `{ entries: [], unreadable: true }`; only a path that tries to leave the
+   * worktree fails, with the `{ ok: false, error }` envelope — so check that
+   * `entries` is an array before walking it.
+   */
+  listDir(worktreePath: string, relPath: string): Promise<BrowseListing>;
+  /**
+   * One file inside the worktree. `error` instead of `content` when it cannot
+   * be read or is too large to send; `readOnly` when there is no way to write
+   * it back, which is every remote project.
+   */
+  readProjectFile(worktreePath: string, relPath: string): Promise<BrowseFile>;
 
   // ── Host ──
   openExternal(url: string): Promise<void>;

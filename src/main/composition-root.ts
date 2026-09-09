@@ -18,6 +18,7 @@ import path from 'node:path';
 import { systemClock } from '../application/ports/clock';
 import { uuidGenerator } from '../application/ports/ids';
 import { AgentFileService } from '../application/services/agent-file-service';
+import { BrowseService } from '../application/services/browse-service';
 import { GitService } from '../application/services/git-service';
 import { PlanService } from '../application/services/plan-service';
 import { ProjectListService } from '../application/services/project-list-service';
@@ -81,6 +82,7 @@ export interface Container {
   readonly plans: PlanService;
   readonly agentFiles: AgentFileService;
   readonly git: GitService;
+  readonly browse: BrowseService;
   readonly stats: ClaudeCliStatsService;
   readonly usage: OAuthUsageService;
   readonly schedules: ScheduleService;
@@ -186,6 +188,7 @@ export function buildContainer(): Container {
   });
 
   const git = new GitService({ runner: processes, log });
+  const browse = new BrowseService({ fs, runner: processes, log });
 
   const schedules = new ScheduleService({
     fs, transcripts, repository, ids, clock, timers, log,
@@ -228,7 +231,7 @@ export function buildContainer(): Container {
     log, paths,
     settings, repository, searchIndex, transcripts, fs, processes,
     registry, terminals, shells, ideBridge, lifecycle, remote, launcher, transitions,
-    sessionIndex, projects, plans, agentFiles, git, stats, usage, schedules,
+    sessionIndex, projects, plans, agentFiles, git, browse, stats, usage, schedules,
     renderer, updater, dialogs, system, fileWatches, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,

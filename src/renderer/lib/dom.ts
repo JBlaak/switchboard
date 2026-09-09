@@ -22,6 +22,7 @@ export function el<T extends HTMLElement = HTMLElement>(id: string): T {
 // Sidebar
 export const projectRail = el('project-rail');
 export const sidebarContent = el('sidebar-content');
+export const filesContent = el('files-content');
 export const plansContent = el('plans-content');
 export const statsContent = el('stats-content');
 export const memoryContent = el('memory-content');
@@ -46,6 +47,10 @@ export const jsonlViewerTitle = el('jsonl-viewer-title');
 export const jsonlViewerSessionId = el('jsonl-viewer-session-id');
 export const jsonlViewerBody = el('jsonl-viewer-body');
 export const settingsViewer = el('settings-viewer');
+// The session-less code panel. Empty in index.html — the code area builds its
+// own header and lets the shared viewer panel fill the rest — but static, so
+// this handle can be resolved at import like every other one here.
+export const codeArea = el('code-area');
 
 // Grid view
 export const gridViewer = el('grid-viewer');

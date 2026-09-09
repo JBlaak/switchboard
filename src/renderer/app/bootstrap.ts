@@ -29,6 +29,8 @@ import { setTickListener } from '../state/remote-status-store';
 import { reconcileScopeWithProjects } from '../state/scope-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
 import { initFilePanel } from '../features/panel/file-panel';
+import { installCodeArea } from '../features/code/code-area';
+import { installFilesTab } from '../features/files/files-tab';
 import { initGridObservers, showGridView } from '../features/terminal/grid-view';
 import {
   applyTerminalFont, prewarmTerminalRenderer,
@@ -53,6 +55,12 @@ export function bootstrap(): void {
 
   initGridObservers();
   initFilePanel();
+  // After the panels module has built its editors: the code area's header is
+  // inserted relative to the one `codePanel` put in #code-area.
+  installCodeArea();
+  // After it, because a click in the tree opens a file into that area. Nothing
+  // is fetched here: the tree reads its first directory when its tab is opened.
+  installFilesTab();
   setTickListener(tickConnectionCards);
 
   terminalStopButton.addEventListener('click', () => {

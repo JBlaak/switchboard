@@ -1,0 +1,180 @@
+/* ========== FILES TAB ==========
+   The sidebar's file tree: one 24px row per name, nested by indent, sharing the
+   session list's left rail so switching tabs does not move the column the eye
+   is following.
+
+   Three conventions this file keeps.
+
+   1. The rail is the --sb-row-* tokens, not numbers of its own. A row's text
+      starts at --sb-row-text exactly as a session's title does; the chevron and
+      the icon divide the --sb-row-gutter between them. Change the tokens and
+      both lists move together.
+   2. Nesting is one value, --file-indent, multiplied by the depth the tree
+      writes onto each row as --file-depth. The drawing therefore holds no px
+      of its own for the tree's geometry.
+   3. Every colour is a token from _tokens.scss, so re-theming the app still
+      means editing that block and nothing else. The two tints follow the
+      sidebar's existing rgba(255,255,255,…) / rgba(var(--sb-accent-rgb),…)
+      idiom rather than introducing hexes. */
+
+#files-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 16px;
+}
+
+/* Matched to #sidebar-content's, so the tree's scrollbar is the same hairline
+   the session list has. */
+#files-content::-webkit-scrollbar { width: 5px; }
+#files-content::-webkit-scrollbar-track { background: transparent; }
+#files-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 3px; }
+#files-content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.1); }
+
+/* The list's own gutter, as .session-list carries it: the rows' hover pills sit
+   inside it rather than running to the sidebar's edge. */
+.file-tree {
+  --file-indent: 14px;
+  padding: 4px var(--sb-sidebar-gutter) 10px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-row-gap);
+  height: 24px;
+  /* The row's own inset, plus one indent per level of nesting. */
+  padding-left: calc(var(--sb-row-inset) + var(--file-depth, 0) * var(--file-indent));
+  padding-right: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+
+.file-row:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.file-row.active {
+  background: rgba(var(--sb-accent-rgb),0.14);
+}
+
+/* The marker gutter: the chevron and the icon, in the width a session's pin and
+   status dot get. A leaf keeps its empty chevron box, so every name in a level
+   starts on the same column whatever its neighbours are. */
+.file-gutter {
+  width: var(--sb-row-gutter);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.file-chevron {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sb-text-faint);
+}
+
+.file-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sb-text-dimmest);
+}
+
+.file-row:hover .file-chevron,
+.file-row.active .file-chevron { color: var(--sb-text-muted); }
+.file-row.active .file-icon { color: var(--sb-accent); }
+
+.file-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--sb-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-row:hover .file-name { color: var(--sb-text); }
+.file-row.active .file-name { color: var(--sb-text-strong); }
+
+/* The run of characters the search box matched, picked out of the name. */
+.file-match {
+  color: var(--sb-accent);
+  font-weight: 600;
+}
+
+/* Why a file would not open, said on its own row: too large, binary, gone since
+   the listing. Shrinks before the name does — the name is the identifier. */
+.file-row-error {
+  flex-shrink: 1;
+  min-width: 0;
+  font-size: 10px;
+  color: var(--sb-red);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A symlink is listed and never walked into, so it reads as a reference rather
+   than as a file that is there. */
+.file-row.symlink .file-name {
+  font-style: italic;
+  color: var(--sb-text-muted);
+}
+
+/* ---- The rows that are not names ---- */
+
+/* An empty or unreadable level, said where that level would have been. */
+.file-row-note {
+  cursor: default;
+  font-size: 11px;
+  color: var(--sb-text-dimmest);
+  padding-left: calc(var(--sb-row-text) + var(--file-depth, 0) * var(--file-indent));
+}
+
+.file-row-note:hover { background: transparent; }
+
+/* A directory being read. The bars vary in width so three of them read as a
+   list arriving rather than as one control repeated. */
+.file-row-skeleton {
+  cursor: default;
+  padding-left: calc(var(--sb-row-text) + var(--file-depth, 0) * var(--file-indent));
+}
+
+.file-row-skeleton:hover { background: transparent; }
+
+.file-skeleton-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+  animation: file-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.file-row-skeleton:nth-of-type(3n+1) .file-skeleton-bar { width: 58%; }
+.file-row-skeleton:nth-of-type(3n+2) .file-skeleton-bar { width: 74%; }
+.file-row-skeleton:nth-of-type(3n)   .file-skeleton-bar { width: 44%; }
+
+@keyframes file-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* No project in scope, or a query nothing matched. Sized and placed like
+   .plans-empty, which answers the same question for the Plans tab. */
+.files-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--sb-text-dimmest);
+  font-size: 13px;
+  line-height: 1.5;
+}
