@@ -91,6 +91,25 @@ const expandTimers = new Map<string, ReturnType<typeof setTimeout>>();
 /** Where a clicked file is shown; supplied by `files-tab.ts`. */
 let showFile: (file: OpenedFile) => void = () => {};
 
+/**
+ * The element the tree draws into, built on the first draw.
+ *
+ * The tab is shared with the Changes list, which sits above the tree and
+ * redraws on its own occasions, so the tree clears this container rather than
+ * `#files-content` — the two would otherwise take turns wiping each other off
+ * the screen.
+ */
+let treeHost: HTMLElement | null = null;
+
+function host(): HTMLElement {
+  if (treeHost === null) {
+    treeHost = document.createElement('div');
+    treeHost.id = 'file-tree-host';
+    filesContent.appendChild(treeHost);
+  }
+  return treeHost;
+}
+
 /** Wire the tree's one click handler up. Does not draw: the tab does that. */
 export function installFileTree(onOpenFile: (file: OpenedFile) => void): void {
   showFile = onOpenFile;
@@ -262,11 +281,12 @@ async function load(node: FileNode): Promise<void> {
 // ── drawing ───────────────────────────────────────────────────────────────────
 
 function draw(): void {
-  filesContent.textContent = '';
+  const into = host();
+  into.textContent = '';
   drawnNodes.clear();
 
   if (root === null) {
-    filesContent.appendChild(note('Pick a project on the rail'));
+    into.appendChild(note('Pick a project on the rail'));
     return;
   }
 
@@ -274,12 +294,12 @@ function draw(): void {
   const list = document.createElement('div');
   list.className = 'file-tree';
   for (const row of rows) list.appendChild(rowElement(row));
-  filesContent.appendChild(list);
+  into.appendChild(list);
 
   if (rows.length === 0 && query.trim() !== '') {
     // The filter only sees what has been opened, so an empty result is as much
     // about which folders are expanded as about the query.
-    filesContent.appendChild(note('Nothing loaded matches. Open a folder to search deeper.'));
+    into.appendChild(note('Nothing loaded matches. Open a folder to search deeper.'));
   }
 }
 
