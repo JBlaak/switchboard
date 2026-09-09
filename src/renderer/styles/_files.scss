@@ -230,6 +230,27 @@
 .change-add { color: var(--sb-green); }
 .change-del { color: var(--sb-red); }
 
+/* The way to the other reading of this list: every changed file in one scroll
+   rather than one at a time (invariant 6). Next to the numbers, because it is
+   the long form of them. */
+.changes-all-btn {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 5px;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--sb-text-muted);
+  cursor: pointer;
+}
+
+.changes-all-btn:hover {
+  color: var(--sb-accent);
+  border-color: rgba(var(--sb-accent-rgb), 0.4);
+  background: rgba(var(--sb-accent-rgb), 0.12);
+}
+
 /* Invariant 7 made visible: git could not use the base it was given and fell
    back. Amber rather than red — the list is true, it is just not the comparison
    that was asked for. */

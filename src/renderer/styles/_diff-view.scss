@@ -1,0 +1,551 @@
+/* ========== THE WHOLE WORKTREE DIFF ==========
+   The code area in `diff` content: every changed file of the scoped worktree in
+   one scroll, sticky headers naming each one. Two regions, both owned by
+   diff-view.ts — a strip that shares #code-area-header with the breadcrumb, and
+   the scroll below it.
+
+   Five conventions this file keeps.
+
+   1. Nothing here styles .viewer-toolbar, for the reason _code.scss gives: the
+      toolbar is the window's drag region and _chrome.scss owns it. This file is
+      loaded before chrome for the same reason _review.scss is.
+   2. Every colour is a token from _tokens.scss, or one of the --sb-code-*
+      custom properties _code-highlight.scss puts on :root for exactly this.
+      The two exceptions are the add/delete washes, which are the design's own
+      rgba() values and are named once at the top.
+   3. Every container hidden by `hidden` also says so at id specificity. A
+      `display: flex` on an id outranks the user agent's
+      [hidden] { display: none }, so a flex region without its own rule would
+      never actually hide.
+   4. Long lines do not wrap (invariant 9). The scroll's rows are `pre` and each
+      file's body carries its own horizontal overflow; `Wrap` adds .is-wrapped.
+   5. The row height and the header height are duplicated in
+      diff-view-model.ts, which uses them to guess how tall a section will be
+      before it has any content. Change one and change the other, or the
+      intrinsic sizes stop matching what actually paints. */
+
+/* One code row and one sticky header. Mirrored by ROW_HEIGHT / HEAD_HEIGHT in
+   diff-view-model.ts. */
+$diff-row-height: 19px;
+$diff-head-height: 30px;
+
+/* The design's washes. Deliberately not --sb-green / --sb-red at low alpha:
+   these sit behind syntax-coloured text and were picked against the dracula
+   background, which is not the app's own surface. */
+$diff-add-wash: rgba(46, 182, 125, 0.12);
+$diff-del-wash: rgba(248, 81, 73, 0.12);
+
+/* ── the header strip ─────────────────────────────────────────────── */
+
+#code-area-diff {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  /* The controls on the right are the ones that must always be reachable — the
+     flip lives among them — so everything to their left gives way first and
+     this box never lets a narrow window push them off the end. */
+  overflow: hidden;
+}
+
+#code-area-diff[hidden] { display: none; }
+
+.diff-pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 5px;
+  background: transparent;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--sb-text-muted);
+  cursor: pointer;
+}
+
+.diff-pill:hover:not(:disabled) {
+  color: var(--sb-text);
+  border-color: rgba(255,255,255,0.16);
+}
+
+.diff-pill:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* A toggle that is on is the accent, like every other latched control in the
+   app — the segmented controls beside it included. */
+.diff-toggle.on,
+.diff-toggle.on:hover {
+  color: var(--sb-accent);
+  border-color: rgba(var(--sb-accent-rgb), 0.4);
+  background: rgba(var(--sb-accent-rgb), 0.12);
+}
+
+/* The three facts on the left, in the order they give way. The worktree is the
+   last thing to go: it is which place you are reading, and the rest of the bar
+   means nothing without it. */
+.diff-head-worktree {
+  color: var(--sb-accent);
+  border-color: rgba(var(--sb-accent-rgb), 0.3);
+  cursor: default;
+  flex: 0 3 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  display: inline-block;
+}
+
+.diff-head-base {
+  cursor: default;
+  flex: 0 2 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  display: inline-block;
+}
+
+.diff-head-counts {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 10px;
+  color: var(--sb-text-dimmest);
+}
+
+/* Invariant 7: the base asked for could not be resolved, so the header says
+   which one this really is. Yellow, like every other "read this" in the app. */
+.diff-head-note {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--sb-yellow);
+}
+
+.diff-head-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+
+  > * { flex-shrink: 0; }
+}
+
+.diff-head-kbd {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 10px;
+  color: var(--sb-text-muted);
+}
+
+/* ── the region below ─────────────────────────────────────────────── */
+
+#code-diff {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sb-code-bg);
+}
+
+#code-diff[hidden] { display: none; }
+
+/* "200 generated files hidden". Yellow, because it is the one place the surface
+   admits to having decided something on the reader's behalf — and it carries
+   the button that undoes it. */
+.diff-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 5px 16px;
+  background: rgba(236, 178, 46, 0.08);
+  border-bottom: 1px solid rgba(236, 178, 46, 0.2);
+  font-size: 11px;
+  color: var(--sb-yellow);
+}
+
+.diff-banner-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.diff-banner-btn,
+.diff-banner-btn:hover {
+  color: var(--sb-yellow);
+  border-color: rgba(236, 178, 46, 0.35);
+}
+
+.diff-empty {
+  padding: 24px 16px;
+  font-size: 12px;
+  color: var(--sb-text-faint);
+}
+
+.diff-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* The code surface's own foreground, stated explicitly: `.tok-punctuation`
+     and friends inherit, so a container without one would take the app's text
+     colour into the middle of a dracula-coloured file. */
+  color: var(--sb-code-fg);
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 12.5px;
+  line-height: $diff-row-height;
+  padding-bottom: 24px;
+}
+
+/* ── one file ─────────────────────────────────────────────────────── */
+
+/* The whole point of the milestone. `content-visibility: auto` lets the browser
+   skip layout and paint for every section that is off screen, and
+   contain-intrinsic-size (set per section from the diffstat, in diff-view.ts)
+   is what stops the scrollbar collapsing while it does. Without the pair, 212
+   files of hunks is 212 files of layout on every scroll. */
+.diff-file {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
+}
+
+/* A section arrived at from a chip or from `Diff | File`. It fades rather than
+   latching: it is a "you are here", not a selection. */
+.diff-file.is-focused > .diff-file-head {
+  box-shadow: inset 2px 0 0 var(--sb-accent);
+}
+
+.diff-file-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: $diff-head-height;
+  padding: 5px 14px;
+  background: var(--sb-bg-raised);
+  border-top: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  font-size: 11.5px;
+}
+
+.diff-head-spacer { flex: 1; }
+
+.diff-status {
+  flex-shrink: 0;
+  width: 11px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.diff-status.is-add      { color: var(--sb-green); }
+.diff-status.is-mod      { color: var(--sb-yellow); }
+.diff-status.is-del      { color: var(--sb-red); }
+.diff-status.is-conflict { color: var(--sb-red); }
+.diff-status.is-plain    { color: var(--sb-text-muted); }
+
+/* Only the folders shrink, so a path too long for the bar loses its leading
+   directories rather than the segment that names the file — the same split the
+   breadcrumb and the sidebar's rows make. */
+.diff-path {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.diff-dir {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--sb-text-muted);
+}
+
+.diff-name {
+  flex-shrink: 0;
+  color: var(--sb-text-strong);
+}
+
+/* The old half of a rename, and a deleted file: both are paths that are no
+   longer there, and both read as history rather than as the subject. */
+.diff-path.is-old .diff-name,
+.diff-path.is-gone .diff-name {
+  color: var(--sb-text-muted);
+  text-decoration: line-through;
+}
+
+.diff-path.is-old .diff-name { text-decoration: none; }
+
+.diff-arrow {
+  flex-shrink: 0;
+  color: var(--sb-text-dimmest);
+}
+
+.diff-add-count { color: var(--sb-green); }
+.diff-del-count { color: var(--sb-red); }
+
+.diff-add-count,
+.diff-del-count {
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+/* generated / binary / submodule / whitespace only / untracked. One shape for
+   every "this file is not ordinary text", so the eye learns it once. */
+.diff-tag {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--sb-text-faint);
+  background: rgba(255,255,255,0.06);
+}
+
+.diff-tag.is-conflict {
+  color: var(--sb-red);
+  background: rgba(224, 30, 90, 0.12);
+}
+
+/* Which session wrote this file, and when. The thing a git panel cannot say. */
+.diff-claim {
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+  font-size: 10px;
+  color: var(--sb-text-dimmest);
+}
+
+/* ── one file's body ──────────────────────────────────────────────── */
+
+.diff-file-body {
+  /* Invariant 9: a long line scrolls sideways, it does not wrap. Per file
+     rather than for the whole scroll, so one minified bundle does not make
+     every other file in the diff scrollable too. */
+  overflow-x: auto;
+}
+
+/* Side by side moves that overflow down a level: the columns are half the
+   panel each and each scrolls its own text, so a scrollbar here as well would
+   be a second one that moves both columns at once. */
+.diff-scroll.is-split .diff-file-body { overflow-x: hidden; }
+
+.diff-hunk-head {
+  padding: 2px 14px;
+  background: rgba(98, 114, 164, 0.16);
+  color: var(--sb-code-line-number);
+  font-size: 11.5px;
+  white-space: pre;
+}
+
+.diff-lines {
+  /* The rows are `pre`, so this box is as wide as its widest line and the
+     parent's overflow is what scrolls it. `min-width: 100%` keeps the row
+     backgrounds spanning the panel on a file with only short lines. */
+  min-width: 100%;
+  width: max-content;
+}
+
+.diff-line {
+  display: flex;
+  align-items: flex-start;
+  padding-right: 14px;
+  white-space: pre;
+}
+
+.diff-line.is-add { background: $diff-add-wash; }
+.diff-line.is-del { background: $diff-del-wash; }
+
+/* Deliberately not .tok-inserted / .tok-deleted: _code-highlight.scss already
+   owns those for languages that mark tokens that way, and reusing them here
+   would paint an added row's text as a string literal. */
+
+.diff-ln {
+  flex-shrink: 0;
+  width: 46px;
+  padding-right: 10px;
+  text-align: right;
+  user-select: none;
+  color: var(--sb-code-line-number);
+}
+
+.diff-code {
+  flex: 1;
+  min-width: 0;
+  white-space: pre;
+}
+
+/* The one change you cannot see. Only drawn on a file whose whole diff is
+   indentation, where the alternative is two identical-looking rows. */
+.diff-ws {
+  color: var(--sb-code-line-number);
+  background: rgba(255,255,255,0.05);
+}
+
+/* ── side by side ─────────────────────────────────────────────────── */
+
+/* Two columns of equal width, each scrolling its own long lines.
+   `width: max-content` — the unified layout's way of letting the file's widest
+   line set the box — cannot work here: a percentage width inside a
+   max-content box is circular, and the columns come out sized by whichever
+   line happened to be longest. So the split box is exactly the panel's width
+   and each cell owns its own horizontal overflow. Invariant 9 still holds:
+   nothing wraps, it scrolls. */
+.diff-lines.is-split {
+  width: 100%;
+}
+
+.diff-lines.is-split .diff-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.diff-cell {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 0;
+  min-width: 0;
+  padding-right: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: pre;
+  /* One row is one line tall on both sides, so the two columns stay in step
+     even where one of them is empty. */
+  min-height: $diff-row-height;
+}
+
+.diff-cell + .diff-cell { border-left: 1px solid rgba(255,255,255,0.07); }
+
+.diff-cell.is-add { background: $diff-add-wash; }
+.diff-cell.is-del { background: $diff-del-wash; }
+
+/* The padding a diff needs because it is not a bijection: a run of three
+   deletions against one addition leaves two cells with nothing in them, and a
+   blank cell has to read as absence rather than as an empty line. */
+.diff-cell.is-blank {
+  background: rgba(255,255,255,0.02);
+}
+
+.diff-cell .diff-ln { width: 44px; }
+
+/* Every row's own scrollbar would be a hundred scrollbars down one file. The
+   overflow stays reachable — a trackpad, shift-wheel and the keyboard all still
+   scroll it — but it is not drawn. */
+.diff-cell::-webkit-scrollbar { height: 0; }
+
+/* ── the collapsed and the unreadable ─────────────────────────────── */
+
+.diff-folded,
+.diff-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  font-size: 11px;
+  color: var(--sb-text-faint);
+}
+
+.diff-note.is-error { color: var(--sb-red); }
+
+/* git's own words — a missing final newline, a mode change — in git's own
+   colour. Never a silent difference. */
+.diff-note.is-git {
+  padding: 2px 14px;
+  color: var(--sb-code-line-number);
+}
+
+.diff-thumbs {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 12px 14px;
+}
+
+.diff-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  max-width: 160px;
+}
+
+.diff-thumb img {
+  max-width: 120px;
+  max-height: 120px;
+  border-radius: 8px;
+  border: 1px solid rgba(46, 182, 125, 0.3);
+  background: rgba(255,255,255,0.03);
+}
+
+.diff-thumb.is-missing {
+  padding: 10px 12px;
+  border: 1px dashed rgba(255,255,255,0.14);
+  border-radius: 8px;
+  color: var(--sb-text-faint);
+  font-size: 10px;
+  text-align: center;
+}
+
+.diff-thumb-note {
+  font-size: 9.5px;
+  color: var(--sb-text-dimmest);
+}
+
+/* ── Wrap ─────────────────────────────────────────────────────────── */
+
+/* Off by default, and this is the whole of turning it on: the rows stop being
+   `pre` and the horizontal overflow has nothing left to scroll. */
+.diff-scroll.is-wrapped {
+  .diff-file-body { overflow-x: hidden; }
+  .diff-lines { width: auto; }
+  .diff-line,
+  .diff-cell,
+  .diff-code,
+  .diff-hunk-head { white-space: pre-wrap; overflow-wrap: anywhere; }
+}
+
+/* ── the file, flipped ────────────────────────────────────────────── */
+
+/* `Diff | File` in the code area's header, and what it leaves behind in the
+   editor: a green bar beside every line this diff changed, so reading the file
+   whole does not throw the diff away. The class is set by the CodeMirror state
+   field in lib/codemirror-setup.ts. */
+#code-area-views[hidden] { display: none; }
+
+#code-area-changed {
+  flex-shrink: 0;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 10px;
+  color: var(--sb-green);
+}
+
+#code-area-changed[hidden] { display: none; }
+
+.cm-changed-line {
+  box-shadow: inset 2px 0 0 var(--sb-green);
+  background: rgba(46, 182, 125, 0.05);
+}

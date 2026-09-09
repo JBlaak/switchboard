@@ -26,7 +26,7 @@
 import { badgeFor } from '../rail/rail-model';
 import { cleanDisplayName } from '../../../domain/session/title';
 import {
-  changesFailure, currentChangesView, ensureChangesLoaded, onChangesChanged, openChangedFile,
+  changesFailure, currentChangesView, ensureChangesLoaded, onChangesChanged, openWholeDiff,
 } from '../files/changes-list';
 import { baseLabel, statusTone } from '../files/changes-list-model';
 import { codeArea, terminalArea } from '../../lib/dom';
@@ -215,7 +215,11 @@ function buildCodeStrip(handlers: FoldStripHandlers): HTMLElement {
     // letting the strip's handler run too would flip twice.
     event.stopPropagation();
     handlers.onShowCode();
-    openChangedFile(path);
+    // The whole diff, scrolled to this file — not the file on its own. A chip
+    // is a way into the change, and landing in the middle of the one scroll
+    // keeps the rest of it one flick away (DESIGN.md: "each chip flips to that
+    // file's hunk").
+    openWholeDiff(path);
   });
   strip.appendChild(chips);
 

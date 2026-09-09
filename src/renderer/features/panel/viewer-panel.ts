@@ -14,7 +14,10 @@
  *
  * Depends on: viewer-toolbar.ts, codemirror-setup.ts
  */
-import { CMEditorView, cmOpenGotoLine, createEditableViewer, createPlanEditor, marked } from '../../lib/codemirror-setup';
+import {
+  CMEditorView, cmOpenGotoLine, createEditableViewer, createPlanEditor,
+  markChangedLines as cmMarkChangedLines, marked,
+} from '../../lib/codemirror-setup';
 import type { WrappableEditorView } from '../../lib/codemirror-setup';
 import { createViewerToolbar, toggleMarkdownPreview } from '../panel/viewer-toolbar';
 
@@ -157,8 +160,15 @@ export class ViewerPanel {
 
   /**
    * Open a file in the viewer.
+   *
+   * `changedLines` are the lines a diff attributes to a change, 1-based on the
+   * document being opened. They are the green gutter bars of the code area's
+   * `Diff / File` flip; every other caller leaves them out and gets none.
    */
-  open(title: string, filePath: string, content: string): void {
+  open(
+    title: string, filePath: string, content: string,
+    { changedLines }: { changedLines?: readonly number[] } = {},
+  ): void {
     this._unwatchFile();
 
     this.filePath = filePath;
@@ -185,11 +195,15 @@ export class ViewerPanel {
 
     // Create or update editor
     if (!this.editorView) {
-      this._createEditor(content, filePath);
+      this._createEditor(content, filePath, changedLines);
     } else {
       this.editorView.dispatch({
         changes: { from: 0, to: this.editorView.state.doc.length, insert: content },
       });
+      // The marks were mapped through that wholesale replacement and now point
+      // at nothing meaningful, so they are re-stated (or cleared) for the
+      // document that just arrived.
+      this.markChangedLines(changedLines ?? []);
     }
 
     // Set wrap default based on file type
@@ -212,10 +226,21 @@ export class ViewerPanel {
     this._watchFile(filePath);
   }
 
-  _createEditor(content: string, filePath: string): void {
+  /**
+   * Mark the lines a diff attributes to a change, or clear them with `[]`.
+   *
+   * Separate from `open` because the lines can arrive after the file does: the
+   * Changes list opens a file with no patch in hand, and the code area asks for
+   * one behind it rather than rebuilding the editor a moment later.
+   */
+  markChangedLines(lines: readonly number[]): void {
+    if (this.editorView) cmMarkChangedLines(this.editorView, lines);
+  }
+
+  _createEditor(content: string, filePath: string, changedLines?: readonly number[]): void {
     if (this.opts.language === 'auto') {
       this.editorView = createEditableViewer(
-        this.editorEl, content, filePath, { wrap: this.wrapMode },
+        this.editorEl, content, filePath, { wrap: this.wrapMode, changedLines },
       );
     } else {
       this.editorView = createPlanEditor(this.editorEl);

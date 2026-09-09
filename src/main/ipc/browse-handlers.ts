@@ -1,8 +1,13 @@
 /**
  * Browsing a project's code: worktrees, the file tree, and what changed.
  *
- * The diff of a single file follows in a later milestone; `getChanges` is the
- * list above the tree.
+ * `getChanges` and `gitDiffFile` are the two halves of one deliberately
+ * two-phase design. The first classifies the whole tree for the price of one
+ * git command and carries no lines at all, so a regenerated lockfile is known
+ * to be 12,000 lines without anybody paying for them; the second buys the lines
+ * of the one file a reader expands. Keeping them apart is what makes a
+ * 212-file diff affordable, so nothing here should be tempted to fold the
+ * second into the first.
  */
 import { INVOKE } from '../../ipc/channels';
 import { resolveClaimPath } from '../../domain/attribution/claims';
@@ -15,6 +20,12 @@ import type { IpcRegistrar } from './registrar';
 export function registerBrowseHandlers(ipc: IpcRegistrar, app: Container): void {
   // ── Git ──
   ipc.handle(INVOKE.gitWorktrees, (projectPath: string) => app.git.worktrees(projectPath));
+
+  // Phase two: the lines of one file, for the one the reader expanded. The
+  // base travels with the request rather than being re-resolved here, so the
+  // hunks are taken against the same revision the row's diffstat was.
+  ipc.handle(INVOKE.gitDiffFile, (worktreePath: string, base: DiffBase, relPath: string) =>
+    app.git.diffFile(worktreePath, base, relPath));
 
   // ── The file tree ──
   // Both take a path relative to the worktree rather than an absolute one:
