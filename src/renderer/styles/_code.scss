@@ -37,26 +37,8 @@
   min-width: 0;
 }
 
-/* Replaced by a fold strip later; until then it is the only way back to the
-   session, so it reads as a control rather than a link. */
-#code-area-back {
-  flex-shrink: 0;
-  padding: 3px 9px;
-  font-size: 11px;
-  font-weight: 500;
-  font-family: inherit;
-  color: var(--sb-text-soft);
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-
-#code-area-back:hover {
-  background: rgba(255,255,255,0.1);
-  color: var(--sb-text-strong);
-}
+/* The way back out of this half is the folded conversation strip along the
+   bottom (_fold-strip.scss), not a button up here — hence no #code-area-back. */
 
 /* The path relative to the worktree. */
 #code-area-crumbs {

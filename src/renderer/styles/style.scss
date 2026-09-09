@@ -21,6 +21,12 @@
 // #sidebar-header, which chrome insets for the macOS traffic lights, so nothing
 // the tree brings with it may outrank that.
 @use 'files';
+// Before chrome for the third time, and for the strongest version of the same
+// reason: the flip's segmented control lives inside #terminal-header, which is
+// the window's drag region and carries the Windows/Linux inset for the overlay
+// controls. Chrome's platform selectors have to keep outranking anything this
+// file says about that header.
+@use 'fold-strip';
 @use 'chrome';
 @use 'update-toast';
 @use 'status-bar';

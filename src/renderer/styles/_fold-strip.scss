@@ -1,0 +1,248 @@
+/* ========== THE FOLD STRIP ==========
+   The half you are not in, as one 36px line along the bottom of the half you
+   are. Two of them — the code side folded under the conversation, and the
+   conversation folded under the code — drawn by one component, so everything
+   they share is written once here.
+
+   Three conventions this file keeps.
+
+   1. No height animation. app/main-mode.ts refits xterm one frame after the
+      strip appears, and xterm measures in pixels: a strip still growing at that
+      moment would be measured mid-transition and the terminal would end up the
+      wrong number of rows. Opacity and colour may transition; height may not.
+   2. flex-shrink: 0, and the halves above are the flexible ones. The strip is
+      the fixed cost of folding; the terminal and the editor give up the 36px.
+   3. Every colour is a token from _tokens.scss. The strip sits on --sb-bg-base
+      like the surface above it and separates with a hairline, rather than
+      taking a panel tone that would read as a second toolbar. */
+
+.fold-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* 8 + 8 padding around a 20px line: the 36px the design gives it. */
+  padding: 8px 16px;
+  min-height: 36px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  background: var(--sb-bg-base);
+  border-top: 1px solid rgba(255,255,255,0.10);
+  /* The whole width is the target: a one-line strip is already the smallest
+     thing in the window, and making only its glyph clickable would make the
+     cheap half of the flip the expensive one. */
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+
+.fold-strip:hover {
+  background: color-mix(in srgb, var(--sb-text-strong) 4%, var(--sb-bg-base));
+}
+
+/* A class selector outranks the UA stylesheet's [hidden] { display: none }, so
+   display:flex above would keep a folded strip on screen with el.hidden set. */
+.fold-strip[hidden] { display: none; }
+
+.fold-chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--sb-text-faint);
+}
+
+.fold-strip:hover .fold-chevron {
+  color: var(--sb-text-soft);
+}
+
+/* Eats the slack, so the shortcut hint stays on the right whatever is left of
+   it and however much of it fits. */
+.fold-spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.fold-kbd {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 10px;
+  color: var(--sb-text-muted);
+}
+
+/* ---- The code half, folded: what changed and a chip per file ---- */
+
+.fold-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sb-text-faint);
+}
+
+.fold-count,
+.fold-stat,
+.fold-base {
+  flex-shrink: 0;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.fold-count { color: var(--sb-text-muted); }
+.fold-base  { color: var(--sb-text-dimmest); }
+
+.fold-stat {
+  display: flex;
+  gap: 5px;
+}
+
+.fold-add { color: var(--sb-green); }
+.fold-del { color: var(--sb-red); }
+
+/* The chips are the one part allowed to run out of room: they are a shortcut
+   into a list the sidebar shows in full, so losing the tail of them costs
+   nothing the user cannot get at another way. */
+.fold-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fold-chip {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 10px;
+  color: var(--sb-text-dim);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.fold-chip:hover {
+  background: rgba(var(--sb-accent-rgb),0.12);
+  border-color: rgba(var(--sb-accent-rgb),0.4);
+  color: var(--sb-accent);
+}
+
+/* The same four tones the Changes list gives a status, so a file that is green
+   in the sidebar is green here. */
+.fold-chip-add      { color: var(--sb-green); }
+.fold-chip-del      { color: var(--sb-red); }
+.fold-chip-conflict { color: var(--sb-yellow); }
+
+/* ---- The conversation half, folded: who, and the last thing said ---- */
+
+.fold-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.18);
+}
+
+/* The three states the rail badges, from the same rule (badgeFor), so a session
+   cannot read as running on one surface and waiting on another. */
+.fold-dot.running { background: var(--sb-green); }
+.fold-dot.unread  { background: var(--sb-blue);   box-shadow: 0 0 8px rgba(54,197,240,0.7); }
+.fold-dot.waiting { background: var(--sb-yellow); box-shadow: 0 0 8px rgba(236,178,46,0.7); }
+
+.fold-name {
+  flex-shrink: 0;
+  max-width: 30%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--sb-text-dim);
+}
+
+/* The line the session last printed. It is the part that shrinks, because it is
+   the part with the least to lose from being cut: the name beside it already
+   says which session this is. */
+.fold-line {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 11px;
+  color: var(--sb-text-faint);
+}
+
+/* ---- Talk | Split | Code, in the terminal header ---- */
+
+/* Kept generic rather than scoped to #terminal-header-mode: it is the app's
+   first segmented control, and the next one should look like this one. */
+.sb-segmented {
+  display: flex;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 5px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sb-segment {
+  padding: 3px 10px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sb-text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.sb-segment:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--sb-text-soft);
+}
+
+/* The mint the design gives the active half of a segmented control. */
+.sb-segment.on,
+.sb-segment.on:hover {
+  background: rgba(var(--sb-accent-rgb),0.12);
+  color: var(--sb-accent);
+}
+
+/* The shortcut, next to the control that names what it does. */
+#terminal-header-flip-hint {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 10px;
+  color: var(--sb-text-muted);
+}
+
+/* ---- The code half with nothing in it yet ---- */
+
+/* Reachable now that ⌘J can bring this half up without a file being picked. */
+#code-area-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--sb-text-dimmest);
+}
+
+#code-area-empty[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fold-strip,
+  .fold-chip,
+  .sb-segment { transition: none; }
+}
