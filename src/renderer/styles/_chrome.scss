@@ -12,7 +12,11 @@
       Each platform insets only the header the controls actually land on. */
 
 /* Every view puts its own header in the top strip, so all of them are drag handles —
-   otherwise the window becomes immovable depending on which view is open. */
+   otherwise the window becomes immovable depending on which view is open. The rail
+   is the whole left edge and so is a drag region for its full height: the strip
+   above its first tile is the only draggable area left on macOS once the traffic
+   lights have taken the corner. */
+#project-rail,
 #sidebar-header,
 #terminal-header,
 #grid-viewer-header,
@@ -25,6 +29,8 @@
 
 /* Anything interactive or selectable inside a drag region has to opt out: a drag
    region eats clicks and cannot be text-selected. */
+#project-rail .rail-tile,
+#project-rail button,
 #sidebar-header button,
 #sidebar-header input,
 #terminal-header button,
@@ -42,7 +48,13 @@
   -webkit-app-region: no-drag;
 }
 
-/* macOS: clear the traffic lights, which sit at x:18 y:15 (see main.js). */
+/* macOS: clear the traffic lights, which sit at x:18 y:15 (see main.js). The rail
+   is only 48px wide and the three-button cluster spans roughly x12–x76, so it
+   still spills across the rail into the sidebar — both insets are needed, and
+   #sidebar-header keeps its own. */
+.platform-darwin #project-rail {
+  padding-block-start: 44px;
+}
 .platform-darwin #sidebar-header {
   padding-top: 44px;
 }
@@ -54,6 +66,9 @@
 }
 
 /* Fullscreen hides the traffic lights entirely — reclaim their space. */
+.platform-darwin.fullscreen #project-rail {
+  padding-block-start: 16px;
+}
 .platform-darwin.fullscreen #sidebar-header {
   padding-top: 16px;
 }
