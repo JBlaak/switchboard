@@ -2,8 +2,7 @@
 // Manages the global and project settings viewer UI.
 import { refreshSidebar, reloadProjects as loadProjects } from '../../app/refresh';
 import {
-  el, jsonlViewer, memoryViewer, placeholder, planViewer, settingsViewer,
-  statsViewer, terminalArea, terminalHeader,
+  el, placeholder, settingsViewer, terminalArea, terminalHeader,
 } from '../../lib/dom';
 import { openSessions, view } from '../../state/session-store';
 import { applyTerminalFont, isFontAvailable, refitOpenTerminals } from '../terminal/terminal-manager';
@@ -15,6 +14,7 @@ import { TERMINAL_THEMES, applyTerminalTheme } from '../terminal/terminal-themes
 import { PERMISSION_MODES } from '../../../domain/launch/session-options';
 import { shortProjectPath } from '../../../domain/project/project-path';
 import { escapeHtml } from '../../lib/format';
+import { showViewer } from '../panel/viewers';
 import type { UpdaterEventData } from '../../../ipc/api';
 
 /** A settings blob — open-ended, since each feature writes its own keys. */
@@ -72,14 +72,11 @@ export async function openSettingsViewer(
 
   settingsViewerTitle.textContent = (isProject ? 'Project Settings — ' : 'Global Settings — ') + shortName;
 
-  // Show settings viewer, hide others
-  placeholder.style.display = 'none';
-  terminalArea.style.display = 'none';
-  planViewer.style.display = 'none';
-  statsViewer.style.display = 'none';
-  memoryViewer.style.display = 'none';
-  jsonlViewer.style.display = 'none';
-  settingsViewer.style.display = 'flex';
+  // Through the one owner of main-area visibility rather than naming the panels
+  // here: the hand-rolled list this replaces had already fallen behind, and the
+  // code area sits last in #main, so a panel it did not know about would have
+  // painted straight over these settings.
+  showViewer('settings');
 
   function useGlobalCheckbox(fieldName: string): string {
     if (!isProject) return '';

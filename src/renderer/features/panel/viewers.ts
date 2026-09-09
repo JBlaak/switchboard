@@ -37,16 +37,29 @@ const BY_NAME: Record<PanelName, () => HTMLElement> = {
   code: () => codeArea,
 };
 
+/**
+ * Hide every panel, and leave the terminal alone.
+ *
+ * For the one caller that needs the terminal to stay up while the panels go
+ * down: the grid replaces what is *inside* `#terminal-area`, so it cannot go
+ * through `showViewer`, but it still has to clear whatever panel was showing.
+ * It used to name the panels itself, which is the same staleness this module
+ * exists to prevent — a panel added later was hidden everywhere except there.
+ */
+export function hideViewerPanels(): void {
+  for (const panel of PANELS) panel.element().style.display = 'none';
+}
+
 /** Show one panel in place of the terminal. */
 export function showViewer(name: PanelName): void {
   placeholder.style.display = 'none';
   terminalArea.style.display = 'none';
-  for (const panel of PANELS) panel.element().style.display = 'none';
+  hideViewerPanels();
   BY_NAME[name]().style.display = 'flex';
 }
 
 /** Put the terminal back. */
 export function hideAllViewers(): void {
-  for (const panel of PANELS) panel.element().style.display = 'none';
+  hideViewerPanels();
   terminalArea.style.display = '';
 }
