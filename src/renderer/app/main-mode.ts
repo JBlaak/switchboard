@@ -47,18 +47,16 @@ import type { OpenSession } from '../state/session-store';
 export type { MainMode } from './main-mode-model';
 
 /**
- * A listener, and the teardown it hands back.
+ * A listener on the mode.
  *
- * Effect-shaped rather than event-shaped: a listener that puts something on
- * screen for one mode usually has something to undo for the next, and returning
- * the undo is what keeps the two next to each other instead of in a second
- * handler that has to remember what the first did. The teardown runs before the
- * listener is called again, and once more when it unsubscribes.
+ * Plain event-shaped, like `onScopeChange`, `onActivityChange` and
+ * `onSidebarRefresh`: every observer in this renderer recomputes from the state
+ * it is handed rather than undoing what it did last time, and one hook that
+ * asked for a teardown instead would be a second convention to remember.
  */
-type MainModeListener = (mode: MainMode) => () => void;
+type MainModeListener = (mode: MainMode) => void;
 
 const listeners = new Set<MainModeListener>();
-const teardowns = new Map<MainModeListener, () => void>();
 
 let installed = false;
 
@@ -131,18 +129,15 @@ export function flipMainMode(): void {
 }
 
 /**
- * Be told when the mode changes, and hand back the undo.
+ * Be told when the mode changes. Returns the unsubscribe.
  *
  * Also called once per application even when the mode has not moved: a session
  * switch re-applies whatever the new session was left in, and a listener that
  * paints the current mode has to repaint for it.
  */
-export function onMainModeChange(fn: (m: MainMode) => () => void): () => void {
+export function onMainModeChange(fn: MainModeListener): () => void {
   listeners.add(fn);
-  return () => {
-    runTeardown(fn);
-    listeners.delete(fn);
-  };
+  return () => { listeners.delete(fn); };
 }
 
 /**
@@ -190,24 +185,12 @@ export function applyMainMode(): void {
 
 function notify(mode: MainMode): void {
   for (const fn of [...listeners]) {
-    runTeardown(fn);
     try {
-      teardowns.set(fn, fn(mode));
+      fn(mode);
     } catch (err) {
       // One listener that throws must not leave the rest on the previous mode.
       console.error('main mode listener failed', err);
     }
-  }
-}
-
-function runTeardown(fn: MainModeListener): void {
-  const teardown = teardowns.get(fn);
-  if (!teardown) return;
-  teardowns.delete(fn);
-  try {
-    teardown();
-  } catch (err) {
-    console.error('main mode teardown failed', err);
   }
 }
 
