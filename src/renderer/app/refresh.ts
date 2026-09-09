@@ -27,6 +27,7 @@ type ProjectsReloader = (options?: SidebarRefreshOptions) => Promise<void>;
 
 let sidebarRefresher: SidebarRefresher = () => {};
 let projectsReloader: ProjectsReloader = async () => {};
+const sidebarRefreshListeners = new Set<SidebarRefresher>();
 
 export function setSidebarRefresher(fn: SidebarRefresher): void {
   sidebarRefresher = fn;
@@ -36,9 +37,42 @@ export function setProjectsReloader(fn: ProjectsReloader): void {
   projectsReloader = fn;
 }
 
-/** Redraw the session list from what is already in memory. */
+/**
+ * Be told each time the session list has been redrawn.
+ *
+ * Kept apart from `setSidebarRefresher` on purpose. There is exactly one
+ * refresher because exactly one module owns the render: the sidebar decides
+ * what the list shows, and a second performer would be two modules disagreeing
+ * about it. Anything else that keys off the list — the project rail's
+ * per-project badges, say — does not render the list; it only needs to know
+ * that a redraw happened so it can derive its own view from the same stores.
+ * Listeners therefore run after the refresher, once the list and whatever the
+ * render recomputed reflect the new state.
+ *
+ * Returns the unsubscribe.
+ */
+export function onSidebarRefresh(listener: (options?: SidebarRefreshOptions) => void): () => void {
+  sidebarRefreshListeners.add(listener);
+  return () => { sidebarRefreshListeners.delete(listener); };
+}
+
+/**
+ * Redraw the session list from what is already in memory, then tell the
+ * listeners.
+ *
+ * A listener that throws is logged and skipped: an observer must never be able
+ * to break the refresh it is observing, or take the listeners after it down
+ * with it.
+ */
 export function refreshSidebar(options?: SidebarRefreshOptions): void {
   sidebarRefresher(options);
+  for (const listener of [...sidebarRefreshListeners]) {
+    try {
+      listener(options);
+    } catch (err) {
+      console.error('sidebar refresh listener failed', err);
+    }
+  }
 }
 
 /** Re-fetch the projects from the main process, then redraw. */

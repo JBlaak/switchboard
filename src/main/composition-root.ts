@@ -18,6 +18,7 @@ import path from 'node:path';
 import { systemClock } from '../application/ports/clock';
 import { uuidGenerator } from '../application/ports/ids';
 import { AgentFileService } from '../application/services/agent-file-service';
+import { GitService } from '../application/services/git-service';
 import { PlanService } from '../application/services/plan-service';
 import { ProjectListService } from '../application/services/project-list-service';
 import { RemoteConnectionSupervisor } from '../application/services/remote-connection-supervisor';
@@ -40,6 +41,7 @@ import { FileWatchRegistry } from '../infrastructure/fs/file-watch-registry';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
 import { McpIdeBridge } from '../infrastructure/mcp/ide-bridge';
+import { NodeProcessRunner } from '../infrastructure/process/node-process-runner';
 import { NodePtyGateway } from '../infrastructure/pty/node-pty-gateway';
 import { SystemShellProfileProvider } from '../infrastructure/shell/shell-discovery';
 import { WorkerProjectScanner } from '../infrastructure/worker/worker-project-scanner';
@@ -63,6 +65,7 @@ export interface Container {
   readonly searchIndex: SqliteSearchIndex;
   readonly transcripts: FileTranscriptStore;
   readonly fs: NodeFileSystem;
+  readonly processes: NodeProcessRunner;
 
   readonly registry: SessionRegistry;
   readonly terminals: NodePtyGateway;
@@ -77,6 +80,7 @@ export interface Container {
   readonly projects: ProjectListService;
   readonly plans: PlanService;
   readonly agentFiles: AgentFileService;
+  readonly git: GitService;
   readonly stats: ClaudeCliStatsService;
   readonly usage: OAuthUsageService;
   readonly schedules: ScheduleService;
@@ -122,6 +126,7 @@ export function buildContainer(): Container {
   // ── Session machinery ──
   const registry = new SessionRegistry();
   const terminals = new NodePtyGateway();
+  const processes = new NodeProcessRunner({ baseEnv: terminals.baseEnv });
   const shells = new SystemShellProfileProvider();
   const ideBridge = new McpIdeBridge({ renderer, log, ideDir: paths.ideDir });
 
@@ -180,6 +185,8 @@ export function buildContainer(): Container {
     projectsDir: paths.projectsDir,
   });
 
+  const git = new GitService({ runner: processes, log });
+
   const schedules = new ScheduleService({
     fs, transcripts, repository, ids, clock, timers, log,
     commandsDir: paths.commandsDir,
@@ -219,9 +226,9 @@ export function buildContainer(): Container {
 
   return {
     log, paths,
-    settings, repository, searchIndex, transcripts, fs,
+    settings, repository, searchIndex, transcripts, fs, processes,
     registry, terminals, shells, ideBridge, lifecycle, remote, launcher, transitions,
-    sessionIndex, projects, plans, agentFiles, stats, usage, schedules,
+    sessionIndex, projects, plans, agentFiles, git, stats, usage, schedules,
     renderer, updater, dialogs, system, fileWatches, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,

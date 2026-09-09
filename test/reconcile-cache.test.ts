@@ -8,6 +8,7 @@ import { SessionIndex } from '../src/application/services/session-index';
 import { NodeFileSystem } from '../src/infrastructure/fs/node-file-system';
 import { FileTranscriptStore } from '../src/infrastructure/fs/transcript-store';
 import { fakeRenderer, fakeTimers, silentLog } from './support/fakes';
+import type { FakeRenderer } from './support/fakes';
 import type { CachedSession, FolderMeta, SessionMeta } from '../src/domain/session/session';
 import type { ProjectScanner } from '../src/application/ports/project-scanner';
 import type { SearchIndex } from '../src/application/ports/search-index';
@@ -62,8 +63,8 @@ function fakeRepository(meta: Map<string, FolderMeta>) {
     },
 
     getAllFolderMeta: () => meta,
-    setFolderMeta(folder, projectPath, indexMtimeMs) {
-      meta.set(folder, { folder, projectPath, indexMtimeMs });
+    setFolderMeta(folder, projectPath, cwd, indexMtimeMs) {
+      meta.set(folder, { folder, projectPath, cwd, indexMtimeMs });
     },
   };
 
@@ -83,19 +84,31 @@ const noSearchIndex: SearchIndex = {
 
 const noScanner: ProjectScanner = { scan: async () => [] };
 
-function build(projectsDir: string, meta: Map<string, FolderMeta>) {
+function build(projectsDir: string, meta: Map<string, FolderMeta>, scanner: ProjectScanner = noScanner) {
   const { repository, indexedFolders, cached } = fakeRepository(meta);
   const transcripts = new FileTranscriptStore(new NodeFileSystem(), projectsDir);
+  const renderer = fakeRenderer();
   const index = new SessionIndex({
     repository,
     searchIndex: noSearchIndex,
     transcripts,
-    scanner: noScanner,
-    renderer: fakeRenderer(),
+    scanner,
+    renderer,
     timers: fakeTimers(),
     log: silentLog,
   });
-  return { index, indexedFolders, cached, transcripts };
+  return { index, indexedFolders, cached, transcripts, renderer };
+}
+
+/**
+ * `rebuild()` is fire-and-forget: it refreshes the sidebar when it lands, so
+ * that event is what marks it finished.
+ */
+async function untilRebuilt(renderer: FakeRenderer): Promise<void> {
+  for (let i = 0; i < 100 && renderer.only('projectsChanged').length === 0; i++) {
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+  assert.ok(renderer.only('projectsChanged').length > 0, 'the rebuild should have landed');
 }
 
 test('reconcile indexes new and stale folders but skips up-to-date ones', () => {
@@ -107,12 +120,13 @@ test('reconcile indexes new and stale folders but skips up-to-date ones', () => 
     writeSession(path.join(projectsDir, 'proj-current'), '/tmp/proj-current');
 
     const meta = new Map<string, FolderMeta>([
-      ['proj-stale', { folder: 'proj-stale', projectPath: '/tmp/proj-stale', indexMtimeMs: 0 }],
+      ['proj-stale', { folder: 'proj-stale', projectPath: '/tmp/proj-stale', cwd: '/tmp/proj-stale', indexMtimeMs: 0 }],
     ]);
     const { index, indexedFolders, transcripts } = build(projectsDir, meta);
     meta.set('proj-current', {
       folder: 'proj-current',
       projectPath: '/tmp/proj-current',
+      cwd: '/tmp/proj-current',
       indexMtimeMs: transcripts.folderIndexMtimeMs('proj-current'),
     });
 
@@ -182,5 +196,49 @@ test('a folder that disappears is forgotten entirely', () => {
     assert.equal(cached.size, 0);
   } finally {
     fs.rmSync(projectsDir, { recursive: true, force: true });
+  }
+});
+
+// A worktree session is attributed to the repository it was cut from, which is
+// right for grouping and loses where it actually ran. The folder name cannot
+// give that back (encoding is lossy), so the gate has to keep the raw cwd.
+
+test('a rebuild keeps the worktree a folder ran in behind the project it folds into', async () => {
+  const folder = 'Users-x-proj--claude-worktrees-feat';
+  const worktree = '/Users/x/proj/.claude/worktrees/feat';
+  const scanner: ProjectScanner = {
+    scan: async () => [{ folder, projectPath: '/Users/x/proj', cwd: worktree, sessions: [], indexMtimeMs: 42 }],
+  };
+  const meta = new Map<string, FolderMeta>();
+  const { index, renderer } = build(os.tmpdir(), meta, scanner);
+
+  index.rebuild();
+  await untilRebuilt(renderer);
+
+  assert.deepEqual(meta.get(folder), {
+    folder, projectPath: '/Users/x/proj', cwd: worktree, indexMtimeMs: 42,
+  }, 'the gate records both the folded project path and the raw cwd');
+});
+
+test('refreshing a folder records the worktree cwd behind the folded project path', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-worktree-'));
+  try {
+    // The fold only applies when the parent repository exists on disk.
+    const repo = path.join(root, 'repo');
+    const worktree = path.join(repo, '.claude', 'worktrees', 'feat');
+    fs.mkdirSync(repo, { recursive: true });
+    const projectsDir = path.join(root, 'projects');
+    writeSession(path.join(projectsDir, 'repo-worktree'), worktree);
+
+    const meta = new Map<string, FolderMeta>();
+    const { index, cached } = build(projectsDir, meta);
+    index.refreshFolder('repo-worktree');
+
+    const gate = meta.get('repo-worktree');
+    assert.equal(gate?.projectPath, repo, 'the session is attributed to the repository');
+    assert.equal(gate?.cwd, worktree, 'but the gate remembers where it actually ran');
+    assert.equal(cached.get('session')?.projectPath, repo, 'and the cached row carries the folded path');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

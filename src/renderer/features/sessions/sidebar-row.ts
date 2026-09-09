@@ -11,6 +11,7 @@ import { byMostRecentlyModified } from '../../../domain/session/session';
 import {
   attentionSessions, isUnread, responseReadySessions, sessionBusyState,
 } from '../../state/activity-store';
+import { getScope } from '../../state/scope-store';
 import { view } from '../../state/session-store';
 import { escapeHtml, formatDate } from '../../lib/format';
 import { ICONS } from '../../lib/icons';
@@ -117,6 +118,10 @@ function buildInfo(session: SessionRow, projectPath: string): HTMLElement {
  *
  * The 30-second label ticker updates `.session-time` only, so it has to stay
  * its own span.
+ *
+ * The project label is left off while a scope is set: the rail already says
+ * where the user is, and repeating it on every row is the noise the rail
+ * removes. Unscoped, the row is exactly what it was before there was a rail.
  */
 function buildMeta(session: SessionRow, projectPath: string): HTMLElement {
   const meta = document.createElement('div');
@@ -126,7 +131,7 @@ function buildMeta(session: SessionRow, projectPath: string): HTMLElement {
   left.className = 'session-meta-left';
 
   const path = projectPath || session.projectPath;
-  const label = projectLabel(path);
+  const label = getScope() === null ? projectLabel(path) : '';
   if (label) {
     const project = document.createElement('span');
     project.className = 'session-project';
@@ -240,9 +245,13 @@ export function buildSlugGroup(
 
   const meta = document.createElement('div');
   meta.className = 'slug-group-meta';
+  // No project label under a scope, for the same reason as on a row.
+  const project = getScope() === null
+    ? `<span class="session-project">${escapeHtml(projectLabel(projectPath))}</span>`
+    : '';
   meta.innerHTML =
     `<span class="slug-group-dot${hasRunning ? ' running' : ''}"></span>` +
-    `<span class="session-project">${escapeHtml(projectLabel(projectPath))}</span>` +
+    project +
     `<span class="slug-group-count">${sessions.length} sessions</span> ` +
     escapeHtml(formatDate(new Date(mostRecent.modified)));
 

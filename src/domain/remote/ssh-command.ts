@@ -10,7 +10,7 @@
  * remote-desktop behaviour. Killing the local ssh only detaches; the tmux
  * session lives on.
  */
-import { quoteArgvForShell, shellArgs } from '../shell/quoting';
+import { posixQuote, quoteArgvForShell, shellArgs } from '../shell/quoting';
 import { isPowerShell } from '../shell/shell-profile';
 import { expandRemoteDir, normalizeRemoteDir, tmuxSessionName } from '../project/remote-target';
 import type { RemoteConfig } from '../project/remote-target';
@@ -79,6 +79,41 @@ export function buildSshArgv(remote: RemoteConfig, sessionId: string, kind?: str
   ];
   if (remote.port && Number(remote.port) !== 22) argv.push('-p', String(remote.port));
   argv.push(remote.user + '@' + remote.host, remoteCmd);
+  return argv;
+}
+
+/**
+ * The ssh argv for running one command on the remote host and reading its
+ * output — `git worktree list` for the project rail, say — as opposed to
+ * buildSshArgv, which opens an interactive screen the user will sit in front
+ * of.
+ *
+ * The two differ in what the user is there to do. Here nobody is watching, so
+ * `BatchMode=yes` makes a password prompt or an unknown host key fail at once
+ * instead of hanging a background job on a question no one will answer (the
+ * interactive session is where the user accepts a host key; this one relies on
+ * known_hosts). There is no `-t`: a PTY would turn the output into terminal
+ * text with \r\n and echo, and we want the bytes git wrote. And no `-A`: the
+ * agent is only needed for git to reach other hosts, and a local read of the
+ * repository never does. The connect and keepalive timers are the same as the
+ * interactive variant's, for the same reason — an unreachable host must fail
+ * into an error rather than hang.
+ *
+ * ssh joins its trailing arguments with spaces and hands the string to the
+ * remote login shell, so each argument is single-quoted for a POSIX shell: a
+ * directory with a space stays one argument and a quote in a format string
+ * stays a character. (A POSIX shell on the far end is already what the tmux
+ * bootstrap assumes.)
+ */
+export function buildSshExecArgv(remote: RemoteConfig, command: readonly string[]): string[] {
+  const argv = [
+    '-o', 'BatchMode=yes',
+    '-o', 'ConnectTimeout=' + CONNECT_TIMEOUT_SECONDS,
+    '-o', 'ServerAliveInterval=15',
+    '-o', 'ServerAliveCountMax=3',
+  ];
+  if (remote.port && Number(remote.port) !== 22) argv.push('-p', String(remote.port));
+  argv.push(remote.user + '@' + remote.host, command.map(posixQuote).join(' '));
   return argv;
 }
 

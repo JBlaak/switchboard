@@ -7,6 +7,7 @@
  * from the same channel table, so the two sides cannot drift apart silently.
  */
 import type { AgentFileIndex } from '../domain/agent-files/agent-file';
+import type { Worktree } from '../domain/git/types';
 import type { PlanSummary } from '../domain/plans/plan';
 import type { Project } from '../domain/project/project';
 import type { RemoteConfig } from '../domain/project/remote-target';
@@ -92,6 +93,13 @@ export interface SwitchboardApi {
   saveFileForPanel(filePath: string, content: string): Promise<IpcResult>;
   watchFile(filePath: string): Promise<IpcResult>;
   unwatchFile(filePath: string): Promise<IpcResult>;
+
+  // ── Git ──
+  /**
+   * `[]` for a folder that is not a repository. A failure answers with the
+   * `{ ok: false, error }` envelope, as every invoke does — check for an array.
+   */
+  gitWorktrees(projectPath: string): Promise<Worktree[]>;
 
   // ── Host ──
   openExternal(url: string): Promise<void>;

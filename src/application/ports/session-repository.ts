@@ -37,5 +37,9 @@ export interface SessionRepository {
 
   // ── The per-folder gate that decides whether a rescan is needed ──
   getAllFolderMeta(): Map<string, FolderMeta>;
-  setFolderMeta(folder: string, projectPath: string | null, indexMtimeMs: number): void;
+  /**
+   * `cwd` is the directory the folder's transcripts ran in, which `projectPath`
+   * loses when a worktree is folded into its parent; see FolderMeta.
+   */
+  setFolderMeta(folder: string, projectPath: string | null, cwd: string | null, indexMtimeMs: number): void;
 }

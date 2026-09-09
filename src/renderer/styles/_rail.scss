@@ -1,0 +1,337 @@
+/* ========== PROJECT RAIL ==========
+   The 48px column left of the sidebar: an All tile, one tile per project, the
+   scoped project's worktrees hanging under it, and the add-project button at the
+   foot. Slack's workspace rail is the reference, which is also where
+   --sb-bg-deep is documented as coming from.
+
+   Two conventions this file has to keep.
+
+   1. Padding is written as padding-block / padding-inline, never as the padding
+      shorthand. _chrome.scss loads after this file and sets the macOS top inset
+      on #project-rail; a shorthand here would be a second declaration of the
+      same physical longhand and the two would have to be kept in step by hand.
+   2. Every colour is a token from _tokens.scss. Tints are color-mix() over a
+      token rather than a hand-picked hex, so re-theming the app still only means
+      editing the token block. The accent has an --sb-accent-rgb companion and
+      uses the rgba() idiom the sidebar already uses; the status colours have no
+      such companion, hence color-mix for those. */
+
+#project-rail {
+  width: 48px;
+  flex-shrink: 0;
+  background: var(--sb-bg-deep);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  /* The rail never scrolls — a scrollbar in 48px is not a control anyone can
+     hit — so anything that does not fit goes behind the +N tile instead. */
+  overflow: hidden;
+  padding-block: 12px;
+  padding-inline: 0;
+}
+
+/* A project and its worktrees: one box, so the scope bar can sit at the rail's
+   own edge rather than the tile's, and the connector has something to hang in. */
+.rail-group {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* The mint bar: which *project* is scoped. Sized to the project tile, not the
+   group, so it does not stretch down past the worktrees. */
+.rail-group.is-scoped::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 32px;
+  border-radius: 0 2px 2px 0;
+  background: var(--sb-accent);
+}
+
+/* ---- The tile ---- */
+.rail-tile {
+  position: relative;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.05);
+  color: var(--sb-text-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, box-shadow 0.12s;
+}
+
+.rail-tile:hover {
+  background: rgba(255,255,255,0.10);
+  color: var(--sb-text-strong);
+}
+
+.rail-tile:focus-visible {
+  outline: 2px solid var(--sb-accent);
+  outline-offset: 1px;
+}
+
+/* The scoped project's own 6% tint. Deliberately faint — the bar is what
+   carries the state; the accent text is what makes the tint legible at all. */
+.rail-group.is-scoped > .rail-tile {
+  background: rgba(var(--sb-accent-rgb),0.06);
+  color: var(--sb-accent);
+}
+
+/* Remote projects read as somewhere else, in the blue they wear everywhere. */
+.rail-tile.is-remote {
+  background: color-mix(in srgb, var(--sb-blue) 10%, transparent);
+  color: var(--sb-blue);
+}
+.rail-tile.is-remote:hover {
+  background: color-mix(in srgb, var(--sb-blue) 18%, transparent);
+}
+
+/* A worktree read that failed — usually an unreachable host. The tooltip says
+   so; this only has to stop the tile reading as ordinary. */
+.rail-tile.is-unreachable {
+  border-color: color-mix(in srgb, var(--sb-red) 55%, transparent);
+  border-style: dashed;
+}
+
+.rail-tile-all svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---- Badges: at most one per tile, see railBadge() ---- */
+.rail-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  /* Rings itself in the rail's own background so a dot over a light tile still
+     reads as a dot rather than as a corner. */
+  box-shadow: 0 0 0 2px var(--sb-bg-deep);
+}
+
+.rail-tile.badge-running .rail-badge { background: var(--sb-green); }
+.rail-tile.badge-unread  .rail-badge { background: var(--sb-blue); }
+.rail-tile.badge-waiting .rail-badge { background: var(--sb-yellow); }
+
+/* Waiting rings its tile as well as dotting it: a blocked session is stalled
+   until someone answers, and it has to be catchable out of the corner of an eye
+   from across the window. */
+.rail-tile.badge-waiting {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-yellow) 65%, transparent);
+}
+
+/* ---- Worktrees: places, not badges (invariant 5) ---- */
+.rail-worktrees {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding-block: 0;
+  padding-inline: 18px 0;
+}
+
+/* The connector. Starts in the gap under the project tile and stops at the last
+   sub-tile's centre, which is 12px — half a sub-tile — up from the bottom. */
+.rail-worktrees::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: -6px;
+  bottom: 12px;
+  width: 1px;
+  background: rgba(255,255,255,0.12);
+}
+
+.rail-subtile {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+/* The stub from the connector to the sub-tile. */
+.rail-subtile::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  width: 6px;
+  height: 1px;
+  background: rgba(255,255,255,0.12);
+}
+
+/* Filled mint: which *worktree* is scoped. */
+.rail-subtile.is-selected {
+  background: var(--sb-accent);
+  color: var(--sb-accent-ink);
+}
+.rail-subtile.is-selected:hover {
+  background: var(--sb-accent-hover);
+  color: var(--sb-accent-ink);
+}
+
+/* The repository's main working tree, so two checkouts never read as one place. */
+.rail-subtile.is-primary {
+  border-color: rgba(255,255,255,0.14);
+}
+
+/* ---- Furniture ---- */
+.rail-divider {
+  width: 20px;
+  height: 1px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.10);
+}
+
+.rail-tile-overflow {
+  background: none;
+  border-color: rgba(255,255,255,0.22);
+  border-style: dashed;
+  color: var(--sb-text-faint);
+  font-size: 11px;
+}
+
+.rail-add-btn {
+  /* Pinned to the foot of the rail: it is not one of the places you can be. */
+  margin-block-start: auto;
+  background: none;
+  color: var(--sb-text-faint);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+/* ---- The overflow flyout ---- */
+.rail-flyout {
+  position: fixed;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 210px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--sb-bg-raised);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding-block: 4px;
+  padding-inline: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.rail-flyout-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding-block: 4px;
+  padding-inline: 4px;
+  color: var(--sb-text-dim);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rail-flyout-row:hover,
+.rail-flyout-row:focus-visible {
+  background: rgba(255,255,255,0.06);
+  color: var(--sb-text);
+  outline: none;
+}
+
+.rail-flyout-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- The right-click menu ---- */
+.rail-menu {
+  position: fixed;
+  z-index: 1001;
+  min-width: 190px;
+  background: var(--sb-bg-raised);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  padding-block: 4px;
+  padding-inline: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.rail-menu-label {
+  padding-block: 4px 6px;
+  padding-inline: 10px;
+  color: var(--sb-text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-menu-item {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding-block: 7px;
+  padding-inline: 10px;
+  color: var(--sb-text-dim);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.rail-menu-item:hover:not(:disabled),
+.rail-menu-item:focus-visible:not(:disabled) {
+  background: rgba(255,255,255,0.06);
+  color: var(--sb-text);
+  outline: none;
+}
+
+/* Pin and Move to group: drawn, and not wired to anything yet. Shown rather
+   than left out so the menu keeps its shape when they land. */
+.rail-menu-item:disabled {
+  color: var(--sb-text-dimmest);
+  cursor: default;
+}
+
+.rail-menu-divider {
+  height: 1px;
+  margin-block: 4px;
+  margin-inline: 6px;
+  background: rgba(255,255,255,0.08);
+}
