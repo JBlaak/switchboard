@@ -6,6 +6,7 @@
  * whole point of the channel table these read their names from.
  */
 import { createRegistrar } from './registrar';
+import { registerBrowseHandlers } from './browse-handlers';
 import { registerContentHandlers } from './content-handlers';
 import { registerHostHandlers } from './host-handlers';
 import { registerProjectHandlers } from './project-handlers';
@@ -20,6 +21,7 @@ export function registerIpcHandlers(app: Container): void {
   registerSessionHandlers(ipc, app);
   registerTerminalHandlers(ipc, app);
   registerContentHandlers(ipc, app);
+  registerBrowseHandlers(ipc, app);
   registerSettingsHandlers(ipc, app);
   registerHostHandlers(ipc, app);
 }
