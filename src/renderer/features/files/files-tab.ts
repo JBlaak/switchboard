@@ -16,7 +16,7 @@
 import { installChangesList, resetChangesList } from './changes-list';
 import { installFileTree, resetFileTree } from './file-tree';
 import { onScopeChange } from '../../state/scope-store';
-import { openFileInCodeArea } from '../code/code-area';
+import { openDiffInCodeArea, openFileInCodeArea } from '../code/code-area';
 import type { OpenedFile } from './file-tree';
 
 /**
@@ -25,7 +25,7 @@ import type { OpenedFile } from './file-tree';
  * reading a directory, which is not worth doing until someone is looking.
  */
 export function installFilesTab(): void {
-  installChangesList(showInCodeArea);
+  installChangesList(showInCodeArea, showDiffInCodeArea);
   installFileTree(showInCodeArea);
 
   // A different project (or a different checkout of the same one) means every
@@ -48,4 +48,15 @@ function showInCodeArea(file: OpenedFile): void {
     relPath: file.relPath,
     content: file.content,
   });
+}
+
+/**
+ * Show the whole worktree's diff, optionally at one file.
+ *
+ * Here for the same reason `showInCodeArea` is: this is the other thing in the
+ * sidebar that reaches the main area, and both go through the module nothing
+ * else imports so that neither becomes a cycle.
+ */
+function showDiffInCodeArea(focusPath?: string): void {
+  openDiffInCodeArea(focusPath);
 }

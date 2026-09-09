@@ -96,10 +96,22 @@ const readErrors = new Map<string, string>();
 /** Where a clicked file is shown; supplied by `files-tab.ts`. */
 let showFile: (file: OpenedFile) => void = () => {};
 
+/**
+ * Where `View all changes` goes; supplied by `files-tab.ts` for the same reason
+ * `showFile` is — the whole-diff surface lives in the code area, which imports
+ * the tab router, which imports the search, which drives this tab's neighbour.
+ * The seam is what keeps that from being a cycle.
+ */
+let showDiff: (focusPath?: string) => void = () => {};
+
 /** Build the section and wire its handlers up. Does not fetch: the tab does that. */
-export function installChangesList(onOpenFile: (file: OpenedFile) => void): void {
+export function installChangesList(
+  onOpenFile: (file: OpenedFile) => void,
+  onOpenDiff: (focusPath?: string) => void,
+): void {
   if (section) return;
   showFile = onOpenFile;
+  showDiff = onOpenDiff;
 
   section = document.createElement('div');
   section.id = 'changes-section';
@@ -314,6 +326,34 @@ export function currentChangesView(): ChangesView | null {
   return payload === null ? null : buildChangesView(payload);
 }
 
+/**
+ * The raw answer, for the surface that needs more of it than a row.
+ *
+ * The whole-worktree diff reads every field `getChanges` carries — `truncated`,
+ * `noNewlineAtEof`, `modeChange`, the similarity of a rename — none of which a
+ * sidebar row has any use for, so `ChangesView` deliberately drops them. Rather
+ * than widen that shape for a second reader, the second reader gets the answer
+ * itself. Still one round trip: this is the same object the list is drawn from.
+ */
+export function currentChangesPayload(): ChangesPayload | null {
+  return payload;
+}
+
+/** The worktree the current answer describes, or null when nothing is scoped. */
+export function changesRoot(): string | null {
+  return shownRoot;
+}
+
+/**
+ * Open the whole worktree's diff, optionally scrolled to one file.
+ *
+ * The Changes list's header and the folded strip's chips both come through
+ * here rather than importing the code area, for the reason `showDiff` gives.
+ */
+export function openWholeDiff(focusPath?: string): void {
+  showDiff(focusPath);
+}
+
 /** Why the last read failed, for a strip that would otherwise say "nothing". */
 export function changesFailure(): string | null {
   return failure;
@@ -338,7 +378,15 @@ export function ensureChangesLoaded(): void {
   void refresh();
 }
 
-/** Open a changed file the same way a click on its row does. */
+/**
+ * Open a changed file the same way a click on its row does.
+ *
+ * Kept for the callers that want the file rather than the diff of it — the
+ * folded strip's chips used to be one and are now the other, so nothing in the
+ * renderer calls this at the moment. It stays because it is the other half of
+ * the seam `openWholeDiff` is one half of, and the pair is what the surfaces
+ * outside this module are allowed to ask for.
+ */
 export function openChangedFile(path: string): void {
   void open(path);
 }
@@ -418,6 +466,20 @@ function drawHeader(): void {
     host.appendChild(base);
 
     host.appendChild(diffstat(current.totals.additions, current.totals.deletions, 'changes-stat'));
+
+    // Invariant 6: the code side opens on the *whole* diff, and a list of files
+    // that only ever opens them one at a time would quietly make the sidebar
+    // the way you read a change. This is the door to the other reading, and it
+    // is next to the numbers it is the long form of.
+    if (current.totals.files > 0) {
+      const all = document.createElement('button');
+      all.type = 'button';
+      all.className = 'changes-all-btn';
+      all.textContent = 'Diff';
+      all.title = 'View all changes in one scroll';
+      all.addEventListener('click', () => openWholeDiff());
+      host.appendChild(all);
+    }
 
     // Invariant 7: git could not use what was asked for, so say which base this
     // list is really about instead of letting the header imply the other one.

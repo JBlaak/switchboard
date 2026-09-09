@@ -17,6 +17,21 @@
 // insets the code area's own bar the way it insets the viewer toolbar above it,
 // that rule has to be the one that wins.
 @use 'code';
+// Next to code, and on the safe side of chrome for the same reason as its
+// neighbours. Nothing in it is scoped tighter than a single `.tok-*` class, so
+// whatever surface embeds coloured code — the code area, the long diff — keeps
+// the last word on layout and only borrows the palette.
+@use 'code-highlight';
+// Immediately after it, and before chrome for the same reason: the review's
+// header strip shares #code-area-header with the breadcrumb, so whatever chrome
+// says about that bar has to keep winning.
+@use 'review';
+// And immediately after the review, for the third time on the same grounds:
+// the whole-worktree diff puts its own strip in #code-area-header alongside the
+// breadcrumb and the review's, so all three have to be on the safe side of
+// chrome. It comes after code-highlight because it paints the rows those
+// `.tok-*` spans sit on, and it must not outrank them.
+@use 'diff-view';
 // Before chrome for the same reason: the Files tab's button lives in
 // #sidebar-header, which chrome insets for the macOS traffic lights, so nothing
 // the tree brings with it may outrank that.

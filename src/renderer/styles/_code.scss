@@ -40,7 +40,11 @@
 /* The way back out of this half is the folded conversation strip along the
    bottom (_fold-strip.scss), not a button up here — hence no #code-area-back. */
 
-/* The path relative to the worktree. */
+/* The path relative to the worktree. Only in `file` content mode: a review puts
+   its own strip in this bar instead, and the `[hidden]` guard below is what
+   makes hiding this one work at all — the `display: flex` on an id outranks the
+   user agent's `[hidden] { display: none }`, so without it an empty breadcrumb
+   would keep its `flex: 1` share of the header. */
 #code-area-crumbs {
   display: flex;
   align-items: baseline;
@@ -51,6 +55,8 @@
   font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
   white-space: nowrap;
 }
+
+#code-area-crumbs[hidden] { display: none; }
 
 /* Only the folders shrink. The file name is a sibling of this box with no
    shrink of its own, so a path wider than the bar ellipsises its leading

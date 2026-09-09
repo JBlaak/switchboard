@@ -9,7 +9,7 @@
 import type { AgentFileIndex } from '../domain/agent-files/agent-file';
 import type { BrowseFile, BrowseListing } from '../domain/browse/types';
 import type { ChangesPayload } from '../domain/changes/types';
-import type { DiffBase, Worktree } from '../domain/git/types';
+import type { DiffBase, FileDiff, Worktree } from '../domain/git/types';
 import type { PlanSummary } from '../domain/plans/plan';
 import type { Project } from '../domain/project/project';
 import type { RemoteConfig } from '../domain/project/remote-target';
@@ -102,6 +102,21 @@ export interface SwitchboardApi {
    * `{ ok: false, error }` envelope, as every invoke does — check for an array.
    */
   gitWorktrees(projectPath: string): Promise<Worktree[]>;
+  /**
+   * One file's hunks — phase two of the two-phase diff.
+   *
+   * `getChanges` classifies the whole tree for the price of one command and
+   * leaves every `hunks` empty; this buys the lines, for one file, when the
+   * reader actually expands it. A 212-file diff is therefore 212 headers and
+   * only as many patches as get scrolled past.
+   *
+   * `base` should be the base that file's row was computed against —
+   * `payload.base`, not the one that was asked for — so the hunks agree with
+   * the diffstat printed beside them. Fails with the `{ ok: false, error }`
+   * envelope when git cannot read the file, so check for `hunks` before
+   * walking it.
+   */
+  gitDiffFile(worktreePath: string, base: DiffBase, relPath: string): Promise<FileDiff>;
 
   // ── Browsing a worktree ──
   /**
