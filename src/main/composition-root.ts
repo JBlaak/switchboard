@@ -40,6 +40,7 @@ import { FileWatchRegistry } from '../infrastructure/fs/file-watch-registry';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
 import { McpIdeBridge } from '../infrastructure/mcp/ide-bridge';
+import { NodeProcessRunner } from '../infrastructure/process/node-process-runner';
 import { NodePtyGateway } from '../infrastructure/pty/node-pty-gateway';
 import { SystemShellProfileProvider } from '../infrastructure/shell/shell-discovery';
 import { WorkerProjectScanner } from '../infrastructure/worker/worker-project-scanner';
@@ -63,6 +64,7 @@ export interface Container {
   readonly searchIndex: SqliteSearchIndex;
   readonly transcripts: FileTranscriptStore;
   readonly fs: NodeFileSystem;
+  readonly processes: NodeProcessRunner;
 
   readonly registry: SessionRegistry;
   readonly terminals: NodePtyGateway;
@@ -122,6 +124,7 @@ export function buildContainer(): Container {
   // ── Session machinery ──
   const registry = new SessionRegistry();
   const terminals = new NodePtyGateway();
+  const processes = new NodeProcessRunner({ baseEnv: terminals.baseEnv });
   const shells = new SystemShellProfileProvider();
   const ideBridge = new McpIdeBridge({ renderer, log, ideDir: paths.ideDir });
 
@@ -219,7 +222,7 @@ export function buildContainer(): Container {
 
   return {
     log, paths,
-    settings, repository, searchIndex, transcripts, fs,
+    settings, repository, searchIndex, transcripts, fs, processes,
     registry, terminals, shells, ideBridge, lifecycle, remote, launcher, transitions,
     sessionIndex, projects, plans, agentFiles, stats, usage, schedules,
     renderer, updater, dialogs, system, fileWatches, projectsWatcher,
