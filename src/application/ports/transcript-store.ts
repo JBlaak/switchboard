@@ -19,6 +19,14 @@ export interface TranscriptSeed {
   nowIso: string;
 }
 
+/** Where a transcript folder's sessions belong, and where they ran. */
+export interface ResolvedProject {
+  /** The project to attribute the sessions to: a worktree's parent repository. */
+  projectPath: string;
+  /** The directory the sessions actually ran in; equals projectPath outside a worktree. */
+  cwd: string;
+}
+
 export interface TranscriptStore {
   /** Every project folder, excluding the ones that are not projects. */
   listFolders(): string[];
@@ -28,12 +36,16 @@ export interface TranscriptStore {
   listSessionIds(folder: string): string[];
 
   /**
-   * The project path this folder's transcripts say they belong to.
+   * The project this folder's transcripts say they belong to, and the
+   * directory they actually ran in.
    *
-   * Read out of a transcript's `cwd` rather than decoded from the folder name,
-   * which is lossy. Null when the folder holds nothing readable.
+   * Both read out of a transcript's `cwd` rather than decoded from the folder
+   * name, which is lossy. `projectPath` folds a worktree into the repository it
+   * was cut from, which is right for grouping; `cwd` is the raw directory, kept
+   * because that fold is exactly what a list scoped to one worktree has to
+   * undo. Null when the folder holds nothing readable.
    */
-  resolveProjectPath(folder: string): string | null;
+  resolveProjectPath(folder: string): ResolvedProject | null;
 
   /**
    * The newest write anywhere in the folder, as epoch ms.

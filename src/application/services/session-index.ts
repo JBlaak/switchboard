@@ -63,13 +63,14 @@ export class SessionIndex {
       return;
     }
 
-    const projectPath = transcripts.resolveProjectPath(folder);
-    if (!projectPath) {
+    const resolved = transcripts.resolveProjectPath(folder);
+    if (!resolved) {
       // Nothing readable in it, but record the visit so the gate does not keep
       // re-reading an empty or unparseable folder on every reconcile.
-      repository.setFolderMeta(folder, null, transcripts.folderIndexMtimeMs(folder));
+      repository.setFolderMeta(folder, null, null, transcripts.folderIndexMtimeMs(folder));
       return;
     }
+    const { projectPath, cwd } = resolved;
 
     const cachedMtimes = new Map<string, string>();
     for (const row of repository.getCachedFingerprints(folder)) {
@@ -114,7 +115,7 @@ export class SessionIndex {
       searchIndex.deleteSession(sessionId);
     }
 
-    repository.setFolderMeta(folder, projectPath, transcripts.folderIndexMtimeMs(folder));
+    repository.setFolderMeta(folder, projectPath, cwd, transcripts.folderIndexMtimeMs(folder));
   }
 
   /**
@@ -177,7 +178,7 @@ export class SessionIndex {
     this.#status(`Indexing ${results.length} projects…`, 'active');
 
     let sessionCount = 0;
-    for (const { folder, projectPath, sessions, indexMtimeMs } of results) {
+    for (const { folder, projectPath, cwd, sessions, indexMtimeMs } of results) {
       repository.deleteCachedFolder(folder);
       searchIndex.deleteFolder(folder);
       if (sessions.length) {
@@ -195,7 +196,7 @@ export class SessionIndex {
           body: session.textContent,
         })));
       }
-      repository.setFolderMeta(folder, projectPath, indexMtimeMs);
+      repository.setFolderMeta(folder, projectPath, cwd, indexMtimeMs);
     }
 
     this.#status(`Indexed ${sessionCount} sessions across ${results.length} projects`, 'done');
