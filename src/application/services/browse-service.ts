@@ -22,7 +22,7 @@
  */
 import { buildSshExecArgv } from '../../domain/remote/ssh-command';
 import { gitEnv, localGit, remoteGit } from '../../domain/git/git-argv';
-import { isRemoteProjectPath, parseRemoteProjectPath } from '../../domain/project/remote-target';
+import { isRemoteProjectPath, parseRemoteProjectPath, remoteCommandDir } from '../../domain/project/remote-target';
 import type { BrowseEntry, BrowseFile, BrowseListing } from '../../domain/browse/types';
 import type { GitInvocation } from '../../domain/git/types';
 import type { ParsedRemotePath } from '../../domain/project/remote-target';
@@ -307,21 +307,16 @@ function remoteOrThrow(projectPath: string): ParsedRemotePath {
 }
 
 /**
- * The path to name on the far host.
+ * The path to name on the far host: the project's own directory as a one-shot
+ * command sees it (`remoteCommandDir`), with `rel` hung off it.
  *
- * The project's own directory is stored the way the user typed it: absolute
- * (`/srv/app`), home-relative (`~/dev/app` or plain `dev/app`), or absent for
- * the login home. Every argument reaches the far shell single-quoted, so `~`
- * and `$HOME` cannot expand there — and they do not need to: sshd starts a
- * one-shot command in the user's home directory, so a home-relative path is
- * the same place read relative to that cwd. This is the same reasoning as
- * `remoteGitDir` in `git-service.ts`, which the two should eventually share
- * from `remote-target.ts`.
+ * `.` is what that helper calls the login home, and joining onto it would give
+ * `./src` — harmless, but the git integration passes the same string to `-C`
+ * and the two should spell the same directory the same way.
  */
 function remotePath(remote: ParsedRemotePath, rel: string): string {
-  const dir = remote.dir ?? '';
-  const base = dir.startsWith('/') ? dir : (dir.startsWith('~/') ? dir.slice(2) : dir);
-  if (!base || base === '~') return rel || '.';
+  const base = remoteCommandDir(remote.dir);
+  if (base === '.') return rel || '.';
   return rel ? `${base.replace(/\/+$/, '')}/${rel}` : base;
 }
 
