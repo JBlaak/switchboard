@@ -54,9 +54,14 @@ function normalize(path: string): string {
  *
  * `knownWorktrees` may be empty (git unavailable, or not asked yet); the other
  * two tests still work without it.
+ *
+ * `cwd` may be null or absent, and both mean the same thing: the row ran where
+ * its projectPath says. A `SessionRow` marks it optional because rows that never
+ * touched disk — pending, terminal, remote — carry none, and taking the row's
+ * own shape here is what lets the renderer pass one straight in.
  */
 export function attributeToScope(
-  row: { cwd: string | null; projectPath: string },
+  row: { cwd?: string | null; projectPath: string },
   scope: Scope | null,
   knownWorktrees: readonly string[],
 ): boolean {
@@ -72,6 +77,52 @@ export function attributeToScope(
 
   if (scope.worktreePath === null) return true;
   return place === normalize(scope.worktreePath);
+}
+
+/**
+ * The project list, narrowed to `scope`.
+ *
+ * The list is projects, each holding its rows, and the scope applies per row:
+ * a project keeps the rows `attributeToScope` admits — plus any `isAlwaysVisible`
+ * insists on, which the sidebar uses for rows it invented for sessions the CLI
+ * has not started yet, since a `--worktree` launch has no cwd until the checkout
+ * exists — and a project left with no rows is dropped, because the flat list has
+ * no header to draw for it.
+ *
+ * Two exceptions, both about the list looking right rather than being right:
+ *
+ *  - No scope hands back the very same array. Scope is a filter, not a mode,
+ *    and "All" has to render exactly what the list rendered before scope
+ *    existed; identical input is the simplest way to guarantee that.
+ *  - The scoped project itself stays even with no rows, so a project the user
+ *    has narrowed to and then emptied still draws as an empty list rather than
+ *    as nothing at all.
+ *
+ * Generic over the project and row shapes, reading only what it needs, so the
+ * renderer passes its own types in and gets them back unchanged — and so this
+ * stays in the domain, tested without a DOM.
+ */
+export function narrowToScope<
+  P extends { projectPath: string; sessions: readonly R[] },
+  R extends { sessionId: string; cwd?: string | null; projectPath: string },
+>(
+  projects: readonly P[],
+  scope: Scope | null,
+  knownWorktrees: readonly string[],
+  isAlwaysVisible: (sessionId: string) => boolean,
+): P[] {
+  // The same array, not a copy — see above. The cast only drops `readonly`.
+  if (scope === null) return projects as P[];
+
+  const scoped = normalize(scope.projectPath);
+  const narrowed: P[] = [];
+  for (const project of projects) {
+    const sessions = project.sessions.filter(
+      row => isAlwaysVisible(row.sessionId) || attributeToScope(row, scope, knownWorktrees));
+    if (sessions.length === 0 && normalize(project.projectPath) !== scoped) continue;
+    narrowed.push({ ...project, sessions });
+  }
+  return narrowed;
 }
 
 /**

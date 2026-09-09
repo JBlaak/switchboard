@@ -10,6 +10,7 @@
  */
 import { shortProjectPath } from '../../domain/project/project-path';
 import { refreshSidebar } from './refresh';
+import { scopedProjects } from '../state/scope-store';
 import { view } from '../state/session-store';
 import { searchBar, searchInput, el } from '../lib/dom';
 import { renderPlans } from '../features/plans/plans-view';
@@ -122,11 +123,17 @@ async function searchSessions(query: string): Promise<void> {
   refreshSidebar({ resort: true });
 }
 
-/** Projects whose own short name contains the query. */
+/**
+ * Projects whose own short name contains the query.
+ *
+ * Read off the scoped list: a name match admits every session of the project,
+ * so matching against the full list would let a search inside a scope pull
+ * another project's sessions in by name alone.
+ */
 function matchingProjectPaths(query: string): Set<string> | null {
   const needle = query.toLowerCase();
   const matched = new Set<string>();
-  for (const project of view.cachedAllProjects) {
+  for (const project of scopedProjects(view.cachedAllProjects)) {
     if (shortProjectPath(project.projectPath).toLowerCase().includes(needle)) {
       matched.add(project.projectPath);
     }
