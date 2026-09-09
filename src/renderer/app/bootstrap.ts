@@ -8,6 +8,7 @@
  * session opens a terminal in the wrong one.
  */
 import { installLayout } from './layout';
+import { installMainMode } from './main-mode';
 import { installIpcListeners } from './ipc-listeners';
 import { installQuotaGauges } from './quota-gauges';
 import { onSidebarRefresh } from './refresh';
@@ -61,6 +62,10 @@ export function bootstrap(): void {
   // After it, because a click in the tree opens a file into that area. Nothing
   // is fetched here: the tree reads its first directory when its tab is opened.
   installFilesTab();
+  // Last of the main area's three: the flip folds two halves that both have to
+  // exist first — its strips are appended to #terminal-area and #code-area, and
+  // the code strip has to land after the split #terminal-split puts there.
+  installMainMode();
   setTickListener(tickConnectionCards);
 
   terminalStopButton.addEventListener('click', () => {

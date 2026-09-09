@@ -29,6 +29,7 @@ import { gridViewerCount, placeholder, terminalsEl } from '../../lib/dom';
 import { openFileInPanel } from '../panel/file-panel';
 import { focusGridCard, gridCards, handleSessionNavKey, isSessionNavKey, showGridView, toggleGridView, wrapInGridCard } from '../terminal/grid-view';
 import { hideAllViewers } from '../panel/viewers';
+import { applyMainMode, flipMainMode } from '../../app/main-mode';
 import { openSessions, sessionMap, view } from '../../state/session-store';
 import { remoteStatus } from '../../state/remote-status-store';
 import { TERMINAL_THEME } from '../terminal/terminal-themes';
@@ -106,6 +107,14 @@ function setupTerminalKeyBindings(
     // Cmd/Ctrl+Shift+G → toggle grid view
     if (e.key === 'g' && (isMac ? e.metaKey : e.ctrlKey) && e.shiftKey && !e.altKey) {
       if (e.type === 'keydown') { e._handled = true; toggleGridView(); }
+      return false;
+    }
+
+    // Cmd/Ctrl+J → swap the conversation and the code. Blocked here as well as
+    // handled in app/shortcuts, because ^J is a newline: without this the shell
+    // would submit the line the user was in the middle of typing.
+    if (e.key === 'j' && (isMac ? e.metaKey : e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      if (e.type === 'keydown') { e._handled = true; flipMainMode(); }
       return false;
     }
 
@@ -522,6 +531,12 @@ export function showSession(sessionId: string): void {
       fitAndScroll(entry);
     }
   }
+
+  // Last, because everything above puts the terminal up: the flip is per
+  // session, so a session that was left reading its code has to be given that
+  // half back once the default has finished being applied. A no-op for a
+  // session on `talk`, which is what has just been drawn.
+  applyMainMode();
 }
 
 function setupDragAndDrop(container: HTMLElement, getSessionId: () => string | null): void {

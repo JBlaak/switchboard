@@ -71,6 +71,13 @@ export const STORAGE_KEYS = {
   gridViewActive: 'gridViewActive',
   expandedSlugs: 'expandedSlugs',
   scope: 'scope',
+  /**
+   * A prefix, not a key: the flip is per session, so the session id is appended
+   * (see `modeStorageKey`). One entry per session rather than one map, so a
+   * session that goes away takes its entry with it when the store is cleared
+   * and never has to be pruned out of a shared blob.
+   */
+  mainMode: 'mainMode',
 } as const;
 
 /**

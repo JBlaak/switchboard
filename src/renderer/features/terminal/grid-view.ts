@@ -7,6 +7,7 @@ import { confirmAndStopSession } from '../sessions/session-actions';
 import { setActiveSession } from '../sessions/active-session';
 import { updateRunningIndicators } from '../sessions/session-poller';
 import { hideViewerPanels } from '../panel/viewers';
+import { hideFoldStrips } from '../code/fold-strip';
 import {
   gridViewer, gridViewerCount, placeholder, sidebarContent, terminalArea, terminalHeader,
   terminalsEl,
@@ -153,6 +154,10 @@ export function showGridView() {
   // here, so a panel added later cannot be left showing behind the grid.
   hideViewerPanels();
   terminalArea.style.display = '';
+  // And the flip's strips, for the same reason and from the same kind of owner:
+  // they are inside the area the grid has just claimed, and a folded half is a
+  // statement about one session.
+  hideFoldStrips();
 
   // Switch #terminals to grid layout
   terminalsEl.classList.add('grid-layout');
