@@ -1,9 +1,14 @@
 /**
  * The search box.
  *
- * One box, three tabs: the query goes to whichever category the user is looking
+ * One box, four tabs: the query goes to whichever category the user is looking
  * at, and the results narrow that tab's list. Debounced, because the index is
  * queried per keystroke and a trigram search over a large history is not free.
+ *
+ * The Files tab is the exception to all of that: its tree is already in the
+ * renderer, so its query is a local filter over what is loaded rather than a
+ * question for the index. It still goes through the same debounce — a filter of
+ * a deep tree per keystroke is cheap but not free.
  *
  * Title-only search additionally matches project names, which full-text search
  * cannot do — a project's name is not in any session's body.
@@ -15,6 +20,7 @@ import { view } from '../state/session-store';
 import { searchBar, searchInput, el } from '../lib/dom';
 import { renderPlans } from '../features/plans/plans-view';
 import { renderMemories } from '../features/memory/memory-view';
+import { forgetFileTreeQuery, setFileTreeQuery } from '../features/files/file-tree';
 
 const DEBOUNCE_MS = 200;
 
@@ -66,6 +72,9 @@ export function clearSearch(): void {
       clearSessionMatches();
       refreshSidebar({ resort: true });
       break;
+    case 'files':
+      setFileTreeQuery('');
+      break;
     case 'plans':
       renderPlans(view.cachedPlans);
       break;
@@ -75,10 +84,17 @@ export function clearSearch(): void {
   }
 }
 
-/** Drop the search state without redrawing — for a tab switch. */
+/**
+ * Drop the search state without redrawing — for a tab switch.
+ *
+ * The file tree's query is dropped unconditionally rather than under a
+ * `switch`: it is one assignment, it is the same answer for every tab, and the
+ * tree redraws from scratch when its tab next comes up either way.
+ */
 export function clearSessionMatches(): void {
   view.searchMatchIds = null;
   view.searchMatchProjectPaths = null;
+  forgetFileTreeQuery();
 }
 
 async function runSearch(): Promise<void> {
@@ -93,6 +109,10 @@ async function runSearch(): Promise<void> {
     switch (view.activeTab) {
       case 'sessions':
         await searchSessions(query);
+        break;
+      case 'files':
+        // No IPC: the tree filters what it has already loaded.
+        setFileTreeQuery(query);
         break;
       case 'plans': {
         const results = await window.api.search('plan', query, titleOnly);
