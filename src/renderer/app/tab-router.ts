@@ -66,6 +66,11 @@ function switchTo(name: TabName): void {
       showFileTree();
       break;
     case 'plans':
+      // The main area has to be put back, not left as it was: these two tabs
+      // replace the sidebar's list and nothing else, so arriving from a tab that
+      // shows a panel — statistics, or now the code area — used to leave that
+      // panel up beside them until something else happened to hide it.
+      restoreMainArea();
       plansContent.style.display = '';
       void loadPlans();
       break;
@@ -75,6 +80,7 @@ function switchTo(name: TabName): void {
       void loadStats();
       break;
     case 'memory':
+      restoreMainArea();
       memoryContent.style.display = '';
       void loadMemories();
       break;
