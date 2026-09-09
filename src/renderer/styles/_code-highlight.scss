@@ -1,0 +1,120 @@
+/* ========== STATIC SYNTAX HIGHLIGHTING ==========
+   Colours for the `tok-*` spans `lib/highlight-static.ts` emits — the long diff
+   and anything else that shows code without building an editor (invariant 8).
+
+   Why these are raw hex and not tokens from _tokens.scss: they are not
+   Switchboard's palette. They are dracula's, and the live CodeMirror editor is
+   themed from the very same values — `config` in
+   @ddietr/codemirror-themes/dist/theme/dracula. The two surfaces sit next to
+   each other in the same window, so a colour that drifts here is immediately
+   visible as two different-looking renderings of the same file.
+
+   SCSS cannot import a JS object, so each value below names the `config` key it
+   was copied from. That annotation is load-bearing, not decoration:
+   test/highlight-static.test.ts parses this file and asserts every annotated
+   hex still equals `config[key]`. Change a colour here and the test says so;
+   bump the theme package and the test says that too.
+
+   One honest caveat about fidelity. `classHighlighter` has a coarser vocabulary
+   than the editor's `HighlightStyle`: a plain variable, a called function and a
+   constant all arrive as `.tok-variableName`, where dracula paints them white,
+   green and purple. The static surface therefore reads as *the same theme*, not
+   as a pixel copy of the editor. Where a class collapses several dracula rules,
+   the comment says which reading was taken. */
+
+:root {
+  /* The surface code sits on, for whatever draws the scroll. Exposed as custom
+     properties rather than baked into a container rule here, because this file
+     owns the palette and the diff surface owns its own layout. */
+  --sb-code-bg:          #282A36;  /* config.background */
+  --sb-code-fg:          #F8F8F2;  /* config.foreground */
+  --sb-code-line-number: #6272A4;  /* config.lineNumber */
+}
+
+/* ── Keywords and operators ──────────────────────────────────────── */
+
+/* Dracula styles `operator` and `operatorKeyword` with config.keyword too, so
+   these genuinely are one colour rather than a shortcut. config.storage holds
+   the same value and is what `tok-keyword` covers for storage keywords. */
+.tok-keyword,
+.tok-operator { color: #FF79C6; }  /* config.keyword */
+
+/* ── Literals ────────────────────────────────────────────────────── */
+
+/* `tok-string2` is regexps, escapes and language-specific string variants.
+   config.regexp and config.string are the same value in dracula, which is why
+   the two rules below do not have to disagree. `tok-inserted` and `tok-url` are
+   dracula's config.string and config.regexp respectively — same value again. */
+.tok-string,
+.tok-inserted { color: #F1FA8C; }  /* config.string */
+
+.tok-string2,
+.tok-url,
+.tok-link { color: #F1FA8C; }  /* config.regexp */
+
+.tok-link { text-decoration: underline; }
+
+/* config.number and config.constant are the same value; `tok-namespace` lands
+   here because dracula groups namespaces with numbers. */
+.tok-number,
+.tok-namespace { color: #BD93F9; }  /* config.number */
+
+/* `tok-literal` is the class `classHighlighter` gives a colour value — the
+   `#69e2bf` in a stylesheet — as well as the generic `literal` tag, which no
+   parser emits on its own because strings, numbers and booleans all have
+   classes of their own. So in practice this rule is CSS colour values, and
+   dracula paints those with config.constant. Same value as config.number
+   above; kept separate because it is a different key doing the work. */
+.tok-literal { color: #BD93F9; }  /* config.constant */
+
+/* ── Names ───────────────────────────────────────────────────────── */
+
+/* config.type and config.class are the same value in dracula. */
+.tok-typeName { color: #8BE9FD; }  /* config.type */
+.tok-className { color: #8BE9FD; }  /* config.class */
+
+/* Both are dracula's config.function: it paints property names the same as
+   called functions. This is the collapse to be aware of — a *plain* variable
+   that happens to be a called function also arrives as `.tok-variableName`
+   below and stays white, where the editor would green it. */
+.tok-propertyName,
+.tok-labelName { color: #50FA7B; }  /* config.function */
+
+/* config.variable is the same value as config.foreground, so these are the
+   default ink. Spelled out anyway: the rules are what make the mapping
+   checkable, and they keep the spans right if a container ever sets a
+   different colour on the block. */
+.tok-variableName,
+.tok-variableName2,
+.tok-macroName,
+.tok-atom,
+.tok-bool,
+.tok-deleted { color: #F8F8F2; }  /* config.variable */
+
+/* ── Comments and prose ──────────────────────────────────────────── */
+
+/* Dracula groups `meta` with comments — pragmas, shebangs, doctypes. */
+.tok-comment,
+.tok-meta { color: #6272A4; }  /* config.comment */
+
+.tok-heading { color: #BD93F9; font-weight: bold; }  /* config.heading */
+.tok-emphasis { font-style: italic; }
+.tok-strong { font-weight: bold; }
+
+/* ── Errors ──────────────────────────────────────────────────────── */
+
+/* Worth expecting on the long diff: a hunk torn out of its file often will not
+   parse, so `highlight-static.ts` documents that limitation. This is what it
+   looks like on screen. */
+.tok-invalid { color: #FF5555; }  /* config.invalid */
+
+/* `tok-punctuation` is left unstyled on purpose. Dracula has no rule for
+   `punctuation`, and the one thing it does colour in that neighbourhood —
+   `separator`, which is where a `;` ends up — it paints config.variable, the
+   same value as config.foreground. So the surrounding foreground already is
+   the right answer, and a rule here would only be one more value to keep true.
+
+   Also deliberately absent: `.tok-inserted` / `.tok-deleted` above colour
+   tokens a *language* marks as inserted or deleted (markdown, a checked-in
+   .diff), and have nothing to do with the diff view's own added/removed rows.
+   Whatever styles those rows must not reuse these class names. */

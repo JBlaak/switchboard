@@ -17,6 +17,11 @@
 // insets the code area's own bar the way it insets the viewer toolbar above it,
 // that rule has to be the one that wins.
 @use 'code';
+// Next to code, and on the safe side of chrome for the same reason as its
+// neighbours. Nothing in it is scoped tighter than a single `.tok-*` class, so
+// whatever surface embeds coloured code — the code area, the long diff — keeps
+// the last word on layout and only borrows the palette.
+@use 'code-highlight';
 // Before chrome for the same reason: the Files tab's button lives in
 // #sidebar-header, which chrome insets for the macOS traffic lights, so nothing
 // the tree brings with it may outrank that.
