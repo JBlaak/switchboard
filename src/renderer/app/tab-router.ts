@@ -19,6 +19,7 @@ import { hideAllViewers, showViewer } from '../features/panel/viewers';
 import { loadPlans } from '../features/plans/plans-view';
 import { loadMemories } from '../features/memory/memory-view';
 import { loadStats } from '../features/stats/stats-view';
+import { showChangesList } from '../features/files/changes-list';
 import { showFileTree } from '../features/files/file-tree';
 
 type TabName = 'sessions' | 'files' | 'plans' | 'stats' | 'memory';
@@ -63,6 +64,11 @@ function switchTo(name: TabName): void {
       // A file is opened into the main area, so the tab starts by putting back
       // whatever was there — coming from stats, that viewer is still up.
       restoreMainArea();
+      // Both halves of the tab, in the order they are stacked. Each is drawn
+      // when the tab is shown rather than kept live: what changed and what is
+      // in the folder are both worth re-reading after time on another tab, and
+      // neither is worth a process while nobody is looking.
+      showChangesList();
       showFileTree();
       break;
     case 'plans':

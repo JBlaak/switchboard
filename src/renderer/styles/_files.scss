@@ -178,3 +178,265 @@
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ========== CHANGES ==========
+   What changed in the scoped worktree, grouped by the session that changed it,
+   stacked above the tree inside the same tab. It keeps the tree's three
+   conventions — the --sb-row-* rail, one indent value, tokens only — plus one
+   of its own: a row's identity is its path, so the path is the element that
+   gets the room and everything beside it is fixed-width or shrinks first. */
+
+#changes-section {
+  padding: 2px var(--sb-sidebar-gutter) 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.changes-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px var(--sb-row-inset) 4px;
+}
+
+.changes-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sb-text-muted);
+}
+
+/* The base the diff was actually taken against — never the one that was asked
+   for; see the note below, which is what says they differed. */
+.changes-base {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--sb-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.changes-stat,
+.change-stat {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.change-add { color: var(--sb-green); }
+.change-del { color: var(--sb-red); }
+
+/* Invariant 7 made visible: git could not use the base it was given and fell
+   back. Amber rather than red — the list is true, it is just not the comparison
+   that was asked for. */
+.changes-note {
+  margin: 0 var(--sb-row-inset) 4px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--sb-yellow);
+}
+
+/* Only present above CROWDED_AT files, which is where a list stops being
+   readable in one glance. `:not([hidden])` because a class that sets `display`
+   outranks the `hidden` attribute's own rule, and this row is hidden far more
+   often than it is shown. */
+.changes-tools:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 var(--sb-row-inset) 6px;
+}
+
+.changes-filter {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--sb-text);
+  background: var(--sb-bg-raised);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 5px;
+}
+
+.changes-filter:focus {
+  outline: none;
+  border-color: rgba(var(--sb-accent-rgb),0.5);
+}
+
+.changes-generated {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--sb-text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.changes-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-row-gap);
+  height: 22px;
+  padding-left: var(--sb-row-inset);
+  padding-right: 6px;
+}
+
+/* The dot is the session list's, drawn at the top of a row there and centred
+   here, where there is only one line to sit beside. */
+.changes-group-header .session-status-dot { margin-top: 0; }
+
+.changes-group-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sb-text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.changes-group-count {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sb-text-dimmest);
+}
+
+.change-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sb-row-gap);
+  height: 22px;
+  /* One indent past the group heading, so the grouping is readable without a
+     connector line. */
+  padding-left: calc(var(--sb-row-inset) + 14px);
+  padding-right: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+
+.change-row:hover { background: rgba(255,255,255,0.06); }
+.change-row.active { background: rgba(var(--sb-accent-rgb),0.14); }
+
+/* One letter, one column: the statuses have to line up down the list or the
+   paths beside them stop lining up too. */
+.change-status {
+  width: 10px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--sb-text-faint);
+}
+
+.change-status.is-mod      { color: var(--sb-yellow); }
+.change-status.is-add      { color: var(--sb-green); }
+.change-status.is-del      { color: var(--sb-red); }
+.change-status.is-conflict { color: var(--sb-red); }
+
+/* The path, in two parts: the directories shrink and the file name does not, so
+   a path too long for the sidebar loses its leading folders rather than the one
+   segment the user is looking for. The same split the code area's breadcrumb
+   makes, for the same reason. */
+.change-path {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.change-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--sb-text-dimmest);
+}
+
+.change-name {
+  flex-shrink: 0;
+  color: var(--sb-text-dim);
+}
+
+.change-row:hover .change-name { color: var(--sb-text); }
+.change-row.active .change-name { color: var(--sb-text-strong); }
+
+/* A lockfile or a build output: present, because it did change, but not what
+   anyone came here to read. */
+.change-row.is-generated .change-path,
+.change-row.is-generated .change-status { opacity: 0.45; }
+
+/* The file is claimed by more than one session — the state this surface exists
+   to show, and the one worth a second look before either half is trusted. */
+.change-shared {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--sb-yellow);
+  background: rgba(236,178,46,0.14);
+}
+
+.change-conflict {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--sb-red);
+  background: rgba(224,30,90,0.14);
+}
+
+/* Binary, submodule: a file with no line counts to print instead. */
+.change-note-tag {
+  flex-shrink: 0;
+  font-size: 9px;
+  color: var(--sb-text-dimmest);
+}
+
+/* Why a file would not open, said on its own row, as the tree does it. */
+.change-row-error {
+  flex-shrink: 1;
+  min-width: 0;
+  font-size: 10px;
+  color: var(--sb-red);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Nothing changed, nothing matched, or the read failed. Compact rather than
+   .files-empty's 40px: this section is a band above the tree, not a page. */
+.changes-empty,
+.changes-error {
+  padding: 8px var(--sb-row-inset);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--sb-text-dimmest);
+}
+
+.changes-error { color: var(--sb-red); }
+
+/* Above CROWDED_AT files the two halves stop fitting, and the tree is the half
+   that gives: it keeps enough rows to stay navigable and scrolls inside itself,
+   while the changes take the room they need up to about half the sidebar. */
+#files-content.changes-crowded .changes-groups {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+#files-content.changes-crowded #file-tree-host {
+  max-height: 220px;
+  overflow-y: auto;
+}

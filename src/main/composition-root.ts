@@ -18,6 +18,7 @@ import path from 'node:path';
 import { systemClock } from '../application/ports/clock';
 import { uuidGenerator } from '../application/ports/ids';
 import { AgentFileService } from '../application/services/agent-file-service';
+import { AttributionService } from '../application/services/attribution-service';
 import { BrowseService } from '../application/services/browse-service';
 import { GitService } from '../application/services/git-service';
 import { PlanService } from '../application/services/plan-service';
@@ -83,6 +84,7 @@ export interface Container {
   readonly agentFiles: AgentFileService;
   readonly git: GitService;
   readonly browse: BrowseService;
+  readonly attribution: AttributionService;
   readonly stats: ClaudeCliStatsService;
   readonly usage: OAuthUsageService;
   readonly schedules: ScheduleService;
@@ -187,8 +189,14 @@ export function buildContainer(): Container {
     projectsDir: paths.projectsDir,
   });
 
-  const git = new GitService({ runner: processes, log });
+  // `fs` is what lets the worktree's own `.gitattributes` be read, so a repo
+  // that marks its own generated files with `linguist-generated` is believed.
+  const git = new GitService({ runner: processes, log, fs });
   const browse = new BrowseService({ fs, runner: processes, log });
+  const attribution = new AttributionService({
+    fs, transcripts, log,
+    projectsDir: paths.projectsDir,
+  });
 
   const schedules = new ScheduleService({
     fs, transcripts, repository, ids, clock, timers, log,
@@ -231,7 +239,7 @@ export function buildContainer(): Container {
     log, paths,
     settings, repository, searchIndex, transcripts, fs, processes,
     registry, terminals, shells, ideBridge, lifecycle, remote, launcher, transitions,
-    sessionIndex, projects, plans, agentFiles, git, browse, stats, usage, schedules,
+    sessionIndex, projects, plans, agentFiles, git, browse, attribution, stats, usage, schedules,
     renderer, updater, dialogs, system, fileWatches, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,

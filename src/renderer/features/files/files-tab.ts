@@ -1,16 +1,19 @@
 /**
- * The Files tab: wiring, and the one decision the tree does not make.
+ * The Files tab: wiring, and the one decision neither half makes.
  *
- * Small on purpose. The tab's sidebar half is drawn by `file-tree.ts` and its
- * rules live in `file-tree-model.ts`; what is left is who tells the tree the
- * scope moved, and where a file the user clicked goes.
+ * Small on purpose. The tab holds two independent surfaces — the Changes list
+ * above (`changes-list.ts`, rules in `changes-list-model.ts`) and the project
+ * tree below (`file-tree.ts`, rules in `file-tree-model.ts`) — and what is left
+ * here is who tells them the scope moved, and where a file either of them
+ * opened goes.
  *
- * That last one is here rather than in the tree because it is the only part
- * that reaches the main area. `openFileInCodeArea` pulls in the code area,
- * which imports the tab router, which imports the search — and the search
- * drives the tree's filter. Keeping the call in this module, which nothing else
- * imports, is what stops that from being a cycle.
+ * That last one is here rather than in the two because it is the only part that
+ * reaches the main area. `openFileInCodeArea` pulls in the code area, which
+ * imports the tab router, which imports the search — and the search drives the
+ * tree's filter. Keeping the call in this module, which nothing else imports,
+ * is what stops that from being a cycle.
  */
+import { installChangesList, resetChangesList } from './changes-list';
 import { installFileTree, resetFileTree } from './file-tree';
 import { onScopeChange } from '../../state/scope-store';
 import { openFileInCodeArea } from '../code/code-area';
@@ -22,11 +25,15 @@ import type { OpenedFile } from './file-tree';
  * reading a directory, which is not worth doing until someone is looking.
  */
 export function installFilesTab(): void {
+  installChangesList(showInCodeArea);
   installFileTree(showInCodeArea);
 
   // A different project (or a different checkout of the same one) means every
-  // path in the tree is relative to a root that is no longer in effect.
-  onScopeChange(() => resetFileTree());
+  // path in either half is relative to a root that is no longer in effect.
+  onScopeChange(() => {
+    resetChangesList();
+    resetFileTree();
+  });
 }
 
 /**

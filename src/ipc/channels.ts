@@ -68,6 +68,7 @@ export const INVOKE = {
   // Browsing
   listDir: 'list-dir',
   readProjectFile: 'read-project-file',
+  getChanges: 'get-changes',
 
   // Host
   openExternal: 'open-external',

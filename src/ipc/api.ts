@@ -8,7 +8,8 @@
  */
 import type { AgentFileIndex } from '../domain/agent-files/agent-file';
 import type { BrowseFile, BrowseListing } from '../domain/browse/types';
-import type { Worktree } from '../domain/git/types';
+import type { ChangesPayload } from '../domain/changes/types';
+import type { DiffBase, Worktree } from '../domain/git/types';
 import type { PlanSummary } from '../domain/plans/plan';
 import type { Project } from '../domain/project/project';
 import type { RemoteConfig } from '../domain/project/remote-target';
@@ -118,6 +119,19 @@ export interface SwitchboardApi {
    * it back, which is every remote project.
    */
   readProjectFile(worktreePath: string, relPath: string): Promise<BrowseFile>;
+  /**
+   * What changed in `worktreePath` against `base`, and which session claims
+   * each path — one channel because they are one answer; see `ChangesPayload`.
+   *
+   * `projectPath` is the *project*, which is the parent repository when the
+   * worktree is one of its checkouts: it is what says which transcript folders
+   * could hold a claim, and a worktree's sessions live in the project's.
+   * `payload.base` is the base git actually used and may not be the one asked
+   * for (invariant 7) — the surface shows that one. Fails with the
+   * `{ ok: false, error }` envelope when git cannot read the worktree at all,
+   * so check that `files` is an array before walking it.
+   */
+  getChanges(worktreePath: string, projectPath: string, base: DiffBase): Promise<ChangesPayload>;
 
   // ── Host ──
   openExternal(url: string): Promise<void>;
