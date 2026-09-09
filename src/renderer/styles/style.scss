@@ -17,6 +17,10 @@
 // insets the code area's own bar the way it insets the viewer toolbar above it,
 // that rule has to be the one that wins.
 @use 'code';
+// Before chrome for the same reason: the Files tab's button lives in
+// #sidebar-header, which chrome insets for the macOS traffic lights, so nothing
+// the tree brings with it may outrank that.
+@use 'files';
 @use 'chrome';
 @use 'update-toast';
 @use 'status-bar';
