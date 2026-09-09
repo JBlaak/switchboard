@@ -68,6 +68,11 @@ const api: SwitchboardApi = {
   // ── Git ──
   gitWorktrees: (projectPath) => ipcRenderer.invoke(INVOKE.gitWorktrees, projectPath),
 
+  // ── Browsing a worktree ──
+  listDir: (worktreePath, relPath) => ipcRenderer.invoke(INVOKE.listDir, worktreePath, relPath),
+  readProjectFile: (worktreePath, relPath) =>
+    ipcRenderer.invoke(INVOKE.readProjectFile, worktreePath, relPath),
+
   // ── Host ──
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
   writeClipboard: (text) => ipcRenderer.invoke(INVOKE.writeClipboard, text),

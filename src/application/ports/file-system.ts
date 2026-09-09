@@ -16,6 +16,13 @@ export interface DirEntry {
   name: string;
   isFile: boolean;
   isDirectory: boolean;
+  /**
+   * A symlink is reported as neither a file nor a directory: the listing does
+   * not follow it, so what it points at is not known here. Callers that walk a
+   * tree need to see one for what it is — to show it as a leaf rather than as
+   * an empty file, and to stay out of a loop.
+   */
+  isSymbolicLink: boolean;
 }
 
 export interface FileStat {

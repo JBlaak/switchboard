@@ -65,6 +65,10 @@ export const INVOKE = {
   // Git
   gitWorktrees: 'git-worktrees',
 
+  // Browsing
+  listDir: 'list-dir',
+  readProjectFile: 'read-project-file',
+
   // Host
   openExternal: 'open-external',
   writeClipboard: 'clipboard-write-text',

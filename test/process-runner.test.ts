@@ -121,12 +121,16 @@ test('fakeFileSystem lists the direct children of a directory, typed', () => {
       '/repo/src/deep/nested.ts': '',
     },
     dirs: ['/repo/empty'],
+    links: ['/repo/vendor'],
   });
 
   assert.deepEqual(disk.readDir('/repo'), [
-    { name: 'README.md', isFile: true, isDirectory: false },
-    { name: 'empty', isFile: false, isDirectory: true },
-    { name: 'src', isFile: false, isDirectory: true },
+    { name: 'README.md', isFile: true, isDirectory: false, isSymbolicLink: false },
+    { name: 'empty', isFile: false, isDirectory: true, isSymbolicLink: false },
+    { name: 'src', isFile: false, isDirectory: true, isSymbolicLink: false },
+    // A symlink is neither, as `readdirSync(withFileTypes)` reports it: the
+    // listing reads the link, not what it points at.
+    { name: 'vendor', isFile: false, isDirectory: false, isSymbolicLink: true },
   ]);
   assert.deepEqual(disk.readDir('/repo/empty'), []);
   assert.ok(disk.isDirectory('/repo/src/deep'), 'seeding a file creates its ancestors');
