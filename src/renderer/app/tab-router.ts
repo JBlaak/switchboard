@@ -1,0 +1,127 @@
+/**
+ * The four tabs, and what the main area shows for each.
+ *
+ * Every tab owns both halves of the window: the sidebar's content and what
+ * fills the space beside it. Switching hides everything and then shows the one
+ * tab's pair, which is verbose but leaves no combination of leftovers on screen.
+ */
+import { clearSessionMatches } from './search';
+import { consumeDeferredProjectsChange } from './ipc-listeners';
+import { reloadProjects } from './refresh';
+import { openSessions, view } from '../state/session-store';
+import {
+  gridViewer, memoryContent, memoryViewer, placeholder, planViewer, plansContent,
+  searchBar, searchInput, settingsViewer, sidebarContent, statsContent, statsViewer,
+  terminalArea, terminalHeader, el,
+} from '../lib/dom';
+import { fitAndScroll, showSession } from '../features/terminal/terminal-manager';
+import { hideAllViewers } from '../features/panel/viewers';
+import { loadPlans } from '../features/plans/plans-view';
+import { loadMemories } from '../features/memory/memory-view';
+import { loadStats } from '../features/stats/stats-view';
+
+type TabName = 'sessions' | 'plans' | 'stats' | 'memory';
+
+/** The search box's placeholder per tab; absent means the box is hidden. */
+const SEARCH_PLACEHOLDERS: Partial<Record<TabName, string>> = {
+  sessions: 'Search sessions...',
+  plans: 'Search plans...',
+  memory: 'Search agent files...',
+};
+
+export function installTabRouter(): void {
+  document.querySelectorAll<HTMLElement>('.sidebar-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const name = tab.dataset.tab as TabName | undefined;
+      if (!name || name === view.activeTab) return;
+      switchTo(name);
+    });
+  });
+}
+
+function switchTo(name: TabName): void {
+  view.activeTab = name;
+  document.querySelectorAll<HTMLElement>('.sidebar-tab')
+    .forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+
+  // A query is scoped to the tab it was typed in.
+  searchInput.value = '';
+  searchBar.classList.remove('has-query');
+  clearSessionMatches();
+
+  hideSidebarPanels();
+  applySearchBox(name);
+
+  switch (name) {
+    case 'sessions':
+      showSessions();
+      break;
+    case 'plans':
+      plansContent.style.display = '';
+      void loadPlans();
+      break;
+    case 'stats':
+      statsContent.style.display = '';
+      showStatsViewer();
+      void loadStats();
+      break;
+    case 'memory':
+      memoryContent.style.display = '';
+      void loadMemories();
+      break;
+  }
+}
+
+function hideSidebarPanels(): void {
+  sidebarContent.style.display = 'none';
+  plansContent.style.display = 'none';
+  statsContent.style.display = 'none';
+  memoryContent.style.display = 'none';
+  el('session-filters').style.display = 'none';
+  searchBar.style.display = 'none';
+}
+
+function applySearchBox(name: TabName): void {
+  const placeholder = SEARCH_PLACEHOLDERS[name];
+  if (!placeholder) return;
+  searchBar.style.display = '';
+  searchInput.placeholder = placeholder;
+}
+
+/**
+ * Back to the sessions tab.
+ *
+ * Whatever was on screen before comes back: the grid, the open session, or the
+ * placeholder. Terminals are refitted because they were hidden while another
+ * tab was up, and xterm cannot measure a hidden element.
+ */
+function showSessions(): void {
+  el('session-filters').style.display = '';
+  sidebarContent.style.display = '';
+  hideAllViewers();
+
+  if (view.gridViewActive) {
+    placeholder.style.display = 'none';
+    terminalHeader.style.display = 'none';
+    gridViewer.style.display = 'block';
+    for (const entry of openSessions.values()) {
+      if (!entry.closed) fitAndScroll(entry);
+    }
+  } else if (view.activeSessionId && openSessions.has(view.activeSessionId)) {
+    showSession(view.activeSessionId);
+  } else {
+    placeholder.style.display = '';
+  }
+
+  // Catch up on changes that arrived while another tab was up.
+  if (consumeDeferredProjectsChange()) void reloadProjects();
+}
+
+function showStatsViewer(): void {
+  placeholder.style.display = 'none';
+  terminalArea.style.display = 'none';
+  planViewer.style.display = 'none';
+  memoryViewer.style.display = 'none';
+  settingsViewer.style.display = 'none';
+  statsViewer.style.display = 'flex';
+}

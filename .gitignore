@@ -9,4 +9,6 @@ dist/
 .env
 .cache/
 dev-app-update.yml
-app/
+# Anchored to the root: the build output. Unanchored, this would also match
+# any nested directory called `app` — it silently swallowed src/renderer/app/.
+/app/
