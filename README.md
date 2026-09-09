@@ -166,21 +166,30 @@ The macOS build uses custom entitlements (`build/entitlements.mac.plist`) to all
 
 ## Project Structure
 
+Switchboard is arranged as a hexagon — rules in the middle, the world at the
+edges, interfaces between them. See [ARCHITECTURE.md](ARCHITECTURE.md) for what
+lives where and how to add to it.
+
 ```
-src/main/          Electron main process (index.ts), SQLite cache, MCP bridge,
-                   session lifecycle, SSH/remote projects, scheduler
-src/preload/       Context bridge — SwitchboardApi is the whole IPC contract
-src/renderer/      Renderer: TypeScript modules bundled into one script
-src/renderer/styles/  SCSS partials, one per UI area
-src/shared/        Types and helpers used by both processes
-src/workers/       Worker threads (project scanner)
-app/               Build output (gitignored) — what Electron actually runs
-test/              Node test-runner suites, run through tsx
-scripts/           Build (esbuild + sass), icon and postinstall scripts
-build/             Icons, entitlements, builder resources
-.github/workflows/ CI/CD
+src/domain/          The rules. Pure TypeScript: no node, no Electron, no DOM,
+                     shared by both processes
+src/application/     Use cases, written against port interfaces
+src/application/ports/   The interfaces (repository, terminal, filesystem, …)
+src/infrastructure/  The adapters: sqlite, node-pty, fs, ssh, mcp, electron
+src/ipc/             The process boundary — channel names and the API contract
+src/main/            Composition root + IPC handler registration + bootstrap
+src/preload/         Context bridge; implements the IPC contract
+src/renderer/        The UI: app/ (bootstrap, routing), state/, features/, lib/
+src/renderer/styles/ SCSS partials, one per UI area
+src/workers/         Worker threads (the cold-start project scanner)
+app/                 Build output (gitignored) — what Electron actually runs
+test/                Node test-runner suites, run through tsx
+scripts/             Build (esbuild + sass), icon and postinstall scripts
+build/               Icons, entitlements, builder resources
+.github/workflows/   CI/CD
 ```
 
 The app is written in TypeScript (strict) and SCSS. `npm run build` compiles
 everything into `app/` with esbuild and sass; `npm run typecheck` runs `tsc`
-over the whole tree; `npm test` builds and then runs the suites.
+over the whole tree; `npm test` builds and then runs the suites. Node 20 or
+newer is required — TypeScript 7 will not load on 18.

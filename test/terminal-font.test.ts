@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { normalizeTerminalFont, DEFAULT_TERMINAL_FONT_FAMILY as DEFAULT_FAMILY } from '../src/renderer/terminal-input.js';
+import { normalizeTerminalFont, DEFAULT_TERMINAL_FONT_FAMILY as DEFAULT_FAMILY } from '../src/renderer/features/terminal/terminal-input';
 
 test('unset font settings fall back to the defaults', () => {
   assert.deepEqual(normalizeTerminalFont(), {

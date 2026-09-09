@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { shouldSendSpaceDirectly } from '../src/renderer/terminal-input.js';
+import { shouldSendSpaceDirectly } from '../src/renderer/features/terminal/terminal-input';
 
 // Build a keydown-like event with sensible defaults (plain Space, no IME).
 // Only the fields the predicate reads; cast so the call site stays honest about

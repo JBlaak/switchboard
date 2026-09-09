@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { fuzzyMatch } from '../src/renderer/utils.js';
-import type { FuzzyMatch } from '../src/renderer/utils.js';
+import { fuzzyMatch } from '../src/domain/search/fuzzy';
+import type { FuzzyMatch } from '../src/domain/search/fuzzy';
 
 // Rank a list of candidates the way the project picker does: best score first.
 function rank(query: string, candidates: string[]): string[] {

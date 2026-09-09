@@ -1,11 +1,11 @@
 /**
  * Ambient declarations for the renderer.
  *
- * `window.api` is the only global the renderer still relies on, and it is typed
- * off the preload's own contract — so renaming an IPC method there breaks
- * compilation here instead of failing at runtime.
+ * `window.api` is the only global the renderer relies on, and it is typed off
+ * the shared IPC contract — so renaming a channel breaks compilation on both
+ * sides instead of failing at runtime on one.
  */
-import type { SwitchboardApi } from '../preload/index.js';
+import type { SwitchboardApi } from '../ipc/api';
 
 declare global {
   interface Window {

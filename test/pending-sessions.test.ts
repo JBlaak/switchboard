@@ -1,12 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isPendingAbandoned, PENDING_GRACE_MS } from '../src/renderer/utils.js';
-import { sessionTier, TIER_RUNNING, TIER_READY, TIER_REST } from '../src/renderer/session-tiers.js';
-import {
-  attentionSessions, pendingSessions, responseReadySessions, sessionBusyState, state,
-} from '../src/renderer/state.js';
-import type { PendingSession } from '../src/renderer/state.js';
+import { isPendingAbandoned, PENDING_GRACE_MS } from '../src/domain/session/pending';
+import { sessionTier, TIER_RUNNING, TIER_READY, TIER_REST } from '../src/domain/session/tiers';
+import type { PendingSession } from '../src/domain/session/pending';
+import type { SessionSignals } from '../src/domain/session/tiers';
 
 const NOW = 1_700_000_000_000;
 const PAST_GRACE = PENDING_GRACE_MS + 1000;
@@ -66,7 +64,7 @@ test('a missed exit event still ages out, counted from creation', () => {
 });
 
 test('terminals and remotes are exempt', () => {
-  // Terminals are torn down explicitly by onProcessExited, and a remote row is
+  // Terminals are torn down explicitly on process exit, and a remote row is
   // meant to outlive its connection — archive is the only thing that drops one.
   const dead = { exitedAt: NOW - PAST_GRACE };
   assert.equal(isPendingAbandoned(pendingRow(dead, { type: 'terminal' }), { now: NOW }), false);
@@ -75,42 +73,31 @@ test('terminals and remotes are exempt', () => {
 
 // --- Which pending rows are filed under "Working" ---
 
-// sessionTier reads the renderer's shared state module. These used to be free
-// variables resolving to Node globals, which a test could just assign; now they
-// are real exports, so a scenario populates them and clears up afterwards.
-function withTierState(
-  { busy = false, pending = false, running = false }:
-    { busy?: boolean; pending?: boolean; running?: boolean },
-  fn: () => number,
-): number {
-  attentionSessions.clear();
-  responseReadySessions.clear();
-  sessionBusyState.clear();
-  pendingSessions.clear();
-  state.activePtyIds = new Set(running ? ['sid'] : []);
-  if (busy) sessionBusyState.set('sid', true);
-  if (pending) pendingSessions.set('sid', pendingRow());
-  try { return fn(); } finally {
-    attentionSessions.clear();
-    responseReadySessions.clear();
-    sessionBusyState.clear();
-    pendingSessions.clear();
-    state.activePtyIds = new Set();
-  }
+// The ranking rules take the live signals as an argument, so a scenario is just
+// a record rather than a populated pile of module state to clean up afterwards.
+function signals(overrides: Partial<SessionSignals> = {}): SessionSignals {
+  return {
+    needsAttention: false,
+    responseReady: false,
+    busy: false,
+    pending: false,
+    hasLivePty: false,
+    ...overrides,
+  };
 }
 
 test('a pending row with a live PTY is Working', () => {
-  assert.equal(withTierState({ pending: true, running: true }, () => sessionTier('sid')), TIER_RUNNING);
+  assert.equal(sessionTier(signals({ pending: true, hasLivePty: true })), TIER_RUNNING);
 });
 
 test('a pending row with no PTY is not Working', () => {
   // Working is exempt from truncation (rowSurvivesTruncation), so tiering a
   // dead placeholder there is what made it impossible to age out of the list.
-  assert.equal(withTierState({ pending: true }, () => sessionTier('sid')), TIER_REST);
+  assert.equal(sessionTier(signals({ pending: true })), TIER_REST);
 });
 
 test('a live session still outranks a dead one, pending or not', () => {
-  assert.equal(withTierState({ running: true }, () => sessionTier('sid')), TIER_READY);
-  assert.equal(withTierState({ busy: true }, () => sessionTier('sid')), TIER_RUNNING);
-  assert.equal(withTierState({}, () => sessionTier('sid')), TIER_REST);
+  assert.equal(sessionTier(signals({ hasLivePty: true })), TIER_READY);
+  assert.equal(sessionTier(signals({ busy: true })), TIER_RUNNING);
+  assert.equal(sessionTier(signals()), TIER_REST);
 });

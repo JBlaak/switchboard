@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { remoteStatusBanner, remoteStatusLabel } from '../src/renderer/utils.js';
+import { statusBanner } from '../src/domain/terminal/ansi';
+import { remoteStatusLabel } from '../src/domain/remote/remote-status';
 
 test('a status banner opens and closes its own line', () => {
   // Bare \n would leave the next line indented by however far the remote host
   // had printed; CRLF on both sides keeps the banner on a line of its own.
   assert.strictEqual(
-    remoteStatusBanner('reconnected', '\x1b[2m'),
+    statusBanner('reconnected', '\x1b[2m'),
     '\r\n\x1b[2m── reconnected ──\x1b[0m\r\n');
 });
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { rowSurvivesTruncation, TIER_RUNNING, TIER_REST } from '../src/renderer/session-tiers.js';
+import { rowSurvivesTruncation, TIER_RUNNING, TIER_REST } from '../src/domain/session/tiers';
 
 const NOW = 1_700_000_000_000;
 const DAY = 86400000;

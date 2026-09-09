@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const APP_DIR = path.join(__dirname, '..');
 // better-sqlite3 is compiled for Electron's ABI, so plain `node` cannot load
-// it (or db.js). Run every DB-touching snippet under Electron-as-Node instead.
+// it (or database.js). Run every DB-touching snippet under Electron-as-Node instead.
 // Under plain node, require('electron') returns the path to the binary.
 // The typings model `electron` as the module the main process gets; under plain
 // node it is the path to the binary, which is what spawnSync needs.
@@ -22,18 +22,18 @@ function runInElectronNode(code: string, dataDir: string) {
   });
 }
 
-// The db module opens its database when it loads, so each scenario loads it in
-// a fresh child process pointed at an isolated data dir. It is the *built*
-// module that runs here (scripts/build.mjs emits app/db.js for exactly this):
+// Opening the database applies the schema, so each scenario does it in a fresh
+// child process pointed at an isolated data dir. It is the *built* module that
+// runs here (scripts/build.mjs emits app/database.js for exactly this):
 // better-sqlite3 needs Electron's ABI, so the snippet cannot go through tsx.
-const BUILT_DB = path.join(APP_DIR, 'app', 'db.js');
+const BUILT_DB = path.join(APP_DIR, 'app', 'database.js');
 
-function loadDbModule(dataDir: string) {
+function openDatabase(dataDir: string) {
   assert.ok(
     fs.existsSync(BUILT_DB),
     `${BUILT_DB} is missing — run \`npm run build\` before the tests`,
   );
-  return runInElectronNode(`require(${JSON.stringify(BUILT_DB)})`, dataDir);
+  return runInElectronNode(`require(${JSON.stringify(BUILT_DB)}).openDatabase().close()`, dataDir);
 }
 
 function inspectDb(dataDir: string) {
@@ -54,7 +54,7 @@ function inspectDb(dataDir: string) {
 test('fresh database gets fileMtime column', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-db-fresh-'));
   try {
-    const r = loadDbModule(dir);
+    const r = openDatabase(dir);
     assert.equal(r.status, 0, r.stderr);
     assert.ok(inspectDb(dir).cols.includes('fileMtime'));
   } finally {
@@ -87,7 +87,7 @@ test('foreign higher-version database is reconciled, not crashed', () => {
     `, dir);
     assert.equal(seed.status, 0, seed.stderr);
 
-    const r = loadDbModule(dir);
+    const r = openDatabase(dir);
     assert.equal(r.status, 0, r.stderr);
 
     const state = inspectDb(dir);
