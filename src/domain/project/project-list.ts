@@ -34,6 +34,12 @@ export interface ProjectListInputs {
    * yet still gets a row to launch the first one from.
    */
   knownProjectPaths: Iterable<string>;
+  /**
+   * Transcript folder → the directory its sessions ran in, from the folder
+   * gate. A folder that is missing here, or maps to null, leaves its rows' `cwd`
+   * null rather than guessing.
+   */
+  folderCwds: ReadonlyMap<string, string | null>;
   activeTerminals: Iterable<ActiveTerminalRow>;
   remoteProjects: Iterable<RemoteProjectSetting>;
   showArchived: boolean;
@@ -47,6 +53,7 @@ function syntheticRow(fields: Partial<SessionRow> & Pick<SessionRow, 'sessionId'
     starred: 0,
     archived: 0,
     messageCount: 0,
+    cwd: null,
     ...fields,
   };
 }
@@ -58,7 +65,8 @@ function syntheticRow(fields: Partial<SessionRow> & Pick<SessionRow, 'sessionId'
  * directories can resolve to the same projectPath — Claude Code's folder-naming
  * scheme has changed over time, leaving legacy stragglers around — so they merge
  * into a single sidebar group, which is also what avoids duplicate-id collisions
- * in the incremental render.
+ * in the incremental render. Each row keeps the cwd of the folder it came from,
+ * so a consumer can undo the worktree fold and scope to one directory.
  */
 export function buildProjectList(inputs: ProjectListInputs): Project[] {
   const projects = new Map<string, Project>();
@@ -79,7 +87,7 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
   for (const row of inputs.cached) {
     if (!row.projectPath) continue;
     if (inputs.hiddenProjects.has(row.projectPath)) continue;
-    const session = toSessionRow(row, inputs.meta.get(row.sessionId));
+    const session = toSessionRow(row, inputs.meta.get(row.sessionId), inputs.folderCwds.get(row.folder) ?? null);
     if (!inputs.showArchived && session.archived) continue;
     upsert(row.projectPath)?.sessions.push(session);
   }

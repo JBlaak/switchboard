@@ -41,6 +41,7 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS cache_meta (
     folder TEXT PRIMARY KEY,
     projectPath TEXT,
+    cwd TEXT,
     indexMtimeMs REAL
   )`,
   `CREATE TABLE IF NOT EXISTS settings (
@@ -130,6 +131,17 @@ function reconcileColumns(db: Database.Database): void {
     db.exec('DELETE FROM session_cache');
     db.exec('DELETE FROM cache_meta');
   }
+
+  const metaColumns = new Set(
+    db.prepare<[], { name: string }>('PRAGMA table_info(cache_meta)').all().map(c => c.name));
+
+  // cwd is the directory a folder's sessions ran in, which projectPath loses
+  // when a worktree is folded into its parent repository. Nothing is cleared
+  // for it: the cached rows are still right, and the column is filled in one
+  // folder at a time as the project list first meets a gate row without it
+  // (ProjectListService), so an upgrade does not pay for a re-index on first
+  // paint.
+  if (!metaColumns.has('cwd')) db.exec('ALTER TABLE cache_meta ADD COLUMN cwd TEXT');
 }
 
 /** Create what is missing, migrate what is old, and reconcile what is odd. */

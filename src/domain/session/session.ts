@@ -52,6 +52,15 @@ export interface FolderMeta {
   folder: string;
   /** NULL for a folder that has been scanned but holds no resolvable project. */
   projectPath: string | null;
+  /**
+   * The directory this folder's transcripts ran in. Equals projectPath unless
+   * that is a worktree folded into the repository it was cut from — the fold
+   * is right for grouping and wrong for scoping, so both are kept. A folder is
+   * one cwd, which is why this lives on the gate rather than on every row.
+   * NULL for a gate written before the column existed (backfilled lazily by the
+   * project list) or for a folder with no readable transcript.
+   */
+  cwd: string | null;
   indexMtimeMs: number;
 }
 
@@ -59,6 +68,8 @@ export interface FolderMeta {
 export interface FolderScan {
   folder: string;
   projectPath: string;
+  /** The raw cwd `projectPath` was resolved from; see FolderMeta.cwd. */
+  cwd: string | null;
   sessions: Session[];
   indexMtimeMs: number;
 }
@@ -79,6 +90,15 @@ export interface SessionRow {
   messageCount: number;
   slug?: string | null;
   aiTitle?: string | null;
+  /**
+   * The directory the session ran in — what a list scoped to one worktree
+   * filters on. Equals projectPath unless the session ran in a worktree, which
+   * projectPath folds into the parent repository. Null when its folder was
+   * indexed before the cwd was recorded or carried none; absent on rows that
+   * never touched disk (pending, terminal, remote). Readers fall back to
+   * projectPath in both cases.
+   */
+  cwd?: string | null;
   name: string | null;
   starred: number;
   archived: number;
@@ -95,8 +115,17 @@ export interface RemoteSessionRecord {
   lastOpened?: string;
 }
 
-/** Assemble the row the sidebar renders from a cache row and its metadata. */
-export function toSessionRow(cached: CachedSession, meta: SessionMeta | null | undefined): SessionRow {
+/**
+ * Assemble the row the sidebar renders from a cache row and its metadata.
+ *
+ * `cwd` comes from the folder gate rather than the row: a transcript folder is
+ * one directory, so it is recorded once per folder and stamped on here.
+ */
+export function toSessionRow(
+  cached: CachedSession,
+  meta: SessionMeta | null | undefined,
+  cwd: string | null,
+): SessionRow {
   return {
     sessionId: cached.sessionId,
     summary: cached.summary,
@@ -105,6 +134,7 @@ export function toSessionRow(cached: CachedSession, meta: SessionMeta | null | u
     modified: cached.modified,
     messageCount: cached.messageCount,
     projectPath: cached.projectPath,
+    cwd,
     slug: cached.slug || null,
     aiTitle: cached.aiTitle || null,
     name: meta?.name || null,
