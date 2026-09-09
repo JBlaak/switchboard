@@ -125,7 +125,7 @@ export function writeSessionMode(sessionId: string, mode: MainMode): void {
 export function lastMessageLine(lines: readonly string[]): string {
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].replace(/\s+/g, ' ').trim();
-    if (line === '' || FURNITURE.test(line)) continue;
+    if (line === '' || FURNITURE.test(line) || isRule(line)) continue;
     return line.length > MAX_LINE ? line.slice(0, MAX_LINE - 1) + '…' : line;
   }
   return '';
@@ -133,6 +133,25 @@ export function lastMessageLine(lines: readonly string[]): string {
 
 /** Rows that are the CLI's frame rather than anything it said. */
 const FURNITURE = /^[\s─━═│┃╭╮╰╯┌┐└┘├┤┬┴┼╌·.>›❯$#%*+~^_|-]*$/;
+
+/** Every character that is drawing a line rather than spelling a word. */
+const RULE_CHARS = /[─━═╌╍┅┉│┃╭╮╰╯┌┐└┘├┤┬┴┼]/g;
+
+/**
+ * A banner: a rule with a label sitting in the middle of it.
+ *
+ * `FURNITURE` only catches a row that is *entirely* frame, and Switchboard
+ * writes its own session banner as `──── name ────`, which has a word in it and
+ * so reads as something said. Judging by proportion instead catches both: a rule
+ * is mostly rule however it is labelled, and a sentence is almost never more
+ * than a few percent box-drawing. Measured on a real session, whose banner came
+ * to 142 characters with 114 of them a dash.
+ */
+function isRule(line: string): boolean {
+  if (line.length < 12) return false;
+  const drawn = line.match(RULE_CHARS)?.length ?? 0;
+  return drawn / line.length > 0.5;
+}
 
 /** Long enough to be a sentence, short enough that the strip never reflows. */
 const MAX_LINE = 200;

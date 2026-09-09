@@ -216,6 +216,27 @@ test('a terminal that has only ever shown a prompt has no last message', () => {
   assert.strictEqual(lastMessageLine(['', '   ', '›']), '');
 });
 
+test('a labelled rule is still a rule', () => {
+  // Observed on a real session: Switchboard writes its own session banner as a
+  // dash rule with the name in the middle of it, so the row has a word on it and
+  // read as something said. 142 characters, 114 of them a dash.
+  const banner = '─'.repeat(56) + ' project-rail-code-browsing ' + '─'.repeat(56);
+  assert.strictEqual(
+    lastMessageLine(['● Committed as 352e4d3.', banner]),
+    '● Committed as 352e4d3.',
+    'the banner is furniture however it is labelled');
+  assert.strictEqual(lastMessageLine([banner]), '', 'and a session with only a banner has said nothing');
+});
+
+test('a sentence about box drawing is not mistaken for box drawing', () => {
+  // The proportion rule must not swallow real output that happens to mention a
+  // rule, nor a short line that is mostly punctuation.
+  assert.strictEqual(
+    lastMessageLine(['● The tree draws its connector with ─ and ┼ characters.']),
+    '● The tree draws its connector with ─ and ┼ characters.');
+  assert.strictEqual(lastMessageLine(['● ok ─ done']), '● ok ─ done');
+});
+
 test('runs of whitespace collapse, so an indented line still reads as one', () => {
   assert.strictEqual(
     lastMessageLine(['  └   Added 12 lines,   removed 4 lines  ']),
