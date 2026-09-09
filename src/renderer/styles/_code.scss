@@ -1,0 +1,125 @@
+/* ========== CODE AREA ==========
+   The main-area panel that shows a file with no session attached. Laid out like
+   the other viewers — absolutely positioned over #main, a column, on the base
+   surface — so that showing it and hiding the terminal area is the whole of
+   switching to it.
+
+   Two conventions this file keeps.
+
+   1. Nothing here styles .viewer-toolbar, not even scoped to #code-area. The
+      toolbar the shared viewer panel builds is the bar in the window's top
+      strip, and _chrome.scss owns that strip: it makes the toolbar a drag
+      region and insets it for the Windows/Linux overlay controls. An
+      `#code-area .viewer-toolbar` rule would outrank chrome's platform
+      selectors on specificity alone, whatever the load order, and the window
+      would stop being draggable in this view.
+   2. Every colour is a token from _tokens.scss, so re-theming the app still
+      means editing that block and nothing else. */
+
+#code-area {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sb-bg-base);
+}
+
+/* The breadcrumb bar, under the toolbar and above the editor. Quieter than the
+   toolbar above it: it is orientation, not controls. */
+#code-area-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: var(--sb-bg-base);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+/* Replaced by a fold strip later; until then it is the only way back to the
+   session, so it reads as a control rather than a link. */
+#code-area-back {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--sb-text-soft);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+#code-area-back:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--sb-text-strong);
+}
+
+/* The path relative to the worktree. */
+#code-area-crumbs {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  white-space: nowrap;
+}
+
+/* Only the folders shrink. The file name is a sibling of this box with no
+   shrink of its own, so a path wider than the bar ellipsises its leading
+   directories and still ends in the name of the file on screen. */
+.code-crumb-dirs {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.code-crumb {
+  color: var(--sb-text-muted);
+}
+
+.code-crumb-sep {
+  margin: 0 4px;
+  color: var(--sb-text-dimmest);
+}
+
+.code-crumb-file {
+  flex-shrink: 0;
+  color: var(--sb-text-strong);
+}
+
+/* Says the buffer is a view, not a draft — the panel has no save. */
+#code-area-readonly {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  color: var(--sb-text-muted);
+  background: rgba(255,255,255,0.06);
+}
+
+/* An external edit has already been reloaded by the time this appears, so it
+   reports rather than asks — and it fades on its own instead of needing a
+   dismiss the user has to find. */
+#code-area-note {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--sb-yellow);
+  animation: code-note-appear 160ms ease-out;
+}
+
+@keyframes code-note-appear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #code-area-note { animation: none; }
+}
