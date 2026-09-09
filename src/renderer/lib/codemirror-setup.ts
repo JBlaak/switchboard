@@ -517,10 +517,60 @@ export function createReadOnlyViewer(parent: HTMLElement, content: string, filen
   return view;
 }
 
+// ── Lines the worktree diff attributes to a change ───────────────────
+
+/**
+ * The green bars down the gutter of a file opened from the diff.
+ *
+ * `Diff / File` is a flip *inside* the code half, and a file that arrives with
+ * no trace of why you opened it has thrown the diff away — you are reading a
+ * whole file with no idea which eight lines of it are new. So the new-side line
+ * numbers travel with the open and are painted as a line decoration.
+ *
+ * A `StateField` rather than a static facet because the buffer is editable:
+ * positions have to be mapped through a change, or a keystroke would leave the
+ * bars pointing at the wrong lines — or, once a line is deleted, out of the
+ * document entirely, which CodeMirror throws on.
+ */
+const setChangedLines = StateEffect.define<readonly number[]>();
+
+const changedLineMark = Decoration.line({ class: 'cm-changed-line' });
+
+function changedLineDecorations(state: EditorState, lines: readonly number[]): DecorationSet {
+  const total = state.doc.lines;
+  const marks = [];
+  let previous = 0;
+  for (const line of lines) {
+    // Ascending and de-duplicated: `Decoration.set` requires sorted ranges, and
+    // a diff can name the same line twice when two hunks touch.
+    if (line <= previous || line < 1 || line > total) continue;
+    previous = line;
+    marks.push(changedLineMark.range(state.doc.line(line).from));
+  }
+  return Decoration.set(marks);
+}
+
+const changedLineField = StateField.define<DecorationSet>({
+  create() { return Decoration.none; },
+  update(marks, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(setChangedLines)) return changedLineDecorations(tr.state, effect.value);
+    }
+    return tr.docChanged ? marks.map(tr.changes) : marks;
+  },
+  provide: field => EditorView.decorations.from(field),
+});
+
+/** Mark (or clear, with an empty list) the lines this diff changed. */
+export function markChangedLines(view: EditorView, lines: readonly number[]): void {
+  view.dispatch({ effects: setChangedLines.of(lines) });
+}
+
 // ── Editable File Viewer (for file panel) ───────────────────────────
 
 export function createEditableViewer(
-  parent: HTMLElement, content: string, filename?: string, { wrap = false }: { wrap?: boolean } = {},
+  parent: HTMLElement, content: string, filename?: string,
+  { wrap = false, changedLines }: { wrap?: boolean; changedLines?: readonly number[] } = {},
 ) {
   const lang = languageForFilename(filename);
   const wrapCompartment = new Compartment();
@@ -552,6 +602,7 @@ export function createEditableViewer(
       dracula,
       syntaxHighlighting(markdownExtras),
       appThemePatch,
+      changedLineField,
       wrapCompartment.of(wrap ? EditorView.lineWrapping : []),
     ],
   });
@@ -559,6 +610,7 @@ export function createEditableViewer(
   const view: WrappableEditorView = new EditorView({ state, parent });
   view._wrapCompartment = wrapCompartment;
   upgradeLanguage(view, lang);
+  if (changedLines && changedLines.length > 0) markChangedLines(view, changedLines);
   return view;
 }
 
