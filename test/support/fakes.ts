@@ -6,10 +6,15 @@
  * rather than on what the OS did. These are shared because several tests want
  * the same fake clock and the same recording gateway.
  */
+import path from 'node:path';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { Timers } from '../../src/application/ports/clock';
+import type {
+  DirEntry, FileStat, FileSystem, WatchListener, WatchOptions, Watcher,
+} from '../../src/application/ports/file-system';
 import type { IdeBridge, IdeBridgeHandle } from '../../src/application/ports/ide-bridge';
 import type { Logger } from '../../src/application/ports/logger';
+import type { ExecOptions, ExecResult, ProcessRunner } from '../../src/application/ports/process-runner';
 import type { RendererGateway } from '../../src/application/ports/renderer-gateway';
 import type {
   PtyHandle, SpawnSpec, TerminalGateway,
@@ -217,5 +222,239 @@ export function fakeIdeBridge(): FakeIdeBridge {
     rekey(oldId, newId) { rekeyed.push([oldId, newId]); },
     resolveDiff() {},
     cleanStaleLocks() {},
+  };
+}
+
+// ── A scripted process runner ──
+
+export interface FakeProcessRunner extends ProcessRunner {
+  /** Every exec it was asked for, in order. */
+  readonly calls: { file: string; args: string[]; opts: ExecOptions }[];
+}
+
+/**
+ * A runner that answers from a script instead of starting anything.
+ *
+ * The script sees the command and decides what it "printed"; returning
+ * undefined means the test did not expect that command, and the runner answers
+ * with exit 127 and a stderr that says so — a loud failure in the assertion
+ * that follows, rather than a service quietly treating empty output as success.
+ */
+export function fakeProcessRunner(
+  script: (file: string, args: readonly string[], stdin?: string) => ExecResult | undefined,
+): FakeProcessRunner {
+  const calls: { file: string; args: string[]; opts: ExecOptions }[] = [];
+
+  return {
+    calls,
+    async exec(file, args, opts) {
+      calls.push({ file, args: [...args], opts });
+      return script(file, args, opts.stdin) ?? {
+        stdout: '',
+        stderr: `fakeProcessRunner: no script match for \`${[file, ...args].join(' ')}\``,
+        code: 127,
+      };
+    },
+  };
+}
+
+// ── An in-memory filesystem ──
+
+export interface FakeFileSystem extends FileSystem {
+  /** Every `writeText`, as [path, content]. */
+  readonly writes: [string, string][];
+  /** Report a change to every watcher whose target covers `path`. */
+  emitChange(path: string, eventType?: string): void;
+}
+
+/** The one mtime every file has: tests that care about time inject a clock, not a filesystem. */
+const FAKE_MTIME_ISO = '2024-01-01T00:00:00.000Z';
+
+/**
+ * The FileSystem port over a map of paths.
+ *
+ * Always posix, whatever the host: the paths a test writes down are the paths
+ * it should read back, and a fake that switched separators on Windows would
+ * have the tests asserting on the CI runner rather than on the code. Relative
+ * paths resolve against `homeDir`.
+ *
+ * Seeding a file creates its ancestors, the way a test would expect; after
+ * that it behaves like the real adapter — `readText` on a missing file throws,
+ * `writeText` into a directory that was never made throws, `stat` on a missing
+ * path is null — so a service that forgets a `makeDir` fails here too.
+ */
+export function fakeFileSystem(
+  seed: { files?: Record<string, string>; dirs?: string[] } = {},
+): FakeFileSystem {
+  const homeDir = '/home/test';
+  const files = new Map<string, string>();
+  const dirs = new Set<string>(['/']);
+  const writes: [string, string][] = [];
+  const watchers = new Set<{ target: string; recursive: boolean; listener: WatchListener }>();
+
+  const resolve = (target: string): string =>
+    path.posix.normalize(path.posix.isAbsolute(target) ? target : path.posix.join(homeDir, target));
+
+  const addDirWithAncestors = (dir: string): void => {
+    for (let current = dir; !dirs.has(current); current = path.posix.dirname(current)) {
+      dirs.add(current);
+    }
+  };
+
+  const fsError = (code: string, syscall: string, target: string): Error => {
+    const messages: Record<string, string> = {
+      ENOENT: 'no such file or directory',
+      EISDIR: 'illegal operation on a directory',
+      ENOTDIR: 'not a directory',
+    };
+    const error = new Error(`${code}: ${messages[code] ?? code}, ${syscall} '${target}'`);
+    (error as NodeJS.ErrnoException).code = code;
+    return error;
+  };
+
+  const isInside = (parent: string, child: string): boolean => {
+    const from = resolve(parent);
+    const to = resolve(child);
+    if (to === from) return true;
+    return to.startsWith(from.endsWith('/') ? from : from + '/');
+  };
+
+  /** Everything at or under `root`, files and directories alike. */
+  const descendants = (root: string): string[] =>
+    [...files.keys(), ...dirs].filter(p => p !== '/' && isInside(root, p));
+
+  for (const dir of seed.dirs ?? []) addDirWithAncestors(resolve(dir));
+  for (const [file, content] of Object.entries(seed.files ?? {})) {
+    const resolved = resolve(file);
+    addDirWithAncestors(path.posix.dirname(resolved));
+    files.set(resolved, content);
+  }
+
+  return {
+    writes,
+    separator: '/',
+    homeDir,
+
+    exists(target) {
+      const resolved = resolve(target);
+      return files.has(resolved) || dirs.has(resolved);
+    },
+
+    isDirectory(target) {
+      return dirs.has(resolve(target));
+    },
+
+    readText(target) {
+      const resolved = resolve(target);
+      const content = files.get(resolved);
+      if (content !== undefined) return content;
+      throw fsError(dirs.has(resolved) ? 'EISDIR' : 'ENOENT', 'open', target);
+    },
+
+    writeText(target, content) {
+      const resolved = resolve(target);
+      if (dirs.has(resolved)) throw fsError('EISDIR', 'open', target);
+      if (!dirs.has(path.posix.dirname(resolved))) throw fsError('ENOENT', 'open', target);
+      files.set(resolved, content);
+      writes.push([resolved, content]);
+    },
+
+    readSlice(target, range) {
+      const resolved = resolve(target);
+      const content = files.get(resolved);
+      if (content === undefined) throw fsError(dirs.has(resolved) ? 'EISDIR' : 'ENOENT', 'open', target);
+      if (range.length <= 0) return '';
+      // Byte offsets, as the real adapter reads them.
+      return Buffer.from(content, 'utf8').subarray(range.start, range.start + range.length).toString('utf8');
+    },
+
+    readDir(target): DirEntry[] {
+      const resolved = resolve(target);
+      if (!dirs.has(resolved)) throw fsError(files.has(resolved) ? 'ENOTDIR' : 'ENOENT', 'scandir', target);
+      const entries: DirEntry[] = [];
+      for (const file of files.keys()) {
+        if (path.posix.dirname(file) === resolved) {
+          entries.push({ name: path.posix.basename(file), isFile: true, isDirectory: false });
+        }
+      }
+      for (const dir of dirs) {
+        if (dir !== resolved && path.posix.dirname(dir) === resolved) {
+          entries.push({ name: path.posix.basename(dir), isFile: false, isDirectory: true });
+        }
+      }
+      // Code-point order, not localeCompare: the same on every CI runner.
+      return entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    },
+
+    stat(target): FileStat | null {
+      const resolved = resolve(target);
+      const content = files.get(resolved);
+      if (content === undefined && !dirs.has(resolved)) return null;
+      return {
+        modifiedIso: FAKE_MTIME_ISO,
+        createdIso: FAKE_MTIME_ISO,
+        mtimeMs: Date.parse(FAKE_MTIME_ISO),
+        size: content === undefined ? 0 : Buffer.byteLength(content, 'utf8'),
+      };
+    },
+
+    makeDir(target) {
+      const resolved = resolve(target);
+      if (files.has(resolved)) throw fsError('ENOTDIR', 'mkdir', target);
+      addDirWithAncestors(resolved);
+    },
+
+    remove(target) {
+      // `force: true` semantics: removing what is not there is not an error.
+      for (const entry of descendants(resolve(target))) {
+        files.delete(entry);
+        dirs.delete(entry);
+      }
+    },
+
+    rename(from, to) {
+      const source = resolve(from);
+      const destination = resolve(to);
+      if (!files.has(source) && !dirs.has(source)) throw fsError('ENOENT', 'rename', from);
+      if (!dirs.has(path.posix.dirname(destination))) throw fsError('ENOENT', 'rename', to);
+      for (const entry of descendants(source)) {
+        const moved = destination + entry.slice(source.length);
+        if (files.has(entry)) {
+          files.set(moved, files.get(entry)!);
+          files.delete(entry);
+        } else {
+          dirs.delete(entry);
+          dirs.add(moved);
+        }
+      }
+    },
+
+    watch(target, options: WatchOptions, listener: WatchListener): Watcher {
+      const resolved = resolve(target);
+      if (!files.has(resolved) && !dirs.has(resolved)) throw fsError('ENOENT', 'watch', target);
+      const entry = { target: resolved, recursive: options.recursive === true, listener };
+      watchers.add(entry);
+      return { close: () => { watchers.delete(entry); } };
+    },
+
+    emitChange(target, eventType = 'change') {
+      const changed = resolve(target);
+      for (const { target: watched, recursive, listener } of [...watchers]) {
+        if (changed === watched) {
+          // As fs.watch does for a watched file: the name reported is its own.
+          listener(eventType, path.posix.basename(changed));
+        } else if (isInside(watched, changed)) {
+          const relative = changed.slice(watched === '/' ? 1 : watched.length + 1);
+          // A plain watch on a directory only sees its direct children.
+          if (recursive || !relative.includes('/')) listener(eventType, relative);
+        }
+      }
+    },
+
+    join: (...parts) => path.posix.join(...parts),
+    resolve,
+    basename: (target, ext) => path.posix.basename(target, ext),
+    dirname: (target) => path.posix.dirname(target),
+    isInside,
   };
 }
