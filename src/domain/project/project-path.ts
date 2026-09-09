@@ -66,9 +66,17 @@ export function shortProjectPath(projectPath: string | null | undefined): string
  * own next to the repo it was cut from. Returns the parent path to attribute the
  * session to, or null when the cwd is not a worktree — the caller confirms the
  * parent still exists, since only it can touch the filesystem.
+ *
+ * A cwd comes from a transcript, so on Windows it is backslash-separated and the
+ * shapes above never matched: a worktree session was attributed to itself rather
+ * than to its repository. The comparison is therefore made on one spelling, and
+ * the answer sliced out of the original — the substitution is character-for-
+ * character, so the match length indexes straight back into the caller's own
+ * string and a Windows path stays a Windows path.
  */
 export function worktreeParentPath(cwd: string | null | undefined): string | null {
   if (!cwd) return null;
-  const match = cwd.match(/^(.+?)\/\.(?:claude\/worktrees|claude-worktrees|worktrees)\/[^/]+\/?$/);
-  return match ? match[1] : null;
+  const match = cwd.replace(/\\/g, '/')
+    .match(/^(.+?)\/\.(?:claude\/worktrees|claude-worktrees|worktrees)\/[^/]+\/?$/);
+  return match ? cwd.slice(0, match[1].length) : null;
 }
