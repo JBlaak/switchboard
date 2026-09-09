@@ -72,6 +72,8 @@ const api: SwitchboardApi = {
   listDir: (worktreePath, relPath) => ipcRenderer.invoke(INVOKE.listDir, worktreePath, relPath),
   readProjectFile: (worktreePath, relPath) =>
     ipcRenderer.invoke(INVOKE.readProjectFile, worktreePath, relPath),
+  getChanges: (worktreePath, projectPath, base) =>
+    ipcRenderer.invoke(INVOKE.getChanges, worktreePath, projectPath, base),
 
   // ── Host ──
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),

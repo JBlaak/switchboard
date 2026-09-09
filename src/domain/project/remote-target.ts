@@ -100,3 +100,26 @@ export function expandRemoteDir(dir: string): string {
   const rest = dir.startsWith('~/') ? dir.slice(2) : dir;
   return rest ? '$HOME/' + rest : '$HOME';
 }
+
+/**
+ * The same directory as `expandRemoteDir` names, but for a one-shot command
+ * rather than for an interactive shell.
+ *
+ * A remote project's dir is stored the way the user typed it: absolute
+ * (`/srv/app`), home-relative (`~/dev/app` or plain `dev/app`), or absent for
+ * the login home. `expandRemoteDir` hands the home-relative forms to the far
+ * shell as `$HOME/…` for it to expand, but the argv builders here single-quote
+ * every argument, so that route is closed: `'$HOME/dev/app'` would arrive as a
+ * literal directory name.
+ *
+ * There is no way to learn the far `$HOME` without a round trip, and none is
+ * needed. sshd starts a one-shot command in the user's home directory, so a
+ * path read relative to that command's own cwd is the same place: `~/dev/app`
+ * and `dev/app` both become `dev/app`, and no directory at all is `.`.
+ */
+export function remoteCommandDir(dir: string | null | undefined): string {
+  if (!dir || dir === '~') return '.';
+  if (dir.startsWith('/')) return dir;
+  const rest = dir.startsWith('~/') ? dir.slice(2) : dir;
+  return rest || '.';
+}
