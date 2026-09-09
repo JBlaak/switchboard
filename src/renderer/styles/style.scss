@@ -22,6 +22,10 @@
 // whatever surface embeds coloured code — the code area, the long diff — keeps
 // the last word on layout and only borrows the palette.
 @use 'code-highlight';
+// Immediately after it, and before chrome for the same reason: the review's
+// header strip shares #code-area-header with the breadcrumb, so whatever chrome
+// says about that bar has to keep winning.
+@use 'review';
 // Before chrome for the same reason: the Files tab's button lives in
 // #sidebar-header, which chrome insets for the macOS traffic lights, so nothing
 // the tree brings with it may outrank that.

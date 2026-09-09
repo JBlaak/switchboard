@@ -101,100 +101,15 @@
   min-height: 0;
 }
 
-#file-panel-viewer,
-#file-panel-diff {
+/* The panel is the viewer, and the viewer fills it. The diff half — a merge
+   view, its toolbar and the accept/reject buttons that answered a parked CLI
+   call — is gone from here: an edit a session proposes is reviewed in the code
+   area now, and its styles are in _review.scss. */
+#file-panel-viewer {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-#file-panel-body {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  overflow: hidden;
-}
-
-#file-panel-body .cm-editor {
-  height: 100%;
-}
-
-#file-panel-body .cm-merge-view {
-  height: 100%;
-  overflow: auto;
-  font-size: 12.5px;
-}
-
-/* Diff line backgrounds */
-#file-panel-body .cm-merge-a .cm-changedLine,
-#file-panel-body .cm-deletedChunk {
-  background-color: rgba(248, 81, 73, 0.12) !important;
-}
-#file-panel-body .cm-merge-b .cm-changedLine {
-  background-color: rgba(46,182,125, 0.12) !important;
-}
-/* Inner word-level change highlighting (replace underlines with backgrounds) */
-#file-panel-body .cm-merge-a .cm-changedText,
-#file-panel-body .cm-deletedChunk .cm-deletedText {
-  background: rgba(248, 81, 73, 0.35) !important;
-}
-#file-panel-body .cm-merge-b .cm-changedText {
-  background: rgba(46,182,125, 0.35) !important;
-}
-
-#file-panel-actions {
-  display: flex;
-  gap: 8px;
-  padding: 6px 12px;
-  background: rgba(27,29,33, 0.85);
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 8px;
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  z-index: 20;
-  opacity: 0;
-  transition: opacity 0.15s;
-  pointer-events: none;
-}
-
-#file-panel-body:hover ~ #file-panel-actions,
-#file-panel-actions:hover {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-#file-panel-actions button {
-  padding: 6px 16px;
-  border-radius: 5px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-  border: 1px solid rgba(255,255,255,0.08);
-  transition: all 0.15s;
-}
-
-.file-panel-accept-btn {
-  background: rgba(46,182,125,0.1);
-  color: var(--sb-green);
-  border-color: rgba(46,182,125,0.3) !important;
-}
-
-.file-panel-accept-btn:hover {
-  background: rgba(46,182,125,0.2);
-}
-
-.file-panel-reject-btn {
-  background: transparent;
-  color: var(--sb-red);
-  border-color: rgba(224,30,90,0.3) !important;
-}
-
-.file-panel-reject-btn:hover {
-  background: rgba(224,30,90,0.1);
 }
 
 /* MCP toggle in terminal header */

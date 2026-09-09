@@ -4,8 +4,12 @@
  * All in one place because the interesting part is not any single handler but
  * the fact that these are the only unprompted inputs the UI has — the terminal
  * stream, a session changing identity underneath us, a connection breaking, the
- * project list changing on disk. Each one delegates immediately; nothing is
- * decided here.
+ * project list changing on disk, a session asking to edit a file. Each one
+ * delegates immediately.
+ *
+ * The one decision made here rather than passed on is whether an arrival may
+ * take the window, because that is a question about what the user is doing and
+ * not about the surface being routed to. See `onProposedEdit`.
  */
 import { refreshSidebar, reloadProjects } from './refresh';
 import { setUpdaterEvent } from './updater-notice';
@@ -21,7 +25,11 @@ import { markNeedsAttention, setActivity } from '../state/activity-store';
 import { openSessions, pendingSessions, sessionMap, view } from '../state/session-store';
 import { bufferTerminalData } from '../features/terminal/terminal-manager';
 import { rekeyFilePanelState } from '../features/panel/file-panel';
+import { openReviewInCodeArea } from '../features/code/code-area';
+import { rekeyReviewSession, withdrawEdit, withdrawEdits } from '../features/code/review-view';
+import { setMainMode } from './main-mode';
 import { updateGridCount } from '../features/terminal/grid-view';
+import type { DiffRequest } from '../../domain/ide/ide-request';
 
 /**
  * How long to wait before re-fetching after a filesystem change.
@@ -51,6 +59,13 @@ export function installIpcListeners(): void {
   window.api.onStatusUpdate(setStatusActivity);
   window.api.onUpdaterEvent(setUpdaterEvent);
 
+  // The three the IDE bridge sends about proposed edits. `openFile` is not one
+  // of them: a file the CLI merely wants shown still goes to the side panel,
+  // and only the edits it is *waiting* on come to the review surface.
+  window.api.onMcpOpenDiff(onProposedEdit);
+  window.api.onMcpCloseTab(withdrawEdit);
+  window.api.onMcpCloseAllDiffs(withdrawEdits);
+
   // Fullscreen hides the macOS traffic lights, so the space the sidebar header
   // reserves for them is dead weight; the stylesheet reclaims it off this class.
   window.api.onFullscreenChanged((isFullscreen) => {
@@ -63,6 +78,40 @@ export function consumeDeferredProjectsChange(): boolean {
   if (!projectsChangedWhileAway) return false;
   projectsChangedWhileAway = false;
   return true;
+}
+
+/**
+ * A session is asking to change a file.
+ *
+ * The request is recorded whoever it belongs to — it is parked in the bridge
+ * until somebody answers, so losing it here would leave the CLI waiting on a
+ * review nobody can reach.
+ *
+ * **Only the session you are already in may take the window.** A diff arriving
+ * from a session in another project, while the user is typing into this one,
+ * must not yank the window out from under the keystroke — that is how an
+ * accept gets clicked on an edit nobody read. Invariant 4 already covers the
+ * other case: the sidebar row and the rail tile badge for attention, which is
+ * how a request in a session you are not looking at announces itself, and
+ * clicking that row brings its review up. For the session on screen the flip
+ * *is* the announcement, and it is the same interruption the file panel already
+ * made when it popped the split open on an incoming diff.
+ *
+ * `setMainMode` is a no-op with no active session, which is the right answer
+ * there too: with the placeholder up there is no half to fold and nothing to
+ * flip away from.
+ */
+function onProposedEdit(sessionId: string, diffId: string, data: DiffRequest): void {
+  openReviewInCodeArea(sessionId, {
+    diffId,
+    filePath: data.oldFilePath,
+    tabName: data.tabName,
+    oldContent: data.oldContent,
+    newContent: data.newContent,
+  });
+
+  if (sessionId === view.activeSessionId) setMainMode('code');
+  else markNeedsAttention(sessionId);
 }
 
 /**
@@ -88,8 +137,9 @@ function onSessionDetected(tempId: string, realId: string): void {
 /**
  * A fork or an accepted plan re-keyed a running session.
  *
- * Same as above, plus the side panel's per-session state and the pending row,
- * which has to follow so the sidebar entry survives until the store catches up.
+ * Same as above, plus the side panel's per-session state, the review's, and the
+ * pending row, which has to follow so the sidebar entry survives until the
+ * store catches up.
  */
 function onSessionForked(oldId: string, newId: string): void {
   const entry = openSessions.get(oldId);
@@ -101,6 +151,10 @@ function onSessionForked(oldId: string, newId: string): void {
   openSessions.set(newId, entry);
 
   rekeyFilePanelState(oldId, newId);
+  // And the review, which is the one piece of per-session state that can still
+  // be holding a parked CLI call: an answer addressed to the old id would find
+  // nothing in the bridge, which has been re-keyed with the session.
+  rekeyReviewSession(oldId, newId);
 
   const pending = pendingSessions.get(oldId);
   pendingSessions.delete(oldId);
