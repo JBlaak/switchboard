@@ -10,7 +10,7 @@
  * explicitly, which re-arms the fast cadence immediately; the idle floor is
  * only there to catch what nothing told us about.
  */
-import { clearActivity, sessionBusyState } from '../../state/activity-store';
+import { clearActivity, notifyActivityChanged, sessionBusyState } from '../../state/activity-store';
 import { view } from '../../state/session-store';
 import { gridCards } from '../terminal/grid-view';
 import { updateTerminalHeader } from './terminal-header';
@@ -24,6 +24,10 @@ export async function pollActiveSessions(): Promise<void> {
   try {
     view.activePtyIds = new Set(await window.api.getActiveSessions());
     updateRunningIndicators();
+    // The live set belongs to the session store, so the activity store cannot
+    // see it change; null tells its listeners to recompute everything. After
+    // the repaint, so the dead rows' activity has already been cleared.
+    notifyActivityChanged(null);
     updateTerminalHeader();
   } catch {
     // A failed poll is not worth reporting; the next one is 3 seconds away.

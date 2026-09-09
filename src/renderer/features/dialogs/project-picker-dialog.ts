@@ -11,8 +11,7 @@
  */
 import { fuzzyMatch } from '../../../domain/search/fuzzy';
 import { reloadProjects } from '../../app/refresh';
-import { archiveSessionRow } from '../sessions/session-actions';
-import { pollActiveSessions } from '../sessions/session-poller';
+import { archiveAllSessions } from '../sessions/session-actions';
 import { isWorktreeProject, projectLabel } from '../sessions/project-label';
 import { view } from '../../state/session-store';
 import { ICONS } from '../../lib/icons';
@@ -232,7 +231,7 @@ function buildActions(project: Project, close: () => void, rerender: () => void)
 
   actions.appendChild(button(
     'picker-archive-btn', 'Archive all sessions in this project', ICONS.archive(18),
-    () => void archiveAll(project, rerender)));
+    () => void archiveAllSessions(project, rerender)));
 
   if (isWorktreeProject(project.projectPath)) {
     actions.appendChild(button('picker-hide-btn', 'Hide worktree', CLOSE_ICON, () => {
@@ -245,24 +244,6 @@ function buildActions(project: Project, close: () => void, rerender: () => void)
   }
 
   return actions;
-}
-
-async function archiveAll(project: Project, rerender: () => void): Promise<void> {
-  const sessions = project.sessions.filter(s => !s.archived);
-  if (sessions.length === 0) return;
-
-  const plural = sessions.length > 1 ? 's' : '';
-  if (!confirm(`Archive all ${sessions.length} session${plural} in ${projectLabel(project.projectPath)}?`)) return;
-
-  for (const session of sessions) {
-    // One failure stops the sweep rather than silently skipping a session whose
-    // PTY is still running.
-    if (!await archiveSessionRow(session, 1)) break;
-  }
-
-  void pollActiveSessions();
-  await reloadProjects();
-  rerender();
 }
 
 /**

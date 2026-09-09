@@ -9,9 +9,10 @@
  */
 import { encodeProjectPath } from '../../../domain/project/project-path';
 import { sessionExitedBanner } from '../../../domain/terminal/ansi';
-import { refreshSidebar } from '../../app/refresh';
+import { refreshSidebar, reloadProjects } from '../../app/refresh';
 import { resolveDefaultSessionOptions } from '../dialogs/launch-options';
 import { setActiveSession } from './active-session';
+import { projectLabel } from './project-label';
 import { pollActiveSessions } from './session-poller';
 import { hideTerminalHeader } from './terminal-header';
 import {
@@ -193,6 +194,32 @@ export async function archiveSessionRow(session: SessionRow, archived: number): 
   // row on the next refresh with its own `archived: 0`.
   if (archived && pendingSessions.has(sessionId)) dropPendingSession(sessionId);
   return true;
+}
+
+/**
+ * Archive every unarchived session in a project, after asking with the count.
+ *
+ * Each row goes through `archiveSessionRow`, so a live session is stopped before
+ * its row is hidden. `onDone` runs once the sweep is over and the projects have
+ * been re-fetched — the project picker passes its own redraw, since the sidebar
+ * refresh does not reach a dialog's list.
+ */
+export async function archiveAllSessions(project: Project, onDone?: () => void): Promise<void> {
+  const sessions = project.sessions.filter(s => !s.archived);
+  if (sessions.length === 0) return;
+
+  const plural = sessions.length > 1 ? 's' : '';
+  if (!confirm(`Archive all ${sessions.length} session${plural} in ${projectLabel(project.projectPath)}?`)) return;
+
+  for (const session of sessions) {
+    // One failure stops the sweep rather than silently skipping a session whose
+    // PTY is still running.
+    if (!await archiveSessionRow(session, 1)) break;
+  }
+
+  void pollActiveSessions();
+  await reloadProjects();
+  onDone?.();
 }
 
 /**
