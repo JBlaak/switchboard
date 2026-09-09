@@ -70,6 +70,7 @@ export const STORAGE_KEYS = {
   activeSessionId: 'activeSessionId',
   gridViewActive: 'gridViewActive',
   expandedSlugs: 'expandedSlugs',
+  scope: 'scope',
 } as const;
 
 /**

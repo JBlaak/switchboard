@@ -10,6 +10,7 @@
 import { installLayout } from './layout';
 import { installIpcListeners } from './ipc-listeners';
 import { installQuotaGauges } from './quota-gauges';
+import { onSidebarRefresh } from './refresh';
 import { installSearch } from './search';
 import { installShortcuts } from './shortcuts';
 import { installTabRouter } from './tab-router';
@@ -24,6 +25,7 @@ import { schedulePoll } from '../features/sessions/session-poller';
 import { terminalStopButton } from '../features/sessions/terminal-header';
 import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
+import { reconcileScopeWithProjects } from '../state/scope-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
 import { initFilePanel } from '../features/panel/file-panel';
 import { initGridObservers, showGridView } from '../features/terminal/grid-view';
@@ -59,6 +61,12 @@ export function bootstrap(): void {
 
   void applyStoredSettings();
   void loadProjects().then(() => {
+    // The stored scope may name a project that has gone since the last run.
+    // Checked once the list exists, and after every redraw from then on — each
+    // reload ends in one, whichever path asked for it. Not before: a redraw of
+    // the still-empty list would drop a perfectly good scope.
+    reconcileScopeWithProjects(view.cachedAllProjects);
+    onSidebarRefresh(() => reconcileScopeWithProjects(view.cachedAllProjects));
     renderStatusSummary();
     restoreView();
   });

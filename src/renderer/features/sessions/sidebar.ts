@@ -6,6 +6,7 @@
  * and `reloadProjects`) have exactly one implementation each to register.
  */
 import { refreshSidebar, setProjectsReloader, setSidebarRefresher } from '../../app/refresh';
+import { onScopeChange, scopedProjects } from '../../state/scope-store';
 import { view } from '../../state/session-store';
 import { loadProjects } from './session-list';
 import { renderSessionList } from './sidebar-render';
@@ -16,6 +17,10 @@ import type { SidebarRefreshOptions } from '../../app/refresh';
 export function installSidebar(): void {
   setSidebarRefresher(render);
   setProjectsReloader((options) => loadProjects(options));
+  // A scope change is a filter change: the rows the last render ordered may be
+  // gone, so the open session is let go to its true position rather than
+  // anchored to a slot that no longer describes anything.
+  onScopeChange(() => refreshSidebar({ resort: true }));
 }
 
 function render({ resort = false }: SidebarRefreshOptions = {}): void {
@@ -25,15 +30,19 @@ function render({ resort = false }: SidebarRefreshOptions = {}): void {
 /**
  * Which projects this render covers.
  *
+ * The scope narrows first, whatever else is on: it decides which rows exist
+ * for this render at all, and the search then picks among those. Without a
+ * scope the list passes through untouched.
+ *
  * A search ignores the archive filter — a session you searched for should be
  * findable whether or not it is archived — so it always renders from the full
  * list, narrowed to the matches.
  */
 function projectsToRender(): Project[] {
   const matchIds = view.searchMatchIds;
-  const source = matchIds !== null || view.showArchived
+  const source = scopedProjects(matchIds !== null || view.showArchived
     ? view.cachedAllProjects
-    : view.cachedProjects;
+    : view.cachedProjects);
 
   if (matchIds === null) return source;
 
