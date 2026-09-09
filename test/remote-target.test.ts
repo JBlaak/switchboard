@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
-  isRemoteProjectPath, normalizeRemoteDir, parseRemoteProjectPath, remoteProjectPath,
-  tmuxSessionName, validateRemoteInput,
+  isRemoteProjectPath, normalizeRemoteDir, parseRemoteProjectPath, remoteCommandDir,
+  remoteProjectPath, tmuxSessionName, validateRemoteInput,
 } from '../src/domain/project/remote-target';
 
 test('remoteProjectPath omits the default port and round-trips through parse', () => {
@@ -50,6 +50,20 @@ test('validateRemoteInput rejects characters that could escape the ssh argv', ()
   assert.strictEqual(validateRemoteInput({ user: 'u', host: 'h', dir: '~/apps/my project' }), null);
   assert.ok(validateRemoteInput({ user: 'u', host: 'h', dir: '$(reboot)' }));
   assert.ok(validateRemoteInput({ user: 'u', host: 'h', dir: 'a"b' }));
+});
+
+test('remoteCommandDir names a directory relative to where sshd starts a command', () => {
+  // Every argument reaches the far shell single-quoted, so `~` and `$HOME`
+  // cannot expand there. They do not need to: a one-shot ssh command starts in
+  // the login home, so a home-relative path read from that cwd is the same
+  // place. Both the git integration (`-C`) and the file browser rely on this.
+  assert.strictEqual(remoteCommandDir('dev/app'), 'dev/app');
+  assert.strictEqual(remoteCommandDir('~/dev/app'), 'dev/app');
+  assert.strictEqual(remoteCommandDir('/srv/app'), '/srv/app', 'an absolute directory is kept as-is');
+  assert.strictEqual(remoteCommandDir('~'), '.');
+  assert.strictEqual(remoteCommandDir(null), '.', 'no directory means the login home itself');
+  assert.strictEqual(remoteCommandDir(undefined), '.');
+  assert.strictEqual(remoteCommandDir(''), '.');
 });
 
 test('tmuxSessionName is short and safe for unquoted shell use', () => {
