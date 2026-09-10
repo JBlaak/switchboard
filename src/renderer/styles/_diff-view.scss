@@ -213,6 +213,14 @@ $diff-amber-edge:    rgba(236, 178, 46, 0.25); /* --sb-yellow */
   color: var(--sb-text-faint);
 }
 
+/* The way out of an empty diff, on its own line under the sentence. Nothing
+   changed is not an apology, so it gets an offer rather than a full stop —
+   and the offer is the pill the headers already use, indented to nothing so it
+   lines up with the sentence above it. */
+.diff-empty-action {
+  margin-top: 10px;
+}
+
 .diff-scroll {
   flex: 1;
   min-height: 0;

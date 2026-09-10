@@ -3,9 +3,10 @@ import assert from 'node:assert';
 import {
   RAIL_GAP_PX, RAIL_TILE_PX,
   badgeFor, lastActivityAt, monogramFor, orderRailProjects, railBadge, splitForRail,
+  worktreeLabel, worktreeMonograms,
 } from '../src/renderer/features/rail/rail-model';
 import type { RailRow } from '../src/renderer/features/rail/rail-model';
-import type { Scope } from '../src/domain/git/types';
+import type { Scope, Worktree } from '../src/domain/git/types';
 import type { SessionSignals } from '../src/domain/session/tiers';
 
 /**
@@ -232,4 +233,61 @@ test('the scoped project’s worktree stack is paid for out of the same budget',
   const { shown, hidden } = splitForRail(plain(4), costOf, TILE_COST * 4);
   assert.deepStrictEqual(shown, ['p0']);
   assert.deepStrictEqual(hidden, ['p1', 'p2', 'p3']);
+});
+
+// ── a worktree's monogram ─────────────────────────────────────────────────────
+
+const worktree = (over: Partial<Worktree> & { path: string }): Worktree => ({
+  head: '0'.repeat(40), branch: null, isPrimary: false, detached: false, ...over,
+});
+
+test('a checkout goes by its branch, not by the directory the CLI named it', () => {
+  assert.strictEqual(
+    worktreeLabel(worktree({ path: '/p/.claude/worktrees/agent-a20a8093', branch: 'feat/rail' })),
+    'feat/rail',
+  );
+});
+
+test('a detached checkout goes by its short head, and one with neither by its directory', () => {
+  assert.strictEqual(
+    worktreeLabel(worktree({
+      path: '/p/.claude/worktrees/agent-a5f3', head: 'abcdef1234567890', detached: true,
+    })),
+    'abcdef1',
+  );
+  assert.strictEqual(
+    worktreeLabel(worktree({ path: '/p/.claude/worktrees/agent-a5f3' })),
+    'agent-a5f3',
+  );
+});
+
+test('three agent checkouts on three branches get three distinguishable monograms', () => {
+  // The bug this fixes, with the real names off this machine: every one of
+  // these directories starts `agent-a`, so the directory monogram was "AG"
+  // three times over. The branch is what tells them apart.
+  const monograms = worktreeMonograms([
+    worktree({ path: '/p/.claude/worktrees/agent-a20a8093fa79edba2', branch: 'feat/x' }),
+    worktree({ path: '/p/.claude/worktrees/agent-a5f37af4224e0be29', branch: 'feat/y' }),
+    worktree({ path: '/p/.claude/worktrees/m1-project-rail', branch: 'fix/z' }),
+  ]);
+  assert.strictEqual(new Set(monograms).size, 3, monograms.join(' '));
+});
+
+test('checkouts that share a leading word are told apart past the part they share', () => {
+  // `feat/rail` and `feat/rail-badges` both start "FR"; dropping the shared
+  // leading word is what leaves anything to distinguish.
+  const monograms = worktreeMonograms([
+    worktree({ path: '/p/a', branch: 'feat/diff' }),
+    worktree({ path: '/p/b', branch: 'feat/rail' }),
+    worktree({ path: '/p/c', branch: 'feat/scope' }),
+  ]);
+  assert.strictEqual(new Set(monograms).size, 3, monograms.join(' '));
+});
+
+test('two checkouts that really do read the same are left equal rather than invented apart', () => {
+  const monograms = worktreeMonograms([
+    worktree({ path: '/p/a', branch: 'main' }),
+    worktree({ path: '/p/b', branch: 'main' }),
+  ]);
+  assert.deepStrictEqual(monograms, [monograms[0], monograms[0]]);
 });

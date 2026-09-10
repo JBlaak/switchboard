@@ -90,6 +90,17 @@
 .platform-win32 #jsonl-viewer-header,
 .platform-linux #jsonl-viewer-header,
 .platform-win32 .viewer-toolbar,
-.platform-linux .viewer-toolbar {
+.platform-linux .viewer-toolbar,
+/* In `code` mode the terminal header is hidden and #code-area covers the main
+   area from its top edge, which makes this bar the one under the overlay
+   controls — and it is the bar the diff puts its base picker and its toggles
+   in, at the right end, exactly where the buttons are. */
+.platform-win32 #code-area-header,
+.platform-linux #code-area-header {
   padding-right: 138px;
 }
+
+/* The rail takes no inset off macOS on purpose. Windows and Linux draw their
+   controls top-right, over whichever header is showing; the rail is the left
+   edge and never reaches them. Only the traffic lights, which are top-left,
+   need the 44px above. */

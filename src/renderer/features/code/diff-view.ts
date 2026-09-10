@@ -68,6 +68,9 @@ import { showSession } from '../terminal/terminal-manager';
 import type { ConflictRole, DiffSection, DiffView } from './diff-view-model';
 import type { FileDiff, Hunk, HunkLine } from '../../../domain/git/types';
 import type { MainMode } from '../../app/main-mode-model';
+import { openFilesTab } from '../../app/tab-router';
+import { getScope } from '../../state/scope-store';
+import { projectSettingsKey } from '../../../domain/settings/settings';
 
 /**
  * Where the surface draws: a strip that shares the code area's header bar, and
@@ -150,6 +153,22 @@ let layout: DiffLayout = localStorage.getItem(LAYOUT_KEY) === 'side-by-side'
   ? 'side-by-side' : 'unified';
 let wrap = localStorage.getItem(WRAP_KEY) === 'on';
 let hideGenerated = true;
+
+/**
+ * Fold reformats away, remembered per project.
+ *
+ * A project setting rather than a `localStorage` key, because whether a
+ * reformat is noise is a fact about the repository, not about the reader: one
+ * project runs a formatter on every save and one has never had one, and the
+ * same person wants opposite answers in each. It sits in the same blob as the
+ * base choice, written the same read-modify-write way.
+ *
+ * The default is on, and it stays on until the stored answer arrives — a
+ * project that has never chosen reads back nothing, and the first paint should
+ * not flash the whole reformat and then fold it.
+ */
+const IGNORE_WHITESPACE_SETTING = 'diffIgnoreWhitespace';
+const whitespaceByProject = new Map<string, boolean>();
 let ignoreWhitespace = true;
 
 /** Paths the reader has expanded past a collapse. Survives a rebuild. */
@@ -222,7 +241,48 @@ export function showDiffView(focusPath?: string): void {
   // Only asked for here: until this half is up, nobody is looking at the
   // answer, and a diff of the whole worktree is the expensive call.
   ensureChangesLoaded();
+  void loadWhitespaceChoice();
   rebuild();
+}
+
+/**
+ * Read this project's `Ignore whitespace` answer, and redraw if it differs.
+ *
+ * Asked each time the half opens rather than once, because the scope can
+ * change while it is folded. The cache makes every visit after the first free,
+ * and a project that has never chosen keeps the default without a write.
+ */
+async function loadWhitespaceChoice(): Promise<void> {
+  const scope = getScope();
+  if (scope === null) return;
+  const { projectPath } = scope;
+
+  let chosen = whitespaceByProject.get(projectPath);
+  if (chosen === undefined) {
+    const stored = await window.api.getSetting<Record<string, unknown>>(
+      projectSettingsKey(projectPath));
+    const value = stored?.[IGNORE_WHITESPACE_SETTING];
+    chosen = typeof value === 'boolean' ? value : true;
+    whitespaceByProject.set(projectPath, chosen);
+  }
+
+  if (chosen === ignoreWhitespace) return;
+  ignoreWhitespace = chosen;
+  if (live) rebuild();
+}
+
+/** Keep the toggle's new answer, for this project, across restarts. */
+function rememberWhitespace(next: boolean): void {
+  const scope = getScope();
+  if (scope === null) return;
+  const { projectPath } = scope;
+  whitespaceByProject.set(projectPath, next);
+
+  void (async () => {
+    const key = projectSettingsKey(projectPath);
+    const stored = (await window.api.getSetting<Record<string, unknown>>(key)) || {};
+    await window.api.setSetting(key, { ...stored, [IGNORE_WHITESPACE_SETTING]: next });
+  })();
 }
 
 /**
@@ -289,7 +349,11 @@ function buildHeader(host: HTMLElement): void {
   whitespaceBtn = toggle('Ignore whitespace',
     'Fold files whose whole change is indentation, and sort them last. '
     + 'Not git diff -w: the counts stay the ones git reported.',
-    () => { ignoreWhitespace = !ignoreWhitespace; rebuild(); });
+    () => {
+      ignoreWhitespace = !ignoreWhitespace;
+      rememberWhitespace(ignoreWhitespace);
+      rebuild();
+    });
   wrapBtn = toggle('Wrap',
     'Long lines never wrap by default — a wrapped 40,000-character line reads as a broken app',
     () => {
@@ -417,9 +481,13 @@ function rebuild(): void {
 
   if (current.sections.length === 0) {
     clearSections();
-    say(current.totals.files === 0
-      ? `Nothing has changed in this worktree ${baseText(current)}.`
-      : `All ${current.totals.files} changed files are hidden. Turn a toggle back on above.`);
+    if (current.totals.files === 0) {
+      say(`Nothing has changed in this worktree ${baseText(current)}.`,
+        { label: 'Browse files', act: openFilesTab });
+    } else {
+      say(`All ${current.totals.files} changed files are hidden. `
+        + 'Turn a toggle back on above.');
+    }
     return;
   }
 
@@ -519,10 +587,31 @@ function clearSections(): void {
   scrollEl.textContent = '';
 }
 
-function say(text: string): void {
+/**
+ * The line the surface shows when it has no sections to draw.
+ *
+ * `offer` is the way out, when there is one. "Nothing changed" is not an
+ * apology — a clean worktree is a fine thing to be looking at — so it comes
+ * with the move a reader actually wants next rather than a full stop. The base
+ * switch that is the other half of that offer is already in the header above,
+ * and stays there whether or not anything changed.
+ */
+function say(text: string, offer?: { label: string; act: () => void }): void {
   emptyEl.hidden = false;
-  emptyEl.textContent = text;
+  emptyEl.textContent = '';
   bannerEl.hidden = true;
+
+  const line = document.createElement('div');
+  line.textContent = text;
+  emptyEl.appendChild(line);
+  if (!offer) return;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'diff-pill diff-empty-action';
+  button.textContent = offer.label;
+  button.addEventListener('click', offer.act);
+  emptyEl.appendChild(button);
 }
 
 // ── one section's header ──────────────────────────────────────────────────────

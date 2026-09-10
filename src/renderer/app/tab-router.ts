@@ -165,3 +165,18 @@ function restoreMainArea(): void {
 export function showTerminalArea(): void {
   restoreMainArea();
 }
+
+/**
+ * Open the Files tab from somewhere other than the tab strip.
+ *
+ * The diff's empty state is the caller: with nothing changed, the next useful
+ * move is the tree, and a reader should not have to work out which tab that is
+ * from a sentence saying there is nothing to read.
+ *
+ * A collapsed sidebar is expanded first. Switching a tab nobody can see is the
+ * one way this button could look broken.
+ */
+export function openFilesTab(): void {
+  el('sidebar').classList.remove('collapsed');
+  if (view.activeTab !== 'files') switchTo('files');
+}
