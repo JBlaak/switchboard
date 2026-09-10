@@ -207,15 +207,47 @@
 }
 
 /* The base the diff was actually taken against — never the one that was asked
-   for; see the note below, which is what says they differed. */
+   for; see the note below, which is what says they differed. Drawn beside the
+   picker only when the two are not the same base, so it does not repeat what
+   the picker already says. */
 .changes-base {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   font-size: 11px;
   color: var(--sb-text-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The base the list *asks* for: the default branch, the merge base with it, or
+   uncommitted only, remembered per project. A bare select — the header is a row
+   of small muted text and a control with a box around it would be the loudest
+   thing in the sidebar. */
+.changes-base-pick {
+  flex: 1;
+  min-width: 0;
+  max-width: max-content;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  color: var(--sb-text-faint);
+  cursor: pointer;
+  appearance: none;
+  text-overflow: ellipsis;
+}
+
+.changes-base-pick:hover,
+.changes-base-pick:focus-visible {
+  color: var(--sb-accent);
+}
+
+/* The list itself is dark whatever the platform draws a select in. */
+.changes-base-pick option {
+  color: var(--sb-text);
+  background: var(--sb-bg-raised);
 }
 
 .changes-stat,

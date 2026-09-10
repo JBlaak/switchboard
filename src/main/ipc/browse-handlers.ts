@@ -11,6 +11,7 @@
  */
 import { INVOKE } from '../../ipc/channels';
 import { resolveClaimPath } from '../../domain/attribution/claims';
+import { isRemoteProjectPath } from '../../domain/project/remote-target';
 import type { ChangesPayload } from '../../domain/changes/types';
 import type { DiffBase } from '../../domain/git/types';
 import type { SessionClaim } from '../../domain/attribution/types';
@@ -20,6 +21,12 @@ import type { IpcRegistrar } from './registrar';
 export function registerBrowseHandlers(ipc: IpcRegistrar, app: Container): void {
   // ── Git ──
   ipc.handle(INVOKE.gitWorktrees, (projectPath: string) => app.git.worktrees(projectPath));
+
+  // What "the default branch" means here, so the base picker can offer it by
+  // name instead of assuming `main` and quietly falling back on a repository
+  // that calls it something else.
+  ipc.handle(INVOKE.gitDefaultBranch, (worktreePath: string) =>
+    app.git.defaultBranch(worktreePath));
 
   // Phase two: the lines of one file, for the one the reader expanded. The
   // base travels with the request rather than being re-resolved here, so the
@@ -55,7 +62,12 @@ export function registerBrowseHandlers(ipc: IpcRegistrar, app: Container): void 
 async function changesIn(
   app: Container, worktreePath: string, projectPath: string, base: DiffBase,
 ): Promise<ChangesPayload> {
-  const diff = await app.git.changedFiles(worktreePath, base);
+  // Both at once: the checkouts are a cheap read that touches no index, and
+  // waiting for it in series would add its latency to every refresh.
+  const [diff, checkouts] = await Promise.all([
+    app.git.changedFiles(worktreePath, base),
+    checkoutsOf(app, projectPath, worktreePath),
+  ]);
 
   // Git spells its paths relative to the worktree; a claim is an absolute path
   // resolved against the transcript entry's own cwd. `resolveClaimPath` is the
@@ -75,8 +87,12 @@ async function changesIn(
 
   // The *project* decides which transcript folders are worth reading — a
   // worktree's sessions are folded into the repository it was cut from, so
-  // scoping the search to the worktree would miss them.
-  const claimed = await app.attribution.claimsFor(projectPath, [...absolute.values()]);
+  // scoping the search to the worktree would miss them. The checkouts then
+  // decide what counts as the same file: a session that ran in a sibling
+  // worktree wrote `<that worktree>/src/x.ts`, and the question here is about
+  // `<this worktree>/src/x.ts`. Without them the two never match, which is the
+  // 99-of-105 unclaimed measured before they were passed.
+  const claimed = await app.attribution.claimsFor(projectPath, [...absolute.values()], checkouts);
 
   const claims: Record<string, SessionClaim[]> = {};
   for (const [relPath, path] of absolute) {
@@ -84,4 +100,32 @@ async function changesIn(
     if (found) claims[relPath] = found.sessions;
   }
   return { ...diff, claims };
+}
+
+/**
+ * Every working copy of this project, for the fold that makes a sibling
+ * worktree's claim answer here.
+ *
+ * One `worktree list` — it reads a handful of files and never touches the
+ * index — and the scoped worktree is added when git did not name it, so a
+ * checkout git has been asked about from the wrong side still folds. A failure
+ * is not one: without the list every path folds against the project directory,
+ * which is what attribution did before there was a list at all.
+ *
+ * A remote project is skipped rather than asked. Its transcripts are written on
+ * the far host and this process has never read them, so nothing can match
+ * whatever came back — and the asking would be an ssh round trip per refresh.
+ */
+async function checkoutsOf(
+  app: Container, projectPath: string, worktreePath: string,
+): Promise<string[]> {
+  if (isRemoteProjectPath(projectPath) || isRemoteProjectPath(worktreePath)) return [];
+  try {
+    const listed = (await app.git.worktrees(projectPath)).map(worktree => worktree.path);
+    return listed.includes(worktreePath) ? listed : [...listed, worktreePath];
+  } catch (err) {
+    app.log.debug('[changes] worktrees of %s could not be listed: %s',
+      projectPath, (err as Error).message);
+    return [worktreePath];
+  }
 }

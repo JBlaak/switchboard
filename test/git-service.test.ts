@@ -581,3 +581,100 @@ test('every phase of a remote worktree runs over ssh, in the directory sshd star
   assert.ok(summary.args[summary.args.length - 1].includes("'--no-optional-locks'"),
     'the lock flag travels in the argv, since ssh does not forward an environment');
 });
+
+// --- Which branch is the default one ---
+//
+// The diff base used to be the constant `merge-base with main`, which is right
+// for most repositories and silently wrong for every one that kept `master`:
+// the ref does not resolve, git falls back to uncommitted-only and says so, and
+// the user is nonetheless reading a diff they did not ask for. So it is asked.
+
+const SOME_SHA = '4444444444444444444444444444444444444444';
+
+/** The ref a `rev-parse --verify <ref>^{commit}` is about. */
+const verifiedRef = (args: readonly string[]): string =>
+  (args.find(arg => arg.includes('^{commit}')) ?? '').replace(/'/g, '').replace('^{commit}', '');
+
+/**
+ * A repository that has the refs it is given, and points `origin/HEAD` at
+ * `pointer` when there is one.
+ */
+function branchProbe(setup: { pointer?: string; refs?: readonly string[] } = {}) {
+  const refs = new Set(setup.refs ?? []);
+  const runner = fakeProcessRunner((_file, args) => {
+    if (asked(args, 'symbolic-ref')) {
+      return setup.pointer === undefined ? exit(1) : exit(0, `${setup.pointer}\n`);
+    }
+    if (asked(args, 'rev-parse')) {
+      return refs.has(verifiedRef(args)) ? exit(0, `${SOME_SHA}\n`) : exit(1);
+    }
+    return exit(127, '', 'nothing else should be run to find the default branch');
+  });
+  const git = new GitService({ runner, log: silentLog });
+  const verified = (): string[] => runner.calls
+    .filter(call => asked(call.args, 'rev-parse'))
+    .map(call => verifiedRef(call.args));
+  return { runner, git, verified };
+}
+
+test('the default branch is what origin/HEAD points at, when it points anywhere', async () => {
+  const h = branchProbe({ pointer: 'origin/trunk', refs: ['trunk', 'main'] });
+
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'trunk');
+  assert.deepEqual(h.verified(), ['trunk'], 'the remote answered, so the guesses are never made');
+  assert.deepEqual(h.runner.calls[0].args.slice(-4),
+    ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
+});
+
+test('a full ref name from symbolic-ref reads the same as a short one', async () => {
+  const h = branchProbe({ pointer: 'refs/remotes/origin/develop', refs: ['develop'] });
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'develop');
+});
+
+test('with no origin/HEAD — every git init — main is tried, and resolves', async () => {
+  const h = branchProbe({ refs: ['main'] });
+
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'main');
+  assert.deepEqual(h.verified(), ['main']);
+});
+
+test('a repository that kept master is not told it has a main', async () => {
+  const h = branchProbe({ refs: ['master'] });
+
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'master');
+  // Both spellings of `main` are ruled out before `master` is offered, which is
+  // the whole point: the name is verified, never assumed.
+  assert.deepEqual(h.verified(), ['main', 'origin/main', 'master']);
+});
+
+test('a branch that only exists on the remote is offered as the remote-tracking ref', async () => {
+  const h = branchProbe({ refs: ['origin/main'] });
+
+  // A fresh worktree of a clone that has never checked `main` out: the name
+  // alone would not resolve and would fall straight back to uncommitted-only.
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'origin/main');
+});
+
+test('a repository where nothing resolves has no default branch, and says so', async () => {
+  const h = branchProbe();
+
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), null);
+  assert.deepEqual(h.verified(), ['main', 'origin/main', 'master', 'origin/master']);
+});
+
+test('the answer is remembered per worktree, but "nothing" is asked again', async () => {
+  const h = branchProbe({ refs: ['main'] });
+
+  await h.git.defaultBranch('/Users/j/dev/proj');
+  const spent = h.runner.calls.length;
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'main');
+  assert.equal(h.runner.calls.length, spent, 'a repository does not rename its default branch');
+
+  // Another checkout is another question — and one with no answer yet is worth
+  // asking again, because a first commit or a first remote is what changes it.
+  const none = branchProbe();
+  await none.git.defaultBranch('/Users/j/dev/proj');
+  const asking = none.runner.calls.length;
+  await none.git.defaultBranch('/Users/j/dev/proj');
+  assert.ok(none.runner.calls.length > asking, 'nothing resolved, so nothing was cached');
+});

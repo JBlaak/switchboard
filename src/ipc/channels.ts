@@ -64,6 +64,7 @@ export const INVOKE = {
 
   // Git
   gitWorktrees: 'git-worktrees',
+  gitDefaultBranch: 'git-default-branch',
   gitDiffFile: 'git-diff-file',
 
   // Browsing

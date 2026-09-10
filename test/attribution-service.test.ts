@@ -93,9 +93,10 @@ test('claims come from the transcripts, and a path git does not report is absent
   const claims = await service.claimsFor(PROJECT, ['src/a.ts', 'src/b.ts', 'src/never-touched.ts']);
 
   // Keyed by the path as asked for — git prints them relative to the worktree —
-  // while the claim itself carries the absolute path the transcripts agreed on.
+  // while the claim carries the identity the transcripts were folded under,
+  // which for a path inside the project is its place inside it.
   assert.deepEqual([...claims.keys()].sort(), ['src/a.ts', 'src/b.ts']);
-  assert.equal(claims.get('src/a.ts')?.path, `${PROJECT}/src/a.ts`);
+  assert.equal(claims.get('src/a.ts')?.path, 'src/a.ts');
 
   // Two sessions on one file, most recent first.
   assert.deepEqual(claims.get('src/a.ts')?.sessions, [
@@ -164,4 +165,116 @@ test('a project with nothing asked about, or nothing claimed, answers empty', as
   assert.equal(slices.length, 0, 'and does not go near the disk to say so');
 
   assert.equal((await service.claimsFor('/home/test/nowhere', ['src/a.ts'])).size, 0);
+});
+
+// ── Across the worktrees of one repository ───────────────────────────────────
+//
+// The case this feature is for: several sessions at once, each in its own
+// checkout. A claim is an absolute path inside the checkout its session ran in,
+// so before the fold a question about a sibling's copy of the same file matched
+// nothing — measured on the Switchboard repository, 105 changed files came back
+// 6 attributed and 99 in `Generated · not by a session`.
+
+/** Claude CLI's own worktree layout: `<project>/.claude/worktrees/<name>`. */
+const AGENT_A = `${PROJECT}/.claude/worktrees/agent-a`;
+const M1_RAIL = `${PROJECT}/.claude/worktrees/m1-project-rail`;
+const AGENT_A_FOLDER = '-home-test-proj--claude-worktrees-agent-a';
+const SESSION_THREE = '9c3e1d20-0b5a-4d18-9a77-2f6c4b8e0d11';
+const SESSION_FOUR = '4d5e6f70-1a2b-4c3d-8e9f-0a1b2c3d4e5f';
+
+/** A session running in worktree `agent-a`, editing that worktree's copy. */
+const AGENT_A_WRITES_A = '{"parentUuid":null,"isSidechain":false,"cwd":"' + AGENT_A + '","sessionId":"' + SESSION_THREE + '","gitBranch":"agent-a","message":{"id":"msg_02A","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_02A","name":"Edit","input":{"file_path":"' + AGENT_A + '/src/a.ts","old_string":"a = 1","new_string":"a = 9","replace_all":false}}]},"type":"assistant","uuid":"00000000-0000-4000-8000-00000000001a","timestamp":"2026-08-15T10:00:00.000Z"}';
+
+/** The same session, running one directory down and naming its file relatively. */
+const AGENT_A_SUBDIR_WRITES_D = '{"parentUuid":null,"isSidechain":false,"cwd":"' + AGENT_A + '/src","sessionId":"' + SESSION_FOUR + '","gitBranch":"agent-a","message":{"id":"msg_02B","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_02B","name":"Write","input":{"file_path":"d.ts","content":"export const d = 4;\\n"}}]},"type":"assistant","uuid":"00000000-0000-4000-8000-00000000001b","timestamp":"2026-08-15T11:00:00.000Z"}';
+
+/** A different repository that happens to live inside this one, with the same paths. */
+const VENDOR = `${PROJECT}/vendor/other`;
+const VENDOR_WRITES_A = '{"parentUuid":null,"isSidechain":false,"cwd":"' + VENDOR + '","sessionId":"33333333-3333-4333-8333-333333333333","gitBranch":"main","message":{"id":"msg_02C","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_02C","name":"Write","input":{"file_path":"' + VENDOR + '/src/a.ts","content":"//\\n"}}]},"type":"assistant","uuid":"00000000-0000-4000-8000-00000000001c","timestamp":"2026-08-15T12:00:00.000Z"}';
+
+/** The seed, plus a worktree of the project and a stranger nested inside it. */
+function seedWithWorktrees(): Record<string, string> {
+  return {
+    ...seed(),
+    [`${PROJECTS_DIR}/${AGENT_A_FOLDER}/${SESSION_THREE}.jsonl`]: AGENT_A_WRITES_A + '\n',
+    [`${PROJECTS_DIR}/${AGENT_A_FOLDER}-src/${SESSION_FOUR}.jsonl`]: AGENT_A_SUBDIR_WRITES_D + '\n',
+    [`${PROJECTS_DIR}/-home-test-proj-vendor-other/33333333-3333-4333-8333-333333333333.jsonl`]:
+      VENDOR_WRITES_A + '\n',
+    // The worktrees have to exist for the CLI's layout to fold to the project.
+    [`${AGENT_A}/.git`]: 'gitdir: /home/test/proj/.git/worktrees/agent-a\n',
+    [`${M1_RAIL}/.git`]: 'gitdir: /home/test/proj/.git/worktrees/m1-project-rail\n',
+  };
+}
+
+test('a claim from a sibling worktree attributes to the file being asked about', async () => {
+  const { service } = build(seedWithWorktrees());
+
+  // The user is looking at `m1-project-rail`, where nothing has ever run. The
+  // edit was made in `agent-a`, against that checkout's own absolute path.
+  const claims = await service.claimsFor(
+    PROJECT, [`${M1_RAIL}/src/a.ts`], [PROJECT, AGENT_A, M1_RAIL]);
+
+  assert.deepEqual(claims.get(`${M1_RAIL}/src/a.ts`)?.sessions.map(s => s.sessionId),
+    [SESSION_THREE, SESSION_TWO, SESSION_ONE],
+    'the sibling worktree, and the two that ran in the project itself');
+});
+
+test('a claim whose cwd is a subdirectory of a worktree still resolves', async () => {
+  const { service } = build(seedWithWorktrees());
+
+  // `file_path` was relative, resolved against the entry's own cwd one level
+  // down — and the result still folds against the worktree it is inside.
+  const claims = await service.claimsFor(
+    PROJECT, [`${M1_RAIL}/src/d.ts`], [PROJECT, AGENT_A, M1_RAIL]);
+
+  assert.deepEqual(claims.get(`${M1_RAIL}/src/d.ts`)?.sessions.map(s => s.sessionId),
+    [SESSION_FOUR]);
+});
+
+test('the same relative path in another project does not cross over', async () => {
+  const { service } = build(seedWithWorktrees());
+
+  const claims = await service.claimsFor(
+    PROJECT, [`${M1_RAIL}/src/a.ts`], [PROJECT, AGENT_A, M1_RAIL]);
+  const sessions = claims.get(`${M1_RAIL}/src/a.ts`)?.sessions.map(s => s.sessionId) ?? [];
+
+  // `/home/test/other/src/a.ts` — a project of its own, never in the pool.
+  assert.equal(sessions.includes('11111111-1111-4111-8111-111111111111'), false);
+  // `<project>/vendor/other/src/a.ts` — read, because it sits inside the
+  // project directory, but never folded: a session merely having run somewhere
+  // does not make that place a checkout of this repository, so its claim keeps
+  // the `vendor/other/` that tells it apart.
+  assert.equal(sessions.includes('33333333-3333-4333-8333-333333333333'), false);
+
+  const nested = await service.claimsFor(
+    PROJECT, [`${PROJECT}/vendor/other/src/a.ts`], [PROJECT, AGENT_A, M1_RAIL]);
+  assert.deepEqual(nested.get(`${PROJECT}/vendor/other/src/a.ts`)?.sessions.map(s => s.sessionId),
+    ['33333333-3333-4333-8333-333333333333'], 'and it is still attributed to itself');
+});
+
+test('without a checkout list the CLI worktree layout is still folded', async () => {
+  const { service } = build(seedWithWorktrees());
+
+  // git could not be asked — not a repository from here, or the command failed.
+  // A session's own cwd still says `<project>/.claude/worktrees/<name>`, which
+  // is a shape rather than a guess, so a question about that worktree resolves.
+  const claims = await service.claimsFor(PROJECT, [`${AGENT_A}/src/a.ts`]);
+
+  assert.deepEqual(claims.get(`${AGENT_A}/src/a.ts`)?.sessions.map(s => s.sessionId),
+    [SESSION_THREE, SESSION_TWO, SESSION_ONE]);
+});
+
+test('a single-checkout project answers exactly as it did before', async () => {
+  const { service } = build(seed());
+
+  // No worktrees anywhere: the fold is to the project directory on both sides,
+  // and the answer is the one the first test in this file asserts.
+  const withList = await service.claimsFor(PROJECT, ['src/a.ts'], [PROJECT]);
+  const without = await service.claimsFor(PROJECT, ['src/a.ts']);
+
+  assert.deepEqual(withList, without);
+  assert.deepEqual(withList.get('src/a.ts')?.sessions, [
+    { sessionId: SESSION_TWO, lastAtIso: '2026-08-13T09:00:00.000Z', edits: 1 },
+    { sessionId: SESSION_ONE, lastAtIso: '2026-08-12T12:00:00.000Z', edits: 1 },
+  ]);
 });

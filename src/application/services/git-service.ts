@@ -110,6 +110,16 @@ const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 /** Enough worktrees for any rail; the cap is only there so the map cannot grow forever. */
 const CACHED_WORKTREES = 32;
 
+/**
+ * The names to try when nothing points at a default branch.
+ *
+ * In that order, and only after `origin/HEAD` has been asked: a repository that
+ * still has a `master` from before the rename *and* a `main` means the one the
+ * remote points at, and this list is what is left when there is no remote to
+ * ask.
+ */
+const DEFAULT_BRANCH_NAMES = ['main', 'master'] as const;
+
 /** What is remembered for one worktree-and-base, and what makes it stale. */
 interface CachedChanges {
   /** The HEAD sha and the status output it was computed from. */
@@ -141,6 +151,18 @@ export class GitService {
   /** One parsed `.gitattributes` per worktree, with the stat that would invalidate it. */
   readonly #attributes = new Map<string, { stamp: string; match: GeneratedAttributes | null }>();
 
+  /**
+   * The default branch per worktree, once something resolved.
+   *
+   * A repository does not rename its default branch while the app is open, so
+   * an answer is kept for the session — the detection is up to seven `rev-parse`
+   * reads and the base picker asks on every scope change. Only "nothing
+   * resolved" is asked again, and that one is worth re-asking: it is the state
+   * of a repository whose first commit or first remote has not happened yet,
+   * and it costs nothing while it lasts.
+   */
+  readonly #defaultBranch = new Map<string, string>();
+
   constructor(private readonly deps: GitServiceDeps) {}
 
   /**
@@ -170,6 +192,37 @@ export class GitService {
       return [];
     }
     throw this.#failure(`worktree list in ${projectPath}`, result);
+  }
+
+  /**
+   * What this repository calls its default branch — the ref a diff base of
+   * "the branch everything is cut from" means here.
+   *
+   * Asked rather than assumed. Hard-coding `main` is correct for most
+   * repositories and silently wrong for every one that kept `master`: the
+   * request cannot resolve, git falls back to uncommitted-only and says so
+   * (invariant 7, working exactly as designed) and the user is nonetheless
+   * looking at a diff they did not ask for. The order is
+   *
+   *   1. `origin/HEAD`, which is what the remote itself says its default is;
+   *   2. `main`, then `master`, for a repository with no remote or no
+   *      `origin/HEAD` set — `git clone` writes one, `git init` does not;
+   *   3. null, for a repository where none of those resolve to a commit, and
+   *      the honest base is then uncommitted-only.
+   *
+   * Every candidate is verified before it is offered, locally and then as
+   * `origin/<name>`, and the ref that resolved is the one returned: a checkout
+   * that has `origin/main` but no local `main` gets a base that works instead
+   * of a name that does not. Null is not a failure — it is a repository with
+   * nothing to compare against, and no repository at all answers the same way.
+   */
+  async defaultBranch(worktreePath: string): Promise<string | null> {
+    const known = this.#defaultBranch.get(worktreePath);
+    if (known !== undefined) return known;
+
+    const found = await this.#detectDefaultBranch(worktreePath);
+    if (found !== null) this.#defaultBranch.set(worktreePath, found);
+    return found;
   }
 
   /**
@@ -399,6 +452,36 @@ export class GitService {
     return { base: requested, revision: sha };
   }
 
+  /** `origin/HEAD` first, then the usual names; the first ref that is a commit wins. */
+  async #detectDefaultBranch(worktreePath: string): Promise<string | null> {
+    // `--quiet` so a repository with no `origin/HEAD` — every `git init` — is
+    // exit 1 and silence rather than a `fatal:` on stderr.
+    const pointer = await this.#git(
+      worktreePath, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
+    const pointed = pointer.code === 0 ? branchNameOf(pointer.stdout) : '';
+
+    const candidates = [pointed, ...DEFAULT_BRANCH_NAMES].filter(
+      (name, index, all) => name !== '' && all.indexOf(name) === index);
+
+    for (const name of candidates) {
+      for (const ref of [name, `origin/${name}`]) {
+        if (await this.#isCommit(worktreePath, ref)) {
+          this.deps.log.debug(`[git] default branch of ${worktreePath} is ${ref}`);
+          return ref;
+        }
+      }
+    }
+    this.deps.log.debug(`[git] no default branch resolves in ${worktreePath}`);
+    return null;
+  }
+
+  /** Does this ref name a commit here? `^{commit}` so a tag or a tree cannot stand in. */
+  async #isCommit(worktreePath: string, ref: string): Promise<boolean> {
+    const result = await this.#git(
+      worktreePath, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+    return result.code === 0 && result.stdout.trim() !== '';
+  }
+
   /** The base, resolved from a fresh status read — for a `diffFile` with no row to lean on. */
   async #resolveFresh(worktreePath: string, base: DiffBase): Promise<{ base: DiffBase; revision: string }> {
     const output = await this.#status(worktreePath);
@@ -462,6 +545,18 @@ export class GitService {
     }
     this.#changed.set(place, entry);
   }
+}
+
+/**
+ * The branch name inside whatever `symbolic-ref` printed.
+ *
+ * `--short` normally prints `origin/main`, but a git old enough to ignore it —
+ * or a caller reading a full ref — prints `refs/remotes/origin/main`, and both
+ * mean the same branch.
+ */
+function branchNameOf(pointer: string): string {
+  const named = pointer.trim().replace(/^refs\/(?:remotes|heads)\//, '');
+  return named.startsWith('origin/') ? named.slice('origin/'.length) : named;
 }
 
 /** The `git <args>` command for this worktree, wherever it lives. */

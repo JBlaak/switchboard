@@ -67,6 +67,7 @@ const api: SwitchboardApi = {
 
   // ── Git ──
   gitWorktrees: (projectPath) => ipcRenderer.invoke(INVOKE.gitWorktrees, projectPath),
+  gitDefaultBranch: (worktreePath) => ipcRenderer.invoke(INVOKE.gitDefaultBranch, worktreePath),
   gitDiffFile: (worktreePath, base, relPath) =>
     ipcRenderer.invoke(INVOKE.gitDiffFile, worktreePath, base, relPath),
 

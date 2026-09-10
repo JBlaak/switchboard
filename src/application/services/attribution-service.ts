@@ -27,6 +27,8 @@
  * Locating a project's folders is still the store's job.
  */
 import { claimsForPaths, claimsFromTranscriptLine, groupClaims, resolveClaimPath } from '../../domain/attribution/claims';
+import { checkoutKey, checkoutRoots } from '../../domain/attribution/worktrees';
+import { worktreeParentPath } from '../../domain/project/project-path';
 import type { EditClaim, PathClaims } from '../../domain/attribution/types';
 import type { DirEntry, FileSystem } from '../ports/file-system';
 import type { Logger } from '../ports/logger';
@@ -74,6 +76,12 @@ interface CachedFolder {
   project: ResolvedProject | null;
 }
 
+/** A transcript folder that could hold a claim on this project, and where it ran. */
+interface ScopedFolder {
+  folder: string;
+  project: ResolvedProject;
+}
+
 export class AttributionService {
   /** Per folder, because pruning what is gone should not walk every project. */
   readonly #transcripts = new Map<string, Map<string, CachedTranscript>>();
@@ -85,28 +93,46 @@ export class AttributionService {
   /**
    * Who claims each of `paths`, keyed by the path as it was asked for.
    *
-   * `paths` are git's changed paths, absolute or relative to `projectPath`; a
+   * `paths` are the changed paths, absolute or relative to `projectPath`; a
    * path no session claims is simply absent from the answer, which is the
-   * "generated, not by a session" group the UI draws. `PathClaims.path` is the
-   * absolute form the transcripts agreed on, which for an absolute caller is
-   * the key itself.
+   * "generated, not by a session" group the UI draws.
+   *
+   * `checkouts` are the repository's other working copies — what
+   * `GitService.worktrees` printed — and they are what makes the answer right
+   * for anyone running several sessions at once. A claim is recorded against an
+   * absolute path inside whichever checkout its session ran in, so a question
+   * about a sibling worktree's copy of the same file matched nothing at all:
+   * measured on this repository, 105 changed files came back 6 attributed and
+   * 99 unclaimed for exactly that reason. Given the checkouts, both sides are
+   * folded to their position inside their own one before being compared. Left
+   * empty — a project with a single checkout — nothing changes: the fold is to
+   * the project directory, on both sides.
+   *
+   * `PathClaims.path` is the identity the claims were folded under, which for
+   * an absolute caller inside no known checkout is the key itself.
    */
-  async claimsFor(projectPath: string, paths: readonly string[]): Promise<Map<string, PathClaims>> {
+  async claimsFor(
+    projectPath: string,
+    paths: readonly string[],
+    checkouts: readonly string[] = [],
+  ): Promise<Map<string, PathClaims>> {
     const found = new Map<string, PathClaims>();
     if (!projectPath || paths.length === 0) return found;
 
+    const scoped = this.#foldersFor(projectPath, checkouts);
     const claims: EditClaim[] = [];
-    for (const folder of this.#foldersFor(projectPath)) {
+    for (const { folder } of scoped) {
       for (const claim of this.#claimsInFolder(folder)) claims.push(claim);
     }
     if (claims.length === 0) return found;
 
-    const byPath = groupClaims(claims);
+    const identify = checkoutKey(this.#rootsFor(projectPath, checkouts, scoped));
+    const byPath = groupClaims(claims, identify);
     const askedFor = new Map<string, string>();
-    for (const path of paths) askedFor.set(resolveClaimPath(projectPath, path), path);
+    for (const path of paths) askedFor.set(identify(resolveClaimPath(projectPath, path)), path);
 
-    for (const [absolute, claimed] of claimsForPaths(byPath, [...askedFor.keys()])) {
-      found.set(askedFor.get(absolute) ?? absolute, claimed);
+    for (const [identity, claimed] of claimsForPaths(byPath, [...askedFor.keys()])) {
+      found.set(askedFor.get(identity) ?? identity, claimed);
     }
     return found;
   }
@@ -131,23 +157,54 @@ export class AttributionService {
    * A folder resolves to the repository its transcripts ran in, with a worktree
    * folded into the repository it was cut from — so scoping to a project picks
    * up its worktrees' folders too, and scoping to one worktree picks up the
-   * folder whose `cwd` is that worktree.
+   * folder whose `cwd` is that worktree. A checkout made outside the project
+   * directory is where both of those rules stop reaching, which is one of the
+   * two things `checkouts` is for.
    */
-  #foldersFor(projectPath: string): string[] {
+  #foldersFor(projectPath: string, checkouts: readonly string[]): ScopedFolder[] {
     const { fs, transcripts, log } = this.deps;
-    const folders: string[] = [];
+    const folders: ScopedFolder[] = [];
     try {
       for (const folder of transcripts.listFolders()) {
         const project = this.#projectOf(folder);
         if (!project) continue;
-        if (project.projectPath === projectPath || fs.isInside(projectPath, project.cwd)) {
-          folders.push(folder);
-        }
+        const mine = project.projectPath === projectPath
+          || fs.isInside(projectPath, project.cwd)
+          || checkouts.some(checkout => checkout !== '' && fs.isInside(checkout, project.cwd));
+        if (mine) folders.push({ folder, project });
       }
     } catch (err) {
       log.warn('[attribution] listing folders failed:', (err as Error).message);
     }
     return folders;
+  }
+
+  /**
+   * The working copies a path may be folded against — and nothing else.
+   *
+   * This is the bound that keeps the relative match honest. Three sources, all
+   * structural rather than guessed: the project directory itself, the checkouts
+   * git listed for it, and the CLI's own `…/worktrees/<name>` layouts under it,
+   * recognised by `worktreeParentPath` from a session's own `cwd` — which still
+   * answers for a worktree git has since pruned, or a repository git could not
+   * be asked about at all.
+   *
+   * A session merely having *run* somewhere is not enough to make that place a
+   * root. A `cwd` of `<project>/src/renderer` is a subdirectory, and a nested
+   * unrelated repository at `<project>/vendor/other` is a different project;
+   * treating either as a checkout is exactly how one project's `src/index.ts`
+   * would start answering for another's. Neither does — their claims fold
+   * against the project directory and keep the directories that tell them
+   * apart.
+   */
+  #rootsFor(
+    projectPath: string, checkouts: readonly string[], scoped: readonly ScopedFolder[],
+  ): string[] {
+    const roots: string[] = [projectPath, ...checkouts];
+    for (const { project } of scoped) {
+      if (worktreeParentPath(project.cwd) === projectPath) roots.push(project.cwd);
+    }
+    return checkoutRoots(roots);
   }
 
   /**
