@@ -41,12 +41,20 @@
  * already share. A second fetch here would both cost twice and let two
  * surfaces disagree about what changed.
  *
+ * And four of them are not a hunk you can read at all — a merge conflict, a
+ * file two sessions both wrote, a file that changed while you were reading it,
+ * and a minified line nothing can colour. The first three are drawn below;
+ * every decision in them (which rows are markers, who can be asked, what is
+ * stale, what is affordable to colour) is in the model, so what is here is
+ * elements and a click handler.
+ *
  * The rules — what a section is, which body it draws, what order they come in,
  * what the counts add up to, and which sections are worth building right now —
  * are in `diff-view-model.ts`, which has no DOM in it and is tested directly.
  */
 import {
-  DEFAULT_OVERSCAN, buildDiffView, estimatedHeight, primaryClaim, visibleSections,
+  DEFAULT_OVERSCAN, askTarget, attributionOf, buildDiffView, colourable, conflictPrompt,
+  conflictRegionsIn, conflictRoles, estimatedHeight, markStale, nextWatched, visibleSections,
 } from './diff-view-model';
 import { baseLabel } from '../files/changes-list-model';
 import { changesFailure, changesRoot, currentChangesPayload, ensureChangesLoaded, onChangesChanged } from '../files/changes-list';
@@ -54,9 +62,10 @@ import { cleanDisplayName } from '../../../domain/session/title';
 import { formatDate, shortcutLabel } from '../../lib/format';
 import { highlightLanguageFor, highlightLines, loadHighlightLanguage } from '../../lib/highlight-static';
 import { isRemoteProjectPath } from '../../../domain/project/remote-target';
-import { sessionMap } from '../../state/session-store';
+import { openSessions, sessionMap, view as sessionView } from '../../state/session-store';
 import { shortSessionId } from '../files/changes-list-model';
-import type { DiffSection, DiffView } from './diff-view-model';
+import { showSession } from '../terminal/terminal-manager';
+import type { ConflictRole, DiffSection, DiffView } from './diff-view-model';
 import type { FileDiff, Hunk, HunkLine } from '../../../domain/git/types';
 import type { MainMode } from '../../app/main-mode-model';
 
@@ -106,9 +115,6 @@ const FETCH_LIMIT = 4;
  * that is already there and one that fills in under the reader.
  */
 const OBSERVER_MARGIN = '150% 0px';
-
-/** Beyond this a hunk is not coloured — `highlight-static` has the reasons. */
-const MAX_HUNK_LINES = 1200;
 
 const STATUS_WORD: Record<string, string> = {
   M: 'modified', A: 'added', D: 'deleted', R: 'renamed', C: 'copied',
@@ -162,6 +168,19 @@ let current: DiffView | null = null;
 const elements = new Map<string, HTMLElement>();
 let observer: IntersectionObserver | null = null;
 
+/**
+ * The files whose bodies are actually on the scroll, and the ones being watched.
+ *
+ * `drawn` is what a `fileChanged` event is matched against — a change to a file
+ * nobody has scrolled to is not news — and `watched` is the bounded, ordered
+ * subset the main process is holding an `fs.watch` open for.
+ */
+const drawn = new Set<string>();
+let watched: string[] = [];
+
+/** Paths a watcher says have changed since the reader last saw them. */
+const stale = new Set<string>();
+
 /** The worktree the scroll is describing, so a stale answer can be recognised. */
 let shownRoot: string | null = null;
 
@@ -184,6 +203,11 @@ export function installDiffView(where: DiffViewMounts, who: DiffViewHandlers): v
   // The answer can arrive long after this half was opened — the sidebar's fetch
   // is the same one — and it changes every number and every section.
   onChangesChanged(() => { if (live) rebuild(); });
+
+  // A session writing while the reader reads is the normal case, not the odd
+  // one. The section is dimmed and offered a `Reload`; it is never re-rendered
+  // underneath the reader, because that moves the scroll and loses the place.
+  window.api.onFileChanged(onDiskChange);
 }
 
 /**
@@ -461,6 +485,7 @@ function drawBanner(view: DiffView): void {
 function drawSections(view: DiffView): void {
   observer?.disconnect();
   elements.clear();
+  releaseWatches();
 
   const html: string[] = [];
   for (const section of view.sections) {
@@ -490,6 +515,7 @@ function clearSections(): void {
   observer?.disconnect();
   observer = null;
   elements.clear();
+  releaseWatches();
   scrollEl.textContent = '';
 }
 
@@ -529,20 +555,64 @@ function sectionHead(section: DiffSection): string {
   if (section.binary) parts.push(tag('binary'));
   if (section.submodule) parts.push(tag('submodule'));
   if (section.untracked) parts.push(tag('untracked'));
-  if (section.status === 'U') parts.push(tag('conflicted', 'is-conflict'));
+  if (section.conflicted) parts.push(conflictTag(section));
 
-  const claim = primaryClaim(section);
-  if (claim !== null) {
-    const extra = section.claims.length > 1 ? ` · ${section.claims.length} sessions` : '';
-    parts.push(`<span class="diff-claim">${esc(sessionLabel(claim.sessionId))} · `
-      + `${esc(formatDate(new Date(claim.lastAtIso)))}${esc(extra)}</span>`);
-  }
+  parts.push(claimsHtml(section));
 
   parts.push('<span class="diff-head-spacer"></span>');
   parts.push(actionsHtml(section));
 
   return `<header class="diff-file-head">${parts.join('')}</header>`;
 }
+
+/** `conflicted`, and how many separate conflicts once the patch is in hand. */
+function conflictTag(section: DiffSection): string {
+  const regions = conflictRegionsIn(loaded.get(section.path)?.hunks ?? section.hunks);
+  const text = regions === 0
+    ? 'conflicted'
+    : `conflicted · ${regions} region${regions === 1 ? '' : 's'}`;
+  return tag(text, 'is-conflict');
+}
+
+/**
+ * Every session that claims this file, named, plus an amber mark when there is
+ * more than one.
+ *
+ * The design's rule is that a file appears **once** whatever happened to it,
+ * with each claimant on its header — which is what stops "two agents on one
+ * file" reading as two unrelated changes. The mark is on the file and says so:
+ * a claim is a path, a session and a time, and there is no line number
+ * anywhere in it, so the moment this said "overlapping edit at line 208" it
+ * would be inventing one. Per-hunk attribution is a different data source and
+ * a later brief.
+ */
+function claimsHtml(section: DiffSection): string {
+  const { claims, overlapping, edits } = attributionOf(section);
+  if (claims.length === 0) return '';
+
+  const named = claims.slice(0, MAX_NAMED_CLAIMS).map(claim => {
+    const running = isRunning(claim.sessionId);
+    return `<span class="diff-claim${running ? ' is-running' : ''}"`
+      + ` title="${esc(`${claim.edits} edit${claim.edits === 1 ? '' : 's'}, last `
+        + `${formatDate(new Date(claim.lastAtIso))}`)}">`
+      + `${esc(sessionLabel(claim.sessionId))} · `
+      + `${esc(formatDate(new Date(claim.lastAtIso)))}</span>`;
+  });
+  if (claims.length > MAX_NAMED_CLAIMS) {
+    named.push(`<span class="diff-claim">+${claims.length - MAX_NAMED_CLAIMS} more</span>`);
+  }
+
+  if (overlapping) {
+    named.unshift(`<span class="diff-tag is-overlap"`
+      + ` title="${esc(`${claims.length} sessions and ${edits} edits on this one file. `
+        + 'Claims are per file, not per line, so which lines they collided on is not '
+        + 'known here.')}">${claims.length} sessions</span>`);
+  }
+  return named.join('');
+}
+
+/** Past this the header is a list of names rather than a header. */
+const MAX_NAMED_CLAIMS = 3;
 
 /** `src/renderer/` and `app.ts`, or `old → new` when the file moved. */
 function pathHtml(section: DiffSection): string {
@@ -664,6 +734,11 @@ function fillSection(path: string): void {
     return;
   }
   body.innerHTML = bodyHtml(section);
+  // Only now: a section whose body is on screen is a section whose staleness
+  // the reader can act on. Watching every classified file would be 212 watches
+  // for a diff nobody has scrolled through.
+  drawn.add(path);
+  watch(path);
 }
 
 /** Whether drawing this body means having the file's lines. */
@@ -671,14 +746,27 @@ function needsPatch(section: DiffSection): boolean {
   return section.body === 'hunks' || section.body === 'submodule';
 }
 
+/**
+ * A section's body, with whatever has to be said above and below the lines.
+ *
+ * The bar at the top is the "this went stale under you" state and the strip at
+ * the bottom is the conflict's actions; both wrap the ordinary body rather than
+ * replacing it, because the lines are still the thing the reader came for.
+ */
 function bodyHtml(section: DiffSection): string {
+  return staleHtml(section) + overlapHtml(section) + contentHtml(section)
+    + conflictActionsHtml(section);
+}
+
+function contentHtml(section: DiffSection): string {
   switch (section.body) {
     case 'rename': return '';
     case 'none': return notesHtml(section) || '<div class="diff-note">No lines changed.</div>';
     case 'generated': return collapsedHtml(section,
       `Generated file — ${countText(section)} not rendered.`);
-    case 'oversize': return collapsedHtml(section,
-      `${countText(section)} — collapsed because the file is over 500.`);
+    case 'oversize': return collapsedHtml(section, section.conflicted
+      ? `${countText(section)} — collapsed because the file is over 500, conflict and all.`
+      : `${countText(section)} — collapsed because the file is over 500.`);
     case 'whitespace': return collapsedHtml(section,
       `Whitespace only — ${countText(section)} re-indented.`);
     case 'binary': return binaryHtml(section);
@@ -687,6 +775,87 @@ function bodyHtml(section: DiffSection): string {
       + 'wrote it. Open it to read the whole file.</div>';
     default: return hunksHtml(section);
   }
+}
+
+/**
+ * The amber line a file gets when more than one session wrote it.
+ *
+ * It says what is known and stops. The canvas wanted "overlapping edit at line
+ * 208"; the data cannot support a line number, so this says which sessions and
+ * how many edits and admits the rest is not known here — see `attributionOf`.
+ */
+function overlapHtml(section: DiffSection): string {
+  const { claims, overlapping, edits } = attributionOf(section);
+  if (!overlapping) return '';
+  const names = claims.map(claim => sessionLabel(claim.sessionId)).join(', ');
+  return '<div class="diff-overlap">'
+    + `<span>${esc(`${claims.length} sessions wrote this file — ${names} — `
+      + `${edits} edits between them.`)}</span>`
+    + '<span class="diff-overlap-caveat">Claims are per file, not per line: '
+    + 'which lines they collided on is not known here.</span>'
+    + '</div>';
+}
+
+/**
+ * The bar that says a watcher saw this file change since it was drawn.
+ *
+ * Built in one place and used from two: `bodyHtml`, for a section that is
+ * redrawn while already stale, and `paintStale`, which puts it on a section
+ * without touching anything else in it.
+ */
+const STALE_BAR = '<div class="diff-stale">'
+  + '<span>Changed on disk since this was read.</span>'
+  + '<button type="button" class="diff-pill diff-stale-btn" data-act="reload">Reload</button>'
+  + '</div>';
+
+function staleHtml(section: DiffSection): string {
+  return stale.has(section.path) ? STALE_BAR : '';
+}
+
+/**
+ * `Keep ours`, `Keep theirs`, `Ask the session`.
+ *
+ * Invariant 10: conflicts are shown, never merged. The first two are drawn
+ * disabled, and the reason on them is the honest one — **nothing in this app
+ * writes to a worktree**, exactly as `Revert` says a few pixels away. They are
+ * not omitted, because a reader looking for them should find out that this
+ * surface has decided not to be a merge tool rather than wonder whether it
+ * forgot.
+ *
+ * `Ask the session` is the one that does something, and it is the move this app
+ * has that an editor does not: the file goes to a session that is already in
+ * this worktree with the context to resolve it. Which session is
+ * `askTarget`'s decision; when there is none it is disabled and says why,
+ * because a prompt written into a dead terminal is lost without a sound.
+ */
+function conflictActionsHtml(section: DiffSection): string {
+  if (!section.conflicted) return '';
+
+  const regions = conflictRegionsIn(loaded.get(section.path)?.hunks ?? section.hunks);
+  const target = askTarget(section.claims, sessionView.activeSessionId, runningSessions());
+  const noWrite = 'Not wired: nothing in this app writes to a worktree yet. '
+    + 'Switchboard shows a conflict — it does not merge it.';
+
+  const ask = target === null
+    ? '<button type="button" class="diff-pill" data-act="ask" disabled'
+      + ' title="No session is running that could take this file. Open one in this'
+      + ' worktree first.">Ask the session</button>'
+    : '<button type="button" class="diff-pill is-primary" data-act="ask"'
+      + ` title="${esc(`Types the prompt into ${sessionLabel(target.sessionId)}`
+        + `${target.from === 'claim' ? ', which wrote this file' : ', the session on screen'}`
+        + '. You press Return.')}">Ask the session</button>`;
+
+  return '<div class="diff-conflict-actions">'
+    + `<span class="diff-conflict-note">${esc(regions === 0
+      ? 'git left both sides in this file.'
+      : `git left both sides in this file, in ${regions} place${regions === 1 ? '' : 's'}.`)}`
+    + '</span>'
+    + `<button type="button" class="diff-pill" data-act="keep-ours" disabled`
+    + ` title="${esc(noWrite)}">Keep ours</button>`
+    + `<button type="button" class="diff-pill" data-act="keep-theirs" disabled`
+    + ` title="${esc(noWrite)}">Keep theirs</button>`
+    + ask
+    + '</div>';
 }
 
 function collapsedHtml(section: DiffSection, text: string): string {
@@ -783,6 +952,7 @@ function notesHtml(section: DiffSection): string {
 
 function unifiedHunk(hunk: Hunk, lang: ReturnType<typeof languageFor>, section: DiffSection): string {
   const coloured = colour(hunk.lines, lang, section);
+  const roles = rolesFor(hunk, section);
   let oldNo = hunk.oldStart;
   let newNo = hunk.newStart;
 
@@ -790,11 +960,36 @@ function unifiedHunk(hunk: Hunk, lang: ReturnType<typeof languageFor>, section: 
   hunk.lines.forEach((line, index) => {
     const left = line.kind === 'add' ? '' : String(oldNo++);
     const right = line.kind === 'del' ? '' : String(newNo++);
-    rows.push(`<div class="diff-line ${kindClass(line)}">`
+    rows.push(`<div class="diff-line ${kindClass(line)}${roleClass(roles[index])}">`
       + `<span class="diff-ln">${left}</span><span class="diff-ln">${right}</span>`
       + `<span class="diff-code">${coloured[index]}</span></div>`);
   });
   return `<div class="diff-lines">${rows.join('')}</div>`;
+}
+
+/**
+ * Which rows of this hunk are conflict markers, and which side each one is on.
+ *
+ * Only asked of a conflicted file. git writes a conflict into the file itself,
+ * so these rows arrive as ordinary `+` lines and would otherwise draw as one
+ * undifferentiated green block — the exact opposite of showing a reader the
+ * shape of the thing they have to decide about.
+ */
+function rolesFor(hunk: Hunk, section: DiffSection): (ConflictRole | null)[] {
+  if (!section.conflicted) return [];
+  return conflictRoles(hunk.lines.map(line => line.text));
+}
+
+function roleClass(role: ConflictRole | null | undefined): string {
+  switch (role) {
+    case 'start': case 'end': return ' is-conflict-marker';
+    case 'separator': return ' is-conflict-split';
+    case 'base-marker': return ' is-conflict-marker is-base';
+    case 'ours': return ' is-ours';
+    case 'theirs': return ' is-theirs';
+    case 'base': return ' is-base';
+    default: return '';
+  }
 }
 
 /**
@@ -807,6 +1002,7 @@ function unifiedHunk(hunk: Hunk, lang: ReturnType<typeof languageFor>, section: 
  */
 function splitHunk(hunk: Hunk, lang: ReturnType<typeof languageFor>, section: DiffSection): string {
   const coloured = colour(hunk.lines, lang, section);
+  const roles = rolesFor(hunk, section);
   let oldNo = hunk.oldStart;
   let newNo = hunk.newStart;
 
@@ -819,8 +1015,10 @@ function splitHunk(hunk: Hunk, lang: ReturnType<typeof languageFor>, section: Di
       const del = dels[i];
       const add = adds[i];
       rows.push('<div class="diff-row">'
-        + side(del === undefined ? null : { no: oldNo + i, html: coloured[del] }, 'is-del')
-        + side(add === undefined ? null : { no: newNo + i, html: coloured[add] }, 'is-add')
+        + side(del === undefined ? null : { no: oldNo + i, html: coloured[del] },
+          `is-del${roleClass(roles[del ?? -1])}`)
+        + side(add === undefined ? null : { no: newNo + i, html: coloured[add] },
+          `is-add${roleClass(roles[add ?? -1])}`)
         + '</div>');
     }
     oldNo += dels.length;
@@ -833,9 +1031,10 @@ function splitHunk(hunk: Hunk, lang: ReturnType<typeof languageFor>, section: Di
     if (line.kind === 'del') { dels.push(index); return; }
     if (line.kind === 'add') { adds.push(index); return; }
     flush();
+    const role = roleClass(roles[index]);
     rows.push('<div class="diff-row">'
-      + side({ no: oldNo++, html: coloured[index] }, '')
-      + side({ no: newNo++, html: coloured[index] }, '')
+      + side({ no: oldNo++, html: coloured[index] }, role)
+      + side({ no: newNo++, html: coloured[index] }, role)
       + '</div>');
   });
   flush();
@@ -864,13 +1063,20 @@ function kindClass(line: HunkLine): string {
  * skips colouring entirely and gets its leading indentation made visible
  * instead — which is the only way to see a change that is, by definition,
  * invisible.
+ *
+ * The cap is `colourable`'s, and it is what a minified bundle runs into: one
+ * added line of 1.6 MB comes back escaped rather than parsed, which is every
+ * character of the change in the right place with no colour on it. Invariant 9
+ * then keeps it on one row that scrolls sideways. `highlightLines` refuses the
+ * same block for the same reasons — asking here as well only saves building
+ * the array to hand over.
  */
 function colour(
   lines: readonly HunkLine[], lang: ReturnType<typeof languageFor>, section: DiffSection,
 ): string[] {
   const texts = lines.map(line => line.text);
   if (section.whitespaceOnly) return texts.map(visibleIndent);
-  if (texts.length > MAX_HUNK_LINES) return texts.map(esc);
+  if (!colourable(texts)) return texts.map(esc);
   return highlightLines(texts, lang);
 }
 
@@ -1009,9 +1215,139 @@ function onBodyClick(event: MouseEvent): void {
     case 'open-base':
       void openAtBase(path);
       break;
+    case 'reload':
+      reloadSection(path);
+      break;
+    case 'ask':
+      askTheSession(path, button);
+      break;
     default:
       break;
   }
+}
+
+// ── changed underneath you ────────────────────────────────────────────────────
+
+/**
+ * A watcher fired: mark the section, do not touch it.
+ *
+ * The whole point is that nothing moves. Re-reading the patch here would
+ * replace the lines the reader is in the middle of and change the section's
+ * height, which on a long scroll means the place they were reading walks off
+ * the screen — and a session mid-run fires this every few seconds. So the
+ * section dims and grows a `Reload`, and the reader decides when.
+ */
+function onDiskChange(changedPath: string): void {
+  const next = markStale(stale, drawn, shownRoot, changedPath);
+  for (const path of next) {
+    if (stale.has(path)) continue;
+    stale.add(path);
+    paintStale(path);
+  }
+}
+
+/** Put the bar at the top of one section's body, leaving the lines alone. */
+function paintStale(path: string): void {
+  const element = elements.get(path);
+  const body = element?.querySelector<HTMLElement>('.diff-file-body');
+  if (!element || !body || body.querySelector('.diff-stale') !== null) return;
+  element.classList.add('is-stale');
+  body.insertAdjacentHTML('afterbegin',
+    '<div class="diff-stale">'
+    + '<span>Changed on disk since this was read.</span>'
+    + '<button type="button" class="diff-pill diff-stale-btn" data-act="reload">Reload</button>'
+    + '</div>');
+}
+
+/** `Reload`: throw away this file's patch and buy it again, in place. */
+function reloadSection(path: string): void {
+  stale.delete(path);
+  elements.get(path)?.classList.remove('is-stale');
+  loaded.delete(path);
+  fetching.delete(path);
+  rebuildSection(path);
+}
+
+/**
+ * Ask the main process to watch one file, within a bounded set.
+ *
+ * Remote worktrees are skipped: the path is an `ssh://` spelling that no local
+ * `fs.watch` can open, and asking would only collect an error per file.
+ */
+function watch(path: string): void {
+  const root = shownRoot;
+  if (root === null || isRemoteProjectPath(root)) return;
+
+  const next = nextWatched(watched, path);
+  if (next.watched.length === watched.length && next.released.length === 0) return;
+  watched = next.watched;
+  for (const gone of next.released) void window.api.unwatchFile(absolute(root, gone));
+  void window.api.watchFile(absolute(root, path));
+}
+
+function releaseWatches(): void {
+  const root = shownRoot;
+  if (root !== null && !isRemoteProjectPath(root)) {
+    for (const path of watched) void window.api.unwatchFile(absolute(root, path));
+  }
+  watched = [];
+  drawn.clear();
+  stale.clear();
+}
+
+function absolute(root: string, relPath: string): string {
+  return `${root.replace(/\/+$/, '')}/${relPath}`;
+}
+
+// ── handing a conflict to a session ───────────────────────────────────────────
+
+/** Sessions with a live PTY *and* a terminal here to show what was typed. */
+function runningSessions(): Set<string> {
+  const live = new Set<string>();
+  for (const [sessionId, entry] of openSessions) {
+    if (entry.closed !== true && sessionView.activePtyIds.has(sessionId)) live.add(sessionId);
+  }
+  return live;
+}
+
+function isRunning(sessionId: string): boolean {
+  const entry = openSessions.get(sessionId);
+  return entry !== undefined && entry.closed !== true
+    && sessionView.activePtyIds.has(sessionId);
+}
+
+/**
+ * Hand a conflicted file to a session: type the prompt, and stop there.
+ *
+ * **Typed, not sent.** The text goes into the session's composer and the flip
+ * lands on it with the cursor at the end; the Return is the reader's. Two
+ * reasons, and the second is the load-bearing one. It is a message that will
+ * appear in their name, so they should see it before it goes. And a running
+ * CLI is not always sitting at an empty prompt — it may be asking whether to
+ * allow a tool call — and a Return we send there answers a question we never
+ * read.
+ *
+ * The target is recomputed at the click rather than trusted from the paint: a
+ * session can exit between a body being drawn and a button being pressed, and
+ * that is exactly the case where the prompt would vanish without a trace.
+ */
+function askTheSession(path: string, button: HTMLElement): void {
+  const section = current?.sections.find(candidate => candidate.path === path);
+  if (section === undefined) return;
+
+  const target = askTarget(section.claims, sessionView.activeSessionId, runningSessions());
+  if (target === null) {
+    button.setAttribute('disabled', '');
+    button.title = 'That session is no longer running. Open one in this worktree first.';
+    return;
+  }
+
+  const regions = conflictRegionsIn(loaded.get(path)?.hunks ?? section.hunks);
+  window.api.sendInput(target.sessionId, conflictPrompt(path, regions));
+  showSession(target.sessionId);
+  // Last: `showSession` restores that session's own half, and the point of
+  // sending is that the reader is now in the conversation.
+  handlers?.onPickMode('talk');
 }
 
 /** `Open file`: the file as it is now, with the diff's lines marked in it. */

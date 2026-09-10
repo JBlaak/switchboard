@@ -26,6 +26,15 @@
  * undoable from the header, because a default that cannot be turned off is a
  * missing file rather than a tidy one. Which is why the counts the banner
  * prints come from the same call that hid them.
+ *
+ * **A file that is not plain readable text is still a file.** Four of the
+ * states below are not "a hunk you can read": a merge conflict, a file two
+ * sessions both wrote, a file that changed while you were reading it, and a
+ * minified line nothing can colour. Each of them is decided here — is this
+ * conflicted, which rows are its markers, is this claimed twice, which session
+ * could be asked about it, is this section stale, is this block affordable to
+ * colour — so the surface can draw the answer without holding any of the
+ * reasoning.
  */
 import { sameBase } from '../files/changes-list-model';
 import type { ChangesPayload } from '../../../domain/changes/types';
@@ -71,6 +80,15 @@ export interface DiffSection {
   submodule: boolean;
   whitespaceOnly: boolean;
   untracked: boolean;
+  /**
+   * git could not merge this file and left both sides in it.
+   *
+   * `status === 'U'` restated as a flag, because it is the one status that
+   * changes how the whole section behaves rather than only which letter it
+   * prints: it outranks every "this is boring" collapse, it colours its own
+   * rows, and it is the only section with actions of its own.
+   */
+  conflicted: boolean;
   /** Where a rename or a copy came from. */
   oldPath?: string;
   /** The rename/copy score, 0–100. */
@@ -192,7 +210,14 @@ export function buildDiffView(payload: ChangesPayload, options: DiffOptions = {}
 
   // Hidden, not dropped: the banner counts them and putting them back is one
   // click, which is the whole bargain of a default this aggressive.
-  const shown = hideGenerated ? all.filter(section => !section.generated) : all;
+  //
+  // Except for a conflict. A conflicted lockfile is the single most common
+  // conflict there is, and hiding it behind a banner that says "generated"
+  // would be telling the reader their tree is clean when git is refusing to
+  // continue — the one lie this surface must not tell.
+  const shown = hideGenerated
+    ? all.filter(section => !section.generated || section.conflicted)
+    : all;
 
   return {
     base: payload.base,
@@ -225,6 +250,7 @@ function sectionFor(
     submodule: file.submodule,
     whitespaceOnly: file.whitespaceOnly,
     untracked: flags.untracked,
+    conflicted: !flags.untracked && file.status === 'U',
     ...(file.oldPath === undefined ? {} : { oldPath: file.oldPath }),
     ...(file.similarity === undefined ? {} : { similarity: file.similarity }),
     ...(file.truncated === undefined ? {} : { truncated: file.truncated }),
@@ -246,6 +272,13 @@ function sectionFor(
  * generation, because it is the one that turns a 212-file migration from
  * unreadable into skimmable: a moved file is one line — old path, arrow, new
  * path, similarity — and never a delete plus an add.
+ *
+ * A conflict is settled next, and only sheer size still folds it. Every other
+ * collapse here is a judgement that the file is *boring* — a lockfile, a
+ * reformat — and a file git could not merge is never boring however it was
+ * written. Size is the exception because that collapse is about what the
+ * browser can draw, not about what is worth reading, and it stays one click
+ * from open.
  */
 export function bodyFor(
   section: DiffSection, expanded: boolean, ignoreWhitespace = true,
@@ -255,6 +288,7 @@ export function bodyFor(
   if (isPureRename(section)) return 'rename';
   if (section.untracked) return 'untracked';
   if (expanded) return 'hunks';
+  if (section.conflicted) return section.truncated === 'size' ? 'oversize' : 'hunks';
   if (section.truncated === 'generated') return 'generated';
   if (section.truncated === 'size') return 'oversize';
   if (ignoreWhitespace && section.whitespaceOnly) return 'whitespace';
@@ -307,6 +341,278 @@ export function totalsOf(sections: readonly DiffSection[]): DiffTotals {
 /** The claim the header names: the most recent one, or none. */
 export function primaryClaim(section: DiffSection): SessionClaim | null {
   return section.claims[0] ?? null;
+}
+
+// ── a conflict, shown and never merged ────────────────────────────────────────
+
+/**
+ * What one row of a conflicted file is.
+ *
+ * git writes a conflict into the file itself, so a conflicted file is an
+ * ordinary patch whose added lines happen to include the markers — which is
+ * why nothing here needs `--cc`, and why the whole shape of the conflict is
+ * already on the wire by the time a section draws.
+ *
+ * `base` is the diff3 style's third side: with `merge.conflictStyle` set to
+ * `diff3` or `zdiff3`, git writes the common ancestor between `|||||||` and
+ * `=======`. Most repositories never see it; the ones that do would otherwise
+ * have that whole region silently coloured as "ours".
+ */
+export type ConflictRole =
+  /** `<<<<<<< HEAD` */
+  | 'start'
+  /** Between `<<<<<<<` and the next marker: the side already in the worktree. */
+  | 'ours'
+  /** `||||||| merged common ancestors` */
+  | 'base-marker'
+  /** Between `|||||||` and `=======`: the common ancestor, in diff3 style. */
+  | 'base'
+  /** `=======` */
+  | 'separator'
+  /** Between `=======` and `>>>>>>>`: the side being merged in. */
+  | 'theirs'
+  /** `>>>>>>> branch` */
+  | 'end';
+
+/**
+ * The markers, as git writes them.
+ *
+ * Seven characters is `merge.conflictMarkerSize`'s default and the only size
+ * anything in the wild uses; `{7,}` covers a repository that raised it. Each
+ * one must be the whole line or be followed by a space, so a line of `=======`
+ * under a heading in a Markdown file is not mistaken for a separator — and
+ * even that only matters inside a region, because the state machine below
+ * never looks for a separator outside one.
+ */
+const CONFLICT_START = /^<{7,}(?: |$)/;
+const CONFLICT_BASE = /^\|{7,}(?: |$)/;
+const CONFLICT_SEPARATOR = /^={7,}(?: |$)/;
+const CONFLICT_END = /^>{7,}(?: |$)/;
+
+/**
+ * One role per line, `null` for the lines that are outside every region.
+ *
+ * A region that never closes keeps its roles to the end of the block, because
+ * that is the honest reading of what is there: the hunk was cut off, or git
+ * really did leave the file that way, and colouring the tail as ordinary code
+ * would hide it either way.
+ */
+export function conflictRoles(lines: readonly string[]): (ConflictRole | null)[] {
+  let side: 'ours' | 'base' | 'theirs' | null = null;
+
+  return lines.map(line => {
+    if (side === null) {
+      if (CONFLICT_START.test(line)) { side = 'ours'; return 'start'; }
+      return null;
+    }
+    if (CONFLICT_BASE.test(line)) { side = 'base'; return 'base-marker'; }
+    if (CONFLICT_SEPARATOR.test(line)) { side = 'theirs'; return 'separator'; }
+    if (CONFLICT_END.test(line)) { side = null; return 'end'; }
+    return side;
+  });
+}
+
+/** Whether a block of lines holds a conflict git wrote into the file. */
+export function hasConflictMarkers(lines: readonly string[]): boolean {
+  return lines.some(line => CONFLICT_START.test(line));
+}
+
+/** How many separate conflicts are in a file's hunks — what the header counts. */
+export function conflictRegionsIn(hunks: readonly Hunk[]): number {
+  let regions = 0;
+  for (const hunk of hunks) {
+    for (const line of hunk.lines) if (CONFLICT_START.test(line.text)) regions += 1;
+  }
+  return regions;
+}
+
+/**
+ * Which session to hand a conflicted file to, if any.
+ *
+ * Invariant 10: the app shows a conflict and offers to hand it to a session,
+ * and that offer is the whole feature — so who it goes to has to be a decision
+ * and not a guess. In order: a session that claims the file and is still
+ * running, most recent claim first; then the session on screen, if it is
+ * running; then nobody. A session that is not running is never a target,
+ * because a prompt written into a dead terminal is lost without a sound.
+ *
+ * `running` is the renderer's live-PTY set, which lags the truth by up to one
+ * poll — so the caller checks again at the moment of sending rather than
+ * trusting an answer that was drawn a minute ago.
+ */
+export interface AskTarget {
+  sessionId: string;
+  /** `claim` — a session that wrote this file. `active` — the one on screen. */
+  from: 'claim' | 'active';
+}
+
+export function askTarget(
+  claims: readonly SessionClaim[],
+  activeSessionId: string | null,
+  running: ReadonlySet<string>,
+): AskTarget | null {
+  for (const claim of claims) {
+    if (running.has(claim.sessionId)) return { sessionId: claim.sessionId, from: 'claim' };
+  }
+  if (activeSessionId !== null && running.has(activeSessionId)) {
+    return { sessionId: activeSessionId, from: 'active' };
+  }
+  return null;
+}
+
+/**
+ * Strip everything a terminal would read as a keystroke rather than as text.
+ *
+ * The prompt is written into a live PTY, so a newline in it is not a newline —
+ * it is Return, and it submits whatever is in the composer at that instant.
+ * Paths can carry one: git quotes such a path in its output and the parser
+ * unquotes it faithfully, so a path with a newline in it reaches this surface
+ * intact. An escape would be worse still. Everything below U+0020, plus DEL,
+ * collapses to a single space.
+ */
+export function sanitiseForTerminal(text: string): string {
+  // Written as escapes rather than as literal bytes so this file stays plain
+  // text: the C0 range, plus DEL.
+  return text.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+}
+
+/**
+ * What `Ask the session` types into the session's composer.
+ *
+ * One line, because a PTY reads a newline as Return. It names the file, says
+ * how many conflicts are in it, and asks for the two sides before any writing
+ * — the app is handing over a decision, not delegating it.
+ */
+export function conflictPrompt(path: string, regions: number): string {
+  const count = regions === 1 ? '1 conflict' : `${regions} conflicts`;
+  return sanitiseForTerminal(
+    `Resolve the merge conflict in ${path} (${count}). `
+    + 'Read the file, tell me what each side is doing, and wait for me before writing.',
+  );
+}
+
+// ── one file, two sessions ────────────────────────────────────────────────────
+
+/**
+ * Who wrote this file, and whether that is more than one answer.
+ *
+ * `overlapping` means **two sessions claim the same file** — nothing narrower.
+ * A claim is a `tool_use` in a transcript: a path, a session and a time, with
+ * no line numbers anywhere in it. So the honest marker is on the file, and any
+ * per-hunk attribution would be a number this surface made up. Saying "two
+ * sessions wrote this file, and where they collide is not known here" is worth
+ * more than a confident line number that is wrong.
+ */
+export interface SectionAttribution {
+  /** Most recent first, as the payload orders them. */
+  claims: readonly SessionClaim[];
+  /** More than one session claims the path. Per file — never per line. */
+  overlapping: boolean;
+  /** Tool calls across every claimant, which is the size of the collision. */
+  edits: number;
+}
+
+export function attributionOf(section: { claims: readonly SessionClaim[] }): SectionAttribution {
+  let edits = 0;
+  for (const claim of section.claims) edits += claim.edits;
+  return { claims: section.claims, overlapping: section.claims.length > 1, edits };
+}
+
+// ── changed underneath you ────────────────────────────────────────────────────
+
+/**
+ * How many of the diff's files are watched at once.
+ *
+ * One `fs.watch` per file, and a 212-file diff scrolled end to end would ask
+ * for 212 of them. The reader is looking at one screen; the sections behind
+ * them have already been skipped by `content-visibility` and will be rebuilt
+ * from a fresh patch if they are ever scrolled back to. So the set is bounded
+ * and the oldest entry is released when a new one arrives.
+ */
+export const MAX_WATCHED_FILES = 64;
+
+/** The watch set after one more path joins it, and whatever fell out. */
+export function nextWatched(
+  watched: readonly string[], path: string, limit = MAX_WATCHED_FILES,
+): { watched: string[]; released: string[] } {
+  if (watched.includes(path)) return { watched: [...watched], released: [] };
+  const grown = [...watched, path];
+  const overflow = Math.max(0, grown.length - Math.max(1, limit));
+  return { watched: grown.slice(overflow), released: grown.slice(0, overflow) };
+}
+
+/**
+ * A watcher's absolute path, as a path inside the worktree — or `null`.
+ *
+ * The main process answers with `path.resolve`'s spelling of what it was
+ * given, which on Windows means backslashes where the diff's own paths have
+ * forward slashes. Both sides are normalised before they are compared, so a
+ * file changing under a Windows worktree still finds its section.
+ */
+export function relativeToWorktree(worktreePath: string, changedPath: string): string | null {
+  const root = worktreePath.replace(/\\/g, '/').replace(/\/+$/, '');
+  const target = changedPath.replace(/\\/g, '/');
+  if (root === '' || !target.startsWith(`${root}/`)) return null;
+  const rel = target.slice(root.length + 1);
+  return rel === '' ? null : rel;
+}
+
+/**
+ * The stale set after one file changed on disk.
+ *
+ * Only a path the scroll has actually drawn can go stale — a change to a file
+ * the reader has never reached is not news, it is just the tree moving. The
+ * answer is a new set rather than a mutation so the caller can tell whether
+ * anything happened without diffing by hand.
+ */
+export function markStale(
+  stale: ReadonlySet<string>,
+  drawn: ReadonlySet<string>,
+  worktreePath: string | null,
+  changedPath: string,
+): Set<string> {
+  const next = new Set(stale);
+  if (worktreePath === null) return next;
+  const rel = relativeToWorktree(worktreePath, changedPath);
+  if (rel === null || !drawn.has(rel)) return next;
+  next.add(rel);
+  return next;
+}
+
+// ── long lines and caps ───────────────────────────────────────────────────────
+
+/**
+ * Beyond this many lines in one block, nothing is coloured.
+ *
+ * Below `MAX_HIGHLIGHT_LINES` in `lib/highlight-static.ts` on purpose: that one
+ * is the highlighter's own floor and this one is the diff's, and a diff hands
+ * over a hunk at a time rather than a file, so the surface can afford to be
+ * the stricter of the two.
+ */
+export const MAX_HUNK_LINES = 1200;
+
+/**
+ * A single line this long turns colouring off for its whole block.
+ *
+ * Deliberately the same number as `MAX_HIGHLIGHT_LINE_LENGTH`, and the test
+ * asserts it has not drifted: the highlighter would refuse the block anyway,
+ * and deciding it here means the surface never builds the array of texts to
+ * hand over in the first place.
+ */
+export const MAX_HUNK_LINE_LENGTH = 2000;
+
+/**
+ * Whether a block of lines is worth handing to the parser.
+ *
+ * A minified bundle is one line of 1.6 MB, and Lezer on the renderer's only
+ * thread has no frame to yield on — the window would simply stop. False here
+ * means the rows are escaped plain text, which is still every character of the
+ * change, in the right order, on the right line: uncoloured, not missing.
+ */
+export function colourable(lines: readonly string[]): boolean {
+  if (lines.length > MAX_HUNK_LINES) return false;
+  for (const line of lines) if (line.length > MAX_HUNK_LINE_LENGTH) return false;
+  return true;
 }
 
 // ── lazy rendering ────────────────────────────────────────────────────────────
