@@ -278,11 +278,15 @@ export class GitService {
     ]);
     if (summary.code !== 0) throw this.#failure(`diff in ${worktreePath}`, summary);
 
+    const statuses = parseStatus(output);
     const result: DiffResult = {
       base: resolved.base,
       requestedBase: base,
-      files: summarise(summary.stdout, this.#generatedAttributes(worktreePath)),
-      untracked: parseStatus(output).filter(file => file.status === '?'),
+      files: markUnmerged(
+        summarise(summary.stdout, this.#generatedAttributes(worktreePath)),
+        new Set(statuses.filter(file => file.status === 'U').map(file => file.path)),
+      ),
+      untracked: statuses.filter(file => file.status === '?'),
     };
     this.#remember(place, { key, revision: resolved.revision, result });
     return result;
@@ -338,6 +342,13 @@ export class GitService {
       if (known.oldPath !== undefined) file.oldPath = known.oldPath;
       if (known.similarity !== undefined) file.similarity = known.similarity;
     }
+    // A conflict is the same case, and needs saying separately because it is
+    // lost for a different reason: no `git diff` against a revision can report
+    // an unmerged file as anything but modified, whatever the pathspec. Only
+    // the file list knows, because `markUnmerged` joined `git status` on to it.
+    // Without this the row arrives conflicted, then turns into an ordinary
+    // modification the moment its patch loads — which is what the app did.
+    if (known?.status === 'U') file.status = 'U';
     if (!file.binary && file.additions > 0 && file.additions === file.deletions) {
       file.whitespaceOnly = await this.#whitespaceOnly(worktreePath, revision, paths);
     }
@@ -580,6 +591,29 @@ function gitInvocation(worktreePath: string, args: readonly string[]): GitInvoca
  * a modification: it should not happen, and losing a changed file is a worse
  * answer than mislabelling one.
  */
+/**
+ * Put back the conflicted status that `git diff --raw` cannot express.
+ *
+ * Against a revision, a file with both sides still in it is reported as an
+ * ordinary `M` — the raw format describes a change against that revision, and
+ * against HEAD a conflicted file has simply been modified. Only the
+ * index-relative form spells it `U`, and that one lists the path twice, once
+ * each way, so it is not the call to build a file list from.
+ *
+ * `git status` already knows: porcelain v2 gives an unmerged path a record of
+ * its own, which `status()` above has been reading all along. This joins that
+ * answer back on. Without it a conflict reaches the surface as a modification
+ * and none of the conflict UI fires — invariant 10 is about showing a conflict
+ * honestly, which starts with noticing there is one.
+ *
+ * Found by opening a real conflicted repository in the app: `note.txt` came
+ * back `M`, and the `Ask the session` row never drew.
+ */
+function markUnmerged(files: FileDiff[], unmerged: ReadonlySet<string>): FileDiff[] {
+  if (unmerged.size === 0) return files;
+  return files.map(file => (unmerged.has(file.path) ? { ...file, status: 'U' as const } : file));
+}
+
 function summarise(stdout: string, attributes: GeneratedAttributes | null): FileDiff[] {
   const counts = new Map<string, NumstatEntry>();
   for (const entry of parseNumstat(stdout)) counts.set(entry.path, entry);

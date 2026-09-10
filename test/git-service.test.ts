@@ -678,3 +678,68 @@ test('the answer is remembered per worktree, but "nothing" is asked again', asyn
   await none.git.defaultBranch('/Users/j/dev/proj');
   assert.ok(none.runner.calls.length > asking, 'nothing resolved, so nothing was cached');
 });
+
+// --- A conflict, which the raw format cannot express ---
+
+/**
+ * Reproduced from a real conflicted repository opened in the app: `git diff
+ * --raw HEAD` calls an unmerged file an ordinary `M`, because that is all the
+ * raw format can say against a revision. Only `git status` knows, and both
+ * phases have to be told separately.
+ */
+const CONFLICT_STATUS = record(
+  `# branch.oid ${HEAD_SHA}`,
+  '# branch.head main',
+  'u UU N... 100644 100644 100644 100644 aaaaaaa bbbbbbb ccccccc note.txt',
+);
+
+const CONFLICT_SUMMARY = record(
+  ':100644 100644 aaaaaaa 0000000 M', 'note.txt',
+  '4\t0\tnote.txt',
+);
+
+const CONFLICT_PATCH = [
+  'diff --git a/note.txt b/note.txt',
+  'index aaaaaaa..bbbbbbb 100644',
+  '--- a/note.txt',
+  '+++ b/note.txt',
+  '@@ -1,3 +1,7 @@',
+  ' one',
+  '+<<<<<<< HEAD',
+  ' TWO from main',
+  '+=======',
+  '+TWO from the feature branch',
+  '+>>>>>>> feature',
+  ' three',
+  '',
+].join('\n');
+
+const conflicted = (): ReturnType<typeof twoPhase> => twoPhase({
+  status: exit(0, CONFLICT_STATUS),
+  summary: exit(0, CONFLICT_SUMMARY),
+  patch: exit(0, CONFLICT_PATCH),
+});
+
+test('an unmerged file is conflicted in the file list, not merely modified', async () => {
+  const result = await conflicted().git.changedFiles('/Users/j/dev/proj', { kind: 'uncommitted' });
+  assert.equal(result.files.length, 1);
+  assert.equal(result.files[0].status, 'U',
+    'the raw half said M; git status said unmerged, and that is the one that knows');
+});
+
+test('it is still conflicted once its patch has been read', async () => {
+  // The nastier half of the same bug: the row arrived conflicted and turned
+  // back into an ordinary modification the moment the reader scrolled to it,
+  // because the per-file diff re-derives a status the patch cannot carry.
+  const h = conflicted();
+  await h.git.changedFiles('/Users/j/dev/proj', { kind: 'uncommitted' });
+  const file = await h.git.diffFile('/Users/j/dev/proj', { kind: 'uncommitted' }, 'note.txt');
+
+  assert.equal(file.status, 'U', 'the file list saw the whole tree and knows better');
+  assert.ok(file.hunks.length > 0, 'and the markers are still there to draw');
+});
+
+test('a file nobody called unmerged keeps the status the raw half gave it', async () => {
+  const result = await twoPhase().git.changedFiles('/Users/j/dev/proj', { kind: 'uncommitted' });
+  assert.deepEqual(result.files.map(file => file.status), ['M', 'A', 'M']);
+});
