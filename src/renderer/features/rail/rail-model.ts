@@ -211,14 +211,6 @@ function collisions(monograms: readonly string[]): number[][] {
   return [...byMonogram.values()].filter(group => group.length > 1);
 }
 
-/** The first character position at which these strings are not all equal, or -1. */
-function firstDivergence(texts: readonly string[]): number {
-  const longest = Math.max(...texts.map(text => text.length));
-  for (let i = 0; i < longest; i++) {
-    if (!texts.every(text => text[i] === texts[0][i])) return i;
-  }
-  return -1;
-}
 
 /**
  * One monogram per checkout, and no two of them the same.
@@ -255,13 +247,49 @@ export function worktreeMonograms(worktrees: readonly Worktree[]): string[] {
     if (!progressed) break;
   }
 
-  for (const group of collisions(monograms)) {
-    const texts = group.map(index => words[index].join(''));
-    const at = firstDivergence(texts);
-    if (at <= 0) continue;
-    group.forEach((index, k) => {
-      monograms[index] = (texts[k][0] ?? '?').toUpperCase() + (texts[k][at] ?? '·');
-    });
+  // Last resort: the first letter plus the first character that is still free.
+  //
+  // It has to consider the whole set, not one colliding group at a time.
+  // Resolving a group on its own can hand a member a monogram some *other*
+  // checkout already wears, and then the pass that was meant to end the
+  // collision has moved it. Measured in the running app on this repository's
+  // 12 drawn checkouts: `a20a8093…` and `a2fad0bf…` both came out `A2`, were
+  // split on their first difference into `A0` and `Af`, and `A0` was already
+  // `a041d52b…`. Two tiles, one monogram, which is exactly what invariant 5
+  // forbids.
+  const groups = collisions(monograms);
+  if (groups.length === 0) return monograms;
+
+  const colliding = new Set(groups.flat());
+  const taken = new Set(monograms.filter((_, index) => !colliding.has(index)));
+  // Two entries whose text is genuinely identical keep one monogram between
+  // them: there is nothing left to tell them apart with, and inventing a
+  // difference at the second character would say something untrue.
+  const byText = new Map<string, string>();
+
+  for (const group of groups) {
+    for (const index of group) {
+      const text = words[index].join('');
+      const already = byText.get(text);
+      if (already !== undefined) {
+        monograms[index] = already;
+        continue;
+      }
+
+      const head = (text[0] ?? '?').toUpperCase();
+      let picked = '';
+      for (let at = 1; at < text.length; at++) {
+        const candidate = head + text[at];
+        if (taken.has(candidate)) continue;
+        picked = candidate;
+        break;
+      }
+      if (picked === '') picked = monograms[index];
+
+      taken.add(picked);
+      byText.set(text, picked);
+      monograms[index] = picked;
+    }
   }
   return monograms;
 }
@@ -329,6 +357,7 @@ export function splitForRail<T>(
   costOf: (tile: T) => number,
   budgetPx: number,
   overflowCostPx: number = RAIL_TILE_PX + RAIL_GAP_PX,
+  keep: (tile: T) => boolean = () => false,
 ): RailSplit<T> {
   let total = 0;
   for (const tile of tiles) total += costOf(tile);
@@ -338,9 +367,40 @@ export function splitForRail<T>(
   let used = 0;
   for (let i = 0; i < tiles.length; i++) {
     const cost = costOf(tiles[i]);
-    if (used + cost + overflowCostPx > budgetPx) return { shown, hidden: tiles.slice(i) };
+    if (used + cost + overflowCostPx > budgetPx) {
+      // Everything from here spills — except the tile the user is standing on.
+      // Scoping to a project and watching it leave the rail is the one outcome
+      // the overflow must never produce: the flyout is for the places you are
+      // not, and `+N` with no selected tile above it reads as the rail having
+      // lost the project rather than folded it away.
+      const rest = tiles.slice(i);
+      const kept = rest.filter(keep);
+      return { shown: [...shown, ...kept], hidden: rest.filter(tile => !keep(tile)) };
+    }
     used += cost;
     shown.push(tiles[i]);
   }
   return { shown, hidden: [] };
+}
+
+/** Below this the stack is not worth drawing as a stack. */
+const MIN_WORKTREE_SUBTILES = 3;
+
+/**
+ * How many checkouts the scoped project draws before the rest go behind `+N`.
+ *
+ * A worktree stack is paid for out of the same budget as every other project,
+ * and an uncapped one starves them all. Measured on this repository, which a
+ * swarm of agents had left with 23 checkouts: the stack alone came to more than
+ * the whole rail, so the very first tile did not fit, and every project —
+ * including the one being scoped to — went behind the overflow. The rail
+ * showed `+21` and nothing else.
+ *
+ * Half the budget is the ceiling. It always leaves room for the tile the stack
+ * hangs from and several projects besides, and it scales with the window
+ * rather than fixing a number that is wrong on some other screen.
+ */
+export function worktreeStackCap(budgetPx: number): number {
+  const room = Math.floor((budgetPx / 2 - RAIL_GAP_PX) / (RAIL_SUBTILE_PX + RAIL_GAP_PX));
+  return Math.max(MIN_WORKTREE_SUBTILES, room);
 }

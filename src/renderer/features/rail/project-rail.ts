@@ -28,7 +28,7 @@
  */
 import {
   RAIL_DIVIDER_PX, RAIL_GAP_PX, RAIL_SUBTILE_PX, RAIL_TILE_PX,
-  orderRailProjects, splitForRail,
+  orderRailProjects, splitForRail, worktreeStackCap,
 } from './rail-model';
 import { absorbedProjectPaths } from '../../../domain/git/scope';
 import { buildAllTile, buildOverflowTile, buildProjectTile } from './rail-tile';
@@ -109,9 +109,14 @@ function render(): void {
   for (const project of projects) rows.push(...project.sessions);
 
   const budget = projectTileBudget(tiles.some(tile => tile.remote));
+  const capped = budget === null
+    ? tiles
+    : tiles.map(tile => capStack(tile, worktreeStackCap(budget), scope));
+  const isScoped = (tile: ProjectTile): boolean =>
+    scope !== null && tile.projectPath === scope.projectPath;
   const { shown, hidden } = budget === null
-    ? { shown: tiles, hidden: [] as ProjectTile[] }
-    : splitForRail(tiles, tileCost, budget);
+    ? { shown: capped, hidden: [] as ProjectTile[] }
+    : splitForRail(capped, tileCost, budget, undefined, isScoped);
 
   const signature = signatureOf(scope, shown, hidden, rows);
   if (signature === lastSignature) return;
@@ -177,8 +182,32 @@ function toTile(project: Project, scope: Scope | null): ProjectTile {
     detached: primary?.detached === true,
     head: primary?.head ?? '',
     missingWorktree: scoped && local ? missingWorktree(scope, probe) : null,
+    hiddenWorktrees: [],
     probe: toProbeState(probe),
   };
+}
+
+/**
+ * Cut the stack down to what the rail has height for.
+ *
+ * The scope's own checkout is never the one cut: it is the place the user is
+ * standing, and a selected sub-tile that vanishes into a flyout is the same
+ * failure as a selected project tile doing it. So it is pulled to the front of
+ * what is kept, and the rest fall in behind it in git's order.
+ */
+function capStack(tile: ProjectTile, cap: number, scope: Scope | null): ProjectTile {
+  if (tile.worktrees.length <= cap) return tile;
+
+  const selected = scope !== null && scope.projectPath === tile.projectPath
+    ? scope.worktreePath : null;
+  const ordered = selected === null
+    ? tile.worktrees
+    : [
+      ...tile.worktrees.filter(worktree => worktree.path === selected),
+      ...tile.worktrees.filter(worktree => worktree.path !== selected),
+    ];
+
+  return { ...tile, worktrees: ordered.slice(0, cap), hiddenWorktrees: ordered.slice(cap) };
 }
 
 /**
