@@ -67,6 +67,7 @@ const api: SwitchboardApi = {
 
   // ── Git ──
   gitWorktrees: (projectPath) => ipcRenderer.invoke(INVOKE.gitWorktrees, projectPath),
+  gitDefaultBranch: (worktreePath) => ipcRenderer.invoke(INVOKE.gitDefaultBranch, worktreePath),
   gitDiffFile: (worktreePath, base, relPath) =>
     ipcRenderer.invoke(INVOKE.gitDiffFile, worktreePath, base, relPath),
 
@@ -79,6 +80,7 @@ const api: SwitchboardApi = {
 
   // ── Host ──
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
+  revealPath: (target) => ipcRenderer.invoke(INVOKE.revealPath, target),
   writeClipboard: (text) => ipcRenderer.invoke(INVOKE.writeClipboard, text),
   getAppVersion: () => ipcRenderer.invoke(INVOKE.getAppVersion),
   updaterCheck: () => ipcRenderer.invoke(INVOKE.updaterCheck),

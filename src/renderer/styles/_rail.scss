@@ -111,6 +111,23 @@
   border-style: dashed;
 }
 
+/* A folder that is not a repository. The rail's whole claim is that a project
+   is a place with a branch and a diff, and here there is neither — so the tile
+   is drawn a shade quieter than its neighbours and the tooltip says why. Not
+   dashed: dashed already means "this used to be here" (the missing worktree)
+   and "there is more behind this" (the overflow tile), and a folder without git
+   is neither of those. It is a perfectly good place to run a session.
+
+   Three classes deep so it outranks the scoped tile's accent below, which is
+   also three; the later rule wins, which is the right way round — being in
+   scope is the louder fact. */
+.rail-group > .rail-tile.is-no-repo {
+  color: var(--sb-text-dimmest);
+}
+.rail-group.is-scoped > .rail-tile.is-no-repo {
+  color: color-mix(in srgb, var(--sb-accent) 65%, transparent);
+}
+
 .rail-tile-all svg {
   width: 16px;
   height: 16px;

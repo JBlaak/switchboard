@@ -160,7 +160,12 @@ test('a leading slash names the worktree root rather than the disk', async () =>
 test('a directory that cannot be read is empty and says so, rather than throwing', async () => {
   const h = harness({ files: { [`${WORKTREE}/a.ts`]: '' } });
 
-  assert.deepEqual(await h.browse.listDir(WORKTREE, 'gone'), { entries: [], unreadable: true });
+  const listing = await h.browse.listDir(WORKTREE, 'gone');
+  assert.deepEqual(listing.entries, []);
+  assert.equal(listing.unreadable, true);
+  // The reason travels with the answer: the tab prints it rather than showing
+  // an empty folder, which would be a different claim about the same directory.
+  assert.match(listing.error ?? '', /ENOENT/);
   assert.equal(h.runner.calls.length, 0, 'there was nothing to ask git about');
 });
 
@@ -228,8 +233,23 @@ test('a remote listing runs ls on the far host and reads the trailing slash as a
 test('a remote directory that ls cannot read is unreadable, and git is not asked', async () => {
   const h = harness({}, () => exit(2, '', "ls: cannot access 'srv/app/gone': No such file or directory\n"));
 
-  assert.deepEqual(await h.browse.listDir(REMOTE, 'gone'), { entries: [], unreadable: true });
+  assert.deepEqual(await h.browse.listDir(REMOTE, 'gone'), {
+    entries: [],
+    unreadable: true,
+    error: "ls: cannot access 'srv/app/gone': No such file or directory",
+  });
   assert.equal(h.runner.calls.length, 1);
+});
+
+test('a host that cannot be reached says so, so the tab never calls it an empty folder', async () => {
+  // What ssh prints under BatchMode=yes when there is no key it can use. The
+  // exit code is ssh's own, not `ls`'s: the command never ran at all.
+  const h = harness({}, () => exit(255, '', 'user@host: Permission denied (publickey).\n'));
+
+  const listing = await h.browse.listDir(REMOTE, '');
+  assert.deepEqual(listing.entries, []);
+  assert.equal(listing.unreadable, true);
+  assert.equal(listing.error, 'user@host: Permission denied (publickey).');
 });
 
 test('a remote read is marked read-only, because there is no way to write it back', async () => {

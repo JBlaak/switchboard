@@ -33,6 +33,16 @@ export interface BrowseListing {
    * folder rather than an error.
    */
   unreadable?: boolean;
+  /**
+   * Why, when it could not be read.
+   *
+   * Carried rather than only logged because the two reasons a remote listing
+   * fails read very differently to a user: a directory that is not there, and a
+   * host that cannot be reached at all. `Permission denied (publickey)` under
+   * `BatchMode=yes` is the common one, and rendering it as "this folder is
+   * empty" would be a lie the user acts on.
+   */
+  error?: string;
 }
 
 /** One file's text, or why there is none. */

@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
-  CROWDED_AT,
-  baseLabel, buildChangesView, sameBase, shortSessionId, statusTone,
+  CROWDED_AT, DEFAULT_BASE_CHOICE,
+  baseForChoice, baseLabel, baseOptions, buildChangesView, parseBaseChoice, sameBase,
+  shortSessionId, statusTone,
 } from '../src/renderer/features/files/changes-list-model';
 import type { ChangesPayload } from '../src/domain/changes/types';
 import type { DiffBase, FileDiff, FileStatus, FileStatusCode } from '../src/domain/git/types';
@@ -294,4 +295,61 @@ test('a status letter has a tone, and a conflict is not a shade of modified', ()
 test('a session nobody can name is still identifiable', () => {
   assert.strictEqual(shortSessionId('9f8e7d6c-1234-5678-9abc-def012345678'), '9f8e7d6c');
   assert.strictEqual(shortSessionId('short'), 'short');
+});
+
+// ── the base picker ───────────────────────────────────────────────────────────
+//
+// Open question 2: `main`, the merge base with it, or uncommitted only. The
+// choice is what is remembered — a stored ref would be wrong the moment it was
+// read back in a repository that calls its default branch something else — and
+// the ref is filled in from whatever this repository turned out to call it.
+
+test('a choice becomes a base against the branch this repository actually has', () => {
+  assert.deepStrictEqual(baseForChoice('default-branch', 'master'), { kind: 'branch', ref: 'master' });
+  assert.deepStrictEqual(baseForChoice('merge-base', 'master'), { kind: 'merge-base', ref: 'master' });
+  assert.deepStrictEqual(baseForChoice('uncommitted', 'master'), { kind: 'uncommitted' });
+
+  // A remote-tracking ref is a ref like any other: a clone whose `main` has
+  // never been checked out here still gets a base that resolves.
+  assert.deepStrictEqual(baseForChoice('merge-base', 'origin/main'),
+    { kind: 'merge-base', ref: 'origin/main' });
+});
+
+test('with no default branch every reading is uncommitted-only, before the round trip', () => {
+  for (const choice of ['default-branch', 'merge-base', 'uncommitted'] as const) {
+    assert.deepStrictEqual(baseForChoice(choice, null), { kind: 'uncommitted' },
+      `${choice} has nothing to compare against`);
+  }
+  // And the control says so by having nothing to pick between.
+  assert.deepStrictEqual(baseOptions(null).map(option => option.choice), ['uncommitted']);
+});
+
+test('the options are the three the design calls for, labelled as the header labels them', () => {
+  const options = baseOptions('master');
+
+  assert.deepStrictEqual(options.map(option => option.choice),
+    ['default-branch', 'merge-base', 'uncommitted']);
+  // The same words `baseLabel` puts in the header, so the control and the
+  // header cannot end up describing one base two ways.
+  assert.deepStrictEqual(options.map(option => option.label),
+    ['master', 'master (merge base)', 'uncommitted']);
+  for (const option of options) {
+    assert.strictEqual(baseLabel(baseForChoice(option.choice, 'master')), option.label);
+    assert.ok(option.title.length > 0, `${option.choice} says which diff it is`);
+  }
+});
+
+test('a stored choice is trusted only while it is still one of the choices', () => {
+  assert.strictEqual(parseBaseChoice('merge-base'), 'merge-base');
+  assert.strictEqual(parseBaseChoice('uncommitted'), 'uncommitted');
+  assert.strictEqual(parseBaseChoice('default-branch'), 'default-branch');
+
+  // A hand-edited settings blob, a shape an older build wrote, nothing at all:
+  // the project falls back to the default rather than asking for a base git
+  // cannot read.
+  for (const stored of ['main', '', 'branch', 42, null, undefined, {}]) {
+    assert.strictEqual(parseBaseChoice(stored), null, JSON.stringify(stored) ?? 'undefined');
+  }
+  assert.strictEqual(DEFAULT_BASE_CHOICE, 'merge-base',
+    'what a long-lived worktree wants: what this branch has done');
 });

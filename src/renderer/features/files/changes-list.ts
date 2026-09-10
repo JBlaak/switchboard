@@ -35,28 +35,40 @@
  * passes that in, for the same reason it does for the tree — the code area
  * imports the tab router, which imports the search, which drives the tree.
  */
-import { baseLabel, buildChangesView, shortSessionId, statusTone } from './changes-list-model';
+import {
+  BASE_CHOICE_SETTING, DEFAULT_BASE_CHOICE, baseForChoice, baseLabel, baseOptions,
+  buildChangesView, parseBaseChoice, shortSessionId, statusTone,
+} from './changes-list-model';
 import { cleanDisplayName } from '../../../domain/session/title';
+import { projectSettingsKey } from '../../../domain/settings/settings';
 import { filesContent } from '../../lib/dom';
 import { getScope } from '../../state/scope-store';
 import { sessionMap, view } from '../../state/session-store';
-import type { ChangeGroup, ChangeRow, ChangesView } from './changes-list-model';
+import type { BaseChoice, ChangeGroup, ChangeRow, ChangesView } from './changes-list-model';
 import type { ChangesPayload } from '../../../domain/changes/types';
-import type { DiffBase } from '../../../domain/git/types';
 import type { OpenedFile } from './file-tree';
 
 /**
- * The base the list asks for.
+ * What the list is compared against — open question 2, closed.
  *
- * Open question 2 has not been answered — the default is meant to be the
- * repository's own default branch, chosen through a picker that does not exist
- * yet — and merge-base is the useful reading for a worktree: *what has this
- * branch done*, rather than every commit `main` has made since it was cut. A
- * repository with no `main` is not lied to: git resolves what it can, falls
- * back to uncommitted-only and reports both, and the header prints the
- * fallback. That is invariant 7 working, not a failure mode.
+ * The base used to be the constant `{ kind: 'merge-base', ref: 'main' }`, which
+ * is right for most repositories and quietly wrong for every one that kept
+ * `master`: the ref does not resolve, git falls back to uncommitted-only and
+ * says so — invariant 7 working — and the user is still looking at a diff they
+ * did not ask for. So the branch is detected (`gitDefaultBranch`) rather than
+ * assumed, and which of the three readings to take is the user's, remembered
+ * per project.
+ *
+ * Both are memoised here rather than re-read per refresh: the branch cannot
+ * change under a worktree while the app is open, and the choice is only changed
+ * through `chooseBase`, which is the thing that writes it.
  */
-const REQUESTED_BASE: DiffBase = { kind: 'merge-base', ref: 'main' };
+const branchByRoot = new Map<string, string | null>();
+const choiceByProject = new Map<string, BaseChoice>();
+
+/** The choice and the branch in effect for what is on screen. */
+let choice: BaseChoice = DEFAULT_BASE_CHOICE;
+let defaultBranch: string | null = null;
 
 /** The whole surface, or null before `installChangesList`. */
 let section: HTMLElement | null = null;
@@ -191,6 +203,8 @@ function forget(): void {
   query = '';
   showGenerated = true;
   selectedPath = null;
+  choice = DEFAULT_BASE_CHOICE;
+  defaultBranch = null;
   readErrors.clear();
   shownRoot = scopeRoot();
   if (filterEl) filterEl.value = '';
@@ -218,7 +232,18 @@ async function refresh(): Promise<void> {
   loading = true;
   draw();
 
-  const answer = await window.api.getChanges(root, scope.projectPath, REQUESTED_BASE);
+  // What to compare against, before anything can be asked for: the branch this
+  // repository calls its default, and the reading of it this project chose. Two
+  // round trips on the first look at a project, none after that.
+  const [branch, chosen] = await Promise.all([
+    defaultBranchFor(root), choiceFor(scope.projectPath),
+  ]);
+  if (mine !== generation || scopeRoot() !== root) return;
+  defaultBranch = branch;
+  choice = chosen;
+
+  const answer = await window.api.getChanges(
+    root, scope.projectPath, baseForChoice(chosen, branch));
   // The scope moved while this was in flight, or a newer request has already
   // been answered: this list describes a place the user has left.
   if (mine !== generation || scopeRoot() !== root) return;
@@ -236,6 +261,75 @@ async function refresh(): Promise<void> {
     failure = null;
   }
   draw();
+}
+
+/**
+ * What this repository calls its default branch, asked once per worktree.
+ *
+ * A failure — the `{ ok: false, error }` envelope, or a folder that is not a
+ * repository — is null, which is a worktree with nothing to compare against and
+ * leaves uncommitted-only as the only honest reading. Remembered either way, so
+ * a repository without one is not asked again on every scope change.
+ */
+async function defaultBranchFor(root: string): Promise<string | null> {
+  const known = branchByRoot.get(root);
+  if (known !== undefined) return known;
+
+  const answer = await window.api.gitDefaultBranch(root);
+  const branch = typeof answer === 'string' && answer !== '' ? answer : null;
+  branchByRoot.set(root, branch);
+  return branch;
+}
+
+/** The project's remembered choice, or the default for one that has never chosen. */
+async function choiceFor(projectPath: string): Promise<BaseChoice> {
+  const known = choiceByProject.get(projectPath);
+  if (known !== undefined) return known;
+
+  const stored = await window.api.getSetting<Record<string, unknown>>(
+    projectSettingsKey(projectPath));
+  const chosen = parseBaseChoice(stored?.[BASE_CHOICE_SETTING]) ?? DEFAULT_BASE_CHOICE;
+  choiceByProject.set(projectPath, chosen);
+  return chosen;
+}
+
+/**
+ * Compare against something else, and remember it for the project.
+ *
+ * Per project rather than per worktree: the reading someone wants — *what has
+ * this branch done* against *everything not committed* — is a habit they have
+ * about a repository, and every checkout of it is the same kind of place. The
+ * write is read-modify-write over the project's settings blob, the way the
+ * settings panel writes into the same one.
+ *
+ * Exported because the diff surface draws the same control over the same
+ * answer; changing it there has to change it here, or the two headers would
+ * disagree about what they are showing.
+ */
+export function chooseBase(next: BaseChoice): void {
+  const scope = getScope();
+  if (scope === null || next === choice) return;
+
+  choice = next;
+  choiceByProject.set(scope.projectPath, next);
+  void remember(scope.projectPath, next);
+  void refresh();
+}
+
+/** The base the list is asking for, for a surface drawing the same control. */
+export function currentBaseChoice(): BaseChoice {
+  return choice;
+}
+
+/** The branch that choice names here, or null where none resolved. */
+export function currentDefaultBranch(): string | null {
+  return defaultBranch;
+}
+
+async function remember(projectPath: string, next: BaseChoice): Promise<void> {
+  const key = projectSettingsKey(projectPath);
+  const stored = (await window.api.getSetting<Record<string, unknown>>(key)) || {};
+  await window.api.setSetting(key, { ...stored, [BASE_CHOICE_SETTING]: next });
 }
 
 function errorOf(answer: unknown): string | null {
@@ -455,15 +549,7 @@ function drawHeader(): void {
 
   const current = viewNow();
   if (current) {
-    const base = document.createElement('span');
-    base.className = 'changes-base';
-    base.textContent = current.base.kind === 'uncommitted'
-      ? 'uncommitted'
-      : `vs ⎇ ${baseLabel(current.base)}`;
-    base.title = current.base.kind === 'uncommitted'
-      ? 'Everything not yet committed'
-      : `Compared against ${baseLabel(current.base)}`;
-    host.appendChild(base);
+    drawBase(current, host);
 
     host.appendChild(diffstat(current.totals.additions, current.totals.deletions, 'changes-stat'));
 
@@ -490,6 +576,55 @@ function drawHeader(): void {
   } else {
     noteEl.hidden = true;
   }
+}
+
+/**
+ * The base control, and — when git could not use what it asked for — the base
+ * that is really on screen.
+ *
+ * The select carries the *request*: it is the thing the user changes and the
+ * thing remembered for the project. The base actually used is what invariant 7
+ * is about, and when the two agree the select's own label already is it, so a
+ * second copy would be furniture. When they differ, the used base is printed
+ * beside the control as it always was, and the note under the header spells out
+ * why.
+ *
+ * A repository with no default branch has one honest reading and so no picker:
+ * it gets the plain label, which is what this header drew before there was a
+ * control at all.
+ */
+function drawBase(current: ChangesView, host: HTMLElement): void {
+  const options = baseOptions(defaultBranch);
+
+  if (options.length > 1) {
+    const pick = document.createElement('select');
+    pick.className = 'changes-base-pick';
+    pick.title = 'What this list is compared against';
+    for (const option of options) {
+      const item = document.createElement('option');
+      item.value = option.choice;
+      item.textContent = option.choice === 'uncommitted' ? option.label : `vs ⎇ ${option.label}`;
+      item.title = option.title;
+      if (option.choice === choice) item.selected = true;
+      pick.appendChild(item);
+    }
+    pick.addEventListener('change', () => {
+      const next = parseBaseChoice(pick.value);
+      if (next !== null) chooseBase(next);
+    });
+    host.appendChild(pick);
+    if (!current.baseMismatch) return;
+  }
+
+  const base = document.createElement('span');
+  base.className = 'changes-base';
+  base.textContent = current.base.kind === 'uncommitted'
+    ? 'uncommitted'
+    : `vs ⎇ ${baseLabel(current.base)}`;
+  base.title = current.base.kind === 'uncommitted'
+    ? 'Everything not yet committed'
+    : `Compared against ${baseLabel(current.base)}`;
+  host.appendChild(base);
 }
 
 function drawGroups(): void {

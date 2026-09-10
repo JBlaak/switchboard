@@ -179,6 +179,83 @@
   line-height: 1.5;
 }
 
+/* How long the read in flight has been going. Under the skeletons and in the
+   same faint grey as an empty level, because it is the same kind of statement:
+   what this part of the list is doing instead of holding names. Only appears
+   past ELAPSED_AFTER_MS, so a local listing never flashes it. */
+.files-elapsed {
+  padding: 2px calc(var(--sb-sidebar-gutter) + var(--sb-row-text));
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sb-text-dimmest);
+}
+
+/* ---- The read that failed ----
+   A band above the tree rather than in place of it: what is underneath is the
+   last listing that worked, and the point of the banner is to say so. Amber,
+   not red — the tree is not wrong, it is only out of date, and the same colour
+   the Changes section uses when git fell back to another base. */
+.files-unreachable {
+  margin: 4px var(--sb-sidebar-gutter) 6px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--sb-yellow) 30%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--sb-yellow) 7%, transparent);
+}
+
+.files-unreachable-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--sb-yellow);
+}
+
+/* ssh's own sentence, wrapped rather than truncated: `Permission denied
+   (publickey)` and `Connection refused` are the whole diagnosis and losing the
+   end of one to an ellipsis loses the part that says which. */
+.files-unreachable-why {
+  margin-top: 4px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--sb-text-dim);
+  overflow-wrap: anywhere;
+}
+
+.files-unreachable-stamp {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--sb-text-dimmest);
+}
+
+.files-unreachable-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* The 11px pill the Changes header's own button already uses, so the two read
+   as one vocabulary rather than as two designs in one sidebar. */
+.files-action-btn {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 5px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--sb-text-muted);
+  cursor: pointer;
+}
+
+.files-action-btn:hover,
+.files-action-btn:focus-visible {
+  color: var(--sb-accent);
+  border-color: rgba(var(--sb-accent-rgb), 0.4);
+  background: rgba(var(--sb-accent-rgb), 0.12);
+  outline: none;
+}
+
 /* ========== CHANGES ==========
    What changed in the scoped worktree, grouped by the session that changed it,
    stacked above the tree inside the same tab. It keeps the tree's three
@@ -207,15 +284,47 @@
 }
 
 /* The base the diff was actually taken against — never the one that was asked
-   for; see the note below, which is what says they differed. */
+   for; see the note below, which is what says they differed. Drawn beside the
+   picker only when the two are not the same base, so it does not repeat what
+   the picker already says. */
 .changes-base {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   font-size: 11px;
   color: var(--sb-text-faint);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The base the list *asks* for: the default branch, the merge base with it, or
+   uncommitted only, remembered per project. A bare select — the header is a row
+   of small muted text and a control with a box around it would be the loudest
+   thing in the sidebar. */
+.changes-base-pick {
+  flex: 1;
+  min-width: 0;
+  max-width: max-content;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  color: var(--sb-text-faint);
+  cursor: pointer;
+  appearance: none;
+  text-overflow: ellipsis;
+}
+
+.changes-base-pick:hover,
+.changes-base-pick:focus-visible {
+  color: var(--sb-accent);
+}
+
+/* The list itself is dark whatever the platform draws a select in. */
+.changes-base-pick option {
+  color: var(--sb-text);
+  background: var(--sb-bg-raised);
 }
 
 .changes-stat,

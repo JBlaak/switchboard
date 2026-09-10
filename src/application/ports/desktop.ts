@@ -16,6 +16,14 @@ export interface SystemGateway {
   /** Opens http(s) in the user's browser; anything else is ignored. */
   openExternal(url: string): Promise<void>;
   /**
+   * Show a path in the platform's file manager, selected rather than opened.
+   *
+   * Takes an absolute path that the caller has already checked: this is the
+   * adapter, and by the time it is reached the decision about whether the path
+   * may be shown has been made. See `resolveRevealTarget`.
+   */
+  revealPath(target: string): void;
+  /**
    * Copy text to the clipboard.
    *
    * Goes through the host rather than the renderer's `navigator.clipboard`,

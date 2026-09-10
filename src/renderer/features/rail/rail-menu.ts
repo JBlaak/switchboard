@@ -14,6 +14,7 @@
  * already offer, so that scoping to a project and acting on it are the same
  * gesture in the same place.
  */
+import { forgetWorktree } from '../../state/scope-store';
 import { projectLabel } from '../sessions/project-label';
 import { reloadProjects } from '../../app/refresh';
 import { showNewSessionPopover } from '../dialogs/new-session-popover';
@@ -27,6 +28,20 @@ import type { Project } from '../../../domain/project/project';
 
 /** How far to the right of the tile the menu sits. */
 const GAP_PX = 6;
+
+/**
+ * What this platform calls its file manager.
+ *
+ * "Reveal in Finder" on a Windows machine is an item nobody can act on, and the
+ * three names are different enough that a generic "Show in file manager" would
+ * read as a translation on the two platforms that have a name for it.
+ */
+function revealLabel(): string {
+  const platform = typeof window === 'undefined' ? '' : window.api?.platform;
+  if (platform === 'darwin') return 'Reveal in Finder';
+  if (platform === 'win32') return 'Show in Explorer';
+  return 'Show in file manager';
+}
 
 /**
  * The project this menu is about, looked up at click time.
@@ -43,32 +58,10 @@ function projectFor(projectPath: string): Project {
     ?? projectStub(projectPath);
 }
 
-export function showRailMenu(projectPath: string, anchor: PopoverAnchor): void {
-  document.querySelectorAll<HTMLElement>('.rail-menu').forEach(el => el.remove());
-
-  const menu = document.createElement('div');
-  menu.className = 'rail-menu';
-
-  const label = document.createElement('div');
-  label.className = 'rail-menu-label';
-  label.textContent = projectLabel(projectPath);
-  menu.appendChild(label);
-
-  let close = (): void => menu.remove();
-
-  const item = (text: string, onPick: () => void): HTMLButtonElement => {
-    const button = document.createElement('button');
-    button.className = 'rail-menu-item';
-    button.type = 'button';
-    button.textContent = text;
-    button.onclick = () => {
-      close();
-      onPick();
-    };
-    menu.appendChild(button);
-    return button;
-  };
-
+/** The three ways to put a line in a menu, handed to whoever is filling one. */
+interface MenuBuilder {
+  /** A live item. Picking it closes the menu first, then acts. */
+  item(text: string, onPick: () => void): HTMLButtonElement;
   /**
    * An item that is drawn but does nothing yet.
    *
@@ -77,42 +70,136 @@ export function showRailMenu(projectPath: string, anchor: PopoverAnchor): void {
    * the menu does not change shape when they land — and so the tooltip can say
    * which release to expect them in instead of the feature looking missing.
    */
-  const inert = (text: string, why: string): void => {
-    const button = document.createElement('button');
-    button.className = 'rail-menu-item';
-    button.type = 'button';
-    button.disabled = true;
-    button.textContent = text;
-    button.title = why;
-    menu.appendChild(button);
-  };
+  inert(text: string, why: string): void;
+  divider(): void;
+  /** A line of prose, for a menu that has something to explain. */
+  note(text: string): void;
+}
 
-  const remote = projectFor(projectPath).remote === true;
+/**
+ * Open one popover beside `anchor`, filled by `fill`.
+ *
+ * Both of the rail's menus are the same panel with different lines in it, so
+ * the shell — the label, the dismissal, the placement, the focus — is written
+ * once and neither of them owns it.
+ */
+function openMenu(labelText: string, anchor: PopoverAnchor, fill: (menu: MenuBuilder) => void): void {
+  document.querySelectorAll<HTMLElement>('.rail-menu').forEach(el => el.remove());
 
-  item('New session', () => showNewSessionPopover(projectFor(projectPath), anchor));
-  item('Open terminal here', () => {
-    const project = projectFor(projectPath);
-    if (project.remote) void launchRemoteSession(project, 'shell');
-    else void launchTerminalSession(project);
+  const menu = document.createElement('div');
+  menu.className = 'rail-menu';
+
+  const label = document.createElement('div');
+  label.className = 'rail-menu-label';
+  label.textContent = labelText;
+  menu.appendChild(label);
+
+  // Reassigned once the dismissal is installed, so an item picked before that
+  // still closes the panel it is in.
+  let close = (): void => menu.remove();
+
+  fill({
+    item(text, onPick) {
+      const button = document.createElement('button');
+      button.className = 'rail-menu-item';
+      button.type = 'button';
+      button.textContent = text;
+      button.onclick = () => {
+        close();
+        onPick();
+      };
+      menu.appendChild(button);
+      return button;
+    },
+    inert(text, why) {
+      const button = document.createElement('button');
+      button.className = 'rail-menu-item';
+      button.type = 'button';
+      button.disabled = true;
+      button.textContent = text;
+      button.title = why;
+      menu.appendChild(button);
+    },
+    divider() {
+      menu.appendChild(divider());
+    },
+    note(text) {
+      const line = document.createElement('div');
+      line.className = 'rail-menu-note';
+      line.textContent = text;
+      line.title = text;
+      menu.appendChild(line);
+    },
   });
-  // A remote project's settings live in its connection record, not in a
-  // `project:` settings key — the picker omits the item for the same reason.
-  if (!remote) {
-    item('Project settings…', () => void openSettingsViewer('project', projectPath));
-  }
-
-  menu.appendChild(divider());
-  inert('Pin', 'Pinning arrives with the rail’s groups');
-  inert('Move to group…', 'Groups arrive in a later release');
-
-  menu.appendChild(divider());
-  item('Archive all sessions', () => void archiveAllSessions(projectFor(projectPath)));
-  item('Remove project', () => void removeProject(projectPath, remote));
 
   document.body.appendChild(menu);
   position(menu, anchor);
   close = installDismiss(menu, anchor);
   menu.querySelector<HTMLElement>('.rail-menu-item:not([disabled])')?.focus();
+}
+
+export function showRailMenu(projectPath: string, anchor: PopoverAnchor): void {
+  const remote = projectFor(projectPath).remote === true;
+
+  openMenu(projectLabel(projectPath), anchor, menu => {
+    menu.item('New session', () => showNewSessionPopover(projectFor(projectPath), anchor));
+    menu.item('Open terminal here', () => {
+      const project = projectFor(projectPath);
+      if (project.remote) void launchRemoteSession(project, 'shell');
+      else void launchTerminalSession(project);
+    });
+    // A remote project's directory is a path on the far host, so there is
+    // nothing on this machine to reveal.
+    if (!remote) {
+      menu.item(revealLabel(), () => void revealPath(projectPath));
+    }
+    // A remote project's settings live in its connection record, not in a
+    // `project:` settings key — the picker omits the item for the same reason.
+    if (!remote) {
+      menu.item('Project settings…', () => void openSettingsViewer('project', projectPath));
+    }
+
+    menu.divider();
+    menu.inert('Pin', 'Pinning arrives with the rail’s groups');
+    menu.inert('Move to group…', 'Groups arrive in a later release');
+
+    menu.divider();
+    menu.item('Archive all sessions', () => void archiveAllSessions(projectFor(projectPath)));
+    menu.item('Remove project', () => void removeProject(projectPath, remote));
+  });
+}
+
+/**
+ * The menu behind a checkout that is no longer on disk.
+ *
+ * Two items, and only one of them does anything. `Forget` is the whole point:
+ * the tile is kept precisely so the user can decide, and this is the deciding.
+ * `Recreate` is drawn and disabled because there is no channel that writes to
+ * git — every git path in the app is a read — and an item that quietly does
+ * nothing is worse than one that says why.
+ */
+export function showMissingWorktreeMenu(
+  projectPath: string, worktreePath: string, anchor: PopoverAnchor,
+): void {
+  openMenu('Worktree removed', anchor, menu => {
+    menu.note(worktreePath);
+    menu.divider();
+    menu.item('Forget', () => forgetWorktree(projectPath, worktreePath));
+    menu.inert('Recreate', 'Switchboard only reads git; recreate the checkout with '
+      + '`git worktree add` and it will come back');
+  });
+}
+
+/**
+ * Show a directory in the platform's file manager.
+ *
+ * The main process checks the path before it hands it to the shell — see
+ * `resolveRevealTarget` — so a refusal here is a bug naming itself rather than
+ * something to put in front of the user.
+ */
+async function revealPath(target: string): Promise<void> {
+  const result = await window.api.revealPath(target);
+  if (result?.ok !== true) console.warn('reveal failed:', result?.error);
 }
 
 function divider(): HTMLElement {

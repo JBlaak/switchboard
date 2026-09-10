@@ -269,6 +269,92 @@ export function baseLabel(base: DiffBase): string {
   }
 }
 
+// ── the base this list is taken against ─────────────────────────────
+
+/**
+ * What the base control offers, as a choice rather than as a ref.
+ *
+ * A ref cannot be stored: `main` is not what every repository calls its default
+ * branch, and a choice remembered as `{ kind: 'merge-base', ref: 'main' }`
+ * would be wrong the moment it was read back in a repository that kept
+ * `master`. The choice is the durable half — *the default branch*, *the merge
+ * base with it*, *uncommitted only* — and the ref is filled in from whatever
+ * that repository turned out to call it.
+ */
+export type BaseChoice = 'default-branch' | 'merge-base' | 'uncommitted';
+
+/**
+ * What a project that has never chosen gets.
+ *
+ * Merge-base, because a long-lived worktree wants *what has this branch done*
+ * rather than every commit the default branch has made since it was cut — open
+ * question 2's own answer, and what the hard-coded base used to ask for.
+ */
+export const DEFAULT_BASE_CHOICE: BaseChoice = 'merge-base';
+
+/** The key a project's choice is remembered under, inside its settings blob. */
+export const BASE_CHOICE_SETTING = 'diffBase';
+
+const BASE_CHOICES: readonly string[] = ['default-branch', 'merge-base', 'uncommitted'];
+
+/** A stored value, if it is still one of the choices; null for anything else. */
+export function parseBaseChoice(value: unknown): BaseChoice | null {
+  return typeof value === 'string' && BASE_CHOICES.includes(value) ? value as BaseChoice : null;
+}
+
+/**
+ * The choice as a base git can be asked for.
+ *
+ * Both branch readings need a branch, so without one they are uncommitted-only
+ * — the same answer git would fall back to, arrived at before the round trip
+ * rather than after it.
+ */
+export function baseForChoice(choice: BaseChoice, defaultBranch: string | null): DiffBase {
+  if (choice === 'uncommitted' || !defaultBranch) return { kind: 'uncommitted' };
+  return choice === 'merge-base'
+    ? { kind: 'merge-base', ref: defaultBranch }
+    : { kind: 'branch', ref: defaultBranch };
+}
+
+/** One entry of the base control. */
+export interface BaseOption {
+  choice: BaseChoice;
+  /** As the header spells it, so the control and the header cannot disagree. */
+  label: string;
+  /** Which diff this actually is, for the option's tooltip. */
+  title: string;
+}
+
+/**
+ * What the control can offer here.
+ *
+ * A repository with no default branch — no commits yet, or nothing named
+ * `main`, `master` or pointed at by `origin/HEAD` — has one honest reading and
+ * gets one option. The surface can then draw the label it always drew instead
+ * of a picker that picks nothing.
+ */
+export function baseOptions(defaultBranch: string | null): BaseOption[] {
+  const options: BaseOption[] = [];
+  if (defaultBranch) {
+    options.push({
+      choice: 'default-branch',
+      label: baseLabel({ kind: 'branch', ref: defaultBranch }),
+      title: `Every difference from ${defaultBranch}, including what ${defaultBranch} did since`,
+    });
+    options.push({
+      choice: 'merge-base',
+      label: baseLabel({ kind: 'merge-base', ref: defaultBranch }),
+      title: `What this branch has done since it left ${defaultBranch}`,
+    });
+  }
+  options.push({
+    choice: 'uncommitted',
+    label: baseLabel({ kind: 'uncommitted' }),
+    title: 'Everything not yet committed',
+  });
+  return options;
+}
+
 /** A session nobody has a name for: enough id to tell two of them apart. */
 export function shortSessionId(sessionId: string): string {
   return sessionId.slice(0, SHORT_ID);

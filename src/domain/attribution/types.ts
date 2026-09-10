@@ -30,7 +30,14 @@ export interface EditClaim {
 
 /** Who touched a path, most recent first. */
 export interface PathClaims {
-  /** The absolute path the claims agree on. */
+  /**
+   * The identity the claims were folded under.
+   *
+   * The absolute path, unless the project is checked out in more than one place
+   * — then it is the path relative to whichever checkout it lies in, which is
+   * what lets a claim made in one worktree answer for the same file in a
+   * sibling. `groupClaims` decides; see `./worktrees`.
+   */
   path: string;
   sessions: SessionClaim[];
 }

@@ -103,6 +103,17 @@ export interface SwitchboardApi {
    */
   gitWorktrees(projectPath: string): Promise<Worktree[]>;
   /**
+   * What this repository calls its default branch — `main`, `master`, or
+   * whatever `origin/HEAD` points at — verified to resolve to a commit here,
+   * and `origin/<name>` when only the remote-tracking ref exists.
+   *
+   * Null when none of them resolve, which is a repository with nothing to
+   * compare against: the base picker then offers uncommitted-only alone. A
+   * failure answers with the `{ ok: false, error }` envelope, as every invoke
+   * does.
+   */
+  gitDefaultBranch(worktreePath: string): Promise<string | null>;
+  /**
    * One file's hunks — phase two of the two-phase diff.
    *
    * `getChanges` classifies the whole tree for the price of one command and
@@ -150,6 +161,15 @@ export interface SwitchboardApi {
 
   // ── Host ──
   openExternal(url: string): Promise<void>;
+  /**
+   * Show a directory or file in the platform's file manager.
+   *
+   * The path comes from the renderer, so the main process checks it before the
+   * shell sees it: it has to exist and it has to be inside a project the app
+   * already knows about. Answers the `{ ok }`/`{ error }` envelope, and a
+   * refusal is a bug rather than something to show the user.
+   */
+  revealPath(target: string): Promise<IpcResult>;
   writeClipboard(text: string): Promise<void>;
   getAppVersion(): Promise<string>;
   updaterCheck(): Promise<IpcResult>;

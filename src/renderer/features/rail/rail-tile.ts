@@ -11,18 +11,29 @@
  * you are" is said to a screen reader — the mint bar only says it to the eye.
  */
 import { ICONS } from '../../lib/icons';
-import { monogramFor, railBadge } from './rail-model';
+import { monogramFor, railBadge, worktreeLabel, worktreeMonograms } from './rail-model';
 import { projectLabel } from '../sessions/project-label';
 import { setScope } from '../../state/scope-store';
+import { showMissingWorktreeMenu } from './rail-menu';
 import type { RailBadge, RailRow } from './rail-model';
 import type { Scope, Worktree } from '../../../domain/git/types';
 import type { SessionSignals } from '../../../domain/session/tiers';
 
-/** What the last `git worktree list` for a project did. */
+/**
+ * What the last `git worktree list` for a project did.
+ *
+ * `no-repo` is its own answer rather than a `ready` with nothing in it, because
+ * the two mean opposite things to a reader: a repository always has at least
+ * its main working tree, so an empty list can only be git saying "there is no
+ * repository here". The rail's whole promise is that a project is a place with
+ * a branch and a diff, and this is the case where that is not true — so it has
+ * to be said rather than left to look like an ordinary tile.
+ */
 export type WorktreeProbe =
   | { kind: 'unknown' }
   | { kind: 'loading' }
   | { kind: 'ready' }
+  | { kind: 'no-repo' }
   | { kind: 'failed'; message: string };
 
 /** One project's tile, as the rail hands it over. */
@@ -34,6 +45,28 @@ export interface ProjectTile {
    * and for a project with a single checkout, which has nowhere else to be.
    */
   worktrees: readonly Worktree[];
+  /** The main working tree's branch, or null when detached or not a repository. */
+  branch: string | null;
+  /** The main working tree is detached; `branch` is null and `head` is what it is at. */
+  detached: boolean;
+  /** The short head of the main working tree, for a detached one. */
+  head: string;
+  /**
+   * A checkout the scope names that `git worktree list` no longer reports —
+   * the directory was deleted from under it. Kept as a tile of its own rather
+   * than dropped: its sessions and their transcripts still exist, and silently
+   * losing the tile loses the way back to them.
+   */
+  missingWorktree: string | null;
+  /**
+   * Checkouts past what the rail has height for, behind the stack's own `+N`.
+   *
+   * The rail does not scroll, and a repository can have many more checkouts
+   * than a stack has room for — an agent swarm leaves one per agent. They are
+   * listed rather than dropped: a checkout you cannot reach is a scope you
+   * cannot get back to.
+   */
+  hiddenWorktrees: readonly Worktree[];
   probe: WorktreeProbe;
 }
 
@@ -91,6 +124,7 @@ export function buildProjectTile(project: ProjectTile, ctx: RailContext): HTMLEl
   const tile = tileButton(monogramFor(project.projectPath), tooltipFor(project, ctx));
   if (project.remote) tile.classList.add('is-remote');
   if (project.probe.kind === 'failed') tile.classList.add('is-unreachable');
+  if (project.probe.kind === 'no-repo') tile.classList.add('is-no-repo');
   tile.setAttribute('aria-pressed', String(scope !== null
     && scope.projectPath === project.projectPath && scope.worktreePath === null));
   tile.onclick = () => {
@@ -111,7 +145,11 @@ export function buildProjectTile(project: ProjectTile, ctx: RailContext): HTMLEl
   ));
 
   group.appendChild(tile);
-  if (project.worktrees.length > 1) group.appendChild(buildWorktrees(project, ctx));
+  // A single checkout has nowhere else to be, so it draws no stack — unless the
+  // scope names one that has since been deleted, which has to be reachable.
+  if (project.worktrees.length > 1 || project.missingWorktree !== null) {
+    group.appendChild(buildWorktrees(project, ctx));
+  }
   return group;
 }
 
@@ -126,13 +164,18 @@ function buildWorktrees(project: ProjectTile, ctx: RailContext): HTMLElement {
   const list = document.createElement('div');
   list.className = 'rail-worktrees';
 
-  for (const worktree of project.worktrees) {
-    const label = worktree.branch ?? (worktree.detached ? worktree.head.slice(0, 7) : worktree.path);
+  // Monogrammed as a set, not one at a time: the checkouts of one repository
+  // are named to look alike, and the whole point of a sub-tile is to be
+  // distinguishable from its neighbours. See `worktreeMonograms`.
+  const monograms = worktreeMonograms(project.worktrees);
+
+  project.worktrees.forEach((worktree, index) => {
+    const label = worktreeLabel(worktree);
     const selected = ctx.scope !== null
       && ctx.scope.projectPath === project.projectPath
       && ctx.scope.worktreePath === worktree.path;
 
-    const tile = tileButton(monogramFor(label), worktreeTooltip(worktree, label));
+    const tile = tileButton(monograms[index], worktreeTooltip(worktree, label));
     tile.classList.add('rail-subtile');
     if (worktree.isPrimary) tile.classList.add('is-primary');
     if (selected) tile.classList.add('is-selected');
@@ -152,8 +195,113 @@ function buildWorktrees(project: ProjectTile, ctx: RailContext): HTMLElement {
     ));
 
     list.appendChild(tile);
+  });
+
+  if (project.missingWorktree !== null) {
+    list.appendChild(missingSubtile(project, project.missingWorktree, ctx));
+  }
+  if (project.hiddenWorktrees.length > 0) {
+    list.appendChild(moreWorktreesSubtile(project, ctx));
   }
   return list;
+}
+
+/**
+ * The checkouts the stack had no height for, behind one `+N` sub-tile.
+ *
+ * The same answer the project column gives when it runs out of room, one level
+ * down, and for the same reason: the rail does not scroll, and a checkout that
+ * is merely off the bottom is a scope nobody can return to. Its badge is the
+ * most urgent thing any of them is saying, so invariant 4 survives the fold.
+ */
+function moreWorktreesSubtile(project: ProjectTile, ctx: RailContext): HTMLButtonElement {
+  const hidden = project.hiddenWorktrees;
+  const tile = tileButton(
+    '+' + hidden.length,
+    `${hidden.length} more checkout${hidden.length > 1 ? 's' : ''}`,
+  );
+  tile.classList.add('rail-subtile', 'rail-tile-overflow');
+  tile.onclick = () => openWorktreeFlyout(project, hidden, ctx, tile);
+
+  const badges = hidden.map(worktree => railBadge(
+    ctx.rows, ctx.signalsOf,
+    { projectPath: project.projectPath, worktreePath: worktree.path },
+    ctx.scope, ctx.worktreesFor,
+  ));
+  paintBadge(tile, badges.includes('waiting') ? 'waiting'
+    : badges.includes('unread') ? 'unread'
+      : badges.includes('running') ? 'running' : null);
+  return tile;
+}
+
+/** The hidden checkouts, listed beside the rail with room for their names. */
+function openWorktreeFlyout(
+  project: ProjectTile, hidden: readonly Worktree[], ctx: RailContext, anchor: HTMLElement,
+): void {
+  const { flyout, close } = flyoutShell(anchor);
+  const monograms = worktreeMonograms(hidden);
+
+  hidden.forEach((worktree, index) => {
+    const label = worktreeLabel(worktree);
+    const row = document.createElement('button');
+    row.className = 'rail-flyout-row';
+    row.type = 'button';
+    row.title = worktreeTooltip(worktree, label);
+
+    const tile = document.createElement('span');
+    tile.className = 'rail-tile rail-subtile';
+    tile.textContent = monograms[index];
+    paintBadge(tile, railBadge(
+      ctx.rows, ctx.signalsOf,
+      { projectPath: project.projectPath, worktreePath: worktree.path },
+      ctx.scope, ctx.worktreesFor,
+    ));
+
+    const name = document.createElement('span');
+    name.className = 'rail-flyout-label';
+    name.textContent = label;
+
+    row.append(tile, name);
+    row.onclick = () => {
+      close();
+      setScope({ projectPath: project.projectPath, worktreePath: worktree.path });
+    };
+    flyout.appendChild(row);
+  });
+
+  place(flyout, anchor);
+}
+
+/**
+ * The checkout that is no longer on disk.
+ *
+ * Dashed and dimmed, and still the scope — because it still is: the sessions
+ * that ran in it are in the list underneath, and their transcripts are where
+ * they always were. Clicking it offers the only two things left to do with it,
+ * `Forget` and `Recreate`, rather than scoping to it again (it is already the
+ * scope) or doing nothing (which reads as a broken tile).
+ */
+function missingSubtile(project: ProjectTile, path: string, ctx: RailContext): HTMLButtonElement {
+  const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
+  const tile = tileButton(
+    monogramFor(path),
+    ['Worktree removed', name, path].join('\n'),
+  );
+  tile.classList.add('rail-subtile', 'is-missing');
+  // The scope still names it, so it is still the place the user is in.
+  tile.setAttribute('aria-pressed', 'true');
+  const open = (): void => showMissingWorktreeMenu(project.projectPath, path, tile);
+  tile.onclick = open;
+  tile.oncontextmenu = (e: MouseEvent) => {
+    e.preventDefault();
+    open();
+  };
+  paintBadge(tile, railBadge(
+    ctx.rows, ctx.signalsOf,
+    { projectPath: project.projectPath, worktreePath: path },
+    ctx.scope, ctx.worktreesFor,
+  ));
+  return tile;
 }
 
 /**
@@ -196,25 +344,7 @@ function badgeAcross(projects: readonly ProjectTile[], ctx: RailContext): RailBa
  * the name of. Dismissed the way the app's other popovers are.
  */
 function openFlyout(hidden: readonly ProjectTile[], ctx: RailContext, anchor: HTMLElement): void {
-  document.querySelectorAll<HTMLElement>('.rail-flyout').forEach(el => el.remove());
-
-  const flyout = document.createElement('div');
-  flyout.className = 'rail-flyout';
-
-  const close = (): void => {
-    flyout.remove();
-    document.removeEventListener('mousedown', onMouseDown);
-    document.removeEventListener('keydown', onKey);
-  };
-  const onMouseDown = (e: MouseEvent): void => {
-    if (flyout.contains(e.target as Node) || e.target === anchor) return;
-    close();
-  };
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key !== 'Escape') return;
-    e.preventDefault();
-    close();
-  };
+  const { flyout, close } = flyoutShell(anchor);
 
   for (const project of hidden) {
     const row = document.createElement('button');
@@ -251,15 +381,50 @@ function openFlyout(hidden: readonly ProjectTile[], ctx: RailContext, anchor: HT
     flyout.appendChild(row);
   }
 
+  place(flyout, anchor);
+}
+
+/**
+ * An empty flyout beside the rail, and the way to shut it.
+ *
+ * Shared by the two overflows — projects that did not fit the column, and
+ * checkouts that did not fit a stack — so both dismiss on the same gestures.
+ * Only one is ever open: opening either clears whatever was there.
+ */
+function flyoutShell(anchor: HTMLElement): { flyout: HTMLElement; close: () => void } {
+  document.querySelectorAll<HTMLElement>('.rail-flyout').forEach(el => el.remove());
+
+  const flyout = document.createElement('div');
+  flyout.className = 'rail-flyout';
+
+  const close = (): void => {
+    flyout.remove();
+    document.removeEventListener('mousedown', onMouseDown);
+    document.removeEventListener('keydown', onKey);
+  };
+  const onMouseDown = (e: MouseEvent): void => {
+    if (flyout.contains(e.target as Node) || e.target === anchor) return;
+    close();
+  };
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    close();
+  };
+
+  // Deferred: the click that opened this is still propagating.
+  setTimeout(() => document.addEventListener('mousedown', onMouseDown), 0);
+  document.addEventListener('keydown', onKey);
+  return { flyout, close };
+}
+
+/** Beside its anchor, and never off the top or bottom of the window. */
+function place(flyout: HTMLElement, anchor: HTMLElement): void {
   document.body.appendChild(flyout);
   const rect = anchor.getBoundingClientRect();
   const height = flyout.offsetHeight;
   flyout.style.left = rect.right + 6 + 'px';
   flyout.style.top = Math.max(6, Math.min(rect.top, window.innerHeight - height - 6)) + 'px';
-
-  // Deferred: the click that opened this is still propagating.
-  setTimeout(() => document.addEventListener('mousedown', onMouseDown), 0);
-  document.addEventListener('keydown', onKey);
 }
 
 /** The bare 32px button every shape above starts from. */
@@ -287,6 +452,14 @@ function paintBadge(tile: HTMLElement, badge: RailBadge): void {
   tile.appendChild(dot);
 }
 
+/**
+ * What the tile says on hover.
+ *
+ * The branch line is the point of it. A tile with nothing but a name on it
+ * reads as "a project, therefore a repository, therefore a branch and a diff" —
+ * so a place that has a branch names it, and a place that has none says so
+ * instead of staying quiet and letting the promise stand.
+ */
 function tooltipFor(project: ProjectTile, ctx: RailContext): string {
   const lines = [projectLabel(project.projectPath)];
   if (project.probe.kind === 'failed') {
@@ -297,8 +470,13 @@ function tooltipFor(project: ProjectTile, ctx: RailContext): string {
     lines.push(project.probe.message);
   } else if (project.probe.kind === 'loading') {
     lines.push('Reading worktrees…');
-  } else if (project.worktrees.length > 1) {
-    lines.push(`${project.worktrees.length} checkouts`);
+  } else if (project.probe.kind === 'no-repo') {
+    lines.push('No repository — files only');
+  } else if (project.probe.kind === 'ready') {
+    if (project.branch !== null) lines.push('⎇ ' + project.branch);
+    else if (project.detached) lines.push('detached at ' + project.head.slice(0, 7));
+    const count = project.worktrees.length + (project.missingWorktree === null ? 0 : 1);
+    if (count > 1) lines.push(`${count} checkouts`);
   }
   if (ctx.scope !== null && ctx.scope.projectPath === project.projectPath) lines.push('In scope');
   return lines.join('\n');

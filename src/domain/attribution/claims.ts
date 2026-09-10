@@ -104,16 +104,26 @@ export function claimsFromEntry(entry: unknown): EditClaim[] {
  * project's 60 most-edited paths had more than one — so every session that
  * touched a path is kept, not just the last.
  *
+ * `keyOf` decides what counts as the same path. It is the identity by default;
+ * a project with more than one checkout passes `checkoutKey`, which folds a
+ * path to its position inside its own worktree so a claim made in one checkout
+ * answers for the same file in a sibling — see `./worktrees`. Whatever it
+ * returns is both the map's key and `PathClaims.path`.
+ *
  * Timestamps are ISO-8601 UTC, which compares chronologically as a string.
  * Sessions that tie are ordered by id, so the same input always renders the
  * same way.
  */
-export function groupClaims(claims: readonly EditClaim[]): Map<string, PathClaims> {
+export function groupClaims(
+  claims: readonly EditClaim[],
+  keyOf: (path: string) => string = path => path,
+): Map<string, PathClaims> {
   const perPath = new Map<string, Map<string, SessionClaim>>();
 
   for (const claim of claims) {
-    let sessions = perPath.get(claim.path);
-    if (!sessions) perPath.set(claim.path, sessions = new Map());
+    const key = keyOf(claim.path);
+    let sessions = perPath.get(key);
+    if (!sessions) perPath.set(key, sessions = new Map());
     const known = sessions.get(claim.sessionId);
     if (!known) {
       sessions.set(claim.sessionId, {
@@ -139,8 +149,9 @@ export function groupClaims(claims: readonly EditClaim[]): Map<string, PathClaim
  *
  * This is where a claim on a file that was rejected, reverted or written and
  * then written back is dropped: the transcript still remembers it, the working
- * tree does not, and the working tree is right. Both sides are absolute paths;
- * a caller holding paths relative to a worktree resolves them first.
+ * tree does not, and the working tree is right. Both sides have to be spelled
+ * the same way: absolute paths, or the keys `groupClaims` folded them under
+ * when the project has more than one checkout.
  */
 export function claimsForPaths(
   byPath: ReadonlyMap<string, PathClaims>,

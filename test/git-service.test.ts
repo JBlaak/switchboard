@@ -581,3 +581,165 @@ test('every phase of a remote worktree runs over ssh, in the directory sshd star
   assert.ok(summary.args[summary.args.length - 1].includes("'--no-optional-locks'"),
     'the lock flag travels in the argv, since ssh does not forward an environment');
 });
+
+// --- Which branch is the default one ---
+//
+// The diff base used to be the constant `merge-base with main`, which is right
+// for most repositories and silently wrong for every one that kept `master`:
+// the ref does not resolve, git falls back to uncommitted-only and says so, and
+// the user is nonetheless reading a diff they did not ask for. So it is asked.
+
+const SOME_SHA = '4444444444444444444444444444444444444444';
+
+/** The ref a `rev-parse --verify <ref>^{commit}` is about. */
+const verifiedRef = (args: readonly string[]): string =>
+  (args.find(arg => arg.includes('^{commit}')) ?? '').replace(/'/g, '').replace('^{commit}', '');
+
+/**
+ * A repository that has the refs it is given, and points `origin/HEAD` at
+ * `pointer` when there is one.
+ */
+function branchProbe(setup: { pointer?: string; refs?: readonly string[] } = {}) {
+  const refs = new Set(setup.refs ?? []);
+  const runner = fakeProcessRunner((_file, args) => {
+    if (asked(args, 'symbolic-ref')) {
+      return setup.pointer === undefined ? exit(1) : exit(0, `${setup.pointer}\n`);
+    }
+    if (asked(args, 'rev-parse')) {
+      return refs.has(verifiedRef(args)) ? exit(0, `${SOME_SHA}\n`) : exit(1);
+    }
+    return exit(127, '', 'nothing else should be run to find the default branch');
+  });
+  const git = new GitService({ runner, log: silentLog });
+  const verified = (): string[] => runner.calls
+    .filter(call => asked(call.args, 'rev-parse'))
+    .map(call => verifiedRef(call.args));
+  return { runner, git, verified };
+}
+
+test('the default branch is what origin/HEAD points at, when it points anywhere', async () => {
+  const h = branchProbe({ pointer: 'origin/trunk', refs: ['trunk', 'main'] });
+
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'trunk');
+  assert.deepEqual(h.verified(), ['trunk'], 'the remote answered, so the guesses are never made');
+  assert.deepEqual(h.runner.calls[0].args.slice(-4),
+    ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
+});
+
+test('a full ref name from symbolic-ref reads the same as a short one', async () => {
+  const h = branchProbe({ pointer: 'refs/remotes/origin/develop', refs: ['develop'] });
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'develop');
+});
+
+test('with no origin/HEAD — every git init — main is tried, and resolves', async () => {
+  const h = branchProbe({ refs: ['main'] });
+
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'main');
+  assert.deepEqual(h.verified(), ['main']);
+});
+
+test('a repository that kept master is not told it has a main', async () => {
+  const h = branchProbe({ refs: ['master'] });
+
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'master');
+  // Both spellings of `main` are ruled out before `master` is offered, which is
+  // the whole point: the name is verified, never assumed.
+  assert.deepEqual(h.verified(), ['main', 'origin/main', 'master']);
+});
+
+test('a branch that only exists on the remote is offered as the remote-tracking ref', async () => {
+  const h = branchProbe({ refs: ['origin/main'] });
+
+  // A fresh worktree of a clone that has never checked `main` out: the name
+  // alone would not resolve and would fall straight back to uncommitted-only.
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'origin/main');
+});
+
+test('a repository where nothing resolves has no default branch, and says so', async () => {
+  const h = branchProbe();
+
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), null);
+  assert.deepEqual(h.verified(), ['main', 'origin/main', 'master', 'origin/master']);
+});
+
+test('the answer is remembered per worktree, but "nothing" is asked again', async () => {
+  const h = branchProbe({ refs: ['main'] });
+
+  await h.git.defaultBranch('/Users/j/dev/proj');
+  const spent = h.runner.calls.length;
+  assert.equal(await h.git.defaultBranch('/Users/j/dev/proj'), 'main');
+  assert.equal(h.runner.calls.length, spent, 'a repository does not rename its default branch');
+
+  // Another checkout is another question — and one with no answer yet is worth
+  // asking again, because a first commit or a first remote is what changes it.
+  const none = branchProbe();
+  await none.git.defaultBranch('/Users/j/dev/proj');
+  const asking = none.runner.calls.length;
+  await none.git.defaultBranch('/Users/j/dev/proj');
+  assert.ok(none.runner.calls.length > asking, 'nothing resolved, so nothing was cached');
+});
+
+// --- A conflict, which the raw format cannot express ---
+
+/**
+ * Reproduced from a real conflicted repository opened in the app: `git diff
+ * --raw HEAD` calls an unmerged file an ordinary `M`, because that is all the
+ * raw format can say against a revision. Only `git status` knows, and both
+ * phases have to be told separately.
+ */
+const CONFLICT_STATUS = record(
+  `# branch.oid ${HEAD_SHA}`,
+  '# branch.head main',
+  'u UU N... 100644 100644 100644 100644 aaaaaaa bbbbbbb ccccccc note.txt',
+);
+
+const CONFLICT_SUMMARY = record(
+  ':100644 100644 aaaaaaa 0000000 M', 'note.txt',
+  '4\t0\tnote.txt',
+);
+
+const CONFLICT_PATCH = [
+  'diff --git a/note.txt b/note.txt',
+  'index aaaaaaa..bbbbbbb 100644',
+  '--- a/note.txt',
+  '+++ b/note.txt',
+  '@@ -1,3 +1,7 @@',
+  ' one',
+  '+<<<<<<< HEAD',
+  ' TWO from main',
+  '+=======',
+  '+TWO from the feature branch',
+  '+>>>>>>> feature',
+  ' three',
+  '',
+].join('\n');
+
+const conflicted = (): ReturnType<typeof twoPhase> => twoPhase({
+  status: exit(0, CONFLICT_STATUS),
+  summary: exit(0, CONFLICT_SUMMARY),
+  patch: exit(0, CONFLICT_PATCH),
+});
+
+test('an unmerged file is conflicted in the file list, not merely modified', async () => {
+  const result = await conflicted().git.changedFiles('/Users/j/dev/proj', { kind: 'uncommitted' });
+  assert.equal(result.files.length, 1);
+  assert.equal(result.files[0].status, 'U',
+    'the raw half said M; git status said unmerged, and that is the one that knows');
+});
+
+test('it is still conflicted once its patch has been read', async () => {
+  // The nastier half of the same bug: the row arrived conflicted and turned
+  // back into an ordinary modification the moment the reader scrolled to it,
+  // because the per-file diff re-derives a status the patch cannot carry.
+  const h = conflicted();
+  await h.git.changedFiles('/Users/j/dev/proj', { kind: 'uncommitted' });
+  const file = await h.git.diffFile('/Users/j/dev/proj', { kind: 'uncommitted' }, 'note.txt');
+
+  assert.equal(file.status, 'U', 'the file list saw the whole tree and knows better');
+  assert.ok(file.hunks.length > 0, 'and the markers are still there to draw');
+});
+
+test('a file nobody called unmerged keeps the status the raw half gave it', async () => {
+  const result = await twoPhase().git.changedFiles('/Users/j/dev/proj', { kind: 'uncommitted' });
+  assert.deepEqual(result.files.map(file => file.status), ['M', 'A', 'M']);
+});

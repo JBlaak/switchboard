@@ -146,6 +146,29 @@ export function reconcileScopeWithProjects(projects: readonly { projectPath: str
 }
 
 /**
+ * Drop a checkout the rail can no longer see: it was deleted from disk.
+ *
+ * The other half of `reconcileScopeWithProjects`. That one answers a *project*
+ * leaving the list, where there is nothing left to look at and the scope has to
+ * go. A worktree is not the same case — its sessions and their transcripts are
+ * still there, which is why the rail keeps a dashed tile for it rather than
+ * dropping it — so this is only ever called deliberately, from that tile's
+ * `Forget`.
+ *
+ * Takes the path out of the project's known list as well as out of the scope,
+ * so the last `git worktree list` that mentioned it stops speaking for it: the
+ * filter would otherwise keep admitting its rows into the whole-project scope
+ * until the next successful read replaced the list anyway.
+ */
+export function forgetWorktree(projectPath: string, worktreePath: string): void {
+  const known = knownWorktrees.get(projectPath);
+  if (known) setKnownWorktrees(projectPath, known.filter(path => path !== worktreePath));
+  if (scope === null) return;
+  if (scope.projectPath !== projectPath || scope.worktreePath !== worktreePath) return;
+  setScope({ projectPath, worktreePath: null });
+}
+
+/**
  * The project list as the sidebar and the search see it: narrowed to the
  * scope, with the rows the renderer invented for sessions the CLI has not
  * started yet always admitted. A `--worktree` launch has no cwd until the CLI

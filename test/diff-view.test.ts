@@ -107,8 +107,8 @@ test('turning Ignore whitespace off puts the reformats back where git had them',
 test('sortSections is stable on both sides of the partition', () => {
   const section = (path: string, whitespaceOnly: boolean): DiffSection => ({
     path, status: 'M', additions: 1, deletions: 1, binary: false, generated: false,
-    submodule: false, whitespaceOnly, untracked: false, body: 'hunks', hunks: [],
-    loaded: false, claims: [],
+    submodule: false, whitespaceOnly, untracked: false, conflicted: false, body: 'hunks',
+    hunks: [], loaded: false, claims: [],
   });
   const sorted = sortSections([
     section('a', false), section('w1', true), section('b', false), section('w2', true),
@@ -287,10 +287,21 @@ test('a submodule and a binary outrank every other reading of a file', () => {
   const base: DiffSection = {
     path: 'vendor/sdk', status: 'M', additions: 0, deletions: 0, binary: false,
     generated: true, submodule: true, whitespaceOnly: true, untracked: false,
-    truncated: 'generated', body: 'none', hunks: [], loaded: false, claims: [],
+    conflicted: false, truncated: 'generated', body: 'none', hunks: [], loaded: false,
+    claims: [],
   };
   assert.strictEqual(bodyFor(base, false), 'submodule');
   assert.strictEqual(bodyFor({ ...base, submodule: false, binary: true }, false), 'binary');
+
+  // And a conflict outranks the two collapses that mean "this file is boring",
+  // but not the one that means "this file is too big to paint". The states
+  // themselves are exercised in diff-edges.test.ts.
+  const conflicted: DiffSection = {
+    ...base, submodule: false, generated: true, status: 'U', conflicted: true,
+    additions: 4, deletions: 2,
+  };
+  assert.strictEqual(bodyFor(conflicted, false), 'hunks');
+  assert.strictEqual(bodyFor({ ...conflicted, truncated: 'size' }, false), 'oversize');
 });
 
 // ── lazy rendering ────────────────────────────────────────────────────────────
@@ -298,8 +309,8 @@ test('a submodule and a binary outrank every other reading of a file', () => {
 test('a section is guessed from its diffstat, and the guess is capped', () => {
   const of = (over: Partial<DiffSection>): DiffSection => ({
     path: 'f', status: 'M', additions: 0, deletions: 0, binary: false, generated: false,
-    submodule: false, whitespaceOnly: false, untracked: false, body: 'hunks', hunks: [],
-    loaded: false, claims: [], ...over,
+    submodule: false, whitespaceOnly: false, untracked: false, conflicted: false,
+    body: 'hunks', hunks: [], loaded: false, claims: [], ...over,
   });
 
   // Three rows of context either side of a small change.
