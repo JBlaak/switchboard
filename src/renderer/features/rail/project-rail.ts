@@ -156,24 +156,51 @@ function render(): void {
  */
 function toTile(project: Project, scope: Scope | null): ProjectTile {
   const scoped = scope !== null && scope.projectPath === project.projectPath;
+  const local = project.remote !== true;
   const probe = probes.get(project.projectPath);
+  const known = probe?.worktrees ?? [];
+  // The main working tree, which is what the tile itself stands for. Read off
+  // the probe rather than off `worktrees` below, so a remote project — whose
+  // checkouts are never drawn — still knows its own branch.
+  const primary = known.find(worktree => worktree.isPrimary) ?? known[0];
+
   return {
     projectPath: project.projectPath,
-    remote: project.remote === true,
+    remote: !local,
     // A remote worktree's path is a path on the far host, so it can never match
     // a remote session's place — those rows carry no cwd at all. Sub-tiles for
     // one would scope the list to nothing, so a remote project gets its tile
     // and its reachability state and no checkouts until there is something to
     // match them against.
-    worktrees: scoped && project.remote !== true ? (probe?.worktrees ?? []) : [],
+    worktrees: scoped && local ? known : [],
+    branch: primary?.branch ?? null,
+    detached: primary?.detached === true,
+    head: primary?.head ?? '',
+    missingWorktree: scoped && local ? missingWorktree(scope, probe) : null,
     probe: toProbeState(probe),
   };
+}
+
+/**
+ * The checkout the scope names that git no longer reports, if there is one.
+ *
+ * Only once a list is actually in hand: while the probe is loading, or has
+ * failed, or has never run, "not in the list" says nothing at all — and
+ * flashing a *removed* tile at every scope change would be worse than the
+ * silence it replaces.
+ */
+function missingWorktree(scope: Scope | null, probe: Probe | undefined): string | null {
+  if (scope === null || scope.worktreePath === null) return null;
+  if (probe === undefined || (probe.state !== 'ready' && probe.state !== 'no-repo')) return null;
+  const path = scope.worktreePath;
+  return probe.worktrees.some(worktree => worktree.path === path) ? null : path;
 }
 
 function toProbeState(probe: Probe | undefined): WorktreeProbe {
   if (!probe) return { kind: 'unknown' };
   if (probe.state === 'failed') return { kind: 'failed', message: probe.message };
   if (probe.state === 'loading') return { kind: 'loading' };
+  if (probe.state === 'no-repo') return { kind: 'no-repo' };
   return { kind: 'ready' };
 }
 
@@ -222,7 +249,16 @@ function readWorktrees(projectPath: string, force: boolean): void {
       }
       const worktrees = answer as Worktree[];
       setKnownWorktrees(projectPath, worktrees.map(worktree => worktree.path));
-      record({ at: Date.now(), worktrees, state: 'ready', message: '' });
+      // A repository always reports at least its main working tree, so an empty
+      // list is git's exit 128 — this folder is not a repository at all. Kept
+      // apart from `ready` so the tile can say so instead of looking like a
+      // repository with one quiet checkout.
+      record({
+        at: Date.now(),
+        worktrees,
+        state: worktrees.length === 0 ? 'no-repo' : 'ready',
+        message: '',
+      });
     },
     (err: unknown) => {
       record({
@@ -259,7 +295,9 @@ function worktreeLists(projects: readonly Project[]): Map<string, readonly strin
  * project draws no sub-tiles, so it costs no more than any other tile.
  */
 function tileCost(tile: ProjectTile): number {
-  const subtiles = tile.worktrees.length > 1 ? tile.worktrees.length : 0;
+  const ghost = tile.missingWorktree === null ? 0 : 1;
+  const drawn = tile.worktrees.length + ghost;
+  const subtiles = drawn > 1 ? drawn : 0;
   const stack = subtiles === 0
     ? 0
     : RAIL_GAP_PX + subtiles * RAIL_SUBTILE_PX + (subtiles - 1) * RAIL_GAP_PX;
@@ -311,6 +349,8 @@ function signatureOf(
         tile.projectPath,
         tile.remote ? 'r' : 'l',
         tile.probe.kind,
+        tile.branch ?? (tile.detached ? tile.head : ''),
+        tile.missingWorktree ?? '',
         tile.worktrees.map(worktree => worktree.path).join(','),
       ].join('|'));
     }

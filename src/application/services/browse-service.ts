@@ -127,8 +127,9 @@ export class BrowseService {
     try {
       listed = fs.readDir(dir);
     } catch (err) {
-      log.debug(`[browse] ${dir} could not be listed:`, (err as Error).message);
-      return { entries: [], unreadable: true };
+      const message = (err as Error).message;
+      log.debug(`[browse] ${dir} could not be listed:`, message);
+      return { entries: [], unreadable: true, error: message };
     }
 
     const entries = listed.map(entry => ({
@@ -179,8 +180,12 @@ export class BrowseService {
       timeoutMs: REMOTE_TIMEOUT_MS,
     });
     if (result.code !== 0) {
-      log.debug(`[browse] remote ${dir} could not be listed:`, result.stderr.trim() || `exit ${result.code}`);
-      return { entries: [], unreadable: true };
+      // ssh writes its own failures to stderr — `Permission denied (publickey)`,
+      // `Connection refused`, a timed-out handshake — and they are the sentence
+      // the panel has to print, so they travel with the answer.
+      const message = result.stderr.trim() || `exit ${result.code}`;
+      log.debug(`[browse] remote ${dir} could not be listed:`, message);
+      return { entries: [], unreadable: true, error: message };
     }
 
     const entries = parseLsOutput(result.stdout);

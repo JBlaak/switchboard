@@ -12,7 +12,7 @@
  * handle at import, so anything that reaches it cannot be imported by a test.
  */
 import { attributeToScope } from '../../../domain/git/scope';
-import type { Scope } from '../../../domain/git/types';
+import type { Scope, Worktree } from '../../../domain/git/types';
 import type { SessionSignals } from '../../../domain/session/tiers';
 
 /**
@@ -140,22 +140,130 @@ function projectName(projectPath: string): string {
   return host.split('@').pop()?.split(':')[0] ?? host;
 }
 
+/** A name broken into the words a monogram is taken from. */
+function splitWords(name: string): string[] {
+  return name.split(/[^A-Za-z0-9]+/).filter(Boolean);
+}
+
 /**
- * Two letters that stand for a project at 32px.
+ * Two letters for a name already broken into words.
  *
- * A name that is several words gives up their initials (`my-app` → `MA`,
- * `switchboard.old` → `SO`); a single word gives its first two letters with
- * only the first capitalised (`switchboard` → `Sw`), because `SW` reads as an
- * acronym for something it is not. The full label is on the tile's `title`
- * either way — the monogram only has to be distinguishable from its neighbours.
+ * Several words give up their initials (`my-app` → `MA`, `switchboard.old` →
+ * `SO`); a single word gives its first two letters with only the first
+ * capitalised (`switchboard` → `Sw`), because `SW` reads as an acronym for
+ * something it is not.
  */
-export function monogramFor(projectPath: string): string {
-  const words = projectName(projectPath).split(/[^A-Za-z0-9]+/).filter(Boolean);
+function monogramOfWords(words: readonly string[]): string {
   if (words.length === 0) return '?';
   if (words.length > 1) return (words[0][0] + words[1][0]).toUpperCase();
   const word = words[0];
   if (word.length === 1) return word[0].toUpperCase();
   return word[0].toUpperCase() + word[1].toLowerCase();
+}
+
+/**
+ * Two letters that stand for a project at 32px.
+ *
+ * The full label is on the tile's `title` either way — the monogram only has to
+ * be distinguishable from its neighbours.
+ */
+export function monogramFor(projectPath: string): string {
+  return monogramOfWords(splitWords(projectName(projectPath)));
+}
+
+/**
+ * The name a checkout goes by: its branch, the head it is detached at, or —
+ * for a worktree git reports with neither — the directory it lives in.
+ *
+ * The branch first, because that is what the user asked for when they made the
+ * checkout. The directory is a distant third: `git worktree add` names it after
+ * whatever the caller passed, and the Claude CLI passes an agent id.
+ */
+export function worktreeLabel(worktree: Worktree): string {
+  if (worktree.branch !== null && worktree.branch !== '') return worktree.branch;
+  if (worktree.detached && worktree.head !== '') return worktree.head.slice(0, 7);
+  return worktree.path.split(/[\\/]/).filter(Boolean).pop() ?? worktree.path;
+}
+
+/**
+ * How many leading words every one of these names shares.
+ *
+ * Never all of them: a name reduced to nothing has no monogram left to take,
+ * so the last word always survives.
+ */
+function sharedLeadingWords(names: readonly (readonly string[])[]): number {
+  const shortest = Math.min(...names.map(words => words.length));
+  let shared = 0;
+  while (shared < shortest - 1 && names.every(words => words[shared] === names[0][shared])) {
+    shared++;
+  }
+  return shared;
+}
+
+/** The indices of every set of two or more entries that came out identical. */
+function collisions(monograms: readonly string[]): number[][] {
+  const byMonogram = new Map<string, number[]>();
+  monograms.forEach((monogram, index) => {
+    const group = byMonogram.get(monogram);
+    if (group) group.push(index);
+    else byMonogram.set(monogram, [index]);
+  });
+  return [...byMonogram.values()].filter(group => group.length > 1);
+}
+
+/** The first character position at which these strings are not all equal, or -1. */
+function firstDivergence(texts: readonly string[]): number {
+  const longest = Math.max(...texts.map(text => text.length));
+  for (let i = 0; i < longest; i++) {
+    if (!texts.every(text => text[i] === texts[0][i])) return i;
+  }
+  return -1;
+}
+
+/**
+ * One monogram per checkout, and no two of them the same.
+ *
+ * Invariant 5: two checkouts of one repository must never read as one place.
+ * That is not something a per-name rule can promise, because the names in a
+ * repository are chosen to look alike — the Claude CLI cuts every agent's
+ * branch as `worktree-agent-<id>`, so the plain initials rule gives all of them
+ * `WA` and the rail turns into a column of the same tile. So the set is
+ * monogrammed together: a group that collides drops the words its members share
+ * and tries again, which turns `worktree-agent-a20a…` and
+ * `worktree-agent-a5f3…` into `A2` and `A5`.
+ *
+ * The last resort, for names that differ only inside a word, is the first
+ * letter plus the first character where they diverge. Two entries with the same
+ * label are the only case that can still come out equal, and there is nothing
+ * left to say about them at two characters.
+ */
+export function worktreeMonograms(worktrees: readonly Worktree[]): string[] {
+  const words = worktrees.map(worktree => splitWords(worktreeLabel(worktree)));
+  const monograms = words.map(monogramOfWords);
+
+  for (;;) {
+    let progressed = false;
+    for (const group of collisions(monograms)) {
+      const shared = sharedLeadingWords(group.map(index => words[index]));
+      if (shared === 0) continue;
+      for (const index of group) {
+        words[index] = words[index].slice(shared);
+        monograms[index] = monogramOfWords(words[index]);
+      }
+      progressed = true;
+    }
+    if (!progressed) break;
+  }
+
+  for (const group of collisions(monograms)) {
+    const texts = group.map(index => words[index].join(''));
+    const at = firstDivergence(texts);
+    if (at <= 0) continue;
+    group.forEach((index, k) => {
+      monograms[index] = (texts[k][0] ?? '?').toUpperCase() + (texts[k][at] ?? '·');
+    });
+  }
+  return monograms;
 }
 
 /** When anything last happened in a project; 0 for one with no sessions. */

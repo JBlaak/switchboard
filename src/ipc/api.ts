@@ -161,6 +161,15 @@ export interface SwitchboardApi {
 
   // ── Host ──
   openExternal(url: string): Promise<void>;
+  /**
+   * Show a directory or file in the platform's file manager.
+   *
+   * The path comes from the renderer, so the main process checks it before the
+   * shell sees it: it has to exist and it has to be inside a project the app
+   * already knows about. Answers the `{ ok }`/`{ error }` envelope, and a
+   * refusal is a bug rather than something to show the user.
+   */
+  revealPath(target: string): Promise<IpcResult>;
   writeClipboard(text: string): Promise<void>;
   getAppVersion(): Promise<string>;
   updaterCheck(): Promise<IpcResult>;

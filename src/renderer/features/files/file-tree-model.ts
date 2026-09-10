@@ -40,8 +40,21 @@ export interface FileNode {
   expanded: boolean;
   /** A fetch is in flight: the rows below this node are skeletons. */
   loading: boolean;
-  /** The listing came back `unreadable` — gone, or not ours to read. */
+  /** The listing came back `unreadable` and there was nothing to fall back on. */
   unreadable: boolean;
+  /**
+   * The last read failed but an earlier one had succeeded, so `children` is the
+   * previous answer rather than the current one.
+   *
+   * A remote read is a round trip, not a read: a host that has gone away says
+   * nothing about whether the directory is still there. Emptying the panel
+   * would claim it had, so the old listing stays up and the tab stamps it.
+   */
+  stale: boolean;
+  /** Why the last read failed, when it did. */
+  error: string | null;
+  /** When the last *successful* listing arrived, epoch ms — for the stamp. */
+  readAt: number | null;
 }
 
 /** Half-open `[start, end)` into a string, for painting a search hit. */
@@ -86,6 +99,9 @@ export function createRoot(): FileNode {
     expanded: true,
     loading: false,
     unreadable: false,
+    stale: false,
+    error: null,
+    readAt: null,
   };
 }
 
@@ -110,11 +126,28 @@ export function joinPath(dir: string, name: string): string {
  *
  * A previous listing is replaced outright, so everything below `node` — which
  * folders were open down there — is forgotten. That only happens when something
- * asks for the same directory twice, which nothing does today.
+ * asks for the same directory twice, which is what a retry is.
+ *
+ * A failed read is the exception: it replaces nothing. A directory that has
+ * been read once keeps what it said and is marked stale, so an unreachable host
+ * costs the reader a banner rather than the tree they were working in. Only a
+ * directory that has never been read successfully has nothing to fall back on,
+ * and that one reports itself unreadable.
  */
-export function applyListing(node: FileNode, listing: BrowseListing): void {
+export function applyListing(node: FileNode, listing: BrowseListing, at: number): void {
   node.loading = false;
-  node.unreadable = listing.unreadable === true;
+
+  if (listing.unreadable === true) {
+    node.error = listing.error ?? null;
+    node.stale = node.children !== null;
+    node.unreadable = !node.stale;
+    return;
+  }
+
+  node.error = null;
+  node.stale = false;
+  node.unreadable = false;
+  node.readAt = at;
   node.children = listing.entries.map(entry => childOf(node, entry));
 }
 
@@ -128,6 +161,9 @@ function childOf(parent: FileNode, entry: BrowseEntry): FileNode {
     expanded: false,
     loading: false,
     unreadable: false,
+    stale: false,
+    error: null,
+    readAt: null,
   };
 }
 

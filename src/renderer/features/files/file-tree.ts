@@ -38,6 +38,7 @@ import {
 import { ICONS } from '../../lib/icons';
 import { filesContent } from '../../lib/dom';
 import { getScope } from '../../state/scope-store';
+import { isRemoteProjectPath } from '../../../domain/project/remote-target';
 import { view } from '../../state/session-store';
 import type { FileNode, FileRow, MatchRange } from './file-tree-model';
 
@@ -59,6 +60,19 @@ export interface OpenedFile {
  * so the wait is invisible unless it is cancelled.
  */
 const EXPAND_MS = 120;
+
+/**
+ * How long a read may take before the tab admits it is waiting.
+ *
+ * A local listing is over in single-digit milliseconds and a counter that
+ * flashed up for one frame would be noise. A remote one is an ssh handshake and
+ * a round trip, and past this point the honest thing is to say how long it has
+ * been rather than leave three skeleton bars sitting there.
+ */
+const ELAPSED_AFTER_MS = 400;
+
+/** How often the elapsed counter is repainted while a read is in flight. */
+const ELAPSED_TICK_MS = 100;
 
 /**
  * The leaf glyph, at the 14px the folder icon is drawn at.
@@ -87,6 +101,22 @@ const drawnNodes = new Map<string, FileNode>();
 
 /** relPath → the pending fetch for that directory, so a collapse can cancel it. */
 const expandTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** relPath → when its `listDir` went out, for the elapsed counter. */
+const inFlight = new Map<string, number>();
+
+/** The counter's own repaint, running only while something is actually in flight. */
+let elapsedTicker: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Why the last read failed, and when.
+ *
+ * Held for the tab rather than per node because it is the *panel's* state: what
+ * the reader needs to know is that the tree in front of them is not current,
+ * and which of `Retry` or `Reconnect session` is worth pressing. Cleared by the
+ * next read that works.
+ */
+let treeError: { message: string | null; at: number } | null = null;
 
 /** Where a clicked file is shown; supplied by `files-tab.ts`. */
 let showFile: (file: OpenedFile) => void = () => {};
@@ -176,6 +206,9 @@ export function resetFileTree(): void {
   selectedPath = null;
   readErrors.clear();
   drawnNodes.clear();
+  treeError = null;
+  inFlight.clear();
+  stopElapsedTicker();
   for (const timer of expandTimers.values()) clearTimeout(timer);
   expandTimers.clear();
   if (view.activeTab === 'files') showFileTree();
@@ -264,18 +297,50 @@ async function load(node: FileNode): Promise<void> {
   if (rootPath === null) return;
   const forRoot = rootPath;
   node.loading = true;
+  inFlight.set(node.path, Date.now());
+  startElapsedTicker();
   draw();
 
   const listing = await window.api.listDir(forRoot, node.path);
+  inFlight.delete(node.path);
   if (rootPath !== forRoot) return;
 
   // The `{ ok: false, error }` envelope every invoke can answer with. Only a
   // path leaving the worktree gets here, which the tree cannot build — so it is
   // reported as an unreadable directory rather than given its own state.
-  applyListing(node, Array.isArray(listing?.entries)
+  const answer = Array.isArray(listing?.entries)
     ? listing
-    : { entries: [], unreadable: true });
+    : { entries: [], unreadable: true, error: (listing as { error?: string } | null)?.error };
+  applyListing(node, answer, Date.now());
+
+  // One fact for the whole panel: either the last read worked, or it did not
+  // and this is why. A directory deep in the tree failing on an unreachable
+  // host is the same event as the root failing, and the banner is the same.
+  treeError = answer.unreadable === true
+    ? { message: answer.error ?? null, at: Date.now() }
+    : null;
+
+  stopElapsedTicker();
   draw();
+}
+
+/** The elapsed counter repaints itself; nothing else about the tree moves. */
+function startElapsedTicker(): void {
+  if (elapsedTicker !== null) return;
+  elapsedTicker = setInterval(() => {
+    if (inFlight.size === 0) {
+      stopElapsedTicker();
+      return;
+    }
+    paintElapsed();
+  }, ELAPSED_TICK_MS);
+}
+
+function stopElapsedTicker(): void {
+  if (inFlight.size > 0) return;
+  if (elapsedTicker !== null) clearInterval(elapsedTicker);
+  elapsedTicker = null;
+  paintElapsed();
 }
 
 // ── drawing ───────────────────────────────────────────────────────────────────
@@ -290,6 +355,8 @@ function draw(): void {
     return;
   }
 
+  if (treeError !== null) into.appendChild(unreachableBanner(root, treeError));
+
   const rows = filterRows(root, query);
   const list = document.createElement('div');
   list.className = 'file-tree';
@@ -301,6 +368,146 @@ function draw(): void {
     // about which folders are expanded as about the query.
     into.appendChild(note('Nothing loaded matches. Open a folder to search deeper.'));
   }
+
+  into.appendChild(elapsedLine());
+  paintElapsed();
+}
+
+/**
+ * The banner over a tree that could not be re-read.
+ *
+ * Never "this folder is empty": a remote read is a round trip, and the two
+ * failures behind one are a directory that is gone and a host that cannot be
+ * reached at all — which are opposite claims about what the user is looking at.
+ * So the reason is printed, the tree underneath is whatever was last read
+ * successfully, and the stamp says when that was.
+ *
+ * `Reconnect session` is the one thing this panel cannot do for itself. The
+ * supervisor that redials a dropped SSH session already exists and is keyed on
+ * a session, so the button hands it the project's most recent one and then
+ * retries the read; it is only drawn when there is a session to hand it.
+ */
+function unreachableBanner(node: FileNode, failure: { message: string | null; at: number }): HTMLElement {
+  const remote = rootPath !== null && isRemoteProjectPath(rootPath);
+
+  const banner = document.createElement('div');
+  banner.className = 'files-unreachable';
+
+  const headline = document.createElement('div');
+  headline.className = 'files-unreachable-title';
+  headline.textContent = remote ? 'Can’t reach host' : 'Couldn’t read this folder';
+  banner.appendChild(headline);
+
+  if (failure.message !== null && failure.message !== '') {
+    const why = document.createElement('div');
+    why.className = 'files-unreachable-why';
+    why.textContent = failure.message;
+    why.title = failure.message;
+    banner.appendChild(why);
+  }
+
+  if (node.stale && node.readAt !== null) {
+    const stamp = document.createElement('div');
+    stamp.className = 'files-unreachable-stamp';
+    stamp.textContent = `Showing the tree read at ${clockTime(node.readAt)}`;
+    banner.appendChild(stamp);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'files-unreachable-actions';
+  actions.appendChild(action('Retry', () => retryRoot()));
+
+  const sessionId = remote ? remoteSessionId() : null;
+  if (sessionId !== null) {
+    actions.appendChild(action('Reconnect session', () => void reconnect(sessionId)));
+  }
+  banner.appendChild(actions);
+  return banner;
+}
+
+function action(text: string, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.className = 'files-action-btn';
+  button.type = 'button';
+  button.textContent = text;
+  button.onclick = onClick;
+  return button;
+}
+
+/** Read the root again, past whatever is cached on the node. */
+function retryRoot(): void {
+  if (root === null) return;
+  treeError = null;
+  void load(root);
+}
+
+/**
+ * Redial the project's connection, then read again.
+ *
+ * The read is retried whatever the reconnect answered: a refusal usually means
+ * the session had already been retired, and the host may well be back anyway.
+ */
+async function reconnect(sessionId: string): Promise<void> {
+  await window.api.reconnectRemote(sessionId).catch(() => null);
+  retryRoot();
+}
+
+/** The most recently touched session of the scoped project, if it has one. */
+function remoteSessionId(): string | null {
+  const scope = getScope();
+  if (scope === null) return null;
+  const project = view.cachedAllProjects.find(p => p.projectPath === scope.projectPath);
+  let newest: { sessionId: string; at: number } | null = null;
+  for (const session of project?.sessions ?? []) {
+    const at = new Date(session.modified).getTime();
+    if (newest === null || at > newest.at) newest = { sessionId: session.sessionId, at };
+  }
+  return newest?.sessionId ?? null;
+}
+
+/** `14:02`, in the user's own locale and time zone. */
+function clockTime(at: number): string {
+  return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/**
+ * The line under the skeletons that says how long this has been going on.
+ *
+ * Built empty on every draw and filled by `paintElapsed`, so the counter can
+ * tick without rebuilding the tree — a redraw every tenth of a second would
+ * cost the reader their hover and their scroll position.
+ */
+function elapsedLine(): HTMLElement {
+  const line = document.createElement('div');
+  line.className = 'files-elapsed';
+  line.hidden = true;
+  return line;
+}
+
+/**
+ * How long the oldest read in flight has taken, or nothing at all.
+ *
+ * Silent under `ELAPSED_AFTER_MS`: a local listing is over before anybody could
+ * read a number, and a counter that appears for one frame is worse than none.
+ */
+function paintElapsed(): void {
+  const line = treeHost?.querySelector<HTMLElement>('.files-elapsed');
+  if (!line) return;
+
+  let oldest: number | null = null;
+  for (const startedAt of inFlight.values()) {
+    if (oldest === null || startedAt < oldest) oldest = startedAt;
+  }
+  const elapsed = oldest === null ? 0 : Date.now() - oldest;
+  if (oldest === null || elapsed < ELAPSED_AFTER_MS) {
+    line.hidden = true;
+    line.textContent = '';
+    return;
+  }
+
+  const where = rootPath !== null && isRemoteProjectPath(rootPath) ? 'reading over ssh' : 'reading';
+  line.hidden = false;
+  line.textContent = `${where} · ${(elapsed / 1000).toFixed(1)}s`;
 }
 
 function rowElement(row: FileRow): HTMLElement {

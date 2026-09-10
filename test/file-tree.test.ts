@@ -16,6 +16,15 @@ import type { BrowseEntry } from '../src/domain/browse/types';
  * that touches `document`, which is what lets this file import it at all.
  */
 
+/**
+ * When a listing arrived, for the tests that do not care.
+ *
+ * `applyListing` stamps the node so the tab can say "showing the tree read at
+ * 14:02" when a later read fails; a fixed number keeps every other test here
+ * off the clock.
+ */
+const AT = Date.parse('2026-05-01T14:02:00Z');
+
 const dir = (name: string): BrowseEntry => ({ name, isDirectory: true, isSymbolicLink: false });
 const file = (name: string): BrowseEntry => ({ name, isDirectory: false, isSymbolicLink: false });
 /** A symlink, as the service reports one: a leaf whatever it points at. */
@@ -41,7 +50,7 @@ function shape(rows: readonly FileRow[]): string[] {
  */
 function fixture(): FileNode {
   const root = createRoot();
-  applyListing(root, { entries: [dir('src'), dir('docs'), file('README.md'), link('link.ts')] });
+  applyListing(root, { entries: [dir('src'), dir('docs'), file('README.md'), link('link.ts')] }, AT);
   return root;
 }
 
@@ -60,7 +69,7 @@ test('a listing becomes children in the order it arrived', () => {
 test('a directory that could not be read says so instead of listing', () => {
   const root = createRoot();
   root.loading = true;
-  applyListing(root, { entries: [], unreadable: true });
+  applyListing(root, { entries: [], unreadable: true }, AT);
 
   assert.strictEqual(root.unreadable, true);
   assert.strictEqual(root.loading, false);
@@ -81,9 +90,9 @@ test('every node carries its own path, built as the tree was walked', () => {
   assert.strictEqual(child(root, 'src').path, 'src');
 
   const src = child(root, 'src');
-  applyListing(src, { entries: [dir('renderer')] });
+  applyListing(src, { entries: [dir('renderer')] }, AT);
   const renderer = child(src, 'renderer');
-  applyListing(renderer, { entries: [file('app.ts')] });
+  applyListing(renderer, { entries: [file('app.ts')] }, AT);
 
   assert.strictEqual(renderer.path, 'src/renderer');
   assert.strictEqual(child(renderer, 'app.ts').path, 'src/renderer/app.ts');
@@ -95,7 +104,7 @@ test('expanding inserts the children one level in', () => {
   const root = fixture();
   const src = child(root, 'src');
   expand(src);
-  applyListing(src, { entries: [dir('renderer'), file('index.ts')] });
+  applyListing(src, { entries: [dir('renderer'), file('index.ts')] }, AT);
 
   assert.deepStrictEqual(shape(visibleRows(root)), [
     '0:src', '1:renderer', '1:index.ts', '0:docs', '0:README.md', '0:link.ts',
@@ -106,10 +115,10 @@ test('a collapse drops the rows below but remembers the branch', () => {
   const root = fixture();
   const src = child(root, 'src');
   expand(src);
-  applyListing(src, { entries: [dir('renderer')] });
+  applyListing(src, { entries: [dir('renderer')] }, AT);
   const renderer = child(src, 'renderer');
   expand(renderer);
-  applyListing(renderer, { entries: [file('app.ts')] });
+  applyListing(renderer, { entries: [file('app.ts')] }, AT);
 
   assert.deepStrictEqual(shape(visibleRows(root)).slice(0, 3), ['0:src', '1:renderer', '2:app.ts']);
 
@@ -160,12 +169,12 @@ test('rows come out in order, depth-first, with the root at depth 0', () => {
   const src = child(root, 'src');
   const docs = child(root, 'docs');
   expand(src);
-  applyListing(src, { entries: [dir('renderer'), file('index.ts')] });
+  applyListing(src, { entries: [dir('renderer'), file('index.ts')] }, AT);
   expand(docs);
-  applyListing(docs, { entries: [file('design.md')] });
+  applyListing(docs, { entries: [file('design.md')] }, AT);
   const renderer = child(src, 'renderer');
   expand(renderer);
-  applyListing(renderer, { entries: [file('app.ts')] });
+  applyListing(renderer, { entries: [file('app.ts')] }, AT);
 
   assert.deepStrictEqual(shape(visibleRows(root)), [
     '0:src',
@@ -191,7 +200,7 @@ test('an open directory says what it is doing when it has no names to show', () 
     ['0:src', ...Array<string>(SKELETON_ROWS).fill('1:<loading>')]);
 
   // Read, and there was nothing in it.
-  applyListing(src, { entries: [] });
+  applyListing(src, { entries: [] }, AT);
   assert.deepStrictEqual(shape(visibleRows(root)).slice(0, 2), ['0:src', '1:<empty>']);
 
   // Closed: it goes back to being one row, whatever it did or did not hold.
@@ -211,11 +220,11 @@ test('a directory nobody has opened costs no rows', () => {
 function loadedTree(): FileNode {
   const root = fixture();
   const src = child(root, 'src');
-  applyListing(src, { entries: [dir('renderer'), file('index.ts')] });
+  applyListing(src, { entries: [dir('renderer'), file('index.ts')] }, AT);
   const renderer = child(src, 'renderer');
-  applyListing(renderer, { entries: [file('app.ts'), file('app.test.ts')] });
+  applyListing(renderer, { entries: [file('app.ts'), file('app.test.ts')] }, AT);
   const docs = child(root, 'docs');
-  applyListing(docs, { entries: [file('design.md')] });
+  applyListing(docs, { entries: [file('design.md')] }, AT);
   return root;
 }
 
