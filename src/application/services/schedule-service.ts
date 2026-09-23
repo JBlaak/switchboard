@@ -70,7 +70,7 @@ export class ScheduleService {
 
     for (const folder of folders) {
       const projectPath = folderMeta.get(folder)?.projectPath
-        || transcripts.resolveProjectPath(folder)?.projectPath;
+        || transcripts.resolveProjectPath(folder);
       if (!projectPath) continue;
 
       const commandsDir = fs.join(projectPath, ...SCHEDULE_COMMANDS_SUBPATH);

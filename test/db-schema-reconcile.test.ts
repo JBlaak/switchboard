@@ -42,7 +42,6 @@ function inspectDb(dataDir: string) {
     const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'), { readonly: true });
     console.log(JSON.stringify({
       cols: db.prepare('PRAGMA table_info(session_cache)').all().map(c => c.name),
-      metaCols: db.prepare('PRAGMA table_info(cache_meta)').all().map(c => c.name),
       cacheCount: db.prepare('SELECT COUNT(*) AS n FROM session_cache').get().n,
       metaCount: db.prepare('SELECT COUNT(*) AS n FROM cache_meta').get().n,
       version: db.prepare("SELECT value FROM settings WHERE key = 'db_version'").get()?.value,
@@ -52,14 +51,12 @@ function inspectDb(dataDir: string) {
   return JSON.parse(r.stdout.trim().split('\n').pop() ?? '{}');
 }
 
-test('fresh database gets the fileMtime and cwd columns', () => {
+test('fresh database gets fileMtime column', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-db-fresh-'));
   try {
     const r = openDatabase(dir);
     assert.equal(r.status, 0, r.stderr);
-    const state = inspectDb(dir);
-    assert.ok(state.cols.includes('fileMtime'));
-    assert.ok(state.metaCols.includes('cwd'));
+    assert.ok(inspectDb(dir).cols.includes('fileMtime'));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -95,9 +92,6 @@ test('foreign higher-version database is reconciled, not crashed', () => {
 
     const state = inspectDb(dir);
     assert.ok(state.cols.includes('fileMtime'), 'fileMtime column added');
-    // The seed's cache_meta predates cwd, as every install upgraded from an
-    // earlier build does; the column has to appear without a version bump.
-    assert.ok(state.metaCols.includes('cwd'), 'cwd column added to cache_meta');
     assert.equal(state.cacheCount, 0, 'stale cache cleared for re-index');
     assert.equal(state.metaCount, 0, 'folder index gate cleared for re-index');
     assert.equal(state.version, '5', 'foreign db_version not downgraded');

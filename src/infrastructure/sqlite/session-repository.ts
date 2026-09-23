@@ -76,11 +76,10 @@ export class SqliteSessionRepository implements SessionRepository {
     this.#cacheDeleteFolder = db.prepare<[string]>('DELETE FROM session_cache WHERE folder = ?');
 
     this.#folderGetAll = db.prepare<[], FolderMeta>('SELECT * FROM cache_meta');
-    this.#folderUpsert = db.prepare<[string, string | null, string | null, number]>(`
-      INSERT INTO cache_meta (folder, projectPath, cwd, indexMtimeMs) VALUES (?, ?, ?, ?)
+    this.#folderUpsert = db.prepare<[string, string | null, number]>(`
+      INSERT INTO cache_meta (folder, projectPath, indexMtimeMs) VALUES (?, ?, ?)
       ON CONFLICT(folder) DO UPDATE SET
-        projectPath = excluded.projectPath, cwd = excluded.cwd,
-        indexMtimeMs = excluded.indexMtimeMs
+        projectPath = excluded.projectPath, indexMtimeMs = excluded.indexMtimeMs
     `);
     this.#folderDelete = db.prepare<[string]>('DELETE FROM cache_meta WHERE folder = ?');
 
@@ -162,7 +161,7 @@ export class SqliteSessionRepository implements SessionRepository {
     return map;
   }
 
-  setFolderMeta(folder: string, projectPath: string | null, cwd: string | null, indexMtimeMs: number): void {
-    this.#folderUpsert.run(folder, projectPath, cwd, indexMtimeMs);
+  setFolderMeta(folder: string, projectPath: string | null, indexMtimeMs: number): void {
+    this.#folderUpsert.run(folder, projectPath, indexMtimeMs);
   }
 }

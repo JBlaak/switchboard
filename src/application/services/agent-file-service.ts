@@ -102,7 +102,7 @@ export class AgentFileService {
     }
 
     for (const folder of folders) {
-      const projectPath = transcripts.resolveProjectPath(folder)?.projectPath ?? null;
+      const projectPath = transcripts.resolveProjectPath(folder);
       if (projectPath && hidden.has(projectPath)) continue;
 
       // The same two-deep label the sessions tab uses. Falls back to decoding

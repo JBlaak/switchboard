@@ -65,22 +65,8 @@ const api: SwitchboardApi = {
   watchFile: (filePath) => ipcRenderer.invoke(INVOKE.watchFile, filePath),
   unwatchFile: (filePath) => ipcRenderer.invoke(INVOKE.unwatchFile, filePath),
 
-  // ── Git ──
-  gitWorktrees: (projectPath) => ipcRenderer.invoke(INVOKE.gitWorktrees, projectPath),
-  gitDefaultBranch: (worktreePath) => ipcRenderer.invoke(INVOKE.gitDefaultBranch, worktreePath),
-  gitDiffFile: (worktreePath, base, relPath) =>
-    ipcRenderer.invoke(INVOKE.gitDiffFile, worktreePath, base, relPath),
-
-  // ── Browsing a worktree ──
-  listDir: (worktreePath, relPath) => ipcRenderer.invoke(INVOKE.listDir, worktreePath, relPath),
-  readProjectFile: (worktreePath, relPath) =>
-    ipcRenderer.invoke(INVOKE.readProjectFile, worktreePath, relPath),
-  getChanges: (worktreePath, projectPath, base) =>
-    ipcRenderer.invoke(INVOKE.getChanges, worktreePath, projectPath, base),
-
   // ── Host ──
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
-  revealPath: (target) => ipcRenderer.invoke(INVOKE.revealPath, target),
   writeClipboard: (text) => ipcRenderer.invoke(INVOKE.writeClipboard, text),
   getAppVersion: () => ipcRenderer.invoke(INVOKE.getAppVersion),
   updaterCheck: () => ipcRenderer.invoke(INVOKE.updaterCheck),
