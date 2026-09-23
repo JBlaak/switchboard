@@ -15,7 +15,7 @@ import { isProjectFolderName } from './claude-paths';
 import type { Session } from '../../domain/session/session';
 import type { TranscriptEntry } from '../../domain/session/transcript';
 import type { FileSystem } from '../../application/ports/file-system';
-import type { ResolvedProject, TranscriptSeed, TranscriptStore } from '../../application/ports/transcript-store';
+import type { TranscriptSeed, TranscriptStore } from '../../application/ports/transcript-store';
 
 /**
  * How much of a transcript is read looking for a `cwd` before giving up on the
@@ -67,16 +67,14 @@ export class FileTranscriptStore implements TranscriptStore {
    * second pass.
    *
    * A worktree resolves to the repository it was cut from, so a `--worktree`
-   * session does not appear as a project of its own next to it. The raw cwd
-   * rides along, because the folder name cannot give it back: encoding is
-   * lossy, and a list scoped to one worktree needs the exact directory.
+   * session does not appear as a project of its own next to it.
    */
-  resolveProjectPath(folder: string): ResolvedProject | null {
+  resolveProjectPath(folder: string): string | null {
     const folderPath = this.#folderPath(folder);
     const cwd = this.#findCwd(folderPath);
     if (!cwd) return null;
     const parent = worktreeParentPath(cwd);
-    return { projectPath: parent && this.fs.exists(parent) ? parent : cwd, cwd };
+    return parent && this.fs.exists(parent) ? parent : cwd;
   }
 
   /**

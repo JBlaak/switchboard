@@ -6,11 +6,9 @@ import { clearNotifications } from '../../state/activity-store';
 import { confirmAndStopSession } from '../sessions/session-actions';
 import { setActiveSession } from '../sessions/active-session';
 import { updateRunningIndicators } from '../sessions/session-poller';
-import { hideViewerPanels } from '../panel/viewers';
-import { hideFoldStrips } from '../code/fold-strip';
 import {
-  gridViewer, gridViewerCount, placeholder, sidebarContent, terminalArea, terminalHeader,
-  terminalsEl,
+  gridViewer, gridViewerCount, jsonlViewer, memoryViewer, placeholder, planViewer,
+  settingsViewer, sidebarContent, statsViewer, terminalArea, terminalHeader, terminalsEl,
 } from '../../lib/dom';
 import { openSessions, sessionMap, view } from '../../state/session-store';
 import { fitAndScroll, isMac, showSession } from '../terminal/terminal-manager';
@@ -149,15 +147,13 @@ export function showGridView() {
   placeholder.style.display = 'none';
   terminalHeader.style.display = 'none';
 
-  // Hide the panels but keep terminal-area visible: the grid rearranges what is
-  // inside it. Asking the one owner of panel visibility rather than naming them
-  // here, so a panel added later cannot be left showing behind the grid.
-  hideViewerPanels();
+  // Hide other viewers but keep terminal-area visible
+  planViewer.style.display = 'none';
+  statsViewer.style.display = 'none';
+  memoryViewer.style.display = 'none';
+  settingsViewer.style.display = 'none';
+  jsonlViewer.style.display = 'none';
   terminalArea.style.display = '';
-  // And the flip's strips, for the same reason and from the same kind of owner:
-  // they are inside the area the grid has just claimed, and a folded half is a
-  // statement about one session.
-  hideFoldStrips();
 
   // Switch #terminals to grid layout
   terminalsEl.classList.add('grid-layout');

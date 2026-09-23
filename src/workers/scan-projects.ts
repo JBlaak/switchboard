@@ -22,9 +22,8 @@ const transcripts = new FileTranscriptStore(new NodeFileSystem(), projectsDir);
 const PROGRESS_EVERY = 5;
 
 function scanFolder(folder: string): FolderScan | null {
-  const resolved = transcripts.resolveProjectPath(folder);
-  if (!resolved) return null;
-  const { projectPath, cwd } = resolved;
+  const projectPath = transcripts.resolveProjectPath(folder);
+  if (!projectPath) return null;
 
   const sessions: Session[] = [];
   for (const sessionId of transcripts.listSessionIds(folder)) {
@@ -32,12 +31,9 @@ function scanFolder(folder: string): FolderScan | null {
     if (session) sessions.push(session);
   }
 
-  // The cwd has to travel with the scan: a cold start writes each folder's gate
-  // with a current mtime, so reconcile() never revisits it to fill the cwd in.
   return {
     folder,
     projectPath,
-    cwd,
     sessions,
     indexMtimeMs: transcripts.folderIndexMtimeMs(folder),
   };

@@ -62,19 +62,8 @@ export const INVOKE = {
   watchFile: 'watch-file',
   unwatchFile: 'unwatch-file',
 
-  // Git
-  gitWorktrees: 'git-worktrees',
-  gitDefaultBranch: 'git-default-branch',
-  gitDiffFile: 'git-diff-file',
-
-  // Browsing
-  listDir: 'list-dir',
-  readProjectFile: 'read-project-file',
-  getChanges: 'get-changes',
-
   // Host
   openExternal: 'open-external',
-  revealPath: 'reveal-path',
   writeClipboard: 'clipboard-write-text',
   getAppVersion: 'get-app-version',
   updaterCheck: 'updater-check',

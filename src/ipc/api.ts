@@ -7,9 +7,6 @@
  * from the same channel table, so the two sides cannot drift apart silently.
  */
 import type { AgentFileIndex } from '../domain/agent-files/agent-file';
-import type { BrowseFile, BrowseListing } from '../domain/browse/types';
-import type { ChangesPayload } from '../domain/changes/types';
-import type { DiffBase, FileDiff, Worktree } from '../domain/git/types';
 import type { PlanSummary } from '../domain/plans/plan';
 import type { Project } from '../domain/project/project';
 import type { RemoteConfig } from '../domain/project/remote-target';
@@ -96,80 +93,8 @@ export interface SwitchboardApi {
   watchFile(filePath: string): Promise<IpcResult>;
   unwatchFile(filePath: string): Promise<IpcResult>;
 
-  // ── Git ──
-  /**
-   * `[]` for a folder that is not a repository. A failure answers with the
-   * `{ ok: false, error }` envelope, as every invoke does — check for an array.
-   */
-  gitWorktrees(projectPath: string): Promise<Worktree[]>;
-  /**
-   * What this repository calls its default branch — `main`, `master`, or
-   * whatever `origin/HEAD` points at — verified to resolve to a commit here,
-   * and `origin/<name>` when only the remote-tracking ref exists.
-   *
-   * Null when none of them resolve, which is a repository with nothing to
-   * compare against: the base picker then offers uncommitted-only alone. A
-   * failure answers with the `{ ok: false, error }` envelope, as every invoke
-   * does.
-   */
-  gitDefaultBranch(worktreePath: string): Promise<string | null>;
-  /**
-   * One file's hunks — phase two of the two-phase diff.
-   *
-   * `getChanges` classifies the whole tree for the price of one command and
-   * leaves every `hunks` empty; this buys the lines, for one file, when the
-   * reader actually expands it. A 212-file diff is therefore 212 headers and
-   * only as many patches as get scrolled past.
-   *
-   * `base` should be the base that file's row was computed against —
-   * `payload.base`, not the one that was asked for — so the hunks agree with
-   * the diffstat printed beside them. Fails with the `{ ok: false, error }`
-   * envelope when git cannot read the file, so check for `hunks` before
-   * walking it.
-   */
-  gitDiffFile(worktreePath: string, base: DiffBase, relPath: string): Promise<FileDiff>;
-
-  // ── Browsing a worktree ──
-  /**
-   * One level of the file tree: the direct children of `relPath` inside
-   * `worktreePath` (`''` for the worktree itself), ignored names already
-   * dropped, directories first. A folder that cannot be read answers
-   * `{ entries: [], unreadable: true }`; only a path that tries to leave the
-   * worktree fails, with the `{ ok: false, error }` envelope — so check that
-   * `entries` is an array before walking it.
-   */
-  listDir(worktreePath: string, relPath: string): Promise<BrowseListing>;
-  /**
-   * One file inside the worktree. `error` instead of `content` when it cannot
-   * be read or is too large to send; `readOnly` when there is no way to write
-   * it back, which is every remote project.
-   */
-  readProjectFile(worktreePath: string, relPath: string): Promise<BrowseFile>;
-  /**
-   * What changed in `worktreePath` against `base`, and which session claims
-   * each path — one channel because they are one answer; see `ChangesPayload`.
-   *
-   * `projectPath` is the *project*, which is the parent repository when the
-   * worktree is one of its checkouts: it is what says which transcript folders
-   * could hold a claim, and a worktree's sessions live in the project's.
-   * `payload.base` is the base git actually used and may not be the one asked
-   * for (invariant 7) — the surface shows that one. Fails with the
-   * `{ ok: false, error }` envelope when git cannot read the worktree at all,
-   * so check that `files` is an array before walking it.
-   */
-  getChanges(worktreePath: string, projectPath: string, base: DiffBase): Promise<ChangesPayload>;
-
   // ── Host ──
   openExternal(url: string): Promise<void>;
-  /**
-   * Show a directory or file in the platform's file manager.
-   *
-   * The path comes from the renderer, so the main process checks it before the
-   * shell sees it: it has to exist and it has to be inside a project the app
-   * already knows about. Answers the `{ ok }`/`{ error }` envelope, and a
-   * refusal is a bug rather than something to show the user.
-   */
-  revealPath(target: string): Promise<IpcResult>;
   writeClipboard(text: string): Promise<void>;
   getAppVersion(): Promise<string>;
   updaterCheck(): Promise<IpcResult>;

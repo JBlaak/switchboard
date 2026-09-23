@@ -8,16 +8,13 @@
  * session opens a terminal in the wrong one.
  */
 import { installLayout } from './layout';
-import { installMainMode } from './main-mode';
 import { installIpcListeners } from './ipc-listeners';
 import { installQuotaGauges } from './quota-gauges';
-import { onSidebarRefresh } from './refresh';
 import { installSearch } from './search';
 import { installShortcuts } from './shortcuts';
 import { installTabRouter } from './tab-router';
 import { installTimeTicker } from './time-ticker';
 import { renderStatusSummary } from './status-bar';
-import { installProjectRail, refreshProjectRail } from '../features/rail/project-rail';
 import { installSidebar } from '../features/sessions/sidebar';
 import { installSidebarFilters } from '../features/sessions/sidebar-filters';
 import { loadProjects } from '../features/sessions/session-list';
@@ -27,11 +24,8 @@ import { schedulePoll } from '../features/sessions/session-poller';
 import { terminalStopButton } from '../features/sessions/terminal-header';
 import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
-import { reconcileScopeWithProjects } from '../state/scope-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
 import { initFilePanel } from '../features/panel/file-panel';
-import { installCodeArea } from '../features/code/code-area';
-import { installFilesTab } from '../features/files/files-tab';
 import { initGridObservers, showGridView } from '../features/terminal/grid-view';
 import {
   applyTerminalFont, prewarmTerminalRenderer,
@@ -42,8 +36,6 @@ import type { GlobalSettings } from '../../domain/settings/settings';
 export function bootstrap(): void {
   // The refresh events, before anything can fire one.
   installSidebar();
-  // After it, so the rail subscribes to a refresh the sidebar has performed.
-  installProjectRail();
 
   installIpcListeners();
   installTabRouter();
@@ -56,16 +48,6 @@ export function bootstrap(): void {
 
   initGridObservers();
   initFilePanel();
-  // After the panels module has built its editors: the code area's header is
-  // inserted relative to the one `codePanel` put in #code-area.
-  installCodeArea();
-  // After it, because a click in the tree opens a file into that area. Nothing
-  // is fetched here: the tree reads its first directory when its tab is opened.
-  installFilesTab();
-  // Last of the main area's three: the flip folds two halves that both have to
-  // exist first — its strips are appended to #terminal-area and #code-area, and
-  // the code strip has to land after the split #terminal-split puts there.
-  installMainMode();
   setTickListener(tickConnectionCards);
 
   terminalStopButton.addEventListener('click', () => {
@@ -77,15 +59,6 @@ export function bootstrap(): void {
 
   void applyStoredSettings();
   void loadProjects().then(() => {
-    // The stored scope may name a project that has gone since the last run.
-    // Checked once the list exists, and after every redraw from then on — each
-    // reload ends in one, whichever path asked for it. Not before: a redraw of
-    // the still-empty list would drop a perfectly good scope.
-    reconcileScopeWithProjects(view.cachedAllProjects);
-    onSidebarRefresh(() => reconcileScopeWithProjects(view.cachedAllProjects));
-    // The rail's first paint: it draws from the project list, which is empty
-    // until now.
-    refreshProjectRail();
     renderStatusSummary();
     restoreView();
   });

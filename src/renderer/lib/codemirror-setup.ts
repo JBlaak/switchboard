@@ -5,7 +5,7 @@ import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirro
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import type { LanguageSupport } from '@codemirror/language';
-import { syntaxHighlighting, HighlightStyle, indentOnInput, bracketMatching, foldGutter, foldKeymap, LanguageDescription } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, indentOnInput, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { highlightSelectionMatches } from '@codemirror/search';
 import { dracula } from '@ddietr/codemirror-themes/theme/dracula';
 import { tags } from '@lezer/highlight';
@@ -23,8 +23,6 @@ import { xml } from '@codemirror/lang-xml';
 import { yaml } from '@codemirror/lang-yaml';
 import { sql } from '@codemirror/lang-sql';
 import { cpp } from '@codemirror/lang-cpp';
-import { sass } from '@codemirror/lang-sass';
-import { less } from '@codemirror/lang-less';
 
 const markdownExtras = HighlightStyle.define([
   { tag: tags.monospace, color: '#8BE9FD' },
@@ -383,18 +381,12 @@ const LANG_MAP = {
   cjs: () => javascript(),
   jsx: () => javascript({ jsx: true }),
   ts: () => javascript({ typescript: true }),
-  mts: () => javascript({ typescript: true }),
-  cts: () => javascript({ typescript: true }),
   tsx: () => javascript({ jsx: true, typescript: true }),
   py: () => python(),
   json: () => json(),
   html: () => html(),
   htm: () => html(),
   css: () => css(),
-  scss: () => sass(),
-  // `.sass` is the indentation-based dialect; `.scss` is the brace-and-semicolon one.
-  sass: () => sass({ indented: true }),
-  less: () => less(),
   rs: () => rust(),
   go: () => go(),
   java: () => java(),
@@ -412,84 +404,17 @@ const LANG_MAP = {
   mdx: () => markdown({ base: markdownLanguage, codeLanguages: languages }),
 };
 
-/**
- * What could be worked out about a file's language.
- *
- * The two halves are separate because they resolve at different speeds:
- * `LANG_MAP` answers synchronously, so the editor can paint highlighted on its
- * first frame, while `@codemirror/language-data` only hands back a description
- * whose parser still has to be imported. First paint must never wait on that
- * import, so the async half is reported on its own and applied once it lands.
- */
-export interface ResolvedLanguage {
-  /** Usable immediately. `null` means nothing is known, which is plain text. */
-  support: LanguageSupport | null;
-  /** A language only `language-data` knows, still needing an async `load()`. */
-  deferred: LanguageDescription | null;
-}
-
-/**
- * Work out how to highlight `filename`.
- *
- * `LANG_MAP` wins wherever it has an entry, because it encodes choices
- * `language-data` cannot make for us: `.ts` as TypeScript rather than plain
- * JavaScript, `.sass` as the indented dialect. Everything it misses is offered
- * to `language-data`, which recognises about a hundred more languages.
- *
- * What neither recognises stays plain text. This used to fall back to markdown,
- * which was actively wrong on source files — every `_name_` came out
- * italicised, `#` comments became headings, and a stylesheet like our own
- * `style.scss` rendered as prose.
- *
- * Exported so anything else that has to highlight a file by name — a static
- * highlighter, say — shares this one table instead of growing a second copy.
- */
-export function languageForFilename(filename?: string | null): ResolvedLanguage {
-  // Match on the basename: `language-data` recognises whole names as well as
-  // extensions (`Dockerfile`, for one) and anchors those patterns, so a leading
-  // directory would stop them matching.
-  const name = (filename || '').split(/[\\/]/).pop() || '';
-  const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : '';
+function getLanguageExt(filename?: string | null) {
+  const ext = (filename || '').split('.').pop()?.toLowerCase();
   const factory = ext ? (LANG_MAP as Record<string, () => LanguageSupport>)[ext] : undefined;
-  if (factory) return { support: factory(), deferred: null };
-  return { support: null, deferred: name ? LanguageDescription.matchFilename(languages, name) : null };
-}
-
-/**
- * The slot every upgradeable viewer keeps its language in.
- *
- * One shared instance is enough: a compartment is only an identity key, and
- * each `EditorState` resolves it against its own configuration, so the same
- * compartment addresses whichever view a reconfigure is dispatched to.
- */
-const langCompartment = new Compartment();
-
-/**
- * Swap in a language whose parser had to be imported.
- *
- * Deliberately fire-and-forget. The view is already on screen and already
- * readable as plain text, so a slow or failed import costs highlighting and
- * nothing else. Dispatching into a view the user has since closed is safe too —
- * `EditorView.update` stores the state and returns once the view is destroyed.
- *
- * In practice the wait is a microtask: the renderer is bundled as one IIFE with
- * no code splitting, so esbuild has already inlined every parser `languages`
- * can reach and `load()` only hands back what is in memory. The await is still
- * required — that is the contract — but no flash of plain text is expected.
- */
-function upgradeLanguage(view: EditorView, resolved: ResolvedLanguage): void {
-  const desc = resolved.deferred;
-  if (!desc) return;
-  void desc.load().then(
-    (support) => { view.dispatch({ effects: langCompartment.reconfigure(support) }); },
-    () => { /* No parser to be had; plain text is a perfectly good end state. */ },
-  );
+  if (factory) return factory();
+  return markdown({ base: markdownLanguage, codeLanguages: languages });
 }
 
 // ── Read-Only File Viewer ───────────────────────────────────────────
 
 export function createReadOnlyViewer(parent: HTMLElement, content: string, filename?: string) {
-  const lang = languageForFilename(filename);
+  const langExt = getLanguageExt(filename);
   const state = EditorState.create({
     doc: content,
     extensions: [
@@ -506,73 +431,21 @@ export function createReadOnlyViewer(parent: HTMLElement, content: string, filen
       cmGotoLineDomHandler,
       cmSaveDomHandler,
       cmFloatingSearch(),
-      langCompartment.of(lang.support ?? []),
+      langExt,
       dracula,
       syntaxHighlighting(markdownExtras),
       appThemePatch,
     ],
   });
-  const view = new EditorView({ state, parent });
-  upgradeLanguage(view, lang);
-  return view;
-}
-
-// ── Lines the worktree diff attributes to a change ───────────────────
-
-/**
- * The green bars down the gutter of a file opened from the diff.
- *
- * `Diff / File` is a flip *inside* the code half, and a file that arrives with
- * no trace of why you opened it has thrown the diff away — you are reading a
- * whole file with no idea which eight lines of it are new. So the new-side line
- * numbers travel with the open and are painted as a line decoration.
- *
- * A `StateField` rather than a static facet because the buffer is editable:
- * positions have to be mapped through a change, or a keystroke would leave the
- * bars pointing at the wrong lines — or, once a line is deleted, out of the
- * document entirely, which CodeMirror throws on.
- */
-const setChangedLines = StateEffect.define<readonly number[]>();
-
-const changedLineMark = Decoration.line({ class: 'cm-changed-line' });
-
-function changedLineDecorations(state: EditorState, lines: readonly number[]): DecorationSet {
-  const total = state.doc.lines;
-  const marks = [];
-  let previous = 0;
-  for (const line of lines) {
-    // Ascending and de-duplicated: `Decoration.set` requires sorted ranges, and
-    // a diff can name the same line twice when two hunks touch.
-    if (line <= previous || line < 1 || line > total) continue;
-    previous = line;
-    marks.push(changedLineMark.range(state.doc.line(line).from));
-  }
-  return Decoration.set(marks);
-}
-
-const changedLineField = StateField.define<DecorationSet>({
-  create() { return Decoration.none; },
-  update(marks, tr) {
-    for (const effect of tr.effects) {
-      if (effect.is(setChangedLines)) return changedLineDecorations(tr.state, effect.value);
-    }
-    return tr.docChanged ? marks.map(tr.changes) : marks;
-  },
-  provide: field => EditorView.decorations.from(field),
-});
-
-/** Mark (or clear, with an empty list) the lines this diff changed. */
-export function markChangedLines(view: EditorView, lines: readonly number[]): void {
-  view.dispatch({ effects: setChangedLines.of(lines) });
+  return new EditorView({ state, parent });
 }
 
 // ── Editable File Viewer (for file panel) ───────────────────────────
 
 export function createEditableViewer(
-  parent: HTMLElement, content: string, filename?: string,
-  { wrap = false, changedLines }: { wrap?: boolean; changedLines?: readonly number[] } = {},
+  parent: HTMLElement, content: string, filename?: string, { wrap = false }: { wrap?: boolean } = {},
 ) {
-  const lang = languageForFilename(filename);
+  const langExt = getLanguageExt(filename);
   const wrapCompartment = new Compartment();
 
   const state = EditorState.create({
@@ -598,19 +471,16 @@ export function createEditableViewer(
       cmGotoLineKeymap,
       cmSaveKeymap,
       cmFloatingSearch(),
-      langCompartment.of(lang.support ?? []),
+      langExt,
       dracula,
       syntaxHighlighting(markdownExtras),
       appThemePatch,
-      changedLineField,
       wrapCompartment.of(wrap ? EditorView.lineWrapping : []),
     ],
   });
 
   const view: WrappableEditorView = new EditorView({ state, parent });
   view._wrapCompartment = wrapCompartment;
-  upgradeLanguage(view, lang);
-  if (changedLines && changedLines.length > 0) markChangedLines(view, changedLines);
   return view;
 }
 
@@ -619,12 +489,7 @@ export function createEditableViewer(
 export function createMergeViewer(
   parent: HTMLElement, originalContent: string, modifiedContent: string, filename?: string,
 ) {
-  // Both merge viewers take only the synchronous half of the resolution. A
-  // `MergeView` owns two `EditorState`s, so an async upgrade would have to
-  // reconfigure both halves in step, and the unified one has the deletion
-  // highlighter reading the language as well. Until that is worth building, a
-  // diff of a language only `language-data` knows renders as plain text.
-  const langExt = languageForFilename(filename).support ?? [];
+  const langExt = getLanguageExt(filename);
   const sharedExts = [
     lineNumbers(),
     highlightSpecialChars(),
@@ -664,8 +529,7 @@ export function createMergeViewer(
 export function createUnifiedMergeViewer(
   parent: HTMLElement, originalContent: string, modifiedContent: string, filename?: string,
 ) {
-  // Synchronous only, for the reason given on `createMergeViewer`.
-  const langExt = languageForFilename(filename).support ?? [];
+  const langExt = getLanguageExt(filename);
   const state = EditorState.create({
     doc: modifiedContent,
     extensions: [
