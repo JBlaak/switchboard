@@ -12,6 +12,7 @@
   z-index: 1000;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  animation: fade-in 0.16s ease-out;
 }
 
 .new-session-dialog {
@@ -21,6 +22,8 @@
   width: 540px;
   max-width: 90vw;
   box-shadow: var(--sb-edge), var(--sb-lift);
+  /* BlaakTasks' modal entrance; the shell is built fresh on every open, so it replays. */
+  animation: modal-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
 
 .new-session-dialog h3 {

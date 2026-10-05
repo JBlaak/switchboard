@@ -17,7 +17,8 @@ import { hideTerminalHeader } from './terminal-header';
 import {
   injectIntoCaches, openSessions, pendingSessions, removeFromCaches, sessionMap, view,
 } from '../../state/session-store';
-import { placeholder } from '../../lib/dom';
+import { placeholder, sidebarContent } from '../../lib/dom';
+import { bump } from '../../lib/motion/reflow';
 import { createTerminalEntry, destroySession, showSession } from '../terminal/terminal-manager';
 import type { Project } from '../../../domain/project/project';
 import type { SessionRow } from '../../../domain/session/session';
@@ -155,6 +156,15 @@ export async function confirmAndStopSession(sessionId: string): Promise<void> {
   view.activePtyIds.delete(sessionId);
   if (view.activeSessionId === sessionId) clearScreen();
   refreshSidebar();
+  settleStoppedRow(sessionId);
+}
+
+/** A small squash on the stopped row, and its status dot dipping, so the stop lands. */
+function settleStoppedRow(sessionId: string): void {
+  const row = sidebarContent.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
+  if (!row) return;
+  bump(row, -1.2);
+  bump(row.querySelector('.session-status-dot'), -6);
 }
 
 /**
