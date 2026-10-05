@@ -146,14 +146,6 @@ npm run release   # builds + publishes to GitHub Releases
 
 Set `GH_TOKEN` in your environment (a GitHub personal access token with `repo` scope).
 
-## Auto-Updates
-
-The app uses `electron-updater` to check for updates from GitHub Releases on launch and every 4 hours. Updates are only checked in packaged builds (not during development). The flow:
-
-1. App auto-downloads updates in the background
-2. A toast notification appears when the update is ready
-3. User can restart immediately or dismiss (installs on next quit)
-
 ## Code Signing
 
 For distribution, set these environment variables:

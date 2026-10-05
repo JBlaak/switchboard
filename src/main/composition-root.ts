@@ -33,7 +33,6 @@ import {
   ElectronAppearanceGateway, ElectronDialogService, ElectronSystemGateway,
 } from '../infrastructure/electron/desktop';
 import { ElectronRendererGateway } from '../infrastructure/electron/renderer-gateway';
-import { ElectronUpdater } from '../infrastructure/electron/updater';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
@@ -75,7 +74,6 @@ export interface Container {
   readonly schedules: ScheduleService;
 
   readonly renderer: ElectronRendererGateway;
-  readonly updater: ElectronUpdater;
   readonly dialogs: ElectronDialogService;
   readonly system: ElectronSystemGateway;
   readonly appearance: ElectronAppearanceGateway;
@@ -164,10 +162,6 @@ export function buildContainer(): Container {
   });
 
   // ── Host ──
-  const updater = new ElectronUpdater({
-    log,
-    onEvent: (type, data) => renderer.updaterEvent(type, data),
-  });
   const dialogs = new ElectronDialogService(getWindow);
   const system = new ElectronSystemGateway(log);
   const appearance = new ElectronAppearanceGateway();
@@ -195,7 +189,7 @@ export function buildContainer(): Container {
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     sessionIndex, projects, usage, schedules,
-    renderer, updater, dialogs, system, appearance, projectsWatcher,
+    renderer, dialogs, system, appearance, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     close: () => {

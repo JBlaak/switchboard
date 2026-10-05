@@ -67,10 +67,6 @@ export class ElectronRendererGateway implements RendererGateway {
     this.#send(EVENT.fullscreenChanged, isFullscreen);
   }
 
-  updaterEvent(type: string, data?: unknown): void {
-    this.#send(EVENT.updaterEvent, type, data);
-  }
-
   #send(channel: string, ...args: unknown[]): void {
     const window = this.getWindow();
     if (!window || window.isDestroyed()) return;

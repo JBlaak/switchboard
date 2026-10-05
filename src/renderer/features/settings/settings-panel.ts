@@ -14,7 +14,6 @@ import { TERMINAL_THEMES, applyTerminalTheme } from '../terminal/terminal-themes
 import { PERMISSION_MODES } from '../../../domain/launch/session-options';
 import { shortProjectPath } from '../../../domain/project/project-path';
 import { escapeHtml } from '../../lib/format';
-import type { UpdaterEventData } from '../../../ipc/api';
 
 /** A settings blob — open-ended, since each feature writes its own keys. */
 type SettingsRecord = Record<string, any>;
@@ -288,14 +287,11 @@ export async function openSettingsViewer(
     </div>` : ''}
 
     ${!isProject ? `<div class="settings-section">
-      <div class="settings-section-title">Updates</div>
+      <div class="settings-section-title">About</div>
       <div class="settings-field">
         <div class="settings-field-info">
           <span class="settings-label">Version</span>
-          <div class="settings-description"><span id="sv-current-version"></span> <span id="sv-update-status"></span></div>
-        </div>
-        <div class="settings-field-control">
-          <button class="settings-check-updates-btn" id="sv-check-updates-btn">Check for Updates</button>
+          <div class="settings-description"><span id="sv-current-version"></span></div>
         </div>
       </div>
     </div>` : ''}
@@ -426,27 +422,11 @@ export async function openSettingsViewer(
     closeSettingsViewer();
   });
 
-  // Check for updates button + current version + inline status
-  const checkUpdatesBtn = ctl('#sv-check-updates-btn');
-  if (checkUpdatesBtn) {
-    const updateStatusEl = ctl('#sv-update-status');
+  // Current version
+  const currentVersionEl = ctl<HTMLElement>('#sv-current-version');
+  if (currentVersionEl) {
     window.api.getAppVersion().then(v => {
-      ctl<HTMLElement>('#sv-current-version').textContent = `v${v}`;
-    });
-    const settingsUpdaterHandler = (type: string, data: UpdaterEventData = {}) => {
-      if (!updateStatusEl) return;
-      switch (type) {
-        case 'checking': updateStatusEl.textContent = '\u2014 checking\u2026'; break;
-        case 'update-available': updateStatusEl.textContent = `\u2014 v${data.version} available`; break;
-        case 'update-not-available': updateStatusEl.textContent = '\u2014 up to date'; break;
-        case 'download-progress': updateStatusEl.textContent = `\u2014 downloading ${Math.round(data.percent ?? 0)}%`; break;
-        case 'update-downloaded': updateStatusEl.textContent = `\u2014 v${data.version} ready, restart to update`; break;
-        case 'error': updateStatusEl.textContent = '\u2014 check failed'; break;
-      }
-    };
-    window.api.onUpdaterEvent(settingsUpdaterHandler);
-    checkUpdatesBtn.addEventListener('click', () => {
-      window.api.updaterCheck();
+      currentVersionEl.textContent = `v${v}`;
     });
   }
 

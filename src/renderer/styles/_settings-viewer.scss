@@ -340,28 +340,3 @@
   color: var(--sb-text-faint);
   font-size: 12.5px;
 }
-.settings-update-status {
-  color: var(--sb-text-subtle);
-  font-size: 12.5px;
-}
-.settings-check-updates-btn {
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.1);
-  color: var(--sb-text-dim);
-  font-size: 12px;
-  padding: 6px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  transition: all 0.15s;
-}
-.settings-check-updates-btn:hover {
-  background: rgba(var(--sb-overlay-rgb),0.1);
-  border-color: rgba(var(--sb-overlay-rgb),0.2);
-  color: var(--sb-text);
-}
-.settings-check-updates-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}

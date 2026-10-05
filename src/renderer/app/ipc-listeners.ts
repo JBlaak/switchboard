@@ -8,7 +8,6 @@
  * decided here.
  */
 import { refreshSidebar, reloadProjects } from './refresh';
-import { setUpdaterEvent } from './updater-notice';
 import { setStatusActivity } from './status-bar';
 import { setActiveSession } from '../features/sessions/active-session';
 import {
@@ -46,7 +45,6 @@ export function installIpcListeners(): void {
   window.api.onRemoteStatus(handleRemoteStatus);
   window.api.onProjectsChanged(onProjectsChanged);
   window.api.onStatusUpdate(setStatusActivity);
-  window.api.onUpdaterEvent(setUpdaterEvent);
 
   // Fullscreen hides the macOS traffic lights, so the space the collapsed
   // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.

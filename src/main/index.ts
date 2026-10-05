@@ -16,11 +16,6 @@ import { systemTimers } from '../infrastructure/system/timers';
 import { normaliseAppearance } from '../domain/settings/appearance';
 import type { Container } from './composition-root';
 
-/** How long after launch the first update check runs. */
-const UPDATE_CHECK_DELAY_MS = 5000;
-/** And how often after that, for an app left running for days. */
-const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
-
 // Must happen before anything reads a path off `app`.
 isolateUserDataIfRequested();
 
@@ -90,11 +85,6 @@ function start(container: Container): void {
   // A migration that recreated the search index leaves it empty even though the
   // session cache is intact, so the index alone has to be refilled.
   if (container.searchIndex.wasRecreated()) container.sessionIndex.rebuild();
-
-  container.updater.startPeriodicChecks(systemTimers, {
-    initialDelayMs: UPDATE_CHECK_DELAY_MS,
-    intervalMs: UPDATE_CHECK_INTERVAL_MS,
-  });
 
   // macOS keeps the app alive after its last window closes.
   app.on('activate', () => {
