@@ -2,9 +2,11 @@
    Sits just left of the settings gear in #sidebar-toolbar and looks like it.
    The gear carries `margin-left: auto` to push itself right; with this button
    in front of it, this one takes the auto margin instead so the pair stays
-   together on the right rather than splitting across the toolbar. */
+   together on the right rather than splitting across the toolbar. Its right
+   margin matches the gear's so the three toolbar icons sit evenly spaced. */
 #appearance-toggle-btn {
   margin-left: auto;
+  margin-right: 3px;
   background: transparent;
   border: none;
   color: var(--sb-text-faint);
