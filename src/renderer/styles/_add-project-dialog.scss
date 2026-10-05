@@ -2,7 +2,7 @@
 .add-project-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(var(--sb-shadow-rgb),calc(0.5 * var(--sb-shadow-k)));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11,12 +11,12 @@
 
 .add-project-dialog {
   background: var(--sb-bg-raised);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(var(--sb-overlay-rgb),0.1);
   border-radius: 12px;
   padding: 20px;
   width: 440px;
   max-width: 90vw;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 32px rgba(var(--sb-shadow-rgb),calc(0.5 * var(--sb-shadow-k)));
 }
 
 .add-project-dialog h3 {
@@ -27,7 +27,7 @@
 }
 
 .add-project-hint {
-  color: #666;
+  color: var(--sb-text-subtle);
   font-size: 12px;
   margin-bottom: 12px;
   line-height: 1.4;
@@ -44,8 +44,8 @@
   /* Flex items refuse to shrink below their intrinsic width by default, which
      pushed the multi-input remote row outside the dialog. */
   min-width: 0;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(var(--sb-overlay-rgb),0.05);
+  border: 1px solid rgba(var(--sb-overlay-rgb),0.1);
   border-radius: 6px;
   padding: 8px 10px;
   color: var(--sb-text);
@@ -59,12 +59,12 @@
 }
 
 .add-project-dialog .folder-input-row input::placeholder {
-  color: #555;
+  color: var(--sb-text-placeholder);
 }
 
 .add-project-browse-btn {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(var(--sb-overlay-rgb),0.06);
+  border: 1px solid rgba(var(--sb-overlay-rgb),0.1);
   border-radius: 6px;
   padding: 8px 12px;
   color: var(--sb-text-dim);
@@ -75,8 +75,8 @@
 }
 
 .add-project-browse-btn:hover {
-  background: rgba(255,255,255,0.1);
-  border-color: rgba(255,255,255,0.15);
+  background: rgba(var(--sb-overlay-rgb),0.1);
+  border-color: rgba(var(--sb-overlay-rgb),0.15);
 }
 
 .add-project-dialog .add-project-actions {
@@ -91,17 +91,17 @@
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(var(--sb-overlay-rgb),0.1);
   transition: all 0.15s;
 }
 
 .add-project-cancel-btn {
   background: transparent;
-  color: #888;
+  color: var(--sb-text-hover);
 }
 
 .add-project-cancel-btn:hover {
-  background: rgba(255,255,255,0.05);
+  background: rgba(var(--sb-overlay-rgb),0.05);
 }
 
 .add-project-add-btn {
@@ -115,7 +115,7 @@
 }
 
 .add-project-error {
-  color: #ff6b6b;
+  color: var(--sb-danger);
   font-size: 12px;
   margin-top: 8px;
   display: none;
@@ -129,8 +129,8 @@
 }
 
 .add-project-tab {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(var(--sb-overlay-rgb),0.04);
+  border: 1px solid rgba(var(--sb-overlay-rgb),0.1);
   border-radius: 6px;
   padding: 6px 12px;
   color: var(--sb-text-dim);
@@ -140,7 +140,7 @@
 }
 
 .add-project-tab:hover {
-  background: rgba(255,255,255,0.08);
+  background: rgba(var(--sb-overlay-rgb),0.08);
 }
 
 .add-project-tab.active {
@@ -150,7 +150,7 @@
 }
 
 .add-remote-sep {
-  color: #666;
+  color: var(--sb-text-subtle);
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 

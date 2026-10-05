@@ -16,9 +16,9 @@
 }
 
 #global-settings-btn:hover {
-  background: rgba(255,255,255,0.04);
-  border-color: rgba(255,255,255,0.12);
-  color: #888;
+  background: rgba(var(--sb-overlay-rgb),0.04);
+  border-color: rgba(var(--sb-overlay-rgb),0.12);
+  color: var(--sb-text-hover);
 }
 
 #global-settings-btn.active {
@@ -33,7 +33,7 @@
   font-weight: 700;
   letter-spacing: 0.5px;
   color: var(--sb-text-faint);
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(var(--sb-overlay-rgb),0.15);
   border-radius: 4px;
   padding: 1px 4px;
   margin-left: 4px;

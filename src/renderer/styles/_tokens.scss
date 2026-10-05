@@ -2,7 +2,11 @@
    Switchboard's colors are lifted from the Slack dark workspace theme: green-tinted
    near-black surfaces, a mint accent, a neutral text ramp, and Slack's brand
    secondaries for status. Everything below is referenced through these tokens, so
-   re-theming the app means editing this block and nothing else. */
+   re-theming the app means editing this block and nothing else.
+
+   The light palette overrides the same tokens under prefers-color-scheme: light.
+   The main process drives that media query through nativeTheme.themeSource, so the
+   system / light / dark toggle needs no class or attribute on the document. */
 :root {
   /* Surfaces, darkest to lightest. Switchboard's own ladder is preserved — the
      terminal sits on the darkest surface and the sidebar floats above it — but each
@@ -37,6 +41,51 @@
   --sb-red:        #e01e5a;
   --sb-yellow:     #ecb22e;
 
+  /* The same status hues as bare channels, for tinted fills and borders. */
+  --sb-green-rgb:      46, 182, 125;
+  --sb-green-soft-rgb: 76, 197, 150;
+  --sb-blue-rgb:       54, 197, 240;
+  --sb-red-rgb:        224, 30, 90;
+  --sb-yellow-rgb:     236, 178, 46;
+
+  /* One-off hues that predate the palette, kept so dark mode stays as it was. */
+  --sb-orange:        #f0a050;  /* needs-attention marker, section 4 label */
+  --sb-orange-rgb:    240, 160, 80;
+  --sb-amber:         #e8a030;  /* quota gauge, middle band */
+  --sb-warning-text:  #e0a830;  /* inline caveats in settings */
+  --sb-danger:        #ff6b6b;  /* form errors, destructive hovers */
+  --sb-danger-rgb:    255, 107, 107;
+  --sb-danger-soft:   #cc4444;  /* remove button at rest */
+  --sb-danger-strong: #ff5050;  /* remove button on hover */
+  --sb-danger-strong-rgb: 255, 80, 80;
+  --sb-red-deep:      #8f2542;  /* stop buttons */
+  --sb-green-muted:   #5a7a6a;  /* launch-config button */
+  --sb-blue-text:     #50b4ff;  /* the "remote" filter when active */
+  --sb-search-text:   #cdd6f4;  /* terminal find bar */
+
+  /* Neutral greys outside the text ramp. */
+  --sb-text-max:         #ffffff;  /* brightest highlight: toggles, shimmer peak */
+  --sb-text-hover:       #888888;  /* icon buttons on hover */
+  --sb-text-quiet:       #999999;  /* update toast's dismiss, on hover */
+  --sb-text-subtle:      #666666;  /* close glyphs, hints */
+  --sb-text-placeholder: #555555;
+  --sb-text-ghost:       #5c6264;  /* search icon, empty-state hints */
+  --sb-border-strong:    #585e60;
+  --sb-switch-track:     #666666;  /* settings toggle knob, off */
+  --sb-switch-knob:      #ffffff;  /* settings toggle knob, on */
+
+  /* Overlays. Translucent washes for hover fills and hairline borders are drawn
+     in --sb-overlay-rgb — white on the dark palette, black on the light one — so
+     an rgba(var(--sb-overlay-rgb), 0.06) border reads the same way in both.
+     Shadows and backdrops multiply their alpha by --sb-shadow-k, because a shadow
+     dark enough to register on near-black is far too heavy on white. */
+  --sb-overlay-rgb: 255, 255, 255;
+  --sb-shadow-rgb:  0, 0, 0;
+  --sb-shadow-k:    1;
+  --sb-bg-base-rgb: 16, 20, 20;  /* --sb-bg-base, for the connection scrim */
+
+  color-scheme: dark;
+
   /* Outer sidebar gutter: the left edge every stacked block in the sidebar
      starts from — the tab strip, the filter row, the search field, and the
      project cards below them. One value so those edges can't drift apart. */
@@ -51,6 +100,76 @@
   --sb-row-gutter: 26px;  /* width of the marker gutter */
   --sb-row-gap:     8px;  /* marker gutter → text */
   --sb-row-text: calc(var(--sb-row-inset) + var(--sb-row-gutter) + var(--sb-row-gap));
+}
+
+/* ========== LIGHT PALETTE ==========
+   The same ladder inverted: the terminal sits on white and the sidebar is a faint
+   green-grey beside it. The mint accent is too light to carry text on white, so
+   the light accent is a deeper teal and its ink flips to white. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --sb-bg-deep:   #e4e9e6;
+    --sb-bg-base:   #ffffff;
+    --sb-bg-panel:  #f3f5f4;
+    --sb-bg-raised: #ffffff;
+
+    --sb-accent:       #0f8f6c;
+    --sb-accent-hover: #0b7a5b;
+    --sb-accent-dim:   #5cc8a6;
+    --sb-accent-ink:   #ffffff;
+    --sb-accent-rgb:   15, 143, 108;
+
+    --sb-text-strong:  #0d1110;
+    --sb-text:         #1f2423;
+    --sb-text-soft:    #2c3231;
+    --sb-text-dim:     #3b4241;
+    --sb-text-muted:   #5d6463;
+    --sb-text-faint:   #767d7c;
+    --sb-text-dimmest: #959b9a;
+
+    --sb-green:      #1e9c68;
+    --sb-green-soft: #2eb67d;
+    --sb-blue:       #1590c0;
+    --sb-red:        #cc1650;
+    --sb-yellow:     #b98200;
+
+    --sb-green-rgb:      30, 156, 104;
+    --sb-green-soft-rgb: 46, 182, 125;
+    --sb-blue-rgb:       21, 144, 192;
+    --sb-red-rgb:        204, 22, 80;
+    --sb-yellow-rgb:     185, 130, 0;
+
+    --sb-orange:        #c96d12;
+    --sb-orange-rgb:    201, 109, 18;
+    --sb-amber:         #d08a10;
+    --sb-warning-text:  #a26e00;
+    --sb-danger:        #d63a3a;
+    --sb-danger-rgb:    214, 58, 58;
+    --sb-danger-soft:   #c03030;
+    --sb-danger-strong: #d02020;
+    --sb-danger-strong-rgb: 208, 32, 32;
+    --sb-red-deep:      #b0284f;
+    --sb-green-muted:   #4f7a64;
+    --sb-blue-text:     #1a7fd0;
+    --sb-search-text:   #1f2423;
+
+    --sb-text-max:         #000000;
+    --sb-text-hover:       #4a5150;
+    --sb-text-quiet:       #5d6463;
+    --sb-text-subtle:      #767d7c;
+    --sb-text-placeholder: #9aa09f;
+    --sb-text-ghost:       #8a908f;
+    --sb-border-strong:    #b5bbb9;
+    --sb-switch-track:     #ffffff;
+    --sb-switch-knob:      #ffffff;
+
+    --sb-overlay-rgb: 0, 0, 0;
+    --sb-shadow-rgb:  15, 23, 20;
+    --sb-shadow-k:    0.35;
+    --sb-bg-base-rgb: 255, 255, 255;
+
+    color-scheme: light;
+  }
 }
 
 html, body {

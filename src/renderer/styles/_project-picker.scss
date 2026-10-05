@@ -6,8 +6,8 @@
 
 .project-picker-filter {
   width: 100%;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(var(--sb-overlay-rgb),0.05);
+  border: 1px solid rgba(var(--sb-overlay-rgb),0.10);
   border-radius: 7px;
   color: var(--sb-text);
   font-family: inherit;
@@ -38,7 +38,7 @@
 
 .project-picker-row:hover,
 .project-picker-row.selected {
-  background: rgba(255,255,255,0.06);
+  background: rgba(var(--sb-overlay-rgb),0.06);
 }
 
 /* The keyboard-selected row. Focus stays in the filter input, so this stripe is
@@ -118,10 +118,10 @@
   font-weight: 500;
   color: var(--sb-text);
   background: var(--sb-bg-raised);
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid rgba(var(--sb-overlay-rgb),0.10);
   border-radius: 5px;
   padding: 3px 7px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  box-shadow: 0 4px 12px rgba(var(--sb-shadow-rgb),calc(0.35 * var(--sb-shadow-k)));
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.1s;
@@ -133,14 +133,14 @@
 }
 
 .project-picker-actions button:hover {
-  background: rgba(255,255,255,0.08);
+  background: rgba(var(--sb-overlay-rgb),0.08);
   color: var(--sb-text-soft);
 }
 
 .project-picker-actions .picker-hide-btn:hover,
 .project-picker-actions .picker-remove-btn:hover {
-  background: rgba(255,107,107,0.12);
-  color: #ff6b6b;
+  background: rgba(var(--sb-danger-rgb),0.12);
+  color: var(--sb-danger);
 }
 
 .project-picker-empty {

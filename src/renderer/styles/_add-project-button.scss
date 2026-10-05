@@ -2,7 +2,7 @@
 #new-session-btn,
 #add-project-btn {
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid rgba(var(--sb-overlay-rgb),0.08);
   color: var(--sb-text-faint);
   font-size: 11px;
   padding: 0;
@@ -23,15 +23,15 @@
 #add-project-btn { margin-left: 2px; }
 
 #add-project-btn:hover {
-  background: rgba(255,255,255,0.04);
-  border-color: rgba(255,255,255,0.12);
-  color: #888;
+  background: rgba(var(--sb-overlay-rgb),0.04);
+  border-color: rgba(var(--sb-overlay-rgb),0.12);
+  color: var(--sb-text-hover);
 }
 
 /* The one button in the row that creates something; tinted so it reads as the
    primary action next to the view toggles. */
 #new-session-btn:hover {
-  background: rgba(76,197,150,0.12);
-  border-color: rgba(76,197,150,0.3);
+  background: rgba(var(--sb-green-soft-rgb),0.12);
+  border-color: rgba(var(--sb-green-soft-rgb),0.3);
   color: var(--sb-green-soft);
 }

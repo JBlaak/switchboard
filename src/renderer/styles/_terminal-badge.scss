@@ -12,5 +12,5 @@
 /* Terminal sessions: green status dot */
 .session-item.is-terminal .session-status-dot.running {
   background: var(--sb-green);
-  box-shadow: 0 0 6px rgba(46,182,125,0.5);
+  box-shadow: 0 0 6px rgba(var(--sb-green-rgb),0.5);
 }
