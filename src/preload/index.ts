@@ -54,9 +54,6 @@ const api: SwitchboardApi = {
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
   writeClipboard: (text) => ipcRenderer.invoke(INVOKE.writeClipboard, text),
   getAppVersion: () => ipcRenderer.invoke(INVOKE.getAppVersion),
-  updaterCheck: () => ipcRenderer.invoke(INVOKE.updaterCheck),
-  updaterDownload: () => ipcRenderer.invoke(INVOKE.updaterDownload),
-  updaterInstall: () => ipcRenderer.invoke(INVOKE.updaterInstall),
 
   // ── Fire-and-forget ──
   sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),
@@ -93,9 +90,6 @@ const api: SwitchboardApi = {
   },
   onFullscreenChanged: (cb) => {
     ipcRenderer.on(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen));
-  },
-  onUpdaterEvent: (cb) => {
-    ipcRenderer.on(EVENT.updaterEvent, (_e, type, data) => cb(type, data));
   },
 
   // ── Host facts ──

@@ -15,11 +15,11 @@ const out = path.join(root, 'app');
 const watch = process.argv.includes('--watch');
 
 // Native addons and Electron's own module can't be bundled — they have to be
-// require()d from node_modules at runtime. electron-log/electron-updater are
-// left external too: they resolve app paths relative to their own location.
+// require()d from node_modules at runtime. electron-log is left external too:
+// it resolves app paths relative to its own location.
 const nodeExternals = [
   'electron', 'node-pty', 'better-sqlite3', 'electron-log',
-  'electron-updater', 'electron-reloader', 'ws',
+  'electron-reloader', 'ws',
 ];
 
 /** @type {import('esbuild').BuildOptions} */

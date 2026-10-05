@@ -32,5 +32,4 @@ export interface RendererGateway {
   projectsChanged(): void
   statusUpdate(text: string, type: string): void
   fullscreenChanged(isFullscreen: boolean): void
-  updaterEvent(type: string, data?: unknown): void
 }

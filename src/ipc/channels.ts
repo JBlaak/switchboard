@@ -51,9 +51,6 @@ export const INVOKE = {
   openExternal: 'open-external',
   writeClipboard: 'clipboard-write-text',
   getAppVersion: 'get-app-version',
-  updaterCheck: 'updater-check',
-  updaterDownload: 'updater-download',
-  updaterInstall: 'updater-install',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -75,5 +72,4 @@ export const EVENT = {
   projectsChanged: 'projects-changed',
   statusUpdate: 'status-update',
   fullscreenChanged: 'fullscreen-changed',
-  updaterEvent: 'updater-event',
 } as const;

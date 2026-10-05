@@ -62,8 +62,8 @@ Nothing here reads `Date.now()`, calls `setTimeout`, or touches a file directly.
 One implementation per port: `sqlite/` behind the repository and the index,
 `pty/` behind the terminal gateway, `fs/` behind the filesystem and the
 transcript store, `ssh/`-shaped logic inside the supervisor, `mcp/` behind the
-IDE bridge, `electron/` behind the window, the menu, the updater and the
-renderer gateway, `claude-cli/` behind usage and statistics, `worker/` behind
+IDE bridge, `electron/` behind the window, the menu and the renderer
+gateway, `claude-cli/` behind usage and statistics, `worker/` behind
 the cold-start scanner.
 
 ### `src/main` — the composition root

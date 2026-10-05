@@ -23,15 +23,6 @@ export interface IpcResult {
   [key: string]: unknown;
 }
 
-/** electron-updater's event payload, as far as the UI reads it. */
-export interface UpdaterEventData {
-  version?: string;
-  percent?: number;
-  message?: string;
-  releaseName?: string;
-  [key: string]: unknown;
-}
-
 export interface SwitchboardApi {
   // ── Projects ──
   getProjects(showArchived: boolean): Promise<Project[]>;
@@ -84,9 +75,6 @@ export interface SwitchboardApi {
   openExternal(url: string): Promise<void>;
   writeClipboard(text: string): Promise<void>;
   getAppVersion(): Promise<string>;
-  updaterCheck(): Promise<IpcResult>;
-  updaterDownload(): Promise<IpcResult>;
-  updaterInstall(): Promise<IpcResult>;
 
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;
@@ -104,7 +92,6 @@ export interface SwitchboardApi {
   onProjectsChanged(cb: () => void): void;
   onStatusUpdate(cb: (text: string, type: string) => void): void;
   onFullscreenChanged(cb: (isFullscreen: boolean) => void): void;
-  onUpdaterEvent(cb: (type: string, data: UpdaterEventData) => void): void;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

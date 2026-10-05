@@ -12,10 +12,4 @@ export function registerHostHandlers(ipc: IpcRegistrar, app: Container): void {
     app.system.writeClipboard(text);
   });
   ipc.handle(INVOKE.getAppVersion, () => app.system.appVersion());
-
-  ipc.handle(INVOKE.updaterCheck, () => app.updater.check());
-  ipc.handle(INVOKE.updaterDownload, () => app.updater.download());
-  ipc.handle(INVOKE.updaterInstall, () => {
-    app.updater.install();
-  });
 }

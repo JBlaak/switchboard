@@ -2,9 +2,9 @@
  * The desktop the app is running on.
  *
  * The handful of host capabilities a use case legitimately needs — a folder
- * picker, the system browser, the clipboard, the app's own version — and the
- * auto-updater. Kept as small separate ports rather than one "electron"
- * grab-bag so a use case declares only what it actually reaches for.
+ * picker, the system browser, the clipboard, the app's own version. Kept as
+ * small separate ports rather than one "electron" grab-bag so a use case
+ * declares only what it actually reaches for.
  */
 import type { Appearance } from '../../domain/settings/appearance';
 
@@ -35,21 +35,4 @@ export interface AppearanceGateway {
    * the stylesheet, the window chrome and the terminal all read from.
    */
   apply(mode: Appearance): void;
-}
-
-/** Result of asking the updater to look for a new version. */
-export interface UpdateCheckResult {
-  available: boolean;
-  /** True in a development build, where there is nothing to update from. */
-  dev?: boolean;
-  [key: string]: unknown;
-}
-
-export interface Updater {
-  /** False in an unpackaged build, where the rest of this does nothing. */
-  readonly enabled: boolean;
-  check(): Promise<UpdateCheckResult>;
-  download(): Promise<void>;
-  /** Quits and relaunches into the downloaded version. */
-  install(): void;
 }
