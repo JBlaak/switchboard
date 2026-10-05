@@ -8,6 +8,10 @@
   padding: 6px;
   box-shadow: var(--sb-edge), var(--sb-lift);
   min-width: 190px;
+  /* A quicker modal entrance, grown from the anchor's corner (it opens below
+     and left-aligned to it). Created fresh on every open, so it replays. */
+  transform-origin: top left;
+  animation: modal-in 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
 
 .popover-option {
