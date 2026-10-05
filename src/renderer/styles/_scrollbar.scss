@@ -1,5 +1,5 @@
 /* ========== SCROLLBAR ========== */
-#sidebar-content::-webkit-scrollbar { width: 6px; }
+#sidebar-content::-webkit-scrollbar { width: var(--sb-scrollbar-width); }
 #sidebar-content::-webkit-scrollbar-track { background: transparent; }
 #sidebar-content::-webkit-scrollbar-thumb { background: var(--sb-line); border-radius: 99px; }
 #sidebar-content::-webkit-scrollbar-thumb:hover { background: var(--sb-border-strong); }

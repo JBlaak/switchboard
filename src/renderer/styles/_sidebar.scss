@@ -204,9 +204,12 @@
 
 
 /* ---- Scrollable content ---- */
+/* The scrollbar's width is always reserved and taken out of the list's right
+   gutter, so row pills end where the search field does, scrolling or not. */
 #sidebar-content {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 0 0 12px;
 }
 
@@ -214,7 +217,7 @@
 /* Sessions are top-level rows now, so the list carries the gutter the project
    cards used to: the row pill's own inset still lands on --sb-row-inset. */
 .session-list {
-  padding: 4px var(--sb-sidebar-gutter) 10px;
+  padding: 4px calc(var(--sb-sidebar-gutter) - var(--sb-scrollbar-width)) 10px var(--sb-sidebar-gutter);
 }
 
 /* Section headings for the flat list: Needs input / Ready / Working / Pinned /
@@ -288,7 +291,7 @@
 /* ---- Slug groups ---- */
 .slug-group { }
 .slug-group-header {
-  padding: 0 6px;
+  padding: 0;
   cursor: pointer;
   user-select: none;
 }
@@ -421,8 +424,8 @@
 }
 
 /* ---- Session items ---- */
-/* The row's hover/active pill is inset from the card edge, so the pill's own
-   padding makes up the rest of --sb-row-inset rather than stacking on top of it.
+/* The row's hover/active pill spans the list's full width, edge to edge with the
+   search field, so the pill's own padding is the whole of --sb-row-inset.
 
    --row-fill is the pill's colour in each state. It is opaque — the hover wash
    is mixed into the panel rather than laid over it — so .session-actions can
@@ -430,7 +433,7 @@
    accent, mixed in the same way. */
 .session-item {
   --row-fill: var(--sb-bg-panel);
-  padding: 0 6px;
+  padding: 0;
   cursor: pointer;
   transition: all 0.12s;
 }
