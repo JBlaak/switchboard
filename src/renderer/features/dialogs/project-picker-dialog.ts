@@ -18,7 +18,7 @@ import { view } from '../../state/session-store';
 import { ICONS } from '../../lib/icons';
 import { openSettingsViewer } from '../settings/settings-panel';
 import { openDialog, setTooltip } from './dialog-shell';
-import { showNewSessionPopover } from './new-session-popover';
+import { launchClaudeSession } from './new-session-popover';
 import type { Project } from '../../../domain/project/project';
 
 const CLOSE_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
@@ -35,7 +35,7 @@ interface Candidate {
 
 interface Row {
   element: HTMLElement;
-  activate(options?: { keyboard?: boolean }): void;
+  activate(): void;
 }
 
 export function showProjectPickerDialog(): void {
@@ -107,7 +107,7 @@ export function showProjectPickerDialog(): void {
       setSelected((selected + step + rows.length) % rows.length);
       return;
     }
-    if (e.key === 'Enter') rows[selected]?.activate({ keyboard: true });
+    if (e.key === 'Enter') rows[selected]?.activate();
   });
 
   render();
@@ -184,14 +184,11 @@ function buildRow(
 
   element.append(name, count, buildActions(project, close, rerender));
 
-  const activate = ({ keyboard = false } = {}): void => {
-    // Capture the anchor rect before closing — the row is detached by then, and
-    // a detached element measures as 0x0 at the top-left corner.
-    const rect = element.getBoundingClientRect();
+  const activate = (): void => {
     close();
-    showNewSessionPopover(project, { getBoundingClientRect: () => rect }, { keyboard });
+    void launchClaudeSession(project);
   };
-  element.onclick = () => activate();
+  element.onclick = activate;
 
   return { element, activate };
 }

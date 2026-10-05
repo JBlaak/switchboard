@@ -52,10 +52,7 @@ export function showNewSessionPopover(
     return button;
   };
 
-  popover.appendChild(option(CLAUDE_ICON + ' Claude', () => {
-    if (project.remote) void launchRemoteSession(project, 'claude');
-    else void startWithDefaults(project);
-  }));
+  popover.appendChild(option(CLAUDE_ICON + ' Claude', () => void launchClaudeSession(project)));
 
   // The configure dialog's options — worktree, permission modes — are all
   // local-machine concepts. A remote session gets plain
@@ -78,7 +75,12 @@ export function showNewSessionPopover(
   if (keyboard) popover.querySelector<HTMLElement>('.popover-option')?.focus();
 }
 
-async function startWithDefaults(project: Project): Promise<void> {
+/** A Claude session with the project's default options, local or remote. */
+export async function launchClaudeSession(project: Project): Promise<void> {
+  if (project.remote) {
+    await launchRemoteSession(project, 'claude');
+    return;
+  }
   await launchNewSession(project, await resolveDefaultSessionOptions(project.projectPath));
 }
 
