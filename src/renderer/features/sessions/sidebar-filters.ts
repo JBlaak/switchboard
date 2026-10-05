@@ -6,7 +6,7 @@
  * question about the whole list, and combining them mostly produces an empty
  * one. "Today" narrows whichever of those is active, so it stacks.
  */
-import { refreshSidebar, reloadProjects } from '../../app/refresh';
+import { refreshSidebar } from '../../app/refresh';
 import { view } from '../../state/session-store';
 import { el } from '../../lib/dom';
 import { ICONS } from '../../lib/icons';
@@ -50,7 +50,6 @@ export function installSidebarFilters(): void {
   });
 
   // Re-sort: the one place the open session gives up its parked slot.
-  el('resort-btn').addEventListener('click', () => void reloadProjects({ resort: true }));
 
   const settingsButton = el('global-settings-btn');
   settingsButton.innerHTML = ICONS.gear(18);

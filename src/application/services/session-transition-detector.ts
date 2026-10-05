@@ -15,7 +15,6 @@ import type { NewSessionSignals } from '../../domain/session/transitions';
 import type { ActiveSession } from '../model/active-session';
 import type { SessionRegistry } from '../model/session-registry';
 import type { Clock } from '../ports/clock';
-import type { IdeBridge } from '../ports/ide-bridge';
 import type { Logger } from '../ports/logger';
 import type { RendererGateway } from '../ports/renderer-gateway';
 import type { TranscriptStore } from '../ports/transcript-store';
@@ -35,7 +34,6 @@ export interface TransitionDetectorDeps {
   registry: SessionRegistry;
   transcripts: TranscriptStore;
   renderer: RendererGateway;
-  ideBridge: IdeBridge;
   clock: Clock;
   log: Logger;
 }
@@ -55,7 +53,7 @@ export class SessionTransitionDetector {
     }
 
     for (const [sessionId, session] of registry.snapshot()) {
-      if (!this.#isCandidate(session, folder, sessionId)) continue;
+      if (!this.#isCandidate(session, folder)) continue;
       this.#checkSession(folder, sessionId, session, currentIds);
     }
   }
@@ -67,19 +65,9 @@ export class SessionTransitionDetector {
    * fork, and a session running in another project's folder cannot be the
    * origin of a file in this one.
    */
-  #isCandidate(session: ActiveSession, folder: string, sessionId: string): boolean {
-    const eligible = !session.exited && !session.isPlainTerminal
+  #isCandidate(session: ActiveSession, folder: string): boolean {
+    return !session.exited && !session.isPlainTerminal
       && !!session.knownTranscriptIds && session.projectFolder === folder;
-
-    // A session waiting for a fork that is being skipped is worth a line: it is
-    // the case where a missed transition is visible to the user.
-    if (!eligible && !session.exited && !session.isPlainTerminal && session.forkFrom) {
-      const reason = !session.knownTranscriptIds ? 'noSnapshot'
-        : `folderMismatch(${session.projectFolder} vs ${folder})`;
-      this.deps.log.info(`[fork-detect] skipped session=${sessionId} forkFrom=${session.forkFrom} reason=${reason}`);
-    }
-
-    return eligible;
   }
 
   #checkSession(
@@ -93,7 +81,7 @@ export class SessionTransitionDetector {
     if (newIds.length === 0) return;
 
     this.deps.log.debug(
-      `[detect] session=${sessionId} forkFrom=${session.forkFrom || 'none'} folder=${folder} ` +
+      `[detect] session=${sessionId} folder=${folder} ` +
       `new=${newIds.length} known=${known.size} current=${currentIds.length}`);
 
     // Transcripts that exist but have said nothing yet. They are excluded from
@@ -105,7 +93,7 @@ export class SessionTransitionDetector {
       const signals = extractNewSessionSignals(
         this.deps.transcripts.readHeadLines(folder, newId, SIGNAL_SCAN_BYTES));
 
-      if (hasNoSignals(signals) && !this.#isSnapshotOnlyFork(signals, session)) {
+      if (hasNoSignals(signals)) {
         if (this.#isStale(folder, newId)) {
           this.deps.log.info(`[detect] session=${sessionId} ignoring stale empty transcript=${newId}`);
         } else {
@@ -114,7 +102,7 @@ export class SessionTransitionDetector {
         continue;
       }
 
-      if (this.#matches(folder, sessionId, session, newId, signals)) {
+      if (this.#matches(folder, sessionId, newId, signals)) {
         this.#applyTransition(sessionId, session, newId, signals, currentIds);
         // Only one transition per session per pass: a second would be re-keying
         // a session that has already moved.
@@ -127,17 +115,6 @@ export class SessionTransitionDetector {
     session.knownTranscriptIds = updated;
   }
 
-  /**
-   * A fork whose transcript holds only snapshots so far.
-   *
-   * The user has not taken a turn in it yet, so there are no signals — but a
-   * session that is explicitly waiting for a fork has nothing else this could
-   * be, and matching now is what stops the row lagging behind the terminal.
-   */
-  #isSnapshotOnlyFork(signals: NewSessionSignals, session: ActiveSession): boolean {
-    return signals.hasSnapshots && !!session.forkFrom && !session.realSessionId;
-  }
-
   /** A transcript untouched for an hour is not the one we are waiting for. */
   #isStale(folder: string, sessionId: string): boolean {
     const mtime = this.deps.transcripts.sessionMtimeMs(folder, sessionId);
@@ -147,23 +124,10 @@ export class SessionTransitionDetector {
   #matches(
     folder: string,
     sessionId: string,
-    session: ActiveSession,
     newId: string,
     signals: NewSessionSignals,
   ): boolean {
-    const tracked = {
-      sessionId,
-      forkFrom: session.forkFrom,
-      realSessionId: session.realSessionId,
-    };
-
-    if (matchesFork(signals, tracked, newId)) return true;
-
-    if (session.forkFrom) {
-      this.deps.log.info(
-        `[detect] session=${sessionId} no fork match for=${newId} forkFrom=${session.forkFrom} ` +
-        `parent=${signals.parentSessionId || 'null'} forkedFrom=${signals.forkedFrom || 'null'}`);
-    }
+    if (matchesFork(signals, { sessionId })) return true;
 
     const { transcripts } = this.deps;
     const oldMtime = transcripts.sessionMtimeMs(folder, sessionId);
@@ -179,9 +143,8 @@ export class SessionTransitionDetector {
   /**
    * Move the session onto its new id.
    *
-   * Three things follow it: the registry (which remembers the old id so a stale
-   * row can still stop the session), the IDE bridge (whose server the CLI finds
-   * by session id), and the renderer.
+   * Two things follow it: the registry (which remembers the old id so a stale
+   * row can still stop the session) and the renderer.
    */
   #applyTransition(
     sessionId: string,
@@ -190,15 +153,14 @@ export class SessionTransitionDetector {
     signals: NewSessionSignals,
     currentIds: readonly string[],
   ): void {
-    const { registry, ideBridge, renderer, log } = this.deps;
+    const { registry, renderer, log } = this.deps;
 
-    log.info(`[session-transition] ${sessionId} → ${newId} (${transitionKind(signals, { sessionId, forkFrom: session.forkFrom })})`);
+    log.info(`[session-transition] ${sessionId} → ${newId} (${transitionKind(signals)})`);
 
     session.knownTranscriptIds = new Set(currentIds);
     if (signals.slug) session.sessionSlug = signals.slug;
 
     registry.rekey(sessionId, newId);
-    ideBridge.rekey(sessionId, newId);
     renderer.sessionForked(sessionId, newId);
   }
 }

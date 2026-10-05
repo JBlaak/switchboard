@@ -95,26 +95,6 @@ export function clearUnread(sessionId: string): void {
   rowFor(sessionId)?.classList.remove('response-ready');
 }
 
-/**
- * Put a session back into the ready state, as if Claude had just finished a
- * turn the user has not looked at.
- *
- * Mirrors the busy→idle transition in `setActivity`, so the sidebar re-renders
- * consistently.
- */
-export function markUnread(sessionId: string): void {
-  if (responseReadySessions.has(sessionId)) return;
-  responseReadySessions.add(sessionId);
-  sessionBusyState.set(sessionId, false);
-  const row = rowFor(sessionId);
-  row?.classList.remove('cli-busy');
-  row?.classList.add('response-ready');
-}
-
-export function isUnread(sessionId: string): boolean {
-  return responseReadySessions.has(sessionId);
-}
-
 /** Clear everything for a session — it stopped, or the row is going away. */
 export function clearActivity(sessionId: string): void {
   attentionSessions.delete(sessionId);

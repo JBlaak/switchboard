@@ -26,19 +26,8 @@ export const INVOKE = {
   toggleStar: 'toggle-star',
   renameSession: 'rename-session',
   archiveSession: 'archive-session',
-  readSessionJsonl: 'read-session-jsonl',
 
-  // Plans and agent files
-  getPlans: 'get-plans',
-  readPlan: 'read-plan',
-  savePlan: 'save-plan',
-  getMemories: 'get-memories',
-  readMemory: 'read-memory',
-  saveMemory: 'save-memory',
-
-  // Statistics
-  getStats: 'get-stats',
-  refreshStats: 'refresh-stats',
+  // Usage
   getUsage: 'get-usage',
 
   // Search
@@ -56,11 +45,6 @@ export const INVOKE = {
   createScheduleSession: 'create-schedule-session',
   runScheduleNow: 'run-schedule-now',
 
-  // The viewer panel
-  readFileForPanel: 'read-file-for-panel',
-  saveFileForPanel: 'save-file-for-panel',
-  watchFile: 'watch-file',
-  unwatchFile: 'unwatch-file',
 
   // Host
   openExternal: 'open-external',
@@ -76,7 +60,6 @@ export const SEND = {
   terminalInput: 'terminal-input',
   terminalResize: 'terminal-resize',
   closeTerminal: 'close-terminal',
-  mcpDiffResponse: 'mcp-diff-response',
 } as const;
 
 /** Main tells the renderer, unprompted. */
@@ -91,10 +74,5 @@ export const EVENT = {
   projectsChanged: 'projects-changed',
   statusUpdate: 'status-update',
   fullscreenChanged: 'fullscreen-changed',
-  fileChanged: 'file-changed',
   updaterEvent: 'updater-event',
-  mcpOpenDiff: 'mcp-open-diff',
-  mcpOpenFile: 'mcp-open-file',
-  mcpCloseAllDiffs: 'mcp-close-all-diffs',
-  mcpCloseTab: 'mcp-close-tab',
 } as const;

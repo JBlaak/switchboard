@@ -26,15 +26,13 @@ export class UnsafeLaunchOptionError extends Error {}
  * `--worktree` only applies when STARTING a session — it creates a fresh
  * isolated git worktree. Resuming must reuse the session's existing directory,
  * so the worktree options are ignored on resume regardless of which call site
- * supplied them (sidebar click, schedule creator, fork, …). Otherwise a resume
+ * supplied them (sidebar click, schedule creator, …). Otherwise a resume
  * tries to spin up a new worktree and fails to attach.
  */
 export function buildClaudeArgs(target: SessionTarget, options?: SessionOptions): string[] {
   const args: string[] = [];
 
-  if (options?.forkFrom) {
-    args.push('--resume', String(options.forkFrom), '--fork-session');
-  } else if (target.isNew) {
+  if (target.isNew) {
     args.push('--session-id', String(target.sessionId));
   } else {
     args.push('--resume', String(target.sessionId));
@@ -73,8 +71,6 @@ export interface ClaudeCommandSpec {
   shellPath: string;
   target: SessionTarget;
   options?: SessionOptions;
-  /** True once an MCP sidecar is listening, which is what `--ide` connects to. */
-  ideBridge?: boolean;
 }
 
 /**
@@ -82,9 +78,8 @@ export interface ClaudeCommandSpec {
  *
  * @throws UnsafeLaunchOptionError when `preLaunchCmd` spans more than one line.
  */
-export function buildClaudeCommand({ shellPath, target, options, ideBridge }: ClaudeCommandSpec): string {
+export function buildClaudeCommand({ shellPath, target, options }: ClaudeCommandSpec): string {
   let command = 'claude ' + quoteArgvForShell(shellPath, buildClaudeArgs(target, options));
-  if (ideBridge) command += ' --ide';
 
   if (options?.preLaunchCmd) {
     const pre = String(options.preLaunchCmd);

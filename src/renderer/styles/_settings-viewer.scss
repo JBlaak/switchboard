@@ -311,16 +311,6 @@
   color: var(--sb-green);
 }
 
-.settings-notice {
-  background: rgba(236,178,46, 0.1);
-  border: 1px solid rgba(236,178,46, 0.25);
-  color: #e0a830;
-  font-size: 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  margin-bottom: 8px;
-}
-
 /* Inline caveat inside a field description (e.g. a font that isn't installed) */
 .settings-warning {
   color: #e0a830;

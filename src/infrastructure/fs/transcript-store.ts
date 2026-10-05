@@ -13,7 +13,6 @@ import { parseTranscript, cwdFromTranscript, parseTranscriptLine } from '../../d
 import { encodeProjectPath, worktreeParentPath } from '../../domain/project/project-path';
 import { isProjectFolderName } from './claude-paths';
 import type { Session } from '../../domain/session/session';
-import type { TranscriptEntry } from '../../domain/session/transcript';
 import type { FileSystem } from '../../application/ports/file-system';
 import type { TranscriptSeed, TranscriptStore } from '../../application/ports/transcript-store';
 
@@ -123,15 +122,6 @@ export class FileTranscriptStore implements TranscriptStore {
     } catch {
       return null;
     }
-  }
-
-  readEntries(folder: string, sessionId: string): TranscriptEntry[] {
-    const entries: TranscriptEntry[] = [];
-    for (const line of this.fs.readText(this.#sessionPath(folder, sessionId)).split('\n')) {
-      const entry = parseTranscriptLine(line);
-      if (entry) entries.push(entry);
-    }
-    return entries;
   }
 
   readHeadLines(folder: string, sessionId: string, byteLimit: number): string[] {

@@ -13,8 +13,6 @@ export interface SessionOptions {
   /** 'shell' or 'claude', for a session on a remote host. */
   remoteKind?: string;
   shell?: string;
-  /** The session this one is forked from, while the fork is unresolved. */
-  forkFrom?: string;
   dangerouslySkipPermissions?: boolean;
   permissionMode?: string | null;
   worktree?: boolean;
@@ -25,7 +23,6 @@ export interface SessionOptions {
   /** Comma-separated extra directories for `--add-dir`. */
   addDirs?: string;
   appendSystemPrompt?: string;
-  mcpEmulation?: boolean;
   [key: string]: unknown;
 }
 

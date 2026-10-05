@@ -1,9 +1,8 @@
 /**
  * The search box.
  *
- * One box, three tabs: the query goes to whichever category the user is looking
- * at, and the results narrow that tab's list. Debounced, because the index is
- * queried per keystroke and a trigram search over a large history is not free.
+ * The query narrows the session list. Debounced, because the index is queried
+ * per keystroke and a trigram search over a large history is not free.
  *
  * Title-only search additionally matches project names, which full-text search
  * cannot do — a project's name is not in any session's body.
@@ -12,8 +11,6 @@ import { shortProjectPath } from '../../domain/project/project-path';
 import { refreshSidebar } from './refresh';
 import { view } from '../state/session-store';
 import { searchBar, searchInput, el } from '../lib/dom';
-import { renderPlans } from '../features/plans/plans-view';
-import { renderMemories } from '../features/memory/memory-view';
 
 const DEBOUNCE_MS = 200;
 
@@ -51,7 +48,7 @@ export function installSearch(): void {
   });
 }
 
-/** Empty the box and put every tab back to its unfiltered list. */
+/** Empty the box and put the session list back to unfiltered. */
 export function clearSearch(): void {
   searchInput.value = '';
   searchBar.classList.remove('has-query');
@@ -60,22 +57,12 @@ export function clearSearch(): void {
     debounce = null;
   }
 
-  switch (view.activeTab) {
-    case 'sessions':
-      clearSessionMatches();
-      refreshSidebar({ resort: true });
-      break;
-    case 'plans':
-      renderPlans(view.cachedPlans);
-      break;
-    case 'memory':
-      renderMemories();
-      break;
-  }
+  clearSessionMatches();
+  refreshSidebar({ resort: true });
 }
 
-/** Drop the search state without redrawing — for a tab switch. */
-export function clearSessionMatches(): void {
+/** Drop the search state without redrawing. */
+function clearSessionMatches(): void {
   view.searchMatchIds = null;
   view.searchMatchProjectPaths = null;
 }
@@ -89,29 +76,12 @@ async function runSearch(): Promise<void> {
   }
 
   try {
-    switch (view.activeTab) {
-      case 'sessions':
-        await searchSessions(query);
-        break;
-      case 'plans': {
-        const results = await window.api.search('plan', query, titleOnly);
-        const ids = new Set(results.map(r => r.id));
-        renderPlans(view.cachedPlans.filter(p => ids.has(p.filename)));
-        break;
-      }
-      case 'memory': {
-        const results = await window.api.search('memory', query, titleOnly);
-        renderMemories(new Set(results.map(r => r.id)));
-        break;
-      }
-    }
+    await searchSessions(query);
   } catch {
     // A query FTS5 cannot parse is not an error worth showing mid-typing; drop
     // back to the unfiltered list.
-    if (view.activeTab === 'sessions') {
-      clearSessionMatches();
-      refreshSidebar({ resort: true });
-    }
+    clearSessionMatches();
+    refreshSidebar({ resort: true });
   }
 }
 

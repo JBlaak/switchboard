@@ -5,7 +5,7 @@ import { ActiveSession } from '../src/application/model/active-session';
 import { SessionRegistry } from '../src/application/model/session-registry';
 import { SessionLifecycle } from '../src/application/services/session-lifecycle';
 import {
-  fakeIdeBridge, fakePty, fakeRenderer, fakeTerminals, fakeTimers, silentLog,
+  fakePty, fakeRenderer, fakeTerminals, fakeTimers, silentLog,
 } from './support/fakes';
 import type { RemoteObserver } from '../src/application/services/session-lifecycle';
 import type { FakePty } from './support/fakes';
@@ -28,11 +28,10 @@ function harness({ alive = [4242] }: { alive?: number[] } = {}) {
   const registry = new SessionRegistry();
   const terminals = fakeTerminals(alive);
   const renderer = fakeRenderer();
-  const ideBridge = fakeIdeBridge();
   const timers = fakeTimers();
 
   const lifecycle = new SessionLifecycle({
-    registry, terminals, renderer, ideBridge, remote: noRemote, timers, log: silentLog,
+    registry, terminals, renderer, remote: noRemote, timers, log: silentLog,
   });
 
   const addSession = (id: string, extra: Partial<ActiveSession> = {}): ActiveSession & { pty: FakePty } => {
@@ -43,8 +42,6 @@ function harness({ alive = [4242] }: { alive?: number[] } = {}) {
       knownTranscriptIds: new Set(),
       sessionSlug: null,
       isPlainTerminal: false,
-      forkFrom: null,
-      ideBridge: null,
       remote: null,
       openedAt: 0,
     });
@@ -53,7 +50,7 @@ function harness({ alive = [4242] }: { alive?: number[] } = {}) {
     return session as ActiveSession & { pty: FakePty };
   };
 
-  return { registry, terminals, renderer, ideBridge, timers, lifecycle, addSession };
+  return { registry, terminals, renderer, timers, lifecycle, addSession };
 }
 
 /** The `[pid, signal]` pairs the gateway was asked for. */
@@ -73,7 +70,6 @@ test('retiring a session clears the record and tells the renderer', () => {
 
   assert.equal(session.exited, true);
   assert.equal(h.registry.has('s1'), false);
-  assert.deepEqual(h.ideBridge.stopped, ['s1']);
   assert.deepEqual(exitsOf(h), [['s1', 0]]);
 });
 
@@ -86,7 +82,6 @@ test('retiring twice is a no-op', () => {
   h.lifecycle.retire('s1', session, 0);
 
   assert.equal(exitsOf(h).length, 1);
-  assert.equal(h.ideBridge.stopped.length, 1);
 });
 
 test('a re-keyed session tells the renderer about every id it answered to', () => {

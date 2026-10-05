@@ -12,7 +12,6 @@ import { installIpcListeners } from './ipc-listeners';
 import { installQuotaGauges } from './quota-gauges';
 import { installSearch } from './search';
 import { installShortcuts } from './shortcuts';
-import { installTabRouter } from './tab-router';
 import { installTimeTicker } from './time-ticker';
 import { renderStatusSummary } from './status-bar';
 import { installSidebar } from '../features/sessions/sidebar';
@@ -25,8 +24,6 @@ import { terminalStopButton } from '../features/sessions/terminal-header';
 import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
-import { initFilePanel } from '../features/panel/file-panel';
-import { initGridObservers, showGridView } from '../features/terminal/grid-view';
 import {
   applyTerminalFont, prewarmTerminalRenderer,
 } from '../features/terminal/terminal-manager';
@@ -38,7 +35,6 @@ export function bootstrap(): void {
   installSidebar();
 
   installIpcListeners();
-  installTabRouter();
   installLayout();
   installSidebarFilters();
   installSearch();
@@ -46,8 +42,6 @@ export function bootstrap(): void {
   installTimeTicker();
   installQuotaGauges();
 
-  initGridObservers();
-  initFilePanel();
   setTickListener(tickConnectionCards);
 
   terminalStopButton.addEventListener('click', () => {
@@ -93,16 +87,11 @@ async function applyStoredSettings(): Promise<void> {
 /**
  * Put the window back the way the user left it.
  *
- * The grid preference is restored before any session opens, so a restored
- * session enters grid mode rather than being opened full-width and then moved.
- *
  * A remote session is only reopened when it is still connected: reconnecting
  * may need auth the user is not looking at (host key prompts, 1Password
  * approval), so it waits for a click.
  */
 function restoreView(): void {
-  if (view.gridViewActive) showGridView();
-
   const sessionId = view.activeSessionId;
   if (!sessionId || openSessions.has(sessionId)) return;
 

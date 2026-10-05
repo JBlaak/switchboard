@@ -24,8 +24,6 @@ export class SqliteSearchIndex implements SearchIndex {
   readonly #deleteMapBySession;
   readonly #deleteFtsByFolder;
   readonly #deleteMapByFolder;
-  readonly #deleteFtsByType;
-  readonly #deleteMapByType;
   readonly #updateTitle;
   readonly #query;
 
@@ -53,9 +51,6 @@ export class SqliteSearchIndex implements SearchIndex {
       "DELETE FROM search_fts WHERE rowid IN (SELECT rowid FROM search_map WHERE type = 'session' AND folder = ?)");
     this.#deleteMapByFolder = db.prepare<[string]>(
       "DELETE FROM search_map WHERE type = 'session' AND folder = ?");
-    this.#deleteFtsByType = db.prepare<[SearchType]>(
-      'DELETE FROM search_fts WHERE rowid IN (SELECT rowid FROM search_map WHERE type = ?)');
-    this.#deleteMapByType = db.prepare<[SearchType]>('DELETE FROM search_map WHERE type = ?');
     this.#updateTitle = db.prepare<[string, string, SearchType]>(
       'UPDATE search_fts SET title = ? WHERE rowid = (SELECT rowid FROM search_map WHERE id = ? AND type = ?)');
     this.#query = db.prepare<[SearchType, string, number], SearchResult>(`
@@ -100,11 +95,6 @@ export class SqliteSearchIndex implements SearchIndex {
   deleteFolder(folder: string): void {
     this.#deleteFtsByFolder.run(folder);
     this.#deleteMapByFolder.run(folder);
-  }
-
-  deleteType(type: SearchType): void {
-    this.#deleteFtsByType.run(type);
-    this.#deleteMapByType.run(type);
   }
 
   updateTitle(id: string, type: SearchType, title: string): void {

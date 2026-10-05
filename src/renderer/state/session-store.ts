@@ -10,7 +10,6 @@
 import type { PendingSession } from '../../domain/session/pending';
 import type { Project } from '../../domain/project/project';
 import type { SessionRow } from '../../domain/session/session';
-import type { PlanSummary } from '../../domain/plans/plan';
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon } from '@xterm/addon-search';
@@ -68,7 +67,6 @@ export const pendingSessions = new Map<string, PendingSession>();
  */
 export const STORAGE_KEYS = {
   activeSessionId: 'activeSessionId',
-  gridViewActive: 'gridViewActive',
   expandedSlugs: 'expandedSlugs',
 } as const;
 
@@ -103,14 +101,12 @@ export function writeStored(
 
 export const view = {
   activeSessionId: readStored('sessionStorage', STORAGE_KEYS.activeSessionId),
-  activeTab: 'sessions' as string,
 
   /** Session ids with a live PTY, as of the last poll. */
   activePtyIds: new Set<string>(),
 
   cachedProjects: [] as Project[],
   cachedAllProjects: [] as Project[],
-  cachedPlans: [] as PlanSummary[],
 
   /** Flat render order of the session list — the source of truth between renders. */
   sortedOrder: [] as OrderedRow[],
@@ -126,7 +122,6 @@ export const view = {
   /** Project paths matched by name, so their rows survive the filter. */
   searchMatchProjectPaths: null as Set<string> | null,
 
-  gridViewActive: readStored('localStorage', STORAGE_KEYS.gridViewActive) === '1',
   visibleSessionCount: 25,
   sessionMaxAgeDays: 3,
 };

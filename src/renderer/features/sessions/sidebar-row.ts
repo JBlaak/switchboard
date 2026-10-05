@@ -9,7 +9,7 @@
 import { cleanDisplayName } from '../../../domain/session/title';
 import { byMostRecentlyModified } from '../../../domain/session/session';
 import {
-  attentionSessions, isUnread, responseReadySessions, sessionBusyState,
+  attentionSessions, responseReadySessions, sessionBusyState,
 } from '../../state/activity-store';
 import { view } from '../../state/session-store';
 import { escapeHtml, formatDate } from '../../lib/format';
@@ -23,8 +23,6 @@ const SVG = {
   pinFilled: '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1-.707.707c-.28-.28-.576-.49-.888-.656L10.073 9.333l-.07 3.181a.5.5 0 0 1-.853.354l-3.535-3.536-4.243 4.243a.5.5 0 1 1-.707-.707l4.243-4.243L1.372 5.11a.5.5 0 0 1 .354-.854l3.18-.07L8.37 .722A3.37 3.37 0 0 1 9.12.074a.5.5 0 0 1 .708.002l-.707.707z"/></svg>',
   pinOutline: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1-.707.707c-.28-.28-.576-.49-.888-.656L10.073 9.333l-.07 3.181a.5.5 0 0 1-.853.354l-3.535-3.536-4.243 4.243a.5.5 0 1 1-.707-.707l4.243-4.243L1.372 5.11a.5.5 0 0 1 .354-.854l3.18-.07L8.37 .722A3.37 3.37 0 0 1 9.12.074a.5.5 0 0 1 .708.002l-.707.707z"/></svg>',
   stop: '<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1"/></svg>',
-  fork: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M8 3h-5v5"/><path d="M21 3l-7.536 7.536a5 5 0 0 0-1.464 3.534v6.93"/><path d="M3 3l7.536 7.536a5 5 0 0 1 1.464 3.534v.93"/></svg>',
-  messages: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg>',
   terminal: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
 };
 
@@ -160,7 +158,7 @@ export function sessionTimeLabel(session: SessionRow): string {
  * The row's action buttons.
  *
  * Which ones appear depends on what the session actually supports. A remote
- * session has no local transcript to fork, view or relaunch from; archive still
+ * session has no local transcript to relaunch from; archive still
  * works — it is keyed on the session id alone — and doubles as "forget this
  * one". A plain terminal has nothing to archive or resume either.
  */
@@ -173,12 +171,6 @@ function buildActions(session: SessionRow): HTMLElement {
     session.type === 'remote' ? 'Disconnect (keeps running on the remote)' : 'Stop session',
     SVG.stop));
 
-  const unread = isUnread(session.sessionId);
-  actions.appendChild(button(
-    'session-unread-btn',
-    unread ? 'Mark as read' : 'Mark as unread',
-    unread ? ICONS.markRead(14) : ICONS.markUnread(14)));
-
   const archive = button(
     'session-archive-btn',
     session.archived ? 'Unarchive' : 'Archive',
@@ -188,8 +180,6 @@ function buildActions(session: SessionRow): HTMLElement {
     actions.appendChild(archive);
   } else if (session.type !== 'terminal') {
     actions.append(
-      button('session-fork-btn', 'Fork session', SVG.fork),
-      button('session-jsonl-btn', 'View messages', SVG.messages),
       archive,
       button('session-launch-config-btn', 'Resume with config', ICONS.launchConfig(14)),
     );

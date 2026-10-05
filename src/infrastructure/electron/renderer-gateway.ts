@@ -14,7 +14,6 @@ import { EVENT } from '../../ipc/channels';
 import type { BrowserWindow } from 'electron';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { RendererGateway } from '../../application/ports/renderer-gateway';
-import type { DiffRequest, FileOpenRequest } from '../../domain/ide/ide-request';
 
 export class ElectronRendererGateway implements RendererGateway {
   constructor(private readonly getWindow: () => BrowserWindow | null) {}
@@ -68,29 +67,8 @@ export class ElectronRendererGateway implements RendererGateway {
     this.#send(EVENT.fullscreenChanged, isFullscreen);
   }
 
-  fileChanged(filePath: string): void {
-    this.#send(EVENT.fileChanged, filePath);
-  }
-
   updaterEvent(type: string, data?: unknown): void {
     this.#send(EVENT.updaterEvent, type, data);
-  }
-
-  // ── IDE bridge ──
-  openDiff(sessionId: string, diffId: string, request: DiffRequest): void {
-    this.#send(EVENT.mcpOpenDiff, sessionId, diffId, request);
-  }
-
-  openFile(sessionId: string, request: FileOpenRequest): void {
-    this.#send(EVENT.mcpOpenFile, sessionId, request);
-  }
-
-  closeAllDiffs(sessionId: string): void {
-    this.#send(EVENT.mcpCloseAllDiffs, sessionId);
-  }
-
-  closeDiffTab(sessionId: string, diffId: string): void {
-    this.#send(EVENT.mcpCloseTab, sessionId, diffId);
   }
 
   #send(channel: string, ...args: unknown[]): void {

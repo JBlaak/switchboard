@@ -8,7 +8,6 @@
  */
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { Timers } from '../../src/application/ports/clock';
-import type { IdeBridge, IdeBridgeHandle } from '../../src/application/ports/ide-bridge';
 import type { Logger } from '../../src/application/ports/logger';
 import type { RendererGateway } from '../../src/application/ports/renderer-gateway';
 import type {
@@ -186,36 +185,6 @@ export function fakeRenderer(): FakeRenderer {
     projectsChanged: record('projectsChanged'),
     statusUpdate: record('statusUpdate'),
     fullscreenChanged: record('fullscreenChanged'),
-    fileChanged: record('fileChanged'),
     updaterEvent: record('updaterEvent'),
-    openDiff: record('openDiff') as FakeRenderer['openDiff'],
-    openFile: record('openFile') as FakeRenderer['openFile'],
-    closeAllDiffs: record('closeAllDiffs'),
-    closeDiffTab: record('closeDiffTab'),
-  };
-}
-
-// ── A fake IDE bridge ──
-
-export interface FakeIdeBridge extends IdeBridge {
-  /** The sessions whose bridge was stopped, in order. */
-  readonly stopped: string[];
-  /** The re-keys it was told about. */
-  readonly rekeyed: [string, string][];
-}
-
-export function fakeIdeBridge(): FakeIdeBridge {
-  const stopped: string[] = [];
-  const rekeyed: [string, string][] = [];
-
-  return {
-    stopped,
-    rekeyed,
-    start: async (): Promise<IdeBridgeHandle> => ({ port: 1234, authToken: 'token' }),
-    stop(sessionId) { stopped.push(sessionId); },
-    stopAll() {},
-    rekey(oldId, newId) { rekeyed.push([oldId, newId]); },
-    resolveDiff() {},
-    cleanStaleLocks() {},
   };
 }

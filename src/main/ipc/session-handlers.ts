@@ -87,15 +87,4 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
     app.repository.setArchived(sessionId, archived);
     return { archived: archived ? 1 : 0 };
   });
-
-  /** A session's whole transcript, for the message-history viewer. */
-  ipc.handle(INVOKE.readSessionJsonl, (sessionId: string) => {
-    const folder = app.repository.getCachedFolder(sessionId);
-    if (!folder) return { error: 'Session not found in cache' };
-    try {
-      return { entries: app.transcripts.readEntries(folder, sessionId) };
-    } catch (err) {
-      return { error: (err as Error).message };
-    }
-  });
 }

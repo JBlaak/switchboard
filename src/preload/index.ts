@@ -29,19 +29,8 @@ const api: SwitchboardApi = {
   toggleStar: (id) => ipcRenderer.invoke(INVOKE.toggleStar, id),
   renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
   archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
-  readSessionJsonl: (sessionId) => ipcRenderer.invoke(INVOKE.readSessionJsonl, sessionId),
 
-  // ── Plans and agent files ──
-  getPlans: () => ipcRenderer.invoke(INVOKE.getPlans),
-  readPlan: (filename) => ipcRenderer.invoke(INVOKE.readPlan, filename),
-  savePlan: (filePath, content) => ipcRenderer.invoke(INVOKE.savePlan, filePath, content),
-  getMemories: () => ipcRenderer.invoke(INVOKE.getMemories),
-  readMemory: (filePath) => ipcRenderer.invoke(INVOKE.readMemory, filePath),
-  saveMemory: (filePath, content) => ipcRenderer.invoke(INVOKE.saveMemory, filePath, content),
-
-  // ── Statistics ──
-  getStats: () => ipcRenderer.invoke(INVOKE.getStats),
-  refreshStats: () => ipcRenderer.invoke(INVOKE.refreshStats),
+  // ── Usage ──
   getUsage: () => ipcRenderer.invoke(INVOKE.getUsage),
 
   // ── Search ──
@@ -59,11 +48,6 @@ const api: SwitchboardApi = {
   createScheduleSession: (projectPath) => ipcRenderer.invoke(INVOKE.createScheduleSession, projectPath),
   runScheduleNow: (filePath) => ipcRenderer.invoke(INVOKE.runScheduleNow, filePath),
 
-  // ── The viewer panel ──
-  readFileForPanel: (filePath) => ipcRenderer.invoke(INVOKE.readFileForPanel, filePath),
-  saveFileForPanel: (filePath, content) => ipcRenderer.invoke(INVOKE.saveFileForPanel, filePath, content),
-  watchFile: (filePath) => ipcRenderer.invoke(INVOKE.watchFile, filePath),
-  unwatchFile: (filePath) => ipcRenderer.invoke(INVOKE.unwatchFile, filePath),
 
   // ── Host ──
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
@@ -77,8 +61,6 @@ const api: SwitchboardApi = {
   sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),
   resizeTerminal: (id, cols, rows) => ipcRenderer.send(SEND.terminalResize, id, cols, rows),
   closeTerminal: (id) => ipcRenderer.send(SEND.closeTerminal, id),
-  mcpDiffResponse: (sessionId, diffId, action, editedContent) =>
-    ipcRenderer.send(SEND.mcpDiffResponse, sessionId, diffId, action, editedContent),
 
   // ── Events from main ──
   onTerminalData: (cb) => {
@@ -111,23 +93,8 @@ const api: SwitchboardApi = {
   onFullscreenChanged: (cb) => {
     ipcRenderer.on(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen));
   },
-  onFileChanged: (cb) => {
-    ipcRenderer.on(EVENT.fileChanged, (_e, filePath) => cb(filePath));
-  },
   onUpdaterEvent: (cb) => {
     ipcRenderer.on(EVENT.updaterEvent, (_e, type, data) => cb(type, data));
-  },
-  onMcpOpenDiff: (cb) => {
-    ipcRenderer.on(EVENT.mcpOpenDiff, (_e, sessionId, diffId, data) => cb(sessionId, diffId, data));
-  },
-  onMcpOpenFile: (cb) => {
-    ipcRenderer.on(EVENT.mcpOpenFile, (_e, sessionId, data) => cb(sessionId, data));
-  },
-  onMcpCloseAllDiffs: (cb) => {
-    ipcRenderer.on(EVENT.mcpCloseAllDiffs, (_e, sessionId) => cb(sessionId));
-  },
-  onMcpCloseTab: (cb) => {
-    ipcRenderer.on(EVENT.mcpCloseTab, (_e, sessionId, diffId) => cb(sessionId, diffId));
   },
 
   // ── Host facts ──

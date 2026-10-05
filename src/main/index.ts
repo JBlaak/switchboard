@@ -64,7 +64,6 @@ function main(): void {
 
   app.on('before-quit', () => {
     container.projectsWatcher.stop();
-    container.ideBridge.stopAll();
     container.lifecycle.terminateAll();
   });
 
@@ -80,7 +79,6 @@ function start(container: Container): void {
   openWindow(container);
 
   container.projectsWatcher.start();
-  container.ideBridge.cleanStaleLocks();
   container.schedules.ensureCreatorCommand();
   container.schedules.start();
 

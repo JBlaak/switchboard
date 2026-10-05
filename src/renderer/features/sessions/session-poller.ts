@@ -10,9 +10,8 @@
  * explicitly, which re-arms the fast cadence immediately; the idle floor is
  * only there to catch what nothing told us about.
  */
-import { clearActivity, sessionBusyState } from '../../state/activity-store';
+import { clearActivity } from '../../state/activity-store';
 import { view } from '../../state/session-store';
-import { gridCards } from '../terminal/grid-view';
 import { updateTerminalHeader } from './terminal-header';
 
 const POLL_FAST_MS = 3000;
@@ -60,15 +59,4 @@ export function updateRunningIndicators(): void {
     const hasRunning = group.querySelector('.session-item.has-running-pty') !== null;
     group.querySelector<HTMLElement>('.slug-group-dot')?.classList.toggle('running', hasRunning);
   });
-
-  for (const [sessionId, card] of gridCards) {
-    const running = view.activePtyIds.has(sessionId);
-    const busy = sessionBusyState.get(sessionId) === true;
-    const dot = card.querySelector<HTMLElement>('.grid-card-dot');
-    if (dot) dot.className = 'grid-card-dot ' + (busy ? 'busy' : running ? 'running' : 'stopped');
-    const footer = card.querySelector<HTMLElement>('.grid-card-footer');
-    if (footer?.children[0]) footer.children[0].textContent = running ? 'Running' : 'Stopped';
-    const stopBtn = card.querySelector<HTMLElement>('.grid-card-stop-btn');
-    if (stopBtn) stopBtn.style.display = running ? '' : 'none';
-  }
 }

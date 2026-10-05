@@ -57,8 +57,8 @@ export function showNewSessionPopover(
     else void startWithDefaults(project);
   }));
 
-  // The configure dialog's options — worktree, permission modes, the IDE
-  // bridge — are all local-machine concepts. A remote session gets plain
+  // The configure dialog's options — worktree, permission modes — are all
+  // local-machine concepts. A remote session gets plain
   // `claude` inside tmux.
   if (!project.remote) {
     popover.appendChild(option(CLAUDE_ICON + ' Claude (Configure...)',

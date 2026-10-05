@@ -76,7 +76,6 @@ const noSearchIndex: SearchIndex = {
   upsert() {},
   deleteSession() {},
   deleteFolder() {},
-  deleteType() {},
   updateTitle() {},
   query: () => [],
 };

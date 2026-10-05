@@ -18,7 +18,6 @@ import { parseTerminalEvents } from '../../domain/terminal/osc';
 import type { ActiveSession } from '../model/active-session';
 import type { SessionRegistry } from '../model/session-registry';
 import type { Timers } from '../ports/clock';
-import type { IdeBridge } from '../ports/ide-bridge';
 import type { Logger } from '../ports/logger';
 import type { RendererGateway } from '../ports/renderer-gateway';
 import type { TerminalGateway } from '../ports/terminal-gateway';
@@ -51,7 +50,6 @@ export interface SessionLifecycleDeps {
   registry: SessionRegistry;
   terminals: TerminalGateway;
   renderer: RendererGateway;
-  ideBridge: IdeBridge;
   remote: RemoteObserver;
   timers: Timers;
   log: Logger;
@@ -145,13 +143,11 @@ export class SessionLifecycle {
     session.retired = true;
     session.exited = true;
 
-    const { registry, renderer, ideBridge, timers } = this.deps;
+    const { registry, renderer, timers } = this.deps;
     timers.clearTimeout(session.killTimer);
     session.killTimer = null;
 
     const realId = session.realSessionId || sessionId;
-    ideBridge.stop(realId);
-    session.ideBridge = null;
 
     renderer.processExited(realId, exitCode);
 

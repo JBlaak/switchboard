@@ -4,7 +4,7 @@
  * A leaf: it reads settings and produces a payload, and nothing about a session
  * or the DOM reaches it. Every launch path goes through it so a project's
  * configured defaults apply whether the session was started from the sidebar,
- * a dialog, a fork or a restored tab.
+ * a dialog or a restored tab.
  */
 import type { SessionOptions } from '../../../domain/launch/session-options';
 
@@ -32,7 +32,6 @@ export async function resolveDefaultSessionOptions(projectPath: string): Promise
   if (effective.chrome) options.chrome = true;
   if (effective.preLaunchCmd) options.preLaunchCmd = effective.preLaunchCmd;
   if (effective.addDirs) options.addDirs = effective.addDirs;
-  if (effective.mcpEmulation === false) options.mcpEmulation = false;
 
   return options;
 }

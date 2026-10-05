@@ -26,11 +26,6 @@ const gaugeEl = el('status-bar-quota');
 export function installQuotaGauges(): void {
   void refresh();
   setInterval(() => void refresh(), REFRESH_MS);
-
-  // The bars are a summary of the stats tab; clicking them opens it.
-  gaugeEl.addEventListener('click', () => {
-    document.querySelector<HTMLElement>('.sidebar-tab[data-tab="stats"]')?.click();
-  });
 }
 
 async function refresh(): Promise<void> {

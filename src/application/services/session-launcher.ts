@@ -22,8 +22,6 @@ import type { SessionOptions } from '../../domain/launch/session-options';
 import type { ShellProfile } from '../../domain/shell/shell-profile';
 import type { SessionRegistry } from '../model/session-registry';
 import type { Clock, Timers } from '../ports/clock';
-import type { IdeBridgeHandle } from '../ports/ide-bridge';
-import type { IdeBridge } from '../ports/ide-bridge';
 import type { Logger } from '../ports/logger';
 import type { PtyHandle, TerminalGateway } from '../ports/terminal-gateway';
 import type { ShellProfileProvider } from '../ports/shell-profiles';
@@ -56,8 +54,6 @@ export interface OpenSessionResult {
   ok: boolean;
   error?: string;
   reattached?: boolean;
-  /** True when the CLI will find an IDE to talk to. */
-  mcpActive?: boolean;
 }
 
 export interface SessionLauncherDeps {
@@ -66,7 +62,6 @@ export interface SessionLauncherDeps {
   shells: ShellProfileProvider;
   transcripts: TranscriptStore;
   settings: SettingsService;
-  ideBridge: IdeBridge;
   lifecycle: SessionLifecycle;
   remote: RemoteConnectionSupervisor;
   renderer: RendererGateway;
@@ -117,7 +112,7 @@ export class SessionLauncher {
 
     if (redial) this.deps.remote.redialNow(sessionId);
 
-    return { ok: true, reattached: true, mcpActive: !!session.ideBridge };
+    return { ok: true, reattached: true };
   }
 
   async #spawn(request: OpenSessionRequest): Promise<OpenSessionResult> {
@@ -138,7 +133,6 @@ export class SessionLauncher {
       : { projectFolder: null, knownTranscriptIds: null, sessionSlug: null };
 
     let pty: PtyHandle;
-    let ideBridge: IdeBridgeHandle | null = null;
     let remoteState: RemoteConnectionState | null = null;
 
     try {
@@ -152,7 +146,6 @@ export class SessionLauncher {
       } else {
         const started = await this.#startClaude(sessionId, projectPath, isNew, shell, options);
         if ('error' in started) return { ok: false, error: started.error };
-        ideBridge = started.ideBridge;
         pty = started.pty;
       }
     } catch (err) {
@@ -166,8 +159,6 @@ export class SessionLauncher {
       knownTranscriptIds: bookkeeping.knownTranscriptIds,
       sessionSlug: bookkeeping.sessionSlug,
       isPlainTerminal,
-      forkFrom: options?.forkFrom || null,
-      ideBridge,
       remote: remoteState,
       openedAt: this.deps.clock.now(),
     });
@@ -182,11 +173,7 @@ export class SessionLauncher {
       remote.sendStatus(sessionId, { phase: 'connecting', target: remoteState.target });
     }
 
-    if (options?.forkFrom) {
-      log.info(`[fork-spawn] tempId=${sessionId} forkFrom=${options.forkFrom} folder=${bookkeeping.projectFolder} knownFiles=${bookkeeping.knownTranscriptIds?.size ?? 0}`);
-    }
-
-    return { ok: true, reattached: false, mcpActive: !!ideBridge };
+    return { ok: true, reattached: false };
   }
 
   /**
@@ -247,7 +234,7 @@ export class SessionLauncher {
    * Connect to a remote project.
    *
    * The "session" is a tmux session on the remote host and the PTY runs ssh
-   * attached to it. No local transcripts, no IDE bridge, no shell profile — and
+   * attached to it. No local transcripts, no shell profile — and
    * no auto-connect: this only runs when the user clicks, because auth may need
    * interaction (host key prompts, 1Password approval, passwords) that renders
    * in the terminal.
@@ -316,30 +303,15 @@ export class SessionLauncher {
     return pty;
   }
 
-  /**
-   * Start a Claude session, with an IDE bridge if the user wants one.
-   *
-   * A bridge that fails to start is logged and skipped: the session still runs,
-   * just with Claude's edits going to the user's own editor instead of the side
-   * panel.
-   */
+  /** Start a Claude session. */
   async #startClaude(
     sessionId: string,
     projectPath: string,
     isNew: boolean,
     shell: ResolvedShell,
     options?: SessionOptions,
-  ): Promise<{ ideBridge: IdeBridgeHandle | null; pty: PtyHandle } | { error: string }> {
-    const { terminals, ideBridge: bridge, log } = this.deps;
-
-    let ideBridge: IdeBridgeHandle | null = null;
-    if (options?.mcpEmulation !== false) {
-      try {
-        ideBridge = await bridge.start(sessionId, [projectPath]);
-      } catch (err) {
-        log.error(`[mcp] failed to start the IDE bridge for ${sessionId}: ${(err as Error).message}`);
-      }
-    }
+  ): Promise<{ pty: PtyHandle } | { error: string }> {
+    const { terminals } = this.deps;
 
     let command: string;
     try {
@@ -347,10 +319,8 @@ export class SessionLauncher {
         shellPath: shell.path,
         target: { sessionId, isNew },
         options,
-        ideBridge: !!ideBridge,
       });
     } catch (err) {
-      if (ideBridge) bridge.stop(sessionId);
       return { error: (err as Error).message };
     }
 
@@ -360,9 +330,9 @@ export class SessionLauncher {
       cwd: shell.cwd,
       cols: SPAWN_COLS,
       rows: SPAWN_ROWS,
-      env: claudeSessionEnv(terminals.baseEnv, { ideBridgePort: ideBridge?.port }),
+      env: claudeSessionEnv(terminals.baseEnv),
     });
 
-    return { ideBridge, pty };
+    return { pty };
   }
 }

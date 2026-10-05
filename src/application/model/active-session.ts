@@ -11,7 +11,6 @@ import { CliBusyTracker } from '../../domain/terminal/osc';
 import { OutputBuffer } from '../../domain/terminal/output-buffer';
 import type { RemoteConfig } from '../../domain/project/remote-target';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
-import type { IdeBridgeHandle } from '../ports/ide-bridge';
 import type { PtyHandle } from '../ports/terminal-gateway';
 import type { TimerHandle } from '../ports/clock';
 
@@ -57,9 +56,6 @@ export interface ActiveSessionSpec {
   knownTranscriptIds: Set<string> | null;
   sessionSlug: string | null;
   isPlainTerminal: boolean;
-  /** The session id this one was forked from, while the fork is unresolved. */
-  forkFrom: string | null;
-  ideBridge: IdeBridgeHandle | null;
   remote: RemoteConnectionState | null;
   openedAt: number;
   maxBufferBytes?: number;
@@ -85,8 +81,6 @@ export class ActiveSession {
   knownTranscriptIds: Set<string> | null;
   sessionSlug: string | null;
   readonly isPlainTerminal: boolean;
-  readonly forkFrom: string | null;
-  ideBridge: IdeBridgeHandle | null;
   readonly openedAt: number;
   remote: RemoteConnectionState | null;
 
@@ -105,8 +99,6 @@ export class ActiveSession {
     this.knownTranscriptIds = spec.knownTranscriptIds;
     this.sessionSlug = spec.sessionSlug;
     this.isPlainTerminal = spec.isPlainTerminal;
-    this.forkFrom = spec.forkFrom;
-    this.ideBridge = spec.ideBridge;
     this.remote = spec.remote;
     this.openedAt = spec.openedAt;
   }

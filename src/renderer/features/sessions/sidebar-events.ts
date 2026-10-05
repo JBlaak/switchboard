@@ -7,12 +7,9 @@
  * idempotent; `addEventListener` would stack duplicates.
  */
 import { refreshSidebar, reloadProjects } from '../../app/refresh';
-import { clearUnread, isUnread, markUnread } from '../../state/activity-store';
-import { projectOf, sessionMap, view } from '../../state/session-store';
+import { sessionMap, view } from '../../state/session-store';
 import { sidebarContent } from '../../lib/dom';
-import { showJsonlViewer } from '../jsonl/jsonl-viewer';
 import { showResumeSessionDialog } from '../dialogs/resume-session-dialog';
-import { forkSession } from '../dialogs/fork-session';
 import { saveExpandedSlugs } from './active-session';
 import { archiveSessionRow, confirmAndStopSession, openSession } from './session-actions';
 import { pollActiveSessions } from './session-poller';
@@ -100,15 +97,7 @@ function bindSessionRows(): void {
 
     onAction(item, '.session-stop-btn', () => void confirmAndStopSession(session.sessionId));
 
-    onAction(item, '.session-unread-btn', () => {
-      if (isUnread(session.sessionId)) clearUnread(session.sessionId);
-      else markUnread(session.sessionId);
-      refreshSidebar();
-    });
-
     onAction(item, '.session-launch-config-btn', () => void showResumeSessionDialog(session));
-    onAction(item, '.session-jsonl-btn', () => void showJsonlViewer(session));
-    onAction(item, '.session-fork-btn', () => void forkCurrent(session));
     onAction(item, '.session-archive-btn', () => void toggleArchive(session));
 
     const summary = item.querySelector<HTMLElement>('.session-summary');
@@ -127,11 +116,6 @@ function onAction(item: HTMLElement, selector: string, handler: () => void): voi
     e.stopPropagation();
     handler();
   };
-}
-
-async function forkCurrent(session: SessionRow): Promise<void> {
-  const project = projectOf(session.sessionId);
-  if (project) await forkSession(session, project);
 }
 
 async function toggleArchive(session: SessionRow): Promise<void> {

@@ -10,7 +10,6 @@
  * above this has to know the layout.
  */
 import type { Session } from '../../domain/session/session';
-import type { TranscriptEntry } from '../../domain/session/transcript';
 
 /** The identifiers a seeded transcript is written with. */
 export interface TranscriptSeed {
@@ -49,9 +48,6 @@ export interface TranscriptStore {
 
   /** Parse one transcript, or null when it holds no conversation. */
   readSession(folder: string, sessionId: string, projectPath: string): Session | null;
-
-  /** Every entry of a transcript, for the message-history viewer. */
-  readEntries(folder: string, sessionId: string): TranscriptEntry[];
 
   /** The leading lines of a transcript, for the cheap signal reads. */
   readHeadLines(folder: string, sessionId: string, byteLimit: number): string[];

@@ -25,9 +25,8 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { clearNotifications } from '../../state/activity-store';
 import { setActiveSession } from '../sessions/active-session';
 import { showTerminalHeader, updatePtyTitle } from '../sessions/terminal-header';
-import { gridViewerCount, placeholder, terminalsEl } from '../../lib/dom';
-import { openFileInPanel } from '../panel/file-panel';
-import { focusGridCard, gridCards, handleSessionNavKey, isSessionNavKey, showGridView, toggleGridView, wrapInGridCard } from '../terminal/grid-view';
+import { placeholder, terminalsEl } from '../../lib/dom';
+import { handleSessionNavKey, isSessionNavKey } from '../terminal/session-nav';
 import { hideAllViewers } from '../panel/viewers';
 import { openSessions, sessionMap, view } from '../../state/session-store';
 import { remoteStatus } from '../../state/remote-status-store';
@@ -100,12 +99,6 @@ function setupTerminalKeyBindings(
     // Cmd/Ctrl+F → open terminal search bar
     if (e.key === 'f' && (isMac ? e.metaKey : e.ctrlKey) && !e.shiftKey && !e.altKey) {
       if (e.type === 'keydown' && onFind) onFind();
-      return false;
-    }
-
-    // Cmd/Ctrl+Shift+G → toggle grid view
-    if (e.key === 'g' && (isMac ? e.metaKey : e.ctrlKey) && e.shiftKey && !e.altKey) {
-      if (e.type === 'keydown') { e._handled = true; toggleGridView(); }
       return false;
     }
 
@@ -350,11 +343,7 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
     macOptionClickForcesSelection: true,
     linkHandler: {
       activate: (_event, uri) => {
-        if (uri.startsWith('file://') && typeof openFileInPanel === 'function') {
-          try { openFileInPanel(sessionId, decodeURIComponent(new URL(uri).pathname)); } catch {}
-        } else {
-          window.api.openExternal(uri);
-        }
+        window.api.openExternal(uri);
       },
       allowNonHttpProtocols: true,
     },
@@ -381,11 +370,7 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
   const fitAddon = new FitAddon();
   terminal.loadAddon(fitAddon);
   terminal.loadAddon(new WebLinksAddon((_event, url) => {
-    if (url.startsWith('file://') && typeof openFileInPanel === 'function') {
-      try { openFileInPanel(sessionId, decodeURIComponent(new URL(url).pathname)); } catch {}
-    } else {
-      window.api.openExternal(url);
-    }
+    window.api.openExternal(url);
   }));
   const searchAddon = new SearchAddon();
   terminal.loadAddon(searchAddon);
@@ -478,11 +463,9 @@ export function destroySession(sessionId: string): void {
   entry.terminal.dispose();
   entry.element.remove();
   openSessions.delete(sessionId);
-  const card = gridCards.get(sessionId);
-  if (card) { card.remove(); gridCards.delete(sessionId); }
 }
 
-// Make a session visible in the current view mode (grid or single).
+// Make a session visible.
 // Handles sidebar highlight, notifications, header, fit, and focus.
 export function showSession(sessionId: string): void {
   const entry = openSessions.get(sessionId);
@@ -495,32 +478,14 @@ export function showSession(sessionId: string): void {
   setActiveSession(sessionId);
   clearNotifications(sessionId);
 
-  if (view.gridViewActive) {
-    // Ensure grid layout is set up (e.g. on first session after startup restore)
-    if (!terminalsEl.classList.contains('grid-layout')) {
-      showGridView();
-    }
-    if (entry && gridCards.has(sessionId)) {
-      // Already in grid — just focus it
-      focusGridCard(sessionId);
-    } else if (entry) {
-      // New entry not yet in grid — wrap and focus
-      wrapInGridCard(sessionId);
-      fitAndScroll(entry);
-      requestAnimationFrame(() => focusGridCard(sessionId));
-      gridViewerCount.textContent = gridCards.size + ' session' + (gridCards.size !== 1 ? 's' : '');
-    }
-  } else {
-    // Single terminal view
-    document.querySelectorAll<HTMLElement>('.terminal-container').forEach(el => el.classList.remove('visible'));
-    placeholder.style.display = 'none';
-    hideAllViewers();
-    if (session) showTerminalHeader(session);
-    if (entry) {
-      entry.element.classList.add('visible');
-      entry.terminal.focus();
-      fitAndScroll(entry);
-    }
+  document.querySelectorAll<HTMLElement>('.terminal-container').forEach(el => el.classList.remove('visible'));
+  placeholder.style.display = 'none';
+  hideAllViewers();
+  if (session) showTerminalHeader(session);
+  if (entry) {
+    entry.element.classList.add('visible');
+    entry.terminal.focus();
+    fitAndScroll(entry);
   }
 }
 

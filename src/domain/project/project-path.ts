@@ -26,18 +26,6 @@ export function encodeProjectPath(projectPath: string): string {
 }
 
 /**
- * A last-resort label for a folder whose project path could not be resolved.
- *
- * The encoding is lossy — every separator became a `-` — so this can only guess
- * at the last two segments ("-Users-home-dev-MyClaude" → "dev/MyClaude"). Used
- * only when no transcript in the folder carries a `cwd`.
- */
-export function folderToShortPath(folder: string): string {
-  const parts = folder.replace(/^-/, '').split('-').filter(Boolean);
-  return parts.slice(-2).join('/');
-}
-
-/**
  * Shorten a project path for display: its last two segments.
  *
  * Splits on both separators. projectPath comes from a session's `cwd`, which on
