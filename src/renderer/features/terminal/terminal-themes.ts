@@ -52,18 +52,33 @@ export const TERMINAL_THEMES = {
 export type TerminalTheme = (typeof TERMINAL_THEMES)['switchboard'];
 
 /**
- * The house theme on the light palette.
+ * Light versions of the themes that have one.
  *
- * Not an entry in TERMINAL_THEMES, so not a choice in the picker: picking
- * "Switchboard" means "match the app", and in light mode the app is white. The
- * ANSI ramp keeps the dark theme's hues but darkens them until they read on
- * white — the dark theme's yellow and cyan are near-invisible there.
+ * Not entries in TERMINAL_THEMES, so not choices in the picker: they stand in
+ * for their dark original while the app is in light mode. A theme without one
+ * keeps its own palette in both modes.
  */
-const SWITCHBOARD_LIGHT: TerminalTheme = {
-  label: 'Switchboard',
-  background: '#ffffff', foreground: '#1f2423', cursor: '#0f8f6c', selectionBackground: '#bfe8da',
-  black: '#0d1110', red: '#c4174c', green: '#1d8a5a', yellow: '#9a6a00', blue: '#1474a6', magenta: '#8a4fb3', cyan: '#0f8f6c', white: '#c6c7c8',
-  brightBlack: '#767d7c', brightRed: '#e01e5a', brightGreen: '#25a26c', brightYellow: '#b58200', brightBlue: '#1a8cc4', brightMagenta: '#a066cc', brightCyan: '#14a57e', brightWhite: '#ffffff',
+const LIGHT_VARIANTS: Record<string, TerminalTheme & { cursorAccent?: string; selectionForeground?: string }> = {
+  // Picking "Switchboard" means "match the app", and in light mode the app is
+  // white. The ANSI ramp keeps the dark theme's hues but darkens them until they
+  // read on white — the dark theme's yellow and cyan are near-invisible there.
+  switchboard: {
+    label: 'Switchboard',
+    background: '#ffffff', foreground: '#1f2423', cursor: '#0f8f6c', selectionBackground: '#bfe8da',
+    black: '#0d1110', red: '#c4174c', green: '#1d8a5a', yellow: '#9a6a00', blue: '#1474a6', magenta: '#8a4fb3', cyan: '#0f8f6c', white: '#c6c7c8',
+    brightBlack: '#767d7c', brightRed: '#e01e5a', brightGreen: '#25a26c', brightYellow: '#b58200', brightBlue: '#1a8cc4', brightMagenta: '#a066cc', brightCyan: '#14a57e', brightWhite: '#ffffff',
+  },
+  // White for daylight, but charcoal text rather than black: about 10.5:1
+  // against white instead of 21:1, keeping the softness of Ghostty's dark
+  // theme. The muted hues are darkened only as far as 4.5:1 on white. Bright
+  // white is the one inversion: programs use it for emphasis on a dark
+  // background, so here it is the darkest ink rather than invisible white.
+  ghostty: {
+    label: 'Ghostty',
+    background: '#ffffff', foreground: '#3b3f46', cursor: '#3b3f46', cursorAccent: '#ffffff', selectionBackground: '#3b3f46', selectionForeground: '#ffffff',
+    black: '#3b3f46', red: '#a8504e', green: '#66702c', yellow: '#86661c', blue: '#4f6e8f', magenta: '#80628f', cyan: '#447a72', white: '#8a8d8b',
+    brightBlack: '#74777c', brightRed: '#b04343', brightGreen: '#6f7a26', brightYellow: '#8f7016', brightBlue: '#4a70a8', brightMagenta: '#8a5fa6', brightCyan: '#3b7f72', brightWhite: '#2a2d33',
+  },
 };
 
 /** The query the renderer's light palette hangs off; main drives it via `themeSource`. */
@@ -78,13 +93,13 @@ export let currentThemeName: string = 'switchboard';
 /**
  * The theme to paint with, resolved against the current colour scheme.
  *
- * Only the house theme follows the scheme; every other theme is a deliberate
- * choice of its own palette and stays put.
+ * Only a theme with a light variant follows the scheme; every other theme is a
+ * deliberate choice of its own palette and stays put.
  */
 export function getTerminalTheme(): TerminalTheme {
-  const chosen = (TERMINAL_THEMES as Record<string, TerminalTheme>)[currentThemeName]
-    || TERMINAL_THEMES.switchboard;
-  return chosen === TERMINAL_THEMES.switchboard && prefersLight() ? SWITCHBOARD_LIGHT : chosen;
+  const name = currentThemeName in TERMINAL_THEMES ? currentThemeName : 'switchboard';
+  const chosen = (TERMINAL_THEMES as Record<string, TerminalTheme>)[name];
+  return (prefersLight() && LIGHT_VARIANTS[name]) || chosen;
 }
 
 export let TERMINAL_THEME: TerminalTheme = getTerminalTheme();
