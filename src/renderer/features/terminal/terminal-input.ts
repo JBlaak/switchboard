@@ -81,6 +81,19 @@ export function shouldSendSpaceDirectly(e: KeyboardEvent): boolean {
     && !isImeComposing(e);
 }
 
+// Map a modified-Enter keydown to the kitty CSI-u sequence Claude Code expects, or
+// null when it isn't one we translate (plain Enter, or Enter with Alt/Cmd, falls
+// through to xterm). Platform-independent: Ctrl is the same physical key everywhere,
+// and Claude Code binds Ctrl+Enter to "send now" on every platform.
+//   Shift+Enter → CSI 13;2u : newline instead of submit.
+//   Ctrl+Enter  → CSI 13;5u : send now (modifier 5 = 1 + ctrl(4)).
+export function enterKittySequence(e: KeyboardEvent): string | null {
+  if (e.key !== 'Enter' || e.altKey || e.metaKey) return null;
+  if (e.shiftKey && !e.ctrlKey) return '\x1b[13;2u';
+  if (e.ctrlKey && !e.shiftKey) return '\x1b[13;5u';
+  return null;
+}
+
 // Decode an OSC 52 payload into the text the program wants on the clipboard.
 // Payload is "<selection>;<base64>", e.g. "c;aGVsbG8=".
 //
