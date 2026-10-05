@@ -1,0 +1,47 @@
+/* ========== MOTION ==========
+   The pieces of BlaakTasks' motion that live in CSS: the confetti layer
+   (lib/motion/celebrate.ts), the copy of a row that fades out where it left
+   (lib/motion/reflow.ts), and the entrance dialogs make. The springs themselves
+   are inline transforms written by lib/motion/spring.ts. */
+
+.confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.confetti__piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-weight: 900;
+  line-height: 1;
+  will-change: transform, opacity;
+}
+
+.motion-ghost {
+  will-change: transform, opacity;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes modal-in {
+    from { opacity: 0; }
+  }
+}
