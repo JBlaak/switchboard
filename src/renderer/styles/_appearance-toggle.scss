@@ -11,9 +11,9 @@
   border: none;
   color: var(--sb-text-faint);
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--sb-r-control);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.15s, color 0.15s;
   line-height: 1;
   display: inline-flex;
   align-items: center;
@@ -21,7 +21,7 @@
 }
 
 #appearance-toggle-btn:hover {
-  background: rgba(var(--sb-overlay-rgb),0.04);
+  background: rgba(var(--sb-overlay-rgb),0.06);
   color: var(--sb-text-hover);
 }
 
