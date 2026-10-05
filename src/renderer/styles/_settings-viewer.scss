@@ -1,4 +1,8 @@
-/* ========== SETTINGS VIEWER ========== */
+/* ========== SETTINGS VIEWER ==========
+   Dressed like BlaakTasks' settings: each section is a soft card, labels and
+   controls are set in Mulish, help text in Nunito Sans, and inputs are raised
+   wells with a hairline ring. Every colour comes from a token, so light and
+   dark follow the palette. */
 #settings-viewer {
   position: absolute;
   inset: 0;
@@ -7,20 +11,21 @@
   background: var(--sb-bg-base);
 }
 
+/* Height stays 8 + 16 + 8 so the title keeps lining up with the traffic lights. */
 #settings-viewer-header {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 16px;
   background: var(--sb-bg-panel);
-  border-bottom: 1px solid rgba(var(--sb-overlay-rgb),0.06);
+  border-bottom: 1px solid var(--sb-line);
   flex-shrink: 0;
 }
 
 #settings-viewer-title {
-  font-size: 13px;
-  color: var(--sb-text-dim);
-  font-weight: 500;
+  font: 800 15px/16px var(--sb-font-head);
+  letter-spacing: -0.02em;
+  color: var(--sb-text-strong);
 }
 
 #settings-viewer-body {
@@ -33,50 +38,42 @@
 
 #settings-viewer-body::-webkit-scrollbar { width: 5px; }
 #settings-viewer-body::-webkit-scrollbar-track { background: transparent; }
-#settings-viewer-body::-webkit-scrollbar-thumb { background: rgba(var(--sb-overlay-rgb),0.06); border-radius: 3px; }
+#settings-viewer-body::-webkit-scrollbar-thumb { background: var(--sb-border-strong); border-radius: 3px; }
 
 .settings-form {
   width: 100%;
   max-width: 680px;
 }
 
-/* --- Section titles --- */
+/* --- Sections: one soft card each --- */
 .settings-section {
-  margin-bottom: 4px;
+  margin-bottom: 16px;
+  padding: 16px 18px 4px;
+  border-radius: var(--sb-r-card);
+  background: var(--sb-bg-panel);
+  box-shadow: var(--sb-edge);
 }
 
 .settings-section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sb-text-muted);
-  margin-bottom: 8px;
-  padding-left: 4px;
+  font: 800 15px var(--sb-font-head);
+  letter-spacing: -0.02em;
+  color: var(--sb-text-strong);
+  padding-bottom: 4px;
 }
 
-/* --- Setting rows (card style) --- */
+/* --- Setting rows: hairline-separated inside the card --- */
 .settings-field {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 14px 18px;
-  border-bottom: 1px solid rgba(var(--sb-overlay-rgb),0.035);
-  background: rgba(var(--sb-overlay-rgb),0.02);
-  margin-bottom: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--sb-line);
   min-height: 52px;
 }
 
-.settings-section > .settings-field:first-of-type,
-.settings-section > .settings-section-title + .settings-field {
-  border-top-left-radius: 10px;
-  border-top-right-radius: 10px;
-}
-
-.settings-section > .settings-field:last-child {
-  border-bottom-left-radius: 10px;
-  border-bottom-right-radius: 10px;
-  border-bottom: none;
-  margin-bottom: 20px;
+.settings-section-title + .settings-field {
+  border-top: none;
 }
 
 .settings-field-info {
@@ -92,17 +89,22 @@
 }
 
 .settings-label {
-  font-size: 13.5px;
+  font: 700 13px var(--sb-font-head);
   color: var(--sb-text-strong);
-  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .settings-description {
+  font-family: var(--sb-font-body);
   font-size: 12.5px;
-  color: var(--sb-text-faint);
+  color: var(--sb-text-muted);
   margin-top: 3px;
   line-height: 1.45;
+}
+
+.settings-description code {
+  font-family: var(--sb-font-mono);
+  font-size: 0.92em;
 }
 
 .settings-field-control {
@@ -117,12 +119,11 @@
   font-size: 11px;
   color: var(--sb-text-dimmest);
   margin: -2px 0 6px;
-  padding-left: 18px;
 }
 
 /* --- Use-global checkbox --- */
 .settings-use-global {
-  font-size: 11px;
+  font: 700 11.5px var(--sb-font-head);
   color: var(--sb-text-faint);
   display: flex;
   align-items: center;
@@ -136,7 +137,7 @@
   accent-color: var(--sb-accent);
 }
 
-/* --- Toggle switch --- */
+/* --- Toggle switch: a mint-ink track when on --- */
 .settings-toggle {
   position: relative;
   width: 42px;
@@ -155,6 +156,7 @@
   position: absolute;
   inset: 0;
   background: rgba(var(--sb-overlay-rgb),0.1);
+  box-shadow: inset 0 0 0 1px var(--sb-line);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -169,11 +171,13 @@
   bottom: 3px;
   background: var(--sb-switch-track);
   border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(var(--sb-shadow-rgb), calc(0.3 * var(--sb-shadow-k)));
   transition: all 0.25s ease;
 }
 
 .settings-toggle input:checked + .settings-toggle-slider {
-  background: var(--sb-green);
+  background: var(--sb-accent);
+  box-shadow: none;
 }
 
 .settings-toggle input:checked + .settings-toggle-slider::before {
@@ -181,23 +185,32 @@
   background: var(--sb-switch-knob);
 }
 
+.settings-toggle input:focus-visible + .settings-toggle-slider {
+  box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb),0.2);
+}
+
 .settings-toggle input:disabled + .settings-toggle-slider {
   opacity: 0.3;
   cursor: not-allowed;
 }
 
-/* --- Inputs & selects (compact, right-aligned) --- */
+/* --- Inputs & selects: raised wells with a hairline ring --- */
 .settings-input {
   width: 100%;
-  background: rgba(var(--sb-overlay-rgb),0.04);
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.08);
-  border-radius: 8px;
-  padding: 7px 12px;
+  background: var(--sb-bg-raised);
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+  border-radius: var(--sb-r-control);
+  padding: 8px 12px;
   font-size: 13px;
-  color: var(--sb-text-soft);
+  color: var(--sb-text);
   outline: none;
-  font-family: inherit;
-  transition: all 0.2s;
+  font-family: var(--sb-font-body);
+  transition: box-shadow 0.2s;
+}
+
+.settings-input::placeholder {
+  color: var(--sb-text-placeholder);
 }
 
 .settings-input.settings-input-compact {
@@ -211,10 +224,11 @@
   margin: 0;
 }
 
-.settings-input:focus {
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  border-color: rgba(var(--sb-accent-rgb),0.4);
-  box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb),0.08);
+.settings-input:focus,
+.settings-select:focus {
+  box-shadow:
+    inset 0 0 0 1px var(--sb-accent),
+    0 0 0 3px rgba(var(--sb-accent-rgb),0.15);
 }
 
 .settings-input:disabled {
@@ -222,23 +236,29 @@
   cursor: not-allowed;
 }
 
+/* The chevron is two gradient half-squares rather than an SVG data URI, so it
+   can take its colour from a token. */
 .settings-select {
-  background: rgba(var(--sb-overlay-rgb),0.04);
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.08);
-  border-radius: 8px;
-  padding: 7px 32px 7px 12px;
-  font-size: 13px;
-  color: var(--sb-text-soft);
+  background-color: var(--sb-bg-raised);
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+  border-radius: var(--sb-r-control);
+  padding: 8px 32px 8px 12px;
+  font: 700 13px var(--sb-font-head);
+  color: var(--sb-text);
   outline: none;
-  font-family: inherit;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
   min-width: 140px;
-  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%237e8385' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--sb-text-faint) 50%),
+    linear-gradient(135deg, var(--sb-text-faint) 50%, transparent 50%);
+  background-size: 5px 5px, 5px 5px;
+  background-position: right 15px center, right 10px center;
   background-repeat: no-repeat;
-  background-position: right 10px center;
   cursor: pointer;
+  transition: box-shadow 0.2s;
 }
 
 .settings-select:disabled {
@@ -260,80 +280,80 @@
   width: 100%;
 }
 
-/* --- Buttons --- */
+/* --- Buttons: primary, ghost, destructive --- */
 .settings-btn-row {
   display: flex;
   gap: 10px;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 4px;
+}
+
+.settings-cancel-btn,
+.settings-save-btn,
+.settings-remove-btn {
+  border: none;
+  border-radius: var(--sb-r-control);
+  padding: 10px 20px;
+  font: 800 14px var(--sb-font-head);
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .settings-cancel-btn {
-  background: transparent;
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.12);
-  color: var(--sb-text-muted);
-  font-size: 13px;
-  padding: 8px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  transition: all 0.15s;
+  background: var(--sb-bg-raised);
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+  color: var(--sb-text);
 }
 
 .settings-cancel-btn:hover {
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  border-color: rgba(var(--sb-overlay-rgb),0.2);
-  color: var(--sb-text-soft);
+  background: var(--sb-bg-panel);
+  color: var(--sb-text-strong);
 }
 
 .settings-save-btn {
-  background: rgba(var(--sb-accent-rgb),0.12);
-  border: 1px solid rgba(var(--sb-accent-rgb),0.3);
-  color: var(--sb-accent);
-  font-size: 13px;
-  padding: 8px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  transition: all 0.15s;
+  background: var(--sb-action);
+  color: var(--sb-action-text);
 }
 
 .settings-save-btn:hover {
-  background: rgba(var(--sb-accent-rgb),0.2);
-  border-color: rgba(var(--sb-accent-rgb),0.5);
+  opacity: 0.88;
 }
 
+/* Saved: the mint pair, matching what the save handler sets inline. */
 .settings-save-btn.saved {
-  background: rgba(var(--sb-green-rgb),0.12);
-  border-color: rgba(var(--sb-green-rgb),0.3);
-  color: var(--sb-green);
+  background: var(--sb-mint);
+  color: var(--sb-accent);
+  opacity: 1;
 }
 
-/* Inline caveat inside a field description (e.g. a font that isn't installed) */
+/* Inline caveat inside a field description (e.g. a font that isn't installed):
+   a sun-filled note, hidden while it has nothing to say. */
 .settings-warning {
+  display: block;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: var(--sb-r-control);
+  background: var(--sb-sun);
   color: var(--sb-warning-text);
+  font-weight: 600;
+}
+
+.settings-warning:empty {
+  display: none;
 }
 
 .settings-remove-btn {
-  background: rgba(var(--sb-danger-strong-rgb),0.08);
-  border: 1px solid rgba(var(--sb-danger-strong-rgb),0.2);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--sb-line);
   color: var(--sb-danger-soft);
-  font-size: 13px;
-  padding: 8px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  transition: all 0.15s;
   margin-left: auto;
 }
 
 .settings-remove-btn:hover {
-  background: rgba(var(--sb-danger-strong-rgb),0.15);
-  border-color: rgba(var(--sb-danger-strong-rgb),0.4);
-  color: var(--sb-danger-strong);
+  background: var(--sb-peach);
+  box-shadow: none;
+  color: var(--sb-danger);
 }
 
 .settings-current-version {
