@@ -14,15 +14,14 @@
   font-family: var(--sb-font-head);
   font-weight: 800;
   line-height: 1;
-  width: 30px;
-  height: 30px;
+  width: var(--sb-icon-button);
+  height: var(--sb-icon-button);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 #new-session-btn { margin-left: auto; }
-#add-project-btn { margin-left: 2px; }
 
 #add-project-btn:hover {
   background: rgba(var(--sb-overlay-rgb),0.06);

@@ -1,11 +1,12 @@
 /* ========== GLOBAL SETTINGS BUTTON ========== */
 #global-settings-btn {
   margin-left: auto;
-  margin-right: 3px;
   background: transparent;
   border: none;
   color: var(--sb-text-faint);
-  padding: 4px;
+  padding: 0;
+  width: var(--sb-icon-button);
+  height: var(--sb-icon-button);
   border-radius: var(--sb-r-control);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;

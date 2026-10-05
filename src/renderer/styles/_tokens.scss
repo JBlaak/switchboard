@@ -122,6 +122,11 @@
   --sb-sidebar-gutter: 16px;
   --sb-scrollbar-width: 6px;
 
+  /* The sidebar's icon buttons — toolbar and filter row alike — are one square
+     size on one gap, so their icons stack in columns down the right edge. */
+  --sb-icon-button: 30px;
+  --sb-icon-gap:     8px;
+
   /* Sidebar row grid. Every row in the session list — section label, slug
      group, session — is a marker gutter followed by text. Holding all three
      values in one place is what keeps those row types sharing a left rail and a

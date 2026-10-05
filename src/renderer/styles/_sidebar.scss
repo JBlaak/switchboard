@@ -29,25 +29,27 @@
 }
 
 #sidebar-header {
-  padding: 8px var(--sb-sidebar-gutter) 12px;
+  padding: 7px var(--sb-sidebar-gutter) 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-/* ---- Toolbar: global settings and collapse, right-aligned ----
-   28px tall so that, with the header's 8px top padding, it is centred on the
-   macOS traffic lights (y:15) and on the terminal header beside it. */
+/* ---- Toolbar: appearance, global settings and collapse, right-aligned ----
+   One icon button tall (30px) so that, with the header's 7px top padding, it
+   is centred on the macOS traffic lights (y:15) and on the terminal header
+   beside it. Spaced like the filter row below, so the icons line up. */
 #sidebar-toolbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-height: 28px;
+  gap: var(--sb-icon-gap);
+  min-height: var(--sb-icon-button);
 }
 
 #session-filters {
   display: flex;
-  gap: 8px;
+  gap: var(--sb-icon-gap);
   align-items: center;
 }
 
@@ -83,8 +85,8 @@
   font-family: var(--sb-font-head);
   font-weight: 800;
   line-height: 1;
-  width: 30px;
-  height: 30px;
+  width: var(--sb-icon-button);
+  height: var(--sb-icon-button);
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -13,8 +13,9 @@
   border: none;
   color: var(--sb-text-faint);
   cursor: pointer;
-  padding: 4px;
-  margin-right: -5px;
+  padding: 0;
+  width: var(--sb-icon-button);
+  height: var(--sb-icon-button);
   border-radius: var(--sb-r-control);
   display: flex;
   align-items: center;
