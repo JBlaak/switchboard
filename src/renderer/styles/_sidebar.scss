@@ -19,7 +19,7 @@
   flex-shrink: 0;
   position: relative;
   z-index: 10;
-  border-right: 1px solid rgba(var(--sb-overlay-rgb),0.06);
+  border-right: 1px solid var(--sb-line);
   transition: background 0.15s;
 }
 
@@ -29,30 +29,34 @@
 }
 
 #sidebar-header {
-  padding: 8px var(--sb-sidebar-gutter) 12px;
+  padding: 7px var(--sb-sidebar-gutter) 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-/* ---- Toolbar: global settings and collapse, right-aligned ----
-   28px tall so that, with the header's 8px top padding, it is centred on the
-   macOS traffic lights (y:15) and on the terminal header beside it. */
+/* ---- Toolbar: appearance, global settings and collapse, right-aligned ----
+   One icon button tall (30px) so that, with the header's 7px top padding, it
+   is centred on the macOS traffic lights (y:15) and on the terminal header
+   beside it. Spaced like the filter row below, so the icons line up. */
 #sidebar-toolbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  min-height: 28px;
+  gap: var(--sb-icon-gap);
+  min-height: var(--sb-icon-button);
 }
 
 #session-filters {
   display: flex;
-  gap: 8px;
+  gap: var(--sb-icon-gap);
   align-items: center;
 }
 
 #loading-status {
+  font-family: var(--sb-font-head);
   font-size: 11px;
+  font-weight: 700;
   color: var(--sb-text-muted);
   margin-left: auto;
   white-space: nowrap;
@@ -67,53 +71,50 @@
   animation: loading-pulse 1.2s ease-in-out infinite;
 }
 
+/* Filter toggles: borderless, a soft wash on hover, and when switched on the
+   pastel fill of whatever they filter for with its ink on top. */
 #star-toggle, #archive-toggle, #running-toggle, #today-toggle {
   background: transparent;
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.08);
+  border: none;
   color: var(--sb-text-faint);
   font-size: 11px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: var(--sb-r-control);
   cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  font-family: var(--sb-font-head);
+  font-weight: 800;
   line-height: 1;
-  width: 26px;
-  height: 26px;
+  width: var(--sb-icon-button);
+  height: var(--sb-icon-button);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 #star-toggle:hover, #archive-toggle:hover, #running-toggle:hover, #today-toggle:hover {
-  background: rgba(var(--sb-overlay-rgb),0.04);
-  border-color: rgba(var(--sb-overlay-rgb),0.12);
+  background: rgba(var(--sb-overlay-rgb),0.06);
   color: var(--sb-text-hover);
 }
 
-#star-toggle.active {
-  background: rgba(var(--sb-yellow-rgb),0.1);
-  border-color: rgba(var(--sb-yellow-rgb),0.25);
-  color: var(--sb-yellow);
-}
-
-#archive-toggle.active {
-  background: rgba(var(--sb-accent-rgb),0.1);
-  border-color: rgba(var(--sb-accent-rgb),0.25);
-  color: var(--sb-accent);
-}
-
 #running-toggle.active {
-  background: rgba(var(--sb-green-rgb),0.1);
-  border-color: rgba(var(--sb-green-rgb),0.25);
+  background: var(--sb-mint);
   color: var(--sb-green);
 }
 
+#star-toggle.active {
+  background: var(--sb-sun);
+  color: var(--sb-yellow);
+}
+
 #today-toggle.active {
-  background: rgba(var(--sb-blue-rgb),0.1);
-  border-color: rgba(var(--sb-blue-rgb),0.25);
-  color: var(--sb-blue-text);
+  background: var(--sb-blue-tint);
+  color: var(--sb-blue);
+}
+
+#archive-toggle.active {
+  background: var(--sb-lav);
+  color: var(--sb-lav-ink);
 }
 
 /* ---- Search ---- */
@@ -122,17 +123,22 @@
   position: relative;
 }
 
+/* A raised field drawn with an inset hairline rather than a border, so the
+   focus ring can replace it without shifting the text. */
 #search-input {
   width: 100%;
-  background: rgba(var(--sb-overlay-rgb),0.04);
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.06);
-  border-radius: 8px;
-  padding: 8px 44px 8px 12px;
+  height: 38px;
+  background: var(--sb-bg-raised);
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+  border-radius: var(--sb-r-row);
+  padding: 0 44px 0 14px;
   font-size: 13px;
-  color: var(--sb-text-soft);
+  font-weight: 600;
+  color: var(--sb-text);
   outline: none;
-  font-family: inherit;
-  transition: all 0.2s;
+  font-family: var(--sb-font-body);
+  transition: box-shadow 0.15s;
 }
 
 #search-clear {
@@ -161,9 +167,9 @@
 }
 
 #search-input:focus {
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  border-color: rgba(var(--sb-accent-rgb),0.4);
-  box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb),0.08);
+  box-shadow:
+    inset 0 0 0 1px var(--sb-accent),
+    0 0 0 3px rgba(var(--sb-accent-rgb),0.14);
 }
 
 #search-input::placeholder {
@@ -180,13 +186,14 @@
   background: none;
   border: none;
   color: var(--sb-text-ghost);
+  font-family: var(--sb-font-head);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
   transition: color 0.15s;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.02em;
 }
 
 #search-titles-toggle:hover {
@@ -194,14 +201,17 @@
 }
 
 #search-titles-toggle.active {
-  color: var(--sb-text-max);
+  color: var(--sb-accent);
 }
 
 
 /* ---- Scrollable content ---- */
+/* The scrollbar's width is always reserved and taken out of the list's right
+   gutter, so row pills end where the search field does, scrolling or not. */
 #sidebar-content {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 0 0 12px;
 }
 
@@ -209,7 +219,7 @@
 /* Sessions are top-level rows now, so the list carries the gutter the project
    cards used to: the row pill's own inset still lands on --sb-row-inset. */
 .session-list {
-  padding: 4px var(--sb-sidebar-gutter) 10px;
+  padding: 4px calc(var(--sb-sidebar-gutter) - var(--sb-scrollbar-width)) 10px var(--sb-sidebar-gutter);
 }
 
 /* Section headings for the flat list: Needs input / Ready / Working / Pinned /
@@ -217,11 +227,12 @@
    to be, so the list keeps one left rail. */
 .session-section-label {
   padding: 12px 6px 4px var(--sb-row-text);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-family: var(--sb-font-head);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--sb-text-dimmest);
+  color: var(--sb-text-muted);
   user-select: none;
 }
 
@@ -244,7 +255,7 @@
    header the flat list no longer has. */
 .session-project {
   color: var(--sb-accent);
-  opacity: 0.8;
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
@@ -256,31 +267,33 @@
   margin-right: 6px;
 }
 
-/* Offset by the pill's own left padding so its label, not its edge, lands on
-   the text column shared by the session titles above it. */
+/* A mint pill, like the count badge. Offset by the pill's own left padding so
+   its label, not its edge, lands on the text column shared by the session
+   titles above it. */
 .sessions-more-toggle {
   padding: 4px 10px;
   margin: 4px 12px 10px calc(var(--sb-row-text) - 10px);
+  font-family: var(--sb-font-head);
   font-size: 11px;
-  font-weight: 500;
-  color: var(--sb-text-faint);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sb-accent);
   cursor: pointer;
   user-select: none;
-  transition: all 0.15s;
-  border-radius: 5px;
+  transition: background 0.15s;
+  border-radius: 99px;
   display: inline-block;
-  background: rgba(var(--sb-overlay-rgb),0.03);
+  background: var(--sb-mint);
 }
 
 .sessions-more-toggle:hover {
-  color: var(--sb-accent);
-  background: rgba(var(--sb-accent-rgb),0.08);
+  background: rgba(var(--sb-accent-rgb),0.2);
 }
 
 /* ---- Slug groups ---- */
 .slug-group { }
 .slug-group-header {
-  padding: 0 6px;
+  padding: 0;
   cursor: pointer;
   user-select: none;
 }
@@ -288,13 +301,13 @@
   display: flex;
   align-items: flex-start;
   gap: var(--sb-row-gap);
-  padding: 10px 6px;
-  border-radius: 8px;
+  padding: 10px 14px;
+  border-radius: var(--sb-r-row);
   transition: background 0.12s;
   border-left: none;
 }
 .slug-group-header:hover .slug-group-row {
-  background: rgba(var(--sb-overlay-rgb),0.06);
+  background: rgba(var(--sb-overlay-rgb),0.05);
 }
 .slug-group:not(.collapsed) .slug-group-row {
 }
@@ -318,19 +331,18 @@
   min-width: 0;
 }
 .slug-group-name {
-  font-size: 13px;
-  color: var(--sb-text-dim);
+  font-size: 13.5px;
+  color: var(--sb-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.45;
-  font-weight: 450;
+  font-weight: 600;
 }
 .slug-group-meta {
   font-size: 11px;
   color: var(--sb-text-dimmest);
   margin-top: 3px;
-  font-weight: 450;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -349,20 +361,21 @@
   animation: pulse-dot 2s ease-in-out infinite;
 }
 .slug-group-count {
-  font-size: 10px;
-  background: rgba(var(--sb-accent-rgb),0.18);
+  font-family: var(--sb-font-head);
+  font-size: 11px;
+  font-weight: 800;
+  background: var(--sb-mint);
   color: var(--sb-accent);
-  padding: 1px 6px;
-  border-radius: 8px;
-  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
 }
 .slug-group-archive-btn {
   background: transparent;
-  border: 1px solid var(--sb-border-strong);
+  border: none;
   color: var(--sb-text-faint);
   width: 22px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -379,7 +392,7 @@
 }
 
 .slug-group-archive-btn:hover {
-  background: rgba(var(--sb-accent-rgb),0.1);
+  background: var(--sb-mint);
   color: var(--sb-accent);
 }
 
@@ -388,54 +401,66 @@
 .slug-group-more {
   padding: 4px 10px;
   margin: 4px 12px 10px calc(var(--sb-row-text) - 10px);
+  font-family: var(--sb-font-head);
   font-size: 11px;
-  font-weight: 500;
-  color: var(--sb-text-faint);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sb-accent);
   cursor: pointer;
   user-select: none;
-  transition: all 0.15s;
-  border-radius: 5px;
+  transition: background 0.15s;
+  border-radius: 99px;
   display: none;
-  background: rgba(var(--sb-overlay-rgb),0.03);
+  background: var(--sb-mint);
 }
 .slug-group.collapsed .slug-group-more {
   display: inline-block;
 }
 .slug-group-more:hover {
-  color: var(--sb-accent);
-  background: rgba(var(--sb-accent-rgb),0.08);
+  background: rgba(var(--sb-accent-rgb),0.2);
 }
 .slug-group-sessions {
-  border-left: 2px solid rgba(var(--sb-accent-rgb),0.12);
+  border-left: 2px solid var(--sb-line);
   margin-left: 28px;
   padding-left: 0;
 }
 
 /* ---- Session items ---- */
-/* The row's hover/active pill is inset from the card edge, so the pill's own
-   padding makes up the rest of --sb-row-inset rather than stacking on top of it. */
+/* The row's hover/active pill spans the list's full width, edge to edge with the
+   search field, so the pill's own padding is the whole of --sb-row-inset.
+
+   --row-fill is the pill's colour in each state. It is opaque — the hover wash
+   is mixed into the panel rather than laid over it — so .session-actions can
+   fade in from exactly the colour behind it. A selected row is tinted with the
+   accent, mixed in the same way. */
 .session-item {
-  padding: 0 6px;
+  --row-fill: var(--sb-bg-panel);
+  padding: 0;
   cursor: pointer;
   transition: all 0.12s;
+}
+
+.session-item:hover {
+  --row-fill: color-mix(in srgb, rgb(var(--sb-overlay-rgb)) 5%, var(--sb-bg-panel));
+}
+
+.session-item.active {
+  --row-fill: color-mix(in srgb, var(--sb-accent) 14%, var(--sb-bg-panel));
 }
 
 .session-item .session-row {
   display: flex;
   align-items: flex-start;
   gap: var(--sb-row-gap);
-  padding: 10px 6px;
-  border-radius: 8px;
+  padding: 10px 14px;
+  border-radius: var(--sb-r-row);
   transition: background 0.12s;
   position: relative;
 }
 
-.session-item:hover .session-row {
-  background: rgba(var(--sb-overlay-rgb),0.06);
-}
-
+.session-item:hover .session-row,
 .session-item.active .session-row {
-  background: rgba(var(--sb-accent-rgb),0.14);
+  background: var(--row-fill);
 }
 
 /* ---- Pin ---- */
@@ -516,38 +541,41 @@
 }
 
 .session-summary {
-  font-size: 13px;
-  color: var(--sb-text-dim);
+  font-size: 13.5px;
+  color: var(--sb-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.45;
-  font-weight: 450;
+  font-weight: 600;
 }
 
 .session-item.active .session-summary {
-  color: var(--sb-text);
+  color: var(--sb-text-strong);
 }
 
 .session-rename-input {
-  font-size: 13px;
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--sb-text);
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  border: 1px solid rgba(var(--sb-accent-rgb),0.4);
-  border-radius: 5px;
+  background: var(--sb-bg-raised);
+  border: none;
+  border-radius: 6px;
   padding: 2px 6px;
   width: 100%;
   outline: none;
   font-family: inherit;
   line-height: 1.45;
-  box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb),0.08);
+  box-shadow:
+    inset 0 0 0 1px var(--sb-accent),
+    0 0 0 3px rgba(var(--sb-accent-rgb),0.14);
 }
 
 .session-id {
   font-size: 10px;
   color: var(--sb-text-dimmest);
   margin-top: 2px;
-  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-family: var(--sb-font-mono);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -569,7 +597,7 @@
 }
 
 .session-short-id {
-  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-family: var(--sb-font-mono);
   color: var(--sb-text-ghost);
   flex-shrink: 0;
   margin-left: auto;
@@ -583,9 +611,9 @@
   opacity: 0;
   transition: opacity 0.12s;
   position: absolute;
-  right: 8px;
+  right: 14px;
   top: 8px;
-  background: linear-gradient(90deg, transparent, var(--sb-bg-panel) 10%);
+  background: linear-gradient(90deg, transparent, var(--row-fill) 10%);
   padding-left: 8px;
   padding-right: 4px;
   z-index: 1;
@@ -604,7 +632,7 @@
   padding: 4px;
   line-height: 1;
   transition: all 0.15s;
-  border-radius: 5px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;

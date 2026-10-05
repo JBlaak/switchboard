@@ -1,37 +1,36 @@
-/* ========== ADD PROJECT BUTTON ========== */
+/* ========== ADD PROJECT BUTTON ==========
+   Shaped like the filter toggles beside them: borderless, a soft wash on
+   hover. */
 #new-session-btn,
 #add-project-btn {
   background: transparent;
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.08);
+  border: none;
   color: var(--sb-text-faint);
   font-size: 11px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: var(--sb-r-control);
   cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  font-family: var(--sb-font-head);
+  font-weight: 800;
   line-height: 1;
-  width: 26px;
-  height: 26px;
+  width: var(--sb-icon-button);
+  height: var(--sb-icon-button);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 #new-session-btn { margin-left: auto; }
-#add-project-btn { margin-left: 2px; }
 
 #add-project-btn:hover {
-  background: rgba(var(--sb-overlay-rgb),0.04);
-  border-color: rgba(var(--sb-overlay-rgb),0.12);
+  background: rgba(var(--sb-overlay-rgb),0.06);
   color: var(--sb-text-hover);
 }
 
-/* The one button in the row that creates something; tinted so it reads as the
-   primary action next to the view toggles. */
+/* The one button in the row that creates something; it takes the mint fill on
+   hover so it reads as the primary action next to the view toggles. */
 #new-session-btn:hover {
-  background: rgba(var(--sb-green-soft-rgb),0.12);
-  border-color: rgba(var(--sb-green-soft-rgb),0.3);
-  color: var(--sb-green-soft);
+  background: var(--sb-mint);
+  color: var(--sb-accent);
 }

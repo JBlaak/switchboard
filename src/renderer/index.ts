@@ -7,6 +7,9 @@
  * preserve — `bootstrap` decides what happens and when.
  */
 import '@xterm/xterm/css/xterm.css';
+// The Soft MoveLab type, bundled (as data URLs) so it renders offline.
+import '@fontsource-variable/mulish';
+import '@fontsource-variable/nunito-sans';
 
 import { bootstrap } from './app/bootstrap';
 
