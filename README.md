@@ -2,72 +2,74 @@
 
 Your command center for Claude Code sessions.
 
-Switchboard is a desktop app that gives you a unified view of all your Claude Code sessions across every project. Launch, resume, fork, and monitor sessions from a single window — no more juggling terminal tabs or digging through `~/.claude/projects` to find that one conversation from last week.
+> **This is a fork.** It started from [doctly/switchboard](https://github.com/doctly/switchboard)
+> and has since gone its own way: some features were added, several were removed, and the
+> code underneath has been rebuilt. If you are looking for the original, head there.
+
+Switchboard is a desktop app that gives you one view of all your Claude Code sessions across every project. Launch, resume and monitor sessions from a single window — no more juggling terminal tabs or digging through `~/.claude/projects` to find that one conversation from last week.
 
 ![Switchboard](build/screenshot.png)
 
-### Key Features
+## Features
 
-- **Session Browser** — All your Claude Code sessions in one flat list — active sessions always on top, most recent first — searchable by content
-- **Built-in Terminal** — Connect to running sessions or launch new ones without leaving the app
-- **Status Notifications** — In-app alerts when a session is waiting for permission approval or user input
-- **Fork & Resume** — Branch off from any point in a session's history
-- **Full-Text Search** — Find any session by what was discussed, not just when it happened
-- **IDE Emulation** — Switchboard acts as an IDE for Claude CLI, showing file diffs and opens in a side panel where you can accept, reject, or edit changes before they're applied. Supports both inline and side-by-side diff views. Disable this in Global Settings if you prefer Claude to use your own editor (VS Code, Cursor, etc.)
-- **Plans & Memory** — Browse and edit your plan files and CLAUDE.md memory in one place
-- **Activity Stats** — Heatmap of your coding activity across all projects
-- **Session Names** — Picks up session names from Claude Code's `/rename` command automatically
+- **Session list** — Every session from every project in one flat list, ordered by recent activity, with running sessions on top
+- **Built-in terminal** — Connect to running sessions or start new ones (Claude or a plain shell) without leaving the app
+- **Project picker** — Start a session anywhere by fuzzy-filtering your projects, entirely from the keyboard: `+`, type, `↓`, `Enter`
+- **Remote projects** — Run sessions on another machine over SSH, kept alive in tmux, with automatic reconnects and a status card while the link is down
+- **Status at a glance** — See which sessions are working, waiting for input or blocked on a permission prompt
+- **Full-text search** — Find a session by what was discussed, not just when
+- **Light and dark** — Follows your system, or pin it to light or dark from the sidebar
+- **Usage gauges** — Your Claude plan's limit windows in the status bar
+- **Session names** — Picks up names from Claude Code's `/rename` automatically
 
-## Session Grid Overview
+![Project picker](build/screenshot-picker.png)
 
-Toggle the grid overview from the sidebar for a bird's-eye view of all your open sessions at once, in the same order as the sidebar list.
+## What's different in this fork
 
-![Session Grid Overview](build/screenshot-grid.png)
+**Added**
 
-- **Live terminals** — Every open session renders its full terminal in a card, so you can monitor multiple Claude agents simultaneously.
-- **Status at a glance** — Each card shows a running/stopped/busy indicator dot and last-activity timestamp.
-- **Click to focus, double-click to expand** — Click a card header to focus it; double-click to switch back to single-terminal view for that session.
-- **Persistent** — Grid preference is saved across restarts.
+- A light mode with a system / light / dark toggle. The Switchboard and Ghostty terminal themes follow it with light versions of their own; the Ghostty one keeps its softer contrast, with charcoal text on white
+- SSH remote projects with persistent tmux sessions, reconnection, and a live view of what the connection is doing
+- A flat, recency-ordered session list with a fuzzy project picker you can drive from the keyboard
+- Terminal font family, size and line height settings, applied live to open sessions
+- A frameless window, with the app's own headers where the title bar used to be
+- A palette based on Slack's dark workspace theme, built on colour tokens
+- Archiving a session also stops it
 
-## File Preview Side Panel & Claude IDE MCP Emulator
+**Removed**
 
-Switchboard can act as an IDE for your Claude Code sessions. When enabled, Claude's file opens and proposed edits appear in a side panel next to the terminal instead of being sent to an external editor.
+- The session grid, IDE emulation and its diff side panel, and the Plans, Agent Files and Stats tabs
+- Fork, mark-as-unread and the message-history viewer
+- The scheduled task button
 
-![IDE Emulation](build/screenshot-ide.png)
+**Under the hood**
 
-- **Diff review** — When Claude proposes a file change, it shows up as a diff in the side panel. You can review the changes and accept or reject them directly.
-- **Inline & side-by-side** — Toggle between inline (unified) and side-by-side diff views. Your preference is remembered across sessions.
-- **Partial acceptance** — In inline mode, you can accept or reject individual chunks within a diff, then submit the final result.
-- **File viewer** — Clickable file links in terminal output (OSC 8 hyperlinks) open in the side panel with syntax highlighting.
+- Rewritten in strict TypeScript and SCSS, with CI running the test suite
+- Restructured into a hexagonal (ports and adapters) architecture — see [ARCHITECTURE.md](ARCHITECTURE.md)
 
-To disable IDE emulation entirely (e.g. if you want Claude to use VS Code or Cursor instead), uncheck **IDE Emulation** in **Global Settings**. This stops Switchboard from registering as an IDE, so Claude CLI will discover and connect to your real editor. Changes take effect on new sessions — running sessions are not affected.
+![Switchboard in light mode](build/screenshot-light.png)
 
-## Status Notifications
-
-Switchboard monitors all your sessions in the background and shows status indicators in the sidebar so you can tell at a glance which sessions need attention — even when you're working in a different one.
-
-![Status Notifications](build/screenshot-notifications.png)
-
-- **Waiting for input** — A session that needs your response is highlighted so you don't miss it.
-- **Permission approval** — When Claude is blocked waiting for a permission grant, the session badge lets you know immediately.
-- **Activity indicators** — See which sessions are actively running, idle, or finished.
-
-## Editor
+## Keyboard
 
 | Shortcut | Action |
 |----------|--------|
-| `Cmd+F` / `Ctrl+F` | Find in file (also works in terminal) |
-| `Cmd+G` / `Ctrl+G` | Go to line |
+| `Cmd+F` / `Ctrl+F` | Find in the terminal |
+| `Cmd+Shift+[` / `]` | Previous / next session |
+| `Cmd+←` `↑` / `Cmd+→` `↓` | Previous / next session |
+
+On Windows and Linux, use `Ctrl` in place of `Cmd`.
+
+## Thanks
+
+Switchboard was created by [Doctly](https://github.com/doctly) — thank you to Ali Basiri and
+everyone who contributed to [the original](https://github.com/doctly/switchboard), which this
+fork stands on. The flat session list and project picker are adapted from
+[Niek Haarman's fork](https://github.com/nhaarman/switchboard).
 
 ## Download
 
-Grab the latest release for your platform:
-
-**[Download Switchboard](https://github.com/doctly/switchboard/releases/latest)**
-
-- **macOS**: `.dmg` (Apple Silicon & Intel)
-- **Windows**: `.exe` installer
-- **Linux**: `.AppImage`, `.deb`, or `.pacman` (Arch/Manjaro)
+This fork doesn't publish builds; build it from source with the steps below. Prebuilt
+releases of the original are on [doctly/switchboard](https://github.com/doctly/switchboard/releases/latest).
 
 ## Prerequisites
 
