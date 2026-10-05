@@ -3,7 +3,7 @@
   height: 22px;
   min-height: 22px;
   background: var(--sb-bg-deep);
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid rgba(var(--sb-overlay-rgb),0.06);
   display: flex;
   align-items: center;
   padding: 0 10px;
@@ -30,7 +30,7 @@
 
 #status-bar-updater {
   white-space: nowrap;
-  color: #888;
+  color: var(--sb-text-hover);
   font-style: italic;
 }
 
@@ -58,7 +58,7 @@
 .quota-track {
   width: 34px;
   height: 4px;
-  background: rgba(255,255,255,0.12);
+  background: rgba(var(--sb-overlay-rgb),0.12);
   border-radius: 2px;
   overflow: hidden;
   flex-shrink: 0;
@@ -70,7 +70,7 @@
   border-radius: 2px;
   transition: width 0.4s ease;
 }
-.quota-fill.quota-mid { background: #e8a030; }
+.quota-fill.quota-mid { background: var(--sb-amber); }
 .quota-fill.quota-high { background: var(--sb-red); }
 .quota-pct {
   color: var(--sb-text-dim);
