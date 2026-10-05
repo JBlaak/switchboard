@@ -52,7 +52,7 @@
   cursor: pointer;
   padding: 3px 4px;
 }
-#update-dismiss-btn:hover { color: #999; }
+#update-dismiss-btn:hover { color: var(--sb-text-quiet); }
 @keyframes toast-slide-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }

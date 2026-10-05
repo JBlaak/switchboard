@@ -66,6 +66,7 @@
   /* Neutral greys outside the text ramp. */
   --sb-text-max:         #ffffff;  /* brightest highlight: toggles, shimmer peak */
   --sb-text-hover:       #888888;  /* icon buttons on hover */
+  --sb-text-quiet:       #999999;  /* update toast's dismiss, on hover */
   --sb-text-subtle:      #666666;  /* close glyphs, hints */
   --sb-text-placeholder: #555555;
   --sb-text-ghost:       #5c6264;  /* search icon, empty-state hints */
@@ -154,6 +155,7 @@
 
     --sb-text-max:         #000000;
     --sb-text-hover:       #4a5150;
+    --sb-text-quiet:       #5d6463;
     --sb-text-subtle:      #767d7c;
     --sb-text-placeholder: #9aa09f;
     --sb-text-ghost:       #8a908f;
