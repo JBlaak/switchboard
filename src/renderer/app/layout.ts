@@ -8,7 +8,7 @@
  */
 import { openSessions, view } from '../state/session-store';
 import { el } from '../lib/dom';
-import { fitAndScroll, safeFit } from '../features/terminal/terminal-manager';
+import { safeFit } from '../features/terminal/terminal-manager';
 
 const MIN_SIDEBAR_WIDTH = 200;
 const MAX_SIDEBAR_WIDTH = 600;
@@ -61,7 +61,7 @@ function installSidebarResize(): void {
     document.body.style.userSelect = '';
 
     const active = view.activeSessionId ? openSessions.get(view.activeSessionId) : undefined;
-    if (!view.gridViewActive && active) safeFit(active);
+    if (active) safeFit(active);
 
     const width = parseInt(sidebar.style.width, 10);
     if (width) void persistSidebarWidth(width);
@@ -74,13 +74,9 @@ async function persistSidebarWidth(width: number): Promise<void> {
   await window.api.setSetting('global', global);
 }
 
-/** Every terminal in the grid needs refitting; only the visible one otherwise. */
+/** Only the visible terminal needs refitting. */
 function installWindowResize(): void {
   window.addEventListener('resize', () => {
-    if (view.gridViewActive) {
-      for (const entry of openSessions.values()) fitAndScroll(entry);
-      return;
-    }
     const active = view.activeSessionId ? openSessions.get(view.activeSessionId) : undefined;
     if (active) safeFit(active);
   });

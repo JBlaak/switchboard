@@ -57,7 +57,6 @@ export interface FileSystem {
 
   // Path operations — platform-specific, so they belong to the adapter.
   join(...parts: string[]): string;
-  resolve(path: string): string;
   basename(path: string, ext?: string): string;
   dirname(path: string): string;
   /** True when `child` is inside `parent`, for the write-path guards. */

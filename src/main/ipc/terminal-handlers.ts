@@ -90,14 +90,4 @@ export function registerTerminalHandlers(ipc: IpcRegistrar, app: Container): voi
     session.rendererAttached = false;
     if (session.exited) app.registry.delete(sessionId);
   });
-
-  /** The user's answer to a diff the CLI is blocking on. */
-  ipc.on(SEND.mcpDiffResponse, (
-    sessionId: string,
-    diffId: string,
-    action: 'accept' | 'accept-edited' | 'reject',
-    editedContent: string | null,
-  ) => {
-    app.ideBridge.resolveDiff(sessionId, diffId, action, editedContent);
-  });
 }

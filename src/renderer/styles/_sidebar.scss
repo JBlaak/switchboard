@@ -29,49 +29,20 @@
 }
 
 #sidebar-header {
-  padding: 16px var(--sb-sidebar-gutter) 12px;
+  padding: 8px var(--sb-sidebar-gutter) 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-/* ---- Sidebar tabs ---- */
-#sidebar-tabs {
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  align-items: center;
-}
-
-.sidebar-tab {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--sb-text-faint);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-family: inherit;
-  letter-spacing: 0.01em;
+/* ---- Toolbar: global settings and collapse, right-aligned ----
+   28px tall so that, with the header's 8px top padding, it is centred on the
+   macOS traffic lights (y:15) and on the terminal header beside it. */
+#sidebar-toolbar {
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.sidebar-tab svg {
-  width: 18px;
-  height: 18px;
-}
-
-.sidebar-tab:hover {
-  color: var(--sb-text-muted);
-}
-
-.sidebar-tab.active {
-  color: var(--sb-text-dim);
-  border-bottom-color: var(--sb-accent);
+  justify-content: flex-end;
+  min-height: 28px;
 }
 
 #session-filters {
@@ -283,81 +254,6 @@
 
 .slug-group-meta .session-project {
   margin-right: 6px;
-}
-
-/* ---- Project groups (agent-files tree; the session list is flat) ---- */
-.project-group {
-  margin: 6px var(--sb-sidebar-gutter);
-  border-radius: 10px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  overflow: hidden;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.project-group:first-child {
-  margin-top: 8px;
-}
-
-.project-group:hover {
-  border-color: rgba(255,255,255,0.10);
-}
-
-.project-header {
-  padding: 10px 12px 10px var(--sb-row-inset);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--sb-text-soft);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--sb-row-gap);
-  user-select: none;
-  transition: all 0.15s;
-  background: transparent;
-  margin: 0;
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.project-header:hover {
-  background: rgba(255,255,255,0.03);
-  color: var(--sb-text);
-}
-
-.project-header .project-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.project-header .arrow {
-  font-size: 9px;
-  transition: transform 0.2s;
-  flex-shrink: 0;
-  width: var(--sb-row-gutter);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--sb-accent);
-}
-
-.project-header.collapsed .arrow {
-  transform: rotate(-90deg);
-}
-
-.project-sessions {
-  padding: 0 0 4px;
-}
-
-.project-header.collapsed + .project-sessions {
-  display: none;
 }
 
 /* Offset by the pill's own left padding so its label, not its edge, lands on
@@ -701,9 +597,6 @@
 
 .session-stop-btn,
 .session-launch-config-btn,
-.session-fork-btn,
-.session-jsonl-btn,
-.session-unread-btn,
 .session-archive-btn {
   cursor: pointer;
   background: none;
@@ -726,18 +619,6 @@
   outline: none;
 }
 
-.session-fork-btn {
-  color: #5a7a6a;
-}
-
-.session-unread-btn {
-  color: #4a7f96;
-}
-
-.session-item.response-ready .session-unread-btn {
-  color: var(--sb-blue);
-}
-
 .session-archive-btn {
   color: var(--sb-accent-dim);
 }
@@ -750,16 +631,6 @@
 .session-launch-config-btn:hover {
   color: var(--sb-green);
   background: rgba(46,182,125,0.1);
-}
-
-.session-fork-btn:hover {
-  color: var(--sb-green);
-  background: rgba(46,182,125,0.1);
-}
-
-.session-unread-btn:hover {
-  color: var(--sb-blue);
-  background: rgba(54,197,240,0.1);
 }
 
 .session-archive-btn:hover {
@@ -776,10 +647,6 @@
 }
 
 .session-item.has-running-pty .session-launch-config-btn {
-  display: none;
-}
-
-.session-item.is-terminal .session-fork-btn {
   display: none;
 }
 

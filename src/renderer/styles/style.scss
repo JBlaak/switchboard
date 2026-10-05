@@ -16,13 +16,7 @@
 @use 'sidebar';
 @use 'main-area';
 @use 'terminal-search';
-@use 'session-grid';
 @use 'scrollbar';
-@use 'plans';
-@use 'stats-viewer';
-@use 'memory-viewer';
-@use 'markdown-preview';
-@use 'jsonl-viewer';
 @use 'add-project-button';
 @use 'add-project-dialog';
 @use 'global-settings-button';
@@ -31,4 +25,3 @@
 @use 'new-session-dialog';
 @use 'new-session-popover';
 @use 'terminal-badge';
-@use 'file-panel';

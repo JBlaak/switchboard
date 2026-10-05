@@ -19,8 +19,6 @@ import {
 } from '../../state/session-store';
 import { placeholder } from '../../lib/dom';
 import { createTerminalEntry, destroySession, showSession } from '../terminal/terminal-manager';
-import { setSessionMcpActive } from '../panel/file-panel';
-import { updateGridCount } from '../terminal/grid-view';
 import type { Project } from '../../../domain/project/project';
 import type { SessionRow } from '../../../domain/session/session';
 import type { SessionOptions } from '../../../domain/launch/session-options';
@@ -141,7 +139,6 @@ async function spawn(
     return;
   }
 
-  setSessionMcpActive(session.sessionId, !!result.mcpActive);
   showSession(session.sessionId);
   void pollActiveSessions();
 }
@@ -156,7 +153,7 @@ export async function confirmAndStopSession(sessionId: string): Promise<void> {
 
   await window.api.stopSession(sessionId);
   view.activePtyIds.delete(sessionId);
-  if (!view.gridViewActive && view.activeSessionId === sessionId) clearScreen();
+  if (view.activeSessionId === sessionId) clearScreen();
   refreshSidebar();
 }
 
@@ -207,9 +204,7 @@ export function dropPendingSession(sessionId: string): void {
   removeFromCaches(sessionId);
   if (openSessions.has(sessionId)) destroySession(sessionId);
 
-  if (view.gridViewActive) {
-    updateGridCount();
-  } else if (view.activeSessionId === sessionId) {
+  if (view.activeSessionId === sessionId) {
     clearScreen();
   }
 }

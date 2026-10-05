@@ -65,7 +65,6 @@ export const SETTING_DEFAULTS = {
   terminalFontFamily: '',
   terminalFontSize: 12,
   terminalLineHeight: 1,
-  mcpEmulation: false,
   shellProfile: 'auto',
 } as const;
 
@@ -89,7 +88,6 @@ export interface EffectiveSettings {
   terminalFontFamily?: string;
   terminalFontSize?: number;
   terminalLineHeight?: number;
-  mcpEmulation?: boolean;
   shellProfile?: string;
   [key: string]: unknown;
 }

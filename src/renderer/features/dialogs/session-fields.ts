@@ -77,7 +77,7 @@ export function sessionFieldsHtml({ prefix, settings, includeWorktree }: Session
 /** Read the fields back into launch options. */
 export function readSessionFields(
   handle: DialogHandle,
-  { prefix, settings, includeWorktree }: SessionFieldsOptions,
+  { prefix, includeWorktree }: SessionFieldsOptions,
   options: SessionOptions,
 ): void {
   if (includeWorktree && handle.field<HTMLInputElement>(`#${prefix}-worktree`).checked) {
@@ -90,10 +90,6 @@ export function readSessionFields(
   if (preLaunch) options.preLaunchCmd = preLaunch;
 
   options.addDirs = handle.field<HTMLInputElement>(`#${prefix}-add-dirs`).value.trim();
-
-  // The IDE bridge is a global preference, not a per-launch one; it rides along
-  // so the main process does not have to look it up again.
-  if (settings.mcpEmulation === false) options.mcpEmulation = false;
 }
 
 /** The two buttons every launch dialog ends with. */

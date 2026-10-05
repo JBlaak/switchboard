@@ -32,17 +32,3 @@ export function statusBanner(text: string, colour: string = COLOUR_DIM): string 
 export function sessionExitedBanner(exitCode: number): string {
   return statusBanner(`session exited (code ${exitCode})`, exitCode === 0 ? COLOUR_DIM : COLOUR_WARN);
 }
-
-/**
- * Drop escape sequences so output can be matched against.
- *
- * Only used where a decision turns on the text a human would see — spotting a
- * trust prompt, waiting for `/stats` to finish — never on anything that reaches
- * a terminal.
- */
-export function stripAnsi(text: string): string {
-  return text
-    .replace(/\x1b\[[^@-~]*[@-~]/g, '')
-    .replace(/\x1b\][^\x07]*\x07/g, '')
-    .replace(/\x1b[^[\]].?/g, '');
-}

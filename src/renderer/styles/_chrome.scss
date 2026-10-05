@@ -15,11 +15,7 @@
    otherwise the window becomes immovable depending on which view is open. */
 #sidebar-header,
 #terminal-header,
-#grid-viewer-header,
-#stats-viewer-header,
-#settings-viewer-header,
-#jsonl-viewer-header,
-.viewer-toolbar {
+#settings-viewer-header {
   -webkit-app-region: drag;
 }
 
@@ -30,22 +26,13 @@
 #terminal-header button,
 #terminal-header input,
 #terminal-header #terminal-header-info > span,
-#grid-viewer-header span,
-#stats-viewer-header span,
-#settings-viewer-header span,
-#jsonl-viewer-header span,
-#jsonl-viewer-header button,
-.viewer-toolbar button,
-.viewer-toolbar input,
-.viewer-toolbar .viewer-toolbar-title,
-.viewer-toolbar .viewer-toolbar-path {
+#settings-viewer-header span {
   -webkit-app-region: no-drag;
 }
 
-/* macOS: clear the traffic lights, which sit at x:18 y:15 (see main.js). */
-.platform-darwin #sidebar-header {
-  padding-top: 44px;
-}
+/* macOS: the traffic lights sit at x:18 y:15 (see main.js), in the same strip as
+   the sidebar toolbar. The toolbar's buttons are right-aligned and level with
+   them, so the header needs no inset; its empty left end stays a drag handle. */
 
 /* Collapsed to a 42px rail, the sidebar is narrower than the traffic lights, so the
    expand button would sit underneath them. Push it below instead. */
@@ -54,9 +41,6 @@
 }
 
 /* Fullscreen hides the traffic lights entirely — reclaim their space. */
-.platform-darwin.fullscreen #sidebar-header {
-  padding-top: 16px;
-}
 .platform-darwin.fullscreen #sidebar.collapsed #sidebar-expand-btn {
   margin-top: 12px;
 }
@@ -66,15 +50,7 @@
    main.js. */
 .platform-win32 #terminal-header,
 .platform-linux #terminal-header,
-.platform-win32 #grid-viewer-header,
-.platform-linux #grid-viewer-header,
-.platform-win32 #stats-viewer-header,
-.platform-linux #stats-viewer-header,
 .platform-win32 #settings-viewer-header,
-.platform-linux #settings-viewer-header,
-.platform-win32 #jsonl-viewer-header,
-.platform-linux #jsonl-viewer-header,
-.platform-win32 .viewer-toolbar,
-.platform-linux .viewer-toolbar {
+.platform-linux #settings-viewer-header {
   padding-right: 138px;
 }

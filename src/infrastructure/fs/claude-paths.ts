@@ -13,14 +13,8 @@ export interface ClaudePaths {
   readonly claudeDir: string;
   /** `~/.claude/projects` — one directory per project, holding transcripts. */
   readonly projectsDir: string;
-  /** `~/.claude/plans` — the markdown plans the CLI writes. */
-  readonly plansDir: string;
   /** `~/.claude/commands` — the user's own slash commands. */
   readonly commandsDir: string;
-  /** `~/.claude/ide` — the lock files editors advertise themselves through. */
-  readonly ideDir: string;
-  /** `~/.claude/stats-cache.json` — what `/stats` leaves behind. */
-  readonly statsCachePath: string;
   readonly homeDir: string;
 }
 
@@ -40,10 +34,7 @@ export function resolveClaudePaths(): ClaudePaths {
     homeDir,
     claudeDir,
     projectsDir: path.join(claudeDir, 'projects'),
-    plansDir: path.join(claudeDir, 'plans'),
     commandsDir: path.join(claudeDir, 'commands'),
-    ideDir: path.join(claudeDir, 'ide'),
-    statsCachePath: path.join(claudeDir, 'stats-cache.json'),
   };
 }
 

@@ -1,11 +1,11 @@
 /**
  * What is searchable, and how a query is turned into a match expression.
  *
- * Sessions, plans and agent files all go into one index, distinguished by type,
- * so a tab switch changes which slice is queried rather than which engine.
+ * Only sessions are indexed. The type column stays in the schema; rows of
+ * other types that older versions wrote are never queried.
  */
 
-export type SearchType = 'session' | 'plan' | 'memory';
+export type SearchType = 'session';
 
 /** A row queued for the index. */
 export interface SearchEntry {

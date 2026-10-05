@@ -18,16 +18,9 @@ const TERMINAL_IDENTITY: Record<string, string> = {
   ITERM_SESSION_ID: '1',
 };
 
-/** The environment for a Claude session, plus the IDE bridge's port if any. */
-export function claudeSessionEnv(
-  baseEnv: Record<string, string>,
-  options: { ideBridgePort?: number } = {},
-): Record<string, string> {
-  const env = { ...baseEnv, ...TERMINAL_IDENTITY };
-  if (options.ideBridgePort !== undefined) {
-    env.CLAUDE_CODE_SSE_PORT = String(options.ideBridgePort);
-  }
-  return env;
+/** The environment for a Claude session. */
+export function claudeSessionEnv(baseEnv: Record<string, string>): Record<string, string> {
+  return { ...baseEnv, ...TERMINAL_IDENTITY };
 }
 
 /**

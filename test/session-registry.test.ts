@@ -13,8 +13,6 @@ function session(): ActiveSession {
     knownTranscriptIds: new Set(),
     sessionSlug: null,
     isPlainTerminal: false,
-    forkFrom: null,
-    ideBridge: null,
     remote: null,
     openedAt: 0,
   });

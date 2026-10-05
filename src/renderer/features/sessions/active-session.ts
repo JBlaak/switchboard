@@ -1,16 +1,13 @@
 /**
  * Which session is on screen.
  *
- * Persisted so a reload lands back where the user was, and broadcast to the
- * side panel, whose open files and diffs are per-session.
+ * Persisted so a reload lands back where the user was.
  */
 import { STORAGE_KEYS, view, writeStored } from '../../state/session-store';
-import { switchPanel } from '../panel/file-panel';
 
 export function setActiveSession(sessionId: string | null): void {
   view.activeSessionId = sessionId;
   writeStored('sessionStorage', STORAGE_KEYS.activeSessionId, sessionId);
-  switchPanel(sessionId);
 }
 
 /** Persist which slug groups are open, so a reload does not collapse them all. */

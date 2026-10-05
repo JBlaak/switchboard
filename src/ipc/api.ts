@@ -6,8 +6,6 @@
  * rather than a runtime `undefined`. The main process registers handlers named
  * from the same channel table, so the two sides cannot drift apart silently.
  */
-import type { AgentFileIndex } from '../domain/agent-files/agent-file';
-import type { PlanSummary } from '../domain/plans/plan';
 import type { Project } from '../domain/project/project';
 import type { RemoteConfig } from '../domain/project/remote-target';
 import type { RemoteStatusPayload } from '../domain/remote/remote-status';
@@ -15,10 +13,7 @@ import type { SearchResult, SearchType } from '../domain/search/search';
 import type { SessionOptions } from '../domain/launch/session-options';
 import type { EffectiveSettings } from '../domain/settings/settings';
 import type { ShellProfile } from '../domain/shell/shell-profile';
-import type { TranscriptEntry } from '../domain/session/transcript';
-import type { StatsData } from '../domain/stats/stats';
 import type { Usage } from '../domain/usage/usage';
-import type { DiffRequest, FileOpenRequest } from '../domain/ide/ide-request';
 
 /** The `{ ok }`/`{ error }` envelope most handlers answer with. */
 export interface IpcResult {
@@ -57,19 +52,8 @@ export interface SwitchboardApi {
   /** `null` clears the rename, falling back to the AI/first-prompt title. */
   renameSession(id: string, name: string | null): Promise<IpcResult>;
   archiveSession(id: string, archived: boolean): Promise<{ archived: number }>;
-  readSessionJsonl(sessionId: string): Promise<{ entries?: TranscriptEntry[]; error?: string }>;
 
-  // ── Plans and agent files ──
-  getPlans(): Promise<PlanSummary[]>;
-  readPlan(filename: string): Promise<{ content: string; filePath: string }>;
-  savePlan(filePath: string, content: string): Promise<IpcResult>;
-  getMemories(): Promise<AgentFileIndex>;
-  readMemory(filePath: string): Promise<string | null>;
-  saveMemory(filePath: string, content: string): Promise<IpcResult>;
-
-  // ── Statistics ──
-  getStats(): Promise<StatsData | null>;
-  refreshStats(): Promise<{ stats?: StatsData | null; usage?: Usage } | null>;
+  // ── Usage ──
   getUsage(): Promise<Usage | null>;
 
   // ── Search ──
@@ -87,11 +71,6 @@ export interface SwitchboardApi {
   createScheduleSession(projectPath: string): Promise<{ sessionId: string; systemPrompt: string } | null>;
   runScheduleNow(filePath: string): Promise<IpcResult>;
 
-  // ── The viewer panel ──
-  readFileForPanel(filePath: string): Promise<{ ok: boolean; content?: string; error?: string }>;
-  saveFileForPanel(filePath: string, content: string): Promise<IpcResult>;
-  watchFile(filePath: string): Promise<IpcResult>;
-  unwatchFile(filePath: string): Promise<IpcResult>;
 
   // ── Host ──
   openExternal(url: string): Promise<void>;
@@ -105,9 +84,6 @@ export interface SwitchboardApi {
   sendInput(id: string, data: string): void;
   resizeTerminal(id: string, cols: number, rows: number): void;
   closeTerminal(id: string): void;
-  mcpDiffResponse(
-    sessionId: string, diffId: string, action: string, editedContent: string | null,
-  ): void;
 
   // ── Events from main ──
   onTerminalData(cb: (sessionId: string, data: string) => void): void;
@@ -120,12 +96,7 @@ export interface SwitchboardApi {
   onProjectsChanged(cb: () => void): void;
   onStatusUpdate(cb: (text: string, type: string) => void): void;
   onFullscreenChanged(cb: (isFullscreen: boolean) => void): void;
-  onFileChanged(cb: (filePath: string) => void): void;
   onUpdaterEvent(cb: (type: string, data: UpdaterEventData) => void): void;
-  onMcpOpenDiff(cb: (sessionId: string, diffId: string, data: DiffRequest) => void): void;
-  onMcpOpenFile(cb: (sessionId: string, data: FileOpenRequest) => void): void;
-  onMcpCloseAllDiffs(cb: (sessionId: string) => void): void;
-  onMcpCloseTab(cb: (sessionId: string, diffId: string) => void): void;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

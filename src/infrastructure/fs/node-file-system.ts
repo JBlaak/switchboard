@@ -97,10 +97,6 @@ export class NodeFileSystem implements FileSystem {
     return path.join(...parts);
   }
 
-  resolve(target: string): string {
-    return path.resolve(target);
-  }
-
   basename(target: string, ext?: string): string {
     return path.basename(target, ext);
   }

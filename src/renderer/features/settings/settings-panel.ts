@@ -2,8 +2,7 @@
 // Manages the global and project settings viewer UI.
 import { refreshSidebar, reloadProjects as loadProjects } from '../../app/refresh';
 import {
-  el, jsonlViewer, memoryViewer, placeholder, planViewer, settingsViewer,
-  statsViewer, terminalArea, terminalHeader,
+  el, placeholder, settingsViewer, terminalArea, terminalHeader,
 } from '../../lib/dom';
 import { openSessions, view } from '../../state/session-store';
 import { applyTerminalFont, isFontAvailable, refitOpenTerminals } from '../terminal/terminal-manager';
@@ -39,13 +38,11 @@ const settingsViewerBody = el('settings-viewer-body');
 
 export function closeSettingsViewer(): void {
   settingsViewer.style.display = 'none';
-  const { gridViewActive, activeSessionId } = view;
+  const { activeSessionId } = view;
   // Check if there's an active session with an open terminal
   if (activeSessionId && openSessions.has(activeSessionId)) {
     terminalArea.style.display = '';
     terminalHeader.style.display = '';
-  } else if (gridViewActive) {
-    terminalArea.style.display = '';
   } else {
     placeholder.style.display = '';
   }
@@ -75,10 +72,6 @@ export async function openSettingsViewer(
   // Show settings viewer, hide others
   placeholder.style.display = 'none';
   terminalArea.style.display = 'none';
-  planViewer.style.display = 'none';
-  statsViewer.style.display = 'none';
-  memoryViewer.style.display = 'none';
-  jsonlViewer.style.display = 'none';
   settingsViewer.style.display = 'flex';
 
   function useGlobalCheckbox(fieldName: string): string {
@@ -108,7 +101,6 @@ export async function openSettingsViewer(
   const visCountValue = fieldValue('view.visibleSessionCount', 25);
   const maxAgeValue = fieldValue('view.sessionMaxAgeDays', 3);
   const themeValue = fieldValue('terminalTheme', 'switchboard');
-  const mcpEmulationValue = fieldValue('mcpEmulation', true);
   const shellProfileValue = fieldValue('shellProfile', 'auto');
   const fontFamilyValue = fieldValue('terminalFontFamily', '');
   const fontSizeValue = fieldValue('terminalFontSize', DEFAULT_TERMINAL_FONT_SIZE);
@@ -293,16 +285,6 @@ export async function openSettingsViewer(
           <input type="number" class="settings-input settings-input-compact" id="sv-max-age" min="1" max="365" value="${maxAgeValue}">
         </div>
       </div>
-
-      <div class="settings-field">
-        <div class="settings-field-info">
-          <span class="settings-label">IDE Emulation</span>
-          <div class="settings-description">Emulate an IDE so Claude can open files and diffs in a side panel. Disable to use your own IDE instead. Changes take effect for new sessions only.</div>
-        </div>
-        <div class="settings-field-control">
-          <label class="settings-toggle"><input type="checkbox" id="sv-mcp-emulation" ${mcpEmulationValue ? 'checked' : ''}><span class="settings-toggle-slider"></span></label>
-        </div>
-      </div>
     </div>` : ''}
 
     ${!isProject ? `<div class="settings-section">
@@ -391,7 +373,6 @@ export async function openSettingsViewer(
       settings.visibleSessionCount = parseInt(ctl('#sv-visible-count').value) || 25;
       settings.sessionMaxAgeDays = parseInt(ctl('#sv-max-age').value) || 3;
       settings.terminalTheme = ctl('#sv-terminal-theme').value || 'switchboard';
-      settings.mcpEmulation = ctl('#sv-mcp-emulation').checked;
       settings.shellProfile = ctl('#sv-shell-profile').value || 'auto';
       // Store the family verbatim (empty = follow the default stack, even if that
       // stack later changes) but store size/line height clamped to what xterm accepts.
@@ -431,16 +412,6 @@ export async function openSettingsViewer(
         });
       }
       if (typeof refreshSidebar === 'function') refreshSidebar();
-    }
-
-    // Notify if IDE Emulation changed
-    if (!isProject && settings.mcpEmulation !== mcpEmulationValue) {
-      const notice = document.createElement('div');
-      notice.className = 'settings-notice';
-      notice.textContent = 'IDE Emulation setting changed. New sessions will use the updated setting \u2014 running sessions are not affected.';
-      const saveBtn = ctl('#sv-save-btn');
-      saveBtn.parentElement?.insertBefore(notice, saveBtn);
-      setTimeout(() => notice.remove(), 8000);
     }
 
     const saveBtn = ctl('#sv-save-btn');

@@ -17,7 +17,6 @@ export interface NewSessionSignals {
   planContent: boolean;
   slug: string | null;
   parentSessionId: string | null;
-  hasSnapshots: boolean;
 }
 
 /** What the tail of the old transcript says about a plan handover. */
@@ -39,10 +38,6 @@ interface TransitionEntry {
 export interface TrackedSession {
   /** The id the map currently holds it under. */
   sessionId: string;
-  /** The session it was forked from, while the fork is unresolved. */
-  forkFrom: string | null;
-  /** Set once a transition has already re-keyed it. */
-  realSessionId?: string;
 }
 
 /** How a new transcript relates to the session we are tracking. */
@@ -59,14 +54,14 @@ export const STALE_EMPTY_FILE_MS = 3600000;
 export function extractNewSessionSignals(lines: string[]): NewSessionSignals {
   const signals: NewSessionSignals = {
     forkedFrom: null, planContent: false, slug: null,
-    parentSessionId: null, hasSnapshots: false,
+    parentSessionId: null,
   };
   for (const line of lines) {
     if (!line.trim()) continue;
     let entry: TransitionEntry;
     try { entry = JSON.parse(line) as TransitionEntry; } catch { continue; }
     // Snapshot lines carry no fork/session signals, and can be tens of KB each.
-    if (entry.type === 'file-history-snapshot') { signals.hasSnapshots = true; continue; }
+    if (entry.type === 'file-history-snapshot') continue;
     if (entry.forkedFrom) signals.forkedFrom = entry.forkedFrom.sessionId ?? null;
     if (entry.planContent) signals.planContent = true;
     if (entry.slug && !signals.slug) signals.slug = entry.slug;
@@ -93,20 +88,10 @@ export function hasNoSignals(signals: NewSessionSignals): boolean {
 /**
  * Does this new transcript belong to the session we are tracking, as a fork?
  *
- * Three shapes count: the file names our id as its origin, it names the session
- * we were forked from (which is what `--fork-session` writes), or it is a fork
- * file with nothing but snapshots in it yet while we are still waiting for one.
+ * It does when the file names our id as its origin.
  */
-export function matchesFork(
-  signals: NewSessionSignals,
-  session: TrackedSession,
-  newSessionId: string,
-): boolean {
-  if (signals.forkedFrom === session.sessionId) return true;
-  if (session.forkFrom && signals.forkedFrom === session.forkFrom) return true;
-  if (session.forkFrom && signals.parentSessionId === session.forkFrom && newSessionId !== session.forkFrom) return true;
-  if (signals.hasSnapshots && session.forkFrom && !session.realSessionId) return true;
-  return false;
+export function matchesFork(signals: NewSessionSignals, session: TrackedSession): boolean {
+  return signals.forkedFrom === session.sessionId;
 }
 
 /**
@@ -128,6 +113,6 @@ export function matchesPlanAccept(
 }
 
 /** Which kind of transition a match represents, for the log line. */
-export function transitionKind(signals: NewSessionSignals, session: TrackedSession): TransitionKind {
-  return signals.forkedFrom || session.forkFrom ? 'fork' : 'plan-accept';
+export function transitionKind(signals: NewSessionSignals): TransitionKind {
+  return signals.forkedFrom ? 'fork' : 'plan-accept';
 }

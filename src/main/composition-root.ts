@@ -17,8 +17,6 @@ import path from 'node:path';
 
 import { systemClock } from '../application/ports/clock';
 import { uuidGenerator } from '../application/ports/ids';
-import { AgentFileService } from '../application/services/agent-file-service';
-import { PlanService } from '../application/services/plan-service';
 import { ProjectListService } from '../application/services/project-list-service';
 import { RemoteConnectionSupervisor } from '../application/services/remote-connection-supervisor';
 import { ScheduleService } from '../application/services/schedule-service';
@@ -29,17 +27,14 @@ import { SessionTransitionDetector } from '../application/services/session-trans
 import { SettingsService } from '../application/services/settings-service';
 import { SessionRegistry } from '../application/model/session-registry';
 
-import { ClaudeCliStatsService } from '../infrastructure/claude-cli/stats-service';
 import { ClaudeCommandRunner } from '../infrastructure/claude-cli/command-runner';
 import { OAuthUsageService } from '../infrastructure/claude-cli/usage-service';
 import { ElectronDialogService, ElectronSystemGateway } from '../infrastructure/electron/desktop';
 import { ElectronRendererGateway } from '../infrastructure/electron/renderer-gateway';
 import { ElectronUpdater } from '../infrastructure/electron/updater';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
-import { FileWatchRegistry } from '../infrastructure/fs/file-watch-registry';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
-import { McpIdeBridge } from '../infrastructure/mcp/ide-bridge';
 import { NodePtyGateway } from '../infrastructure/pty/node-pty-gateway';
 import { SystemShellProfileProvider } from '../infrastructure/shell/shell-discovery';
 import { WorkerProjectScanner } from '../infrastructure/worker/worker-project-scanner';
@@ -67,7 +62,6 @@ export interface Container {
   readonly registry: SessionRegistry;
   readonly terminals: NodePtyGateway;
   readonly shells: SystemShellProfileProvider;
-  readonly ideBridge: McpIdeBridge;
   readonly lifecycle: SessionLifecycle;
   readonly remote: RemoteConnectionSupervisor;
   readonly launcher: SessionLauncher;
@@ -75,9 +69,6 @@ export interface Container {
 
   readonly sessionIndex: SessionIndex;
   readonly projects: ProjectListService;
-  readonly plans: PlanService;
-  readonly agentFiles: AgentFileService;
-  readonly stats: ClaudeCliStatsService;
   readonly usage: OAuthUsageService;
   readonly schedules: ScheduleService;
 
@@ -85,7 +76,6 @@ export interface Container {
   readonly updater: ElectronUpdater;
   readonly dialogs: ElectronDialogService;
   readonly system: ElectronSystemGateway;
-  readonly fileWatches: FileWatchRegistry;
   readonly projectsWatcher: ProjectsWatcher;
 
   /** The window, once one exists. Set by the app lifecycle. */
@@ -123,7 +113,6 @@ export function buildContainer(): Container {
   const registry = new SessionRegistry();
   const terminals = new NodePtyGateway();
   const shells = new SystemShellProfileProvider();
-  const ideBridge = new McpIdeBridge({ renderer, log, ideDir: paths.ideDir });
 
   // The lifecycle needs the supervisor to interpret a remote session's exit;
   // the supervisor needs the lifecycle to wire the PTY a reconnect produces.
@@ -134,19 +123,19 @@ export function buildContainer(): Container {
     homeDir: paths.homeDir,
   });
   const lifecycle = new SessionLifecycle({
-    registry, terminals, renderer, ideBridge, remote, timers, log,
+    registry, terminals, renderer, remote, timers, log,
   });
   remote.attach(lifecycle);
 
   const launcher = new SessionLauncher({
-    registry, terminals, shells, transcripts, settings, ideBridge,
+    registry, terminals, shells, transcripts, settings,
     lifecycle, remote, renderer, clock, timers, log,
     homeDir: paths.homeDir,
     fileExists: (target) => fs.exists(target),
   });
 
   const transitions = new SessionTransitionDetector({
-    registry, transcripts, renderer, ideBridge, clock, log,
+    registry, transcripts, renderer, clock, log,
   });
 
   // ── Indexing ──
@@ -165,21 +154,6 @@ export function buildContainer(): Container {
   const usage = new OAuthUsageService(log);
   const shellProfileId = (): string => settings.shellProfileId(null);
 
-  const stats = new ClaudeCliStatsService({
-    fs, terminals, shells, usage, timers, log,
-    statsCachePath: paths.statsCachePath,
-    homeDir: paths.homeDir,
-    shellProfileId,
-  });
-
-  const plans = new PlanService({ fs, searchIndex, log, plansDir: paths.plansDir });
-
-  const agentFiles = new AgentFileService({
-    fs, transcripts, settings, searchIndex, log,
-    claudeDir: paths.claudeDir,
-    projectsDir: paths.projectsDir,
-  });
-
   const schedules = new ScheduleService({
     fs, transcripts, repository, ids, clock, timers, log,
     commandsDir: paths.commandsDir,
@@ -193,11 +167,6 @@ export function buildContainer(): Container {
   });
   const dialogs = new ElectronDialogService(getWindow);
   const system = new ElectronSystemGateway(log);
-
-  const fileWatches = new FileWatchRegistry({
-    fs, timers,
-    onChanged: (filePath) => renderer.fileChanged(filePath),
-  });
 
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
@@ -220,15 +189,13 @@ export function buildContainer(): Container {
   return {
     log, paths,
     settings, repository, searchIndex, transcripts, fs,
-    registry, terminals, shells, ideBridge, lifecycle, remote, launcher, transitions,
-    sessionIndex, projects, plans, agentFiles, stats, usage, schedules,
-    renderer, updater, dialogs, system, fileWatches, projectsWatcher,
+    registry, terminals, shells, lifecycle, remote, launcher, transitions,
+    sessionIndex, projects, usage, schedules,
+    renderer, updater, dialogs, system, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     close: () => {
       projectsWatcher.stop();
-      fileWatches.closeAll();
-      ideBridge.stopAll();
       database.close();
     },
   };

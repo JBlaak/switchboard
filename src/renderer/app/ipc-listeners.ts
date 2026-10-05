@@ -20,8 +20,6 @@ import { handleRemoteStatus } from '../features/remote/connection-card';
 import { markNeedsAttention, setActivity } from '../state/activity-store';
 import { openSessions, pendingSessions, sessionMap, view } from '../state/session-store';
 import { bufferTerminalData } from '../features/terminal/terminal-manager';
-import { rekeyFilePanelState } from '../features/panel/file-panel';
-import { updateGridCount } from '../features/terminal/grid-view';
 
 /**
  * How long to wait before re-fetching after a filesystem change.
@@ -37,7 +35,6 @@ const NEEDS_ATTENTION = /attention|approval|permission|needs your|wants to enter
 const WAITING_FOR_INPUT = /waiting for your input/i;
 
 let projectsChangedTimer: ReturnType<typeof setTimeout> | null = null;
-let projectsChangedWhileAway = false;
 
 export function installIpcListeners(): void {
   window.api.onTerminalData(bufferTerminalData);
@@ -51,18 +48,11 @@ export function installIpcListeners(): void {
   window.api.onStatusUpdate(setStatusActivity);
   window.api.onUpdaterEvent(setUpdaterEvent);
 
-  // Fullscreen hides the macOS traffic lights, so the space the sidebar header
-  // reserves for them is dead weight; the stylesheet reclaims it off this class.
+  // Fullscreen hides the macOS traffic lights, so the space the collapsed
+  // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.
   window.api.onFullscreenChanged((isFullscreen) => {
     document.documentElement.classList.toggle('fullscreen', isFullscreen);
   });
-}
-
-/** True when a re-fetch is owed because a change arrived on another tab. */
-export function consumeDeferredProjectsChange(): boolean {
-  if (!projectsChangedWhileAway) return false;
-  projectsChangedWhileAway = false;
-  return true;
 }
 
 /**
@@ -88,7 +78,7 @@ function onSessionDetected(tempId: string, realId: string): void {
 /**
  * A fork or an accepted plan re-keyed a running session.
  *
- * Same as above, plus the side panel's per-session state and the pending row,
+ * Same as above, plus the pending row,
  * which has to follow so the sidebar entry survives until the store catches up.
  */
 function onSessionForked(oldId: string, newId: string): void {
@@ -99,8 +89,6 @@ function onSessionForked(oldId: string, newId: string): void {
   if (view.activeSessionId === oldId) setActiveSession(newId);
   openSessions.delete(oldId);
   openSessions.set(newId, entry);
-
-  rekeyFilePanelState(oldId, newId);
 
   const pending = pendingSessions.get(oldId);
   pendingSessions.delete(oldId);
@@ -153,7 +141,6 @@ function onProcessExited(sessionId: string, exitCode: number): void {
   const pending = pendingSessions.get(sessionId);
   if (pending && !pending.exitedAt) pending.exitedAt = Date.now();
 
-  if (view.gridViewActive) updateGridCount();
   void pollActiveSessions();
 }
 
@@ -184,18 +171,9 @@ function onTerminalNotification(sessionId: string, message: string): void {
   if (sessionId === view.activeSessionId) showHeaderNotice(message);
 }
 
-/**
- * The transcripts on disk changed.
- *
- * Deferred while the user is on another tab: re-fetching would be work nobody
- * can see, and the tab switch catches up.
- */
+/** The transcripts on disk changed. */
 function onProjectsChanged(): void {
   if (projectsChangedTimer) clearTimeout(projectsChangedTimer);
-  if (view.activeTab !== 'sessions') {
-    projectsChangedWhileAway = true;
-    return;
-  }
   projectsChangedTimer = setTimeout(() => {
     projectsChangedTimer = null;
     void reloadProjects();
