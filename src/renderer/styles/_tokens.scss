@@ -126,9 +126,9 @@
      group, session — is a marker gutter followed by text. Holding all three
      values in one place is what keeps those row types sharing a left rail and a
      text column instead of each drifting to its own indent. The gutter is sized
-     to fit a session's pin + status dot (12 + 8 + 6). */
+     to fit a session's pin + status dot (12 + 8 + 4 + 6). */
   --sb-row-inset:  14px;  /* card edge → marker gutter */
-  --sb-row-gutter: 26px;  /* width of the marker gutter */
+  --sb-row-gutter: 30px;  /* width of the marker gutter */
   --sb-row-gap:     8px;  /* marker gutter → text */
   --sb-row-text: calc(var(--sb-row-inset) + var(--sb-row-gutter) + var(--sb-row-gap));
 }
