@@ -426,8 +426,8 @@
 
    --row-fill is the pill's colour in each state. It is opaque — the hover wash
    is mixed into the panel rather than laid over it — so .session-actions can
-   fade in from exactly the colour behind it. A selected row is raised, as in
-   BlaakTasks' sidebar: the card surface with a hairline ring and a faint lift. */
+   fade in from exactly the colour behind it. A selected row is tinted with the
+   accent, mixed in the same way. */
 .session-item {
   --row-fill: var(--sb-bg-panel);
   padding: 0 6px;
@@ -440,7 +440,7 @@
 }
 
 .session-item.active {
-  --row-fill: var(--sb-bg-raised);
+  --row-fill: color-mix(in srgb, var(--sb-accent) 14%, var(--sb-bg-panel));
 }
 
 .session-item .session-row {
@@ -449,19 +449,13 @@
   gap: var(--sb-row-gap);
   padding: 10px 6px;
   border-radius: var(--sb-r-row);
-  transition: background 0.12s, box-shadow 0.12s;
+  transition: background 0.12s;
   position: relative;
 }
 
 .session-item:hover .session-row,
 .session-item.active .session-row {
   background: var(--row-fill);
-}
-
-.session-item.active .session-row {
-  box-shadow:
-    0 1px 2px rgba(20, 30, 50, 0.06),
-    0 0 0 1px var(--sb-line);
 }
 
 /* ---- Pin ---- */
