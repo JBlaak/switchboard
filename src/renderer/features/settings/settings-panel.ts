@@ -412,8 +412,8 @@ export async function openSettingsViewer(
 
     const saveBtn = ctl('#sv-save-btn');
     saveBtn.textContent = '✓ Saved';
-    saveBtn.style.background = 'var(--sb-green)';
-    saveBtn.style.color = 'var(--sb-accent-ink)';
+    saveBtn.style.background = 'var(--sb-mint)';
+    saveBtn.style.color = 'var(--sb-accent)';
     setTimeout(() => closeSettingsViewer(), 600);
   });
 
