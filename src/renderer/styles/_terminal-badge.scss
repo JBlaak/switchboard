@@ -9,8 +9,7 @@
   top: -1px;
 }
 
-/* Terminal sessions: green status dot */
+/* Terminal sessions: green status dot, flat like every other session dot */
 .session-item.is-terminal .session-status-dot.running {
   background: var(--sb-green);
-  box-shadow: 0 0 6px rgba(var(--sb-green-rgb),0.5);
 }
