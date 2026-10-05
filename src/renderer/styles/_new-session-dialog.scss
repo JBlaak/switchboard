@@ -1,4 +1,7 @@
-/* ========== NEW SESSION DIALOG ========== */
+/* ========== NEW SESSION DIALOG ==========
+   Shared by the configure and resume dialogs. Drawn like BlaakTasks' modals: a
+   borderless raised panel lifted by shadow, its fields grouped on one inset
+   card, and a filled primary button beside a ghost cancel. */
 .new-session-overlay {
   position: fixed;
   inset: 0;
@@ -13,39 +16,76 @@
 
 .new-session-dialog {
   background: var(--sb-bg-raised);
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.1);
-  border-radius: 12px;
+  border-radius: var(--sb-r-panel);
   padding: 24px;
   width: 540px;
   max-width: 90vw;
-  box-shadow: 0 16px 48px rgba(var(--sb-shadow-rgb),calc(0.4 * var(--sb-shadow-k)));
+  box-shadow: var(--sb-edge), var(--sb-lift);
 }
 
 .new-session-dialog h3 {
-  font-size: 15px;
-  color: var(--sb-text);
-  font-weight: 600;
-  margin-bottom: 20px;
+  font-family: var(--sb-font-head);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  color: var(--sb-text-strong);
+  margin-bottom: 18px;
 }
 
+/* The settings rows borrow the settings viewer's markup; inside the dialog they
+   stack into one card, split by hairlines, on the panel tone beneath the dialog. */
 .new-session-dialog .settings-field {
   margin-bottom: 0;
-  border-bottom: 1px solid rgba(var(--sb-overlay-rgb),0.035);
-  background: rgba(var(--sb-overlay-rgb),0.02);
+  border-bottom: 1px solid var(--sb-line);
+  background: var(--sb-bg-panel);
   padding: 14px 18px;
   border-radius: 0;
 }
 
 .new-session-dialog .settings-field:first-of-type {
-  border-top-left-radius: 10px;
-  border-top-right-radius: 10px;
+  border-top-left-radius: var(--sb-r-card);
+  border-top-right-radius: var(--sb-r-card);
 }
 
 .new-session-dialog .settings-field:last-of-type {
-  border-bottom-left-radius: 10px;
-  border-bottom-right-radius: 10px;
+  border-bottom-left-radius: var(--sb-r-card);
+  border-bottom-right-radius: var(--sb-r-card);
   border-bottom: none;
   margin-bottom: 16px;
+}
+
+.new-session-dialog .settings-label {
+  font-family: var(--sb-font-head);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* A label that stands alone over its control (Permission Mode), rather than
+   heading a description, reads as a field label. */
+.new-session-dialog .settings-field > .settings-label {
+  font-size: 12px;
+  color: var(--sb-text-muted);
+  letter-spacing: -0.01em;
+}
+
+.new-session-dialog .settings-input {
+  background: var(--sb-bg-raised);
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+  border-radius: var(--sb-r-control);
+  padding: 8px 12px;
+  color: var(--sb-text-strong);
+}
+
+.new-session-dialog .settings-input:focus {
+  background: var(--sb-bg-raised);
+  box-shadow:
+    inset 0 0 0 1px var(--sb-accent),
+    0 0 0 3px rgba(var(--sb-accent-rgb),0.18);
+}
+
+.new-session-dialog .settings-input::placeholder {
+  color: var(--sb-text-placeholder);
 }
 
 .permission-grid {
@@ -54,15 +94,18 @@
   gap: 6px;
 }
 
+/* Each mode is a small card; the picked one fills with the mint pastel and takes
+   the accent as its ink, the way BlaakTasks marks a picked chip. */
 .permission-option {
-  background: rgba(var(--sb-overlay-rgb),0.04);
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.08);
-  border-radius: 6px;
+  background: var(--sb-bg-raised);
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+  border-radius: var(--sb-r-row);
   padding: 10px 12px;
   font-size: 12px;
-  color: var(--sb-text-muted);
+  color: var(--sb-text);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, box-shadow 0.15s, color 0.15s;
   text-align: left;
   font-family: inherit;
   font-weight: 500;
@@ -70,42 +113,59 @@
 
 .permission-option .perm-name {
   display: block;
-  font-weight: 600;
+  font-family: var(--sb-font-head);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+  color: var(--sb-text-strong);
   margin-bottom: 2px;
 }
 
 .permission-option .perm-desc {
   display: block;
-  font-size: 10px;
-  color: var(--sb-text-dimmest);
+  font-size: 11px;
+  color: var(--sb-text-faint);
   font-weight: 400;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 .permission-option:hover {
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  border-color: rgba(var(--sb-overlay-rgb),0.15);
-  color: var(--sb-text-dim);
+  background: rgba(var(--sb-overlay-rgb),0.04);
+}
+
+.permission-option:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px var(--sb-accent),
+    0 0 0 3px rgba(var(--sb-accent-rgb),0.18);
 }
 
 .permission-option.selected {
-  background: rgba(var(--sb-accent-rgb),0.12);
-  border-color: rgba(var(--sb-accent-rgb),0.4);
+  background: var(--sb-mint);
+  box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb),0.35);
+  color: var(--sb-accent);
+}
+
+.permission-option.selected .perm-name {
   color: var(--sb-accent);
 }
 
 .permission-option.selected .perm-desc {
-  color: rgba(var(--sb-accent-rgb),0.6);
+  color: rgba(var(--sb-accent-rgb),0.75);
 }
 
 .permission-option.dangerous.selected {
-  background: rgba(var(--sb-red-rgb),0.12);
-  border-color: rgba(var(--sb-red-rgb),0.4);
-  color: var(--sb-red);
+  background: rgba(var(--sb-danger-rgb),0.12);
+  box-shadow: inset 0 0 0 1px rgba(var(--sb-danger-rgb),0.4);
+  color: var(--sb-danger);
+}
+
+.permission-option.dangerous.selected .perm-name {
+  color: var(--sb-danger);
 }
 
 .permission-option.dangerous.selected .perm-desc {
-  color: rgba(var(--sb-red-rgb),0.5);
+  color: rgba(var(--sb-danger-rgb),0.7);
 }
 
 .new-session-actions {
@@ -115,38 +175,42 @@
   margin-top: 20px;
 }
 
-.new-session-cancel-btn {
-  background: transparent;
-  border: 1px solid rgba(var(--sb-overlay-rgb),0.08);
-  color: var(--sb-text-muted);
-  font-size: 13px;
-  padding: 8px 20px;
-  border-radius: 6px;
+.new-session-cancel-btn,
+.new-session-start-btn {
+  border: none;
+  border-radius: var(--sb-r-control);
+  padding: 10px 16px;
+  font-family: var(--sb-font-head);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
-  transition: all 0.15s;
+  transition: background 0.15s, opacity 0.15s, box-shadow 0.15s;
+}
+
+.new-session-cancel-btn:focus-visible,
+.new-session-start-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb),0.3);
+}
+
+/* Ghost: the dialog's own surface, outlined by a hairline. */
+.new-session-cancel-btn {
+  background: var(--sb-bg-raised);
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+  color: var(--sb-text-strong);
 }
 
 .new-session-cancel-btn:hover {
-  background: rgba(var(--sb-overlay-rgb),0.04);
-  color: var(--sb-text-muted);
+  background: rgba(var(--sb-overlay-rgb),0.05);
 }
 
+/* Primary: filled with the action colour. */
 .new-session-start-btn {
-  background: rgba(var(--sb-green-rgb),0.12);
-  border: 1px solid rgba(var(--sb-green-rgb),0.3);
-  color: var(--sb-green);
-  font-size: 13px;
-  padding: 8px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 600;
-  transition: all 0.15s;
+  background: var(--sb-action);
+  color: var(--sb-action-text);
 }
 
 .new-session-start-btn:hover {
-  background: rgba(var(--sb-green-rgb),0.2);
-  border-color: rgba(var(--sb-green-rgb),0.5);
+  opacity: 0.88;
 }
