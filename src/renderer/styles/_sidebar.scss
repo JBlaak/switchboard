@@ -296,7 +296,7 @@
   display: flex;
   align-items: flex-start;
   gap: var(--sb-row-gap);
-  padding: 10px 6px;
+  padding: 10px 14px;
   border-radius: var(--sb-r-row);
   transition: background 0.12s;
   border-left: none;
@@ -447,7 +447,7 @@
   display: flex;
   align-items: flex-start;
   gap: var(--sb-row-gap);
-  padding: 10px 6px;
+  padding: 10px 14px;
   border-radius: var(--sb-r-row);
   transition: background 0.12s;
   position: relative;
@@ -606,7 +606,7 @@
   opacity: 0;
   transition: opacity 0.12s;
   position: absolute;
-  right: 8px;
+  right: 14px;
   top: 8px;
   background: linear-gradient(90deg, transparent, var(--row-fill) 10%);
   padding-left: 8px;
