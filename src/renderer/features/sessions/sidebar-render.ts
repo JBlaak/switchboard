@@ -12,6 +12,14 @@
  * cannot slide out from under the cursor while the rest reorders. And it is
  * *morphed* rather than replaced, so scroll position, an open rename input and
  * an expanded group all survive a redraw.
+ *
+ * When the list does reorder, rows glide to their new place instead of jumping
+ * (the reflow from BlaakTasks): a snapshot of where every top-level entry sat
+ * before the morph, played straight after it. Only top-level entries take part
+ * — a session inside a slug group already rides along on its group's transform,
+ * and moving it as well would move it twice. Because the morph keeps element
+ * identity, a row caught mid-glide by the next redraw keeps its spring and
+ * simply heads for its newest place.
  */
 import morphdom from 'morphdom';
 import { byMostRecentlyModified } from '../../../domain/session/session';
@@ -22,6 +30,8 @@ import { tierOf } from '../../state/activity-store';
 import { isFiltering, openSessions, view } from '../../state/session-store';
 import { localDateKey } from '../../lib/format';
 import { sidebarContent } from '../../lib/dom';
+import { hasMotion } from '../../lib/motion/spring';
+import { play, snapshot } from '../../lib/motion/reflow';
 import { bindSidebarEvents } from './sidebar-events';
 import { buildSessionItem, buildSlugGroup } from './sidebar-row';
 import type { Project } from '../../../domain/project/project';
@@ -42,6 +52,15 @@ interface OrderedItem {
   tier: number;
 }
 
+/** The list's top-level entries: rows, slug groups, section labels and the "older" toggle — never what sits inside a group. */
+const REFLOW_SELECTOR = '.session-list > [id], .sessions-older > [id]';
+
+/** Inline styles a motion owns, which the freshly built tree (having none) would otherwise wipe. */
+const MOTION_STYLES = ['transform', 'opacity', 'height', 'overflow', 'min-height', 'box-sizing'] as const;
+
+/** The first render has nothing to glide from: everything would fade in at once. */
+let rendered = false;
+
 export function renderSessionList(projects: readonly Project[], resort = false): void {
   const filtering = isFiltering();
   const { items, activeItemId } = buildItems(projects);
@@ -58,11 +77,18 @@ export function renderSessionList(projects: readonly Project[], resort = false):
       ?.classList.add('active');
   }
 
+  // A collapsed sidebar shows no list to watch, so measuring it is wasted work.
+  const animate = rendered && !document.getElementById('sidebar')?.classList.contains('collapsed');
+  const before = animate ? snapshot(sidebarContent, REFLOW_SELECTOR) : null;
+
   morphdom(sidebarContent, next, {
     childrenOnly: true,
     onBeforeElUpdated: preserveInteractionState,
     getNodeKey: (node: Node) => (node as HTMLElement).id || undefined,
   });
+
+  if (before) play(before);
+  rendered = true;
 
   // The rendered order is the source of truth the next render anchors against.
   view.sortedOrder = ordered.map(({ item, tier }) => ({ id: item.element.id, tier }));
@@ -281,6 +307,18 @@ function buildList(
  * things the user did, and the freshly built tree knows nothing about them.
  */
 function preserveInteractionState(fromEl: HTMLElement, toEl: HTMLElement): boolean {
+  // A row sliding out (archived) is mid-animation and on its way out of the
+  // DOM; morphing it now would snap it back into the list.
+  if (fromEl.hasAttribute('data-leaving')) return false;
+  // A moving element's inline transform/opacity (and a collapse's height) are
+  // the animation itself; the fresh tree has no inline style, so syncing
+  // attributes would wipe it mid-flight and the row would flicker.
+  if (hasMotion(fromEl)) {
+    for (const prop of MOTION_STYLES) {
+      const value = fromEl.style.getPropertyValue(prop);
+      if (value) toEl.style.setProperty(prop, value);
+    }
+  }
   // A row being renamed is left entirely alone: replacing it would discard what
   // the user is typing.
   if (fromEl.classList.contains('session-item') && fromEl.querySelector('.session-rename-input')) {
