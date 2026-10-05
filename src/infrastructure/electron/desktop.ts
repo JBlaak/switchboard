@@ -1,11 +1,14 @@
 /**
- * The handful of host capabilities behind the DialogService and SystemGateway
- * ports.
+ * The handful of host capabilities behind the DialogService, SystemGateway and
+ * AppearanceGateway ports.
  */
-import { app, clipboard, dialog, shell } from 'electron';
+import { app, clipboard, dialog, nativeTheme, shell } from 'electron';
 import type { BrowserWindow } from 'electron';
-import type { DialogService, SystemGateway } from '../../application/ports/desktop';
+import type {
+  AppearanceGateway, DialogService, SystemGateway,
+} from '../../application/ports/desktop';
 import type { Logger } from '../../application/ports/logger';
+import type { Appearance } from '../../domain/settings/appearance';
 
 export class ElectronDialogService implements DialogService {
   constructor(private readonly getWindow: () => BrowserWindow | null) {}
@@ -44,5 +47,18 @@ export class ElectronSystemGateway implements SystemGateway {
 
   appVersion(): string {
     return app.getVersion();
+  }
+}
+
+/**
+ * The colour scheme, via `nativeTheme.themeSource`.
+ *
+ * Setting it is all it takes: Chromium re-evaluates `prefers-color-scheme` in
+ * every renderer and fires `nativeTheme`'s 'updated', which the window chrome
+ * listens to for the parts CSS cannot reach.
+ */
+export class ElectronAppearanceGateway implements AppearanceGateway {
+  apply(mode: Appearance): void {
+    nativeTheme.themeSource = mode;
   }
 }

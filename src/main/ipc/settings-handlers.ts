@@ -2,6 +2,7 @@
  * Settings, shell profiles and scheduled tasks.
  */
 import { INVOKE } from '../../ipc/channels';
+import { normaliseAppearance } from '../../domain/settings/appearance';
 import type { Container } from '../composition-root';
 import type { IpcRegistrar } from './registrar';
 
@@ -26,6 +27,21 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
    * `wsl.exe --list` every time the settings panel opened.
    */
   ipc.handle(INVOKE.getShellProfiles, () => app.shells.list());
+
+  /**
+   * Store the colour scheme, then apply it.
+   *
+   * Normalised first: the argument comes from the renderer, and an unknown
+   * string handed to `themeSource` throws rather than being ignored.
+   */
+  ipc.handle(INVOKE.setAppearance, (mode: unknown) => {
+    const appearance = normaliseAppearance(mode);
+    app.settings.updateGlobal((settings) => {
+      settings.appearance = appearance;
+    });
+    app.appearance.apply(appearance);
+    return { ok: true, appearance };
+  });
 
   // ── Scheduled tasks ──
   ipc.handle(INVOKE.getScheduleCreatorCommand, () => app.schedules.readCreatorCommand());

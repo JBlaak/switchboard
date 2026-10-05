@@ -27,7 +27,10 @@ import { openSessions, sessionMap, view } from '../state/session-store';
 import {
   applyTerminalFont, prewarmTerminalRenderer,
 } from '../features/terminal/terminal-manager';
-import { TERMINAL_THEMES, applyTerminalTheme } from '../features/terminal/terminal-themes';
+import {
+  TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
+} from '../features/terminal/terminal-themes';
+import { installAppearanceToggle } from '../features/settings/appearance-toggle';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -41,6 +44,8 @@ export function bootstrap(): void {
   installShortcuts();
   installTimeTicker();
   installQuotaGauges();
+  installAppearanceToggle();
+  followColorSchemeInTerminals();
 
   setTickListener(tickConnectionCards);
 

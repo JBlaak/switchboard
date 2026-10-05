@@ -39,6 +39,7 @@ export const INVOKE = {
   deleteSetting: 'delete-setting',
   getEffectiveSettings: 'get-effective-settings',
   getShellProfiles: 'get-shell-profiles',
+  setAppearance: 'set-appearance',
 
   // Schedules
   getScheduleCreatorCommand: 'get-schedule-creator-command',

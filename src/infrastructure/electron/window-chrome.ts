@@ -10,15 +10,30 @@
  * The colours are duplicated from the stylesheet on purpose. On Windows and
  * Linux the controls are painted into an overlay Electron owns, and it has to
  * be given the same colour as the sidebar behind it or it shows as a lighter
- * block. Kept in sync with `--sb-bg-panel` / `--sb-text-muted`.
+ * (or, in light mode, darker) block. CSS cannot reach that overlay, so it does
+ * not follow `prefers-color-scheme` on its own: it is picked from
+ * `nativeTheme.shouldUseDarkColors` at creation and repainted whenever
+ * `nativeTheme` reports a change. Kept in sync with `--sb-bg-panel` /
+ * `--sb-text-muted` in both palettes of `_tokens.scss`.
  */
-import type { BrowserWindowConstructorOptions } from 'electron';
+import { nativeTheme } from 'electron';
+import type { BrowserWindow, BrowserWindowConstructorOptions, TitleBarOverlay } from 'electron';
 
-const CHROME_BG = '#1b1d21';
-const CHROME_SYMBOL = '#9a9a9c';
+const CHROME_DARK = { bg: '#1b1d21', symbol: '#9a9a9c' };
+const CHROME_LIGHT = { bg: '#f3f5f4', symbol: '#5d6463' };
 
 /** The height the overlay reserves, matching the app's own header strip. */
 const OVERLAY_HEIGHT = 40;
+
+/** Only these platforms paint the controls into an overlay we colour. */
+function hasTitleBarOverlay(platform: NodeJS.Platform): boolean {
+  return platform === 'win32' || platform === 'linux';
+}
+
+function titleBarOverlay(dark: boolean): TitleBarOverlay {
+  const chrome = dark ? CHROME_DARK : CHROME_LIGHT;
+  return { color: chrome.bg, symbolColor: chrome.symbol, height: OVERLAY_HEIGHT };
+}
 
 /**
  * Per-platform frameless options.
@@ -28,6 +43,7 @@ const OVERLAY_HEIGHT = 40;
  */
 export function windowChromeOptions(
   platform: NodeJS.Platform = process.platform,
+  dark: boolean = nativeTheme.shouldUseDarkColors,
 ): Partial<BrowserWindowConstructorOptions> {
   if (platform === 'darwin') {
     return {
@@ -36,11 +52,32 @@ export function windowChromeOptions(
       trafficLightPosition: { x: 18, y: 15 },
     };
   }
-  if (platform === 'win32' || platform === 'linux') {
+  if (hasTitleBarOverlay(platform)) {
     return {
       titleBarStyle: 'hidden',
-      titleBarOverlay: { color: CHROME_BG, symbolColor: CHROME_SYMBOL, height: OVERLAY_HEIGHT },
+      titleBarOverlay: titleBarOverlay(dark),
     };
   }
   return {};
+}
+
+/**
+ * Repaint the overlay when the colour scheme changes.
+ *
+ * Fires both for the in-app toggle (which sets `themeSource`) and for the OS
+ * flipping while the app follows it. macOS draws its traffic lights natively
+ * and needs nothing. The listener goes with the window: `nativeTheme` outlives
+ * it, and a stale one would call into a destroyed window.
+ */
+export function followColorScheme(
+  window: BrowserWindow,
+  platform: NodeJS.Platform = process.platform,
+): void {
+  if (!hasTitleBarOverlay(platform)) return;
+  const repaint = (): void => {
+    if (window.isDestroyed()) return;
+    window.setTitleBarOverlay(titleBarOverlay(nativeTheme.shouldUseDarkColors));
+  };
+  nativeTheme.on('updated', repaint);
+  window.on('closed', () => nativeTheme.off('updated', repaint));
 }

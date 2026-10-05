@@ -6,6 +6,7 @@
  * auto-updater. Kept as small separate ports rather than one "electron"
  * grab-bag so a use case declares only what it actually reaches for.
  */
+import type { Appearance } from '../../domain/settings/appearance';
 
 export interface DialogService {
   /** The folder the user chose, or null if they cancelled. */
@@ -24,6 +25,16 @@ export interface SystemGateway {
    */
   writeClipboard(text: string): void;
   appVersion(): string;
+}
+
+export interface AppearanceGateway {
+  /**
+   * Make the host render in this colour scheme.
+   *
+   * The renderer's `prefers-color-scheme` follows it, so this is the one switch
+   * the stylesheet, the window chrome and the terminal all read from.
+   */
+  apply(mode: Appearance): void;
 }
 
 /** Result of asking the updater to look for a new version. */
