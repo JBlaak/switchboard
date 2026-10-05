@@ -7,9 +7,9 @@ export const TERMINAL_THEMES = {
   // ramp is built from the same brand palette (see :root in style.css).
   switchboard: {
     label: 'Switchboard',
-    background: '#101414', foreground: '#d3d4d5', cursor: '#69e2bf', selectionBackground: '#1f4a3e',
-    black: '#0e1713', red: '#e01e5a', green: '#3ec78d', yellow: '#ecb22e', blue: '#36c5f0', magenta: '#c08ce0', cyan: '#69e2bf', white: '#c6c7c8',
-    brightBlack: '#656b6d', brightRed: '#ff5c85', brightGreen: '#5fe0a8', brightYellow: '#ffcc5c', brightBlue: '#6fd9f7', brightMagenta: '#d6a8f0', brightCyan: '#8aecd0', brightWhite: '#f2f3f3',
+    background: '#141517', foreground: '#d9d7d2', cursor: '#8fd8bf', selectionBackground: '#2a4a40',
+    black: '#1c1d20', red: '#ee8b8b', green: '#6cc4a1', yellow: '#f0cf7e', blue: '#9cc5e8', magenta: '#c8b8e8', cyan: '#8fd8bf', white: '#cfcdc8',
+    brightBlack: '#6e6d69', brightRed: '#f4a8a8', brightGreen: '#8fd8bf', brightYellow: '#f5dc9c', brightBlue: '#b9d7f0', brightMagenta: '#dccff2', brightCyan: '#b0e6d3', brightWhite: '#ecebe8',
   },
   ghostty: {
     label: 'Ghostty',
@@ -64,9 +64,9 @@ const LIGHT_VARIANTS: Record<string, TerminalTheme & { cursorAccent?: string; se
   // read on white — the dark theme's yellow and cyan are near-invisible there.
   switchboard: {
     label: 'Switchboard',
-    background: '#ffffff', foreground: '#1f2423', cursor: '#0f8f6c', selectionBackground: '#bfe8da',
-    black: '#0d1110', red: '#c4174c', green: '#1d8a5a', yellow: '#9a6a00', blue: '#1474a6', magenta: '#8a4fb3', cyan: '#0f8f6c', white: '#c6c7c8',
-    brightBlack: '#767d7c', brightRed: '#e01e5a', brightGreen: '#25a26c', brightYellow: '#b58200', brightBlue: '#1a8cc4', brightMagenta: '#a066cc', brightCyan: '#14a57e', brightWhite: '#ffffff',
+    background: '#fafbfd', foreground: '#262a31', cursor: '#1c6e56', selectionBackground: '#cdeee1',
+    black: '#16181d', red: '#b83a3a', green: '#1c6e56', yellow: '#7a5a0c', blue: '#255f8c', magenta: '#553489', cyan: '#1a7a7a', white: '#aab2bd',
+    brightBlack: '#7b8491', brightRed: '#9a3c22', brightGreen: '#2e8a68', brightYellow: '#946e10', brightBlue: '#2f74aa', brightMagenta: '#6a45a3', brightCyan: '#22908f', brightWhite: '#16181d',
   },
   // White for daylight, but charcoal text rather than black: about 10.5:1
   // against white instead of 21:1, keeping the softness of Ghostty's dark

@@ -1,77 +1,107 @@
 /* ========== BRAND PALETTE ==========
-   Switchboard's colors are lifted from the Slack dark workspace theme: green-tinted
-   near-black surfaces, a mint accent, a neutral text ramp, and Slack's brand
-   secondaries for status. Everything below is referenced through these tokens, so
-   re-theming the app means editing this block and nothing else.
+   Switchboard wears the Soft MoveLab look it shares with BlaakTasks: graphite
+   surfaces in the dark (never navy, never green-tinted), cool off-whites in the
+   light, a mint accent, and status drawn as pastel fills with a matching ink —
+   mint for running, blue for ready, peach for needs-input, sun for pinned.
+   Everything below is referenced through these tokens, so re-theming the app
+   means editing this block and nothing else.
 
    The light palette overrides the same tokens under prefers-color-scheme: light.
    The main process drives that media query through nativeTheme.themeSource, so the
    system / light / dark toggle needs no class or attribute on the document. */
 :root {
-  /* Surfaces, darkest to lightest. Switchboard's own ladder is preserved — the
-     terminal sits on the darkest surface and the sidebar floats above it — but each
-     rung lands on a color sampled straight out of Slack. */
-  --sb-bg-deep:   #0e1713;  /* status bar; Slack's workspace rail */
-  --sb-bg-base:   #101414;  /* app background, terminal, main content */
-  --sb-bg-panel:  #1b1d21;  /* sidebar, headers, toolbars */
-  --sb-bg-raised: #22252a;  /* dialogs, toasts, inputs, cards */
+  /* Type: Mulish for headings, labels and controls; Nunito Sans for reading. */
+  --sb-font-head: 'Mulish Variable', 'Mulish', system-ui, sans-serif;
+  --sb-font-body: 'Nunito Sans Variable', 'Nunito Sans', system-ui, sans-serif;
+  --sb-font-mono: 'SF Mono', 'Fira Code', Menlo, monospace;
 
-  /* Accent: the mint Slack fills the active channel with. Because it is a light
-     color, anything filled with it takes --sb-accent-ink for its foreground. */
-  --sb-accent:       #69e2bf;
-  --sb-accent-hover: #45c7a3;
-  --sb-accent-dim:   #2f8f74;
-  --sb-accent-ink:   #06231b;
-  --sb-accent-rgb:   105, 226, 191;
+  /* Corners, smallest to largest: a control, a list row, a card, a dialog. */
+  --sb-r-control: 10px;
+  --sb-r-row:     12px;
+  --sb-r-card:    16px;
+  --sb-r-panel:   22px;
 
-  /* Text, brightest to faintest — neutral grey, no purple cast. */
-  --sb-text-strong:  #f2f3f3;
-  --sb-text:         #d3d4d5;
-  --sb-text-soft:    #c6c7c8;
-  --sb-text-dim:     #bcbdbe;
-  --sb-text-muted:   #9a9a9c;
-  --sb-text-faint:   #7e8385;
-  --sb-text-dimmest: #656b6d;
+  /* Surfaces, darkest to lightest. The terminal sits on the darkest surface and
+     the sidebar floats above it. */
+  --sb-bg-deep:   #1c1d20;  /* status bar */
+  --sb-bg-base:   #141517;  /* app background, terminal, main content */
+  --sb-bg-panel:  #1c1d20;  /* sidebar, headers, toolbars */
+  --sb-bg-raised: #212226;  /* dialogs, toasts, inputs, cards */
 
-  /* Status, from Slack's brand secondaries. The green sits deliberately below the
-     mint accent in brightness so a running dot never competes with a selection. */
-  --sb-green:      #2eb67d;
-  --sb-green-soft: #4cc596;
-  --sb-blue:       #36c5f0;
-  --sb-red:        #e01e5a;
-  --sb-yellow:     #ecb22e;
+  /* A hairline, the faint outline a panel gets in the dark, and the lift under
+     anything that floats (dialogs, popovers). */
+  --sb-line: #2e2f33;
+  --sb-edge: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --sb-lift: 0 22px 44px -14px rgba(0, 0, 0, 0.7);
+
+  /* The primary button: ink on paper, inverted per theme. */
+  --sb-action:      #ecebe8;
+  --sb-action-text: #141517;
+
+  /* Accent: mint ink, the colour of the selected thing. Because it is a light
+     colour, anything filled with it takes --sb-accent-ink for its foreground. */
+  --sb-accent:       #8fd8bf;
+  --sb-accent-hover: #a9e3cf;
+  --sb-accent-dim:   #5e9e88;
+  --sb-accent-ink:   #141517;
+  --sb-accent-rgb:   143, 216, 191;
+
+  /* Pastel fills, each paired with the status ink drawn on it. */
+  --sb-mint:  #1a2a25;
+  --sb-blue-tint:  #1b2530;
+  --sb-peach: #2d211d;
+  --sb-sun:   #2a2518;
+  --sb-lav:   #241f2d;
+  --sb-lav-ink: #c8b8e8;
+
+  /* Text, brightest to faintest — warm neutral grey. */
+  --sb-text-strong:  #ecebe8;
+  --sb-text:         #d9d7d2;
+  --sb-text-soft:    #cfcdc8;
+  --sb-text-dim:     #c2c0bb;
+  --sb-text-muted:   #a09e99;
+  --sb-text-faint:   #85837f;
+  --sb-text-dimmest: #6e6d69;
+
+  /* Status inks. The running green sits below the mint accent in brightness so a
+     running dot never competes with a selection. */
+  --sb-green:      #6cc4a1;
+  --sb-green-soft: #8fd8bf;
+  --sb-blue:       #9cc5e8;
+  --sb-red:        #ee8b8b;
+  --sb-yellow:     #f0cf7e;
 
   /* The same status hues as bare channels, for tinted fills and borders. */
-  --sb-green-rgb:      46, 182, 125;
-  --sb-green-soft-rgb: 76, 197, 150;
-  --sb-blue-rgb:       54, 197, 240;
-  --sb-red-rgb:        224, 30, 90;
-  --sb-yellow-rgb:     236, 178, 46;
+  --sb-green-rgb:      108, 196, 161;
+  --sb-green-soft-rgb: 143, 216, 191;
+  --sb-blue-rgb:       156, 197, 232;
+  --sb-red-rgb:        238, 139, 139;
+  --sb-yellow-rgb:     240, 207, 126;
 
-  /* One-off hues that predate the palette, kept so dark mode stays as it was. */
-  --sb-orange:        #f0a050;  /* needs-attention marker, section 4 label */
-  --sb-orange-rgb:    240, 160, 80;
-  --sb-amber:         #e8a030;  /* quota gauge, middle band */
-  --sb-warning-text:  #e0a830;  /* inline caveats in settings */
-  --sb-danger:        #ff6b6b;  /* form errors, destructive hovers */
-  --sb-danger-rgb:    255, 107, 107;
-  --sb-danger-soft:   #cc4444;  /* remove button at rest */
-  --sb-danger-strong: #ff5050;  /* remove button on hover */
-  --sb-danger-strong-rgb: 255, 80, 80;
-  --sb-red-deep:      #8f2542;  /* stop buttons */
-  --sb-green-muted:   #5a7a6a;  /* launch-config button */
-  --sb-blue-text:     #50b4ff;  /* the "remote" filter when active */
-  --sb-search-text:   #cdd6f4;  /* terminal find bar */
+  /* One-off hues, folded into the same family. */
+  --sb-orange:        #eeab94;  /* needs-attention marker, section 4 label: peach ink */
+  --sb-orange-rgb:    238, 171, 148;
+  --sb-amber:         #f0cf7e;  /* quota gauge, middle band */
+  --sb-warning-text:  #f0cf7e;  /* inline caveats in settings */
+  --sb-danger:        #ee8b8b;  /* form errors, destructive hovers */
+  --sb-danger-rgb:    238, 139, 139;
+  --sb-danger-soft:   #c97373;  /* remove button at rest */
+  --sb-danger-strong: #f29e9e;  /* remove button on hover */
+  --sb-danger-strong-rgb: 242, 158, 158;
+  --sb-red-deep:      #b86a6a;  /* stop buttons */
+  --sb-green-muted:   #6f8f82;  /* launch-config button */
+  --sb-blue-text:     #9cc5e8;  /* the "remote" filter when active */
+  --sb-search-text:   #d9d7d2;  /* terminal find bar */
 
   /* Neutral greys outside the text ramp. */
   --sb-text-max:         #ffffff;  /* brightest highlight: toggles, shimmer peak */
-  --sb-text-hover:       #888888;  /* icon buttons on hover */
-  --sb-text-quiet:       #999999;  /* update toast's dismiss, on hover */
-  --sb-text-subtle:      #666666;  /* close glyphs, hints */
-  --sb-text-placeholder: #555555;
-  --sb-text-ghost:       #5c6264;  /* search icon, empty-state hints */
-  --sb-border-strong:    #585e60;
-  --sb-switch-track:     #666666;  /* settings toggle knob, off */
+  --sb-text-hover:       #b5b3ae;  /* icon buttons on hover */
+  --sb-text-quiet:       #a09e99;  /* update toast's dismiss, on hover */
+  --sb-text-subtle:      #7a7975;  /* close glyphs, hints */
+  --sb-text-placeholder: #6a6965;
+  --sb-text-ghost:       #6e6d69;  /* search icon, empty-state hints */
+  --sb-border-strong:    #3d3e43;
+  --sb-switch-track:     #4a4b50;  /* settings toggle knob, off */
   --sb-switch-knob:      #ffffff;  /* settings toggle knob, on */
 
   /* Overlays. Translucent washes for hover fills and hairline borders are drawn
@@ -82,7 +112,7 @@
   --sb-overlay-rgb: 255, 255, 255;
   --sb-shadow-rgb:  0, 0, 0;
   --sb-shadow-k:    1;
-  --sb-bg-base-rgb: 16, 20, 20;  /* --sb-bg-base, for the connection scrim */
+  --sb-bg-base-rgb: 20, 21, 23;  /* --sb-bg-base, for the connection scrim */
 
   color-scheme: dark;
 
@@ -103,70 +133,84 @@
 }
 
 /* ========== LIGHT PALETTE ==========
-   The same ladder inverted: the terminal sits on white and the sidebar is a faint
-   green-grey beside it. The mint accent is too light to carry text on white, so
-   the light accent is a deeper teal and its ink flips to white. */
+   Cool off-whites: the terminal sits on the page colour and the sidebar is the
+   soft blue-grey beside it. Mint is too light to carry text on white, so the
+   light accent is the deep mint ink and its own ink flips to white. */
 @media (prefers-color-scheme: light) {
   :root {
-    --sb-bg-deep:   #e4e9e6;
-    --sb-bg-base:   #ffffff;
-    --sb-bg-panel:  #f3f5f4;
+    --sb-bg-deep:   #f0f3f8;
+    --sb-bg-base:   #fafbfd;
+    --sb-bg-panel:  #f0f3f8;
     --sb-bg-raised: #ffffff;
 
-    --sb-accent:       #0f8f6c;
-    --sb-accent-hover: #0b7a5b;
-    --sb-accent-dim:   #5cc8a6;
+    --sb-line: #e3e8ef;
+    --sb-edge: 0 0 0 0 transparent;
+    --sb-lift: 0 22px 44px -16px rgba(20, 30, 50, 0.35);
+
+    --sb-action:      #16181d;
+    --sb-action-text: #ffffff;
+
+    --sb-accent:       #1c6e56;
+    --sb-accent-hover: #155a46;
+    --sb-accent-dim:   #6fb39c;
     --sb-accent-ink:   #ffffff;
-    --sb-accent-rgb:   15, 143, 108;
+    --sb-accent-rgb:   28, 110, 86;
 
-    --sb-text-strong:  #0d1110;
-    --sb-text:         #1f2423;
-    --sb-text-soft:    #2c3231;
-    --sb-text-dim:     #3b4241;
-    --sb-text-muted:   #5d6463;
-    --sb-text-faint:   #767d7c;
-    --sb-text-dimmest: #959b9a;
+    --sb-mint:  #e3f7ef;
+    --sb-blue-tint:  #e6f1fb;
+    --sb-peach: #fdeee8;
+    --sb-sun:   #fbf3dc;
+    --sb-lav:   #efe8fa;
+    --sb-lav-ink: #553489;
 
-    --sb-green:      #1e9c68;
-    --sb-green-soft: #2eb67d;
-    --sb-blue:       #1590c0;
-    --sb-red:        #cc1650;
-    --sb-yellow:     #b98200;
+    --sb-text-strong:  #16181d;
+    --sb-text:         #262a31;
+    --sb-text-soft:    #30353d;
+    --sb-text-dim:     #3d434c;
+    --sb-text-muted:   #626b78;
+    --sb-text-faint:   #7b8491;
+    --sb-text-dimmest: #98a1ad;
 
-    --sb-green-rgb:      30, 156, 104;
-    --sb-green-soft-rgb: 46, 182, 125;
-    --sb-blue-rgb:       21, 144, 192;
-    --sb-red-rgb:        204, 22, 80;
-    --sb-yellow-rgb:     185, 130, 0;
+    --sb-green:      #2e8a68;
+    --sb-green-soft: #1c6e56;
+    --sb-blue:       #255f8c;
+    --sb-red:        #b83a3a;
+    --sb-yellow:     #7a5a0c;
 
-    --sb-orange:        #c96d12;
-    --sb-orange-rgb:    201, 109, 18;
-    --sb-amber:         #d08a10;
-    --sb-warning-text:  #a26e00;
-    --sb-danger:        #d63a3a;
-    --sb-danger-rgb:    214, 58, 58;
-    --sb-danger-soft:   #c03030;
-    --sb-danger-strong: #d02020;
-    --sb-danger-strong-rgb: 208, 32, 32;
-    --sb-red-deep:      #b0284f;
-    --sb-green-muted:   #4f7a64;
-    --sb-blue-text:     #1a7fd0;
-    --sb-search-text:   #1f2423;
+    --sb-green-rgb:      46, 138, 104;
+    --sb-green-soft-rgb: 28, 110, 86;
+    --sb-blue-rgb:       37, 95, 140;
+    --sb-red-rgb:        184, 58, 58;
+    --sb-yellow-rgb:     122, 90, 12;
+
+    --sb-orange:        #9a3c22;
+    --sb-orange-rgb:    154, 60, 34;
+    --sb-amber:         #b8860b;
+    --sb-warning-text:  #7a5a0c;
+    --sb-danger:        #c0392b;
+    --sb-danger-rgb:    192, 57, 43;
+    --sb-danger-soft:   #b04a3e;
+    --sb-danger-strong: #a8281b;
+    --sb-danger-strong-rgb: 168, 40, 27;
+    --sb-red-deep:      #a33a3a;
+    --sb-green-muted:   #4f7a68;
+    --sb-blue-text:     #255f8c;
+    --sb-search-text:   #262a31;
 
     --sb-text-max:         #000000;
-    --sb-text-hover:       #4a5150;
-    --sb-text-quiet:       #5d6463;
-    --sb-text-subtle:      #767d7c;
-    --sb-text-placeholder: #9aa09f;
-    --sb-text-ghost:       #8a908f;
-    --sb-border-strong:    #b5bbb9;
+    --sb-text-hover:       #3d434c;
+    --sb-text-quiet:       #626b78;
+    --sb-text-subtle:      #7b8491;
+    --sb-text-placeholder: #aab2bd;
+    --sb-text-ghost:       #98a1ad;
+    --sb-border-strong:    #cfd6df;
     --sb-switch-track:     #ffffff;
     --sb-switch-knob:      #ffffff;
 
-    --sb-overlay-rgb: 0, 0, 0;
-    --sb-shadow-rgb:  15, 23, 20;
+    --sb-overlay-rgb: 20, 30, 50;
+    --sb-shadow-rgb:  20, 30, 50;
     --sb-shadow-k:    0.35;
-    --sb-bg-base-rgb: 255, 255, 255;
+    --sb-bg-base-rgb: 250, 251, 253;
 
     color-scheme: light;
   }
@@ -174,10 +218,16 @@
 
 html, body {
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-family: var(--sb-font-body);
   background: var(--sb-bg-base);
   color: var(--sb-text);
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Form controls don't inherit the page font by default. */
+button, input, select, textarea {
+  font-family: inherit;
 }
 
 body { display: flex; flex-direction: column; }

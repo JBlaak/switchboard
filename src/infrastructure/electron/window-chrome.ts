@@ -19,8 +19,8 @@
 import { nativeTheme } from 'electron';
 import type { BrowserWindow, BrowserWindowConstructorOptions, TitleBarOverlay } from 'electron';
 
-const CHROME_DARK = { bg: '#1b1d21', symbol: '#9a9a9c' };
-const CHROME_LIGHT = { bg: '#f3f5f4', symbol: '#5d6463' };
+const CHROME_DARK = { bg: '#1c1d20', symbol: '#a09e99' };
+const CHROME_LIGHT = { bg: '#f0f3f8', symbol: '#626b78' };
 
 /** The height the overlay reserves, matching the app's own header strip. */
 const OVERLAY_HEIGHT = 40;
