@@ -15,7 +15,7 @@
   cursor: pointer;
   padding: 4px;
   margin-right: -5px;
-  border-radius: 6px;
+  border-radius: var(--sb-r-control);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -32,7 +32,7 @@
   color: var(--sb-text-faint);
   cursor: pointer;
   padding: 4px;
-  border-radius: 6px;
+  border-radius: var(--sb-r-control);
   display: none;
   align-items: center;
   justify-content: center;
@@ -65,7 +65,8 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--sb-text-dimmest);
+  color: var(--sb-text-muted);
+  font-family: var(--sb-font-body);
   font-size: 14px;
 }
 
@@ -82,7 +83,7 @@
   justify-content: space-between;
   padding: 8px 16px;
   background: var(--sb-bg-panel);
-  border-bottom: 1px solid rgba(var(--sb-overlay-rgb),0.06);
+  border-bottom: 1px solid var(--sb-line);
   flex-shrink: 0;
 }
 
@@ -96,9 +97,11 @@
 }
 
 #terminal-header-name {
-  font-size: 13px;
-  color: var(--sb-text-dim);
-  font-weight: 500;
+  font-family: var(--sb-font-head);
+  font-size: 14px;
+  color: var(--sb-text-strong);
+  font-weight: 800;
+  letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -114,25 +117,30 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-left: 6px;
-  border-left: 1px solid rgba(var(--sb-overlay-rgb),0.08);
+  padding-left: 8px;
+  border-left: 1px solid var(--sb-line);
 }
 
 #terminal-header-id {
   font-size: 10px;
   color: var(--sb-text-dimmest);
-  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-family: var(--sb-font-mono);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
+/* The shell profile, as a soft grey chip. */
 #terminal-header-shell {
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--sb-font-head);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--sb-text-muted);
   background: rgba(var(--sb-overlay-rgb),0.06);
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  padding: 2px 8px;
+  border-radius: 99px;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -144,12 +152,18 @@
   flex-shrink: 0;
 }
 
+/* Session state as a pill chip: a pastel fill with its matching ink. */
 #terminal-header-status {
-  font-size: 11px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-family: var(--sb-font-head);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
 #terminal-header-status::before {
@@ -161,17 +175,19 @@
 }
 
 #terminal-header-status.running {
+  background: var(--sb-mint);
   color: var(--sb-green);
 }
 
 #terminal-header-status.running::before {
   background: var(--sb-green);
-  box-shadow: 0 0 6px rgba(var(--sb-green-rgb),0.5);
 }
 
 /* Remote sessions sit between running and stopped while ssh connects or the
-   reconnect backoff runs; yellow and pulsing so it reads as "in progress". */
+   reconnect backoff runs; sun-filled with a pulsing dot so it reads as "in
+   progress". */
 #terminal-header-status.connecting {
+  background: var(--sb-sun);
   color: var(--sb-yellow);
 }
 
@@ -186,7 +202,8 @@
 }
 
 #terminal-header-status.stopped {
-  color: var(--sb-text-faint);
+  background: rgba(var(--sb-overlay-rgb),0.06);
+  color: var(--sb-text-muted);
 }
 
 #terminal-header-status.stopped::before {
@@ -200,7 +217,7 @@
   padding: 4px;
   line-height: 1;
   color: var(--sb-red-deep);
-  border-radius: 5px;
+  border-radius: var(--sb-r-control);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -208,8 +225,8 @@
 }
 
 #terminal-stop-btn:hover {
-  color: var(--sb-red);
-  background: rgba(var(--sb-red-rgb),0.1);
+  color: var(--sb-orange);
+  background: var(--sb-peach);
 }
 
 #terminals {
@@ -270,10 +287,9 @@
   width: min(400px, 86%);
   box-sizing: border-box;
   padding: 22px 26px 18px;
-  border: 1px solid rgba(var(--sb-overlay-rgb), 0.07);
-  border-radius: 12px;
+  border-radius: var(--sb-r-card);
   background: var(--sb-bg-raised);
-  box-shadow: 0 18px 48px rgba(var(--sb-shadow-rgb), calc(0.5 * var(--sb-shadow-k)));
+  box-shadow: var(--sb-edge), var(--sb-lift);
   text-align: center;
 }
 
@@ -306,7 +322,7 @@
    moves while a connection is actually being attempted. */
 .rc-wire {
   fill: none;
-  stroke: rgba(var(--sb-overlay-rgb), 0.09);
+  stroke: var(--sb-line);
   stroke-width: 1.6;
 }
 
@@ -381,16 +397,17 @@
 
 /* --- Text --- */
 .rc-status {
+  font-family: var(--sb-font-head);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--rc-accent);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .rc-target {
   margin-top: 3px;
   font-size: 12px;
-  font-family: 'SF Mono', Menlo, monospace;
+  font-family: var(--sb-font-mono);
   color: var(--sb-text-muted);
   overflow-wrap: anywhere;
 }
@@ -408,9 +425,9 @@
    attempt. --rc-duration is set per state from JS. */
 .rc-bar {
   --rc-duration: 10000ms;
-  height: 2px;
+  height: 3px;
   margin-top: 14px;
-  border-radius: 2px;
+  border-radius: 99px;
   background: rgba(var(--sb-overlay-rgb), 0.07);
   overflow: hidden;
 }
@@ -420,7 +437,7 @@
   width: 0;
   height: 100%;
   background: var(--rc-accent);
-  border-radius: 2px;
+  border-radius: 99px;
 }
 
 .rc.is-connecting .rc-bar i {
@@ -448,6 +465,8 @@
 }
 
 /* --- Actions --- */
+/* Ghost buttons by default — raised with a hairline ring — and the primary
+   ink-on-paper button for the one action that matters once we've given up. */
 .rc-actions {
   display: flex;
   gap: 8px;
@@ -456,32 +475,35 @@
 }
 
 .rc-actions button {
-  padding: 5px 12px;
-  font-size: 11px;
-  font-weight: 500;
-  font-family: inherit;
-  color: var(--sb-text-soft);
-  background: rgba(var(--sb-overlay-rgb), 0.05);
-  border: 1px solid rgba(var(--sb-overlay-rgb), 0.08);
-  border-radius: 6px;
+  padding: 6px 14px;
+  font-family: var(--sb-font-head);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sb-text);
+  background: var(--sb-bg-raised);
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+  border-radius: var(--sb-r-control);
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
 }
 
 .rc-actions button:hover {
-  background: rgba(var(--sb-overlay-rgb), 0.1);
+  background: rgba(var(--sb-overlay-rgb), 0.06);
   color: var(--sb-text-strong);
 }
 
 .rc.is-failed .rc-retry {
-  color: var(--sb-accent-ink);
-  background: var(--sb-accent);
-  border-color: transparent;
+  color: var(--sb-action-text);
+  background: var(--sb-action);
+  box-shadow: none;
 }
 
 .rc.is-failed .rc-retry:hover {
-  background: var(--sb-accent-hover);
-  color: var(--sb-accent-ink);
+  background: var(--sb-action);
+  color: var(--sb-action-text);
+  opacity: 0.88;
 }
 
 /* Retrying already has a countdown doing the work, so the button is a
@@ -519,7 +541,7 @@
 
 .terminal-container .xterm-viewport::-webkit-scrollbar-thumb {
   background: rgba(var(--sb-overlay-rgb),0.08);
-  border-radius: 4px;
+  border-radius: 99px;
 }
 
 .terminal-container .xterm-viewport::-webkit-scrollbar-thumb:hover {
