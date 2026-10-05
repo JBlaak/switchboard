@@ -1,8 +1,8 @@
 name: Test
 
 on:
-  # Only main on push: a branch with a PR open would otherwise run the whole
-  # matrix twice for one commit, and the concurrency group below cannot dedupe
+  # Only main on push: a branch with a PR open would otherwise run the suite
+  # twice for one commit, and the concurrency group below cannot dedupe
   # them because push and pull_request events carry different refs.
   push:
     branches: [main]
@@ -16,20 +16,7 @@ concurrency:
 
 jobs:
   test:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-          - os: macos-14
-          # Pinned for the same reason build.yml pins it: `windows-latest` has
-          # rolled over to Windows Server 2025, whose image no longer ships the
-          # Visual Studio C++ toolchain node-gyp needs to rebuild better-sqlite3
-          # against Electron's ABI. 2022 still carries it.
-          - os: windows-2022
-
-    runs-on: ${{ matrix.os }}
-    name: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -60,12 +47,5 @@ jobs:
 
       # `npm test` would rebuild via pretest; the build above already did, and
       # keeping the steps separate says which one broke.
-      #
-      # bash on every runner, Windows included: the default shell there is
-      # PowerShell, which does not expand `test/*.test.ts` into filenames, and
-      # neither Node's test runner (its discovery only matches .js) nor tsx
-      # expands it either — so the glob reached tsx as a literal path and the
-      # step failed with "Could not find …\test\*.test.ts".
       - name: Test
-        shell: bash
         run: npx tsx --test test/*.test.ts
