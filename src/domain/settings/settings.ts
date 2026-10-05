@@ -8,6 +8,7 @@
  */
 import type { RemoteConfig } from '../project/remote-target';
 import type { RemoteSessionRecord } from '../session/session';
+import type { Appearance } from './appearance';
 
 /**
  * The `global` settings blob.
@@ -19,6 +20,11 @@ export interface GlobalSettings {
   hiddenProjects?: string[];
   remoteProjects?: RemoteProjectSetting[];
   windowBounds?: WindowBounds;
+  /**
+   * Global only, never per project: it is one window's colour scheme. Read it
+   * through `normaliseAppearance`, which supplies the 'system' default.
+   */
+  appearance?: Appearance;
   [key: string]: unknown;
 }
 

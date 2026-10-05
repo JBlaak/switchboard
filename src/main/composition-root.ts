@@ -29,7 +29,9 @@ import { SessionRegistry } from '../application/model/session-registry';
 
 import { ClaudeCommandRunner } from '../infrastructure/claude-cli/command-runner';
 import { OAuthUsageService } from '../infrastructure/claude-cli/usage-service';
-import { ElectronDialogService, ElectronSystemGateway } from '../infrastructure/electron/desktop';
+import {
+  ElectronAppearanceGateway, ElectronDialogService, ElectronSystemGateway,
+} from '../infrastructure/electron/desktop';
 import { ElectronRendererGateway } from '../infrastructure/electron/renderer-gateway';
 import { ElectronUpdater } from '../infrastructure/electron/updater';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
@@ -76,6 +78,7 @@ export interface Container {
   readonly updater: ElectronUpdater;
   readonly dialogs: ElectronDialogService;
   readonly system: ElectronSystemGateway;
+  readonly appearance: ElectronAppearanceGateway;
   readonly projectsWatcher: ProjectsWatcher;
 
   /** The window, once one exists. Set by the app lifecycle. */
@@ -167,6 +170,7 @@ export function buildContainer(): Container {
   });
   const dialogs = new ElectronDialogService(getWindow);
   const system = new ElectronSystemGateway(log);
+  const appearance = new ElectronAppearanceGateway();
 
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
@@ -191,7 +195,7 @@ export function buildContainer(): Container {
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     sessionIndex, projects, usage, schedules,
-    renderer, updater, dialogs, system, projectsWatcher,
+    renderer, updater, dialogs, system, appearance, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     close: () => {

@@ -12,6 +12,7 @@ import type { RemoteStatusPayload } from '../domain/remote/remote-status';
 import type { SearchResult, SearchType } from '../domain/search/search';
 import type { SessionOptions } from '../domain/launch/session-options';
 import type { EffectiveSettings } from '../domain/settings/settings';
+import type { Appearance } from '../domain/settings/appearance';
 import type { ShellProfile } from '../domain/shell/shell-profile';
 import type { Usage } from '../domain/usage/usage';
 
@@ -65,6 +66,13 @@ export interface SwitchboardApi {
   deleteSetting(key: string): Promise<IpcResult>;
   getEffectiveSettings(projectPath: string | null): Promise<EffectiveSettings>;
   getShellProfiles(): Promise<ShellProfile[]>;
+  /**
+   * Persist the colour scheme and apply it.
+   *
+   * A channel of its own rather than `setSetting`: storing the value is only
+   * half of it, main also has to hand it to Electron.
+   */
+  setAppearance(mode: Appearance): Promise<IpcResult>;
 
   // ── Schedules ──
   getScheduleCreatorCommand(): Promise<string | null>;

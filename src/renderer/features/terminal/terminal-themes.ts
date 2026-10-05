@@ -51,11 +51,40 @@ export const TERMINAL_THEMES = {
 
 export type TerminalTheme = (typeof TERMINAL_THEMES)['switchboard'];
 
+/**
+ * The house theme on the light palette.
+ *
+ * Not an entry in TERMINAL_THEMES, so not a choice in the picker: picking
+ * "Switchboard" means "match the app", and in light mode the app is white. The
+ * ANSI ramp keeps the dark theme's hues but darkens them until they read on
+ * white — the dark theme's yellow and cyan are near-invisible there.
+ */
+const SWITCHBOARD_LIGHT: TerminalTheme = {
+  label: 'Switchboard',
+  background: '#ffffff', foreground: '#1f2423', cursor: '#0f8f6c', selectionBackground: '#bfe8da',
+  black: '#0d1110', red: '#c4174c', green: '#1d8a5a', yellow: '#9a6a00', blue: '#1474a6', magenta: '#8a4fb3', cyan: '#0f8f6c', white: '#c6c7c8',
+  brightBlack: '#767d7c', brightRed: '#e01e5a', brightGreen: '#25a26c', brightYellow: '#b58200', brightBlue: '#1a8cc4', brightMagenta: '#a066cc', brightCyan: '#14a57e', brightWhite: '#ffffff',
+};
+
+/** The query the renderer's light palette hangs off; main drives it via `themeSource`. */
+const LIGHT_SCHEME_QUERY = '(prefers-color-scheme: light)';
+
+function prefersLight(): boolean {
+  return typeof matchMedia === 'function' && matchMedia(LIGHT_SCHEME_QUERY).matches;
+}
+
 export let currentThemeName: string = 'switchboard';
 
+/**
+ * The theme to paint with, resolved against the current colour scheme.
+ *
+ * Only the house theme follows the scheme; every other theme is a deliberate
+ * choice of its own palette and stays put.
+ */
 export function getTerminalTheme(): TerminalTheme {
-  return (TERMINAL_THEMES as Record<string, TerminalTheme>)[currentThemeName]
+  const chosen = (TERMINAL_THEMES as Record<string, TerminalTheme>)[currentThemeName]
     || TERMINAL_THEMES.switchboard;
+  return chosen === TERMINAL_THEMES.switchboard && prefersLight() ? SWITCHBOARD_LIGHT : chosen;
 }
 
 export let TERMINAL_THEME: TerminalTheme = getTerminalTheme();
@@ -74,4 +103,19 @@ export function applyTerminalTheme(themeName: string): void {
     entry.terminal.options.theme = TERMINAL_THEME;
     entry.element.style.backgroundColor = TERMINAL_THEME.background;
   }
+}
+
+/**
+ * Repaint open terminals when the colour scheme flips.
+ *
+ * xterm takes its colours as values, not CSS variables, so the stylesheet
+ * switching palettes does not reach it. Re-applying the current theme name
+ * re-resolves it against the new scheme and updates `TERMINAL_THEME`, which is
+ * what a terminal created afterwards reads.
+ */
+export function followColorSchemeInTerminals(): void {
+  if (typeof matchMedia !== 'function') return;
+  matchMedia(LIGHT_SCHEME_QUERY).addEventListener('change', () => {
+    applyTerminalTheme(currentThemeName);
+  });
 }

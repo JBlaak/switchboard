@@ -13,6 +13,7 @@ import { registerIpcHandlers } from './ipc';
 import { buildApplicationMenu } from '../infrastructure/electron/app-menu';
 import { createMainWindow } from '../infrastructure/electron/main-window';
 import { systemTimers } from '../infrastructure/system/timers';
+import { normaliseAppearance } from '../domain/settings/appearance';
 import type { Container } from './composition-root';
 
 /** How long after launch the first update check runs. */
@@ -76,6 +77,10 @@ function main(): void {
 function start(container: Container): void {
   registerIpcHandlers(container);
   buildApplicationMenu();
+
+  // Before the window: the chrome's overlay colours are picked at creation, and
+  // a renderer that first paints in the wrong scheme flashes on every launch.
+  container.appearance.apply(normaliseAppearance(container.settings.global().appearance));
   openWindow(container);
 
   container.projectsWatcher.start();

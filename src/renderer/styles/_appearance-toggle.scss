@@ -1,0 +1,28 @@
+/* ========== APPEARANCE TOGGLE ==========
+   Sits just left of the settings gear in #sidebar-toolbar and looks like it.
+   The gear carries `margin-left: auto` to push itself right; with this button
+   in front of it, this one takes the auto margin instead so the pair stays
+   together on the right rather than splitting across the toolbar. */
+#appearance-toggle-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--sb-text-faint);
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#appearance-toggle-btn:hover {
+  background: rgba(var(--sb-overlay-rgb),0.04);
+  color: var(--sb-text-hover);
+}
+
+#appearance-toggle-btn + #global-settings-btn {
+  margin-left: 0;
+}
