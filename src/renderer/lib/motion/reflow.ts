@@ -59,6 +59,8 @@ export function play(before: Snapshot): void {
   if (entering.length > SCREEN_CHANGE || gone.length > SCREEN_CHANGE) return;
 
   for (const el of now) {
+    // A row playing its own exit (archive) owns its motion; gliding it would retarget its slide.
+    if (el.dataset.leaving !== undefined) continue;
     const was = before.items.get(el.id);
     const m = motion(el);
     if (!was) {
