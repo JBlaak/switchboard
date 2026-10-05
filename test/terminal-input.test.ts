@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { shouldSendSpaceDirectly } from '../src/renderer/features/terminal/terminal-input';
+import { enterKittySequence, shouldSendSpaceDirectly } from '../src/renderer/features/terminal/terminal-input';
+
+// Build an Enter keydown-like event with sensible defaults (no modifiers).
+function enter(overrides: Record<string, unknown> = {}): KeyboardEvent {
+  return {
+    key: 'Enter', ctrlKey: false, altKey: false, metaKey: false, shiftKey: false, ...overrides,
+  } as unknown as KeyboardEvent;
+}
 
 // Build a keydown-like event with sensible defaults (plain Space, no IME).
 // Only the fields the predicate reads; cast so the call site stays honest about
@@ -47,4 +54,32 @@ test('Space combined with a modifier is not the push-to-talk path', () => {
 
 test('non-Space keys are never on the direct-send path', () => {
   assert.equal(shouldSendSpaceDirectly(kd({ key: 'a', keyCode: 65 })), false);
+});
+
+test('Shift+Enter → CSI 13;2u (newline, not submit) on every platform', () => {
+  assert.equal(enterKittySequence(enter({ shiftKey: true })), '\x1b[13;2u');
+});
+
+test('Ctrl+Enter → CSI 13;5u ("send now") on every platform', () => {
+  // Regression: mac used to fall through to xterm (bare \r), so Claude Code could
+  // not tell it apart from a plain Enter and "send now" never fired.
+  assert.equal(enterKittySequence(enter({ ctrlKey: true })), '\x1b[13;5u');
+});
+
+test('plain Enter is left to xterm (bare \\r submit)', () => {
+  assert.equal(enterKittySequence(enter()), null);
+});
+
+test('Enter with Alt or Cmd falls through to xterm', () => {
+  assert.equal(enterKittySequence(enter({ altKey: true })), null);
+  assert.equal(enterKittySequence(enter({ metaKey: true })), null);
+  assert.equal(enterKittySequence(enter({ ctrlKey: true, metaKey: true })), null);
+});
+
+test('Ctrl+Shift+Enter is not translated (ambiguous combo falls through)', () => {
+  assert.equal(enterKittySequence(enter({ ctrlKey: true, shiftKey: true })), null);
+});
+
+test('non-Enter keys are never given an Enter sequence', () => {
+  assert.equal(enterKittySequence(enter({ key: 'a', ctrlKey: true })), null);
 });

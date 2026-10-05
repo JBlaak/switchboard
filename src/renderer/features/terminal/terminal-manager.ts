@@ -3,7 +3,7 @@
 //
 import {
   DEFAULT_TERMINAL_FONT_FAMILY, DEFAULT_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_LINE_HEIGHT,
-  decodeOsc52Payload, normalizeTerminalFont, shouldSendSpaceDirectly,
+  decodeOsc52Payload, enterKittySequence, normalizeTerminalFont, shouldSendSpaceDirectly,
 } from '../terminal/terminal-input';
 import type { StoredFontSettings } from '../terminal/terminal-input';
 import type { OpenSession } from '../../state/session-store';
@@ -78,7 +78,11 @@ export function applyTerminalFont(font?: StoredFontSettings): void {
 }
 
 // --- Terminal key bindings ---
-// Shift+Enter → kitty protocol (CSI 13;2u) so Claude Code treats it as newline, not submit.
+// Modified Enter → kitty protocol CSI-u sequences that Claude Code recognizes:
+//   Shift+Enter → CSI 13;2u — insert a newline instead of submitting.
+//   Ctrl+Enter  → CSI 13;5u — "send now" (flush a queued message mid-turn).
+// A terminal can't otherwise distinguish these from a plain Enter (all bare \r), so
+// xterm never emits them; we synthesize the kitty encoding. See enterKittySequence.
 // Two layers needed:
 //   1. attachCustomKeyEventHandler returning false — blocks xterm's key pipeline (onKey/onData)
 //   2. preventDefault on capture-phase keydown — prevents browser inserting \n into textarea
@@ -108,25 +112,12 @@ function setupTerminalKeyBindings(
       return false;
     }
 
-    // Shift+Enter → newline (kitty protocol CSI 13;2u) so Claude Code treats it as newline, not submit.
-    if (e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    // Shift+Enter → newline, Ctrl+Enter → "send now" (kitty CSI-u). See enterKittySequence.
+    const enterSeq = enterKittySequence(e);
+    if (enterSeq) {
       if (e.type === 'keydown') {
-        {
-          const sid = getSessionId();
-          if (sid) window.api.sendInput(sid, '\x1b[13;2u');
-        }
-      }
-      return false;
-    }
-
-    // Ctrl+Enter → newline on Windows/Linux (matches PowerShell convention).
-    // Send the same Shift+Enter kitty sequence that Claude Code recognizes as newline.
-    if (!isMac && e.key === 'Enter' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
-      if (e.type === 'keydown') {
-        {
-          const sid = getSessionId();
-          if (sid) window.api.sendInput(sid, '\x1b[13;2u');
-        }
+        const sid = getSessionId();
+        if (sid) window.api.sendInput(sid, enterSeq);
       }
       return false;
     }
@@ -176,7 +167,11 @@ function setupTerminalKeyBindings(
   const textarea = container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
   if (textarea) {
     textarea.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.shiftKey || (!isMac && e.ctrlKey)) && !e.altKey && !e.metaKey) {
+      // Suppress the browser's literal \n for ANY Ctrl/Shift-modified Enter — a superset
+      // of what enterKittySequence translates. This deliberately also covers
+      // Ctrl+Shift+Enter (which we don't translate): without it the browser would insert
+      // a stray \n into the hidden helper textarea for that combo.
+      if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey) && !e.altKey && !e.metaKey) {
         e.preventDefault();
       }
     }, { capture: true });
