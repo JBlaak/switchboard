@@ -14,6 +14,7 @@ import { TERMINAL_THEMES, applyTerminalTheme } from '../terminal/terminal-themes
 import { PERMISSION_MODES } from '../../../domain/launch/session-options';
 import { shortProjectPath } from '../../../domain/project/project-path';
 import { escapeHtml } from '../../lib/format';
+import { syncQuickSessionButton } from '../sessions/quick-session';
 
 /** A settings blob — open-ended, since each feature writes its own keys. */
 type SettingsRecord = Record<string, any>;
@@ -104,6 +105,7 @@ export async function openSettingsViewer(
   const fontFamilyValue = fieldValue('terminalFontFamily', '');
   const fontSizeValue = fieldValue('terminalFontSize', DEFAULT_TERMINAL_FONT_SIZE);
   const lineHeightValue = fieldValue('terminalLineHeight', DEFAULT_TERMINAL_LINE_HEIGHT);
+  const quickSessionPathValue = fieldValue('quickSessionPath', '');
 
   // Discover available shell profiles
   let shellProfiles: { id: string; name: string; path: string }[] = [];
@@ -200,6 +202,16 @@ export async function openSettingsViewer(
           <input type="text" class="settings-input" id="sv-pre-launch" placeholder="e.g. aws-vault exec profile --" value="${escapeHtml(preLaunchValue)}" ${fieldDisabled('preLaunchCmd')}>
         </div>
       </div>
+
+      ${!isProject ? `<div class="settings-field settings-field-wide">
+        <div class="settings-field-info">
+          <span class="settings-label">Quick Session Folder</span>
+          <div class="settings-description">Where the lightning bolt, ⌘N and N (outside a session) start a session straight away</div>
+        </div>
+        <div class="settings-field-control">
+          <input type="text" class="settings-input" id="sv-quick-session-path" placeholder="/path/to/folder" value="${escapeHtml(quickSessionPathValue)}">
+        </div>
+      </div>` : ''}
     </div>
 
     ${!isProject ? `<div class="settings-section">
@@ -366,6 +378,7 @@ export async function openSettingsViewer(
       settings.chrome = ctl('#sv-chrome').checked;
       settings.preLaunchCmd = ctl('#sv-pre-launch').value.trim();
       settings.addDirs = ctl('#sv-add-dirs').value.trim();
+      settings.quickSessionPath = ctl('#sv-quick-session-path').value.trim();
       settings.visibleSessionCount = parseInt(ctl('#sv-visible-count').value) || 25;
       settings.sessionMaxAgeDays = parseInt(ctl('#sv-max-age').value) || 3;
       settings.terminalTheme = ctl('#sv-terminal-theme').value || 'switchboard';
@@ -408,6 +421,7 @@ export async function openSettingsViewer(
         });
       }
       if (typeof refreshSidebar === 'function') refreshSidebar();
+      void syncQuickSessionButton();
     }
 
     const saveBtn = ctl('#sv-save-btn');

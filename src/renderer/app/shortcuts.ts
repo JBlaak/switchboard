@@ -7,8 +7,14 @@
  * listener steps aside — which is what stops one keypress firing the same action
  * twice.
  */
-import { focusSidebar, isSidebarFocusKey } from '../features/sessions/sidebar-keyboard';
+import {
+  archiveActiveSession, focusSidebar, isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey,
+} from '../features/sessions/sidebar-keyboard';
+import { showProjectPickerDialog } from '../features/dialogs/project-picker-dialog';
 import { handleSessionNavKey } from '../features/terminal/session-nav';
+import {
+  isBareQuickSessionKey, isQuickSessionKey, launchQuickSession,
+} from '../features/sessions/quick-session';
 
 /** An event xterm's own handler has already acted on. */
 type MarkedEvent = KeyboardEvent & { _handled?: boolean };
@@ -24,6 +30,24 @@ export function installShortcuts(): void {
     if (isSidebarFocusKey(e)) {
       e.preventDefault();
       focusSidebar();
+    }
+
+    // Cmd+A opens the new-session picker; in a text field it is Select All.
+    if (isSessionPickerKey(e)) {
+      e.preventDefault();
+      showProjectPickerDialog();
+    }
+
+    // Cmd+E archives the open session; in a text field it is left alone.
+    if (isArchiveSessionKey(e)) {
+      e.preventDefault();
+      archiveActiveSession();
+    }
+
+    // Cmd+N, or N outside the terminal and text fields, starts a quick session.
+    if (isQuickSessionKey(e) || isBareQuickSessionKey(e)) {
+      e.preventDefault();
+      void launchQuickSession();
     }
   });
 }

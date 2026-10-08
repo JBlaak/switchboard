@@ -208,6 +208,9 @@ export async function archiveSessionRow(session: SessionRow, archived: number): 
   // forgetting it — and leaving the pending entry behind would re-inject the
   // row on the next refresh with its own `archived: 0`.
   if (archived && pendingSessions.has(sessionId)) dropPendingSession(sessionId);
+  // Its terminal goes too, rather than staying on screen with an exit banner
+  // in it for a session that is no longer in the list.
+  else if (archived) closeSessionView(sessionId);
   return true;
 }
 
@@ -221,11 +224,13 @@ export function dropPendingSession(sessionId: string): void {
   pendingSessions.delete(sessionId);
   sessionMap.delete(sessionId);
   removeFromCaches(sessionId);
-  if (openSessions.has(sessionId)) destroySession(sessionId);
+  closeSessionView(sessionId);
+}
 
-  if (view.activeSessionId === sessionId) {
-    clearScreen();
-  }
+/** Tear down a session's terminal, and clear the screen if it was the one showing. */
+function closeSessionView(sessionId: string): void {
+  if (openSessions.has(sessionId)) destroySession(sessionId);
+  if (view.activeSessionId === sessionId) clearScreen();
 }
 
 /** Nothing is on screen: hide the terminal chrome and show the placeholder. */

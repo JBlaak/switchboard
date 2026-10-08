@@ -1,6 +1,7 @@
 /* ========== ADD PROJECT BUTTON ==========
    Shaped like the filter toggles beside them: borderless, a soft wash on
    hover. */
+#quick-session-btn,
 #new-session-btn,
 #add-project-btn {
   background: transparent;
@@ -21,15 +22,20 @@
   justify-content: center;
 }
 
-#new-session-btn { margin-left: auto; }
+/* The first of the create buttons pushes the group right; the lightning bolt
+   is hidden until a quick session folder is set. */
+#quick-session-btn,
+#quick-session-btn[hidden] + #new-session-btn { margin-left: auto; }
+#quick-session-btn[hidden] { display: none; }
 
 #add-project-btn:hover {
   background: rgba(var(--sb-overlay-rgb),0.06);
   color: var(--sb-text-hover);
 }
 
-/* The one button in the row that creates something; it takes the mint fill on
-   hover so it reads as the primary action next to the view toggles. */
+/* The buttons in the row that create something; they take the mint fill on
+   hover so they read as the primary actions next to the view toggles. */
+#quick-session-btn:hover,
 #new-session-btn:hover {
   background: var(--sb-mint);
   color: var(--sb-accent);

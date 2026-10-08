@@ -28,7 +28,11 @@ import { showTerminalHeader, updatePtyTitle } from '../sessions/terminal-header'
 import { placeholder, terminalsEl } from '../../lib/dom';
 import { handleSessionNavKey, isSessionNavKey } from '../terminal/session-nav';
 import { hideAllViewers } from '../panel/viewers';
-import { focusSidebar, isSidebarFocusKey } from '../sessions/sidebar-keyboard';
+import {
+  archiveActiveSession, focusSidebar, isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey,
+} from '../sessions/sidebar-keyboard';
+import { showProjectPickerDialog } from '../dialogs/project-picker-dialog';
+import { isQuickSessionKey, launchQuickSession } from '../sessions/quick-session';
 import { openSessions, sessionMap, view } from '../../state/session-store';
 import { remoteStatus } from '../../state/remote-status-store';
 import { TERMINAL_THEME } from '../terminal/terminal-themes';
@@ -114,6 +118,25 @@ function setupTerminalKeyBindings(
     // Cmd+L: hand the keyboard to the session list
     if (isSidebarFocusKey(e)) {
       if (e.type === 'keydown') { e._handled = true; focusSidebar(); }
+      return false;
+    }
+
+    // Cmd+A: open the new-session picker. preventDefault keeps the menu's
+    // Select All from also running.
+    if (isSessionPickerKey(e)) {
+      if (e.type === 'keydown') { e._handled = true; e.preventDefault(); showProjectPickerDialog(); }
+      return false;
+    }
+
+    // Cmd+E: archive this session
+    if (isArchiveSessionKey(e)) {
+      if (e.type === 'keydown') { e._handled = true; archiveActiveSession(); }
+      return false;
+    }
+
+    // Cmd+N: start a quick session
+    if (isQuickSessionKey(e)) {
+      if (e.type === 'keydown') { e._handled = true; void launchQuickSession(); }
       return false;
     }
 

@@ -13,6 +13,7 @@ import { ICONS } from '../../lib/icons';
 import { showAddProjectDialog } from '../dialogs/add-project-dialog';
 import { showProjectPickerDialog } from '../dialogs/project-picker-dialog';
 import { openSettingsViewer } from '../settings/settings-panel';
+import { launchQuickSession, syncQuickSessionButton } from './quick-session';
 
 /** The three toggles that replace one another. */
 type ExclusiveFilter = 'showArchived' | 'showStarredOnly' | 'showRunningOnly';
@@ -57,4 +58,6 @@ export function installSidebarFilters(): void {
 
   el('add-project-btn').addEventListener('click', () => showAddProjectDialog());
   el('new-session-btn').addEventListener('click', () => showProjectPickerDialog());
+  el('quick-session-btn').addEventListener('click', () => void launchQuickSession());
+  void syncQuickSessionButton();
 }
