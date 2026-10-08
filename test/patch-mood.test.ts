@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
-  beatFor, patchBeats, patchMood, timeOfDay, type PatchContext,
+  beatFor, patchBeats, patchMood, pokeBeat, RAPID_POKE_WINDOW_MS, timeOfDay, type PatchContext,
 } from '../src/domain/companion/patch';
 
 /** A context with no weather at midday, so no aside is inserted unless a test asks for one. */
@@ -150,4 +150,19 @@ test('beatFor cycles through the beats so consecutive appearances differ, and wr
   // A stray negative or non-finite count still lands on a beat.
   assert.deepStrictEqual(beatFor(c, -1), beats[2]);
   assert.deepStrictEqual(beatFor(c, Number.NaN), beats[0]);
+});
+
+test('pokes cycle through the reactions', () => {
+  assert.deepStrictEqual(pokeBeat(0, 0, []), { move: 'jelly', line: 'Hey, that tickles!' });
+  assert.strictEqual(pokeBeat(1, 0, []).line, 'Boop!');
+  assert.deepStrictEqual(pokeBeat(7, 0, []), pokeBeat(0, 0, []));
+  assert.deepStrictEqual(pokeBeat(-1, 0, []), pokeBeat(6, 0, []));
+});
+
+test('poking too fast makes Patch dizzy, and slowing down ends it', () => {
+  const four = [1000, 1500, 2000, 2500];
+  assert.strictEqual(pokeBeat(4, 3000, four).line, 'Okay, I’m dizzy now.');
+  assert.strictEqual(pokeBeat(4, 3000, four.slice(1)).line, pokeBeat(4, 0, []).line, 'four in the window is fine');
+  assert.strictEqual(pokeBeat(4, 1000 + RAPID_POKE_WINDOW_MS, four).line, pokeBeat(4, 0, []).line,
+    'the oldest poke has left the window');
 });

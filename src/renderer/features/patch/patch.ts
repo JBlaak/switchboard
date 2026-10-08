@@ -9,15 +9,20 @@
  * Every path that shows the placeholder goes through `showEmptyScreen`, which
  * is what makes "comes into view" a single event rather than a display change
  * scattered across the features.
+ *
+ * Clicking Patch pokes it: it answers straight away with a reaction, dressed
+ * as it was, without gathering the board again.
  */
 import { mountPatch } from '@jblaak/patch';
 import '@jblaak/patch/patch.css';
-import { beatFor, patchMood, timeOfDay } from '../../../domain/companion/patch';
+import {
+  RAPID_POKE_WINDOW_MS, beatFor, patchMood, pokeBeat, timeOfDay,
+} from '../../../domain/companion/patch';
 import { placeholder } from '../../lib/dom';
 import { view } from '../../state/session-store';
 import { tightestUsage, whenUsageLoaded } from '../../state/usage-store';
 import type { PatchContext, PatchSky } from '../../../domain/companion/patch';
-import type { PatchHandle } from '@jblaak/patch';
+import type { PatchHandle, PatchScene } from '@jblaak/patch';
 
 /**
  * How long an appearance waits for the numbers before going with what it has.
@@ -31,12 +36,17 @@ let patch: PatchHandle | null = null;
 let appearances = 0;
 /** Bumped per appearance, so a slow gather cannot overwrite a newer one. */
 let latest = 0;
+/** The scene on screen, which a poke keeps the dressing of. */
+let shown: PatchScene | null = null;
+let pokes = 0;
+/** When the recent pokes landed, oldest first. */
+let pokeTimes: number[] = [];
 
 export function installPatch(): void {
   const stage = document.createElement('div');
   stage.className = 'placeholder-patch';
   placeholder.prepend(stage);
-  patch = mountPatch(stage);
+  patch = mountPatch(stage, { onPoke: poke });
   // Warm main's weather cache, so the first appearance does not wait on it.
   void window.api.getWeather().catch(() => null);
   if (placeholder.style.display !== 'none') void appear();
@@ -55,13 +65,26 @@ async function appear(): Promise<void> {
   const ctx = await gatherContext();
   if (token !== latest || placeholder.style.display === 'none') return;
   const beat = beatFor(ctx, appearances++);
-  patch.appear({
+  shown = {
     move: beat.move,
     line: beat.line,
     mood: patchMood(ctx),
     sky: ctx.sky,
     time: timeOfDay(ctx.hour),
-  });
+  };
+  patch.appear(shown);
+}
+
+function poke(): void {
+  if (!patch || !shown) return;
+  // A poke during a gather wins; the gathered scene would replace the reaction.
+  latest++;
+  const now = Date.now();
+  pokeTimes = pokeTimes.filter(t => now - t < RAPID_POKE_WINDOW_MS);
+  const beat = pokeBeat(pokes++, now, pokeTimes);
+  pokeTimes.push(now);
+  shown = { ...shown, move: beat.move, line: beat.line };
+  patch.appear(shown);
 }
 
 async function gatherContext(): Promise<PatchContext> {

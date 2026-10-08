@@ -61,7 +61,12 @@
   display: none;
 }
 
+/* Above #terminal-area, which covers the whole pane even with no terminal in
+   it and would otherwise swallow every click meant for Patch. The placeholder
+   is hidden whenever a terminal or the settings show, so it never covers them. */
 #placeholder {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;

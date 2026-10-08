@@ -180,3 +180,33 @@ export function beatFor(ctx: PatchContext, appearance: number): PatchBeat {
   const i = ((k % n) + n) % n;
   return beats[i];
 }
+
+/** How many pokes inside `RAPID_POKE_WINDOW_MS` count as being poked too much. */
+export const RAPID_POKES = 5;
+export const RAPID_POKE_WINDOW_MS = 4000;
+
+const POKE_BEATS: readonly PatchBeat[] = [
+  { move: 'jelly', line: 'Hey, that tickles!' },
+  { move: 'hop', line: 'Boop!' },
+  { move: 'twirl', line: 'Wheee! Again?' },
+  { move: 'love', line: 'Aww, hi to you too.' },
+  { move: 'stretch', line: 'Okay, okay, I’m awake!' },
+  { move: 'jelly', line: 'Careful, I’m mostly jelly.' },
+  { move: 'peek', line: 'Need something? The sidebar’s right there.' },
+];
+
+/**
+ * What Patch does when poked: the nth reaction in turn, or a protest when the
+ * pokes come too fast.
+ *
+ * `recentPokes` holds the times of earlier pokes, oldest first; only the ones
+ * inside the window count, so a protest ends on its own once the clicking
+ * slows down.
+ */
+export function pokeBeat(poke: number, now: number, recentPokes: readonly number[]): PatchBeat {
+  const inWindow = recentPokes.filter(t => now - t < RAPID_POKE_WINDOW_MS).length;
+  if (inWindow + 1 >= RAPID_POKES) return { move: 'twirl', line: 'Okay, I’m dizzy now.' };
+  const n = POKE_BEATS.length;
+  const k = Number.isFinite(poke) ? Math.trunc(poke) : 0;
+  return POKE_BEATS[((k % n) + n) % n];
+}
