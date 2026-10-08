@@ -9,7 +9,7 @@
 import { BrowserWindow, screen, shell } from 'electron';
 import path from 'node:path';
 import { boundsToSave, MIN_BOUNDS, restorableBounds } from './window-bounds';
-import { followColorScheme, windowChromeOptions } from './window-chrome';
+import { windowChromeOptions } from './window-chrome';
 import type { WindowBounds } from '../../domain/settings/settings';
 import type { Timers } from '../../application/ports/clock';
 
@@ -84,7 +84,6 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
   void window.loadFile(path.join(deps.appDir, 'renderer', 'index.html'));
 
   containNavigation(window);
-  followColorScheme(window);
   trackBounds(window, deps);
   reportFullscreen(window, deps);
 

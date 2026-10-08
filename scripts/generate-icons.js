@@ -3,7 +3,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const png2icons = require('png2icons');
-const { loadImage, createCanvas } = require('@napi-rs/canvas');
+const { createCanvas } = require('@napi-rs/canvas');
 
 const OUTPUT_DIR = path.join(__dirname, '..', 'build');
 const pngPath = path.join(OUTPUT_DIR, 'icon.png');
@@ -103,29 +103,4 @@ bg.save('${paddedPath}')
   }
 }
 
-// ICO (Windows) — png2icons on all platforms
-const pngBuffer = fs.readFileSync(pngPath);
-const icoBuffer = png2icons.createICO(pngBuffer, png2icons.BICUBIC2, 0, true);
-if (icoBuffer) {
-  const icoPath = path.join(OUTPUT_DIR, 'icon.ico');
-  fs.writeFileSync(icoPath, icoBuffer);
-  console.log(`Created ${icoPath} (${icoBuffer.length} bytes)`);
-}
-
-// Linux: hicolor-sized PNGs for /usr/share/icons/hicolor/<size>x<size>/apps/
-// electron-builder picks these up when linux.icon points at the directory.
-(async () => {
-  const linuxDir = path.join(OUTPUT_DIR, 'icons');
-  fs.mkdirSync(linuxDir, { recursive: true });
-  const img = await loadImage(pngPath);
-  for (const size of [16, 32, 48, 64, 128, 256, 512]) {
-    const c = createCanvas(size, size);
-    const ctx = c.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, 0, 0, size, size);
-    fs.writeFileSync(path.join(linuxDir, `${size}x${size}.png`), c.toBuffer('image/png'));
-  }
-  console.log(`Created ${linuxDir} (Linux hicolor sizes)`);
-  console.log('Icon generation complete.');
-})();
+console.log('Icon generation complete.');

@@ -57,8 +57,6 @@ Switchboard is a desktop app that gives you one view of all your Claude Code ses
 | `Cmd+Shift+[` / `]` | Previous / next session |
 | `Cmd+←` `↑` / `Cmd+→` `↓` | Previous / next session |
 
-On Windows and Linux, use `Ctrl` in place of `Cmd`.
-
 ## Thanks
 
 Switchboard was created by [Doctly](https://github.com/doctly) — thank you to Ali Basiri and
@@ -75,10 +73,7 @@ releases of the original are on [doctly/switchboard](https://github.com/doctly/s
 
 - **Node.js** 20+
 - **npm** 10+
-- Platform build tools for native modules:
-  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
-  - **Linux**: `build-essential`, `python3` (`sudo apt install build-essential python3`)
-  - **Windows**: Visual Studio Build Tools or `npm install -g windows-build-tools`
+- Xcode Command Line Tools for the native modules (`xcode-select --install`)
 
 ## Development Setup
 
@@ -101,35 +96,10 @@ npm run electron
 All build commands bundle CodeMirror first, then invoke electron-builder.
 
 ```bash
-# Current platform
-npm run build
-
-# Platform-specific
 npm run build:mac     # DMG + zip (arm64 + x64)
-npm run build:win     # NSIS installer (x64 + arm64)
-npm run build:linux   # AppImage + deb + pacman (x64 + arm64)
 ```
 
 Output goes to `dist/`.
-
-### Building on Arch / Manjaro
-
-The `deb` and `pacman` targets are built via the `fpm` binary bundled by
-electron-builder, which links against `libcrypt.so.1`. Arch ships `libxcrypt`
-without that legacy ABI, so install the compat shim once:
-
-```bash
-sudo pacman -S libxcrypt-compat
-```
-
-`AppImage` builds without it.
-
-The pacman package is published as **`switchboard-doctly`** rather than
-`switchboard` because the Arch `extra` repo already ships a package named
-`switchboard` (elementary OS's Pantheon Control Center). Renaming avoids the
-file-conflict that would block installation alongside it. The app itself is
-still called Switchboard everywhere users see it — only the package identity
-changes. Uninstall later with `sudo pacman -R switchboard-doctly`.
 
 ## Releasing
 
@@ -140,7 +110,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The GitHub Actions workflow builds for all platforms and publishes to GitHub Releases. You can also release locally:
+The GitHub Actions workflow builds the macOS app and publishes to GitHub Releases. You can also release locally:
 
 ```bash
 npm run release   # builds + publishes to GitHub Releases
@@ -152,8 +122,7 @@ Set `GH_TOKEN` in your environment (a GitHub personal access token with `repo` s
 
 For distribution, set these environment variables:
 
-- **macOS**: `CSC_LINK` (p12 certificate) and `CSC_KEY_PASSWORD`, or sign via Keychain
-- **Windows**: `CSC_LINK` and `CSC_KEY_PASSWORD` for EV/OV code signing
+- `CSC_LINK` (p12 certificate) and `CSC_KEY_PASSWORD`, or sign via Keychain
 - Set `CSC_IDENTITY_AUTO_DISCOVERY=false` to skip signing (CI artifact builds)
 
 The macOS build uses custom entitlements (`build/entitlements.mac.plist`) to allow JIT and unsigned memory execution, required by native modules (node-pty, better-sqlite3).

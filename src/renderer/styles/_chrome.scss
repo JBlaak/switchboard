@@ -7,9 +7,7 @@
       drag region swallows clicks from anything inside it — so every control within
       one has to opt back out with no-drag. Text the user may want to select must opt
       out too, since a drag region can't be selected either.
-   2. The native controls float over the app. macOS draws its traffic lights top-left,
-      over the sidebar; Windows/Linux draw theirs top-right, over the terminal header.
-      Each platform insets only the header the controls actually land on. */
+   2. The traffic lights float over the app, top-left, over the sidebar. */
 
 /* Every view puts its own header in the top strip, so all of them are drag handles —
    otherwise the window becomes immovable depending on which view is open. */
@@ -43,14 +41,4 @@
 /* Fullscreen hides the traffic lights entirely — reclaim their space. */
 .platform-darwin.fullscreen #sidebar.collapsed #sidebar-expand-btn {
   margin-top: 12px;
-}
-
-/* Windows/Linux: the overlay controls are top-right, above whichever header is
-   showing. 138px clears the three-button cluster at the overlay height set in
-   main.js. */
-.platform-win32 #terminal-header,
-.platform-linux #terminal-header,
-.platform-win32 #settings-viewer-header,
-.platform-linux #settings-viewer-header {
-  padding-right: 138px;
 }
