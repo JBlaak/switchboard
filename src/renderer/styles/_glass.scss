@@ -1,8 +1,8 @@
 /* ========== SIDEBAR GLASS ==========
    The window is backed by macOS's sidebar material (see window-chrome.ts) and the
    page is transparent down to it, so the desktop shows through, blurred, wherever
-   nothing paints. Only the sidebar lets it through: #main and the status bar keep
-   their opaque surfaces, and the terminal never sits on glass.
+   nothing paints. Only the sidebar lets it through: #main keeps
+   its opaque surface, and the terminal never sits on glass.
 
    The sidebar lays a thin wash of its own panel colour over the material so it
    stays in the palette's family instead of taking on whatever is behind it.

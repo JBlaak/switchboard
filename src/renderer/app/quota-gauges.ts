@@ -1,14 +1,11 @@
 /**
- * The quota bars in the status bar.
+ * The quota bars in the sidebar footer.
  *
- * One per limit window the usage API reports — a 5-hour session window, a
- * weekly all-models window, and a weekly window per model. Which one bites
- * first varies, and the 5-hour is usually the emptiest while resetting within
- * the day, so showing a single window would read as "plenty left" while a
- * weekly one is the one actually running out.
- *
- * The rows come from the API self-describing, so a newly launched model gets a
- * bar without a code change here.
+ * One for the 5-hour session window and one for the weekly all-models window.
+ * Which one bites first varies, and the 5-hour is usually the emptiest while
+ * resetting within the day, so showing a single window would read as "plenty
+ * left" while the weekly one is the one actually running out. The per-model
+ * weekly windows are filtered out in usageGaugeRows.
  */
 import { shortUsageLabel, usageGaugeRows } from '../../domain/usage/usage';
 import { el } from '../lib/dom';
@@ -21,7 +18,7 @@ const REFRESH_MS = 5 * 60 * 1000;
 const HIGH_PERCENT = 80;
 const MID_PERCENT = 60;
 
-const gaugeEl = el('status-bar-quota');
+const gaugeEl = el('sidebar-footer-quota');
 
 export function installQuotaGauges(): void {
   void refresh();
@@ -66,7 +63,7 @@ function buildBar(row: UsageLimit): HTMLElement {
   value.textContent = percent + '%';
 
   wrap.append(label, track, value);
-  // The full label ("Week (all models)") is too long for a status bar; the
+  // The full label ("Week (all models)") is too long for a gauge row; the
   // tooltip carries it, along with when the window resets.
   wrap.title = `${row.label}: ${percent}%` + (row.reset ? ` — resets ${row.reset}` : '');
   return wrap;

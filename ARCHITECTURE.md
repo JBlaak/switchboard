@@ -80,7 +80,7 @@ renaming a channel is a compile error rather than a runtime `undefined`.
 
 ### `src/renderer` — the driving adapter
 
-- `app/` — bootstrap, the IPC listeners, the tab router, layout, the status bar
+- `app/` — bootstrap, the IPC listeners, the tab router, layout, the sidebar footer
 - `state/` — the session, activity and remote-status stores
 - `features/` — one folder per feature: sessions, terminal, dialogs, plans,
   memory, stats, settings, panel, jsonl, remote
