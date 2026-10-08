@@ -87,7 +87,6 @@ const api: SwitchboardApi = {
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),
-  platform: process.platform,
 };
 
 contextBridge.exposeInMainWorld('api', api);

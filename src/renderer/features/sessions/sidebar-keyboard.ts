@@ -1,10 +1,9 @@
 /**
  * Driving the session list from the keyboard.
  *
- * Cmd+L (Ctrl+Shift+L elsewhere, where Ctrl+L is the shell's clear-screen)
- * takes focus out of the terminal and puts a cursor on the row on screen. The
- * arrows (or J and K) move it, Enter does what a click would, R or F2
- * renames, E archives (a group header archives the whole group), A starts a
+ * Cmd+L takes focus out of the terminal and puts a cursor on the row on
+ * screen. The arrows (or J and K) move it, Enter does what a click would, R or
+ * F2 renames, E archives (a group header archives the whole group), A starts a
  * new session, and Escape goes back to the terminal.
  *
  * The cursor is a class on the element rather than a remembered id: rows,
@@ -14,7 +13,6 @@
  */
 import { sidebarContent } from '../../lib/dom';
 import { openSessions, sessionMap, view } from '../../state/session-store';
-import { isMac } from '../terminal/terminal-manager';
 import { showProjectPickerDialog } from '../dialogs/project-picker-dialog';
 import { startRename } from './session-rename';
 
@@ -25,7 +23,7 @@ const NAVIGABLE = '.session-item, .slug-group-header, .slug-group-more, .session
 
 export function isSidebarFocusKey(e: KeyboardEvent): boolean {
   if (e.altKey || e.code !== 'KeyL') return false;
-  return isMac ? e.metaKey && !e.shiftKey && !e.ctrlKey : e.ctrlKey && e.shiftKey && !e.metaKey;
+  return e.metaKey && !e.shiftKey && !e.ctrlKey;
 }
 
 export function installSidebarKeyboard(): void {

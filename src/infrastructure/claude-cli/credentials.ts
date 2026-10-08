@@ -36,7 +36,6 @@ function keychainServiceName(): string {
 }
 
 function readFromKeychain(): CredentialsFile | null {
-  if (process.platform !== 'darwin') return null;
   try {
     const user = process.env.USER || os.userInfo().username;
     // execFileSync, not a shell: $USER must not be interpolated into a command.

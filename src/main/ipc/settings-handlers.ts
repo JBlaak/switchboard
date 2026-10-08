@@ -19,8 +19,8 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
   /**
    * The shells this machine has.
    *
-   * Discovered once per launch. Re-discovering per request would shell out to
-   * `wsl.exe --list` every time the settings panel opened.
+   * Discovered once per launch rather than re-reading /etc/shells every time
+   * the settings panel opens.
    */
   ipc.handle(INVOKE.getShellProfiles, () => app.shells.list());
 

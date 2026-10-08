@@ -87,8 +87,6 @@ export function applyTerminalFont(font?: StoredFontSettings): void {
 // Two layers needed:
 //   1. attachCustomKeyEventHandler returning false — blocks xterm's key pipeline (onKey/onData)
 //   2. preventDefault on capture-phase keydown — prevents browser inserting \n into textarea
-export const isMac = typeof window !== 'undefined' && window.api && window.api.platform === 'darwin';
-
 /** A keydown this module has already acted on, flagged for the capture listener. */
 interface HandledKeyboardEvent extends KeyboardEvent {
   _handled?: boolean;
@@ -101,8 +99,8 @@ function setupTerminalKeyBindings(
   { onFind }: { onFind?: () => void } = {},
 ): void {
   terminal.attachCustomKeyEventHandler((e: HandledKeyboardEvent) => {
-    // Cmd/Ctrl+F → open terminal search bar
-    if (e.key === 'f' && (isMac ? e.metaKey : e.ctrlKey) && !e.shiftKey && !e.altKey) {
+    // Cmd+F → open terminal search bar
+    if (e.key === 'f' && e.metaKey && !e.shiftKey && !e.altKey) {
       if (e.type === 'keydown' && onFind) onFind();
       return false;
     }
@@ -127,24 +125,6 @@ function setupTerminalKeyBindings(
         if (sid) window.api.sendInput(sid, enterSeq);
       }
       return false;
-    }
-
-    // On Windows/Linux, Ctrl+V is captured by xterm as a control character (0x16)
-    // instead of triggering a paste. Return false to block xterm's key pipeline and
-    // let Electron's Edit menu { role: 'paste' } handle the actual clipboard paste.
-    if (!isMac && e.key === 'v' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
-      return false;
-    }
-
-    // On Windows/Linux, Ctrl+C with a selection should copy instead of sending SIGINT.
-    // When nothing is selected, Ctrl+C falls through to xterm (sends SIGINT as normal).
-    if (!isMac && e.key === 'c' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
-      if (terminal.hasSelection()) {
-        if (e.type === 'keydown') {
-          window.api.writeClipboard(terminal.getSelection());
-        }
-        return false;
-      }
     }
 
     // Space → send directly on keydown (including key-repeat) to ensure reliable
@@ -341,7 +321,7 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
     // iTerm2 let you hold Option to override that; xterm.js requires opting in.
     // Without this, selecting (and therefore copying) inside such a session is
     // impossible on macOS and Cmd+C silently leaves the previous clipboard contents
-    // in place. Windows/Linux get the same escape hatch via Shift, which needs no flag.
+    // in place.
     macOptionClickForcesSelection: true,
     linkHandler: {
       activate: (_event, uri) => {
@@ -353,8 +333,7 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
 
   // OSC 52 — let the program inside the terminal set the system clipboard (this is how
   // Claude Code copies). xterm doesn't wire this up itself, so we do.
-  // Route through the main process — see writeClipboard — because the renderer clipboard
-  // is unreliable on Wayland.
+  // Routed through the main process — see writeClipboard.
   terminal.parser.registerOscHandler(52, (payload) => {
     let text;
     try {
@@ -392,7 +371,7 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
     console.warn('[terminal] WebGL addon failed, falling back to DOM renderer', e);
   }
 
-  // --- Terminal search bar (Cmd/Ctrl+F) ---
+  // --- Terminal search bar (Cmd+F) ---
   const searchBar = document.createElement('div');
   searchBar.className = 'terminal-search-bar';
   searchBar.style.display = 'none';

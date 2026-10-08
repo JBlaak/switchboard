@@ -1,7 +1,7 @@
 // --- Session navigation (Cmd+Shift+[/], Cmd+Arrow) ---
 import { sidebarContent } from '../../lib/dom';
 import { openSessions, view } from '../../state/session-store';
-import { isMac, showSession } from '../terminal/terminal-manager';
+import { showSession } from '../terminal/terminal-manager';
 
 // Returns ordered list of open (non-closed) session IDs matching sidebar order.
 function getOrderedOpenSessionIds() {
@@ -32,16 +32,14 @@ function navigateSession(direction: -1 | 1): void {
 
 // Returns true if the key combo is a session nav shortcut (used by xterm to block without acting)
 export function isSessionNavKey(e: KeyboardEvent): boolean {
-  const mod = isMac ? e.metaKey : e.ctrlKey;
-  if (!mod || e.altKey) return false;
+  if (!e.metaKey || e.altKey) return false;
   if (e.shiftKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) return true;
   if (!e.shiftKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return true;
   return false;
 }
 
 export function handleSessionNavKey(e: KeyboardEvent): boolean {
-  const mod = isMac ? e.metaKey : e.ctrlKey;
-  if (!mod || e.altKey) return false;
+  if (!e.metaKey || e.altKey) return false;
 
   // Cmd+Shift+[ or Cmd+Shift+] — prev/next session
   // On macOS, Shift changes e.key to { / }, so check code for reliable matching

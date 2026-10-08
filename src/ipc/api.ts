@@ -89,5 +89,4 @@ export interface SwitchboardApi {
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */
   getPathForFile(file: File): string;
-  platform: NodeJS.Platform;
 }
