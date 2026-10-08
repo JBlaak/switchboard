@@ -55,6 +55,15 @@ function trackPending(session: SessionRow, remote = false): void {
   refreshSidebar();
 }
 
+/** A Claude session with the project's default options, local or remote. */
+export async function launchClaudeSession(project: Project): Promise<void> {
+  if (project.remote) {
+    await launchRemoteSession(project);
+    return;
+  }
+  await launchNewSession(project, await resolveDefaultSessionOptions(project.projectPath));
+}
+
 /**
  * Start a Claude session and put it on screen.
  *
@@ -62,40 +71,40 @@ function trackPending(session: SessionRow, remote = false): void {
  * somewhere to be printed — which is the only place a failed pre-launch command
  * is visible.
  */
-export async function launchNewSession(project: Project, options?: SessionOptions): Promise<void> {
+async function launchNewSession(project: Project, options?: SessionOptions): Promise<void> {
   const session = newSessionRow(project.projectPath);
   trackPending(session);
   await spawn(session, { isNew: true, options });
 }
 
 /**
- * Start a plain terminal.
+ * Start a plain terminal, in place of one whose shell has exited.
  *
  * Deliberately not a Claude session: no MCP bridge, no transcript, and it is
  * torn down when its shell exits rather than kept around to read.
  */
-export async function launchTerminalSession(project: Project): Promise<void> {
+async function launchTerminalSession(project: Project): Promise<void> {
   const session = newSessionRow(project.projectPath, { summary: 'Terminal', type: 'terminal' });
   trackPending(session);
   await spawn(session, { isNew: true, options: { type: 'terminal' } });
 }
 
 /**
- * Start a session on a remote project.
+ * Start a Claude session on a remote project.
  *
  * The main process records it in settings and connects ssh to a fresh tmux
  * session; unlike a plain terminal the sidebar row persists, so after a
  * disconnect — or an app restart — clicking it re-attaches to the session still
  * running on the far end.
  */
-export async function launchRemoteSession(project: Project, kind: 'claude' | 'shell'): Promise<void> {
+async function launchRemoteSession(project: Project): Promise<void> {
   const session = newSessionRow(project.projectPath, {
-    summary: kind === 'shell' ? 'Remote terminal' : 'Remote Claude',
+    summary: 'Remote Claude',
     type: 'remote',
-    remoteKind: kind,
+    remoteKind: 'claude',
   });
   trackPending(session, true);
-  await spawn(session, { isNew: true, options: { type: 'remote', remoteKind: kind } });
+  await spawn(session, { isNew: true, options: { type: 'remote', remoteKind: 'claude' } });
 }
 
 /** Open an existing session, or bring it forward if it is already open. */

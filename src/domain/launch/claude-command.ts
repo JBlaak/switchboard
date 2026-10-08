@@ -68,7 +68,6 @@ export function buildClaudeArgs(target: SessionTarget, options?: SessionOptions)
 
 /** Everything that shapes the final command string. */
 export interface ClaudeCommandSpec {
-  shellPath: string;
   target: SessionTarget;
   options?: SessionOptions;
 }
@@ -78,8 +77,8 @@ export interface ClaudeCommandSpec {
  *
  * @throws UnsafeLaunchOptionError when `preLaunchCmd` spans more than one line.
  */
-export function buildClaudeCommand({ shellPath, target, options }: ClaudeCommandSpec): string {
-  let command = 'claude ' + quoteArgvForShell(shellPath, buildClaudeArgs(target, options));
+export function buildClaudeCommand({ target, options }: ClaudeCommandSpec): string {
+  let command = 'claude ' + quoteArgvForShell(buildClaudeArgs(target, options));
 
   if (options?.preLaunchCmd) {
     const pre = String(options.preLaunchCmd);

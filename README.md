@@ -41,6 +41,8 @@ Switchboard is a desktop app that gives you one view of all your Claude Code ses
 - The session grid, IDE emulation and its diff side panel, and the Plans, Agent Files and Stats tabs
 - Fork, mark-as-unread and the message-history viewer
 - The scheduled task button
+- The new-session menu: picking a project starts Claude with its defaults, and the configure dialog and plain terminal sessions are gone
+- The Windows and Linux builds; Switchboard is macOS-only
 
 **Under the hood**
 
@@ -85,7 +87,7 @@ npm install
 npm start
 ```
 
-`npm start` bundles CodeMirror and launches Electron. For faster iteration after the first run:
+`npm start` builds the app and launches Electron. For faster iteration after the first run:
 
 ```bash
 npm run electron
@@ -93,7 +95,7 @@ npm run electron
 
 ## Building
 
-All build commands bundle CodeMirror first, then invoke electron-builder.
+All build commands build the app first, then invoke electron-builder.
 
 ```bash
 npm run build:mac     # DMG + zip (arm64 + x64)
@@ -138,7 +140,7 @@ src/domain/          The rules. Pure TypeScript: no node, no Electron, no DOM,
                      shared by both processes
 src/application/     Use cases, written against port interfaces
 src/application/ports/   The interfaces (repository, terminal, filesystem, …)
-src/infrastructure/  The adapters: sqlite, node-pty, fs, ssh, mcp, electron
+src/infrastructure/  The adapters: sqlite, node-pty, fs, ssh, electron
 src/ipc/             The process boundary — channel names and the API contract
 src/main/            Composition root + IPC handler registration + bootstrap
 src/preload/         Context bridge; implements the IPC contract

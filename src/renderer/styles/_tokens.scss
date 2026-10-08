@@ -23,13 +23,12 @@
 
   /* Surfaces, darkest to lightest. The terminal sits on the darkest surface and
      the sidebar floats above it. */
-  --sb-bg-deep:   #1c1d20;  /* status bar */
   --sb-bg-base:   #141517;  /* app background, terminal, main content */
   --sb-bg-panel:  #1c1d20;  /* sidebar, headers, toolbars */
   --sb-bg-raised: #212226;  /* dialogs, toasts, inputs, cards */
 
   /* A hairline, the faint outline a panel gets in the dark, and the lift under
-     anything that floats (dialogs, popovers). */
+     anything that floats (dialogs, toasts). */
   --sb-line: #2e2f33;
   --sb-edge: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
   --sb-lift: 0 22px 44px -14px rgba(0, 0, 0, 0.7);
@@ -38,12 +37,9 @@
   --sb-action:      #ecebe8;
   --sb-action-text: #141517;
 
-  /* Accent: mint ink, the colour of the selected thing. Because it is a light
-     colour, anything filled with it takes --sb-accent-ink for its foreground. */
+  /* Accent: mint ink, the colour of the selected thing. */
   --sb-accent:       #8fd8bf;
-  --sb-accent-hover: #a9e3cf;
   --sb-accent-dim:   #5e9e88;
-  --sb-accent-ink:   #141517;
   --sb-accent-rgb:   143, 216, 191;
 
   /* Pastel fills, each paired with the status ink drawn on it. */
@@ -57,7 +53,6 @@
   /* Text, brightest to faintest — warm neutral grey. */
   --sb-text-strong:  #ecebe8;
   --sb-text:         #d9d7d2;
-  --sb-text-soft:    #cfcdc8;
   --sb-text-dim:     #c2c0bb;
   --sb-text-muted:   #a09e99;
   --sb-text-faint:   #85837f;
@@ -73,10 +68,8 @@
 
   /* The same status hues as bare channels, for tinted fills and borders. */
   --sb-green-rgb:      108, 196, 161;
-  --sb-green-soft-rgb: 143, 216, 191;
   --sb-blue-rgb:       156, 197, 232;
   --sb-red-rgb:        238, 139, 139;
-  --sb-yellow-rgb:     240, 207, 126;
 
   /* One-off hues, folded into the same family. */
   --sb-orange:        #eeab94;  /* needs-attention marker, section 4 label: peach ink */
@@ -86,18 +79,13 @@
   --sb-danger:        #ee8b8b;  /* form errors, destructive hovers */
   --sb-danger-rgb:    238, 139, 139;
   --sb-danger-soft:   #c97373;  /* remove button at rest */
-  --sb-danger-strong: #f29e9e;  /* remove button on hover */
-  --sb-danger-strong-rgb: 242, 158, 158;
   --sb-red-deep:      #b86a6a;  /* stop buttons */
   --sb-green-muted:   #6f8f82;  /* launch-config button */
-  --sb-blue-text:     #9cc5e8;  /* the "remote" filter when active */
   --sb-search-text:   #d9d7d2;  /* terminal find bar */
 
   /* Neutral greys outside the text ramp. */
   --sb-text-max:         #ffffff;  /* brightest highlight: toggles, shimmer peak */
   --sb-text-hover:       #b5b3ae;  /* icon buttons on hover */
-  --sb-text-quiet:       #a09e99;  /* update toast's dismiss, on hover */
-  --sb-text-subtle:      #7a7975;  /* close glyphs, hints */
   --sb-text-placeholder: #6a6965;
   --sb-text-ghost:       #6e6d69;  /* search icon, empty-state hints */
   --sb-border-strong:    #3d3e43;
@@ -145,7 +133,6 @@
    light accent is the deep mint ink and its own ink flips to white. */
 @media (prefers-color-scheme: light) {
   :root {
-    --sb-bg-deep:   #f0f3f8;
     --sb-bg-base:   #fafbfd;
     --sb-bg-panel:  #f0f3f8;
     --sb-bg-raised: #ffffff;
@@ -158,9 +145,7 @@
     --sb-action-text: #ffffff;
 
     --sb-accent:       #1c6e56;
-    --sb-accent-hover: #155a46;
     --sb-accent-dim:   #6fb39c;
-    --sb-accent-ink:   #ffffff;
     --sb-accent-rgb:   28, 110, 86;
 
     --sb-mint:  #e3f7ef;
@@ -172,7 +157,6 @@
 
     --sb-text-strong:  #16181d;
     --sb-text:         #262a31;
-    --sb-text-soft:    #30353d;
     --sb-text-dim:     #3d434c;
     --sb-text-muted:   #626b78;
     --sb-text-faint:   #7b8491;
@@ -185,10 +169,8 @@
     --sb-yellow:     #7a5a0c;
 
     --sb-green-rgb:      46, 138, 104;
-    --sb-green-soft-rgb: 28, 110, 86;
     --sb-blue-rgb:       37, 95, 140;
     --sb-red-rgb:        184, 58, 58;
-    --sb-yellow-rgb:     122, 90, 12;
 
     --sb-orange:        #9a3c22;
     --sb-orange-rgb:    154, 60, 34;
@@ -197,17 +179,12 @@
     --sb-danger:        #c0392b;
     --sb-danger-rgb:    192, 57, 43;
     --sb-danger-soft:   #b04a3e;
-    --sb-danger-strong: #a8281b;
-    --sb-danger-strong-rgb: 168, 40, 27;
     --sb-red-deep:      #a33a3a;
     --sb-green-muted:   #4f7a68;
-    --sb-blue-text:     #255f8c;
     --sb-search-text:   #262a31;
 
     --sb-text-max:         #000000;
     --sb-text-hover:       #3d434c;
-    --sb-text-quiet:       #626b78;
-    --sb-text-subtle:      #7b8491;
     --sb-text-placeholder: #aab2bd;
     --sb-text-ghost:       #98a1ad;
     --sb-border-strong:    #cfd6df;

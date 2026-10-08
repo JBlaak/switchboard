@@ -14,8 +14,8 @@ booting Electron, opening a database or spawning a process.
     adapter)          │        ▼                      │
                       │  application ── ports ──▶ infrastructure
                       │        ▼                  (sqlite, node-pty,
-                      │     domain                 fs, ssh, mcp,
-                      └───────────────────────     electron, claude-cli)
+                      │     domain                 fs, ssh, electron,
+                      └───────────────────────     claude-cli)
 ```
 
 Dependencies point inward only. `domain` imports nothing. `application` imports
@@ -36,9 +36,9 @@ remote-status rules the main process does instead of a parallel copy.
 | `project/` | project-path encoding and shortening, `ssh://` identity, assembling the project list |
 | `remote/` | the SSH reconnect policy, the ssh command, connection status |
 | `terminal/` | OSC parsing (busy/idle/notifications), the output ring buffer, the banners Switchboard writes itself |
-| `shell/` | shell families, argv quoting, WSL paths |
+| `shell/` | shell profiles and argv quoting |
 | `launch/` | the `claude` command line, session options, the child environment |
-| `search/`, `settings/`, `schedule/`, `plans/`, `agent-files/`, `usage/` | the rules for each of those, similarly |
+| `search/`, `settings/`, `schedule/`, `usage/` | the rules for each of those, similarly |
 
 ### `src/application` — the use cases
 
@@ -46,7 +46,7 @@ Orchestration written against interfaces.
 
 - **`ports/`** — the interfaces. `SessionRepository`, `SearchIndex`,
   `SettingsStore`, `TerminalGateway`, `TranscriptStore`, `RendererGateway`,
-  `FileSystem`, `IdeBridge`, `Clock`, `Timers`, `Logger`, and a few more.
+  `FileSystem`, `ShellProfiles`, `Clock`, `Timers`, `Logger`, and a few more.
 - **`model/`** — `ActiveSession` (a running session: a PTY, a buffer, a
   connection) and `SessionRegistry`, which can find a session by any id it has
   answered to.
@@ -61,9 +61,9 @@ Nothing here reads `Date.now()`, calls `setTimeout`, or touches a file directly.
 
 One implementation per port: `sqlite/` behind the repository and the index,
 `pty/` behind the terminal gateway, `fs/` behind the filesystem and the
-transcript store, `ssh/`-shaped logic inside the supervisor, `mcp/` behind the
-IDE bridge, `electron/` behind the window, the menu and the renderer
-gateway, `claude-cli/` behind usage and statistics, `worker/` behind
+transcript store, `ssh/`-shaped logic inside the supervisor, `shell/` behind
+the shell profiles, `electron/` behind the window, the menu and the renderer
+gateway, `claude-cli/` behind usage and scheduled runs, `worker/` behind
 the cold-start scanner.
 
 ### `src/main` — the composition root
@@ -82,9 +82,9 @@ renaming a channel is a compile error rather than a runtime `undefined`.
 
 - `app/` — bootstrap, the IPC listeners, the tab router, layout, the sidebar footer
 - `state/` — the session, activity and remote-status stores
-- `features/` — one folder per feature: sessions, terminal, dialogs, plans,
-  memory, stats, settings, panel, jsonl, remote
-- `lib/` — DOM handles, formatting, icons, the editor setup
+- `features/` — one folder per feature: sessions, terminal, dialogs,
+  settings, panel, remote
+- `lib/` — DOM handles, formatting, icons, motion
 
 ## How to add something
 

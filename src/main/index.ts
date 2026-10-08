@@ -54,9 +54,9 @@ function main(): void {
     window.focus();
   });
 
-  app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
-  });
+  // Listening at all is the point: without a listener Electron quits when the
+  // last window closes, and a Mac app stays running in the Dock instead.
+  app.on('window-all-closed', () => {});
 
   app.on('before-quit', () => {
     container.projectsWatcher.stop();

@@ -20,8 +20,7 @@ export interface SystemGateway {
    * Copy text to the clipboard.
    *
    * Goes through the host rather than the renderer's `navigator.clipboard`,
-   * which is gated on focus and user activation and is flaky-to-dead on
-   * Linux/Wayland.
+   * which is gated on focus and user activation.
    */
   writeClipboard(text: string): void;
   appVersion(): string;

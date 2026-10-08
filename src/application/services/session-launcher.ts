@@ -10,7 +10,6 @@
  */
 import { buildClaudeCommand, PLAIN_TERMINAL_CLAUDE_SHIM } from '../../domain/launch/claude-command';
 import { claudeSessionEnv, plainTerminalEnv } from '../../domain/launch/terminal-env';
-import { isWslShell, windowsToWslPath } from '../../domain/shell/shell-profile';
 import { shellArgs } from '../../domain/shell/quoting';
 import {
   isRemoteProjectPath, parseRemoteProjectPath, remoteTargetLabel,
@@ -68,18 +67,7 @@ export interface SessionLauncherDeps {
   clock: Clock;
   timers: Timers;
   log: Logger;
-  homeDir: string;
   fileExists(path: string): boolean;
-}
-
-/** The resolved shell for a launch, plus what WSL needs on top. */
-interface ResolvedShell {
-  profile: ShellProfile;
-  path: string;
-  extraArgs: string[];
-  isWsl: boolean;
-  /** WSL spawns from a Windows path but starts the session elsewhere. */
-  cwd: string;
 }
 
 export class SessionLauncher {
@@ -125,8 +113,8 @@ export class SessionLauncher {
     }
 
     const isPlainTerminal = !isRemote && options?.type === 'terminal';
-    const shell = this.#resolveShell(projectPath, isPlainTerminal);
-    log.info(`[shell] profile=${shell.profile.id} shell=${shell.path} args=${JSON.stringify(shell.extraArgs)}`);
+    const shell = this.#resolveShell(projectPath);
+    log.info(`[shell] profile=${shell.id} shell=${shell.path}`);
 
     const bookkeeping = (!isPlainTerminal && !isRemote)
       ? this.#snapshotTranscripts(projectPath, sessionId, isNew)
@@ -142,7 +130,7 @@ export class SessionLauncher {
         remoteState = started.state;
         pty = started.pty;
       } else if (isPlainTerminal) {
-        pty = this.#startPlainTerminal(shell);
+        pty = this.#startPlainTerminal(projectPath, shell);
       } else {
         const started = await this.#startClaude(sessionId, projectPath, isNew, shell, options);
         if ('error' in started) return { ok: false, error: started.error };
@@ -176,35 +164,10 @@ export class SessionLauncher {
     return { ok: true, reattached: false };
   }
 
-  /**
-   * Which shell to launch in.
-   *
-   * WSL profiles only work for plain terminals — a Claude session needs the
-   * Windows shell, because the session data lives on the Windows filesystem —
-   * so a WSL profile silently falls back to auto-detection for one.
-   */
-  #resolveShell(projectPath: string, isPlainTerminal: boolean): ResolvedShell {
-    const { shells, settings, homeDir } = this.deps;
-    const requested = shells.resolve(settings.shellProfileId(projectPath));
-    const profile = (isWslShell(requested.path) && !isPlainTerminal)
-      ? shells.resolve('auto')
-      : requested;
-
-    const extraArgs = [...(profile.args || [])];
-    const isWsl = isWslShell(profile.path);
-    if (isWsl) {
-      // The distribution sees a /mnt/ path, but wsl.exe itself must be spawned
-      // from a valid Windows directory.
-      extraArgs.unshift('--cd', windowsToWslPath(projectPath));
-    }
-
-    return {
-      profile,
-      path: profile.path,
-      extraArgs,
-      isWsl,
-      cwd: isWsl ? homeDir : projectPath,
-    };
+  /** Which shell to launch in. */
+  #resolveShell(projectPath: string): ShellProfile {
+    const { shells, settings } = this.deps;
+    return shells.resolve(settings.shellProfileId(projectPath));
   }
 
   /**
@@ -242,7 +205,7 @@ export class SessionLauncher {
   #startRemote(
     sessionId: string,
     projectPath: string,
-    shell: ResolvedShell,
+    shell: ShellProfile,
     options?: SessionOptions,
   ): { state: RemoteConnectionState; pty: PtyHandle } | { error: string } {
     const { settings, renderer, remote, clock } = this.deps;
@@ -261,7 +224,6 @@ export class SessionLauncher {
       remote: config,
       kind: record.kind,
       shell: shell.path,
-      shellExtraArgs: shell.extraArgs,
       target: remoteTargetLabel(config),
       attempt: 0,
       timer: null,
@@ -277,12 +239,12 @@ export class SessionLauncher {
   }
 
   /** Start an interactive login shell, with no `claude` in it. */
-  #startPlainTerminal(shell: ResolvedShell): PtyHandle {
+  #startPlainTerminal(projectPath: string, shell: ShellProfile): PtyHandle {
     const { terminals, timers } = this.deps;
     const pty = terminals.spawn({
       file: shell.path,
-      args: shellArgs(shell.path, undefined, shell.extraArgs),
-      cwd: shell.cwd,
+      args: shellArgs(shell.path),
+      cwd: projectPath,
       cols: SPAWN_COLS,
       rows: SPAWN_ROWS,
       env: plainTerminalEnv(terminals.baseEnv),
@@ -308,7 +270,7 @@ export class SessionLauncher {
     sessionId: string,
     projectPath: string,
     isNew: boolean,
-    shell: ResolvedShell,
+    shell: ShellProfile,
     options?: SessionOptions,
   ): Promise<{ pty: PtyHandle } | { error: string }> {
     const { terminals } = this.deps;
@@ -316,7 +278,6 @@ export class SessionLauncher {
     let command: string;
     try {
       command = buildClaudeCommand({
-        shellPath: shell.path,
         target: { sessionId, isNew },
         options,
       });
@@ -326,8 +287,8 @@ export class SessionLauncher {
 
     const pty = terminals.spawn({
       file: shell.path,
-      args: shellArgs(shell.path, command, shell.extraArgs),
-      cwd: shell.cwd,
+      args: shellArgs(shell.path, command),
+      cwd: projectPath,
       cols: SPAWN_COLS,
       rows: SPAWN_ROWS,
       env: claudeSessionEnv(terminals.baseEnv),

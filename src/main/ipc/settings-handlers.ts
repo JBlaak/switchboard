@@ -1,5 +1,5 @@
 /**
- * Settings, shell profiles and scheduled tasks.
+ * Settings and shell profiles.
  */
 import { INVOKE } from '../../ipc/channels';
 import { normaliseAppearance } from '../../domain/settings/appearance';
@@ -12,10 +12,6 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
     app.settings.set(key, value);
     return { ok: true };
   });
-  ipc.handle(INVOKE.deleteSetting, (key: string) => {
-    app.settings.delete(key);
-    return { ok: true };
-  });
 
   ipc.handle(INVOKE.getEffectiveSettings, (projectPath: string | null) =>
     app.settings.effective(projectPath));
@@ -23,8 +19,8 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
   /**
    * The shells this machine has.
    *
-   * Discovered once per launch. Re-discovering per request would shell out to
-   * `wsl.exe --list` every time the settings panel opened.
+   * Discovered once per launch rather than re-reading /etc/shells every time
+   * the settings panel opens.
    */
   ipc.handle(INVOKE.getShellProfiles, () => app.shells.list());
 
@@ -42,10 +38,4 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
     app.appearance.apply(appearance);
     return { ok: true, appearance };
   });
-
-  // ── Scheduled tasks ──
-  ipc.handle(INVOKE.getScheduleCreatorCommand, () => app.schedules.readCreatorCommand());
-  ipc.handle(INVOKE.createScheduleSession, (projectPath: string) =>
-    app.schedules.createCreatorSession(projectPath));
-  ipc.handle(INVOKE.runScheduleNow, (filePath: string) => app.schedules.runNow(filePath));
 }

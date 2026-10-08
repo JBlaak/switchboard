@@ -3,12 +3,11 @@
  *
  * Switchboard does not have a form for building a scheduled task — cron
  * expressions and tool allowlists are exactly the kind of thing a conversation
- * is better at than a dialog. So "new schedule" opens a Claude session seeded
- * with these two texts: the command file that tells it how to write a schedule,
- * and a first message that tells the user what is going on.
+ * is better at than a dialog. So it installs a slash command instead, and any
+ * Claude session can be asked to write a schedule.
  *
- * They are prose rather than code, which is why they live in a file of their
- * own; the service that installs and seeds them is next door.
+ * It is prose rather than code, which is why it lives in a file of its own; the
+ * service that installs it is next door.
  */
 
 /** Installed as `~/.claude/commands/create-switchboard-schedule.md`. */
@@ -87,28 +86,3 @@ Default permission-mode is \`acceptEdits\`. Always include at least \`Read\` and
 - After saving, tell the user: "Your scheduled task is saved! It will appear in Switchboard's brain tab with a schedule icon. You can enable/disable it or edit the schedule from there."
 - If the user wants to see existing schedules, list any \`schedule-*.md\` files in \`.claude/commands/\`
 `;
-
-/** The first message the seeded session opens with. */
-export const SCHEDULE_WELCOME_MESSAGE = `## Switchboard Scheduled Task Creator
-
-Welcome! This session will help you create a **scheduled task** that runs automatically on a cron schedule using Claude Code.
-
-### How it works
-- Describe **what** you want the task to do and **when** it should run
-- I'll generate a schedule file with the right cron expression and prompt
-- The schedule file gets saved to this project's \`.claude/commands/\` directory as a command — so it can also be run manually from any Claude session using \`/schedule-<name>\`
-- Once saved, it appears in the **brain tab** with a clock icon where you can edit it directly
-- To edit, you can also ask use this schedule claude session to ask to edit existing commands.
-- Switchboard runs matching schedules automatically in the background — each run creates a session grouped under the task's slug
-
-### What you can configure
-- **The prompt** — what Claude should do each time the task runs
-- **The schedule** — any cron pattern (e.g. "every weekday at 9am", "hourly", "first Monday of the month")
-- **CLI settings** — model, permission mode, budget cap, allowed tools, additional directories
-
-### To get started
-Just describe the task you have in mind, or try one of these:
-- **"What are my existing schedules?"** — list just the scheduled tasks
-- **"Edit schedule-hn-digest to run every 5 minutes instead of hourly"** — modify an existing schedule
-- **"Create a task that runs the test suite every morning at 8am"** — create a new one
-- **"Disable schedule-repo-health"** — toggle a schedule off`;

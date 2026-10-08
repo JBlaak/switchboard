@@ -120,7 +120,6 @@ export function buildContainer(): Container {
   // Constructed in that order and closed with `attach`.
   const remote = new RemoteConnectionSupervisor({
     registry, terminals, renderer, timers, clock, log,
-    isWindows: shells.isWindows,
     homeDir: paths.homeDir,
   });
   const lifecycle = new SessionLifecycle({
@@ -131,7 +130,6 @@ export function buildContainer(): Container {
   const launcher = new SessionLauncher({
     registry, terminals, shells, transcripts, settings,
     lifecycle, remote, renderer, clock, timers, log,
-    homeDir: paths.homeDir,
     fileExists: (target) => fs.exists(target),
   });
 

@@ -18,29 +18,26 @@ try {
   }
 }
 
-// macOS/Linux: ad-hoc codesign native modules & fix node-pty permissions
-if (process.platform !== 'win32') {
-  // Ad-hoc codesign all .node files so macOS doesn't block them
+// Ad-hoc codesign all .node files so macOS doesn't block them
+try {
+  const nodeModules = path.join(__dirname, '..', 'node_modules');
+  findFiles(nodeModules, '.node').forEach(file => {
+    try {
+      execSync(`codesign --sign - --force "${file}"`, { stdio: 'ignore' });
+    } catch {}
+  });
+} catch {}
+
+// Ensure node-pty spawn-helper is executable
+const spawnHelperGlob = path.join(
+  __dirname, '..', 'node_modules', 'node-pty', 'prebuilds'
+);
+if (fs.existsSync(spawnHelperGlob)) {
   try {
-    const nodeModules = path.join(__dirname, '..', 'node_modules');
-    findFiles(nodeModules, '.node').forEach(file => {
-      try {
-        execSync(`codesign --sign - --force "${file}"`, { stdio: 'ignore' });
-      } catch {}
+    findFiles(spawnHelperGlob, 'spawn-helper').forEach(file => {
+      fs.chmodSync(file, 0o755);
     });
   } catch {}
-
-  // Ensure node-pty spawn-helper is executable
-  const spawnHelperGlob = path.join(
-    __dirname, '..', 'node_modules', 'node-pty', 'prebuilds'
-  );
-  if (fs.existsSync(spawnHelperGlob)) {
-    try {
-      findFiles(spawnHelperGlob, 'spawn-helper').forEach(file => {
-        fs.chmodSync(file, 0o755);
-      });
-    } catch {}
-  }
 }
 
 function findFiles(dir, suffix) {

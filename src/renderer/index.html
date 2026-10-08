@@ -8,12 +8,6 @@
        (xterm's stylesheet); style.css is the compiled SCSS. -->
   <link rel="stylesheet" href="renderer.css">
   <link rel="stylesheet" href="style.css">
-  <script>
-    // The window is frameless and the traffic lights overlay the app's own headers,
-    // which have to make room for them. Set here rather than in app.js so the inset is in place for the first paint;
-    // applying it later reflows the whole chrome in front of the user.
-    document.documentElement.classList.add('platform-' + (window.api ? window.api.platform : 'unknown'));
-  </script>
 </head>
 <body>
   <div id="app-container">

@@ -39,16 +39,9 @@ const api: SwitchboardApi = {
   // ── Settings ──
   getSetting: (key) => ipcRenderer.invoke(INVOKE.getSetting, key),
   setSetting: (key, value) => ipcRenderer.invoke(INVOKE.setSetting, key, value),
-  deleteSetting: (key) => ipcRenderer.invoke(INVOKE.deleteSetting, key),
   getEffectiveSettings: (projectPath) => ipcRenderer.invoke(INVOKE.getEffectiveSettings, projectPath),
   getShellProfiles: () => ipcRenderer.invoke(INVOKE.getShellProfiles),
   setAppearance: (mode) => ipcRenderer.invoke(INVOKE.setAppearance, mode),
-
-  // ── Schedules ──
-  getScheduleCreatorCommand: () => ipcRenderer.invoke(INVOKE.getScheduleCreatorCommand),
-  createScheduleSession: (projectPath) => ipcRenderer.invoke(INVOKE.createScheduleSession, projectPath),
-  runScheduleNow: (filePath) => ipcRenderer.invoke(INVOKE.runScheduleNow, filePath),
-
 
   // ── Host ──
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
@@ -94,7 +87,6 @@ const api: SwitchboardApi = {
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),
-  platform: process.platform,
 };
 
 contextBridge.exposeInMainWorld('api', api);

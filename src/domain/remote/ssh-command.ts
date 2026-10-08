@@ -11,7 +11,6 @@
  * session lives on.
  */
 import { quoteArgvForShell, shellArgs } from '../shell/quoting';
-import { isPowerShell } from '../shell/shell-profile';
 import { expandRemoteDir, normalizeRemoteDir, tmuxSessionName } from '../project/remote-target';
 import type { RemoteConfig } from '../project/remote-target';
 
@@ -38,13 +37,6 @@ export const CONNECT_TIMEOUT_SECONDS = 10;
 export interface SshSpawn {
   file: string;
   args: string[];
-}
-
-export interface SshSpawnOptions {
-  shell?: string | null;
-  shellExtraArgs?: readonly string[];
-  /** Windows spawns ssh directly; see buildSshSpawn. */
-  windows?: boolean;
 }
 
 /** The argv for ssh itself, ending in the command to run on the remote host. */
@@ -95,16 +87,9 @@ export function buildSshArgv(remote: RemoteConfig, sessionId: string, kind?: str
  * user actually uses. `exec` replaces the shell with ssh, so the PTY still
  * drives ssh itself and closing the session detaches from tmux exactly as
  * before.
- *
- * Windows spawns ssh directly: ssh.exe reaches its agent over a named pipe, so
- * there is nothing to inherit, and cmd/PowerShell have no exec.
  */
-export function buildSshSpawn(
-  sshArgv: string[],
-  { shell, shellExtraArgs = [], windows = false }: SshSpawnOptions = {},
-): SshSpawn {
-  if (windows || !shell) return { file: 'ssh', args: sshArgv };
-  const exec = isPowerShell(shell) ? '' : 'exec ';
-  const cmd = exec + 'ssh ' + quoteArgvForShell(shell, sshArgv);
-  return { file: shell, args: shellArgs(shell, cmd, shellExtraArgs) };
+export function buildSshSpawn(sshArgv: string[], shell?: string | null): SshSpawn {
+  if (!shell) return { file: 'ssh', args: sshArgv };
+  const cmd = 'exec ssh ' + quoteArgvForShell(sshArgv);
+  return { file: shell, args: shellArgs(shell, cmd) };
 }

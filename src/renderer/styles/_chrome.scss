@@ -34,11 +34,11 @@
 
 /* Collapsed to a 42px rail, the sidebar is narrower than the traffic lights, so the
    expand button would sit underneath them. Push it below instead. */
-.platform-darwin #sidebar.collapsed #sidebar-expand-btn {
+#sidebar.collapsed #sidebar-expand-btn {
   margin-top: 44px;
 }
 
 /* Fullscreen hides the traffic lights entirely — reclaim their space. */
-.platform-darwin.fullscreen #sidebar.collapsed #sidebar-expand-btn {
+.fullscreen #sidebar.collapsed #sidebar-expand-btn {
   margin-top: 12px;
 }

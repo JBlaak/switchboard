@@ -2,7 +2,6 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const png2icons = require('png2icons');
 const { createCanvas } = require('@napi-rs/canvas');
 
 const OUTPUT_DIR = path.join(__dirname, '..', 'build');
@@ -52,18 +51,17 @@ if (!fs.existsSync(pngPath)) {
   console.log(`Using existing ${pngPath}`);
 }
 
-// macOS: create padded icon (macOS expects ~80% inset with transparent border)
+// Create a padded icon (macOS expects ~80% inset with transparent border)
 // then use iconutil for perfect transparency support
-if (process.platform === 'darwin') {
-  const paddedPath = path.join(OUTPUT_DIR, 'icon-padded.png');
-  // Create a 1024x1024 transparent canvas with the icon at 80% centered
-  const PADDED_SIZE = 1024;
-  const INSET = Math.round(PADDED_SIZE * 0.1); // 10% padding on each side = 80% content
-  const INNER = PADDED_SIZE - INSET * 2;
-  execSync(`sips -z ${INNER} ${INNER} "${pngPath}" --out "${paddedPath}"`, { stdio: 'ignore' });
-  // Use sips to pad: create blank canvas then composite
-  // sips can't composite easily, so use a Python one-liner with CoreImage
-  execSync(`python3 -c "
+const paddedPath = path.join(OUTPUT_DIR, 'icon-padded.png');
+// Create a 1024x1024 transparent canvas with the icon at 80% centered
+const PADDED_SIZE = 1024;
+const INSET = Math.round(PADDED_SIZE * 0.1); // 10% padding on each side = 80% content
+const INNER = PADDED_SIZE - INSET * 2;
+execSync(`sips -z ${INNER} ${INNER} "${pngPath}" --out "${paddedPath}"`, { stdio: 'ignore' });
+// Use sips to pad: create blank canvas then composite
+// sips can't composite easily, so use a Python one-liner with CoreImage
+execSync(`python3 -c "
 from PIL import Image
 bg = Image.new('RGBA', (${PADDED_SIZE}, ${PADDED_SIZE}), (0, 0, 0, 0))
 fg = Image.open('${paddedPath}').convert('RGBA')
@@ -71,36 +69,27 @@ bg.paste(fg, (${INSET}, ${INSET}), fg)
 bg.save('${paddedPath}')
 "`, { stdio: 'inherit' });
 
-  const iconsetDir = path.join(OUTPUT_DIR, 'icon.iconset');
-  fs.mkdirSync(iconsetDir, { recursive: true });
+const iconsetDir = path.join(OUTPUT_DIR, 'icon.iconset');
+fs.mkdirSync(iconsetDir, { recursive: true });
 
-  const sizes = [16, 32, 64, 128, 256, 512, 1024];
-  for (const size of sizes) {
-    // Standard resolution
-    execSync(`sips -z ${size} ${size} "${paddedPath}" --out "${path.join(iconsetDir, `icon_${size}x${size}.png`)}"`, { stdio: 'ignore' });
-    // @2x (half the name, double the pixels)
-    if (size <= 512) {
-      execSync(`sips -z ${size * 2} ${size * 2} "${paddedPath}" --out "${path.join(iconsetDir, `icon_${size}x${size}@2x.png`)}"`, { stdio: 'ignore' });
-    }
-  }
-  // Rename 1024 to 512@2x (required by iconutil)
-  const icon1024 = path.join(iconsetDir, 'icon_1024x1024.png');
-  if (fs.existsSync(icon1024)) fs.unlinkSync(icon1024);
-
-  const icnsPath = path.join(OUTPUT_DIR, 'icon.icns');
-  execSync(`iconutil -c icns "${iconsetDir}" -o "${icnsPath}"`, { stdio: 'ignore' });
-  // Clean up
-  fs.rmSync(iconsetDir, { recursive: true });
-  fs.unlinkSync(paddedPath);
-  console.log(`Created ${icnsPath} (with macOS padding)`);
-} else {
-  // Non-macOS fallback: use png2icons
-  const pngBuffer = fs.readFileSync(pngPath);
-  const icnsBuffer = png2icons.createICNS(pngBuffer, png2icons.BICUBIC2, 0);
-  if (icnsBuffer) {
-    fs.writeFileSync(path.join(OUTPUT_DIR, 'icon.icns'), icnsBuffer);
-    console.log(`Created icon.icns (${icnsBuffer.length} bytes)`);
+const sizes = [16, 32, 64, 128, 256, 512, 1024];
+for (const size of sizes) {
+  // Standard resolution
+  execSync(`sips -z ${size} ${size} "${paddedPath}" --out "${path.join(iconsetDir, `icon_${size}x${size}.png`)}"`, { stdio: 'ignore' });
+  // @2x (half the name, double the pixels)
+  if (size <= 512) {
+    execSync(`sips -z ${size * 2} ${size * 2} "${paddedPath}" --out "${path.join(iconsetDir, `icon_${size}x${size}@2x.png`)}"`, { stdio: 'ignore' });
   }
 }
+// Rename 1024 to 512@2x (required by iconutil)
+const icon1024 = path.join(iconsetDir, 'icon_1024x1024.png');
+if (fs.existsSync(icon1024)) fs.unlinkSync(icon1024);
+
+const icnsPath = path.join(OUTPUT_DIR, 'icon.icns');
+execSync(`iconutil -c icns "${iconsetDir}" -o "${icnsPath}"`, { stdio: 'ignore' });
+// Clean up
+fs.rmSync(iconsetDir, { recursive: true });
+fs.unlinkSync(paddedPath);
+console.log(`Created ${icnsPath} (with macOS padding)`);
 
 console.log('Icon generation complete.');

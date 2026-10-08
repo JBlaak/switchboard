@@ -184,12 +184,3 @@ export function injectIntoCaches(session: SessionRow, folder: string, remote = f
     }
   }
 }
-
-/** The project a session belongs to, as far as the cached lists know. */
-export function projectOf(sessionId: string): Project | undefined {
-  for (const list of [view.cachedAllProjects, view.cachedProjects]) {
-    const found = list.find(p => p.sessions.some(s => s.sessionId === sessionId));
-    if (found) return found;
-  }
-  return undefined;
-}
