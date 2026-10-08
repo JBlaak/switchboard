@@ -46,7 +46,6 @@
     "electron-builder": "^26.0.0",
     "electron-reloader": "^1.2.3",
     "esbuild": "^0.27.3",
-    "png2icons": "^2.0.1",
     "sass": "^1.104.0",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
