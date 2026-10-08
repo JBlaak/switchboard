@@ -3,9 +3,9 @@
  *
  * Cmd+L (Ctrl+Shift+L elsewhere, where Ctrl+L is the shell's clear-screen)
  * takes focus out of the terminal and puts a cursor on the row on screen. The
- * arrows move it, Enter does what a click would, R or F2 renames, A archives
- * (a group header archives the whole group), and Escape goes back to the
- * terminal.
+ * arrows (or J and K) move it, Enter does what a click would, R or F2
+ * renames, E archives (a group header archives the whole group), A starts a
+ * new session, and Escape goes back to the terminal.
  *
  * The cursor is a class on the element rather than a remembered id: rows,
  * group headers and the "more" toggles all take part, and only rows have ids.
@@ -15,6 +15,7 @@
 import { sidebarContent } from '../../lib/dom';
 import { openSessions, sessionMap, view } from '../../state/session-store';
 import { isMac } from '../terminal/terminal-manager';
+import { showProjectPickerDialog } from '../dialogs/project-picker-dialog';
 import { startRename } from './session-rename';
 
 export const CURSOR_CLASS = 'kbd-cursor';
@@ -63,6 +64,12 @@ function onKeyDown(e: KeyboardEvent): void {
       e.preventDefault();
       step(e.key === 'ArrowDown' ? 1 : -1);
       return;
+    case 'j':
+    case 'k':
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      step(e.key === 'j' ? 1 : -1);
+      return;
     case 'Enter':
       e.preventDefault();
       currentCursor()?.click();
@@ -73,10 +80,15 @@ function onKeyDown(e: KeyboardEvent): void {
       e.preventDefault();
       renameAtCursor();
       return;
-    case 'a':
+    case 'e':
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       e.preventDefault();
       archiveAtCursor();
+      return;
+    case 'a':
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      showProjectPickerDialog();
       return;
     case 'Escape':
       e.preventDefault();
