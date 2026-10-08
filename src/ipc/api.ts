@@ -15,6 +15,7 @@ import type { EffectiveSettings } from '../domain/settings/settings';
 import type { Appearance } from '../domain/settings/appearance';
 import type { ShellProfile } from '../domain/shell/shell-profile';
 import type { Usage } from '../domain/usage/usage';
+import type { Weather, WeatherLocation } from '../domain/weather/weather';
 
 /** The `{ ok }`/`{ error }` envelope most handlers answer with. */
 export interface IpcResult {
@@ -47,6 +48,12 @@ export interface SwitchboardApi {
 
   // ── Usage ──
   getUsage(): Promise<Usage | null>;
+
+  // ── Weather ──
+  /** Null when weather is switched off or could not be fetched. */
+  getWeather(): Promise<Weather | null>;
+  /** The best match for a city name, or null when there is none. */
+  geocodeWeatherLocation(name: string): Promise<WeatherLocation | null>;
 
   // ── Search ──
   search(type: SearchType, query: string, titleOnly: boolean): Promise<SearchResult[]>;

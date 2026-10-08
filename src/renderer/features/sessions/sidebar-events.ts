@@ -14,7 +14,7 @@ import { bump, collapse, uncollapse } from '../../lib/motion/reflow';
 import { motion, reducedMotion } from '../../lib/motion/spring';
 import { showResumeSessionDialog } from '../dialogs/resume-session-dialog';
 import { saveExpandedSlugs } from './active-session';
-import { archiveSessionRow, confirmAndStopSession, openSession } from './session-actions';
+import { archiveSessionRow, clearScreen, confirmAndStopSession, openSession } from './session-actions';
 import { pollActiveSessions } from './session-poller';
 import { startRename } from './session-rename';
 import type { SessionRow } from '../../../domain/session/session';
@@ -23,7 +23,17 @@ export function bindSidebarEvents(): void {
   bindSlugGroups();
   bindOlderToggles();
   bindSessionRows();
+  bindEmptySpace();
   expandGroupHoldingActiveSession();
+}
+
+/** Clicking the list anywhere but on a row or control puts the session away. */
+function bindEmptySpace(): void {
+  sidebarContent.onclick = (e) => {
+    if ((e.target as HTMLElement).closest(
+      '.session-item, .slug-group-header, .slug-group-more, .sessions-more-toggle, button, a, input')) return;
+    if (view.activeSessionId) clearScreen();
+  };
 }
 
 function bindSlugGroups(): void {

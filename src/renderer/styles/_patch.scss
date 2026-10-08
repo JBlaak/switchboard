@@ -1,0 +1,35 @@
+/* Patch, the friend on the empty screen (features/patch). The art and its
+   animations come from @jblaak/patch; this only gives it room and dresses it
+   in Switchboard's palette. The package's defaults are the
+   dark palette already, so the dark theme only maps the bubble onto the app's
+   own surfaces and type; the light theme recolours what would vanish on white. */
+
+/* Room for the bubble and the tallest move, held from the start so Patch
+   does not shift as the bubble pops in. */
+.placeholder-patch {
+  min-height: 290px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+#placeholder .patch {
+  --patch-bubble-bg: var(--sb-bg-raised);
+  --patch-bubble-text: var(--sb-text-strong);
+  --patch-font: var(--sb-font-head);
+}
+
+@media (prefers-color-scheme: light) {
+  #placeholder .patch {
+    --patch-body: #7fd0b4;
+    --patch-body-tired: #a9cfc1;
+    --patch-ink: #16181d;
+    --patch-cloud: #cfd6df;
+    --patch-snow: #aab2bd;
+    --patch-pole: #7b8491;
+    --patch-rain: #6fa3cf;
+    --patch-bubble-edge: rgba(20, 30, 50, 0.08);
+    --patch-bubble-shadow: rgba(20, 30, 50, 0.22);
+    --patch-shadow: rgba(20, 30, 50, 0.12);
+  }
+}

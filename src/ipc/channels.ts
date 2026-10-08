@@ -30,6 +30,10 @@ export const INVOKE = {
   // Usage
   getUsage: 'get-usage',
 
+  // Weather
+  getWeather: 'get-weather',
+  geocodeWeatherLocation: 'geocode-weather-location',
+
   // Search
   search: 'search',
 

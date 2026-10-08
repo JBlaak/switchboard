@@ -32,6 +32,7 @@ import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
 } from '../features/terminal/terminal-themes';
 import { installAppearanceToggle } from '../features/settings/appearance-toggle';
+import { installPatch } from '../features/patch/patch';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -47,6 +48,7 @@ export function bootstrap(): void {
   installTimeTicker();
   installQuotaGauges();
   installAppearanceToggle();
+  installPatch();
   followColorSchemeInTerminals();
 
   setTickListener(tickConnectionCards);

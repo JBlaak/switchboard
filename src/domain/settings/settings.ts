@@ -9,6 +9,8 @@
 import type { RemoteConfig } from '../project/remote-target';
 import type { RemoteSessionRecord } from '../session/session';
 import type { Appearance } from './appearance';
+import { DEFAULT_WEATHER_LOCATION, parseWeatherLocation } from '../weather/weather';
+import type { WeatherLocation } from '../weather/weather';
 
 /**
  * The `global` settings blob.
@@ -25,6 +27,16 @@ export interface GlobalSettings {
    * through `normaliseAppearance`, which supplies the 'system' default.
    */
   appearance?: Appearance;
+  /**
+   * Global only. Whether the empty screen fetches the weather at all; read it
+   * through `resolveWeatherEnabled`, which supplies the `true` default.
+   */
+  weatherEnabled?: boolean;
+  /**
+   * Global only. Where the weather is fetched for; read it through
+   * `resolveWeatherLocation`, which supplies Amsterdam.
+   */
+  weatherLocation?: WeatherLocation;
   [key: string]: unknown;
 }
 
@@ -130,4 +142,16 @@ export function resolveShellProfileId(
   const fromProject = project?.shellProfile;
   if (fromProject !== undefined && fromProject !== null) profileId = String(fromProject);
   return profileId;
+}
+
+/** Whether to fetch the weather. On unless switched off explicitly. */
+export function resolveWeatherEnabled(global: Record<string, unknown> | null | undefined): boolean {
+  return global?.weatherEnabled !== false;
+}
+
+/** Where to fetch the weather for: the stored location if it is a valid one. */
+export function resolveWeatherLocation(
+  global: Record<string, unknown> | null | undefined,
+): WeatherLocation {
+  return parseWeatherLocation(global?.weatherLocation) ?? DEFAULT_WEATHER_LOCATION;
 }

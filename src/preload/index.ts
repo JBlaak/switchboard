@@ -33,6 +33,10 @@ const api: SwitchboardApi = {
   // ── Usage ──
   getUsage: () => ipcRenderer.invoke(INVOKE.getUsage),
 
+  // ── Weather ──
+  getWeather: () => ipcRenderer.invoke(INVOKE.getWeather),
+  geocodeWeatherLocation: (name) => ipcRenderer.invoke(INVOKE.geocodeWeatherLocation, name),
+
   // ── Search ──
   search: (type, query, titleOnly) => ipcRenderer.invoke(INVOKE.search, type, query, titleOnly),
 

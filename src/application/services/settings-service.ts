@@ -8,12 +8,14 @@
  */
 import {
   GLOBAL_SETTINGS_KEY, mergeEffectiveSettings, projectSettingsKey, resolveShellProfileId,
+  resolveWeatherEnabled, resolveWeatherLocation,
 } from '../../domain/settings/settings';
 import { remoteProjectPath } from '../../domain/project/remote-target';
 import type {
   EffectiveSettings, GlobalSettings, RemoteProjectSetting,
 } from '../../domain/settings/settings';
 import type { RemoteSessionRecord } from '../../domain/session/session';
+import type { WeatherLocation } from '../../domain/weather/weather';
 import type { SettingsStore } from '../ports/settings-store';
 
 export class SettingsService {
@@ -65,6 +67,17 @@ export class SettingsService {
   /** The shell profile id a project should launch in. */
   shellProfileId(projectPath?: string | null): string {
     return resolveShellProfileId(this.global(), projectPath ? this.project(projectPath) : null);
+  }
+
+  // ── Weather ──
+  // Global only: it is the one empty screen's weather, not a project's.
+
+  weatherEnabled(): boolean {
+    return resolveWeatherEnabled(this.global());
+  }
+
+  weatherLocation(): WeatherLocation {
+    return resolveWeatherLocation(this.global());
   }
 
   // ── Hidden projects ──

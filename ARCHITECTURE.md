@@ -38,6 +38,7 @@ remote-status rules the main process does instead of a parallel copy.
 | `terminal/` | OSC parsing (busy/idle/notifications), the output ring buffer, the banners Switchboard writes itself |
 | `shell/` | shell profiles and argv quoting |
 | `launch/` | the `claude` command line, session options, the child environment |
+| `weather/` | folding a WMO weather code into the four skies the empty-state mascot dresses for, and parsing the forecast and geocoding responses |
 | `search/`, `settings/`, `schedule/`, `usage/` | the rules for each of those, similarly |
 
 ### `src/application` — the use cases
@@ -64,7 +65,7 @@ One implementation per port: `sqlite/` behind the repository and the index,
 transcript store, `ssh/`-shaped logic inside the supervisor, `shell/` behind
 the shell profiles, `electron/` behind the window, the menu and the renderer
 gateway, `claude-cli/` behind usage and scheduled runs, `worker/` behind
-the cold-start scanner.
+the cold-start scanner, `weather/` (Open-Meteo) behind the weather source.
 
 ### `src/main` — the composition root
 

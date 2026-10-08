@@ -25,6 +25,7 @@ import { SessionLauncher } from '../application/services/session-launcher';
 import { SessionLifecycle } from '../application/services/session-lifecycle';
 import { SessionTransitionDetector } from '../application/services/session-transition-detector';
 import { SettingsService } from '../application/services/settings-service';
+import { WeatherService } from '../application/services/weather-service';
 import { SessionRegistry } from '../application/model/session-registry';
 
 import { ClaudeCommandRunner } from '../infrastructure/claude-cli/command-runner';
@@ -45,6 +46,7 @@ import { SqliteSettingsStore } from '../infrastructure/sqlite/settings-store';
 import { openDatabase } from '../infrastructure/sqlite/database';
 import { resolveClaudePaths } from '../infrastructure/fs/claude-paths';
 import { systemTimers } from '../infrastructure/system/timers';
+import { OpenMeteoWeatherSource } from '../infrastructure/weather/open-meteo';
 
 import type { BrowserWindow } from 'electron';
 import type { SwitchboardDatabase } from '../infrastructure/sqlite/database';
@@ -72,6 +74,7 @@ export interface Container {
   readonly projects: ProjectListService;
   readonly usage: OAuthUsageService;
   readonly schedules: ScheduleService;
+  readonly weather: WeatherService;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -151,6 +154,9 @@ export function buildContainer(): Container {
 
   // ── Feature services ──
   const usage = new OAuthUsageService(log);
+  const weather = new WeatherService({
+    source: new OpenMeteoWeatherSource(clock, log), settings, clock, log,
+  });
   const shellProfileId = (): string => settings.shellProfileId(null);
 
   const schedules = new ScheduleService({
@@ -186,7 +192,7 @@ export function buildContainer(): Container {
     log, paths,
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
-    sessionIndex, projects, usage, schedules,
+    sessionIndex, projects, usage, schedules, weather,
     renderer, dialogs, system, appearance, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,

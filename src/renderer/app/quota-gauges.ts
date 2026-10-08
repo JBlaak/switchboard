@@ -9,6 +9,7 @@
  */
 import { shortUsageLabel, usageGaugeRows } from '../../domain/usage/usage';
 import { el } from '../lib/dom';
+import { recordUsage, usageSettled } from '../state/usage-store';
 import type { UsageLimit } from '../../domain/usage/usage';
 
 /** How often the gauges are re-fetched. */
@@ -28,6 +29,7 @@ export function installQuotaGauges(): void {
 async function refresh(): Promise<void> {
   try {
     const rows = usageGaugeRows(await window.api.getUsage());
+    recordUsage(rows);
     if (!rows.length) {
       gaugeEl.style.display = 'none';
       return;
@@ -36,6 +38,7 @@ async function refresh(): Promise<void> {
     gaugeEl.style.display = '';
   } catch {
     // Offline, or no credentials; leave whatever is on screen.
+    usageSettled();
   }
 }
 
