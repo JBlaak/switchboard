@@ -1,9 +1,9 @@
 /**
  * "Resume this session, but change how."
  *
- * The same form as a new session minus the worktree field: resuming has to
- * reuse the directory the session already lives in, so a worktree option would
- * be silently ignored by the CLI.
+ * Every launch option but the worktree: resuming has to reuse the directory the
+ * session already lives in, so a worktree option would be silently ignored by
+ * the CLI.
  */
 import { escapeHtml } from '../../lib/format';
 import { openSession } from '../sessions/session-actions';
@@ -12,7 +12,6 @@ import { applyPermissionSelection, bindPermissionGrid, permissionGridHtml } from
 import { dialogActionsHtml, readSessionFields, sessionFieldsHtml } from './session-fields';
 import type { SessionOptions } from '../../../domain/launch/session-options';
 import type { SessionRow } from '../../../domain/session/session';
-import type { SessionFieldsOptions } from './session-fields';
 
 export async function showResumeSessionDialog(session: SessionRow): Promise<void> {
   const settings = await window.api.getEffectiveSettings(session.projectPath);
@@ -20,7 +19,6 @@ export async function showResumeSessionDialog(session: SessionRow): Promise<void
     mode: settings.permissionMode ?? null,
     dangerousSkip: !!settings.dangerouslySkipPermissions,
   };
-  const fields: SessionFieldsOptions = { prefix: 'rsd', settings, includeWorktree: false };
 
   const name = session.name || session.aiTitle || session.summary || session.sessionId.slice(0, 8);
 
@@ -33,7 +31,7 @@ export async function showResumeSessionDialog(session: SessionRow): Promise<void
         <div class="settings-label">Permission Mode</div>
         <div class="permission-grid" id="rsd-mode-grid">${permissionGridHtml(initial)}</div>
       </div>
-      ${sessionFieldsHtml(fields)}
+      ${sessionFieldsHtml(settings)}
       ${dialogActionsHtml('Resume')}
     `,
   });
@@ -43,7 +41,7 @@ export async function showResumeSessionDialog(session: SessionRow): Promise<void
   const resume = (): void => {
     const options: SessionOptions = {};
     applyPermissionSelection(options, readPermissions());
-    readSessionFields(handle, fields, options);
+    readSessionFields(handle, options);
     handle.close();
     void openSession(session, options);
   };
