@@ -7,6 +7,7 @@
  * listener steps aside — which is what stops one keypress firing the same action
  * twice.
  */
+import { focusSidebar, isSidebarFocusKey } from '../features/sessions/sidebar-keyboard';
 import { handleSessionNavKey } from '../features/terminal/session-nav';
 
 /** An event xterm's own handler has already acted on. */
@@ -18,6 +19,12 @@ export function installShortcuts(): void {
 
     // Cmd+Shift+[ / ] and Cmd+Arrow move between sessions.
     handleSessionNavKey(e);
+
+    // Cmd+L puts a cursor in the session list.
+    if (isSidebarFocusKey(e)) {
+      e.preventDefault();
+      focusSidebar();
+    }
   });
 }
 

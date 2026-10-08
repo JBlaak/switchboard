@@ -16,6 +16,7 @@ import { installTimeTicker } from './time-ticker';
 import { renderStatusSummary } from './status-bar';
 import { installSidebar } from '../features/sessions/sidebar';
 import { installSidebarFilters } from '../features/sessions/sidebar-filters';
+import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
 import { loadProjects } from '../features/sessions/session-list';
 import { openSession } from '../features/sessions/session-actions';
 import { confirmAndStopSession } from '../features/sessions/session-actions';
@@ -40,6 +41,7 @@ export function bootstrap(): void {
   installIpcListeners();
   installLayout();
   installSidebarFilters();
+  installSidebarKeyboard();
   installSearch();
   installShortcuts();
   installTimeTicker();

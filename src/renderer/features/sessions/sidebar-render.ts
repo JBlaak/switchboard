@@ -33,6 +33,7 @@ import { sidebarContent } from '../../lib/dom';
 import { hasMotion } from '../../lib/motion/spring';
 import { play, snapshot } from '../../lib/motion/reflow';
 import { bindSidebarEvents } from './sidebar-events';
+import { CURSOR_CLASS, isSidebarFocused } from './sidebar-keyboard';
 import { buildSessionItem, buildSlugGroup } from './sidebar-row';
 import type { Project } from '../../../domain/project/project';
 import type { SessionRow } from '../../../domain/session/session';
@@ -303,8 +304,8 @@ function buildList(
 /**
  * Carry the bits of state that live in the DOM across a morph.
  *
- * A collapsed group, an expanded "older" list and a rename in progress are all
- * things the user did, and the freshly built tree knows nothing about them.
+ * A collapsed group, an expanded "older" list, a rename in progress and the
+ * keyboard cursor are all things the user did, and the freshly built tree knows nothing about them.
  */
 function preserveInteractionState(fromEl: HTMLElement, toEl: HTMLElement): boolean {
   // A row sliding out (archived) is mid-animation and on its way out of the
@@ -324,6 +325,7 @@ function preserveInteractionState(fromEl: HTMLElement, toEl: HTMLElement): boole
   if (fromEl.classList.contains('session-item') && fromEl.querySelector('.session-rename-input')) {
     return false;
   }
+  if (fromEl.classList.contains(CURSOR_CLASS)) toEl.classList.add(CURSOR_CLASS);
   if (fromEl.classList.contains('slug-group')) {
     toEl.classList.toggle('collapsed', fromEl.classList.contains('collapsed'));
   }
@@ -344,12 +346,14 @@ function preserveInteractionState(fromEl: HTMLElement, toEl: HTMLElement): boole
 }
 
 /**
- * Put focus back in the terminal after a redraw — unless the user is typing.
+ * Put focus back in the terminal after a redraw — unless the user is typing,
+ * or walking the list with the keyboard.
  *
  * The list re-renders on every status change, and stealing focus mid-keystroke
  * from the search box or a rename input would make either unusable.
  */
 function restoreTerminalFocus(): void {
+  if (isSidebarFocused()) return;
   const active = document.activeElement as HTMLElement | null;
   const typing = active && (
     active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'

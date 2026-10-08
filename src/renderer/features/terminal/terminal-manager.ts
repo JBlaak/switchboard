@@ -28,6 +28,7 @@ import { showTerminalHeader, updatePtyTitle } from '../sessions/terminal-header'
 import { placeholder, terminalsEl } from '../../lib/dom';
 import { handleSessionNavKey, isSessionNavKey } from '../terminal/session-nav';
 import { hideAllViewers } from '../panel/viewers';
+import { focusSidebar, isSidebarFocusKey } from '../sessions/sidebar-keyboard';
 import { openSessions, sessionMap, view } from '../../state/session-store';
 import { remoteStatus } from '../../state/remote-status-store';
 import { TERMINAL_THEME } from '../terminal/terminal-themes';
@@ -109,6 +110,12 @@ function setupTerminalKeyBindings(
     // Session navigation: Cmd+Shift+[/], Cmd+Arrow
     if (isSessionNavKey(e)) {
       if (e.type === 'keydown') { e._handled = true; handleSessionNavKey(e); }
+      return false;
+    }
+
+    // Cmd+L: hand the keyboard to the session list
+    if (isSidebarFocusKey(e)) {
+      if (e.type === 'keydown') { e._handled = true; focusSidebar(); }
       return false;
     }
 
