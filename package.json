@@ -21,8 +21,6 @@
     "dist": "npm run build && electron-builder",
     "build:mac": "npm run build && electron-builder --mac && node scripts/postinstall.js",
     "build:mac:arm64": "npm run build && electron-builder --mac --arm64 && node scripts/postinstall.js",
-    "build:win": "npm run build && electron-builder --win",
-    "build:linux": "npm run build && electron-builder --linux",
     "release": "npm run build && electron-builder --publish always",
     "postinstall": "node scripts/postinstall.js"
   },
@@ -97,39 +95,6 @@
       "gatekeeperAssess": false,
       "notarize": true
     },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb",
-        "pacman"
-      ],
-      "icon": "build/icons",
-      "category": "Development"
-    },
-    "pacman": {
-      "packageName": "switchboard-doctly",
-      "artifactName": "switchboard-doctly-${version}.${ext}",
-      "depends": [
-        "gtk3",
-        "nss",
-        "libnotify",
-        "libxtst",
-        "libxss",
-        "xdg-utils",
-        "libsecret"
-      ]
-    },
     "dmg": {
       "background": "build/dmg-background.png",
       "iconSize": 100,
@@ -149,10 +114,6 @@
           "path": "/Applications"
         }
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
     }
   }
 }
