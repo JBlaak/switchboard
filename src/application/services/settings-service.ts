@@ -27,10 +27,6 @@ export class SettingsService {
     this.store.set(key, value);
   }
 
-  delete(key: string): void {
-    this.store.delete(key);
-  }
-
   global(): GlobalSettings {
     return this.store.get<GlobalSettings>(GLOBAL_SETTINGS_KEY) || {};
   }

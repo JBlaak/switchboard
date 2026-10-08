@@ -68,25 +68,6 @@ export function parseSchedule(content: string, location: ScheduleLocation): Sche
   };
 }
 
-/**
- * Parse a schedule file for an immediate manual run.
- *
- * Unlike `parseSchedule` this ignores `enabled` and does not need a cron — the
- * user clicked Run, which is the trigger — but it still needs a prompt.
- */
-export function parseScheduleForManualRun(content: string, location: ScheduleLocation): Schedule | null {
-  const { meta, body } = parseFrontmatter(content);
-  if (!body) return null;
-  return {
-    ...location,
-    name: scalar(meta, 'name', location.file),
-    cron: scalar(meta, 'cron', '* * * * *'),
-    slug: scalar(meta, 'slug', defaultScheduleSlug(location.file)),
-    cli: block(meta, 'cli'),
-    prompt: body,
-  };
-}
-
 /** The re-entrancy key: one run of a given task at a time. */
 export function scheduleTaskKey(schedule: Pick<Schedule, 'folder' | 'slug'>): string {
   return `${schedule.folder}:${schedule.slug}`;

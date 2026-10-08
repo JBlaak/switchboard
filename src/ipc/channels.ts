@@ -36,16 +36,9 @@ export const INVOKE = {
   // Settings
   getSetting: 'get-setting',
   setSetting: 'set-setting',
-  deleteSetting: 'delete-setting',
   getEffectiveSettings: 'get-effective-settings',
   getShellProfiles: 'get-shell-profiles',
   setAppearance: 'set-appearance',
-
-  // Schedules
-  getScheduleCreatorCommand: 'get-schedule-creator-command',
-  createScheduleSession: 'create-schedule-session',
-  runScheduleNow: 'run-schedule-now',
-
 
   // Host
   openExternal: 'open-external',
