@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
-  beatFor, patchBeats, patchMood, pokeBeat, RAPID_POKE_WINDOW_MS, timeOfDay, type PatchContext,
+  beatFor, dropBeat, FLING_SPEED, patchBeats, patchMood, pokeBeat, RAPID_POKE_WINDOW_MS, timeOfDay,
+  type PatchContext,
 } from '../src/domain/companion/patch';
 
 /** A context with no weather at midday, so no aside is inserted unless a test asks for one. */
@@ -165,4 +166,11 @@ test('poking too fast makes Patch dizzy, and slowing down ends it', () => {
   assert.strictEqual(pokeBeat(4, 3000, four.slice(1)).line, pokeBeat(4, 0, []).line, 'four in the window is fine');
   assert.strictEqual(pokeBeat(4, 1000 + RAPID_POKE_WINDOW_MS, four).line, pokeBeat(4, 0, []).line,
     'the oldest poke has left the window');
+});
+
+test('a fast let-go is a fling, a slow one is setting Patch down', () => {
+  assert.strictEqual(dropBeat(0, FLING_SPEED + 0.1).line, 'Wheee!');
+  assert.strictEqual(dropBeat(0, FLING_SPEED).line, 'Boing! Right back where I belong.');
+  assert.strictEqual(dropBeat(1, 0).line, 'Where was I? Oh, right here.');
+  assert.deepStrictEqual(dropBeat(3, 5), dropBeat(0, 5));
 });

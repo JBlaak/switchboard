@@ -210,3 +210,26 @@ export function pokeBeat(poke: number, now: number, recentPokes: readonly number
   const k = Number.isFinite(poke) ? Math.trunc(poke) : 0;
   return POKE_BEATS[((k % n) + n) % n];
 }
+
+/** Let-go speed, in px per ms, above which Patch counts as flung rather than set down. */
+export const FLING_SPEED = 1.5;
+
+const FLUNG_BEATS: readonly PatchBeat[] = [
+  { move: 'twirl', line: 'Wheee!' },
+  { move: 'hop', line: 'Again! Again!' },
+  { move: 'jelly', line: 'Whoa, I’m all wobbly.' },
+];
+
+const SET_DOWN_BEATS: readonly PatchBeat[] = [
+  { move: 'jelly', line: 'Boing! Right back where I belong.' },
+  { move: 'peek', line: 'Where was I? Oh, right here.' },
+  { move: 'love', line: 'That was fun.' },
+];
+
+/** What Patch says when let go after a drag: the nth reaction, flung or set down. */
+export function dropBeat(drop: number, speed: number): PatchBeat {
+  const beats = speed > FLING_SPEED ? FLUNG_BEATS : SET_DOWN_BEATS;
+  const n = beats.length;
+  const k = Number.isFinite(drop) ? Math.trunc(drop) : 0;
+  return beats[((k % n) + n) % n];
+}
