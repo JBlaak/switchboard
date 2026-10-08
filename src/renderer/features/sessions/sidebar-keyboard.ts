@@ -3,7 +3,8 @@
  *
  * Cmd+L takes focus out of the terminal and puts a cursor on the row on
  * screen. The arrows (or J and K) move it, Enter does what a click would, R or
- * F2 renames, E archives (a group header archives the whole group), A starts a
+ * F2 renames, E archives (a group header archives the whole group; Cmd+E, from
+ * anywhere, archives the open session), A (or Cmd+A, from anywhere) starts a
  * new session, and Escape goes back to the terminal.
  *
  * The cursor is a class on the element rather than a remembered id: rows,
@@ -24,6 +25,43 @@ const NAVIGABLE = '.session-item, .slug-group-header, .slug-group-more, .session
 export function isSidebarFocusKey(e: KeyboardEvent): boolean {
   if (e.altKey || e.code !== 'KeyL') return false;
   return e.metaKey && !e.shiftKey && !e.ctrlKey;
+}
+
+/**
+ * Cmd+A opens the new-session picker.
+ *
+ * Except in a text field, where it stays Select All — the picker's own filter
+ * among them.
+ */
+export function isSessionPickerKey(e: KeyboardEvent): boolean {
+  return isCommandKey(e, 'KeyA');
+}
+
+/** Cmd+E archives the open session, with the same text-field exception. */
+export function isArchiveSessionKey(e: KeyboardEvent): boolean {
+  return isCommandKey(e, 'KeyE');
+}
+
+/** Cmd plus `code`, unless the key is going into a text field. */
+function isCommandKey(e: KeyboardEvent, code: string): boolean {
+  if (e.altKey || e.shiftKey || e.ctrlKey || !e.metaKey || e.code !== code) return false;
+  const target = e.target as HTMLElement | null;
+  if (!target || target.closest('.xterm')) return true;
+  return !target.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
+}
+
+/**
+ * Archive the session on screen, the way its row's archive button does.
+ *
+ * Through the button rather than around it, so the confetti and the slide-out
+ * happen here too.
+ */
+export function archiveActiveSession(): void {
+  const { activeSessionId } = view;
+  if (!activeSessionId) return;
+  sidebarContent
+    .querySelector<HTMLElement>(`[data-session-id="${activeSessionId}"] .session-archive-btn`)
+    ?.click();
 }
 
 export function installSidebarKeyboard(): void {
