@@ -28,7 +28,6 @@ export interface RemoteConnectionState {
   target: string;
   kind: string;
   shell?: string;
-  shellExtraArgs?: string[];
   /** Which reconnect attempt we are on; reset once a link proves stable. */
   attempt: number;
   timer: TimerHandle | null;

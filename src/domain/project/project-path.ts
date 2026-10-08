@@ -27,10 +27,6 @@ export function encodeProjectPath(projectPath: string): string {
 
 /**
  * Shorten a project path for display: its last two segments.
- *
- * Splits on both separators. projectPath comes from a session's `cwd`, which on
- * Windows is backslash-separated — splitting on '/' alone finds no separator, so
- * every "short" label rendered the entire path.
  */
 export function shortProjectPath(projectPath: string | null | undefined): string {
   if (!projectPath) return '';
@@ -43,7 +39,7 @@ export function shortProjectPath(projectPath: string | null | undefined): string
     const lastSeg = rest.slice(slash + 1).split('/').filter(s => s && s !== '~').pop();
     return lastSeg ? rest.slice(0, slash) + '/' + lastSeg : rest.slice(0, slash);
   }
-  return projectPath.split(/[\\/]/).filter(Boolean).slice(-2).join('/');
+  return projectPath.split('/').filter(Boolean).slice(-2).join('/');
 }
 
 /**

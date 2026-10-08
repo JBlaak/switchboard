@@ -36,7 +36,7 @@ test('buildSshArgv creates and starts in the working directory when set', () => 
 
 test('buildSshSpawn runs ssh through the login shell so profile env (SSH_AUTH_SOCK) applies', () => {
   const argv = buildSshArgv({ user: 'joris', host: '10.10.0.24', port: 22 }, 'abc12345', 'claude');
-  const spawned = buildSshSpawn(argv, { shell: '/bin/zsh', windows: false });
+  const spawned = buildSshSpawn(argv, '/bin/zsh');
   assert.strictEqual(spawned.file, '/bin/zsh');
   // -i is what sources ~/.zshrc, where an agent socket export usually lives
   assert.deepStrictEqual(spawned.args.slice(0, 3), ['-l', '-i', '-c']);
@@ -44,11 +44,6 @@ test('buildSshSpawn runs ssh through the login shell so profile env (SSH_AUTH_SO
   assert.match(cmd, /^exec ssh /, 'exec keeps the PTY attached to ssh itself');
   assert.ok(cmd.includes("'joris@10.10.0.24'"), 'argv stays quoted for the shell');
   assert.ok(cmd.includes('attach-session'), 'the remote command survives quoting');
-
-  // Windows has no exec and finds its agent over a named pipe: spawn ssh directly
-  const onWindows = buildSshSpawn(argv, { shell: 'C:\\Windows\\System32\\cmd.exe', windows: true });
-  assert.strictEqual(onWindows.file, 'ssh');
-  assert.deepStrictEqual(onWindows.args, argv);
 });
 
 test('buildSshArgv bounds the connect and keepalive timers itself', () => {
