@@ -5,6 +5,7 @@ import {
   el, placeholder, settingsViewer, terminalArea, terminalHeader,
 } from '../../lib/dom';
 import { openSessions, view } from '../../state/session-store';
+import { showEmptyScreen } from '../patch/patch';
 import { applyTerminalFont, isFontAvailable, refitOpenTerminals } from '../terminal/terminal-manager';
 import {
   DEFAULT_TERMINAL_FONT_FAMILY, DEFAULT_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_LINE_HEIGHT,
@@ -47,7 +48,7 @@ export function closeSettingsViewer(): void {
     terminalArea.style.display = '';
     terminalHeader.style.display = '';
   } else {
-    placeholder.style.display = '';
+    showEmptyScreen();
   }
   // Terminals had no layout box while the panel covered them, so anything that
   // changed their metrics in the meantime (font size, line height) could not fit
@@ -514,7 +515,7 @@ export async function openSettingsViewer(
       if (!confirm(`Hide project "${shortName}" from Switchboard?\n\nThis hides the project from the sidebar. Your session files are not deleted.`)) return;
       if (projectPath) await window.api.removeProject(projectPath);
       settingsViewer.style.display = 'none';
-      placeholder.style.display = 'flex';
+      showEmptyScreen();
       loadProjects();
     });
   }

@@ -17,9 +17,10 @@ import { hideTerminalHeader } from './terminal-header';
 import {
   injectIntoCaches, openSessions, pendingSessions, removeFromCaches, sessionMap, view,
 } from '../../state/session-store';
-import { placeholder, sidebarContent } from '../../lib/dom';
+import { sidebarContent } from '../../lib/dom';
 import { bump } from '../../lib/motion/reflow';
 import { createTerminalEntry, destroySession, showSession } from '../terminal/terminal-manager';
+import { showEmptyScreen } from '../patch/patch';
 import type { Project } from '../../../domain/project/project';
 import type { SessionRow } from '../../../domain/session/session';
 import type { SessionOptions } from '../../../domain/launch/session-options';
@@ -243,7 +244,7 @@ export function clearScreen(): void {
   sidebarContent.querySelectorAll<HTMLElement>('.session-item.active').forEach(el => el.classList.remove('active'));
   document.querySelectorAll<HTMLElement>('.terminal-container.visible').forEach(el => el.classList.remove('visible'));
   hideTerminalHeader();
-  placeholder.style.display = '';
+  showEmptyScreen();
 }
 
 /** Write the exit banner into a terminal whose process has ended. */
