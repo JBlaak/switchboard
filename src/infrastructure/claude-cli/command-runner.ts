@@ -32,8 +32,8 @@ export class ClaudeCommandRunner implements CommandRunner {
   run(claudeArgs: readonly string[], cwd: string, name: string, onDone: () => void): void {
     const { shells, terminals, log } = this.deps;
     const profile = shells.resolve(this.deps.shellProfileId());
-    const command = 'claude ' + quoteArgvForShell(profile.path, claudeArgs);
-    const args = shellArgs(profile.path, command, profile.args);
+    const command = 'claude ' + quoteArgvForShell(claudeArgs);
+    const args = shellArgs(profile.path, command);
 
     log.info(`[schedule] running: ${profile.path} ${args.join(' ')}`);
 

