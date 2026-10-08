@@ -233,9 +233,15 @@ function closeSessionView(sessionId: string): void {
   if (view.activeSessionId === sessionId) clearScreen();
 }
 
-/** Nothing is on screen: hide the terminal chrome and show the placeholder. */
+/**
+ * Nothing is on screen: hide the terminal and its chrome and show the placeholder.
+ *
+ * The session's terminal stays alive; opening the row again shows it as it was.
+ */
 export function clearScreen(): void {
   setActiveSession(null);
+  sidebarContent.querySelectorAll<HTMLElement>('.session-item.active').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll<HTMLElement>('.terminal-container.visible').forEach(el => el.classList.remove('visible'));
   hideTerminalHeader();
   placeholder.style.display = '';
 }
