@@ -3,7 +3,7 @@
   "version": "0.0.33",
   "private": true,
   "description": "A desktop app for browsing, searching, and managing CLI coding sessions",
-  "author": "Doctly <support@doctly.ai>",
+  "author": "Joris Blaak <joris@movelab.studio>",
   "main": "app/main.js",
   "engines": {
     "node": ">=18.20"
@@ -64,7 +64,7 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "doctly",
+      "owner": "JBlaak",
       "repo": "switchboard"
     },
     "mac": {
