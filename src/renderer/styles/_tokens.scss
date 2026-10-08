@@ -113,6 +113,7 @@
   --sb-shadow-rgb:  0, 0, 0;
   --sb-shadow-k:    1;
   --sb-bg-base-rgb: 20, 21, 23;  /* --sb-bg-base, for the connection scrim */
+  --sb-bg-panel-rgb: 28, 29, 32; /* --sb-bg-panel, for the sidebar's glass tint */
 
   color-scheme: dark;
 
@@ -217,6 +218,7 @@
     --sb-shadow-rgb:  20, 30, 50;
     --sb-shadow-k:    0.35;
     --sb-bg-base-rgb: 250, 251, 253;
+    --sb-bg-panel-rgb: 240, 243, 248;
 
     color-scheme: light;
   }

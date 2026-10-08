@@ -1,0 +1,75 @@
+/* ========== SIDEBAR GLASS ==========
+   The window is backed by macOS's sidebar material (see window-chrome.ts) and the
+   page is transparent down to it, so the desktop shows through, blurred, wherever
+   nothing paints. Only the sidebar lets it through: #main and the status bar keep
+   their opaque surfaces, and the terminal never sits on glass.
+
+   The sidebar lays a thin wash of its own panel colour over the material so it
+   stays in the palette's family instead of taking on whatever is behind it.
+
+   In fullscreen there is no desktop behind the window to show, and with Reduce
+   Transparency on the user has asked for none: both fall back to the solid
+   surfaces. */
+
+/* Scoped from the root so the fullscreen class, which sits on <html> itself, can
+   gate it. */
+@mixin solid($root: ':root') {
+  #{$root}, #{$root} body {
+    background: var(--sb-bg-base);
+  }
+
+  #{$root} #sidebar {
+    background: var(--sb-bg-panel);
+  }
+
+  #{$root} .session-item        { --row-fill: var(--sb-bg-panel); }
+  #{$root} .session-item:hover  { --row-fill: color-mix(in srgb, rgb(var(--sb-overlay-rgb)) 5%, var(--sb-bg-panel)); }
+  #{$root} .session-item.active { --row-fill: color-mix(in srgb, var(--sb-accent) 14%, var(--sb-bg-panel)); }
+
+  #{$root} .session-actions {
+    background: linear-gradient(90deg, transparent, var(--row-fill) 10%);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-radius: 0;
+    padding-left: 8px;
+  }
+}
+
+html, body {
+  background: transparent;
+}
+
+#sidebar {
+  background: rgba(var(--sb-bg-panel-rgb), 0.6);
+}
+
+/* The row fills are opaque mixes into the panel colour (see _sidebar.scss), which
+   would stamp solid pills onto the glass. Here they are washes laid over it. */
+.session-item {
+  --row-fill: transparent;
+}
+
+.session-item:hover {
+  --row-fill: rgba(var(--sb-overlay-rgb), 0.06);
+}
+
+.session-item.active {
+  --row-fill: rgba(var(--sb-accent-rgb), 0.16);
+}
+
+/* .session-actions fades in from the row fill to cover the title beneath it. A
+   translucent fill can't cover anything, so the buttons get a small frosted
+   capsule of their own that blurs the title out instead. */
+.session-actions {
+  background: rgba(var(--sb-bg-panel-rgb), 0.6);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  border-radius: var(--sb-r-row);
+  padding-left: 4px;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  @include solid;
+}
+
+@include solid(':root.fullscreen');
