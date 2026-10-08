@@ -28,8 +28,6 @@
 
   #{$root} .session-actions {
     background: linear-gradient(90deg, transparent, var(--row-fill) 10%);
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
     border-radius: 0;
     padding-left: 8px;
   }
@@ -58,12 +56,12 @@ html, body {
 }
 
 /* .session-actions fades in from the row fill to cover the title beneath it. A
-   translucent fill can't cover anything, so the buttons get a small frosted
-   capsule of their own that blurs the title out instead. */
+   translucent fill can't cover anything, so the buttons get a solid capsule of
+   their own instead. Frosting it doesn't work: over the glass the page behind is
+   itself translucent, so a backdrop blur comes out translucent too and the sharp
+   title shows through it. */
 .session-actions {
-  background: rgba(var(--sb-bg-panel-rgb), 0.6);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
-  backdrop-filter: blur(12px) saturate(1.4);
+  background: var(--sb-bg-panel);
   border-radius: var(--sb-r-row);
   padding-left: 4px;
 }
