@@ -52,7 +52,7 @@ test('a stop signals the process group, not the single pid', () => {
 });
 
 test('signalling falls back to the handle when there is no process group', () => {
-  // Windows has no process groups; node-pty kills the job object there instead.
+  // When the group cannot be signalled, the shell itself still gets the signal.
   const h = harness({ throwFor: () => { throw new Error('EPERM'); } });
   const pty = fakePty(4242);
 

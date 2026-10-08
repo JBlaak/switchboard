@@ -108,9 +108,8 @@ export class NodePtyGateway implements TerminalGateway {
    * process-group id and a negative pid reaches everything under it — which is
    * what stops `claude` outliving the row that owns it.
    *
-   * The fallback covers Windows, where there is no process group, and the case
-   * where the group leader has already been reaped; node-pty's own kill closes
-   * the job object there, which has the same effect.
+   * When the group cannot be signalled, the fallback signals the shell alone
+   * through node-pty's own kill.
    */
   signalTree(handle: PtyHandle, signal: NodeJS.Signals): boolean {
     const pid = handle.pid;

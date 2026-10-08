@@ -26,8 +26,8 @@ export interface PtyHandle {
   /**
    * Signal this process alone.
    *
-   * The fallback for `signalTree`, and the only option on Windows, where there
-   * is no process group to reach.
+   * The fallback for `signalTree`, for when the process group cannot be
+   * reached.
    */
   kill(signal?: NodeJS.Signals): void;
   /** True once the handle can no longer be written to. */
