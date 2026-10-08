@@ -463,6 +463,21 @@
   background: var(--row-fill);
 }
 
+/* The keyboard cursor (Cmd+L): a ring on top of whatever fill the row has, so
+   it reads on the active row as well as on a plain one. */
+#sidebar-content:focus { outline: none; }
+
+.session-item.kbd-cursor .session-row,
+.slug-group-header.kbd-cursor .slug-group-row {
+  background: var(--row-fill, rgba(var(--sb-overlay-rgb),0.05));
+  box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+}
+
+.slug-group-more.kbd-cursor,
+.sessions-more-toggle.kbd-cursor {
+  box-shadow: 0 0 0 1.5px var(--sb-accent);
+}
+
 /* ---- Pin ---- */
 .session-pin {
   flex-shrink: 0;
