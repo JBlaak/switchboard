@@ -106,3 +106,15 @@ test("Electron's own variables are stripped from a child's environment", () => {
 
   assert.deepEqual(env, { PATH: '/usr/bin', SHELL: '/bin/zsh' });
 });
+
+test("A Claude Code parent's markers are stripped from a child's environment", () => {
+  // Switchboard started from inside a Claude Code session inherits them, and a
+  // session that sees CLAUDE_CODE_CHILD_SESSION turns its transcript saving off.
+  const env = cleanChildEnv({
+    PATH: '/usr/bin',
+    CLAUDE_CODE_CHILD_SESSION: '1',
+    CLAUDECODE: '1',
+  });
+
+  assert.deepEqual(env, { PATH: '/usr/bin' });
+});

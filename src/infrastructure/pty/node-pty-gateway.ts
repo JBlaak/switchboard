@@ -20,6 +20,9 @@ import type {
  * node-pty inside one — malfunction, and a session that starts an editor or a
  * dev server is exactly that case. NODE_OPTIONS goes for the same reason, and
  * the desktop-session leftovers because they confuse terminal detection.
+ * And a Claude Code parent's markers go: when Switchboard itself was started
+ * from a Claude Code session, every session would otherwise believe it is that
+ * session's child and stop saving its transcript.
  */
 export function cleanChildEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   return Object.fromEntries(
@@ -28,7 +31,9 @@ export function cleanChildEnv(env: NodeJS.ProcessEnv = process.env): Record<stri
       !key.startsWith('GOOGLE_API_KEY') &&
       key !== 'NODE_OPTIONS' &&
       key !== 'ORIGINAL_XDG_CURRENT_DESKTOP' &&
-      key !== 'WT_SESSION'),
+      key !== 'WT_SESSION' &&
+      key !== 'CLAUDE_CODE_CHILD_SESSION' &&
+      key !== 'CLAUDECODE'),
   ) as Record<string, string>;
 }
 
