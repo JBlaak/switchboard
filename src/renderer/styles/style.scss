@@ -5,8 +5,8 @@
 // list is sequence-significant rather than alphabetical.
 //
 // The colour tokens stay CSS custom properties rather than becoming Sass
-// variables: they are read at runtime (see docs/customizing-colors.md and
-// scripts/apply-theme.ps1), which compile-time variables could not support.
+// variables: light and dark swap them at runtime, which compile-time variables
+// could not support.
 
 @use 'reset';
 @use 'tokens';
