@@ -11,14 +11,13 @@
  */
 import { fuzzyMatch } from '../../../domain/search/fuzzy';
 import { reloadProjects } from '../../app/refresh';
-import { archiveSessionRow } from '../sessions/session-actions';
+import { archiveSessionRow, launchClaudeSession } from '../sessions/session-actions';
 import { pollActiveSessions } from '../sessions/session-poller';
 import { isWorktreeProject, projectLabel } from '../sessions/project-label';
 import { view } from '../../state/session-store';
 import { ICONS } from '../../lib/icons';
 import { openSettingsViewer } from '../settings/settings-panel';
 import { openDialog, setTooltip } from './dialog-shell';
-import { launchClaudeSession } from './new-session-popover';
 import type { Project } from '../../../domain/project/project';
 
 const CLOSE_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';

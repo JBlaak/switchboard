@@ -19,7 +19,7 @@ const watch = process.argv.includes('--watch');
 // it resolves app paths relative to its own location.
 const nodeExternals = [
   'electron', 'node-pty', 'better-sqlite3', 'electron-log',
-  'electron-reloader', 'ws',
+  'electron-reloader',
 ];
 
 /** @type {import('esbuild').BuildOptions} */
@@ -74,8 +74,8 @@ const targets = [
   },
   {
     // The renderer is a plain browser bundle: contextIsolation is on and
-    // nodeIntegration off, so xterm, morphdom, marked and CodeMirror all get
-    // bundled in rather than pulled from node_modules by <script src>.
+    // nodeIntegration off, so xterm and morphdom get bundled in rather than
+    // pulled from node_modules by <script src>.
     name: 'renderer',
     ...common,
     entryPoints: [path.join(root, 'src/renderer/index.ts')],

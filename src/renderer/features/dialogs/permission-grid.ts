@@ -1,5 +1,5 @@
 /**
- * The permission-mode picker, shared by the new-session and resume dialogs.
+ * The permission-mode picker in the resume dialog.
  *
  * A grid of mutually exclusive options plus one that is deliberately set apart:
  * `--dangerously-skip-permissions` is not a mode the CLI takes alongside

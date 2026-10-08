@@ -54,7 +54,6 @@ export interface SwitchboardApi {
   // ── Settings ──
   getSetting<T = unknown>(key: string): Promise<T | null>;
   setSetting(key: string, value: unknown): Promise<IpcResult>;
-  deleteSetting(key: string): Promise<IpcResult>;
   getEffectiveSettings(projectPath: string | null): Promise<EffectiveSettings>;
   getShellProfiles(): Promise<ShellProfile[]>;
   /**
@@ -64,12 +63,6 @@ export interface SwitchboardApi {
    * half of it, main also has to hand it to Electron.
    */
   setAppearance(mode: Appearance): Promise<IpcResult>;
-
-  // ── Schedules ──
-  getScheduleCreatorCommand(): Promise<string | null>;
-  createScheduleSession(projectPath: string): Promise<{ sessionId: string; systemPrompt: string } | null>;
-  runScheduleNow(filePath: string): Promise<IpcResult>;
-
 
   // ── Host ──
   openExternal(url: string): Promise<void>;

@@ -1,5 +1,5 @@
 /**
- * Settings, shell profiles and scheduled tasks.
+ * Settings and shell profiles.
  */
 import { INVOKE } from '../../ipc/channels';
 import { normaliseAppearance } from '../../domain/settings/appearance';
@@ -10,10 +10,6 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
   ipc.handle(INVOKE.getSetting, (key: string) => app.settings.get(key));
   ipc.handle(INVOKE.setSetting, (key: string, value: unknown) => {
     app.settings.set(key, value);
-    return { ok: true };
-  });
-  ipc.handle(INVOKE.deleteSetting, (key: string) => {
-    app.settings.delete(key);
     return { ok: true };
   });
 
@@ -42,10 +38,4 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
     app.appearance.apply(appearance);
     return { ok: true, appearance };
   });
-
-  // ── Scheduled tasks ──
-  ipc.handle(INVOKE.getScheduleCreatorCommand, () => app.schedules.readCreatorCommand());
-  ipc.handle(INVOKE.createScheduleSession, (projectPath: string) =>
-    app.schedules.createCreatorSession(projectPath));
-  ipc.handle(INVOKE.runScheduleNow, (filePath: string) => app.schedules.runNow(filePath));
 }

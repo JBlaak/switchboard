@@ -11,15 +11,11 @@
  * which is what groups a task's runs under a single slug in the sidebar.
  */
 import { cronMatches } from '../../domain/schedule/cron';
+import { SCHEDULE_CREATOR_TEMPLATE } from '../../domain/schedule/creator-template';
 import {
-  SCHEDULE_CREATOR_TEMPLATE, SCHEDULE_WELCOME_MESSAGE,
-} from '../../domain/schedule/creator-template';
-import {
-  buildScheduleArgs, isScheduleFileName, parseSchedule, parseScheduleForManualRun,
-  SCHEDULE_COMMANDS_SUBPATH, scheduleTaskKey,
+  buildScheduleArgs, isScheduleFileName, parseSchedule, SCHEDULE_COMMANDS_SUBPATH, scheduleTaskKey,
 } from '../../domain/schedule/schedule';
-import { encodeProjectPath } from '../../domain/project/project-path';
-import type { Schedule, ScheduleLocation } from '../../domain/schedule/schedule';
+import type { Schedule } from '../../domain/schedule/schedule';
 import type { CommandRunner } from '../ports/claude-cli';
 import type { Clock, Timers } from '../ports/clock';
 import type { FileSystem } from '../ports/file-system';
@@ -149,22 +145,6 @@ export class ScheduleService {
     };
   }
 
-  /** Run one schedule immediately, ignoring its cron and its enabled flag. */
-  runNow(filePath: string): { ok: true; sessionId: string } | { ok: false; error: string } {
-    const { fs, log } = this.deps;
-    try {
-      const schedule = parseScheduleForManualRun(fs.readText(filePath), this.#locate(filePath));
-      if (!schedule) return { ok: false, error: 'No prompt in schedule file' };
-
-      const sessionId = this.#dispatch(schedule, () => {});
-      log.info(`[schedule] manual run triggered: ${schedule.name} (session ${sessionId})`);
-      return { ok: true, sessionId };
-    } catch (err) {
-      log.error('[schedule] could not run schedule:', (err as Error).message);
-      return { ok: false, error: (err as Error).message };
-    }
-  }
-
   // ── The schedule creator ──
 
   /** Install the creator command, if the user does not already have it. */
@@ -180,68 +160,8 @@ export class ScheduleService {
     }
   }
 
-  readCreatorCommand(): string | null {
-    const { fs, log } = this.deps;
-    try {
-      this.ensureCreatorCommand();
-      return fs.readText(this.#creatorCommandPath());
-    } catch (err) {
-      log.error('[schedule] could not read the creator command:', (err as Error).message);
-      return null;
-    }
-  }
-
-  /**
-   * Seed a session for the schedule creator to open into.
-   *
-   * The transcript is written before the CLI runs so the session already has a
-   * first message explaining itself — the alternative is an empty terminal and
-   * a user who has to guess what to type.
-   */
-  createCreatorSession(projectPath: string): { sessionId: string; systemPrompt: string } | null {
-    const { transcripts, ids, clock, log } = this.deps;
-    try {
-      const systemPrompt = this.readCreatorCommand();
-      if (systemPrompt === null) return null;
-
-      const sessionId = ids.newId();
-      const messageId = ids.newId();
-      const timestamp = new Date(clock.now()).toISOString();
-      const folder = encodeProjectPath(projectPath);
-
-      transcripts.seedSession(folder, sessionId, [
-        {
-          type: 'file-history-snapshot',
-          messageId,
-          snapshot: { messageId, trackedFileBackups: {}, timestamp },
-          isSnapshotUpdate: false,
-        },
-        {
-          parentUuid: null,
-          isSidechain: false,
-          userType: 'external',
-          cwd: projectPath,
-          sessionId,
-          version: '1.0.0',
-          gitBranch: 'main',
-          slug: 'create-schedule',
-          type: 'assistant',
-          message: { role: 'assistant', content: [{ type: 'text', text: SCHEDULE_WELCOME_MESSAGE }] },
-          uuid: messageId,
-          timestamp,
-        },
-      ]);
-
-      log.info(`[schedule] pre-created schedule session ${sessionId} for ${projectPath}`);
-      return { sessionId, systemPrompt };
-    } catch (err) {
-      log.error('[schedule] could not create a schedule session:', (err as Error).message);
-      return null;
-    }
-  }
-
   /** Seed a session for one run and hand it to the runner. */
-  #dispatch(schedule: Schedule, onDone: () => void): string {
+  #dispatch(schedule: Schedule, onDone: () => void): void {
     const { transcripts, ids, clock, runner } = this.deps;
 
     const sessionId = ids.newId();
@@ -257,24 +177,6 @@ export class ScheduleService {
     }]);
 
     runner.run(buildScheduleArgs(sessionId, schedule), schedule.projectPath, schedule.name, onDone);
-    return sessionId;
-  }
-
-  /**
-   * Work out which project a schedule file belongs to from its own path.
-   *
-   * `<project>/.claude/commands/schedule-x.md` — three levels up is the project.
-   */
-  #locate(filePath: string): ScheduleLocation {
-    const { fs } = this.deps;
-    const commandsDir = fs.dirname(filePath);
-    const projectPath = fs.dirname(fs.dirname(commandsDir));
-    return {
-      file: fs.basename(filePath),
-      filePath,
-      projectPath,
-      folder: encodeProjectPath(projectPath),
-    };
   }
 
   #creatorCommandPath(): string {
