@@ -13,6 +13,9 @@ import {
 import { TERMINAL_THEMES, applyTerminalTheme } from '../terminal/terminal-themes';
 import { PERMISSION_MODES } from '../../../domain/launch/session-options';
 import { shortProjectPath } from '../../../domain/project/project-path';
+import { resolveWeatherEnabled, resolveWeatherLocation } from '../../../domain/settings/settings';
+import { DEFAULT_WEATHER_LOCATION } from '../../../domain/weather/weather';
+import type { WeatherLocation } from '../../../domain/weather/weather';
 import { escapeHtml } from '../../lib/format';
 import { syncQuickSessionButton } from '../sessions/quick-session';
 
@@ -106,6 +109,9 @@ export async function openSettingsViewer(
   const fontSizeValue = fieldValue('terminalFontSize', DEFAULT_TERMINAL_FONT_SIZE);
   const lineHeightValue = fieldValue('terminalLineHeight', DEFAULT_TERMINAL_LINE_HEIGHT);
   const quickSessionPathValue = fieldValue('quickSessionPath', '');
+  const weatherEnabledValue = resolveWeatherEnabled(current);
+  // The location the form will save: replaced each time the city resolves.
+  let weatherLocationValue: WeatherLocation = resolveWeatherLocation(current);
 
   // Discover available shell profiles
   let shellProfiles: { id: string; name: string; path: string }[] = [];
@@ -299,6 +305,30 @@ export async function openSettingsViewer(
     </div>` : ''}
 
     ${!isProject ? `<div class="settings-section">
+      <div class="settings-section-title">Weather</div>
+
+      <div class="settings-field">
+        <div class="settings-field-info">
+          <span class="settings-label">Show weather on the empty screen</span>
+          <div class="settings-description">Patch dresses for the weather outside, fetched from Open-Meteo</div>
+        </div>
+        <div class="settings-field-control">
+          <label class="settings-toggle"><input type="checkbox" id="sv-weather-enabled" ${weatherEnabledValue ? 'checked' : ''}><span class="settings-toggle-slider"></span></label>
+        </div>
+      </div>
+
+      <div class="settings-field">
+        <div class="settings-field-info">
+          <span class="settings-label">City</span>
+          <div class="settings-description">Weather for <span id="sv-weather-resolved">${escapeHtml(weatherLocationValue.name)}</span><span id="sv-weather-warning" class="settings-warning"></span></div>
+        </div>
+        <div class="settings-field-control">
+          <input type="text" class="settings-input" id="sv-weather-city" placeholder="${escapeHtml(DEFAULT_WEATHER_LOCATION.name)}" value="${escapeHtml(weatherLocationValue.name)}" style="width:180px">
+        </div>
+      </div>
+    </div>` : ''}
+
+    ${!isProject ? `<div class="settings-section">
       <div class="settings-section-title">About</div>
       <div class="settings-field">
         <div class="settings-field-info">
@@ -331,6 +361,35 @@ export async function openSettingsViewer(
     };
     fontFamilyInput.addEventListener('input', checkFontAvailable);
     checkFontAvailable();
+  }
+
+  // A typed city only counts once it resolves to coordinates; until then (or if
+  // it never does) the form keeps saving the last location that did.
+  let weatherLookup: Promise<void> = Promise.resolve();
+  if (!isProject) {
+    const cityInput = ctl('#sv-weather-city');
+    const resolvedName = ctl<HTMLElement>('#sv-weather-resolved');
+    const weatherWarning = ctl<HTMLElement>('#sv-weather-warning');
+    cityInput.addEventListener('change', () => {
+      const name = cityInput.value.trim();
+      weatherWarning.textContent = '';
+      if (!name) {
+        weatherLocationValue = DEFAULT_WEATHER_LOCATION;
+        resolvedName.textContent = DEFAULT_WEATHER_LOCATION.name;
+        return;
+      }
+      weatherLookup = window.api.geocodeWeatherLocation(name).then((found) => {
+        if (cityInput.value.trim() !== name) return; // typed over while resolving
+        if (found) {
+          weatherLocationValue = found;
+          resolvedName.textContent = found.name;
+        } else {
+          weatherWarning.textContent = ` — couldn't find “${name}”; keeping ${weatherLocationValue.name}.`;
+        }
+      }).catch(() => {
+        weatherWarning.textContent = ` — couldn't look up “${name}”; keeping ${weatherLocationValue.name}.`;
+      });
+    });
   }
 
   // Use-global checkboxes toggle field disabled state
@@ -392,6 +451,10 @@ export async function openSettingsViewer(
       settings.terminalFontFamily = ctl('#sv-font-family').value.trim();
       settings.terminalFontSize = font.fontSize;
       settings.terminalLineHeight = font.lineHeight;
+      // A city typed just before clicking Save is still resolving.
+      await weatherLookup;
+      settings.weatherEnabled = ctl('#sv-weather-enabled').checked;
+      settings.weatherLocation = weatherLocationValue;
     }
 
     // Merge form values into existing settings to preserve keys not managed by the form
