@@ -24,7 +24,6 @@ export const sidebarContent = el('sidebar-content');
 export const searchBar = el('search-bar');
 export const searchInput = el<HTMLInputElement>('search-input');
 export const loadingStatus = el('loading-status');
-export const sessionFilters = el('session-filters');
 
 // Main area
 export const placeholder = el('placeholder');

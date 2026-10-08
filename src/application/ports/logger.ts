@@ -11,11 +11,3 @@ export interface Logger {
   warn(message: string, ...args: unknown[]): void;
   error(message: string, ...args: unknown[]): void;
 }
-
-/** A logger that discards everything — the default for tests. */
-export const silentLogger: Logger = {
-  debug: () => {},
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-};
