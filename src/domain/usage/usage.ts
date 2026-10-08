@@ -177,10 +177,12 @@ export function shortUsageLabel(row: UsageLimit): string {
  * The gauges to draw for a usage response.
  *
  * Prefers the API's self-describing rows, falling back to the flat 5-hour keys
- * so an older response shape still renders something.
+ * so an older response shape still renders something. Per-model windows are
+ * left out: only the 5-hour and all-models weekly windows are shown.
  */
 export function usageGaugeRows(usage: Usage | null | undefined): UsageLimit[] {
-  if (Array.isArray(usage?.limits) && usage.limits.length) return usage.limits;
+  const shared = (usage?.limits ?? []).filter(l => !l.model);
+  if (shared.length) return shared;
   if (usage?.session === undefined) return [];
   return [{
     kind: 'session',

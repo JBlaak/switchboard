@@ -1,0 +1,85 @@
+/* ========== SIDEBAR FOOTER ==========
+   What the status bar used to carry: the running count, the indexer's activity
+   line and the quota gauges, pinned under the session list. */
+#sidebar-footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px var(--sb-sidebar-gutter) 10px;
+  border-top: 1px solid var(--sb-line);
+  font-family: var(--sb-font-head);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--sb-text-faint);
+}
+
+/* Both halves are usually empty; the row only takes space when one has text. */
+#sidebar-footer-status {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+#sidebar-footer-status:not(:has(:not(:empty))) {
+  display: none;
+}
+
+#sidebar-footer-info {
+  white-space: nowrap;
+}
+
+#sidebar-footer-activity {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--sb-accent);
+}
+
+#sidebar-footer-activity.status-done {
+  color: var(--sb-green-soft);
+}
+
+/* The limit windows side by side, sharing the width equally; each track
+   stretches to fill its share. Kept quiet until hovered:
+   it is background information, and the amber and red fills still show
+   through when a window runs low. */
+#sidebar-footer-quota {
+  display: flex;
+  gap: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+#sidebar-footer-quota:hover { opacity: 1; }
+.quota-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.quota-label {
+  color: var(--sb-text-faint);
+  white-space: nowrap;
+}
+.quota-track {
+  flex: 1;
+  min-width: 16px;
+  height: 3px;
+  background: rgba(var(--sb-overlay-rgb),0.12);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.quota-fill {
+  display: block;
+  height: 100%;
+  background: var(--sb-green);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.quota-fill.quota-mid { background: var(--sb-amber); }
+.quota-fill.quota-high { background: var(--sb-red); }
+.quota-pct {
+  color: var(--sb-text-faint);
+  white-space: nowrap;
+}

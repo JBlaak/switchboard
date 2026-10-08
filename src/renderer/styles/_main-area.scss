@@ -241,6 +241,9 @@
   inset: -5px 20px 0 0;
   display: none;
   padding: 8px 0 8px 8px;
+  /* FitAddon sizes the terminal from this element's computed height, which under
+     border-box includes the padding, so the last row would be clipped at the window's edge. */
+  box-sizing: content-box;
   overflow: hidden;
 }
 

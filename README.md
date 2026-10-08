@@ -19,7 +19,7 @@ Switchboard is a desktop app that gives you one view of all your Claude Code ses
 - **Status at a glance** — See which sessions are working, waiting for input or blocked on a permission prompt
 - **Full-text search** — Find a session by what was discussed, not just when
 - **Light and dark** — Follows your system, or pin it to light or dark from the sidebar
-- **Usage gauges** — Your Claude plan's limit windows in the status bar
+- **Usage gauges** — Your Claude plan's limit windows at the bottom of the sidebar
 - **Session names** — Picks up names from Claude Code's `/rename` automatically
 
 ![Project picker](build/screenshot-picker.png)
