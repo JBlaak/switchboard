@@ -32,6 +32,7 @@ import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
 } from '../features/terminal/terminal-themes';
 import { installAppearanceToggle } from '../features/settings/appearance-toggle';
+import { installSleepToggle } from '../features/settings/sleep-toggle';
 import { installPatch } from '../features/patch/patch';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
@@ -47,6 +48,7 @@ export function bootstrap(): void {
   installShortcuts();
   installTimeTicker();
   installQuotaGauges();
+  installSleepToggle();
   installAppearanceToggle();
   installPatch();
   followColorSchemeInTerminals();

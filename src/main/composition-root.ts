@@ -47,6 +47,7 @@ import { openDatabase } from '../infrastructure/sqlite/database';
 import { resolveClaudePaths } from '../infrastructure/fs/claude-paths';
 import { systemTimers } from '../infrastructure/system/timers';
 import { OpenMeteoWeatherSource } from '../infrastructure/weather/open-meteo';
+import { PmsetSleepControl } from '../infrastructure/system/pmset-sleep-control';
 
 import type { BrowserWindow } from 'electron';
 import type { SwitchboardDatabase } from '../infrastructure/sqlite/database';
@@ -80,6 +81,7 @@ export interface Container {
   readonly dialogs: ElectronDialogService;
   readonly system: ElectronSystemGateway;
   readonly appearance: ElectronAppearanceGateway;
+  readonly sleep: PmsetSleepControl;
   readonly projectsWatcher: ProjectsWatcher;
 
   /** The window, once one exists. Set by the app lifecycle. */
@@ -169,6 +171,7 @@ export function buildContainer(): Container {
   const dialogs = new ElectronDialogService(getWindow);
   const system = new ElectronSystemGateway(log);
   const appearance = new ElectronAppearanceGateway();
+  const sleep = new PmsetSleepControl(log);
 
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
@@ -193,7 +196,7 @@ export function buildContainer(): Container {
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     sessionIndex, projects, usage, schedules, weather,
-    renderer, dialogs, system, appearance, projectsWatcher,
+    renderer, dialogs, system, appearance, sleep, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     close: () => {

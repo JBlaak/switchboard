@@ -55,6 +55,12 @@ export interface SwitchboardApi {
   /** The best match for a city name, or null when there is none. */
   geocodeWeatherLocation(name: string): Promise<WeatherLocation | null>;
 
+  // ── Sleep ──
+  /** True when `pmset disablesleep 1` is in effect; null when it cannot be read (not a Mac). */
+  getSleepDisabled(): Promise<boolean | null>;
+  /** Flip the switch (may show the macOS password prompt); answers with the state read back. */
+  setSleepDisabled(disabled: boolean): Promise<boolean | null>;
+
   // ── Search ──
   search(type: SearchType, query: string, titleOnly: boolean): Promise<SearchResult[]>;
 
