@@ -29,3 +29,43 @@
 #appearance-toggle-btn + #global-settings-btn {
   margin-left: 0;
 }
+
+/* The sleep switch, when shown, sits in front and takes the auto margin. */
+#sleep-toggle-btn:not([hidden]) + #appearance-toggle-btn {
+  margin-left: 0;
+}
+
+/* ========== SLEEP TOGGLE ==========
+   Same quiet icon button while the Mac may sleep. While sleep is disabled it
+   is meant to be noticed: amber ink on an amber wash, so a Mac left awake by
+   accident does not go unseen. */
+#sleep-toggle-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--sb-text-faint);
+  padding: 0;
+  width: var(--sb-icon-button);
+  height: var(--sb-icon-button);
+  border-radius: var(--sb-r-control);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#sleep-toggle-btn[hidden] { display: none; }
+
+#sleep-toggle-btn:hover {
+  background: rgba(var(--sb-overlay-rgb),0.06);
+  color: var(--sb-text-hover);
+}
+
+#sleep-toggle-btn.sleep-disabled,
+#sleep-toggle-btn.sleep-disabled:hover {
+  color: var(--sb-amber);
+  background: color-mix(in srgb, var(--sb-amber) 18%, transparent);
+}
+
+#sleep-toggle-btn:disabled { cursor: progress; opacity: 0.6; }
