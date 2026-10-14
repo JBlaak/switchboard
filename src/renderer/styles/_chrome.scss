@@ -13,7 +13,8 @@
    otherwise the window becomes immovable depending on which view is open. */
 #sidebar-header,
 #terminal-header,
-#settings-viewer-header {
+#settings-viewer-header,
+#sidebar-drag-space {
   -webkit-app-region: drag;
 }
 

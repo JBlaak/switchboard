@@ -72,6 +72,7 @@ export function renderSessionList(projects: readonly Project[], resort = false):
 
   const next = document.createElement('div');
   next.appendChild(buildList(visible, older, filtering));
+  next.appendChild(buildDragSpace());
 
   if (view.activeSessionId) {
     next.querySelector<HTMLElement>(`[data-session-id="${view.activeSessionId}"]`)
@@ -258,6 +259,13 @@ function truncate(
 }
 
 // ── Assembling the DOM ──
+
+/** Fills whatever height the list leaves free, so the window can be dragged by it. */
+function buildDragSpace(): HTMLElement {
+  const space = document.createElement('div');
+  space.id = 'sidebar-drag-space';
+  return space;
+}
 
 function buildList(
   visible: readonly OrderedItem[],
