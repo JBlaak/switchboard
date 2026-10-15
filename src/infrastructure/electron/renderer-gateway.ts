@@ -13,6 +13,7 @@
 import { EVENT } from '../../ipc/channels';
 import type { BrowserWindow } from 'electron';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
+import type { UpdateNotice } from '../../domain/update/release';
 import type { RendererGateway } from '../../application/ports/renderer-gateway';
 
 export class ElectronRendererGateway implements RendererGateway {
@@ -65,6 +66,10 @@ export class ElectronRendererGateway implements RendererGateway {
 
   fullscreenChanged(isFullscreen: boolean): void {
     this.#send(EVENT.fullscreenChanged, isFullscreen);
+  }
+
+  updateAvailable(update: UpdateNotice): void {
+    this.#send(EVENT.updateAvailable, update);
   }
 
   #send(channel: string, ...args: unknown[]): void {

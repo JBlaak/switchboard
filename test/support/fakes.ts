@@ -185,5 +185,6 @@ export function fakeRenderer(): FakeRenderer {
     projectsChanged: record('projectsChanged'),
     statusUpdate: record('statusUpdate'),
     fullscreenChanged: record('fullscreenChanged'),
+    updateAvailable: record('updateAvailable'),
   };
 }

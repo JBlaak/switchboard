@@ -13,6 +13,7 @@ import { registerSessionHandlers } from './session-handlers';
 import { registerSettingsHandlers } from './settings-handlers';
 import { registerSleepHandlers } from './sleep-handlers';
 import { registerTerminalHandlers } from './terminal-handlers';
+import { registerUpdateHandlers } from './update-handlers';
 import { registerWeatherHandlers } from './weather-handlers';
 import type { Container } from '../composition-root';
 
@@ -26,4 +27,5 @@ export function registerIpcHandlers(app: Container): void {
   registerHostHandlers(ipc, app);
   registerWeatherHandlers(ipc, app);
   registerSleepHandlers(ipc, app);
+  registerUpdateHandlers(ipc, app);
 }

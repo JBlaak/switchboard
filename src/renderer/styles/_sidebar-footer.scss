@@ -83,3 +83,45 @@
   color: var(--sb-text-faint);
   white-space: nowrap;
 }
+
+/* A newer release: one line in the footer's own small type, the version in
+   plain text and Install as an accent-coloured text button. No fill or badge —
+   it waits to be noticed rather than asking to be. */
+#update-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+#update-notice[hidden] { display: none; }
+#update-notice-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#update-notice-action,
+#update-notice-dismiss {
+  background: transparent;
+  border: none;
+  padding: 2px 6px;
+  border-radius: var(--sb-r-control);
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+#update-notice-action {
+  color: var(--sb-accent);
+}
+#update-notice-action:hover:not(:disabled) {
+  background: rgba(var(--sb-accent-rgb), 0.12);
+}
+#update-notice-action:disabled { cursor: progress; opacity: 0.7; }
+#update-notice-dismiss {
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--sb-text-faint);
+}
+#update-notice-dismiss:hover { color: var(--sb-text-hover); }

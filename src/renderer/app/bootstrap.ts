@@ -34,6 +34,7 @@ import {
 import { installAppearanceToggle } from '../features/settings/appearance-toggle';
 import { installSleepToggle } from '../features/settings/sleep-toggle';
 import { installPatch } from '../features/patch/patch';
+import { installUpdateNotice } from '../features/update/update-notice';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -51,6 +52,7 @@ export function bootstrap(): void {
   installSleepToggle();
   installAppearanceToggle();
   installPatch();
+  installUpdateNotice();
   followColorSchemeInTerminals();
 
   setTickListener(tickConnectionCards);

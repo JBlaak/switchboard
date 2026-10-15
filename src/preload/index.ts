@@ -41,6 +41,10 @@ const api: SwitchboardApi = {
   getSleepDisabled: () => ipcRenderer.invoke(INVOKE.getSleepDisabled),
   setSleepDisabled: (disabled) => ipcRenderer.invoke(INVOKE.setSleepDisabled, disabled),
 
+  // ── Updates ──
+  getUpdate: () => ipcRenderer.invoke(INVOKE.getUpdate),
+  installUpdate: () => ipcRenderer.invoke(INVOKE.installUpdate),
+
   // ── Search ──
   search: (type, query, titleOnly) => ipcRenderer.invoke(INVOKE.search, type, query, titleOnly),
 
@@ -92,6 +96,9 @@ const api: SwitchboardApi = {
   },
   onFullscreenChanged: (cb) => {
     ipcRenderer.on(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen));
+  },
+  onUpdateAvailable: (cb) => {
+    ipcRenderer.on(EVENT.updateAvailable, (_e, update) => cb(update));
   },
 
   // ── Host facts ──

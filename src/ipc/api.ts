@@ -14,6 +14,7 @@ import type { SessionOptions } from '../domain/launch/session-options';
 import type { EffectiveSettings } from '../domain/settings/settings';
 import type { Appearance } from '../domain/settings/appearance';
 import type { ShellProfile } from '../domain/shell/shell-profile';
+import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
 import type { Weather, WeatherLocation } from '../domain/weather/weather';
 
@@ -61,6 +62,12 @@ export interface SwitchboardApi {
   /** Flip the switch (may show the macOS password prompt); answers with the state read back. */
   setSleepDisabled(disabled: boolean): Promise<boolean | null>;
 
+  // ── Updates ──
+  /** A newer release waiting to be installed, or null. */
+  getUpdate(): Promise<UpdateNotice | null>;
+  /** Download and swap in the waiting update, then relaunch. False when it could not. */
+  installUpdate(): Promise<boolean>;
+
   // ── Search ──
   search(type: SearchType, query: string, titleOnly: boolean): Promise<SearchResult[]>;
 
@@ -100,6 +107,7 @@ export interface SwitchboardApi {
   onProjectsChanged(cb: () => void): void;
   onStatusUpdate(cb: (text: string, type: string) => void): void;
   onFullscreenChanged(cb: (isFullscreen: boolean) => void): void;
+  onUpdateAvailable(cb: (update: UpdateNotice) => void): void;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */
