@@ -51,6 +51,7 @@ import { OpenMeteoWeatherSource } from '../infrastructure/weather/open-meteo';
 import { PmsetSleepControl } from '../infrastructure/system/pmset-sleep-control';
 import { BundleInstaller } from '../infrastructure/system/bundle-installer';
 import { GitHubReleaseFeed } from '../infrastructure/github/github-release-feed';
+import { GitCliRemotes } from '../infrastructure/git/git-cli-remotes';
 
 import type { BrowserWindow } from 'electron';
 import type { SwitchboardDatabase } from '../infrastructure/sqlite/database';
@@ -86,6 +87,7 @@ export interface Container {
   readonly system: ElectronSystemGateway;
   readonly appearance: ElectronAppearanceGateway;
   readonly sleep: PmsetSleepControl;
+  readonly git: GitCliRemotes;
   readonly projectsWatcher: ProjectsWatcher;
 
   /** The window, once one exists. Set by the app lifecycle. */
@@ -183,6 +185,7 @@ export function buildContainer(): Container {
   const system = new ElectronSystemGateway(log);
   const appearance = new ElectronAppearanceGateway();
   const sleep = new PmsetSleepControl(log);
+  const git = new GitCliRemotes();
 
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
@@ -207,7 +210,7 @@ export function buildContainer(): Container {
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     sessionIndex, projects, usage, schedules, weather, updates,
-    renderer, dialogs, system, appearance, sleep, projectsWatcher,
+    renderer, dialogs, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     close: () => {

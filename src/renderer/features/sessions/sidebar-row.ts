@@ -131,6 +131,7 @@ function buildMeta(session: SessionRow, projectPath: string): HTMLElement {
     project.textContent = label;
     project.title = path || '';
     if (path?.startsWith('ssh://')) project.classList.add('is-remote');
+    else if (path) markRepoLink(project, path);
     left.appendChild(project);
   }
 
@@ -146,6 +147,17 @@ function buildMeta(session: SessionRow, projectPath: string): HTMLElement {
 
   meta.append(left, shortId);
   return meta;
+}
+
+/**
+ * Make a project label open its repository in the browser.
+ *
+ * Remote (`ssh://`) projects are left alone: their git lives on another host.
+ */
+function markRepoLink(label: HTMLElement, projectPath: string): void {
+  label.classList.add('is-repo-link');
+  label.dataset.projectPath = projectPath;
+  label.title = projectPath + '\nClick to open the repository in your browser';
 }
 
 /** The relative time plus the message count — the ticker rewrites this. */
@@ -235,6 +247,11 @@ export function buildSlugGroup(
     `<span class="session-project">${escapeHtml(projectLabel(projectPath))}</span>` +
     `<span class="slug-group-count">${sessions.length} sessions</span> ` +
     escapeHtml(formatDate(new Date(mostRecent.modified)));
+
+  const groupProject = meta.querySelector<HTMLElement>('.session-project');
+  if (groupProject && projectPath && !projectPath.startsWith('ssh://')) {
+    markRepoLink(groupProject, projectPath);
+  }
 
   info.append(name, meta);
   row.append(expand, info, button(
