@@ -40,6 +40,7 @@ remote-status rules the main process does instead of a parallel copy.
 | `launch/` | the `claude` command line, session options, the child environment |
 | `power/` | reading `pmset`'s SleepDisabled flag for the toolbar's sleep switch |
 | `weather/` | folding a WMO weather code into the four skies the empty-state mascot dresses for, and parsing the forecast and geocoding responses |
+| `update/` | whether a published release is newer than the running app, and which zip this Mac's architecture installs from |
 | `search/`, `settings/`, `schedule/`, `usage/` | the rules for each of those, similarly |
 
 ### `src/application` — the use cases
@@ -67,7 +68,7 @@ transcript store, `ssh/`-shaped logic inside the supervisor, `shell/` behind
 the shell profiles, `electron/` behind the window, the menu and the renderer
 gateway, `claude-cli/` behind usage and scheduled runs, `worker/` behind
 the cold-start scanner, `weather/` (Open-Meteo) behind the weather source, `system/` (`pmset`) behind
-the sleep switch.
+the sleep switch and (a bundle swap) behind the app installer, `github/` behind the release feed.
 
 ### `src/main` — the composition root
 

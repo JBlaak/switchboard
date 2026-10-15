@@ -25,6 +25,7 @@ import { SessionLauncher } from '../application/services/session-launcher';
 import { SessionLifecycle } from '../application/services/session-lifecycle';
 import { SessionTransitionDetector } from '../application/services/session-transition-detector';
 import { SettingsService } from '../application/services/settings-service';
+import { UpdateService } from '../application/services/update-service';
 import { WeatherService } from '../application/services/weather-service';
 import { SessionRegistry } from '../application/model/session-registry';
 
@@ -48,6 +49,8 @@ import { resolveClaudePaths } from '../infrastructure/fs/claude-paths';
 import { systemTimers } from '../infrastructure/system/timers';
 import { OpenMeteoWeatherSource } from '../infrastructure/weather/open-meteo';
 import { PmsetSleepControl } from '../infrastructure/system/pmset-sleep-control';
+import { BundleInstaller } from '../infrastructure/system/bundle-installer';
+import { GitHubReleaseFeed } from '../infrastructure/github/github-release-feed';
 
 import type { BrowserWindow } from 'electron';
 import type { SwitchboardDatabase } from '../infrastructure/sqlite/database';
@@ -76,6 +79,7 @@ export interface Container {
   readonly usage: OAuthUsageService;
   readonly schedules: ScheduleService;
   readonly weather: WeatherService;
+  readonly updates: UpdateService;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -159,6 +163,13 @@ export function buildContainer(): Container {
   const weather = new WeatherService({
     source: new OpenMeteoWeatherSource(clock, log), settings, clock, log,
   });
+  const updates = new UpdateService({
+    feed: new GitHubReleaseFeed({ owner: 'JBlaak', name: 'switchboard' }),
+    installer: new BundleInstaller(log),
+    renderer, timers, log,
+    currentVersion: app.getVersion(),
+    arch: process.arch,
+  });
   const shellProfileId = (): string => settings.shellProfileId(null);
 
   const schedules = new ScheduleService({
@@ -195,7 +206,7 @@ export function buildContainer(): Container {
     log, paths,
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
-    sessionIndex, projects, usage, schedules, weather,
+    sessionIndex, projects, usage, schedules, weather, updates,
     renderer, dialogs, system, appearance, sleep, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,

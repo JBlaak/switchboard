@@ -81,6 +81,9 @@ function start(container: Container): void {
   container.projectsWatcher.start();
   container.schedules.ensureCreatorCommand();
   container.schedules.start();
+  // Only an installed build has a version worth comparing; a dev run would
+  // always be "behind" whatever is released.
+  if (app.isPackaged) container.updates.start();
 
   // A migration that recreated the search index leaves it empty even though the
   // session cache is intact, so the index alone has to be refilled.
