@@ -8,6 +8,7 @@
  * session lifecycle and the SSH supervisor.
  */
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
+import type { UpdateNotice } from '../../domain/update/release';
 
 export interface RendererGateway {
   /** True while there is a window listening; every send is a no-op without one. */
@@ -32,4 +33,6 @@ export interface RendererGateway {
   projectsChanged(): void
   statusUpdate(text: string, type: string): void
   fullscreenChanged(isFullscreen: boolean): void
+  /** A newer release was found. */
+  updateAvailable(update: UpdateNotice): void
 }

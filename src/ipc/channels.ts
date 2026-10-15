@@ -38,6 +38,10 @@ export const INVOKE = {
   getSleepDisabled: 'get-sleep-disabled',
   setSleepDisabled: 'set-sleep-disabled',
 
+  // Updates
+  getUpdate: 'get-update',
+  installUpdate: 'install-update',
+
   // Search
   search: 'search',
 
@@ -73,4 +77,5 @@ export const EVENT = {
   projectsChanged: 'projects-changed',
   statusUpdate: 'status-update',
   fullscreenChanged: 'fullscreen-changed',
+  updateAvailable: 'update-available',
 } as const;
