@@ -50,6 +50,7 @@ export const INVOKE = {
 
   // Host
   openExternal: 'open-external',
+  openRepository: 'open-repository',
   writeClipboard: 'clipboard-write-text',
   getAppVersion: 'get-app-version',
 } as const;

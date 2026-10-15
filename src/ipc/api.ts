@@ -79,6 +79,8 @@ export interface SwitchboardApi {
 
   // ── Host ──
   openExternal(url: string): Promise<void>;
+  /** Open the project's `origin` in the browser; false when it has none with a web page. */
+  openRepository(projectPath: string): Promise<boolean>;
   writeClipboard(text: string): Promise<void>;
   getAppVersion(): Promise<string>;
 

@@ -20,11 +20,23 @@ import { startRename } from './session-rename';
 import type { SessionRow } from '../../../domain/session/session';
 
 export function bindSidebarEvents(): void {
+  bindRepoLinks();
   bindSlugGroups();
   bindOlderToggles();
   bindSessionRows();
   bindEmptySpace();
   expandGroupHoldingActiveSession();
+}
+
+/** A project label opens its repository, instead of the row or group it sits in. */
+function bindRepoLinks(): void {
+  sidebarContent.querySelectorAll<HTMLElement>('.session-project.is-repo-link').forEach(label => {
+    label.onclick = (e) => {
+      e.stopPropagation();
+      const projectPath = label.dataset.projectPath;
+      if (projectPath) void window.api.openRepository(projectPath);
+    };
+  });
 }
 
 /** Clicking the list anywhere but on a row or control puts the session away. */
