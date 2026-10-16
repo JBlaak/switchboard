@@ -7,21 +7,28 @@
  * anywhere, archives the open session), A (or Cmd+A, from anywhere) starts a
  * new session, and Escape goes back to the terminal.
  *
- * The cursor is found by its class on the element: rows, group headers and
- * the "more" toggles all take part. The class is rendered from state (see
- * `ui/session-list/cursor`), so it survives a redraw, and if the element is
- * gone the next arrow simply starts again from the active row.
+ * Where the cursor can go is read from the list's layout (`state/list-cursor`):
+ * rows, group headers and the "more" toggles all take part, in the order the
+ * list renders them. The cursor itself is state, so it survives a redraw, and
+ * if what it was on is gone the next arrow simply starts again from the top.
+ *
+ * The keys are heard on `#sidebar-content`, which is what holds the focus
+ * while the cursor is out: the focus, and scrolling the cursor into view,
+ * are the parts that stay with the DOM.
  */
+import { flushSync } from 'react-dom';
 import { sidebarContent } from '../../lib/dom';
-import { openSessions, sessionMap, view } from '../../state/session-store';
+import { getState } from '../../state/app-store';
+import {
+  cursorTargets, liveCursor, shownTargets, startTarget, stepTarget, targetAfterRemoval,
+} from '../../state/list-cursor';
+import { openSessions } from '../../state/session-store';
 import { showProjectPickerDialog } from '../dialogs/project-picker-dialog';
-import { startRename } from './session-rename';
-import { setListCursor } from '../../ui/session-list/cursor';
-
-export const CURSOR_CLASS = 'kbd-cursor';
-
-/** Everything the cursor can land on — each one acts on click. */
-const NAVIGABLE = '.session-item, .slug-group-header, .slug-group-more, .sessions-more-toggle';
+import {
+  expandSlugGroup, openRow, startRename, toggleOlder, toggleSlugGroup,
+} from '../../ui/session-list/actions';
+import { cursorElement, pressArchive, setListCursor } from '../../ui/session-list/cursor';
+import type { CursorTarget } from '../../state/list-cursor';
 
 export function isSidebarFocusKey(e: KeyboardEvent): boolean {
   if (e.altKey || e.code !== 'KeyL') return false;
@@ -58,11 +65,10 @@ function isCommandKey(e: KeyboardEvent, code: string): boolean {
  * happen here too.
  */
 export function archiveActiveSession(): void {
-  const { activeSessionId } = view;
+  const { activeSessionId } = getState().view;
   if (!activeSessionId) return;
-  sidebarContent
-    .querySelector<HTMLElement>(`[data-session-id="${activeSessionId}"] .session-archive-btn`)
-    ?.click();
+  const row = targets().find(t => t.kind === 'row' && t.sessionId === activeSessionId);
+  if (row) pressArchive(row.name);
 }
 
 export function installSidebarKeyboard(): void {
@@ -82,10 +88,9 @@ export function isSidebarFocused(): boolean {
 }
 
 export function focusSidebar(): void {
-  if (document.getElementById('sidebar')?.classList.contains('collapsed')) return;
-  const start = currentCursor()
-    ?? sidebarContent.querySelector<HTMLElement>('.session-item.active')
-    ?? navigableItems()[0];
+  const state = getState();
+  if (state.toolbar.sidebarCollapsed) return;
+  const start = startTarget(state.sessionList, targets(), state.view.activeSessionId);
   if (!start) return;
   sidebarContent.focus({ preventScroll: true });
   moveCursorTo(start);
@@ -109,7 +114,7 @@ function onKeyDown(e: KeyboardEvent): void {
       return;
     case 'Enter':
       e.preventDefault();
-      currentCursor()?.click();
+      activateCursor();
       return;
     case 'r':
     case 'F2':
@@ -134,33 +139,61 @@ function onKeyDown(e: KeyboardEvent): void {
   }
 }
 
+/** What the list renders right now that the cursor could be on. */
+function targets(): CursorTarget[] {
+  const state = getState();
+  return cursorTargets(state.sessionList, state.view.activePtyIds);
+}
+
+function currentCursor(): CursorTarget | null {
+  return liveCursor(getState().sessionList, targets());
+}
+
 function step(direction: -1 | 1): void {
-  const items = navigableItems();
-  if (!items.length) return;
+  const shown = shownTargets(targets());
+  const next = stepTarget(shown, currentCursor()?.name ?? null, direction);
+  if (next) moveCursorTo(next);
+}
+
+/** Enter: what clicking the target would do. */
+function activateCursor(): void {
   const cursor = currentCursor();
-  const at = cursor ? items.indexOf(cursor) : -1;
-  const next = at === -1
-    ? items[0]
-    : items[Math.min(items.length - 1, Math.max(0, at + direction))];
-  moveCursorTo(next);
+  if (!cursor) return;
+  switch (cursor.kind) {
+    case 'row':
+      openRow(cursor.name, cursor.sessionId, cursor.groupId);
+      return;
+    case 'header':
+      toggleSlugGroup(cursor.groupId);
+      return;
+    case 'more':
+      expandSlugGroup(cursor.groupId);
+      return;
+    case 'older':
+      toggleOlder();
+      return;
+  }
 }
 
 function renameAtCursor(): void {
-  const item = currentCursor();
-  if (!item?.classList.contains('session-item')) return;
-  const session = sessionMap.get(item.dataset.sessionId ?? '');
-  const summary = item.querySelector<HTMLElement>('.session-summary');
-  if (!session || !summary) return;
+  const cursor = currentCursor();
+  if (cursor?.kind !== 'row') return;
+  const { name } = cursor;
 
-  startRename(summary, session);
+  // Committed at once: the input focuses itself as it mounts, and the keys
+  // that end the rename are listened for on it.
+  flushSync(() => startRename(name));
+  const input = document.activeElement;
+  if (!input || input === sidebarContent || !sidebarContent.contains(input)) return;
+
   // Enter or Escape finishes the rename; the list keeps the keyboard after it.
   // The input losing focus has already cleared the cursor, so it goes back on.
-  item.querySelector('.session-rename-input')?.addEventListener('keydown', (e: Event) => {
+  input.addEventListener('keydown', (e: Event) => {
     const { key } = e as KeyboardEvent;
     if (key !== 'Enter' && key !== 'Escape') return;
     setTimeout(() => {
       sidebarContent.focus({ preventScroll: true });
-      if (item.isConnected) moveCursorTo(item);
+      if (targets().some(t => t.name === name)) moveCursorTo(name);
     });
   });
 }
@@ -168,45 +201,32 @@ function renameAtCursor(): void {
 /**
  * Archive what is under the cursor by pressing its own archive button, so the
  * slide-out and confetti are the same as a click. The cursor moves on to the
- * next row before this one is gone.
+ * next target before this one is gone.
  */
 function archiveAtCursor(): void {
   const cursor = currentCursor();
-  const button = cursor?.querySelector<HTMLElement>('.session-archive-btn, .slug-group-archive-btn');
-  if (!cursor || !button) return;
+  if (!cursor || (cursor.kind !== 'row' && cursor.kind !== 'header')) return;
 
-  const before = navigableItems();
-  const at = before.indexOf(cursor);
-  button.click();
+  const before = shownTargets(targets());
+  // Marks the row (or group) as leaving at once, so it drops out of `after`.
+  if (!pressArchive(cursor.name)) return;
 
-  // The leaving row (and, for a group, its rows) has dropped out of the list.
-  const remaining = new Set(navigableItems());
-  const next = before.slice(at + 1).find(el => remaining.has(el))
-    ?? before.slice(0, at).reverse().find(el => remaining.has(el));
+  const next = targetAfterRemoval(before, cursor.name, shownTargets(targets()));
   if (next) moveCursorTo(next);
   else clearCursor();
 }
 
 function backToTerminal(): void {
   clearCursor();
-  const open = view.activeSessionId ? openSessions.get(view.activeSessionId) : undefined;
+  const { activeSessionId } = getState().view;
+  const open = activeSessionId ? openSessions.get(activeSessionId) : undefined;
   if (open) open.terminal.focus();
   else sidebarContent.blur();
 }
 
-/** Visible targets, in on-screen order: rows in a collapsed group or a hidden "older" list are skipped. */
-function navigableItems(): HTMLElement[] {
-  return [...sidebarContent.querySelectorAll<HTMLElement>(NAVIGABLE)]
-    .filter(el => el.offsetParent !== null && !el.closest('[data-leaving]'));
-}
-
-function currentCursor(): HTMLElement | null {
-  return sidebarContent.querySelector<HTMLElement>('.' + CURSOR_CLASS);
-}
-
-function moveCursorTo(el: HTMLElement): void {
-  setListCursor(el);
-  el.scrollIntoView({ block: 'nearest' });
+function moveCursorTo(target: string): void {
+  setListCursor(target);
+  cursorElement(target)?.scrollIntoView({ block: 'nearest' });
 }
 
 function clearCursor(): void {
