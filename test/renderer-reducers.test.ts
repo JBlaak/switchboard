@@ -4,6 +4,7 @@ import { initialRendererState, rootReducer } from '../src/renderer/state/root';
 import { busyChanged } from '../src/renderer/state/activity-slice';
 import { sessionsInFlightIn } from '../src/renderer/state/remote-slice';
 import { tightestIn } from '../src/renderer/state/usage-slice';
+import { sessionKeyIn } from '../src/renderer/state/keys-slice';
 import { rowActivity, rowActivityChanges } from '../src/renderer/state/row-activity';
 import type { PushEvent, RendererEvent } from '../src/renderer/state/events';
 import type { RendererState } from '../src/renderer/state/root';
@@ -246,11 +247,110 @@ test('sessionForked keeps a set main already asked under the new id', () => {
   assert.strictEqual(state.questions.bySession.s2.toolUseId, 't9');
 });
 
-test('sessionForked does not move the session on screen; the IPC follow-up does', () => {
-  // It only does so when the session has an open terminal, which the store
-  // does not know about.
-  const state = run(initial('s1'), SAMPLES.sessionForked);
-  assert.strictEqual(state.view.activeSessionId, 's1');
+// ── Re-keying ──
+
+/** Every session id any slice holds, as a key or as a value that names one. */
+function idsHeldIn(state: RendererState): Set<string> {
+  const ids = new Set<string>();
+  const { view, activity, questions, remote, keys } = state;
+  if (view.activeSessionId) ids.add(view.activeSessionId);
+  for (const id of view.activePtyIds) ids.add(id);
+  for (const id of view.searchMatchIds ?? []) ids.add(id);
+  for (const record of [activity.attention, activity.ready, activity.busy, activity.agents,
+    questions.bySession, remote.statuses, keys.byId]) {
+    for (const id of Object.keys(record)) ids.add(id);
+  }
+  for (const pending of Object.values(questions.bySession)) ids.add(pending.sessionId);
+  return ids;
+}
+
+/** s1 on screen, running, matched, busy, waiting, with agents, asking, connecting and keyed. */
+function everythingAbout(sessionId: string): RendererState {
+  return run(initial(),
+    { type: 'sessionsSeen', sessionIds: ['other', sessionId] },
+    { type: 'viewPatched', patch: { activePtyIds: new Set([sessionId]), searchMatchIds: new Set([sessionId]) } },
+    { type: 'cliBusyState', sessionId, busy: true },
+    { type: 'sessionNeedsAttention', sessionId },
+    { type: 'sessionAgents', sessionId, agents: [{ id: 'a', title: 'x' } as never] },
+    { type: 'questionsAsked', pending: asked(sessionId, 't1') },
+    { type: 'remoteStatus', sessionId, status: { phase: 'connecting' }, receivedAt: 5 },
+    { type: 'activeSessionChanged', sessionId },
+  );
+}
+
+test('after a re-key no slice holds the old id', () => {
+  const state = run(everythingAbout('s1'), SAMPLES.sessionForked);
+  assert.ok(!idsHeldIn(state).has('s1'), [...idsHeldIn(state)].join(','));
+});
+
+test('a re-key carries everything over to the new id', () => {
+  const before = everythingAbout('s1');
+  const state = run(before, SAMPLES.sessionForked);
+
+  assert.strictEqual(state.view.activeSessionId, 's2');
+  assert.deepStrictEqual([...state.view.activePtyIds], ['s2']);
+  assert.deepStrictEqual([...state.view.searchMatchIds!], ['s2']);
+  assert.strictEqual(state.activity.busy.s2, true);
+  assert.strictEqual(state.activity.agents.s2, before.activity.agents.s1);
+  assert.strictEqual(state.questions.bySession.s2.toolUseId, 't1');
+  assert.strictEqual(state.questions.bySession.s2.sessionId, 's2');
+  assert.strictEqual(state.remote.statuses.s2, before.remote.statuses.s1);
+  assert.strictEqual(state.keys.byId.s2, before.keys.byId.s1);
+});
+
+test('a re-key carries the waiting and unread marks of a session off screen', () => {
+  const state = run(initial('elsewhere'),
+    { type: 'cliBusyState', sessionId: 's1', busy: true },
+    { type: 'cliBusyState', sessionId: 's1', busy: false },
+    { type: 'sessionNeedsAttention', sessionId: 's1' },
+    SAMPLES.sessionForked);
+  assert.strictEqual(state.activity.ready.s2, true);
+  assert.strictEqual(state.activity.attention.s2, true);
+  assert.ok(!idsHeldIn(state).has('s1'));
+});
+
+test('a re-key leaves what main already said under the new id', () => {
+  const state = run(initial(),
+    { type: 'remoteStatus', sessionId: 's1', status: { phase: 'connecting' }, receivedAt: 5 },
+    { type: 'remoteStatus', sessionId: 's2', status: { phase: 'connected' }, receivedAt: 6 },
+    SAMPLES.sessionForked);
+  assert.strictEqual(state.remote.statuses.s2.phase, 'connected');
+  assert.ok(!state.remote.statuses.s1);
+});
+
+test('a re-key of a session nobody knows changes nothing', () => {
+  const state = initial('other');
+  assert.strictEqual(rootReducer(state, SAMPLES.sessionForked), state);
+});
+
+// ── Local keys ──
+
+test('a session seen for the first time gets a key; seeing it again keeps it', () => {
+  const state = run(initial(), { type: 'sessionsSeen', sessionIds: ['a', 'b'] });
+  assert.notStrictEqual(state.keys.byId.a, state.keys.byId.b);
+  assert.strictEqual(rootReducer(state, { type: 'sessionsSeen', sessionIds: ['b', 'a'] }), state);
+});
+
+test('the key follows the session across re-keys, and the old id gets a fresh one', () => {
+  const seen = run(initial(), { type: 'sessionsSeen', sessionIds: ['a'] });
+  const key = sessionKeyIn(seen.keys, 'a');
+  const state = run(seen,
+    { type: 'sessionForked', oldId: 'a', newId: 'b' },
+    { type: 'sessionForked', oldId: 'b', newId: 'c' },
+    // The old transcript shows up again as a row of its own.
+    { type: 'sessionsSeen', sessionIds: ['a', 'c'] });
+  assert.strictEqual(sessionKeyIn(state.keys, 'c'), key);
+  assert.notStrictEqual(sessionKeyIn(state.keys, 'a'), key);
+});
+
+test('the old key wins over one the new id was already given', () => {
+  const seen = run(initial(), { type: 'sessionsSeen', sessionIds: ['a', 'b'] });
+  const state = run(seen, { type: 'sessionForked', oldId: 'a', newId: 'b' });
+  assert.strictEqual(state.keys.byId.b, seen.keys.byId.a);
+});
+
+test('a session never seen is keyed by its id', () => {
+  assert.strictEqual(sessionKeyIn(initial().keys, 'x'), 'x');
 });
 
 // ── View ──

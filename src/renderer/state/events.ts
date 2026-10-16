@@ -39,6 +39,11 @@ export type PushEvent =
 // ── From the renderer itself: user actions and timers ──
 
 export type LocalEvent =
+  /**
+   * The renderer has rows for these sessions (fetched, or just launched); the
+   * ones it has not seen before get a local key (see `keys-slice`).
+   */
+  | { type: 'sessionsSeen'; sessionIds: readonly string[] }
   /** The session on screen changed (or none is). */
   | { type: 'activeSessionChanged'; sessionId: string | null }
   /**
