@@ -9,6 +9,7 @@
  * follow at once (see `rekeyState`).
  */
 import { activityReducer, initialActivityState, rekeyActivity } from './activity-slice';
+import { dialogReducer, initialDialogState } from './dialog-slice';
 import { initialKeysState, keysReducer, rekeyKeys } from './keys-slice';
 import { initialQuestionsState, questionsReducer, rekeyQuestions } from './questions-slice';
 import { initialRemoteState, rekeyRemote, remoteReducer } from './remote-slice';
@@ -18,10 +19,11 @@ import { initialUpdateState, updateReducer } from './update-slice';
 import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, rekeyView, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
+import type { DialogState } from './dialog-slice';
+import type { RendererEvent } from './events';
 import type { KeysState } from './keys-slice';
 import type { QuestionsState } from './questions-slice';
 import type { RemoteState } from './remote-slice';
-import type { RendererEvent } from './events';
 import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
 import type { UpdateState } from './update-slice';
@@ -34,6 +36,7 @@ export interface RendererState {
   readonly questions: QuestionsState;
   readonly remote: RemoteState;
   readonly usage: UsageState;
+  readonly dialog: DialogState;
   readonly settings: SettingsState;
   readonly keys: KeysState;
   readonly status: StatusState;
@@ -47,6 +50,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     questions: initialQuestionsState,
     remote: initialRemoteState,
     usage: initialUsageState,
+    dialog: initialDialogState,
     settings: initialSettingsState,
     keys: initialKeysState,
     status: initialStatusState,
@@ -68,8 +72,9 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const status = statusReducer(state.status, event);
   const update = updateReducer(state.update, event);
   const settings = settingsReducer(state.settings, event);
+  const dialog = dialogReducer(state.dialog, event);
 
-  return settle(state, { view, activity, questions, remote, usage, keys, status, update, settings });
+  return settle(state, { view, activity, questions, remote, usage, keys, status, update, settings, dialog });
 }
 
 /**
@@ -96,6 +101,7 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     status: state.status,
     update: state.update,
     settings: state.settings,
+    dialog: state.dialog,
   });
 }
 

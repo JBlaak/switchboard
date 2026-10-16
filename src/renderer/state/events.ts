@@ -17,6 +17,7 @@ import type { UpdateNotice } from '../../domain/update/release';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ViewState } from './view-slice';
+import type { DialogRequest } from './dialog-slice';
 import type { SettingsRecord, SettingsScope } from './settings-slice';
 import type { ShellProfile } from '../../domain/shell/shell-profile';
 
@@ -70,6 +71,10 @@ export type LocalEvent =
   | { type: 'usageFetched'; rows: readonly UsageLimit[] }
   /** The usage fetch failed; what is known stays, but it counts as loaded. */
   | { type: 'usageFailed' }
+  /** Open a modal dialog, replacing any that is open. */
+  | { type: 'dialogOpened'; request: DialogRequest }
+  /** Close the dialog opened as `seq`; a stale close from a replaced one does nothing. */
+  | { type: 'dialogClosed'; seq: number }
   /** The settings panel opened on a scope, with what is stored for it. */
   | {
     type: 'settingsOpened';
