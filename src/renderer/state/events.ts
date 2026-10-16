@@ -17,6 +17,8 @@ import type { UpdateNotice } from '../../domain/update/release';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ViewState } from './view-slice';
+import type { SettingsRecord, SettingsScope } from './settings-slice';
+import type { ShellProfile } from '../../domain/shell/shell-profile';
 
 // ── Pushed by the main process ──
 
@@ -62,7 +64,21 @@ export type LocalEvent =
   /** The quota gauges fetched the usage windows. */
   | { type: 'usageFetched'; rows: readonly UsageLimit[] }
   /** The usage fetch failed; what is known stays, but it counts as loaded. */
-  | { type: 'usageFailed' };
+  | { type: 'usageFailed' }
+  /** The settings panel opened on a scope, with what is stored for it. */
+  | {
+    type: 'settingsOpened';
+    scope: SettingsScope;
+    projectPath: string | null;
+    current: SettingsRecord;
+    globalSettings: SettingsRecord;
+    shellProfiles: readonly ShellProfile[];
+    appVersion: string | null;
+  }
+  /** The settings panel's Save went through. */
+  | { type: 'settingsSaved' }
+  /** The settings panel closed, or the terminal took its place. */
+  | { type: 'settingsClosed' };
 
 export type RendererEvent = PushEvent | LocalEvent;
 
