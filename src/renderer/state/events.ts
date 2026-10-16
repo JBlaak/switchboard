@@ -62,7 +62,18 @@ export type LocalEvent =
   /** The quota gauges fetched the usage windows. */
   | { type: 'usageFetched'; rows: readonly UsageLimit[] }
   /** The usage fetch failed; what is known stays, but it counts as loaded. */
-  | { type: 'usageFailed' };
+  | { type: 'usageFailed' }
+  /** The project list loaded with this many sessions running. */
+  | { type: 'runningCounted'; running: number }
+  /** A done status message has lingered long enough. */
+  | { type: 'statusActivityExpired' }
+  /** The renderer asked main for a waiting update at launch. */
+  | { type: 'updateChecked'; update: UpdateNotice | null }
+  /** The user hid the update notice for this version. */
+  | { type: 'updateDismissed'; version: string }
+  | { type: 'updateInstallStarted' }
+  /** Main answered the install, which means it did not quit to finish it. */
+  | { type: 'updateInstallFailed' };
 
 export type RendererEvent = PushEvent | LocalEvent;
 
