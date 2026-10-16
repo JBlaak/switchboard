@@ -3,7 +3,8 @@
  * the form for whichever scope is open.
  *
  * Rendered into `#settings-viewer`, which stays in `index.html` because the
- * vanilla main area still decides when it shows (see `actions`). The form is
+ * main area's panel swap, which decides when it shows, is imperative (see
+ * `actions`). The form is
  * keyed on the open, so each open starts from what is stored.
  */
 import { shortProjectPath } from '../../../domain/project/project-path';

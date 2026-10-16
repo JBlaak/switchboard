@@ -7,12 +7,13 @@
  * that is what the rest of the renderer holds — the terminal, the dialogs, the
  * pending registry — and the layout's copy is only what the list showed.
  */
-import { refreshSidebar, reloadProjects } from '../../app/refresh';
+import { loadProjects } from '../../features/sessions/session-list';
+import { relayoutSessionList } from './relayout';
 import { dispatch, getState } from '../../state/app-store';
 import { sessionMap } from '../../state/session-store';
 import { fallbackName } from '../../state/session-list-layout';
 import { bump } from '../../lib/motion/reflow';
-import { showResumeSessionDialog } from '../../features/dialogs/resume-session-dialog';
+import { openResumeDialog } from '../dialogs/actions';
 import {
   archiveSessionRow, clearScreen, confirmAndStopSession, openSession,
 } from '../../features/sessions/session-actions';
@@ -52,7 +53,7 @@ export async function togglePin(sessionId: string, pin: HTMLElement): Promise<vo
   session.starred = starred;
   // A pin going in pops, one coming out dips.
   bump(pin, starred ? 10 : -4);
-  refreshSidebar({ resort: true });
+  relayoutSessionList({ resort: true });
 }
 
 export function stopRow(sessionId: string): void {
@@ -61,7 +62,7 @@ export function stopRow(sessionId: string): void {
 
 export function resumeWithConfig(sessionId: string): void {
   const session = sessionMap.get(sessionId);
-  if (session) void showResumeSessionDialog(session);
+  if (session) void openResumeDialog(session);
 }
 
 /** Archive a row with confetti, or bring one back from the archive without; either way it slides out of this list. */
@@ -73,7 +74,7 @@ export function toggleArchive(el: HTMLElement, rowId: string, sessionId: string,
   leave(el, rowId, async () => {
     if (!await archiveSessionRow(session, archived)) return false;
     if (archived) void pollActiveSessions();
-    void reloadProjects();
+    void loadProjects();
     return true;
   });
 }
@@ -98,7 +99,7 @@ export function archiveGroup(el: HTMLElement, groupId: string, sessionIds: reado
       }
     }
     void pollActiveSessions();
-    void reloadProjects();
+    void loadProjects();
     return ok;
   });
 }

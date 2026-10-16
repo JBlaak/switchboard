@@ -1,10 +1,10 @@
 /**
- * The one React root, mounted beside the vanilla UI.
+ * The one React root.
  *
- * It renders nothing of its own. Surfaces move over one at a time, and each
- * renders into the container it already has in `index.html` through a
- * `Portal` from here — so the markup and its styles stay where they are, and a
- * single root keeps one tree, one StrictMode and one place to add context.
+ * It renders nothing of its own. Each surface renders into its container in
+ * `index.html` through a `Portal` from here — so the page's layout and its
+ * styles stay static markup, and a single root keeps one tree, one StrictMode
+ * and one place to add context.
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -22,7 +22,7 @@ import { TerminalHeaderControls, TerminalHeaderInfo } from './terminal/TerminalH
 import type { JSX } from 'react';
 import type { Root as ReactRoot } from 'react-dom/client';
 
-/** The surfaces ported so far, each a `<Portal>` into its container. */
+/** Every surface, each a `<Portal>` into its container (the toolbar and the dialogs place their own). */
 export function Root(): JSX.Element | null {
   return (
     <>

@@ -1,18 +1,16 @@
 /**
  * Starting the renderer.
  *
- * Read it top to bottom: install the wiring, apply the stored preferences, then
- * fetch and restore. The order is the only thing here that matters —
- * `installSidebar` has to register the two refresh events before anything can
- * fire one, the IPC follow-ups have to subscribe to the store before the
- * question panel, and the stored terminal font has to be applied before a
- * restored session opens a terminal in the wrong one.
+ * Read it top to bottom: install the wiring, mount the React root, apply the
+ * stored preferences, then fetch and restore. Two things here depend on the
+ * order: the IPC follow-ups subscribe to the store first, and the stored
+ * terminal font has to be applied before a restored session opens a terminal
+ * in the wrong one.
  */
 import { installLayout } from './layout';
 import { installIpcBridge } from './ipc-bridge';
 import { installIpcListeners } from './ipc-listeners';
 import { installShortcuts } from './shortcuts';
-import { installSidebar } from '../features/sessions/sidebar';
 import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
 import { loadProjects } from '../features/sessions/session-list';
 import { openSession } from '../features/sessions/session-actions';
@@ -35,13 +33,11 @@ import { installSessionList } from '../ui/session-list/install-session-list';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
-  // The refresh events, before anything can fire one.
-  installSidebar();
-
-  // The IPC follow-ups subscribe to the store before the question panel does
-  // (`installQuestions`, below): a re-key has to move the terminal registry
-  // before the panel looks for the session under its new id. No push can
-  // arrive while this runs, so the bridge itself can go anywhere in it.
+  // The IPC follow-ups subscribe first: on a re-key they move the registries
+  // outside the store (`rekeyRegistries`) before any later subscriber — the
+  // React tree's included, which only subscribes once it mounts — looks the
+  // session up under its new id. No push can arrive while this runs, so the
+  // bridge itself can go anywhere in it.
   installIpcListeners();
   installIpcBridge(window.api, dispatch, bufferTerminalData);
   installLayout();

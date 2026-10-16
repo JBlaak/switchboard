@@ -4,7 +4,7 @@
  * around it is a window drag region; the buttons opt out in `_chrome.scss`.
  */
 import { ICONS } from '../../lib/icons';
-import { openSettingsViewer } from '../../features/settings/settings-panel';
+import { openSettings } from '../settings/actions';
 import { AppearanceToggle } from './AppearanceToggle';
 import { SleepToggle } from './SleepToggle';
 import { SidebarCollapseIcon } from './icons';
@@ -22,7 +22,7 @@ export function SidebarToolbar(): JSX.Element {
         id="global-settings-btn"
         title="Global settings"
         dangerouslySetInnerHTML={GEAR}
-        onClick={() => void openSettingsViewer('global')}
+        onClick={() => void openSettings('global')}
       />
       <button id="sidebar-collapse-btn" title="Hide sidebar" onClick={() => setSidebarCollapsed(true)}>
         <SidebarCollapseIcon />

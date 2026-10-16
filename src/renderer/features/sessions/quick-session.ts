@@ -6,7 +6,7 @@
  * global settings instead of doing nothing silently.
  */
 import { dispatch } from '../../state/app-store';
-import { openSettingsViewer } from '../settings/settings-panel';
+import { openSettings } from '../../ui/settings/actions';
 import { launchClaudeSession, projectStub } from './session-actions';
 
 /** Cmd+N. */
@@ -32,7 +32,7 @@ export function isBareQuickSessionKey(e: KeyboardEvent): boolean {
 export async function launchQuickSession(): Promise<void> {
   const path = await quickSessionPath();
   if (!path) {
-    await openSettingsViewer('global');
+    await openSettings('global');
     return;
   }
   await launchClaudeSession(projectStub(path));

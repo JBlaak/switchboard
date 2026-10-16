@@ -3,17 +3,18 @@
  *
  * The pushes arrive through the bridge (`ipc-bridge`) and the reducers record
  * what they change; what is left here is the follow-up that state alone does
- * not cover — re-keying the registries outside the store, redrawing when a row changed
- * section, the scrollback banners, a debounced re-fetch. Each handler is a
- * store subscriber for one event, so it runs with the state already updated
- * and the state from before it in hand.
+ * not cover — re-keying the registries outside the store, laying the list out
+ * again when a row changed section, the scrollback banners, a debounced
+ * re-fetch. Each handler is a store subscriber for one event, so it runs with
+ * the state already updated and the state from before it in hand.
  *
  * Subscribers rather than functions the bridge calls, so the bridge stays a
- * plain event source and a React surface can later replace any one of these
- * by subscribing for itself. Installed before the question panel's listener,
- * which a re-key relies on (see `onSessionForked`).
+ * plain event source and a React surface can replace any one of these by
+ * subscribing for itself. Installed before every other subscriber, which a
+ * re-key relies on (see `onSessionForked`).
  */
-import { refreshSidebar, reloadProjects } from './refresh';
+import { loadProjects } from '../features/sessions/session-list';
+import { relayoutSessionList } from '../ui/session-list/relayout';
 import {
   dropPendingSession, writeExitBanner,
 } from '../features/sessions/session-actions';
@@ -44,12 +45,12 @@ export function installIpcListeners(): void {
   // is only recomputed by a render — the class alone would leave it stranded
   // under its old heading. Not a re-sort: the open session keeps its slot.
   onEvent('cliBusyState', ({ sessionId }, state, previous) => {
-    if (busyChanged(previous.activity, state.activity, sessionId)) refreshSidebar();
+    if (busyChanged(previous.activity, state.activity, sessionId)) relayoutSessionList();
   });
   // The header shows the notice itself; see `terminal-slice`.
   onEvent('terminalNotification', ({ sessionId }, state, previous) => {
     // "Waiting for your input" settles the session; see `activityReducer`.
-    if (busyChanged(previous.activity, state.activity, sessionId)) refreshSidebar();
+    if (busyChanged(previous.activity, state.activity, sessionId)) relayoutSessionList();
   });
 
   onEvent('remoteStatus', ({ sessionId, status }, _state, previous) => {
@@ -69,19 +70,20 @@ export function installIpcListeners(): void {
  *
  * The store has already moved every slice; `rekeyRegistries` moves what lives
  * outside it, first, because everything after looks the session up under its
- * new id. The question panel hears about the re-key after this has run (see
- * `bootstrap`), so it finds the terminal moved too.
+ * new id. Every other subscriber, the React tree's included, hears about the
+ * re-key after this has run (see `bootstrap`), so it finds the terminal moved
+ * too.
  *
- * The row keeps its local key across the re-key, so the redraw morphs the same
- * element in place: it stays in its slot and stays highlighted, and only its
- * id changes. The header is named from the row, now and again once the fetch
- * has brought the new transcript's title.
+ * The row keeps its local key across the re-key, so React keeps the same
+ * element across the new layout: it stays in its slot and stays highlighted,
+ * and only its id changes. The header is named from the row, now and again
+ * once the fetch has brought the new transcript's title.
  */
 function onSessionForked(oldId: string, newId: string, state: RendererState): void {
   rekeyRegistries(oldId, newId, state);
-  refreshSidebar();
+  relayoutSessionList();
   nameHeaderAfterRekey(newId);
-  void reloadProjects().then(() => nameHeaderAfterRekey(newId));
+  void loadProjects().then(() => nameHeaderAfterRekey(newId));
   void pollActiveSessions();
 }
 
@@ -105,7 +107,7 @@ function onProcessExited(sessionId: string, exitCode: number): void {
   if (sessionMap.get(sessionId)?.type === 'terminal') {
     dropPendingSession(sessionId);
     sessionMap.delete(sessionId);
-    refreshSidebar();
+    relayoutSessionList();
     void pollActiveSessions();
     return;
   }
@@ -123,6 +125,6 @@ function onProjectsChanged(): void {
   if (projectsChangedTimer) clearTimeout(projectsChangedTimer);
   projectsChangedTimer = setTimeout(() => {
     projectsChangedTimer = null;
-    void reloadProjects();
+    void loadProjects();
   }, PROJECTS_CHANGED_DEBOUNCE_MS);
 }

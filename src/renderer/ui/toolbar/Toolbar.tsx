@@ -3,8 +3,9 @@
  * the search box, the expand button of the collapsed rail, and the resize
  * handle.
  *
- * The session list between them is still vanilla, so each piece portals into
- * its own container in `index.html` rather than owning the sidebar.
+ * The session list between them is a surface of its own, so each piece
+ * portals into its own container in `index.html` rather than owning the
+ * sidebar.
  */
 import { useLayoutEffect } from 'react';
 import { Portal } from '../Portal';
@@ -19,8 +20,8 @@ import type { JSX } from 'react';
 
 /**
  * `#sidebar.collapsed` is what the stylesheet hides the rest of the sidebar
- * by, and what the list's reflow animation and Cmd+L still check for. The
- * sidebar is not this tree's, so the class is set on it from here.
+ * by. The sidebar element is static markup in `index.html`, not this tree's,
+ * so the class is set on it from here.
  */
 function useCollapsedClass(): void {
   const collapsed = useStore(s => s.toolbar.sidebarCollapsed);

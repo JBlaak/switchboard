@@ -2,14 +2,15 @@
  * What the sidebar chrome does: every IPC call and timer behind the toolbar,
  * the filter row and the search box, each ending in a dispatch.
  *
- * The components only call these. The session list is still vanilla, so the
- * ones that change what it shows also ask it to redraw — with `resort: true`,
+ * The components only call these. The session list is laid out on request
+ * (`ui/session-list/relayout`), so the ones that change what it shows also ask
+ * for a new layout — with `resort: true`,
  * because a filter or a search is a user's own action, and the one moment the
  * open session gives up the slot it is parked in.
  */
 import { shortProjectPath } from '../../../domain/project/project-path';
 import { nextAppearance, normaliseAppearance } from '../../../domain/settings/appearance';
-import { refreshSidebar } from '../../app/refresh';
+import { relayoutSessionList } from '../session-list/relayout';
 import { dispatch, getState } from '../../state/app-store';
 import { openSessions, view } from '../../state/session-store';
 import { safeFit } from '../../features/terminal/terminal-manager';
@@ -53,7 +54,7 @@ export async function persistSidebarWidth(width: number): Promise<void> {
 
 export function toggleFilter(filter: SidebarFilter): void {
   dispatch({ type: 'filterToggled', filter });
-  refreshSidebar({ resort: true });
+  relayoutSessionList({ resort: true });
 }
 
 // ── Search ──
@@ -94,7 +95,7 @@ export function toggleSearchTitlesOnly(): void {
 
 function dropSearchMatches(): void {
   dispatch({ type: 'searchMatched', ids: null, projectPaths: null });
-  refreshSidebar({ resort: true });
+  relayoutSessionList({ resort: true });
 }
 
 async function runSearch(): Promise<void> {
@@ -115,7 +116,7 @@ async function runSearch(): Promise<void> {
       // cannot match it; titles-only mode matches it here instead.
       projectPaths: searchTitlesOnly ? matchingProjectPaths(query) : null,
     });
-    refreshSidebar({ resort: true });
+    relayoutSessionList({ resort: true });
   } catch {
     // A query FTS5 cannot parse is not an error worth showing mid-typing; drop
     // back to the unfiltered list.

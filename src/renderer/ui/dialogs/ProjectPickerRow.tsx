@@ -6,7 +6,7 @@
  */
 import { ICONS } from '../../lib/icons';
 import { isWorktreeProject } from '../../features/sessions/project-label';
-import { openSettingsViewer } from '../../features/settings/settings-panel';
+import { openSettings } from '../settings/actions';
 import { archiveAllSessions, hideWorktree, removeRemoteProject } from './actions';
 import { tooltip } from './DialogShell';
 import { labelRuns } from './rank-projects';
@@ -81,7 +81,7 @@ function RowActions({ project, onClose, onChanged }: RowActionsProps): JSX.Eleme
         : <ActionButton className="picker-settings-btn" label="Project settings" icon={ICONS.gear(16)}
             onClick={() => {
               onClose();
-              void openSettingsViewer('project', project.projectPath);
+              void openSettings('project', project.projectPath);
             }} />}
       <ActionButton className="picker-archive-btn" label="Archive all sessions in this project"
         icon={ICONS.archive(18)} onClick={() => redrawIfChanged(archiveAllSessions(project))} />

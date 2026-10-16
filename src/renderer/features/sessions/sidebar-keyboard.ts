@@ -23,7 +23,7 @@ import {
   cursorTargets, liveCursor, shownTargets, startTarget, stepTarget, targetAfterRemoval,
 } from '../../state/list-cursor';
 import { openSessions } from '../../state/session-store';
-import { showProjectPickerDialog } from '../dialogs/project-picker-dialog';
+import { openDialog } from '../../ui/dialogs/actions';
 import {
   expandSlugGroup, openRow, startRename, toggleOlder, toggleSlugGroup,
 } from '../../ui/session-list/actions';
@@ -130,7 +130,7 @@ function onKeyDown(e: KeyboardEvent): void {
     case 'a':
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       e.preventDefault();
-      showProjectPickerDialog();
+      openDialog({ kind: 'projectPicker' });
       return;
     case 'Escape':
       e.preventDefault();

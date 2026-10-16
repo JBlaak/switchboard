@@ -4,8 +4,7 @@
  * project, and a new project.
  */
 import { ICONS } from '../../lib/icons';
-import { showAddProjectDialog } from '../../features/dialogs/add-project-dialog';
-import { showProjectPickerDialog } from '../../features/dialogs/project-picker-dialog';
+import { openDialog } from '../dialogs/actions';
 import { launchQuickSession } from '../../features/sessions/quick-session';
 import { useStore } from '../use-store';
 import { toggleFilter } from './actions';
@@ -81,10 +80,10 @@ export function SessionFilters(): JSX.Element {
       >
         <QuickSessionIcon />
       </button>
-      <button id="new-session-btn" title="New session" onClick={() => showProjectPickerDialog()}>
+      <button id="new-session-btn" title="New session" onClick={() => openDialog({ kind: 'projectPicker' })}>
         <NewSessionIcon />
       </button>
-      <button id="add-project-btn" title="Add project" onClick={() => showAddProjectDialog()}>
+      <button id="add-project-btn" title="Add project" onClick={() => openDialog({ kind: 'addProject' })}>
         <AddProjectIcon />
       </button>
     </div>

@@ -10,7 +10,7 @@
 import {
   archiveActiveSession, focusSidebar, isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey,
 } from '../features/sessions/sidebar-keyboard';
-import { showProjectPickerDialog } from '../features/dialogs/project-picker-dialog';
+import { openDialog } from '../ui/dialogs/actions';
 import { handleSessionNavKey } from '../features/terminal/session-nav';
 import {
   isBareQuickSessionKey, isQuickSessionKey, launchQuickSession,
@@ -35,7 +35,7 @@ export function installShortcuts(): void {
     // Cmd+A opens the new-session picker; in a text field it is Select All.
     if (isSessionPickerKey(e)) {
       e.preventDefault();
-      showProjectPickerDialog();
+      openDialog({ kind: 'projectPicker' });
     }
 
     // Cmd+E archives the open session; in a text field it is left alone.

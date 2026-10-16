@@ -1,9 +1,9 @@
 /**
- * What the vanilla code still says to the terminal header.
+ * What the modules outside React say to the terminal header.
  *
- * The header itself is React now (`ui/terminal/TerminalHeader`), drawn from
- * the store. These are the adapters its remaining vanilla callers go
- * through, each one an event.
+ * The header itself is React (`ui/terminal/TerminalHeader`), drawn from the
+ * store. These name the events the poller, the connection log and the IPC
+ * follow-ups send it, and the name it gives a session.
  */
 import { cleanDisplayName } from '../../../domain/session/title';
 import { dispatch } from '../../state/app-store';

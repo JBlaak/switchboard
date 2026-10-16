@@ -8,7 +8,8 @@
  * (in-flight offsets taken out), so a change can land at any moment of a
  * running animation, or after a scroll, and it still adds up.
  *
- * Elements are matched by id, which is also what the sidebar's morph keys on.
+ * Elements are matched by id. A session row's id comes from its stable local
+ * key (`state/keys-slice`), so a row keeps matching across a re-key.
  */
 import { hasMotion, motion, reducedMotion, Spring, type Motion } from './spring';
 
@@ -91,7 +92,7 @@ function enter(m: Motion): void {
 
 /**
  * An element that left: a copy put back where it was, fixed over the page, that
- * fades out. A copy, because the morph may still own (or reuse) the original.
+ * fades out. A copy, because React may still own (or reuse) the original.
  */
 function ghost(container: HTMLElement, el: HTMLElement, pos: Pos): void {
   const c = container.getBoundingClientRect();

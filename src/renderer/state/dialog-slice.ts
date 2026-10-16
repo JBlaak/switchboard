@@ -1,7 +1,7 @@
 /**
  * Which modal dialog is open, if any.
  *
- * The dialogs are opened from all over the vanilla code — the toolbar, a row's
+ * The dialogs are opened from all over the renderer — the toolbar, a row's
  * actions, the keyboard shortcuts, the terminal — and drawn by React, so the
  * request travels through the store: a caller dispatches `dialogOpened`, and
  * the dialog layer renders whatever is open. What a dialog does inside itself
