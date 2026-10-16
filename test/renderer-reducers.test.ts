@@ -5,7 +5,7 @@ import { busyChanged } from '../src/renderer/state/activity-slice';
 import { sessionsInFlightIn } from '../src/renderer/state/remote-slice';
 import { tightestIn } from '../src/renderer/state/usage-slice';
 import { sessionKeyIn } from '../src/renderer/state/keys-slice';
-import { rowActivity, rowActivityChanges } from '../src/renderer/state/row-activity';
+import { rowActivity } from '../src/renderer/state/row-activity';
 import type { PushEvent, RendererEvent } from '../src/renderer/state/events';
 import type { RendererState } from '../src/renderer/state/root';
 import type { PendingQuestions } from '../src/domain/questions/question';
@@ -389,29 +389,26 @@ test('usage: a fetch records the rows; a failure only marks it loaded', () => {
 
 // ── What the rows show ──
 
-test('rowActivity derives the classes the row builder and the sidebar both use', () => {
+test('rowActivity derives the classes a row renders', () => {
   const state = run(initial(), { type: 'questionsAsked', pending: asked('s1', 't1') });
   assert.deepStrictEqual(rowActivity(state, 's1'),
     { needsAttention: true, responseReady: false, busy: false, agents: [] });
 });
 
-test('rowActivityChanges names only the rows and classes that changed', () => {
+test('a turn ending off screen makes the row ready and no longer busy', () => {
   const before = run(initial('other'), { type: 'cliBusyState', sessionId: 's1', busy: true });
   const after = run(before, { type: 'cliBusyState', sessionId: 's1', busy: false });
-  assert.deepStrictEqual(rowActivityChanges(before, after).map(c => [c.sessionId, c.classes, c.agentsChanged]),
-    [['s1', { 'response-ready': true, 'cli-busy': false }, false]]);
-});
-
-test('rowActivityChanges is empty when neither slice moved', () => {
-  const state = initial();
-  assert.deepStrictEqual(rowActivityChanges(state, run(state, { type: 'remoteTick', at: 1 })), []);
+  assert.deepStrictEqual(rowActivity(after, 's1'),
+    { needsAttention: false, responseReady: true, busy: false, agents: [] });
 });
 
 test('a settled question set clears needs-attention unless OSC 9 also asked', () => {
   const asking = run(initial(), SAMPLES.questionsAsked);
   const settled = run(asking, SAMPLES.questionsSettled);
-  assert.deepStrictEqual(rowActivityChanges(asking, settled)[0].classes, { 'needs-attention': false });
+  const id = 's1';
+  assert.strictEqual(rowActivity(asking, id).needsAttention, true);
+  assert.strictEqual(rowActivity(settled, id).needsAttention, false);
 
   const both = run(asking, SAMPLES.sessionNeedsAttention);
-  assert.deepStrictEqual(rowActivityChanges(both, run(both, SAMPLES.questionsSettled)), []);
+  assert.strictEqual(rowActivity(run(both, SAMPLES.questionsSettled), id).needsAttention, true);
 });

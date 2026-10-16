@@ -16,6 +16,7 @@ import { SettingsViewer } from './settings/SettingsViewer';
 import { EmptyScreenPatch } from './patch/EmptyScreenPatch';
 import { Questions } from './questions/Questions';
 import { QuestionsHeaderButton } from './questions/QuestionsHeaderButton';
+import { SessionList } from './session-list/SessionList';
 import { TerminalHost } from './terminal/TerminalHost';
 import { TerminalHeaderControls, TerminalHeaderInfo } from './terminal/TerminalHeader';
 import type { JSX } from 'react';
@@ -35,6 +36,7 @@ export function Root(): JSX.Element | null {
       <Portal target="terminals"><Questions /></Portal>
       <Portal target="terminal-header-questions"><QuestionsHeaderButton /></Portal>
       <Portal target="placeholder"><EmptyScreenPatch /></Portal>
+      <Portal target="sidebar-content"><SessionList /></Portal>
     </>
   );
 }

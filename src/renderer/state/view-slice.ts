@@ -2,13 +2,12 @@
  * The sidebar's view state: which session is on screen, which are running,
  * the filters, the search and the list limits.
  *
- * The cached project lists and the last render order are deliberately not
- * here. The project lists hold the shared `SessionRow` objects that every
- * surface mutates in place (a rename, a star, a re-key), which no immutable
- * slice can model without first changing all of those writers; the render
- * order is the vanilla renderer's private memory between two of its own
- * renders. Both stay on the `view` adapter in `session-store`, and move when
- * the sidebar does.
+ * The cached project lists are deliberately not here. They hold the shared
+ * `SessionRow` objects that every surface mutates in place (a rename, a star,
+ * a re-key), which no immutable slice can model without first changing all of
+ * those writers, so they stay on the `view` adapter in `session-store`. The
+ * list copies what it shows out of them at each redraw, and keeps its last
+ * order in its own slice (`session-list-slice`).
  */
 import type { RendererEvent } from './events';
 import type { SidebarFilter } from './toolbar-slice';

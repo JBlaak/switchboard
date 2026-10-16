@@ -385,13 +385,9 @@ export function showSession(sessionId: string): void {
   const entry = openSessions.get(sessionId);
   const session = sessionMap.get(sessionId) || (entry && entry.session);
 
-  // Update sidebar active state
-  document.querySelectorAll<HTMLElement>('.session-item.active').forEach(el => el.classList.remove('active'));
-  const item = document.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
-  if (item) item.classList.add('active');
-
-  // React puts the session's container and header on screen. Rendered now:
-  // the terminal cannot take focus or measure itself until it is displayed.
+  // React puts the session's container and header on screen, and highlights its
+  // row in the sidebar. Rendered now: the terminal cannot take focus or measure
+  // itself until it is displayed.
   flushSync(() => {
     setActiveSession(sessionId);
     dispatch({ type: 'sessionShown', sessionId, name: session ? headerNameFor(session) : '' });

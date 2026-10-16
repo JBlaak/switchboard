@@ -11,6 +11,7 @@
  * only there to catch what nothing told us about.
  */
 import { clearActivity } from '../../state/activity-store';
+import { getState } from '../../state/app-store';
 import { view } from '../../state/session-store';
 import { updateTerminalHeader } from './terminal-header';
 
@@ -22,7 +23,7 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null;
 export async function pollActiveSessions(): Promise<void> {
   try {
     view.activePtyIds = new Set(await window.api.getActiveSessions());
-    updateRunningIndicators();
+    clearStoppedActivity();
     updateTerminalHeader();
   } catch {
     // A failed poll is not worth reporting; the next one is 3 seconds away.
@@ -37,26 +38,19 @@ export function schedulePoll(): void {
 }
 
 /**
- * Repaint every "is it running" indicator from the poll's answer.
+ * Nothing is running under a session the poll did not report, so it cannot be
+ * busy, ready or waiting any more.
  *
- * Done by touching classes rather than re-rendering: this runs every three
- * seconds, and a full render would fight the user's scroll position and any
- * rename input they have open.
+ * The rows show the running state straight from the poll's answer; this only
+ * clears the marks a session that died without saying so would keep.
  */
-export function updateRunningIndicators(): void {
-  document.querySelectorAll<HTMLElement>('.session-item').forEach(item => {
-    const sessionId = item.dataset.sessionId;
-    if (!sessionId) return;
-
-    const running = view.activePtyIds.has(sessionId);
-    item.classList.toggle('has-running-pty', running);
-    // Nothing is running under it, so it cannot be busy, ready or waiting.
-    if (!running) clearActivity(sessionId);
-    item.querySelector<HTMLElement>('.session-status-dot')?.classList.toggle('running', running);
-  });
-
-  document.querySelectorAll<HTMLElement>('.slug-group').forEach(group => {
-    const hasRunning = group.querySelector('.session-item.has-running-pty') !== null;
-    group.querySelector<HTMLElement>('.slug-group-dot')?.classList.toggle('running', hasRunning);
-  });
+function clearStoppedActivity(): void {
+  const { activity, view: { activePtyIds } } = getState();
+  const marked = new Set([
+    ...Object.keys(activity.attention), ...Object.keys(activity.ready),
+    ...Object.keys(activity.busy), ...Object.keys(activity.agents),
+  ]);
+  for (const sessionId of marked) {
+    if (!activePtyIds.has(sessionId)) clearActivity(sessionId);
+  }
 }

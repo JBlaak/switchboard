@@ -110,7 +110,7 @@ node like the domain code. React components read with `useStore(selector)`,
 which re-renders only when the selection changes. The vanilla code that has
 not moved yet keeps its old calls through the `*-store` adapters, and what
 must still touch the DOM after an event subscribes to the store
-(`app/ipc-listeners`, `features/sessions/sidebar-activity`). The React root
+(`app/ipc-listeners`). The React root
 renders nothing itself: each ported surface portals into the container it
 already has in `index.html`. Registries that hold live objects — `openSessions`
 with its xterm instances, and the shared session rows — stay plain Maps

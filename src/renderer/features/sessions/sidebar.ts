@@ -6,9 +6,14 @@
  * and `reloadProjects`) have exactly one implementation each to register.
  */
 import { setProjectsReloader, setSidebarRefresher } from '../../app/refresh';
+import { dispatch, getState } from '../../state/app-store';
+import { tierOf } from '../../state/activity-store';
+import { sessionKeyIn } from '../../state/keys-slice';
+import { listItems } from '../../state/session-list-layout';
 import { view } from '../../state/session-store';
+import { isFilteringView } from '../../state/view-slice';
+import { localDateKey } from '../../lib/format';
 import { loadProjects } from './session-list';
-import { renderSessionList } from './sidebar-render';
 import type { Project } from '../../../domain/project/project';
 import type { SidebarRefreshOptions } from '../../app/refresh';
 
@@ -18,8 +23,33 @@ export function installSidebar(): void {
   setProjectsReloader((options) => loadProjects(options));
 }
 
+/**
+ * Lay the list out again from the cached projects and the live signals.
+ *
+ * The rows are copied into the event as they stand now; the slice orders and
+ * folds them (`session-list-slice`), and the list renders what it decided.
+ */
 function render({ resort = false }: SidebarRefreshOptions = {}): void {
-  renderSessionList(projectsToRender(), resort);
+  const state = getState();
+  const now = Date.now();
+  const { items, activeItemId } = listItems(projectsToRender(), {
+    filters: state.view,
+    running: state.view.activePtyIds,
+    activeSessionId: state.view.activeSessionId,
+    tierOf,
+    keyOf: (sessionId) => sessionKeyIn(getState().keys, sessionId),
+    today: localDateKey(new Date(now)),
+  });
+  dispatch({
+    type: 'sessionListBuilt',
+    items,
+    activeItemId,
+    resort,
+    filtering: isFilteringView(state.view),
+    visibleSessionCount: state.view.visibleSessionCount,
+    sessionMaxAgeDays: state.view.sessionMaxAgeDays,
+    now,
+  });
 }
 
 /**

@@ -17,6 +17,7 @@ import type { UpdateNotice } from '../../domain/update/release';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ToolbarEvent } from './toolbar-slice';
+import type { SessionListEvent } from './session-list-slice';
 import type { ViewState } from './view-slice';
 import type { DraftAction } from '../../domain/questions/answer-draft';
 import type { QuestionView } from './answers-slice';
@@ -138,7 +139,7 @@ export type LocalEvent =
   | { type: 'terminalSearchOpened'; sessionId: string }
   | { type: 'terminalSearchClosed'; sessionId: string };
 
-export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent;
+export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

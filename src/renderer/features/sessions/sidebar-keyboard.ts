@@ -7,15 +7,16 @@
  * anywhere, archives the open session), A (or Cmd+A, from anywhere) starts a
  * new session, and Escape goes back to the terminal.
  *
- * The cursor is a class on the element rather than a remembered id: rows,
- * group headers and the "more" toggles all take part, and only rows have ids.
- * The morph carries the class across a redraw (see `sidebar-render`), and if
- * the element is gone the next arrow simply starts again from the active row.
+ * The cursor is found by its class on the element: rows, group headers and
+ * the "more" toggles all take part. The class is rendered from state (see
+ * `ui/session-list/cursor`), so it survives a redraw, and if the element is
+ * gone the next arrow simply starts again from the active row.
  */
 import { sidebarContent } from '../../lib/dom';
 import { openSessions, sessionMap, view } from '../../state/session-store';
 import { showProjectPickerDialog } from '../dialogs/project-picker-dialog';
 import { startRename } from './session-rename';
+import { setListCursor } from '../../ui/session-list/cursor';
 
 export const CURSOR_CLASS = 'kbd-cursor';
 
@@ -204,11 +205,10 @@ function currentCursor(): HTMLElement | null {
 }
 
 function moveCursorTo(el: HTMLElement): void {
-  clearCursor();
-  el.classList.add(CURSOR_CLASS);
+  setListCursor(el);
   el.scrollIntoView({ block: 'nearest' });
 }
 
 function clearCursor(): void {
-  sidebarContent.querySelectorAll('.' + CURSOR_CLASS).forEach(el => el.classList.remove(CURSOR_CLASS));
+  setListCursor(null);
 }
