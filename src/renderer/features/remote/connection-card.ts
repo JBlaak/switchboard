@@ -50,7 +50,7 @@ const CARD_HTML = `
     </svg>
     <div class="rc-status"></div>
     <div class="rc-target"></div>
-    <div class="rc-bar"><i></i></div>
+    <div class="rc-bar" data-testid="remote-progress"><i></i></div>
     <div class="rc-detail"></div>
     <div class="rc-actions">
       <button class="rc-retry" type="button">Retry now</button>
