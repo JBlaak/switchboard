@@ -82,7 +82,10 @@ export function terminalReducer(state: TerminalState, event: RendererEvent): Ter
         ? { ...state, headerName: event.name }
         : state;
 
+    // Each tick of the connection countdown repaints the header too, as the
+    // vanilla card's tick did.
     case 'headerRefreshed':
+    case 'remoteTick':
       return state.notice === null ? state : { ...state, notice: null };
 
     case 'ptyTitleChanged': {

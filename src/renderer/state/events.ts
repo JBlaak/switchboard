@@ -71,6 +71,8 @@ export type LocalEvent =
   | { type: 'remoteStatusForgotten'; sessionId: string }
   /** The shared once-a-second clock the connection countdowns run on. */
   | { type: 'remoteTick'; at: number }
+  /** The green beat after a reconnect has had its moment; the card steps aside. */
+  | { type: 'remoteConnectedBeatEnded'; sessionId: string }
   /** The quota gauges fetched the usage windows. */
   | { type: 'usageFetched'; rows: readonly UsageLimit[] }
   /** The usage fetch failed; what is known stays, but it counts as loaded. */
