@@ -298,11 +298,20 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
   // ── The keyboard around a showing ──
 
   // Showing a session focuses its terminal; while the questions are up the
-  // keyboard belongs to them.
+  // keyboard belongs to them. Checked in a microtask: the terminal manager
+  // renders the showing synchronously (`flushSync`) and only focuses the
+  // terminal after that, so at commit time the terminal has not taken the
+  // keyboard yet.
   useLayoutEffect(() => {
-    if (!up || !screen.open?.element.contains(document.activeElement)) return;
-    sheet.current?.focus({ preventScroll: true });
-    handlers.current.syncFocus();
+    let current = true;
+    const open = screen.open;
+    queueMicrotask(() => {
+      if (!current || !live.current.up) return;
+      if (!open?.element.contains(document.activeElement)) return;
+      sheet.current?.focus({ preventScroll: true });
+      handlers.current.syncFocus();
+    });
+    return () => { current = false; };
   }, [screen.shown]);
 
   // A set that settles while the panel has the keyboard hands it to the terminal.
