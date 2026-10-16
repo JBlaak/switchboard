@@ -3,7 +3,7 @@
  *
  * The pushes arrive through the bridge (`ipc-bridge`) and the reducers record
  * what they change; what is left here is the follow-up that state alone does
- * not cover — re-keying the terminal registry, redrawing when a row changed
+ * not cover — re-keying the registries outside the store, redrawing when a row changed
  * section, the scrollback banners, a debounced re-fetch. Each handler is a
  * store subscriber for one event, so it runs with the state already updated
  * and the state from before it in hand.
@@ -14,8 +14,6 @@
  * which a re-key relies on (see `onSessionForked`).
  */
 import { refreshSidebar, reloadProjects } from './refresh';
-import { setStatusActivity } from './status-bar';
-import { setActiveSession } from '../features/sessions/active-session';
 import {
   dropPendingSession, writeExitBanner,
 } from '../features/sessions/session-actions';
@@ -23,8 +21,9 @@ import { pollActiveSessions } from '../features/sessions/session-poller';
 import { setHeaderIdentity, showHeaderNotice } from '../features/sessions/terminal-header';
 import { handleRemoteStatus } from '../features/remote/connection-card';
 import { busyChanged } from '../state/activity-slice';
-import { onEvent } from '../state/app-store';
-import { openSessions, pendingSessions, sessionMap } from '../state/session-store';
+import { getState, onEvent } from '../state/app-store';
+import { pendingSessions, sessionMap } from '../state/session-store';
+import { rekeyRegistries } from './rekey-registries';
 import type { RendererState } from '../state/root';
 
 /**
@@ -39,7 +38,7 @@ let projectsChangedTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function installIpcListeners(): void {
   onEvent('processExited', ({ sessionId, exitCode }) => onProcessExited(sessionId, exitCode));
-  onEvent('sessionForked', ({ oldId, newId }, _state, previous) => onSessionForked(oldId, newId, previous));
+  onEvent('sessionForked', ({ oldId, newId }, state) => onSessionForked(oldId, newId, state));
 
   // A working↔ready flip moves the row between sections, and a row's section
   // is only recomputed by a render — the class alone would leave it stranded
@@ -57,7 +56,6 @@ export function installIpcListeners(): void {
     handleRemoteStatus(sessionId, status, previous.remote.statuses[sessionId]);
   });
   onEvent('projectsChanged', onProjectsChanged);
-  onEvent('statusUpdate', ({ text, kind }) => setStatusActivity(text, kind));
 
   // Fullscreen hides the macOS traffic lights, so the space the collapsed
   // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.
@@ -69,46 +67,29 @@ export function installIpcListeners(): void {
 /**
  * A fork or an accepted plan re-keyed a running session.
  *
- * Everything holding the old id has to move across — the pending row too,
- * which has to follow so the sidebar entry survives until the store catches up.
- * The store has already moved the session's questions; the panel hears about
- * that after this has run, so it finds the terminal under the new id.
+ * The store has already moved every slice; `rekeyRegistries` moves what lives
+ * outside it, first, because everything after looks the session up under its
+ * new id. The question panel hears about the re-key after this has run (see
+ * `bootstrap`), so it finds the terminal moved too.
+ *
+ * The row keeps its local key across the re-key, so the redraw morphs the same
+ * element in place: it stays in its slot and stays highlighted, and only its
+ * id changes. The header is named from the row, now and again once the fetch
+ * has brought the new transcript's title.
  */
-function onSessionForked(oldId: string, newId: string, previous: RendererState): void {
-  const entry = openSessions.get(oldId);
-  if (!entry) return;
-
-  entry.session.sessionId = newId;
-  if (previous.view.activeSessionId === oldId) setActiveSession(newId);
-  openSessions.delete(oldId);
-  openSessions.set(newId, entry);
-
-  const pending = pendingSessions.get(oldId);
-  pendingSessions.delete(oldId);
-  if (pending) {
-    pending.session.sessionId = newId;
-    pendingSessions.set(newId, pending);
-  }
-  sessionMap.delete(oldId);
-  sessionMap.set(newId, entry.session);
-
-  setHeaderIdentity(newId);
-  void reloadProjects().then(() => {
-    const row = selectRow(newId);
-    const summary = row?.querySelector<HTMLElement>('.session-summary');
-    if (summary) setHeaderIdentity(newId, summary.textContent);
-  });
+function onSessionForked(oldId: string, newId: string, state: RendererState): void {
+  rekeyRegistries(oldId, newId, state);
+  refreshSidebar();
+  nameHeaderAfterRekey(newId);
+  void reloadProjects().then(() => nameHeaderAfterRekey(newId));
   void pollActiveSessions();
 }
 
-/** Mark a row as the one on screen, after a re-render has replaced it. */
-function selectRow(sessionId: string): HTMLElement | null {
-  const row = document.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
-  if (!row) return null;
-  document.querySelectorAll<HTMLElement>('.session-item.active')
-    .forEach(el => el.classList.remove('active'));
-  row.classList.add('active');
-  return row;
+/** Put the re-keyed session's id and name in the header, if it is the one on screen. */
+function nameHeaderAfterRekey(sessionId: string): void {
+  if (getState().view.activeSessionId !== sessionId) return;
+  const row = sessionMap.get(sessionId);
+  if (row) setHeaderIdentity(row);
 }
 
 /**

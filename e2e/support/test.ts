@@ -33,8 +33,14 @@ export interface HarnessOptions {
   fixture: FixtureSpec;
   /** The app's own appearance setting, so both schemes are the app's real ones. */
   appearance: 'light' | 'dark';
-  /** Overrides for the host stubs (usage, sleep, folder picker). */
+  /** Overrides for the host stubs (usage, updates, sleep, folder picker). */
   stubs: Partial<HostStubs>;
+  /**
+   * Put the renderer's timers on Playwright's fake clock, so a test can
+   * `page.clock.fastForward` past a poll interval or a linger instead of
+   * waiting for it. Time still flows on its own; see `launchApp`.
+   */
+  fakeTimers: boolean;
 }
 
 export interface HarnessFixtures {
@@ -47,6 +53,7 @@ export const test = base.extend<HarnessOptions & HarnessFixtures>({
   fixture: [standardFixture(), { option: true }],
   appearance: ['light', { option: true }],
   stubs: [{}, { option: true }],
+  fakeTimers: [false, { option: true }],
 
   home: async ({ fixture, appearance }, use) => {
     const home = fixtureHome({ ...fixture, settings: { ...fixture.settings, appearance } });
@@ -56,8 +63,8 @@ export const test = base.extend<HarnessOptions & HarnessFixtures>({
 
   // One launch backs both `app` and `page`; `page` asks for `app` so the two
   // always belong to the same process.
-  app: async ({ home, stubs }, use) => {
-    const launched = await launchApp(home, stubs);
+  app: async ({ home, stubs, fakeTimers }, use) => {
+    const launched = await launchApp(home, stubs, { fakeTimers });
     try {
       await waitForIndex(launched.page, launched.app, home);
       await use(launched.app);

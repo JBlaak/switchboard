@@ -18,6 +18,9 @@ import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ToolbarEvent } from './toolbar-slice';
 import type { ViewState } from './view-slice';
+import type { DialogRequest } from './dialog-slice';
+import type { SettingsRecord, SettingsScope } from './settings-slice';
+import type { ShellProfile } from '../../domain/shell/shell-profile';
 
 // ── Pushed by the main process ──
 
@@ -40,6 +43,11 @@ export type PushEvent =
 // ── From the renderer itself: user actions and timers ──
 
 export type LocalEvent =
+  /**
+   * The renderer has rows for these sessions (fetched, or just launched); the
+   * ones it has not seen before get a local key (see `keys-slice`).
+   */
+  | { type: 'sessionsSeen'; sessionIds: readonly string[] }
   /** The session on screen changed (or none is). */
   | { type: 'activeSessionChanged'; sessionId: string | null }
   /**
@@ -63,7 +71,36 @@ export type LocalEvent =
   /** The quota gauges fetched the usage windows. */
   | { type: 'usageFetched'; rows: readonly UsageLimit[] }
   /** The usage fetch failed; what is known stays, but it counts as loaded. */
-  | { type: 'usageFailed' };
+  | { type: 'usageFailed' }
+  /** Open a modal dialog, replacing any that is open. */
+  | { type: 'dialogOpened'; request: DialogRequest }
+  /** Close the dialog opened as `seq`; a stale close from a replaced one does nothing. */
+  | { type: 'dialogClosed'; seq: number }
+  /** The settings panel opened on a scope, with what is stored for it. */
+  | {
+    type: 'settingsOpened';
+    scope: SettingsScope;
+    projectPath: string | null;
+    current: SettingsRecord;
+    globalSettings: SettingsRecord;
+    shellProfiles: readonly ShellProfile[];
+    appVersion: string | null;
+  }
+  /** The settings panel's Save went through. */
+  | { type: 'settingsSaved' }
+  /** The settings panel closed, or the terminal took its place. */
+  | { type: 'settingsClosed' }
+  /** The project list loaded with this many sessions running. */
+  | { type: 'runningCounted'; running: number }
+  /** A done status message has lingered long enough. */
+  | { type: 'statusActivityExpired' }
+  /** The renderer asked main for a waiting update at launch. */
+  | { type: 'updateChecked'; update: UpdateNotice | null }
+  /** The user hid the update notice for this version. */
+  | { type: 'updateDismissed'; version: string }
+  | { type: 'updateInstallStarted' }
+  /** Main answered the install, which means it did not quit to finish it. */
+  | { type: 'updateInstallFailed' };
 
 export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent;
 

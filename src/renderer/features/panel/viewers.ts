@@ -6,9 +6,11 @@
  * it lingering behind the terminal.
  */
 import { settingsViewer, terminalArea } from '../../lib/dom';
+import { dispatch } from '../../state/app-store';
 
 /** Put the terminal back. */
 export function hideAllViewers(): void {
   settingsViewer.style.display = 'none';
+  dispatch({ type: 'settingsClosed' });
   terminalArea.style.display = '';
 }

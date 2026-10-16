@@ -11,10 +11,8 @@
 import { installLayout } from './layout';
 import { installIpcBridge } from './ipc-bridge';
 import { installIpcListeners } from './ipc-listeners';
-import { installQuotaGauges } from './quota-gauges';
 import { installShortcuts } from './shortcuts';
 import { installTimeTicker } from './time-ticker';
-import { renderStatusSummary } from './status-bar';
 import { installSidebar } from '../features/sessions/sidebar';
 import { installSidebarActivity } from '../features/sessions/sidebar-activity';
 import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
@@ -27,16 +25,16 @@ import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
 import { dispatch } from '../state/app-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
-import {
-  applyTerminalFont, bufferTerminalData, prewarmTerminalRenderer,
-} from '../features/terminal/terminal-manager';
+import { applyTerminalFont, prewarmTerminalRenderer } from '../features/terminal/terminal-manager';
+import { bufferTerminalData } from '../features/terminal/write-buffer';
 import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
 } from '../features/terminal/terminal-themes';
 import { installPatch } from '../features/patch/patch';
-import { installUpdateNotice } from '../features/update/update-notice';
 import { installQuestions } from '../features/questions/questions';
 import { mountReactRoot } from '../ui/Root';
+import { countRunning } from '../ui/footer/actions';
+import { installFooter } from '../ui/footer/install-footer';
 import { installToolbar } from '../ui/toolbar/actions';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
@@ -56,9 +54,8 @@ export function bootstrap(): void {
   installSidebarKeyboard();
   installShortcuts();
   installTimeTicker();
-  installQuotaGauges();
+  installFooter();
   installPatch();
-  installUpdateNotice();
   installQuestions();
   followColorSchemeInTerminals();
   // The surfaces that have moved to React portal out of it.
@@ -75,7 +72,7 @@ export function bootstrap(): void {
 
   void applyStoredSettings();
   void loadProjects().then(() => {
-    renderStatusSummary();
+    countRunning();
     restoreView();
   });
 }

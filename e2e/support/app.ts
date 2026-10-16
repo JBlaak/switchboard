@@ -107,6 +107,14 @@ export function sidebar(page: Page): Locator {
   return page.getByTestId('sidebar');
 }
 
+/**
+ * The strip under the session list: the running count, the activity line, the
+ * quota gauges and the update notice. A plain div, hence the test id.
+ */
+export function sidebarFooter(page: Page): Locator {
+  return page.getByTestId('sidebar-footer');
+}
+
 /** The bar above the terminal: name, process title, id, status, stop. */
 export function terminalHeader(page: Page): Locator {
   return page.getByTestId('terminal-header');

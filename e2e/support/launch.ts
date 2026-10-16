@@ -50,9 +50,15 @@ export interface LaunchedApp {
   close(): Promise<void>;
 }
 
+export interface LaunchOptions {
+  /** Fake timers on the renderer's clock instead of only a frozen `Date`. */
+  fakeTimers?: boolean;
+}
+
 export async function launchApp(
   home: FixtureHome,
   stubs: Partial<HostStubs> = {},
+  { fakeTimers = false }: LaunchOptions = {},
 ): Promise<LaunchedApp> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -84,9 +90,9 @@ export async function launchApp(
   try {
     page = await app.firstWindow();
     await installHostStubs(app, { ...DEFAULT_STUBS, ...stubs });
-    await settleWindow(app, page);
+    await settleWindow(app, page, fakeTimers);
   } catch (err) {
-    await app.close().catch(() => {});
+    await quit(app);
     throw err;
   }
 
@@ -97,9 +103,30 @@ export async function launchApp(
       // Quitting (not closing the window, which on macOS leaves the app in the
       // Dock) runs the app's before-quit, which signals every session's
       // process group — so the fake CLIs go with it.
-      await app.close().catch(() => {});
+      await quit(app);
     },
   };
+}
+
+/** How long a quit may take before the app is killed instead. */
+const QUIT_TIMEOUT_MS = 10_000;
+
+/**
+ * Quit the app, and kill it if it will not go.
+ *
+ * On a loaded CI Mac a quit now and then never finishes, and Playwright then
+ * waits out its whole worker teardown and fails the run with no test to blame.
+ * Killing the main process closes the PTYs' masters, which hangs up the
+ * sessions still under them.
+ */
+async function quit(app: ElectronApplication): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<'timeout'>((resolve) => {
+    timer = setTimeout(() => resolve('timeout'), QUIT_TIMEOUT_MS);
+  });
+  const outcome = await Promise.race([app.close().catch(() => 'closed' as const), timedOut]);
+  clearTimeout(timer);
+  if (outcome === 'timeout') app.process().kill('SIGKILL');
 }
 
 /**
@@ -112,15 +139,21 @@ export async function launchApp(
  * reduced-motion emulation and the host stubs apply from the first frame. The
  * reload is safe: nothing has been launched yet, and the renderer rebuilds
  * itself from main.
+ *
+ * With `fakeTimers` the clock is installed instead of fixed: it starts at
+ * FIXTURE_NOW and runs on from there, and `page.clock.fastForward` can jump
+ * the renderer's timers ahead. Only for tests about timing, since the running
+ * clock lets relative times drift away from the screenshots'.
  */
-async function settleWindow(app: ElectronApplication, page: Page): Promise<void> {
+async function settleWindow(app: ElectronApplication, page: Page, fakeTimers: boolean): Promise<void> {
   await app.evaluate(({ BrowserWindow }, size) => {
     const window = BrowserWindow.getAllWindows()[0];
     window.setContentSize(size.width, size.height);
     window.center();
   }, WINDOW_SIZE);
 
-  await page.context().clock.setFixedTime(FIXTURE_NOW);
+  if (fakeTimers) await page.context().clock.install({ time: FIXTURE_NOW });
+  else await page.context().clock.setFixedTime(FIXTURE_NOW);
   // colorScheme: null, explicitly. Playwright otherwise emulates `light` along
   // with whatever is asked for, which would hide the app's own dark mode: the
   // scheme has to come from the appearance setting, through nativeTheme, as it

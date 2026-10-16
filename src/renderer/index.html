@@ -15,21 +15,12 @@
     <div id="sidebar-header"></div>
     <div id="search-bar"></div>
     <div id="sidebar-content"></div>
-    <div id="sidebar-footer">
-      <div id="update-notice" hidden><span id="update-notice-label"></span><button id="update-notice-action" type="button"></button><button id="update-notice-dismiss" type="button" title="Dismiss" aria-label="Dismiss">&times;</button></div>
-      <div id="sidebar-footer-status"><span id="sidebar-footer-info"></span><span id="sidebar-footer-activity"></span></div>
-      <div id="sidebar-footer-quota" style="display:none;"></div>
-    </div>
+    <div id="sidebar-footer" data-testid="sidebar-footer"></div>
   </div>
   <div id="sidebar-resize-handle" data-testid="sidebar-resize-handle"></div>
   <div id="main">
-    <div id="placeholder"></div>
-    <div id="settings-viewer" style="display:none;">
-      <div id="settings-viewer-header">
-        <span id="settings-viewer-title">Settings</span>
-      </div>
-      <div id="settings-viewer-body"></div>
-    </div>
+    <div id="placeholder" data-testid="empty-screen"></div>
+    <div id="settings-viewer" style="display:none;"></div>
     <div id="terminal-area">
       <div id="terminal-header" data-testid="terminal-header" style="display:none;">
         <div id="terminal-header-info">

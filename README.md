@@ -131,7 +131,12 @@ a different world passes its own spec with `test.use({ fixture: … })`.
 notifications, output, transcript lines, a fork, an exit code),
 `askQuestions` posts an AskUserQuestion to the session's hook,
 `pushRemoteStatus` puts the connection card in any phase, and
-`expectScreen` takes a whole-window screenshot.
+`expectScreen` takes a whole-window screenshot. The host-facing channels
+(usage, updates, sleep, the folder picker, the browser) answer from stubs a
+test sets with `test.use({ stubs: … })` or `setHostStub`, and
+`hostStubCalls` counts what the renderer asked for. A test about timing
+passes `test.use({ fakeTimers: true })` and jumps the renderer's clock with
+`page.clock.fastForward`.
 
 **Porting a surface.** The first commit of a PR that ports part of the UI adds
 characterization tests for its issue's checklist and must pass on the current,

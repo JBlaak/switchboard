@@ -10,6 +10,7 @@
  * now in the store (see `view-slice`).
  */
 import { dispatch, getState } from './app-store';
+import { sessionKeyIn } from './keys-slice';
 import { isFilteringView } from './view-slice';
 import type { ViewState } from './view-slice';
 import type { PendingSession } from '../../domain/session/pending';
@@ -103,6 +104,11 @@ export const view: View = (() => {
   return adapter;
 })();
 
+/** A session's stable local key, for element keys; see `keys-slice`. */
+export function sessionKey(sessionId: string): string {
+  return sessionKeyIn(getState().keys, sessionId);
+}
+
 /** True when any filter or a search is narrowing the list. */
 export function isFiltering(): boolean {
   return isFilteringView(getState().view);
@@ -116,6 +122,7 @@ export function isFiltering(): boolean {
  * so an existing row is updated in place and reused.
  */
 export function adoptSessions(projects: readonly Project[]): void {
+  dispatch({ type: 'sessionsSeen', sessionIds: projects.flatMap(p => p.sessions.map(s => s.sessionId)) });
   for (const project of projects) {
     for (let i = 0; i < project.sessions.length; i++) {
       const fresh = project.sessions[i];
@@ -147,6 +154,7 @@ export function removeFromCaches(sessionId: string): void {
  * takes long enough to look broken.
  */
 export function injectIntoCaches(session: SessionRow, folder: string, remote = false): void {
+  dispatch({ type: 'sessionsSeen', sessionIds: [session.sessionId] });
   sessionMap.set(session.sessionId, session);
   for (const list of [view.cachedProjects, view.cachedAllProjects]) {
     let project = list.find(p => p.projectPath === session.projectPath);
@@ -159,4 +167,34 @@ export function injectIntoCaches(session: SessionRow, folder: string, remote = f
       project.sessions.unshift(session);
     }
   }
+}
+
+/**
+ * Follow a re-key in the three collections.
+ *
+ * The row is renamed in place rather than replaced: `sessionMap` and every
+ * cached project list hold the same object (see `adoptSessions`), and so,
+ * normally, do the open terminal and the pending entry — so one assignment
+ * re-keys all of them, and only the Map keys are left to move. Should the
+ * terminal or the pending entry hold a different copy, it is renamed too.
+ */
+export function rekeySessions(oldId: string, newId: string): void {
+  if (oldId === newId) return;
+  const entry = openSessions.get(oldId);
+  const pending = pendingSessions.get(oldId);
+  const row = sessionMap.get(oldId) ?? entry?.session ?? pending?.session;
+
+  for (const copy of new Set([row, entry?.session, pending?.session])) {
+    if (copy) copy.sessionId = newId;
+  }
+  if (entry) {
+    openSessions.delete(oldId);
+    openSessions.set(newId, entry);
+  }
+  if (pending) {
+    pendingSessions.delete(oldId);
+    pendingSessions.set(newId, pending);
+  }
+  sessionMap.delete(oldId);
+  if (row) sessionMap.set(newId, row);
 }
