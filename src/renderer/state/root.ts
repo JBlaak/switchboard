@@ -15,6 +15,7 @@ import { initialQuestionsState, questionsReducer, rekeyQuestions } from './quest
 import { initialRemoteState, rekeyRemote, remoteReducer } from './remote-slice';
 import { initialSettingsState, settingsReducer } from './settings-slice';
 import { initialStatusState, statusReducer } from './status-slice';
+import { initialToolbarState, toolbarReducer } from './toolbar-slice';
 import { initialUpdateState, updateReducer } from './update-slice';
 import { initialTerminalState, rekeyTerminal, terminalReducer } from './terminal-slice';
 import { initialUsageState, usageReducer } from './usage-slice';
@@ -27,6 +28,7 @@ import type { QuestionsState } from './questions-slice';
 import type { RemoteState } from './remote-slice';
 import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
+import type { ToolbarState } from './toolbar-slice';
 import type { UpdateState } from './update-slice';
 import type { TerminalState } from './terminal-slice';
 import type { UsageState } from './usage-slice';
@@ -38,6 +40,7 @@ export interface RendererState {
   readonly questions: QuestionsState;
   readonly remote: RemoteState;
   readonly usage: UsageState;
+  readonly toolbar: ToolbarState;
   readonly dialog: DialogState;
   readonly settings: SettingsState;
   readonly keys: KeysState;
@@ -53,6 +56,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     questions: initialQuestionsState,
     remote: initialRemoteState,
     usage: initialUsageState,
+    toolbar: initialToolbarState,
     dialog: initialDialogState,
     settings: initialSettingsState,
     keys: initialKeysState,
@@ -77,10 +81,12 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const update = updateReducer(state.update, event);
   const settings = settingsReducer(state.settings, event);
   const dialog = dialogReducer(state.dialog, event);
-
+  const toolbar = toolbarReducer(state.toolbar, event);
   const terminal = terminalReducer(state.terminal, event);
 
-  return settle(state, { view, activity, questions, remote, usage, keys, status, update, settings, dialog, terminal });
+  return settle(state, {
+    view, activity, questions, remote, usage, keys, status, update, settings, dialog, toolbar, terminal,
+  });
 }
 
 /**
@@ -108,6 +114,7 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     update: state.update,
     settings: state.settings,
     dialog: state.dialog,
+    toolbar: state.toolbar,
     terminal: rekeyTerminal(state.terminal, oldId, newId),
   });
 }

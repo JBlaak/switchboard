@@ -18,7 +18,7 @@ import { pollActiveSessions } from './session-poller';
 import {
   adoptSessions, injectIntoCaches, pendingSessions, sessionMap, view,
 } from '../../state/session-store';
-import { loadingStatus } from '../../lib/dom';
+import { dispatch } from '../../state/app-store';
 import type { Project } from '../../../domain/project/project';
 
 export interface LoadOptions {
@@ -27,12 +27,8 @@ export interface LoadOptions {
 
 /** Re-fetch the projects, reconcile the pending rows, and redraw. */
 export async function loadProjects({ resort = false }: LoadOptions = {}): Promise<void> {
-  const showLoading = view.cachedProjects.length === 0;
-  if (showLoading) {
-    loadingStatus.textContent = 'Loading…';
-    loadingStatus.className = 'active';
-    loadingStatus.style.display = '';
-  }
+  // Only the first load says so: later ones redraw over a list already shown.
+  if (view.cachedProjects.length === 0) dispatch({ type: 'projectsLoading', loading: true });
 
   const [defaultProjects, allProjects] = await Promise.all([
     window.api.getProjects(false),
@@ -41,8 +37,7 @@ export async function loadProjects({ resort = false }: LoadOptions = {}): Promis
 
   view.cachedProjects = defaultProjects;
   view.cachedAllProjects = allProjects;
-  loadingStatus.style.display = 'none';
-  loadingStatus.className = '';
+  dispatch({ type: 'projectsLoading', loading: false });
 
   adoptSessions(view.cachedProjects);
   adoptSessions(view.cachedAllProjects);

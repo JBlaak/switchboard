@@ -21,9 +21,6 @@ export function el<T extends HTMLElement = HTMLElement>(id: string): T {
 
 // Sidebar
 export const sidebarContent = el('sidebar-content');
-export const searchBar = el('search-bar');
-export const searchInput = el<HTMLInputElement>('search-input');
-export const loadingStatus = el('loading-status');
 
 // Main area
 export const placeholder = el('placeholder');
