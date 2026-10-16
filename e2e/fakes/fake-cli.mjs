@@ -26,6 +26,7 @@
  *   the PTY, which is what lets a test wait for a command instead of sleeping.
  * - `input.log` — every byte the PTY delivered on stdin, so a test can check
  *   that typing in the terminal reached the process.
+ * - `size.json` — `{ cols, rows }`, rewritten whenever the PTY is resized.
  *
  * The command vocabulary is documented on `run` below and mirrored by the
  * typed controller in e2e/support/fake-cli.ts.
@@ -46,6 +47,7 @@ fs.mkdirSync(dir, { recursive: true });
 const commandsPath = path.join(dir, 'commands.jsonl');
 const acksPath = path.join(dir, 'acks.jsonl');
 const inputPath = path.join(dir, 'input.log');
+const sizePath = path.join(dir, 'size.json');
 
 // Measured before launch.json exists: the test waits for launch.json and only
 // then writes commands, so everything it sends lands after this offset.
@@ -77,6 +79,11 @@ process.on('SIGTERM', () => process.exit(143));
 
 if (role === 'claude') greet();
 
+// The PTY's size, kept current, so a test can see the app refit the terminal
+// (a font change, a panel that covered it) without reading the canvas.
+writeSize();
+process.stdout.on('resize', writeSize);
+
 setInterval(poll, POLL_MS);
 
 // ── Startup ──
@@ -91,6 +98,12 @@ function greet() {
   const mode = launch.resume ? 'Resumed' : 'Started';
   write(osc(0, '✳ Claude Code'));
   write(`Fake Claude · ${mode} session ${launch.sessionId}\r\n`);
+}
+
+function writeSize() {
+  const size = { cols: process.stdout.columns, rows: process.stdout.rows };
+  fs.writeFileSync(sizePath + '.tmp', JSON.stringify(size));
+  fs.renameSync(sizePath + '.tmp', sizePath);
 }
 
 // ── Commands ──
