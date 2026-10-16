@@ -6,8 +6,9 @@
  * things the harness needs:
  *
  * - **Host stubs.** A few IPC channels answer with facts about the machine the
- *   suite happens to run on (is sleep disabled right now?) or act on it (open a
- *   browser, show a folder picker, prompt for an administrator password). Their
+ *   suite happens to run on (is sleep disabled right now? is there a newer
+ *   release?) or act on it (open a browser, show a folder picker, replace the
+ *   app, prompt for an administrator password). Their
  *   handlers are swapped for test doubles, so a run is the same on every Mac
  *   and a stray click cannot reach the host.
  * - **Pushing events.** Anything main tells the renderer travels as a
@@ -21,6 +22,7 @@
 import type { ElectronApplication } from '@playwright/test';
 import { EVENT, INVOKE } from '../../src/ipc/channels';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
+import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
 import type { WeatherLocation } from '../../src/domain/weather/weather';
 
@@ -39,6 +41,15 @@ export const STUB_USAGE: Usage = {
 export interface HostStubs {
   /** What `getUsage` answers; null hides the gauges. */
   usage: Usage | null;
+  /** Make `getUsage` fail, as it does offline or without credentials. */
+  usageFails: boolean;
+  /** What `getUpdate` answers: the release main has found, or null for none. */
+  update: UpdateNotice | null;
+  /**
+   * What `installUpdate` answers. 'pending' never answers, which is what the
+   * renderer sees when an install works: the app quits from under it.
+   */
+  installUpdate: boolean | 'pending';
   /** Whether `pmset` would report sleep as disabled. */
   sleepDisabled: boolean;
   /** What the folder picker "chooses"; null is a cancelled dialog. */
@@ -60,12 +71,22 @@ export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number }
  */
 interface StubState extends HostStubs {
   opened: string[];
+  calls: HostStubCalls;
+}
+
+/** How often the renderer asked the stubs for something, by channel. */
+export interface HostStubCalls {
+  getUsage: number;
+  installUpdate: number;
 }
 
 type WithStubs = typeof globalThis & { __switchboardE2E: StubState };
 
 export const DEFAULT_STUBS: HostStubs = {
   usage: STUB_USAGE,
+  usageFails: false,
+  update: null,
+  installUpdate: 'pending',
   sleepDisabled: false,
   browseFolder: null,
   geocode: {},
@@ -74,7 +95,7 @@ export const DEFAULT_STUBS: HostStubs = {
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
   await app.evaluate(({ ipcMain }, { stubs, channels }) => {
-    const state: StubState = { ...stubs, opened: [] };
+    const state: StubState = { ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0 } };
     (globalThis as WithStubs).__switchboardE2E = state;
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {
@@ -82,7 +103,16 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       ipcMain.handle(channel, (_event, ...args) => handler(...args));
     };
 
-    replace(channels.getUsage, () => state.usage);
+    replace(channels.getUsage, () => {
+      state.calls.getUsage++;
+      if (state.usageFails) throw new Error('usage unavailable');
+      return state.usage;
+    });
+    replace(channels.getUpdate, () => state.update);
+    replace(channels.installUpdate, () => {
+      state.calls.installUpdate++;
+      return state.installUpdate === 'pending' ? new Promise(() => {}) : state.installUpdate;
+    });
     replace(channels.getSleepDisabled, () => state.sleepDisabled);
     replace(channels.setSleepDisabled, (disabled) => {
       state.sleepDisabled = !!disabled;
@@ -126,6 +156,13 @@ export async function setHostStub<K extends keyof HostStubs>(
 export async function openedExternally(app: ElectronApplication): Promise<string[]> {
   return await app.evaluate(() => {
     return [...(globalThis as WithStubs).__switchboardE2E.opened];
+  });
+}
+
+/** How often each counted stub has been called since the app launched. */
+export async function hostStubCalls(app: ElectronApplication): Promise<HostStubCalls> {
+  return await app.evaluate(() => {
+    return { ...(globalThis as WithStubs).__switchboardE2E.calls };
   });
 }
 

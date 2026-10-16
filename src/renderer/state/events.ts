@@ -41,6 +41,11 @@ export type PushEvent =
 // ── From the renderer itself: user actions and timers ──
 
 export type LocalEvent =
+  /**
+   * The renderer has rows for these sessions (fetched, or just launched); the
+   * ones it has not seen before get a local key (see `keys-slice`).
+   */
+  | { type: 'sessionsSeen'; sessionIds: readonly string[] }
   /** The session on screen changed (or none is). */
   | { type: 'activeSessionChanged'; sessionId: string | null }
   /**
@@ -78,7 +83,18 @@ export type LocalEvent =
   /** The settings panel's Save went through. */
   | { type: 'settingsSaved' }
   /** The settings panel closed, or the terminal took its place. */
-  | { type: 'settingsClosed' };
+  | { type: 'settingsClosed' }
+  /** The project list loaded with this many sessions running. */
+  | { type: 'runningCounted'; running: number }
+  /** A done status message has lingered long enough. */
+  | { type: 'statusActivityExpired' }
+  /** The renderer asked main for a waiting update at launch. */
+  | { type: 'updateChecked'; update: UpdateNotice | null }
+  /** The user hid the update notice for this version. */
+  | { type: 'updateDismissed'; version: string }
+  | { type: 'updateInstallStarted' }
+  /** Main answered the install, which means it did not quit to finish it. */
+  | { type: 'updateInstallFailed' };
 
 export type RendererEvent = PushEvent | LocalEvent;
 

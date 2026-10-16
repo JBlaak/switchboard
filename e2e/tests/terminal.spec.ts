@@ -87,6 +87,35 @@ test.describe('smoke', () => {
     await expect(terminalHeader(page).getByText(forkId, { exact: true })).toBeVisible();
   });
 
+  test('a fork keeps the same row, highlighted, and the same terminal', async ({ page, home }) => {
+    const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
+    // Tag the live elements, so "the same row" means the same node and not
+    // merely one that looks alike after a remove and re-add.
+    await page.evaluate((id) => {
+      const row = document.querySelector<HTMLElement>(`.session-item[data-session-id="${id}"]`)!;
+      (row as HTMLElement & { e2eTag?: string }).e2eTag = 'row';
+      const term = document.querySelector<HTMLElement>('.terminal-container.visible')!;
+      (term as HTMLElement & { e2eTag?: string }).e2eTag = 'terminal';
+    }, S.loginFix);
+
+    const forkId = sessionId('login-fix-fork');
+    await claude.fork(forkId, 'Forked: try a different redirect strategy');
+    await expect(terminalHeader(page).getByText(forkId, { exact: true })).toBeVisible();
+
+    const after = await page.evaluate((id) => {
+      const row = document.querySelector<HTMLElement>(`.session-item[data-session-id="${id}"]`);
+      const term = document.querySelector<HTMLElement>('.terminal-container.visible');
+      return {
+        rowTag: (row as (HTMLElement & { e2eTag?: string }) | null)?.e2eTag,
+        active: row?.classList.contains('active'),
+        terminalTag: (term as (HTMLElement & { e2eTag?: string }) | null)?.e2eTag,
+      };
+    }, forkId);
+    expect(after).toMatchObject({ rowTag: 'row', active: true, terminalTag: 'terminal' });
+    // The fork's new turn may move the row to another section; it moves as itself.
+    await expect(terminalHeader(page).getByText('Forked: try a different redirect strategy')).toBeVisible();
+  });
+
   test('a new session from the picker launches with a fresh id', async ({ page, home }) => {
     const before = launchedKeys(home);
     await page.getByRole('button', { name: 'New session', exact: true }).click();

@@ -1,5 +1,6 @@
 // --- Terminal management ---
-// Key bindings, write buffering, xterm instance lifecycle, drag-and-drop.
+// Key bindings, xterm instance lifecycle, drag-and-drop. The write buffering
+// the byte stream goes through is in `write-buffer`.
 //
 import {
   DEFAULT_TERMINAL_FONT_FAMILY, DEFAULT_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_LINE_HEIGHT,
@@ -8,14 +9,6 @@ import {
 import type { StoredFontSettings } from '../terminal/terminal-input';
 import type { OpenSession } from '../../state/session-store';
 import type { SessionRow } from '../../../domain/session/session';
-
-/** Terminal output held back while a synchronised-update block is open. */
-export interface WriteBuffer {
-  chunks: string[];
-  syncDepth: number;
-  rafId: number;
-  timerId: ReturnType<typeof setTimeout>;
-}
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -36,6 +29,7 @@ import { isQuickSessionKey, launchQuickSession } from '../sessions/quick-session
 import { openSessions, sessionMap, view } from '../../state/session-store';
 import { remoteStatus } from '../../state/remote-status-store';
 import { TERMINAL_THEME } from '../terminal/terminal-themes';
+import { isAtBottom } from './write-buffer';
 import { posixQuote } from '../../../domain/shell/quoting';
 
 // --- Terminal font ---
@@ -188,12 +182,6 @@ function setupTerminalKeyBindings(
   }
 }
 
-// Check whether a terminal is scrolled to the bottom using xterm's buffer API.
-function isAtBottom(terminal: Terminal): boolean {
-  const buf = terminal.buffer.active;
-  return buf.viewportY >= buf.baseY;
-}
-
 // Fit terminal to container, subtracting 1 row to avoid partial-row clipping.
 export function safeFit(entry: OpenSession): void {
   const dims = entry.fitAddon.proposeDimensions();
@@ -216,83 +204,8 @@ export function fitAndScroll(entry: OpenSession): void {
   });
 }
 
-// --- Terminal write buffering ---
-// Batch incoming terminal data to coalesce IPC chunks into fewer write() calls.
-export const ESC_SYNC_START = '\x1b[?2026h';
-export const ESC_SYNC_END = '\x1b[?2026l';
-export const SYNC_BUFFER_TIMEOUT = 500; // max ms to hold data waiting for sync end
 /** How long after boot the throwaway warm-up terminal is built. */
 const PREWARM_DELAY_MS = 100;
-/** sessionId → the chunks held back while a synchronised-update block is open. */
-export const terminalWriteBuffers = new Map<string, WriteBuffer>();
-
-export function flushTerminalBuffer(sessionId: string): void {
-  const buf = terminalWriteBuffers.get(sessionId);
-  if (!buf) return;
-  clearTimeout(buf.timerId);
-  cancelAnimationFrame(buf.rafId);
-  terminalWriteBuffers.delete(sessionId);
-
-  const entry = openSessions.get(sessionId);
-  if (!entry) return;
-
-  const data = buf.chunks.join('');
-  const wasAtBottom = isAtBottom(entry.terminal);
-  const savedViewportY = entry.terminal.buffer.active.viewportY;
-  entry.terminal.write(data, () => {
-    if (sessionId !== view.activeSessionId) return;
-    if (wasAtBottom) {
-      entry.terminal.scrollToBottom();
-    } else {
-      // Restore scroll position so redraws don't yank the user away
-      entry.terminal.scrollLines(savedViewportY - entry.terminal.buffer.active.viewportY);
-    }
-  });
-}
-
-export function scheduleFlush(sessionId: string, buf: WriteBuffer): void {
-  cancelAnimationFrame(buf.rafId);
-  buf.rafId = requestAnimationFrame(() => flushTerminalBuffer(sessionId));
-}
-
-/**
- * Take a chunk of PTY output and decide when to write it.
- *
- * A TUI wraps a repaint in a synchronised-update block, and writing the halves
- * of one separately is what makes a redraw visibly tear. So a chunk that opens
- * a block is held until the block closes — with a timeout behind it, because a
- * process killed mid-repaint never closes its block and the data must not be
- * held forever.
- *
- * Outside a block, chunks are coalesced to one write per frame: the IPC stream
- * arrives in far smaller pieces than a frame needs.
- */
-export function bufferTerminalData(sessionId: string, data: string): void {
-  if (!openSessions.has(sessionId)) return;
-
-  let buffer = terminalWriteBuffers.get(sessionId);
-  if (!buffer) {
-    buffer = { chunks: [], syncDepth: 0, rafId: 0, timerId: 0 as unknown as ReturnType<typeof setTimeout> };
-    terminalWriteBuffers.set(sessionId, buffer);
-  }
-  buffer.chunks.push(data);
-
-  // Blocks nest, so the depth is tracked rather than a flag.
-  if (data.includes(ESC_SYNC_START)) buffer.syncDepth++;
-  if (data.includes(ESC_SYNC_END)) buffer.syncDepth = Math.max(0, buffer.syncDepth - 1);
-
-  if (buffer.syncDepth > 0) {
-    cancelAnimationFrame(buffer.rafId);
-    if (!buffer.timerId) {
-      buffer.timerId = setTimeout(() => flushTerminalBuffer(sessionId), SYNC_BUFFER_TIMEOUT);
-    }
-    return;
-  }
-
-  clearTimeout(buffer.timerId);
-  buffer.timerId = 0 as unknown as ReturnType<typeof setTimeout>;
-  scheduleFlush(sessionId, buffer);
-}
 
 /**
  * Build and throw away one xterm instance at startup.

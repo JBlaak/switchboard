@@ -17,7 +17,7 @@
  * Nothing here touches the DOM: the sidebar subscribes and puts the classes on
  * its rows (see `features/sessions/sidebar-activity`).
  */
-import { hasEntry, withEntry, withoutEntry } from './records';
+import { hasEntry, movedEntry, withEntry, withoutEntry } from './records';
 import type { IdRecord } from './records';
 import type { RendererEvent } from './events';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
@@ -147,6 +147,16 @@ function patch(state: ActivityState, fields: Partial<ActivityState>): ActivitySt
     if (fields[key] !== state[key]) return { ...state, ...fields };
   }
   return state;
+}
+
+/** A re-keyed session keeps all four marks; see `rekeyState` in `root`. */
+export function rekeyActivity(state: ActivityState, oldId: string, newId: string): ActivityState {
+  return patch(state, {
+    attention: movedEntry(state.attention, oldId, newId),
+    ready: movedEntry(state.ready, oldId, newId),
+    busy: movedEntry(state.busy, oldId, newId),
+    agents: movedEntry(state.agents, oldId, newId),
+  });
 }
 
 /** True when a session's busy flag differs between two states. */

@@ -50,19 +50,23 @@ export function questionsReducer(state: QuestionsState, event: RendererEvent): Q
       return { bySession, settled };
     }
 
-    case 'sessionForked': {
-      const { oldId, newId } = event;
-      const pending = state.bySession[oldId];
-      if (!pending || oldId === newId) return state;
-      let bySession = withoutEntry(state.bySession, oldId);
-      // Main already asked again under the new id: that set is the live one.
-      if (!bySession[newId]) bySession = withEntry(bySession, newId, { ...pending, sessionId: newId });
-      return { ...state, bySession };
-    }
-
     default:
       return state;
   }
+}
+
+/**
+ * A re-keyed session's set, filed under its new id and saying so.
+ *
+ * If main already asked again under the new id, that set is the live one and
+ * the old one is simply dropped.
+ */
+export function rekeyQuestions(state: QuestionsState, oldId: string, newId: string): QuestionsState {
+  const pending = state.bySession[oldId];
+  if (!pending || oldId === newId) return state;
+  let bySession = withoutEntry(state.bySession, oldId);
+  if (!bySession[newId]) bySession = withEntry(bySession, newId, { ...pending, sessionId: newId });
+  return { ...state, bySession };
 }
 
 /** Which session is asking the set with this tool-use id, if any. */
