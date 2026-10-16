@@ -63,7 +63,7 @@ export interface ActiveSessionSpec {
 export class ActiveSession {
   pty: PtyHandle;
   readonly output: OutputBuffer;
-  /** Whether a CLI turn is in flight, tracked off the OSC 0 title. */
+  /** Whether a CLI turn is in flight, tracked off OSC 7501 (or, failing that, the OSC 0 title). */
   readonly cliBusy = new CliBusyTracker();
 
   rendererAttached = true;

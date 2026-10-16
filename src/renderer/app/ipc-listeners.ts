@@ -42,6 +42,9 @@ export function installIpcListeners(): void {
   window.api.onSessionForked(onSessionForked);
   window.api.onCliBusyState(onCliBusyState);
   window.api.onTerminalNotification(onTerminalNotification);
+  // OSC 7501's `blocked`: the same flag the OSC 9 permission text raises, but
+  // stated outright. Both can arrive for one prompt; marking twice is harmless.
+  window.api.onSessionNeedsAttention(markNeedsAttention);
   window.api.onRemoteStatus(handleRemoteStatus);
   window.api.onProjectsChanged(onProjectsChanged);
   window.api.onStatusUpdate(setStatusActivity);

@@ -74,6 +74,7 @@ export const EVENT = {
   sessionForked: 'session-forked',
   cliBusyState: 'cli-busy-state',
   terminalNotification: 'terminal-notification',
+  sessionNeedsAttention: 'session-needs-attention',
   remoteStatus: 'remote-status',
   projectsChanged: 'projects-changed',
   statusUpdate: 'status-update',

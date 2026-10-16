@@ -14,7 +14,7 @@
  * not the process cooperated.
  */
 import { ENTER_ALT_SCREEN, HIDE_CURSOR } from '../../domain/terminal/ansi';
-import { parseTerminalEvents } from '../../domain/terminal/osc';
+import { PROGRAM_STATUS_REPLY, parseTerminalEvents } from '../../domain/terminal/osc';
 import type { ActiveSession } from '../model/active-session';
 import type { SessionRegistry } from '../model/session-registry';
 import type { Timers } from '../ports/clock';
@@ -77,10 +77,24 @@ export class SessionLifecycle {
 
       for (const event of parseTerminalEvents(data)) {
         switch (event.kind) {
+          case 'program-status-query':
+            // Answered here, before the chunk is forwarded: the CLI gives up on
+            // 7501 as soon as its DA query is answered, and xterm.js answers
+            // that one only after an IPC round trip. A plain terminal is not
+            // running Claude, so it is left for whatever does run there. On a
+            // remote session tmux on the far end usually answers DA first; the
+            // reply is harmless then and the legacy signals take over.
+            if (!session.isPlainTerminal) pty.write(PROGRAM_STATUS_REPLY);
+            break;
+          case 'program-status':
           case 'title':
           case 'progress': {
-            const busy = session.cliBusy.observe(event);
-            if (busy !== null) renderer.cliBusyState(currentId, busy);
+            if (event.kind === 'program-status') {
+              log.debug(`[osc7501] session=${currentId} state=${event.state}${event.id ? ` id=${event.id}` : ''}`);
+            }
+            const change = session.cliBusy.observe(event);
+            if (change?.kind === 'busy') renderer.cliBusyState(currentId, change.busy);
+            else if (change?.kind === 'needs-attention') renderer.sessionNeedsAttention(currentId);
             break;
           }
           case 'notification':

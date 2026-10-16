@@ -51,6 +51,10 @@ export class ElectronRendererGateway implements RendererGateway {
     this.#send(EVENT.terminalNotification, sessionId, message);
   }
 
+  sessionNeedsAttention(sessionId: string): void {
+    this.#send(EVENT.sessionNeedsAttention, sessionId);
+  }
+
   remoteStatus(sessionId: string, status: RemoteStatusPayload): void {
     this.#send(EVENT.remoteStatus, sessionId, status);
   }

@@ -181,6 +181,7 @@ export function fakeRenderer(): FakeRenderer {
     sessionForked: record('sessionForked'),
     cliBusyState: record('cliBusyState'),
     terminalNotification: record('terminalNotification'),
+    sessionNeedsAttention: record('sessionNeedsAttention'),
     remoteStatus: record('remoteStatus') as (id: string, s: RemoteStatusPayload) => void,
     projectsChanged: record('projectsChanged'),
     statusUpdate: record('statusUpdate'),

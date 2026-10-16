@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { ActiveSession } from '../src/application/model/active-session';
 import { SessionRegistry } from '../src/application/model/session-registry';
 import { SessionLifecycle } from '../src/application/services/session-lifecycle';
+import { PROGRAM_STATUS_REPLY } from '../src/domain/terminal/osc';
 import {
   fakePty, fakeRenderer, fakeTerminals, fakeTimers, silentLog,
 } from './support/fakes';
@@ -186,6 +187,58 @@ test('a busy title is forwarded once, not per repaint', () => {
   assert.deepEqual(
     h.renderer.only('cliBusyState').map(([, id, busy]) => [id, busy]),
     [['s1', true], ['s1', false]]);
+});
+
+test('the 7501 probe is answered straight into the PTY, before the chunk is forwarded', () => {
+  // The CLI drops 7501 for the session if xterm.js's DA answer beats ours, and
+  // that one has an IPC round trip to make.
+  const h = harness();
+  const session = h.addSession('s1');
+  h.lifecycle.wire('s1', session);
+
+  const order: string[] = [];
+  const write = session.pty.write.bind(session.pty);
+  session.pty.write = (data: string) => { order.push('reply'); write(data); };
+  const terminalData = h.renderer.terminalData;
+  h.renderer.terminalData = (id, data) => { order.push('forward'); terminalData(id, data); };
+
+  session.pty.emitData('\x1b]7501;?\x1b\\\x1b[c');
+
+  assert.deepEqual(session.pty.writes, [PROGRAM_STATUS_REPLY]);
+  assert.deepEqual(order, ['reply', 'forward']);
+});
+
+test('a plain terminal does not answer the 7501 probe', () => {
+  const h = harness();
+  const session = h.addSession('t1', { isPlainTerminal: true } as Partial<ActiveSession>);
+  h.lifecycle.wire('t1', session);
+
+  session.pty.emitData('\x1b]7501;?\x1b\\\x1b[c');
+
+  assert.deepEqual(session.pty.writes, []);
+});
+
+test('7501 reports drive the busy state and a block reaches the renderer', () => {
+  const h = harness();
+  const session = h.addSession('s1');
+  h.lifecycle.wire('s1', session);
+  const msg = Buffer.from('approve Write: /p').toString('base64');
+
+  session.pty.emitData('\x1b]7501;state=idle:app=claude-code\x1b\\');
+  session.pty.emitData('\x1b]7501;state=working:app=claude-code\x1b\\');
+  session.pty.emitData(`\x1b]7501;state=blocked:app=claude-code:kind=permission:msg=${msg}\x1b\\`);
+  session.pty.emitData('\x1b]9;Claude needs your permission\x07');
+  session.pty.emitData('\x1b]0;◐ Ok\x07');
+  session.pty.emitData('\x1b]7501;state=done:app=claude-code\x1b\\');
+
+  assert.deepEqual(
+    h.renderer.only('cliBusyState').map(([, id, busy]) => [id, busy]),
+    [['s1', true], ['s1', false]]);
+  assert.deepEqual(h.renderer.only('sessionNeedsAttention'), [['sessionNeedsAttention', 's1']]);
+  // The OSC 9 path still runs alongside, for older CLIs.
+  assert.deepEqual(
+    h.renderer.only('terminalNotification').map(([, , message]) => message),
+    ['Claude needs your permission']);
 });
 
 test('an exit with no remote observer retires the session', () => {

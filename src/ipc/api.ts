@@ -103,6 +103,7 @@ export interface SwitchboardApi {
   onSessionForked(cb: (oldId: string, newId: string) => void): void;
   onCliBusyState(cb: (sessionId: string, busy: boolean) => void): void;
   onTerminalNotification(cb: (sessionId: string, message: string) => void): void;
+  onSessionNeedsAttention(cb: (sessionId: string) => void): void;
   onRemoteStatus(cb: (sessionId: string, status: RemoteStatusPayload) => void): void;
   onProjectsChanged(cb: () => void): void;
   onStatusUpdate(cb: (text: string, type: string) => void): void;
