@@ -16,9 +16,11 @@ import {
 import { pollActiveSessions } from '../features/sessions/session-poller';
 import { setHeaderIdentity, showHeaderNotice } from '../features/sessions/terminal-header';
 import { handleRemoteStatus } from '../features/remote/connection-card';
-import { markNeedsAttention, setActivity } from '../state/activity-store';
+import { markNeedsAttention, setActivity, setSessionAgents } from '../state/activity-store';
+import { writeAgentsBadge } from '../features/sessions/sidebar-row';
 import { openSessions, pendingSessions, sessionMap, view } from '../state/session-store';
 import { bufferTerminalData } from '../features/terminal/terminal-manager';
+import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 
 /**
  * How long to wait before re-fetching after a filesystem change.
@@ -45,6 +47,7 @@ export function installIpcListeners(): void {
   // OSC 7501's `blocked`: the same flag the OSC 9 permission text raises, but
   // stated outright. Both can arrive for one prompt; marking twice is harmless.
   window.api.onSessionNeedsAttention(markNeedsAttention);
+  window.api.onSessionAgents(onSessionAgents);
   window.api.onRemoteStatus(handleRemoteStatus);
   window.api.onProjectsChanged(onProjectsChanged);
   window.api.onStatusUpdate(setStatusActivity);
@@ -151,6 +154,18 @@ function onCliBusyState(sessionId: string, busy: boolean): void {
   // stranded under its old heading. Not a re-sort: the open session keeps its
   // slot.
   if (setActivity(sessionId, busy)) refreshSidebar();
+}
+
+/**
+ * The subagents a session has working changed.
+ *
+ * Redrawn on the row in place: the count says nothing about which section the
+ * row belongs in, so a render would buy nothing.
+ */
+function onSessionAgents(sessionId: string, agents: WorkingAgent[]): void {
+  setSessionAgents(sessionId, agents);
+  const row = document.querySelector<HTMLElement>(`.session-item[data-session-id="${sessionId}"]`);
+  if (row) writeAgentsBadge(row, agents);
 }
 
 /**

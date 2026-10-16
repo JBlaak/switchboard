@@ -11,6 +11,9 @@
  * from the main process, which already de-duplicates it into transitions. The
  * OSC 9 notifications are what the CLI sends when it actually needs someone.
  *
+ * Alongside the state, which subagents the session has working (OSC 7501's
+ * child records, de-duplicated in the main process like the busy state).
+ *
  * The classes are toggled on the row directly as well as being recorded here,
  * because a state change usually does not warrant a re-render — but a
  * working↔ready flip moves the row between sections, and a row's section is
@@ -19,6 +22,7 @@
 import { sessionTier } from '../../domain/session/tiers';
 import { pendingSessions, view } from './session-store';
 import type { SessionSignals } from '../../domain/session/tiers';
+import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 
 /** Sessions blocked on the user, per OSC 9. */
 export const attentionSessions = new Set<string>();
@@ -26,6 +30,8 @@ export const attentionSessions = new Set<string>();
 export const responseReadySessions = new Set<string>();
 /** sessionId → whether a CLI turn is currently in flight. */
 export const sessionBusyState = new Map<string, boolean>();
+/** sessionId → the subagents it has working. Absent means none. */
+export const sessionAgents = new Map<string, readonly WorkingAgent[]>();
 
 /** The live signals for one session, as the ranking rules want them. */
 export function signalsFor(sessionId: string): SessionSignals {
@@ -90,6 +96,18 @@ export function markNeedsAttention(sessionId: string): void {
   rowFor(sessionId)?.classList.add('needs-attention');
 }
 
+/**
+ * Record the agents a session has working.
+ *
+ * Only the record: the row's badge is markup, so the caller redraws it — see
+ * `writeAgentsBadge`. The count never moves a row between sections, so no
+ * re-render is owed.
+ */
+export function setSessionAgents(sessionId: string, agents: readonly WorkingAgent[]): void {
+  if (agents.length > 0) sessionAgents.set(sessionId, agents);
+  else sessionAgents.delete(sessionId);
+}
+
 export function clearUnread(sessionId: string): void {
   responseReadySessions.delete(sessionId);
   rowFor(sessionId)?.classList.remove('response-ready');
@@ -100,7 +118,12 @@ export function clearActivity(sessionId: string): void {
   attentionSessions.delete(sessionId);
   responseReadySessions.delete(sessionId);
   sessionBusyState.delete(sessionId);
-  rowFor(sessionId)?.classList.remove('needs-attention', 'response-ready', 'cli-busy');
+  // A CLI that died without its final `clear` would otherwise leave its
+  // agents on the row for good.
+  sessionAgents.delete(sessionId);
+  const row = rowFor(sessionId);
+  row?.classList.remove('needs-attention', 'response-ready', 'cli-busy');
+  row?.querySelector('.session-agents')?.remove();
 }
 
 /** The user is now looking at this session, so nothing about it is unread. */

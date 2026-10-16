@@ -91,6 +91,11 @@ export class SessionLifecycle {
           case 'progress': {
             if (event.kind === 'program-status') {
               log.debug(`[osc7501] session=${currentId} state=${event.state}${event.id ? ` id=${event.id}` : ''}`);
+              // Child records are subagents. Nothing is sent on exit: the CLI
+              // clears them itself, and a renderer row whose process is gone
+              // drops its agents along with the rest of its activity.
+              const agents = session.agents.observe(event);
+              if (agents) renderer.sessionAgents(currentId, agents);
             }
             const change = session.cliBusy.observe(event);
             if (change?.kind === 'busy') renderer.cliBusyState(currentId, change.busy);

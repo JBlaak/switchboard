@@ -637,6 +637,31 @@
   margin-left: auto;
 }
 
+/* ---- Working agents badge ----
+   How many subagents a session has working (OSC 7501 child records), as one
+   more piece of the meta line: a robot glyph and a count on a lavender pill,
+   lavender because no session state uses it, so it never reads as one. Drawn
+   by `writeAgentsBadge`; the tooltip lists the agents. */
+.session-agents {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  align-self: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--sb-lav);
+  color: var(--sb-lav-ink);
+  font-family: var(--sb-font-head);
+  font-weight: 700;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
 /* ---- Session action buttons ---- */
 .session-actions {
   flex-shrink: 0;

@@ -7,6 +7,7 @@
  * the same fake clock and the same recording gateway.
  */
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
+import type { WorkingAgent } from '../../src/domain/terminal/program-status-children';
 import type { Timers } from '../../src/application/ports/clock';
 import type { Logger } from '../../src/application/ports/logger';
 import type { RendererGateway } from '../../src/application/ports/renderer-gateway';
@@ -182,6 +183,7 @@ export function fakeRenderer(): FakeRenderer {
     cliBusyState: record('cliBusyState'),
     terminalNotification: record('terminalNotification'),
     sessionNeedsAttention: record('sessionNeedsAttention'),
+    sessionAgents: record('sessionAgents') as (id: string, agents: WorkingAgent[]) => void,
     remoteStatus: record('remoteStatus') as (id: string, s: RemoteStatusPayload) => void,
     projectsChanged: record('projectsChanged'),
     statusUpdate: record('statusUpdate'),

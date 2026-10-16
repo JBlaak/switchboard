@@ -8,6 +8,7 @@
  * session lifecycle and the SSH supervisor.
  */
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
+import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../../domain/update/release';
 
 export interface RendererGateway {
@@ -29,6 +30,8 @@ export interface RendererGateway {
   terminalNotification(sessionId: string, message: string): void
   /** The CLI is blocked on the user — a permission prompt, a question, a login. */
   sessionNeedsAttention(sessionId: string): void
+  /** The agents the session has working changed; an empty list means none. */
+  sessionAgents(sessionId: string, agents: WorkingAgent[]): void
   remoteStatus(sessionId: string, status: RemoteStatusPayload): void
 
   // ── Lists and chrome ──
