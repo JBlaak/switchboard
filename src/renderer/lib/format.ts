@@ -2,9 +2,14 @@
  * Formatting and escaping, for the parts of the UI built as strings.
  */
 
-/** A timestamp as a relative label, falling back to a date after a week. */
-export function formatDate(date: Date): string {
-  const diff = Date.now() - date.getTime();
+/**
+ * A timestamp as a relative label, falling back to a date after a week.
+ *
+ * `now` is what the label is relative to; the session list passes the time of
+ * its last redraw or tick, so a label is a function of state.
+ */
+export function formatDate(date: Date, now = Date.now()): string {
+  const diff = now - date.getTime();
   const mins = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);

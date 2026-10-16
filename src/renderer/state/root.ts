@@ -13,6 +13,7 @@ import { dialogReducer, initialDialogState } from './dialog-slice';
 import { initialKeysState, keysReducer, rekeyKeys } from './keys-slice';
 import { initialQuestionsState, questionsReducer, rekeyQuestions } from './questions-slice';
 import { initialRemoteState, rekeyRemote, remoteReducer } from './remote-slice';
+import { initialSessionListState, sessionListReducer } from './session-list-slice';
 import { initialSettingsState, settingsReducer } from './settings-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialToolbarState, toolbarReducer } from './toolbar-slice';
@@ -25,6 +26,7 @@ import type { RendererEvent } from './events';
 import type { KeysState } from './keys-slice';
 import type { QuestionsState } from './questions-slice';
 import type { RemoteState } from './remote-slice';
+import type { SessionListState } from './session-list-slice';
 import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
 import type { ToolbarState } from './toolbar-slice';
@@ -44,6 +46,7 @@ export interface RendererState {
   readonly keys: KeysState;
   readonly status: StatusState;
   readonly update: UpdateState;
+  readonly sessionList: SessionListState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -59,6 +62,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     keys: initialKeysState,
     status: initialStatusState,
     update: initialUpdateState,
+    sessionList: initialSessionListState,
   };
 }
 
@@ -78,9 +82,10 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const settings = settingsReducer(state.settings, event);
   const dialog = dialogReducer(state.dialog, event);
   const toolbar = toolbarReducer(state.toolbar, event);
+  const sessionList = sessionListReducer(state.sessionList, event);
 
   return settle(state, {
-    view, activity, questions, remote, usage, keys, status, update, settings, dialog, toolbar,
+    view, activity, questions, remote, usage, keys, status, update, settings, dialog, toolbar, sessionList,
   });
 }
 
@@ -110,6 +115,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     settings: state.settings,
     dialog: state.dialog,
     toolbar: state.toolbar,
+    // Keyed by element ids, which a re-key leaves alone (see `session-list-slice`).
+    sessionList: state.sessionList,
   });
 }
 
