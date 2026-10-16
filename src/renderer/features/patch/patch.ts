@@ -19,6 +19,7 @@ import '@jblaak/patch/patch.css';
 import {
   RAPID_POKE_WINDOW_MS, beatFor, dropBeat, patchMood, pokeBeat, timeOfDay,
 } from '../../../domain/companion/patch';
+import { fetchWeather } from '../../app/weather';
 import { placeholder } from '../../lib/dom';
 import { view } from '../../state/session-store';
 import { tightestUsage, whenUsageLoaded } from '../../state/usage-store';
@@ -50,7 +51,7 @@ export function installPatch(): void {
   placeholder.prepend(stage);
   patch = mountPatch(stage, { onPoke: poke, onDrop: drop });
   // Warm main's weather cache, so the first appearance does not wait on it.
-  void window.api.getWeather().catch(() => null);
+  void fetchWeather();
   if (placeholder.style.display !== 'none') void appear();
 }
 
@@ -101,7 +102,7 @@ function react(beat: PatchBeat): void {
 async function gatherContext(): Promise<PatchContext> {
   const [running, sky] = await Promise.all([
     withTimeout(window.api.getActiveSessions().then(ids => ids.length), view.activePtyIds.size),
-    withTimeout<PatchSky | null>(window.api.getWeather().then(w => w?.sky ?? null), null),
+    withTimeout<PatchSky | null>(fetchWeather().then(w => w?.sky ?? null), null),
     withTimeout(whenUsageLoaded(), undefined),
   ]);
   const usage = tightestUsage();
