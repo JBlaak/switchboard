@@ -7,6 +7,7 @@
  * cannot orphan a listener, because there were none on it.
  */
 import { cleanDisplayName } from '../../../domain/session/title';
+import { pullRequestChips, pullRequestLabel } from '../../../domain/session/pull-requests';
 import { byMostRecentlyModified } from '../../../domain/session/session';
 import {
   attentionSessions, responseReadySessions, sessionAgents, sessionBusyState,
@@ -142,6 +143,9 @@ function buildMeta(session: SessionRow, projectPath: string): HTMLElement {
   left.appendChild(time);
   writeAgentsBadge(left, sessionAgents.get(session.sessionId) ?? []);
 
+  const prs = buildPullRequests(session);
+  if (prs) left.appendChild(prs);
+
   const shortId = document.createElement('span');
   shortId.className = 'session-short-id';
   shortId.title = session.sessionId;
@@ -178,6 +182,40 @@ export function writeAgentsBadge(container: HTMLElement, agents: readonly Workin
   badge.appendChild(count);
 
   time.after(badge);
+}
+
+/**
+ * The PRs the session opened, as `#1309` chips, newest first.
+ *
+ * Two at most, with the rest folded into a `+N` whose tooltip names them: the
+ * meta line is already the busiest part of the row. Each chip carries its URL
+ * for `sidebar-events` to open; the `+N` is only a tooltip.
+ */
+function buildPullRequests(session: SessionRow): HTMLElement | null {
+  const { shown, hidden } = pullRequestChips(session.pullRequests);
+  if (!shown.length) return null;
+
+  const list = document.createElement('span');
+  list.className = 'session-prs';
+
+  for (const pr of shown) {
+    const chip = document.createElement('span');
+    chip.className = 'session-pr';
+    chip.dataset.url = pr.url;
+    chip.title = pullRequestLabel(pr) + '\nClick to open the pull request in your browser';
+    chip.textContent = '#' + pr.number;
+    list.appendChild(chip);
+  }
+
+  if (hidden.length) {
+    const more = document.createElement('span');
+    more.className = 'session-pr-more';
+    more.title = hidden.map(pullRequestLabel).join('\n');
+    more.textContent = '+' + hidden.length;
+    list.appendChild(more);
+  }
+
+  return list;
 }
 
 /**

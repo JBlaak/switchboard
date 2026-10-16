@@ -7,8 +7,17 @@
  * transaction each would take a second.
  */
 import type Database from 'better-sqlite3';
+import { decodePullRequests } from '../../domain/session/pull-requests';
 import type { CachedSession, FolderMeta, SessionMeta } from '../../domain/session/session';
 import type { SessionRepository } from '../../application/ports/session-repository';
+
+/** A `session_cache` row as SQLite hands it back: the PR list is still JSON text. */
+type CachedSessionRow = Omit<CachedSession, 'pullRequests'> & { pullRequests: string | null };
+
+/** A cache row with its PR list decoded. */
+function fromRow(row: CachedSessionRow): CachedSession {
+  return { ...row, pullRequests: decodePullRequests(row.pullRequests) };
+}
 
 export class SqliteSessionRepository implements SessionRepository {
   readonly #metaGet;
@@ -50,8 +59,8 @@ export class SqliteSessionRepository implements SessionRepository {
     `);
 
     this.#cacheCount = db.prepare<[], { cnt: number }>('SELECT COUNT(*) as cnt FROM session_cache');
-    this.#cacheGetAll = db.prepare<[], CachedSession>('SELECT * FROM session_cache');
-    this.#cacheGetOne = db.prepare<[string], CachedSession>(
+    this.#cacheGetAll = db.prepare<[], CachedSessionRow>('SELECT * FROM session_cache');
+    this.#cacheGetOne = db.prepare<[string], CachedSessionRow>(
       'SELECT * FROM session_cache WHERE sessionId = ?');
     this.#cacheGetFolder = db.prepare<[string], { folder: string }>(
       'SELECT folder FROM session_cache WHERE sessionId = ?');
@@ -59,18 +68,19 @@ export class SqliteSessionRepository implements SessionRepository {
       'SELECT sessionId, fileMtime FROM session_cache WHERE folder = ?');
     this.#cacheUpsert = db.prepare<[
       string, string, string, string, string, string, string, number,
-      string | null, string | null, string | null,
+      string | null, string | null, string | null, string,
     ]>(`
       INSERT INTO session_cache (
         sessionId, folder, projectPath, summary, firstPrompt, created, modified,
-        messageCount, slug, aiTitle, fileMtime
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        messageCount, slug, aiTitle, fileMtime, pullRequests
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(sessionId) DO UPDATE SET
         folder = excluded.folder, projectPath = excluded.projectPath,
         summary = excluded.summary, firstPrompt = excluded.firstPrompt,
         created = excluded.created, modified = excluded.modified,
         messageCount = excluded.messageCount, slug = excluded.slug,
-        aiTitle = excluded.aiTitle, fileMtime = excluded.fileMtime
+        aiTitle = excluded.aiTitle, fileMtime = excluded.fileMtime,
+        pullRequests = excluded.pullRequests
     `);
     this.#cacheDeleteOne = db.prepare<[string]>('DELETE FROM session_cache WHERE sessionId = ?');
     this.#cacheDeleteFolder = db.prepare<[string]>('DELETE FROM session_cache WHERE folder = ?');
@@ -88,7 +98,8 @@ export class SqliteSessionRepository implements SessionRepository {
         this.#cacheUpsert.run(
           s.sessionId, s.folder, s.projectPath, s.summary, s.firstPrompt,
           s.created, s.modified, s.messageCount || 0,
-          s.slug || null, s.aiTitle || null, s.fileMtime || null);
+          s.slug || null, s.aiTitle || null, s.fileMtime || null,
+          JSON.stringify(s.pullRequests ?? []));
       }
     });
   }
@@ -125,11 +136,12 @@ export class SqliteSessionRepository implements SessionRepository {
   }
 
   getAllCached(): CachedSession[] {
-    return this.#cacheGetAll.all();
+    return this.#cacheGetAll.all().map(fromRow);
   }
 
   getCachedSession(sessionId: string): CachedSession | null {
-    return this.#cacheGetOne.get(sessionId) ?? null;
+    const row = this.#cacheGetOne.get(sessionId);
+    return row ? fromRow(row) : null;
   }
 
   getCachedFolder(sessionId: string): string | null {
