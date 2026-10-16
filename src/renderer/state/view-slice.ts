@@ -79,6 +79,32 @@ export function viewReducer(state: ViewState, event: RendererEvent): ViewState {
   }
 }
 
+/**
+ * A re-keyed session stays on screen, running and matched under its new id.
+ *
+ * The session on screen moves whether or not it has a terminal open: the row
+ * the user selected is the same session, so the highlight follows it.
+ */
+export function rekeyView(state: ViewState, oldId: string, newId: string): ViewState {
+  if (oldId === newId) return state;
+  const activeSessionId = state.activeSessionId === oldId ? newId : state.activeSessionId;
+  const activePtyIds = movedId(state.activePtyIds, oldId, newId);
+  const searchMatchIds = state.searchMatchIds && movedId(state.searchMatchIds, oldId, newId);
+  if (activeSessionId === state.activeSessionId && activePtyIds === state.activePtyIds
+    && searchMatchIds === state.searchMatchIds) {
+    return state;
+  }
+  return { ...state, activeSessionId, activePtyIds, searchMatchIds };
+}
+
+function movedId(ids: ReadonlySet<string>, oldId: string, newId: string): ReadonlySet<string> {
+  if (!ids.has(oldId)) return ids;
+  const next = new Set(ids);
+  next.delete(oldId);
+  next.add(newId);
+  return next;
+}
+
 /** True when any filter or a search is narrowing the list. */
 export function isFilteringView(view: ViewState): boolean {
   return view.showStarredOnly || view.showRunningOnly || view.showTodayOnly

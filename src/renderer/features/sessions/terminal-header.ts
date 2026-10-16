@@ -20,8 +20,7 @@ export { stopButton as terminalStopButton };
 
 /** Show the header for a session, and fill in which shell it is running in. */
 export async function showTerminalHeader(session: SessionRow): Promise<void> {
-  headerName.textContent = cleanDisplayName(session.name || session.aiTitle || session.summary) ?? '';
-  headerId.textContent = session.sessionId;
+  setHeaderIdentity(session);
   terminalHeader.style.display = '';
   updateTerminalHeader();
 
@@ -82,10 +81,15 @@ export function showHeaderNotice(message: string): void {
   headerPtyTitle.style.display = '';
 }
 
-/** Rename the header, for a session that has just been re-keyed. */
-export function setHeaderIdentity(sessionId: string, name?: string | null): void {
-  headerId.textContent = sessionId;
-  if (name !== undefined) headerName.textContent = name ?? '';
+/**
+ * Name and id the header for a session, from its row.
+ *
+ * From the row rather than from the sidebar's DOM, so a re-key can name the
+ * header before (and whether or not) the row has been redrawn.
+ */
+export function setHeaderIdentity(session: SessionRow): void {
+  headerName.textContent = cleanDisplayName(session.name || session.aiTitle || session.summary) ?? '';
+  headerId.textContent = session.sessionId;
 }
 
 /** Hide the header — nothing is on screen. */

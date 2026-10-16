@@ -1,0 +1,273 @@
+/**
+ * The settings form, in global or project scope.
+ *
+ * The controls are uncontrolled: each starts from what was stored when the
+ * panel opened and is read once, on Save, the way the vanilla form did. Only
+ * what changes the form as you use it is state — which fields follow the
+ * global default (and so are disabled), and the two live warnings.
+ *
+ * In project scope a field that the project does not override shows the
+ * global value, with "Use global default" checked; Save stores only the
+ * fields whose box is unchecked.
+ */
+import { useRef, useState } from 'react';
+import { PERMISSION_MODES } from '../../../domain/launch/session-options';
+import { shortProjectPath } from '../../../domain/project/project-path';
+import { resolveWeatherEnabled, resolveWeatherLocation } from '../../../domain/settings/settings';
+import { DEFAULT_WEATHER_LOCATION } from '../../../domain/weather/weather';
+import { isFontAvailable } from '../../features/terminal/terminal-manager';
+import {
+  DEFAULT_TERMINAL_FONT_FAMILY, DEFAULT_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_LINE_HEIGHT,
+  normalizeTerminalFont,
+} from '../../features/terminal/terminal-input';
+import { TERMINAL_THEMES } from '../../features/terminal/terminal-themes';
+import { closeSettings, hideProject, saveSettings } from './actions';
+import { AppField, LaunchField } from './SettingsField';
+import { useWeatherCity } from './use-weather-city';
+import type { JSX } from 'react';
+import type { SettingsPanel } from '../../state/settings-slice';
+
+/** The fields a project can override, in the order the form shows them. */
+const PROJECT_FIELDS = ['permissionMode', 'worktree', 'worktreeName', 'chrome', 'addDirs', 'preLaunchCmd'] as const;
+type ProjectField = typeof PROJECT_FIELDS[number];
+
+/**
+ * Without this the fallback is invisible: naming a font you don't have
+ * installed looks identical to the setting not working at all.
+ */
+function fontWarningFor(family: string): string {
+  const name = family.trim();
+  return !name || isFontAvailable(name) ? '' : ` — “${name}” isn't installed; falling back to the default.`;
+}
+
+export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
+  const { current, globalSettings } = panel;
+  const isProject = panel.scope === 'project';
+  const inherits = (field: string): boolean => current[field] === undefined || current[field] === null;
+
+  function fieldValue(field: string, fallback: unknown): any {
+    if (isProject && inherits(field)) {
+      return globalSettings[field] !== undefined ? globalSettings[field] : fallback;
+    }
+    return current[field] !== undefined ? current[field] : fallback;
+  }
+
+  const [useGlobal, setUseGlobal] = useState<Record<ProjectField, boolean>>(() =>
+    Object.fromEntries(PROJECT_FIELDS.map(f => [f, isProject && inherits(f)])) as Record<ProjectField, boolean>);
+  const disabled = (field: ProjectField): boolean => isProject && useGlobal[field];
+  const useGlobalBox = (field: ProjectField) => isProject
+    ? { field, checked: useGlobal[field], onChange: (checked: boolean) => setUseGlobal(s => ({ ...s, [field]: checked })) }
+    : undefined;
+
+  const fontFamilyValue: string = fieldValue('terminalFontFamily', '') ?? '';
+  const [fontWarning, setFontWarning] = useState(() => isProject ? '' : fontWarningFor(fontFamilyValue));
+  const weather = useWeatherCity(resolveWeatherLocation(current));
+
+  const permMode = useRef<HTMLSelectElement>(null);
+  const worktree = useRef<HTMLInputElement>(null);
+  const worktreeName = useRef<HTMLInputElement>(null);
+  const chrome = useRef<HTMLInputElement>(null);
+  const addDirs = useRef<HTMLInputElement>(null);
+  const preLaunch = useRef<HTMLInputElement>(null);
+  const quickSessionPath = useRef<HTMLInputElement>(null);
+  const terminalTheme = useRef<HTMLSelectElement>(null);
+  const fontFamily = useRef<HTMLInputElement>(null);
+  const fontSize = useRef<HTMLInputElement>(null);
+  const lineHeight = useRef<HTMLInputElement>(null);
+  const shellProfile = useRef<HTMLSelectElement>(null);
+  const visibleCount = useRef<HTMLInputElement>(null);
+  const maxAge = useRef<HTMLInputElement>(null);
+  const weatherEnabled = useRef<HTMLInputElement>(null);
+
+  const readers: Record<ProjectField, () => unknown> = {
+    permissionMode: () => permMode.current!.value || null,
+    worktree: () => worktree.current!.checked,
+    worktreeName: () => worktreeName.current!.value.trim(),
+    chrome: () => chrome.current!.checked,
+    addDirs: () => addDirs.current!.value.trim(),
+    preLaunchCmd: () => preLaunch.current!.value.trim(),
+  };
+
+  async function save(): Promise<void> {
+    const settings: Record<string, unknown> = {};
+    if (isProject) {
+      for (const field of PROJECT_FIELDS) {
+        if (!useGlobal[field]) settings[field] = readers[field]();
+      }
+    } else {
+      for (const field of PROJECT_FIELDS) settings[field] = readers[field]();
+      settings.quickSessionPath = quickSessionPath.current!.value.trim();
+      settings.visibleSessionCount = parseInt(visibleCount.current!.value) || 25;
+      settings.sessionMaxAgeDays = parseInt(maxAge.current!.value) || 3;
+      settings.terminalTheme = terminalTheme.current!.value || 'switchboard';
+      settings.shellProfile = shellProfile.current!.value || 'auto';
+      // Store the family verbatim (empty = follow the default stack, even if that
+      // stack later changes) but store size/line height clamped to what xterm accepts.
+      const font = normalizeTerminalFont({
+        fontSize: fontSize.current!.value,
+        lineHeight: lineHeight.current!.value,
+      });
+      settings.terminalFontFamily = fontFamily.current!.value.trim();
+      settings.terminalFontSize = font.fontSize;
+      settings.terminalLineHeight = font.lineHeight;
+      // A city typed just before clicking Save is still resolving.
+      const location = await weather.settled();
+      settings.weatherEnabled = weatherEnabled.current!.checked;
+      settings.weatherLocation = location;
+    }
+    await saveSettings(panel.scope, panel.projectPath, settings);
+  }
+
+  const permModeValue = fieldValue('permissionMode', '') ?? '';
+  const themeValue = fieldValue('terminalTheme', 'switchboard');
+  const shellProfileValue = fieldValue('shellProfile', 'auto');
+
+  return (
+    <div className="settings-form">
+      <div className="settings-section">
+        <div className="settings-section-title">Claude CLI Options</div>
+
+        <LaunchField
+          label="Permission Mode"
+          description={<>Permission mode passed to the <code>claude</code> command</>}
+          useGlobal={useGlobalBox('permissionMode')}
+        >
+          <select className="settings-select" id="sv-perm-mode" ref={permMode}
+            defaultValue={permModeValue} disabled={disabled('permissionMode')}>
+            {PERMISSION_MODES.map(m => m.value === null
+              ? <option key="" value="">Default (none)</option>
+              : <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+        </LaunchField>
+
+        <LaunchField label="Worktree" description="Enable worktree for new sessions" useGlobal={useGlobalBox('worktree')}>
+          <label className="settings-toggle"><input type="checkbox" id="sv-worktree" ref={worktree}
+            defaultChecked={!!fieldValue('worktree', false)} disabled={disabled('worktree')} /><span className="settings-toggle-slider"></span></label>
+        </LaunchField>
+
+        <LaunchField label="Worktree Name" description="Custom name for worktree branches" useGlobal={useGlobalBox('worktreeName')}>
+          <input type="text" className="settings-input" id="sv-worktree-name" ref={worktreeName} placeholder="auto"
+            defaultValue={fieldValue('worktreeName', '') ?? ''} disabled={disabled('worktreeName')} style={{ width: '140px' }} />
+        </LaunchField>
+
+        <LaunchField label="Chrome" description="Enable Chrome browser automation" useGlobal={useGlobalBox('chrome')}>
+          <label className="settings-toggle"><input type="checkbox" id="sv-chrome" ref={chrome}
+            defaultChecked={!!fieldValue('chrome', false)} disabled={disabled('chrome')} /><span className="settings-toggle-slider"></span></label>
+        </LaunchField>
+
+        <LaunchField wide label="Additional Directories" description="Extra directories to include in Claude sessions"
+          useGlobal={useGlobalBox('addDirs')}>
+          <input type="text" className="settings-input" id="sv-add-dirs" ref={addDirs} placeholder="/path/to/dir1, /path/to/dir2"
+            defaultValue={fieldValue('addDirs', '') ?? ''} disabled={disabled('addDirs')} />
+        </LaunchField>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">Session Launch</div>
+
+        <LaunchField wide label="Pre-launch Command"
+          description={'Prepended to the claude command (e.g. "aws-vault exec profile --")'}
+          useGlobal={useGlobalBox('preLaunchCmd')}>
+          <input type="text" className="settings-input" id="sv-pre-launch" ref={preLaunch} placeholder="e.g. aws-vault exec profile --"
+            defaultValue={fieldValue('preLaunchCmd', '') ?? ''} disabled={disabled('preLaunchCmd')} />
+        </LaunchField>
+
+        {!isProject && (
+          <AppField wide label="Quick Session Folder"
+            description="Where the lightning bolt, ⌘N and N (outside a session) start a session straight away">
+            <input type="text" className="settings-input" id="sv-quick-session-path" ref={quickSessionPath}
+              placeholder="/path/to/folder" defaultValue={fieldValue('quickSessionPath', '') ?? ''} />
+          </AppField>
+        )}
+      </div>
+
+      {!isProject && (
+        <div className="settings-section">
+          <div className="settings-section-title">Application</div>
+
+          <AppField label="Terminal Theme" description="Color theme for terminal sessions">
+            <select className="settings-select" id="sv-terminal-theme" ref={terminalTheme} defaultValue={themeValue}>
+              {Object.entries(TERMINAL_THEMES).map(([key, t]) =>
+                <option key={key} value={key}>{t.label}</option>)}
+            </select>
+          </AppField>
+
+          <AppField label="Terminal Font"
+            description={<>Font family for terminal sessions. Leave empty for the default.<span id="sv-font-warning" className="settings-warning">{fontWarning}</span></>}>
+            <input type="text" className="settings-input" id="sv-font-family" ref={fontFamily} style={{ width: '220px' }}
+              defaultValue={fontFamilyValue} placeholder={DEFAULT_TERMINAL_FONT_FAMILY}
+              onChange={e => setFontWarning(fontWarningFor(e.currentTarget.value))} />
+          </AppField>
+
+          <AppField label="Terminal Font Size" description="Font size in pixels for terminal sessions">
+            <input type="number" className="settings-input settings-input-compact" id="sv-font-size" ref={fontSize}
+              min="6" max="32" step="1" defaultValue={String(fieldValue('terminalFontSize', DEFAULT_TERMINAL_FONT_SIZE))} />
+          </AppField>
+
+          <AppField label="Terminal Line Height" description="Line spacing as a multiple of the font size (1 = tightest)">
+            <input type="number" className="settings-input settings-input-compact" id="sv-line-height" ref={lineHeight}
+              min="1" max="3" step="0.05" defaultValue={String(fieldValue('terminalLineHeight', DEFAULT_TERMINAL_LINE_HEIGHT))} />
+          </AppField>
+
+          <AppField label="Shell Profile"
+            description="Shell used for terminal and Claude sessions. Changes take effect for new sessions only.">
+            <select className="settings-select" id="sv-shell-profile" ref={shellProfile} defaultValue={shellProfileValue}>
+              <option value="auto">Auto (detect)</option>
+              {panel.shellProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </AppField>
+
+          <AppField label="Max Visible Sessions"
+            description={'Show up to this many sessions in the list before collapsing the rest behind "+N older". Active and pinned sessions are always shown.'}>
+            <input type="number" className="settings-input settings-input-compact" id="sv-visible-count" ref={visibleCount}
+              min="1" max="100" defaultValue={String(fieldValue('visibleSessionCount', 25))} />
+          </AppField>
+
+          <AppField label="Session Max Age (days)"
+            description={'Sessions older than this are hidden behind "+N older" even if under the count limit'}>
+            <input type="number" className="settings-input settings-input-compact" id="sv-max-age" ref={maxAge}
+              min="1" max="365" defaultValue={String(fieldValue('sessionMaxAgeDays', 3))} />
+          </AppField>
+        </div>
+      )}
+
+      {!isProject && (
+        <div className="settings-section">
+          <div className="settings-section-title">Weather</div>
+
+          <AppField label="Show weather on the empty screen"
+            description="Patch dresses for the weather outside, fetched from Open-Meteo">
+            <label className="settings-toggle"><input type="checkbox" id="sv-weather-enabled" ref={weatherEnabled}
+              defaultChecked={resolveWeatherEnabled(current)} /><span className="settings-toggle-slider"></span></label>
+          </AppField>
+
+          <AppField label="City"
+            description={<>Weather for <span id="sv-weather-resolved">{weather.resolvedName}</span><span id="sv-weather-warning" className="settings-warning">{weather.warning}</span></>}>
+            <input type="text" className="settings-input" id="sv-weather-city" ref={weather.cityRef}
+              placeholder={DEFAULT_WEATHER_LOCATION.name} defaultValue={resolveWeatherLocation(current).name} style={{ width: '180px' }} />
+          </AppField>
+        </div>
+      )}
+
+      {!isProject && (
+        <div className="settings-section">
+          <div className="settings-section-title">About</div>
+          <AppField label="Version"
+            description={<span id="sv-current-version">{panel.appVersion ? `v${panel.appVersion}` : ''}</span>} />
+        </div>
+      )}
+
+      <div className="settings-btn-row">
+        <button className="settings-cancel-btn" id="sv-cancel-btn" onClick={() => closeSettings()}>Cancel</button>
+        <button className="settings-save-btn" id="sv-save-btn" onClick={() => void save()}
+          style={panel.saved ? { background: 'var(--sb-mint)', color: 'var(--sb-accent)' } : undefined}>
+          {panel.saved ? '✓ Saved' : 'Save Settings'}
+        </button>
+        {isProject && panel.projectPath && (
+          <button className="settings-remove-btn" id="sv-remove-btn"
+            onClick={() => void hideProject(panel.projectPath!, shortProjectPath(panel.projectPath))}>Hide Project</button>
+        )}
+      </div>
+    </div>
+  );
+}

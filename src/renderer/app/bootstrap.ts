@@ -11,11 +11,9 @@
 import { installLayout } from './layout';
 import { installIpcBridge } from './ipc-bridge';
 import { installIpcListeners } from './ipc-listeners';
-import { installQuotaGauges } from './quota-gauges';
 import { installSearch } from './search';
 import { installShortcuts } from './shortcuts';
 import { installTimeTicker } from './time-ticker';
-import { renderStatusSummary } from './status-bar';
 import { installSidebar } from '../features/sessions/sidebar';
 import { installSidebarActivity } from '../features/sessions/sidebar-activity';
 import { installSidebarFilters } from '../features/sessions/sidebar-filters';
@@ -29,18 +27,18 @@ import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
 import { dispatch } from '../state/app-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
-import {
-  applyTerminalFont, bufferTerminalData, prewarmTerminalRenderer,
-} from '../features/terminal/terminal-manager';
+import { applyTerminalFont, prewarmTerminalRenderer } from '../features/terminal/terminal-manager';
+import { bufferTerminalData } from '../features/terminal/write-buffer';
 import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
 } from '../features/terminal/terminal-themes';
 import { installAppearanceToggle } from '../features/settings/appearance-toggle';
 import { installSleepToggle } from '../features/settings/sleep-toggle';
 import { installPatch } from '../features/patch/patch';
-import { installUpdateNotice } from '../features/update/update-notice';
 import { installQuestions } from '../features/questions/questions';
 import { mountReactRoot } from '../ui/Root';
+import { countRunning } from '../ui/footer/actions';
+import { installFooter } from '../ui/footer/install-footer';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -60,14 +58,13 @@ export function bootstrap(): void {
   installSearch();
   installShortcuts();
   installTimeTicker();
-  installQuotaGauges();
+  installFooter();
   installSleepToggle();
   installAppearanceToggle();
   installPatch();
-  installUpdateNotice();
   installQuestions();
   followColorSchemeInTerminals();
-  // Renders nothing yet; the surfaces that move to React portal out of it.
+  // The surfaces that have moved to React portal out of it.
   mountReactRoot();
 
   setTickListener(tickConnectionCards);
@@ -81,7 +78,7 @@ export function bootstrap(): void {
 
   void applyStoredSettings();
   void loadProjects().then(() => {
-    renderStatusSummary();
+    countRunning();
     restoreView();
   });
 }
