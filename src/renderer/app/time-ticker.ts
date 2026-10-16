@@ -5,7 +5,7 @@
  * re-renders often enough already, and doing it on a timer would fight the
  * user's scroll position for no visible gain.
  */
-import { sessionMap } from '../state/session-store';
+import { sessionKey, sessionMap } from '../state/session-store';
 import { sessionTimeLabel } from '../features/sessions/sidebar-row';
 
 /** Fine enough that "just now" becomes "1m ago" without a visible lag. */
@@ -15,7 +15,7 @@ export function installTimeTicker(): void {
   setInterval(() => {
     for (const [sessionId, session] of sessionMap) {
       if (!session.modified) continue;
-      const timeEl = document.getElementById('si-' + sessionId)
+      const timeEl = document.getElementById('si-' + sessionKey(sessionId))
         ?.querySelector<HTMLElement>('.session-time');
       if (timeEl) timeEl.textContent = sessionTimeLabel(session);
     }

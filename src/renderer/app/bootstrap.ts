@@ -27,9 +27,8 @@ import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
 import { dispatch } from '../state/app-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
-import {
-  applyTerminalFont, bufferTerminalData, prewarmTerminalRenderer,
-} from '../features/terminal/terminal-manager';
+import { applyTerminalFont, prewarmTerminalRenderer } from '../features/terminal/terminal-manager';
+import { bufferTerminalData } from '../features/terminal/write-buffer';
 import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
 } from '../features/terminal/terminal-themes';

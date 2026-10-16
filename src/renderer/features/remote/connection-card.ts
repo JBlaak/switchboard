@@ -144,11 +144,13 @@ function ensureCard(sessionId: string): HTMLElement | null {
   card.hidden = true;
   card.innerHTML = CARD_HTML;
 
-  card.querySelector<HTMLElement>('.rc-retry')!.onclick = () => void retry(sessionId);
+  // The id as of the click, not as of building the card: the card rides on
+  // the terminal's entry across a re-key, and the old id finds nothing here.
+  card.querySelector<HTMLElement>('.rc-retry')!.onclick = () => void retry(entry.session.sessionId);
   card.querySelector<HTMLElement>('.rc-cancel')!.onclick = () => {
     // The tmux session on the far end is untouched by this, so there is nothing
     // to confirm — it only stops Switchboard dialling.
-    void window.api.stopSession(sessionId);
+    void window.api.stopSession(entry.session.sessionId);
   };
 
   entry.element.appendChild(card);
