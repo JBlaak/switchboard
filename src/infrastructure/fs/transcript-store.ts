@@ -12,9 +12,12 @@
 import { parseTranscript, cwdFromTranscript, parseTranscriptLine } from '../../domain/session/transcript';
 import { encodeProjectPath, worktreeParentPath } from '../../domain/project/project-path';
 import { isProjectFolderName } from './claude-paths';
+import { workLocations, type TranscriptSource } from '../../domain/session-work/locations';
+import { issueMentionsInTranscript } from '../../domain/session-work/issues';
 import type { Session } from '../../domain/session/session';
+import type { IssueRef } from '../../domain/session-work/model';
 import type { FileSystem } from '../../application/ports/file-system';
-import type { TranscriptSeed, TranscriptStore } from '../../application/ports/transcript-store';
+import type { TranscriptLocation, TranscriptSeed, TranscriptStore } from '../../application/ports/transcript-store';
 
 /**
  * How much of a transcript is read looking for a `cwd` before giving up on the
@@ -142,6 +145,24 @@ export class FileTranscriptStore implements TranscriptStore {
     }
   }
 
+  locations(folder: string, sessionId: string): TranscriptLocation[] {
+    // No worktree roots: each `cwd` stays as written, for whoever has git to
+    // resolve to its worktree.
+    return workLocations(this.#sessionSources(folder, sessionId), [])
+      .map(({ worktree, branch, fromSubagent }) => ({ cwd: worktree, branch, fromSubagent }));
+  }
+
+  issueMentions(folder: string, sessionId: string, repository: string): IssueRef[] {
+    const found = new Map<string, IssueRef>();
+    for (const source of this.#sessionSources(folder, sessionId)) {
+      for (const issue of issueMentionsInTranscript(source.lines, repository)) {
+        const key = issue.repository + '#' + issue.number;
+        if (!found.has(key)) found.set(key, issue);
+      }
+    }
+    return [...found.values()];
+  }
+
   readSlug(folder: string, sessionId: string): string | null {
     for (const line of this.readHeadLines(folder, sessionId, SLUG_SCAN_BYTES)) {
       const entry = parseTranscriptLine(line);
@@ -171,6 +192,41 @@ export class FileTranscriptStore implements TranscriptStore {
     this.fs.makeDir(folderPath);
     const body = lines.map(line => JSON.stringify(line)).join('\n') + '\n';
     this.fs.writeText(this.#sessionPath(folder, sessionId), body);
+  }
+
+  /**
+   * A session's main transcript and its subagents' (`<session>/subagents/*.jsonl`),
+   * main first, then the subagents by file name. A file that cannot be read is
+   * skipped. Read whole: every line can carry a `cwd` or a mention.
+   */
+  #sessionSources(folder: string, sessionId: string): TranscriptSource[] {
+    const sources: TranscriptSource[] = [];
+    const main = this.#readLines(this.#sessionPath(folder, sessionId));
+    if (main) sources.push({ lines: main, fromSubagent: false });
+
+    const agentDir = this.fs.join(this.projectsDir, folder, sessionId, 'subagents');
+    let names: string[] = [];
+    try {
+      names = this.fs.readDir(agentDir)
+        .filter(entry => entry.isFile && entry.name.endsWith('.jsonl'))
+        .map(entry => entry.name)
+        .sort();
+    } catch {
+      // No subagents, the common case.
+    }
+    for (const name of names) {
+      const lines = this.#readLines(this.fs.join(agentDir, name));
+      if (lines) sources.push({ lines, fromSubagent: true });
+    }
+    return sources;
+  }
+
+  #readLines(filePath: string): string[] | null {
+    try {
+      return this.fs.readText(filePath).split('\n').filter(Boolean);
+    } catch {
+      return null;
+    }
   }
 
   /** True when the folder holds no transcript at all. */
