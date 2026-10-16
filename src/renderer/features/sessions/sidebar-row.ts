@@ -85,6 +85,7 @@ export function buildSessionItem(session: SessionRow, projectPath: string): HTML
 function buildPin(session: SessionRow): HTMLElement {
   const pin = document.createElement('span');
   pin.className = 'session-pin' + (session.starred ? ' pinned' : '');
+  pin.dataset.testid = 'session-pin';
   pin.innerHTML = session.starred ? SVG.pinFilled : SVG.pinOutline;
   return pin;
 }
@@ -93,6 +94,7 @@ function buildStatusDot(session: SessionRow): HTMLElement {
   const dot = document.createElement('span');
   dot.className = 'session-status-dot'
     + (view.activePtyIds.has(session.sessionId) ? ' running' : '');
+  dot.dataset.testid = 'session-status-dot';
   return dot;
 }
 
@@ -109,6 +111,7 @@ function buildInfo(session: SessionRow, projectPath: string): HTMLElement {
   if (session.type === 'terminal' || (session.type === 'remote' && session.remoteKind === 'shell')) {
     const badge = document.createElement('span');
     badge.className = 'terminal-badge';
+    badge.dataset.testid = 'terminal-badge';
     badge.innerHTML = SVG.terminal;
     summary.prepend(badge);
   }

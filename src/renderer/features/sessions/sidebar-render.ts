@@ -264,6 +264,7 @@ function truncate(
 function buildDragSpace(): HTMLElement {
   const space = document.createElement('div');
   space.id = 'sidebar-drag-space';
+  space.dataset.testid = 'sidebar-drag-space';
   return space;
 }
 
