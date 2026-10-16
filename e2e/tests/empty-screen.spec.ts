@@ -4,7 +4,7 @@
  */
 import { test, expect, forEachAppearance } from '../support/test';
 import { expectScreen, openSession, searchBox, sidebar } from '../support/app';
-import { weatherAsked } from '../support/main-process';
+import { hostStubCalls } from '../support/main-process';
 import { LABEL, S, emptyFixture, standardFixture } from '../fixtures/standard';
 import type { Page } from '@playwright/test';
 
@@ -126,6 +126,6 @@ test.describe('patch', () => {
   });
 
   test('warms the weather cache as the window loads', async ({ app }) => {
-    await expect.poll(() => weatherAsked(app)).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => (await hostStubCalls(app)).getWeather).toBeGreaterThanOrEqual(1);
   });
 });

@@ -1,21 +1,13 @@
 /**
- * The usage-limit windows, as the vanilla code records and reads them.
+ * The usage-limit windows, as Patch reads them.
  *
- * The rows live in the store (see `usage-slice`); these calls dispatch and
- * read so the gauges and Patch keep their old entry points.
+ * The rows live in the store (see `usage-slice`), fetched by the footer (see
+ * `ui/footer/actions`); these reads keep Patch's old entry points until it
+ * moves to React too.
  */
-import { dispatch, getState, store } from './app-store';
+import { getState, store } from './app-store';
 import { tightestIn } from './usage-slice';
 import type { UsageLimit } from '../../domain/usage/usage';
-
-export function recordUsage(next: readonly UsageLimit[]): void {
-  dispatch({ type: 'usageFetched', rows: next });
-}
-
-/** The first fetch has finished, whether or not it got anything. */
-export function usageSettled(): void {
-  dispatch({ type: 'usageFailed' });
-}
 
 /** Resolves once the first fetch has finished. */
 export function whenUsageLoaded(): Promise<void> {

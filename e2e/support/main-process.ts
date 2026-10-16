@@ -6,8 +6,9 @@
  * things the harness needs:
  *
  * - **Host stubs.** A few IPC channels answer with facts about the machine the
- *   suite happens to run on (is sleep disabled right now?) or act on it (open a
- *   browser, show a folder picker, prompt for an administrator password). Their
+ *   suite happens to run on (is sleep disabled right now? is there a newer
+ *   release?) or act on it (open a browser, show a folder picker, replace the
+ *   app, prompt for an administrator password). Their
  *   handlers are swapped for test doubles, so a run is the same on every Mac
  *   and a stray click cannot reach the host.
  * - **Pushing events.** Anything main tells the renderer travels as a
@@ -21,8 +22,9 @@
 import type { ElectronApplication } from '@playwright/test';
 import { EVENT, INVOKE } from '../../src/ipc/channels';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
+import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
-import type { Weather } from '../../src/domain/weather/weather';
+import type { Weather, WeatherLocation } from '../../src/domain/weather/weather';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -39,17 +41,34 @@ export const STUB_USAGE: Usage = {
 export interface HostStubs {
   /** What `getUsage` answers; null hides the gauges. */
   usage: Usage | null;
+  /** Make `getUsage` fail, as it does offline or without credentials. */
+  usageFails: boolean;
+  /** What `getUpdate` answers: the release main has found, or null for none. */
+  update: UpdateNotice | null;
+  /**
+   * What `installUpdate` answers. 'pending' never answers, which is what the
+   * renderer sees when an install works: the app quits from under it.
+   */
+  installUpdate: boolean | 'pending';
   /** Whether `pmset` would report sleep as disabled. */
   sleepDisabled: boolean;
   /** What the folder picker "chooses"; null is a cancelled dialog. */
   browseFolder: string | null;
   /**
-   * What `getWeather` answers: null is weather switched off (what the
-   * fixture's settings make the real handler answer), and `'never'` a fetch
-   * that never comes back, for the timeouts that guard it.
+   * What `getWeather` answers: null is no sky (weather switched off, or not
+   * fetched), and `'never'` a fetch that never comes back, for the timeouts
+   * that guard it.
    */
   weather: Weather | null | 'never';
+  /**
+   * What looking up a weather city answers, by the name typed: a location
+   * (after `delayMs`, to hold a lookup in flight), null for "no such place",
+   * or 'fail' for a lookup that throws. A name not listed finds nothing.
+   */
+  geocode: Record<string, GeocodeStub>;
 }
+
+export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number } | 'fail';
 
 /**
  * What the stubs keep in the main process, on `globalThis.__switchboardE2E`.
@@ -58,23 +77,33 @@ export interface HostStubs {
  */
 interface StubState extends HostStubs {
   opened: string[];
-  /** How many times the renderer has asked for the weather. */
-  weatherAsked: number;
+  calls: HostStubCalls;
+}
+
+/** How often the renderer asked the stubs for something, by channel. */
+export interface HostStubCalls {
+  getUsage: number;
+  installUpdate: number;
+  getWeather: number;
 }
 
 type WithStubs = typeof globalThis & { __switchboardE2E: StubState };
 
 export const DEFAULT_STUBS: HostStubs = {
   usage: STUB_USAGE,
+  usageFails: false,
+  update: null,
+  installUpdate: 'pending',
   sleepDisabled: false,
   browseFolder: null,
   weather: null,
+  geocode: {},
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
   await app.evaluate(({ ipcMain }, { stubs, channels }) => {
-    const state: StubState = { ...stubs, opened: [], weatherAsked: 0 };
+    const state: StubState = { ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0, getWeather: 0 } };
     (globalThis as WithStubs).__switchboardE2E = state;
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {
@@ -82,16 +111,35 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       ipcMain.handle(channel, (_event, ...args) => handler(...args));
     };
 
-    replace(channels.getUsage, () => state.usage);
+    replace(channels.getUsage, () => {
+      state.calls.getUsage++;
+      if (state.usageFails) throw new Error('usage unavailable');
+      return state.usage;
+    });
+    replace(channels.getUpdate, () => state.update);
+    replace(channels.installUpdate, () => {
+      state.calls.installUpdate++;
+      return state.installUpdate === 'pending' ? new Promise(() => {}) : state.installUpdate;
+    });
     replace(channels.getSleepDisabled, () => state.sleepDisabled);
     replace(channels.setSleepDisabled, (disabled) => {
       state.sleepDisabled = !!disabled;
       return state.sleepDisabled;
     });
     replace(channels.browseFolder, () => state.browseFolder);
+    // Both weather channels would reach Open-Meteo. The forecast answers
+    // the `weather` stub (none, unless a test dresses Patch for one), and
+    // the lookup answers from the table above.
     replace(channels.getWeather, () => {
-      state.weatherAsked++;
+      state.calls.getWeather++;
       return state.weather === 'never' ? new Promise(() => {}) : state.weather;
+    });
+    replace(channels.geocodeWeatherLocation, async (name) => {
+      const stub = state.geocode[String(name)];
+      if (stub === 'fail') throw new Error('geocoding is offline');
+      if (!stub) return null;
+      if (stub.delayMs) await new Promise(resolve => setTimeout(resolve, stub.delayMs));
+      return stub.location;
     });
     replace(channels.openExternal, (url) => {
       state.opened.push(String(url));
@@ -122,9 +170,11 @@ export async function openedExternally(app: ElectronApplication): Promise<string
   });
 }
 
-/** How many times the renderer has asked main for the weather so far. */
-export async function weatherAsked(app: ElectronApplication): Promise<number> {
-  return await app.evaluate(() => (globalThis as WithStubs).__switchboardE2E.weatherAsked);
+/** How often each counted stub has been called since the app launched. */
+export async function hostStubCalls(app: ElectronApplication): Promise<HostStubCalls> {
+  return await app.evaluate(() => {
+    return { ...(globalThis as WithStubs).__switchboardE2E.calls };
+  });
 }
 
 /** Send the renderer an event, as main would. */
@@ -147,4 +197,16 @@ export async function pushRemoteStatus(
   app: ElectronApplication, sessionId: string, status: RemoteStatusPayload,
 ): Promise<void> {
   await pushEvent(app, EVENT.remoteStatus, sessionId, status);
+}
+
+/**
+ * Make every "stop session" request fail with `error`, the way a PTY that
+ * refuses to die would. For the paths that have to give up part-way — archiving
+ * a whole project stops at the first session it cannot stop.
+ */
+export async function failStopSession(app: ElectronApplication, error: string): Promise<void> {
+  await app.evaluate(({ ipcMain }, { channel, error }) => {
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, () => ({ ok: false, error }));
+  }, { channel: INVOKE.stopSession, error });
 }

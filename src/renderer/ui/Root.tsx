@@ -8,12 +8,22 @@
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Dialogs } from './dialogs/Dialogs';
+import { Portal } from './Portal';
+import { Footer } from './footer/Footer';
+import { SettingsViewer } from './settings/SettingsViewer';
 import type { JSX } from 'react';
 import type { Root as ReactRoot } from 'react-dom/client';
 
 /** The surfaces ported so far, each a `<Portal>` into its container. */
 export function Root(): JSX.Element | null {
-  return null;
+  return (
+    <>
+      <Dialogs />
+      <Portal target="settings-viewer"><SettingsViewer /></Portal>
+      <Portal target="sidebar-footer"><Footer /></Portal>
+    </>
+  );
 }
 
 /**
