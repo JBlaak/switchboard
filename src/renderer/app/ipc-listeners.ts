@@ -19,7 +19,7 @@ import {
   dropPendingSession, writeExitBanner,
 } from '../features/sessions/session-actions';
 import { pollActiveSessions } from '../features/sessions/session-poller';
-import { setHeaderIdentity, showHeaderNotice } from '../features/sessions/terminal-header';
+import { setHeaderIdentity } from '../features/sessions/terminal-header';
 import { handleRemoteStatus } from '../features/remote/connection-card';
 import { busyChanged } from '../state/activity-slice';
 import { getState, onEvent } from '../state/app-store';
@@ -47,10 +47,10 @@ export function installIpcListeners(): void {
   onEvent('cliBusyState', ({ sessionId }, state, previous) => {
     if (busyChanged(previous.activity, state.activity, sessionId)) refreshSidebar();
   });
-  onEvent('terminalNotification', ({ sessionId, message }, state, previous) => {
+  // The header shows the notice itself; see `terminal-slice`.
+  onEvent('terminalNotification', ({ sessionId }, state, previous) => {
     // "Waiting for your input" settles the session; see `activityReducer`.
     if (busyChanged(previous.activity, state.activity, sessionId)) refreshSidebar();
-    if (sessionId === state.view.activeSessionId) showHeaderNotice(message);
   });
 
   onEvent('remoteStatus', ({ sessionId, status }, _state, previous) => {

@@ -22,9 +22,7 @@ import { installSidebarFilters } from '../features/sessions/sidebar-filters';
 import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
 import { loadProjects } from '../features/sessions/session-list';
 import { openSession } from '../features/sessions/session-actions';
-import { confirmAndStopSession } from '../features/sessions/session-actions';
 import { schedulePoll } from '../features/sessions/session-poller';
-import { terminalStopButton } from '../features/sessions/terminal-header';
 import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
 import { dispatch } from '../state/app-store';
@@ -68,14 +66,10 @@ export function bootstrap(): void {
   installQuestions();
   followColorSchemeInTerminals();
   installTerminalProbe();
-  // Renders nothing yet; the surfaces that move to React portal out of it.
+  // The surfaces that have moved to React portal out of it.
   mountReactRoot();
 
   setTickListener(tickConnectionCards);
-
-  terminalStopButton.addEventListener('click', () => {
-    if (view.activeSessionId) void confirmAndStopSession(view.activeSessionId);
-  });
 
   schedulePoll();
   prewarmTerminalRenderer();

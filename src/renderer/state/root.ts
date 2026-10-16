@@ -12,6 +12,7 @@ import { activityReducer, initialActivityState, rekeyActivity } from './activity
 import { initialKeysState, keysReducer, rekeyKeys } from './keys-slice';
 import { initialQuestionsState, questionsReducer, rekeyQuestions } from './questions-slice';
 import { initialRemoteState, rekeyRemote, remoteReducer } from './remote-slice';
+import { initialTerminalState, rekeyTerminal, terminalReducer } from './terminal-slice';
 import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, rekeyView, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
@@ -19,6 +20,7 @@ import type { KeysState } from './keys-slice';
 import type { QuestionsState } from './questions-slice';
 import type { RemoteState } from './remote-slice';
 import type { RendererEvent } from './events';
+import type { TerminalState } from './terminal-slice';
 import type { UsageState } from './usage-slice';
 import type { ViewState } from './view-slice';
 
@@ -29,6 +31,7 @@ export interface RendererState {
   readonly remote: RemoteState;
   readonly usage: UsageState;
   readonly keys: KeysState;
+  readonly terminal: TerminalState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -39,6 +42,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     remote: initialRemoteState,
     usage: initialUsageState,
     keys: initialKeysState,
+    terminal: initialTerminalState,
   };
 }
 
@@ -53,8 +57,9 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const remote = remoteReducer(state.remote, event);
   const usage = usageReducer(state.usage, event);
   const keys = keysReducer(state.keys, event);
+  const terminal = terminalReducer(state.terminal, event);
 
-  return settle(state, { view, activity, questions, remote, usage, keys });
+  return settle(state, { view, activity, questions, remote, usage, keys, terminal });
 }
 
 /**
@@ -78,6 +83,7 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     remote: rekeyRemote(state.remote, oldId, newId),
     usage: state.usage,
     keys: rekeyKeys(state.keys, oldId, newId),
+    terminal: rekeyTerminal(state.terminal, oldId, newId),
   });
 }
 

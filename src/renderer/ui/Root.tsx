@@ -10,10 +10,19 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { JSX } from 'react';
 import type { Root as ReactRoot } from 'react-dom/client';
+import { Portal } from './Portal';
+import { TerminalHost } from './terminal/TerminalHost';
+import { TerminalHeaderControls, TerminalHeaderInfo } from './terminal/TerminalHeader';
 
 /** The surfaces ported so far, each a `<Portal>` into its container. */
 export function Root(): JSX.Element | null {
-  return null;
+  return (
+    <>
+      <Portal target="terminals"><TerminalHost /></Portal>
+      <Portal target="terminal-header-info"><TerminalHeaderInfo /></Portal>
+      <Portal target="terminal-header-controls"><TerminalHeaderControls /></Portal>
+    </>
+  );
 }
 
 /**
