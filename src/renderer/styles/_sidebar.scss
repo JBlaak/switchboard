@@ -631,7 +631,7 @@
    How many subagents a session has working (OSC 7501 child records), as one
    more piece of the meta line: a robot glyph and a count on a lavender pill,
    lavender because no session state uses it, so it never reads as one. Drawn
-   by `writeAgentsBadge`; the tooltip lists the agents. */
+   by the row's `AgentsBadge` (ui/session-list/RowMeta); the tooltip lists the agents. */
 .session-agents {
   display: inline-flex;
   align-items: center;

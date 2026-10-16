@@ -74,7 +74,7 @@ const targets = [
   },
   {
     // The renderer is a plain browser bundle: contextIsolation is on and
-    // nodeIntegration off, so xterm, morphdom and React get bundled in rather
+    // nodeIntegration off, so xterm and React get bundled in rather
     // than pulled from node_modules by <script src>.
     //
     // React reads process.env.NODE_ENV to decide whether to ship its dev-only

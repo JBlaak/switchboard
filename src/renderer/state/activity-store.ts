@@ -7,8 +7,8 @@
  * collections are read-only views of the current state, and the remaining
  * calls dispatch.
  *
- * Nothing here writes to the DOM any more. The sidebar subscribes and puts the
- * classes on its rows itself (`features/sessions/sidebar-activity`).
+ * Nothing here writes to the DOM any more. Each row of the session list reads
+ * its classes from the store itself (`ui/session-list/SessionItem`).
  */
 import { sessionTier } from '../../domain/session/tiers';
 import { dispatch, getState } from './app-store';

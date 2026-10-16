@@ -39,12 +39,6 @@ export interface OpenSession {
   [key: string]: unknown;
 }
 
-/** One entry of the flat sidebar render order. */
-export interface OrderedRow {
-  id: string;
-  tier: number;
-}
-
 // ── Collections ──
 
 /** sessionId → the terminal and metadata of an open session. */
@@ -70,14 +64,11 @@ type StoredViewKey = keyof ViewState;
 
 /**
  * The fields of `view` that do not: the cached project lists hold the shared
- * row objects every surface mutates in place, and `sortedOrder` is the
- * renderer's own memory between two of its renders. See `view-slice` for why.
+ * row objects every surface mutates in place. See `view-slice` for why.
  */
 interface LocalView {
   cachedProjects: Project[];
   cachedAllProjects: Project[];
-  /** Flat render order of the session list — the source of truth between renders. */
-  sortedOrder: OrderedRow[];
 }
 
 type View = { -readonly [K in StoredViewKey]: ViewState[K] } & LocalView;
@@ -92,7 +83,7 @@ type View = { -readonly [K in StoredViewKey]: ViewState[K] } & LocalView;
  * behind its back, so it is a compile error; dispatch an event instead.
  */
 export const view: View = (() => {
-  const local: LocalView = { cachedProjects: [], cachedAllProjects: [], sortedOrder: [] };
+  const local: LocalView = { cachedProjects: [], cachedAllProjects: [] };
   const adapter = local as View;
   for (const key of Object.keys(getState().view) as StoredViewKey[]) {
     Object.defineProperty(adapter, key, {

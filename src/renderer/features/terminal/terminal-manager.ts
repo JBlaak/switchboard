@@ -388,10 +388,7 @@ export function showSession(sessionId: string): void {
   const entry = openSessions.get(sessionId);
   const session = sessionMap.get(sessionId) || (entry && entry.session);
 
-  // Update sidebar active state
-  document.querySelectorAll<HTMLElement>('.session-item.active').forEach(el => el.classList.remove('active'));
-  const item = document.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
-  if (item) item.classList.add('active');
+  // The sidebar highlights the row from this (see `ui/session-list`).
   setActiveSession(sessionId);
   clearNotifications(sessionId);
 

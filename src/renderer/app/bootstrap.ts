@@ -12,9 +12,7 @@ import { installLayout } from './layout';
 import { installIpcBridge } from './ipc-bridge';
 import { installIpcListeners } from './ipc-listeners';
 import { installShortcuts } from './shortcuts';
-import { installTimeTicker } from './time-ticker';
 import { installSidebar } from '../features/sessions/sidebar';
-import { installSidebarActivity } from '../features/sessions/sidebar-activity';
 import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
 import { loadProjects } from '../features/sessions/session-list';
 import { openSession } from '../features/sessions/session-actions';
@@ -36,12 +34,12 @@ import { mountReactRoot } from '../ui/Root';
 import { countRunning } from '../ui/footer/actions';
 import { installFooter } from '../ui/footer/install-footer';
 import { installToolbar } from '../ui/toolbar/actions';
+import { installSessionList } from '../ui/session-list/install-session-list';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
   // The refresh events, before anything can fire one.
   installSidebar();
-  installSidebarActivity();
 
   // The IPC follow-ups subscribe to the store before the question panel does
   // (`installQuestions`, below): a re-key has to move the terminal registry
@@ -53,7 +51,7 @@ export function bootstrap(): void {
   installToolbar();
   installSidebarKeyboard();
   installShortcuts();
-  installTimeTicker();
+  installSessionList();
   installFooter();
   installPatch();
   installQuestions();

@@ -13,6 +13,7 @@ import { Dialogs } from './dialogs/Dialogs';
 import { Portal } from './Portal';
 import { Footer } from './footer/Footer';
 import { SettingsViewer } from './settings/SettingsViewer';
+import { SessionList } from './session-list/SessionList';
 import type { JSX } from 'react';
 import type { Root as ReactRoot } from 'react-dom/client';
 
@@ -24,6 +25,7 @@ export function Root(): JSX.Element | null {
       <Dialogs />
       <Portal target="settings-viewer"><SettingsViewer /></Portal>
       <Portal target="sidebar-footer"><Footer /></Portal>
+      <Portal target="sidebar-content"><SessionList /></Portal>
     </>
   );
 }

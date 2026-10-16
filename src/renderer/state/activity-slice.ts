@@ -14,8 +14,8 @@
  * Alongside the state, which subagents the session has working (OSC 7501's
  * child records, de-duplicated in the main process like the busy state).
  *
- * Nothing here touches the DOM: the sidebar subscribes and puts the classes on
- * its rows (see `features/sessions/sidebar-activity`).
+ * Nothing here touches the DOM: each row of the session list reads its classes
+ * from here (see `ui/session-list/SessionItem`).
  */
 import { hasEntry, movedEntry, withEntry, withoutEntry } from './records';
 import type { IdRecord } from './records';

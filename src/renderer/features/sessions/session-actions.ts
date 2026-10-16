@@ -242,7 +242,6 @@ function closeSessionView(sessionId: string): void {
  */
 export function clearScreen(): void {
   setActiveSession(null);
-  sidebarContent.querySelectorAll<HTMLElement>('.session-item.active').forEach(el => el.classList.remove('active'));
   document.querySelectorAll<HTMLElement>('.terminal-container.visible').forEach(el => el.classList.remove('visible'));
   hideTerminalHeader();
   showEmptyScreen();
