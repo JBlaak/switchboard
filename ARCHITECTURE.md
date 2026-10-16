@@ -84,43 +84,74 @@ renaming a channel is a compile error rather than a runtime `undefined`.
 
 ### `src/renderer` — the driving adapter
 
-- `app/` — bootstrap, the IPC bridge and its follow-ups, the tab router, layout
-- `state/` — the store, the event union, the reducers, and the `*-store`
-  adapters the vanilla code still reads through
+- `app/` — bootstrap, the IPC bridge and its follow-ups, the shortcuts,
+  layout, the re-key of the registries outside the store
+- `state/` — the store, the event union, the reducers (one slice per
+  concern), and the `*-store` adapters the modules outside React read through
 - `ui/` — the React root, the `Portal` surfaces render through, and one
-  folder per ported surface (`footer/`)
-- `features/` — one folder per feature: sessions, terminal, dialogs,
-  settings, panel, remote
-- `lib/` — DOM handles, formatting, icons, motion
+  folder per surface: components, an `actions.ts` behind them, and an
+  `install-*.ts` for its timers
+- `features/` — the imperative modules: the xterm lifecycle and its write
+  buffer, session launch and fetch, the poller, the list's keyboard, motion
+  specs
+- `lib/` — the containers the imperative code drives, formatting, icons,
+  motion
 
-The renderer is moving to React one surface at a time, and state flows one
-way:
+Every surface is React, and state flows one way:
 
 ```
 IPC push (app/ipc-bridge) ─┐
-user action ───────────────┼─▶ dispatch(RendererEvent) ─▶ reducers ─▶ store
-timer ─────────────────────┘     (state/events)         (state/*-slice)  │
+user action (ui/*/actions) ┼─▶ dispatch(RendererEvent) ─▶ reducers ─▶ store
+timer (ui/*/install-*) ────┘     (state/events)         (state/*-slice)  │
                                                                          ▼
-                        useStore(selector) in a component, or a vanilla subscriber
-terminal data ─────────▶ terminal manager (never through the store)
+                 useStore(selector) in a component, or an onEvent subscriber
+terminal data ─────────▶ write buffer ─▶ xterm (never through the store)
 ```
 
 Every change is a typed `RendererEvent`; the reducers are pure and tested in
-node like the domain code. React components read with `useStore(selector)`,
-which re-renders only when the selection changes. The vanilla code that has
-not moved yet keeps its old calls through the `*-store` adapters, and what
-must still touch the DOM after an event subscribes to the store
-(`app/ipc-listeners`). The React root
-renders nothing itself: each ported surface portals into the container it
-already has in `index.html`. Registries that hold live objects — `openSessions`
-with its xterm instances, and the shared session rows — stay plain Maps
-outside the store.
+node like the domain code. Components read with `useStore(selector)`, which
+re-renders only when the selection changes, and call the functions in their
+surface's `actions.ts`, which call `window.api` and dispatch the answer. What
+has to follow an event outside React — re-keying the registries, the exit
+banner, a debounced re-fetch — subscribes to the store with `onEvent`
+(`app/ipc-listeners`, installed first so a re-key has moved everything before
+anyone else looks).
+
+The React root renders nothing itself: each surface portals into its
+container in `index.html`, which keeps the page's layout as static markup.
+Registries that hold live objects — `openSessions` with its xterm instances,
+and the shared session rows that every cached project list points at — stay
+plain Maps outside the store. That is also why the session list is laid out on
+request rather than derived: whoever changed the rows calls
+`relayoutSessionList` (`ui/session-list/relayout`), and the slice lays the
+list out against its previous order so it holds still between layouts.
+
+What stays imperative, each driven from React effects with refs or from the
+modules in `features/`:
+
+- **The terminals.** `ui/terminal/TerminalHost` renders a container per open
+  session; `features/terminal/terminal-manager` opens an xterm into it and
+  owns everything inside: keys, fit, focus, drag-and-drop. Its output goes
+  through `features/terminal/write-buffer`, which batches the byte stream
+  into frames and holds back synchronised-update blocks.
+- **The main area's panel swap.** The empty screen, the terminal area and the
+  settings panel are shown and hidden by style (`lib/dom`), because a
+  terminal can only take focus or be refitted once its panel has a layout box,
+  synchronously.
+- **Motion.** The springs, the list's reflow and the confetti
+  (`lib/motion/*`), and the question panel's motion spec, play on the DOM
+  React committed, measured before and after.
+- **Patch**, the empty screen's friend, is its package's own imperative
+  handle, mounted into the stage `ui/patch/EmptyScreenPatch` renders.
+- **The list's keyboard focus.** `#sidebar-content` holds the focus while the
+  cursor is out (`features/sessions/sidebar-keyboard`); the cursor itself is
+  state.
 
 A session's id can change under it (a fork, an accepted plan). The reducer
 moves every slice keyed by session id in one pass (`rekeyState` in
 `state/root`), and `app/rekey-registries` moves the Maps outside the store, in
 a stated order. Rendering keys a row by the session's stable local key
-(`state/keys-slice`), not its id, so a re-keyed row is morphed in place.
+(`state/keys-slice`), not its id, so a re-keyed row keeps its element.
 
 ## How to add something
 
