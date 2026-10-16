@@ -24,7 +24,7 @@ import { EVENT, INVOKE } from '../../src/ipc/channels';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
-import type { WeatherLocation } from '../../src/domain/weather/weather';
+import type { Weather, WeatherLocation } from '../../src/domain/weather/weather';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -62,6 +62,12 @@ export interface HostStubs {
   /** What the folder picker "chooses"; null is a cancelled dialog. */
   browseFolder: string | null;
   /**
+   * What `getWeather` answers: null is no sky (weather switched off, or not
+   * fetched), and `'never'` a fetch that never comes back, for the timeouts
+   * that guard it.
+   */
+  weather: Weather | null | 'never';
+  /**
    * What looking up a weather city answers, by the name typed: a location
    * (after `delayMs`, to hold a lookup in flight), null for "no such place",
    * or 'fail' for a lookup that throws. A name not listed finds nothing.
@@ -86,6 +92,7 @@ interface StubState extends HostStubs {
 export interface HostStubCalls {
   getUsage: number;
   installUpdate: number;
+  getWeather: number;
 }
 
 type WithStubs = typeof globalThis & { __switchboardE2E: StubState };
@@ -99,13 +106,14 @@ export const DEFAULT_STUBS: HostStubs = {
   sleepPromptDelayMs: 0,
   sleepPromptCancelled: false,
   browseFolder: null,
+  weather: null,
   geocode: {},
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
   await app.evaluate(({ ipcMain }, { stubs, channels }) => {
-    const state: StubState = { ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0 }, clipboard: [] };
+    const state: StubState = { ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0, getWeather: 0 }, clipboard: [] };
     (globalThis as WithStubs).__switchboardE2E = state;
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {
@@ -130,10 +138,13 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       return state.sleepDisabled;
     });
     replace(channels.browseFolder, () => state.browseFolder);
-    // Both weather channels would reach Open-Meteo. The forecast is never
-    // needed (a fixture that turns weather on gets no sky), and the lookup
-    // answers from the table above.
-    replace(channels.getWeather, () => null);
+    // Both weather channels would reach Open-Meteo. The forecast answers
+    // the `weather` stub (none, unless a test dresses Patch for one), and
+    // the lookup answers from the table above.
+    replace(channels.getWeather, () => {
+      state.calls.getWeather++;
+      return state.weather === 'never' ? new Promise(() => {}) : state.weather;
+    });
     replace(channels.geocodeWeatherLocation, async (name) => {
       const stub = state.geocode[String(name)];
       if (stub === 'fail') throw new Error('geocoding is offline');
