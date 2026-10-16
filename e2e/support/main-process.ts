@@ -129,3 +129,15 @@ export async function pushRemoteStatus(
 ): Promise<void> {
   await pushEvent(app, EVENT.remoteStatus, sessionId, status);
 }
+
+/**
+ * Make every "stop session" request fail with `error`, the way a PTY that
+ * refuses to die would. For the paths that have to give up part-way — archiving
+ * a whole project stops at the first session it cannot stop.
+ */
+export async function failStopSession(app: ElectronApplication, error: string): Promise<void> {
+  await app.evaluate(({ ipcMain }, { channel, error }) => {
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, () => ({ ok: false, error }));
+  }, { channel: INVOKE.stopSession, error });
+}
