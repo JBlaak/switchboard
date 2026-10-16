@@ -347,8 +347,9 @@ export async function openSettingsViewer(
   </div>
 `;
 
-  const fontFamilyInput = ctl('#sv-font-family');
-  {
+  // The terminal font is an application setting: project scope has no field for it.
+  if (!isProject) {
+    const fontFamilyInput = ctl('#sv-font-family');
     fontFamilyInput.value = fontFamilyValue;
     fontFamilyInput.placeholder = DEFAULT_TERMINAL_FONT_FAMILY;
     // Without this the fallback is invisible: naming a font you don't have installed
@@ -501,17 +502,16 @@ export async function openSettingsViewer(
   });
 
   // Current version
-  const currentVersionEl = ctl<HTMLElement>('#sv-current-version');
-  if (currentVersionEl) {
+  if (!isProject) {
+    const currentVersionEl = ctl<HTMLElement>('#sv-current-version');
     window.api.getAppVersion().then(v => {
       currentVersionEl.textContent = `v${v}`;
     });
   }
 
   // Remove project button
-  const removeBtn = ctl('#sv-remove-btn');
-  if (removeBtn) {
-    removeBtn.addEventListener('click', async () => {
+  if (isProject) {
+    ctl('#sv-remove-btn').addEventListener('click', async () => {
       if (!confirm(`Hide project "${shortName}" from Switchboard?\n\nThis hides the project from the sidebar. Your session files are not deleted.`)) return;
       if (projectPath) await window.api.removeProject(projectPath);
       settingsViewer.style.display = 'none';
