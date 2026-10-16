@@ -25,6 +25,16 @@ export interface IssueRef {
   number: number;
 }
 
+/**
+ * An issue `gh` confirmed is an issue, not a PR: a conversation names both as
+ * `#88`, and only GitHub can tell them apart.
+ */
+export interface IssueStatus extends IssueRef {
+  title: string;
+  state: 'open' | 'closed';
+  url: string;
+}
+
 /** One CI check on a PR's head commit, folded into the four states the page draws. */
 export interface CheckRun {
   name: string;
