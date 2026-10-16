@@ -14,6 +14,7 @@ import type { SessionOptions } from '../domain/launch/session-options';
 import type { EffectiveSettings } from '../domain/settings/settings';
 import type { Appearance } from '../domain/settings/appearance';
 import type { ShellProfile } from '../domain/shell/shell-profile';
+import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
 import type { Weather, WeatherLocation } from '../domain/weather/weather';
@@ -104,6 +105,7 @@ export interface SwitchboardApi {
   onCliBusyState(cb: (sessionId: string, busy: boolean) => void): void;
   onTerminalNotification(cb: (sessionId: string, message: string) => void): void;
   onSessionNeedsAttention(cb: (sessionId: string) => void): void;
+  onSessionAgents(cb: (sessionId: string, agents: WorkingAgent[]) => void): void;
   onRemoteStatus(cb: (sessionId: string, status: RemoteStatusPayload) => void): void;
   onProjectsChanged(cb: () => void): void;
   onStatusUpdate(cb: (text: string, type: string) => void): void;

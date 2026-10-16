@@ -21,6 +21,7 @@ import type { SessionRow } from '../../../domain/session/session';
 
 export function bindSidebarEvents(): void {
   bindRepoLinks();
+  bindPullRequestChips();
   bindSlugGroups();
   bindOlderToggles();
   bindSessionRows();
@@ -35,6 +36,17 @@ function bindRepoLinks(): void {
       e.stopPropagation();
       const projectPath = label.dataset.projectPath;
       if (projectPath) void window.api.openRepository(projectPath);
+    };
+  });
+}
+
+/** A PR chip opens the pull request, instead of the row it sits in. */
+function bindPullRequestChips(): void {
+  sidebarContent.querySelectorAll<HTMLElement>('.session-pr').forEach(chip => {
+    chip.onclick = (e) => {
+      e.stopPropagation();
+      const url = chip.dataset.url;
+      if (url) void window.api.openExternal(url);
     };
   });
 }

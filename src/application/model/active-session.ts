@@ -8,6 +8,7 @@
  * message.
  */
 import { CliBusyTracker } from '../../domain/terminal/osc';
+import { ProgramStatusChildren } from '../../domain/terminal/program-status-children';
 import { OutputBuffer } from '../../domain/terminal/output-buffer';
 import type { RemoteConfig } from '../../domain/project/remote-target';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
@@ -65,6 +66,8 @@ export class ActiveSession {
   readonly output: OutputBuffer;
   /** Whether a CLI turn is in flight, tracked off OSC 7501 (or, failing that, the OSC 0 title). */
   readonly cliBusy = new CliBusyTracker();
+  /** The subagents the CLI has working, tracked off OSC 7501's child records. */
+  readonly agents = new ProgramStatusChildren();
 
   rendererAttached = true;
   exited = false;

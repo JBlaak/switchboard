@@ -6,7 +6,8 @@
  * supplies the lines and the file's timestamps; everything the sidebar and the
  * search index need is derived here.
  */
-import type { Session } from './session';
+import { pullRequestFromLink } from './pull-requests';
+import type { Session, SessionPullRequest } from './session';
 
 /** A message body as it appears in a transcript — string, or a content block list. */
 interface TranscriptMessage {
@@ -24,6 +25,10 @@ export interface TranscriptEntry {
   aiTitle?: string;
   cwd?: string;
   message?: string | TranscriptMessage;
+  /** `pr-link` lines only. */
+  prNumber?: unknown;
+  prUrl?: unknown;
+  prRepository?: unknown;
 }
 
 /** The file facts the parser cannot see for itself. */
@@ -78,6 +83,19 @@ function isUserTurn(entry: TranscriptEntry): boolean {
 }
 
 /**
+ * Does a timestamp on this entry mark real activity in the conversation?
+ *
+ * Not a `pr-link`: the CLI re-writes those, freshly timestamped, in the
+ * bookkeeping block it appends whenever a session exits or is resumed, so they
+ * would move `modified` without anything having happened. The PR's actual
+ * creation needs no help — the tool call that opened it is timestamped within
+ * milliseconds of it.
+ */
+function marksActivity(entry: TranscriptEntry): boolean {
+  return entry.type !== 'pr-link';
+}
+
+/**
  * The row label taken from a user message, or '' when the message is not one a
  * label should come from.
  *
@@ -106,6 +124,9 @@ export function parseTranscript(
   let slug: string | null = null;
   let customTitle: string | null = null;
   let aiTitle: string | null = null;
+  // Keyed by URL: the same PR is recorded again on every exit and resume.
+  // A Map keeps first-seen order, which is chronological.
+  const pullRequests = new Map<string, SessionPullRequest>();
   // Real conversation time bounds. Resuming a session appends untimestamped
   // bookkeeping records (last-prompt, mode, ai-title, …) which bump the file's
   // mtime without any actual activity, so mtime can't be the displayed time.
@@ -116,7 +137,7 @@ export function parseTranscript(
     const entry = parseTranscriptLine(line);
     if (!entry) continue;
 
-    if (entry.timestamp) {
+    if (entry.timestamp && marksActivity(entry)) {
       // ISO-8601 UTC strings — lexicographic comparison is chronological
       if (!firstTimestamp || entry.timestamp < firstTimestamp) firstTimestamp = entry.timestamp;
       if (!lastTimestamp || entry.timestamp > lastTimestamp) lastTimestamp = entry.timestamp;
@@ -124,6 +145,10 @@ export function parseTranscript(
     if (entry.slug && !slug) slug = entry.slug;
     if (entry.type === 'custom-title' && entry.customTitle) customTitle = entry.customTitle;
     if (entry.type === 'ai-title' && entry.aiTitle) aiTitle = entry.aiTitle;
+    if (entry.type === 'pr-link') {
+      const pr = pullRequestFromLink(entry);
+      if (pr && !pullRequests.has(pr.url)) pullRequests.set(pr.url, pr);
+    }
     if (isConversationEntry(entry)) messageCount++;
 
     const text = entryText(entry.message);
@@ -149,6 +174,7 @@ export function parseTranscript(
     slug,
     customTitle,
     aiTitle,
+    pullRequests: [...pullRequests.values()],
   };
 }
 
