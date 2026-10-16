@@ -1,0 +1,185 @@
+{
+  "data": {
+    "viewer": { "login": "joris" },
+    "repository": {
+      "pr12": {
+        "number": 12,
+        "url": "https://github.com/acme/web/pull/12",
+        "title": "Add the billing page",
+        "state": "OPEN",
+        "isDraft": false,
+        "isCrossRepository": false,
+        "mergeable": "MERGEABLE",
+        "headRefName": "feat/12-billing",
+        "headRefOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+        "baseRefName": "main",
+        "repository": { "defaultBranchRef": { "name": "main" } },
+        "headRef": { "compare": { "aheadBy": 3 } },
+        "statusCheckRollup": {
+          "contexts": {
+            "nodes": [
+              { "__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "FAILURE", "detailsUrl": "https://github.com/acme/web/actions/runs/111/job/222" },
+              { "__typename": "CheckRun", "name": "e2e", "status": "IN_PROGRESS", "conclusion": null, "detailsUrl": "https://github.com/acme/web/actions/runs/111/job/223" },
+              { "__typename": "CheckRun", "name": "publish", "status": "COMPLETED", "conclusion": "SKIPPED", "detailsUrl": "https://github.com/acme/web/actions/runs/111/job/224" },
+              { "__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "CANCELLED", "detailsUrl": null },
+              { "__typename": "StatusContext", "context": "vercel", "state": "SUCCESS", "targetUrl": "https://vercel.com/acme/web/abc" }
+            ]
+          }
+        },
+        "closingIssuesReferences": {
+          "nodes": [
+            { "number": 7, "repository": { "nameWithOwner": "acme/web" } },
+            { "number": 3, "repository": { "nameWithOwner": "acme/api" } }
+          ]
+        },
+        "reviewThreads": {
+          "nodes": [
+            {
+              "id": "PRRT_bot",
+              "path": "src/billing.ts",
+              "line": 40,
+              "originalLine": 40,
+              "diffSide": "RIGHT",
+              "isResolved": false,
+              "comments": {
+                "nodes": [
+                  { "id": "PRRC_1", "state": "SUBMITTED", "body": "Possible null dereference.", "createdAt": "2026-10-16T09:00:00Z", "author": { "__typename": "Bot", "login": "coderabbitai" } }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_app",
+              "path": "src/billing.ts",
+              "line": 52,
+              "originalLine": 52,
+              "diffSide": "RIGHT",
+              "isResolved": false,
+              "comments": {
+                "nodes": [
+                  { "id": "PRRC_2", "state": "SUBMITTED", "body": "Coverage dropped.", "createdAt": "2026-10-16T09:01:00Z", "author": { "__typename": "User", "login": "codecov[bot]" } }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_needs_you",
+              "path": "src/invoice.ts",
+              "line": 12,
+              "originalLine": 12,
+              "diffSide": "LEFT",
+              "isResolved": false,
+              "comments": {
+                "nodes": [
+                  { "id": "PRRC_3", "state": "SUBMITTED", "body": "Should we keep the old rounding?", "createdAt": "2026-10-16T10:00:00Z", "author": { "__typename": "User", "login": "sam" } },
+                  { "id": "PRRC_4", "state": "SUBMITTED", "body": "Kept it for now; this changes totals for existing invoices, so it needs your call.", "createdAt": "2026-10-16T10:20:00Z", "author": { "__typename": "User", "login": "joris" } }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_resolved",
+              "path": "src/invoice.ts",
+              "line": null,
+              "originalLine": 30,
+              "diffSide": "RIGHT",
+              "isResolved": true,
+              "comments": {
+                "nodes": [
+                  { "id": "PRRC_5", "state": "SUBMITTED", "body": "Rename this.", "createdAt": "2026-10-16T10:30:00Z", "author": { "__typename": "User", "login": "sam" } },
+                  { "id": "PRRC_6", "state": "SUBMITTED", "body": "Renamed in 1a2b3c4.", "createdAt": "2026-10-16T10:40:00Z", "author": { "__typename": "User", "login": "joris" } }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_waiting",
+              "path": "src/invoice.ts",
+              "line": 20,
+              "originalLine": 20,
+              "diffSide": "RIGHT",
+              "isResolved": false,
+              "comments": {
+                "nodes": [
+                  { "id": "PRRC_7", "state": "SUBMITTED", "body": "Add a test for zero amounts.", "createdAt": "2026-10-16T11:00:00Z", "author": { "__typename": "User", "login": "sam" } }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_pending",
+              "path": "src/billing.ts",
+              "line": 8,
+              "originalLine": 8,
+              "diffSide": "LEFT",
+              "isResolved": false,
+              "comments": {
+                "nodes": [
+                  { "id": "PRRC_8", "state": "PENDING", "body": "Why was this removed?", "createdAt": "2026-10-16T12:00:00Z", "author": { "__typename": "User", "login": "joris" } }
+                ]
+              }
+            }
+          ]
+        },
+        "reviews": {
+          "nodes": [
+            {
+              "comments": {
+                "nodes": [
+                  { "id": "PRRC_8", "path": "src/billing.ts", "line": 8, "originalLine": 8, "body": "Why was this removed?" },
+                  { "id": "PRRC_9", "path": "src/billing.ts", "line": 61, "originalLine": 61, "body": "Typo in the label." }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "pr13": {
+        "number": 13,
+        "url": "https://github.com/acme/web/pull/13",
+        "title": "Backport the rounding fix",
+        "state": "OPEN",
+        "isDraft": true,
+        "isCrossRepository": false,
+        "mergeable": "CONFLICTING",
+        "headRefName": "fix/rounding-backport",
+        "headRefOid": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
+        "baseRefName": "release/2.1",
+        "repository": { "defaultBranchRef": { "name": "main" } },
+        "headRef": { "compare": { "aheadBy": 40 } },
+        "statusCheckRollup": null,
+        "closingIssuesReferences": { "nodes": [] },
+        "reviewThreads": { "nodes": [] },
+        "reviews": { "nodes": [] }
+      },
+      "pr14": {
+        "number": 14,
+        "url": "https://github.com/acme/web/pull/14",
+        "title": "Bump dependencies",
+        "state": "MERGED",
+        "isDraft": false,
+        "isCrossRepository": false,
+        "mergeable": "UNKNOWN",
+        "headRefName": "chore/deps",
+        "headRefOid": "9988776655443322110099887766554433221100",
+        "baseRefName": "main",
+        "repository": { "defaultBranchRef": { "name": "main" } },
+        "headRef": null,
+        "statusCheckRollup": {
+          "contexts": {
+            "nodes": [
+              { "__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "SUCCESS", "detailsUrl": "https://github.com/acme/web/actions/runs/90/job/91" }
+            ]
+          }
+        },
+        "closingIssuesReferences": { "nodes": [] },
+        "reviewThreads": { "nodes": [] },
+        "reviews": { "nodes": [] }
+      },
+      "pr99": null
+    }
+  },
+  "errors": [
+    {
+      "type": "NOT_FOUND",
+      "path": ["repository", "pr99"],
+      "locations": [{ "line": 3, "column": 220 }],
+      "message": "Could not resolve to a PullRequest with the number of 99."
+    }
+  ]
+}

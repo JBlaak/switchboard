@@ -10,6 +10,20 @@
  * above this has to know the layout.
  */
 import type { Session } from '../../domain/session/session';
+import type { IssueRef } from '../../domain/session-work/model';
+
+/**
+ * A `cwd` + `gitBranch` a session's transcripts were written from.
+ *
+ * The `cwd` as written, which can be a subdirectory: resolving it to a
+ * worktree root takes git, which the store does not have.
+ */
+export interface TranscriptLocation {
+  cwd: string;
+  branch: string;
+  /** Only subagent transcripts were written from here. */
+  fromSubagent: boolean;
+}
 
 /** The identifiers a seeded transcript is written with. */
 export interface TranscriptSeed {
@@ -57,6 +71,20 @@ export interface TranscriptStore {
 
   /** A transcript's own mtime in epoch ms, for the handover timing check. */
   sessionMtimeMs(folder: string, sessionId: string): number | null;
+
+  /**
+   * Every `cwd` + `gitBranch` the session's main transcript and its
+   * `<session>/subagents/*.jsonl` were written from, once each, in the order
+   * they first appear (D6). Empty when the session has no transcript.
+   */
+  locations(folder: string, sessionId: string): TranscriptLocation[];
+
+  /**
+   * The issues the session's conversation mentions, main transcript first and
+   * then its subagents', once each. A bare `#123` is taken to be in
+   * `repository` (`owner/repo`, or '' when unknown).
+   */
+  issueMentions(folder: string, sessionId: string, repository: string): IssueRef[];
 
   /** The `slug` a session was started under, if it has one. */
   readSlug(folder: string, sessionId: string): string | null;
