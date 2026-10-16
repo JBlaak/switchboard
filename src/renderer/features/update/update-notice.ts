@@ -9,6 +9,7 @@
  * When the app cannot replace itself (a dev build, or a copy in a folder it
  * cannot write to), the button opens the release page instead.
  */
+import { onEvent } from '../../state/app-store';
 import { view } from '../../state/session-store';
 import type { UpdateNotice } from '../../../domain/update/release';
 
@@ -64,6 +65,6 @@ export function installUpdateNotice(): void {
     render();
   });
 
-  window.api.onUpdateAvailable(show);
+  onEvent('updateAvailable', ({ update }) => show(update));
   void window.api.getUpdate().then(show);
 }

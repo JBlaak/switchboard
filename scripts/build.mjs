@@ -74,14 +74,20 @@ const targets = [
   },
   {
     // The renderer is a plain browser bundle: contextIsolation is on and
-    // nodeIntegration off, so xterm and morphdom get bundled in rather than
-    // pulled from node_modules by <script src>.
+    // nodeIntegration off, so xterm, morphdom and React get bundled in rather
+    // than pulled from node_modules by <script src>.
+    //
+    // React reads process.env.NODE_ENV to decide whether to ship its dev-only
+    // checks and warnings; a one-shot build is what gets packaged, so it is
+    // production, and only the watch build keeps them.
     name: 'renderer',
     ...common,
     entryPoints: [path.join(root, 'src/renderer/index.ts')],
     outfile: path.join(out, 'renderer/renderer.js'),
     platform: 'browser',
     format: 'iife',
+    jsx: 'automatic',
+    define: { 'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : 'production') },
     loader: { '.png': 'dataurl', '.ttf': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl' },
   },
 ];

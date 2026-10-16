@@ -18,6 +18,7 @@
  */
 import { answeredCount, draftAnswers } from '../../../domain/questions/answer-draft';
 import { refreshSidebar } from '../../app/refresh';
+import { fetchWeather } from '../../app/weather';
 import { el, terminalsEl } from '../../lib/dom';
 import {
   addPendingQuestions, onQuestionsChange, questionsFor, settleQuestions,
@@ -53,7 +54,7 @@ export function installQuestions(): void {
   watchTerminals();
   setInterval(tickDoze, DOZE_TICK_MS);
 
-  void window.api.getWeather()
+  void fetchWeather()
     .then(weather => { sky = weather?.sky ?? null; panel.setSky(sky); })
     .catch(() => {});
   // Sets asked before this window loaded (or before a reload).

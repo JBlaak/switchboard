@@ -1,12 +1,17 @@
 /**
  * What the renderer knows about sessions right now.
  *
- * Four collections and one record of view state. The collections are exported
+ * Three collections and one record of view state. The collections are exported
  * directly — nothing reassigns a Map, so a live binding is all anyone needs.
- * Everything reassignable lives on `view` instead: an ES module can read an
- * imported `let` but not write to it, and a single mutable record is clearer
- * than a setter per field.
+ * They stay plain registries outside the store: `openSessions` holds xterm
+ * instances and DOM elements, and `sessionMap` and `pendingSessions` hold the
+ * shared row objects that are mutated in place, none of which an immutable
+ * store can hold. Everything reassignable lives on `view` instead, most of it
+ * now in the store (see `view-slice`).
  */
+import { dispatch, getState } from './app-store';
+import { isFilteringView } from './view-slice';
+import type { ViewState } from './view-slice';
 import type { PendingSession } from '../../domain/session/pending';
 import type { Project } from '../../domain/project/project';
 import type { SessionRow } from '../../domain/session/session';
@@ -57,79 +62,50 @@ export const pendingSessions = new Map<string, PendingSession>();
 
 // ── View state ──
 
-/**
- * The keys view state is persisted under.
- *
- * Named here because both the read and the write have to agree: they used to be
- * spelled differently at the two ends ('activeSessionId' read, but
- * 'state.activeSessionId' written), which silently stopped the open session
- * being restored after a reload.
- */
-export const STORAGE_KEYS = {
-  activeSessionId: 'activeSessionId',
-  expandedSlugs: 'expandedSlugs',
-} as const;
+export { STORAGE_KEYS, readStored, writeStored } from './storage';
+
+/** The fields of `view` that live in the store; see `view-slice`. */
+type StoredViewKey = keyof ViewState;
 
 /**
- * Web Storage, when there is any.
- *
- * The unit tests import this module in Node, where neither store exists — and a
- * browser with site data blocked throws on the property access itself, not just
- * on the call. Both are handled here so no caller has to.
+ * The fields of `view` that do not: the cached project lists hold the shared
+ * row objects every surface mutates in place, and `sortedOrder` is the
+ * renderer's own memory between two of its renders. See `view-slice` for why.
  */
-export function readStored(store: 'sessionStorage' | 'localStorage', key: string): string | null {
-  try {
-    return globalThis[store]?.getItem(key) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** Write, or forget, a persisted value. Silent when there is no storage. */
-export function writeStored(
-  store: 'sessionStorage' | 'localStorage',
-  key: string,
-  value: string | null,
-): void {
-  try {
-    if (value === null) globalThis[store]?.removeItem(key);
-    else globalThis[store]?.setItem(key, value);
-  } catch {
-    // Site data blocked; the preference simply does not persist.
-  }
-}
-
-export const view = {
-  activeSessionId: readStored('sessionStorage', STORAGE_KEYS.activeSessionId),
-
-  /** Session ids with a live PTY, as of the last poll. */
-  activePtyIds: new Set<string>(),
-
-  cachedProjects: [] as Project[],
-  cachedAllProjects: [] as Project[],
-
+interface LocalView {
+  cachedProjects: Project[];
+  cachedAllProjects: Project[];
   /** Flat render order of the session list — the source of truth between renders. */
-  sortedOrder: [] as OrderedRow[],
+  sortedOrder: OrderedRow[];
+}
 
-  // Sidebar filters
-  showArchived: false,
-  showStarredOnly: false,
-  showRunningOnly: false,
-  showTodayOnly: false,
+type View = { -readonly [K in StoredViewKey]: ViewState[K] } & LocalView;
 
-  /** null = no search active; a Set = the matched session ids. */
-  searchMatchIds: null as Set<string> | null,
-  /** Project paths matched by name, so their rows survive the filter. */
-  searchMatchProjectPaths: null as Set<string> | null,
-
-  visibleSessionCount: 25,
-  sessionMaxAgeDays: 3,
-};
+/**
+ * The view state, as the vanilla code reads and writes it.
+ *
+ * An adapter over the store: reading a stored field reads the current state,
+ * and assigning one dispatches it (as `viewPatched`), so `view.showArchived =
+ * true` keeps working and every subscriber hears about it. Collections come
+ * back read-only — `view.activePtyIds.delete(id)` would mutate the store
+ * behind its back, so it is a compile error; dispatch an event instead.
+ */
+export const view: View = (() => {
+  const local: LocalView = { cachedProjects: [], cachedAllProjects: [], sortedOrder: [] };
+  const adapter = local as View;
+  for (const key of Object.keys(getState().view) as StoredViewKey[]) {
+    Object.defineProperty(adapter, key, {
+      enumerable: true,
+      get: () => getState().view[key],
+      set: (value: unknown) => dispatch({ type: 'viewPatched', patch: { [key]: value } }),
+    });
+  }
+  return adapter;
+})();
 
 /** True when any filter or a search is narrowing the list. */
 export function isFiltering(): boolean {
-  return view.showStarredOnly || view.showRunningOnly || view.showTodayOnly
-    || view.showArchived || view.searchMatchIds !== null;
+  return isFilteringView(getState().view);
 }
 
 /**

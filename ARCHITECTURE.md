@@ -84,17 +84,45 @@ renaming a channel is a compile error rather than a runtime `undefined`.
 
 ### `src/renderer` — the driving adapter
 
-- `app/` — bootstrap, the IPC listeners, the tab router, layout, the sidebar footer
-- `state/` — the session, activity and remote-status stores
+- `app/` — bootstrap, the IPC bridge and its follow-ups, the tab router, layout,
+  the sidebar footer
+- `state/` — the store, the event union, the reducers, and the `*-store`
+  adapters the vanilla code still reads through
+- `ui/` — the React root and the `Portal` surfaces render through
 - `features/` — one folder per feature: sessions, terminal, dialogs,
   settings, panel, remote
 - `lib/` — DOM handles, formatting, icons, motion
+
+The renderer is moving to React one surface at a time, and state flows one
+way:
+
+```
+IPC push (app/ipc-bridge) ─┐
+user action ───────────────┼─▶ dispatch(RendererEvent) ─▶ reducers ─▶ store
+timer ─────────────────────┘     (state/events)         (state/*-slice)  │
+                                                                         ▼
+                        useStore(selector) in a component, or a vanilla subscriber
+terminal data ─────────▶ terminal manager (never through the store)
+```
+
+Every change is a typed `RendererEvent`; the reducers are pure and tested in
+node like the domain code. React components read with `useStore(selector)`,
+which re-renders only when the selection changes. The vanilla code that has
+not moved yet keeps its old calls through the `*-store` adapters, and what
+must still touch the DOM after an event subscribes to the store
+(`app/ipc-listeners`, `features/sessions/sidebar-activity`). The React root
+renders nothing itself: each ported surface portals into the container it
+already has in `index.html`. Registries that hold live objects — `openSessions`
+with its xterm instances, and the shared session rows — stay plain Maps
+outside the store.
 
 ## How to add something
 
 **A new thing the UI can ask for.** Add the channel to `src/ipc/channels.ts`
 and the method to `src/ipc/api.ts`; forward it in `src/preload/index.ts`;
-handle it in the matching `src/main/ipc/*-handlers.ts`.
+handle it in the matching `src/main/ipc/*-handlers.ts`. A push from main also
+needs its event in `src/renderer/state/events.ts` (the typecheck insists) and
+a line in `src/renderer/app/ipc-bridge.ts`.
 
 **A new rule.** Put it in `src/domain` and unit-test it directly — no fakes
 needed, because there is nothing to fake.

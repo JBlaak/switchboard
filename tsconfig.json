@@ -14,6 +14,9 @@
     // Bundler resolution, so imports are written without a file extension and
     // esbuild (and tsx, for the tests) resolves them to the .ts on disk.
     "moduleResolution": "bundler",
+    // The renderer's React surfaces are .tsx, compiled with the automatic
+    // runtime: no `import React` needed for JSX. esbuild is set the same way.
+    "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
 
     "strict": true,

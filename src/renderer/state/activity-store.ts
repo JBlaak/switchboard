@@ -1,38 +1,39 @@
 /**
- * What each session currently wants from the user.
+ * What each session currently wants from the user, as the vanilla code reads
+ * it.
  *
- * Three states, and the transitions between them are the whole point:
+ * The state and its rules live in the store now (see `activity-slice`); this
+ * is the adapter that keeps the old reads and calls working. The four
+ * collections are read-only views of the current state, and the remaining
+ * calls dispatch.
  *
- *   working        a CLI turn is in flight
- *   ready          it finished, and the user has not looked yet
- *   needs input    it is blocked on the user (an OSC 9 notification)
- *
- * Two signals feed this. The OSC 0 title spinner is authoritative and comes
- * from the main process, which already de-duplicates it into transitions. The
- * OSC 9 notifications are what the CLI sends when it actually needs someone.
- *
- * Alongside the state, which subagents the session has working (OSC 7501's
- * child records, de-duplicated in the main process like the busy state).
- *
- * The classes are toggled on the row directly as well as being recorded here,
- * because a state change usually does not warrant a re-render — but a
- * working↔ready flip moves the row between sections, and a row's section is
- * only recomputed by a render.
+ * Nothing here writes to the DOM any more. The sidebar subscribes and puts the
+ * classes on its rows itself (`features/sessions/sidebar-activity`).
  */
 import { sessionTier } from '../../domain/session/tiers';
+import { dispatch, getState } from './app-store';
 import { pendingSessions, view } from './session-store';
 import { askingCount } from './question-store';
+import { hasEntry } from './records';
 import type { SessionSignals } from '../../domain/session/tiers';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 
 /** Sessions blocked on the user, per OSC 9. */
-export const attentionSessions = new Set<string>();
+export const attentionSessions = {
+  has: (sessionId: string): boolean => hasEntry(getState().activity.attention, sessionId),
+};
 /** Sessions that finished a turn the user has not looked at. */
-export const responseReadySessions = new Set<string>();
+export const responseReadySessions = {
+  has: (sessionId: string): boolean => hasEntry(getState().activity.ready, sessionId),
+};
 /** sessionId → whether a CLI turn is currently in flight. */
-export const sessionBusyState = new Map<string, boolean>();
+export const sessionBusyState = {
+  get: (sessionId: string): boolean | undefined => getState().activity.busy[sessionId],
+};
 /** sessionId → the subagents it has working. Absent means none. */
-export const sessionAgents = new Map<string, readonly WorkingAgent[]>();
+export const sessionAgents = {
+  get: (sessionId: string): readonly WorkingAgent[] | undefined => getState().activity.agents[sessionId],
+};
 
 /** The live signals for one session, as the ranking rules want them. */
 export function signalsFor(sessionId: string): SessionSignals {
@@ -52,87 +53,12 @@ export function tierOf(sessionId: string): number {
   return sessionTier(signalsFor(sessionId));
 }
 
-function rowFor(sessionId: string): HTMLElement | null {
-  return document.querySelector<HTMLElement>(`.session-item[data-session-id="${sessionId}"]`);
-}
-
-/**
- * Record a busy↔idle transition.
- *
- * Answers true when the session moved between sections, so the caller knows a
- * re-render is owed. Only real transitions reach here — the main process
- * de-duplicates the title stream — so this stays cheap.
- */
-export function setActivity(sessionId: string, active: boolean): boolean {
-  // A turn starting again supersedes an unread answer: the row goes back to
-  // working. Only an idle signal is ignored while unread — otherwise a late
-  // idle repaint would clear a mark the user has not seen yet.
-  if (responseReadySessions.has(sessionId)) {
-    if (!active) return false;
-    responseReadySessions.delete(sessionId);
-    rowFor(sessionId)?.classList.remove('response-ready');
-  }
-
-  const wasActive = sessionBusyState.get(sessionId) === true;
-  sessionBusyState.set(sessionId, active);
-
-  // Activity ended → ready, but only if the user is not looking at it: a
-  // session on screen has been read by definition.
-  if (wasActive && !active && sessionId !== view.activeSessionId) {
-    responseReadySessions.add(sessionId);
-    const row = rowFor(sessionId);
-    row?.classList.remove('cli-busy');
-    row?.classList.add('response-ready');
-  }
-
-  if (!responseReadySessions.has(sessionId)) {
-    rowFor(sessionId)?.classList.toggle('cli-busy', active);
-  }
-
-  return wasActive !== active;
-}
-
-/** Mark a session as needing the user, unless they are already looking at it. */
-export function markNeedsAttention(sessionId: string): void {
-  if (sessionId === view.activeSessionId) return;
-  attentionSessions.add(sessionId);
-  rowFor(sessionId)?.classList.add('needs-attention');
-}
-
-/**
- * Record the agents a session has working.
- *
- * Only the record: the row's badge is markup, so the caller redraws it — see
- * `writeAgentsBadge`. The count never moves a row between sections, so no
- * re-render is owed.
- */
-export function setSessionAgents(sessionId: string, agents: readonly WorkingAgent[]): void {
-  if (agents.length > 0) sessionAgents.set(sessionId, agents);
-  else sessionAgents.delete(sessionId);
-}
-
-export function clearUnread(sessionId: string): void {
-  responseReadySessions.delete(sessionId);
-  rowFor(sessionId)?.classList.remove('response-ready');
-}
-
 /** Clear everything for a session — it stopped, or the row is going away. */
 export function clearActivity(sessionId: string): void {
-  attentionSessions.delete(sessionId);
-  responseReadySessions.delete(sessionId);
-  sessionBusyState.delete(sessionId);
-  // A CLI that died without its final `clear` would otherwise leave its
-  // agents on the row for good.
-  sessionAgents.delete(sessionId);
-  const row = rowFor(sessionId);
-  row?.classList.remove('response-ready', 'cli-busy');
-  if (askingCount(sessionId) === 0) row?.classList.remove('needs-attention');
-  row?.querySelector('.session-agents')?.remove();
+  dispatch({ type: 'activityCleared', sessionId });
 }
 
 /** The user is now looking at this session, so nothing about it is unread. */
 export function clearNotifications(sessionId: string): void {
-  clearUnread(sessionId);
-  attentionSessions.delete(sessionId);
-  if (askingCount(sessionId) === 0) rowFor(sessionId)?.classList.remove('needs-attention');
+  dispatch({ type: 'sessionViewed', sessionId });
 }
