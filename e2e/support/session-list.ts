@@ -215,3 +215,25 @@ export function collectDialogs(page: Page, accept = true): string[] {
   });
   return messages;
 }
+
+/**
+ * Whatever the keyboard cursor is on: a row, a group header or a "more"
+ * toggle.
+ *
+ * The cursor has no accessible handle — it is a highlight, not a selection
+ * the platform knows about — so this is the one place that names its class.
+ */
+export function keyboardCursor(page: Page): Locator {
+  return listScroller(page).locator('.kbd-cursor');
+}
+
+/**
+ * Make one IPC handler never answer, so whatever waits on it stays waiting —
+ * a row archived through it stays mid-exit for the rest of the test.
+ */
+export async function hangInvoke(app: ElectronApplication, channel: keyof typeof INVOKE): Promise<void> {
+  await app.evaluate(({ ipcMain }, channel) => {
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, () => new Promise(() => {}));
+  }, INVOKE[channel]);
+}
