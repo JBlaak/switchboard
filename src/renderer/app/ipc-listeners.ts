@@ -14,7 +14,6 @@
  * which a re-key relies on (see `onSessionForked`).
  */
 import { refreshSidebar, reloadProjects } from './refresh';
-import { setStatusActivity } from './status-bar';
 import {
   dropPendingSession, writeExitBanner,
 } from '../features/sessions/session-actions';
@@ -57,7 +56,6 @@ export function installIpcListeners(): void {
     handleRemoteStatus(sessionId, status, previous.remote.statuses[sessionId]);
   });
   onEvent('projectsChanged', onProjectsChanged);
-  onEvent('statusUpdate', ({ text, kind }) => setStatusActivity(text, kind));
 
   // Fullscreen hides the macOS traffic lights, so the space the collapsed
   // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.

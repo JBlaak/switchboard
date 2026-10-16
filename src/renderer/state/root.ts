@@ -9,17 +9,25 @@
  * follow at once (see `rekeyState`).
  */
 import { activityReducer, initialActivityState, rekeyActivity } from './activity-slice';
+import { dialogReducer, initialDialogState } from './dialog-slice';
 import { initialKeysState, keysReducer, rekeyKeys } from './keys-slice';
 import { initialQuestionsState, questionsReducer, rekeyQuestions } from './questions-slice';
 import { initialRemoteState, rekeyRemote, remoteReducer } from './remote-slice';
+import { initialSettingsState, settingsReducer } from './settings-slice';
+import { initialStatusState, statusReducer } from './status-slice';
+import { initialUpdateState, updateReducer } from './update-slice';
 import { initialTerminalState, rekeyTerminal, terminalReducer } from './terminal-slice';
 import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, rekeyView, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
+import type { DialogState } from './dialog-slice';
+import type { RendererEvent } from './events';
 import type { KeysState } from './keys-slice';
 import type { QuestionsState } from './questions-slice';
 import type { RemoteState } from './remote-slice';
-import type { RendererEvent } from './events';
+import type { SettingsState } from './settings-slice';
+import type { StatusState } from './status-slice';
+import type { UpdateState } from './update-slice';
 import type { TerminalState } from './terminal-slice';
 import type { UsageState } from './usage-slice';
 import type { ViewState } from './view-slice';
@@ -30,7 +38,11 @@ export interface RendererState {
   readonly questions: QuestionsState;
   readonly remote: RemoteState;
   readonly usage: UsageState;
+  readonly dialog: DialogState;
+  readonly settings: SettingsState;
   readonly keys: KeysState;
+  readonly status: StatusState;
+  readonly update: UpdateState;
   readonly terminal: TerminalState;
 }
 
@@ -41,7 +53,11 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     questions: initialQuestionsState,
     remote: initialRemoteState,
     usage: initialUsageState,
+    dialog: initialDialogState,
+    settings: initialSettingsState,
     keys: initialKeysState,
+    status: initialStatusState,
+    update: initialUpdateState,
     terminal: initialTerminalState,
   };
 }
@@ -57,9 +73,14 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const remote = remoteReducer(state.remote, event);
   const usage = usageReducer(state.usage, event);
   const keys = keysReducer(state.keys, event);
+  const status = statusReducer(state.status, event);
+  const update = updateReducer(state.update, event);
+  const settings = settingsReducer(state.settings, event);
+  const dialog = dialogReducer(state.dialog, event);
+
   const terminal = terminalReducer(state.terminal, event);
 
-  return settle(state, { view, activity, questions, remote, usage, keys, terminal });
+  return settle(state, { view, activity, questions, remote, usage, keys, status, update, settings, dialog, terminal });
 }
 
 /**
@@ -83,6 +104,10 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     remote: rekeyRemote(state.remote, oldId, newId),
     usage: state.usage,
     keys: rekeyKeys(state.keys, oldId, newId),
+    status: state.status,
+    update: state.update,
+    settings: state.settings,
+    dialog: state.dialog,
     terminal: rekeyTerminal(state.terminal, oldId, newId),
   });
 }

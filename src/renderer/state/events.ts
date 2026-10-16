@@ -17,6 +17,9 @@ import type { UpdateNotice } from '../../domain/update/release';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ViewState } from './view-slice';
+import type { DialogRequest } from './dialog-slice';
+import type { SettingsRecord, SettingsScope } from './settings-slice';
+import type { ShellProfile } from '../../domain/shell/shell-profile';
 
 // ── Pushed by the main process ──
 
@@ -68,6 +71,35 @@ export type LocalEvent =
   | { type: 'usageFetched'; rows: readonly UsageLimit[] }
   /** The usage fetch failed; what is known stays, but it counts as loaded. */
   | { type: 'usageFailed' }
+  /** Open a modal dialog, replacing any that is open. */
+  | { type: 'dialogOpened'; request: DialogRequest }
+  /** Close the dialog opened as `seq`; a stale close from a replaced one does nothing. */
+  | { type: 'dialogClosed'; seq: number }
+  /** The settings panel opened on a scope, with what is stored for it. */
+  | {
+    type: 'settingsOpened';
+    scope: SettingsScope;
+    projectPath: string | null;
+    current: SettingsRecord;
+    globalSettings: SettingsRecord;
+    shellProfiles: readonly ShellProfile[];
+    appVersion: string | null;
+  }
+  /** The settings panel's Save went through. */
+  | { type: 'settingsSaved' }
+  /** The settings panel closed, or the terminal took its place. */
+  | { type: 'settingsClosed' }
+  /** The project list loaded with this many sessions running. */
+  | { type: 'runningCounted'; running: number }
+  /** A done status message has lingered long enough. */
+  | { type: 'statusActivityExpired' }
+  /** The renderer asked main for a waiting update at launch. */
+  | { type: 'updateChecked'; update: UpdateNotice | null }
+  /** The user hid the update notice for this version. */
+  | { type: 'updateDismissed'; version: string }
+  | { type: 'updateInstallStarted' }
+  /** Main answered the install, which means it did not quit to finish it. */
+  | { type: 'updateInstallFailed' }
   // The terminals' chrome; see `terminal-slice`. Never the byte stream.
   /** A terminal was created for a session; `slotId` keys its container. */
   | { type: 'terminalOpened'; sessionId: string; slotId: number }

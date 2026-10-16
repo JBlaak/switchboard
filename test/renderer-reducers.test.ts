@@ -63,9 +63,10 @@ test('every push event reduces without mutating the state it was given', () => {
 });
 
 test('pushes that are only prompts to act leave the state as it was', () => {
-  // These have follow-ups (a banner, a re-fetch, a class on <html>, a notice)
-  // but nothing for the store to record.
-  for (const type of ['processExited', 'projectsChanged', 'statusUpdate', 'fullscreenChanged', 'updateAvailable'] as const) {
+  // These have follow-ups (a banner, a re-fetch, a class on <html>) but
+  // nothing for the store to record. The status line and the update notice
+  // are in the store now; see footer-slices.test.ts.
+  for (const type of ['processExited', 'projectsChanged', 'fullscreenChanged'] as const) {
     const state = initial();
     assert.strictEqual(rootReducer(state, SAMPLES[type]), state, type);
   }

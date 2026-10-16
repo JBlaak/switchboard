@@ -84,11 +84,11 @@ renaming a channel is a compile error rather than a runtime `undefined`.
 
 ### `src/renderer` — the driving adapter
 
-- `app/` — bootstrap, the IPC bridge and its follow-ups, the tab router, layout,
-  the sidebar footer
+- `app/` — bootstrap, the IPC bridge and its follow-ups, the tab router, layout
 - `state/` — the store, the event union, the reducers, and the `*-store`
   adapters the vanilla code still reads through
-- `ui/` — the React root and the `Portal` surfaces render through
+- `ui/` — the React root, the `Portal` surfaces render through, and one
+  folder per ported surface (`footer/`)
 - `features/` — one folder per feature: sessions, terminal, dialogs,
   settings, panel, remote
 - `lib/` — DOM handles, formatting, icons, motion
@@ -137,8 +137,14 @@ needed, because there is nothing to fake.
 `src/application/ports/`, use it from a service, implement it in
 `src/infrastructure/`, and wire it in `composition-root.ts`.
 
-**A new UI surface.** A folder under `src/renderer/features/`, installed from
-`src/renderer/app/bootstrap.ts`.
+**A new UI surface.** A folder under `src/renderer/ui/`, the way `footer/` is
+laid out: components in `.tsx` files, rendered from `Root.tsx` through a
+`<Portal>` into the surface's container in `index.html`; an `actions.ts` that
+calls `window.api` and dispatches the answer, which is all the components
+call; and, if the surface has timers or launch-time fetches, an
+`install-*.ts` that starts them from `bootstrap.ts` and dispatches events, so
+they stay out of React's (StrictMode-doubled) effects. Its state is a slice
+in `state/`, tested in node.
 
 ## Testing
 
