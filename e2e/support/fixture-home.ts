@@ -170,11 +170,15 @@ export function fixtureHome(spec: FixtureSpec = {}): FixtureHome {
  * whole path as well as the label, so a suffix that happened to spell out the
  * query (an "api" across "sb-e2e-zpIbS9" and the temp dir above it) made an
  * unrelated project match, about one run in seventy.
+ *
+ * Under `/tmp` rather than `os.tmpdir()` for the same reason: on macOS that is
+ * `/var/folders/<random>/T`, and a machine whose random part spelled a query
+ * would fail every run. `/tmp` resolves to `/private/tmp`, the same everywhere.
  */
 function makeRoot(): string {
   for (;;) {
     const name = 'sb-e2e-' + process.pid + '-' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0');
-    const dir = path.join(os.tmpdir(), name);
+    const dir = path.join('/tmp', name);
     try {
       fs.mkdirSync(dir, { mode: 0o700 });
       return dir;
