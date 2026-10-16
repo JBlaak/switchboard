@@ -34,6 +34,17 @@ export interface Session {
   slug: string | null;
   customTitle: string | null;
   aiTitle: string | null;
+  /** PRs the conversation created or linked, chronological, one per URL. */
+  pullRequests: SessionPullRequest[];
+}
+
+/** A pull request a session created or linked, from its transcript's `pr-link` lines. */
+export interface SessionPullRequest {
+  number: number;
+  /** Always https — it is what a click on the row's chip opens. */
+  url: string;
+  /** `owner/repo`; '' when the transcript did not say. */
+  repository: string;
 }
 
 /** User-controlled per-session state, stored outside the transcript. */
@@ -79,6 +90,8 @@ export interface SessionRow {
   messageCount: number;
   slug?: string | null;
   aiTitle?: string | null;
+  /** Absent on rows that never came from a transcript (terminals, pending rows). */
+  pullRequests?: SessionPullRequest[];
   name: string | null;
   starred: number;
   archived: number;
@@ -107,6 +120,7 @@ export function toSessionRow(cached: CachedSession, meta: SessionMeta | null | u
     projectPath: cached.projectPath,
     slug: cached.slug || null,
     aiTitle: cached.aiTitle || null,
+    pullRequests: cached.pullRequests ?? [],
     name: meta?.name || null,
     starred: meta?.starred || 0,
     archived: meta?.archived || 0,
