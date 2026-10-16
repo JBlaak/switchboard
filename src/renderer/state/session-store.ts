@@ -31,8 +31,6 @@ export interface OpenSession {
   closed?: boolean;
   /** Set while the PTY has switched to the alternate screen buffer. */
   altScreen?: boolean;
-  /** The connection card, built lazily for remote sessions only. */
-  remoteCard?: HTMLElement;
   [key: string]: unknown;
 }
 

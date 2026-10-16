@@ -243,3 +243,29 @@ export async function failStopSession(app: ElectronApplication, error: string): 
     ipcMain.handle(channel, () => ({ ok: false, error }));
   }, { channel: INVOKE.stopSession, error });
 }
+
+/**
+ * Answer every "reconnect now" request with `result` instead of acting on it,
+ * and remember which sessions asked. For the card's Retry button: what the
+ * click asks main for is the thing under test, and a real early redial would
+ * race the backoff it short-circuits.
+ */
+export async function stubReconnectRemote(app: ElectronApplication, result: { ok: boolean }): Promise<void> {
+  await app.evaluate(({ ipcMain }, { channel, result }) => {
+    const state = (globalThis as typeof globalThis & { __switchboardE2E: { reconnects?: string[] } }).__switchboardE2E;
+    state.reconnects = [];
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, (_event, sessionId) => {
+      state.reconnects!.push(String(sessionId));
+      return result;
+    });
+  }, { channel: INVOKE.reconnectRemote, result });
+}
+
+/** The sessions the renderer asked to reconnect since `stubReconnectRemote`. */
+export async function reconnectRequests(app: ElectronApplication): Promise<string[]> {
+  return await app.evaluate(() => {
+    const state = (globalThis as typeof globalThis & { __switchboardE2E: { reconnects?: string[] } }).__switchboardE2E;
+    return [...(state.reconnects ?? [])];
+  });
+}
