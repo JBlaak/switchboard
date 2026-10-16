@@ -93,6 +93,53 @@ npm start
 npm run electron
 ```
 
+## End-to-end tests
+
+`e2e/` drives the built app with Playwright's Electron support. Each test gets
+its own temporary `HOME` holding a fixture `~/.claude/projects`, its own
+`SWITCHBOARD_DATA_DIR`, and fake `claude` and `ssh` commands on the session
+shell's `PATH`, so nothing touches your real sessions or settings and no real
+CLI or network is needed.
+
+```bash
+npm run test:e2e                          # build, then run the whole suite
+npm run test:e2e -- e2e/tests/sidebar.spec.ts --grep "pinned"
+npm run test:e2e -- --update-snapshots    # rewrite the screenshot baselines
+```
+
+A window opens for each test (a few at a time); leave it alone while it runs.
+`SB_E2E_SKIP_SCREENSHOTS=1` runs every functional assertion but skips the
+pixel comparisons. CI does that: the baselines are rendered on a developer's
+Mac, and a runner's macOS version and GPU draw text differently enough to fail
+them. Run the screenshots locally before you push.
+
+**Baselines** live in `e2e/tests/__screenshots__/<spec>/<name>-<light|dark>-darwin.png`,
+one per surface and colour scheme. Update them only for an intended visual
+change, look at every changed image before committing it, and say in the PR
+why it changed. A port that needs a baseline updated has changed the UI.
+
+**Fixture sessions** are built in code, not committed as JSONL.
+`e2e/fixtures/standard.ts` is the shared fixture: add a session there as one
+object (a stable id from `sessionId('name')`, a prompt, a time such as
+`hoursAgo(2)`, and optionally `pinned`, `archived`, `slug`, `pullRequests`,
+`name`, `cwd` for a worktree). Times are relative to a fixed `FIXTURE_NOW`, and
+the renderer's clock is frozen there, so "2h ago" is stable. A test that needs
+a different world passes its own spec with `test.use({ fixture: … })`.
+
+**The helpers** are in `e2e/support/`: `fakeClaude(home, id)` and
+`fakeSsh(home, id)` script the fake CLIs (titles, busy/idle, OSC 7501, OSC 9
+notifications, output, transcript lines, a fork, an exit code),
+`askQuestions` posts an AskUserQuestion to the session's hook,
+`pushRemoteStatus` puts the connection card in any phase, and
+`expectScreen` takes a whole-window screenshot.
+
+**Porting a surface.** The first commit of a PR that ports part of the UI adds
+characterization tests for its issue's checklist and must pass on the current,
+vanilla renderer. The port comes in later commits, with those tests unchanged
+and the baselines still matching. Find elements by role, label or text; where
+the vanilla markup has no accessible handle, add a `data-testid` to it in that
+first commit.
+
 ## Building
 
 All build commands build the app first, then invoke electron-builder.

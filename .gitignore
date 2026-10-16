@@ -12,3 +12,7 @@ dev-app-update.yml
 # Anchored to the root: the build output. Unanchored, this would also match
 # any nested directory called `app` — it silently swallowed src/renderer/app/.
 /app/
+
+# End-to-end run output (see e2e/playwright.config.ts).
+/test-results/
+/playwright-report/

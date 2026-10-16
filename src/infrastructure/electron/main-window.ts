@@ -65,6 +65,9 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
     width: bounds.width,
     height: bounds.height,
     ...MIN_BOUNDS,
+    // The e2e harness sizes the window to its baselines, which on a CI Mac's
+    // small virtual display would otherwise be clipped to the work area.
+    ...(process.env.SWITCHBOARD_E2E === '1' ? { enableLargerThanScreen: true } : {}),
     title: 'Switchboard',
     icon: path.join(deps.appDir, '..', 'build', 'icon.png'),
     ...windowChromeOptions(),
