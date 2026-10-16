@@ -126,7 +126,10 @@ async function quit(app: ElectronApplication): Promise<void> {
   });
   const outcome = await Promise.race([app.close().catch(() => 'closed' as const), timedOut]);
   clearTimeout(timer);
-  if (outcome === 'timeout') app.process().kill('SIGKILL');
+  // The process can be gone already by the time the timeout fires.
+  if (outcome === 'timeout') {
+    try { app.process()?.kill('SIGKILL'); } catch { /* already exited */ }
+  }
 }
 
 /**
