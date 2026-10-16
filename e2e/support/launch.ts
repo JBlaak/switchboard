@@ -92,7 +92,7 @@ export async function launchApp(
     await installHostStubs(app, { ...DEFAULT_STUBS, ...stubs });
     await settleWindow(app, page, fakeTimers);
   } catch (err) {
-    await app.close().catch(() => {});
+    await quit(app);
     throw err;
   }
 
@@ -103,9 +103,30 @@ export async function launchApp(
       // Quitting (not closing the window, which on macOS leaves the app in the
       // Dock) runs the app's before-quit, which signals every session's
       // process group — so the fake CLIs go with it.
-      await app.close().catch(() => {});
+      await quit(app);
     },
   };
+}
+
+/** How long a quit may take before the app is killed instead. */
+const QUIT_TIMEOUT_MS = 10_000;
+
+/**
+ * Quit the app, and kill it if it will not go.
+ *
+ * On a loaded CI Mac a quit now and then never finishes, and Playwright then
+ * waits out its whole worker teardown and fails the run with no test to blame.
+ * Killing the main process closes the PTYs' masters, which hangs up the
+ * sessions still under them.
+ */
+async function quit(app: ElectronApplication): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<'timeout'>((resolve) => {
+    timer = setTimeout(() => resolve('timeout'), QUIT_TIMEOUT_MS);
+  });
+  const outcome = await Promise.race([app.close().catch(() => 'closed' as const), timedOut]);
+  clearTimeout(timer);
+  if (outcome === 'timeout') app.process().kill('SIGKILL');
 }
 
 /**
