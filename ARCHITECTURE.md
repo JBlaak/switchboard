@@ -33,6 +33,7 @@ remote-status rules the main process does instead of a parallel copy.
 | | |
 |---|---|
 | `session/` | what a session is, how its transcript parses, which of its names wins, how rows are ranked and truncated, when a pending row is abandoned, how a fork is recognised |
+| `session-work/` | a session's footprint for the Session work page: its work items, the unified-diff parser and which files start collapsed, the Ship it steps, the auto-fix limit, the PR status dot, and the prompts every action types |
 | `project/` | project-path encoding and shortening, `ssh://` identity, assembling the project list |
 | `remote/` | the SSH reconnect policy, the ssh command, connection status |
 | `terminal/` | OSC parsing (busy/idle/notifications), the output ring buffer, the banners Switchboard writes itself |
