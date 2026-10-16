@@ -117,6 +117,13 @@ async function settleWindow(app: ElectronApplication, page: Page): Promise<void>
     window.setContentSize(size.width, size.height);
     window.center();
   }, WINDOW_SIZE);
+  if (process.env.CI) {
+    const actual = await app.evaluate(({ BrowserWindow, screen }) => ({
+      content: BrowserWindow.getAllWindows()[0].getContentSize(),
+      workArea: screen.getPrimaryDisplay().workAreaSize,
+    }));
+    console.log('[e2e] window', JSON.stringify(actual));
+  }
 
   await page.context().clock.setFixedTime(FIXTURE_NOW);
   // colorScheme: null, explicitly. Playwright otherwise emulates `light` along
