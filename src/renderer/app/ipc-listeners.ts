@@ -1,11 +1,17 @@
 /**
- * Everything the main process pushes at the renderer.
+ * What the renderer does after the main process pushed something.
  *
- * All in one place because the interesting part is not any single handler but
- * the fact that these are the only unprompted inputs the UI has — the terminal
- * stream, a session changing identity underneath us, a connection breaking, the
- * project list changing on disk. Each one delegates immediately; nothing is
- * decided here.
+ * The pushes arrive through the bridge (`ipc-bridge`) and the reducers record
+ * what they change; what is left here is the follow-up that state alone does
+ * not cover — re-keying the terminal registry, redrawing when a row changed
+ * section, the scrollback banners, a debounced re-fetch. Each handler is a
+ * store subscriber for one event, so it runs with the state already updated
+ * and the state from before it in hand.
+ *
+ * Subscribers rather than functions the bridge calls, so the bridge stays a
+ * plain event source and a React surface can later replace any one of these
+ * by subscribing for itself. Installed before the question panel's listener,
+ * which a re-key relies on (see `onSessionForked`).
  */
 import { refreshSidebar, reloadProjects } from './refresh';
 import { setStatusActivity } from './status-bar';
@@ -16,12 +22,10 @@ import {
 import { pollActiveSessions } from '../features/sessions/session-poller';
 import { setHeaderIdentity, showHeaderNotice } from '../features/sessions/terminal-header';
 import { handleRemoteStatus } from '../features/remote/connection-card';
-import { markNeedsAttention, setActivity, setSessionAgents } from '../state/activity-store';
-import { writeAgentsBadge } from '../features/sessions/sidebar-row';
-import { openSessions, pendingSessions, sessionMap, view } from '../state/session-store';
-import { addPendingQuestions, rekeyQuestions, settleQuestions } from '../state/question-store';
-import { bufferTerminalData } from '../features/terminal/terminal-manager';
-import type { WorkingAgent } from '../../domain/terminal/program-status-children';
+import { busyChanged } from '../state/activity-slice';
+import { onEvent } from '../state/app-store';
+import { openSessions, pendingSessions, sessionMap } from '../state/session-store';
+import type { RendererState } from '../state/root';
 
 /**
  * How long to wait before re-fetching after a filesystem change.
@@ -31,34 +35,33 @@ import type { WorkingAgent } from '../../domain/terminal/program-status-children
  */
 const PROJECTS_CHANGED_DEBOUNCE_MS = 300;
 
-/** Notifications that mean the CLI is waiting for a person. */
-const NEEDS_ATTENTION = /attention|approval|permission|needs your|wants to enter/i;
-/** …and the one that is really a late idle signal. */
-const WAITING_FOR_INPUT = /waiting for your input/i;
-
 let projectsChangedTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function installIpcListeners(): void {
-  window.api.onTerminalData(bufferTerminalData);
-  window.api.onProcessExited(onProcessExited);
-  window.api.onSessionForked(onSessionForked);
-  window.api.onCliBusyState(onCliBusyState);
-  window.api.onTerminalNotification(onTerminalNotification);
-  // OSC 7501's `blocked`: the same flag the OSC 9 permission text raises, but
-  // stated outright. Both can arrive for one prompt; marking twice is harmless.
-  window.api.onSessionNeedsAttention(markNeedsAttention);
-  window.api.onSessionAgents(onSessionAgents);
-  window.api.onRemoteStatus(handleRemoteStatus);
-  window.api.onProjectsChanged(onProjectsChanged);
-  window.api.onStatusUpdate(setStatusActivity);
-  // Claude's AskUserQuestion, held by the hook until it is answered here or
-  // given up on; see features/questions.
-  window.api.onQuestionsAsked(addPendingQuestions);
-  window.api.onQuestionsSettled(settleQuestions);
+  onEvent('processExited', ({ sessionId, exitCode }) => onProcessExited(sessionId, exitCode));
+  onEvent('sessionForked', ({ oldId, newId }, _state, previous) => onSessionForked(oldId, newId, previous));
+
+  // A working↔ready flip moves the row between sections, and a row's section
+  // is only recomputed by a render — the class alone would leave it stranded
+  // under its old heading. Not a re-sort: the open session keeps its slot.
+  onEvent('cliBusyState', ({ sessionId }, state, previous) => {
+    if (busyChanged(previous.activity, state.activity, sessionId)) refreshSidebar();
+  });
+  onEvent('terminalNotification', ({ sessionId, message }, state, previous) => {
+    // "Waiting for your input" settles the session; see `activityReducer`.
+    if (busyChanged(previous.activity, state.activity, sessionId)) refreshSidebar();
+    if (sessionId === state.view.activeSessionId) showHeaderNotice(message);
+  });
+
+  onEvent('remoteStatus', ({ sessionId, status }, _state, previous) => {
+    handleRemoteStatus(sessionId, status, previous.remote.statuses[sessionId]);
+  });
+  onEvent('projectsChanged', onProjectsChanged);
+  onEvent('statusUpdate', ({ text, kind }) => setStatusActivity(text, kind));
 
   // Fullscreen hides the macOS traffic lights, so the space the collapsed
   // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.
-  window.api.onFullscreenChanged((isFullscreen) => {
+  onEvent('fullscreenChanged', ({ isFullscreen }) => {
     document.documentElement.classList.toggle('fullscreen', isFullscreen);
   });
 }
@@ -68,19 +71,17 @@ export function installIpcListeners(): void {
  *
  * Everything holding the old id has to move across — the pending row too,
  * which has to follow so the sidebar entry survives until the store catches up.
+ * The store has already moved the session's questions; the panel hears about
+ * that after this has run, so it finds the terminal under the new id.
  */
-function onSessionForked(oldId: string, newId: string): void {
+function onSessionForked(oldId: string, newId: string, previous: RendererState): void {
   const entry = openSessions.get(oldId);
-  if (!entry) {
-    rekeyQuestions(oldId, newId);
-    return;
-  }
+  if (!entry) return;
 
   entry.session.sessionId = newId;
-  if (view.activeSessionId === oldId) setActiveSession(newId);
+  if (previous.view.activeSessionId === oldId) setActiveSession(newId);
   openSessions.delete(oldId);
   openSessions.set(newId, entry);
-  rekeyQuestions(oldId, newId);
 
   const pending = pendingSessions.get(oldId);
   pendingSessions.delete(oldId);
@@ -134,45 +135,6 @@ function onProcessExited(sessionId: string, exitCode: number): void {
   if (pending && !pending.exitedAt) pending.exitedAt = Date.now();
 
   void pollActiveSessions();
-}
-
-function onCliBusyState(sessionId: string, busy: boolean): void {
-  // A working↔ready flip moves the row between sections, and a row's section is
-  // only recomputed by a render — toggling a class alone would leave it
-  // stranded under its old heading. Not a re-sort: the open session keeps its
-  // slot.
-  if (setActivity(sessionId, busy)) refreshSidebar();
-}
-
-/**
- * The subagents a session has working changed.
- *
- * Redrawn on the row in place: the count says nothing about which section the
- * row belongs in, so a render would buy nothing.
- */
-function onSessionAgents(sessionId: string, agents: WorkingAgent[]): void {
-  setSessionAgents(sessionId, agents);
-  const row = document.querySelector<HTMLElement>(`.session-item[data-session-id="${sessionId}"]`);
-  if (row) writeAgentsBadge(row, agents);
-}
-
-/**
- * A notification from the CLI.
- *
- * Four of the CLI's messages mean "a person is needed": needs your attention,
- * needs your approval for the plan, needs your permission to use a tool, and
- * wants to enter plan mode. A fifth — "waiting for your input" — is a late idle
- * signal rather than a request, so it settles the session instead of flagging
- * it.
- */
-function onTerminalNotification(sessionId: string, message: string): void {
-  if (NEEDS_ATTENTION.test(message)) {
-    markNeedsAttention(sessionId);
-  } else if (WAITING_FOR_INPUT.test(message)) {
-    if (setActivity(sessionId, false)) refreshSidebar();
-  }
-
-  if (sessionId === view.activeSessionId) showHeaderNotice(message);
 }
 
 /** The transcripts on disk changed. */

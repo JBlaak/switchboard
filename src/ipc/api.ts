@@ -20,6 +20,9 @@ import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
 import type { Weather, WeatherLocation } from '../domain/weather/weather';
 
+/** Removes the listener an `on*` subscription added. */
+export type Unsubscribe = () => void;
+
 /** The `{ ok }`/`{ error }` envelope most handlers answer with. */
 export interface IpcResult {
   ok?: boolean;
@@ -105,20 +108,22 @@ export interface SwitchboardApi {
   closeTerminal(id: string): void;
 
   // ── Events from main ──
-  onTerminalData(cb: (sessionId: string, data: string) => void): void;
-  onProcessExited(cb: (sessionId: string, exitCode: number) => void): void;
-  onSessionForked(cb: (oldId: string, newId: string) => void): void;
-  onCliBusyState(cb: (sessionId: string, busy: boolean) => void): void;
-  onTerminalNotification(cb: (sessionId: string, message: string) => void): void;
-  onSessionNeedsAttention(cb: (sessionId: string) => void): void;
-  onSessionAgents(cb: (sessionId: string, agents: WorkingAgent[]) => void): void;
-  onRemoteStatus(cb: (sessionId: string, status: RemoteStatusPayload) => void): void;
-  onQuestionsAsked(cb: (pending: PendingQuestions) => void): void;
-  onQuestionsSettled(cb: (settled: QuestionsSettled) => void): void;
-  onProjectsChanged(cb: () => void): void;
-  onStatusUpdate(cb: (text: string, type: string) => void): void;
-  onFullscreenChanged(cb: (isFullscreen: boolean) => void): void;
-  onUpdateAvailable(cb: (update: UpdateNotice) => void): void;
+  // Each answers its unsubscribe, so a listener can be removed again (StrictMode
+  // mounts twice; a hot reload re-installs the bridge).
+  onTerminalData(cb: (sessionId: string, data: string) => void): Unsubscribe;
+  onProcessExited(cb: (sessionId: string, exitCode: number) => void): Unsubscribe;
+  onSessionForked(cb: (oldId: string, newId: string) => void): Unsubscribe;
+  onCliBusyState(cb: (sessionId: string, busy: boolean) => void): Unsubscribe;
+  onTerminalNotification(cb: (sessionId: string, message: string) => void): Unsubscribe;
+  onSessionNeedsAttention(cb: (sessionId: string) => void): Unsubscribe;
+  onSessionAgents(cb: (sessionId: string, agents: WorkingAgent[]) => void): Unsubscribe;
+  onRemoteStatus(cb: (sessionId: string, status: RemoteStatusPayload) => void): Unsubscribe;
+  onQuestionsAsked(cb: (pending: PendingQuestions) => void): Unsubscribe;
+  onQuestionsSettled(cb: (settled: QuestionsSettled) => void): Unsubscribe;
+  onProjectsChanged(cb: () => void): Unsubscribe;
+  onStatusUpdate(cb: (text: string, type: string) => void): Unsubscribe;
+  onFullscreenChanged(cb: (isFullscreen: boolean) => void): Unsubscribe;
+  onUpdateAvailable(cb: (update: UpdateNotice) => void): Unsubscribe;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

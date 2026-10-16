@@ -17,6 +17,7 @@ import { hideTerminalHeader } from './terminal-header';
 import {
   injectIntoCaches, openSessions, pendingSessions, removeFromCaches, sessionMap, view,
 } from '../../state/session-store';
+import { dispatch } from '../../state/app-store';
 import { sidebarContent } from '../../lib/dom';
 import { bump } from '../../lib/motion/reflow';
 import { createTerminalEntry, destroySession, showSession } from '../terminal/terminal-manager';
@@ -163,7 +164,7 @@ export async function confirmAndStopSession(sessionId: string): Promise<void> {
   if (!confirm(prompt)) return;
 
   await window.api.stopSession(sessionId);
-  view.activePtyIds.delete(sessionId);
+  dispatch({ type: 'ptyStopped', sessionId });
   if (view.activeSessionId === sessionId) clearScreen();
   refreshSidebar();
   settleStoppedRow(sessionId);
@@ -199,7 +200,7 @@ export async function archiveSessionRow(session: SessionRow, archived: number): 
       alert(`Could not stop this session: ${result.error || 'unknown error'}`);
       return false;
     }
-    view.activePtyIds.delete(sessionId);
+    dispatch({ type: 'ptyStopped', sessionId });
   }
 
   await window.api.archiveSession(sessionId, Boolean(archived));
