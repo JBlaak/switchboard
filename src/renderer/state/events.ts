@@ -16,6 +16,7 @@ import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { UpdateNotice } from '../../domain/update/release';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
+import type { ToolbarEvent } from './toolbar-slice';
 import type { ViewState } from './view-slice';
 
 // ── Pushed by the main process ──
@@ -64,7 +65,7 @@ export type LocalEvent =
   /** The usage fetch failed; what is known stays, but it counts as loaded. */
   | { type: 'usageFailed' };
 
-export type RendererEvent = PushEvent | LocalEvent;
+export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

@@ -8,12 +8,14 @@
 import { activityReducer, initialActivityState } from './activity-slice';
 import { initialQuestionsState, questionsReducer } from './questions-slice';
 import { initialRemoteState, remoteReducer } from './remote-slice';
+import { initialToolbarState, toolbarReducer } from './toolbar-slice';
 import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
 import type { QuestionsState } from './questions-slice';
 import type { RemoteState } from './remote-slice';
 import type { RendererEvent } from './events';
+import type { ToolbarState } from './toolbar-slice';
 import type { UsageState } from './usage-slice';
 import type { ViewState } from './view-slice';
 
@@ -23,6 +25,7 @@ export interface RendererState {
   readonly questions: QuestionsState;
   readonly remote: RemoteState;
   readonly usage: UsageState;
+  readonly toolbar: ToolbarState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -32,6 +35,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     questions: initialQuestionsState,
     remote: initialRemoteState,
     usage: initialUsageState,
+    toolbar: initialToolbarState,
   };
 }
 
@@ -43,10 +47,11 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const questions = questionsReducer(state.questions, event);
   const remote = remoteReducer(state.remote, event);
   const usage = usageReducer(state.usage, event);
+  const toolbar = toolbarReducer(state.toolbar, event);
 
   if (view === state.view && activity === state.activity && questions === state.questions
-    && remote === state.remote && usage === state.usage) {
+    && remote === state.remote && usage === state.usage && toolbar === state.toolbar) {
     return state;
   }
-  return { view, activity, questions, remote, usage };
+  return { view, activity, questions, remote, usage, toolbar };
 }

@@ -11,6 +11,7 @@
  * the sidebar does.
  */
 import type { RendererEvent } from './events';
+import type { SidebarFilter } from './toolbar-slice';
 
 export interface ViewState {
   readonly activeSessionId: string | null;
@@ -61,6 +62,14 @@ export function viewReducer(state: ViewState, event: RendererEvent): ViewState {
       return { ...state, activePtyIds };
     }
 
+    case 'filterToggled':
+      return toggleFilter(state, event.filter);
+
+    case 'searchMatched':
+      return state.searchMatchIds === event.ids && state.searchMatchProjectPaths === event.projectPaths
+        ? state
+        : { ...state, searchMatchIds: event.ids, searchMatchProjectPaths: event.projectPaths };
+
     case 'viewPatched': {
       // Only a field that really changed makes a new state, so writing a value
       // back unchanged notifies nobody.
@@ -77,6 +86,29 @@ export function viewReducer(state: ViewState, event: RendererEvent): ViewState {
     default:
       return state;
   }
+}
+
+/** The three toggles that replace one another, by the view field each sets. */
+const EXCLUSIVE_FILTERS = {
+  archived: 'showArchived',
+  pinned: 'showStarredOnly',
+  running: 'showRunningOnly',
+} as const;
+
+/**
+ * Flip one filter.
+ *
+ * Archived, pinned and running are mutually exclusive rather than cumulative:
+ * each answers a different question about the whole list, and combining them
+ * mostly produces an empty one. Today narrows whichever of those is on, so it
+ * stacks.
+ */
+function toggleFilter(state: ViewState, filter: SidebarFilter): ViewState {
+  if (filter === 'today') return { ...state, showTodayOnly: !state.showTodayOnly };
+  const field = EXCLUSIVE_FILTERS[filter];
+  const next = { ...state, showArchived: false, showStarredOnly: false, showRunningOnly: false };
+  next[field] = !state[field];
+  return next;
 }
 
 /** True when any filter or a search is narrowing the list. */
