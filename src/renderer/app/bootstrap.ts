@@ -34,8 +34,7 @@ import {
 } from '../features/terminal/terminal-themes';
 import { installAppearanceToggle } from '../features/settings/appearance-toggle';
 import { installSleepToggle } from '../features/settings/sleep-toggle';
-import { installPatch } from '../features/patch/patch';
-import { installQuestions } from '../features/questions/questions';
+import { installQuestions } from '../ui/questions/actions';
 import { mountReactRoot } from '../ui/Root';
 import { countRunning } from '../ui/footer/actions';
 import { installFooter } from '../ui/footer/install-footer';
@@ -61,7 +60,6 @@ export function bootstrap(): void {
   installFooter();
   installSleepToggle();
   installAppearanceToggle();
-  installPatch();
   installQuestions();
   followColorSchemeInTerminals();
   // The surfaces that have moved to React portal out of it.

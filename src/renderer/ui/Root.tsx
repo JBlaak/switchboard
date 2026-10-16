@@ -12,6 +12,9 @@ import { Dialogs } from './dialogs/Dialogs';
 import { Portal } from './Portal';
 import { Footer } from './footer/Footer';
 import { SettingsViewer } from './settings/SettingsViewer';
+import { EmptyScreenPatch } from './patch/EmptyScreenPatch';
+import { Questions } from './questions/Questions';
+import { QuestionsHeaderButton } from './questions/QuestionsHeaderButton';
 import type { JSX } from 'react';
 import type { Root as ReactRoot } from 'react-dom/client';
 
@@ -22,6 +25,9 @@ export function Root(): JSX.Element | null {
       <Dialogs />
       <Portal target="settings-viewer"><SettingsViewer /></Portal>
       <Portal target="sidebar-footer"><Footer /></Portal>
+      <Portal target="terminals"><Questions /></Portal>
+      <Portal target="terminal-header-questions"><QuestionsHeaderButton /></Portal>
+      <Portal target="placeholder"><EmptyScreenPatch /></Portal>
     </>
   );
 }
