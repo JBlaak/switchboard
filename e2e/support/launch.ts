@@ -63,6 +63,8 @@ export async function launchApp(
     SWITCHBOARD_DATA_DIR: home.dataDir,
     CLAUDE_CONFIG_DIR: path.join(home.home, '.claude'),
     SHELL: '/bin/zsh',
+    // Lets the window keep its fixed size on a display smaller than it.
+    SWITCHBOARD_E2E: '1',
     TZ: 'UTC',
     LANG: 'en_US.UTF-8',
     LC_ALL: 'en_US.UTF-8',

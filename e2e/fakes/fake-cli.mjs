@@ -62,7 +62,10 @@ const launch = {
   startedAt: Date.now(),
   ...(role === 'claude' ? claudeLaunchFacts(argv) : {}),
 };
-fs.writeFileSync(path.join(dir, 'launch.json'), JSON.stringify(launch, null, 2));
+// Written aside and renamed into place: the test polls for the file and would
+// otherwise read it half-written.
+fs.writeFileSync(path.join(dir, 'launch.json.tmp'), JSON.stringify(launch, null, 2));
+fs.renameSync(path.join(dir, 'launch.json.tmp'), path.join(dir, 'launch.json'));
 fs.appendFileSync(path.join(dir, 'launches.jsonl'), JSON.stringify(launch) + '\n');
 
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
