@@ -17,10 +17,10 @@
  */
 import { COLOUR_WARN, statusBanner } from '../../../domain/terminal/ansi';
 import { openSessions, sessionMap, view } from '../../state/session-store';
-import { forgetStatus, recordStatus, remoteStatus, syncTicker } from '../../state/remote-status-store';
+import { remoteStatus, syncTicker } from '../../state/remote-status-store';
 import { openSession } from '../sessions/session-actions';
 import { updateTerminalHeader } from '../sessions/terminal-header';
-import type { RemoteStatusPayload } from '../../../domain/remote/remote-status';
+import type { RemoteStatusPayload, RemoteStatusView } from '../../../domain/remote/remote-status';
 
 /**
  * What the connecting bar fills toward.
@@ -66,20 +66,22 @@ const PHASE_CLASSES = ['is-connecting', 'is-retrying', 'is-failed', 'is-connecte
  * Each phase does two things: update the card, and — for the phases that mean
  * something changed — leave a line in the scrollback that survives the next
  * reconnect.
+ *
+ * Called after the store has recorded the status (see `remote-slice`), so
+ * `previous` is the one it replaced.
  */
-export function handleRemoteStatus(sessionId: string, status: RemoteStatusPayload): void {
-  const previous = remoteStatus.get(sessionId);
+export function handleRemoteStatus(
+  sessionId: string, status: RemoteStatusPayload, previous: RemoteStatusView | undefined,
+): void {
   const target = status.target || 'the remote host';
 
   switch (status.phase) {
     case 'connecting':
-      recordStatus(sessionId, status);
       renderCard(sessionId);
       restartBar(ensureCard(sessionId), CONNECT_TIMEOUT_MS);
       break;
 
     case 'connected':
-      recordStatus(sessionId, status);
       // A brief green beat so a reconnect is visibly resolved rather than the
       // card just vanishing. On a first connect the tmux repaint says it well
       // enough, so the card goes straight away.
@@ -95,7 +97,6 @@ export function handleRemoteStatus(sessionId: string, status: RemoteStatusPayloa
       break;
 
     case 'retrying':
-      recordStatus(sessionId, status);
       // The reason also goes to the scrollback, where it survives the next
       // reconnect — the card only ever shows the break it is currently on.
       writeStatusLine(sessionId, status.everConnected
@@ -106,7 +107,6 @@ export function handleRemoteStatus(sessionId: string, status: RemoteStatusPayloa
       break;
 
     case 'failed':
-      recordStatus(sessionId, status);
       writeStatusLine(sessionId,
         `gave up ${status.everConnected ? 'reconnecting to' : 'connecting to'} ${target}`,
         COLOUR_WARN);
@@ -114,7 +114,6 @@ export function handleRemoteStatus(sessionId: string, status: RemoteStatusPayloa
       break;
 
     case 'disconnected':
-      forgetStatus(sessionId);
       hideCard(sessionId);
       break;
   }

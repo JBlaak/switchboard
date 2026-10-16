@@ -1,20 +1,25 @@
 /**
  * The questions sessions are blocked on, and how far the user got answering.
  *
- * One entry per session id: the pending set main told us about, plus what the
- * renderer adds to it — the draft and whether the user chose to answer in the
- * terminal instead. Kept here rather than in the panel because the panel only
- * ever shows one session, and switching away from a half-answered set and back
- * must find it as it was left.
+ * Two halves. Which sets are pending is store state (see `questions-slice`):
+ * main pushes it, and the sidebar and the header read it. How far the user got
+ * — the draft, whether they chose to answer in the terminal instead, Patch's
+ * bookkeeping — is the question panel's working state, which it mutates in
+ * place as the user types and compares by identity to tell "the set I am
+ * showing" from "another set". That half stays here, one entry per set, keyed
+ * by tool-use id so it survives the set being re-keyed to a new session id.
  *
- * Keyed by the session's current id, so it follows the same re-keys
- * `openSessions` does (a new session's real id, a fork). Main sends later
- * events under the new id, which is why the entry has to move rather than be
- * looked up by the old one.
+ * Kept here rather than in the panel because the panel only ever shows one
+ * session, and switching away from a half-answered set and back must find it
+ * as it was left.
  */
 import { createDraft } from '../../domain/questions/answer-draft';
+import { dispatch, getState, store } from './app-store';
+import { askingCountIn, sessionAsking } from './questions-slice';
 import type { AnswerDraft } from '../../domain/questions/answer-draft';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
+import type { RendererState } from './root';
+import type { RendererEvent } from './events';
 
 /** Which of the two things a session with questions shows over its terminal area. */
 export type QuestionView = 'questions' | 'terminal';
@@ -38,77 +43,99 @@ export type QuestionChange =
   | { kind: 'settled'; sessionId: string; entry: QuestionEntry; outcome: QuestionsSettled['outcome'] }
   | { kind: 'rekeyed'; oldId: string; newId: string };
 
+/** toolUseId → the panel's working state for that set. */
 const entries = new Map<string, QuestionEntry>();
-/**
- * Tool-use ids already settled. The bootstrap fetch can resolve after a set it
- * returned was settled by an event, and must not bring that set back.
- */
-const settledToolUses = new Set<string>();
 const listeners = new Set<(change: QuestionChange) => void>();
+let unsubscribe: (() => void) | null = null;
 
+/**
+ * The entry for the set a session is asking, made on first use.
+ *
+ * Answers the same object for as long as the set is pending, so the panel can
+ * hold it and write to it; a re-key only points its `pending` at the moved set.
+ */
 export function questionsFor(sessionId: string | null | undefined): QuestionEntry | undefined {
-  return sessionId ? entries.get(sessionId) : undefined;
+  const pending = sessionId ? getState().questions.bySession[sessionId] : undefined;
+  return pending ? entryFor(pending) : undefined;
+}
+
+function entryFor(pending: PendingQuestions): QuestionEntry {
+  let entry = entries.get(pending.toolUseId);
+  if (!entry) {
+    entry = {
+      pending,
+      draft: createDraft(pending.questions),
+      view: 'questions',
+      greeted: false,
+      pokes: 0,
+      dozedAt: null,
+      sending: false,
+    };
+    entries.set(pending.toolUseId, entry);
+  }
+  entry.pending = pending;
+  return entry;
 }
 
 /** How many questions a session is asking; 0 when it is asking none. */
 export function askingCount(sessionId: string): number {
-  return entries.get(sessionId)?.pending.questions.length ?? 0;
+  return askingCountIn(getState().questions, sessionId);
 }
 
+/**
+ * Be told when a set is asked, settled or re-keyed.
+ *
+ * The store subscription is made on the first call rather than at import, so
+ * it runs after the IPC follow-ups (installed earlier in `bootstrap`): a
+ * re-key has to have moved `openSessions` before the panel looks for the
+ * session under its new id.
+ */
 export function onQuestionsChange(listener: (change: QuestionChange) => void): void {
   listeners.add(listener);
+  unsubscribe ??= store.subscribe(onTransition);
+}
+
+function onTransition(state: RendererState, previous: RendererState, event: RendererEvent): void {
+  const before = previous.questions;
+  const after = state.questions;
+  if (before === after) return;
+
+  switch (event.type) {
+    case 'questionsAsked':
+      if (before.bySession !== after.bySession) emit({ kind: 'asked', sessionId: event.pending.sessionId });
+      break;
+
+    case 'questionsSettled': {
+      const sessionId = sessionAsking(before, event.settled.toolUseId);
+      const pending = sessionId ? before.bySession[sessionId] : undefined;
+      if (sessionId && pending) {
+        const entry = entryFor(pending);
+        entries.delete(pending.toolUseId);
+        emit({ kind: 'settled', sessionId, entry, outcome: event.settled.outcome });
+      }
+      break;
+    }
+
+    case 'sessionForked':
+      emit({ kind: 'rekeyed', oldId: event.oldId, newId: event.newId });
+      break;
+  }
+
+  // A set replaced by another for the same session leaves its entry behind.
+  const live = new Set(Object.values(after.bySession).map(p => p.toolUseId));
+  for (const toolUseId of entries.keys()) if (!live.has(toolUseId)) entries.delete(toolUseId);
 }
 
 function emit(change: QuestionChange): void {
   for (const listener of listeners) listener(change);
 }
 
-/**
- * A session asked. A session has at most one set at a time, so a different
- * set replaces whatever was there; the same set again is ignored, keeping the
- * draft.
- */
+/** A session asked; see `questionsReducer` for when that replaces a set. */
 export function addPendingQuestions(pending: PendingQuestions): void {
-  if (settledToolUses.has(pending.toolUseId)) return;
-  const existing = entries.get(pending.sessionId);
-  if (existing?.pending.toolUseId === pending.toolUseId) return;
-  entries.set(pending.sessionId, {
-    pending,
-    draft: createDraft(pending.questions),
-    view: 'questions',
-    greeted: false,
-    pokes: 0,
-    dozedAt: null,
-    sending: false,
-  });
-  emit({ kind: 'asked', sessionId: pending.sessionId });
+  dispatch({ type: 'questionsAsked', pending });
 }
 
-/**
- * A set ended. Found by tool-use id first, because that cannot be stale; the
- * session id is the fallback for a set this renderer never heard of.
- */
+/** A set ended, here or in main. */
 export function settleQuestions(settled: QuestionsSettled): void {
-  settledToolUses.add(settled.toolUseId);
-  let sessionId: string | null = null;
-  for (const [id, entry] of entries) {
-    if (entry.pending.toolUseId === settled.toolUseId) { sessionId = id; break; }
-  }
-  if (!sessionId) return;
-  const entry = entries.get(sessionId)!;
-  entries.delete(sessionId);
-  emit({ kind: 'settled', sessionId, entry, outcome: settled.outcome });
-}
-
-/** Move a session's set to its new id. */
-export function rekeyQuestions(oldId: string, newId: string): void {
-  const entry = entries.get(oldId);
-  if (!entry || oldId === newId) return;
-  entries.delete(oldId);
-  // Main already asked again under the new id: that set is the live one.
-  if (!entries.has(newId)) {
-    entry.pending = { ...entry.pending, sessionId: newId };
-    entries.set(newId, entry);
-  }
-  emit({ kind: 'rekeyed', oldId, newId });
+  dispatch({ type: 'questionsSettled', settled });
 }

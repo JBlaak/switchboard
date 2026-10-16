@@ -4,10 +4,12 @@
  * Read it top to bottom: install the wiring, apply the stored preferences, then
  * fetch and restore. The order is the only thing here that matters —
  * `installSidebar` has to register the two refresh events before anything can
- * fire one, and the stored terminal font has to be applied before a restored
- * session opens a terminal in the wrong one.
+ * fire one, the IPC follow-ups have to subscribe to the store before the
+ * question panel, and the stored terminal font has to be applied before a
+ * restored session opens a terminal in the wrong one.
  */
 import { installLayout } from './layout';
+import { installIpcBridge } from './ipc-bridge';
 import { installIpcListeners } from './ipc-listeners';
 import { installQuotaGauges } from './quota-gauges';
 import { installSearch } from './search';
@@ -15,6 +17,7 @@ import { installShortcuts } from './shortcuts';
 import { installTimeTicker } from './time-ticker';
 import { renderStatusSummary } from './status-bar';
 import { installSidebar } from '../features/sessions/sidebar';
+import { installSidebarActivity } from '../features/sessions/sidebar-activity';
 import { installSidebarFilters } from '../features/sessions/sidebar-filters';
 import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
 import { loadProjects } from '../features/sessions/session-list';
@@ -24,9 +27,10 @@ import { schedulePoll } from '../features/sessions/session-poller';
 import { terminalStopButton } from '../features/sessions/terminal-header';
 import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
+import { dispatch } from '../state/app-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
 import {
-  applyTerminalFont, prewarmTerminalRenderer,
+  applyTerminalFont, bufferTerminalData, prewarmTerminalRenderer,
 } from '../features/terminal/terminal-manager';
 import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
@@ -41,8 +45,14 @@ import type { GlobalSettings } from '../../domain/settings/settings';
 export function bootstrap(): void {
   // The refresh events, before anything can fire one.
   installSidebar();
+  installSidebarActivity();
 
+  // The IPC follow-ups subscribe to the store before the question panel does
+  // (`installQuestions`, below): a re-key has to move the terminal registry
+  // before the panel looks for the session under its new id. No push can
+  // arrive while this runs, so the bridge itself can go anywhere in it.
   installIpcListeners();
+  installIpcBridge(window.api, dispatch, bufferTerminalData);
   installLayout();
   installSidebarFilters();
   installSidebarKeyboard();
