@@ -54,6 +54,7 @@ function buildBar(row: UsageLimit): HTMLElement {
   track.className = 'quota-track';
 
   const fill = document.createElement('span');
+  fill.dataset.testid = 'quota-fill';
   const percent = row.percent;
   fill.className = 'quota-fill'
     + (percent >= HIGH_PERCENT ? ' quota-high' : percent >= MID_PERCENT ? ' quota-mid' : '');
