@@ -13,7 +13,7 @@ import {
   attentionSessions, responseReadySessions, sessionAgents, sessionBusyState,
 } from '../../state/activity-store';
 import { askingCount } from '../../state/question-store';
-import { view } from '../../state/session-store';
+import { sessionKey, view } from '../../state/session-store';
 import { escapeHtml, formatDate } from '../../lib/format';
 import { ICONS } from '../../lib/icons';
 import { getExpandedSlugs } from './active-session';
@@ -55,7 +55,10 @@ function button(className: string, title: string, html: string): HTMLButtonEleme
 export function buildSessionItem(session: SessionRow, projectPath: string): HTMLElement {
   const item = document.createElement('div');
   item.className = 'session-item';
-  item.id = 'si-' + session.sessionId;
+  // Keyed by the session's local key, not its id, so a re-key morphs this
+  // same element in place (keeping its slot, its glide and `.active`) rather
+  // than removing it and adding another. Lookups by id use the data attribute.
+  item.id = 'si-' + sessionKey(session.sessionId);
   item.dataset.sessionId = session.sessionId;
 
   if (session.type === 'terminal') item.classList.add('is-terminal');

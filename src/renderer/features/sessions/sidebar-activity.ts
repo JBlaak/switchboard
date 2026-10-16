@@ -12,7 +12,12 @@ import { rowActivityChanges } from '../../state/row-activity';
 import { writeAgentsBadge } from './sidebar-row';
 
 export function installSidebarActivity(): void {
-  store.subscribe((state, previous) => {
+  store.subscribe((state, previous, event) => {
+    // A re-key moves every mark from the old id to the new one, but the row
+    // on screen still says the old id until the IPC follow-up re-renders it:
+    // toggling here would strip the old id's classes off the very row that is
+    // about to carry them under the new one.
+    if (event.type === 'sessionForked') return;
     for (const change of rowActivityChanges(previous, state)) {
       const row = document.querySelector<HTMLElement>(`.session-item[data-session-id="${change.sessionId}"]`);
       if (!row) continue;

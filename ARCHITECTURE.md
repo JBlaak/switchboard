@@ -116,6 +116,12 @@ already has in `index.html`. Registries that hold live objects — `openSessions
 with its xterm instances, and the shared session rows — stay plain Maps
 outside the store.
 
+A session's id can change under it (a fork, an accepted plan). The reducer
+moves every slice keyed by session id in one pass (`rekeyState` in
+`state/root`), and `app/rekey-registries` moves the Maps outside the store, in
+a stated order. Rendering keys a row by the session's stable local key
+(`state/keys-slice`), not its id, so a re-keyed row is morphed in place.
+
 ## How to add something
 
 **A new thing the UI can ask for.** Add the channel to `src/ipc/channels.ts`

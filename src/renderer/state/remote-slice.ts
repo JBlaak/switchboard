@@ -7,7 +7,7 @@
  * runs while some connection is in flight and everything reads `tickAt`.
  */
 import { isConnectionInFlight } from '../../domain/remote/remote-status';
-import { withEntry, withoutEntry } from './records';
+import { movedEntry, withEntry, withoutEntry } from './records';
 import type { IdRecord } from './records';
 import type { RendererEvent } from './events';
 import type { RemoteStatusPayload, RemoteStatusView } from '../../domain/remote/remote-status';
@@ -55,6 +55,12 @@ export function resolveStatus(status: RemoteStatusPayload, now: number): RemoteS
   if (status.phase === 'connecting') stored.startedAt = now;
   if (status.phase === 'retrying') stored.retryAt = now + (status.delayMs ?? 0);
   return stored;
+}
+
+/** A re-keyed session's connection is the same connection; it keeps its status. */
+export function rekeyRemote(state: RemoteState, oldId: string, newId: string): RemoteState {
+  const statuses = movedEntry(state.statuses, oldId, newId);
+  return statuses === state.statuses ? state : { ...state, statuses };
 }
 
 /** The sessions whose countdown is still moving. */
