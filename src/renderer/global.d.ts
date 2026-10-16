@@ -10,6 +10,8 @@ import type { SwitchboardApi } from '../ipc/api';
 declare global {
   interface Window {
     api: SwitchboardApi;
+    /** Set by the preload under the e2e harness only. */
+    switchboardE2E?: true;
   }
 }
 

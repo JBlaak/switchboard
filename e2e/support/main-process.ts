@@ -7,9 +7,9 @@
  *
  * - **Host stubs.** A few IPC channels answer with facts about the machine the
  *   suite happens to run on (is sleep disabled right now?) or act on it (open a
- *   browser, show a folder picker, prompt for an administrator password). Their
- *   handlers are swapped for test doubles, so a run is the same on every Mac
- *   and a stray click cannot reach the host.
+ *   browser, show a folder picker, write the clipboard, prompt for an
+ *   administrator password). Their handlers are swapped for test doubles, so
+ *   a run is the same on every Mac and a stray click cannot reach the host.
  * - **Pushing events.** Anything main tells the renderer travels as a
  *   `webContents.send` on a channel from src/ipc/channels.ts, so a test can
  *   send one directly — a remote status, say — to put the UI in a state that
@@ -51,6 +51,7 @@ export interface HostStubs {
  */
 interface StubState extends HostStubs {
   opened: string[];
+  clipboard: string[];
 }
 
 type WithStubs = typeof globalThis & { __switchboardE2E: StubState };
@@ -64,7 +65,7 @@ export const DEFAULT_STUBS: HostStubs = {
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
   await app.evaluate(({ ipcMain }, { stubs, channels }) => {
-    const state: StubState = { ...stubs, opened: [] };
+    const state: StubState = { ...stubs, opened: [], clipboard: [] };
     (globalThis as WithStubs).__switchboardE2E = state;
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {
@@ -81,6 +82,10 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
     replace(channels.browseFolder, () => state.browseFolder);
     replace(channels.openExternal, (url) => {
       state.opened.push(String(url));
+    });
+    // The real clipboard is the user's: a test that copies must not overwrite it.
+    replace(channels.writeClipboard, (text) => {
+      state.clipboard.push(String(text));
     });
     replace(channels.openRepository, (projectPath) => {
       state.opened.push('repository:' + String(projectPath));
@@ -105,6 +110,13 @@ export async function setHostStub<K extends keyof HostStubs>(
 export async function openedExternally(app: ElectronApplication): Promise<string[]> {
   return await app.evaluate(() => {
     return [...(globalThis as WithStubs).__switchboardE2E.opened];
+  });
+}
+
+/** Everything the app wrote to the clipboard (stubbed; the host's is never touched). */
+export async function clipboardWrites(app: ElectronApplication): Promise<string[]> {
+  return await app.evaluate(() => {
+    return [...(globalThis as WithStubs).__switchboardE2E.clipboard];
   });
 }
 

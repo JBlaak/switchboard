@@ -31,6 +31,7 @@ import { dispatch } from '../state/app-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
 import { applyTerminalFont, prewarmTerminalRenderer } from '../features/terminal/terminal-manager';
 import { bufferTerminalData } from '../features/terminal/write-buffer';
+import { installTerminalProbe } from '../features/terminal/terminal-probe';
 import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
 } from '../features/terminal/terminal-themes';
@@ -66,6 +67,7 @@ export function bootstrap(): void {
   installUpdateNotice();
   installQuestions();
   followColorSchemeInTerminals();
+  installTerminalProbe();
   // Renders nothing yet; the surfaces that move to React portal out of it.
   mountReactRoot();
 
