@@ -179,7 +179,6 @@ export function fakeRenderer(): FakeRenderer {
     attached: true,
     terminalData: record('terminalData'),
     processExited: record('processExited'),
-    sessionDetected: record('sessionDetected'),
     sessionForked: record('sessionForked'),
     cliBusyState: record('cliBusyState'),
     terminalNotification: record('terminalNotification'),

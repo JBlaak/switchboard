@@ -5,7 +5,7 @@
  * search narrows them — and so the two cross-cutting refreshes (`refreshSidebar`
  * and `reloadProjects`) have exactly one implementation each to register.
  */
-import { refreshSidebar, setProjectsReloader, setSidebarRefresher } from '../../app/refresh';
+import { setProjectsReloader, setSidebarRefresher } from '../../app/refresh';
 import { view } from '../../state/session-store';
 import { loadProjects } from './session-list';
 import { renderSessionList } from './sidebar-render';
@@ -54,5 +54,3 @@ function projectsToRender(): Project[] {
   }
   return narrowed;
 }
-
-export { refreshSidebar };

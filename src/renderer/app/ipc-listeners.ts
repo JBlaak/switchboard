@@ -11,7 +11,7 @@ import { refreshSidebar, reloadProjects } from './refresh';
 import { setStatusActivity } from './status-bar';
 import { setActiveSession } from '../features/sessions/active-session';
 import {
-  clearScreen, dropPendingSession, writeExitBanner,
+  dropPendingSession, writeExitBanner,
 } from '../features/sessions/session-actions';
 import { pollActiveSessions } from '../features/sessions/session-poller';
 import { setHeaderIdentity, showHeaderNotice } from '../features/sessions/terminal-header';
@@ -41,7 +41,6 @@ let projectsChangedTimer: ReturnType<typeof setTimeout> | null = null;
 export function installIpcListeners(): void {
   window.api.onTerminalData(bufferTerminalData);
   window.api.onProcessExited(onProcessExited);
-  window.api.onSessionDetected(onSessionDetected);
   window.api.onSessionForked(onSessionForked);
   window.api.onCliBusyState(onCliBusyState);
   window.api.onTerminalNotification(onTerminalNotification);
@@ -65,34 +64,9 @@ export function installIpcListeners(): void {
 }
 
 /**
- * A new session's real id, once Claude has written it.
- *
- * The renderer launched it under an id it invented, so everything holding that
- * id has to move across.
- */
-function onSessionDetected(tempId: string, realId: string): void {
-  const entry = openSessions.get(tempId);
-  if (!entry) {
-    rekeyQuestions(tempId, realId);
-    return;
-  }
-
-  entry.session.sessionId = realId;
-  if (view.activeSessionId === tempId) setActiveSession(realId);
-  openSessions.delete(tempId);
-  openSessions.set(realId, entry);
-  // After the active id has moved, so the panel finds its set under the new one.
-  rekeyQuestions(tempId, realId);
-
-  setHeaderIdentity(realId, 'New session');
-  void reloadProjects().then(() => selectRow(realId));
-  void pollActiveSessions();
-}
-
-/**
  * A fork or an accepted plan re-keyed a running session.
  *
- * Same as above, plus the pending row,
+ * Everything holding the old id has to move across — the pending row too,
  * which has to follow so the sidebar entry survives until the store catches up.
  */
 function onSessionForked(oldId: string, newId: string): void {
@@ -209,5 +183,3 @@ function onProjectsChanged(): void {
     void reloadProjects();
   }, PROJECTS_CHANGED_DEBOUNCE_MS);
 }
-
-export { clearScreen };

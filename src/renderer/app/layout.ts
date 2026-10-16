@@ -3,8 +3,7 @@
  *
  * Terminals are the reason any of this needs code. xterm measures its grid in
  * pixels, so every change to the space it occupies has to be followed by a
- * refit — and a refit while the element is hidden measures nothing, which is
- * why the tab router does its own.
+ * refit.
  */
 import { openSessions, view } from '../state/session-store';
 import { el } from '../lib/dom';

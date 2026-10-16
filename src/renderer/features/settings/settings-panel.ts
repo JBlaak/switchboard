@@ -477,14 +477,12 @@ export async function openSettingsViewer(
       if (settings.terminalTheme) {
         applyTerminalTheme(settings.terminalTheme);
       }
-      if (typeof applyTerminalFont === 'function') {
-        applyTerminalFont({
-          fontFamily: settings.terminalFontFamily,
-          fontSize: settings.terminalFontSize,
-          lineHeight: settings.terminalLineHeight,
-        });
-      }
-      if (typeof refreshSidebar === 'function') refreshSidebar();
+      applyTerminalFont({
+        fontFamily: settings.terminalFontFamily,
+        fontSize: settings.terminalFontSize,
+        lineHeight: settings.terminalLineHeight,
+      });
+      refreshSidebar();
       void syncQuickSessionButton();
     }
 

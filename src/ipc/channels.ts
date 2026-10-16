@@ -74,7 +74,6 @@ export const SEND = {
 export const EVENT = {
   terminalData: 'terminal-data',
   processExited: 'process-exited',
-  sessionDetected: 'session-detected',
   sessionForked: 'session-forked',
   cliBusyState: 'cli-busy-state',
   terminalNotification: 'terminal-notification',
