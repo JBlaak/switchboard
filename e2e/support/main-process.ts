@@ -22,6 +22,7 @@ import type { ElectronApplication } from '@playwright/test';
 import { EVENT, INVOKE } from '../../src/ipc/channels';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { Usage } from '../../src/domain/usage/usage';
+import type { Weather } from '../../src/domain/weather/weather';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -42,6 +43,12 @@ export interface HostStubs {
   sleepDisabled: boolean;
   /** What the folder picker "chooses"; null is a cancelled dialog. */
   browseFolder: string | null;
+  /**
+   * What `getWeather` answers: null is weather switched off (what the
+   * fixture's settings make the real handler answer), and `'never'` a fetch
+   * that never comes back, for the timeouts that guard it.
+   */
+  weather: Weather | null | 'never';
 }
 
 /**
@@ -51,6 +58,8 @@ export interface HostStubs {
  */
 interface StubState extends HostStubs {
   opened: string[];
+  /** How many times the renderer has asked for the weather. */
+  weatherAsked: number;
 }
 
 type WithStubs = typeof globalThis & { __switchboardE2E: StubState };
@@ -59,12 +68,13 @@ export const DEFAULT_STUBS: HostStubs = {
   usage: STUB_USAGE,
   sleepDisabled: false,
   browseFolder: null,
+  weather: null,
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
   await app.evaluate(({ ipcMain }, { stubs, channels }) => {
-    const state: StubState = { ...stubs, opened: [] };
+    const state: StubState = { ...stubs, opened: [], weatherAsked: 0 };
     (globalThis as WithStubs).__switchboardE2E = state;
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {
@@ -79,6 +89,10 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       return state.sleepDisabled;
     });
     replace(channels.browseFolder, () => state.browseFolder);
+    replace(channels.getWeather, () => {
+      state.weatherAsked++;
+      return state.weather === 'never' ? new Promise(() => {}) : state.weather;
+    });
     replace(channels.openExternal, (url) => {
       state.opened.push(String(url));
     });
@@ -106,6 +120,11 @@ export async function openedExternally(app: ElectronApplication): Promise<string
   return await app.evaluate(() => {
     return [...(globalThis as WithStubs).__switchboardE2E.opened];
   });
+}
+
+/** How many times the renderer has asked main for the weather so far. */
+export async function weatherAsked(app: ElectronApplication): Promise<number> {
+  return await app.evaluate(() => (globalThis as WithStubs).__switchboardE2E.weatherAsked);
 }
 
 /** Send the renderer an event, as main would. */
