@@ -40,6 +40,7 @@ import { installSleepToggle } from '../features/settings/sleep-toggle';
 import { installPatch } from '../features/patch/patch';
 import { installUpdateNotice } from '../features/update/update-notice';
 import { installQuestions } from '../features/questions/questions';
+import { mountReactRoot } from '../ui/Root';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -66,6 +67,8 @@ export function bootstrap(): void {
   installUpdateNotice();
   installQuestions();
   followColorSchemeInTerminals();
+  // Renders nothing yet; the surfaces that move to React portal out of it.
+  mountReactRoot();
 
   setTickListener(tickConnectionCards);
 
