@@ -605,16 +605,6 @@
     0 0 0 3px rgba(var(--sb-accent-rgb),0.14);
 }
 
-.session-id {
-  font-size: 10px;
-  color: var(--sb-text-dimmest);
-  margin-top: 2px;
-  font-family: var(--sb-font-mono);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .session-meta {
   font-size: 10px;
   color: var(--sb-text-dimmest);
@@ -777,11 +767,6 @@
   background: var(--sb-blue);
   box-shadow: 0 0 8px rgba(var(--sb-blue-rgb),0.7);
   animation: none;
-}
-
-.session-item.response-ready .session-name {
-  color: var(--sb-blue);
-  font-weight: 600;
 }
 
 .session-item.response-ready .session-summary {

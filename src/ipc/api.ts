@@ -107,7 +107,6 @@ export interface SwitchboardApi {
   // ── Events from main ──
   onTerminalData(cb: (sessionId: string, data: string) => void): void;
   onProcessExited(cb: (sessionId: string, exitCode: number) => void): void;
-  onSessionDetected(cb: (tempId: string, realId: string) => void): void;
   onSessionForked(cb: (oldId: string, newId: string) => void): void;
   onCliBusyState(cb: (sessionId: string, busy: boolean) => void): void;
   onTerminalNotification(cb: (sessionId: string, message: string) => void): void;

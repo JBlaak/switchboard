@@ -21,8 +21,6 @@ export interface RendererGateway {
   processExited(sessionId: string, exitCode: number): void
 
   // ── Session identity ──
-  /** A new session's real id, once Claude has written it. */
-  sessionDetected(tempId: string, realId: string): void
   /** A fork or plan-accept re-keyed a running session. */
   sessionForked(oldId: string, newId: string): void
 

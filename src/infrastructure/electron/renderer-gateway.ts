@@ -36,10 +36,6 @@ export class ElectronRendererGateway implements RendererGateway {
   }
 
   // ── Session identity ──
-  sessionDetected(tempId: string, realId: string): void {
-    this.#send(EVENT.sessionDetected, tempId, realId);
-  }
-
   sessionForked(oldId: string, newId: string): void {
     this.#send(EVENT.sessionForked, oldId, newId);
   }

@@ -556,7 +556,3 @@
 .terminal-container .xterm-viewport::-webkit-scrollbar-thumb:hover {
   background: rgba(var(--sb-overlay-rgb),0.15);
 }
-
-.cm-editor:focus {
-  outline: none;
-}

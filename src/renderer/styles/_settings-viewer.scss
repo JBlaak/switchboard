@@ -114,13 +114,6 @@
   gap: 8px;
 }
 
-/* --- Hint (below control area, full-width) --- */
-.settings-hint {
-  font-size: 11px;
-  color: var(--sb-text-dimmest);
-  margin: -2px 0 6px;
-}
-
 /* --- Use-global checkbox --- */
 .settings-use-global {
   font: 700 11.5px var(--sb-font-head);
@@ -320,13 +313,6 @@
   opacity: 0.88;
 }
 
-/* Saved: the mint pair, matching what the save handler sets inline. */
-.settings-save-btn.saved {
-  background: var(--sb-mint);
-  color: var(--sb-accent);
-  opacity: 1;
-}
-
 /* Inline caveat inside a field description (e.g. a font that isn't installed):
    a sun-filled note, hidden while it has nothing to say. */
 .settings-warning {
@@ -354,9 +340,4 @@
   background: var(--sb-peach);
   box-shadow: none;
   color: var(--sb-danger);
-}
-
-.settings-current-version {
-  color: var(--sb-text-faint);
-  font-size: 12.5px;
 }

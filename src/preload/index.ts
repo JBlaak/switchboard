@@ -78,9 +78,6 @@ const api: SwitchboardApi = {
   onProcessExited: (cb) => {
     ipcRenderer.on(EVENT.processExited, (_e, sessionId, exitCode) => cb(sessionId, exitCode));
   },
-  onSessionDetected: (cb) => {
-    ipcRenderer.on(EVENT.sessionDetected, (_e, tempId, realId) => cb(tempId, realId));
-  },
   onSessionForked: (cb) => {
     ipcRenderer.on(EVENT.sessionForked, (_e, oldId, newId) => cb(oldId, newId));
   },
