@@ -142,7 +142,7 @@ export function fixtureHome(spec: FixtureSpec = {}): FixtureHome {
   // realpath: on macOS the temp dir is reached through the /var → /private/var
   // symlink, and a child's process.cwd() reports the resolved form. Every path
   // the app compares (a session's cwd against its project folder) has to agree.
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-')));
+  const root = fs.realpathSync(makeRoot());
   const home = path.join(root, 'home');
   const dataDir = path.join(root, 'data');
   const controlDir = path.join(root, 'control');
@@ -160,6 +160,28 @@ export function fixtureHome(spec: FixtureSpec = {}): FixtureHome {
     root, home, dataDir, controlDir, binDir, spec, projectPath,
     dispose: () => fs.rmSync(root, { recursive: true, force: true }),
   };
+}
+
+/**
+ * A fresh, empty directory for one fixture, named with digits only.
+ *
+ * Not `mkdtemp`: its random suffix is letters too, and every project path
+ * under the fixture carries it. The project picker matches a query against the
+ * whole path as well as the label, so a suffix that happened to spell out the
+ * query (an "api" across "sb-e2e-zpIbS9" and the temp dir above it) made an
+ * unrelated project match, about one run in seventy.
+ */
+function makeRoot(): string {
+  for (;;) {
+    const name = 'sb-e2e-' + process.pid + '-' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0');
+    const dir = path.join(os.tmpdir(), name);
+    try {
+      fs.mkdirSync(dir, { mode: 0o700 });
+      return dir;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    }
+  }
 }
 
 // ── Fake CLIs ──
