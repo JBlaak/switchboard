@@ -38,8 +38,15 @@ export const STUB_USAGE: Usage = {
 export interface HostStubs {
   /** What `getUsage` answers; null hides the gauges. */
   usage: Usage | null;
-  /** Whether `pmset` would report sleep as disabled. */
-  sleepDisabled: boolean;
+  /** Whether `pmset` would report sleep as disabled; null is a host that cannot say. */
+  sleepDisabled: boolean | null;
+  /**
+   * How long the sleep switch takes to answer, standing in for the password
+   * prompt the real one may show.
+   */
+  sleepPromptDelayMs: number;
+  /** True when that prompt is cancelled: the switch answers with the state unchanged. */
+  sleepPromptCancelled: boolean;
   /** What the folder picker "chooses"; null is a cancelled dialog. */
   browseFolder: string | null;
 }
@@ -58,6 +65,8 @@ type WithStubs = typeof globalThis & { __switchboardE2E: StubState };
 export const DEFAULT_STUBS: HostStubs = {
   usage: STUB_USAGE,
   sleepDisabled: false,
+  sleepPromptDelayMs: 0,
+  sleepPromptCancelled: false,
   browseFolder: null,
 };
 
@@ -74,8 +83,9 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
 
     replace(channels.getUsage, () => state.usage);
     replace(channels.getSleepDisabled, () => state.sleepDisabled);
-    replace(channels.setSleepDisabled, (disabled) => {
-      state.sleepDisabled = !!disabled;
+    replace(channels.setSleepDisabled, async (disabled) => {
+      await new Promise(resolve => setTimeout(resolve, state.sleepPromptDelayMs));
+      if (!state.sleepPromptCancelled) state.sleepDisabled = !!disabled;
       return state.sleepDisabled;
     });
     replace(channels.browseFolder, () => state.browseFolder);
@@ -106,6 +116,17 @@ export async function openedExternally(app: ElectronApplication): Promise<string
   return await app.evaluate(() => {
     return [...(globalThis as WithStubs).__switchboardE2E.opened];
   });
+}
+
+/**
+ * Make every search fail in the main process, as an index that cannot parse a
+ * query would if main did not already answer it with no results.
+ */
+export async function breakSearch(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ ipcMain }, channel) => {
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, () => { throw new Error('fts5: syntax error'); });
+  }, INVOKE.search);
 }
 
 /** Send the renderer an event, as main would. */
