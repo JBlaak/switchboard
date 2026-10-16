@@ -19,9 +19,8 @@ import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
 import { loadProjects } from '../features/sessions/session-list';
 import { openSession } from '../features/sessions/session-actions';
 import { schedulePoll } from '../features/sessions/session-poller';
-import { tickConnectionCards } from '../features/remote/connection-card';
-import { setTickListener } from '../state/remote-status-store';
-import { dispatch } from '../state/app-store';
+import { installRemoteTicker } from '../state/remote-ticker';
+import { dispatch, store } from '../state/app-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
 import { applyTerminalFont, prewarmTerminalRenderer } from '../features/terminal/terminal-manager';
 import { bufferTerminalData } from '../features/terminal/write-buffer';
@@ -61,7 +60,7 @@ export function bootstrap(): void {
   // The surfaces that have moved to React portal out of it.
   mountReactRoot();
 
-  setTickListener(tickConnectionCards);
+  installRemoteTicker(store);
 
   schedulePoll();
   prewarmTerminalRenderer();

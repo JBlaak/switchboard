@@ -16,6 +16,7 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import type { JSX } from 'react';
 import { attachTerminal } from '../../features/terminal/terminal-manager';
+import { RemoteCard } from '../remote/RemoteCard';
 import { TerminalSearchBar } from './TerminalSearchBar';
 
 export interface TerminalSlotProps {
@@ -43,6 +44,7 @@ export function TerminalSlot({ sessionId, visible }: TerminalSlotProps): JSX.Ele
   return (
     <div className="terminal-container" ref={attach}>
       <TerminalSearchBar sessionId={sessionId} />
+      <RemoteCard sessionId={sessionId} />
     </div>
   );
 }

@@ -19,7 +19,7 @@ import {
 } from '../features/sessions/session-actions';
 import { pollActiveSessions } from '../features/sessions/session-poller';
 import { setHeaderIdentity } from '../features/sessions/terminal-header';
-import { handleRemoteStatus } from '../features/remote/connection-card';
+import { handleRemoteStatus } from '../features/remote/connection-log';
 import { busyChanged } from '../state/activity-slice';
 import { getState, onEvent } from '../state/app-store';
 import { pendingSessions, sessionMap } from '../state/session-store';
