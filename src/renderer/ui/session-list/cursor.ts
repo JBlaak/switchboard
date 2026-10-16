@@ -1,32 +1,43 @@
 /**
- * The keyboard cursor, as state.
+ * The keyboard cursor, as state, and the element it is on.
  *
- * The keyboard navigation (`features/sessions/sidebar-keyboard`) still finds
- * its targets in the DOM and reads the cursor back off the `kbd-cursor` class.
- * What it can no longer do is put that class on an element itself: the list
- * renders its rows' classes from state, and a class written behind React's back
- * would be wiped by the row's next render. So the cursor is recorded here, by
- * a name each target can be rendered from, and the class follows.
+ * The cursor is recorded by a name each target can be rendered from (see
+ * `state/list-cursor`), and the `kbd-cursor` class follows from state. The
+ * keyboard navigation (`features/sessions/sidebar-keyboard`) decides where it
+ * goes from the layout alone; the element is only wanted for what has to be
+ * done to the DOM itself — scrolling it into view, and pressing its archive
+ * button so the slide-out and the confetti start from it.
  */
 import { dispatch } from '../../state/app-store';
+import { sidebarContent } from '../../lib/dom';
+
+export { headerTarget } from '../../state/list-cursor';
+
+/** Put the cursor on the target of this name, or take it away. */
+export function setListCursor(target: string | null): void {
+  dispatch({ type: 'listCursorMoved', target });
+}
 
 /**
- * The name of a cursor target: its element id, or `header:<group id>` for a
- * slug group's header, which has no id of its own.
+ * The element a cursor name renders as: the element of that id, or for a
+ * group's header, the header at the top of the group's element.
  */
-export function cursorTargetOf(el: HTMLElement): string | null {
-  if (el.classList.contains('slug-group-header')) {
-    const group = el.parentElement;
-    return group?.id ? headerTarget(group.id) : null;
+export function cursorElement(target: string): HTMLElement | null {
+  if (target.startsWith('header:')) {
+    const group = document.getElementById(target.slice('header:'.length));
+    return group?.querySelector<HTMLElement>(':scope > .slug-group-header') ?? null;
   }
-  return el.id || null;
+  const el = document.getElementById(target);
+  return el && sidebarContent.contains(el) ? el : null;
 }
 
-export function headerTarget(groupId: string): string {
-  return 'header:' + groupId;
-}
-
-/** Put the cursor on `el`, or take it away. */
-export function setListCursor(el: HTMLElement | null): void {
-  dispatch({ type: 'listCursorMoved', target: el ? cursorTargetOf(el) : null });
+/**
+ * Press the archive button of a row or a group's header, as a click would.
+ * False when it has none (a plain terminal's row).
+ */
+export function pressArchive(target: string): boolean {
+  const button = cursorElement(target)
+    ?.querySelector<HTMLElement>('.session-archive-btn, .slug-group-archive-btn');
+  button?.click();
+  return !!button;
 }

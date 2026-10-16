@@ -1,24 +1,26 @@
 // --- Session navigation (Cmd+Shift+[/], Cmd+Arrow) ---
-import { sidebarContent } from '../../lib/dom';
-import { openSessions, view } from '../../state/session-store';
+import { getState } from '../../state/app-store';
+import { cursorTargets, rowOrder } from '../../state/list-cursor';
+import { openSessions } from '../../state/session-store';
 import { showSession } from '../terminal/terminal-manager';
 
-// Returns ordered list of open (non-closed) session IDs matching sidebar order.
-function getOrderedOpenSessionIds() {
-  const items = sidebarContent.querySelectorAll<HTMLElement>('.session-item[data-session-id]');
-  const ids: string[] = [];
-  for (const item of items) {
-    const sid = item.dataset.sessionId;
-    if (!sid) continue;
-    const entry = openSessions.get(sid);
-    if (entry && !entry.closed) ids.push(sid);
-  }
-  return ids;
+/**
+ * The open (not closed) sessions, in the order the sidebar lists their rows —
+ * read from the list's layout, so rows folded away or behind "+ N older"
+ * count too, in their place.
+ */
+function getOrderedOpenSessionIds(): string[] {
+  const state = getState();
+  return rowOrder(cursorTargets(state.sessionList, state.view.activePtyIds))
+    .filter((id) => {
+      const entry = openSessions.get(id);
+      return !!entry && !entry.closed;
+    });
 }
 
 function navigateSession(direction: -1 | 1): void {
   const ids = getOrderedOpenSessionIds();
-  const current = view.activeSessionId;
+  const current = getState().view.activeSessionId;
   const idx = current ? ids.indexOf(current) : -1;
   let next;
   if (idx === -1) {
