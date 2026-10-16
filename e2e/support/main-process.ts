@@ -24,6 +24,7 @@ import { EVENT, INVOKE } from '../../src/ipc/channels';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
+import type { WeatherLocation } from '../../src/domain/weather/weather';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -53,7 +54,15 @@ export interface HostStubs {
   sleepDisabled: boolean;
   /** What the folder picker "chooses"; null is a cancelled dialog. */
   browseFolder: string | null;
+  /**
+   * What looking up a weather city answers, by the name typed: a location
+   * (after `delayMs`, to hold a lookup in flight), null for "no such place",
+   * or 'fail' for a lookup that throws. A name not listed finds nothing.
+   */
+  geocode: Record<string, GeocodeStub>;
 }
+
+export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number } | 'fail';
 
 /**
  * What the stubs keep in the main process, on `globalThis.__switchboardE2E`.
@@ -80,6 +89,7 @@ export const DEFAULT_STUBS: HostStubs = {
   installUpdate: 'pending',
   sleepDisabled: false,
   browseFolder: null,
+  geocode: {},
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
@@ -109,6 +119,17 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       return state.sleepDisabled;
     });
     replace(channels.browseFolder, () => state.browseFolder);
+    // Both weather channels would reach Open-Meteo. The forecast is never
+    // needed (a fixture that turns weather on gets no sky), and the lookup
+    // answers from the table above.
+    replace(channels.getWeather, () => null);
+    replace(channels.geocodeWeatherLocation, async (name) => {
+      const stub = state.geocode[String(name)];
+      if (stub === 'fail') throw new Error('geocoding is offline');
+      if (!stub) return null;
+      if (stub.delayMs) await new Promise(resolve => setTimeout(resolve, stub.delayMs));
+      return stub.location;
+    });
     replace(channels.openExternal, (url) => {
       state.opened.push(String(url));
     });

@@ -86,6 +86,15 @@ export class FakeCli {
     }
   }
 
+  /** The PTY's current size, as the process last saw it. */
+  size(): { cols: number; rows: number } | null {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(this.dir, 'size.json'), 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
   async waitForInput(text: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
     await waitFor(() => this.input().includes(text), timeoutMs, `${JSON.stringify(text)} to reach ${this.key}`);
   }

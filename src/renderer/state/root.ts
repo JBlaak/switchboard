@@ -12,6 +12,7 @@ import { activityReducer, initialActivityState, rekeyActivity } from './activity
 import { initialKeysState, keysReducer, rekeyKeys } from './keys-slice';
 import { initialQuestionsState, questionsReducer, rekeyQuestions } from './questions-slice';
 import { initialRemoteState, rekeyRemote, remoteReducer } from './remote-slice';
+import { initialSettingsState, settingsReducer } from './settings-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialUpdateState, updateReducer } from './update-slice';
 import { initialUsageState, usageReducer } from './usage-slice';
@@ -21,6 +22,7 @@ import type { KeysState } from './keys-slice';
 import type { QuestionsState } from './questions-slice';
 import type { RemoteState } from './remote-slice';
 import type { RendererEvent } from './events';
+import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
 import type { UpdateState } from './update-slice';
 import type { UsageState } from './usage-slice';
@@ -32,6 +34,7 @@ export interface RendererState {
   readonly questions: QuestionsState;
   readonly remote: RemoteState;
   readonly usage: UsageState;
+  readonly settings: SettingsState;
   readonly keys: KeysState;
   readonly status: StatusState;
   readonly update: UpdateState;
@@ -44,6 +47,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     questions: initialQuestionsState,
     remote: initialRemoteState,
     usage: initialUsageState,
+    settings: initialSettingsState,
     keys: initialKeysState,
     status: initialStatusState,
     update: initialUpdateState,
@@ -63,8 +67,9 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const keys = keysReducer(state.keys, event);
   const status = statusReducer(state.status, event);
   const update = updateReducer(state.update, event);
+  const settings = settingsReducer(state.settings, event);
 
-  return settle(state, { view, activity, questions, remote, usage, keys, status, update });
+  return settle(state, { view, activity, questions, remote, usage, keys, status, update, settings });
 }
 
 /**
@@ -90,6 +95,7 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     keys: rekeyKeys(state.keys, oldId, newId),
     status: state.status,
     update: state.update,
+    settings: state.settings,
   });
 }
 
