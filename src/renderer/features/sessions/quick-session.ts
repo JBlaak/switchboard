@@ -5,7 +5,7 @@
  * is nowhere to launch: the lightning bolt is hidden, and the shortcuts open
  * global settings instead of doing nothing silently.
  */
-import { el } from '../../lib/dom';
+import { dispatch } from '../../state/app-store';
 import { openSettingsViewer } from '../settings/settings-panel';
 import { launchClaudeSession, projectStub } from './session-actions';
 
@@ -38,9 +38,13 @@ export async function launchQuickSession(): Promise<void> {
   await launchClaudeSession(projectStub(path));
 }
 
-/** Show the lightning bolt only while there is a folder for it to launch in. */
+/**
+ * Show the lightning bolt only while there is a folder for it to launch in.
+ *
+ * Re-read after a settings save, which is how the folder changes.
+ */
 export async function syncQuickSessionButton(): Promise<void> {
-  el('quick-session-btn').hidden = !await quickSessionPath();
+  dispatch({ type: 'quickSessionPathRead', path: await quickSessionPath() });
 }
 
 async function quickSessionPath(): Promise<string> {
