@@ -102,8 +102,8 @@ export async function openSettingsViewer(
   const chromeValue = fieldValue('chrome', false);
   const preLaunchValue = fieldValue('preLaunchCmd', '');
   const addDirsValue = fieldValue('addDirs', '');
-  const visCountValue = fieldValue('view.visibleSessionCount', 25);
-  const maxAgeValue = fieldValue('view.sessionMaxAgeDays', 3);
+  const visCountValue = fieldValue('visibleSessionCount', 25);
+  const maxAgeValue = fieldValue('sessionMaxAgeDays', 3);
   const themeValue = fieldValue('terminalTheme', 'switchboard');
   const shellProfileValue = fieldValue('shellProfile', 'auto');
   const fontFamilyValue = fieldValue('terminalFontFamily', '');
