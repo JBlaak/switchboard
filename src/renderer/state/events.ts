@@ -17,6 +17,8 @@ import type { UpdateNotice } from '../../domain/update/release';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ViewState } from './view-slice';
+import type { DraftAction } from '../../domain/questions/answer-draft';
+import type { QuestionView } from './answers-slice';
 import type { DialogRequest } from './dialog-slice';
 import type { SettingsRecord, SettingsScope } from './settings-slice';
 import type { ShellProfile } from '../../domain/shell/shell-profile';
@@ -71,6 +73,20 @@ export type LocalEvent =
   | { type: 'usageFetched'; rows: readonly UsageLimit[] }
   /** The usage fetch failed; what is known stays, but it counts as loaded. */
   | { type: 'usageFailed' }
+  /** A key, click or keystroke on the question panel, for the set it is showing. */
+  | { type: 'answerAction'; toolUseId: string; action: DraftAction }
+  /** The question panel showed this set for the first time; Patch says hello. */
+  | { type: 'answersGreeted'; toolUseId: string }
+  /** Answer this set in the terminal instead, or go back to the panel. */
+  | { type: 'answerViewChosen'; toolUseId: string; view: QuestionView }
+  /** Patch was poked beside this set. */
+  | { type: 'answersPatchPoked'; toolUseId: string }
+  /** The doze timer: this set has `minutesLeft` before the terminal takes over. */
+  | { type: 'answersDozed'; toolUseId: string; minutesLeft: number }
+  /** Main took the answers to this set; Patch sees them off. A prompt to act; no state changes. */
+  | { type: 'answersDelivered'; toolUseId: string }
+  /** The empty screen came into view; Patch appears on it. A prompt to act; no state changes. */
+  | { type: 'emptyScreenShown' }
   /** Open a modal dialog, replacing any that is open. */
   | { type: 'dialogOpened'; request: DialogRequest }
   /** Close the dialog opened as `seq`; a stale close from a replaced one does nothing. */

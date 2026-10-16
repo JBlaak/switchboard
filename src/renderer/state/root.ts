@@ -9,6 +9,7 @@
  * follow at once (see `rekeyState`).
  */
 import { activityReducer, initialActivityState, rekeyActivity } from './activity-slice';
+import { answersReducer, followPending, initialAnswersState } from './answers-slice';
 import { dialogReducer, initialDialogState } from './dialog-slice';
 import { initialKeysState, keysReducer, rekeyKeys } from './keys-slice';
 import { initialQuestionsState, questionsReducer, rekeyQuestions } from './questions-slice';
@@ -19,6 +20,7 @@ import { initialUpdateState, updateReducer } from './update-slice';
 import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, rekeyView, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
+import type { AnswersState } from './answers-slice';
 import type { DialogState } from './dialog-slice';
 import type { RendererEvent } from './events';
 import type { KeysState } from './keys-slice';
@@ -34,6 +36,7 @@ export interface RendererState {
   readonly view: ViewState;
   readonly activity: ActivityState;
   readonly questions: QuestionsState;
+  readonly answers: AnswersState;
   readonly remote: RemoteState;
   readonly usage: UsageState;
   readonly dialog: DialogState;
@@ -48,6 +51,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     view: initialViewState(activeSessionId),
     activity: initialActivityState,
     questions: initialQuestionsState,
+    answers: initialAnswersState,
     remote: initialRemoteState,
     usage: initialUsageState,
     dialog: initialDialogState,
@@ -66,6 +70,8 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   // events move it.
   const activity = activityReducer(state.activity, event, state.view.activeSessionId);
   const questions = questionsReducer(state.questions, event);
+  // The sets as this event left them, so an entry comes and goes with its set.
+  const answers = answersReducer(state.answers, event, questions);
   const remote = remoteReducer(state.remote, event);
   const usage = usageReducer(state.usage, event);
   const keys = keysReducer(state.keys, event);
@@ -74,7 +80,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const settings = settingsReducer(state.settings, event);
   const dialog = dialogReducer(state.dialog, event);
 
-  return settle(state, { view, activity, questions, remote, usage, keys, status, update, settings, dialog });
+  return settle(state, { view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog });
 }
 
 /**
@@ -91,10 +97,13 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
  */
 export function rekeyState(state: RendererState, oldId: string, newId: string): RendererState {
   if (oldId === newId) return state;
+  const questions = rekeyQuestions(state.questions, oldId, newId);
   return settle(state, {
     view: rekeyView(state.view, oldId, newId),
     activity: rekeyActivity(state.activity, oldId, newId),
-    questions: rekeyQuestions(state.questions, oldId, newId),
+    questions,
+    // Keyed by tool-use id, so nothing moves; a set the re-key dropped loses its entry.
+    answers: followPending(state.answers, questions),
     remote: rekeyRemote(state.remote, oldId, newId),
     usage: state.usage,
     keys: rekeyKeys(state.keys, oldId, newId),
