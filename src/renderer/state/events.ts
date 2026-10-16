@@ -17,6 +17,7 @@ import type { UpdateNotice } from '../../domain/update/release';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ViewState } from './view-slice';
+import type { DialogRequest } from './dialog-slice';
 
 // ── Pushed by the main process ──
 
@@ -62,7 +63,11 @@ export type LocalEvent =
   /** The quota gauges fetched the usage windows. */
   | { type: 'usageFetched'; rows: readonly UsageLimit[] }
   /** The usage fetch failed; what is known stays, but it counts as loaded. */
-  | { type: 'usageFailed' };
+  | { type: 'usageFailed' }
+  /** Open a modal dialog, replacing any that is open. */
+  | { type: 'dialogOpened'; request: DialogRequest }
+  /** Close the dialog opened as `seq`; a stale close from a replaced one does nothing. */
+  | { type: 'dialogClosed'; seq: number };
 
 export type RendererEvent = PushEvent | LocalEvent;
 

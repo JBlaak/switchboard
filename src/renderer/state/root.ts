@@ -6,11 +6,13 @@
  * concerns nobody notifies nobody.
  */
 import { activityReducer, initialActivityState } from './activity-slice';
+import { dialogReducer, initialDialogState } from './dialog-slice';
 import { initialQuestionsState, questionsReducer } from './questions-slice';
 import { initialRemoteState, remoteReducer } from './remote-slice';
 import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
+import type { DialogState } from './dialog-slice';
 import type { QuestionsState } from './questions-slice';
 import type { RemoteState } from './remote-slice';
 import type { RendererEvent } from './events';
@@ -23,6 +25,7 @@ export interface RendererState {
   readonly questions: QuestionsState;
   readonly remote: RemoteState;
   readonly usage: UsageState;
+  readonly dialog: DialogState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -32,6 +35,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     questions: initialQuestionsState,
     remote: initialRemoteState,
     usage: initialUsageState,
+    dialog: initialDialogState,
   };
 }
 
@@ -43,10 +47,11 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const questions = questionsReducer(state.questions, event);
   const remote = remoteReducer(state.remote, event);
   const usage = usageReducer(state.usage, event);
+  const dialog = dialogReducer(state.dialog, event);
 
   if (view === state.view && activity === state.activity && questions === state.questions
-    && remote === state.remote && usage === state.usage) {
+    && remote === state.remote && usage === state.usage && dialog === state.dialog) {
     return state;
   }
-  return { view, activity, questions, remote, usage };
+  return { view, activity, questions, remote, usage, dialog };
 }
