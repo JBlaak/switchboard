@@ -11,12 +11,10 @@
 import { installLayout } from './layout';
 import { installIpcBridge } from './ipc-bridge';
 import { installIpcListeners } from './ipc-listeners';
-import { installSearch } from './search';
 import { installShortcuts } from './shortcuts';
 import { installTimeTicker } from './time-ticker';
 import { installSidebar } from '../features/sessions/sidebar';
 import { installSidebarActivity } from '../features/sessions/sidebar-activity';
-import { installSidebarFilters } from '../features/sessions/sidebar-filters';
 import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
 import { loadProjects } from '../features/sessions/session-list';
 import { openSession } from '../features/sessions/session-actions';
@@ -32,13 +30,12 @@ import { bufferTerminalData } from '../features/terminal/write-buffer';
 import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
 } from '../features/terminal/terminal-themes';
-import { installAppearanceToggle } from '../features/settings/appearance-toggle';
-import { installSleepToggle } from '../features/settings/sleep-toggle';
 import { installPatch } from '../features/patch/patch';
 import { installQuestions } from '../features/questions/questions';
 import { mountReactRoot } from '../ui/Root';
 import { countRunning } from '../ui/footer/actions';
 import { installFooter } from '../ui/footer/install-footer';
+import { installToolbar } from '../ui/toolbar/actions';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -53,14 +50,11 @@ export function bootstrap(): void {
   installIpcListeners();
   installIpcBridge(window.api, dispatch, bufferTerminalData);
   installLayout();
-  installSidebarFilters();
+  installToolbar();
   installSidebarKeyboard();
-  installSearch();
   installShortcuts();
   installTimeTicker();
   installFooter();
-  installSleepToggle();
-  installAppearanceToggle();
   installPatch();
   installQuestions();
   followColorSchemeInTerminals();

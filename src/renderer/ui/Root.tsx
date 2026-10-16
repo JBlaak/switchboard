@@ -8,6 +8,7 @@
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Toolbar } from './toolbar/Toolbar';
 import { Dialogs } from './dialogs/Dialogs';
 import { Portal } from './Portal';
 import { Footer } from './footer/Footer';
@@ -19,6 +20,7 @@ import type { Root as ReactRoot } from 'react-dom/client';
 export function Root(): JSX.Element | null {
   return (
     <>
+      <Toolbar />
       <Dialogs />
       <Portal target="settings-viewer"><SettingsViewer /></Portal>
       <Portal target="sidebar-footer"><Footer /></Portal>

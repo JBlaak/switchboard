@@ -50,8 +50,15 @@ export interface HostStubs {
    * renderer sees when an install works: the app quits from under it.
    */
   installUpdate: boolean | 'pending';
-  /** Whether `pmset` would report sleep as disabled. */
-  sleepDisabled: boolean;
+  /** Whether `pmset` would report sleep as disabled; null is a host that cannot say. */
+  sleepDisabled: boolean | null;
+  /**
+   * How long the sleep switch takes to answer, standing in for the password
+   * prompt the real one may show.
+   */
+  sleepPromptDelayMs: number;
+  /** True when that prompt is cancelled: the switch answers with the state unchanged. */
+  sleepPromptCancelled: boolean;
   /** What the folder picker "chooses"; null is a cancelled dialog. */
   browseFolder: string | null;
   /**
@@ -88,6 +95,8 @@ export const DEFAULT_STUBS: HostStubs = {
   update: null,
   installUpdate: 'pending',
   sleepDisabled: false,
+  sleepPromptDelayMs: 0,
+  sleepPromptCancelled: false,
   browseFolder: null,
   geocode: {},
 };
@@ -114,8 +123,9 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       return state.installUpdate === 'pending' ? new Promise(() => {}) : state.installUpdate;
     });
     replace(channels.getSleepDisabled, () => state.sleepDisabled);
-    replace(channels.setSleepDisabled, (disabled) => {
-      state.sleepDisabled = !!disabled;
+    replace(channels.setSleepDisabled, async (disabled) => {
+      await new Promise(resolve => setTimeout(resolve, state.sleepPromptDelayMs));
+      if (!state.sleepPromptCancelled) state.sleepDisabled = !!disabled;
       return state.sleepDisabled;
     });
     replace(channels.browseFolder, () => state.browseFolder);
@@ -157,6 +167,17 @@ export async function openedExternally(app: ElectronApplication): Promise<string
   return await app.evaluate(() => {
     return [...(globalThis as WithStubs).__switchboardE2E.opened];
   });
+}
+
+/**
+ * Make every search fail in the main process, as an index that cannot parse a
+ * query would if main did not already answer it with no results.
+ */
+export async function breakSearch(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ ipcMain }, channel) => {
+    ipcMain.removeHandler(channel);
+    ipcMain.handle(channel, () => { throw new Error('fts5: syntax error'); });
+  }, INVOKE.search);
 }
 
 /** How often each counted stub has been called since the app launched. */
