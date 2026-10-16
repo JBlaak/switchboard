@@ -5,7 +5,8 @@
  * it is at that moment: how many sessions run, how close the usage limit is,
  * the weather and the hour. It does not follow those while it is on screen; the
  * next appearance picks up whatever changed. The placeholder is shown and
- * hidden by the vanilla code, which says so with `emptyScreenShown`.
+ * hidden imperatively, with the rest of the main area's panel swap, and
+ * `showEmptyScreen` says so with `emptyScreenShown`.
  *
  * Clicking Patch pokes it, and dragging picks it up; either way it answers
  * straight away with a reaction, dressed as it was, without gathering the

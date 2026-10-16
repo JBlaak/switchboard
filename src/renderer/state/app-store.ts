@@ -2,13 +2,14 @@
  * The renderer's one store.
  *
  * Everything that changes state comes through `dispatch`: the IPC bridge for
- * what main pushes, the adapters in the `*-store` modules for what the vanilla
- * code does, and the timers. React components read it with `useStore` (see
- * `ui/use-store`); vanilla code reads it through those same adapters, or
- * subscribes with `onEvent` to follow up on one kind of event.
+ * what main pushes, the actions the components call, the adapters in the
+ * `*-store` modules for the imperative modules outside React, and the timers.
+ * React components read it with `useStore` (see `ui/use-store`); the modules
+ * outside React read it through those same adapters, or subscribe with
+ * `onEvent` to follow up on one kind of event.
  *
  * Listeners run in the order they subscribed. Where that matters — the IPC
- * follow-ups re-key `openSessions` before the questions panel looks for the
+ * follow-ups re-key `openSessions` before anything else looks for the
  * re-keyed session — `bootstrap` installs them in that order.
  */
 import { createStore } from './store';

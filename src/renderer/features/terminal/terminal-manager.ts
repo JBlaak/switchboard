@@ -25,13 +25,12 @@ import { dispatch } from '../../state/app-store';
 import { setActiveSession } from '../sessions/active-session';
 import { headerNameFor } from '../sessions/terminal-header';
 import { loadShellProfile } from '../../ui/terminal/actions';
-import { placeholder } from '../../lib/dom';
+import { placeholder, settingsViewer, terminalArea } from '../../lib/dom';
 import { handleSessionNavKey, isSessionNavKey } from '../terminal/session-nav';
-import { hideAllViewers } from '../panel/viewers';
 import {
   archiveActiveSession, focusSidebar, isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey,
 } from '../sessions/sidebar-keyboard';
-import { showProjectPickerDialog } from '../dialogs/project-picker-dialog';
+import { openDialog } from '../../ui/dialogs/actions';
 import { isQuickSessionKey, launchQuickSession } from '../sessions/quick-session';
 import { openSessions, sessionMap } from '../../state/session-store';
 import { remoteStatus } from '../../state/remote-status-store';
@@ -125,7 +124,7 @@ function setupTerminalKeyBindings(
     // Cmd+A: open the new-session picker. preventDefault keeps the menu's
     // Select All from also running.
     if (isSessionPickerKey(e)) {
-      if (e.type === 'keydown') { e._handled = true; e.preventDefault(); showProjectPickerDialog(); }
+      if (e.type === 'keydown') { e._handled = true; e.preventDefault(); openDialog({ kind: 'projectPicker' }); }
       return false;
     }
 
@@ -394,8 +393,13 @@ export function showSession(sessionId: string): void {
   });
   clearNotifications(sessionId);
 
+  // Terminals and the settings panel share the main area, and only one may be
+  // visible: putting the terminal back hides settings, so it cannot linger
+  // behind it.
   placeholder.style.display = 'none';
-  hideAllViewers();
+  settingsViewer.style.display = 'none';
+  dispatch({ type: 'settingsClosed' });
+  terminalArea.style.display = '';
   if (session) void loadShellProfile(session);
   if (entry) {
     entry.terminal.focus();

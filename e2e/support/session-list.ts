@@ -5,9 +5,8 @@
  * Two of these reach past roles and text, each for a reason:
  *
  * - A row is found by its `data-session-id`. That attribute is a contract in
- *   its own right — the keyboard navigation and the session cycling read it —
- *   so a port has to keep it anyway, and the state classes a row carries are
- *   the thing being checked.
+ *   its own right — the stop's settle motion finds the row by it — and the
+ *   state classes a row carries are the thing being checked.
  * - Motion has no accessible handle at all. The recorder watches the inline
  *   transforms and opacities the springs write, and the ghosts a removed row
  *   leaves, which is the only place an animation is observable.

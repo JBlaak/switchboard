@@ -6,7 +6,7 @@
  * dialog *does* reads in one place and the components stay about markup.
  */
 import { dispatch } from '../../state/app-store';
-import { reloadProjects } from '../../app/refresh';
+import { loadProjects } from '../../features/sessions/session-list';
 import { archiveSessionRow } from '../../features/sessions/session-actions';
 import { pollActiveSessions } from '../../features/sessions/session-poller';
 import { projectLabel } from '../../features/sessions/project-label';
@@ -80,7 +80,7 @@ export async function removeRemoteProject(project: Project): Promise<boolean> {
     + 'This disconnects open connections. tmux sessions on the remote machine keep running.';
   if (!confirm(message)) return false;
   await window.api.removeRemoteProject(project.projectPath);
-  await reloadProjects();
+  await loadProjects();
   return true;
 }
 
@@ -89,7 +89,7 @@ export async function hideWorktree(project: Project): Promise<boolean> {
   const name = project.projectPath.split('/').pop();
   if (!confirm(`Hide worktree "${name}"?\n\nSession files are not deleted.`)) return false;
   await window.api.removeProject(project.projectPath);
-  await reloadProjects();
+  await loadProjects();
   return true;
 }
 
@@ -108,6 +108,6 @@ export async function archiveAllSessions(project: Project): Promise<boolean> {
   }
 
   void pollActiveSessions();
-  await reloadProjects();
+  await loadProjects();
   return true;
 }

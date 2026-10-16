@@ -1,11 +1,10 @@
 /**
- * Render into an existing container of the vanilla page.
+ * Render into an existing container of the page.
  *
- * How a surface moves to React without moving in the DOM: the root stays one
- * tree, and each ported surface portals into the element `index.html` (or
- * vanilla code) already gives it, found by id. While the target is missing —
- * a container the vanilla code has not built yet — nothing renders, rather
- * than throwing.
+ * How a surface lives in React without owning the layout: the root stays one
+ * tree, and each surface portals into the element `index.html` gives it,
+ * found by id. While the target is missing nothing renders, rather than
+ * throwing.
  */
 import { createPortal } from 'react-dom';
 import type { JSX, ReactNode } from 'react';

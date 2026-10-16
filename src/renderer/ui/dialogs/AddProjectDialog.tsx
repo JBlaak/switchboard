@@ -7,7 +7,7 @@
  * they left the host blank.
  */
 import { useEffect, useRef, useState } from 'react';
-import { reloadProjects } from '../../app/refresh';
+import { loadProjects } from '../../features/sessions/session-list';
 import { addLocalProject, addRemoteProject } from './actions';
 import { DialogShell } from './DialogShell';
 import type { JSX } from 'react';
@@ -46,7 +46,7 @@ export function AddProjectDialog({ onClose }: AddProjectDialogProps): JSX.Elemen
       return;
     }
     onClose();
-    await reloadProjects();
+    await loadProjects();
   };
 
   const browse = async (): Promise<void> => {

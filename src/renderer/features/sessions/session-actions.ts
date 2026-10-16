@@ -9,7 +9,7 @@
  */
 import { encodeProjectPath } from '../../../domain/project/project-path';
 import { sessionExitedBanner } from '../../../domain/terminal/ansi';
-import { refreshSidebar } from '../../app/refresh';
+import { relayoutSessionList } from '../../ui/session-list/relayout';
 import { resolveDefaultSessionOptions } from '../dialogs/launch-options';
 import { setActiveSession } from './active-session';
 import { pollActiveSessions } from './session-poller';
@@ -53,7 +53,7 @@ function trackPending(session: SessionRow, remote = false): void {
   const folder = encodeProjectPath(session.projectPath);
   pendingSessions.set(session.sessionId, { session, projectPath: session.projectPath, folder });
   injectIntoCaches(session, folder, remote);
-  refreshSidebar();
+  relayoutSessionList();
 }
 
 /** A Claude session with the project's default options, local or remote. */
@@ -165,7 +165,7 @@ export async function confirmAndStopSession(sessionId: string): Promise<void> {
   await window.api.stopSession(sessionId);
   dispatch({ type: 'ptyStopped', sessionId });
   if (view.activeSessionId === sessionId) clearScreen();
-  refreshSidebar();
+  relayoutSessionList();
   settleStoppedRow(sessionId);
 }
 

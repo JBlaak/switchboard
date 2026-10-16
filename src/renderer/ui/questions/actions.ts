@@ -7,7 +7,7 @@
  * Patch and is read at the moment Patch appears.
  */
 import { draftAnswers } from '../../../domain/questions/answer-draft';
-import { refreshSidebar } from '../../app/refresh';
+import { relayoutSessionList } from '../session-list/relayout';
 import { fetchWeather } from '../../app/weather';
 import { dozeMinute } from '../../features/questions/question-copy';
 import { dispatch, getState, onEvent } from '../../state/app-store';
@@ -36,10 +36,10 @@ export function installQuestions(): void {
   // Asking moves a row into the needs-input section and writes its label;
   // settling moves it back. Both are a render, not a class toggle.
   onEvent('questionsAsked', (_event, state, previous) => {
-    if (state.questions.bySession !== previous.questions.bySession) refreshSidebar();
+    if (state.questions.bySession !== previous.questions.bySession) relayoutSessionList();
   });
   onEvent('questionsSettled', (_event, state, previous) => {
-    if (state.questions.bySession !== previous.questions.bySession) refreshSidebar();
+    if (state.questions.bySession !== previous.questions.bySession) relayoutSessionList();
   });
 
   setInterval(tickDoze, DOZE_TICK_MS);

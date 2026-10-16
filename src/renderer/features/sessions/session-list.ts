@@ -12,7 +12,7 @@
  */
 import { isPendingAbandoned } from '../../../domain/session/pending';
 import { encodeProjectPath } from '../../../domain/project/project-path';
-import { refreshSidebar } from '../../app/refresh';
+import { relayoutSessionList } from '../../ui/session-list/relayout';
 import { dropPendingSession } from './session-actions';
 import { pollActiveSessions } from './session-poller';
 import {
@@ -46,7 +46,7 @@ export async function loadProjects({ resort = false }: LoadOptions = {}): Promis
   await adoptActiveTerminals();
 
   await pollActiveSessions();
-  refreshSidebar({ resort });
+  relayoutSessionList({ resort });
 }
 
 /**

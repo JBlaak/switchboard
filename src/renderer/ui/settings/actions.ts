@@ -3,12 +3,14 @@
  * stored settings, applying them to the rest of the app, and swapping the
  * panel in for the terminal or the empty screen.
  *
- * The swap stays imperative. The terminal area and the placeholder are still
- * vanilla, and a terminal can only be refitted once it has a layout box again —
- * which has to be true synchronously, before `refitOpenTerminals` runs, not
- * whenever React next commits.
+ * The swap stays imperative: the terminal area, the placeholder and the panel
+ * are containers in `index.html` shown and hidden by style, and a terminal can
+ * only be refitted once it has a layout box again — which has to be true
+ * synchronously, before `refitOpenTerminals` runs, not whenever React next
+ * commits.
  */
-import { refreshSidebar, reloadProjects } from '../../app/refresh';
+import { loadProjects } from '../../features/sessions/session-list';
+import { relayoutSessionList } from '../session-list/relayout';
 import { placeholder, settingsViewer, terminalArea, terminalHeader } from '../../lib/dom';
 import { dispatch } from '../../state/app-store';
 import { openSessions, view } from '../../state/session-store';
@@ -97,7 +99,7 @@ export async function saveSettings(
       fontSize: settings.terminalFontSize,
       lineHeight: settings.terminalLineHeight,
     });
-    refreshSidebar();
+    relayoutSessionList();
     void syncQuickSessionButton();
   }
 
@@ -115,7 +117,7 @@ export async function hideProject(projectPath: string, shortName: string): Promi
   settingsViewer.style.display = 'none';
   dispatch({ type: 'settingsClosed' });
   showEmptyScreen();
-  void reloadProjects();
+  void loadProjects();
 }
 
 /** Look a weather city up. Null when there is no such place. */

@@ -1,6 +1,6 @@
 /**
  * A stable local key per session, for the things that must not notice a
- * re-key: element keys, the sidebar's morph, the reflow glide.
+ * re-key: element keys, React's keys in the session list, the reflow glide.
  *
  * A session's id is not stable. A fork or an accepted plan gives a running
  * session a new one, and anything keyed by the id alone — a row's element id,
