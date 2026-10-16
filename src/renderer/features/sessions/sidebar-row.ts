@@ -7,9 +7,10 @@
  * cannot orphan a listener, because there were none on it.
  */
 import { cleanDisplayName } from '../../../domain/session/title';
+import { pullRequestChips, pullRequestLabel } from '../../../domain/session/pull-requests';
 import { byMostRecentlyModified } from '../../../domain/session/session';
 import {
-  attentionSessions, responseReadySessions, sessionBusyState,
+  attentionSessions, responseReadySessions, sessionAgents, sessionBusyState,
 } from '../../state/activity-store';
 import { view } from '../../state/session-store';
 import { escapeHtml, formatDate } from '../../lib/format';
@@ -17,6 +18,7 @@ import { ICONS } from '../../lib/icons';
 import { getExpandedSlugs } from './active-session';
 import { projectLabel } from './project-label';
 import type { SessionRow } from '../../../domain/session/session';
+import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
 
 /** Inline SVGs used by the row. Kept here because they are markup, not icons. */
 const SVG = {
@@ -139,6 +141,10 @@ function buildMeta(session: SessionRow, projectPath: string): HTMLElement {
   time.className = 'session-time';
   time.textContent = sessionTimeLabel(session);
   left.appendChild(time);
+  writeAgentsBadge(left, sessionAgents.get(session.sessionId) ?? []);
+
+  const prs = buildPullRequests(session);
+  if (prs) left.appendChild(prs);
 
   const shortId = document.createElement('span');
   shortId.className = 'session-short-id';
@@ -147,6 +153,69 @@ function buildMeta(session: SessionRow, projectPath: string): HTMLElement {
 
   meta.append(left, shortId);
   return meta;
+}
+
+/**
+ * Draw — or redraw, or remove — the badge counting a session's working agents.
+ *
+ * One helper for both paths: a full render calls it while building the row,
+ * and an agents change calls it on the row already in the DOM, so a count can
+ * tick up and down without re-rendering the list. It takes the row, or any
+ * element holding its `.session-time`, and puts the badge right after the time
+ * so it reads as one more piece of the row's metadata. Shown only when something is
+ * working; the tooltip names each agent's task.
+ */
+export function writeAgentsBadge(container: HTMLElement, agents: readonly WorkingAgent[]): void {
+  container.querySelector('.session-agents')?.remove();
+  if (agents.length === 0) return;
+  const time = container.querySelector('.session-time');
+  if (!time) return;
+
+  const badge = document.createElement('span');
+  badge.className = 'session-agents';
+  badge.title = `${agents.length} ${agents.length === 1 ? 'agent' : 'agents'} working\n`
+    + agents.map(agent => '• ' + (agent.title || 'Untitled agent')).join('\n');
+  badge.innerHTML = ICONS.agents(11);
+  const count = document.createElement('span');
+  count.className = 'session-agents-count';
+  count.textContent = String(agents.length);
+  badge.appendChild(count);
+
+  time.after(badge);
+}
+
+/**
+ * The PRs the session opened, as `#1309` chips, newest first.
+ *
+ * Two at most, with the rest folded into a `+N` whose tooltip names them: the
+ * meta line is already the busiest part of the row. Each chip carries its URL
+ * for `sidebar-events` to open; the `+N` is only a tooltip.
+ */
+function buildPullRequests(session: SessionRow): HTMLElement | null {
+  const { shown, hidden } = pullRequestChips(session.pullRequests);
+  if (!shown.length) return null;
+
+  const list = document.createElement('span');
+  list.className = 'session-prs';
+
+  for (const pr of shown) {
+    const chip = document.createElement('span');
+    chip.className = 'session-pr';
+    chip.dataset.url = pr.url;
+    chip.title = pullRequestLabel(pr) + '\nClick to open the pull request in your browser';
+    chip.textContent = '#' + pr.number;
+    list.appendChild(chip);
+  }
+
+  if (hidden.length) {
+    const more = document.createElement('span');
+    more.className = 'session-pr-more';
+    more.title = hidden.map(pullRequestLabel).join('\n');
+    more.textContent = '+' + hidden.length;
+    list.appendChild(more);
+  }
+
+  return list;
 }
 
 /**

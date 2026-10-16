@@ -102,3 +102,58 @@ test('foreign higher-version database is reconciled, not crashed', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('fresh database gets pullRequests column', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-db-fresh-prs-'));
+  try {
+    const r = openDatabase(dir);
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(inspectDb(dir).cols.includes('pullRequests'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// A cache written before pullRequests existed holds rows that would read as
+// "no PRs" until their transcript next changes. The column's arrival clears the
+// cache and the folder gate so the cold-start rebuild re-reads every session.
+test('a cache without pullRequests gains the column and is cleared for re-index', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-db-prs-'));
+  try {
+    const seed = runInElectronNode(`
+      const Database = require('better-sqlite3');
+      const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'));
+      db.exec(\`CREATE TABLE session_cache (
+        sessionId TEXT PRIMARY KEY, folder TEXT NOT NULL, projectPath TEXT,
+        summary TEXT, firstPrompt TEXT, created TEXT, modified TEXT,
+        messageCount INTEGER DEFAULT 0, slug TEXT, aiTitle TEXT, fileMtime TEXT
+      )\`);
+      db.exec('CREATE TABLE cache_meta (folder TEXT PRIMARY KEY, projectPath TEXT, indexMtimeMs REAL)');
+      db.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
+      db.prepare("INSERT INTO settings (key, value) VALUES ('db_version', '4')").run();
+      db.prepare("INSERT INTO session_cache (sessionId, folder, modified, fileMtime) VALUES ('s1', 'f1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')").run();
+      db.prepare("INSERT INTO cache_meta (folder, indexMtimeMs) VALUES ('f1', 123)").run();
+    `, dir);
+    assert.equal(seed.status, 0, seed.stderr);
+
+    const r = openDatabase(dir);
+    assert.equal(r.status, 0, r.stderr);
+
+    const state = inspectDb(dir);
+    assert.ok(state.cols.includes('pullRequests'), 'pullRequests column added');
+    assert.equal(state.cacheCount, 0, 'stale cache cleared for re-index');
+    assert.equal(state.metaCount, 0, 'folder index gate cleared for re-index');
+
+    // Only once: a second open finds the column and leaves the cache alone.
+    const refill = runInElectronNode(`
+      const Database = require('better-sqlite3');
+      const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'));
+      db.prepare("INSERT INTO session_cache (sessionId, folder, pullRequests) VALUES ('s1', 'f1', '[]')").run();
+    `, dir);
+    assert.equal(refill.status, 0, refill.stderr);
+    assert.equal(openDatabase(dir).status, 0);
+    assert.equal(inspectDb(dir).cacheCount, 1, 'cache kept once the column exists');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

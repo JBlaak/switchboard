@@ -241,6 +241,30 @@ test('7501 reports drive the busy state and a block reaches the renderer', () =>
     ['Claude needs your permission']);
 });
 
+test('7501 child records reach the renderer as working agents, once per change', () => {
+  const h = harness();
+  const session = h.addSession('s1');
+  h.lifecycle.wire('s1', session);
+  const title = (text: string) => Buffer.from(text).toString('base64');
+
+  session.pty.emitData('\x1b]7501;state=working:app=claude-code\x1b\\');
+  session.pty.emitData(`\x1b]7501;state=working:app=claude-code:id=a:title=${title('Count domain')}\x1b\\`);
+  session.pty.emitData(`\x1b]7501;state=working:app=claude-code:id=a:title=${title('Count domain')}\x1b\\`);
+  session.pty.emitData(`\x1b]7501;state=working:app=claude-code:id=b:title=${title('Count renderer')}\x1b\\`);
+  session.pty.emitData('\x1b]7501;state=clear:id=b\x1b\\');
+  session.pty.emitData('\x1b]7501;state=clear\x1b\\');
+
+  assert.deepEqual(h.renderer.only('sessionAgents').map(([, id, agents]) => [id, agents]), [
+    ['s1', [{ id: 'a', title: 'Count domain' }]],
+    ['s1', [{ id: 'a', title: 'Count domain' }, { id: 'b', title: 'Count renderer' }]],
+    ['s1', [{ id: 'a', title: 'Count domain' }]],
+    ['s1', []],
+  ]);
+  // Subagents do not move the session's own state; only the root's working
+  // and the final clear do.
+  assert.deepEqual(h.renderer.only('cliBusyState').map(([, , busy]) => busy), [true, false]);
+});
+
 test('an exit with no remote observer retires the session', () => {
   const h = harness();
   const session = h.addSession('s1');

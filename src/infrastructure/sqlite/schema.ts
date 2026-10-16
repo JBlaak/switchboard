@@ -36,7 +36,8 @@ const TABLES = [
     messageCount INTEGER DEFAULT 0,
     slug TEXT,
     aiTitle TEXT,
-    fileMtime TEXT
+    fileMtime TEXT,
+    pullRequests TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS cache_meta (
     folder TEXT PRIMARY KEY,
@@ -127,6 +128,16 @@ function reconcileColumns(db: Database.Database): void {
     // are stale. Clear the cache to force a full re-index; without this,
     // dormant folders would keep mtime-based times indefinitely, because the
     // folder-level index gate never re-reads them.
+    db.exec('DELETE FROM session_cache');
+    db.exec('DELETE FROM cache_meta');
+  }
+
+  if (!columns.has('pullRequests')) {
+    // A JSON array of { number, url, repository }. Rows cached before it
+    // existed would otherwise read as "no PRs" for as long as their transcript
+    // stays untouched — the per-file mtime gate never re-reads them — so clear
+    // the cache and let the cold-start rebuild fill it in for every session.
+    db.exec('ALTER TABLE session_cache ADD COLUMN pullRequests TEXT');
     db.exec('DELETE FROM session_cache');
     db.exec('DELETE FROM cache_meta');
   }

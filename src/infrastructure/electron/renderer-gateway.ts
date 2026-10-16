@@ -13,6 +13,7 @@
 import { EVENT } from '../../ipc/channels';
 import type { BrowserWindow } from 'electron';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
+import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../../domain/update/release';
 import type { RendererGateway } from '../../application/ports/renderer-gateway';
 
@@ -53,6 +54,10 @@ export class ElectronRendererGateway implements RendererGateway {
 
   sessionNeedsAttention(sessionId: string): void {
     this.#send(EVENT.sessionNeedsAttention, sessionId);
+  }
+
+  sessionAgents(sessionId: string, agents: WorkingAgent[]): void {
+    this.#send(EVENT.sessionAgents, sessionId, agents);
   }
 
   remoteStatus(sessionId: string, status: RemoteStatusPayload): void {
