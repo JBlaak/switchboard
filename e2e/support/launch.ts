@@ -50,9 +50,15 @@ export interface LaunchedApp {
   close(): Promise<void>;
 }
 
+export interface LaunchOptions {
+  /** Fake timers on the renderer's clock instead of only a frozen `Date`. */
+  fakeTimers?: boolean;
+}
+
 export async function launchApp(
   home: FixtureHome,
   stubs: Partial<HostStubs> = {},
+  { fakeTimers = false }: LaunchOptions = {},
 ): Promise<LaunchedApp> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -84,7 +90,7 @@ export async function launchApp(
   try {
     page = await app.firstWindow();
     await installHostStubs(app, { ...DEFAULT_STUBS, ...stubs });
-    await settleWindow(app, page);
+    await settleWindow(app, page, fakeTimers);
   } catch (err) {
     await quit(app);
     throw err;
@@ -133,15 +139,21 @@ async function quit(app: ElectronApplication): Promise<void> {
  * reduced-motion emulation and the host stubs apply from the first frame. The
  * reload is safe: nothing has been launched yet, and the renderer rebuilds
  * itself from main.
+ *
+ * With `fakeTimers` the clock is installed instead of fixed: it starts at
+ * FIXTURE_NOW and runs on from there, and `page.clock.fastForward` can jump
+ * the renderer's timers ahead. Only for tests about timing, since the running
+ * clock lets relative times drift away from the screenshots'.
  */
-async function settleWindow(app: ElectronApplication, page: Page): Promise<void> {
+async function settleWindow(app: ElectronApplication, page: Page, fakeTimers: boolean): Promise<void> {
   await app.evaluate(({ BrowserWindow }, size) => {
     const window = BrowserWindow.getAllWindows()[0];
     window.setContentSize(size.width, size.height);
     window.center();
   }, WINDOW_SIZE);
 
-  await page.context().clock.setFixedTime(FIXTURE_NOW);
+  if (fakeTimers) await page.context().clock.install({ time: FIXTURE_NOW });
+  else await page.context().clock.setFixedTime(FIXTURE_NOW);
   // colorScheme: null, explicitly. Playwright otherwise emulates `light` along
   // with whatever is asked for, which would hide the app's own dark mode: the
   // scheme has to come from the appearance setting, through nativeTheme, as it
