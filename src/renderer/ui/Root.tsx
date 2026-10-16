@@ -8,12 +8,17 @@
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Dialogs } from './dialogs/Dialogs';
 import type { JSX } from 'react';
 import type { Root as ReactRoot } from 'react-dom/client';
 
 /** The surfaces ported so far, each a `<Portal>` into its container. */
 export function Root(): JSX.Element | null {
-  return null;
+  return (
+    <>
+      <Dialogs />
+    </>
+  );
 }
 
 /**
