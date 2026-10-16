@@ -17,6 +17,7 @@ import { initialSettingsState, settingsReducer } from './settings-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialToolbarState, toolbarReducer } from './toolbar-slice';
 import { initialUpdateState, updateReducer } from './update-slice';
+import { initialTerminalState, rekeyTerminal, terminalReducer } from './terminal-slice';
 import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, rekeyView, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
@@ -29,6 +30,7 @@ import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
 import type { ToolbarState } from './toolbar-slice';
 import type { UpdateState } from './update-slice';
+import type { TerminalState } from './terminal-slice';
 import type { UsageState } from './usage-slice';
 import type { ViewState } from './view-slice';
 
@@ -44,6 +46,7 @@ export interface RendererState {
   readonly keys: KeysState;
   readonly status: StatusState;
   readonly update: UpdateState;
+  readonly terminal: TerminalState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -59,6 +62,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     keys: initialKeysState,
     status: initialStatusState,
     update: initialUpdateState,
+    terminal: initialTerminalState,
   };
 }
 
@@ -78,9 +82,10 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const settings = settingsReducer(state.settings, event);
   const dialog = dialogReducer(state.dialog, event);
   const toolbar = toolbarReducer(state.toolbar, event);
+  const terminal = terminalReducer(state.terminal, event);
 
   return settle(state, {
-    view, activity, questions, remote, usage, keys, status, update, settings, dialog, toolbar,
+    view, activity, questions, remote, usage, keys, status, update, settings, dialog, toolbar, terminal,
   });
 }
 
@@ -110,6 +115,7 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     settings: state.settings,
     dialog: state.dialog,
     toolbar: state.toolbar,
+    terminal: rekeyTerminal(state.terminal, oldId, newId),
   });
 }
 

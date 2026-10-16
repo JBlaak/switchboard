@@ -15,6 +15,8 @@ import { Footer } from './footer/Footer';
 import { SettingsViewer } from './settings/SettingsViewer';
 import type { JSX } from 'react';
 import type { Root as ReactRoot } from 'react-dom/client';
+import { TerminalHost } from './terminal/TerminalHost';
+import { TerminalHeaderControls, TerminalHeaderInfo } from './terminal/TerminalHeader';
 
 /** The surfaces ported so far, each a `<Portal>` into its container. */
 export function Root(): JSX.Element | null {
@@ -24,6 +26,9 @@ export function Root(): JSX.Element | null {
       <Dialogs />
       <Portal target="settings-viewer"><SettingsViewer /></Portal>
       <Portal target="sidebar-footer"><Footer /></Portal>
+      <Portal target="terminals"><TerminalHost /></Portal>
+      <Portal target="terminal-header-info"><TerminalHeaderInfo /></Portal>
+      <Portal target="terminal-header-controls"><TerminalHeaderControls /></Portal>
     </>
   );
 }
