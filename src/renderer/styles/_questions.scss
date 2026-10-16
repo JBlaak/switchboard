@@ -1,0 +1,597 @@
+/* ========== QUESTIONS ==========
+   Claude's questions as a sheet over the terminal area (features/questions).
+   Timings follow the approved motion spec: ease-out (.2,.8,.2,1) for things
+   that slide, the spring (.34,1.56,.64,1) for anything that pops, and exits
+   shorter than entrances. The per-question swap, the option stagger and the
+   check pop are Web Animations in question-motion.ts; the sheet and the
+   terminal sinking behind it are the transitions here. */
+
+$qp-ease-out: cubic-bezier(.2, .8, .2, 1);
+$qp-spring: cubic-bezier(.34, 1.56, .64, 1);
+
+/* ---- The sheet and the terminal behind it ---- */
+
+/* A sibling of the terminal containers, over the same box. */
+.qp {
+  position: absolute;
+  inset: 0 20px 0 0;
+  z-index: 5;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 36px 32px 28px;
+  box-sizing: border-box;
+  outline: none;
+  background: var(--sb-bg-base);
+  color: var(--sb-text);
+  font-family: var(--sb-font-body);
+
+  /* Leaving: drops 28px and fades; visibility goes once it has. */
+  transform: translateY(28px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 260ms ease-in,
+    opacity 260ms ease-in,
+    visibility 0s linear 260ms;
+}
+
+/* Arriving: rises and fades in over the terminal. */
+.qp.is-up {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 340ms $qp-ease-out,
+    opacity 220ms ease,
+    visibility 0s linear 0s;
+}
+
+/* The terminal grows back a 60ms beat after the sheet starts to drop. Only
+   transform and opacity: neither touches layout, so the xterm is never refitted. */
+.terminal-container {
+  transform-origin: 50% 0%;
+  transition:
+    transform 340ms $qp-ease-out 60ms,
+    opacity 280ms ease 60ms;
+}
+
+/* …and sinks to 97% and dims to a quarter while the questions are up. */
+.terminal-container.qp-under {
+  transform: scale(0.97);
+  opacity: 0.25;
+  pointer-events: none;
+  transition:
+    transform 340ms $qp-ease-out,
+    opacity 340ms ease;
+}
+
+/* A session switch lands in its state rather than animating into it. */
+#terminals.qp-instant .qp,
+#terminals.qp-instant .terminal-container {
+  transition: none;
+}
+
+/* ---- Layout: Patch's column beside the question column ---- */
+
+.qp-inner {
+  width: 100%;
+  max-width: 920px;
+  display: flex;
+  gap: 36px;
+  align-items: flex-start;
+}
+
+.qp-patch-col {
+  width: 196px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-top: 24px;
+}
+
+/* Room for the bubble and the tallest move, held from the start so Patch
+   does not shift as the bubble pops in. */
+.qp-patch {
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transform-origin: 50% 100%;
+}
+
+.qp-patch .patch-svg {
+  width: 176px;
+  height: auto;
+}
+
+.qp-patch .patch-bubble {
+  max-width: 196px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.qp-foot {
+  font-size: 11.5px;
+  color: var(--sb-text-dimmest);
+  margin-top: 2px;
+}
+
+/* Patch's line, for screen readers: the bubble itself is inside the package. */
+.qp-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.qp-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* ---- Progress tabs ---- */
+
+.qp-tabs {
+  display: grid;
+  grid-template-columns: repeat(var(--qp-tab-count, 3), minmax(0, 1fr));
+  gap: 8px;
+}
+
+.qp-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.qp-tab-bar {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--sb-line);
+  overflow: hidden;
+}
+
+.qp-tab-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: var(--sb-accent);
+  transition: width 300ms $qp-ease-out, background 200ms ease;
+}
+
+.qp-tab.is-done .qp-tab-fill { width: 100%; }
+.qp-tab.is-current .qp-tab-fill { width: 100%; background: var(--sb-text-strong); }
+
+.qp-tab-label {
+  font-family: var(--sb-font-head);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--sb-text-faint);
+  transition: color 200ms ease;
+}
+
+.qp-tab.is-done .qp-tab-label { color: var(--sb-accent); }
+.qp-tab.is-current .qp-tab-label { color: var(--sb-text-strong); }
+
+/* ---- The question ---- */
+
+.qp-q {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.qp-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.qp-counter {
+  font-family: var(--sb-font-head);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sb-text-faint);
+}
+
+.qp-question {
+  margin: 0;
+  font-family: var(--sb-font-head);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--sb-text-strong);
+}
+
+.qp-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A row: number badge, label and description, the mark on the right.
+   Selected is the mint ring; the keyboard cursor is the outline ring. */
+.qp-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: none;
+  border-radius: var(--sb-r-row);
+  background: var(--sb-bg-panel);
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    box-shadow 120ms ease,
+    outline-color 120ms ease,
+    transform 100ms ease;
+}
+
+.qp-option:active { transform: scale(0.985); }
+.qp-option.is-selected {
+  background: rgba(var(--sb-accent-rgb), 0.10);
+  box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+}
+.qp-option.is-cursor { outline-color: var(--sb-text-strong); }
+
+.qp-key {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--sb-border-strong);
+  font-family: var(--sb-font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--sb-text-muted);
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.qp-option.is-cursor .qp-key {
+  background: var(--sb-action);
+  color: var(--sb-action-text);
+  box-shadow: none;
+}
+
+.qp-option.is-selected .qp-key {
+  background: var(--sb-accent);
+  color: var(--sb-action-text);
+  box-shadow: none;
+}
+
+.qp-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.qp-option-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.qp-option-label {
+  font-family: var(--sb-font-head);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--sb-text-strong);
+  flex-shrink: 0;
+}
+
+.qp-chip {
+  font-family: var(--sb-font-head);
+  font-weight: 700;
+  font-size: 10.5px;
+  color: var(--sb-accent);
+  background: var(--sb-mint);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+.qp-option-desc {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--sb-text-muted);
+}
+
+/* The radio (or, picking any, the checkbox) on the right. */
+.qp-mark {
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--sb-border-strong);
+  color: var(--sb-action-text);
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.qp-options.is-multi .qp-mark { border-radius: 6px; }
+.qp-mark svg { visibility: hidden; }
+
+.qp-option.is-selected .qp-mark {
+  background: var(--sb-accent);
+  box-shadow: none;
+}
+.qp-option.is-selected .qp-mark svg { visibility: visible; }
+
+/* Other: the same row, with a field where the description would be. */
+.qp-other { cursor: text; }
+.qp-other:active { transform: none; }
+
+.qp-other-input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  padding: 0;
+  color: var(--sb-text-strong);
+  font-family: var(--sb-font-body);
+  font-size: 14px;
+}
+
+.qp-other-input::placeholder { color: var(--sb-text-placeholder); }
+
+/* ---- Footer: key hints, Back, Next / Send ---- */
+
+.qp-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.qp-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--sb-text-faint);
+}
+
+.qp-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.qp-kbd {
+  font-family: var(--sb-font-mono);
+  font-size: 10.5px;
+  color: var(--sb-text-dim);
+  padding: 2px 6px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px var(--sb-border-strong);
+}
+
+.qp-spacer { flex: 1; }
+
+.qp-back,
+.qp-primary {
+  height: 40px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--sb-r-control);
+  font-family: var(--sb-font-head);
+  font-size: 13.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.qp-back {
+  font-weight: 700;
+  background: rgba(var(--sb-overlay-rgb), 0.06);
+  color: var(--sb-text);
+}
+
+.qp-back[hidden] { display: none; }
+
+.qp-primary {
+  font-weight: 800;
+  background: var(--sb-action);
+  color: var(--sb-action-text);
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.qp-primary[aria-disabled="true"] {
+  background: rgba(var(--sb-overlay-rgb), 0.06);
+  color: var(--sb-text-dimmest);
+  cursor: default;
+}
+
+.qp-primary-key {
+  font-family: var(--sb-font-mono);
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
+/* ---- Header: the way out, and the way back ---- */
+
+#terminal-header-questions:not([hidden]) {
+  display: flex;
+  align-items: center;
+}
+
+.qh-terminal,
+.qh-waiting {
+  height: 30px;
+  border: none;
+  border-radius: var(--sb-r-control);
+  font-family: var(--sb-font-head);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.qh-terminal {
+  padding: 0 12px;
+  gap: 7px;
+  background: rgba(var(--sb-overlay-rgb), 0.06);
+  color: var(--sb-text);
+  animation: qp-pop 220ms ease-out both;
+}
+
+.qh-terminal:hover { background: rgba(var(--sb-overlay-rgb), 0.1); }
+
+.qh-kbd {
+  font-family: var(--sb-font-mono);
+  font-size: 10.5px;
+  color: var(--sb-text-faint);
+}
+
+/* Pops in once the sheet has gone. */
+.qh-waiting {
+  padding: 0 12px 0 6px;
+  gap: 6px;
+  background: var(--sb-peach);
+  color: var(--sb-orange);
+  animation: qp-pop 260ms $qp-spring 180ms both;
+}
+
+.qh-face-body { fill: var(--qp-patch-body); }
+.qh-face-eye { fill: var(--qp-patch-ink); }
+
+@keyframes qp-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.05); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+
+/* ---- The send-off ---- */
+
+.qp-farewell {
+  position: absolute;
+  right: 56px;
+  bottom: 28px;
+  z-index: 6;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+}
+
+.qp-farewell .patch-svg {
+  width: 110px;
+  height: auto;
+}
+
+/* ---- Patch's palette ----
+   As on the empty screen (_patch.scss): the package's defaults are the dark
+   palette, so the dark theme only maps the bubble onto the app's surfaces and
+   type, and the light theme recolours what would vanish on white. The header's
+   tiny face reads the same two colours. */
+
+:root {
+  --qp-patch-body: #8fd8bf;
+  --qp-patch-ink: #141517;
+}
+
+.qp-patch .patch,
+.qp-farewell .patch {
+  --patch-bubble-bg: var(--sb-bg-raised);
+  --patch-bubble-text: var(--sb-text-strong);
+  --patch-font: var(--sb-font-head);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --qp-patch-body: #7fd0b4;
+    --qp-patch-ink: #16181d;
+  }
+
+  .qp-patch .patch,
+  .qp-farewell .patch {
+    --patch-body: #7fd0b4;
+    --patch-body-tired: #a9cfc1;
+    --patch-ink: #16181d;
+    --patch-cloud: #cfd6df;
+    --patch-snow: #aab2bd;
+    --patch-pole: #7b8491;
+    --patch-rain: #6fa3cf;
+    --patch-bubble-edge: rgba(20, 30, 50, 0.08);
+    --patch-bubble-shadow: rgba(20, 30, 50, 0.22);
+    --patch-shadow: rgba(20, 30, 50, 0.12);
+  }
+}
+
+/* ---- Sidebar: what a row is asking ---- */
+
+.session-asking {
+  font-family: var(--sb-font-head);
+  font-weight: 700;
+  color: var(--sb-orange);
+}
+
+/* ---- Reduced motion: nothing travels, things only fade ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  .qp,
+  .qp.is-up {
+    transform: none;
+  }
+
+  .terminal-container,
+  .terminal-container.qp-under {
+    transform: none;
+    transition-property: opacity;
+  }
+
+  .qp,
+  .qp.is-up {
+    transition-property: opacity, visibility;
+  }
+
+  .qp-option:active { transform: none; }
+  .qp-tab-fill { transition: none; }
+
+  .qh-terminal,
+  .qh-waiting {
+    animation-name: qp-fade;
+  }
+
+  @keyframes qp-fade {
+    from { opacity: 0; }
+  }
+}

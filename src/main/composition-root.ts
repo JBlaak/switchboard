@@ -17,6 +17,7 @@ import path from 'node:path';
 
 import { systemClock } from '../application/ports/clock';
 import { uuidGenerator } from '../application/ports/ids';
+import { QuestionService } from '../application/services/question-service';
 import { ProjectListService } from '../application/services/project-list-service';
 import { RemoteConnectionSupervisor } from '../application/services/remote-connection-supervisor';
 import { ScheduleService } from '../application/services/schedule-service';
@@ -52,6 +53,7 @@ import { PmsetSleepControl } from '../infrastructure/system/pmset-sleep-control'
 import { BundleInstaller } from '../infrastructure/system/bundle-installer';
 import { GitHubReleaseFeed } from '../infrastructure/github/github-release-feed';
 import { GitCliRemotes } from '../infrastructure/git/git-cli-remotes';
+import { QuestionHookServer } from '../infrastructure/http/question-hook-server';
 
 import type { BrowserWindow } from 'electron';
 import type { SwitchboardDatabase } from '../infrastructure/sqlite/database';
@@ -74,6 +76,8 @@ export interface Container {
   readonly remote: RemoteConnectionSupervisor;
   readonly launcher: SessionLauncher;
   readonly transitions: SessionTransitionDetector;
+  readonly questions: QuestionService;
+  readonly questionHook: QuestionHookServer;
 
   readonly sessionIndex: SessionIndex;
   readonly projects: ProjectListService;
@@ -138,9 +142,20 @@ export function buildContainer(): Container {
   });
   remote.attach(lifecycle);
 
+  // The server and the service need each other: the service bakes the server's
+  // address into each launch, the server hands each request to the service.
+  // The server only calls `receive` once a request arrives, long after both exist.
+  const questionHook = new QuestionHookServer({
+    receiver: { receive: (...args) => questions.receive(...args) },
+    log,
+  });
+  const questions = new QuestionService({
+    registry, renderer, clock, log, endpoint: questionHook,
+  });
+
   const launcher = new SessionLauncher({
     registry, terminals, shells, transcripts, settings,
-    lifecycle, remote, renderer, clock, timers, log,
+    lifecycle, remote, renderer, questions, clock, timers, log,
     fileExists: (target) => fs.exists(target),
   });
 
@@ -209,6 +224,7 @@ export function buildContainer(): Container {
     log, paths,
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
+    questions, questionHook,
     sessionIndex, projects, usage, schedules, weather, updates,
     renderer, dialogs, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },

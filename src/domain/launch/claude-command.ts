@@ -29,8 +29,12 @@ export class UnsafeLaunchOptionError extends Error {}
  * supplied them (sidebar click, schedule creator, …). Otherwise a resume
  * tries to spin up a new worktree and fails to attach.
  */
-export function buildClaudeArgs(target: SessionTarget, options?: SessionOptions): string[] {
+export function buildClaudeArgs(target: SessionTarget, options?: SessionOptions, settings?: string): string[] {
   const args: string[] = [];
+
+  // Switchboard's own per-session settings (the question hook). Ahead of the
+  // early return: a session launched with no options still gets it.
+  if (settings) args.push('--settings', settings);
 
   if (target.isNew) {
     args.push('--session-id', String(target.sessionId));
@@ -70,6 +74,8 @@ export function buildClaudeArgs(target: SessionTarget, options?: SessionOptions)
 export interface ClaudeCommandSpec {
   target: SessionTarget;
   options?: SessionOptions;
+  /** Inline JSON for `--settings`; merged by the CLI with the user's own settings files. */
+  settings?: string;
 }
 
 /**
@@ -77,8 +83,8 @@ export interface ClaudeCommandSpec {
  *
  * @throws UnsafeLaunchOptionError when `preLaunchCmd` spans more than one line.
  */
-export function buildClaudeCommand({ target, options }: ClaudeCommandSpec): string {
-  let command = 'claude ' + quoteArgvForShell(buildClaudeArgs(target, options));
+export function buildClaudeCommand({ target, options, settings }: ClaudeCommandSpec): string {
+  let command = 'claude ' + quoteArgvForShell(buildClaudeArgs(target, options, settings));
 
   if (options?.preLaunchCmd) {
     const pre = String(options.preLaunchCmd);

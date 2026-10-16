@@ -6,6 +6,7 @@
  * rather than on what the OS did. These are shared because several tests want
  * the same fake clock and the same recording gateway.
  */
+import type { PendingQuestions, QuestionsSettled } from '../../src/domain/questions/question';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { WorkingAgent } from '../../src/domain/terminal/program-status-children';
 import type { Timers } from '../../src/application/ports/clock';
@@ -185,6 +186,8 @@ export function fakeRenderer(): FakeRenderer {
     sessionNeedsAttention: record('sessionNeedsAttention'),
     sessionAgents: record('sessionAgents') as (id: string, agents: WorkingAgent[]) => void,
     remoteStatus: record('remoteStatus') as (id: string, s: RemoteStatusPayload) => void,
+    questionsAsked: record('questionsAsked') as (pending: PendingQuestions) => void,
+    questionsSettled: record('questionsSettled') as (settled: QuestionsSettled) => void,
     projectsChanged: record('projectsChanged'),
     statusUpdate: record('statusUpdate'),
     fullscreenChanged: record('fullscreenChanged'),

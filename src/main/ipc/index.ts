@@ -9,6 +9,7 @@ import { createRegistrar } from './registrar';
 import { registerContentHandlers } from './content-handlers';
 import { registerHostHandlers } from './host-handlers';
 import { registerProjectHandlers } from './project-handlers';
+import { registerQuestionHandlers } from './question-handlers';
 import { registerSessionHandlers } from './session-handlers';
 import { registerSettingsHandlers } from './settings-handlers';
 import { registerSleepHandlers } from './sleep-handlers';
@@ -22,6 +23,7 @@ export function registerIpcHandlers(app: Container): void {
   registerProjectHandlers(ipc, app);
   registerSessionHandlers(ipc, app);
   registerTerminalHandlers(ipc, app);
+  registerQuestionHandlers(ipc, app);
   registerContentHandlers(ipc, app);
   registerSettingsHandlers(ipc, app);
   registerHostHandlers(ipc, app);

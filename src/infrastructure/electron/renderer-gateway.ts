@@ -15,6 +15,7 @@ import type { BrowserWindow } from 'electron';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../../domain/update/release';
+import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 import type { RendererGateway } from '../../application/ports/renderer-gateway';
 
 export class ElectronRendererGateway implements RendererGateway {
@@ -62,6 +63,15 @@ export class ElectronRendererGateway implements RendererGateway {
 
   remoteStatus(sessionId: string, status: RemoteStatusPayload): void {
     this.#send(EVENT.remoteStatus, sessionId, status);
+  }
+
+  // ── Questions ──
+  questionsAsked(pending: PendingQuestions): void {
+    this.#send(EVENT.questionsAsked, pending);
+  }
+
+  questionsSettled(settled: QuestionsSettled): void {
+    this.#send(EVENT.questionsSettled, settled);
   }
 
   // ── Lists and chrome ──
