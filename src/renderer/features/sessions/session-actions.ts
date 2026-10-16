@@ -13,7 +13,6 @@ import { refreshSidebar } from '../../app/refresh';
 import { resolveDefaultSessionOptions } from '../dialogs/launch-options';
 import { setActiveSession } from './active-session';
 import { pollActiveSessions } from './session-poller';
-import { hideTerminalHeader } from './terminal-header';
 import {
   injectIntoCaches, openSessions, pendingSessions, removeFromCaches, sessionMap, view,
 } from '../../state/session-store';
@@ -239,11 +238,11 @@ function closeSessionView(sessionId: string): void {
  * Nothing is on screen: hide the terminal and its chrome and show the placeholder.
  *
  * The session's terminal stays alive; opening the row again shows it as it was.
+ * No session active is what takes the terminal and the header off screen (see
+ * `terminal-slice`).
  */
 export function clearScreen(): void {
   setActiveSession(null);
-  document.querySelectorAll<HTMLElement>('.terminal-container.visible').forEach(el => el.classList.remove('visible'));
-  hideTerminalHeader();
   showEmptyScreen();
 }
 

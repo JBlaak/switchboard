@@ -101,7 +101,25 @@ export type LocalEvent =
   | { type: 'updateDismissed'; version: string }
   | { type: 'updateInstallStarted' }
   /** Main answered the install, which means it did not quit to finish it. */
-  | { type: 'updateInstallFailed' };
+  | { type: 'updateInstallFailed' }
+  // The terminals' chrome; see `terminal-slice`. Never the byte stream.
+  /** A terminal was created for a session; `slotId` keys its container. */
+  | { type: 'terminalOpened'; sessionId: string; slotId: number }
+  /** A session's terminal was torn down. */
+  | { type: 'terminalClosed'; sessionId: string }
+  /** A session's terminal and header were put on screen, the header naming it `name`. */
+  | { type: 'sessionShown'; sessionId: string; name: string }
+  /** The session on screen has a new name for the header (after a re-key). */
+  | { type: 'headerRenamed'; sessionId: string; name: string }
+  /** Something asked the header to repaint, which puts the process title back over a notice. */
+  | { type: 'headerRefreshed' }
+  /** The process in a terminal set its title (OSC 0). */
+  | { type: 'ptyTitleChanged'; sessionId: string; title: string }
+  /** The shell profile a session runs in; null when it is the default. */
+  | { type: 'shellProfileResolved'; sessionId: string; name: string | null }
+  /** Cmd+F in a terminal. */
+  | { type: 'terminalSearchOpened'; sessionId: string }
+  | { type: 'terminalSearchClosed'; sessionId: string };
 
 export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent;
 

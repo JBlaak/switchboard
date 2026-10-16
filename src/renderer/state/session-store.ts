@@ -23,17 +23,14 @@ import type { SearchAddon } from '@xterm/addon-search';
 /** A session with a terminal on screen. */
 export interface OpenSession {
   terminal: Terminal;
+  /** The container React renders for the terminal (see `ui/terminal/TerminalSlot`). */
   element: HTMLElement;
   fitAddon: FitAddon;
   searchAddon?: SearchAddon;
-  openSearchBar?: () => void;
-  closeSearchBar?: () => void;
   session: SessionRow;
   closed?: boolean;
   /** Set while the PTY has switched to the alternate screen buffer. */
   altScreen?: boolean;
-  /** The last title the PTY set via OSC 0, shown next to the session name. */
-  ptyTitle?: string;
   /** The connection card, built lazily for remote sessions only. */
   remoteCard?: HTMLElement;
   [key: string]: unknown;

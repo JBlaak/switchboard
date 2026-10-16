@@ -8,7 +8,7 @@
  * - **Host stubs.** A few IPC channels answer with facts about the machine the
  *   suite happens to run on (is sleep disabled right now? is there a newer
  *   release?) or act on it (open a browser, show a folder picker, replace the
- *   app, prompt for an administrator password). Their
+ *   app, write the clipboard, prompt for an administrator password). Their
  *   handlers are swapped for test doubles, so a run is the same on every Mac
  *   and a stray click cannot reach the host.
  * - **Pushing events.** Anything main tells the renderer travels as a
@@ -79,6 +79,7 @@ export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number }
 interface StubState extends HostStubs {
   opened: string[];
   calls: HostStubCalls;
+  clipboard: string[];
 }
 
 /** How often the renderer asked the stubs for something, by channel. */
@@ -104,7 +105,7 @@ export const DEFAULT_STUBS: HostStubs = {
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
   await app.evaluate(({ ipcMain }, { stubs, channels }) => {
-    const state: StubState = { ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0 } };
+    const state: StubState = { ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0 }, clipboard: [] };
     (globalThis as WithStubs).__switchboardE2E = state;
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {
@@ -142,6 +143,10 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
     });
     replace(channels.openExternal, (url) => {
       state.opened.push(String(url));
+    });
+    // The real clipboard is the user's: a test that copies must not overwrite it.
+    replace(channels.writeClipboard, (text) => {
+      state.clipboard.push(String(text));
     });
     replace(channels.openRepository, (projectPath) => {
       state.opened.push('repository:' + String(projectPath));
@@ -184,6 +189,13 @@ export async function breakSearch(app: ElectronApplication): Promise<void> {
 export async function hostStubCalls(app: ElectronApplication): Promise<HostStubCalls> {
   return await app.evaluate(() => {
     return { ...(globalThis as WithStubs).__switchboardE2E.calls };
+  });
+}
+
+/** Everything the app wrote to the clipboard (stubbed; the host's is never touched). */
+export async function clipboardWrites(app: ElectronApplication): Promise<string[]> {
+  return await app.evaluate(() => {
+    return [...(globalThis as WithStubs).__switchboardE2E.clipboard];
   });
 }
 

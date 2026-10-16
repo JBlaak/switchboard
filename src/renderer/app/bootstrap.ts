@@ -16,15 +16,14 @@ import { installSidebar } from '../features/sessions/sidebar';
 import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
 import { loadProjects } from '../features/sessions/session-list';
 import { openSession } from '../features/sessions/session-actions';
-import { confirmAndStopSession } from '../features/sessions/session-actions';
 import { schedulePoll } from '../features/sessions/session-poller';
-import { terminalStopButton } from '../features/sessions/terminal-header';
 import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
 import { dispatch } from '../state/app-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
 import { applyTerminalFont, prewarmTerminalRenderer } from '../features/terminal/terminal-manager';
 import { bufferTerminalData } from '../features/terminal/write-buffer';
+import { installTerminalProbe } from '../features/terminal/terminal-probe';
 import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
 } from '../features/terminal/terminal-themes';
@@ -56,14 +55,11 @@ export function bootstrap(): void {
   installPatch();
   installQuestions();
   followColorSchemeInTerminals();
+  installTerminalProbe();
   // The surfaces that have moved to React portal out of it.
   mountReactRoot();
 
   setTickListener(tickConnectionCards);
-
-  terminalStopButton.addEventListener('click', () => {
-    if (view.activeSessionId) void confirmAndStopSession(view.activeSessionId);
-  });
 
   schedulePoll();
   prewarmTerminalRenderer();

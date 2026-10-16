@@ -106,3 +106,8 @@ const api: SwitchboardApi = {
 };
 
 contextBridge.exposeInMainWorld('api', api);
+
+// Under the e2e harness only: tells the renderer to install its test probes
+// (see `features/terminal/terminal-probe`). A flag and nothing else, so no
+// test-only capability is ever reachable from a normal run.
+if (process.env.SWITCHBOARD_E2E === '1') contextBridge.exposeInMainWorld('switchboardE2E', true);
