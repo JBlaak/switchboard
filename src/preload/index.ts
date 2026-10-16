@@ -85,6 +85,9 @@ const api: SwitchboardApi = {
   onTerminalNotification: (cb) => {
     ipcRenderer.on(EVENT.terminalNotification, (_e, sessionId, message) => cb(sessionId, message));
   },
+  onSessionNeedsAttention: (cb) => {
+    ipcRenderer.on(EVENT.sessionNeedsAttention, (_e, sessionId) => cb(sessionId));
+  },
   onRemoteStatus: (cb) => {
     ipcRenderer.on(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status));
   },

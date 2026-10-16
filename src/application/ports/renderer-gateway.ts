@@ -27,6 +27,8 @@ export interface RendererGateway {
   // ── Session state ──
   cliBusyState(sessionId: string, busy: boolean): void
   terminalNotification(sessionId: string, message: string): void
+  /** The CLI is blocked on the user — a permission prompt, a question, a login. */
+  sessionNeedsAttention(sessionId: string): void
   remoteStatus(sessionId: string, status: RemoteStatusPayload): void
 
   // ── Lists and chrome ──
