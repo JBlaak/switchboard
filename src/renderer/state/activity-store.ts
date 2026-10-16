@@ -21,6 +21,7 @@
  */
 import { sessionTier } from '../../domain/session/tiers';
 import { pendingSessions, view } from './session-store';
+import { askingCount } from './question-store';
 import type { SessionSignals } from '../../domain/session/tiers';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 
@@ -36,7 +37,9 @@ export const sessionAgents = new Map<string, readonly WorkingAgent[]>();
 /** The live signals for one session, as the ranking rules want them. */
 export function signalsFor(sessionId: string): SessionSignals {
   return {
-    needsAttention: attentionSessions.has(sessionId),
+    // A session asking questions is waiting on the user just as surely, and
+    // stays so while it is on screen: it is cleared by the set settling.
+    needsAttention: attentionSessions.has(sessionId) || askingCount(sessionId) > 0,
     responseReady: responseReadySessions.has(sessionId),
     busy: sessionBusyState.get(sessionId) === true,
     pending: pendingSessions.has(sessionId),
@@ -122,7 +125,8 @@ export function clearActivity(sessionId: string): void {
   // agents on the row for good.
   sessionAgents.delete(sessionId);
   const row = rowFor(sessionId);
-  row?.classList.remove('needs-attention', 'response-ready', 'cli-busy');
+  row?.classList.remove('response-ready', 'cli-busy');
+  if (askingCount(sessionId) === 0) row?.classList.remove('needs-attention');
   row?.querySelector('.session-agents')?.remove();
 }
 
@@ -130,5 +134,5 @@ export function clearActivity(sessionId: string): void {
 export function clearNotifications(sessionId: string): void {
   clearUnread(sessionId);
   attentionSessions.delete(sessionId);
-  rowFor(sessionId)?.classList.remove('needs-attention');
+  if (askingCount(sessionId) === 0) rowFor(sessionId)?.classList.remove('needs-attention');
 }

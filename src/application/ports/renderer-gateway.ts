@@ -10,6 +10,7 @@
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../../domain/update/release';
+import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 
 export interface RendererGateway {
   /** True while there is a window listening; every send is a no-op without one. */
@@ -33,6 +34,12 @@ export interface RendererGateway {
   /** The agents the session has working changed; an empty list means none. */
   sessionAgents(sessionId: string, agents: WorkingAgent[]): void
   remoteStatus(sessionId: string, status: RemoteStatusPayload): void
+
+  // ── Questions ──
+  /** A session is blocked on questions Switchboard can answer. */
+  questionsAsked(pending: PendingQuestions): void
+  /** Those questions were answered here, or withdrawn (the CLI asks in the terminal). */
+  questionsSettled(settled: QuestionsSettled): void
 
   // ── Lists and chrome ──
   projectsChanged(): void

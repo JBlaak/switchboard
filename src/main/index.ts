@@ -60,6 +60,7 @@ function main(): void {
 
   app.on('before-quit', () => {
     container.projectsWatcher.stop();
+    container.questionHook.stop();
     container.lifecycle.terminateAll();
   });
 
@@ -69,7 +70,16 @@ function main(): void {
   void app.whenReady().then(() => start(container));
 }
 
-function start(container: Container): void {
+async function start(container: Container): Promise<void> {
+  // Before the window, so the first session the renderer restores already gets
+  // the question hook. A server that fails to start costs only the hook:
+  // sessions launch without it and ask in their own terminal.
+  try {
+    await container.questionHook.start();
+  } catch (err) {
+    container.log.error('[questions] hook server failed to start:', (err as Error).message);
+  }
+
   registerIpcHandlers(container);
   buildApplicationMenu();
 

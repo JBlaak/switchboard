@@ -367,6 +367,9 @@ function restoreTerminalFocus(): void {
     active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'
     || active.isContentEditable || active.closest('.modal-overlay'));
   if (typing) return;
+  // The question panel takes the keyboard while it is up; asking is itself a
+  // status change, so the redraw it causes must not hand keys to the terminal.
+  if (active?.closest('section.qp')) return;
 
   const open = view.activeSessionId ? openSessions.get(view.activeSessionId) : undefined;
   open?.terminal.focus();

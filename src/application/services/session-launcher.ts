@@ -28,6 +28,7 @@ import type { TranscriptStore } from '../ports/transcript-store';
 import type { RendererGateway } from '../ports/renderer-gateway';
 import type { RemoteConnectionSupervisor } from './remote-connection-supervisor';
 import type { SessionLifecycle } from './session-lifecycle';
+import type { QuestionService } from './question-service';
 import type { SettingsService } from './settings-service';
 
 /** The spawn geometry before the renderer reports its real terminal size. */
@@ -64,6 +65,8 @@ export interface SessionLauncherDeps {
   lifecycle: SessionLifecycle;
   remote: RemoteConnectionSupervisor;
   renderer: RendererGateway;
+  /** Supplies each Claude session's question hook, when the hook server is up. */
+  questions: Pick<QuestionService, 'settingsFor'>;
   clock: Clock;
   timers: Timers;
   log: Logger;
@@ -277,9 +280,12 @@ export class SessionLauncher {
 
     let command: string;
     try {
+      // The question hook is posted to under the id the session is registered
+      // with now; the service finds it by that id even after a re-key.
       command = buildClaudeCommand({
         target: { sessionId, isNew },
         options,
+        settings: this.deps.questions.settingsFor(sessionId) ?? undefined,
       });
     } catch (err) {
       return { error: (err as Error).message };

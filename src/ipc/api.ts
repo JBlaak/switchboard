@@ -13,6 +13,7 @@ import type { SearchResult, SearchType } from '../domain/search/search';
 import type { SessionOptions } from '../domain/launch/session-options';
 import type { EffectiveSettings } from '../domain/settings/settings';
 import type { Appearance } from '../domain/settings/appearance';
+import type { Answers, PendingQuestions, QuestionsSettled } from '../domain/questions/question';
 import type { ShellProfile } from '../domain/shell/shell-profile';
 import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
@@ -47,6 +48,12 @@ export interface SwitchboardApi {
   /** `null` clears the rename, falling back to the AI/first-prompt title. */
   renameSession(id: string, name: string | null): Promise<IpcResult>;
   archiveSession(id: string, archived: boolean): Promise<{ archived: number }>;
+
+  // ── Questions ──
+  /** Every set of questions a running session is blocked on, for a renderer that (re)loads. */
+  getPendingQuestions(): Promise<PendingQuestions[]>;
+  /** Send the answers; `{ ok: false }` when the questions were already withdrawn. */
+  answerQuestions(sessionId: string, toolUseId: string, answers: Answers): Promise<IpcResult>;
 
   // ── Usage ──
   getUsage(): Promise<Usage | null>;
@@ -107,6 +114,8 @@ export interface SwitchboardApi {
   onSessionNeedsAttention(cb: (sessionId: string) => void): void;
   onSessionAgents(cb: (sessionId: string, agents: WorkingAgent[]) => void): void;
   onRemoteStatus(cb: (sessionId: string, status: RemoteStatusPayload) => void): void;
+  onQuestionsAsked(cb: (pending: PendingQuestions) => void): void;
+  onQuestionsSettled(cb: (settled: QuestionsSettled) => void): void;
   onProjectsChanged(cb: () => void): void;
   onStatusUpdate(cb: (text: string, type: string) => void): void;
   onFullscreenChanged(cb: (isFullscreen: boolean) => void): void;

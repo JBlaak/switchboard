@@ -19,6 +19,7 @@ import { handleRemoteStatus } from '../features/remote/connection-card';
 import { markNeedsAttention, setActivity, setSessionAgents } from '../state/activity-store';
 import { writeAgentsBadge } from '../features/sessions/sidebar-row';
 import { openSessions, pendingSessions, sessionMap, view } from '../state/session-store';
+import { addPendingQuestions, rekeyQuestions, settleQuestions } from '../state/question-store';
 import { bufferTerminalData } from '../features/terminal/terminal-manager';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 
@@ -51,6 +52,10 @@ export function installIpcListeners(): void {
   window.api.onRemoteStatus(handleRemoteStatus);
   window.api.onProjectsChanged(onProjectsChanged);
   window.api.onStatusUpdate(setStatusActivity);
+  // Claude's AskUserQuestion, held by the hook until it is answered here or
+  // given up on; see features/questions.
+  window.api.onQuestionsAsked(addPendingQuestions);
+  window.api.onQuestionsSettled(settleQuestions);
 
   // Fullscreen hides the macOS traffic lights, so the space the collapsed
   // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.
@@ -67,12 +72,17 @@ export function installIpcListeners(): void {
  */
 function onSessionDetected(tempId: string, realId: string): void {
   const entry = openSessions.get(tempId);
-  if (!entry) return;
+  if (!entry) {
+    rekeyQuestions(tempId, realId);
+    return;
+  }
 
   entry.session.sessionId = realId;
   if (view.activeSessionId === tempId) setActiveSession(realId);
   openSessions.delete(tempId);
   openSessions.set(realId, entry);
+  // After the active id has moved, so the panel finds its set under the new one.
+  rekeyQuestions(tempId, realId);
 
   setHeaderIdentity(realId, 'New session');
   void reloadProjects().then(() => selectRow(realId));
@@ -87,12 +97,16 @@ function onSessionDetected(tempId: string, realId: string): void {
  */
 function onSessionForked(oldId: string, newId: string): void {
   const entry = openSessions.get(oldId);
-  if (!entry) return;
+  if (!entry) {
+    rekeyQuestions(oldId, newId);
+    return;
+  }
 
   entry.session.sessionId = newId;
   if (view.activeSessionId === oldId) setActiveSession(newId);
   openSessions.delete(oldId);
   openSessions.set(newId, entry);
+  rekeyQuestions(oldId, newId);
 
   const pending = pendingSessions.get(oldId);
   pendingSessions.delete(oldId);

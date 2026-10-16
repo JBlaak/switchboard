@@ -30,6 +30,11 @@ const api: SwitchboardApi = {
   renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
   archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
 
+  // ── Questions ──
+  getPendingQuestions: () => ipcRenderer.invoke(INVOKE.getPendingQuestions),
+  answerQuestions: (sessionId, toolUseId, answers) =>
+    ipcRenderer.invoke(INVOKE.answerQuestions, sessionId, toolUseId, answers),
+
   // ── Usage ──
   getUsage: () => ipcRenderer.invoke(INVOKE.getUsage),
 
@@ -93,6 +98,12 @@ const api: SwitchboardApi = {
   },
   onRemoteStatus: (cb) => {
     ipcRenderer.on(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status));
+  },
+  onQuestionsAsked: (cb) => {
+    ipcRenderer.on(EVENT.questionsAsked, (_e, pending) => cb(pending));
+  },
+  onQuestionsSettled: (cb) => {
+    ipcRenderer.on(EVENT.questionsSettled, (_e, settled) => cb(settled));
   },
   onProjectsChanged: (cb) => {
     ipcRenderer.on(EVENT.projectsChanged, () => cb());

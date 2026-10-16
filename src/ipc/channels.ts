@@ -27,6 +27,10 @@ export const INVOKE = {
   renameSession: 'rename-session',
   archiveSession: 'archive-session',
 
+  // Questions
+  getPendingQuestions: 'get-pending-questions',
+  answerQuestions: 'answer-questions',
+
   // Usage
   getUsage: 'get-usage',
 
@@ -77,6 +81,8 @@ export const EVENT = {
   sessionNeedsAttention: 'session-needs-attention',
   sessionAgents: 'session-agents',
   remoteStatus: 'remote-status',
+  questionsAsked: 'questions-asked',
+  questionsSettled: 'questions-settled',
   projectsChanged: 'projects-changed',
   statusUpdate: 'status-update',
   fullscreenChanged: 'fullscreen-changed',

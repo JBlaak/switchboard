@@ -12,6 +12,7 @@ import { byMostRecentlyModified } from '../../../domain/session/session';
 import {
   attentionSessions, responseReadySessions, sessionAgents, sessionBusyState,
 } from '../../state/activity-store';
+import { askingCount } from '../../state/question-store';
 import { view } from '../../state/session-store';
 import { escapeHtml, formatDate } from '../../lib/format';
 import { ICONS } from '../../lib/icons';
@@ -60,7 +61,9 @@ export function buildSessionItem(session: SessionRow, projectPath: string): HTML
   if (session.type === 'terminal') item.classList.add('is-terminal');
   if (session.archived) item.classList.add('archived-item');
   if (view.activePtyIds.has(session.sessionId)) item.classList.add('has-running-pty');
-  if (attentionSessions.has(session.sessionId)) item.classList.add('needs-attention');
+  if (attentionSessions.has(session.sessionId) || askingCount(session.sessionId) > 0) {
+    item.classList.add('needs-attention');
+  }
   if (responseReadySessions.has(session.sessionId)) item.classList.add('response-ready');
   if (sessionBusyState.get(session.sessionId)) item.classList.add('cli-busy');
 
@@ -124,6 +127,15 @@ function buildMeta(session: SessionRow, projectPath: string): HTMLElement {
 
   const left = document.createElement('span');
   left.className = 'session-meta-left';
+
+  // What the session is blocked on, ahead of everything else on the line.
+  const asking = askingCount(session.sessionId);
+  if (asking > 0) {
+    const label = document.createElement('span');
+    label.className = 'session-asking';
+    label.textContent = asking === 1 ? 'Asking 1 question' : `Asking ${asking} questions`;
+    left.appendChild(label);
+  }
 
   const path = projectPath || session.projectPath;
   const label = projectLabel(path);
