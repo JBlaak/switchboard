@@ -8,7 +8,21 @@
  */
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { EVENT, INVOKE, SEND } from '../ipc/channels';
-import type { SwitchboardApi } from '../ipc/api';
+import type { SwitchboardApi, Unsubscribe } from '../ipc/api';
+
+type ChannelListener = Parameters<typeof ipcRenderer.on>[1];
+
+/**
+ * Listen on a push channel, answering the call that stops listening.
+ *
+ * The listener handed to `ipcRenderer` is the wrapper, not the renderer's
+ * callback (which never sees the Electron event), so the wrapper is what has
+ * to be removed again.
+ */
+function subscribe(channel: string, listener: ChannelListener): Unsubscribe {
+  ipcRenderer.on(channel, listener);
+  return () => { ipcRenderer.removeListener(channel, listener); };
+}
 
 const api: SwitchboardApi = {
   // ── Projects ──
@@ -72,48 +86,20 @@ const api: SwitchboardApi = {
   closeTerminal: (id) => ipcRenderer.send(SEND.closeTerminal, id),
 
   // ── Events from main ──
-  onTerminalData: (cb) => {
-    ipcRenderer.on(EVENT.terminalData, (_e, sessionId, data) => cb(sessionId, data));
-  },
-  onProcessExited: (cb) => {
-    ipcRenderer.on(EVENT.processExited, (_e, sessionId, exitCode) => cb(sessionId, exitCode));
-  },
-  onSessionForked: (cb) => {
-    ipcRenderer.on(EVENT.sessionForked, (_e, oldId, newId) => cb(oldId, newId));
-  },
-  onCliBusyState: (cb) => {
-    ipcRenderer.on(EVENT.cliBusyState, (_e, sessionId, busy) => cb(sessionId, busy));
-  },
-  onTerminalNotification: (cb) => {
-    ipcRenderer.on(EVENT.terminalNotification, (_e, sessionId, message) => cb(sessionId, message));
-  },
-  onSessionNeedsAttention: (cb) => {
-    ipcRenderer.on(EVENT.sessionNeedsAttention, (_e, sessionId) => cb(sessionId));
-  },
-  onSessionAgents: (cb) => {
-    ipcRenderer.on(EVENT.sessionAgents, (_e, sessionId, agents) => cb(sessionId, agents));
-  },
-  onRemoteStatus: (cb) => {
-    ipcRenderer.on(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status));
-  },
-  onQuestionsAsked: (cb) => {
-    ipcRenderer.on(EVENT.questionsAsked, (_e, pending) => cb(pending));
-  },
-  onQuestionsSettled: (cb) => {
-    ipcRenderer.on(EVENT.questionsSettled, (_e, settled) => cb(settled));
-  },
-  onProjectsChanged: (cb) => {
-    ipcRenderer.on(EVENT.projectsChanged, () => cb());
-  },
-  onStatusUpdate: (cb) => {
-    ipcRenderer.on(EVENT.statusUpdate, (_e, text, type) => cb(text, type));
-  },
-  onFullscreenChanged: (cb) => {
-    ipcRenderer.on(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen));
-  },
-  onUpdateAvailable: (cb) => {
-    ipcRenderer.on(EVENT.updateAvailable, (_e, update) => cb(update));
-  },
+  onTerminalData: (cb) => subscribe(EVENT.terminalData, (_e, sessionId, data) => cb(sessionId, data)),
+  onProcessExited: (cb) => subscribe(EVENT.processExited, (_e, sessionId, exitCode) => cb(sessionId, exitCode)),
+  onSessionForked: (cb) => subscribe(EVENT.sessionForked, (_e, oldId, newId) => cb(oldId, newId)),
+  onCliBusyState: (cb) => subscribe(EVENT.cliBusyState, (_e, sessionId, busy) => cb(sessionId, busy)),
+  onTerminalNotification: (cb) => subscribe(EVENT.terminalNotification, (_e, sessionId, message) => cb(sessionId, message)),
+  onSessionNeedsAttention: (cb) => subscribe(EVENT.sessionNeedsAttention, (_e, sessionId) => cb(sessionId)),
+  onSessionAgents: (cb) => subscribe(EVENT.sessionAgents, (_e, sessionId, agents) => cb(sessionId, agents)),
+  onRemoteStatus: (cb) => subscribe(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status)),
+  onQuestionsAsked: (cb) => subscribe(EVENT.questionsAsked, (_e, pending) => cb(pending)),
+  onQuestionsSettled: (cb) => subscribe(EVENT.questionsSettled, (_e, settled) => cb(settled)),
+  onProjectsChanged: (cb) => subscribe(EVENT.projectsChanged, () => cb()),
+  onStatusUpdate: (cb) => subscribe(EVENT.statusUpdate, (_e, text, type) => cb(text, type)),
+  onFullscreenChanged: (cb) => subscribe(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen)),
+  onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),
