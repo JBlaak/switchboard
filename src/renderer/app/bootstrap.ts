@@ -11,33 +11,29 @@
 import { installLayout } from './layout';
 import { installIpcBridge } from './ipc-bridge';
 import { installIpcListeners } from './ipc-listeners';
-import { installSearch } from './search';
 import { installShortcuts } from './shortcuts';
 import { installTimeTicker } from './time-ticker';
 import { installSidebar } from '../features/sessions/sidebar';
 import { installSidebarActivity } from '../features/sessions/sidebar-activity';
-import { installSidebarFilters } from '../features/sessions/sidebar-filters';
 import { installSidebarKeyboard } from '../features/sessions/sidebar-keyboard';
 import { loadProjects } from '../features/sessions/session-list';
 import { openSession } from '../features/sessions/session-actions';
-import { confirmAndStopSession } from '../features/sessions/session-actions';
 import { schedulePoll } from '../features/sessions/session-poller';
-import { terminalStopButton } from '../features/sessions/terminal-header';
 import { tickConnectionCards } from '../features/remote/connection-card';
 import { setTickListener } from '../state/remote-status-store';
 import { dispatch } from '../state/app-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
 import { applyTerminalFont, prewarmTerminalRenderer } from '../features/terminal/terminal-manager';
 import { bufferTerminalData } from '../features/terminal/write-buffer';
+import { installTerminalProbe } from '../features/terminal/terminal-probe';
 import {
   TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals,
 } from '../features/terminal/terminal-themes';
-import { installAppearanceToggle } from '../features/settings/appearance-toggle';
-import { installSleepToggle } from '../features/settings/sleep-toggle';
 import { installQuestions } from '../ui/questions/actions';
 import { mountReactRoot } from '../ui/Root';
 import { countRunning } from '../ui/footer/actions';
 import { installFooter } from '../ui/footer/install-footer';
+import { installToolbar } from '../ui/toolbar/actions';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -52,24 +48,18 @@ export function bootstrap(): void {
   installIpcListeners();
   installIpcBridge(window.api, dispatch, bufferTerminalData);
   installLayout();
-  installSidebarFilters();
+  installToolbar();
   installSidebarKeyboard();
-  installSearch();
   installShortcuts();
   installTimeTicker();
   installFooter();
-  installSleepToggle();
-  installAppearanceToggle();
   installQuestions();
   followColorSchemeInTerminals();
+  installTerminalProbe();
   // The surfaces that have moved to React portal out of it.
   mountReactRoot();
 
   setTickListener(tickConnectionCards);
-
-  terminalStopButton.addEventListener('click', () => {
-    if (view.activeSessionId) void confirmAndStopSession(view.activeSessionId);
-  });
 
   schedulePoll();
   prewarmTerminalRenderer();

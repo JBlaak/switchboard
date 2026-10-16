@@ -2,6 +2,10 @@
 // Key bindings, xterm instance lifecycle, drag-and-drop. The write buffering
 // the byte stream goes through is in `write-buffer`.
 //
+// React decides which terminals have a container and which one is on screen
+// (`ui/terminal/TerminalHost`); this module builds each xterm, opens it into
+// the container React gives it, and owns everything that happens inside.
+//
 import {
   DEFAULT_TERMINAL_FONT_FAMILY, DEFAULT_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_LINE_HEIGHT,
   decodeOsc52Payload, enterKittySequence, normalizeTerminalFont, shouldSendSpaceDirectly,
@@ -15,10 +19,13 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { UnicodeGraphemesAddon } from '@xterm/addon-unicode-graphemes';
 import { WebglAddon } from '@xterm/addon-webgl';
+import { flushSync } from 'react-dom';
 import { clearNotifications } from '../../state/activity-store';
+import { dispatch } from '../../state/app-store';
 import { setActiveSession } from '../sessions/active-session';
-import { showTerminalHeader, updatePtyTitle } from '../sessions/terminal-header';
-import { placeholder, terminalsEl } from '../../lib/dom';
+import { headerNameFor } from '../sessions/terminal-header';
+import { loadShellProfile } from '../../ui/terminal/actions';
+import { placeholder } from '../../lib/dom';
 import { handleSessionNavKey, isSessionNavKey } from '../terminal/session-nav';
 import { hideAllViewers } from '../panel/viewers';
 import {
@@ -26,7 +33,7 @@ import {
 } from '../sessions/sidebar-keyboard';
 import { showProjectPickerDialog } from '../dialogs/project-picker-dialog';
 import { isQuickSessionKey, launchQuickSession } from '../sessions/quick-session';
-import { openSessions, sessionMap, view } from '../../state/session-store';
+import { openSessions, sessionMap } from '../../state/session-store';
 import { remoteStatus } from '../../state/remote-status-store';
 import { TERMINAL_THEME } from '../terminal/terminal-themes';
 import { isAtBottom } from './write-buffer';
@@ -235,13 +242,23 @@ export function prewarmTerminalRenderer(): void {
 
 // --- Terminal lifecycle helpers ---
 
-// Create an xterm instance, wire up IPC, and register in openSessions.
-// Returns the entry. Does NOT make it visible or fit it — call showSession() for that.
+/** The next container key; see `TerminalSlot` in `state/terminal-slice`. */
+let nextSlotId = 1;
+
+/**
+ * Create a session's xterm, wire it to IPC and register it in openSessions.
+ *
+ * The xterm is opened into the container React renders for the session, and
+ * that render happens right here (`flushSync`), so the entry comes back with
+ * its element, as it did when this built the container itself. That needs a
+ * caller outside React's own work — an event handler or a promise callback,
+ * which every caller is; from inside a store listener or a React render the
+ * container would only mount a moment later.
+ *
+ * Does NOT make it visible or fit it — call showSession() for that.
+ */
 export function createTerminalEntry(session: SessionRow): OpenSession {
   const { sessionId } = session;
-  const container = document.createElement('div');
-  container.className = 'terminal-container';
-  terminalsEl.appendChild(container);
 
   const terminal = new Terminal({
     fontSize: TERMINAL_FONT.fontSize,
@@ -293,6 +310,42 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
   terminal.loadAddon(searchAddon);
   terminal.loadAddon(new UnicodeGraphemesAddon());
   terminal.unicode.activeVersion = '15';
+
+  // `element` is filled in by attachTerminal, when the container mounts below.
+  const entry: OpenSession = {
+    terminal, element: undefined as unknown as HTMLElement, fitAddon, searchAddon, session, closed: false,
+  };
+  openSessions.set(sessionId, entry);
+
+  // Wire up IPC (use entry.session.sessionId so fork re-keying works)
+  terminal.onData(data => {
+    if (data === '\x1b[I' || data === '\x1b[O') return;
+    window.api.sendInput(entry.session.sessionId, data);
+  });
+  terminal.onResize(({ cols, rows }) => {
+    window.api.resizeTerminal(entry.session.sessionId, cols, rows);
+  });
+  terminal.onTitleChange(title => {
+    dispatch({ type: 'ptyTitleChanged', sessionId: entry.session.sessionId, title });
+  });
+
+  flushSync(() => dispatch({ type: 'terminalOpened', sessionId, slotId: nextSlotId++ }));
+  return entry;
+}
+
+/**
+ * Open a session's xterm into the container React rendered for it.
+ *
+ * Called from the container's ref, so the container is in the document: xterm
+ * measures its font on open, and the WebGL addon needs an attached canvas.
+ * Idempotent — StrictMode calls a ref twice in development.
+ */
+export function attachTerminal(sessionId: string, container: HTMLElement): void {
+  const entry = openSessions.get(sessionId);
+  if (!entry || entry.element) return;
+  entry.element = container;
+  const { terminal } = entry;
+
   terminal.open(container);
   container.style.backgroundColor = TERMINAL_THEME.background;
 
@@ -307,67 +360,10 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
     console.warn('[terminal] WebGL addon failed, falling back to DOM renderer', e);
   }
 
-  // --- Terminal search bar (Cmd+F) ---
-  const searchBar = document.createElement('div');
-  searchBar.className = 'terminal-search-bar';
-  searchBar.style.display = 'none';
-  searchBar.innerHTML = `
-    <input type="text" class="terminal-search-input" placeholder="Find..." />
-    <span class="terminal-search-count"></span>
-    <button class="terminal-search-prev" title="Previous (Shift+Enter)">&#x25B2;</button>
-    <button class="terminal-search-next" title="Next (Enter)">&#x25BC;</button>
-    <button class="terminal-search-close" title="Close (Escape)">&times;</button>
-  `;
-  container.appendChild(searchBar);
-  // Markup this function just wrote, so neither lookup can miss.
-  const searchInput = searchBar.querySelector<HTMLElement>('.terminal-search-input') as HTMLInputElement;
-  const searchCount = searchBar.querySelector<HTMLElement>('.terminal-search-count') as HTMLElement;
-  const searchOpts = { decorations: { matchBackground: '#515C6A', activeMatchBackground: '#EAA549', matchOverviewRuler: '#515C6A', activeMatchColorOverviewRuler: '#EAA549' } };
-
-  function openSearchBar() {
-    searchBar.style.display = 'flex';
-    searchInput.focus();
-    const sel = terminal.getSelection();
-    if (sel) { searchInput.value = sel; searchAddon.findNext(sel, searchOpts); }
-  }
-  function closeSearchBar() {
-    searchBar.style.display = 'none';
-    searchAddon.clearDecorations();
-    searchInput.value = '';
-    searchCount.textContent = '';
-    terminal.focus();
-  }
-  searchInput.addEventListener('input', () => {
-    const q = searchInput.value;
-    if (q) { searchAddon.findNext(q, searchOpts); } else { searchAddon.clearDecorations(); searchCount.textContent = ''; }
-  });
-  searchInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Escape') { closeSearchBar(); e.preventDefault(); }
-    else if (e.key === 'Enter' && e.shiftKey) { searchAddon.findPrevious(searchInput.value, searchOpts); e.preventDefault(); }
-    else if (e.key === 'Enter') { searchAddon.findNext(searchInput.value, searchOpts); e.preventDefault(); }
-  });
-  (searchBar.querySelector<HTMLElement>('.terminal-search-next') as HTMLElement).addEventListener('click', () => searchAddon.findNext(searchInput.value, searchOpts));
-  (searchBar.querySelector<HTMLElement>('.terminal-search-prev') as HTMLElement).addEventListener('click', () => searchAddon.findPrevious(searchInput.value, searchOpts));
-  (searchBar.querySelector<HTMLElement>('.terminal-search-close') as HTMLElement).addEventListener('click', closeSearchBar);
-
-  const entry: OpenSession = { terminal, element: container, fitAddon, searchAddon, openSearchBar, closeSearchBar, session, closed: false };
-  openSessions.set(sessionId, entry);
-
-  // Wire up IPC (use entry.session.sessionId so fork re-keying works)
-  terminal.onData(data => {
-    if (data === '\x1b[I' || data === '\x1b[O') return;
-    window.api.sendInput(entry.session.sessionId, data);
-  });
-  setupTerminalKeyBindings(terminal, container, () => entry.session.sessionId, { onFind: openSearchBar });
+  // Cmd+F asks the store; the search bar in this container answers it.
+  const onFind = () => dispatch({ type: 'terminalSearchOpened', sessionId: entry.session.sessionId });
+  setupTerminalKeyBindings(terminal, container, () => entry.session.sessionId, { onFind });
   setupDragAndDrop(container, () => entry.session.sessionId);
-  terminal.onResize(({ cols, rows }) => {
-    window.api.resizeTerminal(entry.session.sessionId, cols, rows);
-  });
-  terminal.onTitleChange(title => {
-    entry.ptyTitle = title;
-    if (view.activeSessionId === entry.session.sessionId) updatePtyTitle();
-  });
-  return entry;
 }
 
 // Clean up a closed session entry (dispose terminal, remove DOM, remove from maps).
@@ -378,8 +374,9 @@ export function destroySession(sessionId: string): void {
   // Drop the remote-connection state; the connecting card goes with the element.
   if (typeof remoteStatus !== 'undefined') remoteStatus.delete(sessionId);
   entry.terminal.dispose();
-  entry.element.remove();
   openSessions.delete(sessionId);
+  // React removes the container; now, like the rest of the teardown.
+  flushSync(() => dispatch({ type: 'terminalClosed', sessionId }));
 }
 
 // Make a session visible.
@@ -392,15 +389,19 @@ export function showSession(sessionId: string): void {
   document.querySelectorAll<HTMLElement>('.session-item.active').forEach(el => el.classList.remove('active'));
   const item = document.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
   if (item) item.classList.add('active');
-  setActiveSession(sessionId);
+
+  // React puts the session's container and header on screen. Rendered now:
+  // the terminal cannot take focus or measure itself until it is displayed.
+  flushSync(() => {
+    setActiveSession(sessionId);
+    dispatch({ type: 'sessionShown', sessionId, name: session ? headerNameFor(session) : '' });
+  });
   clearNotifications(sessionId);
 
-  document.querySelectorAll<HTMLElement>('.terminal-container').forEach(el => el.classList.remove('visible'));
   placeholder.style.display = 'none';
   hideAllViewers();
-  if (session) showTerminalHeader(session);
+  if (session) void loadShellProfile(session);
   if (entry) {
-    entry.element.classList.add('visible');
     entry.terminal.focus();
     fitAndScroll(entry);
   }

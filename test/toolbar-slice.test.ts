@@ -1,0 +1,118 @@
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { initialRendererState, rootReducer } from '../src/renderer/state/root';
+import type { RendererEvent } from '../src/renderer/state/events';
+import type { RendererState } from '../src/renderer/state/root';
+
+function run(...events: RendererEvent[]): RendererState {
+  return events.reduce((s, e) => rootReducer(Object.freeze(s), e), initialRendererState());
+}
+
+const filters = (state: RendererState) => {
+  const { showArchived, showStarredOnly, showRunningOnly, showTodayOnly } = state.view;
+  return { showArchived, showStarredOnly, showRunningOnly, showTodayOnly };
+};
+
+// ── Filters ──
+
+test('archived, pinned and running replace one another', () => {
+  const state = run(
+    { type: 'filterToggled', filter: 'pinned' },
+    { type: 'filterToggled', filter: 'archived' },
+  );
+  assert.deepStrictEqual(filters(state), {
+    showArchived: true, showStarredOnly: false, showRunningOnly: false, showTodayOnly: false,
+  });
+
+  const running = rootReducer(state, { type: 'filterToggled', filter: 'running' });
+  assert.deepStrictEqual(filters(running), {
+    showArchived: false, showStarredOnly: false, showRunningOnly: true, showTodayOnly: false,
+  });
+});
+
+test('toggling the active exclusive filter turns it off', () => {
+  const state = run(
+    { type: 'filterToggled', filter: 'running' },
+    { type: 'filterToggled', filter: 'running' },
+  );
+  assert.strictEqual(state.view.showRunningOnly, false);
+});
+
+test('today stacks with an exclusive filter and survives a switch between them', () => {
+  const state = run(
+    { type: 'filterToggled', filter: 'today' },
+    { type: 'filterToggled', filter: 'pinned' },
+    { type: 'filterToggled', filter: 'archived' },
+  );
+  assert.deepStrictEqual(filters(state), {
+    showArchived: true, showStarredOnly: false, showRunningOnly: false, showTodayOnly: true,
+  });
+  assert.strictEqual(rootReducer(state, { type: 'filterToggled', filter: 'today' }).view.showTodayOnly, false);
+});
+
+// ── Search ──
+
+test('a search result sets the matches, and a dropped one clears them', () => {
+  const ids = new Set(['a', 'b']);
+  const paths = new Set(['/p']);
+  const matched = run({ type: 'searchMatched', ids, projectPaths: paths });
+  assert.strictEqual(matched.view.searchMatchIds, ids);
+  assert.strictEqual(matched.view.searchMatchProjectPaths, paths);
+
+  const cleared = rootReducer(matched, { type: 'searchMatched', ids: null, projectPaths: null });
+  assert.strictEqual(cleared.view.searchMatchIds, null);
+  assert.strictEqual(cleared.view.searchMatchProjectPaths, null);
+});
+
+test('clearing a search that is not there notifies nobody', () => {
+  const state = initialRendererState();
+  assert.strictEqual(rootReducer(state, { type: 'searchMatched', ids: null, projectPaths: null }), state);
+});
+
+test('the typed query and the titles-only mode are kept as given', () => {
+  const state = run(
+    { type: 'searchTyped', query: '  login ' },
+    { type: 'searchTitlesOnlyChanged', titlesOnly: true },
+  );
+  assert.strictEqual(state.toolbar.searchQuery, '  login ');
+  assert.strictEqual(state.toolbar.searchTitlesOnly, true);
+  // Typing changes nothing the list reads until the query has run.
+  assert.strictEqual(state.view.searchMatchIds, null);
+});
+
+// ── The rest of the chrome ──
+
+test('starts open, on the default appearance, with no sleep answer yet', () => {
+  const { toolbar } = initialRendererState();
+  assert.strictEqual(toolbar.sidebarCollapsed, false);
+  assert.strictEqual(toolbar.appearance, 'system');
+  assert.strictEqual(toolbar.sleepDisabled, null);
+  assert.strictEqual(toolbar.sleepPending, false);
+  assert.strictEqual(toolbar.quickSessionPath, '');
+});
+
+test('each chrome event sets its own field', () => {
+  const state = run(
+    { type: 'sidebarCollapsed', collapsed: true },
+    { type: 'projectsLoading', loading: true },
+    { type: 'appearanceChanged', mode: 'dark' },
+    { type: 'sleepStateRead', disabled: true },
+    { type: 'sleepSwitchPending', pending: true },
+    { type: 'quickSessionPathRead', path: '/tmp' },
+  );
+  assert.deepStrictEqual(state.toolbar, {
+    sidebarCollapsed: true,
+    projectsLoading: true,
+    searchQuery: '',
+    searchTitlesOnly: false,
+    appearance: 'dark',
+    sleepDisabled: true,
+    sleepPending: true,
+    quickSessionPath: '/tmp',
+  });
+});
+
+test('writing a chrome field back unchanged keeps the same state', () => {
+  const state = run({ type: 'sidebarCollapsed', collapsed: true });
+  assert.strictEqual(rootReducer(state, { type: 'sidebarCollapsed', collapsed: true }), state);
+});
