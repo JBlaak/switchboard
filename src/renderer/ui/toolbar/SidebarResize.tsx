@@ -43,14 +43,14 @@ export function SidebarResize(): null {
     const onMove = (e: MouseEvent): void => {
       if (!dragging) return;
       const width = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, e.clientX));
-      sidebar.style.width = width + 'px';
+      sidebar.style.setProperty('--sidebar-width', width + 'px');
     };
 
     const onUp = (): void => {
       if (!dragging) return;
       release();
       refitActiveTerminal();
-      const width = parseInt(sidebar.style.width, 10);
+      const width = parseInt(sidebar.style.getPropertyValue('--sidebar-width'), 10);
       if (width) void persistSidebarWidth(width);
     };
 

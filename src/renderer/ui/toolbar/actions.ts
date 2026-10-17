@@ -38,6 +38,15 @@ export function setSidebarCollapsed(collapsed: boolean): void {
   dispatch({ type: 'sidebarCollapsed', collapsed });
 }
 
+/** Cmd+S, wherever the focus is: no text field has a use for it. */
+export function isSidebarToggleKey(e: KeyboardEvent): boolean {
+  return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyS';
+}
+
+export function toggleSidebar(): void {
+  setSidebarCollapsed(!getState().toolbar.sidebarCollapsed);
+}
+
 /** xterm measures its grid in pixels, so the visible terminal refits when its space changes. */
 export function refitActiveTerminal(): void {
   const active = view.activeSessionId ? openSessions.get(view.activeSessionId) : undefined;

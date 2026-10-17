@@ -1,8 +1,10 @@
 /* ========== SIDEBAR ========== */
+/* The width is a custom property, set by the resize handle (and from the stored
+   setting at boot) rather than as an inline width, so the collapsed rail can
+   still override it and the slide between the two can be a transition. The
+   handle clamps it to 200–600px. */
 #sidebar {
-  width: 340px;
-  min-width: 200px;
-  max-width: 600px;
+  width: var(--sidebar-width, 340px);
   background: var(--sb-bg-panel);
   display: flex;
   flex-direction: column;

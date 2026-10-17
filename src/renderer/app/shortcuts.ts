@@ -13,6 +13,7 @@ import {
 import { openDialog } from '../ui/dialogs/actions';
 import { handleSessionNavKey } from '../features/terminal/session-nav';
 import { isSessionWorkKey, toggleSessionWork } from '../ui/session-work/actions';
+import { isSidebarToggleKey, toggleSidebar } from '../ui/toolbar/actions';
 import {
   isBareQuickSessionKey, isQuickSessionKey, launchQuickSession,
 } from '../features/sessions/quick-session';
@@ -31,6 +32,12 @@ export function installShortcuts(): void {
     if (isSidebarFocusKey(e)) {
       e.preventDefault();
       focusSidebar();
+    }
+
+    // Cmd+S hides or shows the sidebar.
+    if (isSidebarToggleKey(e)) {
+      e.preventDefault();
+      toggleSidebar();
     }
 
     // Cmd+A opens the new-session picker; in a text field it is Select All.
