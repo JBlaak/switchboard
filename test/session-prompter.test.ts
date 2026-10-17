@@ -47,99 +47,210 @@ function harness() {
 }
 
 test('a prompt is a bracketed paste, so its lines arrive as one message', () => {
-  assert.equal(pasteBytes('one\ntwo'), '\x1b[200~one\ntwo\x1b[201~');
+  /* When */
+  const bytes = pasteBytes('one\ntwo');
+
+  /* Then */
+  assert.equal(bytes, '\x1b[200~one\ntwo\x1b[201~');
   assert.equal(PASTE_START, '\x1b[200~');
   assert.equal(PASTE_END, '\x1b[201~');
 });
 
 test('nothing in the prompt can close the paste early or press Enter in it', () => {
+  /* Given */
   // A CI log tail with colour codes, a stray paste-end, CRLF line ends and a bell.
   const prompt = 'Log tail:\r\n\x1b[31merror\x1b[0m: boom\x1b[201~\rnext\x07\tok';
-  assert.equal(pasteBytes(prompt), '\x1b[200~Log tail:\n[31merror[0m: boom[201~\nnext\tok\x1b[201~');
+
+  /* When */
+  const bytes = pasteBytes(prompt);
+
+  /* Then */
+  assert.equal(bytes, '\x1b[200~Log tail:\n[31merror[0m: boom[201~\nnext\tok\x1b[201~');
 });
 
 test('send writes the paste, then Enter as a write of its own a moment later', () => {
+  /* Given */
   const { start, prompter, timers, delays } = harness();
   const session = start('s1');
   session.pty.emitData(IDLE_TITLE);
 
+  /* When */
   prompter.send('s1', 'Ship PR #12.\nThen pull main.');
+
+  /* Then */
   assert.deepEqual(session.pty.writes, ['\x1b[200~Ship PR #12.\nThen pull main.\x1b[201~']);
   assert.deepEqual(delays, [SUBMIT_DELAY_MS]);
 
+  /* When */
   timers.tick();
+
+  /* Then */
   assert.deepEqual(session.pty.writes, ['\x1b[200~Ship PR #12.\nThen pull main.\x1b[201~', '\r']);
 });
 
 test('Enter is not pressed into a session that ended after the paste', () => {
+  /* Given */
   const { start, prompter, timers } = harness();
   const session = start('s1');
   prompter.send('s1', 'hi');
   session.exited = true;
+
+  /* When */
   timers.tick();
+
+  /* Then */
   assert.deepEqual(session.pty.writes, ['\x1b[200~hi\x1b[201~']);
 });
 
-test('nothing is written to a session that is not running, or to a plain terminal', () => {
-  const { start, prompter } = harness();
-  prompter.send('nobody', 'hi');
-  const plain = start('t1', { plain: true });
-  prompter.send('t1', 'hi');
-  assert.deepEqual(plain.pty.writes, []);
-  assert.equal(prompter.runningId('t1'), null);
+test('nothing is written to a session that is not running', () => {
+  /* Given */
+  const { prompter } = harness();
+
+  /* When */
+  const act = () => prompter.send('nobody', 'hi');
+
+  /* Then */
+  assert.doesNotThrow(act);
   assert.equal(prompter.runningId('nobody'), null);
 });
 
-test('busy until the CLI shows its prompt, busy mid-turn, idle at its prompt', () => {
+test('nothing is written to a plain terminal', () => {
+  /* Given */
   const { start, prompter } = harness();
+  const plain = start('t1', { plain: true });
+
+  /* When */
+  prompter.send('t1', 'hi');
+
+  /* Then */
+  assert.deepEqual(plain.pty.writes, []);
+  assert.equal(prompter.runningId('t1'), null);
+});
+
+test('busy until the CLI shows its prompt, busy mid-turn, idle at its prompt', () => {
+  /* Given */
+  const { start, prompter } = harness();
+
+  /* When */
   const session = start('s1');
+
+  /* Then */
   assert.equal(prompter.isBusy('s1'), true, 'started, not at its prompt yet');
+
+  /* When */
   session.pty.emitData(IDLE_TITLE);
+
+  /* Then */
   assert.equal(prompter.isBusy('s1'), false);
+
+  /* When */
   session.pty.emitData(BUSY_TITLE);
+
+  /* Then */
   assert.equal(prompter.isBusy('s1'), true);
+
+  /* When */
   session.pty.emitData(IDLE_TITLE);
+
+  /* Then */
   assert.equal(prompter.isBusy('s1'), false);
-  assert.equal(prompter.isBusy('nobody'), true, 'not running');
+});
+
+test('a session that is not running counts as busy', () => {
+  /* Given */
+  const { prompter } = harness();
+
+  /* When */
+  const busy = prompter.isBusy('nobody');
+
+  /* Then */
+  assert.equal(busy, true, 'not running');
 });
 
 test('onIdle hears the first prompt and every end of a turn, until disposed', () => {
+  /* Given */
   const { start, prompter } = harness();
   const session = start('s1');
   let idles = 0;
   const listener = prompter.onIdle('s1', () => idles++);
 
+  /* When */
   session.pty.emitData(IDLE_TITLE);
+
+  /* Then */
   assert.equal(idles, 1, 'ready');
+
+  /* When */
   session.pty.emitData(IDLE_TITLE);
+
+  /* Then */
   assert.equal(idles, 1, 'a repaint of the same title is not another idle');
+
+  /* When */
   session.pty.emitData(BUSY_TITLE);
+
+  /* Then */
   assert.equal(idles, 1);
+
+  /* When */
   session.pty.emitData(IDLE_TITLE);
+
+  /* Then */
   assert.equal(idles, 2, 'the turn ended');
 
+  /* When */
   listener.dispose();
   session.pty.emitData(BUSY_TITLE + IDLE_TITLE);
+
+  /* Then */
   assert.equal(idles, 2);
 });
 
-test('a session that moved to a new id is still heard and found by the old one', () => {
-  const { start, prompter, registry } = harness();
-  const session = start('old');
+function movedSession() {
+  const h = harness();
+  const session = h.start('old');
   session.pty.emitData(IDLE_TITLE);
   let idles = 0;
-  prompter.onIdle('old', () => idles++);
+  h.prompter.onIdle('old', () => idles++);
+  h.registry.rekey('old', 'new');
+  return { ...h, session, idles: () => idles };
+}
 
-  registry.rekey('old', 'new');
-  assert.equal(prompter.runningId('old'), 'new');
+test('a session that moved to a new id is still found by the old one', () => {
+  /* Given */
+  const { prompter } = movedSession();
+
+  /* When */
+  const running = prompter.runningId('old');
+
+  /* Then */
+  assert.equal(running, 'new');
+});
+
+test('a session that moved to a new id is still heard by a listener on the old one', () => {
+  /* Given */
+  const { session, idles } = movedSession();
+
+  /* When */
   session.pty.emitData(BUSY_TITLE + IDLE_TITLE);
-  assert.equal(idles, 1);
 
+  /* Then */
+  assert.equal(idles(), 1);
+});
+
+test('a session that moved to a new id is still sent to by the old one', () => {
+  /* Given */
+  const { session, prompter } = movedSession();
+
+  /* When */
   prompter.send('old', 'hi');
+
+  /* Then */
   assert.deepEqual(session.pty.writes, ['\x1b[200~hi\x1b[201~']);
 });
 
 test('onExit hears the process end, under any id the session went by, once it is no longer running', () => {
+  /* Given */
   const { start, prompter, registry } = harness();
   const session = start('old');
   registry.rekey('old', 'new');
@@ -148,6 +259,9 @@ test('onExit hears the process end, under any id the session went by, once it is
   const other = prompter.onExit('new', () => heard.push('new'));
   other.dispose();
 
+  /* When */
   session.pty.emitExit(0);
+
+  /* Then */
   assert.deepEqual(heard, [null]);
 });
