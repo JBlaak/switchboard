@@ -49,6 +49,14 @@ test('without gh, PRs come from the transcript alone, newest first, diffed throu
   assert.deepEqual(first.diff, { kind: 'pull-request', repository: REPO, number: 2 });
 });
 
+test('a PR in another repository is left out; an unknown repository on either side keeps it', () => {
+  const foreign = { number: 12, url: 'https://github.com/someone/else/pull/12', repository: 'someone/else' };
+  const shouted = { number: 3, url: url(3), repository: REPO.toUpperCase() };
+  assert.deepEqual(summary(deriveWorkItems(facts({ pullRequests: [link(1), foreign, shouted] }))), ['pr #3', 'pr #1']);
+  assert.deepEqual(summary(deriveWorkItems(facts({ pullRequests: [foreign], repository: '' }))), ['pr #12']);
+  assert.deepEqual(summary(deriveWorkItems(facts({ pullRequests: [{ ...link(4), repository: '' }] }))), ['pr #4']);
+});
+
 test('the default branch is never a branch item, though it can be dirty', () => {
   const items = deriveWorkItems(facts({
     locations: [loc(MAIN, 'main')],
