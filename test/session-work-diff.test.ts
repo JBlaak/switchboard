@@ -6,7 +6,8 @@ import { collapseReason, commentAnchor, parseUnifiedDiff } from '../src/domain/s
 const diff = (...lines: string[]) => lines.join('\n') + '\n';
 
 test('a modified file keeps old and new line numbers on every line', () => {
-  const [file] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/src/app.ts b/src/app.ts',
     'index 1111111..2222222 100644',
     '--- a/src/app.ts',
@@ -18,7 +19,12 @@ test('a modified file keeps old and new line numbers on every line', () => {
     '+const c = 4;',
     ' const d = 5;',
     ' return a;',
-  ));
+  );
+
+  /* When */
+  const [file] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.equal(file.path, 'src/app.ts');
   assert.equal(file.status, 'modified');
   assert.equal(file.oldPath, undefined);
@@ -42,6 +48,7 @@ test('a modified file keeps old and new line numbers on every line', () => {
 });
 
 test('a comment anchors to the left for a deleted line and the right otherwise', () => {
+  /* Given */
   const [file] = parseUnifiedDiff(diff(
     'diff --git a/x b/x',
     '--- a/x',
@@ -52,13 +59,21 @@ test('a comment anchors to the left for a deleted line and the right otherwise',
     '+new',
   ));
   const [keep, removed, added] = file.hunks[0].lines;
-  assert.deepEqual(commentAnchor(keep), { line: 1, side: 'RIGHT' });
-  assert.deepEqual(commentAnchor(removed), { line: 2, side: 'LEFT' });
-  assert.deepEqual(commentAnchor(added), { line: 2, side: 'RIGHT' });
+
+  /* When */
+  const anchors = [keep, removed, added].map(commentAnchor);
+
+  /* Then */
+  assert.deepEqual(anchors, [
+    { line: 1, side: 'RIGHT' },
+    { line: 2, side: 'LEFT' },
+    { line: 2, side: 'RIGHT' },
+  ]);
 });
 
 test('several files and hunks are read apart', () => {
-  const files = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/a.ts b/a.ts',
     '--- a/a.ts',
     '+++ b/a.ts',
@@ -74,7 +89,12 @@ test('several files and hunks are read apart', () => {
     '+++ b/b.ts',
     '@@ -5,1 +5,0 @@',
     '-gone',
-  ));
+  );
+
+  /* When */
+  const files = parseUnifiedDiff(text);
+
+  /* Then */
   assert.deepEqual(files.map((f) => [f.path, f.additions, f.deletions, f.hunks.length]), [
     ['a.ts', 2, 1, 2],
     ['b.ts', 0, 1, 1],
@@ -83,19 +103,26 @@ test('several files and hunks are read apart', () => {
 });
 
 test('a deleted line that looks like a file header stays a deleted line', () => {
-  const [file] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/notes.md b/notes.md',
     '--- a/notes.md',
     '+++ b/notes.md',
     '@@ -1,2 +1,1 @@',
     '--- a/heading',
     ' body',
-  ));
+  );
+
+  /* When */
+  const [file] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.deepEqual(file.hunks[0].lines.map((l) => [l.kind, l.text]), [['delete', '-- a/heading'], ['context', 'body']]);
 });
 
 test('new and deleted files', () => {
-  const [added, deleted] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/new.ts b/new.ts',
     'new file mode 100644',
     'index 0000000..1111111',
@@ -111,7 +138,12 @@ test('new and deleted files', () => {
     '+++ /dev/null',
     '@@ -1 +0,0 @@',
     '-only',
-  ));
+  );
+
+  /* When */
+  const [added, deleted] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.equal(added.status, 'added');
   assert.equal(added.path, 'new.ts');
   assert.deepEqual(added.hunks[0].lines.map((l) => [l.oldLine, l.newLine]), [[null, 1], [null, 2]]);
@@ -121,16 +153,23 @@ test('new and deleted files', () => {
 });
 
 test('an empty new file has no hunks but is still a file', () => {
-  const [file] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/empty.txt b/empty.txt',
     'new file mode 100644',
     'index 0000000..e69de29',
-  ));
+  );
+
+  /* When */
+  const [file] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.deepEqual({ path: file.path, status: file.status, hunks: file.hunks.length }, { path: 'empty.txt', status: 'added', hunks: 0 });
 });
 
 test('renames, with and without changes, and copies', () => {
-  const [pure, edited, copied] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/src/old name.ts b/src/new name.ts',
     'similarity index 100%',
     'rename from src/old name.ts',
@@ -149,35 +188,53 @@ test('renames, with and without changes, and copies', () => {
     'similarity index 100%',
     'copy from c.ts',
     'copy to d.ts',
-  ));
+  );
+
+  /* When */
+  const [pure, edited, copied] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.deepEqual([pure.status, pure.path, pure.oldPath, pure.hunks.length], ['renamed', 'src/new name.ts', 'src/old name.ts', 0]);
   assert.deepEqual([edited.status, edited.path, edited.oldPath, edited.additions], ['renamed', 'lib/b.ts', 'lib/a.ts', 1]);
   assert.deepEqual([copied.status, copied.path, copied.oldPath], ['copied', 'd.ts', 'c.ts']);
 });
 
 test('a path with spaces is read whole from the diff --git line', () => {
-  const [file] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/my dir/a b.txt b/my dir/a b.txt',
     'old mode 100644',
     'new mode 100755',
-  ));
+  );
+
+  /* When */
+  const [file] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.deepEqual([file.path, file.status], ['my dir/a b.txt', 'modified']);
 });
 
 test('git-quoted paths are unquoted, including UTF-8 octal escapes', () => {
-  const [file] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git "a/caf\\303\\251 \\"x\\".txt" "b/caf\\303\\251 \\"x\\".txt"',
     '--- "a/caf\\303\\251 \\"x\\".txt"',
     '+++ "b/caf\\303\\251 \\"x\\".txt"',
     '@@ -1 +1 @@',
     '-a',
     '+b',
-  ));
+  );
+
+  /* When */
+  const [file] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.equal(file.path, 'café "x".txt');
 });
 
 test('binary files are one row with no hunks', () => {
-  const [changed, added, patched] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/logo.png b/logo.png',
     'index 1111111..2222222 100644',
     'Binary files a/logo.png and b/logo.png differ',
@@ -194,14 +251,20 @@ test('binary files are one row with no hunks', () => {
     'literal 10',
     'zcmZ?wbhEHbRAx',
     '',
-  ));
+  );
+
+  /* When */
+  const [changed, added, patched] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.deepEqual([changed.path, changed.status, changed.binary, changed.hunks.length], ['logo.png', 'modified', true, 0]);
   assert.deepEqual([added.path, added.status, added.binary], ['new.png', 'added', true]);
   assert.deepEqual([patched.path, patched.binary, patched.additions], ['font.woff', true, 0]);
 });
 
 test('"No newline at end of file" marks the line before it', () => {
-  const [file] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/x b/x',
     '--- a/x',
     '+++ b/x',
@@ -210,7 +273,12 @@ test('"No newline at end of file" marks the line before it', () => {
     '-last',
     '\\ No newline at end of file',
     '+last',
-  ));
+  );
+
+  /* When */
+  const [file] = parseUnifiedDiff(text);
+
+  /* Then */
   const lines = file.hunks[0].lines;
   assert.deepEqual(lines.map((l) => [l.kind, l.noNewlineAtEnd ?? false]), [
     ['context', false], ['delete', true], ['add', false],
@@ -220,7 +288,8 @@ test('"No newline at end of file" marks the line before it', () => {
 });
 
 test('a marker after the hunk is complete still applies to its last line', () => {
-  const [file] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/x b/x',
     '--- a/x',
     '+++ b/x',
@@ -228,12 +297,18 @@ test('a marker after the hunk is complete still applies to its last line', () =>
     '-a',
     '+b',
     '\\ No newline at end of file',
-  ));
+  );
+
+  /* When */
+  const [file] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.equal(file.hunks[0].lines[1].noNewlineAtEnd, true);
 });
 
 test('an empty context line whose space was stripped is still context', () => {
-  const [file] = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     'diff --git a/x b/x',
     '--- a/x',
     '+++ b/x',
@@ -242,14 +317,20 @@ test('an empty context line whose space was stripped is still context', () => {
     '',
     '-b',
     '+c',
-  ));
+  );
+
+  /* When */
+  const [file] = parseUnifiedDiff(text);
+
+  /* Then */
   assert.deepEqual(file.hunks[0].lines.map((l) => [l.kind, l.oldLine, l.newLine]), [
     ['context', 1, 1], ['context', 2, 2], ['delete', 3, null], ['add', null, 3],
   ]);
 });
 
 test('a plain diff -u without diff --git lines is read too', () => {
-  const files = parseUnifiedDiff(diff(
+  /* Given */
+  const text = diff(
     '--- a.txt\t2026-01-01 00:00:00',
     '+++ a.txt\t2026-01-02 00:00:00',
     '@@ -1 +1 @@',
@@ -260,42 +341,109 @@ test('a plain diff -u without diff --git lines is read too', () => {
     '@@ -1 +1,2 @@',
     ' x',
     '+y',
-  ));
+  );
+
+  /* When */
+  const files = parseUnifiedDiff(text);
+
+  /* Then */
   assert.deepEqual(files.map((f) => [f.path, f.additions, f.deletions]), [['a.txt', 1, 1], ['b.txt', 1, 0]]);
 });
 
 test('empty input is no files', () => {
-  assert.deepEqual(parseUnifiedDiff(''), []);
+  /* When */
+  const files = parseUnifiedDiff('');
+
+  /* Then */
+  assert.deepEqual(files, []);
 });
 
 test('lock files start collapsed, wherever they are', () => {
-  for (const path of ['package-lock.json', 'web/yarn.lock', 'pnpm-lock.yaml', 'Cargo.lock',
-    'Gemfile.lock', 'composer.lock', 'ios/Podfile.lock', 'go.sum']) {
-    assert.equal(collapseReason({ path, additions: 1, deletions: 0 }), 'lockfile', path);
+  /* Given */
+  const paths = ['package-lock.json', 'web/yarn.lock', 'pnpm-lock.yaml', 'Cargo.lock',
+    'Gemfile.lock', 'composer.lock', 'ios/Podfile.lock', 'go.sum'];
+
+  for (const path of paths) {
+    /* When */
+    const reason = collapseReason({ path, additions: 1, deletions: 0 });
+
+    /* Then */
+    assert.equal(reason, 'lockfile', path);
   }
-  assert.equal(collapseReason({ path: 'package.json', additions: 1, deletions: 0 }), null);
-  assert.equal(collapseReason({ path: 'src/go.sum.ts', additions: 1, deletions: 0 }), null);
 });
 
-test('generated files start collapsed: build output, or marked linguist-generated', () => {
-  for (const path of ['dist/main.js', 'build/out.css', 'out/index.html', 'packages/ui/dist/index.js']) {
-    assert.equal(collapseReason({ path, additions: 1, deletions: 0 }), 'generated', path);
+test('files merely named like a lock file are not collapsed', () => {
+  /* Given */
+  const paths = ['package.json', 'src/go.sum.ts'];
+
+  for (const path of paths) {
+    /* When */
+    const reason = collapseReason({ path, additions: 1, deletions: 0 });
+
+    /* Then */
+    assert.equal(reason, null, path);
   }
-  assert.equal(collapseReason({ path: 'src/distance.ts', additions: 1, deletions: 0 }), null);
-  assert.equal(collapseReason({ path: 'src/build.ts', additions: 1, deletions: 0 }), null);
-  assert.equal(collapseReason({ path: 'src/schema.gen.ts', additions: 1, deletions: 0 }, new Set(['src/schema.gen.ts'])), 'generated');
+});
+
+test('generated files start collapsed: build output', () => {
+  /* Given */
+  const paths = ['dist/main.js', 'build/out.css', 'out/index.html', 'packages/ui/dist/index.js'];
+
+  for (const path of paths) {
+    /* When */
+    const reason = collapseReason({ path, additions: 1, deletions: 0 });
+
+    /* Then */
+    assert.equal(reason, 'generated', path);
+  }
+});
+
+test('files merely named like build output are not collapsed', () => {
+  /* Given */
+  const paths = ['src/distance.ts', 'src/build.ts'];
+
+  for (const path of paths) {
+    /* When */
+    const reason = collapseReason({ path, additions: 1, deletions: 0 });
+
+    /* Then */
+    assert.equal(reason, null, path);
+  }
+});
+
+test('generated files start collapsed: marked linguist-generated', () => {
+  /* Given */
+  const generated = new Set(['src/schema.gen.ts']);
+
+  /* When */
+  const reason = collapseReason({ path: 'src/schema.gen.ts', additions: 1, deletions: 0 }, generated);
+
+  /* Then */
+  assert.equal(reason, 'generated');
 });
 
 test('files over 400 changed lines start collapsed', () => {
-  assert.equal(collapseReason({ path: 'a.ts', additions: 200, deletions: 200 }), null);
-  assert.equal(collapseReason({ path: 'a.ts', additions: 201, deletions: 200 }), 'large');
-  // A lock file says why it is collapsed before it says it is big.
-  assert.equal(collapseReason({ path: 'yarn.lock', additions: 5000, deletions: 0 }), 'lockfile');
+  /* When */
+  const atLimit = collapseReason({ path: 'a.ts', additions: 200, deletions: 200 });
+  const overLimit = collapseReason({ path: 'a.ts', additions: 201, deletions: 200 });
+
+  /* Then */
+  assert.equal(atLimit, null);
+  assert.equal(overLimit, 'large');
+});
+
+test('a lock file says why it is collapsed before it says it is big', () => {
+  /* When */
+  const reason = collapseReason({ path: 'yarn.lock', additions: 5000, deletions: 0 });
+
+  /* Then */
+  assert.equal(reason, 'lockfile');
 });
 
 test('the parser applies the collapse rules', () => {
+  /* Given */
   const big = Array.from({ length: 401 }, (_, i) => '+line ' + i);
-  const files = parseUnifiedDiff(diff(
+  const text = diff(
     'diff --git a/package-lock.json b/package-lock.json',
     '--- a/package-lock.json',
     '+++ b/package-lock.json',
@@ -320,7 +468,12 @@ test('the parser applies the collapse rules', () => {
     '@@ -1 +1 @@',
     '-a',
     '+b',
-  ), { generatedPaths: ['src/schema.ts'] });
+  );
+
+  /* When */
+  const files = parseUnifiedDiff(text, { generatedPaths: ['src/schema.ts'] });
+
+  /* Then */
   assert.deepEqual(files.map((f) => [f.path, f.collapsedReason]), [
     ['package-lock.json', 'lockfile'],
     ['src/schema.ts', 'generated'],
