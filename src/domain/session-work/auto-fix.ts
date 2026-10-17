@@ -6,7 +6,7 @@
  * is bounded: two automatic tries per PR per check, then the PR is yours. The
  * history is stored by the caller and survives restarts; this only reads it.
  */
-import type { CheckRun, PullRequestStatus } from './model';
+import type { AutoFixAttemptSummary, CheckRun, PullRequestStatus } from './model';
 
 /** Automatic Fix CI attempts per `(repository, PR, check)` before giving up. */
 export const MAX_AUTO_FIX_ATTEMPTS = 2;
@@ -21,6 +21,11 @@ export type AutoFixEvent =
     /** The head commit the check failed on when the attempt was queued. */
     headSha: string;
     origin: 'manual' | 'auto';
+    /**
+     * The attempt's action is still queued or with Claude. Once Claude has
+     * finished its turn the attempt is spent, whether or not it pushed.
+     */
+    inFlight: boolean;
   }
   | {
     /** The check went green; earlier attempts no longer count. */
@@ -28,7 +33,16 @@ export type AutoFixEvent =
     repository: string;
     number: number;
     checkName: string;
+  }
+  | {
+    /** The attempts ran out and the PR was handed back to you; said once per streak. */
+    kind: 'gave-up';
+    repository: string;
+    number: number;
+    checkName: string;
   };
+
+type Attempt = Extract<AutoFixEvent, { kind: 'attempt' }>;
 
 /** What to do about a PR's failing checks this poll. */
 export type AutoFixDecision =
@@ -39,16 +53,19 @@ export type AutoFixDecision =
 /**
  * Queue a Fix CI, give up, or leave it.
  *
- * Attempts are counted per head commit: once one is queued for a commit, that
- * commit's failure has been handed over, and the next poll seeing the same red
- * check must not queue it again. A new push that fails again is the next
- * attempt. A manual Fix CI on the commit also means it has been handed over,
- * but it is your call, so it does not use up an automatic try. A check going
+ * A check is in hand while an attempt on it is queued or with Claude, manual
+ * or automatic: the next poll seeing the same red check must not queue it
+ * again. Once Claude finished its turn the attempt is spent. If it pushed, the
+ * new commit failing is the next attempt; if it did not, the same commit still
+ * failing is the next attempt too — otherwise a turn that ended without a push
+ * would leave the check waiting forever. Only automatic attempts count towards
+ * the limit: a manual Fix CI is your call, and is always allowed. A check going
  * green wipes the slate: a failure next week is a new problem.
  *
  * Checks are taken in the order `gh` lists them. One that can still be queued
  * wins over one that has run out, so a PR with two broken checks gets both
- * tried; when nothing can be queued and a check has run out, the PR is given up.
+ * tried; when nothing can be queued and a check has run out, the PR is given
+ * up — once: a check already given up on is left alone until it goes green.
  */
 export function autoFixDecision(pr: PullRequestStatus, history: readonly AutoFixEvent[]): AutoFixDecision {
   if (pr.state !== undefined && pr.state !== 'open' && pr.state !== 'draft') return { action: 'skip' };
@@ -57,15 +74,37 @@ export function autoFixDecision(pr: PullRequestStatus, history: readonly AutoFix
 
   let exhausted: { checkName: string; attempts: number } | null = null;
   for (const check of failingChecks(pr.checks)) {
-    const attempts = attemptsSinceGreen(pr, check.name, history);
-    if (attempts.some((attempt) => attempt.headSha === headSha)) continue;
-    const automatic = new Set(attempts.filter((a) => a.origin === 'auto').map((a) => a.headSha)).size;
+    const { attempts, gaveUp } = sinceGreen(pr, check.name, history);
+    if (attempts.some((attempt) => attempt.inFlight)) continue;
+    const automatic = attempts.filter((attempt) => attempt.origin === 'auto').length;
     if (automatic < MAX_AUTO_FIX_ATTEMPTS) {
       return { action: 'queue', checkName: check.name, headSha, attempt: automatic + 1 };
     }
-    exhausted ??= { checkName: check.name, attempts: automatic };
+    if (!gaveUp) exhausted ??= { checkName: check.name, attempts: automatic };
   }
   return exhausted ? { action: 'give-up', ...exhausted } : { action: 'skip' };
+}
+
+/**
+ * The automatic attempts on a check since it was last green, for the card
+ * that says auto-fix gave up: the commit each was handed, and what Claude
+ * pushed in answer — the commit the next attempt (or, for the last one, the
+ * PR's head now) failed on, or null when the head did not move.
+ */
+export function autoFixAttempts(
+  pr: PullRequestStatus, checkName: string, history: readonly AutoFixEvent[],
+): AutoFixAttemptSummary[] {
+  const automatic = sinceGreen(pr, checkName, history).attempts.filter((attempt) => attempt.origin === 'auto');
+  return automatic.map((attempt, i) => {
+    const next = i + 1 < automatic.length ? automatic[i + 1].headSha : pr.headSha;
+    return { attempt: i + 1, failedOn: attempt.headSha, pushed: next && next !== attempt.headSha ? next : null };
+  });
+}
+
+/** Has anything happened to the check since it was last green, that a green run now wipes? */
+export function hasAutoFixStreak(pr: PullRequestStatus, checkName: string, history: readonly AutoFixEvent[]): boolean {
+  const { attempts, gaveUp } = sinceGreen(pr, checkName, history);
+  return attempts.length > 0 || gaveUp;
 }
 
 function failingChecks(checks: readonly CheckRun[] | undefined): CheckRun[] {
@@ -80,17 +119,24 @@ function failingChecks(checks: readonly CheckRun[] | undefined): CheckRun[] {
   return failing;
 }
 
-/** This check's attempts on this PR since it last went green. */
-function attemptsSinceGreen(
+/** This check's attempts on this PR since it last went green, and whether it was given up on since. */
+function sinceGreen(
   pr: PullRequestStatus,
   checkName: string,
   history: readonly AutoFixEvent[],
-): Array<Extract<AutoFixEvent, { kind: 'attempt' }>> {
-  let attempts: Array<Extract<AutoFixEvent, { kind: 'attempt' }>> = [];
+): { attempts: Attempt[]; gaveUp: boolean } {
+  let attempts: Attempt[] = [];
+  let gaveUp = false;
   for (const event of history) {
     if (event.repository !== pr.repository || event.number !== pr.number || event.checkName !== checkName) continue;
-    if (event.kind === 'passed') attempts = [];
-    else attempts.push(event);
+    if (event.kind === 'passed') {
+      attempts = [];
+      gaveUp = false;
+    } else if (event.kind === 'gave-up') {
+      gaveUp = true;
+    } else {
+      attempts.push(event);
+    }
   }
-  return attempts;
+  return { attempts, gaveUp };
 }
