@@ -26,6 +26,7 @@ import { SessionLauncher } from '../application/services/session-launcher';
 import { SessionLifecycle } from '../application/services/session-lifecycle';
 import { SessionTransitionDetector } from '../application/services/session-transition-detector';
 import { SessionWorkService } from '../application/services/session-work-service';
+import { IssueSessionService, type IssueSessionCandidate } from '../application/services/issue-session-service';
 import { ReviewService } from '../application/services/review-service';
 import { SessionActionService } from '../application/services/session-action-service';
 import { PrWatchService } from '../application/services/pr-watch-service';
@@ -102,6 +103,7 @@ export interface Container {
   readonly sessionActions: SessionActionService;
   readonly review: ReviewService
   readonly prWatch: PrWatchService;
+  readonly issueSessions: IssueSessionService;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -276,6 +278,45 @@ export function buildContainer(): Container {
     renderer, clock, timers, log,
   });
 
+  // Sessions on a plan's issues (#125): every listed session and every running
+  // one may own an issue, and a new one starts in a worktree made here.
+  const issueSessions = new IssueSessionService({
+    sessions: () => {
+      const meta = repository.getAllMeta();
+      const candidates = new Map<string, IssueSessionCandidate>();
+      for (const cached of repository.getAllCached()) {
+        if (meta.get(cached.sessionId)?.archived) continue;
+        candidates.set(cached.sessionId, {
+          sessionId: cached.sessionId,
+          projectPath: cached.projectPath,
+          folder: cached.folder,
+          activeAt: Date.parse(cached.modified) || 0,
+          pullRequests: cached.pullRequests ?? [],
+        });
+      }
+      for (const [sessionId, live] of registry.snapshot()) {
+        if (live.exited || live.isPlainTerminal) continue;
+        const listed = candidates.get(sessionId);
+        if (listed) listed.activeAt = Math.max(listed.activeAt, live.openedAt);
+        else {
+          candidates.set(sessionId, {
+            sessionId,
+            projectPath: live.projectPath,
+            folder: live.projectFolder ?? encodeProjectPath(live.projectPath),
+            activeAt: live.openedAt,
+            pullRequests: [],
+          });
+        }
+      }
+      return [...candidates.values()];
+    },
+    transcripts,
+    git: workspace,
+    remotes: git,
+    github,
+    clock, log,
+  });
+
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
   const projectsWatcher = new ProjectsWatcher({
@@ -302,6 +343,7 @@ export function buildContainer(): Container {
     questions, questionHook,
     sessionIndex, projects, usage, schedules, weather, updates, sessionWork, sessionActions, prWatch,
     review,
+    issueSessions,
     renderer, dialogs, windowDrag, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,

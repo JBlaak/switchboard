@@ -24,3 +24,10 @@ function build(host: string, repoPath: string): string | null {
   if (!clean || clean.split('/').some(part => !part)) return null;
   return `https://${host}/${clean}`;
 }
+
+/** `owner/repo` of a remote on github.com, or null for any other remote. */
+export function gitHubRepository(remote: string): string | null {
+  const web = repoWebUrl(remote);
+  const match = web ? /^https:\/\/github\.com\/([^/]+\/[^/]+)$/i.exec(web) : null;
+  return match ? match[1] : null;
+}

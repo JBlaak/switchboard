@@ -76,3 +76,19 @@ test('the settings survive a pre-launch command', () => {
   assert.ok(command.startsWith("aws-vault exec dev -- claude '--settings' '{"));
   assert.ok(command.endsWith("'--session-id' 'abc'"));
 });
+
+test('a new session\'s first prompt goes last, behind --, after a variadic --add-dir', () => {
+  /* When */
+  const args = buildClaudeArgs(fresh, { addDirs: '/a,/b', initialPrompt: 'Work on #114' });
+
+  /* Then */
+  assert.deepEqual(args, ['--session-id', 'abc', '--add-dir', '/a', '--add-dir', '/b', '--', 'Work on #114']);
+});
+
+test('a resumed session is never handed a first prompt', () => {
+  /* When */
+  const args = buildClaudeArgs(resumed, { initialPrompt: 'Work on #114' });
+
+  /* Then */
+  assert.deepEqual(args, ['--resume', 'abc']);
+});

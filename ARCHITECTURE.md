@@ -34,7 +34,7 @@ remote-status rules the main process does instead of a parallel copy.
 |---|---|
 | `session/` | what a session is, how its transcript parses, which of its names wins, how rows are ranked and truncated, when a pending row is abandoned, how a fork is recognised |
 | `session-work/` | a session's footprint for the Session work page: its work items, the unified-diff parser and which files start collapsed, the Ship it steps, the auto-fix limit, the PR status dot, which actions an item offers, and the prompts every action types |
-| `plan/` | an epic and its sub-issues for the Plan tab: levels from "Blocked by" links, row order, each issue's state, the current level and the warnings, the body summary, and the branch and prompt that start a session on an issue |
+| `plan/` | an epic and its sub-issues for the Plan tab: levels from "Blocked by" links, row order, each issue's state, the current level and the warnings, the body summary, the branch, base and prompt that start a session on an issue, and which session owns an issue |
 | `project/` | project-path encoding and shortening, `ssh://` identity, assembling the project list |
 | `remote/` | the SSH reconnect policy, the ssh command, connection status |
 | `terminal/` | OSC parsing (busy/idle/notifications), the output ring buffer, the banners Switchboard writes itself |

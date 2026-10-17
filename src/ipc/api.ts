@@ -23,6 +23,7 @@ import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
 import type { Weather, WeatherLocation } from '../domain/weather/weather';
+import type { IssueWorktreeRequest, IssueWorktreeResult } from '../domain/plan/issue-session';
 
 /** Removes the listener an `on*` subscription added. */
 export type Unsubscribe = () => void;
@@ -137,6 +138,16 @@ export interface SwitchboardApi {
   sessionWorkReview(request: ReviewRequest): Promise<ReviewResult>
   /** The end of a failing check run's log, for the Checks panel; null when `gh` has none. */
   getCheckLog(request: { repository: string; checkRunUrl: string }): Promise<string | null>;
+
+  // ── Plan: sessions on a plan's issues (#125) ──
+  /** `owner/repo#n` → the id of the session that owns it (S1), across the repository's sessions. */
+  issueSessions(repository: string): Promise<Record<string, string>>;
+  /**
+   * Make the worktree a new session on a plan's issue starts in (A2, A3),
+   * answering it and the prompt Claude starts with. The renderer starts the
+   * session (`startIssueSession`), because the row is its to make.
+   */
+  prepareIssueWorktree(request: IssueWorktreeRequest): Promise<IssueWorktreeResult>;
 
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;

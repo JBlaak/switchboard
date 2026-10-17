@@ -8,6 +8,10 @@
  * Every method answers rather than throws. A worktree that has gone, a branch
  * that was deleted, a repository with no commits yet — each is an ordinary
  * state of a session's footprint, and answers with the empty value.
+ *
+ * `GitWorktrees`, at the end, is the one exception to "only questions":
+ * starting a session on a plan's issue (A2) fetches the branch it starts from
+ * and adds a worktree for it, because the user asked for exactly that.
  */
 import type { FileChange, LineStats } from '../../domain/session-work/model';
 
@@ -94,4 +98,28 @@ export interface GitWorkspace {
    * Edits to working files that nothing has staged are not reported.
    */
   watch(worktree: string, onChange: () => void): Disposable;
+}
+
+/** A git write went through, or did not, with git's reason. */
+export type GitWrite = { ok: true } | { ok: false; reason: string };
+
+/**
+ * The worktree a session on a plan's issue starts in (A2, A3). Writes, and
+ * only these: a fetch of the branch it starts from, and the worktree itself.
+ */
+export interface GitWorktrees {
+  /**
+   * The main checkout of the repository `cwd` is in: for a linked worktree,
+   * the checkout it was added from. Null outside a repository.
+   */
+  mainCheckout(cwd: string): Promise<string | null>;
+
+  /** Fetch `branch` from origin into `origin/<branch>`. */
+  fetchBranch(repository: string, branch: string): Promise<GitWrite>;
+
+  /**
+   * `git worktree add -b <branch> <path> <base>`, the new branch tracking
+   * nothing, so it only counts as pushed once it has been.
+   */
+  addWorktree(repository: string, path: string, branch: string, base: string): Promise<GitWrite>;
 }

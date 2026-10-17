@@ -15,7 +15,7 @@ import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { FileChange, FileStatus, LineStats } from '../../domain/session-work/model';
-import type { Disposable, GitWorkspace } from '../../application/ports/git-workspace';
+import type { Disposable, GitWorkspace, GitWorktrees, GitWrite } from '../../application/ports/git-workspace';
 
 /** git's well-known empty tree: what a repository with no commits yet is diffed against. */
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
@@ -75,7 +75,7 @@ function isSafeRef(ref: string): boolean {
   return ref.length > 0 && !ref.startsWith('-');
 }
 
-export class GitCliWorkspace implements GitWorkspace {
+export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
   async worktreeRoot(cwd: string): Promise<string | null> {
     const result = await git(cwd, ['rev-parse', '--show-toplevel']);
     return result.code === 0 ? result.stdout.trim() || null : null;
@@ -291,6 +291,49 @@ export class GitCliWorkspace implements GitWorkspace {
       },
     };
   }
+
+  // ── GitWorktrees: the worktree a session on a plan's issue starts in (A2) ──
+
+  async mainCheckout(cwd: string): Promise<string | null> {
+    const result = await git(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
+    const common = result.code === 0 ? result.stdout.trim() : '';
+    if (!common) return null;
+    // The common dir is the main checkout's `.git`; anything else (a bare
+    // repository, a submodule's dir under `.git/modules`) has no checkout above it.
+    if (path.basename(common) === '.git') return path.dirname(common);
+    return this.worktreeRoot(cwd);
+  }
+
+  async fetchBranch(repository: string, branch: string): Promise<GitWrite> {
+    if (!isSafeRef(branch)) return { ok: false, reason: 'Not a branch name: ' + branch };
+    return gitWrite(repository, ['fetch', '--quiet', '--no-tags', 'origin',
+      `+refs/heads/${branch}:refs/remotes/origin/${branch}`], FETCH_TIMEOUT_MS);
+  }
+
+  async addWorktree(repository: string, worktree: string, branch: string, base: string): Promise<GitWrite> {
+    if (!isSafeRef(branch) || !isSafeRef(base)) return { ok: false, reason: 'Not a branch name: ' + branch };
+    return gitWrite(repository, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, worktree, base], TIMEOUT_MS);
+  }
+}
+
+/** How long a fetch may take: it goes over the network. */
+const FETCH_TIMEOUT_MS = 60_000;
+
+/** Run a git command that changes something, answering git's own last word when it fails. */
+function gitWrite(cwd: string, args: readonly string[], timeout: number): Promise<GitWrite> {
+  return new Promise((resolve) => {
+    // Never wait on a credential prompt nobody can see.
+    const env = { ...GIT_OPTIONS.env, GIT_TERMINAL_PROMPT: '0' };
+    execFile('git', ['-C', cwd, ...args], { ...GIT_OPTIONS, timeout, env, encoding: 'utf8' }, (err, _stdout, stderr) => {
+      if (!err) {
+        resolve({ ok: true });
+        return;
+      }
+      const said = (stderr ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
+      const reason = said.length ? said[said.length - 1].replace(/^(fatal|error):\s*/, '') : err.message;
+      resolve({ ok: false, reason });
+    });
+  });
 }
 
 /**

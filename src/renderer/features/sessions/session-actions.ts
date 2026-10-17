@@ -134,11 +134,28 @@ export async function openSession(session: SessionRow, options?: SessionOptions)
   await spawn(session, { isNew: false, options: resumeOptions });
 }
 
-/** Create the terminal, ask main to start the process, and show the result. */
+/**
+ * Start a Claude session in a directory with exactly these options, and put
+ * it on screen. Answers its id, or why it did not start (also printed in its
+ * terminal, as for any launch).
+ */
+export async function startClaudeSessionIn(
+  projectPath: string, options: SessionOptions,
+): Promise<{ ok: true; sessionId: string } | { ok: false; reason: string }> {
+  const session = newSessionRow(projectPath);
+  trackPending(session);
+  const error = await spawn(session, { isNew: true, options });
+  return error === null ? { ok: true, sessionId: session.sessionId } : { ok: false, reason: error };
+}
+
+/**
+ * Create the terminal, ask main to start the process, and show the result.
+ * Answers why it could not start, or null when it did.
+ */
 async function spawn(
   session: SessionRow,
   { isNew, options }: { isNew: boolean; options?: SessionOptions },
-): Promise<void> {
+): Promise<string | null> {
   const entry = createTerminalEntry(session);
 
   const result = await window.api.openTerminal(
@@ -147,11 +164,12 @@ async function spawn(
   if (!result.ok) {
     entry.terminal.write(`\r\nError: ${result.error}\r\n`);
     entry.closed = true;
-    return;
+    return String(result.error ?? 'The session could not start');
   }
 
   showSession(session.sessionId);
   void pollActiveSessions();
+  return null;
 }
 
 /** Stop a session, after asking — it is destructive and cannot be undone. */
