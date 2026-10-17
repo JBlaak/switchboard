@@ -1,237 +1,136 @@
 # Switchboard
 
-Your command center for Claude Code sessions.
+A calm home for your Claude Code sessions.
 
-> **This is a fork.** It started from [doctly/switchboard](https://github.com/doctly/switchboard)
-> and has since gone its own way: some features were added, several were removed, and the
-> code underneath has been rebuilt. If you are looking for the original, head there.
-
-Switchboard is a desktop app that gives you one view of all your Claude Code sessions across every project. Launch, resume and monitor sessions from a single window — no more juggling terminal tabs or digging through `~/.claude/projects` to find that one conversation from last week.
+Every session from every project in one quiet list. A real terminal beside it. Your hands stay on
+the keyboard, and a small jelly friend named Patch keeps you company.
 
 ![Switchboard](build/screenshot.png)
 
-## Features
+> **This is a fork** of [doctly/switchboard](https://github.com/doctly/switchboard). It has gone its
+> own way: fewer panels, more keyboard, and a lot of care for how it feels to sit in all day.
 
-- **Session list** — Every session from every project in one flat list, ordered by recent activity, with running sessions on top
-- **Built-in terminal** — Connect to running sessions or start new ones (Claude or a plain shell) without leaving the app
-- **Project picker** — Start a session anywhere by fuzzy-filtering your projects, entirely from the keyboard: `+`, type, `↓`, `Enter`
-- **Remote projects** — Run sessions on another machine over SSH, kept alive in tmux, with automatic reconnects and a status card while the link is down
-- **Status at a glance** — See which sessions are working, waiting for input or blocked on a permission prompt
-- **Full-text search** — Find a session by what was discussed, not just when
-- **Light and dark** — Follows your system, or pin it to light or dark from the sidebar
-- **Usage gauges** — Your Claude plan's limit windows at the bottom of the sidebar
-- **Session names** — Picks up names from Claude Code's `/rename` automatically
+## What it's about
+
+**Focus.** Switchboard shows you what needs you and keeps everything else out of the way. Sessions
+sort themselves into *Needs input*, *Working*, *Pinned* and *Recent*, with live dots so you can
+tell a busy Claude from a waiting one at a glance. Old sessions fold away behind "+3 older".
+
+**Minimalism.** One list, one terminal, no tabs. Archiving a session also stops it. Picking a
+project just starts Claude there. When a feature didn't earn its pixels, it went.
+
+**Keyboard first.** Start a session, jump between them, rename, archive and review without
+reaching for the mouse. See [Keyboard](#keyboard).
+
+**A little whimsy.** Archiving throws confetti. Every fifth time, there are stars. Patch lives on the
+empty screen and has opinions about the weather, your usage limits, late nights and Dutch
+holidays. Poke Patch and see what happens. Then poke again.
+
+![Patch on the empty screen](build/screenshot-patch.png)
+
+## Highlights
+
+### Answer Claude's questions properly
+
+When Claude asks you something, the questions open as a proper sheet instead of a menu in the
+terminal: number keys to pick, arrows to move between questions, and an "Other" box to write your
+own answer. Patch keeps count. Press `Esc` to answer in the terminal instead.
+
+![Claude's questions](build/screenshot-questions.png)
+
+### See what a session did
+
+`⌘G` opens **Session work** for the session on screen: its pull requests, branches, uncommitted
+worktrees and the issues it touched, each with its CI status. Read the diff unified or split, leave
+review comments on lines, and hand them back to Claude. Buttons like *Ship it*, *Rebase* and
+*Fix CI* type the prompt into the session for you. While a session runs, failing CI on its PRs is
+handed to Claude automatically, at most twice per check.
+
+![Session work](build/screenshot-work.png)
+
+### Start anywhere in three keys
+
+`⌘A`, type a few letters, `Enter`. The project picker fuzzy-matches every project you've used
+Claude in, local or remote. `⌘N` starts a quick session in a scratch folder of your choosing.
 
 ![Project picker](build/screenshot-picker.png)
 
-## What's different in this fork
+### And also
 
-**Added**
-
-- A light mode with a system / light / dark toggle. The Switchboard and Ghostty terminal themes follow it with light versions of their own; the Ghostty one keeps its softer contrast, with charcoal text on white
-- SSH remote projects with persistent tmux sessions, reconnection, and a live view of what the connection is doing
-- A flat, recency-ordered session list with a fuzzy project picker you can drive from the keyboard
-- Terminal font family, size and line height settings, applied live to open sessions
-- A frameless window, with the app's own headers where the title bar used to be
-- A palette based on Slack's dark workspace theme, built on colour tokens
-- Archiving a session also stops it
-
-**Removed**
-
-- The session grid, IDE emulation and its diff side panel, and the Plans, Agent Files and Stats tabs
-- Fork, mark-as-unread and the message-history viewer
-- The scheduled task button
-- The new-session menu: picking a project starts Claude with its defaults, and the configure dialog and plain terminal sessions are gone
-- The Windows and Linux builds; Switchboard is macOS-only
-
-**Under the hood**
-
-- Rewritten in strict TypeScript and SCSS, with CI running the test suite
-- Restructured into a hexagonal (ports and adapters) architecture — see [ARCHITECTURE.md](ARCHITECTURE.md)
-
-![Switchboard in light mode](build/screenshot-light.png)
+- **Remote projects over SSH.** Sessions live in tmux on the other machine, survive a dropped
+  link, and reconnect on their own. A card shows what the connection is doing in the meantime.
+- **Full-text search** across everything you and Claude ever said, not just the titles.
+- **Usage gauges** for your plan's 5-hour and weekly windows, quietly in the corner.
+- **Keep awake.** One click on the zzz keeps your Mac from sleeping while Claude works.
+- **Light and dark**, following your system or pinned. The terminal has themes to match:
+  Switchboard, Ghostty, Tokyo Night, Catppuccin, Dracula, Nord and Solarized.
+- **Your terminal, your way.** Font, size and line height apply live. `Shift+Enter` makes a newline,
+  holding `Space` works for voice input, and dropping a file pastes its path.
+- **Scheduled tasks.** `.claude/commands/schedule-*.md` files with a cron line run on their own.
 
 ## Keyboard
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+F` / `Ctrl+F` | Find in the terminal |
-| `Cmd+Shift+[` / `]` | Previous / next session |
-| `Cmd+←` `↑` / `Cmd+→` `↓` | Previous / next session |
+**Anywhere**
+
+| Keys | Does |
+|---|---|
+| `⌘A` | New session: open the project picker |
+| `⌘N` | Quick session in your quick-session folder |
+| `⌘⇧[` / `⌘⇧]` | Previous / next session (`⌘←` `⌘→` and `⌘↑` `⌘↓` work too) |
+| `⌘L` | Move to the session list |
+| `⌘G` | Open or close Session work |
+| `⌘E` | Archive the session on screen 🎉 |
+| `⌘S` | Hide or show the sidebar |
+| `⌘F` | Find in the terminal |
+
+**In the session list** (after `⌘L`)
+
+| Keys | Does |
+|---|---|
+| `↑` `↓` or `J` `K` | Move |
+| `Enter` | Open the session, fold a group, or show older ones |
+| `R` or `F2` | Rename |
+| `E` | Archive (a whole group, on a group header) |
+| `A` | New session |
+| `Esc` | Back to the terminal |
+
+**In Session work**
+
+| Keys | Does |
+|---|---|
+| `J` `K` | Next / previous item |
+| `N` `P` | Next / previous file |
+| `U` | Unified or split diff |
+| `C` | Comment on the focused line |
+| `Esc` | Back to the terminal |
+
+**In Claude's questions**
+
+| Keys | Does |
+|---|---|
+| `1`–`9` | Pick an option |
+| `↑` `↓` | Move between options |
+| `←` `→` or `Enter` | Previous / next question |
+| `Space` | Toggle an option, when you can pick several |
+| `Esc` | Answer in the terminal instead |
+
+## Run it
+
+Switchboard is macOS only, and this fork doesn't publish builds, so you build it yourself. You need
+Node.js 20+ and the Xcode Command Line Tools (`xcode-select --install`).
+
+```bash
+npm install
+npm start              # build and launch
+npm run build:mac      # or package a .dmg into dist/
+```
+
+Building, testing and releasing are covered in [CONTRIBUTING.md](CONTRIBUTING.md), and how the code
+is laid out in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Thanks
 
-Switchboard was created by [Doctly](https://github.com/doctly) — thank you to Ali Basiri and
-everyone who contributed to [the original](https://github.com/doctly/switchboard), which this
-fork stands on. The flat session list and project picker are adapted from
+Switchboard was created by [Doctly](https://github.com/doctly). Thank you to Ali Basiri and
+everyone who contributed to [the original](https://github.com/doctly/switchboard), which this fork
+stands on. The flat session list and project picker are adapted from
 [Niek Haarman's fork](https://github.com/nhaarman/switchboard).
-
-## Download
-
-This fork doesn't publish builds; build it from source with the steps below. Prebuilt
-releases of the original are on [doctly/switchboard](https://github.com/doctly/switchboard/releases/latest).
-
-## Prerequisites
-
-- **Node.js** 20+
-- **npm** 10+
-- Xcode Command Line Tools for the native modules (`xcode-select --install`)
-
-## Development Setup
-
-```bash
-# Install dependencies (runs postinstall automatically)
-npm install
-
-# Start the app
-npm start
-```
-
-`npm start` builds the app and launches Electron. For faster iteration after the first run:
-
-```bash
-npm run electron
-```
-
-## End-to-end tests
-
-`e2e/` drives the built app with Playwright's Electron support. Each test gets
-its own temporary `HOME` holding a fixture `~/.claude/projects`, its own
-`SWITCHBOARD_DATA_DIR`, and fake `claude` and `ssh` commands on the session
-shell's `PATH`, so nothing touches your real sessions or settings and no real
-CLI or network is needed.
-
-```bash
-npm run test:e2e                          # build, then run the whole suite
-npm run test:e2e -- e2e/tests/sidebar.spec.ts --grep "pinned"
-npm run test:e2e -- --update-snapshots    # rewrite the screenshot baselines
-```
-
-The windows stay hidden and never take focus, so you can keep working while it
-runs. `SB_E2E_HEADED=1` shows them, for watching a test.
-`SB_E2E_SKIP_SCREENSHOTS=1` runs every functional assertion but skips the
-pixel comparisons. CI does that: the baselines are rendered on a developer's
-Mac, and a runner's macOS version and GPU draw text differently enough to fail
-them. Run the screenshots locally before you push.
-
-**Baselines** live in `e2e/tests/__screenshots__/<spec>/<name>-<light|dark>-darwin.png`,
-one per surface and colour scheme. Update them only for an intended visual
-change, look at every changed image before committing it, and say in the PR
-why it changed. A port that needs a baseline updated has changed the UI.
-
-**Fixture sessions** are built in code, not committed as JSONL.
-`e2e/fixtures/standard.ts` is the shared fixture: add a session there as one
-object (a stable id from `sessionId('name')`, a prompt, a time such as
-`hoursAgo(2)`, and optionally `pinned`, `archived`, `slug`, `pullRequests`,
-`name`, `cwd` for a worktree). Times are relative to a fixed `FIXTURE_NOW`, and
-the renderer's clock is frozen there, so "2h ago" is stable. A test that needs
-a different world passes its own spec with `test.use({ fixture: … })`.
-
-**The helpers** are in `e2e/support/`: `fakeClaude(home, id)` and
-`fakeSsh(home, id)` script the fake CLIs (titles, busy/idle, OSC 7501, OSC 9
-notifications, output, transcript lines, a fork, an exit code),
-`askQuestions` posts an AskUserQuestion to the session's hook,
-`pushRemoteStatus` puts the connection card in any phase, and
-`expectScreen` takes a whole-window screenshot. The host-facing channels
-(usage, updates, sleep, the folder picker, the browser) answer from stubs a
-test sets with `test.use({ stubs: … })` or `setHostStub`, and
-`hostStubCalls` counts what the renderer asked for. A test about timing
-passes `test.use({ fakeTimers: true })` and jumps the renderer's clock with
-`page.clock.fastForward`.
-
-**What belongs in e2e.** Prefer a unit test (`test/`, against a reducer, a
-layout function or a service with fakes) whenever the behaviour can be decided
-without the app. An e2e test is for what only the wired-up app can prove: an
-IPC round-trip, the real terminal, keyboard and focus moving between surfaces,
-a side effect in the main process, or a journey across several surfaces. Each
-test launches the app, so a few fuller journeys beat many small checks. Find
-elements by role, label or text, and add a `data-testid` only where nothing
-accessible identifies the element.
-
-## Writing tests
-
-Every test, unit or e2e, is split into `/* Given */`, `/* When */` and
-`/* Then */` blocks: setup, the one action under test, and the assertions.
-
-```ts
-test('archiving a session hides it from the recent list', () => {
-  /* Given */
-  const state = run(initialRendererState(), built([item(row('a'))]));
-
-  /* When */
-  const next = run(state, { type: 'sessionArchived', id: 'a' });
-
-  /* Then */
-  assert.deepEqual(visibleIds(next), []);
-});
-```
-
-Leave out `/* Given */` when there is no setup. Test one behaviour per test. A
-test that walks a sequence, such as an e2e journey, may repeat `/* When */` and
-`/* Then */` pairs. Assertions never go in Given, and actions never go in Then.
-
-## Building
-
-All build commands build the app first, then invoke electron-builder.
-
-```bash
-npm run build:mac     # DMG + zip (arm64 + x64)
-```
-
-Output goes to `dist/`.
-
-## Releasing
-
-Releases are driven by git tags:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-The GitHub Actions workflow builds the macOS app and publishes to GitHub Releases. You can also release locally:
-
-```bash
-npm run release   # builds + publishes to GitHub Releases
-```
-
-Set `GH_TOKEN` in your environment (a GitHub personal access token with `repo` scope).
-
-## Code Signing
-
-For distribution, set these environment variables:
-
-- `CSC_LINK` (p12 certificate) and `CSC_KEY_PASSWORD`, or sign via Keychain
-- Set `CSC_IDENTITY_AUTO_DISCOVERY=false` to skip signing (CI artifact builds)
-
-The macOS build uses custom entitlements (`build/entitlements.mac.plist`) to allow JIT and unsigned memory execution, required by native modules (node-pty, better-sqlite3).
-
-## Project Structure
-
-Switchboard is arranged as a hexagon — rules in the middle, the world at the
-edges, interfaces between them. See [ARCHITECTURE.md](ARCHITECTURE.md) for what
-lives where and how to add to it.
-
-```
-src/domain/          The rules. Pure TypeScript: no node, no Electron, no DOM,
-                     shared by both processes
-src/application/     Use cases, written against port interfaces
-src/application/ports/   The interfaces (repository, terminal, filesystem, …)
-src/infrastructure/  The adapters: sqlite, node-pty, fs, ssh, electron
-src/ipc/             The process boundary — channel names and the API contract
-src/main/            Composition root + IPC handler registration + bootstrap
-src/preload/         Context bridge; implements the IPC contract
-src/renderer/        The UI: app/ (bootstrap, routing), state/, features/, lib/
-src/renderer/styles/ SCSS partials, one per UI area
-src/workers/         Worker threads (the cold-start project scanner)
-app/                 Build output (gitignored) — what Electron actually runs
-test/                Node test-runner suites, run through tsx
-scripts/             Build (esbuild + sass), icon and postinstall scripts
-build/               Icons, entitlements, builder resources
-.github/workflows/   CI/CD
-```
-
-The app is written in TypeScript (strict) and SCSS. `npm run build` compiles
-everything into `app/` with esbuild and sass; `npm run typecheck` runs `tsc`
-over the whole tree; `npm test` builds and then runs the suites. Node 20 or
-newer is required — TypeScript 7 will not load on 18.

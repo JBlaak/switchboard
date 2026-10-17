@@ -84,7 +84,7 @@ jobs:
       # Screenshot comparisons are skipped here: the baselines are rendered on
       # a developer's Mac, and a runner's macOS version and GPU antialias text
       # differently enough to fail them without anything having changed. Every
-      # functional assertion still runs. See "End-to-end tests" in the README.
+      # functional assertion still runs. See "End-to-end tests" in CONTRIBUTING.md.
       - name: End-to-end tests
         run: npx playwright test --config e2e/playwright.config.ts
         env:

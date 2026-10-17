@@ -1,7 +1,7 @@
 /**
  * The end-to-end suite: the built app, driven through Playwright's Electron
- * support against a fixture home. See the "End-to-end tests" section of the
- * README for how to run it and how to update the screenshot baselines.
+ * support against a fixture home. See the "End-to-end tests" section of
+ * CONTRIBUTING.md for how to run it and how to update the screenshot baselines.
  *
  * Kept out of the unit glob (`test/*.test.ts`) on purpose: these need a build,
  * a display and several seconds per test.
