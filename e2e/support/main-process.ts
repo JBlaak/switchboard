@@ -28,7 +28,7 @@ import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status'
 import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
 import type { Weather, WeatherLocation } from '../../src/domain/weather/weather';
-import type { Plan } from '../../src/domain/plan/model';
+import type { Plan, PlanSummary } from '../../src/domain/plan/model';
 import type { SessionPlans } from '../../src/application/services/plan-service';
 
 /**
@@ -98,6 +98,12 @@ export interface PlansStub {
   plans?: Record<string, Plan>;
   /** By repository: `owner/repo#n` → the session that owns it. */
   issueSessions?: Record<string, Record<string, string>>;
+  /**
+   * A project's plans for the picker, by the end of its path (`Development/acme-api`):
+   * open and closed together, as `projectPlans` with `closed` answers them. A project
+   * not here has none; null answers as a project with no GitHub remote does.
+   */
+  projectPlans?: Record<string, PlanSummary[] | null>;
 }
 
 /**
@@ -251,7 +257,12 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       ipcMain.removeHandler(channels.planGet);
       ipcMain.handle(channels.planGet, (_event, repo, number) => plans.plans?.[String(repo) + '#' + String(number)] ?? null);
       ipcMain.removeHandler(channels.planProjectPlans);
-      ipcMain.handle(channels.planProjectPlans, () => []);
+      ipcMain.handle(channels.planProjectPlans, (_event, projectPath, options: { closed?: boolean } | undefined) => {
+        const found = Object.entries(plans.projectPlans ?? {}).find(([end]) => String(projectPath).endsWith('/' + end));
+        if (!found) return [];
+        if (!found[1]) return null;
+        return options?.closed ? found[1] : found[1].filter(plan => plan.state === 'open');
+      });
       ipcMain.removeHandler(channels.planIssueSessions);
       ipcMain.handle(channels.planIssueSessions, (_event, repo) => plans.issueSessions?.[String(repo)] ?? {});
     }

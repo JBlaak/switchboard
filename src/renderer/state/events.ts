@@ -17,6 +17,7 @@ import type { UpdateNotice } from '../../domain/update/release';
 import type { SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
 import type { DiffMode, ImageDefaults, ReviewKind, WorkTab } from './session-work-slice';
 import type { PlanSource, SessionPlansAnswer } from './plan-slice';
+import type { PlanPage } from './plan-page-slice';
 import type { IssueKey } from '../../domain/plan/model';
 import type { IssueSessionStart } from '../../domain/plan/issue-session';
 import type { ImageMode } from '../ui/session-work/image-compare/modes/types';
@@ -234,7 +235,12 @@ export type LocalEvent =
   /** The Checks panel asked main for a failing check's log, by the check run's URL. */
   | { type: 'checkLogRequested'; url: string }
   /** Main answered: the log's end, or null when there is none to show. */
-  | { type: 'checkLogLoaded'; url: string; text: string | null };
+  | { type: 'checkLogLoaded'; url: string; text: string | null }
+  // The Plan view without a session (#128); see `plan-page-slice`.
+  /** A plan picked in the New Session picker takes the main area. */
+  | { type: 'planPageOpened'; page: PlanPage }
+  /** Its Close, or Esc. */
+  | { type: 'planPageClosed' };
 
 export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent;
 
