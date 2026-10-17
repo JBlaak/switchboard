@@ -31,44 +31,97 @@ test('a pending row whose PTY exited long ago is abandoned', () => {
   // The regression: a session launched with a --session-id the CLI then refused
   // exited without ever writing a .jsonl, so the "real session appeared" check
   // could never fire and nothing else evicted it. The row was immortal.
+  /* Given */
   const row = pendingRow({ exitedAt: NOW - PAST_GRACE });
-  assert.equal(isPendingAbandoned(row, { now: NOW }), true);
+
+  /* When */
+  const abandoned = isPendingAbandoned(row, { now: NOW });
+
+  /* Then */
+  assert.equal(abandoned, true);
 });
 
 test('a pending row is kept through its grace period after exiting', () => {
+  /* Given */
   const row = pendingRow({ exitedAt: NOW - 1000 });
-  assert.equal(isPendingAbandoned(row, { now: NOW }), false);
+
+  /* When */
+  const abandoned = isPendingAbandoned(row, { now: NOW });
+
+  /* Then */
+  assert.equal(abandoned, false);
 });
 
 test('a running pending row is never abandoned, however old', () => {
+  /* Given */
   const old = pendingRow({ exitedAt: NOW - PAST_GRACE }, { created: new Date(NOW - PAST_GRACE).toISOString() });
-  assert.equal(isPendingAbandoned(old, { running: true, now: NOW }), false);
+
+  /* When */
+  const abandoned = isPendingAbandoned(old, { running: true, now: NOW });
+
+  /* Then */
+  assert.equal(abandoned, false);
 });
 
 test('the row being looked at is kept so its exit banner stays readable', () => {
+  /* Given */
   const row = pendingRow({ exitedAt: NOW - PAST_GRACE });
-  assert.equal(isPendingAbandoned(row, { onScreen: true, now: NOW }), false);
+
+  /* When */
+  const abandoned = isPendingAbandoned(row, { onScreen: true, now: NOW });
+
+  /* Then */
+  assert.equal(abandoned, false);
 });
 
 test('a missed exit event still ages out, counted from creation', () => {
   // No exitedAt: the renderer reloaded mid-launch, or openTerminal failed
   // before any PTY existed. Nothing is running under the id either way.
+  /* Given */
   const stale = pendingRow({}, { created: new Date(NOW - PAST_GRACE).toISOString() });
-  assert.equal(isPendingAbandoned(stale, { now: NOW }), true);
-  // A launch still in flight keeps its grace period.
+
+  /* When */
+  const abandoned = isPendingAbandoned(stale, { now: NOW });
+
+  /* Then */
+  assert.equal(abandoned, true);
+});
+
+test('a launch still in flight keeps its grace period', () => {
+  /* Given */
   const fresh = pendingRow();
-  assert.equal(isPendingAbandoned(fresh, { now: NOW }), false);
-  // An unparseable created date must not read as "infinitely old".
+
+  /* When */
+  const abandoned = isPendingAbandoned(fresh, { now: NOW });
+
+  /* Then */
+  assert.equal(abandoned, false);
+});
+
+test('an unparseable created date does not read as infinitely old', () => {
+  /* Given */
   const undated = pendingRow({}, { created: undefined });
-  assert.equal(isPendingAbandoned(undated, { now: NOW }), false);
+
+  /* When */
+  const abandoned = isPendingAbandoned(undated, { now: NOW });
+
+  /* Then */
+  assert.equal(abandoned, false);
 });
 
 test('terminals and remotes are exempt', () => {
   // Terminals are torn down explicitly on process exit, and a remote row is
   // meant to outlive its connection — archive is the only thing that drops one.
+  /* Given */
   const dead = { exitedAt: NOW - PAST_GRACE };
-  assert.equal(isPendingAbandoned(pendingRow(dead, { type: 'terminal' }), { now: NOW }), false);
-  assert.equal(isPendingAbandoned(pendingRow(dead, { type: 'remote' }), { now: NOW }), false);
+
+  /* When */
+  const terminal = isPendingAbandoned(pendingRow(dead, { type: 'terminal' }), { now: NOW });
+  const remote = isPendingAbandoned(pendingRow(dead, { type: 'remote' }), { now: NOW });
+
+  /* Then */
+  assert.equal(terminal, false);
+  assert.equal(remote, false);
 });
 
 // --- Which pending rows are filed under "Working" ---
@@ -87,17 +140,31 @@ function signals(overrides: Partial<SessionSignals> = {}): SessionSignals {
 }
 
 test('a pending row with a live PTY is Working', () => {
-  assert.equal(sessionTier(signals({ pending: true, hasLivePty: true })), TIER_RUNNING);
+  /* When */
+  const tier = sessionTier(signals({ pending: true, hasLivePty: true }));
+
+  /* Then */
+  assert.equal(tier, TIER_RUNNING);
 });
 
 test('a pending row with no PTY is not Working', () => {
   // Working is exempt from truncation (rowSurvivesTruncation), so tiering a
   // dead placeholder there is what made it impossible to age out of the list.
-  assert.equal(sessionTier(signals({ pending: true })), TIER_REST);
+  /* When */
+  const tier = sessionTier(signals({ pending: true }));
+
+  /* Then */
+  assert.equal(tier, TIER_REST);
 });
 
 test('a live session still outranks a dead one, pending or not', () => {
-  assert.equal(sessionTier(signals({ hasLivePty: true })), TIER_READY);
-  assert.equal(sessionTier(signals({ busy: true })), TIER_RUNNING);
-  assert.equal(sessionTier(signals()), TIER_REST);
+  /* When */
+  const live = sessionTier(signals({ hasLivePty: true }));
+  const busy = sessionTier(signals({ busy: true }));
+  const dead = sessionTier(signals());
+
+  /* Then */
+  assert.equal(live, TIER_READY);
+  assert.equal(busy, TIER_RUNNING);
+  assert.equal(dead, TIER_REST);
 });
