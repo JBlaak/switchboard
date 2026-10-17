@@ -7,6 +7,7 @@ import {
   expectScreen, openSession, rowButton, searchBox, sessionRow, sidebar, sidebarFilter,
 } from '../support/app';
 import { openedExternally } from '../support/main-process';
+import { fakeClaude } from '../support/fake-cli';
 import { LABEL, S } from '../fixtures/standard';
 
 test.describe('smoke', () => {
@@ -37,10 +38,12 @@ test.describe('smoke', () => {
     await expect(sessionRow(page, 'Implement the plan: extract the invoice model')).toBeVisible();
   });
 
-  test('opens a pull request chip in the browser', async ({ page, app }) => {
+  test('a pull request chip is display only: it no longer opens the browser', async ({ page, app, home }) => {
     await expect(sidebar(page).getByText('+1', { exact: true })).toBeVisible();
+    // Outside a git repository the meta line is text, so the click is the row's.
     await sidebar(page).getByText('#1320', { exact: true }).click();
-    await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1320');
+    await fakeClaude(home, S.loginFix).launched();
+    expect(await openedExternally(app)).toEqual([]);
   });
 
   test('archives from the row and finds it under the archive filter', async ({ page }) => {

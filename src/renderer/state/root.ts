@@ -15,6 +15,7 @@ import { initialKeysState, keysReducer, rekeyKeys } from './keys-slice';
 import { initialQuestionsState, questionsReducer, rekeyQuestions } from './questions-slice';
 import { initialRemoteState, rekeyRemote, remoteReducer } from './remote-slice';
 import { initialSessionListState, sessionListReducer } from './session-list-slice';
+import { initialSessionWorkState, rekeySessionWork, sessionWorkReducer } from './session-work-slice';
 import { initialSettingsState, settingsReducer } from './settings-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialToolbarState, toolbarReducer } from './toolbar-slice';
@@ -30,6 +31,7 @@ import type { KeysState } from './keys-slice';
 import type { QuestionsState } from './questions-slice';
 import type { RemoteState } from './remote-slice';
 import type { SessionListState } from './session-list-slice';
+import type { SessionWorkState } from './session-work-slice';
 import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
 import type { ToolbarState } from './toolbar-slice';
@@ -53,6 +55,7 @@ export interface RendererState {
   readonly update: UpdateState;
   readonly sessionList: SessionListState;
   readonly terminal: TerminalState;
+  readonly sessionWork: SessionWorkState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -71,6 +74,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     update: initialUpdateState,
     sessionList: initialSessionListState,
     terminal: initialTerminalState,
+    sessionWork: initialSessionWorkState,
   };
 }
 
@@ -94,10 +98,11 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const toolbar = toolbarReducer(state.toolbar, event);
   const sessionList = sessionListReducer(state.sessionList, event);
   const terminal = terminalReducer(state.terminal, event);
+  const sessionWork = sessionWorkReducer(state.sessionWork, event);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList,
+    terminal, sessionList, sessionWork,
   });
 }
 
@@ -133,6 +138,7 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     terminal: rekeyTerminal(state.terminal, oldId, newId),
     // Keyed by element ids, which a re-key leaves alone (see `session-list-slice`).
     sessionList: state.sessionList,
+    sessionWork: rekeySessionWork(state.sessionWork, oldId, newId),
   });
 }
 

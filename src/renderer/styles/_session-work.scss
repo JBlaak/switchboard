@@ -1,0 +1,406 @@
+/* ========== SESSION WORK ==========
+   The page that takes the terminal's place (ui/session-work), and the row's
+   meta line that opens it. Master–detail: a header on the panel surface, the
+   work items in a 320px column, the selected one beside them. Status is drawn
+   the way the rest of the app draws it — pastel fills with a matching ink —
+   and every colour is a token, so light and dark both follow the palette. */
+
+/* ---- The trigger: a row's whole meta line ----
+   A button only when the page can open; otherwise the line stays the plain
+   div it always was. Unset to look exactly like that div, and widened by the
+   same amount its padding takes so the text does not move. */
+.session-item .session-meta.is-work-trigger {
+  appearance: none;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  color: var(--sb-text-dimmest);
+  text-align: left;
+  cursor: pointer;
+  width: calc(100% + 8px);
+  margin: 2px -4px -1px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  transition: background 0.12s, box-shadow 0.12s;
+
+  &:hover {
+    background: rgba(var(--sb-accent-rgb), 0.10);
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.28);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sb-accent);
+    outline-offset: 1px;
+  }
+}
+
+/* ---- The page ---- */
+#session-work {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sb-bg-base);
+}
+
+.sw-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--sb-font-body);
+  color: var(--sb-text);
+  outline: none;
+}
+
+.sw-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 24px 14px;
+  background: var(--sb-bg-panel);
+  border-bottom: 1px solid var(--sb-line);
+  flex-shrink: 0;
+}
+
+.sw-header-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sw-heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sw-title {
+  margin: 0;
+  font: 800 17px var(--sb-font-head);
+  letter-spacing: -0.02em;
+  color: var(--sb-text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sw-subline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--sb-text-muted);
+}
+
+.sw-repo {
+  font-weight: 700;
+  color: var(--sb-accent);
+  text-decoration: none;
+  border-radius: 4px;
+
+  &:hover { text-decoration: underline; }
+}
+
+.sw-updated { color: var(--sb-text-faint); }
+
+/* ---- Buttons, keys, focus ---- */
+.sw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-control);
+  background: var(--sb-bg-raised);
+  color: var(--sb-text);
+  font: 700 12px var(--sb-font-head);
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    border-color: var(--sb-border-strong);
+    color: var(--sb-text-strong);
+  }
+}
+
+.sw-kbd {
+  font: 600 10px var(--sb-font-mono);
+  color: var(--sb-text-muted);
+  border: 1px solid var(--sb-border-strong);
+  border-radius: 5px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.sw-page :is(button, a):focus-visible {
+  outline: 2px solid var(--sb-accent);
+  outline-offset: 1px;
+}
+
+/* ---- Pills: a pastel fill and its ink ---- */
+.sw-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.sw-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font: 700 10.5px var(--sb-font-head);
+  white-space: nowrap;
+
+  &.is-green    { background: rgba(var(--sb-green-rgb), 0.14); color: var(--sb-green-soft); }
+  &.is-red      { background: rgba(var(--sb-red-rgb), 0.14);   color: var(--sb-red); }
+  &.is-amber    { background: var(--sb-sun);                    color: var(--sb-yellow); }
+  &.is-grey     { background: rgba(var(--sb-overlay-rgb), 0.06); color: var(--sb-text-muted); }
+  &.is-lavender { background: var(--sb-lav);                    color: var(--sb-lav-ink); }
+}
+
+/* ---- The agents strip ---- */
+.sw-agents {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 12px;
+  color: var(--sb-text-muted);
+}
+
+.sw-agent {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.sw-sep { color: var(--sb-border-strong); }
+
+/* ---- The gh banner, said once ---- */
+.sw-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 24px 0;
+  padding: 12px 14px;
+  border-radius: var(--sb-r-row);
+  background: var(--sb-sun);
+  color: var(--sb-yellow);
+  font-size: 12.5px;
+  flex-shrink: 0;
+
+  svg { flex: 0 0 16px; margin-top: 1px; }
+
+  code {
+    font: 12px var(--sb-font-mono);
+    color: var(--sb-text-strong);
+  }
+}
+
+/* ---- Body: list and detail ---- */
+.sw-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.sw-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 15px var(--sb-font-head);
+  color: var(--sb-text-strong);
+}
+
+.sw-list {
+  width: 320px;
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 12px;
+  border-right: 1px solid var(--sb-line);
+  overflow-y: auto;
+}
+
+.sw-section-label,
+.sw-kind {
+  font: 800 9.5px var(--sb-font-head);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sb-text-faint);
+}
+
+.sw-list > .sw-section-label {
+  padding: 4px 12px 6px;
+
+  &:not(:first-child) { padding-top: 16px; }
+}
+
+.sw-skeleton {
+  height: 58px;
+  border-radius: var(--sb-r-row);
+  background: rgba(var(--sb-overlay-rgb), 0.06);
+
+  & + & { opacity: 0.7; }
+  & + & + & { opacity: 0.45; }
+}
+
+.sw-item {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--sb-r-row);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover { background: rgba(var(--sb-overlay-rgb), 0.04); }
+
+  &.is-selected {
+    background: var(--sb-mint);
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.25);
+  }
+}
+
+.sw-item-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sw-ref {
+  font: 700 11px var(--sb-font-mono);
+  color: var(--sb-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sw-external {
+  margin-left: auto;
+  color: var(--sb-text-faint);
+  flex-shrink: 0;
+}
+
+.sw-item-title {
+  font: 700 13.5px/1.3 var(--sb-font-head);
+  color: var(--sb-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.sw-item.is-link .sw-item-title { color: var(--sb-text); }
+
+.sw-done-toggle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--sb-r-row);
+  background: none;
+  color: var(--sb-text-muted);
+  cursor: pointer;
+
+  &:hover { background: rgba(var(--sb-overlay-rgb), 0.04); }
+
+  svg { transition: transform 0.12s; }
+  &[aria-expanded='true'] svg { transform: rotate(90deg); }
+
+  .sw-section-label { color: var(--sb-text-muted); }
+}
+
+/* ---- The selected item ---- */
+.sw-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sw-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--sb-line);
+}
+
+.sw-detail-title {
+  margin: 0;
+  font: 800 20px var(--sb-font-head);
+  letter-spacing: -0.02em;
+  color: var(--sb-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.sw-detail-ref {
+  font-weight: 600;
+  color: var(--sb-text-faint);
+}
+
+.sw-detail-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 12.5px;
+  color: var(--sb-text-muted);
+
+  a {
+    color: var(--sb-accent);
+    border-radius: 4px;
+  }
+}
+
+.sw-branch {
+  font: 12px var(--sb-font-mono);
+}
+
+.sw-item-error {
+  font-size: 12.5px;
+  color: var(--sb-red);
+}
+
+/* Where the diff goes (#75). */
+.sw-diff-placeholder {
+  margin: 16px 24px 32px;
+  padding: 14px 16px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-row);
+  background: var(--sb-bg-panel);
+}
+
+.sw-diff-summary {
+  font-size: 12.5px;
+  color: var(--sb-text-muted);
+}
+
+.sw-file-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font: 12px/20px var(--sb-font-mono);
+  color: var(--sb-text);
+}

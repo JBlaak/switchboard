@@ -1,0 +1,142 @@
+/**
+ * What the Session work page and its trigger do: asking main whether the page
+ * can open, opening and closing it, and moving the selection.
+ *
+ * These only dispatch. Swapping the page in for the terminal, telling main it
+ * closed, and putting the focus back follow the store (see `panel`), so every
+ * way of closing it — Esc, Back, Cmd+G, another session on screen — goes
+ * through one place.
+ */
+import { flushSync } from 'react-dom';
+import { dispatch, getState } from '../../state/app-store';
+import { hasEntry } from '../../state/records';
+import { sessionMap } from '../../state/session-store';
+import { steppedItemId } from '../../state/session-work-slice';
+import { headerNameFor } from '../../features/sessions/terminal-header';
+import { openSession } from '../../features/sessions/session-actions';
+
+/** Sessions whose eligibility is being asked right now, so a row asks once. */
+const asking = new Map<string, Promise<boolean>>();
+
+/** Is this session remote? Then the page cannot open, and main need not be asked. */
+export function isRemoteSession(sessionId: string, projectPath?: string | null): boolean {
+  const session = sessionMap.get(sessionId);
+  const path = projectPath ?? session?.projectPath ?? '';
+  return session?.type === 'remote' || path.startsWith('ssh://');
+}
+
+/**
+ * Whether the page can open for a session, asking main the first time.
+ *
+ * The answer is cached in the store, so a row asks once however often it
+ * renders; `fresh` asks again even so (Cmd+G, on a "no" that may be stale).
+ */
+export function canOpenSessionWork(sessionId: string, { fresh = false } = {}): Promise<boolean> {
+  if (isRemoteSession(sessionId)) return Promise.resolve(false);
+  const cached = getState().sessionWork.canOpen;
+  if (!fresh && hasEntry(cached, sessionId)) return Promise.resolve(cached[sessionId]);
+  const pending = asking.get(sessionId);
+  if (pending) return pending;
+
+  const answer = window.api.canOpenSessionWork(sessionId)
+    .catch(() => false)
+    .then((canOpen) => {
+      dispatch({ type: 'sessionWorkEligibility', sessionId, canOpen });
+      return canOpen;
+    })
+    .finally(() => asking.delete(sessionId));
+  asking.set(sessionId, answer);
+  return answer;
+}
+
+/**
+ * Open the page for a session: the skeleton at once, then the first snapshot.
+ *
+ * The header and the agents strip need nothing from git, so they show while
+ * main reads the session's worktrees. Should main answer that the page cannot
+ * open after all, it closes again.
+ */
+export async function openSessionWork(sessionId: string): Promise<void> {
+  const session = sessionMap.get(sessionId);
+  // Rendered now: the page takes its panel synchronously (see `panel`) and the
+  // focus goes into it.
+  flushSync(() => dispatch({
+    type: 'sessionWorkOpened', sessionId, name: session ? headerNameFor(session) : '', at: Date.now(),
+  }));
+
+  let snapshot = null;
+  try {
+    snapshot = await window.api.openSessionWork(sessionId);
+  } catch {
+    snapshot = null;
+  }
+  if (getState().sessionWork.page?.sessionId !== sessionId) return;
+  if (snapshot) dispatch({ type: 'sessionWorkSnapshot', snapshot });
+  else closeSessionWork();
+}
+
+/** Close the page, whoever it is for; the terminal comes back. */
+export function closeSessionWork(): void {
+  const page = getState().sessionWork.page;
+  if (page) dispatch({ type: 'sessionWorkClosed', sessionId: page.sessionId });
+}
+
+/** Cmd+G, wherever the focus is (D3). */
+export function isSessionWorkKey(e: KeyboardEvent): boolean {
+  return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyG';
+}
+
+/** Cmd+G: the page for the session on screen, open or closed. Nothing when it cannot open. */
+export async function toggleSessionWork(): Promise<void> {
+  const { view, sessionWork } = getState();
+  const sessionId = view.activeSessionId;
+  if (!sessionId) return;
+  if (sessionWork.page?.sessionId === sessionId) {
+    closeSessionWork();
+    return;
+  }
+  const cached = sessionWork.canOpen[sessionId];
+  const canOpen = cached === true || await canOpenSessionWork(sessionId, { fresh: cached === false });
+  // The user may have moved on while main answered.
+  if (!canOpen || getState().view.activeSessionId !== sessionId) return;
+  await openSessionWork(sessionId);
+}
+
+/**
+ * A click on a row's meta line: put the session on screen if it is not, then
+ * open its page.
+ */
+export async function openSessionWorkFromRow(sessionId: string): Promise<void> {
+  if (getState().view.activeSessionId !== sessionId) {
+    const session = sessionMap.get(sessionId);
+    if (!session) return;
+    await openSession(session);
+    if (getState().view.activeSessionId !== sessionId) return;
+  }
+  await openSessionWork(sessionId);
+}
+
+export function selectWorkItem(itemId: string): void {
+  dispatch({ type: 'sessionWorkItemSelected', itemId });
+}
+
+/**
+ * `j` / `k`: select the next or previous item and answer its id, for the
+ * caller to move the focus to; null at either end.
+ */
+export function stepWorkItem(direction: 1 | -1): string | null {
+  const page = getState().sessionWork.page;
+  if (!page) return null;
+  const next = steppedItemId(page, direction);
+  if (next) flushSync(() => dispatch({ type: 'sessionWorkItemSelected', itemId: next }));
+  return next;
+}
+
+export function toggleDoneItems(): void {
+  dispatch({ type: 'sessionWorkDoneToggled' });
+}
+
+/** Open a GitHub page in the browser (main only opens https URLs). */
+export function openOnGitHub(url: string): void {
+  void window.api.openExternal(url);
+}

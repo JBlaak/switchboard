@@ -7,8 +7,8 @@
  *
  * - `sidebarContent` holds the keyboard focus while the list cursor is out,
  *   hears the list's keys, and is the scrolling container the reflow measures.
- * - `placeholder`, `terminalArea`, `settingsViewer` and `terminalHeader` are
- *   the main area's panels, swapped by style: a terminal can only take focus or
+ * - `placeholder`, `terminalArea`, `settingsViewer`, `sessionWorkPanel` and
+ *   `terminalHeader` are the main area's panels, swapped by style: a terminal can only take focus or
  *   be refitted once its panel has a layout box, which has to be true before
  *   the next line runs, not whenever React next commits.
  */
@@ -33,3 +33,4 @@ export const placeholder = el('placeholder');
 export const terminalArea = el('terminal-area');
 export const terminalHeader = el('terminal-header');
 export const settingsViewer = el('settings-viewer');
+export const sessionWorkPanel = el('session-work');

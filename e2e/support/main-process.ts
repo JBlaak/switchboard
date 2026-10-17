@@ -20,7 +20,8 @@
  * the harness at compile time rather than leaving a stub silently unused.
  */
 import type { ElectronApplication } from '@playwright/test';
-import { EVENT, INVOKE } from '../../src/ipc/channels';
+import { EVENT, INVOKE, SEND } from '../../src/ipc/channels';
+import type { SessionWorkSnapshot } from '../../src/domain/session-work/model';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
@@ -73,6 +74,20 @@ export interface HostStubs {
    * or 'fail' for a lookup that throws. A name not listed finds nothing.
    */
   geocode: Record<string, GeocodeStub>;
+  /**
+   * The Session work page's back end, standing in for git and `gh`; null
+   * leaves the real service, which finds no repository in the fixture home.
+   */
+  sessionWork: SessionWorkStub | null;
+}
+
+/**
+ * Which sessions the page can open for, and the snapshot it opens with. A
+ * session with no snapshot opens on the skeleton and stays there.
+ */
+export interface SessionWorkStub {
+  canOpen: string[];
+  snapshots: Record<string, SessionWorkSnapshot>;
 }
 
 export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number } | 'fail';
@@ -86,6 +101,8 @@ interface StubState extends HostStubs {
   opened: string[];
   calls: HostStubCalls;
   clipboard: string[];
+  /** Every session the renderer told main its Session work page closed for, in order. */
+  sessionWorkClosed: string[];
 }
 
 /** How often the renderer asked the stubs for something, by channel. */
@@ -108,13 +125,32 @@ export const DEFAULT_STUBS: HostStubs = {
   browseFolder: null,
   weather: null,
   geocode: {},
+  sessionWork: null,
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
-  await app.evaluate(({ ipcMain }, { stubs, channels }) => {
-    const state: StubState = { ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0, getWeather: 0 }, clipboard: [] };
+  await app.evaluate(({ ipcMain }, { stubs, channels, send }) => {
+    const state: StubState = {
+      ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0, getWeather: 0 }, clipboard: [], sessionWorkClosed: [],
+    };
     (globalThis as WithStubs).__switchboardE2E = state;
+
+    // Heard beside the real handler, which ignores a close for a page it never opened.
+    ipcMain.on(send.sessionWorkClose, (_event, sessionId) => {
+      state.sessionWorkClosed.push(String(sessionId));
+    });
+    if (state.sessionWork) {
+      const work = state.sessionWork;
+      ipcMain.removeHandler(channels.sessionWorkCanOpen);
+      ipcMain.handle(channels.sessionWorkCanOpen, (_event, sessionId) => work.canOpen.includes(String(sessionId)));
+      ipcMain.removeHandler(channels.sessionWorkOpen);
+      ipcMain.handle(channels.sessionWorkOpen, (_event, sessionId) => {
+        const snapshot = work.snapshots[String(sessionId)];
+        // No snapshot: main is still reading git, and the page stays a skeleton.
+        return snapshot ?? new Promise(() => {});
+      });
+    }
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {
       ipcMain.removeHandler(channel);
@@ -163,7 +199,14 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       state.opened.push('repository:' + String(projectPath));
       return true;
     });
-  }, { stubs, channels: INVOKE });
+  }, { stubs, channels: INVOKE, send: SEND });
+}
+
+/** The sessions whose Session work page the renderer told main it closed, in order. */
+export async function sessionWorkClosed(app: ElectronApplication): Promise<string[]> {
+  return await app.evaluate(() => {
+    return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkClosed];
+  });
 }
 
 /** Change a stub mid-test (takes effect on the renderer's next request). */
