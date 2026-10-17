@@ -17,14 +17,22 @@ function asked(sessionId: string, toolUseId: string): PendingQuestions {
 }
 
 test('asking counts the questions and starts an entry for the set', () => {
+  /* When */
   addPendingQuestions(asked('qa', 'qa-t'));
+
+  /* Then */
   assert.strictEqual(askingCount('qa'), 1);
   assert.strictEqual(getState().answers.byToolUse['qa-t']?.view, 'questions');
 });
 
 test('settling ends the count and the entry', () => {
+  /* Given */
   addPendingQuestions(asked('qb', 'qb-t'));
+
+  /* When */
   settleQuestions({ sessionId: 'qb', toolUseId: 'qb-t', outcome: 'answered' });
+
+  /* Then */
   assert.strictEqual(askingCount('qb'), 0);
   assert.strictEqual(getState().answers.byToolUse['qb-t'], undefined);
 });
