@@ -12,6 +12,7 @@ import path from 'node:path';
 import { test, expect, forEachAppearance } from '../support/test';
 import { expectScreen, openSession, sessionRow, sidebar, terminalHeader, terminalStatus } from '../support/app';
 import { clipboardWrites, openedExternally } from '../support/main-process';
+import { answerDialogs } from '../support/native-dialogs';
 import {
   cellPoint, expectTerminalText, findInTerminal, scrollTerminal, selectInTerminal, terminalLines, terminalState,
   terminalText,
@@ -448,7 +449,7 @@ test.describe('terminal header', () => {
     const stop = terminalHeader(page).getByRole('button', { name: 'Stop process', exact: true });
     await expect(stop).toBeVisible();
 
-    page.once('dialog', dialog => void dialog.dismiss());
+    await answerDialogs(page, false);
     await stop.click();
     await settle(page, 300);
     await expect(terminalStatus(page)).toHaveText('Running');
@@ -461,7 +462,7 @@ test.describe('terminal header', () => {
 
   test('confirming Stop stops the session and clears the screen', async ({ page, home }) => {
     await openSession(page, home, LABEL.loginFix, S.loginFix);
-    page.once('dialog', dialog => void dialog.accept());
+    await answerDialogs(page, true);
     await terminalHeader(page).getByRole('button', { name: 'Stop process', exact: true }).click();
     await expect(terminalHeader(page)).toBeHidden();
     await expect.poll(() => page.evaluate(() => window.api.getActiveSessions())).not.toContain(S.loginFix);

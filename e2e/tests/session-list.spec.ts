@@ -16,9 +16,10 @@ import {
 import { fakeClaude, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
 import { daysAgo, hoursAgo, minutesAgo, sessionId } from '../support/fixture-home';
 import { failStopSession, openedExternally, windowPosition } from '../support/main-process';
+import { answerDialogs, dialogsAsked } from '../support/native-dialogs';
 import { askQuestions } from '../support/questions';
 import {
-  allowMotion, collectDialogs, expectInOrder, expectRowsInOrder, failInvoke, listScroller, readMotion,
+  allowMotion, expectInOrder, expectRowsInOrder, failInvoke, listScroller, readMotion,
   redraw, renameInput, rowNode, sectionOf, sessionItem, startMotionRecorder, storedSession, tagRow,
 } from '../support/session-list';
 import { LABEL, P, S, standardFixture } from '../fixtures/standard';
@@ -791,17 +792,17 @@ test.describe('pin', () => {
 test.describe('stop', () => {
   test('asks first, and leaves the session running when declined', async ({ page, home }) => {
     await openSession(page, home, LABEL.loginFix, S.loginFix);
-    const asked = collectDialogs(page, false);
+    await answerDialogs(page, false);
     const row = sessionRow(page, LABEL.loginFix);
     await row.hover();
     await rowButton(row, 'Stop session').click();
-    await expect.poll(() => asked).toEqual(['Stop this session?']);
+    await expect.poll(() => dialogsAsked(page)).toEqual(['Stop this session?']);
     await expect(terminalStatus(page)).toHaveText('Running');
   });
 
   test('stops the session and clears the screen when it was on it', async ({ page, home }) => {
     await openSession(page, home, LABEL.loginFix, S.loginFix);
-    collectDialogs(page, true);
+    await answerDialogs(page, true);
     const row = sessionRow(page, LABEL.loginFix);
     await row.hover();
     await rowButton(row, 'Stop session').click();
@@ -812,11 +813,11 @@ test.describe('stop', () => {
 
   test('says "disconnect" for a remote session', async ({ page, home }) => {
     await openRemoteSession(page, home, LABEL.remoteApi, S.remoteApi);
-    const asked = collectDialogs(page, false);
+    await answerDialogs(page, false);
     const row = sessionRow(page, LABEL.remoteApi);
     await row.hover();
     await rowButton(row, 'Disconnect (keeps running on the remote)').click();
-    await expect.poll(() => asked).toEqual(['Disconnect? The session keeps running on the remote machine.']);
+    await expect.poll(() => dialogsAsked(page)).toEqual(['Disconnect? The session keeps running on the remote machine.']);
   });
 });
 
@@ -834,11 +835,11 @@ test.describe('archive', () => {
 
   test('keeps the row, and says so, when the session cannot be stopped', async ({ page, app }) => {
     await failStopSession(app, 'the PTY would not die');
-    const asked = collectDialogs(page);
+    await answerDialogs(page, true);
     const row = sessionRow(page, LABEL.chartsDarkMode);
     await row.hover();
     await rowButton(row, 'Archive').click();
-    await expect.poll(() => asked).toEqual(['Could not stop this session: the PTY would not die']);
+    await expect.poll(() => dialogsAsked(page)).toEqual(['Could not stop this session: the PTY would not die']);
     await expect(row).toBeVisible();
     expect(await rowNode(page, S.chartsDarkMode)).toMatchObject({ leaving: false });
     expect(await storedSession(page, S.chartsDarkMode)).toMatchObject({ archived: 0 });
@@ -938,14 +939,14 @@ test.describe('group archive', () => {
 
   test('stops at the first session it cannot stop, and the group comes back', async ({ page, app }) => {
     await failStopSession(app, 'the PTY would not die');
-    const asked = collectDialogs(page);
+    await answerDialogs(page, true);
     const header = sessionRow(page, LABEL.billingGroup).first();
     await header.hover();
     await rowButton(header, 'Archive all sessions in group').click();
-    await expect.poll(() => asked).toEqual(['Could not stop this session: the PTY would not die']);
+    await expect.poll(() => dialogsAsked(page)).toEqual(['Could not stop this session: the PTY would not die']);
     await expect(header).toBeVisible();
     await page.waitForTimeout(500);
-    expect(asked).toHaveLength(1);
+    expect(await dialogsAsked(page)).toHaveLength(1);
     for (const id of [S.billingPlan, S.billingStep1, S.billingStep2]) {
       expect(await storedSession(page, id)).toMatchObject({ archived: 0 });
     }

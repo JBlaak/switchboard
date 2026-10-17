@@ -41,6 +41,11 @@ const WINDOW_OPEN_SHIM = `
   void 0;
 `;
 
+/** The e2e harness asked for a window that never appears on screen. */
+export function hiddenForE2e(): boolean {
+  return process.env.SWITCHBOARD_E2E === '1' && process.env.SWITCHBOARD_E2E_HIDDEN === '1';
+}
+
 function isExternalUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
@@ -70,6 +75,10 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
     // The e2e harness sizes the window to its baselines, which on a CI Mac's
     // small virtual display would otherwise be clipped to the work area.
     ...(process.env.SWITCHBOARD_E2E === '1' ? { enableLargerThanScreen: true } : {}),
+    // The e2e suite runs a few apps at once; shown, they would flash over the
+    // desktop of whoever runs it. Hidden, the page still lays out and paints,
+    // so Playwright's input and screenshots work the same.
+    ...(hiddenForE2e() ? { show: false } : {}),
     title: 'Switchboard',
     icon: path.join(deps.appDir, '..', 'build', 'icon.png'),
     ...windowChromeOptions(),
@@ -77,6 +86,9 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
       preload: path.join(deps.appDir, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      // A hidden window is otherwise throttled like a background tab: its
+      // timers slow down and its animation frames stop.
+      ...(hiddenForE2e() ? { backgroundThrottling: false } : {}),
     },
   });
 

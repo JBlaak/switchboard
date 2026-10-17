@@ -4,6 +4,7 @@
 import { test, expect, forEachAppearance } from '../support/test';
 import { dialog, expectScreen, openSession, rowButton, sidebar, terminalHeader } from '../support/app';
 import { setHostStub } from '../support/main-process';
+import { answerDialogs, dialogsAsked } from '../support/native-dialogs';
 import { LABEL, P, S, standardFixture } from '../fixtures/standard';
 import type { Locator, Page } from '@playwright/test';
 
@@ -90,19 +91,6 @@ async function resolvedColor(page: Page, expression: string): Promise<string> {
     probe.remove();
     return color;
   }, expression);
-}
-
-/** Make `confirm` answer `answer` without a native dialog, and record what it asked. */
-async function answerConfirm(page: Page, answer: boolean): Promise<void> {
-  await page.evaluate((answer) => {
-    const asked: string[] = [];
-    (window as unknown as { __asked: string[] }).__asked = asked;
-    window.confirm = (message?: string) => { asked.push(String(message)); return answer; };
-  }, answer);
-}
-
-async function confirmsAsked(page: Page): Promise<string[]> {
-  return await page.evaluate(() => (window as unknown as { __asked: string[] }).__asked);
 }
 
 test.describe('smoke', () => {
@@ -474,14 +462,14 @@ test.describe('project scope', () => {
 
   test('Hide Project asks first, then hides it and shows the empty screen', async ({ page, home }) => {
     await openProjectSettings(page, P.acmeApi);
-    await answerConfirm(page, false);
+    await answerDialogs(page, false);
     await button(page, 'Hide Project').click();
-    expect(await confirmsAsked(page)).toEqual([
+    expect(await dialogsAsked(page)).toEqual([
       `Hide project "${P.acmeApi}" from Switchboard?\n\nThis hides the project from the sidebar. Your session files are not deleted.`,
     ]);
     await expect(projectTitle(page, P.acmeApi)).toBeVisible();
 
-    await answerConfirm(page, true);
+    await answerDialogs(page, true);
     await button(page, 'Hide Project').click();
     await expect(projectTitle(page, P.acmeApi)).toBeHidden();
     await expect(emptyScreen(page)).toBeVisible();

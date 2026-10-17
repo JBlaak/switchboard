@@ -18,6 +18,10 @@
  * - **The host.** The IPC handlers that read or act on the machine itself
  *   (sleep, usage, the browser, the folder picker) are swapped for stubs; see
  *   main-process.ts.
+ * - **Off screen.** The window is created hidden and the app never takes
+ *   focus, so a run leaves the desktop usable. Native confirm/alert boxes
+ *   would still pop up, so they are stubbed too (native-dialogs.ts). SB_E2E_HEADED=1 shows the
+ *   windows, for watching a test.
  * - **The shell.** SHELL is pinned to zsh so the profile that puts the fakes
  *   on PATH is the one that runs, whatever the host's login shell is.
  */
@@ -26,6 +30,7 @@ import path from 'node:path';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { FIXTURE_NOW } from './fixture-home';
 import { DEFAULT_STUBS, installHostStubs } from './main-process';
+import { stubNativeDialogs } from './native-dialogs';
 import type { FixtureHome } from './fixture-home';
 import type { HostStubs } from './main-process';
 
@@ -71,6 +76,7 @@ export async function launchApp(
     SHELL: '/bin/zsh',
     // Lets the window keep its fixed size on a display smaller than it.
     SWITCHBOARD_E2E: '1',
+    ...(process.env.SB_E2E_HEADED === '1' ? {} : { SWITCHBOARD_E2E_HIDDEN: '1' }),
     TZ: 'UTC',
     LANG: 'en_US.UTF-8',
     LC_ALL: 'en_US.UTF-8',
@@ -141,7 +147,7 @@ async function quit(app: ElectronApplication): Promise<void> {
  * installed on the context and the page reloaded once, which also makes the
  * reduced-motion emulation and the host stubs apply from the first frame. The
  * reload is safe: nothing has been launched yet, and the renderer rebuilds
- * itself from main.
+ * itself from main. The native dialog stubs go in the same way.
  *
  * With `fakeTimers` the clock is installed instead of fixed: it starts at
  * FIXTURE_NOW and runs on from there, and `page.clock.fastForward` can jump
@@ -155,6 +161,7 @@ async function settleWindow(app: ElectronApplication, page: Page, fakeTimers: bo
     window.center();
   }, WINDOW_SIZE);
 
+  await page.context().addInitScript(stubNativeDialogs);
   if (fakeTimers) await page.context().clock.install({ time: FIXTURE_NOW });
   else await page.context().clock.setFixedTime(FIXTURE_NOW);
   // colorScheme: null, explicitly. Playwright otherwise emulates `light` along

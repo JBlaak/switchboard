@@ -9,6 +9,7 @@
 import { test, expect, forEachAppearance } from '../support/test';
 import { expectScreen, openSession, sidebarFooter } from '../support/app';
 import { hostStubCalls, openedExternally, pushEvent, setHostStub } from '../support/main-process';
+import { answerDialogs, dialogsAsked } from '../support/native-dialogs';
 import { EVENT } from '../../src/ipc/channels';
 import { LABEL, S, emptyFixture } from '../fixtures/standard';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
@@ -49,16 +50,6 @@ function noticeButton(page: Page, name: string): Locator {
 /** A line from main's indexer, as `onStatusUpdate` delivers it. */
 async function statusUpdate(app: ElectronApplication, text: string, kind: string): Promise<void> {
   await pushEvent(app, EVENT.statusUpdate, text, kind);
-}
-
-/** Answer the next `confirm()` and hand back what it asked. */
-function answerConfirm(page: Page, accept: boolean): Promise<string> {
-  return new Promise(resolve => {
-    page.once('dialog', dialog => {
-      const message = dialog.message();
-      void (accept ? dialog.accept() : dialog.dismiss()).then(() => resolve(message));
-    });
-  });
 }
 
 test.describe('status summary', () => {
@@ -211,26 +202,23 @@ test.describe('update notice', () => {
     });
 
     test('installs straight away when nothing is running', async ({ page, app }) => {
-      let asked = false;
-      page.on('dialog', dialog => { asked = true; void dialog.dismiss(); });
       await noticeButton(page, 'Install').click();
       await expect(noticeButton(page, 'Installing…')).toBeDisabled();
       expect((await hostStubCalls(app)).installUpdate).toBe(1);
-      expect(asked).toBe(false);
+      expect(await dialogsAsked(page)).toEqual([]);
     });
 
     test('asks first when sessions are running', async ({ page, app, home }) => {
       await openSession(page, home, LABEL.loginFix, S.loginFix);
 
-      const declined = answerConfirm(page, false);
+      await answerDialogs(page, false);
       await noticeButton(page, 'Install').click();
-      expect(await declined).toBe('Restarting to update stops 1 running session. Install now?');
+      await expect.poll(() => dialogsAsked(page)).toEqual(['Restarting to update stops 1 running session. Install now?']);
       await expect(noticeButton(page, 'Install')).toBeEnabled();
       expect((await hostStubCalls(app)).installUpdate).toBe(0);
 
-      const accepted = answerConfirm(page, true);
+      await answerDialogs(page, true);
       await noticeButton(page, 'Install').click();
-      await accepted;
       await expect(noticeButton(page, 'Installing…')).toBeDisabled();
       expect((await hostStubCalls(app)).installUpdate).toBe(1);
     });
