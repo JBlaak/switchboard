@@ -17,7 +17,7 @@ function title(panel: SettingsPanel | null): string {
   if (!panel) return 'Settings';
   return panel.scope === 'project'
     ? 'Project Settings — ' + shortProjectPath(panel.projectPath)
-    : 'Global Settings — Global';
+    : 'Global Settings';
 }
 
 export function SettingsViewer(): JSX.Element {

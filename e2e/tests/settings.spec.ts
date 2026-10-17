@@ -29,7 +29,7 @@ async function openProjectSettings(page: Page, label: string) {
 }
 
 function globalTitle(page: Page): Locator {
-  return page.getByText('Global Settings — Global', { exact: true });
+  return page.getByText('Global Settings', { exact: true });
 }
 
 function projectTitle(page: Page, label: string): Locator {
@@ -136,7 +136,6 @@ test.describe('global fields', () => {
       settings: {
         permissionMode: 'acceptEdits',
         worktree: true,
-        worktreeName: 'feature',
         chrome: true,
         addDirs: '/opt/shared',
         preLaunchCmd: 'aws-vault exec dev --',
@@ -160,7 +159,6 @@ test.describe('global fields', () => {
     /* Then */
     await expect(field(page, 'Permission Mode').getByRole('combobox')).toHaveValue('acceptEdits');
     await expect(toggle(page, 'Worktree')).toBeChecked();
-    await expect(field(page, 'Worktree Name').getByRole('textbox')).toHaveValue('feature');
     await expect(toggle(page, 'Chrome')).toBeChecked();
     await expect(field(page, 'Additional Directories').getByRole('textbox')).toHaveValue('/opt/shared');
     await expect(field(page, 'Pre-launch Command').getByRole('textbox')).toHaveValue('aws-vault exec dev --');
@@ -180,6 +178,23 @@ test.describe('global fields', () => {
   });
 });
 
+test('scrolled to the bottom, the buttons keep the body padding beneath them', async ({ page }) => {
+  /* Given */
+  await openGlobalSettings(page);
+  const body = page.locator('#settings-viewer-body');
+
+  /* When */
+  await body.evaluate(el => el.scrollTo(0, el.scrollHeight));
+
+  /* Then */
+  const gap = await body.evaluate(el => {
+    const row = el.querySelector('.settings-btn-row')!.getBoundingClientRect();
+    return el.getBoundingClientRect().bottom - row.bottom;
+  });
+  // 32px of padding, give or take subpixel rounding.
+  expect(gap).toBeGreaterThan(30);
+});
+
 test.describe('global save', () => {
   test('writes every field, merged over the stored settings, and re-syncs the quick session button', async ({ page }) => {
     /* Given */
@@ -196,7 +211,6 @@ test.describe('global save', () => {
     /* When */
     await field(page, 'Permission Mode').getByRole('combobox').selectOption('plan');
     await switchOn(page, 'Worktree');
-    await field(page, 'Worktree Name').getByRole('textbox').fill('  wt  ');
     await switchOn(page, 'Chrome');
     await field(page, 'Additional Directories').getByRole('textbox').fill('/a, /b');
     await field(page, 'Pre-launch Command').getByRole('textbox').fill('direnv exec .');
@@ -221,7 +235,6 @@ test.describe('global save', () => {
       ...stored,
       permissionMode: 'plan',
       worktree: true,
-      worktreeName: 'wt',
       chrome: true,
       addDirs: '/a, /b',
       preLaunchCmd: 'direnv exec .',
@@ -284,7 +297,7 @@ test.describe('global cancel', () => {
     expect(region).toBe('drag');
 
     /* When */
-    await field(page, 'Worktree Name').getByRole('textbox').fill('never-saved');
+    await field(page, 'Pre-launch Command').getByRole('textbox').fill('never-saved');
     await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('2');
     await button(page, 'Cancel').click();
 
@@ -299,7 +312,7 @@ test.describe('global cancel', () => {
 
     /* Then */
     // The next open starts from what is stored, not from the abandoned edit.
-    await expect(field(page, 'Worktree Name').getByRole('textbox')).toHaveValue('');
+    await expect(field(page, 'Pre-launch Command').getByRole('textbox')).toHaveValue('');
   });
 });
 
@@ -365,7 +378,7 @@ test.describe('project scope', () => {
     fixture: {
       ...standardFixture(),
       settings: { preLaunchCmd: 'global-pre', permissionMode: 'plan' },
-      projectSettings: { [P.acmeApi]: { worktreeName: 'proj-wt' } },
+      projectSettings: { [P.acmeApi]: { addDirs: '/proj' } },
     },
   });
 
@@ -383,9 +396,9 @@ test.describe('project scope', () => {
     await expect(field(page, 'Permission Mode').getByRole('combobox')).toBeDisabled();
     await expect(toggle(page, 'Chrome')).toBeDisabled();
     // Overridden: the project's value, unchecked and enabled.
-    await expect(useGlobal(page, 'Worktree Name')).not.toBeChecked();
-    await expect(field(page, 'Worktree Name').getByRole('textbox')).toHaveValue('proj-wt');
-    await expect(field(page, 'Worktree Name').getByRole('textbox')).toBeEnabled();
+    await expect(useGlobal(page, 'Additional Directories')).not.toBeChecked();
+    await expect(field(page, 'Additional Directories').getByRole('textbox')).toHaveValue('/proj');
+    await expect(field(page, 'Additional Directories').getByRole('textbox')).toBeEnabled();
     // The application settings are global only.
     for (const label of ['Quick Session Folder', 'Terminal Theme', 'Terminal Font', 'City', 'Version']) {
       await expect(page.getByText(label, { exact: true })).toHaveCount(0);
@@ -401,11 +414,11 @@ test.describe('project scope', () => {
     await useGlobal(page, 'Permission Mode').uncheck();
     await field(page, 'Permission Mode').getByRole('combobox').selectOption('auto');
     // Back to the global value: dropped from the project's settings.
-    await useGlobal(page, 'Worktree Name').check();
-    // Edited but still inherited: not saved.
-    await useGlobal(page, 'Additional Directories').uncheck();
-    await field(page, 'Additional Directories').getByRole('textbox').fill('/x');
     await useGlobal(page, 'Additional Directories').check();
+    // Edited but still inherited: not saved.
+    await useGlobal(page, 'Pre-launch Command').uncheck();
+    await field(page, 'Pre-launch Command').getByRole('textbox').fill('direnv exec .');
+    await useGlobal(page, 'Pre-launch Command').check();
 
     /* When */
     await button(page, 'Save Settings').click();
@@ -424,7 +437,7 @@ test.describe('project scope', () => {
     /* Given */
     await openProjectSettings(page, P.acmeApi);
     await useGlobal(page, 'Chrome').uncheck();
-    await field(page, 'Worktree Name').getByRole('textbox').fill('changed');
+    await field(page, 'Additional Directories').getByRole('textbox').fill('/changed');
 
     /* When */
     await button(page, 'Cancel').click();
@@ -432,7 +445,7 @@ test.describe('project scope', () => {
     /* Then */
     await expect(projectTitle(page, P.acmeApi)).toBeHidden();
     await expect(emptyScreen(page)).toBeVisible();
-    expect(await readSetting(page, 'project:' + home.projectPath(P.acmeApi))).toEqual({ worktreeName: 'proj-wt' });
+    expect(await readSetting(page, 'project:' + home.projectPath(P.acmeApi))).toEqual({ addDirs: '/proj' });
   });
 
   test('Hide Project asks first, then hides it and shows the empty screen', async ({ page, home }) => {

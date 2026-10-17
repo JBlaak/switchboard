@@ -34,6 +34,9 @@
   padding: 32px 40px;
   display: flex;
   justify-content: center;
+  /* Not stretch: a stretched form is only as tall as the viewport, its cards
+     overflow it, and the bottom padding is lost under the Save row. */
+  align-items: flex-start;
 }
 
 #settings-viewer-body::-webkit-scrollbar { width: 5px; }

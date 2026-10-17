@@ -28,7 +28,7 @@ import type { JSX } from 'react';
 import type { SettingsPanel } from '../../state/settings-slice';
 
 /** The fields a project can override, in the order the form shows them. */
-const PROJECT_FIELDS = ['permissionMode', 'worktree', 'worktreeName', 'chrome', 'addDirs', 'preLaunchCmd'] as const;
+const PROJECT_FIELDS = ['permissionMode', 'worktree', 'chrome', 'addDirs', 'preLaunchCmd'] as const;
 type ProjectField = typeof PROJECT_FIELDS[number];
 
 /**
@@ -65,7 +65,6 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
 
   const permMode = useRef<HTMLSelectElement>(null);
   const worktree = useRef<HTMLInputElement>(null);
-  const worktreeName = useRef<HTMLInputElement>(null);
   const chrome = useRef<HTMLInputElement>(null);
   const addDirs = useRef<HTMLInputElement>(null);
   const preLaunch = useRef<HTMLInputElement>(null);
@@ -82,7 +81,6 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
   const readers: Record<ProjectField, () => unknown> = {
     permissionMode: () => permMode.current!.value || null,
     worktree: () => worktree.current!.checked,
-    worktreeName: () => worktreeName.current!.value.trim(),
     chrome: () => chrome.current!.checked,
     addDirs: () => addDirs.current!.value.trim(),
     preLaunchCmd: () => preLaunch.current!.value.trim(),
@@ -125,7 +123,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
   return (
     <div className="settings-form">
       <div className="settings-section">
-        <div className="settings-section-title">Claude CLI Options</div>
+        <div className="settings-section-title">Claude Sessions</div>
 
         <LaunchField
           label="Permission Mode"
@@ -135,38 +133,34 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
           <select className="settings-select" id="sv-perm-mode" ref={permMode}
             defaultValue={permModeValue} disabled={disabled('permissionMode')}>
             {PERMISSION_MODES.map(m => m.value === null
-              ? <option key="" value="">Default (none)</option>
+              ? <option key="" value="">Your Claude default</option>
               : <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
         </LaunchField>
 
-        <LaunchField label="Worktree" description="Enable worktree for new sessions" useGlobal={useGlobalBox('worktree')}>
+        <LaunchField label="Worktree"
+          description={<>Start each new session in its own git worktree (<code>--worktree</code>)</>}
+          useGlobal={useGlobalBox('worktree')}>
           <label className="settings-toggle"><input type="checkbox" id="sv-worktree" ref={worktree}
             defaultChecked={!!fieldValue('worktree', false)} disabled={disabled('worktree')} /><span className="settings-toggle-slider"></span></label>
         </LaunchField>
 
-        <LaunchField label="Worktree Name" description="Custom name for worktree branches" useGlobal={useGlobalBox('worktreeName')}>
-          <input type="text" className="settings-input" id="sv-worktree-name" ref={worktreeName} placeholder="auto"
-            defaultValue={fieldValue('worktreeName', '') ?? ''} disabled={disabled('worktreeName')} style={{ width: '140px' }} />
-        </LaunchField>
-
-        <LaunchField label="Chrome" description="Enable Chrome browser automation" useGlobal={useGlobalBox('chrome')}>
+        <LaunchField label="Chrome"
+          description={<>Let Claude use your browser through Claude in Chrome (<code>--chrome</code>)</>}
+          useGlobal={useGlobalBox('chrome')}>
           <label className="settings-toggle"><input type="checkbox" id="sv-chrome" ref={chrome}
             defaultChecked={!!fieldValue('chrome', false)} disabled={disabled('chrome')} /><span className="settings-toggle-slider"></span></label>
         </LaunchField>
 
-        <LaunchField wide label="Additional Directories" description="Extra directories to include in Claude sessions"
+        <LaunchField wide label="Additional Directories"
+          description={<>Folders outside the project that Claude can also work in, separated by commas (<code>--add-dir</code>)</>}
           useGlobal={useGlobalBox('addDirs')}>
           <input type="text" className="settings-input" id="sv-add-dirs" ref={addDirs} placeholder="/path/to/dir1, /path/to/dir2"
             defaultValue={fieldValue('addDirs', '') ?? ''} disabled={disabled('addDirs')} />
         </LaunchField>
-      </div>
-
-      <div className="settings-section">
-        <div className="settings-section-title">Session Launch</div>
 
         <LaunchField wide label="Pre-launch Command"
-          description={'Prepended to the claude command (e.g. "aws-vault exec profile --")'}
+          description={<>Put in front of the <code>claude</code> command, e.g. to load credentials first</>}
           useGlobal={useGlobalBox('preLaunchCmd')}>
           <input type="text" className="settings-input" id="sv-pre-launch" ref={preLaunch} placeholder="e.g. aws-vault exec profile --"
             defaultValue={fieldValue('preLaunchCmd', '') ?? ''} disabled={disabled('preLaunchCmd')} />
@@ -183,9 +177,9 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
 
       {!isProject && (
         <div className="settings-section">
-          <div className="settings-section-title">Application</div>
+          <div className="settings-section-title">Terminal</div>
 
-          <AppField label="Terminal Theme" description="Color theme for terminal sessions">
+          <AppField label="Terminal Theme" description="Colour theme for terminal and Claude sessions">
             <select className="settings-select" id="sv-terminal-theme" ref={terminalTheme} defaultValue={themeValue}>
               {Object.entries(TERMINAL_THEMES).map(([key, t]) =>
                 <option key={key} value={key}>{t.label}</option>)}
@@ -216,15 +210,21 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
               {panel.shellProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </AppField>
+        </div>
+      )}
+
+      {!isProject && (
+        <div className="settings-section">
+          <div className="settings-section-title">Sidebar</div>
 
           <AppField label="Max Visible Sessions"
-            description={'Show up to this many sessions in the list before collapsing the rest behind "+N older". Active and pinned sessions are always shown.'}>
+            description={'Show up to this many sessions before folding the rest behind "+N older". Active and pinned sessions always show.'}>
             <input type="number" className="settings-input settings-input-compact" id="sv-visible-count" ref={visibleCount}
               min="1" max="100" defaultValue={String(fieldValue('visibleSessionCount', 25))} />
           </AppField>
 
           <AppField label="Session Max Age (days)"
-            description={'Sessions older than this are hidden behind "+N older" even if under the count limit'}>
+            description={'Sessions older than this also fold behind "+N older", even under the limit above'}>
             <input type="number" className="settings-input settings-input-compact" id="sv-max-age" ref={maxAge}
               min="1" max="365" defaultValue={String(fieldValue('sessionMaxAgeDays', 3))} />
           </AppField>
