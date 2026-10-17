@@ -131,7 +131,7 @@ test.describe('filters', () => {
   test('narrow the list, replace one another and hide the section labels until turned off', async ({ page }) => {
     /* Given */
     const pinned = sidebarFilter(page, 'pinned');
-    const archived = sidebarFilter(page, 'archived');
+    const running = sidebarFilter(page, 'running');
 
     /* When */
     await pinned.click();
@@ -143,20 +143,19 @@ test.describe('filters', () => {
     await expectSectionLabels(page, false);
 
     /* When */
-    await archived.click();
+    await running.click();
 
     /* Then */
-    await expect(archived).toHaveClass(/\bactive\b/);
+    await expect(running).toHaveClass(/\bactive\b/);
     await expect(pinned).not.toHaveClass(/\bactive\b/);
-    await expect(sessionRow(page, LABEL.graphqlSpike)).toBeVisible();
     await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
 
     /* When */
     // Clicking the active one again turns it off.
-    await archived.click();
+    await running.click();
 
     /* Then */
-    await expect(archived).not.toHaveClass(/\bactive\b/);
+    await expect(running).not.toHaveClass(/\bactive\b/);
     await expect(sessionRow(page, LABEL.loginFix)).toBeVisible();
     await expectSectionLabels(page, true);
   });
@@ -385,7 +384,6 @@ forEachAppearance(() => {
       /* When */
       await titlesToggle(page).click();
       await searchBox(page).fill('billing');
-      await sidebarFilter(page, 'today').click();
 
       /* Then */
       await expect(sessionRow(page, LABEL.loginFix)).toHaveCount(0);
@@ -400,7 +398,7 @@ forEachAppearance(() => {
       for (const name of ['Global settings', 'Hide sidebar', 'New session', 'Add project']) {
         expect(await region(button(page, name))).toBe('no-drag');
       }
-      for (const filter of ['running', 'pinned', 'today', 'archived'] as const) {
+      for (const filter of ['running', 'pinned'] as const) {
         expect(await region(sidebarFilter(page, filter))).toBe('no-drag');
       }
       expect(await region(appearanceButton(page))).toBe('no-drag');

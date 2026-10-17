@@ -18,8 +18,8 @@ import { LABEL, S } from '../fixtures/standard';
  * "Needs input" section on the next redraw, which toggling a filter forces.
  */
 async function redrawSidebar(page: Page): Promise<void> {
-  await sidebarFilter(page, 'today').click();
-  await sidebarFilter(page, 'today').click();
+  await sidebarFilter(page, 'pinned').click();
+  await sidebarFilter(page, 'pinned').click();
 }
 
 test.describe('smoke', () => {
