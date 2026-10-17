@@ -34,292 +34,638 @@ function run(questions: Question[], actions: DraftAction[], from?: AnswerDraft):
   return result;
 }
 
+/** The draft after some setup actions, checked for mutation like any other run. */
+const after = (questions: Question[], actions: DraftAction[]): AnswerDraft => run(questions, actions).draft;
+
 test('a fresh draft starts on the first question with nothing answered', () => {
+  /* When */
   const draft = createDraft(qs);
+
+  /* Then */
   assert.deepEqual(draft, { step: 0, cursor: 0, picks: [[], [], []], other: ['', '', ''] });
   assert.equal(answeredCount(qs, draft), 0);
 });
 
-test('moving on a single-choice question picks quietly and wraps over the Other row', () => {
-  let r = run(qs, [{ kind: 'move', by: 1 }]);
+test('moving on a single-choice question picks quietly', () => {
+  /* When */
+  const r = run(qs, [{ kind: 'move', by: 1 }]);
+
+  /* Then */
   assert.equal(r.event, null);
   assert.equal(r.draft.cursor, 1);
   assert.deepEqual(r.draft.picks[0], ['Long (Recommended)']);
+});
 
-  r = run(qs, [{ kind: 'move', by: -1 }]);
+test('moving up from the first row wraps over to the Other row', () => {
+  /* When */
+  const r = run(qs, [{ kind: 'move', by: -1 }]);
+
+  /* Then */
   assert.equal(r.draft.cursor, 3, 'up from the first row wraps to Other');
   assert.deepEqual(r.draft.picks[0], []);
+});
 
-  r = run(qs, [{ kind: 'move', by: -1 }, { kind: 'move', by: 1 }]);
+test('moving down from the Other row wraps to the first row', () => {
+  /* Given */
+  const onOther = after(qs, [{ kind: 'move', by: -1 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'move', by: 1 }], onOther);
+
+  /* Then */
   assert.equal(r.draft.cursor, 0, 'down from Other wraps to the first row');
   assert.deepEqual(r.draft.picks[0], ['Short']);
 });
 
-test('moving onto an option clears Other text; moving onto Other keeps it and drops the pick', () => {
-  let r = run(qs, [{ kind: 'type', text: 'Five minutes' }, { kind: 'move', by: 1 }]);
+test('moving onto an option clears Other text', () => {
+  /* Given */
+  const typed = after(qs, [{ kind: 'type', text: 'Five minutes' }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'move', by: 1 }], typed);
+
+  /* Then */
   assert.equal(r.draft.cursor, 0);
   assert.deepEqual(r.draft.picks[0], ['Short']);
   assert.equal(r.draft.other[0], '');
+});
 
-  r = run(qs, [{ kind: 'press', row: 1 }, { kind: 'type', text: 'x' }, { kind: 'press', row: 0 }, { kind: 'move', by: -1 }]);
+test('moving onto Other drops the pick', () => {
+  /* Given */
+  const picked = after(qs, [{ kind: 'press', row: 1 }, { kind: 'type', text: 'x' }, { kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'move', by: -1 }], picked);
+
+  /* Then */
   assert.equal(r.draft.cursor, 3);
   assert.deepEqual(r.draft.picks[0], []);
 });
 
 test('moving on a multiple-choice question only moves the cursor', () => {
-  const r = run([multi], [{ kind: 'move', by: 1 }, { kind: 'move', by: 1 }]);
+  /* Given */
+  const moved = after([multi], [{ kind: 'move', by: 1 }]);
+
+  /* When */
+  const r = run([multi], [{ kind: 'move', by: 1 }], moved);
+
+  /* Then */
   assert.equal(r.event, null);
   assert.equal(r.draft.cursor, 2);
   assert.deepEqual(r.draft.picks[0], []);
 });
 
 test('a move that completes the set stays quiet', () => {
+  /* When */
   const r = run([single], [{ kind: 'move', by: 1 }]);
+
+  /* Then */
   assert.equal(r.event, null);
   assert.equal(answeredCount([single], r.draft), 1);
 });
 
-test('pressing an option picks it, says whether it was the recommended one, and the cursor follows', () => {
-  let r = run(qs, [{ kind: 'press', row: 2 }]);
+test('pressing an option picks it, says it was not the recommended one, and the cursor follows', () => {
+  /* When */
+  const r = run(qs, [{ kind: 'press', row: 2 }]);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'picked', recommended: false });
   assert.equal(r.draft.cursor, 2);
   assert.deepEqual(r.draft.picks[0], ['None']);
+});
 
-  r = run(qs, [{ kind: 'press', row: 1 }]);
+test('pressing the recommended option says so', () => {
+  /* When */
+  const r = run(qs, [{ kind: 'press', row: 1 }]);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'picked', recommended: true });
 });
 
 test('pressing the picked option again keeps it and says nothing', () => {
-  const r = run(qs, [{ kind: 'press', row: 1 }, { kind: 'move', by: 1 }, { kind: 'move', by: 1 }, { kind: 'press', row: 2 }, { kind: 'press', row: 2 }]);
+  /* Given */
+  const picked = after(qs, [{ kind: 'press', row: 1 }, { kind: 'move', by: 1 }, { kind: 'move', by: 1 }, { kind: 'press', row: 2 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'press', row: 2 }], picked);
+
+  /* Then */
   assert.equal(r.event, null);
   assert.deepEqual(r.draft.picks[0], ['None']);
 });
 
 test('picking an option on a single-choice question replaces the last pick and clears Other', () => {
-  const r = run(qs, [{ kind: 'type', text: 'mine' }, { kind: 'press', row: 0 }, { kind: 'press', row: 2 }]);
+  /* Given */
+  const picked = after(qs, [{ kind: 'type', text: 'mine' }, { kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'press', row: 2 }], picked);
+
+  /* Then */
   assert.deepEqual(r.draft.picks[0], ['None']);
   assert.equal(r.draft.other[0], '');
 });
 
 test('pressing the Other row moves the cursor there and drops a single-choice pick', () => {
-  const r = run(qs, [{ kind: 'press', row: 0 }, { kind: 'press', row: 3 }]);
+  /* Given */
+  const picked = after(qs, [{ kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'press', row: 3 }], picked);
+
+  /* Then */
   assert.equal(r.event, null);
   assert.equal(r.draft.cursor, 3);
   assert.deepEqual(r.draft.picks[0], []);
 });
 
 test('pressing the Other row on a multiple-choice question keeps the picks', () => {
-  const r = run([multi], [{ kind: 'press', row: 0 }, { kind: 'press', row: 3 }]);
+  /* Given */
+  const picked = after([multi], [{ kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run([multi], [{ kind: 'press', row: 3 }], picked);
+
+  /* Then */
   assert.equal(r.draft.cursor, 3);
   assert.deepEqual(r.draft.picks[0], ['Logs']);
 });
 
 test('pressing a row that does not exist does nothing', () => {
+  /* Given */
   const draft = createDraft(qs);
+
   for (const row of [-1, 4, 1.5]) {
+    /* When */
     const r = reduceDraft(qs, draft, { kind: 'press', row });
+
+    /* Then */
     assert.equal(r.draft, draft);
     assert.equal(r.event, null);
   }
 });
 
-test('toggles on a multiple-choice question report the count and keep picks in option order', () => {
-  let r = run([multi, single], [{ kind: 'press', row: 2 }]);
+test('a toggle on a multiple-choice question reports the count', () => {
+  /* When */
+  const r = run([multi, single], [{ kind: 'press', row: 2 }]);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'multi-count', count: 1, total: 3 });
-  r = run([multi, single], [{ kind: 'press', row: 2 }, { kind: 'press', row: 0 }]);
+});
+
+test('toggles on a multiple-choice question count up and keep picks in option order', () => {
+  /* Given */
+  const one = after([multi, single], [{ kind: 'press', row: 2 }]);
+
+  /* When */
+  const r = run([multi, single], [{ kind: 'press', row: 0 }], one);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'multi-count', count: 2, total: 3 });
   assert.deepEqual(r.draft.picks[0], ['Logs', 'Traces']);
-  r = run([multi, single], [{ kind: 'press', row: 2 }, { kind: 'press', row: 0 }, { kind: 'press', row: 2 }]);
+});
+
+test('toggling a pick off on a multiple-choice question counts down', () => {
+  /* Given */
+  const two = after([multi, single], [{ kind: 'press', row: 2 }, { kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run([multi, single], [{ kind: 'press', row: 2 }], two);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'multi-count', count: 1, total: 3 });
   assert.deepEqual(r.draft.picks[0], ['Logs']);
   assert.equal(r.draft.cursor, 2);
 });
 
 test('the multi count leaves Other text out', () => {
-  const r = run([multi, single], [{ kind: 'type', text: 'Profiles' }, { kind: 'press', row: 1 }]);
+  /* Given */
+  const typed = after([multi, single], [{ kind: 'type', text: 'Profiles' }]);
+
+  /* When */
+  const r = run([multi, single], [{ kind: 'press', row: 1 }], typed);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'multi-count', count: 1, total: 3 });
   assert.equal(r.draft.other[0], 'Profiles', 'Other is one more thing to include, not a rival');
 });
 
 test('clicking the picked option of a single-choice question unpicks it', () => {
-  const r = run(qs, [{ kind: 'click', row: 1 }, { kind: 'click', row: 1 }]);
+  /* Given */
+  const picked = after(qs, [{ kind: 'click', row: 1 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'click', row: 1 }], picked);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'unpicked' });
   assert.deepEqual(r.draft.picks[0], []);
   assert.equal(r.draft.cursor, 1);
 });
 
-test('clicking otherwise behaves like pressing', () => {
-  assert.deepEqual(run(qs, [{ kind: 'click', row: 0 }]).event, { kind: 'picked', recommended: false });
-  const r = run([multi, single], [{ kind: 'click', row: 0 }, { kind: 'click', row: 0 }]);
+test('clicking an unpicked option behaves like pressing', () => {
+  /* When */
+  const r = run(qs, [{ kind: 'click', row: 0 }]);
+
+  /* Then */
+  assert.deepEqual(r.event, { kind: 'picked', recommended: false });
+});
+
+test('clicking on a multiple-choice question behaves like pressing', () => {
+  /* Given */
+  const picked = after([multi, single], [{ kind: 'click', row: 0 }]);
+
+  /* When */
+  const r = run([multi, single], [{ kind: 'click', row: 0 }], picked);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'multi-count', count: 0, total: 3 });
 });
 
-test('space presses the row under the cursor, and does nothing on Other', () => {
-  let r = run([multi, single], [{ kind: 'move', by: 1 }, { kind: 'space' }]);
+test('space presses the row under the cursor', () => {
+  /* Given */
+  const moved = after([multi, single], [{ kind: 'move', by: 1 }]);
+
+  /* When */
+  const r = run([multi, single], [{ kind: 'space' }], moved);
+
+  /* Then */
   assert.deepEqual(r.draft.picks[0], ['Metrics']);
   assert.deepEqual(r.event, { kind: 'multi-count', count: 1, total: 3 });
+});
 
-  const onOther = run([multi, single], [{ kind: 'move', by: -1 }]).draft;
-  r = reduceDraft([multi, single], onOther, { kind: 'space' });
+test('space does nothing on Other', () => {
+  /* Given */
+  const onOther = after([multi, single], [{ kind: 'move', by: -1 }]);
+
+  /* When */
+  const r = reduceDraft([multi, single], onOther, { kind: 'space' });
+
+  /* Then */
   assert.equal(r.draft, onOther);
   assert.equal(r.event, null);
 });
 
 test('focusing Other is pressing its row', () => {
-  const r = run(qs, [{ kind: 'press', row: 0 }, { kind: 'focus-other' }]);
+  /* Given */
+  const picked = after(qs, [{ kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'focus-other' }], picked);
+
+  /* Then */
   assert.equal(r.draft.cursor, 3);
   assert.deepEqual(r.draft.picks[0], []);
   assert.equal(r.event, null);
 });
 
-test('typing sets Other, drops a single-choice pick and announces only the first non-blank text', () => {
-  let r = run(qs, [{ kind: 'press', row: 0 }, { kind: 'type', text: '   ' }]);
+test('typing sets Other and drops a single-choice pick, but blank text announces nothing', () => {
+  /* Given */
+  const picked = after(qs, [{ kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'type', text: '   ' }], picked);
+
+  /* Then */
   assert.equal(r.event, null, 'blank text is not an answer yet');
   assert.deepEqual(r.draft.picks[0], []);
   assert.equal(r.draft.cursor, 3);
+});
 
-  r = run(qs, [{ kind: 'type', text: '   ' }, { kind: 'type', text: ' 5m' }]);
+test('typing announces the first non-blank text', () => {
+  /* Given */
+  const blank = after(qs, [{ kind: 'type', text: '   ' }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'type', text: ' 5m' }], blank);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'started-other' });
-  r = run(qs, [{ kind: 'type', text: '5' }, { kind: 'type', text: '5m' }]);
+});
+
+test('typing announces only the first non-blank text', () => {
+  /* Given */
+  const started = after(qs, [{ kind: 'type', text: '5' }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'type', text: '5m' }], started);
+
+  /* Then */
   assert.equal(r.event, null);
   assert.equal(r.draft.other[0], '5m');
 });
 
 test('typing on a multiple-choice question keeps the picks', () => {
-  const r = run([multi, single], [{ kind: 'press', row: 0 }, { kind: 'type', text: 'Profiles' }]);
+  /* Given */
+  const picked = after([multi, single], [{ kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run([multi, single], [{ kind: 'type', text: 'Profiles' }], picked);
+
+  /* Then */
   assert.deepEqual(r.draft.picks[0], ['Logs']);
   assert.equal(r.draft.cursor, 3);
 });
 
-test('isAnswered counts a pick or non-blank Other text', () => {
-  let draft = createDraft(qs);
-  assert.equal(isAnswered(qs, draft, 0), false);
-  draft = run(qs, [{ kind: 'type', text: '  ' }]).draft;
-  assert.equal(isAnswered(qs, draft, 0), false);
-  draft = run(qs, [{ kind: 'type', text: 'x' }]).draft;
-  assert.equal(isAnswered(qs, draft, 0), true);
-  draft = run(qs, [{ kind: 'press', row: 0 }]).draft;
-  assert.equal(isAnswered(qs, draft, 0), true);
-  assert.equal(isAnswered(qs, draft, 7), false);
+test('isAnswered counts nothing on a fresh question', () => {
+  /* Given */
+  const draft = createDraft(qs);
+
+  /* When */
+  const answered = isAnswered(qs, draft, 0);
+
+  /* Then */
+  assert.equal(answered, false);
+});
+
+test('isAnswered does not count blank Other text', () => {
+  /* Given */
+  const draft = after(qs, [{ kind: 'type', text: '  ' }]);
+
+  /* When */
+  const answered = isAnswered(qs, draft, 0);
+
+  /* Then */
+  assert.equal(answered, false);
+});
+
+test('isAnswered counts non-blank Other text', () => {
+  /* Given */
+  const draft = after(qs, [{ kind: 'type', text: 'x' }]);
+
+  /* When */
+  const answered = isAnswered(qs, draft, 0);
+
+  /* Then */
+  assert.equal(answered, true);
+});
+
+test('isAnswered counts a pick', () => {
+  /* Given */
+  const draft = after(qs, [{ kind: 'press', row: 0 }]);
+
+  /* When */
+  const answered = isAnswered(qs, draft, 0);
+
+  /* Then */
+  assert.equal(answered, true);
+});
+
+test('isAnswered does not count a question that does not exist', () => {
+  /* Given */
+  const draft = after(qs, [{ kind: 'press', row: 0 }]);
+
+  /* When */
+  const answered = isAnswered(qs, draft, 7);
+
+  /* Then */
+  assert.equal(answered, false);
 });
 
 test('next is blocked until the current question is answered', () => {
+  /* When */
   const r = run(qs, [{ kind: 'next' }]);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'blocked', isLast: false });
   assert.equal(r.draft.step, 0);
 });
 
-test('next advances with the answered count and whether it landed on the last question', () => {
-  let r = run(qs, [{ kind: 'press', row: 0 }, { kind: 'next' }]);
+test('next advances with the answered count', () => {
+  /* Given */
+  const picked = after(qs, [{ kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'next' }], picked);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'advanced', done: 1, total: 3, isLast: false });
   assert.equal(r.draft.step, 1);
   assert.equal(r.draft.cursor, 0);
+});
 
-  r = run(qs, [{ kind: 'press', row: 0 }, { kind: 'next' }, { kind: 'press', row: 1 }, { kind: 'next' }]);
+test('next says whether it landed on the last question', () => {
+  /* Given */
+  const secondPicked = after(qs, [{ kind: 'press', row: 0 }, { kind: 'next' }, { kind: 'press', row: 1 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'next' }], secondPicked);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'advanced', done: 2, total: 3, isLast: true });
   assert.equal(r.draft.step, 2);
 });
 
 test('next on the last question submits when everything is answered, without touching the draft', () => {
-  const answered = run(qs, [
+  /* Given */
+  const answered = after(qs, [
     { kind: 'press', row: 0 }, { kind: 'next' },
     { kind: 'press', row: 1 }, { kind: 'next' },
     { kind: 'press', row: 1 },
-  ]).draft;
+  ]);
+
+  /* When */
   const r = reduceDraft(qs, answered, { kind: 'next' });
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'submit' });
   assert.equal(r.draft, answered);
 });
 
 test('next on the last question is blocked while an earlier one is unanswered', () => {
-  const r = run(qs, [{ kind: 'goto', step: 2 }, { kind: 'press', row: 0 }, { kind: 'next' }]);
+  /* Given */
+  const lastPicked = after(qs, [{ kind: 'goto', step: 2 }, { kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'next' }], lastPicked);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'blocked', isLast: true });
   assert.equal(r.draft.step, 2);
+});
 
-  const blank = run(qs, [{ kind: 'goto', step: 2 }, { kind: 'next' }]);
+test('next on a blank last question is blocked', () => {
+  /* Given */
+  const onLast = after(qs, [{ kind: 'goto', step: 2 }]);
+
+  /* When */
+  const blank = run(qs, [{ kind: 'next' }], onLast);
+
+  /* Then */
   assert.deepEqual(blank.event, { kind: 'blocked', isLast: true });
 });
 
-test('answering the last open question announces it instead of the usual event', () => {
-  let r = run(qs, [{ kind: 'press', row: 0 }, { kind: 'next' }, { kind: 'press', row: 1 }, { kind: 'next' }, { kind: 'press', row: 0 }]);
-  assert.deepEqual(r.event, { kind: 'all-answered' });
+/** The first two questions answered, the third still open. */
+const twoAnswered = () => after(qs, [{ kind: 'press', row: 0 }, { kind: 'next' }, { kind: 'press', row: 1 }, { kind: 'next' }]);
 
-  r = run(qs, [{ kind: 'press', row: 0 }, { kind: 'next' }, { kind: 'press', row: 1 }, { kind: 'next' }, { kind: 'type', text: 'Baz' }]);
-  assert.deepEqual(r.event, { kind: 'all-answered' });
+test('answering the last open question with a pick announces it instead of the usual event', () => {
+  /* Given */
+  const draft = twoAnswered();
 
-  r = run([multi], [{ kind: 'press', row: 0 }]);
+  /* When */
+  const r = run(qs, [{ kind: 'press', row: 0 }], draft);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'all-answered' });
-  r = run([multi], [{ kind: 'press', row: 0 }, { kind: 'press', row: 1 }]);
+});
+
+test('answering the last open question with Other text announces it instead of the usual event', () => {
+  /* Given */
+  const draft = twoAnswered();
+
+  /* When */
+  const r = run(qs, [{ kind: 'type', text: 'Baz' }], draft);
+
+  /* Then */
+  assert.deepEqual(r.event, { kind: 'all-answered' });
+});
+
+test('the first toggle that answers a lone multiple-choice question announces it', () => {
+  /* When */
+  const r = run([multi], [{ kind: 'press', row: 0 }]);
+
+  /* Then */
+  assert.deepEqual(r.event, { kind: 'all-answered' });
+});
+
+test('a toggle once everything is already answered just reports the count', () => {
+  /* Given */
+  const answered = after([multi], [{ kind: 'press', row: 0 }]);
+
+  /* When */
+  const r = run([multi], [{ kind: 'press', row: 1 }], answered);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'multi-count', count: 2, total: 3 }, 'already all answered');
 });
 
 test('re-answering after unpicking announces everything again', () => {
-  const r = run([single], [{ kind: 'click', row: 0 }, { kind: 'click', row: 0 }, { kind: 'click', row: 2 }]);
+  /* Given */
+  const unpicked = after([single], [{ kind: 'click', row: 0 }, { kind: 'click', row: 0 }]);
+
+  /* When */
+  const r = run([single], [{ kind: 'click', row: 2 }], unpicked);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'all-answered' });
 });
 
 test('back goes to the previous question with the cursor on its pick', () => {
-  const r = run(qs, [{ kind: 'press', row: 2 }, { kind: 'next' }, { kind: 'back' }]);
+  /* Given */
+  const advanced = after(qs, [{ kind: 'press', row: 2 }, { kind: 'next' }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'back' }], advanced);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'moved-to', header: 'Timeout' });
   assert.equal(r.draft.step, 0);
   assert.equal(r.draft.cursor, 2);
 });
 
 test('back on the first question does nothing', () => {
+  /* Given */
   const draft = createDraft(qs);
+
+  /* When */
   const r = reduceDraft(qs, draft, { kind: 'back' });
+
+  /* Then */
   assert.equal(r.draft, draft);
   assert.equal(r.event, null);
 });
 
 test('landing on a question with only Other text puts the cursor on Other', () => {
-  const r = run(qs, [{ kind: 'type', text: 'Ten' }, { kind: 'next' }, { kind: 'back' }]);
+  /* Given */
+  const advanced = after(qs, [{ kind: 'type', text: 'Ten' }, { kind: 'next' }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'back' }], advanced);
+
+  /* Then */
   assert.equal(r.draft.cursor, 3);
 });
 
 test('landing on a multiple-choice question with picks puts the cursor on the first row', () => {
-  const r = run(qs, [{ kind: 'goto', step: 1 }, { kind: 'press', row: 2 }, { kind: 'goto', step: 0 }, { kind: 'goto', step: 1 }]);
+  /* Given */
+  const away = after(qs, [{ kind: 'goto', step: 1 }, { kind: 'press', row: 2 }, { kind: 'goto', step: 0 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'goto', step: 1 }], away);
+
+  /* Then */
   assert.equal(r.draft.cursor, 0);
 });
 
-test('goto jumps without the answered check and names where it landed, falling back to the number', () => {
-  let r = run(qs, [{ kind: 'goto', step: 2 }]);
+test('goto jumps without the answered check, naming where it landed by number when it has no header', () => {
+  /* When */
+  const r = run(qs, [{ kind: 'goto', step: 2 }]);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'moved-to', header: 'Question 3' });
   assert.equal(r.draft.step, 2);
   assert.equal(r.draft.cursor, 0);
+});
 
-  r = run(qs, [{ kind: 'goto', step: 1 }]);
+test('goto names where it landed by its header', () => {
+  /* When */
+  const r = run(qs, [{ kind: 'goto', step: 1 }]);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'moved-to', header: 'Features' });
 });
 
 test('goto the current or a missing question does nothing', () => {
+  /* Given */
   const draft = createDraft(qs);
+
   for (const step of [0, -1, 3]) {
+    /* When */
     const r = reduceDraft(qs, draft, { kind: 'goto', step });
+
+    /* Then */
     assert.equal(r.draft, draft);
     assert.equal(r.event, null);
   }
 });
 
 test('draftAnswers keeps option order and the Recommended suffix, then trimmed Other text', () => {
-  const draft = run(qs, [
+  /* Given */
+  const draft = after(qs, [
     { kind: 'press', row: 1 },
     { kind: 'goto', step: 1 }, { kind: 'press', row: 2 }, { kind: 'press', row: 0 }, { kind: 'type', text: '  Profiles  ' },
     { kind: 'goto', step: 2 }, { kind: 'type', text: ' Qux ' },
-  ]).draft;
-  assert.deepEqual(draftAnswers(qs, draft), {
+  ]);
+
+  /* When */
+  const answers = draftAnswers(qs, draft);
+
+  /* Then */
+  assert.deepEqual(answers, {
     'Timeout?': 'Long (Recommended)',
     'Features?': 'Logs, Traces, Profiles',
     'Name?': 'Qux',
   });
 });
 
-test('isRecommended reads Claude’s suffix loosely; displayLabel strips it', () => {
-  assert.equal(isRecommended('Long (Recommended)'), true);
-  assert.equal(isRecommended('Long (recommended)  '), true);
-  assert.equal(isRecommended('Long'), false);
-  assert.equal(isRecommended('(Recommended) Long'), false);
-  assert.equal(displayLabel('Long (Recommended)'), 'Long');
-  assert.equal(displayLabel('  Long (RECOMMENDED) '), 'Long');
-  assert.equal(displayLabel('Long'), 'Long');
+test('isRecommended reads Claude’s suffix loosely', () => {
+  /* Given */
+  const labels = ['Long (Recommended)', 'Long (recommended)  ', 'Long', '(Recommended) Long'];
+
+  /* When */
+  const recommended = labels.map(isRecommended);
+
+  /* Then */
+  assert.deepEqual(recommended, [true, true, false, false]);
+});
+
+test('displayLabel strips Claude’s suffix', () => {
+  /* Given */
+  const labels = ['Long (Recommended)', '  Long (RECOMMENDED) ', 'Long'];
+
+  /* When */
+  const shown = labels.map(displayLabel);
+
+  /* Then */
+  assert.deepEqual(shown, ['Long', 'Long', 'Long']);
 });
