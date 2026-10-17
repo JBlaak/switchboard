@@ -139,12 +139,36 @@ test sets with `test.use({ stubs: … })` or `setHostStub`, and
 passes `test.use({ fakeTimers: true })` and jumps the renderer's clock with
 `page.clock.fastForward`.
 
-**Porting a surface.** The first commit of a PR that ports part of the UI adds
-characterization tests for its issue's checklist and must pass on the current,
-vanilla renderer. The port comes in later commits, with those tests unchanged
-and the baselines still matching. Find elements by role, label or text; where
-the vanilla markup has no accessible handle, add a `data-testid` to it in that
-first commit.
+**What belongs in e2e.** Prefer a unit test (`test/`, against a reducer, a
+layout function or a service with fakes) whenever the behaviour can be decided
+without the app. An e2e test is for what only the wired-up app can prove: an
+IPC round-trip, the real terminal, keyboard and focus moving between surfaces,
+a side effect in the main process, or a journey across several surfaces. Each
+test launches the app, so a few fuller journeys beat many small checks. Find
+elements by role, label or text, and add a `data-testid` only where nothing
+accessible identifies the element.
+
+## Writing tests
+
+Every test, unit or e2e, is split into `/* Given */`, `/* When */` and
+`/* Then */` blocks: setup, the one action under test, and the assertions.
+
+```ts
+test('archiving a session hides it from the recent list', () => {
+  /* Given */
+  const state = run(initialRendererState(), built([item(row('a'))]));
+
+  /* When */
+  const next = run(state, { type: 'sessionArchived', id: 'a' });
+
+  /* Then */
+  assert.deepEqual(visibleIds(next), []);
+});
+```
+
+Leave out `/* Given */` when there is no setup. Test one behaviour per test. A
+test that walks a sequence, such as an e2e journey, may repeat `/* When */` and
+`/* Then */` pairs. Assertions never go in Given, and actions never go in Then.
 
 ## Building
 
