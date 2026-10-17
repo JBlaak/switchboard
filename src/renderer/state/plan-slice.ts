@@ -14,7 +14,11 @@
 import type { IssueKey, Plan, PlanSummary } from '../../domain/plan/model';
 import type { IssueSessionStart } from '../../domain/plan/issue-session';
 import type { IdRecord } from './records';
+import { hasEntry, withEntry } from './records';
 import { issueKeyString, sameIssue } from '../../domain/plan/model';
+import { layOutPlan } from '../../domain/plan/layout';
+import { shouldCelebrate } from '../../domain/plan/celebrate';
+import type { Celebration } from '../../domain/plan/celebrate';
 import type { RendererEvent } from './events';
 
 /** What `sessionPlans` answers (see `SessionPlans` in the plan service). */
@@ -56,9 +60,46 @@ export type PlanStart =
 
 export interface PlanState {
   readonly view: PlanViewState | null;
+  /**
+   * `owner/repo#n` → the level last seen for that plan (A4); null once it was
+   * seen cleared. Kept across restarts by `plan/levels-seen`.
+   */
+  readonly levelsSeen: IdRecord<number | null>;
+  /** A level-up or a cleared plan to play, until the view has played it (A4). */
+  readonly celebration: PlanCelebration | null;
+  /**
+   * Start level (A1): confirming, on its way, or answered. Outside the view,
+   * because each start puts its session on screen and the view closes under
+   * it; the answer waits for the plan to be shown again.
+   */
+  readonly levelStart: PlanLevelStart | null;
 }
 
-export const initialPlanState: PlanState = { view: null };
+/** A celebration to play: which plan, what for, and the issues that just turned Ready. */
+export interface PlanCelebration {
+  /** Counts up, so a view tells one celebration from the next. */
+  readonly id: number;
+  readonly plan: IssueKey;
+  readonly celebration: Exclude<Celebration, { kind: 'none' }>;
+  /** How many levels the plan has, for Patch's line. */
+  readonly levels: number;
+  /** The new current level's Ready issues, which animate in. */
+  readonly arriving: readonly IssueKey[];
+}
+
+/** Start level on a plan's current level (A1). */
+export type PlanLevelStart =
+  | {
+    readonly plan: IssueKey; readonly level: number; readonly issues: readonly IssueKey[];
+    readonly phase: 'confirm' | 'starting';
+  }
+  | {
+    readonly plan: IssueKey; readonly level: number; readonly issues: readonly IssueKey[];
+    readonly phase: 'answered'; readonly started: number;
+    readonly failed: readonly { readonly issue: IssueKey; readonly reason: string }[];
+  };
+
+export const initialPlanState: PlanState = { view: null, levelsSeen: {}, celebration: null, levelStart: null };
 
 /** A stable string for a source, to tell an answer for it from one for another. */
 export function planSourceKey(source: PlanSource): string {
@@ -66,15 +107,83 @@ export function planSourceKey(source: PlanSource): string {
 }
 
 export function planReducer(state: PlanState, event: RendererEvent): PlanState {
+  const viewed = reduceView(state, event);
+  // Every plan the view shows is sighted: on each load and poll, and when the switcher picks it (A4).
+  const sighted = viewed !== state && (event.type === 'planLoaded' || event.type === 'planChosen') ? sight(viewed) : viewed;
+  return reduceLevels(sighted, event);
+}
+
+/**
+ * Record the level of the plan on screen, and queue a celebration when it
+ * went up or cleared since it was last seen (A4).
+ */
+function sight(state: PlanState): PlanState {
+  const plan = state.view ? chosenPlan(state.view) : null;
+  if (!plan) return state;
+  const layout = layOutPlan(plan);
+  const planKey = issueKeyString(plan);
+  const first = !hasEntry(state.levelsSeen, planKey);
+  const celebration = shouldCelebrate(state.levelsSeen[planKey] ?? null, layout.current, first);
+  const levelsSeen = withEntry(state.levelsSeen, planKey, layout.current);
+  if (celebration.kind === 'none') return levelsSeen === state.levelsSeen ? state : { ...state, levelsSeen };
+  const arriving = celebration.kind === 'level-up'
+    ? (layout.levels[celebration.level - 1] ?? []).filter(issue => layout.stateOf(issue) === 'ready').map(key)
+    : [];
+  return {
+    ...state, levelsSeen,
+    celebration: { id: (state.celebration?.id ?? 0) + 1, plan: key(plan), celebration, levels: layout.levels.length, arriving },
+  };
+}
+
+function reduceLevels(state: PlanState, event: RendererEvent): PlanState {
+  switch (event.type) {
+    // What was seen before this run; anything seen since it started wins.
+    case 'planLevelsSeenRestored':
+      return Object.keys(event.seen).length ? { ...state, levelsSeen: { ...event.seen, ...state.levelsSeen } } : state;
+
+    case 'planCelebrationPlayed':
+      return state.celebration?.id === event.id ? { ...state, celebration: null } : state;
+
+    case 'planLevelStartAsked':
+      if (state.levelStart?.phase === 'starting' || !event.issues.length) return state;
+      return {
+        ...state,
+        levelStart: { plan: key(event.plan), level: event.level, issues: event.issues.map(key), phase: 'confirm' },
+      };
+
+    case 'planLevelStartConfirmed':
+      return state.levelStart?.phase === 'confirm' ? { ...state, levelStart: { ...state.levelStart, phase: 'starting' } } : state;
+
+    case 'planLevelStartCancelled':
+      return state.levelStart && state.levelStart.phase !== 'starting' ? { ...state, levelStart: null } : state;
+
+    case 'planLevelStartAnswered': {
+      const asked = state.levelStart;
+      if (asked?.phase !== 'starting') return state;
+      return {
+        ...state,
+        levelStart: {
+          plan: asked.plan, level: asked.level, issues: asked.issues, phase: 'answered',
+          started: event.started, failed: event.failed.map(({ issue, reason }) => ({ issue: key(issue), reason })),
+        },
+      };
+    }
+
+    default:
+      return state;
+  }
+}
+
+function reduceView(state: PlanState, event: RendererEvent): PlanState {
   const { view } = state;
   switch (event.type) {
     case 'planViewOpened': {
       if (view && view.owner === event.owner && planSourceKey(view.source) === planSourceKey(event.source)) return state;
-      return { view: freshView(event.owner, event.source, null) };
+      return { ...state, view: freshView(event.owner, event.source, null) };
     }
 
     case 'planViewClosed':
-      return view?.owner === event.owner ? { view: null } : state;
+      return view?.owner === event.owner ? { ...state, view: null } : state;
 
     // Picked from the list of others, or back to where the view opened.
     case 'planSourcePicked': {
@@ -82,13 +191,13 @@ export function planReducer(state: PlanState, event: RendererEvent): PlanState {
       const key = planSourceKey(event.source);
       if (planSourceKey(view.source) === key) return state;
       const back = view.from && planSourceKey(view.from) === key;
-      return { view: freshView(view.owner, event.source, back ? null : view.source) };
+      return { ...state, view: freshView(view.owner, event.source, back ? null : view.source) };
     }
 
     case 'planLoaded': {
       if (!view || view.owner !== event.owner || planSourceKey(view.source) !== event.sourceKey) return state;
       if (event.answer === null) {
-        return view.answer ? state : { view: { ...view, phase: 'failed' } };
+        return view.answer ? state : { ...state, view: { ...view, phase: 'failed' } };
       }
       const answer = event.answer;
       const plans = answer.plans;
@@ -96,6 +205,7 @@ export function planReducer(state: PlanState, event: RendererEvent): PlanState {
       const plan = chosen ? plans.find(p => sameIssue(p, chosen)) : plans[0];
       const inPlan = (issue: IssueKey | null) => !!issue && !!plan?.issues.some(i => sameIssue(i, issue));
       return {
+        ...state,
         view: {
           ...view, phase: 'loaded', answer, chosen,
           hovered: inPlan(view.hovered) ? view.hovered : null,
@@ -108,21 +218,21 @@ export function planReducer(state: PlanState, event: RendererEvent): PlanState {
       if (!view || view.owner !== event.owner) return state;
       const same = Object.keys(view.owners).length === Object.keys(event.owners).length
         && Object.entries(event.owners).every(([issue, id]) => view.owners[issue] === id);
-      return same ? state : { view: { ...view, owners: event.owners } };
+      return same ? state : { ...state, view: { ...view, owners: event.owners } };
     }
 
     case 'planStartAsked': {
       if (!view || !view.selected || !sameIssue(view.selected, event.issue)) return state;
       if (view.start && view.start.phase === 'starting') return state;
-      return { view: { ...view, start: { issue: key(event.issue), phase: event.confirm ? 'confirm' : 'starting' } } };
+      return { ...state, view: { ...view, start: { issue: key(event.issue), phase: event.confirm ? 'confirm' : 'starting' } } };
     }
 
     case 'planStartCancelled':
-      return view?.start?.phase === 'confirm' ? { view: { ...view, start: null } } : state;
+      return view?.start?.phase === 'confirm' ? { ...state, view: { ...view, start: null } } : state;
 
     case 'planStartAnswered': {
       if (!view?.start || !sameIssue(view.start.issue, event.issue)) return state;
-      return { view: { ...view, start: { issue: view.start.issue, phase: 'answered', result: event.result } } };
+      return { ...state, view: { ...view, start: { issue: view.start.issue, phase: 'answered', result: event.result } } };
     }
 
     case 'planChosen': {
@@ -130,13 +240,13 @@ export function planReducer(state: PlanState, event: RendererEvent): PlanState {
       if (!view.answer.plans.some(plan => sameIssue(plan, event.plan))) return state;
       const current = chosenPlan(view);
       if (current && sameIssue(current, event.plan)) return state;
-      return { view: { ...view, chosen: key(event.plan), hovered: null, selected: null, start: null } };
+      return { ...state, view: { ...view, chosen: key(event.plan), hovered: null, selected: null, start: null } };
     }
 
     case 'planIssueHovered': {
       if (!view) return state;
       if (sameOrBothNull(view.hovered, event.issue)) return state;
-      return { view: { ...view, hovered: event.issue ? key(event.issue) : null } };
+      return { ...state, view: { ...view, hovered: event.issue ? key(event.issue) : null } };
     }
 
     case 'planIssueSelected': {
@@ -145,7 +255,7 @@ export function planReducer(state: PlanState, event: RendererEvent): PlanState {
       if (event.issue && !chosenPlan(view)?.issues.some(i => sameIssue(i, event.issue!))) return state;
       // Another issue's start is no longer on screen; one on its way still answers to it.
       const start = view.start && view.start.phase !== 'starting' ? null : view.start;
-      return { view: { ...view, selected: event.issue ? key(event.issue) : null, start } };
+      return { ...state, view: { ...view, selected: event.issue ? key(event.issue) : null, start } };
     }
 
     default:
@@ -163,7 +273,7 @@ export function rekeyPlan(state: PlanState, oldId: string, newId: string): PlanS
   const source = moveSource(view.source)!;
   const from = moveSource(view.from);
   if (owner === view.owner && source === view.source && from === view.from) return state;
-  return { view: { ...view, owner, source, from } };
+  return { ...state, view: { ...view, owner, source, from } };
 }
 
 // ── Derived ──
@@ -188,6 +298,26 @@ export function steppedIssue(order: readonly IssueKey[], current: IssueKey | nul
   if (at === -1) return order[0];
   const next = at + direction;
   return next >= 0 && next < order.length ? order[next] : null;
+}
+
+/**
+ * The levels seen, as `plan/levels-seen` stored them; anything unreadable is
+ * dropped, which only costs a plan its next celebration.
+ */
+export function storedLevelsSeen(raw: string | null): IdRecord<number | null> {
+  if (!raw) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const seen: Record<string, number | null> = {};
+  for (const [planKey, level] of Object.entries(parsed)) {
+    if (level === null || (typeof level === 'number' && Number.isInteger(level) && level > 0)) seen[planKey] = level;
+  }
+  return seen;
 }
 
 function freshView(owner: string, source: PlanSource, from: PlanSource | null): PlanViewState {

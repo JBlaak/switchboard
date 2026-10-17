@@ -3,7 +3,8 @@
  * issue, ghosts of outside blockers above their issue, and an arrow from each
  * blocker to what it blocks — solid once the blocker is closed, dashed while
  * it is open. Hovering an issue lights up its chain and fades the rest; a
- * click selects it.
+ * click selects it. The current level's label offers Start level (A1), and
+ * the issues a level-up just made Ready animate in (A4).
  *
  * Every position comes from `planGeometry`; this only paints.
  */
@@ -13,11 +14,16 @@ import { issueKeyString, sameIssue } from '../../../../domain/plan/model';
 import type { IssueKey, NodeState, Plan, PlanLayout } from '../../../../domain/plan/model';
 import { arrowInChain, chainOf, inChain, NODE_H, NODE_W, PAD, GHOST_H, planGeometry } from './geometry';
 import { issueIn, issueUrl, levelStatus, nodeMiniLine, shortRef, STATE_LABEL } from './describe';
+import { readyOnLevel } from './start-level';
 import type { IssueActions, PlanHandlers, PlanUi } from './types';
 
 export function PlanDiagram(
-  { plan, layout, ui, on, issueActions }:
-  { plan: Plan; layout: PlanLayout; ui: PlanUi; on: PlanHandlers; issueActions?: IssueActions },
+  { plan, layout, ui, on, issueActions, arriving }:
+  {
+    plan: Plan; layout: PlanLayout; ui: PlanUi; on: PlanHandlers; issueActions?: IssueActions;
+    /** Issues a level-up just made Ready, which animate from Locked (A4). */
+    arriving?: readonly IssueKey[];
+  },
 ): JSX.Element {
   const geometry = useMemo(() => planGeometry(plan, layout), [plan, layout]);
   const focus = ui.hovered ?? ui.selected;
@@ -35,6 +41,7 @@ export function PlanDiagram(
     >
       {geometry.bands.map((band) => {
         const status = levelStatus(plan, layout, band.level);
+        const ready = band.level === layout.current && issueActions?.startLevel ? readyOnLevel(layout, band.level) : [];
         return (
           <div
             key={band.level}
@@ -46,6 +53,16 @@ export function PlanDiagram(
               <span className="pv-band-num">{band.level}</span>
               <span className="pv-band-status">{status.label}</span>
               <span className="pv-band-count">{status.closed + ' / ' + status.total + ' closed'}</span>
+              {ready.length > 0 && (
+                <button
+                  type="button"
+                  className="pv-pill pv-band-start"
+                  title={`Start a session on each Ready issue on level ${band.level}`}
+                  onClick={() => issueActions!.startLevel!(plan, band.level, ready)}
+                >
+                  Start level
+                </button>
+              )}
             </div>
           </div>
         );
@@ -87,7 +104,9 @@ export function PlanDiagram(
         const state = layout.stateOf(issue);
         const selected = !!ui.selected && sameIssue(ui.selected, issue);
         const session = issueActions?.sessionFor?.(issue) ?? null;
-        const cls = 'pv-node is-' + state + (selected ? ' is-selected' : '') + (inChain(chain, issue) ? '' : ' is-faded');
+        const arrives = !!arriving?.some(candidate => sameIssue(candidate, issue));
+        const cls = 'pv-node is-' + state + (selected ? ' is-selected' : '') + (inChain(chain, issue) ? '' : ' is-faded')
+          + (arrives ? ' is-arriving' : '');
         return (
           <button
             key={issueKeyString(issue)}

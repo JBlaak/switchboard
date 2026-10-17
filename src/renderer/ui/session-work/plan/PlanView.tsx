@@ -6,7 +6,8 @@
  *
  * `PlanViewContent` draws it from props alone (and is what the tests render);
  * `PlanView` is the same view wired to the plan slice for what is hovered and
- * selected, and to `plan/load` for what it does.
+ * selected, to `plan/load` for what it does, and plays a level-up the slice
+ * queued (`PlanCheer`) in whichever home it is in.
  */
 import type { JSX } from 'react';
 import { useStore } from '../../use-store';
@@ -15,6 +16,7 @@ import { planHandlers } from './load';
 import { NO_PLAN_UI } from './types';
 import { PlanViewContent } from './PlanViewContent';
 import type { PlanViewProps } from './PlanViewContent';
+import { PlanCheer, useCheer } from './PlanCheer';
 
 export type { PlanViewProps };
 
@@ -29,5 +31,11 @@ export function PlanView(props: PlanViewProps): JSX.Element {
   );
   const canGoBack = useStore(state => !!state.plan.view?.from);
   const on = canGoBack ? planHandlers : { ...planHandlers, back: undefined };
-  return <PlanViewContent {...props} ui={ui} on={on} />;
+  const cheer = useCheer();
+  return (
+    <>
+      <PlanViewContent {...props} ui={ui} on={on} arriving={cheer?.arriving} />
+      {cheer && <PlanCheer cheer={cheer} />}
+    </>
+  );
 }

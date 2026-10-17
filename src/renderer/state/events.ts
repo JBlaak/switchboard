@@ -231,6 +231,17 @@ export type LocalEvent =
   | { type: 'planStartCancelled' }
   /** The start came back: the new session, with a warning, or why it did not start. */
   | { type: 'planStartAnswered'; issue: IssueKey; result: IssueSessionStart }
+  /** The levels seen per plan, read back from storage at start (A4). */
+  | { type: 'planLevelsSeenRestored'; seen: Record<string, number | null> }
+  /** A plan view has played the celebration with this id. */
+  | { type: 'planCelebrationPlayed'; id: number }
+  /** Start level pressed on a plan's current level: asks to confirm, naming the count (A1). */
+  | { type: 'planLevelStartAsked'; plan: IssueKey; level: number; issues: IssueKey[] }
+  | { type: 'planLevelStartConfirmed' }
+  /** The confirmation was turned down, or the answer put away. */
+  | { type: 'planLevelStartCancelled' }
+  /** Every start came back: how many started, and which did not. */
+  | { type: 'planLevelStartAnswered'; started: number; failed: { issue: IssueKey; reason: string }[] }
   /** The Checks panel asked main for a failing check's log, by the check run's URL. */
   | { type: 'checkLogRequested'; url: string }
   /** Main answered: the log's end, or null when there is none to show. */

@@ -47,11 +47,20 @@ export const LOGIN_PLAN: Plan = {
   ],
 };
 
+/** The login plan once level 2 cleared: #1302 and #1303 merged, on to level 3 (A4). */
+export const LOGIN_PLAN_ON_LEVEL_3: Plan = {
+  ...LOGIN_PLAN,
+  issues: LOGIN_PLAN.issues.map(i => (i.number === 1302 || i.number === 1303
+    ? { ...i, state: 'closed', closedAs: 'completed', pullRequests: [pr(i.number + 20, 'merged')] }
+    : i)),
+};
+
 export const JAMES_PLAN: Plan = toPlan((james22 as { data: unknown }).data, 'JBlaak/James')!;
 
-export function plansStub(): PlansStub {
+/** `login`: the login plan as GitHub answers it now; a test swaps in another with `setHostStub`. */
+export function plansStub(login: Plan = LOGIN_PLAN): PlansStub {
   return {
-    sessionPlans: { [S.loginFix]: { plans: [LOGIN_PLAN, JAMES_PLAN], others: [] } },
+    sessionPlans: { [S.loginFix]: { plans: [login, JAMES_PLAN], others: [] } },
     issueSessions: { [REPO]: { [REPO + '#1302']: S.loginFix } },
   };
 }
