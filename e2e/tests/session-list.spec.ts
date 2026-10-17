@@ -936,10 +936,12 @@ test.describe('clicks elsewhere on a row', () => {
     await expect(sidebar(page).getByText('+ 3 older', { exact: true })).toBeVisible();
   });
 
-  test('the project label opens the repository instead of the session', async ({ page, app, home }) => {
+  test('a row\'s project label no longer opens the repository', async ({ page, app, home }) => {
+    // Display only now (the meta line is the Session work button where it can
+    // open); outside a git repository the click is the row's.
     await sessionItem(page, S.chartsDarkMode).getByText(P.webDashboard, { exact: true }).click();
-    await expect.poll(() => openedExternally(app)).toContain('repository:' + home.projectPath(P.webDashboard));
-    expect(fakeClaude(home, S.chartsDarkMode).launches()).toHaveLength(0);
+    await fakeClaude(home, S.chartsDarkMode).launched();
+    expect((await openedExternally(app)).filter(url => url.startsWith('repository:'))).toEqual([]);
   });
 
   test('a remote project label is not a repository link', async ({ page, app, home }) => {
