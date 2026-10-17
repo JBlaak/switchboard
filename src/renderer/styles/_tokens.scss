@@ -84,6 +84,11 @@
   --sb-green-muted:   #6f8f82;  /* launch-config button */
   --sb-search-text:   #d9d7d2;  /* terminal find bar */
 
+  /* The flat backgrounds an image card can be put on (#112). Fixed in both
+     themes: the point is to see an image on white or on near-black. */
+  --sb-stage-light: #ffffff;
+  --sb-stage-dark:  #141517;
+
   /* Neutral greys outside the text ramp. */
   --sb-text-max:         #ffffff;  /* brightest highlight: toggles, shimmer peak */
   --sb-text-hover:       #b5b3ae;  /* icon buttons on hover */
