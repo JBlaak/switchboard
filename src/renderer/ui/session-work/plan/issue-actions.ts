@@ -20,6 +20,7 @@ import type { IdRecord } from '../../../state/records';
 import { jumpToSession, startIssueSession } from './actions';
 import type { IssueActions, IssueSession } from './types';
 import { startLevelWith } from './start-level';
+import { reloadOwners } from './load';
 
 const NO_OWNERS: IdRecord<string> = {};
 const NO_BUSY: IdRecord<boolean> = {};
@@ -47,13 +48,18 @@ async function start(projectPath: string, issue: IssueKey, plan: Plan): Promise<
   dispatch({ type: 'planStartAnswered', issue, result });
 }
 
-/** Start level (A1): every asked issue, one after another, then the report. */
+/**
+ * Start level (A1): every asked issue, one after another, each in the
+ * background so the plan view stays on screen; then the report, and the
+ * owners asked again so each started node shows its session.
+ */
 async function startLevel(projectPath: string, plan: Plan): Promise<void> {
   const asking = getState().plan.levelStart;
   if (asking?.phase !== 'confirm' || !sameIssue(asking.plan, plan)) return;
   dispatch({ type: 'planLevelStartConfirmed' });
-  const report = await startLevelWith(issue => startIssueSession({ projectPath, issue, plan }), asking.issues);
+  const report = await startLevelWith(issue => startIssueSession({ projectPath, issue, plan, show: false }), asking.issues);
   dispatch({ type: 'planLevelStartAnswered', ...report });
+  await reloadOwners();
 }
 
 /** The actions for a plan view whose sessions start in `projectPath`; null starts none. */

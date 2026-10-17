@@ -37,6 +37,12 @@ export async function loadPlanView(view: Pick<PlanViewState, 'owner' | 'source'>
   if (answer) await loadOwners(view.owner, answer);
 }
 
+/** Ask again which sessions own the open view's issues, e.g. straight after Start level made some. */
+export async function reloadOwners(): Promise<void> {
+  const view = getState().plan.view;
+  if (view?.answer) await loadOwners(view.owner, view.answer);
+}
+
 /** Which sessions own the plans' issues (S1), across every repository the plans are in. */
 async function loadOwners(owner: string, answer: SessionPlansAnswer): Promise<void> {
   const repositories = [...new Set(answer.plans.flatMap(plan => [plan.repository, ...plan.issues.map(i => i.repository)]))];

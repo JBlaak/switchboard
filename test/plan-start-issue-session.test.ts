@@ -15,13 +15,18 @@ const PREPARED: IssueWorktreeResult = {
 
 function steps(prepared: IssueWorktreeResult, defaults: SessionOptions = {}) {
   const launches: { projectPath: string; options: SessionOptions }[] = [];
+  const shown: boolean[] = [];
   const asked: string[] = [];
   const fake: StartIssueSessionSteps = {
     prepare: async () => prepared,
     defaultOptions: async (projectPath) => { asked.push(projectPath); return defaults; },
-    launch: async (projectPath, options) => { launches.push({ projectPath, options }); return { ok: true, sessionId: 'new-session' }; },
+    launch: async (projectPath, options, how) => {
+      launches.push({ projectPath, options });
+      shown.push(how.show);
+      return { ok: true, sessionId: 'new-session' };
+    },
   };
-  return { fake, launches, asked };
+  return { fake, launches, asked, shown };
 }
 
 test('a prepared worktree gets a session with the project\'s options and the prompt as its first prompt', async () => {
@@ -73,4 +78,17 @@ test('a session that fails to start answers why', async () => {
 
   /* Then */
   assert.deepEqual(result, { ok: false, reason: 'Directory does not exist' });
+});
+
+test('a start puts its session on screen unless asked not to', async () => {
+  /* Given */
+  const { fake, shown } = steps(PREPARED);
+
+  /* When */
+  await startIssueSessionWith(fake, REQUEST);
+  const hidden = await startIssueSessionWith(fake, { ...REQUEST, show: false });
+
+  /* Then */
+  assert.deepEqual(shown, [true, false]);
+  assert.deepEqual(hidden, { ok: true, sessionId: 'new-session' });
 });
