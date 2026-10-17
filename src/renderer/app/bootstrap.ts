@@ -32,6 +32,7 @@ import { installToolbar } from '../ui/toolbar/actions';
 import { installSessionList } from '../ui/session-list/install-session-list';
 import { installSessionWork } from '../ui/session-work/install-session-work';
 import { installPlan } from '../ui/session-work/plan/install-plan';
+import { installPlanPage } from '../ui/plan-page/install-plan-page';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -51,6 +52,7 @@ export function bootstrap(): void {
   installQuestions();
   installSessionWork();
   installPlan();
+  installPlanPage();
   followColorSchemeInTerminals();
   installTerminalProbe();
   // The surfaces that have moved to React portal out of it.

@@ -25,6 +25,8 @@ export interface ProjectPickerRowProps {
   selected: boolean;
   /** How many of its sessions have a live PTY. */
   running: number;
+  /** Opens its plans (F1); absent for a project that cannot have any, which shows no → cue. */
+  onOpenPlans?(): void;
   onHover(): void;
   onActivate(): void;
   /** Close the picker, for an action that leads somewhere else. */
@@ -34,7 +36,7 @@ export interface ProjectPickerRowProps {
 }
 
 export function ProjectPickerRow({
-  ref, candidate, highlight, selected, running, onHover, onActivate, onClose, onChanged,
+  ref, candidate, highlight, selected, running, onOpenPlans, onHover, onActivate, onClose, onChanged,
 }: ProjectPickerRowProps): JSX.Element {
   const { project, label, positions } = candidate;
   const total = project.sessions.length;
@@ -56,6 +58,20 @@ export function ProjectPickerRow({
         {sessionCountLabel(total, running)}
       </span>
       <RowActions project={project} onClose={onClose} onChanged={onChanged} />
+      {onOpenPlans && (
+        <button
+          type="button"
+          className="project-picker-plans-cue"
+          aria-label="Show plans"
+          title="Plans (→ or Tab)"
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation();
+            onOpenPlans();
+          }}
+        >
+          →
+        </button>
+      )}
     </div>
   );
 }

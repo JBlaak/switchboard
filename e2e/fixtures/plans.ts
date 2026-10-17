@@ -3,10 +3,10 @@
  * `HostStubs.plans`): the login-fix session works on two plans, a small one
  * of acme/api's built here, and James #22 as GitHub really answered it.
  */
-import { S } from './standard';
+import { P, S } from './standard';
 import { toPlan } from '../../src/infrastructure/github/gh-plans';
 import james22 from '../../test/fixtures/gh-plan-james-22.json';
-import type { Plan, PlanIssue, PlanPullRequest } from '../../src/domain/plan/model';
+import type { Plan, PlanIssue, PlanPullRequest, PlanSummary } from '../../src/domain/plan/model';
 import type { PlansStub } from '../support/main-process';
 
 const REPO = 'acme/api';
@@ -49,9 +49,27 @@ export const LOGIN_PLAN: Plan = {
 
 export const JAMES_PLAN: Plan = toPlan((james22 as { data: unknown }).data, 'JBlaak/James')!;
 
+function planSummary(number: number, title: string, fields: Partial<PlanSummary> = {}): PlanSummary {
+  return {
+    repository: REPO, number, title, state: 'open', updatedAt: '2026-10-10T10:00:00Z',
+    open: 2, total: 4, current: 1, levels: 2,
+    ...fields,
+  };
+}
+
+/** acme/api's plans in the New Session picker (#128): open and closed together. */
+export const ACME_PLANS: PlanSummary[] = [
+  planSummary(1200, 'Rate limiting at the edge', { updatedAt: '2026-10-12T09:00:00Z' }),
+  planSummary(1300, 'Login rework', { updatedAt: '2026-10-17T10:00:00Z', open: 3, total: 5, current: 2, levels: 3 }),
+  planSummary(900, 'Move to Postgres 16', { state: 'closed', open: 0, total: 6, current: null, levels: 2 }),
+];
+
 export function plansStub(): PlansStub {
   return {
     sessionPlans: { [S.loginFix]: { plans: [LOGIN_PLAN, JAMES_PLAN], others: [] } },
     issueSessions: { [REPO]: { [REPO + '#1302']: S.loginFix } },
+    plans: { [REPO + '#1300']: LOGIN_PLAN },
+    // web-dashboard is not on GitHub: the picker's → finds no plans there.
+    projectPlans: { [P.acmeApi]: ACME_PLANS, [P.webDashboard]: null },
   };
 }
