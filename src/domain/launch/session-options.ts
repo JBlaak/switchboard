@@ -23,6 +23,12 @@ export interface SessionOptions {
   /** Comma-separated extra directories for `--add-dir`. */
   addDirs?: string;
   appendSystemPrompt?: string;
+  /**
+   * The first prompt a new session starts on, handed to the CLI as its
+   * positional prompt. Ignored on resume. Never a stored setting: the launch
+   * that asks for it is the only one it applies to.
+   */
+  initialPrompt?: string;
   [key: string]: unknown;
 }
 

@@ -31,3 +31,4 @@ function build(host: string, repoPath: string): string | null {
   if (!clean || clean.split('/').some(part => !part)) return null;
   return `https://${host}/${clean}`;
 }
+

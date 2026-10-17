@@ -67,6 +67,13 @@ export function buildClaudeArgs(target: SessionTarget, options?: SessionOptions,
     args.push('--append-system-prompt', String(options.appendSystemPrompt));
   }
 
+  // Last, behind `--`: `--add-dir` takes any number of values and would
+  // otherwise swallow the prompt as one more directory, and a prompt that
+  // starts with `-` must not read as a flag.
+  if (target.isNew && options.initialPrompt) {
+    args.push('--', String(options.initialPrompt));
+  }
+
   return args;
 }
 
