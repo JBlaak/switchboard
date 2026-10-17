@@ -95,6 +95,9 @@ const api: SwitchboardApi = {
   resizeTerminal: (id, cols, rows) => ipcRenderer.send(SEND.terminalResize, id, cols, rows),
   closeTerminal: (id) => ipcRenderer.send(SEND.closeTerminal, id),
   closeSessionWork: (sessionId) => ipcRenderer.send(SEND.sessionWorkClose, sessionId),
+  startWindowDrag: () => ipcRenderer.send(SEND.windowDragStart),
+  moveWindowDrag: (dx, dy) => ipcRenderer.send(SEND.windowDragMove, dx, dy),
+  endWindowDrag: () => ipcRenderer.send(SEND.windowDragEnd),
 
   // ── Events from main ──
   onTerminalData: (cb) => subscribe(EVENT.terminalData, (_e, sessionId, data) => cb(sessionId, data)),

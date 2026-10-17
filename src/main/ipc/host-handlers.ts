@@ -1,7 +1,7 @@
 /**
  * The host capabilities the UI reaches for.
  */
-import { INVOKE } from '../../ipc/channels';
+import { INVOKE, SEND } from '../../ipc/channels';
 import { repoWebUrl } from '../../domain/project/repo-url';
 import type { Container } from '../composition-root';
 import type { IpcRegistrar } from './registrar';
@@ -21,4 +21,9 @@ export function registerHostHandlers(ipc: IpcRegistrar, app: Container): void {
     app.system.writeClipboard(text);
   });
   ipc.handle(INVOKE.getAppVersion, () => app.system.appVersion());
+
+  // ── Window ──
+  ipc.on(SEND.windowDragStart, () => app.windowDrag.start());
+  ipc.on(SEND.windowDragMove, (dx: number, dy: number) => app.windowDrag.move(dx, dy));
+  ipc.on(SEND.windowDragEnd, () => app.windowDrag.end());
 }

@@ -10,11 +10,12 @@
  * see `session-list-slice` for why the order is not recomputed on every
  * render.
  */
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { TIER_LABELS } from '../../../domain/session/tiers';
 import { sidebarContent } from '../../lib/dom';
 import { useStore } from '../use-store';
 import { clearScreenFromList, toggleOlder } from './actions';
+import { installDragSpace } from './drag-space';
 import { restoreTerminalFocus } from './focus';
 import { SessionItem } from './SessionItem';
 import { SlugGroup } from './SlugGroup';
@@ -43,6 +44,11 @@ export function SessionList(): JSX.Element | null {
     return () => sidebarContent.removeEventListener('click', onClick);
   }, []);
 
+  // The blank space below the list also drags the window. It only renders once
+  // there is a layout, so that is when it is watched.
+  const dragSpace = useRef<HTMLDivElement>(null);
+  useEffect(() => (dragSpace.current ? installDragSpace(dragSpace.current) : undefined), [layout !== null]);
+
   if (!layout) return null;
   const { visible, older, filtering } = layout;
 
@@ -65,8 +71,8 @@ export function SessionList(): JSX.Element | null {
           </>
         )}
       </div>
-      {/* Fills whatever height the list leaves free, so the window can be dragged by it. */}
-      <div id="sidebar-drag-space" data-testid="sidebar-drag-space" />
+      {/* Fills whatever height the list leaves free: a click there puts the session away, a drag moves the window. */}
+      <div id="sidebar-drag-space" data-testid="sidebar-drag-space" ref={dragSpace} />
     </>
   );
 }

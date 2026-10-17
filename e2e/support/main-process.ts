@@ -391,3 +391,8 @@ export async function reconnectRequests(app: ElectronApplication): Promise<strin
     return [...(state.reconnects ?? [])];
   });
 }
+
+/** Where the main window sits on screen, [x, y]. */
+export async function windowPosition(app: ElectronApplication): Promise<number[]> {
+  return await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getPosition());
+}

@@ -138,6 +138,11 @@ export interface SwitchboardApi {
   closeTerminal(id: string): void;
   /** Close the Session work page: its watchers and polling stop. */
   closeSessionWork(sessionId: string): void;
+  /** Move the window by hand from the sidebar's blank space (see `ElectronWindowDrag`). */
+  startWindowDrag(): void;
+  /** How far the pointer has come since the drag started, in screen points. */
+  moveWindowDrag(dx: number, dy: number): void;
+  endWindowDrag(): void;
 
   // ── Events from main ──
   // Each answers its unsubscribe, so a listener can be removed again (StrictMode

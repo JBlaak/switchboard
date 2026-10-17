@@ -10,11 +10,12 @@
    2. The traffic lights float over the app, top-left, over the sidebar. */
 
 /* Every view puts its own header in the top strip, so all of them are drag handles —
-   otherwise the window becomes immovable depending on which view is open. */
+   otherwise the window becomes immovable depending on which view is open. The blank
+   space below the sessions drags the window too, but by hand (see drag-space.ts):
+   a drag region there would swallow the click that puts the session away. */
 #sidebar-header,
 #terminal-header,
-#settings-viewer-header,
-#sidebar-drag-space {
+#settings-viewer-header {
   -webkit-app-region: drag;
 }
 

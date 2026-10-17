@@ -40,6 +40,7 @@ import {
   ElectronAppearanceGateway, ElectronDialogService, ElectronSystemGateway,
 } from '../infrastructure/electron/desktop';
 import { ElectronRendererGateway } from '../infrastructure/electron/renderer-gateway';
+import { ElectronWindowDrag } from '../infrastructure/electron/window-drag';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
@@ -104,6 +105,7 @@ export interface Container {
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
+  readonly windowDrag: ElectronWindowDrag;
   readonly system: ElectronSystemGateway;
   readonly appearance: ElectronAppearanceGateway;
   readonly sleep: PmsetSleepControl;
@@ -216,6 +218,7 @@ export function buildContainer(): Container {
 
   // ── Host ──
   const dialogs = new ElectronDialogService(getWindow);
+  const windowDrag = new ElectronWindowDrag(getWindow);
   const system = new ElectronSystemGateway(log);
   const appearance = new ElectronAppearanceGateway();
   const sleep = new PmsetSleepControl(log);
@@ -299,7 +302,7 @@ export function buildContainer(): Container {
     questions, questionHook,
     sessionIndex, projects, usage, schedules, weather, updates, sessionWork, sessionActions, prWatch,
     review,
-    renderer, dialogs, system, appearance, sleep, git, projectsWatcher,
+    renderer, dialogs, windowDrag, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     close: () => {
