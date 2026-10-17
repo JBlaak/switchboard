@@ -85,6 +85,18 @@ export class PrWatchService {
   readonly #published = new Map<string, string>();
   /** Check logs already read, by check run URL: a finished run's log does not change. */
   readonly #logs = new Map<string, string | null>();
+  /** Each session's PRs (by item key) with an action queued or with Claude, as last published. */
+  readonly #working = new Map<string, Set<string>>();
+  /**
+   * PRs whose action finished after `gh` last answered, by URL, with the poll
+   * count at the time: what `gh` said is from before Claude's push, so the dot
+   * stays amber until a poll started after that answers.
+   */
+  readonly #settling = new Map<string, number>();
+  /** Polls started so far. */
+  #polls = 0;
+  /** A poll asked for while one was running: which repositories (null: all), to run after it. */
+  #next: Set<string> | null | undefined = undefined;
 
   constructor(private readonly deps: PrWatchServiceDeps) {
     // An action changing phase changes a dot (amber while Claude works on it).
@@ -113,10 +125,28 @@ export class PrWatchService {
    * poll asked for while one is running (a focus during the minute's) is that one.
    */
   poll(): Promise<void> {
-    if (this.#polling) return this.#polling;
-    this.#polling = this.#poll()
+    return this.#run(null);
+  }
+
+  /**
+   * Poll these repositories (null: all). While a poll is running, a targeted
+   * one is run after it — the running one may have asked before Claude pushed.
+   */
+  #run(repositories: Set<string> | null): Promise<void> {
+    if (this.#polling) {
+      if (repositories) {
+        if (this.#next !== null) this.#next = new Set([...(this.#next ?? []), ...repositories]);
+      }
+      return this.#polling;
+    }
+    this.#polling = this.#poll(repositories)
       .catch((err) => this.deps.log.error('[pr-watch] polling failed:', (err as Error).message))
-      .finally(() => { this.#polling = null; });
+      .finally(() => {
+        this.#polling = null;
+        const next = this.#next;
+        this.#next = undefined;
+        if (next !== undefined) void this.#run(next);
+      });
     return this.#polling;
   }
 
@@ -128,7 +158,8 @@ export class PrWatchService {
     return log;
   }
 
-  async #poll(): Promise<void> {
+  async #poll(repositories: Set<string> | null): Promise<void> {
+    const ticket = ++this.#polls;
     const sessions = this.deps.sessions();
     this.#forgetStopped(sessions);
     this.#sessions = sessions;
@@ -137,6 +168,7 @@ export class PrWatchService {
     const owners = new Map<string, { session: WatchedSession; pr: WatchedPr }>();
     for (const session of sessions) {
       for (const pr of watchedPrs(session)) {
+        if (repositories && !repositories.has(pr.repository)) continue;
         if (!this.#finished.has(pr.link.url) && !owners.has(pr.link.url)) owners.set(pr.link.url, { session, pr });
       }
     }
@@ -162,6 +194,8 @@ export class PrWatchService {
         const owner = [...owners.values()].find(({ pr }) => pr.repository === repository && pr.link.number === status.number);
         if (!owner) continue;
         this.#latest.set(owner.pr.link.url, { ...status, url: owner.pr.link.url, repository: status.repository || repository });
+        // Asked after the action finished: this answer knows what Claude pushed.
+        if ((this.#settling.get(owner.pr.link.url) ?? Infinity) < ticket) this.#settling.delete(owner.pr.link.url);
       }
     }
 
@@ -282,26 +316,50 @@ export class PrWatchService {
   }
 
   #publishAll(): void {
-    for (const session of this.#sessions) this.#publish(session);
+    const settled = new Set<string>();
+    for (const session of this.#sessions) {
+      for (const repository of this.#publish(session)) settled.add(repository);
+    }
+    // Claude finished with a PR: ask about it now rather than within the minute.
+    if (settled.size > 0 && this.#interval) void this.#run(settled);
   }
 
-  /** Push the session's dots when they differ from what was pushed last. */
-  #publish(session: WatchedSession): void {
+  /**
+   * Push the session's dots when they differ from what was pushed last, and
+   * answer the repositories of its PRs whose action just finished.
+   */
+  #publish(session: WatchedSession): Set<string> {
     const activities = this.deps.actions.forSession(session.sessionId).byItem;
+    const working = new Set<string>();
+    for (const [key, activity] of activities) {
+      if (isWorking(activity)) working.add(key);
+    }
+    const before = this.#working.get(session.sessionId);
+    this.#working.set(session.sessionId, working);
+
+    const settled = new Set<string>();
     const prs: PullRequestDot[] = [];
     let waiting = false;
     for (const pr of watchedPrs(session)) {
+      if (before?.has(pr.key) && !working.has(pr.key)) {
+        this.#settling.set(pr.link.url, this.#polls);
+        settled.add(pr.repository);
+      }
       const status = this.#latest.get(pr.link.url);
       if (!status) continue;
       const activity = activities.get(pr.key) ?? null;
-      prs.push({ number: pr.link.number, dot: statusDot(status, activity) });
+      let dot = statusDot(status, activity);
+      // What `gh` last said is from before Claude finished: not red yet.
+      if (dot === 'red' && this.#settling.has(pr.link.url) && !needsYou(status, activity)) dot = 'amber';
+      prs.push({ number: pr.link.number, dot });
       if (needsYou(status, activity)) waiting = true;
     }
     const key = JSON.stringify({ prs, waiting });
     const last = this.#published.get(session.sessionId);
-    if (last === key || (last === undefined && prs.length === 0)) return;
+    if (last === key || (last === undefined && prs.length === 0)) return settled;
     this.#published.set(session.sessionId, key);
     this.deps.renderer.prStatusChanged({ sessionId: session.sessionId, prs, needsYou: waiting });
+    return settled;
   }
 
   #now(): string {

@@ -31,8 +31,11 @@ class FakeGitHub {
   calls: Array<[string, number[]]> = [];
   logs: Array<[string, string, number]> = [];
   async available() { return this.availability; }
+  /** While set, every answer waits for it: an answer still on its way. */
+  gate: Promise<void> | null = null;
   async pullRequests(repo: string, numbers: readonly number[]) {
     this.calls.push([repo, [...numbers]]);
+    if (this.gate) await this.gate;
     return numbers.flatMap((n) => (this.prs.has(n) ? [{ ...this.prs.get(n)! }] : []));
   }
   async checkLogTail(repo: string, checkRunUrl: string, lines: number) {
@@ -329,7 +332,7 @@ test('dots are pushed only when they change: amber while Claude fixes it, gone w
   await watch.poll();
   assert.equal(dots().length, 1, 'failing, but Claude is on it: still amber');
   finishTurn();
-  assert.deepEqual(dots().at(-1)?.prs, [{ number: 7, dot: 'red' }], 'Claude is done and the check is still red');
+  assert.equal(dots().length, 1, 'Claude is done, but gh has not said what it pushed: still amber');
 
   prompter.exit();
   await watch.poll();
@@ -360,4 +363,74 @@ test('gh missing or signed out: nothing is asked, nothing is fixed', async () =>
   await watch.poll();
   assert.deepEqual(github.calls, []);
   assert.equal(prompter.sent.length, 0);
+});
+
+/** Let every promise that can settle now, settle. */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('an action finishing polls its PR\'s repository at once, and keeps the dot amber until gh answers', async () => {
+  const github = new FakeGitHub();
+  const prompter = new FakePrompter();
+  const session: WatchedSession = {
+    ...SESSION,
+    pullRequests: [...SESSION.pullRequests, { number: 3, url: 'https://github.com/o/lib/pull/3', repository: 'o/lib' }],
+  };
+  const { watch, dots, finishTurn } = setup({ github, prompter, sessions: [session] });
+  github.prs.set(7, status('aaa', 'failing'));
+  github.prs.set(3, status('lib', 'passing', { number: 3, url: 'https://github.com/o/lib/pull/3', repository: 'o/lib' }));
+  watch.start();
+  await watch.poll();
+  assert.equal(prompter.sent.length, 1, 'attempt 1 is with Claude');
+  assert.deepEqual(dots().at(-1)?.prs, [{ number: 7, dot: 'amber' }, { number: 3, dot: 'green' }]);
+  const asked = github.calls.length;
+
+  // Claude pushed and finished; GitHub is slow to answer.
+  github.prs.set(7, status('bbb', 'pending'));
+  let release!: () => void;
+  github.gate = new Promise((resolve) => { release = resolve; });
+  finishTurn();
+  await settle();
+  assert.deepEqual(github.calls.slice(asked), [[REPO, [7]]], 'only the PR\'s repository, without waiting for the minute');
+  assert.ok(dots().every((pushed) => pushed.prs.every((pr) => pr.dot !== 'red')), 'never red in between');
+  assert.deepEqual(dots().at(-1)?.prs, [{ number: 7, dot: 'amber' }, { number: 3, dot: 'green' }]);
+
+  github.prs.set(7, status('bbb', 'passing'));
+  github.gate = null;
+  release();
+  await watch.poll();
+  assert.deepEqual(dots().at(-1)?.prs[0], { number: 7, dot: 'green' });
+});
+
+test('an answer asked for before the action finished does not end the amber', async () => {
+  const github = new FakeGitHub();
+  const { watch, dots, finishTurn } = setup({ github });
+  github.prs.set(7, status('aaa', 'failing'));
+  watch.start();
+  await watch.poll();
+
+  // The minute's poll is on its way when Claude finishes without fixing it.
+  let release!: () => void;
+  github.gate = new Promise((resolve) => { release = resolve; });
+  const minute = watch.poll();
+  await settle();
+  finishTurn();
+  github.gate = null;
+  release();
+  await minute;
+  assert.equal(dots().at(-1)?.prs[0].dot, 'amber', 'that answer left before Claude finished');
+
+  // The poll the finish asked for runs after it, and hands over attempt 2.
+  await settle();
+  await watch.poll();
+  assert.ok(github.calls.length >= 3);
+  assert.equal(dots().at(-1)?.prs[0].dot, 'amber', 'attempt 2 is with Claude');
+});
+
+test('without the watch on (the e2e suite), a finished action asks gh nothing', async () => {
+  const { watch, github, finishTurn } = setup();
+  github.prs.set(7, status('aaa', 'failing'));
+  await watch.poll();
+  finishTurn();
+  await settle();
+  assert.equal(github.calls.length, 1);
 });
