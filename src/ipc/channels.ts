@@ -61,6 +61,11 @@ export const INVOKE = {
   openRepository: 'open-repository',
   writeClipboard: 'clipboard-write-text',
   getAppVersion: 'get-app-version',
+
+  // Session work
+  sessionWorkOpen: 'session-work:open',
+  sessionWorkCanOpen: 'session-work:can-open',
+  sessionWorkDiff: 'session-work:diff',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -68,6 +73,7 @@ export const SEND = {
   terminalInput: 'terminal-input',
   terminalResize: 'terminal-resize',
   closeTerminal: 'close-terminal',
+  sessionWorkClose: 'session-work:close',
 } as const;
 
 /** Main tells the renderer, unprompted. */
@@ -86,4 +92,5 @@ export const EVENT = {
   statusUpdate: 'status-update',
   fullscreenChanged: 'fullscreen-changed',
   updateAvailable: 'update-available',
+  sessionWorkSnapshot: 'session-work:snapshot',
 } as const;

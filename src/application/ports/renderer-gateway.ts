@@ -11,6 +11,7 @@ import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../../domain/update/release';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
+import type { SessionWorkSnapshot } from '../../domain/session-work/model';
 
 export interface RendererGateway {
   /** True while there is a window listening; every send is a no-op without one. */
@@ -45,4 +46,8 @@ export interface RendererGateway {
   fullscreenChanged(isFullscreen: boolean): void
   /** A newer release was found. */
   updateAvailable(update: UpdateNotice): void
+
+  // ── Session work ──
+  /** The open Session work page's snapshot changed. */
+  sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void
 }

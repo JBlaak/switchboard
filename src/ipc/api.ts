@@ -15,6 +15,7 @@ import type { EffectiveSettings } from '../domain/settings/settings';
 import type { Appearance } from '../domain/settings/appearance';
 import type { Answers, PendingQuestions, QuestionsSettled } from '../domain/questions/question';
 import type { ShellProfile } from '../domain/shell/shell-profile';
+import type { FileDiff, SessionWorkSnapshot } from '../domain/session-work/model';
 import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
@@ -102,10 +103,24 @@ export interface SwitchboardApi {
   writeClipboard(text: string): Promise<void>;
   getAppVersion(): Promise<string>;
 
+  // ── Session work ──
+  /**
+   * Open the Session work page for a session, closing whichever was open.
+   * Answers the first snapshot (later ones arrive on `onSessionWorkSnapshot`),
+   * or null when the page cannot open for this session.
+   */
+  openSessionWork(sessionId: string): Promise<SessionWorkSnapshot | null>;
+  /** False for remote sessions and for sessions outside a git repository (D14). */
+  canOpenSessionWork(sessionId: string): Promise<boolean>;
+  /** The parsed diff of one item (`SessionWorkItem.id`) of the open page; empty when there is none. */
+  getSessionWorkDiff(request: { sessionId: string; itemId: string }): Promise<FileDiff[]>;
+
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;
   resizeTerminal(id: string, cols: number, rows: number): void;
   closeTerminal(id: string): void;
+  /** Close the Session work page: its watchers and polling stop. */
+  closeSessionWork(sessionId: string): void;
 
   // ── Events from main ──
   // Each answers its unsubscribe, so a listener can be removed again (StrictMode
@@ -124,6 +139,7 @@ export interface SwitchboardApi {
   onStatusUpdate(cb: (text: string, type: string) => void): Unsubscribe;
   onFullscreenChanged(cb: (isFullscreen: boolean) => void): Unsubscribe;
   onUpdateAvailable(cb: (update: UpdateNotice) => void): Unsubscribe;
+  onSessionWorkSnapshot(cb: (snapshot: SessionWorkSnapshot) => void): Unsubscribe;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

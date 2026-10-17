@@ -149,12 +149,35 @@ export interface FileChange {
   status: FileStatus;
 }
 
-/** One entry in the page's list. */
-export type WorkItem =
+/**
+ * One entry in the page's list.
+ *
+ * `error` is why part of the item could not be read — `gh` failed for its PR,
+ * its diff could not be had. It belongs to the item, never to the page (one
+ * bad PR does not blank the rest).
+ */
+export type WorkItem = { error?: string } & (
   | { kind: 'pr'; pr: PullRequestStatus; location: WorkLocation | null; diff: DiffSource; activity: Activity | null }
   | { kind: 'branch'; location: WorkLocation; ahead: number; diff: DiffSource; activity: Activity | null }
   | { kind: 'dirty'; location: WorkLocation; files: FileChange[] }
-  | { kind: 'issue'; issue: IssueRef };
+  /** An `IssueStatus` once `gh` confirmed it is an issue; a bare ref without `gh`. */
+  | { kind: 'issue'; issue: IssueRef | IssueStatus }
+);
+
+/** Whether `gh` can be asked anything: installed, and signed in to github.com (D9). */
+export type GitHubAvailability = 'ok' | 'missing' | 'unauthenticated';
+
+/** A work item in a snapshot, with the id the page asks for its diff by (`workItemKey`). */
+export type SessionWorkItem = WorkItem & { id: string };
+
+/** Everything the page shows for one session, pushed whenever it changes. */
+export interface SessionWorkSnapshot {
+  sessionId: string;
+  items: SessionWorkItem[];
+  gh: GitHubAvailability;
+  /** ISO-8601: when this snapshot was assembled. */
+  updatedAt: string;
+}
 
 /** Which side of a diff a line, or a comment on it, belongs to — GitHub's names. */
 export type DiffSide = 'LEFT' | 'RIGHT';

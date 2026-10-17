@@ -8,10 +8,10 @@
  * method throws. Each answers null when it could not ask, and `available()`
  * says why.
  */
-import type { IssueStatus, PullRequestStatus } from '../../domain/session-work/model';
+import type { GitHubAvailability, IssueStatus, PullRequestStatus } from '../../domain/session-work/model';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
-export type GitHubAvailability = 'ok' | 'missing' | 'unauthenticated';
+export type { GitHubAvailability };
 
 export interface GitHubCli {
   available(): Promise<GitHubAvailability>;

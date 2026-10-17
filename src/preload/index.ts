@@ -80,10 +80,16 @@ const api: SwitchboardApi = {
   writeClipboard: (text) => ipcRenderer.invoke(INVOKE.writeClipboard, text),
   getAppVersion: () => ipcRenderer.invoke(INVOKE.getAppVersion),
 
+  // ── Session work ──
+  openSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkOpen, sessionId),
+  canOpenSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkCanOpen, sessionId),
+  getSessionWorkDiff: (request) => ipcRenderer.invoke(INVOKE.sessionWorkDiff, request),
+
   // ── Fire-and-forget ──
   sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),
   resizeTerminal: (id, cols, rows) => ipcRenderer.send(SEND.terminalResize, id, cols, rows),
   closeTerminal: (id) => ipcRenderer.send(SEND.closeTerminal, id),
+  closeSessionWork: (sessionId) => ipcRenderer.send(SEND.sessionWorkClose, sessionId),
 
   // ── Events from main ──
   onTerminalData: (cb) => subscribe(EVENT.terminalData, (_e, sessionId, data) => cb(sessionId, data)),
@@ -100,6 +106,7 @@ const api: SwitchboardApi = {
   onStatusUpdate: (cb) => subscribe(EVENT.statusUpdate, (_e, text, type) => cb(text, type)),
   onFullscreenChanged: (cb) => subscribe(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen)),
   onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
+  onSessionWorkSnapshot: (cb) => subscribe(EVENT.sessionWorkSnapshot, (_e, snapshot) => cb(snapshot)),
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),
