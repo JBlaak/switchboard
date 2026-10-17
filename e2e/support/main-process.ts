@@ -96,6 +96,8 @@ export interface SessionWorkStub {
    * Either way the request is recorded (see `sessionWorkActions`).
    */
   refuseActions?: string;
+  /** What the Checks panel's log request answers, by check run URL; a URL not here has no log. */
+  checkLogs?: Record<string, string>;
 }
 
 export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number } | 'fail';
@@ -183,6 +185,10 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
         state.sessionWorkCancels.push(String(activityId));
         return { ok: true };
       });
+      // The real one would ask `gh` for the log.
+      ipcMain.removeHandler(channels.sessionWorkCheckLog);
+      ipcMain.handle(channels.sessionWorkCheckLog, (_event, request: { checkRunUrl: string }) =>
+        work.checkLogs?.[String(request?.checkRunUrl)] ?? null);
     }
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {

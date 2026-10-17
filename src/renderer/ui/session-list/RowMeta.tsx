@@ -19,6 +19,9 @@ import { openRepository } from './actions';
 import type { JSX, MouseEvent } from 'react';
 import type { SessionListRow } from '../../state/session-list-layout';
 import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
+import type { SessionPullRequest } from '../../../domain/session/session';
+import { statusDotLabel, type StatusDot } from '../../../domain/session-work/status';
+import { chipDot, hiddenChipsDot } from '../../state/ci-status-slice';
 
 export interface RowMetaProps {
   row: SessionListRow;
@@ -137,20 +140,36 @@ function AgentsBadge({ agents }: { agents: readonly WorkingAgent[] }): JSX.Eleme
  * on the Session work page, which the line opens.
  */
 function PullRequests({ row }: { row: SessionListRow }): JSX.Element | null {
+  const status = useStore(state => state.ciStatus.bySession[row.session.sessionId]);
   const { shown, hidden } = pullRequestChips(row.session.pullRequests);
   if (!shown.length) return null;
+  // Each chip says how its PR is doing once the CI watch has (W4); the `+N`
+  // takes the worst of the ones it hides, and its tooltip names each one's.
+  const label = (pr: SessionPullRequest): string => {
+    const dot = chipDot(status, pr.number);
+    return pullRequestLabel(pr) + (dot ? ' · ' + statusDotLabel(dot) : '');
+  };
+  const hiddenDot = hiddenChipsDot(status, hidden.map(pr => pr.number));
   return (
     <span className="session-prs">
       {shown.map(pr => (
-        <span key={pr.url + '#' + pr.number} className="session-pr" data-url={pr.url} title={pullRequestLabel(pr)}>
+        <span key={pr.url + '#' + pr.number} className="session-pr" data-url={pr.url} title={label(pr)}>
+          <ChipDot dot={chipDot(status, pr.number)} />
           {'#' + pr.number}
         </span>
       ))}
       {hidden.length > 0 && (
-        <span className="session-pr-more" title={hidden.map(pullRequestLabel).join('\n')}>
+        <span className="session-pr-more" title={hidden.map(label).join('\n')}>
+          <ChipDot dot={hiddenDot} />
           {'+' + hidden.length}
         </span>
       )}
     </span>
   );
+}
+
+/** A chip's status dot; nothing until the CI watch has said something about it. */
+function ChipDot({ dot }: { dot: StatusDot | null }): JSX.Element | null {
+  if (!dot) return null;
+  return <span className={'session-pr-dot is-' + dot} data-dot={dot} aria-hidden="true" />;
 }

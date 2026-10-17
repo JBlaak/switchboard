@@ -9,6 +9,7 @@ import type {
 } from '../../../domain/session-work/model';
 import { availableActions, NOT_RUNNING_REASON, openThreadCount } from '../../../domain/session-work/actions';
 import { shipSteps, type ShipStepState } from '../../../domain/session-work/ship';
+import { MAX_AUTO_FIX_ATTEMPTS } from '../../../domain/session-work/auto-fix';
 
 /** The pastel fill and matching ink a pill is drawn in. */
 export type PillTone = 'green' | 'red' | 'amber' | 'grey' | 'lavender';
@@ -230,6 +231,8 @@ export interface ActivityCard {
   readonly viewInTerminal: boolean;
   /** Ship it's four steps; empty for every other action. */
   readonly steps: ReadonlyArray<{ readonly label: string; readonly state: ShipStepState }>;
+  /** Lines listed under the head: each automatic attempt, when auto-fix gave up. */
+  readonly lines?: readonly string[];
 }
 
 /** What an action does, in a few words, for the card's title. */
@@ -259,11 +262,15 @@ export function activityCard(item: SessionWorkItem, now: number): ActivityCard |
   const steps = activity.action === 'ship' && item.kind === 'pr'
     ? shipSteps(item.pr, activity).map(step => ({ label: step.label, state: step.state }))
     : [];
+  const automatic = activity.action === 'fix-ci' && activity.origin === 'auto';
+  const attemptOf = automatic && activity.attempt !== undefined
+    ? ` · attempt ${activity.attempt} of ${MAX_AUTO_FIX_ATTEMPTS}`
+    : '';
   switch (activity.phase) {
     case 'queued':
       return {
         tone: 'grey',
-        title: 'Queued: ' + phrase,
+        title: 'Queued: ' + phrase + attemptOf,
         detail: 'Sends when the session finishes its current turn',
         cancelId: activity.id,
         viewInTerminal: false,
@@ -281,6 +288,16 @@ export function activityCard(item: SessionWorkItem, now: number): ActivityCard |
           steps,
         };
       }
+      if (attemptOf) {
+        return {
+          tone: 'amber',
+          title: 'Claude is fixing CI' + attemptOf,
+          detail: (activity.checkName ? activity.checkName + ' failed · ' : '') + 'sent to the session' + since,
+          cancelId: null,
+          viewInTerminal: true,
+          steps: [],
+        };
+      }
       return {
         tone: 'amber',
         title: 'Claude is on it: ' + phrase,
@@ -291,6 +308,18 @@ export function activityCard(item: SessionWorkItem, now: number): ActivityCard |
       };
     }
     case 'gave-up':
+      if (automatic && activity.attempts) {
+        return {
+          tone: 'red',
+          title: `Still failing after ${plural(activity.attempts.length, 'automatic fix', 'automatic fixes')}`,
+          detail: (activity.checkName ? activity.checkName + ' still fails. ' : '') + 'It needs you now: have a look, or try Fix CI yourself.',
+          cancelId: null,
+          viewInTerminal: true,
+          steps: [],
+          lines: activity.attempts.map((attempt) => `Attempt ${attempt.attempt} · failed on ${shortSha(attempt.failedOn)} · `
+            + (attempt.pushed ? 'pushed ' + shortSha(attempt.pushed) : 'nothing pushed')),
+        };
+      }
       return {
         tone: 'red',
         title: 'Claude gave up: ' + phrase,
@@ -302,6 +331,11 @@ export function activityCard(item: SessionWorkItem, now: number): ActivityCard |
     case 'done':
       return null;
   }
+}
+
+/** A commit as GitHub abbreviates it. */
+function shortSha(sha: string): string {
+  return sha.slice(0, 7);
 }
 
 /** "started 2m ago", from when the prompt was typed in. */

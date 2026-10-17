@@ -10,6 +10,7 @@
  */
 import { activityReducer, initialActivityState, rekeyActivity } from './activity-slice';
 import { answersReducer, followPending, initialAnswersState } from './answers-slice';
+import { ciStatusReducer, initialCiStatusState, rekeyCiStatus } from './ci-status-slice';
 import { dialogReducer, initialDialogState } from './dialog-slice';
 import { initialKeysState, keysReducer, rekeyKeys } from './keys-slice';
 import { initialQuestionsState, questionsReducer, rekeyQuestions } from './questions-slice';
@@ -25,6 +26,7 @@ import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, rekeyView, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
 import type { AnswersState } from './answers-slice';
+import type { CiStatusState } from './ci-status-slice';
 import type { DialogState } from './dialog-slice';
 import type { RendererEvent } from './events';
 import type { KeysState } from './keys-slice';
@@ -56,6 +58,7 @@ export interface RendererState {
   readonly sessionList: SessionListState;
   readonly terminal: TerminalState;
   readonly sessionWork: SessionWorkState;
+  readonly ciStatus: CiStatusState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -75,6 +78,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     sessionList: initialSessionListState,
     terminal: initialTerminalState,
     sessionWork: initialSessionWorkState,
+    ciStatus: initialCiStatusState,
   };
 }
 
@@ -99,10 +103,11 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const sessionList = sessionListReducer(state.sessionList, event);
   const terminal = terminalReducer(state.terminal, event);
   const sessionWork = sessionWorkReducer(state.sessionWork, event);
+  const ciStatus = ciStatusReducer(state.ciStatus, event);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList, sessionWork,
+    terminal, sessionList, sessionWork, ciStatus,
   });
 }
 
@@ -139,6 +144,7 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     // Keyed by element ids, which a re-key leaves alone (see `session-list-slice`).
     sessionList: state.sessionList,
     sessionWork: rekeySessionWork(state.sessionWork, oldId, newId),
+    ciStatus: rekeyCiStatus(state.ciStatus, oldId, newId),
   });
 }
 

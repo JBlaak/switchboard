@@ -17,4 +17,6 @@ export function registerSessionWorkHandlers(ipc: IpcRegistrar, app: Container): 
     app.sessionActions.request(request.sessionId, request.itemId, request.action));
   ipc.handle(INVOKE.sessionWorkCancel, (activityId: string) => app.sessionActions.cancel(activityId));
   ipc.on(SEND.sessionWorkClose, (sessionId: string) => app.sessionWork.close(sessionId));
+  ipc.handle(INVOKE.sessionWorkCheckLog, (request: { repository: string; checkRunUrl: string }) =>
+    app.prWatch.checkLog(String(request?.repository ?? ''), String(request?.checkRunUrl ?? '')));
 }

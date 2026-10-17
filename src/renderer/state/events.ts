@@ -16,6 +16,7 @@ import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { UpdateNotice } from '../../domain/update/release';
 import type { SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
 import type { DiffMode } from './session-work-slice';
+import type { PullRequestStatusChange } from '../../domain/session-work/status';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ToolbarEvent } from './toolbar-slice';
@@ -44,7 +45,8 @@ export type PushEvent =
   | { type: 'statusUpdate'; text: string; kind: string }
   | { type: 'fullscreenChanged'; isFullscreen: boolean }
   | { type: 'updateAvailable'; update: UpdateNotice }
-  | { type: 'sessionWorkSnapshot'; snapshot: SessionWorkSnapshot };
+  | { type: 'sessionWorkSnapshot'; snapshot: SessionWorkSnapshot }
+  | { type: 'prStatusChanged'; change: PullRequestStatusChange };
 
 // ── From the renderer itself: user actions and timers ──
 
@@ -172,7 +174,11 @@ export type LocalEvent =
   /** An action button was pressed: main is asked to queue it (A2). */
   | { type: 'sessionWorkActionRequested'; sessionId: string; itemId: string; action: WorkAction }
   /** Main answered: queued (`error` null; the snapshot shows it), or refused with why. */
-  | { type: 'sessionWorkActionAnswered'; sessionId: string; itemId: string; error: string | null };
+  | { type: 'sessionWorkActionAnswered'; sessionId: string; itemId: string; error: string | null }
+  /** The Checks panel asked main for a failing check's log, by the check run's URL. */
+  | { type: 'checkLogRequested'; url: string }
+  /** Main answered: the log's end, or null when there is none to show. */
+  | { type: 'checkLogLoaded'; url: string; text: string | null };
 
 export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent;
 

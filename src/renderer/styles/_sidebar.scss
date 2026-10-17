@@ -670,6 +670,20 @@
   background: rgba(var(--sb-overlay-rgb), 0.06);
 }
 
+/* How the PR is doing (W4): a glance, not a read. */
+.session-pr-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 3px;
+  border-radius: 50%;
+  vertical-align: 1px;
+
+  &.is-green { background: var(--sb-green); }
+  &.is-amber { background: var(--sb-amber); }
+  &.is-red { background: var(--sb-red); }
+}
+
 /* ---- Session action buttons ---- */
 .session-actions {
   flex-shrink: 0;

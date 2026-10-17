@@ -52,6 +52,8 @@ export interface MainWindowDeps {
   /** Persist the geometry; called debounced, and once more on close. */
   saveBounds(bounds: WindowBounds): void;
   onFullscreenChanged(isFullscreen: boolean): void;
+  /** The window got focus: the user is back. */
+  onFocus?(): void;
   /** Every session's process has to go when the last window does. */
   onClosed(): void;
   /** Directory holding the built bundles — preload, renderer, icon. */
@@ -154,4 +156,5 @@ function trackBounds(window: BrowserWindow, deps: MainWindowDeps): void {
 function reportFullscreen(window: BrowserWindow, deps: MainWindowDeps): void {
   window.on('enter-full-screen', () => deps.onFullscreenChanged(true));
   window.on('leave-full-screen', () => deps.onFullscreenChanged(false));
+  window.on('focus', () => deps.onFocus?.());
 }

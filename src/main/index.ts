@@ -94,6 +94,9 @@ async function start(container: Container): Promise<void> {
   // Only an installed build has a version worth comparing; a dev run would
   // always be "behind" whatever is released.
   if (app.isPackaged) container.updates.start();
+  // The CI watch asks the user's own `gh` about real PRs; the end-to-end suite
+  // must never reach GitHub, and drives the dots and cards by pushing instead.
+  if (process.env.SWITCHBOARD_E2E !== '1') container.prWatch.start();
 
   // A migration that recreated the search index leaves it empty even though the
   // session cache is intact, so the index alone has to be refilled.
@@ -114,6 +117,8 @@ function openWindow(container: Container): void {
       settings.windowBounds = bounds;
     }),
     onFullscreenChanged: (isFullscreen) => container.renderer.fullscreenChanged(isFullscreen),
+    // Back at the window: what CI did meanwhile shows now, not within the minute (W1).
+    onFocus: () => container.prWatch.focused(),
     onClosed: () => {
       // On macOS the app stays in the dock after its last window closes. Kill
       // the sessions anyway: orphaned `claude` processes would otherwise

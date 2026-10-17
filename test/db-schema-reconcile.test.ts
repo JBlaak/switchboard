@@ -170,6 +170,7 @@ function sessionActionColumns(dataDir: string): string[] {
 
 const SESSION_ACTION_COLUMNS = [
   'id', 'session', 'repository', 'item_key', 'action', 'origin', 'phase', 'prompt', 'queued_at', 'sent_at', 'done_at',
+  'details',
 ];
 
 test('a fresh database gets the session_actions table', () => {
@@ -212,6 +213,51 @@ test('an existing, foreign higher-version database gains session_actions, and ke
       console.log(String(db.prepare('SELECT COUNT(*) AS n FROM session_actions').get().n));
     `, dir);
     assert.equal(count.stdout.trim().split('\n').pop(), '1', 'a queued action survives the next open');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a session_actions table from before card details gains the column, and keeps its rows', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-db-actions-details-'));
+  try {
+    const seed = runInElectronNode(`
+      const Database = require('better-sqlite3');
+      const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'));
+      db.exec(\`CREATE TABLE session_actions (id TEXT PRIMARY KEY, session TEXT NOT NULL, repository TEXT NOT NULL DEFAULT '',
+        item_key TEXT NOT NULL, action TEXT NOT NULL, origin TEXT NOT NULL, phase TEXT NOT NULL, prompt TEXT NOT NULL,
+        queued_at TEXT NOT NULL, sent_at TEXT, done_at TEXT)\`);
+      db.prepare(\`INSERT INTO session_actions (id, session, item_key, action, origin, phase, prompt, queued_at)
+        VALUES ('a1', 's1', 'pr:x', 'ship', 'manual', 'queued', 'Ship PR #1', '2026-01-01T00:00:00Z')\`).run();
+    `, dir);
+    assert.equal(seed.status, 0, seed.stderr);
+    assert.equal(openDatabase(dir).status, 0);
+    assert.deepEqual(sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The auto-fix limit survives a restart only if its history does (W3).
+test('the auto-fix history table is created, and its rows survive the next open', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-db-auto-fix-'));
+  try {
+    assert.equal(openDatabase(dir).status, 0);
+    const write = runInElectronNode(`
+      const Database = require('better-sqlite3');
+      const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'));
+      db.prepare(\`INSERT INTO auto_fix_attempts (kind, repository, number, check_name, head_sha, origin, activity_id, at)
+        VALUES ('attempt', 'o/app', 7, 'test', 'aaa', 'auto', 'a1', '2026-01-01T00:00:00Z')\`).run();
+    `, dir);
+    assert.equal(write.status, 0, write.stderr);
+    assert.equal(openDatabase(dir).status, 0);
+    const read = runInElectronNode(`
+      const Database = require('better-sqlite3');
+      const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'), { readonly: true });
+      console.log(JSON.stringify(db.prepare('SELECT kind, head_sha FROM auto_fix_attempts').all()));
+    `, dir);
+    assert.equal(read.status, 0, read.stderr);
+    assert.deepEqual(JSON.parse(read.stdout.trim().split('\n').pop() ?? '[]'), [{ kind: 'attempt', head_sha: 'aaa' }]);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

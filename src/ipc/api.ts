@@ -16,6 +16,7 @@ import type { Appearance } from '../domain/settings/appearance';
 import type { Answers, PendingQuestions, QuestionsSettled } from '../domain/questions/question';
 import type { ShellProfile } from '../domain/shell/shell-profile';
 import type { SessionWorkDiff, SessionWorkSnapshot } from '../domain/session-work/model';
+import type { PullRequestStatusChange } from '../domain/session-work/status';
 import type { ActionRequest, ActionResult, CancelResult } from '../domain/session-work/actions';
 import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
@@ -123,6 +124,8 @@ export interface SwitchboardApi {
   sessionWorkAction(request: ActionRequest): Promise<ActionResult>;
   /** Take a queued action back out of its queue; one already typed in cannot be. */
   cancelSessionWorkAction(activityId: string): Promise<CancelResult>;
+  /** The end of a failing check run's log, for the Checks panel; null when `gh` has none. */
+  getCheckLog(request: { repository: string; checkRunUrl: string }): Promise<string | null>;
 
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;
@@ -149,6 +152,8 @@ export interface SwitchboardApi {
   onFullscreenChanged(cb: (isFullscreen: boolean) => void): Unsubscribe;
   onUpdateAvailable(cb: (update: UpdateNotice) => void): Unsubscribe;
   onSessionWorkSnapshot(cb: (snapshot: SessionWorkSnapshot) => void): Unsubscribe;
+  /** A running session's PR chips changed colour (W4). */
+  onPrStatusChanged(cb: (change: PullRequestStatusChange) => void): Unsubscribe;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

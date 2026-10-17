@@ -110,7 +110,7 @@ export const FIRST_PR_ID = 'pr:' + pr(1320);
  * says about that PR.
  */
 export function loginFixWorkWith(
-  activity: Activity, { queued = 0, facts = {} }: { queued?: number; facts?: Partial<PullRequestStatus> } = {},
+  activity: Activity | null, { queued = 0, facts = {} }: { queued?: number; facts?: Partial<PullRequestStatus> } = {},
 ): SessionWorkSnapshot {
   const items = ITEMS.map((item): SessionWorkItem =>
     item.id === FIRST_PR_ID && item.kind === 'pr' ? { ...item, pr: { ...item.pr, ...facts }, activity } : item);

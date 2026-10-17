@@ -86,6 +86,7 @@ const api: SwitchboardApi = {
   getSessionWorkDiff: (request) => ipcRenderer.invoke(INVOKE.sessionWorkDiff, request),
   sessionWorkAction: (request) => ipcRenderer.invoke(INVOKE.sessionWorkAction, request),
   cancelSessionWorkAction: (activityId) => ipcRenderer.invoke(INVOKE.sessionWorkCancel, activityId),
+  getCheckLog: (request) => ipcRenderer.invoke(INVOKE.sessionWorkCheckLog, request),
 
   // ── Fire-and-forget ──
   sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),
@@ -109,6 +110,7 @@ const api: SwitchboardApi = {
   onFullscreenChanged: (cb) => subscribe(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen)),
   onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
   onSessionWorkSnapshot: (cb) => subscribe(EVENT.sessionWorkSnapshot, (_e, snapshot) => cb(snapshot)),
+  onPrStatusChanged: (cb) => subscribe(EVENT.prStatusChanged, (_e, change) => cb(change)),
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),
