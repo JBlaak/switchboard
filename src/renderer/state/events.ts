@@ -15,7 +15,9 @@ import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { UpdateNotice } from '../../domain/update/release';
 import type { SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
-import type { DiffMode, ReviewKind } from './session-work-slice';
+import type { DiffMode, ImageDefaults, ReviewKind } from './session-work-slice';
+import type { ImageMode } from '../ui/session-work/image-compare/modes/types';
+import type { Background, View } from '../ui/session-work/image-compare/types';
 import type { DiffSide } from '../../domain/session-work/model';
 import type { PullRequestStatusChange } from '../../domain/session-work/status';
 import type { UsageLimit } from '../../domain/usage/usage';
@@ -184,6 +186,23 @@ export type LocalEvent =
   | { type: 'sessionWorkReviewRequested'; sessionId: string; itemId: string; kind: ReviewKind }
   /** Main answered: done (`error` null; the snapshot shows it), or refused with why. */
   | { type: 'sessionWorkReviewAnswered'; sessionId: string; itemId: string; kind: ReviewKind; error: string | null }
+  /** The image cards' defaults as saved, read back when the renderer starts (C1, C3). */
+  | { type: 'sessionWorkImageDefaultsRestored'; defaults: ImageDefaults }
+  /**
+   * An image card's stage measured its frame; `fit` is the view that fits it.
+   * The first one opens the card's state; later ones refit a card not zoomed or panned since.
+   */
+  | { type: 'sessionWorkImageFramed'; itemId: string; path: string; fit: View }
+  /** A zoom, pan or double-click on an image card. */
+  | { type: 'sessionWorkImageViewed'; itemId: string; path: string; view: View }
+  /** `0` on an image card: back to fit (C6). */
+  | { type: 'sessionWorkImageFitted'; itemId: string; path: string }
+  /** A mode picked on an image card's toolbar, or with `1`–`5` (C1, C6). */
+  | { type: 'sessionWorkImageModeSet'; itemId: string; path: string; mode: ImageMode }
+  /** A click on Blink's image, or `b` (M4). */
+  | { type: 'sessionWorkImageBlinked'; itemId: string; path: string }
+  /** The background picked on any image card; every card follows it (C3). */
+  | { type: 'sessionWorkImageBackgroundSet'; background: Background }
   /** The Checks panel asked main for a failing check's log, by the check run's URL. */
   | { type: 'checkLogRequested'; url: string }
   /** Main answered: the log's end, or null when there is none to show. */

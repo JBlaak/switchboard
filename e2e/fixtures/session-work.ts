@@ -12,9 +12,11 @@
 import { FIXTURE_NOW } from '../support/fixture-home';
 import { S } from './standard';
 import { parseUnifiedDiff } from '../../src/domain/session-work/diff';
+import { imageStubKey } from '../support/main-process';
+import { solidPng } from './png';
 import type { SessionWorkStub } from '../support/main-process';
 import type {
-  Activity, PendingComment, PullRequestStatus, ReviewThread, SessionWorkItem, SessionWorkSnapshot,
+  Activity, FileDiff, PendingComment, PullRequestStatus, ReviewThread, SessionWorkItem, SessionWorkSnapshot,
 } from '../../src/domain/session-work/model';
 
 const REPO = 'acme/api';
@@ -221,6 +223,46 @@ const REDIRECT_CHAIN_DIFF = [
   '+export const chain: string[] = [];',
   '',
 ].join('\n');
+
+/** The changed image's two sides: wider than half a card, so side-by-side opens below 1:1. */
+export const LOGO_BEFORE = solidPng(1200, 600, [220, 60, 60]);
+export const LOGO_AFTER = solidPng(1600, 600, [60, 90, 220]);
+/** The added image: no before side. */
+export const ICON_AFTER = solidPng(64, 64, [60, 180, 90]);
+
+/**
+ * The first PR's diff as a local diff of images (#115): a changed PNG and an
+ * added one, marked as main marks them, with their bytes behind
+ * `sessionWorkImage`.
+ */
+const IMAGES_DIFF = [
+  'diff --git a/assets/logo.png b/assets/logo.png',
+  'index 5555555..6666666 100644',
+  'Binary files a/assets/logo.png and b/assets/logo.png differ',
+  'diff --git a/assets/icon.png b/assets/icon.png',
+  'new file mode 100644',
+  'index 0000000..8888888',
+  'Binary files /dev/null and b/assets/icon.png differ',
+  '',
+].join('\n');
+
+export function imageWorkStub(): SessionWorkStub {
+  const files = parseUnifiedDiff(IMAGES_DIFF).map((file): FileDiff => ({
+    ...file,
+    image: file.path === 'assets/logo.png'
+      ? { format: 'png', before: { bytes: LOGO_BEFORE.length }, after: { bytes: LOGO_AFTER.length } }
+      : { format: 'png', before: null, after: { bytes: ICON_AFTER.length } },
+  }));
+  return {
+    ...sessionWorkStub(),
+    diffs: { [FIRST_PR_ID]: { files, source: 'local' } },
+    images: {
+      [imageStubKey(FIRST_PR_ID, 'assets/logo.png', 'before')]: LOGO_BEFORE.toString('base64'),
+      [imageStubKey(FIRST_PR_ID, 'assets/logo.png', 'after')]: LOGO_AFTER.toString('base64'),
+      [imageStubKey(FIRST_PR_ID, 'assets/icon.png', 'after')]: ICON_AFTER.toString('base64'),
+    },
+  };
+}
 
 export function sessionWorkStub(): SessionWorkStub {
   return {

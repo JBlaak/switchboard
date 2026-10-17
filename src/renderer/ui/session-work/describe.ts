@@ -10,6 +10,11 @@ import type {
 import { availableActions, NOT_RUNNING_REASON, openThreadCount } from '../../../domain/session-work/actions';
 import { shipSteps, type ShipStepState } from '../../../domain/session-work/ship';
 import { MAX_AUTO_FIX_ATTEMPTS } from '../../../domain/session-work/auto-fix';
+import { IMAGE_AUTO_LOAD_BYTES } from '../../../domain/session-work/image';
+import type { FileImage } from '../../../domain/session-work/model';
+import { formatBytes } from './image-compare/image-meta';
+import type { ImageMode } from './image-compare/modes/types';
+import type { Background } from './image-compare/types';
 
 /** The pastel fill and matching ink a pill is drawn in. */
 export type PillTone = 'green' | 'red' | 'amber' | 'grey' | 'lavender';
@@ -394,6 +399,42 @@ export function collapsedText(file: FileDiff): string | null {
     default: return null;
   }
 }
+
+// ── Image cards (#112) ──
+
+/** The image card toolbar's names for its modes; `1`–`5` follow `IMAGE_MODES`. */
+export const IMAGE_MODE_LABEL: Readonly<Record<ImageMode, string>> = {
+  'side-by-side': 'Side-by-side',
+  swipe: 'Swipe',
+  onion: 'Onion',
+  blink: 'Blink',
+  'pixel-diff': 'Pixel diff',
+};
+
+export const IMAGE_BACKGROUND_LABEL: Readonly<Record<Background, string>> = {
+  checkerboard: 'Checkerboard',
+  light: 'Light',
+  dark: 'Dark',
+};
+
+/**
+ * Why an image card starts collapsed behind Show diff: a side over
+ * `IMAGE_AUTO_LOAD_BYTES` (L1), named by the larger side. Null when it loads
+ * by itself.
+ */
+export function imageCollapsedText(image: FileImage): string | null {
+  const bytes = Math.max(image.before?.bytes ?? 0, image.after?.bytes ?? 0);
+  return bytes > IMAGE_AUTO_LOAD_BYTES ? `Large image · ${formatBytes(bytes)}` : null;
+}
+
+/** Under an image that would not decode (L4). */
+export const IMAGE_UNREADABLE = 'Couldn\'t read this image';
+
+/** Beside a binary image from GitHub's copy of a PR, whose bytes are not here (I4). */
+export const IMAGE_GITHUB_NOTE = 'Check out the branch to compare images';
+
+/** Beside the toolbar when an overlay mode compares an animated image (I3). */
+export const IMAGE_FIRST_FRAME = 'Comparing the first frame';
 
 /**
  * "N worktrees · M branches" the session worked in: every one its transcripts

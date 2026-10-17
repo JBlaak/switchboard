@@ -1083,3 +1083,64 @@
     linear-gradient(to right, rgba(var(--sb-overlay-rgb), 0.22) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(var(--sb-overlay-rgb), 0.22) 1px, transparent 1px);
 }
+
+/* ---- Image compare: the card (#115) ----
+   An image's card body: the toolbar (mode, background) with the metadata
+   line, then the stage(s) of the mode picked. Until the stage has measured
+   its frame and the view is fitted, its content is hidden, so a card never
+   flashes its image at 1:1. */
+.sw-image-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--sb-line);
+
+  .sw-seg { margin-left: 0; }
+}
+
+.sw-image-meta {
+  margin-left: auto;
+  font: 12px var(--sb-font-mono);
+  color: var(--sb-text-muted);
+}
+
+.sw-image-note {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sb-sun);
+  color: var(--sb-yellow);
+  font: 700 11px var(--sb-font-head);
+}
+
+.sw-image.is-fitting {
+  .sw-stage-content, .sw-stage-backdrop, .sw-stage-grid { visibility: hidden; }
+}
+
+.sw-image-loading {
+  padding: 12px;
+
+  .sw-skeleton { height: 160px; }
+}
+
+.sw-side-by-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1px;
+  background: var(--sb-line);
+}
+
+.sw-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  background: var(--sb-bg-panel);
+}
+
+.sw-side-label {
+  padding: 4px 12px;
+  font: 700 11px var(--sb-font-head);
+  color: var(--sb-text-muted);
+}

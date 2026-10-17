@@ -11,13 +11,14 @@
  * rather than globally (D15): Esc goes back to the terminal, `j` and `k` move
  * between items, `n` and `p` between the files of its diff, `u` switches
  * the diff between unified and split, and `c` comments on the focused line of
- * a PR's diff. None of them is taken from a text field, and an open comment
- * composer takes Esc first.
+ * a PR's diff. On an image card `n`/`p` landed on, `1`–`5` pick its mode, `b`
+ * flips Blink and `0` fits the view again (C6). None of them is taken from a
+ * text field, and an open comment composer takes Esc first.
  */
 import { useLayoutEffect, useRef } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
 import { useStore } from '../use-store';
-import { closeSessionWork, stepFile, stepWorkItem, toggleDiffMode } from './actions';
+import { closeSessionWork, imageKey, stepFile, stepWorkItem, toggleDiffMode } from './actions';
 import { WorkHeader } from './WorkHeader';
 import { WorkList } from './WorkList';
 import { WorkDetail } from './WorkDetail';
@@ -26,6 +27,9 @@ import { openComposerAt } from './ReviewNotes';
 
 /** The single-letter keys the page answers (D15). */
 const PAGE_KEYS = new Set(['j', 'k', 'n', 'p', 'u', 'c']);
+
+/** The keys of the focused image card; heard only when there is one. */
+const IMAGE_KEYS = new Set(['1', '2', '3', '4', '5', 'b', '0']);
 
 /**
  * `c`: comment on the line that has the focus (a click puts it there), when
@@ -60,6 +64,12 @@ export function SessionWorkPage(): JSX.Element | null {
       return;
     }
     if (e.shiftKey || (e.target as HTMLElement).matches('input, textarea, select, [contenteditable="true"]')) return;
+    if (IMAGE_KEYS.has(e.key)) {
+      if (!imageKey(e.key)) return;
+      e.preventDefault();
+      (e.nativeEvent as Event & { _handled?: boolean })._handled = true;
+      return;
+    }
     if (!PAGE_KEYS.has(e.key)) return;
     e.preventDefault();
     // The page's keys are its own: a bare N here is "next file", not the

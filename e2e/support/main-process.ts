@@ -101,6 +101,16 @@ export interface SessionWorkStub {
   refuseReview?: string
   /** What the Checks panel's log request answers, by check run URL; a URL not here has no log. */
   checkLogs?: Record<string, string>;
+  /**
+   * What `sessionWorkImage` answers, by `imageStubKey`, as base64: the bytes
+   * the real service would read for that side. A side not here has none.
+   */
+  images?: Record<string, string>;
+}
+
+/** Where `SessionWorkStub.images` files one side of an image in an item's diff. */
+export function imageStubKey(itemId: string, path: string, side: 'before' | 'after'): string {
+  return [itemId, path, side].join('\n');
 }
 
 export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number } | 'fail';
@@ -208,6 +218,12 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       ipcMain.removeHandler(channels.sessionWorkCheckLog);
       ipcMain.handle(channels.sessionWorkCheckLog, (_event, request: { checkRunUrl: string }) =>
         work.checkLogs?.[String(request?.checkRunUrl)] ?? null);
+      // The real one reads the bytes at the commits the diff was made from.
+      ipcMain.removeHandler(channels.sessionWorkImage);
+      ipcMain.handle(channels.sessionWorkImage, (_event, request: { itemId: string; path: string; side: string }) => {
+        const bytes = work.images?.[[request?.itemId, request?.path, request?.side].join('\n')];
+        return bytes ? new Uint8Array(Buffer.from(bytes, 'base64')) : null;
+      });
     }
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {

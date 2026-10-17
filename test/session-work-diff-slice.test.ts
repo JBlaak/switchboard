@@ -79,7 +79,7 @@ test('diff: a diff asked for is loading and no longer wanted', () => {
   /* Then */
   assert.strictEqual(diffToLoad(page(next)), null, 'on its way');
   assert.deepStrictEqual(selectedDiff(page(next)), {
-    key: diffKey(pr), phase: 'loading', files: [], source: null, error: null, expanded: [], focusedPath: null,
+    key: diffKey(pr), phase: 'loading', files: [], source: null, error: null, expanded: [], focusedPath: null, images: {},
   });
 });
 

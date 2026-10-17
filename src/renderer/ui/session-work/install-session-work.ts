@@ -1,7 +1,8 @@
 /**
  * The Session work page's work outside React: swapping it in for the terminal
  * and back, telling main when it closes, the clock its "updated Xs ago" runs
- * on, and fetching the selected item's diff.
+ * on, fetching the selected item's diff, and keeping the image cards'
+ * defaults (`image-defaults`).
  *
  * It follows the store rather than the actions, because the page closes for
  * reasons of its own slice (another session on screen, the screen cleared,
@@ -20,6 +21,7 @@ import { showEmptyScreen } from '../../features/patch/patch';
 import { fitAndScroll } from '../../features/terminal/terminal-manager';
 import { diffToLoad } from '../../state/session-work-slice';
 import { loadDiff } from './actions';
+import { installImageDefaults } from './image-defaults';
 import type { RendererState } from '../../state/root';
 
 /** How often "updated Xs ago" moves on while the page is open. */
@@ -28,6 +30,7 @@ const TICK_MS = 1000;
 /** Start following the page. Answers a teardown. */
 export function installSessionWork(): () => void {
   let tick: ReturnType<typeof setInterval> | null = null;
+  const stopImageDefaults = installImageDefaults();
 
   const unsubscribe = store.subscribe((state, previous) => {
     // The selected item's diff, asked for once it is selected and again when
@@ -56,6 +59,7 @@ export function installSessionWork(): () => void {
   return () => {
     if (tick) clearInterval(tick);
     unsubscribe();
+    stopImageDefaults();
   };
 }
 
