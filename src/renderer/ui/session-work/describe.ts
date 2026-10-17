@@ -233,14 +233,14 @@ export interface ActivityCard {
 }
 
 /** What an action does, in a few words, for the card's title. */
-function actionPhrase(item: SessionWorkItem, action: WorkAction): string {
+function actionPhrase(item: SessionWorkItem, action: WorkAction, threadIds?: readonly string[]): string {
   const ref = item.kind === 'pr' ? ' #' + item.pr.number : '';
   switch (action) {
     case 'ship': return 'ship' + ref;
     case 'rebase': return 'rebase' + ref;
     case 'fix-ci': return 'fix CI on' + ref;
     case 'fix-comments': {
-      const n = item.kind === 'pr' ? openThreadCount(item.pr) : 0;
+      const n = threadIds?.length || (item.kind === 'pr' ? openThreadCount(item.pr) : 0);
       return `fix ${plural(n, 'review comment')}`;
     }
     case 'open-pr': return 'open a PR for ' + (item.kind === 'branch' ? item.location.branch : 'the branch');
@@ -255,7 +255,7 @@ function actionPhrase(item: SessionWorkItem, action: WorkAction): string {
 export function activityCard(item: SessionWorkItem, now: number): ActivityCard | null {
   const activity: Activity | null = item.kind === 'pr' || item.kind === 'branch' ? item.activity : null;
   if (!activity) return null;
-  const phrase = actionPhrase(item, activity.action);
+  const phrase = actionPhrase(item, activity.action, activity.threadIds);
   const steps = activity.action === 'ship' && item.kind === 'pr'
     ? shipSteps(item.pr, activity).map(step => ({ label: step.label, state: step.state }))
     : [];

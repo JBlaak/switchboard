@@ -17,7 +17,8 @@
 import { movedEntry, withEntry, withoutEntry } from './records';
 import type { IdRecord } from './records';
 import type { RendererEvent } from './events';
-import type { FileDiff, SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
+import type { DiffSide, FileDiff, SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
+import type { ReviewMode } from '../../domain/session-work/review';
 
 export interface SessionWorkPage {
   readonly sessionId: string;
@@ -36,11 +37,31 @@ export interface SessionWorkPage {
    * the page is open, so going back to an item does not ask main again.
    */
   readonly diffs: IdRecord<ItemDiff>;
-  /** The action asked of main and not answered yet: its button does not take a second press. */
-  readonly pendingAction: { readonly itemId: string; readonly action: WorkAction } | null;
-  /** Why main refused the last action, shown on its item until the next one or another selection. */
-  readonly actionError: { readonly itemId: string; readonly message: string } | null;
+  /**
+   * The action asked of main and not answered yet: its button does not take a
+   * second press. `threadIds` when it was one thread's Have Claude fix.
+   */
+  readonly pendingAction: { readonly itemId: string; readonly action: WorkAction; readonly threadIds?: readonly string[] } | null;
+  /** Why main refused the last action, shown on its item (or its thread) until the next one or another selection. */
+  readonly actionError: { readonly itemId: string; readonly message: string; readonly threadIds?: readonly string[] } | null;
+  /** The line the comment composer is open under; null when it is closed. One at a time. */
+  readonly composer: CommentTarget | null;
+  /** The review write asked of main and not answered yet: Add to review, or a bar button. */
+  readonly reviewPending: { readonly itemId: string; readonly kind: ReviewKind } | null;
+  /** Why main refused the last review write, shown where it was asked until the next one. */
+  readonly reviewError: { readonly itemId: string; readonly kind: ReviewKind; readonly message: string } | null;
 }
+
+/** A line a comment is being written on. */
+export interface CommentTarget {
+  readonly itemId: string;
+  readonly path: string;
+  readonly line: number;
+  readonly side: DiffSide;
+}
+
+/** A write to your review: a comment, or finishing it. */
+export type ReviewKind = 'comment' | ReviewMode;
 
 export type DiffMode = 'unified' | 'split';
 
@@ -81,6 +102,7 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
         page: {
           sessionId: event.sessionId, name: event.name, snapshot: null, selectedItemId: null, doneExpanded: false,
           diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null,
+          composer: null, reviewPending: null, reviewError: null,
         },
       };
     }
@@ -152,20 +174,60 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
       const { page } = state;
       if (!page?.snapshot || page.selectedItemId === event.itemId) return state;
       if (!selectableItems(page.snapshot).some(item => item.id === event.itemId)) return state;
-      return { ...state, page: { ...page, selectedItemId: event.itemId, actionError: null } };
+      return { ...state, page: { ...page, selectedItemId: event.itemId, actionError: null, composer: null, reviewError: null } };
     }
 
     case 'sessionWorkActionRequested': {
       const { page } = state;
       if (!page || page.sessionId !== event.sessionId || page.pendingAction) return state;
-      return { ...state, page: { ...page, pendingAction: { itemId: event.itemId, action: event.action }, actionError: null } };
+      const pendingAction = event.threadIds
+        ? { itemId: event.itemId, action: event.action, threadIds: event.threadIds }
+        : { itemId: event.itemId, action: event.action };
+      return { ...state, page: { ...page, pendingAction, actionError: null } };
     }
 
     case 'sessionWorkActionAnswered': {
       const { page } = state;
       if (!page || page.sessionId !== event.sessionId) return state;
-      const actionError = event.error === null ? null : { itemId: event.itemId, message: event.error };
+      const threadIds = page.pendingAction?.itemId === event.itemId ? page.pendingAction.threadIds : undefined;
+      const actionError = event.error === null
+        ? null
+        : threadIds ? { itemId: event.itemId, message: event.error, threadIds } : { itemId: event.itemId, message: event.error };
       return { ...state, page: { ...page, pendingAction: null, actionError } };
+    }
+
+    case 'sessionWorkComposerOpened': {
+      const { page } = state;
+      if (!page || page.selectedItemId !== event.itemId) return state;
+      const { itemId, path, line, side } = event;
+      const open = page.composer;
+      if (open && open.itemId === itemId && open.path === path && open.line === line && open.side === side) return state;
+      const reviewError = page.reviewError?.kind === 'comment' ? null : page.reviewError ?? null;
+      return { ...state, page: { ...page, composer: { itemId, path, line, side }, reviewError } };
+    }
+
+    case 'sessionWorkComposerClosed': {
+      const { page } = state;
+      if (!page?.composer) return state;
+      const reviewError = page.reviewError?.kind === 'comment' ? null : page.reviewError ?? null;
+      return { ...state, page: { ...page, composer: null, reviewError } };
+    }
+
+    case 'sessionWorkReviewRequested': {
+      const { page } = state;
+      if (!page || page.sessionId !== event.sessionId || page.reviewPending) return state;
+      return { ...state, page: { ...page, reviewPending: { itemId: event.itemId, kind: event.kind }, reviewError: null } };
+    }
+
+    case 'sessionWorkReviewAnswered': {
+      const { page } = state;
+      if (!page || page.sessionId !== event.sessionId) return state;
+      const reviewError = event.error === null ? null : { itemId: event.itemId, kind: event.kind, message: event.error };
+      // A comment that went in closes its composer; one that did not keeps it, and what was written.
+      const composer = event.kind === 'comment' && event.error === null && page.composer?.itemId === event.itemId
+        ? null
+        : page.composer ?? null;
+      return { ...state, page: { ...page, reviewPending: null, reviewError, composer } };
     }
 
     case 'sessionWorkDoneToggled':

@@ -15,7 +15,8 @@ import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { UpdateNotice } from '../../domain/update/release';
 import type { SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
-import type { DiffMode } from './session-work-slice';
+import type { DiffMode, ReviewKind } from './session-work-slice';
+import type { DiffSide } from '../../domain/session-work/model';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ToolbarEvent } from './toolbar-slice';
@@ -170,9 +171,17 @@ export type LocalEvent =
   /** The page's once-a-second clock, for "updated Xs ago". Only runs while it is open. */
   | { type: 'sessionWorkTicked'; at: number }
   /** An action button was pressed: main is asked to queue it (A2). */
-  | { type: 'sessionWorkActionRequested'; sessionId: string; itemId: string; action: WorkAction }
+  | { type: 'sessionWorkActionRequested'; sessionId: string; itemId: string; action: WorkAction; threadIds?: string[] }
   /** Main answered: queued (`error` null; the snapshot shows it), or refused with why. */
-  | { type: 'sessionWorkActionAnswered'; sessionId: string; itemId: string; error: string | null };
+  | { type: 'sessionWorkActionAnswered'; sessionId: string; itemId: string; error: string | null }
+  /** `+` or `c` on a line of a PR's diff: the comment composer opens under it (C1). */
+  | { type: 'sessionWorkComposerOpened'; itemId: string; path: string; line: number; side: DiffSide }
+  /** Cancel, Esc, or the comment went into the review. */
+  | { type: 'sessionWorkComposerClosed' }
+  /** Add to review, or one of the pending review bar's buttons, was pressed: main is asked (C2). */
+  | { type: 'sessionWorkReviewRequested'; sessionId: string; itemId: string; kind: ReviewKind }
+  /** Main answered: done (`error` null; the snapshot shows it), or refused with why. */
+  | { type: 'sessionWorkReviewAnswered'; sessionId: string; itemId: string; kind: ReviewKind; error: string | null };
 
 export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent;
 
