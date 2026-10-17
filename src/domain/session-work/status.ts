@@ -47,6 +47,33 @@ export function statusDot(pr: PullRequestStatus, activity: Activity | null | und
   return 'green';
 }
 
+/** One PR chip's dot, as main pushes it to the sidebar. */
+export interface PullRequestDot {
+  number: number;
+  dot: StatusDot;
+}
+
+/**
+ * How a running session's PRs are doing, for its sidebar row: pushed on
+ * `pr-status:changed` whenever any of it changed. An empty `prs` means
+ * nothing is known (the session stopped, or `gh` never answered).
+ */
+export interface PullRequestStatusChange {
+  sessionId: string;
+  prs: PullRequestDot[];
+  /** Any of them waits on you (auto-fix gave up, or a thread wants your call). */
+  needsYou: boolean;
+}
+
+/** A dot in words, for a chip's tooltip. */
+export function statusDotLabel(dot: StatusDot): string {
+  switch (dot) {
+    case 'green': return 'passing';
+    case 'amber': return 'in progress';
+    case 'red': return 'failing';
+  }
+}
+
 /**
  * The worst of several dots, or null for none — the `+N` chip's colour.
  *

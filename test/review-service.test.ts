@@ -63,8 +63,8 @@ function setup({
   };
   const requests: Array<{ itemId: string; action: string; threadIds?: readonly string[] }> = [];
   const actions: FixRequester = {
-    async request(_sessionId, itemId, action, _origin, threadIds) {
-      requests.push({ itemId, action, threadIds });
+    async request(_sessionId, itemId, action, _origin, options) {
+      requests.push({ itemId, action, threadIds: options?.threadIds });
       return fix;
     },
   };

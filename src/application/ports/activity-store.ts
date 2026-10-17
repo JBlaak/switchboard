@@ -25,7 +25,12 @@ export interface StoredAction {
   queuedAt: string;
   sentAt: string | null;
   doneAt: string | null;
+  /** What the card says beyond the phase: an auto-fix's attempt, or the attempts it gave up after. */
+  details?: ActivityDetails | null;
 }
+
+/** The parts of an `Activity` only some actions have. */
+export type ActivityDetails = Pick<Activity, 'attempt' | 'checkName' | 'attempts'>;
 
 export interface ActivityStore {
   add(action: StoredAction): void;

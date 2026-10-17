@@ -55,6 +55,7 @@ const SAMPLES: { [K in PushEvent['type']]: Extract<PushEvent, { type: K }> } = {
   fullscreenChanged: { type: 'fullscreenChanged', isFullscreen: true },
   updateAvailable: { type: 'updateAvailable', update: { version: '9.9.9', pageUrl: 'u', installable: true } },
   sessionWorkSnapshot: { type: 'sessionWorkSnapshot', snapshot: { sessionId: 's1', repository: '', items: [], footprint: { worktrees: 0, branches: 0 }, queued: 0, gh: 'ok', updatedAt: 'now' } },
+  prStatusChanged: { type: 'prStatusChanged', change: { sessionId: 's1', prs: [{ number: 7, dot: 'red' }], needsYou: true } },
 };
 
 test('every push event reduces without mutating the state it was given', () => {

@@ -192,5 +192,6 @@ export function fakeRenderer(): FakeRenderer {
     fullscreenChanged: record('fullscreenChanged'),
     updateAvailable: record('updateAvailable'),
     sessionWorkSnapshot: record('sessionWorkSnapshot'),
+    prStatusChanged: record('prStatusChanged'),
   };
 }

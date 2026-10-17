@@ -75,7 +75,21 @@ const TABLES = [
     prompt TEXT NOT NULL,
     queued_at TEXT NOT NULL,
     sent_at TEXT,
-    done_at TEXT
+    done_at TEXT,
+    details TEXT
+  )`,
+  // What auto-fix did to each PR's checks: attempts, green runs and give-ups,
+  // so the limit of two attempts per check survives a restart (W3).
+  `CREATE TABLE IF NOT EXISTS auto_fix_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    check_name TEXT NOT NULL,
+    head_sha TEXT NOT NULL DEFAULT '',
+    origin TEXT,
+    activity_id TEXT,
+    at TEXT NOT NULL
   )`,
 ];
 
@@ -84,6 +98,7 @@ const INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_session_cache_slug ON session_cache(slug)',
   'CREATE INDEX IF NOT EXISTS idx_search_map_type_id ON search_map(type, id)',
   'CREATE INDEX IF NOT EXISTS idx_session_actions_phase ON session_actions(phase)',
+  'CREATE INDEX IF NOT EXISTS idx_auto_fix_attempts_pr ON auto_fix_attempts(repository, number)',
 ];
 
 type Migration = (db: Database.Database, result: SchemaResult) => void;
@@ -158,6 +173,12 @@ function reconcileColumns(db: Database.Database): void {
     db.exec('DELETE FROM session_cache');
     db.exec('DELETE FROM cache_meta');
   }
+
+  // An action's card details (an auto-fix attempt, the attempts it gave up
+  // after), as JSON. A queue table from before it has no rows that need any.
+  const actionColumns = new Set(
+    db.prepare<[], { name: string }>('PRAGMA table_info(session_actions)').all().map(c => c.name));
+  if (!actionColumns.has('details')) db.exec('ALTER TABLE session_actions ADD COLUMN details TEXT');
 }
 
 /** Create what is missing, migrate what is old, and reconcile what is odd. */

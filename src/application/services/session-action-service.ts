@@ -25,7 +25,7 @@ import { threadsToFix } from '../../domain/session-work/review';
 import type {
   Activity, GitHubAvailability, SessionWorkItem, WorkAction,
 } from '../../domain/session-work/model';
-import type { ActivityStore, StoredAction } from '../ports/activity-store';
+import type { ActivityDetails, ActivityStore, StoredAction } from '../ports/activity-store';
 import type { Clock } from '../ports/clock';
 import type { Disposable } from '../ports/git-workspace';
 import type { GitHubCli } from '../ports/github-cli';
@@ -36,6 +36,9 @@ import type { SessionPrompter } from '../ports/session-prompter';
 /** How much of a failing check's log the Fix CI prompt carries. */
 export const LOG_TAIL_LINES = 40;
 
+/** How much an automatic Fix CI carries: Claude reads it with nobody there to add more (W2). */
+export const AUTO_FIX_LOG_TAIL_LINES = 80;
+
 export type { ActionResult, CancelResult };
 
 /** What the page knows that a prompt needs, for the session whose page is open. */
@@ -45,6 +48,30 @@ export interface ActionContext {
   mainCheckout: string;
   gh: GitHubAvailability;
 }
+
+/**
+ * An item and its context handed in by whoever asks, instead of looked up on
+ * the open page: the CI watch asks for a Fix CI with no page open.
+ */
+export interface ResolvedRequest {
+  item: SessionWorkItem;
+  context: ActionContext;
+  /** Fix CI: the failing check to hand over, rather than the first one. */
+  checkName?: string;
+  /** Fix CI: which automatic attempt this is, 1-based. */
+  attempt?: number;
+}
+
+/** How an action is asked for, beyond the item and the action. */
+export interface RequestOptions {
+  /** The item and its context, when the caller has them without the open page. */
+  resolved?: ResolvedRequest;
+  /** Fix comments: hand over only these review threads. */
+  threadIds?: readonly string[];
+}
+
+/** What a gave-up card shows: the check, and each attempt with what Claude pushed. */
+export type GaveUpDetails = Required<Pick<ActivityDetails, 'checkName' | 'attempts'>>;
 
 /** The Session work page, as far as the actions need it. */
 export interface WorkPageSource {
@@ -82,6 +109,8 @@ export class SessionActionService {
   /** Idle listeners, one per session id a queue is stored under. */
   readonly #listening = new Map<string, Disposable>();
   #page: WorkPageSource | null = null;
+  /** Others that follow the actions' phases (the CI watch's sidebar dots). */
+  readonly #followers: Array<(sessionId: string) => void> = [];
 
   constructor(private readonly deps: SessionActionServiceDeps) {
     const now = this.#now();
@@ -104,19 +133,30 @@ export class SessionActionService {
     this.#page = page;
   }
 
+  /** Hear every change of an action's phase, as the page does. */
+  follow(fn: (sessionId: string) => void): void {
+    this.#followers.push(fn);
+  }
+
   /**
    * Hand an item of the session's open page to Claude: render its prompt,
    * queue it, and type it in now if the session is idle.
+   *
+   * `options.resolved` hands the item and its context in instead, for a
+   * caller that has them without the page (the CI watch's auto-fix);
+   * `options.threadIds` has a Fix comments hand over only those threads
+   * (Have Claude fix, Submit & have Claude fix).
    */
   async request(
     sessionId: string, itemId: string, action: WorkAction, origin: Activity['origin'] = 'manual',
-    threadIds?: readonly string[],
+    options: RequestOptions = {},
   ): Promise<ActionResult> {
     const { prompter } = this.deps;
     if (!prompter.runningId(sessionId)) return { ok: false, reason: NOT_RUNNING_REASON };
     const page = this.#page;
-    const item = page?.item(sessionId, itemId) ?? null;
-    const context = page?.context(sessionId) ?? null;
+    const { resolved, threadIds } = options;
+    const item = resolved?.item ?? page?.item(sessionId, itemId) ?? null;
+    const context = resolved?.context ?? page?.context(sessionId) ?? null;
     if (!item || !context) return { ok: false, reason: 'This item is no longer on the page' };
     if (!availableActions(item, context.gh).includes(action)) {
       return { ok: false, reason: 'This item has nothing for that action to do' };
@@ -129,7 +169,7 @@ export class SessionActionService {
       : same[0];
     if (busy) return { ok: false, reason: busy.phase === 'queued' ? 'Already queued' : 'Claude is already on it' };
 
-    const request = await this.#promptRequest(item, action, context, threadIds);
+    const request = await this.#promptRequest(item, action, context, options);
     if (!request) return { ok: false, reason: 'This item has nothing for that action to do' };
     // The session may have ended while the CI log was fetched.
     if (!prompter.runningId(sessionId)) return { ok: false, reason: NOT_RUNNING_REASON };
@@ -146,6 +186,7 @@ export class SessionActionService {
       queuedAt: this.#now(),
       sentAt: null,
       doneAt: null,
+      details: request.action === 'fix-ci' ? fixCiDetails(request.checkName, request.automaticAttempt) : null,
     };
     this.deps.store.add(stored);
     this.#actions.push(stored);
@@ -166,6 +207,53 @@ export class SessionActionService {
     this.#unlistenIfIdle(action.sessionId);
     this.#changed(action.sessionId);
     return { ok: true };
+  }
+
+  /** Is this action still waiting for the session, or with Claude? */
+  isInFlight(activityId: string): boolean {
+    const action = this.#actions.find((candidate) => candidate.id === activityId);
+    return action !== undefined && (action.phase === 'queued' || action.phase === 'sent');
+  }
+
+  /**
+   * Auto-fix ran out of attempts on an item's check (W3): show it as given up,
+   * red, until the check goes green or the PR is done. Nothing is typed in.
+   */
+  giveUp(sessionId: string, itemKey: string, repository: string, details: GaveUpDetails): void {
+    const stored: StoredAction = {
+      id: this.deps.ids.newId(),
+      sessionId,
+      repository,
+      itemKey,
+      action: 'fix-ci',
+      origin: 'auto',
+      phase: 'gave-up',
+      prompt: '',
+      queuedAt: this.#now(),
+      sentAt: null,
+      doneAt: null,
+      details,
+    };
+    this.deps.store.add(stored);
+    this.#actions.push(stored);
+    this.#changed(sessionId);
+  }
+
+  /**
+   * The check auto-fix gave up on is green again, or the PR is done: the item
+   * no longer needs you. Without `checkName`, every give-up on the item ends.
+   */
+  settleGaveUp(sessionId: string, itemKey: string, checkName?: string): void {
+    const now = this.#now();
+    let settled = false;
+    for (const action of this.#forSession(sessionId)) {
+      if (action.phase !== 'gave-up' || action.itemKey !== itemKey) continue;
+      if (checkName !== undefined && action.details?.checkName !== checkName) continue;
+      this.#actions.splice(this.#actions.indexOf(action), 1);
+      this.deps.store.update(action.id, { phase: 'done', doneAt: now });
+      settled = true;
+    }
+    if (settled) this.#changed(sessionId);
   }
 
   /** One session's actions for its page, under any id it has gone by. */
@@ -230,15 +318,35 @@ export class SessionActionService {
   }
 
   /**
-   * Hear the session's idles, once per session: a queue stored under an id
-   * the session has since moved on from is heard through that old id, which
-   * the prompter still matches.
+   * The session's process ended. What was typed in will never be finished by
+   * that turn, so it is done now rather than left amber until a restart (which
+   * would do the same). What is still queued waits for the session to run again.
+   */
+  #exited(sessionId: string): void {
+    const now = this.#now();
+    let finished = false;
+    for (const action of this.#forSession(sessionId)) {
+      if (action.phase !== 'sent') continue;
+      this.#actions.splice(this.#actions.indexOf(action), 1);
+      this.deps.store.update(action.id, { phase: 'done', doneAt: now });
+      finished = true;
+    }
+    if (finished) this.#changed(sessionId);
+    this.#unlistenIfIdle(sessionId);
+  }
+
+  /**
+   * Hear the session's idles and its exit, once per session: a queue stored
+   * under an id the session has since moved on from is heard through that old
+   * id, which the prompter still matches.
    */
   #listen(sessionId: string): void {
     for (const id of this.#listening.keys()) {
       if (this.#sameSession(id, sessionId)) return;
     }
-    this.#listening.set(sessionId, this.deps.prompter.onIdle(sessionId, () => this.#idle(sessionId)));
+    const idle = this.deps.prompter.onIdle(sessionId, () => this.#idle(sessionId));
+    const exit = this.deps.prompter.onExit(sessionId, () => this.#exited(sessionId));
+    this.#listening.set(sessionId, { dispose: () => { idle.dispose(); exit.dispose(); } });
   }
 
   /** Stop listening for a session that has nothing left waiting or with Claude. */
@@ -265,6 +373,7 @@ export class SessionActionService {
 
   #changed(sessionId: string): void {
     this.#page?.activitiesChanged(sessionId);
+    for (const fn of this.#followers) fn(sessionId);
   }
 
   #now(): string {
@@ -275,7 +384,7 @@ export class SessionActionService {
 
   /** What the item's prompt needs, from the page's facts; null when the item cannot take the action. */
   async #promptRequest(
-    item: SessionWorkItem, action: WorkAction, context: ActionContext, threadIds?: readonly string[],
+    item: SessionWorkItem, action: WorkAction, context: ActionContext, { resolved, threadIds }: RequestOptions = {},
   ): Promise<PromptRequest | null> {
     if (item.kind === 'branch') {
       if (action !== 'open-pr') return null;
@@ -300,15 +409,19 @@ export class SessionActionService {
       case 'rebase':
         return { action: 'rebase', number: pr.number, headRef: pr.headRef || item.location?.branch || '', base };
       case 'fix-ci': {
-        const check = failingCheck(pr);
+        const named = resolved?.checkName;
+        const check = named
+          ? (pr.checks ?? []).find((candidate) => candidate.name === named && candidate.state === 'failing') ?? null
+          : failingCheck(pr);
         if (!check) return null;
         const repository = pr.repository || context.repository;
-        const log = check.url && repository
-          ? await this.deps.github.checkLogTail(repository, check.url, LOG_TAIL_LINES)
-          : null;
+        const automatic = resolved?.attempt;
+        const lines = automatic === undefined ? LOG_TAIL_LINES : AUTO_FIX_LOG_TAIL_LINES;
+        const log = check.url && repository ? await this.deps.github.checkLogTail(repository, check.url, lines) : null;
         return {
           action: 'fix-ci', number: pr.number, url: pr.url, checkName: check.name, sha: pr.headSha ?? 'the head commit',
           logTail: log ?? '(no log available; read it with gh run view)', worktree,
+          ...(automatic === undefined ? {} : { automaticAttempt: automatic }),
         };
       }
       case 'fix-comments': {
@@ -336,7 +449,15 @@ function toActivity(action: StoredAction): Activity {
   };
   if (action.sentAt) activity.sentAt = action.sentAt;
   if (action.action === 'fix-comments') activity.threadIds = promptThreadIds(action.prompt);
+  const details = action.details;
+  if (details?.attempt !== undefined) activity.attempt = details.attempt;
+  if (details?.checkName !== undefined) activity.checkName = details.checkName;
+  if (details?.attempts !== undefined) activity.attempts = details.attempts;
   return activity;
+}
+
+function fixCiDetails(checkName: string, attempt: number | undefined): ActivityDetails {
+  return attempt === undefined ? { checkName } : { checkName, attempt };
 }
 
 /** The threads each item's waiting or sent Fix comments cover. */

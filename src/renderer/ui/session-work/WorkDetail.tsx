@@ -9,6 +9,7 @@ import { closedIssues, itemBranchLine, itemPills, itemRef, itemTitle } from './d
 import { DiffView } from './DiffView';
 import { Pills } from './Pills';
 import { ActionRow, ActivityCardView } from './WorkActions';
+import { ChecksPanel } from './ChecksPanel';
 import { selectedItem } from '../../state/session-work-slice';
 import type { SessionWorkPage } from '../../state/session-work-slice';
 
@@ -63,6 +64,7 @@ export function WorkDetail({ page }: { page: SessionWorkPage }): JSX.Element {
           <div className="sw-item-error" role="alert">{page.actionError.message}</div>
         )}
         <ActivityCardView item={item} />
+        <ChecksPanel item={item} />
       </div>
       <DiffView page={page} item={item} />
     </section>

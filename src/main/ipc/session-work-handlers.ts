@@ -15,7 +15,7 @@ export function registerSessionWorkHandlers(ipc: IpcRegistrar, app: Container): 
   ipc.handle(INVOKE.sessionWorkDiff, (request: { sessionId: string; itemId: string }) =>
     app.sessionWork.diff(request.sessionId, request.itemId));
   ipc.handle(INVOKE.sessionWorkAction, (request: ActionRequest) =>
-    app.sessionActions.request(request.sessionId, request.itemId, request.action, 'manual', threadIdsOf(request)));
+    app.sessionActions.request(request.sessionId, request.itemId, request.action, 'manual', { threadIds: threadIdsOf(request) }));
   ipc.handle(INVOKE.sessionWorkCancel, (activityId: string) => app.sessionActions.cancel(activityId));
   ipc.handle(INVOKE.sessionWorkComment, (request: CommentRequest) => app.review.comment(request));
   ipc.handle(INVOKE.sessionWorkReview, (request: ReviewRequest) => {
@@ -25,6 +25,8 @@ export function registerSessionWorkHandlers(ipc: IpcRegistrar, app: Container): 
     return app.review.review(request);
   });
   ipc.on(SEND.sessionWorkClose, (sessionId: string) => app.sessionWork.close(sessionId));
+  ipc.handle(INVOKE.sessionWorkCheckLog, (request: { repository: string; checkRunUrl: string }) =>
+    app.prWatch.checkLog(String(request?.repository ?? ''), String(request?.checkRunUrl ?? '')));
 }
 
 /** The threads a Fix comments names, when it names any: strings only. */

@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { LOG_TAIL_LINES, SessionActionService, type ActionContext } from '../src/application/services/session-action-service';
+import {
+  AUTO_FIX_LOG_TAIL_LINES, LOG_TAIL_LINES, SessionActionService, type ActionContext,
+} from '../src/application/services/session-action-service';
 import { NOT_RUNNING_REASON } from '../src/domain/session-work/actions';
 import { silentLog } from './support/fakes';
-import type { ActivityStore, StoredAction } from '../src/application/ports/activity-store';
-import type { SessionPrompter } from '../src/application/ports/session-prompter';
+import { FakePrompter, MemoryStore } from './support/session-work-fakes';
 import type { PullRequestStatus, SessionWorkItem } from '../src/domain/session-work/model';
 
 const REPO = 'o/app';
@@ -39,56 +40,6 @@ const branchItem: SessionWorkItem = {
   pushed: false,
 };
 
-/** A session the test drives: running or not, busy or idle, with its id moving on a fork. */
-class FakePrompter implements SessionPrompter {
-  running = new Set<string>(['s1']);
-  busy = new Set<string>();
-  /** A rekeyed session: old id → the id it goes by now. */
-  moved = new Map<string, string>();
-  sent: Array<{ sessionId: string; prompt: string }> = [];
-  listeners = new Map<string, Set<() => void>>();
-
-  runningId(sessionId: string): string | null {
-    const id = this.moved.get(sessionId) ?? sessionId;
-    return this.running.has(id) ? id : null;
-  }
-  isBusy(sessionId: string): boolean {
-    const id = this.runningId(sessionId);
-    return id === null || this.busy.has(id);
-  }
-  onIdle(sessionId: string, fn: () => void) {
-    const set = this.listeners.get(sessionId) ?? new Set();
-    set.add(fn);
-    this.listeners.set(sessionId, set);
-    return { dispose: () => { set.delete(fn); } };
-  }
-  send(sessionId: string, prompt: string): void {
-    this.sent.push({ sessionId, prompt });
-  }
-  /** The session starts a turn. */
-  goBusy(id = 's1') { this.busy.add(id); }
-  /** The session comes to its prompt: every listener under any of its ids hears it. */
-  goIdle(id = 's1') {
-    this.busy.delete(id);
-    for (const [listenId, fns] of this.listeners) {
-      if (this.runningId(listenId) === id) for (const fn of [...fns]) fn();
-    }
-  }
-  listenerCount(): number {
-    return [...this.listeners.values()].reduce((n, set) => n + set.size, 0);
-  }
-}
-
-class MemoryStore implements ActivityStore {
-  rows: StoredAction[] = [];
-  add(action: StoredAction) { this.rows.push({ ...action }); }
-  update(id: string, changes: Partial<Pick<StoredAction, 'phase' | 'sentAt' | 'doneAt'>>) {
-    const row = this.rows.find((r) => r.id === id);
-    if (row) Object.assign(row, Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)));
-  }
-  remove(id: string) { this.rows = this.rows.filter((r) => r.id !== id); }
-  unfinished() { return this.rows.filter((r) => r.phase !== 'done').map((r) => ({ ...r })); }
-}
 
 function setup({ items = [prItem(12), prItem(13), branchItem], store = new MemoryStore(), prompter = new FakePrompter() } = {}) {
   const page = new Map(items.map((item) => [item.id, item]));
@@ -335,7 +286,7 @@ function reviewThread(id: string, resolved = false) {
 test('Fix comments on named threads hands over exactly those, and the activity names them', async () => {
   const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2'), reviewThread('T3'), reviewThread('T4', true)] });
   const { service, prompter } = setup({ items: [pr] });
-  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', ['T2', 'T4'])).ok, true);
+  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T2', 'T4'] })).ok, true);
   const prompt = prompter.sent[0].prompt;
   assert.match(prompt, /\(T2\)/);
   assert.doesNotMatch(prompt, /\(T1\)|\(T3\)|\(T4\)/, 'only the named open threads');
@@ -347,9 +298,13 @@ test('another thread can be handed over while one is with Claude; the same one c
   const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2')] });
   const { service, prompter } = setup({ items: [pr] });
   prompter.goBusy();
-  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', ['T1'])).ok, true);
-  assert.deepEqual(await service.request('s1', PR12, 'fix-comments', 'manual', ['T1']), { ok: false, reason: 'Already queued' });
-  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', ['T2'])).ok, true);
+  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T1'] })).ok, true);
+  assert.deepEqual(await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T1'] }), { ok: false, reason: 'Already queued' });
+  const second = await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T2'] });
+  assert.ok(second.ok);
+  // In flight like any action, and the item's current one: the CI watch stays out of its way.
+  assert.equal(service.isInFlight(second.activityId), true);
+  assert.equal(service.forSession('s1').byItem.get(PR12)?.action, 'fix-comments');
   assert.deepEqual(service.forSession('s1').fixingThreads?.get(PR12), ['T1', 'T2']);
   // Every open thread without naming them: one is already queued.
   assert.equal((await service.request('s1', PR12, 'fix-comments')).ok, false);
@@ -358,7 +313,9 @@ test('another thread can be handed over while one is with Claude; the same one c
 test('naming only resolved or unknown threads has nothing to do', async () => {
   const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2', true)] });
   const { service, prompter } = setup({ items: [pr] });
-  const result = await service.request('s1', PR12, 'fix-comments', 'manual', ['T2', 'nope']);
+  const none = await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: [] });
+  assert.equal(none.ok, false, 'naming no thread is not "every thread"');
+  const result = await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T2', 'nope'] });
   assert.equal(result.ok, false);
   assert.equal(prompter.sent.length, 0);
 });
@@ -368,7 +325,76 @@ test('a queued Fix comments still knows its threads after a restart', async () =
   const store = new MemoryStore();
   const first = setup({ items: [pr], store });
   first.prompter.goBusy();
-  await first.service.request('s1', PR12, 'fix-comments', 'manual', ['T2']);
+  await first.service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T2'] });
   const again = setup({ items: [pr], store });
   assert.deepEqual(again.service.forSession('s1').fixingThreads?.get(PR12), ['T2']);
+});
+
+test('a session that exits while Claude has an action finishes it; what is queued waits for the next start', async () => {
+  const { service, prompter, store } = setup();
+  await service.request('s1', PR12, 'ship');
+  prompter.goBusy();
+  await service.request('s1', PR13, 'ship');
+  assert.deepEqual(store.rows.map((r) => r.phase), ['sent', 'queued']);
+
+  prompter.exit();
+  assert.deepEqual(store.rows.map((r) => r.phase), ['done', 'queued']);
+  assert.equal(service.forSession('s1').byItem.get(PR12), undefined, 'no longer amber');
+  assert.equal(prompter.sent.length, 1, 'nothing typed into a session that is not running');
+
+  // Resumed later: the queue goes on once it is at its prompt.
+  prompter.running.add('s1');
+  prompter.goIdle();
+  assert.deepEqual(prompter.sent.map((sent) => sent.prompt.slice(0, 12)), ['Ship PR #12 ', 'Ship PR #13 ']);
+});
+
+test('without the page open, an item handed in can be asked for: an automatic Fix CI', async () => {
+  const { service, prompter, store, logRequests, context } = setup({ items: [] });
+  const item = prItem(12, {
+    headSha: 'abc1234', checks: [{ name: 'lint', state: 'failing', url: 'https://github.com/o/app/runs/1' },
+      { name: 'test', state: 'failing', url: 'https://github.com/o/app/runs/2' }],
+  });
+  const result = await service.request('s1', item.id, 'fix-ci', 'auto', { resolved: { item, context, checkName: 'test', attempt: 1 } });
+  assert.equal(result.ok, true);
+  assert.deepEqual(logRequests, [[REPO, 'https://github.com/o/app/runs/2', AUTO_FIX_LOG_TAIL_LINES]]);
+  assert.match(prompter.sent[0].prompt, /: test failed on abc1234\. Log tail:\nError: expected 2, got 3\n/);
+  assert.match(prompter.sent[0].prompt, /This is automatic attempt 1 of 2\.$/);
+  assert.equal(store.rows[0].origin, 'auto');
+  const activity = service.forSession('s1').byItem.get(item.id);
+  assert.equal(activity?.attempt, 1);
+  assert.equal(activity?.checkName, 'test');
+  assert.equal(service.isInFlight(store.rows[0].id), true);
+
+  prompter.goBusy();
+  prompter.goIdle();
+  assert.equal(service.isInFlight(store.rows[0].id), false);
+});
+
+test('a manual Fix CI carries the shorter log and no attempt', async () => {
+  const { service, logRequests, store } = setup({
+    items: [prItem(12, { checks: [{ name: 'test', state: 'failing', url: 'https://github.com/o/app/runs/2' }] })],
+  });
+  await service.request('s1', PR12, 'fix-ci');
+  assert.equal(logRequests[0][2], LOG_TAIL_LINES);
+  assert.deepEqual(store.rows[0].details, { checkName: 'test' });
+});
+
+test('giving up shows red until the check is green again, and survives a restart', () => {
+  const store = new MemoryStore();
+  const { service, changed } = setup({ store });
+  const attempts = [{ attempt: 1, failedOn: 'aaa', pushed: 'bbb' }, { attempt: 2, failedOn: 'bbb', pushed: null }];
+  service.giveUp('s1', PR12, REPO, { checkName: 'test', attempts });
+  const card = service.forSession('s1').byItem.get(PR12);
+  assert.equal(card?.phase, 'gave-up');
+  assert.equal(card?.origin, 'auto');
+  assert.deepEqual(card?.attempts, attempts);
+  assert.ok(changed.length > 0);
+
+  const after = setup({ store });
+  assert.deepEqual(after.service.forSession('s1').byItem.get(PR12)?.attempts, attempts);
+  after.service.settleGaveUp('s1', PR12, 'lint');
+  assert.equal(after.service.forSession('s1').byItem.get(PR12)?.phase, 'gave-up', 'another check going green changes nothing');
+  after.service.settleGaveUp('s1', PR12, 'test');
+  assert.equal(after.service.forSession('s1').byItem.get(PR12), undefined);
+  assert.equal(store.rows[0].phase, 'done');
 });

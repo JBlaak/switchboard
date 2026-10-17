@@ -28,6 +28,7 @@ import { SessionTransitionDetector } from '../application/services/session-trans
 import { SessionWorkService } from '../application/services/session-work-service';
 import { ReviewService } from '../application/services/review-service';
 import { SessionActionService } from '../application/services/session-action-service';
+import { PrWatchService } from '../application/services/pr-watch-service';
 import { SettingsService } from '../application/services/settings-service';
 import { UpdateService } from '../application/services/update-service';
 import { WeatherService } from '../application/services/weather-service';
@@ -50,6 +51,7 @@ import { SqliteSearchIndex } from '../infrastructure/sqlite/search-index';
 import { SqliteSessionRepository } from '../infrastructure/sqlite/session-repository';
 import { SqliteSettingsStore } from '../infrastructure/sqlite/settings-store';
 import { SqliteActivityStore } from '../infrastructure/sqlite/activity-store';
+import { SqliteAutoFixHistory } from '../infrastructure/sqlite/auto-fix-history';
 import { openDatabase } from '../infrastructure/sqlite/database';
 import { resolveClaudePaths } from '../infrastructure/fs/claude-paths';
 import { systemTimers } from '../infrastructure/system/timers';
@@ -97,7 +99,8 @@ export interface Container {
   readonly updates: UpdateService;
   readonly sessionWork: SessionWorkService;
   readonly sessionActions: SessionActionService;
-  readonly review: ReviewService;
+  readonly review: ReviewService
+  readonly prWatch: PrWatchService;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -227,6 +230,7 @@ export function buildContainer(): Container {
   const sessionActions = new SessionActionService({
     prompter, store: new SqliteActivityStore(database.db), github, ids, clock, log,
   });
+  const workspace = new GitCliWorkspace();
   const sessionWork = new SessionWorkService({
     locate: (sessionId) => {
       const cached = repository.getCachedSession(sessionId);
@@ -238,7 +242,7 @@ export function buildContainer(): Container {
       return { folder: remote ? null : encodeProjectPath(live.projectPath), projectPath: live.projectPath };
     },
     transcripts,
-    git: new GitCliWorkspace(),
+    git: workspace,
     github,
     remotes: git,
     activities: sessionActions,
@@ -246,6 +250,28 @@ export function buildContainer(): Container {
   });
   sessionActions.attach(sessionWork);
   const review = new ReviewService({ github, page: sessionWork, actions: sessionActions, log });
+
+  // Always on, page or no page (W1): the running Claude sessions' PRs, as
+  // their transcripts linked them. Remote sessions are out of scope.
+  const prWatch = new PrWatchService({
+    sessions: () => registry.snapshot()
+      .filter(([, session]) => !session.exited && !session.isPlainTerminal && !isRemoteProjectPath(session.projectPath))
+      .map(([sessionId, session]) => {
+        const cached = repository.getCachedSession(sessionId);
+        return {
+          sessionId,
+          projectPath: session.projectPath,
+          folder: cached?.folder ?? encodeProjectPath(session.projectPath),
+          pullRequests: cached?.pullRequests ?? [],
+        };
+      }),
+    github,
+    history: new SqliteAutoFixHistory(database.db),
+    actions: sessionActions,
+    transcripts,
+    git: workspace,
+    renderer, clock, timers, log,
+  });
 
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
@@ -271,13 +297,14 @@ export function buildContainer(): Container {
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     questions, questionHook,
-    sessionIndex, projects, usage, schedules, weather, updates, sessionWork, sessionActions,
+    sessionIndex, projects, usage, schedules, weather, updates, sessionWork, sessionActions, prWatch,
     review,
     renderer, dialogs, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     close: () => {
       projectsWatcher.stop();
+      prWatch.stop();
       sessionWork.closeAll();
       database.close();
     },

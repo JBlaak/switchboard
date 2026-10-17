@@ -16,6 +16,7 @@ import type { Appearance } from '../domain/settings/appearance';
 import type { Answers, PendingQuestions, QuestionsSettled } from '../domain/questions/question';
 import type { ShellProfile } from '../domain/shell/shell-profile';
 import type { SessionWorkDiff, SessionWorkSnapshot } from '../domain/session-work/model';
+import type { PullRequestStatusChange } from '../domain/session-work/status';
 import type { ActionRequest, ActionResult, CancelResult } from '../domain/session-work/actions';
 import type { CommentRequest, ReviewRequest, ReviewResult } from '../domain/session-work/review';
 import type { WorkingAgent } from '../domain/terminal/program-status-children';
@@ -127,7 +128,9 @@ export interface SwitchboardApi {
   /** Add a line comment to your pending review on a PR item, starting the review if there is none (C1, C2). */
   sessionWorkComment(request: CommentRequest): Promise<ReviewResult>;
   /** Finish your pending review on a PR item: submit it (and hand its threads to Claude), or discard it (C2). */
-  sessionWorkReview(request: ReviewRequest): Promise<ReviewResult>;
+  sessionWorkReview(request: ReviewRequest): Promise<ReviewResult>
+  /** The end of a failing check run's log, for the Checks panel; null when `gh` has none. */
+  getCheckLog(request: { repository: string; checkRunUrl: string }): Promise<string | null>;
 
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;
@@ -154,6 +157,8 @@ export interface SwitchboardApi {
   onFullscreenChanged(cb: (isFullscreen: boolean) => void): Unsubscribe;
   onUpdateAvailable(cb: (update: UpdateNotice) => void): Unsubscribe;
   onSessionWorkSnapshot(cb: (snapshot: SessionWorkSnapshot) => void): Unsubscribe;
+  /** A running session's PR chips changed colour (W4). */
+  onPrStatusChanged(cb: (change: PullRequestStatusChange) => void): Unsubscribe;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

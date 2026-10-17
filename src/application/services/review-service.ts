@@ -32,7 +32,8 @@ export interface ReviewPage {
 /** Handing threads to Claude: the action service's `request`. */
 export interface FixRequester {
   request(
-    sessionId: string, itemId: string, action: WorkAction, origin?: 'manual' | 'auto', threadIds?: readonly string[],
+    sessionId: string, itemId: string, action: WorkAction, origin?: 'manual' | 'auto',
+    options?: { threadIds?: readonly string[] },
   ): Promise<ActionResult>;
 }
 
@@ -121,7 +122,7 @@ export class ReviewService {
     if (mode === 'submit') return { ok: true };
 
     if (threadIds.length === 0) return { ok: false, reason: 'Review submitted, but GitHub did not say which threads it made' };
-    const handed = await this.deps.actions.request(sessionId, itemId, 'fix-comments', 'manual', threadIds);
+    const handed = await this.deps.actions.request(sessionId, itemId, 'fix-comments', 'manual', { threadIds });
     return handed.ok ? { ok: true } : { ok: false, reason: 'Review submitted, but ' + lowerFirst(handed.reason) };
   }
 

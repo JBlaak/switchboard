@@ -98,7 +98,9 @@ export interface SessionWorkStub {
    */
   refuseActions?: string;
   /** Why every review write (a comment, submit, discard) is refused; unset, each one goes through. */
-  refuseReview?: string;
+  refuseReview?: string
+  /** What the Checks panel's log request answers, by check run URL; a URL not here has no log. */
+  checkLogs?: Record<string, string>;
 }
 
 export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number } | 'fail';
@@ -201,7 +203,11 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       ipcMain.handle(channels.sessionWorkReview, (_event, request: ReviewRequest) => {
         state.sessionWorkReviews.push({ review: request });
         return work.refuseReview ? { ok: false, reason: work.refuseReview } : { ok: true };
-      });
+      })
+      // The real one would ask `gh` for the log.
+      ipcMain.removeHandler(channels.sessionWorkCheckLog);
+      ipcMain.handle(channels.sessionWorkCheckLog, (_event, request: { checkRunUrl: string }) =>
+        work.checkLogs?.[String(request?.checkRunUrl)] ?? null);
     }
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {

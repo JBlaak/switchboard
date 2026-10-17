@@ -12,6 +12,7 @@ import type { WorkingAgent } from '../../domain/terminal/program-status-children
 import type { UpdateNotice } from '../../domain/update/release';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 import type { SessionWorkSnapshot } from '../../domain/session-work/model';
+import type { PullRequestStatusChange } from '../../domain/session-work/status';
 
 export interface RendererGateway {
   /** True while there is a window listening; every send is a no-op without one. */
@@ -50,4 +51,6 @@ export interface RendererGateway {
   // ── Session work ──
   /** The open Session work page's snapshot changed. */
   sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void
+  /** A running session's PR chips changed colour, or whether one needs you. */
+  prStatusChanged(change: PullRequestStatusChange): void
 }

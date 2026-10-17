@@ -51,6 +51,8 @@ export interface RemoteObserver {
 export interface CliStateObserver {
   /** `sessionId` is the id the session goes by now. */
   cliStateChanged(sessionId: string, session: ActiveSession, change: CliStateChange): void;
+  /** The session's process ended for good (retired); `sessionId` is the id it went by last. */
+  sessionEnded?(sessionId: string, session: ActiveSession): void;
 }
 
 export interface SessionLifecycleDeps {
@@ -199,6 +201,9 @@ export class SessionLifecycle {
     registry.delete(realId);
     // The original key too, in case transition detection has not run yet.
     registry.delete(sessionId);
+
+    // After the registry let go, so whoever hears it finds the session not running.
+    this.deps.cliState?.sessionEnded?.(realId, session);
   }
 
   /** Ask a session to stop, and make sure it does. */
