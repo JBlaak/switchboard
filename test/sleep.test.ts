@@ -12,19 +12,58 @@ const PMSET = (flag: string): string => [
 ].join('\n');
 
 test('reads SleepDisabled 1 as sleep disabled', () => {
-  assert.equal(parseSleepDisabled(PMSET('1')), true);
+  /* Given */
+  const output = PMSET('1');
+
+  /* When */
+  const disabled = parseSleepDisabled(output);
+
+  /* Then */
+  assert.equal(disabled, true);
 });
 
 test('reads SleepDisabled 0 as sleep allowed, whatever caffeinate is doing', () => {
-  assert.equal(parseSleepDisabled(PMSET('0')), false);
+  /* Given */
+  const output = PMSET('0');
+
+  /* When */
+  const disabled = parseSleepDisabled(output);
+
+  /* Then */
+  assert.equal(disabled, false);
 });
 
 test('answers null when the output has no SleepDisabled line', () => {
-  assert.equal(parseSleepDisabled(' sleep  1\n displaysleep  10\n'), null);
-  assert.equal(parseSleepDisabled(''), null);
+  /* Given */
+  const output = ' sleep  1\n displaysleep  10\n';
+
+  /* When */
+  const disabled = parseSleepDisabled(output);
+
+  /* Then */
+  assert.equal(disabled, null);
 });
 
-test('builds the pmset arguments for each position', () => {
-  assert.deepEqual(disableSleepArgs(true), ['disablesleep', '1']);
-  assert.deepEqual(disableSleepArgs(false), ['disablesleep', '0']);
+test('answers null for empty output', () => {
+  /* When */
+  const disabled = parseSleepDisabled('');
+
+  /* Then */
+  assert.equal(disabled, null);
+});
+
+test('builds the pmset arguments to disable sleep', () => {
+  /* When */
+  const args = disableSleepArgs(true);
+
+  /* Then */
+  assert.deepEqual(args, ['disablesleep', '1']);
+});
+
+test('builds the pmset arguments to allow sleep', () => {
+  /* When */
+  const args = disableSleepArgs(false);
+
+  /* Then */
+  assert.deepEqual(args, ['disablesleep', '0']);
 });

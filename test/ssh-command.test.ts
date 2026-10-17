@@ -2,9 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { buildSshArgv, buildSshSpawn } from '../src/domain/remote/ssh-command';
 
-test('buildSshArgv attaches to tmux and only passes -p for non-default ports', () => {
-  const remote = { user: 'joris', host: '10.10.0.24', port: 22 };
+const remote = { user: 'joris', host: '10.10.0.24', port: 22 };
+
+test('buildSshArgv attaches to tmux and passes no -p for the default port', () => {
+  /* When */
   const argv = buildSshArgv(remote, '8f14e45f-ceea-4672-9b3a-1c2d3e4f5a6b', 'claude');
+
+  /* Then */
   assert.ok(!argv.includes('-p'));
   assert.ok(argv.includes('-A'), 'forwards the SSH agent');
   assert.ok(argv.includes('joris@10.10.0.24'));
@@ -13,8 +17,13 @@ test('buildSshArgv attaches to tmux and only passes -p for non-default ports', (
   assert.match(remoteCmd, /tmux new-session -d -s sb-8f14e45f/);
   assert.match(remoteCmd, /send-keys -t sb-8f14e45f 'export SSH_AUTH_SOCK=\$HOME\/\.ssh\/switchboard-agent\.sock; claude' Enter/);
   assert.match(remoteCmd, /exec tmux attach-session -t sb-8f14e45f$/);
+});
 
+test('buildSshArgv passes -p for a non-default port, and a shell session does not launch claude', () => {
+  /* When */
   const argvPort = buildSshArgv({ ...remote, port: 2222 }, 'abc12345', 'shell');
+
+  /* Then */
   const pIdx = argvPort.indexOf('-p');
   assert.notStrictEqual(pIdx, -1);
   assert.strictEqual(argvPort[pIdx + 1], '2222');
@@ -22,21 +31,44 @@ test('buildSshArgv attaches to tmux and only passes -p for non-default ports', (
 });
 
 test('buildSshArgv creates and starts in the working directory when set', () => {
-  const remote = { user: 'u', host: 'h', port: 22, dir: '~/apps/my project' };
-  const cmd = buildSshArgv(remote, 'abc12345', 'shell').pop()!;
+  /* Given */
+  const withDir = { user: 'u', host: 'h', port: 22, dir: '~/apps/my project' };
+
+  /* When */
+  const cmd = buildSshArgv(withDir, 'abc12345', 'shell').pop()!;
+
+  /* Then */
   assert.match(cmd, /mkdir -p "\$HOME\/apps\/my project"/);
   assert.match(cmd, /tmux new-session -d -s sb-abc12345 -c "\$HOME\/apps\/my project"/);
+});
 
-  const absCmd = buildSshArgv({ ...remote, dir: '/srv/app' }, 'abc12345', 'shell').pop()!;
+test('buildSshArgv starts in an absolute working directory as given', () => {
+  /* Given */
+  const withDir = { user: 'u', host: 'h', port: 22, dir: '/srv/app' };
+
+  /* When */
+  const absCmd = buildSshArgv(withDir, 'abc12345', 'shell').pop()!;
+
+  /* Then */
   assert.match(absCmd, /-c "\/srv\/app"/);
+});
 
+test('buildSshArgv passes no -c without a working directory', () => {
+  /* When */
   const noDirCmd = buildSshArgv({ user: 'u', host: 'h', port: 22 }, 'abc12345', 'shell').pop()!;
+
+  /* Then */
   assert.ok(!noDirCmd.includes(' -c '), 'no -c without a working directory');
 });
 
 test('buildSshSpawn runs ssh through the login shell so profile env (SSH_AUTH_SOCK) applies', () => {
+  /* Given */
   const argv = buildSshArgv({ user: 'joris', host: '10.10.0.24', port: 22 }, 'abc12345', 'claude');
+
+  /* When */
   const spawned = buildSshSpawn(argv, '/bin/zsh');
+
+  /* Then */
   assert.strictEqual(spawned.file, '/bin/zsh');
   // -i is what sources ~/.zshrc, where an agent socket export usually lives
   assert.deepStrictEqual(spawned.args.slice(0, 3), ['-l', '-i', '-c']);
@@ -47,7 +79,10 @@ test('buildSshSpawn runs ssh through the login shell so profile env (SSH_AUTH_SO
 });
 
 test('buildSshArgv bounds the connect and keepalive timers itself', () => {
+  /* When */
   const argv = buildSshArgv({ user: 'u', host: 'h', port: 22 }, 'abc12345', 'claude');
+
+  /* Then */
   // Without ConnectTimeout, an unreachable host hangs on the OS TCP timeout
   // (~75s) with no output at all — the connect looks like a frozen app.
   const ct = argv.indexOf('ConnectTimeout=10');
