@@ -118,6 +118,12 @@ export interface SwitchboardApi {
   /** The parsed diff of one item (`SessionWorkItem.id`) of the open page, and where it came from. */
   getSessionWorkDiff(request: { sessionId: string; itemId: string }): Promise<SessionWorkDiff>;
   /**
+   * One side of an image (`FileDiff.image`) in an item's local diff, as bytes;
+   * null when there is none. Only a file in that diff can be named, and it is
+   * read at the commits the diff was made from (L3).
+   */
+  sessionWorkImage(request: { sessionId: string; itemId: string; path: string; side: 'before' | 'after' }): Promise<Uint8Array | null>;
+  /**
    * Hand an item of the open page to Claude: its prompt is queued and typed
    * into the session's terminal once it is idle. Refused, with the reason,
    * when the session is not running or the item cannot take the action.

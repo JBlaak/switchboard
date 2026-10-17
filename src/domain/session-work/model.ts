@@ -9,6 +9,7 @@
  * git and `gh`, and the renderer draws; the rules that turn one into the other
  * live next to these types.
  */
+import type { ImageFormat } from './image';
 
 /** A worktree and branch the session worked in, from a transcript line's `cwd` + `gitBranch`. */
 export interface WorkLocation {
@@ -307,4 +308,13 @@ export interface FileDiff {
   /** Binary files are one row with no hunks, and cannot be commented on. */
   binary: boolean;
   collapsedReason?: CollapsedReason;
+  /** Set on an image in a local diff only: its bytes can be read for comparing (I4). */
+  image?: FileImage;
+}
+
+/** An image file's two sides, sized; a side is null when the file was added or deleted (I5). */
+export interface FileImage {
+  format: ImageFormat;
+  before: { bytes: number } | null;
+  after: { bytes: number } | null;
 }

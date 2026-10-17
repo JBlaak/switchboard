@@ -39,16 +39,33 @@ interface GitResult {
   stdout: string;
 }
 
-function git(cwd: string, args: readonly string[]): Promise<GitResult> {
+const GIT_OPTIONS = {
+  timeout: TIMEOUT_MS,
+  maxBuffer: MAX_OUTPUT_BYTES,
+  env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
+};
+
+function exitCode(err: Error | null): number | null {
+  if (!err) return 0;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === 'number' ? code : null;
+}
+
+/** Run git, with `input` written to its stdin when given. */
+function git(cwd: string, args: readonly string[], input?: string): Promise<GitResult> {
   return new Promise((resolve) => {
-    execFile('git', ['-C', cwd, ...args], {
-      timeout: TIMEOUT_MS,
-      maxBuffer: MAX_OUTPUT_BYTES,
-      encoding: 'utf8',
-      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
-    }, (err, stdout) => {
-      const code = err ? (typeof (err as { code?: unknown }).code === 'number' ? (err as { code: number }).code : null) : 0;
-      resolve({ code, stdout: stdout ?? '' });
+    const child = execFile('git', ['-C', cwd, ...args], { ...GIT_OPTIONS, encoding: 'utf8' }, (err, stdout) => {
+      resolve({ code: exitCode(err), stdout: stdout ?? '' });
+    });
+    if (input !== undefined) child.stdin?.end(input);
+  });
+}
+
+/** Run git for its raw output bytes; null when it did not succeed. */
+function gitBytes(cwd: string, args: readonly string[]): Promise<Buffer | null> {
+  return new Promise((resolve) => {
+    execFile('git', ['-C', cwd, ...args], { ...GIT_OPTIONS, encoding: 'buffer' }, (err, stdout) => {
+      resolve(exitCode(err) === 0 ? stdout : null);
     });
   });
 }
@@ -158,6 +175,61 @@ export class GitCliWorkspace implements GitWorkspace {
     return diff;
   }
 
+  async mergeBase(worktree: string, branch: string, base: string): Promise<string | null> {
+    if (!isSafeRef(branch) || !isSafeRef(base)) return null;
+    const result = await git(worktree, ['merge-base', base, branch]);
+    return result.code === 0 ? result.stdout.trim() || null : null;
+  }
+
+  async blobSizes(worktree: string, revision: string, paths: readonly string[]): Promise<Map<string, number>> {
+    const sizes = new Map<string, number>();
+    // One object name per line: a path with a newline in it cannot be asked.
+    const asked = paths.filter((file) => file.length > 0 && !file.includes('\n'));
+    if (!isSafeRef(revision) || asked.length === 0) return sizes;
+    const input = asked.map((file) => `${revision}:${file}\n`).join('');
+    const result = await git(worktree, ['cat-file', '--batch-check=%(objecttype) %(objectsize)'], input);
+    if (result.code !== 0) return sizes;
+    // One answer line per question, in order; a missing one reads `<name> missing`.
+    const lines = result.stdout.split('\n');
+    asked.forEach((file, i) => {
+      const match = /^blob (\d+)$/.exec(lines[i] ?? '');
+      if (match) sizes.set(file, Number(match[1]));
+    });
+    return sizes;
+  }
+
+  async blob(worktree: string, revision: string, file: string): Promise<Uint8Array | null> {
+    if (!isSafeRef(revision) || file.length === 0) return null;
+    // `cat-file blob` rather than `git show`: no textconv or other filter
+    // stands between the bytes in the repository and the ones sent on.
+    return gitBytes(worktree, ['cat-file', 'blob', `${revision}:${file}`]);
+  }
+
+  async workingFileSizes(worktree: string, paths: readonly string[]): Promise<Map<string, number>> {
+    const sizes = new Map<string, number>();
+    for (const file of paths) {
+      const full = await workingFilePath(worktree, file);
+      if (!full) continue;
+      try {
+        sizes.set(file, (await fs.promises.lstat(full)).size);
+      } catch {
+        // Gone since it was checked: left out like any missing file.
+      }
+    }
+    return sizes;
+  }
+
+  async workingFile(worktree: string, file: string): Promise<Uint8Array | null> {
+    const full = await workingFilePath(worktree, file);
+    if (!full) return null;
+    try {
+      if ((await fs.promises.lstat(full)).size > MAX_OUTPUT_BYTES) return null;
+      return await fs.promises.readFile(full);
+    } catch {
+      return null;
+    }
+  }
+
   async generatedPaths(worktree: string, paths: readonly string[]): Promise<string[]> {
     const generated: string[] = [];
     for (let i = 0; i < paths.length; i += CHECK_ATTR_CHUNK) {
@@ -218,6 +290,23 @@ export class GitCliWorkspace implements GitWorkspace {
         watchers.length = 0;
       },
     };
+  }
+}
+
+/**
+ * Where a repository-relative path is on disk, when it is a plain file inside
+ * the worktree: not a symlink, and not somewhere a `..` or a symlinked
+ * directory would lead out of it. null otherwise.
+ */
+async function workingFilePath(worktree: string, file: string): Promise<string | null> {
+  if (file.length === 0 || path.isAbsolute(file)) return null;
+  const full = path.resolve(worktree, file);
+  try {
+    if (!(await fs.promises.lstat(full)).isFile()) return null;
+    const [realRoot, realFile] = await Promise.all([fs.promises.realpath(worktree), fs.promises.realpath(full)]);
+    return realFile.startsWith(realRoot + path.sep) ? full : null;
+  } catch {
+    return null;
   }
 }
 

@@ -92,6 +92,12 @@ interface World {
   targets: Map<string, SessionWorkTarget>;
   /** What the action service says about the session's items. */
   activities: SessionActivities;
+  /** The merge-base of any branch and base. */
+  mergeBase: string | null;
+  /** Committed file contents, by `revision:path`. */
+  blobs: Map<string, string>;
+  /** Working-tree file contents, by `worktree:path`. */
+  files: Map<string, string>;
 }
 
 function setup(overrides: Partial<World> = {}) {
@@ -122,11 +128,19 @@ function setup(overrides: Partial<World> = {}) {
       ['loose', { folder: 'f3', projectPath: '/tmp/not-a-repo' }],
     ]),
     activities: { byItem: new Map(), queued: 0, shipping: false },
+    mergeBase: 'merge-base-1',
+    blobs: new Map(),
+    files: new Map(),
     ...overrides,
   };
 
   const calls: Record<string, number> = {};
   const count = (name: string) => { calls[name] = (calls[name] ?? 0) + 1; };
+  /** Every file read for its bytes, as `revision:path` or `worktree:path`. */
+  const reads: string[] = [];
+  const bytes = (text: string | undefined) => (text === undefined ? null : new TextEncoder().encode(text));
+  const sizes = (contents: Map<string, string>, prefix: string, paths: readonly string[]) =>
+    new Map(paths.filter((p) => contents.has(prefix + p)).map((p) => [p, contents.get(prefix + p)!.length]));
   const watchers: Array<{ worktree: string; onChange: () => void; disposed: boolean }> = [];
 
   const git: GitWorkspace = {
@@ -146,6 +160,11 @@ function setup(overrides: Partial<World> = {}) {
     async workingDiff() { count('workingDiff'); return world.workingDiff; },
     async workingLineStats(worktree) { return world.workingStats.get(worktree) ?? { additions: 0, deletions: 0 }; },
     async generatedPaths(_worktree, paths) { return paths.filter((p) => world.generated.includes(p)); },
+    async mergeBase() { return world.mergeBase; },
+    async blobSizes(_worktree, revision, paths) { return sizes(world.blobs, revision + ':', paths); },
+    async blob(_worktree, revision, path) { reads.push(revision + ':' + path); return bytes(world.blobs.get(revision + ':' + path)); },
+    async workingFileSizes(worktree, paths) { return sizes(world.files, worktree + ':', paths); },
+    async workingFile(worktree, path) { reads.push(worktree + ':' + path); return bytes(world.files.get(worktree + ':' + path)); },
     watch(worktree, onChange) {
       const watcher = { worktree, onChange, disposed: false };
       watchers.push(watcher);
@@ -183,7 +202,7 @@ function setup(overrides: Partial<World> = {}) {
   });
 
   return {
-    world, service, snapshots, timers, calls, watchers,
+    world, service, snapshots, timers, calls, watchers, reads,
     live: () => watchers.filter((watcher) => !watcher.disposed),
     last: () => snapshots[snapshots.length - 1],
   };
@@ -1053,4 +1072,286 @@ test('the footprint counts every worktree and branch the session worked in, not 
   /* Then */
   assert.deepEqual(snapshot?.items, []);
   assert.deepEqual(snapshot?.footprint, { worktrees: 2, branches: 2 });
+});
+
+// ── Images (#113) ──
+
+const IMAGE_DIFF = [
+  'diff --git a/logo.png b/logo.png',
+  'index 1111111..2222222 100644',
+  'Binary files a/logo.png and b/logo.png differ',
+  'diff --git a/new.png b/new.png',
+  'new file mode 100644',
+  'index 0000000..3333333',
+  'Binary files /dev/null and b/new.png differ',
+  'diff --git a/old.gif b/old.gif',
+  'deleted file mode 100644',
+  'index 4444444..0000000',
+  'Binary files a/old.gif and /dev/null differ',
+  'diff --git a/img/a.webp b/img/b.webp',
+  'similarity index 90%',
+  'rename from img/a.webp',
+  'rename to img/b.webp',
+  'index 5555555..6666666 100644',
+  'Binary files a/img/a.webp and b/img/b.webp differ',
+  'diff --git a/icon.svg b/icon.svg',
+  'index 7777777..8888888 100644',
+  '--- a/icon.svg',
+  '+++ b/icon.svg',
+  '@@ -1 +1 @@',
+  '-<svg/>',
+  '+<svg></svg>',
+  DIFF,
+].join('\n');
+
+/** A branch with images in its diff, and every side of them in the repository. */
+function imageBranch() {
+  return setup({
+    locations: [{ cwd: ROOT, branch: 'feat/img', fromSubagent: false }],
+    branches: new Set(['main', 'feat/img']),
+    ahead: new Map([['feat/img', 1]]),
+    branchDiff: IMAGE_DIFF,
+    blobs: new Map([
+      ['merge-base-1:logo.png', 'old logo'],
+      ['sha-feat/img:logo.png', 'the new logo'],
+      ['sha-feat/img:new.png', 'new'],
+      ['merge-base-1:old.gif', 'gone gif'],
+      ['merge-base-1:img/a.webp', 'webp before'],
+      ['sha-feat/img:img/b.webp', 'webp after!'],
+      ['merge-base-1:icon.svg', '<svg/>'],
+      ['sha-feat/img:icon.svg', '<svg></svg>'],
+    ]),
+  });
+}
+
+/** Uncommitted images in the main checkout: before at HEAD, after on disk. */
+function imageChanges() {
+  const harness = setup({
+    workingDiff: IMAGE_DIFF,
+    shas: new Map([['origin/main', 'base-1'], ['HEAD', 'head-1']]),
+    blobs: new Map([
+      ['head-1:logo.png', 'old logo'],
+      ['head-1:old.gif', 'gone gif'],
+      ['head-1:img/a.webp', 'webp before'],
+      ['head-1:icon.svg', '<svg/>'],
+    ]),
+    files: new Map([
+      [ROOT + ':logo.png', 'logo on disk'],
+      [ROOT + ':new.png', 'new'],
+      [ROOT + ':img/b.webp', 'webp on disk'],
+      [ROOT + ':icon.svg', '<svg></svg>'],
+    ]),
+  });
+  harness.world.status.set(ROOT, [{ path: 'logo.png', status: 'modified' }]);
+  return harness;
+}
+
+const text = (bytes: Uint8Array | null) => (bytes === null ? null : new TextDecoder().decode(bytes));
+
+test('a branch diff marks each image with its format and the size of each side', async () => {
+  /* Given */
+  const { service } = imageBranch();
+  const id = (await service.open('s1'))!.items[0].id;
+
+  /* When */
+  const diff = await service.diff('s1', id);
+
+  /* Then */
+  assert.equal(diff.source, 'local');
+  assert.deepEqual(diff.files.map((file) => [file.path, file.image ?? null]), [
+    ['logo.png', { format: 'png', before: { bytes: 8 }, after: { bytes: 12 } }],
+    ['new.png', { format: 'png', before: null, after: { bytes: 3 } }],
+    ['old.gif', { format: 'gif', before: { bytes: 8 }, after: null }],
+    ['img/b.webp', { format: 'webp', before: { bytes: 11 }, after: { bytes: 11 } }],
+    ['icon.svg', { format: 'svg', before: { bytes: 6 }, after: { bytes: 11 } }],
+    ['a.txt', null],
+  ]);
+});
+
+test('an SVG keeps its line diff as well as its image', async () => {
+  /* Given */
+  const { service } = imageBranch();
+  const id = (await service.open('s1'))!.items[0].id;
+
+  /* When */
+  const diff = await service.diff('s1', id);
+
+  /* Then */
+  const svg = diff.files.find((file) => file.path === 'icon.svg')!;
+  assert.equal(svg.binary, false);
+  assert.equal(svg.hunks.length, 1);
+  assert.equal(svg.image?.format, 'svg');
+});
+
+test('a cached branch diff keeps its images', async () => {
+  /* Given */
+  const { service, calls } = imageBranch();
+  const id = (await service.open('s1'))!.items[0].id;
+  await service.diff('s1', id);
+
+  /* When */
+  const again = await service.diff('s1', id);
+
+  /* Then */
+  assert.equal(calls.branchDiff, 1, 'served from the cache');
+  assert.deepEqual(again.files[0].image, { format: 'png', before: { bytes: 8 }, after: { bytes: 12 } });
+});
+
+test('uncommitted images are sized at HEAD before and on disk after', async () => {
+  /* Given */
+  const { service } = imageChanges();
+  const id = (await service.open('s1'))!.items[0].id;
+
+  /* When */
+  const diff = await service.diff('s1', id);
+
+  /* Then */
+  assert.deepEqual(diff.files.map((file) => [file.path, file.image ?? null]), [
+    ['logo.png', { format: 'png', before: { bytes: 8 }, after: { bytes: 12 } }],
+    ['new.png', { format: 'png', before: null, after: { bytes: 3 } }],
+    ['old.gif', { format: 'gif', before: { bytes: 8 }, after: null }],
+    ['img/b.webp', { format: 'webp', before: { bytes: 11 }, after: { bytes: 12 } }],
+    ['icon.svg', { format: 'svg', before: { bytes: 6 }, after: { bytes: 11 } }],
+    ['a.txt', null],
+  ]);
+});
+
+test('a diff from GitHub has no images', async () => {
+  /* Given */
+  const { service } = setup({
+    pullRequests: [prLink(9)],
+    prs: [prStatus(9, { headRef: 'feat/gone' })],
+    prDiff: IMAGE_DIFF,
+    blobs: new Map([['head-9:logo.png', 'anything']]),
+  });
+  const id = (await service.open('s1'))!.items[0].id;
+
+  /* When */
+  const diff = await service.diff('s1', id);
+
+  /* Then */
+  assert.equal(diff.source, 'github');
+  assert.ok(diff.files.length > 0);
+  assert.ok(diff.files.every((file) => file.image === undefined));
+});
+
+test('an image on a branch is read at the merge-base before and at the head commit after', async () => {
+  /* Given */
+  const { service, reads } = imageBranch();
+  const id = (await service.open('s1'))!.items[0].id;
+  await service.diff('s1', id);
+
+  /* When */
+  const before = await service.image('s1', id, 'logo.png', 'before');
+  const after = await service.image('s1', id, 'logo.png', 'after');
+
+  /* Then */
+  assert.equal(text(before), 'old logo');
+  assert.equal(text(after), 'the new logo');
+  assert.deepEqual(reads, ['merge-base-1:logo.png', 'sha-feat/img:logo.png']);
+});
+
+test('a renamed image is read at its old path before and its new path after', async () => {
+  /* Given */
+  const { service, reads } = imageBranch();
+  const id = (await service.open('s1'))!.items[0].id;
+  await service.diff('s1', id);
+
+  /* When */
+  const before = await service.image('s1', id, 'img/b.webp', 'before');
+  const after = await service.image('s1', id, 'img/b.webp', 'after');
+
+  /* Then */
+  assert.equal(text(before), 'webp before');
+  assert.equal(text(after), 'webp after!');
+  assert.deepEqual(reads, ['merge-base-1:img/a.webp', 'sha-feat/img:img/b.webp']);
+});
+
+test('an uncommitted image is read at HEAD before and from the working tree after', async () => {
+  /* Given */
+  const { service, reads } = imageChanges();
+  const id = (await service.open('s1'))!.items[0].id;
+  await service.diff('s1', id);
+
+  /* When */
+  const before = await service.image('s1', id, 'logo.png', 'before');
+  const after = await service.image('s1', id, 'logo.png', 'after');
+
+  /* Then */
+  assert.equal(text(before), 'old logo');
+  assert.equal(text(after), 'logo on disk');
+  assert.deepEqual(reads, ['head-1:logo.png', ROOT + ':logo.png']);
+});
+
+test('an added image has no before, and a deleted one no after', async () => {
+  /* Given */
+  const { service, reads } = imageBranch();
+  const id = (await service.open('s1'))!.items[0].id;
+  await service.diff('s1', id);
+
+  /* When */
+  const addedBefore = await service.image('s1', id, 'new.png', 'before');
+  const deletedAfter = await service.image('s1', id, 'old.gif', 'after');
+
+  /* Then */
+  assert.equal(addedBefore, null);
+  assert.equal(deletedAfter, null);
+  assert.deepEqual(reads, [], 'nothing is read');
+});
+
+test('image refuses anything but an image in the item\'s own local diff', async () => {
+  /* Given */
+  const { service, world, reads } = imageBranch();
+  world.blobs.set('merge-base-1:secret.png', 'not in the diff');
+  const id = (await service.open('s1'))!.items[0].id;
+  await service.diff('s1', id);
+
+  /* When */
+  const refused = await Promise.all([
+    service.image('s1', id, 'secret.png', 'before'),
+    service.image('s1', id, '../logo.png', 'after'),
+    service.image('s1', id, 'img/a.webp', 'before'),
+    service.image('s1', id, 'a.txt', 'after'),
+    service.image('s1', id, 'logo.png', 'sideways' as 'after'),
+    service.image('s1', 'unknown-item', 'logo.png', 'after'),
+    service.image('s2', id, 'logo.png', 'after'),
+  ]);
+
+  /* Then */
+  assert.deepEqual(refused, [null, null, null, null, null, null, null]);
+  assert.deepEqual(reads, []);
+});
+
+test('image answers nothing for an item whose diff has not been asked for', async () => {
+  /* Given */
+  const { service, reads } = imageBranch();
+  const id = (await service.open('s1'))!.items[0].id;
+
+  /* When */
+  const bytes = await service.image('s1', id, 'logo.png', 'after');
+
+  /* Then */
+  assert.equal(bytes, null);
+  assert.deepEqual(reads, []);
+});
+
+test('image answers nothing once the item\'s diff comes from GitHub instead', async () => {
+  /* Given */
+  const { service, world, reads } = checkedOutPr('abc', 'abc');
+  world.branchDiff = IMAGE_DIFF;
+  world.prDiff = IMAGE_DIFF;
+  world.blobs.set('abc:logo.png', 'local logo');
+  const id = (await service.open('s1'))!.items[0].id;
+  await service.diff('s1', id);
+  world.prs = [prStatus(3, { headRef: 'feat/3-x', headSha: 'pushed-elsewhere' })];
+  await service.open('s1');
+
+  /* When */
+  const fromGitHub = await service.diff('s1', id);
+  const bytes = await service.image('s1', id, 'logo.png', 'after');
+
+  /* Then */
+  assert.equal(fromGitHub.source, 'github');
+  assert.equal(bytes, null);
+  assert.deepEqual(reads, []);
 });
