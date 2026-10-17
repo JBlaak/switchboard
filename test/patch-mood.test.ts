@@ -5,9 +5,17 @@ import {
   type PatchContext,
 } from '../src/domain/companion/patch';
 
-/** A context with no weather at midday, so no aside is inserted unless a test asks for one. */
+const SEASONS = ['spring', 'summer', 'autumn', 'winter'] as const;
+const HOLIDAYS = [
+  null, 'oud-en-nieuw', 'carnaval', 'valentijnsdag', 'pasen', 'koningsdag',
+  'bevrijdingsdag', 'halloween', 'sint-maarten', 'sinterklaas', 'kerst',
+] as const;
+
+/** A context with no weather and no holiday at midday, so no aside is inserted unless a test asks for one. */
 function ctx(over: Partial<PatchContext> = {}): PatchContext {
-  return { running: 0, usagePercent: null, usageReset: null, sky: null, hour: 14, ...over };
+  return {
+    running: 0, usagePercent: null, usageReset: null, sky: null, hour: 14, season: 'autumn', holiday: null, ...over,
+  };
 }
 
 test('timeOfDay buckets the hour at each boundary, with night wrapping midnight', () => {
@@ -83,22 +91,56 @@ test('at the limit Patch naps until the reset time, or until it resets when that
 test('a weather or time aside goes second', () => {
   const rainy = patchBeats(ctx({ running: 3, sky: 'rain' }));
   assert.strictEqual(rainy[0].move, 'twirl', 'the board still opens');
-  assert.deepStrictEqual(rainy[1], { move: 'peek', line: 'Raining out there. Good day to stay in and ship.' });
+  assert.deepStrictEqual(rainy[1], { move: 'peek', line: 'Leaves and a little rain. Hat on, let’s ship.' });
   assert.strictEqual(rainy.length, 3);
 
   const aside = (over: Partial<PatchContext>) => patchBeats(ctx(over))[1];
-  assert.strictEqual(aside({ sky: 'clear', hour: 9 }).line, 'Sunny out. Shades on.');
-  assert.strictEqual(aside({ sky: 'clear', hour: 14 }).line, 'Sunny out. Shades on.');
-  assert.strictEqual(aside({ sky: 'clear', hour: 1 }).line, 'Late one, huh? Don’t forget to sleep.');
+  assert.strictEqual(aside({ sky: 'clear', hour: 9 }).line, 'Crunchy leaves out there today.');
+  assert.strictEqual(aside({ sky: 'clear', hour: 14, season: 'summer' }).line, 'Ice cream and a green build. Perfect.');
+  assert.strictEqual(aside({ sky: 'clear', hour: 1, season: 'summer' }).line, 'Late one, huh? Don’t forget to sleep.',
+    'no ice cream at 1am');
   assert.strictEqual(aside({ sky: null, hour: 23 }).line, 'Late one, huh? Don’t forget to sleep.');
-  assert.strictEqual(aside({ sky: 'cloudy' }).line, 'Grey skies. I’ll be your sunshine.');
-  assert.strictEqual(aside({ sky: 'snow', hour: 20 }).move, 'hop');
+  assert.strictEqual(aside({ sky: 'cloudy' }).line, 'Leaves everywhere. Cosy coding weather.');
+  assert.strictEqual(aside({ sky: 'snow', hour: 20, season: 'winter' }).line, 'Snow! Can we go outside after this one?');
   assert.strictEqual(aside({ sky: null, hour: 7 }).line, 'Morning! Coffee first, then code.');
 });
 
 test('the aside is also placed second while usage is close', () => {
-  const beats = patchBeats(ctx({ usagePercent: 90, sky: 'snow' }));
+  const beats = patchBeats(ctx({ usagePercent: 90, sky: 'snow', season: 'winter' }));
   assert.deepStrictEqual(beats.map((b) => b.move), ['jelly', 'hop', 'peek', 'doze', 'stretch']);
+});
+
+test('rain gets a cheerful line in every season', () => {
+  const rain = (season: PatchContext['season']) => patchBeats(ctx({ sky: 'rain', season }))[1].line;
+  assert.strictEqual(rain('spring'), 'Spring shower. Rainbow incoming!');
+  assert.strictEqual(rain('summer'), 'Warm rain! Puddle jumping later.');
+  assert.strictEqual(rain('autumn'), 'Leaves and a little rain. Hat on, let’s ship.');
+  assert.strictEqual(rain('winter'), 'Winter drizzle. Staying in where it’s warm.');
+});
+
+test('the weather lines follow the season', () => {
+  const aside = (over: Partial<PatchContext>) => patchBeats(ctx(over))[1].line;
+  assert.strictEqual(aside({ season: 'spring', sky: 'clear' }), 'Tulips are up. So am I!');
+  assert.strictEqual(aside({ season: 'spring', sky: 'snow' }), 'Snow in April? Typisch.');
+  assert.strictEqual(aside({ season: 'summer', sky: 'cloudy' }), 'Warm and grey. Shades stay on.');
+  assert.strictEqual(aside({ season: 'autumn', sky: 'snow' }), 'First flakes on the leaves!');
+  assert.strictEqual(aside({ season: 'winter', sky: 'clear' }), 'Crisp out. Hot chocolate in hand.');
+  assert.strictEqual(aside({ season: 'winter', sky: 'cloudy' }), 'Grey and cold. Beanie on.');
+});
+
+test('a holiday aside wins over the weather and the hour', () => {
+  const kerst = patchBeats(ctx({ running: 3, sky: 'snow', season: 'winter', holiday: 'kerst' }));
+  assert.strictEqual(kerst[0].move, 'twirl', 'the board still opens');
+  assert.strictEqual(kerst[1].line, 'Vrolijk kerstfeest! Lights are on.');
+  assert.strictEqual(kerst.length, 3);
+  assert.strictEqual(patchBeats(ctx({ hour: 23, holiday: 'oud-en-nieuw' }))[1].line, 'Oliebol? Gelukkig nieuwjaar!');
+  assert.strictEqual(patchBeats(ctx({ sky: 'clear', hour: 19, holiday: 'koningsdag' }))[1].line,
+    'Oranje boven! Fijne Koningsdag!');
+});
+
+test('the holiday aside is dropped once the limit is hit', () => {
+  const beats = patchBeats(ctx({ usagePercent: 95, holiday: 'sinterklaas' }));
+  assert.deepStrictEqual(beats.map((b) => b.move), ['doze', 'stretch']);
 });
 
 test('there is no aside when there is nothing worth saying', () => {
@@ -117,10 +159,14 @@ test('patchBeats is never empty and every line is non-empty', () => {
   for (const running of [0, 1, 2, 3, 5, 6, 20]) {
     for (const usagePercent of [null, 0, 79, 80, 94, 95, 100]) {
       for (const sky of skies) {
-        for (let hour = 0; hour < 24; hour++) {
-          const beats = patchBeats({ running, usagePercent, usageReset: null, sky, hour });
-          assert.ok(beats.length > 0);
-          for (const b of beats) assert.ok(b.line.length > 0);
+        for (const season of SEASONS) {
+          for (const holiday of HOLIDAYS) {
+            for (let hour = 0; hour < 24; hour++) {
+              const beats = patchBeats({ running, usagePercent, usageReset: null, sky, hour, season, holiday });
+              assert.ok(beats.length > 0);
+              for (const b of beats) assert.ok(b.line.length > 0);
+            }
+          }
         }
       }
     }
@@ -131,9 +177,15 @@ test('lines use typographic apostrophes and ellipses, never ASCII ones', () => {
   for (const running of [0, 1, 3, 6]) {
     for (const usagePercent of [null, 85, 99]) {
       for (const sky of [null, 'clear', 'cloudy', 'rain', 'snow'] as const) {
-        for (const b of patchBeats({ running, usagePercent, usageReset: null, sky, hour: 23 })) {
-          assert.ok(!b.line.includes("'"), b.line);
-          assert.ok(!b.line.includes('...'), b.line);
+        for (const season of SEASONS) {
+          for (const holiday of HOLIDAYS) {
+            for (const hour of [9, 23]) {
+              for (const b of patchBeats({ running, usagePercent, usageReset: null, sky, hour, season, holiday })) {
+                assert.ok(!b.line.includes("'"), b.line);
+                assert.ok(!b.line.includes('...'), b.line);
+              }
+            }
+          }
         }
       }
     }

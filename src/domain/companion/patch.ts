@@ -5,9 +5,13 @@
  * Patch is there to make an empty board feel less empty, but it only earns its
  * place if what it says is true: a cheerful wave while the usage limit is about
  * to cut every session off would be worse than silence. So the rules rank what
- * matters — the limit first, then how busy the board is, then the weather and
- * the hour — and the renderer only picks which of the ranked beats to play.
+ * matters — the limit first, then how busy the board is, then a holiday, then
+ * the weather through the season and the hour — and the renderer only picks
+ * which of the ranked beats to play.
  */
+import type { PatchHoliday, PatchSeason } from './calendar';
+
+export type { PatchHoliday, PatchSeason } from './calendar';
 
 /** An animation the renderer knows how to play. */
 export type PatchMove = 'wave' | 'hop' | 'twirl' | 'peek' | 'doze' | 'jelly' | 'love' | 'stretch';
@@ -32,6 +36,10 @@ export interface PatchContext {
   sky: PatchSky | null;
   /** Local hour, 0–23. */
   hour: number;
+  /** The season the weather lines are dressed for. */
+  season: PatchSeason;
+  /** The Dutch holiday today, if any. */
+  holiday: PatchHoliday | null;
 }
 
 /** One appearance: a move and the line said with it. */
@@ -132,28 +140,74 @@ function boardBeats(ctx: PatchContext): PatchBeat[] {
 }
 
 /**
- * At most one aside about the weather or the hour. The sky wins over the clock
- * when it is known; the clock alone only speaks at the ends of the day, where
- * there is something worth saying.
+ * One line per holiday. A holiday only comes round once a year, so it gets the
+ * aside over the weather, which Patch can talk about any other day.
+ */
+const HOLIDAY_BEATS: Record<PatchHoliday, PatchBeat> = {
+  'oud-en-nieuw': { move: 'twirl', line: 'Oliebol? Gelukkig nieuwjaar!' },
+  carnaval: { move: 'jelly', line: 'Alaaf! Back to work on Wednesday.' },
+  valentijnsdag: { move: 'love', line: 'Love you. And your commits.' },
+  pasen: { move: 'peek', line: 'Found an egg! Vrolijk Pasen.' },
+  koningsdag: { move: 'hop', line: 'Oranje boven! Fijne Koningsdag!' },
+  bevrijdingsdag: { move: 'wave', line: 'Fijne Bevrijdingsdag.' },
+  halloween: { move: 'peek', line: 'Boo! Did I scare you?' },
+  'sint-maarten': { move: 'wave', line: 'Sint Maarten, Sint Maarten… a sweet for a song?' },
+  sinterklaas: { move: 'hop', line: 'Shoe’s out. Fingers crossed for pepernoten.' },
+  kerst: { move: 'love', line: 'Vrolijk kerstfeest! Lights are on.' },
+};
+
+/**
+ * What each sky is like in each season. Rain is never gloomy: Patch sits on an
+ * empty board, and moping about the weather there would only make it emptier.
+ */
+const SEASON_SKY_BEATS: Record<PatchSeason, Record<PatchSky, PatchBeat>> = {
+  spring: {
+    clear: { move: 'stretch', line: 'Tulips are up. So am I!' },
+    cloudy: { move: 'love', line: 'Blossom weather. Grey, but pretty.' },
+    rain: { move: 'peek', line: 'Spring shower. Rainbow incoming!' },
+    snow: { move: 'jelly', line: 'Snow in April? Typisch.' },
+  },
+  summer: {
+    clear: { move: 'twirl', line: 'Ice cream and a green build. Perfect.' },
+    cloudy: { move: 'stretch', line: 'Warm and grey. Shades stay on.' },
+    rain: { move: 'hop', line: 'Warm rain! Puddle jumping later.' },
+    snow: { move: 'jelly', line: 'Snow in summer?! Shades stay on.' },
+  },
+  autumn: {
+    clear: { move: 'hop', line: 'Crunchy leaves out there today.' },
+    cloudy: { move: 'stretch', line: 'Leaves everywhere. Cosy coding weather.' },
+    rain: { move: 'peek', line: 'Leaves and a little rain. Hat on, let’s ship.' },
+    snow: { move: 'twirl', line: 'First flakes on the leaves!' },
+  },
+  winter: {
+    clear: { move: 'wave', line: 'Crisp out. Hot chocolate in hand.' },
+    cloudy: { move: 'jelly', line: 'Grey and cold. Beanie on.' },
+    rain: { move: 'peek', line: 'Winter drizzle. Staying in where it’s warm.' },
+    snow: { move: 'hop', line: 'Snow! Can we go outside after this one?' },
+  },
+};
+
+const SLEEP_BEAT: PatchBeat = { move: 'doze', line: 'Late one, huh? Don’t forget to sleep.' };
+
+/**
+ * At most one aside: a holiday when there is one, otherwise the weather or the
+ * hour. The sky wins over the clock when it is known; the clock alone only
+ * speaks at the ends of the day, where there is something worth saying.
+ *
+ * A clear sky is the exception: it is the clock that matters then. Sunshine
+ * lines at 2am would be wrong, and a clear evening has nothing to add.
  */
 function ambientBeat(ctx: PatchContext): PatchBeat | null {
+  if (ctx.holiday) return HOLIDAY_BEATS[ctx.holiday];
   const time = timeOfDay(ctx.hour);
-  switch (ctx.sky) {
-    case 'clear':
-      if (time === 'morning' || time === 'day') return { move: 'twirl', line: 'Sunny out. Shades on.' };
-      if (time === 'night') return { move: 'doze', line: 'Late one, huh? Don’t forget to sleep.' };
-      return null;
-    case 'cloudy':
-      return { move: 'stretch', line: 'Grey skies. I’ll be your sunshine.' };
-    case 'rain':
-      return { move: 'peek', line: 'Raining out there. Good day to stay in and ship.' };
-    case 'snow':
-      return { move: 'hop', line: 'Snow! Can we go outside after this one?' };
-    case null:
-      if (time === 'night') return { move: 'doze', line: 'Late one, huh? Don’t forget to sleep.' };
-      if (time === 'morning') return { move: 'wave', line: 'Morning! Coffee first, then code.' };
-      return null;
+  if (ctx.sky === 'clear') {
+    if (time === 'night') return SLEEP_BEAT;
+    if (time === 'evening') return null;
   }
+  if (ctx.sky) return SEASON_SKY_BEATS[ctx.season][ctx.sky];
+  if (time === 'night') return SLEEP_BEAT;
+  if (time === 'morning') return { move: 'wave', line: 'Morning! Coffee first, then code.' };
+  return null;
 }
 
 /**
