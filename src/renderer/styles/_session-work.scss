@@ -1083,3 +1083,101 @@
     linear-gradient(to right, rgba(var(--sb-overlay-rgb), 0.22) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(var(--sb-overlay-rgb), 0.22) 1px, transparent 1px);
 }
+
+/* ---- Image compare: the overlay modes (#116) ----
+   Swipe, onion skin, blink and pixel diff. Both sides sit at the content's
+   top-left corner (M1). What a mode draws over its stage at screen size (the
+   swipe divider, the blink label) is a sibling of the stage, so it does not
+   scale with the zoom; the controls row sits under the stage. */
+.sw-swipe,
+.sw-onion,
+.sw-blink,
+.sw-pixel-diff {
+  position: relative;
+}
+
+.sw-stage-content .sw-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+// A divider panned out of the frame is cut off with the image.
+.sw-swipe {
+  overflow: hidden;
+}
+
+// The line is drawn but not hit-tested, so the stage under it still zooms
+// and pans; only the handle takes the pointer.
+.sw-swipe-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--sb-accent);
+  box-shadow: 0 0 0 1px rgba(var(--sb-shadow-rgb), calc(0.25 * var(--sb-shadow-k)));
+  pointer-events: none;
+}
+
+.sw-swipe-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  border-radius: 9px;
+  background: var(--sb-accent);
+  box-shadow: 0 1px 4px rgba(var(--sb-shadow-rgb), calc(0.4 * var(--sb-shadow-k)));
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+
+  .sw-swipe-divider.is-dragging & { background: var(--sb-accent-dim); }
+}
+
+.sw-blink-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sb-text-strong);
+  background: rgba(var(--sb-bg-panel-rgb), 0.85);
+  box-shadow: 0 0 0 1px rgba(var(--sb-overlay-rgb), 0.08);
+  pointer-events: none;
+}
+
+.sw-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--sb-text-muted);
+}
+
+.sw-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sw-mode-slider {
+  width: 160px;
+  accent-color: var(--sb-accent);
+}
+
+.sw-mode-value,
+.sw-pixel-diff-summary {
+  font-variant-numeric: tabular-nums;
+}
+
+.sw-pixel-diff-summary {
+  margin-left: auto;
+  color: var(--sb-text-dim);
+}
+/* ---- end image compare overlay modes ---- */
