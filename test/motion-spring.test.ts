@@ -13,62 +13,99 @@ function settle(spring: Spring, seconds = 3): number {
   return t;
 }
 
+// Push a spring from 0 to 100 and report the furthest it got.
+function peakOnTheWayTo100(): number {
+  const spring = new Spring(0);
+  let peak = 0;
+  spring.onUpdate = (x) => { peak = Math.max(peak, x); };
+  spring.to(100);
+  settle(spring);
+  return peak;
+}
+
 test('a spring comes to rest exactly on its target', () => {
+  /* Given */
   setReducedMotion(false);
   const spring = new Spring(0);
 
+  /* When */
   spring.to(100);
   settle(spring);
 
+  /* Then */
   assert.equal(spring.moving, false);
   assert.equal(spring.x, 100);
   assert.equal(spring.v, 0);
 });
 
-test('the house feel overshoots a little; reduced motion does not', () => {
-  // Lively (damping 0.78) passes its target before settling; critically damped never does.
-  for (const [reduced, overshoots] of [[false, true], [true, false]] as const) {
-    setReducedMotion(reduced);
-    const spring = new Spring(0);
-    let peak = 0;
-    spring.onUpdate = (x) => { peak = Math.max(peak, x); };
-
-    spring.to(100);
-    settle(spring);
-
-    assert.equal(peak > 100.5, overshoots, `reduced=${reduced} peak=${peak}`);
-  }
+test('the house feel overshoots a little', () => {
+  // Lively (damping 0.78) passes its target before settling.
+  /* Given */
   setReducedMotion(false);
+
+  /* When */
+  const peak = peakOnTheWayTo100();
+
+  /* Then */
+  assert.equal(peak > 100.5, true, `reduced=false peak=${peak}`);
+});
+
+test('reduced motion does not overshoot', () => {
+  // Critically damped never passes its target.
+  /* Given */
+  setReducedMotion(true);
+
+  try {
+    /* When */
+    const peak = peakOnTheWayTo100();
+
+    /* Then */
+    assert.equal(peak > 100.5, false, `reduced=true peak=${peak}`);
+  } finally {
+    setReducedMotion(false);
+  }
 });
 
 test('retargeting mid-flight keeps the velocity', () => {
+  /* Given */
   setReducedMotion(false);
   const spring = new Spring(0);
   spring.to(100);
   advance(0.05);
   const velocity = spring.v;
 
+  /* When */
   spring.to(-100);
 
+  /* Then */
   assert.equal(spring.v, velocity);
 });
 
 test('a kick springs back to where it was', () => {
+  /* Given */
   setReducedMotion(false);
   const spring = new Spring(1, { eps: 0.0005 });
 
+  /* When */
   spring.to(1).kick(9);
   settle(spring);
 
+  /* Then */
   assert.equal(spring.x, 1);
 });
 
 test('under reduced motion a kick does nothing', () => {
+  /* Given */
   setReducedMotion(true);
   const spring = new Spring(1);
 
-  spring.kick(9);
+  try {
+    /* When */
+    spring.kick(9);
 
-  assert.equal(spring.v, 0);
-  setReducedMotion(false);
+    /* Then */
+    assert.equal(spring.v, 0);
+  } finally {
+    setReducedMotion(false);
+  }
 });

@@ -8,6 +8,7 @@ import { NodeFileSystem } from '../src/infrastructure/fs/node-file-system';
 import { FileTranscriptStore } from '../src/infrastructure/fs/transcript-store';
 
 test('folder index timestamp advances when an existing session file is appended', async () => {
+  /* Given */
   const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-folder-index-'));
   const transcripts = new FileTranscriptStore(new NodeFileSystem(), projectsDir);
 
@@ -26,9 +27,11 @@ test('folder index timestamp advances when an existing session file is appended'
     // would not be distinguishable.
     await new Promise(resolve => setTimeout(resolve, 1100));
 
+    /* When */
     fs.appendFileSync(sessionPath, '{"type":"assistant","message":"second"}\n', 'utf8');
-
     const after = transcripts.folderIndexMtimeMs(folder);
+
+    /* Then */
     assert.ok(after > before, `expected index mtime to increase (${before} -> ${after})`);
   } finally {
     fs.rmSync(projectsDir, { recursive: true, force: true });
