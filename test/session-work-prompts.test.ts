@@ -137,7 +137,11 @@ test('Open PR', () => {
 });
 
 test('Create a pull request', () => {
-  assert.equal(renderPrompt({ action: 'create-pr', branch: 'main', worktree: '/wt' }),
+  /* When */
+  const prompt = renderPrompt({ action: 'create-pr', branch: 'main', worktree: '/wt' });
+
+  /* Then */
+  assert.equal(prompt,
     'Commit the uncommitted changes in /wt, on a new branch if main is the default branch, ' +
     "then push it and open a pull request for it, following this repo's commit and PR conventions.");
 });

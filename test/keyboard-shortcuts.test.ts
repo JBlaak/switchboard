@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isArchiveSessionKey, isBareQuickSessionKey, isQuickSessionKey, isSessionNavKey, isSessionPickerKey,
-  isSidebarFocusKey, listCursorKey, sessionNavDirection,
+  isSidebarFocusKey, isSidebarToggleKey, listCursorKey, sessionNavDirection,
 } from '../src/renderer/lib/shortcut-keys';
 
 /** Where a key lands: nowhere in particular, a text field, or xterm's own textarea. */
@@ -42,6 +42,35 @@ test('Cmd+L is the list key, and nothing else with L is', () => {
 
   /* Then */
   assert.deepEqual(listKeys, [true, false, false]);
+});
+
+// ── Cmd+S ──
+
+test('Cmd+S toggles the sidebar, wherever the key lands', () => {
+  /* Given */
+  const presses = [cmd('KeyS'), keydown({ code: 'KeyS', metaKey: true }, 'textField'), keydown({ code: 'KeyS', metaKey: true }, 'terminal')];
+
+  /* When */
+  const toggles = presses.map(isSidebarToggleKey);
+
+  /* Then */
+  assert.deepEqual(toggles, [true, true, true]);
+});
+
+test('S without Cmd, or with another modifier, is no sidebar toggle', () => {
+  /* Given */
+  const presses = [
+    keydown({ code: 'KeyS' }),
+    keydown({ code: 'KeyS', metaKey: true, shiftKey: true }),
+    keydown({ code: 'KeyS', metaKey: true, altKey: true }),
+    keydown({ code: 'KeyS', metaKey: true, ctrlKey: true }),
+  ];
+
+  /* When */
+  const toggles = presses.map(isSidebarToggleKey);
+
+  /* Then */
+  assert.deepEqual(toggles, [false, false, false, false]);
 });
 
 // ── Cmd+A and Cmd+E ──

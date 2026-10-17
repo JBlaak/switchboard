@@ -117,8 +117,13 @@ test('Ship it merges with the repository\'s method', async () => {
 });
 
 test('uncommitted changes hand Claude a commit-and-PR prompt for their worktree', async () => {
+  /* Given */
   const { service, prompter } = setup({ items: [dirtyItem] });
+
+  /* When */
   await service.request('s1', dirtyItem.id, 'create-pr');
+
+  /* Then */
   assert.equal(prompter.sent[0].prompt,
     `Commit the uncommitted changes in ${ROOT}, on a new branch if main is the default branch, ` +
     "then push it and open a pull request for it, following this repo's commit and PR conventions.");

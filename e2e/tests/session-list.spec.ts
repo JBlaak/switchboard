@@ -21,9 +21,10 @@ import {
 import { fakeClaude, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
 import { minutesAgo, sessionId } from '../support/fixture-home';
 import { failStopSession, windowPosition } from '../support/main-process';
+import { answerDialogs, dialogsAsked } from '../support/native-dialogs';
 import { askQuestions } from '../support/questions';
 import {
-  allowMotion, answerDialogs, collectDialogs, expectInOrder, expectRowsInOrder, failInvoke, listScroller,
+  allowMotion, expectInOrder, expectRowsInOrder, failInvoke, listScroller,
   readMotion, redraw, renameInput, rowNode, sectionOf, sessionItem, startMotionRecorder, storedSession, tagRow,
 } from '../support/session-list';
 import { LABEL, P, S } from '../fixtures/standard';
@@ -397,7 +398,7 @@ test.describe('stop', () => {
     /* Given */
     await openRemoteSession(page, home, LABEL.remoteApi, S.remoteApi);
     await openSession(page, home, LABEL.loginFix, S.loginFix);
-    const dialogs = answerDialogs(page, false);
+    await answerDialogs(page, false);
     const remote = sessionRow(page, LABEL.remoteApi);
     const login = sessionRow(page, LABEL.loginFix);
 
@@ -406,18 +407,18 @@ test.describe('stop', () => {
     await rowButton(remote, 'Disconnect (keeps running on the remote)').click();
 
     /* Then */
-    await expect.poll(() => dialogs.messages).toEqual(['Disconnect? The session keeps running on the remote machine.']);
+    await expect.poll(() => dialogsAsked(page)).toEqual(['Disconnect? The session keeps running on the remote machine.']);
 
     /* When */
     await login.hover();
     await rowButton(login, 'Stop session').click();
 
     /* Then */
-    await expect.poll(() => dialogs.messages.slice(1)).toEqual(['Stop this session?']);
+    await expect.poll(async () => (await dialogsAsked(page)).slice(1)).toEqual(['Stop this session?']);
     await expect(terminalStatus(page)).toHaveText('Running');
 
     /* When */
-    dialogs.accept = true;
+    await answerDialogs(page, true);
     await login.hover();
     await rowButton(login, 'Stop session').click();
 
@@ -480,7 +481,7 @@ test.describe('archive', () => {
   test('a row or a group comes back, and says so, when archiving or stopping fails', async ({ page, app }) => {
     /* Given */
     await failInvoke(app, 'archiveSession', 'the database is locked');
-    const asked = collectDialogs(page);
+    await answerDialogs(page, true);
     const row = sessionRow(page, LABEL.chartsDarkMode);
 
     /* When */
@@ -497,7 +498,7 @@ test.describe('archive', () => {
     await rowButton(row, 'Archive').click();
 
     /* Then */
-    await expect.poll(() => asked).toEqual(['Could not stop this session: the PTY would not die']);
+    await expect.poll(() => dialogsAsked(page)).toEqual(['Could not stop this session: the PTY would not die']);
     await expect(row).toBeVisible();
     expect(await rowNode(page, S.chartsDarkMode)).toMatchObject({ leaving: false });
     expect(await storedSession(page, S.chartsDarkMode)).toMatchObject({ archived: 0 });
@@ -509,10 +510,10 @@ test.describe('archive', () => {
 
     /* Then */
     // It stops at the first session it cannot stop.
-    await expect.poll(() => asked).toHaveLength(2);
+    await expect.poll(() => dialogsAsked(page)).toHaveLength(2);
     await expect(header).toBeVisible();
     await page.waitForTimeout(500);
-    expect(asked).toHaveLength(2);
+    expect(await dialogsAsked(page)).toHaveLength(2);
     for (const id of [S.billingPlan, S.billingStep1, S.billingStep2]) {
       expect(await storedSession(page, id)).toMatchObject({ archived: 0 });
     }

@@ -18,6 +18,7 @@ import path from 'node:path';
 import { test, expect, forEachAppearance } from '../support/test';
 import { expectScreen, openSession, sessionRow, sidebar, terminalHeader, terminalStatus } from '../support/app';
 import { clipboardWrites, openedExternally } from '../support/main-process';
+import { answerDialogs } from '../support/native-dialogs';
 import {
   cellPoint, expectTerminalText, findInTerminal, scrollTerminal, selectInTerminal, terminalLines, terminalState,
   terminalText,
@@ -377,7 +378,7 @@ test.describe('terminal exit and stop', () => {
     const stop = terminalHeader(page).getByRole('button', { name: 'Stop process', exact: true });
 
     /* When */
-    page.once('dialog', dialog => void dialog.dismiss());
+    await answerDialogs(page, false);
     await stop.click();
     await settle(page, 300);
 
@@ -386,7 +387,7 @@ test.describe('terminal exit and stop', () => {
     expect(await page.evaluate(() => window.api.getActiveSessions())).toContain(S.loginFix);
 
     /* When */
-    page.once('dialog', dialog => void dialog.accept());
+    await answerDialogs(page, true);
     await stop.click();
 
     /* Then */

@@ -20,6 +20,7 @@ import type { GlobalSettings } from '../../../domain/settings/settings';
 import type { SidebarFilter } from '../../state/toolbar-slice';
 
 export { toggleSleep } from './sleep-switch';
+export { isSidebarToggleKey } from '../../lib/shortcut-keys';
 
 /** Read the stored preferences the chrome shows, and start the sleep watcher. Called once, at boot. */
 export function installToolbar(): void {
@@ -39,11 +40,6 @@ export function installToolbar(): void {
 
 export function setSidebarCollapsed(collapsed: boolean): void {
   dispatch({ type: 'sidebarCollapsed', collapsed });
-}
-
-/** Cmd+S, wherever the focus is: no text field has a use for it. */
-export function isSidebarToggleKey(e: KeyboardEvent): boolean {
-  return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyS';
 }
 
 export function toggleSidebar(): void {

@@ -13,6 +13,7 @@ import { test, expect, forEachAppearance } from '../support/test';
 import { dialog, expectScreen, rowButton, sessionRow, terminalStatus } from '../support/app';
 import { fakeClaude, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
 import { failStopSession, setHostStub } from '../support/main-process';
+import { answerDialogs, dialogsShown } from '../support/native-dialogs';
 import { LABEL, P, S, standardFixture } from '../fixtures/standard';
 import type { Locator, Page } from '@playwright/test';
 
@@ -33,11 +34,6 @@ async function openResumeWithConfig(page: Page, label: string) {
 /** Take the focus off whatever has it, so a stray Enter cannot click a button. */
 async function blur(page: Page) {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-}
-
-/** Answer the next native confirm(). */
-function answerNextConfirm(page: Page, accept: boolean) {
-  page.once('dialog', prompt => void (accept ? prompt.accept() : prompt.dismiss()));
 }
 
 /** A picker row's name; `rowButton` climbs from it to the row's buttons. */
@@ -199,7 +195,7 @@ test.describe('project picker', () => {
     const before = launchedKeys(home);
 
     /* When */
-    answerNextConfirm(page, false);
+    await answerDialogs(page, false);
     await rowButton(pickerRow(picker, REMOTE_NAME), 'Remove remote project').click();
 
     /* Then */
@@ -208,7 +204,7 @@ test.describe('project picker', () => {
     expect(await projectPaths(page)).toContain(REMOTE_PATH);
 
     /* When */
-    answerNextConfirm(page, true);
+    await answerDialogs(page, true);
     await rowButton(pickerRow(picker, REMOTE_NAME), 'Remove remote project').click();
 
     /* Then */
@@ -217,7 +213,7 @@ test.describe('project picker', () => {
     expect(await projectPaths(page)).not.toContain(REMOTE_PATH);
 
     /* When */
-    answerNextConfirm(page, true);
+    await answerDialogs(page, true);
     await rowButton(pickerRow(picker, WORKTREE_NAME), 'Hide worktree').click();
 
     /* Then */
@@ -225,7 +221,7 @@ test.describe('project picker', () => {
     expect(await projectPaths(page)).not.toContain(home.projectPath(P.goneParser));
 
     /* When */
-    answerNextConfirm(page, true);
+    await answerDialogs(page, true);
     await rowButton(pickerRow(picker, P.webDashboard), 'Archive all sessions in this project').click();
 
     /* Then */
@@ -240,18 +236,15 @@ test.describe('project picker', () => {
     /* When */
     await failStopSession(app, 'still running');
     const archivedBefore = await archivedCount(page, home.projectPath(P.acmeApi));
-    const prompts: string[] = [];
-    page.on('dialog', prompt => {
-      prompts.push(prompt.type());
-      void prompt.accept();
-    });
+    await answerDialogs(page, true);
+    const prompts = async () => (await dialogsShown(page)).map(shown => shown.type);
     await rowButton(pickerRow(picker, P.acmeApi), 'Archive all sessions in this project').click();
 
     /* Then */
     // Archive all stops at the first session it cannot stop, and says so once.
-    await expect.poll(() => prompts).toEqual(['confirm', 'alert']);
+    await expect.poll(prompts).toEqual(['confirm', 'alert']);
     await settle(page);
-    expect(prompts).toEqual(['confirm', 'alert']);
+    expect(await prompts()).toEqual(['confirm', 'alert']);
     expect(await archivedCount(page, home.projectPath(P.acmeApi))).toBe(archivedBefore);
 
     /* When */

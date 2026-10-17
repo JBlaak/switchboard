@@ -320,6 +320,32 @@ test.describe('sleep toggle', () => {
   });
 });
 
+test.describe('collapse', () => {
+  test('Cmd+S hides and shows the sidebar, from the search box too', async ({ page }) => {
+    /* When */
+    await page.keyboard.press('Meta+s');
+
+    /* Then */
+    await expect(searchBox(page)).toBeHidden();
+    await expect(button(page, 'Show sidebar')).toBeVisible();
+    expect(await sidebarWidth(page)).toBe(42);
+
+    /* When */
+    await page.keyboard.press('Meta+s');
+
+    /* Then */
+    await expect(searchBox(page)).toBeVisible();
+    await expect(button(page, 'Show sidebar')).toBeHidden();
+
+    /* When */
+    await searchBox(page).focus();
+    await page.keyboard.press('Meta+s');
+
+    /* Then */
+    await expect(searchBox(page)).toBeHidden();
+  });
+});
+
 forEachAppearance(() => {
   test('sidebar, collapsed', async ({ page }) => {
     /* When */

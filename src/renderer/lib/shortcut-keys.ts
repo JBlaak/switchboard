@@ -12,6 +12,11 @@ export function isSidebarFocusKey(e: KeyboardEvent): boolean {
   return e.metaKey && !e.shiftKey && !e.ctrlKey;
 }
 
+/** Cmd+S hides or shows the sidebar, wherever the focus is: no text field has a use for it. */
+export function isSidebarToggleKey(e: KeyboardEvent): boolean {
+  return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyS';
+}
+
 /**
  * Cmd+A opens the new-session picker.
  *
