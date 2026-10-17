@@ -13,6 +13,7 @@ import { projectLabel } from '../../features/sessions/project-label';
 import { sessionDisplayName, sessionTimeLabel } from '../../state/session-list-layout';
 import { useStore } from '../use-store';
 import { canOpenSessionWork } from '../session-work/actions';
+import { isRemoteRow, workTrigger } from './work-trigger';
 import { agentsBadgeHtml } from './markup';
 import { openRepository } from './actions';
 import type { JSX, MouseEvent } from 'react';
@@ -31,14 +32,11 @@ export interface RowMetaProps {
   onOpenWork: (e: MouseEvent<HTMLElement>) => void;
 }
 
-const REMOTE_REASON = "Session work isn't available for remote sessions yet";
-const NO_REPO_REASON = 'Not a git repository';
-
 export function RowMeta({ row, asking, agents, now, onOpenWork }: RowMetaProps): JSX.Element {
   const { session } = row;
   const path = row.projectPath || session.projectPath;
-  const remote = session.type === 'remote' || !!path?.startsWith('ssh://');
-  const canOpen = useCanOpenWork(session.sessionId, remote);
+  const remote = isRemoteRow(session, path);
+  const trigger = workTrigger(remote, useCanOpenWork(session.sessionId, remote));
 
   const content = (
     <span className="session-meta-left">
@@ -55,7 +53,7 @@ export function RowMeta({ row, asking, agents, now, onOpenWork }: RowMetaProps):
     </span>
   );
 
-  if (canOpen === true) {
+  if (trigger.button) {
     return (
       <button
         type="button"
@@ -68,8 +66,7 @@ export function RowMeta({ row, asking, agents, now, onOpenWork }: RowMetaProps):
       </button>
     );
   }
-  const reason = remote ? REMOTE_REASON : canOpen === false ? NO_REPO_REASON : undefined;
-  return <div className="session-meta" title={reason}>{content}</div>;
+  return <div className="session-meta" title={trigger.reason}>{content}</div>;
 }
 
 /**
