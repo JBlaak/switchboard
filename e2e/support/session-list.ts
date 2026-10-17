@@ -215,14 +215,3 @@ export async function storedSession(page: Page, sessionId: string): Promise<{
 export function keyboardCursor(page: Page): Locator {
   return listScroller(page).locator('.kbd-cursor');
 }
-
-/**
- * Make one IPC handler never answer, so whatever waits on it stays waiting —
- * a row archived through it stays mid-exit for the rest of the test.
- */
-export async function hangInvoke(app: ElectronApplication, channel: keyof typeof INVOKE): Promise<void> {
-  await app.evaluate(({ ipcMain }, channel) => {
-    ipcMain.removeHandler(channel);
-    ipcMain.handle(channel, () => new Promise(() => {}));
-  }, INVOKE[channel]);
-}
