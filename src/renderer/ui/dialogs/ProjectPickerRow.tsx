@@ -10,6 +10,7 @@ import { openSettings } from '../settings/actions';
 import { archiveAllSessions, hideWorktree, removeRemoteProject } from './actions';
 import { tooltip } from './DialogShell';
 import { labelRuns } from './rank-projects';
+import { sessionCountLabel } from './picker-selection';
 import type { JSX, MouseEvent, Ref } from 'react';
 import type { Candidate } from './rank-projects';
 import type { Project } from '../../../domain/project/project';
@@ -52,7 +53,7 @@ export function ProjectPickerRow({
         {project.remote && <span className="remote-badge">SSH</span>}
       </div>
       <span className={'project-picker-count' + (running > 0 ? ' running' : '')}>
-        {running > 0 ? `${running} running` : `${total} session${total === 1 ? '' : 's'}`}
+        {sessionCountLabel(total, running)}
       </span>
       <RowActions project={project} onClose={onClose} onChanged={onChanged} />
     </div>

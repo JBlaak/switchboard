@@ -10,6 +10,8 @@ import { loadProjects } from '../../features/sessions/session-list';
 import { archiveSessionRow } from '../../features/sessions/session-actions';
 import { pollActiveSessions } from '../../features/sessions/session-poller';
 import { projectLabel } from '../../features/sessions/project-label';
+import { localProjectRequest, remoteProjectRequest } from './add-project-request';
+import type { RemoteFields } from './add-project-request';
 import type { DialogRequest } from '../../state/dialog-slice';
 import type { Project } from '../../../domain/project/project';
 import type { SessionRow } from '../../../domain/session/session';
@@ -38,12 +40,7 @@ export async function openResumeDialog(session: SessionRow): Promise<void> {
 
 // ── Adding a project ──
 
-export interface RemoteFields {
-  user: string;
-  host: string;
-  port: string;
-  dir: string;
-}
+export type { RemoteFields } from './add-project-request';
 
 /**
  * Add a local folder. Answers with an error message, or null on success.
@@ -52,20 +49,17 @@ export interface RemoteFields {
  * trip to be told it is blank; the validation that matters is in main.
  */
 export async function addLocalProject(projectPath: string): Promise<string | null> {
-  const trimmed = projectPath.trim();
-  if (!trimmed) return 'Please enter a folder path.';
-  const result = await window.api.addProject(trimmed);
+  const request = localProjectRequest(projectPath);
+  if ('error' in request) return request.error;
+  const result = await window.api.addProject(request.path);
   return result.error ?? null;
 }
 
 /** Add a machine over SSH. Answers with an error message, or null on success. */
 export async function addRemoteProject(fields: RemoteFields): Promise<string | null> {
-  const user = fields.user.trim();
-  const host = fields.host.trim();
-  if (!user || !host) return 'Please enter a username and host.';
-  const result = await window.api.addRemoteProject({
-    user, host, port: Number(fields.port.trim()) || 22, dir: fields.dir.trim(),
-  });
+  const request = remoteProjectRequest(fields);
+  if ('error' in request) return request.error;
+  const result = await window.api.addRemoteProject(request.config);
   return result.error ?? null;
 }
 
