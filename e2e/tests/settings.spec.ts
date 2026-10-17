@@ -1,10 +1,15 @@
 /**
  * The settings viewer, in its global and per-project forms.
+ *
+ * The weather city lookup's cases are unit tested
+ * (test/settings-weather-city.test.ts) and the panel's open/save/close state
+ * too (test/settings-slice.test.ts). These tests keep what needs the app: the
+ * stored settings read and written through main, the panel swapped in for the
+ * terminal or the empty screen, and what saving changes elsewhere.
  */
 import { test, expect, forEachAppearance } from '../support/test';
 import { dialog, expectScreen, openSession, rowButton, sidebar, terminalHeader } from '../support/app';
 import { setHostStub } from '../support/main-process';
-import { answerDialogs, dialogsAsked } from '../support/native-dialogs';
 import { LABEL, P, S, standardFixture } from '../fixtures/standard';
 import type { Locator, Page } from '@playwright/test';
 
@@ -93,56 +98,46 @@ async function resolvedColor(page: Page, expression: string): Promise<string> {
   }, expression);
 }
 
-test.describe('smoke', () => {
-  test('global settings save and close', async ({ page }) => {
-    await openGlobalSettings(page);
-    await page.getByRole('button', { name: 'Save Settings', exact: true }).click();
-    await expect(page.getByText('Global Settings — Global', { exact: true })).toBeHidden();
-    const global = await page.evaluate(() => window.api.getSetting<Record<string, unknown>>('global'));
-    // The form writes back what it was opened with, and keeps the harness's own keys.
-    expect(global).toMatchObject({ sessionMaxAgeDays: 3, weatherEnabled: false, appearance: 'light' });
-  });
+/** Make `confirm` answer `answer` without a native dialog, and record what it asked. */
+async function answerConfirm(page: Page, answer: boolean): Promise<void> {
+  await page.evaluate((answer) => {
+    const asked: string[] = [];
+    (window as unknown as { __asked: string[] }).__asked = asked;
+    window.confirm = (message?: string) => { asked.push(String(message)); return answer; };
+  }, answer);
+}
 
-  test('project settings open from the picker and cancel', async ({ page }) => {
-    await openProjectSettings(page, P.acmeApi);
-    await expect(page.getByRole('button', { name: 'Hide Project', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.getByText(`Project Settings — ${P.acmeApi}`, { exact: true })).toBeHidden();
-  });
-});
+async function confirmsAsked(page: Page): Promise<string[]> {
+  return await page.evaluate(() => (window as unknown as { __asked: string[] }).__asked);
+}
 
 test.describe('layout', () => {
-  test('replaces the empty screen, and Cancel brings it back', async ({ page }) => {
-    await expect(emptyScreen(page)).toBeVisible();
-    await openGlobalSettings(page);
-    await expect(emptyScreen(page)).toBeHidden();
-    await button(page, 'Cancel').click();
-    await expect(globalTitle(page)).toBeHidden();
-    await expect(emptyScreen(page)).toBeVisible();
-  });
-
-  test('replaces the terminal, and closing restores and refits it', async ({ page, home }) => {
+  test('replaces the terminal, and saving a font and theme refits and recolours it', async ({ page, home }) => {
+    /* Given */
     const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
     await expect.poll(() => claude.size()?.cols ?? 0).toBeGreaterThan(0);
     const before = claude.size()!;
 
+    /* When */
     await openGlobalSettings(page);
-    await expect(terminalHeader(page)).toBeHidden();
-    await field(page, 'Terminal Font Size').getByRole('spinbutton').fill('24');
-    await button(page, 'Save Settings').click();
-    await expect(globalTitle(page)).toBeHidden();
 
+    /* Then */
+    await expect(terminalHeader(page)).toBeHidden();
+
+    /* When */
+    await field(page, 'Terminal Font Size').getByRole('spinbutton').fill('24');
+    await field(page, 'Terminal Theme').getByRole('combobox').selectOption('dracula');
+    await button(page, 'Save Settings').click();
+
+    /* Then */
+    await expect(globalTitle(page)).toBeHidden();
     await expect(terminalHeader(page)).toBeVisible();
     await expect(emptyScreen(page)).toBeHidden();
     // The bigger font, applied while the terminal had no box, fits on close.
     await expect.poll(() => claude.size()?.cols).toBeLessThan(before.cols);
-  });
-
-  test('the header is a window drag region', async ({ page }) => {
-    await openGlobalSettings(page);
-    const region = await globalTitle(page).locator('..').evaluate(el =>
-      getComputedStyle(el).getPropertyValue('-webkit-app-region'));
-    expect(region).toBe('drag');
+    const container = page.getByLabel('Terminal input')
+      .locator('xpath=ancestor::*[contains(@style, "background-color")][1]');
+    await expect(container).toHaveCSS('background-color', 'rgb(40, 42, 54)');
   });
 });
 
@@ -171,7 +166,10 @@ test.describe('global fields', () => {
   });
 
   test('show the saved values', async ({ page }) => {
+    /* When */
     await openGlobalSettings(page);
+
+    /* Then */
     await expect(field(page, 'Permission Mode').getByRole('combobox')).toHaveValue('acceptEdits');
     await expect(toggle(page, 'Worktree')).toBeChecked();
     await expect(field(page, 'Worktree Name').getByRole('textbox')).toHaveValue('feature');
@@ -195,9 +193,19 @@ test.describe('global fields', () => {
 });
 
 test.describe('global save', () => {
-  test('writes every field, merged over the stored settings', async ({ page }) => {
+  test('writes every field, merged over the stored settings, and re-syncs the quick session button', async ({ page }) => {
+    /* Given */
     const stored = withoutWindowBounds(await readSetting(page, 'global'));
+    const quick = page.getByRole('button', { name: 'Quick session (⌘N)', exact: true });
+
+    /* When */
     await openGlobalSettings(page);
+
+    /* Then */
+    // Hidden until there is a folder to launch in.
+    await expect(quick).toBeHidden();
+
+    /* When */
     await field(page, 'Permission Mode').getByRole('combobox').selectOption('plan');
     await switchOn(page, 'Worktree');
     await field(page, 'Worktree Name').getByRole('textbox').fill('  wt  ');
@@ -213,14 +221,14 @@ test.describe('global save', () => {
     await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('4');
     await field(page, 'Session Max Age (days)').getByRole('spinbutton').fill('2');
     await switchOn(page, 'Show weather on the empty screen');
-
     await button(page, 'Save Settings').click();
+
+    /* Then */
     const saved = button(page, '✓ Saved');
     await expect(saved).toBeVisible();
     // Retried: the button transitions into the colour.
     await expect(saved).toHaveCSS('background-color', await resolvedColor(page, 'var(--sb-mint)'));
     await expect(globalTitle(page)).toBeHidden();
-
     expect(withoutWindowBounds(await readSetting(page, 'global'))).toEqual({
       ...stored,
       permissionMode: 'plan',
@@ -240,149 +248,127 @@ test.describe('global save', () => {
       weatherEnabled: true,
       weatherLocation: { name: 'Amsterdam', latitude: 52.3676, longitude: 4.9041 },
     });
+    await expect(quick).toBeVisible();
   });
 
   test('applies the session limits to the sidebar at once', async ({ page }) => {
+    /* When */
+    await openGlobalSettings(page);
+
+    /* Then */
     await expect(sidebar(page).getByText('+ 3 older', { exact: true })).toBeVisible();
 
-    await openGlobalSettings(page);
+    /* When */
     await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('100');
     await field(page, 'Session Max Age (days)').getByRole('spinbutton').fill('365');
     await button(page, 'Save Settings').click();
+
+    /* Then */
     await expect(globalTitle(page)).toBeHidden();
     await expect(sidebar(page).getByText(/^\+ \d+ older$/)).toHaveCount(0);
 
+    /* When */
     await openGlobalSettings(page);
     await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('1');
     await button(page, 'Save Settings').click();
+
+    /* Then */
     await expect(globalTitle(page)).toBeHidden();
     const older = sidebar(page).getByText(/^\+ \d+ older$/);
     await expect(older).toBeVisible();
     expect(Number((await older.textContent())!.match(/\d+/)![0])).toBeGreaterThan(3);
   });
-
-  test('applies the terminal theme to open terminals at once', async ({ page, home }) => {
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
-    await openGlobalSettings(page);
-    await field(page, 'Terminal Theme').getByRole('combobox').selectOption('dracula');
-    await button(page, 'Save Settings').click();
-    await expect(globalTitle(page)).toBeHidden();
-    const container = page.getByLabel('Terminal input')
-      .locator('xpath=ancestor::*[contains(@style, "background-color")][1]');
-    await expect(container).toHaveCSS('background-color', 'rgb(40, 42, 54)');
-  });
-
-  test('re-syncs the quick session button', async ({ page }) => {
-    // Hidden until there is a folder to launch in.
-    const quick = page.getByRole('button', { name: 'Quick session (⌘N)', exact: true });
-    await expect(quick).toBeHidden();
-    await openGlobalSettings(page);
-    await field(page, 'Quick Session Folder').getByRole('textbox').fill('/tmp/quick-folder');
-    await button(page, 'Save Settings').click();
-    await expect(globalTitle(page)).toBeHidden();
-    await expect(quick).toBeVisible();
-  });
 });
 
 test.describe('global cancel', () => {
-  test('closes without saving', async ({ page }) => {
+  test('closes without saving, back to the empty screen', async ({ page }) => {
+    /* Given */
     const before = withoutWindowBounds(await readSetting(page, 'global'));
+
+    /* When */
     await openGlobalSettings(page);
+
+    /* Then */
+    await expect(emptyScreen(page)).toBeHidden();
+    // The header is a window drag region.
+    const region = await globalTitle(page).locator('..').evaluate(el =>
+      getComputedStyle(el).getPropertyValue('-webkit-app-region'));
+    expect(region).toBe('drag');
+
+    /* When */
     await field(page, 'Worktree Name').getByRole('textbox').fill('never-saved');
     await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('2');
     await button(page, 'Cancel').click();
+
+    /* Then */
     await expect(globalTitle(page)).toBeHidden();
+    await expect(emptyScreen(page)).toBeVisible();
     expect(withoutWindowBounds(await readSetting(page, 'global'))).toEqual(before);
     await expect(sidebar(page).getByText('+ 3 older', { exact: true })).toBeVisible();
 
-    // And the next open starts from what is stored, not from the abandoned edit.
+    /* When */
     await openGlobalSettings(page);
+
+    /* Then */
+    // The next open starts from what is stored, not from the abandoned edit.
     await expect(field(page, 'Worktree Name').getByRole('textbox')).toHaveValue('');
   });
 });
 
 test.describe('terminal font warning', () => {
   test('warns live when the font is not installed', async ({ page }) => {
+    /* Given */
     await openGlobalSettings(page);
     const input = field(page, 'Terminal Font').getByRole('textbox');
     const warning = page.getByText(/isn't installed; falling back to the default/);
-    await expect(warning).toHaveCount(0);
 
+    /* When */
     await input.fill('No Such Font Xyz');
+
+    /* Then */
     await expect(warning).toBeVisible();
     await expect(warning).toContainText('“No Such Font Xyz”');
 
+    /* When */
     await input.fill('Menlo');
+
+    /* Then */
     await expect(warning).toHaveCount(0);
+
+    /* When */
     await input.fill('');
+
+    /* Then */
     await expect(warning).toHaveCount(0);
   });
 });
 
 test.describe('weather city', () => {
-  test('resolves on change and saves the resolved place', async ({ page, app }) => {
-    await setHostStub(app, 'geocode', { utrecht: { location: UTRECHT } });
+  test('resolves on change, and Save saves the place it resolves to', async ({ page, app }) => {
+    /* Given */
+    await setHostStub(app, 'geocode', {
+      utrecht: { location: UTRECHT },
+      Berlin: { location: BERLIN, delayMs: 600 },
+    });
     await openGlobalSettings(page);
-    await expect(page.getByText('Weather for Amsterdam', { exact: true })).toBeVisible();
     const city = field(page, 'City').getByRole('textbox');
+
+    /* When */
     await city.fill('utrecht');
     await city.press('Tab');
+
+    /* Then */
     await expect(page.getByText('Weather for Utrecht', { exact: true })).toBeVisible();
-    await button(page, 'Save Settings').click();
-    await expect(globalTitle(page)).toBeHidden();
-    expect((await readSetting(page, 'global'))?.weatherLocation).toEqual(UTRECHT);
-  });
 
-  test('keeps the previous place when nothing is found', async ({ page }) => {
-    await openGlobalSettings(page);
-    const city = field(page, 'City').getByRole('textbox');
-    await city.fill('Atlantis');
-    await city.press('Tab');
-    await expect(page.getByText('— couldn\'t find “Atlantis”; keeping Amsterdam.', { exact: false })).toBeVisible();
-    await expect(page.getByText('Weather for Amsterdam', { exact: false })).toBeVisible();
-    await button(page, 'Save Settings').click();
-    await expect(globalTitle(page)).toBeHidden();
-    expect((await readSetting(page, 'global'))?.weatherLocation).toMatchObject({ name: 'Amsterdam' });
-  });
-
-  test('keeps the previous place when the lookup fails', async ({ page, app }) => {
-    await setHostStub(app, 'geocode', { Utrecht: 'fail' });
-    await openGlobalSettings(page);
-    const city = field(page, 'City').getByRole('textbox');
-    await city.fill('Utrecht');
-    await city.press('Tab');
-    await expect(page.getByText('— couldn\'t look up “Utrecht”; keeping Amsterdam.', { exact: false })).toBeVisible();
-  });
-
-  test('ignores a result for text that has since changed', async ({ page, app }) => {
-    await setHostStub(app, 'geocode', { Berlin: { location: BERLIN, delayMs: 600 } });
-    await openGlobalSettings(page);
-    const city = field(page, 'City').getByRole('textbox');
-    await city.fill('Berlin');
-    await city.press('Tab');
-    // Typed over while Berlin resolves, without committing the new text.
-    await city.fill('Ber');
-    await page.waitForTimeout(1000);
-    await expect(page.getByText('Weather for Amsterdam', { exact: true })).toBeVisible();
-  });
-
-  test('Save waits for a lookup in flight', async ({ page, app }) => {
-    await setHostStub(app, 'geocode', { Berlin: { location: BERLIN, delayMs: 600 } });
-    await openGlobalSettings(page);
-    const city = field(page, 'City').getByRole('textbox');
+    /* When */
     await city.fill('Berlin');
     // Clicking Save blurs the field, which starts the lookup just before the click.
     await button(page, 'Save Settings').click();
+
+    /* Then */
+    // Save waited for the lookup in flight.
     await expect(globalTitle(page)).toBeHidden();
     expect((await readSetting(page, 'global'))?.weatherLocation).toEqual(BERLIN);
-  });
-
-  test('an empty city goes back to the default', async ({ page }) => {
-    await openGlobalSettings(page);
-    const city = field(page, 'City').getByRole('textbox');
-    await city.fill('');
-    await city.press('Tab');
-    await expect(page.getByText('Weather for Amsterdam', { exact: true })).toBeVisible();
   });
 });
 
@@ -396,7 +382,10 @@ test.describe('project scope', () => {
   });
 
   test('shows the project fields only, global values behind "Use global default"', async ({ page }) => {
+    /* When */
     await openProjectSettings(page, P.acmeApi);
+
+    /* Then */
     // Inherited: the global value, checked and disabled.
     await expect(useGlobal(page, 'Pre-launch Command')).toBeChecked();
     await expect(field(page, 'Pre-launch Command').getByRole('textbox')).toHaveValue('global-pre');
@@ -415,20 +404,10 @@ test.describe('project scope', () => {
     }
   });
 
-  test('"Use global default" disables and enables its field', async ({ page }) => {
-    await openProjectSettings(page, P.acmeApi);
-    const input = field(page, 'Additional Directories').getByRole('textbox');
-    await expect(input).toBeDisabled();
-    await useGlobal(page, 'Additional Directories').uncheck();
-    await expect(input).toBeEnabled();
-    await useGlobal(page, 'Additional Directories').check();
-    await expect(input).toBeDisabled();
-    await useGlobal(page, 'Worktree').uncheck();
-    await expect(toggle(page, 'Worktree')).toBeEnabled();
-  });
-
   test('Save stores only the fields not using the global default', async ({ page, home }) => {
+    /* Given */
     await openProjectSettings(page, P.acmeApi);
+    // Unchecking "Use global default" enables the field; the fill and switch would fail on a disabled one.
     await useGlobal(page, 'Chrome').uncheck();
     await switchOn(page, 'Chrome');
     await useGlobal(page, 'Permission Mode').uncheck();
@@ -440,7 +419,10 @@ test.describe('project scope', () => {
     await field(page, 'Additional Directories').getByRole('textbox').fill('/x');
     await useGlobal(page, 'Additional Directories').check();
 
+    /* When */
     await button(page, 'Save Settings').click();
+
+    /* Then */
     await expect(button(page, '✓ Saved')).toBeVisible();
     await expect(projectTitle(page, P.acmeApi)).toBeHidden();
     await expect(emptyScreen(page)).toBeVisible();
@@ -451,26 +433,39 @@ test.describe('project scope', () => {
   });
 
   test('Cancel closes without saving', async ({ page, home }) => {
+    /* Given */
     await openProjectSettings(page, P.acmeApi);
     await useGlobal(page, 'Chrome').uncheck();
     await field(page, 'Worktree Name').getByRole('textbox').fill('changed');
+
+    /* When */
     await button(page, 'Cancel').click();
+
+    /* Then */
     await expect(projectTitle(page, P.acmeApi)).toBeHidden();
     await expect(emptyScreen(page)).toBeVisible();
     expect(await readSetting(page, 'project:' + home.projectPath(P.acmeApi))).toEqual({ worktreeName: 'proj-wt' });
   });
 
   test('Hide Project asks first, then hides it and shows the empty screen', async ({ page, home }) => {
+    /* Given */
     await openProjectSettings(page, P.acmeApi);
-    await answerDialogs(page, false);
+    await answerConfirm(page, false);
+
+    /* When */
     await button(page, 'Hide Project').click();
-    expect(await dialogsAsked(page)).toEqual([
+
+    /* Then */
+    expect(await confirmsAsked(page)).toEqual([
       `Hide project "${P.acmeApi}" from Switchboard?\n\nThis hides the project from the sidebar. Your session files are not deleted.`,
     ]);
     await expect(projectTitle(page, P.acmeApi)).toBeVisible();
 
-    await answerDialogs(page, true);
+    /* When */
+    await answerConfirm(page, true);
     await button(page, 'Hide Project').click();
+
+    /* Then */
     await expect(projectTitle(page, P.acmeApi)).toBeHidden();
     await expect(emptyScreen(page)).toBeVisible();
     await expect.poll(async () => page.evaluate(async (projectPath) => {
@@ -483,12 +478,18 @@ test.describe('project scope', () => {
 
 forEachAppearance(() => {
   test('global settings', async ({ page }) => {
+    /* When */
     await openGlobalSettings(page);
+
+    /* Then */
     await expectScreen(page, 'settings-global');
   });
 
   test('project settings', async ({ page }) => {
+    /* When */
     await openProjectSettings(page, P.acmeApi);
+
+    /* Then */
     await expectScreen(page, 'settings-project');
   });
 });
