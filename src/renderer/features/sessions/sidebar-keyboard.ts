@@ -18,6 +18,7 @@
  */
 import { flushSync } from 'react-dom';
 import { sidebarContent } from '../../lib/dom';
+import { listCursorKey } from '../../lib/shortcut-keys';
 import { getState } from '../../state/app-store';
 import {
   cursorTargets, liveCursor, shownTargets, startTarget, stepTarget, targetAfterRemoval,
@@ -30,33 +31,7 @@ import {
 import { cursorElement, pressArchive, setListCursor } from '../../ui/session-list/cursor';
 import type { CursorTarget } from '../../state/list-cursor';
 
-export function isSidebarFocusKey(e: KeyboardEvent): boolean {
-  if (e.altKey || e.code !== 'KeyL') return false;
-  return e.metaKey && !e.shiftKey && !e.ctrlKey;
-}
-
-/**
- * Cmd+A opens the new-session picker.
- *
- * Except in a text field, where it stays Select All — the picker's own filter
- * among them.
- */
-export function isSessionPickerKey(e: KeyboardEvent): boolean {
-  return isCommandKey(e, 'KeyA');
-}
-
-/** Cmd+E archives the open session, with the same text-field exception. */
-export function isArchiveSessionKey(e: KeyboardEvent): boolean {
-  return isCommandKey(e, 'KeyE');
-}
-
-/** Cmd plus `code`, unless the key is going into a text field. */
-function isCommandKey(e: KeyboardEvent, code: string): boolean {
-  if (e.altKey || e.shiftKey || e.ctrlKey || !e.metaKey || e.code !== code) return false;
-  const target = e.target as HTMLElement | null;
-  if (!target || target.closest('.xterm')) return true;
-  return !target.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
-}
+export { isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey } from '../../lib/shortcut-keys';
 
 /**
  * Archive the session on screen, the way its row's archive button does.
@@ -100,40 +75,27 @@ function onKeyDown(e: KeyboardEvent): void {
   // Keys typed into a rename input are the input's own.
   if (e.target !== sidebarContent) return;
 
-  switch (e.key) {
-    case 'ArrowDown':
-    case 'ArrowUp':
-      e.preventDefault();
-      step(e.key === 'ArrowDown' ? 1 : -1);
+  const key = listCursorKey(e);
+  if (!key) return;
+  e.preventDefault();
+  switch (key) {
+    case 'down':
+    case 'up':
+      step(key === 'down' ? 1 : -1);
       return;
-    case 'j':
-    case 'k':
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      e.preventDefault();
-      step(e.key === 'j' ? 1 : -1);
-      return;
-    case 'Enter':
-      e.preventDefault();
+    case 'activate':
       activateCursor();
       return;
-    case 'r':
-    case 'F2':
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      e.preventDefault();
+    case 'rename':
       renameAtCursor();
       return;
-    case 'e':
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      e.preventDefault();
+    case 'archive':
       archiveAtCursor();
       return;
-    case 'a':
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      e.preventDefault();
+    case 'newSession':
       openDialog({ kind: 'projectPicker' });
       return;
-    case 'Escape':
-      e.preventDefault();
+    case 'leave':
       backToTerminal();
       return;
   }
