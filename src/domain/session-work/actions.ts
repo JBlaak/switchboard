@@ -5,7 +5,7 @@
  * Every action is a prompt typed into the session's terminal (A1), so what an
  * item offers depends only on what is known about it: a PR offers Ship it and
  * whatever it needs (A3), a branch with no PR offers Open PR (A5), and
- * uncommitted changes offer nothing. The page draws the buttons from this and
+ * uncommitted changes offer Create a pull request. The page draws the buttons from this and
  * the main process refuses anything this does not allow, so the two cannot
  * drift apart.
  */
@@ -64,6 +64,7 @@ export function availableActions(item: WorkItem, gh: GitHubAvailability): WorkAc
     case 'branch':
       return ['open-pr'];
     case 'dirty':
+      return ['create-pr'];
     case 'issue':
       return [];
   }

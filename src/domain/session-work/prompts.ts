@@ -55,8 +55,15 @@ export interface OpenPrPrompt {
   base: string;
 }
 
-/** Everything one of the five prompts needs, by action. */
-export type PromptRequest = ShipPrompt | RebasePrompt | FixCiPrompt | FixCommentsPrompt | OpenPrPrompt;
+export interface CreatePrPrompt {
+  action: 'create-pr';
+  /** The branch checked out in `worktree` now, perhaps the default branch. */
+  branch: string;
+  worktree: string;
+}
+
+/** Everything one of the six prompts needs, by action. */
+export type PromptRequest = ShipPrompt | RebasePrompt | FixCiPrompt | FixCommentsPrompt | OpenPrPrompt | CreatePrPrompt;
 
 /**
  * One review thread as a line of the Fix comments prompt.
@@ -124,6 +131,11 @@ export function renderPrompt(request: PromptRequest): string {
     case 'open-pr': {
       const { branch, worktree, base } = request;
       return `Push ${branch} from ${worktree} and open a pull request for it against ${base}, following this repo's PR conventions.`;
+    }
+    case 'create-pr': {
+      const { branch, worktree } = request;
+      return `Commit the uncommitted changes in ${worktree}, on a new branch if ${branch} is the default branch, ` +
+        "then push it and open a pull request for it, following this repo's commit and PR conventions.";
     }
   }
 }

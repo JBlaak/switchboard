@@ -395,6 +395,10 @@ export class SessionActionService {
         base: item.diff.kind === 'local' ? item.diff.base.replace(/^origin\//, '') : 'main',
       };
     }
+    if (item.kind === 'dirty') {
+      if (action !== 'create-pr') return null;
+      return { action: 'create-pr', branch: item.location.branch, worktree: item.location.worktree };
+    }
     if (item.kind !== 'pr') return null;
 
     const { pr } = item;
@@ -430,6 +434,7 @@ export class SessionActionService {
         return { action: 'fix-comments', number: pr.number, url: pr.url, threads, worktree };
       }
       case 'open-pr':
+      case 'create-pr':
         return null;
     }
   }

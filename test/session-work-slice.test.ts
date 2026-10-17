@@ -45,6 +45,7 @@ const dirty: SessionWorkItem = {
   kind: 'dirty',
   location: { worktree: '/w/api', branch: 'fix/login', fromSubagent: false },
   files: [{ path: 'a.ts', status: 'modified' }, { path: 'b.ts', status: 'untracked' }],
+  activity: null,
   additions: 12,
   deletions: 3,
 };
