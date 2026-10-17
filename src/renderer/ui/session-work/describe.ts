@@ -4,7 +4,7 @@
  * Pure, so it is tested in node with the slice; the components only lay out
  * what these answer.
  */
-import type { GitHubAvailability, SessionWorkItem, SessionWorkSnapshot } from '../../../domain/session-work/model';
+import type { GitHubAvailability, LineStats, SessionWorkItem, SessionWorkSnapshot } from '../../../domain/session-work/model';
 
 /** The pastel fill and matching ink a pill is drawn in. */
 export type PillTone = 'green' | 'red' | 'amber' | 'grey' | 'lavender';
@@ -78,6 +78,24 @@ export function itemPills(item: SessionWorkItem): Pill[] {
       break;
   }
   return pills;
+}
+
+/**
+ * The lines an item adds and removes, for the list's `+a −d`; null when that
+ * is not known (a PR `gh` has not described) or there is nothing to count.
+ */
+export function itemLineStats(item: SessionWorkItem): LineStats | null {
+  switch (item.kind) {
+    case 'pr':
+      return item.pr.additions === undefined || item.pr.deletions === undefined
+        ? null
+        : { additions: item.pr.additions, deletions: item.pr.deletions };
+    case 'branch':
+    case 'dirty':
+      return { additions: item.additions, deletions: item.deletions };
+    case 'issue':
+      return null;
+  }
 }
 
 /** `head → base` for the detail, or just the branch when there is no base. */

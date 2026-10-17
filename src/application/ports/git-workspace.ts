@@ -9,7 +9,7 @@
  * that was deleted, a repository with no commits yet — each is an ordinary
  * state of a session's footprint, and answers with the empty value.
  */
-import type { FileChange } from '../../domain/session-work/model';
+import type { FileChange, LineStats } from '../../domain/session-work/model';
 
 /** Something to stop. */
 export interface Disposable {
@@ -46,11 +46,17 @@ export interface GitWorkspace {
   /** The unified diff of `branch` against its merge-base with `base`; '' when either is unknown. */
   branchDiff(worktree: string, branch: string, base: string): Promise<string>;
 
+  /** Lines `branch` adds and removes since its merge-base with `base`; zeros when either is unknown. */
+  branchLineStats(worktree: string, branch: string, base: string): Promise<LineStats>;
+
   /** The worktree's uncommitted changes, untracked files included. */
   status(worktree: string): Promise<FileChange[]>;
 
   /** Staged, unstaged and untracked changes as one unified diff against HEAD; untracked files appear as new files. */
   workingDiff(worktree: string): Promise<string>;
+
+  /** Lines the uncommitted changes add and remove, counted the way `workingDiff` shows them. */
+  workingLineStats(worktree: string): Promise<LineStats>;
 
   /**
    * The ones among `paths` that `.gitattributes` marks `linguist-generated`,

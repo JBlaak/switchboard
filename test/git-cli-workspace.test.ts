@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { GitCliWorkspace, parseStatus } from '../src/infrastructure/git/git-cli-workspace';
+import { GitCliWorkspace, parseStatus, sumNumstat } from '../src/infrastructure/git/git-cli-workspace';
 import { parseUnifiedDiff } from '../src/domain/session-work/diff';
 
 // Keep the developer's own git config (signing, hooks, a diff tool) out of
@@ -118,6 +118,17 @@ test('branchDiff is taken from the merge-base, so what main gained since is not 
   assert.equal(await git.branchDiff(worktree, 'nope', 'main'), '');
 });
 
+test('branchLineStats counts the same lines as branchDiff, and zeros for what is not there', async () => {
+  assert.deepEqual(await git.branchLineStats(worktree, 'feat/12-thing', 'main'), { additions: 2, deletions: 0 });
+  assert.deepEqual(await git.branchLineStats(worktree, 'nope', 'main'), { additions: 0, deletions: 0 });
+  assert.deepEqual(await git.branchLineStats(worktree, '--all', 'main'), { additions: 0, deletions: 0 });
+});
+
+test('sumNumstat adds up numstat lines, binary files counting nothing', () => {
+  assert.deepEqual(sumNumstat('3\t1\ta.ts\n-\t-\timg.png\n10\t0\told => new\n'), { additions: 13, deletions: 1 });
+  assert.deepEqual(sumNumstat(''), { additions: 0, deletions: 0 });
+});
+
 test('generatedPaths reads linguist-generated from .gitattributes', async () => {
   assert.deepEqual(await git.generatedPaths(worktree, ['gen/out.js', 'a.txt', 'src/sub/feature.ts']), ['gen/out.js']);
   assert.deepEqual(await git.generatedPaths(worktree, []), []);
@@ -152,6 +163,9 @@ test('status and workingDiff cover staged, unstaged, renamed and untracked chang
   ]);
   const untracked = files.find((f) => f.path === 'notes/untracked.md')!;
   assert.deepEqual(untracked.hunks[0].lines.map((l) => [l.kind, l.text]), [['add', '# new']]);
+
+  // a.txt +1, staged.txt +1, c.txt −1, notes/untracked.md +1; the rename changed nothing.
+  assert.deepEqual(await git.workingLineStats(dirty), { additions: 3, deletions: 1 });
 
   // Reading changed nothing: the file is still untracked.
   assert.match(run(dirty, 'status', '--porcelain', '--untracked-files=all'),/^\?\? notes\/untracked\.md$/m);

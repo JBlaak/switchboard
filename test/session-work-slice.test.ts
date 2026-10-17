@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { initialRendererState, rekeyState, rootReducer } from '../src/renderer/state/root';
 import { selectedItem, steppedItemId, workSections } from '../src/renderer/state/session-work-slice';
 import {
-  closedIssues, footprintLine, githubBanner, itemBranchLine, itemKind, itemPills, itemRef, itemTitle,
+  closedIssues, footprintLine, githubBanner, itemBranchLine, itemKind, itemLineStats, itemPills, itemRef, itemTitle,
   updatedAgo,
 } from '../src/renderer/ui/session-work/describe';
 import type { RendererEvent } from '../src/renderer/state/events';
@@ -36,12 +36,16 @@ const branch: SessionWorkItem = {
   ahead: 2,
   diff: { kind: 'local', worktree: '/w/api-2', base: 'origin/main', head: 'spike' },
   activity: null,
+  additions: 40,
+  deletions: 7,
 };
 const dirty: SessionWorkItem = {
   id: 'dirty:/w/api\0fix/login',
   kind: 'dirty',
   location: { worktree: '/w/api', branch: 'fix/login', fromSubagent: false },
   files: [{ path: 'a.ts', status: 'modified' }, { path: 'b.ts', status: 'untracked' }],
+  additions: 12,
+  deletions: 3,
 };
 const issue: SessionWorkItem = {
   id: 'issue:acme/api#49',
@@ -221,6 +225,15 @@ test('session work: pills put CI first, then the state, then how far behind', ()
   assert.deepStrictEqual(itemPills(issue), [{ label: 'Open', tone: 'green' }]);
   const unknown: SessionWorkItem = { ...openPr, pr: { number: 1, url: 'u', repository: '', closes: [] } } as SessionWorkItem;
   assert.deepStrictEqual(itemPills(unknown), [], 'no gh, no pills');
+});
+
+test('session work: each item\'s +a −d, unknown for a PR gh has not counted', () => {
+  assert.strictEqual(itemLineStats(openPr), null);
+  const counted = { ...openPr, pr: { ...openPr.pr, additions: 42, deletions: 9 } } as SessionWorkItem;
+  assert.deepStrictEqual(itemLineStats(counted), { additions: 42, deletions: 9 });
+  assert.deepStrictEqual(itemLineStats(branch), { additions: 40, deletions: 7 });
+  assert.deepStrictEqual(itemLineStats(dirty), { additions: 12, deletions: 3 });
+  assert.strictEqual(itemLineStats(issue), null);
 });
 
 test('session work: the detail line, and the issues a PR closes', () => {

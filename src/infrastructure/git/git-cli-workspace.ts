@@ -14,7 +14,7 @@
 import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { FileChange, FileStatus } from '../../domain/session-work/model';
+import type { FileChange, FileStatus, LineStats } from '../../domain/session-work/model';
 import type { Disposable, GitWorkspace } from '../../application/ports/git-workspace';
 
 /** git's well-known empty tree: what a repository with no commits yet is diffed against. */
@@ -111,15 +111,30 @@ export class GitCliWorkspace implements GitWorkspace {
     return result.code === 0 ? result.stdout : '';
   }
 
+  async branchLineStats(worktree: string, branch: string, base: string): Promise<LineStats> {
+    if (!isSafeRef(branch) || !isSafeRef(base)) return { additions: 0, deletions: 0 };
+    const result = await git(worktree, ['diff', '--numstat', ...DIFF_FLAGS, `${base}...${branch}`, '--']);
+    return sumNumstat(result.code === 0 ? result.stdout : '');
+  }
+
   async status(worktree: string): Promise<FileChange[]> {
     const result = await git(worktree, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
     return result.code === 0 ? parseStatus(result.stdout) : [];
   }
 
-  async workingDiff(worktree: string): Promise<string> {
+  workingDiff(worktree: string): Promise<string> {
+    return this.#working(worktree, []);
+  }
+
+  async workingLineStats(worktree: string): Promise<LineStats> {
+    return sumNumstat(await this.#working(worktree, ['--numstat']));
+  }
+
+  /** `git diff` of the uncommitted changes in `format`, with untracked files as new ones. */
+  async #working(worktree: string, format: readonly string[]): Promise<string> {
     const head = await git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD']);
     const base = head.code === 0 ? 'HEAD' : EMPTY_TREE;
-    const tracked = await git(worktree, ['diff', ...DIFF_FLAGS, base, '--']);
+    const tracked = await git(worktree, ['diff', ...format, ...DIFF_FLAGS, base, '--']);
     let diff = tracked.code === 0 ? tracked.stdout : '';
 
     // Untracked files are not in any diff git keeps, and adding them with
@@ -129,7 +144,7 @@ export class GitCliWorkspace implements GitWorkspace {
     const untracked = others.code === 0 ? others.stdout.split('\0').filter(isUntrackedFile) : [];
     for (const file of untracked) {
       // `--no-index` exits 1 when the files differ, which here they always do.
-      const added = await git(worktree, ['diff', '--no-index', ...DIFF_FLAGS, '--', '/dev/null', file]);
+      const added = await git(worktree, ['diff', '--no-index', ...format, ...DIFF_FLAGS, '--', '/dev/null', file]);
       if (added.code === 0 || added.code === 1) diff += added.stdout;
     }
     return diff;
@@ -222,6 +237,22 @@ function gitDirs(worktree: string): { gitDir: string; commonDir: string } | null
   } catch {
     return null;
   }
+}
+
+/**
+ * The lines added and removed in `git diff --numstat` output. A binary file
+ * counts `-` for both, which adds nothing.
+ */
+export function sumNumstat(output: string): LineStats {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of output.split('\n')) {
+    const [added, removed] = line.split('\t');
+    if (removed === undefined) continue;
+    additions += Number(added) || 0;
+    deletions += Number(removed) || 0;
+  }
+  return { additions, deletions };
 }
 
 /**

@@ -23,8 +23,8 @@ import { isRemoteProjectPath } from '../../domain/project/remote-target';
 import { repoWebUrl } from '../../domain/project/repo-url';
 import type { SessionPullRequest } from '../../domain/session/session';
 import type {
-  FileDiff, GitHubAvailability, IssueRef, IssueStatus, PullRequestStatus, SessionWorkItem, SessionWorkSnapshot,
-  WorkItem, WorkLocation,
+  FileDiff, GitHubAvailability, IssueRef, IssueStatus, LineStats, PullRequestStatus, SessionWorkItem,
+  SessionWorkSnapshot, WorkItem, WorkLocation,
 } from '../../domain/session-work/model';
 import type { Clock, TimerHandle, Timers } from '../ports/clock';
 import type { Disposable, GitWorkspace } from '../ports/git-workspace';
@@ -104,7 +104,9 @@ interface Page {
   closed: boolean;
 }
 
-const NOT_CHECKED_OUT = 'The branch is not checked out here';
+const NO_LINES: LineStats = { additions: 0, deletions: 0 };
+
+const NOT_CHECKED_OUT ='The branch is not checked out here';
 
 export class SessionWorkService {
   #page: Page | null = null;
@@ -298,7 +300,9 @@ export class SessionWorkService {
     const changes: WorktreeChanges[] = [];
     for (const worktree of worktrees) {
       const [branch, files] = await Promise.all([git.currentBranch(worktree), git.status(worktree)]);
-      if (branch) changes.push({ worktree, branch, files });
+      if (!branch) continue;
+      const stats = files.length > 0 ? await git.workingLineStats(worktree) : NO_LINES;
+      changes.push({ worktree, branch, files, ...stats });
     }
     const branches: BranchFacts[] = [];
     for (const location of locations) {
@@ -307,7 +311,8 @@ export class SessionWorkService {
       const base = await this.#baseRef(page, location.worktree);
       const isDefault = location.branch === defaultBranch;
       const ahead = isDefault ? 0 : (await git.aheadBehind(location.worktree, location.branch, base)).ahead;
-      branches.push({ worktree: location.worktree, branch: location.branch, isDefault, ahead, base });
+      const stats = ahead > 0 ? await git.branchLineStats(location.worktree, location.branch, base) : NO_LINES;
+      branches.push({ worktree: location.worktree, branch: location.branch, isDefault, ahead, base, ...stats });
     }
     if (page.closed) return;
 

@@ -8,7 +8,8 @@
  */
 import type { JSX } from 'react';
 import { selectWorkItem, openOnGitHub, toggleDoneItems } from './actions';
-import { itemKind, itemPills, itemRef, itemTitle, itemUrl } from './describe';
+import { itemKind, itemLineStats, itemPills, itemRef, itemTitle, itemUrl } from './describe';
+import { LineCounts } from './LineCounts';
 import { Pills } from './Pills';
 import { workSections } from '../../state/session-work-slice';
 import type { SessionWorkPage } from '../../state/session-work-slice';
@@ -104,10 +105,12 @@ function IssueLink({ item, repository }: { item: SessionWorkItem; repository: st
 }
 
 function ItemTop({ item, external = false }: { item: SessionWorkItem; external?: boolean }): JSX.Element {
+  const stats = itemLineStats(item);
   return (
     <span className="sw-item-top">
       <span className="sw-kind">{itemKind(item)}</span>
       <span className="sw-ref">{itemRef(item)}</span>
+      {stats && <LineCounts stats={stats} />}
       {external && (
         <svg className="sw-external" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M7 17L17 7M9 7h8v8" />

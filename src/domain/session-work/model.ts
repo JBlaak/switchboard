@@ -105,6 +105,9 @@ export interface PullRequestStatus {
   headRef?: string;
   headSha?: string;
   baseRef?: string;
+  /** Lines the PR adds and removes, as GitHub counts them. */
+  additions?: number;
+  deletions?: number;
 }
 
 /** The actions a work item can hand to Claude, each one a prompt (A1). */
@@ -141,6 +144,12 @@ export type DiffSource =
 /** How a file changed. `untracked` only occurs in a worktree's uncommitted changes. */
 export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'untracked';
 
+/** Lines added and removed, for the list's `+a −d` without loading a diff. */
+export interface LineStats {
+  additions: number;
+  deletions: number;
+}
+
 /** One uncommitted change in a worktree, from `git status`. */
 export interface FileChange {
   path: string;
@@ -158,8 +167,8 @@ export interface FileChange {
  */
 export type WorkItem = { error?: string } & (
   | { kind: 'pr'; pr: PullRequestStatus; location: WorkLocation | null; diff: DiffSource; activity: Activity | null }
-  | { kind: 'branch'; location: WorkLocation; ahead: number; diff: DiffSource; activity: Activity | null }
-  | { kind: 'dirty'; location: WorkLocation; files: FileChange[] }
+  | ({ kind: 'branch'; location: WorkLocation; ahead: number; diff: DiffSource; activity: Activity | null } & LineStats)
+  | ({ kind: 'dirty'; location: WorkLocation; files: FileChange[] } & LineStats)
   /** An `IssueStatus` once `gh` confirmed it is an issue; a bare ref without `gh`. */
   | { kind: 'issue'; issue: IssueRef | IssueStatus }
 );

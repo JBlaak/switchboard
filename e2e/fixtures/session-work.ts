@@ -23,6 +23,7 @@ const ITEMS: SessionWorkItem[] = [
     pr: {
       number: 1320, url: pr(1320), repository: REPO, title: 'Stop the login redirect loop', state: 'open',
       checks: [{ name: 'test', state: 'passing' }], behindBy: 2, baseRef: 'main', headRef: 'fix/login-loop',
+      additions: 42, deletions: 9,
       closes: [{ repository: '', number: 1301 }],
     },
     location: { worktree: '/w/acme-api', branch: 'fix/login-loop', fromSubagent: false },
@@ -45,6 +46,8 @@ const ITEMS: SessionWorkItem[] = [
     kind: 'dirty',
     location: { worktree: '/w/acme-api', branch: 'fix/login-loop', fromSubagent: false },
     files: [{ path: 'src/session.ts', status: 'modified' }, { path: 'src/cookie.ts', status: 'untracked' }],
+    additions: 18,
+    deletions: 4,
   },
   {
     id: 'issue:acme/api#1290',

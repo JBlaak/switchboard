@@ -301,6 +301,21 @@
   flex-shrink: 0;
 }
 
+/* `+a −d`, right-aligned in a list item's top line and in a file's header. */
+.sw-counts {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+  font: 700 11px var(--sb-font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  & + .sw-external { margin-left: 0; }
+}
+
+.sw-count-add { color: var(--sb-green); }
+.sw-count-del { color: var(--sb-red); }
+
 .sw-item-title {
   font: 700 13.5px/1.3 var(--sb-font-head);
   color: var(--sb-text-strong);

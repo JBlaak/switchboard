@@ -132,9 +132,11 @@ test.describe('with a repository', () => {
     await expect(first).toContainText('#1320');
     await expect(first).toContainText('CI passing');
     await expect(first).toContainText('2 behind main');
+    await expect(first).toContainText('+42−9');
     await expect(first).toHaveAttribute('aria-current', 'true');
     await expect(list.getByRole('button', { name: /Add a regression test/ })).toContainText('Draft');
     await expect(list.getByRole('button', { name: /Uncommitted changes in acme-api/ })).toContainText('2 files');
+    await expect(list.getByRole('button', { name: /Uncommitted changes in acme-api/ })).toContainText('+18−4');
     // Done starts collapsed.
     await expect(list.getByRole('button', { name: /^Done/ })).toHaveAttribute('aria-expanded', 'false');
     await expect(list.getByText('Log the redirect chain')).toHaveCount(0);

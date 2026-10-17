@@ -10,7 +10,7 @@ import type { GitHubAvailability, GitHubCli } from '../src/application/ports/git
 import type { TranscriptLocation } from '../src/application/ports/transcript-store';
 import type { Session, SessionPullRequest } from '../src/domain/session/session';
 import type {
-  FileChange, IssueRef, IssueStatus, PullRequestStatus, SessionWorkSnapshot,
+  FileChange, IssueRef, IssueStatus, LineStats, PullRequestStatus, SessionWorkSnapshot,
 } from '../src/domain/session-work/model';
 import { silentLog } from './support/fakes';
 
@@ -74,6 +74,9 @@ interface World {
   shas: Map<string, string>;
   branchDiff: string;
   workingDiff: string;
+  /** Line stats by branch, and of each worktree's uncommitted changes. */
+  branchStats: Map<string, LineStats>;
+  workingStats: Map<string, LineStats>;
   generated: string[];
   locations: TranscriptLocation[];
   pullRequests: SessionPullRequest[];
@@ -95,6 +98,8 @@ function setup(overrides: Partial<World> = {}) {
     shas: new Map([['origin/main', 'base-1']]),
     branchDiff: DIFF,
     workingDiff: DIFF,
+    branchStats: new Map(),
+    workingStats: new Map(),
     generated: [],
     locations: [{ cwd: ROOT, branch: 'main', fromSubagent: false }],
     pullRequests: [],
@@ -128,7 +133,9 @@ function setup(overrides: Partial<World> = {}) {
     async aheadBehind(_worktree, branch) { return { ahead: world.ahead.get(branch) ?? 0, behind: 0 }; },
     async branchDiff() { count('branchDiff'); return world.branchDiff; },
     async status(worktree) { return world.status.get(worktree) ?? []; },
+    async branchLineStats(_worktree, branch) { return world.branchStats.get(branch) ?? { additions: 0, deletions: 0 }; },
     async workingDiff() { count('workingDiff'); return world.workingDiff; },
+    async workingLineStats(worktree) { return world.workingStats.get(worktree) ?? { additions: 0, deletions: 0 }; },
     async generatedPaths(_worktree, paths) { return paths.filter((p) => world.generated.includes(p)); },
     watch(worktree, onChange) {
       const watcher = { worktree, onChange, disposed: false };
@@ -250,9 +257,15 @@ test('a subagent worktree is its own place, marked as the subagent\'s, and watch
     ahead: new Map([['feat/agent', 1]]),
   });
   world.status.set(AGENT, [{ path: 'new.ts', status: 'untracked' }]);
+  world.branchStats.set('feat/agent', { additions: 40, deletions: 7 });
+  world.workingStats.set(AGENT, { additions: 3, deletions: 0 });
   const snapshot = await service.open('s1');
   const kinds = snapshot!.items.map((item) => item.kind);
   assert.deepEqual(kinds, ['branch', 'dirty']);
+  assert.deepEqual(snapshot!.items.map((item) => item.kind !== 'pr' && item.kind !== 'issue' && [item.additions, item.deletions]), [
+    [40, 7],
+    [3, 0],
+  ], 'each item counts its own lines');
   for (const item of snapshot!.items) {
     assert.ok(item.kind === 'branch' || item.kind === 'dirty');
     assert.deepEqual(item.location, { worktree: AGENT, branch: 'feat/agent', fromSubagent: true });

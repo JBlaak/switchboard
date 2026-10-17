@@ -24,6 +24,9 @@ export interface BranchFacts {
   ahead: number;
   /** What the branch's diff is taken against, e.g. `origin/main`. */
   base: string;
+  /** Lines the branch adds and removes since its merge-base with `base`. */
+  additions: number;
+  deletions: number;
 }
 
 /** What `git status` says about one worktree the session worked in. */
@@ -32,6 +35,9 @@ export interface WorktreeChanges {
   /** The branch checked out there now. */
   branch: string;
   files: FileChange[];
+  /** Lines the uncommitted changes add and remove, untracked files included. */
+  additions: number;
+  deletions: number;
 }
 
 /** Everything {@link deriveWorkItems} works from. */
@@ -141,6 +147,8 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
       ahead: branch.ahead,
       diff: { kind: 'local', worktree: branch.worktree, base: branch.base, head: branch.branch },
       activity: null,
+      additions: branch.additions,
+      deletions: branch.deletions,
     };
     item.activity = activityOf(workItemKey(item));
     branchItems.push(item);
@@ -184,6 +192,8 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
       kind: 'dirty',
       location: known ?? { worktree: change.worktree, branch: change.branch, fromSubagent },
       files: change.files,
+      additions: change.additions,
+      deletions: change.deletions,
     });
   }
 
