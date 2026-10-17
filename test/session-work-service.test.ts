@@ -302,7 +302,9 @@ test('a PR whose branch was deleted takes its diff from gh, cached by its head c
   assert.ok(pr.kind === 'pr');
   assert.deepEqual(pr.diff, { kind: 'pull-request', repository: REPO, number: 9 });
 
-  const files = await service.diff('s1', pr.id);
+  const fromGitHub = await service.diff('s1', pr.id);
+  assert.equal(fromGitHub.source, 'github', 'the page says the branch is not checked out');
+  const files = fromGitHub.files;
   assert.deepEqual(files.map((file) => [file.path, file.additions, file.deletions]), [['a.txt', 1, 1]]);
   await service.diff('s1', pr.id);
   assert.equal(calls.pullRequestDiff, 1, 'the second ask is cached');
@@ -326,8 +328,9 @@ test('a PR whose branch is checked out diffs locally, cached by both commits, wi
   assert.ok(pr.kind === 'pr');
   assert.deepEqual(pr.diff, { kind: 'local', worktree: ROOT, base: 'origin/main', head: 'feat/3-x' });
 
-  const files = await service.diff('s1', pr.id);
-  assert.equal(files[0].collapsedReason, 'generated');
+  const local = await service.diff('s1', pr.id);
+  assert.equal(local.source, 'local');
+  assert.equal(local.files[0].collapsedReason, 'generated');
   await service.diff('s1', pr.id);
   assert.equal(calls.branchDiff, 1);
   assert.equal(calls.pullRequestDiff, undefined);
@@ -387,9 +390,11 @@ test('without gh the page has git-only data, says why, and never asks GitHub for
     assert.equal(calls.issues, undefined);
 
     // Its branch is not here and gh cannot fetch it: no diff, and the item says why.
-    assert.deepEqual(await service.diff('s1', pr.id), []);
+    const none = await service.diff('s1', pr.id);
+    assert.deepEqual([none.files, none.source], [[], null]);
+    assert.match(none.error ?? '', gh === 'missing' ? /not installed/ : /not signed in/);
     const marked = snapshots[snapshots.length - 1].items[0];
-    assert.match(marked.error ?? '', gh === 'missing' ? /not installed/ : /not signed in/);
+    assert.equal(marked.error, none.error);
   }
 });
 
@@ -477,7 +482,7 @@ test('close stops the watchers and the polling, and a late event does nothing', 
   watcher.onChange();
   assert.equal(timers.timeouts.size, 0);
   assert.equal(snapshots.length, 1);
-  assert.deepEqual(await service.diff('s1', 'anything'), []);
+  assert.deepEqual(await service.diff('s1', 'anything'), { files: [], source: null });
 });
 
 test('opening a second session closes the first; a stale close for the first is ignored', async () => {

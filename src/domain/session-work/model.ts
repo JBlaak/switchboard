@@ -177,6 +177,18 @@ export type WorkItem = { error?: string } & (
   | { kind: 'issue'; issue: IssueRef | IssueStatus }
 );
 
+/**
+ * One item's diff as the page receives it: its files, and where they came
+ * from. `local` is the worktree's own; `github` is `gh pr diff`, because the
+ * PR's branch is not checked out here (D8). When no diff could be had, `error`
+ * says why (as the item's `error` in the next snapshot will) and `source` is null.
+ */
+export interface SessionWorkDiff {
+  files: FileDiff[];
+  source: 'local' | 'github' | null;
+  error?: string;
+}
+
 /** Whether `gh` can be asked anything: installed, and signed in to github.com (D9). */
 export type GitHubAvailability = 'ok' | 'missing' | 'unauthenticated';
 
