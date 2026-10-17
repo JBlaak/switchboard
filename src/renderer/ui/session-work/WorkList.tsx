@@ -62,7 +62,9 @@ export function WorkList({ page }: { page: SessionWorkPage }): JSX.Element {
             <span className="sw-section-label">Done</span>
             <span className="sw-pill is-grey">{done.length}</span>
           </button>
-          {page.doneExpanded && done.map(row)}
+          {page.doneExpanded && done.map(item => (item.kind === 'issue'
+            ? <IssueLink key={item.id} item={item} repository={repository} />
+            : row(item)))}
         </>
       )}
     </nav>

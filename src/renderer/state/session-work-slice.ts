@@ -125,34 +125,39 @@ type Item = SessionWorkSnapshot['items'][number];
 export interface WorkSections {
   /** Open and draft PRs, branches without a PR, uncommitted changes. */
   readonly inProgress: readonly Item[];
+  /** Issues nothing closes that are still open (or whose state `gh` could not say). */
   readonly issues: readonly Item[];
-  /** Merged and closed PRs. */
+  /** Merged and closed PRs, then closed issues. */
   readonly done: readonly Item[];
 }
 
+/** A merged or closed PR, or a closed issue: finished, whoever finished it. */
 export function isDoneItem(item: Item): boolean {
-  return item.kind === 'pr' && (item.pr.state === 'merged' || item.pr.state === 'closed');
+  if (item.kind === 'pr') return item.pr.state === 'merged' || item.pr.state === 'closed';
+  if (item.kind === 'issue') return 'state' in item.issue && item.issue.state === 'closed';
+  return false;
 }
 
 export function workSections(snapshot: SessionWorkSnapshot): WorkSections {
   const inProgress: Item[] = [];
   const issues: Item[] = [];
   const done: Item[] = [];
+  const doneIssues: Item[] = [];
   for (const item of snapshot.items) {
-    if (item.kind === 'issue') issues.push(item);
-    else if (isDoneItem(item)) done.push(item);
+    if (isDoneItem(item)) (item.kind === 'issue' ? doneIssues : done).push(item);
+    else if (item.kind === 'issue') issues.push(item);
     else inProgress.push(item);
   }
-  return { inProgress, issues, done };
+  return { inProgress, issues, done: [...done, ...doneIssues] };
 }
 
 /**
- * The items that can be selected, in list order. Issues are links out rather
- * than selectable, and Done only counts while it is expanded.
+ * The items that can be selected, in list order. Issues — open or done — are
+ * links out rather than selectable, and Done only counts while it is expanded.
  */
 export function selectableItems(snapshot: SessionWorkSnapshot, doneExpanded = true): Item[] {
   const { inProgress, done } = workSections(snapshot);
-  return doneExpanded ? [...inProgress, ...done] : [...inProgress];
+  return doneExpanded ? [...inProgress, ...done.filter(item => item.kind !== 'issue')] : [...inProgress];
 }
 
 /**

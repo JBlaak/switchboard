@@ -69,6 +69,14 @@ const ITEMS: SessionWorkItem[] = [
     },
   },
   {
+    id: 'issue:acme/api#1288',
+    kind: 'issue',
+    issue: {
+      repository: REPO, number: 1288, title: 'Session cookie not marked Secure', state: 'closed',
+      url: `https://github.com/${REPO}/issues/1288`,
+    },
+  },
+  {
     id: 'pr:' + pr(1309),
     kind: 'pr',
     pr: { number: 1309, url: pr(1309), repository: REPO, title: 'Log the redirect chain', state: 'merged', closes: [] },

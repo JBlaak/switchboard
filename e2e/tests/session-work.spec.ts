@@ -143,6 +143,11 @@ test.describe('with a repository', () => {
     // Done starts collapsed.
     await expect(list.getByRole('button', { name: /^Done/ })).toHaveAttribute('aria-expanded', 'false');
     await expect(list.getByText('Log the redirect chain')).toHaveCount(0);
+    // A closed issue is done too: not under Issues, but a link under Done.
+    await expect(list.getByText('Session cookie not marked Secure')).toHaveCount(0);
+    await list.getByRole('button', { name: /^Done/ }).click();
+    await expect(list.getByRole('link', { name: /Session cookie not marked Secure/ })).toContainText('Closed');
+    await list.getByRole('button', { name: /^Done/ }).click();
 
     const detail = work.getByRole('region', { name: 'Selected work item' });
     await expect(detail.getByRole('heading', { level: 2 })).toHaveText('Stop the login redirect loop #1320');

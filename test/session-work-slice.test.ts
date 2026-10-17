@@ -202,6 +202,25 @@ test('session work: items group as in progress, issues and done', () => {
   assert.deepStrictEqual(sections.done, [merged]);
 });
 
+test('session work: a closed issue goes under Done, after the PRs, and is never selected', () => {
+  const closed: SessionWorkItem = {
+    id: 'issue:acme/api#40', kind: 'issue',
+    issue: { repository: 'acme/api', number: 40, title: 'Fixed elsewhere', state: 'closed', url: 'https://github.com/acme/api/issues/40' },
+  };
+  const bare: SessionWorkItem = { id: 'issue:#41', kind: 'issue', issue: { repository: '', number: 41 } };
+  const snap = snapshot([openPr, closed, issue, bare, merged]);
+  const sections = workSections(snap);
+  assert.deepStrictEqual(sections.issues, [issue, bare], 'open, or unknown without gh');
+  assert.deepStrictEqual(sections.done, [merged, closed]);
+
+  const page = run(initialRendererState('s1'), opened(), { type: 'sessionWorkSnapshot', snapshot: snap }, { type: 'sessionWorkDoneToggled' })
+    .sessionWork.page!;
+  assert.strictEqual(steppedItemId({ ...page, selectedItemId: merged.id }, 1), null, 'the closed issue is a link, not a stop');
+  const selected = run(initialRendererState('s1'), opened(), { type: 'sessionWorkSnapshot', snapshot: snap },
+    { type: 'sessionWorkItemSelected', itemId: closed.id });
+  assert.strictEqual(selected.sessionWork.page!.selectedItemId, openPr.id);
+});
+
 // ── What the page says ──
 
 test('session work: each kind of item has its kind, ref and title', () => {
