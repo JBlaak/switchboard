@@ -37,7 +37,10 @@ export type DraftAction =
   | { kind: 'focus-other' }
   /** The Other field's text changed. */
   | { kind: 'type'; text: string }
-  /** Enter / →. Advances when the question is answered, or asks to submit on the last one. */
+  /**
+   * Enter / →. Advances when the question is answered, or asks to submit on the last one.
+   * On an unanswered single-choice question it first picks the option under the cursor.
+   */
   | { kind: 'next' }
   /** ←. */
   | { kind: 'back' }
@@ -82,7 +85,7 @@ export function reduceDraft(questions: Question[], draft: AnswerDraft, action: D
   const result = applyAction(questions, draft, action);
   // Arrow moves stay quiet even when they happen to complete the set: a move
   // is browsing, and cheering on every pass over an option would be noise.
-  if (action.kind === 'move' || result.draft === draft) return result;
+  if (action.kind === 'move' || result.draft === draft || result.event?.kind === 'submit') return result;
   const total = questions.length;
   const before = answeredCount(questions, draft);
   const after = answeredCount(questions, result.draft);
@@ -124,6 +127,10 @@ function applyAction(questions: Question[], draft: AnswerDraft, action: DraftAct
     }
     case 'next': {
       const last = questions.length - 1;
+      // The cursor sits on an option from the start, so Enter takes it — as in Claude Code's own picker.
+      if (!question.multiSelect && draft.cursor < otherRow && !isAnswered(questions, draft, draft.step)) {
+        draft = withAnswer(draft, { cursor: draft.cursor, picks: [question.options[draft.cursor].label], other: '' });
+      }
       if (!isAnswered(questions, draft, draft.step)) {
         return { draft, event: { kind: 'blocked', isLast: draft.step === last } };
       }
