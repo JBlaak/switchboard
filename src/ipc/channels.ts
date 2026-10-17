@@ -68,6 +68,8 @@ export const INVOKE = {
   sessionWorkDiff: 'session-work:diff',
   sessionWorkAction: 'session-work:action',
   sessionWorkCancel: 'session-work:cancel',
+  sessionWorkComment: 'session-work:comment',
+  sessionWorkReview: 'session-work:review',
 } as const;
 
 /** Renderer tells main; no answer expected. */

@@ -63,6 +63,8 @@ export interface ReviewThread {
   line: number | null;
   side: DiffSide;
   resolved: boolean;
+  /** Who resolved it, when it is resolved and GitHub said. */
+  resolvedBy?: string;
   /**
    * Claude replied and left it open because it needs your call (C5). Working
    * that out needs to know who "you" are on GitHub, so the adapter sets it.
@@ -78,6 +80,12 @@ export interface PendingComment {
   line: number;
   side: DiffSide;
   body: string;
+  /**
+   * The thread GitHub made for it. It keeps its id once the review is
+   * submitted, which is how Submit & have Claude fix names exactly the
+   * threads it submitted.
+   */
+  threadId?: string;
 }
 
 /** How the repository merges a PR, as `gh pr merge` spells it. */
@@ -103,6 +111,13 @@ export interface PullRequestStatus {
   mergeable?: 'mergeable' | 'conflicting' | 'unknown';
   threads?: ReviewThread[];
   pendingReview?: PendingComment[];
+  /**
+   * Your pending review's GraphQL id, when you have one on this PR — started
+   * here or in the browser. A comment goes into it rather than a new one.
+   */
+  pendingReviewId?: string;
+  /** The PR's GraphQL id: what a new pending review is started on. */
+  nodeId?: string;
   /** Issues the PR closes, shown in its header (D10). */
   closes: IssueRef[];
   headRef?: string;
@@ -138,6 +153,8 @@ export interface Activity {
   queuedAt: string;
   /** ISO-8601. */
   sentAt?: string;
+  /** The review threads a Fix comments hands over. */
+  threadIds?: string[];
 }
 
 /**
@@ -179,7 +196,11 @@ export interface FileChange {
  * bad PR does not blank the rest).
  */
 export type WorkItem = { error?: string } & (
-  | { kind: 'pr'; pr: PullRequestStatus; location: WorkLocation | null; diff: DiffSource; activity: Activity | null }
+  | {
+    kind: 'pr'; pr: PullRequestStatus; location: WorkLocation | null; diff: DiffSource; activity: Activity | null;
+    /** Review threads a queued or sent Fix comments covers: "Claude is on it". */
+    fixingThreads?: string[];
+  }
   | ({
     kind: 'branch'; location: WorkLocation; ahead: number; diff: DiffSource; activity: Activity | null;
     /** Has an upstream, or a branch of the same name on origin: someone else could see it. */

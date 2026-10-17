@@ -322,3 +322,53 @@ test('a session that moved to a new id keeps its queue', async () => {
   assert.equal(prompter.sent.length, 1);
   assert.equal(service.forSession('s2').byItem.get(PR12)?.phase, 'sent');
 });
+
+// ── Fix comments on named threads (#77) ──
+
+function reviewThread(id: string, resolved = false) {
+  return {
+    id, path: 'a.ts', line: 3, side: 'RIGHT' as const, resolved,
+    comments: [{ author: 'mate', isBot: false, body: 'fix ' + id, createdAt: '' }],
+  };
+}
+
+test('Fix comments on named threads hands over exactly those, and the activity names them', async () => {
+  const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2'), reviewThread('T3'), reviewThread('T4', true)] });
+  const { service, prompter } = setup({ items: [pr] });
+  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', ['T2', 'T4'])).ok, true);
+  const prompt = prompter.sent[0].prompt;
+  assert.match(prompt, /\(T2\)/);
+  assert.doesNotMatch(prompt, /\(T1\)|\(T3\)|\(T4\)/, 'only the named open threads');
+  assert.deepEqual(service.forSession('s1').byItem.get(PR12)?.threadIds, ['T2']);
+  assert.deepEqual(service.forSession('s1').fixingThreads?.get(PR12), ['T2']);
+});
+
+test('another thread can be handed over while one is with Claude; the same one cannot', async () => {
+  const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2')] });
+  const { service, prompter } = setup({ items: [pr] });
+  prompter.goBusy();
+  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', ['T1'])).ok, true);
+  assert.deepEqual(await service.request('s1', PR12, 'fix-comments', 'manual', ['T1']), { ok: false, reason: 'Already queued' });
+  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', ['T2'])).ok, true);
+  assert.deepEqual(service.forSession('s1').fixingThreads?.get(PR12), ['T1', 'T2']);
+  // Every open thread without naming them: one is already queued.
+  assert.equal((await service.request('s1', PR12, 'fix-comments')).ok, false);
+});
+
+test('naming only resolved or unknown threads has nothing to do', async () => {
+  const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2', true)] });
+  const { service, prompter } = setup({ items: [pr] });
+  const result = await service.request('s1', PR12, 'fix-comments', 'manual', ['T2', 'nope']);
+  assert.equal(result.ok, false);
+  assert.equal(prompter.sent.length, 0);
+});
+
+test('a queued Fix comments still knows its threads after a restart', async () => {
+  const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2')] });
+  const store = new MemoryStore();
+  const first = setup({ items: [pr], store });
+  first.prompter.goBusy();
+  await first.service.request('s1', PR12, 'fix-comments', 'manual', ['T2']);
+  const again = setup({ items: [pr], store });
+  assert.deepEqual(again.service.forSession('s1').fixingThreads?.get(PR12), ['T2']);
+});

@@ -136,9 +136,108 @@ test('review threads carry author, bot flag, path, line, side and resolution; ne
 test('your pending review comes back with each comment\'s side', async () => {
   const [pr] = (await new GhCli({ run: scripted(partial) }).pullRequests('acme/web', [12]))!;
   assert.deepEqual(pr.pendingReview, [
-    { path: 'src/billing.ts', line: 8, side: 'LEFT', body: 'Why was this removed?' },
+    { path: 'src/billing.ts', line: 8, side: 'LEFT', body: 'Why was this removed?', threadId: 'PRRT_pending' },
     { path: 'src/billing.ts', line: 61, side: 'RIGHT', body: 'Typo in the label.' },
   ]);
+});
+
+test('a pending review started anywhere comes back with its id, and the PR with its own', async () => {
+  const [pr, draft] = (await new GhCli({ run: scripted(partial) }).pullRequests('acme/web', [12, 13]))!;
+  assert.equal(pr.pendingReviewId, 'PRR_pending12');
+  assert.equal(pr.nodeId, 'PR_kwDO12');
+  assert.equal(draft.pendingReviewId, undefined, 'no pending review: none');
+});
+
+test('a resolved thread says who resolved it', async () => {
+  const [pr] = (await new GhCli({ run: scripted(partial) }).pullRequests('acme/web', [12]))!;
+  const threads = new Map(pr.threads!.map((thread) => [thread.id, thread]));
+  assert.equal(threads.get('PRRT_resolved')!.resolvedBy, 'sam');
+  assert.equal(threads.get('PRRT_bot')!.resolvedBy, undefined);
+});
+
+// ── Your review: the only writes ──
+
+/** The GraphQL variables of a `gh api graphql` call, by name, with the flag each was passed with. */
+function variablesOf(args: readonly string[]): Map<string, { flag: string; value: string }> {
+  const variables = new Map<string, { flag: string; value: string }>();
+  for (let i = 4; i < args.length; i += 2) {
+    const [key, ...rest] = args[i + 1].split('=');
+    variables.set(key, { flag: args[i], value: rest.join('=') });
+  }
+  return variables;
+}
+
+const answers = (data: unknown): Partial<GhResult> => ({ code: 0, stdout: JSON.stringify({ data }) });
+
+test('starting a pending review: addPullRequestReview without an event, the PR id as a variable', async () => {
+  const run = scripted(() => answers({ addPullRequestReview: { pullRequestReview: { id: 'PRR_new' } } }));
+  assert.deepEqual(await new GhCli({ run }).startPendingReview('PR_kwDO12'), { ok: true, reviewId: 'PRR_new' });
+
+  const args = run.calls[0];
+  assert.deepEqual(args.slice(0, 3), ['api', 'graphql', '-f']);
+  assert.match(args[3], /^query=mutation\(\$pullRequestId: ID!\)/);
+  assert.match(args[3], /addPullRequestReview\(input: \{ pullRequestId: \$pullRequestId \}\)/);
+  assert.doesNotMatch(args[3], /event/, 'no event: the review stays pending');
+  assert.deepEqual([...variablesOf(args)], [['pullRequestId', { flag: '-f', value: 'PR_kwDO12' }]]);
+});
+
+test('a comment goes in as variables: the body verbatim with -f, the line as an Int with -F', async () => {
+  const run = scripted(() => answers({ addPullRequestReviewThread: { thread: { id: 'PRRT_new' } } }));
+  const body = '@here `rm -rf /` "quoted" $(whoami)\nline two } query {';
+  const result = await new GhCli({ run }).addPendingComment('PRR_1', { path: 'src/a b.ts', line: 42, side: 'LEFT', body });
+  assert.deepEqual(result, { ok: true, threadId: 'PRRT_new' });
+
+  const args = run.calls[0];
+  assert.match(args[3], /addPullRequestReviewThread\(input: \{\s*pullRequestReviewId: \$reviewId, path: \$path, line: \$line, side: \$side, body: \$body/);
+  assert.ok(!args[3].includes(body) && !args[3].includes('src/a b.ts'), 'nothing is written into the query text');
+  assert.deepEqual(Object.fromEntries(variablesOf(args)), {
+    reviewId: { flag: '-f', value: 'PRR_1' },
+    path: { flag: '-f', value: 'src/a b.ts' },
+    line: { flag: '-F', value: '42' },
+    side: { flag: '-f', value: 'LEFT' },
+    body: { flag: '-f', value: body },
+  });
+});
+
+test('a line that is not a positive integer is refused without asking gh', async () => {
+  const run = scripted(() => answers({}));
+  const result = await new GhCli({ run }).addPendingComment('PRR_1', { path: 'a.ts', line: 0, side: 'RIGHT', body: 'x' });
+  assert.equal(result.ok, false);
+  assert.equal(run.calls.length, 0);
+});
+
+test('discarding deletes the pending review; submitting sends the event as a variable', async () => {
+  const run = scripted((args) => answers(args[3].includes('deletePullRequestReview')
+    ? { deletePullRequestReview: { pullRequestReview: { id: 'PRR_1' } } }
+    : { submitPullRequestReview: { pullRequestReview: { id: 'PRR_1', state: 'CHANGES_REQUESTED' } } }));
+  const gh = new GhCli({ run });
+  assert.deepEqual(await gh.deletePendingReview('PRR_1'), { ok: true });
+  assert.deepEqual(await gh.submitPendingReview('PRR_1', 'REQUEST_CHANGES'), { ok: true });
+  assert.deepEqual(await gh.submitPendingReview('PRR_1', 'COMMENT'), { ok: true });
+
+  assert.match(run.calls[0][3], /deletePullRequestReview\(input: \{ pullRequestReviewId: \$reviewId \}\)/);
+  assert.deepEqual([...variablesOf(run.calls[0])], [['reviewId', { flag: '-f', value: 'PRR_1' }]]);
+  assert.match(run.calls[1][3], /submitPullRequestReview\(input: \{ pullRequestReviewId: \$reviewId, event: \$event \}\)/);
+  assert.equal(variablesOf(run.calls[1]).get('event')!.value, 'REQUEST_CHANGES');
+  assert.equal(variablesOf(run.calls[2]).get('event')!.value, 'COMMENT');
+});
+
+test('a write GitHub refuses answers its reason; missing or signed-out gh says so', async () => {
+  const refused = scripted(() => ({
+    code: 1,
+    stdout: JSON.stringify({ errors: [{ message: 'User can only have one pending review per pull request' }] }),
+    stderr: 'gh: User can only have one pending review per pull request\n',
+  }));
+  assert.deepEqual(await new GhCli({ run: refused }).startPendingReview('PR_1'),
+    { ok: false, reason: 'User can only have one pending review per pull request' });
+
+  assert.deepEqual(await new GhCli({ run: scripted(missing) }).deletePendingReview('PRR_1'),
+    { ok: false, reason: 'gh is not installed' });
+  assert.deepEqual(await new GhCli({ run: scripted(signedOut) }).submitPendingReview('PRR_1', 'COMMENT'),
+    { ok: false, reason: 'gh is not signed in to github.com' });
+  const offline = scripted(() => ({ code: 1, stderr: 'error connecting to api.github.com\n' }));
+  assert.deepEqual(await new GhCli({ run: offline }).deletePendingReview('PRR_1'),
+    { ok: false, reason: 'error connecting to api.github.com' });
 });
 
 test('missing gh: available says so and every call answers null without throwing', async () => {

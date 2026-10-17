@@ -58,7 +58,8 @@ export interface SessionWorkServiceDeps {
   locate(sessionId: string): SessionWorkTarget | null;
   transcripts: Pick<TranscriptStore, 'locations' | 'issueMentions' | 'readSession'>;
   git: GitWorkspace;
-  github: GitHubCli;
+  /** Reads only: the page writes nothing to GitHub; your review is the review service's. */
+  github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview'>;
   remotes: GitRemotes;
   renderer: Pick<RendererGateway, 'sessionWorkSnapshot'>;
   /** The actions on the session's items; without it, no item has one. */
@@ -248,6 +249,17 @@ export class SessionWorkService implements WorkPageSource {
   }
 
   /**
+   * Ask `gh` again now and rebuild, for the open page of this session: after
+   * your review was written, so the page shows what GitHub made of it.
+   */
+  async refreshGitHub(sessionId: string): Promise<void> {
+    const page = this.#page;
+    if (!page || page.sessionId !== sessionId || page.closed) return;
+    page.askGitHub = true;
+    await this.#refresh(page);
+  }
+
+  /**
    * A transcript folder was written to. When it is the open session's, the
    * page is rebuilt: Claude may have moved to another worktree, opened a PR,
    * or edited files (which git's watchers do not report).
@@ -406,6 +418,8 @@ export class SessionWorkService implements WorkPageSource {
       const item: SessionWorkItem = built.kind === 'pr' || built.kind === 'branch'
         ? { ...built, activity: activities.byItem.get(built.id) ?? null }
         : built;
+      const fixing = item.kind === 'pr' ? activities.fixingThreads?.get(item.id) : undefined;
+      if (item.kind === 'pr' && fixing?.length) item.fixingThreads = [...fixing];
       const error = page.diffErrors.get(item.id) ?? item.error;
       return error ? { ...item, error } : item;
     });

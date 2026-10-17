@@ -16,6 +16,8 @@ export interface ActionRequest {
   sessionId: string;
   itemId: string;
   action: WorkAction;
+  /** For Fix comments: hand over only these review threads (Have Claude fix, Submit & have Claude fix). */
+  threadIds?: string[];
 }
 
 /** Queued, with the id Cancel takes; or refused, with why. */

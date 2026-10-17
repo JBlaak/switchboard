@@ -86,6 +86,8 @@ const api: SwitchboardApi = {
   getSessionWorkDiff: (request) => ipcRenderer.invoke(INVOKE.sessionWorkDiff, request),
   sessionWorkAction: (request) => ipcRenderer.invoke(INVOKE.sessionWorkAction, request),
   cancelSessionWorkAction: (activityId) => ipcRenderer.invoke(INVOKE.sessionWorkCancel, activityId),
+  sessionWorkComment: (request) => ipcRenderer.invoke(INVOKE.sessionWorkComment, request),
+  sessionWorkReview: (request) => ipcRenderer.invoke(INVOKE.sessionWorkReview, request),
 
   // ── Fire-and-forget ──
   sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),

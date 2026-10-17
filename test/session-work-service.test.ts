@@ -152,7 +152,7 @@ function setup(overrides: Partial<World> = {}) {
     },
   };
 
-  const github: GitHubCli = {
+  const github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview'> = {
     async available() { count('available'); return world.gh; },
     async pullRequests() { count('pullRequests'); return world.prs; },
     async pullRequestDiff() { count('pullRequestDiff'); return world.prDiff; },

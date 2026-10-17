@@ -26,6 +26,7 @@ import { SessionLauncher } from '../application/services/session-launcher';
 import { SessionLifecycle } from '../application/services/session-lifecycle';
 import { SessionTransitionDetector } from '../application/services/session-transition-detector';
 import { SessionWorkService } from '../application/services/session-work-service';
+import { ReviewService } from '../application/services/review-service';
 import { SessionActionService } from '../application/services/session-action-service';
 import { SettingsService } from '../application/services/settings-service';
 import { UpdateService } from '../application/services/update-service';
@@ -96,6 +97,7 @@ export interface Container {
   readonly updates: UpdateService;
   readonly sessionWork: SessionWorkService;
   readonly sessionActions: SessionActionService;
+  readonly review: ReviewService;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -243,6 +245,7 @@ export function buildContainer(): Container {
     renderer, clock, timers, log,
   });
   sessionActions.attach(sessionWork);
+  const review = new ReviewService({ github, page: sessionWork, actions: sessionActions, log });
 
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
@@ -269,6 +272,7 @@ export function buildContainer(): Container {
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     questions, questionHook,
     sessionIndex, projects, usage, schedules, weather, updates, sessionWork, sessionActions,
+    review,
     renderer, dialogs, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
