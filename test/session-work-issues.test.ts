@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   issueFromBranch, issueMentionsInText, issueMentionsInTranscript, standaloneIssues,
 } from '../src/domain/session-work/issues';
-import { workLocations, worktreeRootOf } from '../src/domain/session-work/locations';
+import { mergeWorkLocations, workLocations, worktreeRootOf } from '../src/domain/session-work/locations';
 
 const REPO = 'owner/repo';
 
@@ -101,5 +101,18 @@ test('work locations come from every transcript, once per worktree and branch', 
     { worktree: '/repo', branch: 'main', fromSubagent: false },
     { worktree: '/repo/.claude/worktrees/a', branch: 'feat/a', fromSubagent: true },
     { worktree: '/repo/.claude/worktrees/a', branch: 'feat/b', fromSubagent: false },
+  ]);
+});
+
+test('mergeWorkLocations makes one place of each worktree and branch, a subagent\'s only while nobody else went there', () => {
+  const merged = mergeWorkLocations([
+    { worktree: '/repo', branch: 'feat/a', fromSubagent: true },
+    { worktree: '/repo/.claude/worktrees/b', branch: 'feat/b', fromSubagent: true },
+    { worktree: '/repo', branch: 'feat/a', fromSubagent: false },
+    { worktree: '/repo/.claude/worktrees/b', branch: 'feat/b', fromSubagent: true },
+  ]);
+  assert.deepEqual(merged, [
+    { worktree: '/repo', branch: 'feat/a', fromSubagent: false },
+    { worktree: '/repo/.claude/worktrees/b', branch: 'feat/b', fromSubagent: true },
   ]);
 });

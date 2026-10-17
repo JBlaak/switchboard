@@ -16,6 +16,7 @@ import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../../domain/update/release';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
+import type { SessionWorkSnapshot } from '../../domain/session-work/model';
 import type { RendererGateway } from '../../application/ports/renderer-gateway';
 
 export class ElectronRendererGateway implements RendererGateway {
@@ -85,6 +86,11 @@ export class ElectronRendererGateway implements RendererGateway {
 
   updateAvailable(update: UpdateNotice): void {
     this.#send(EVENT.updateAvailable, update);
+  }
+
+  // ── Session work ──
+  sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void {
+    this.#send(EVENT.sessionWorkSnapshot, snapshot);
   }
 
   #send(channel: string, ...args: unknown[]): void {

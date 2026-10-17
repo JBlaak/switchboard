@@ -95,6 +95,15 @@ test('branchExists knows local branches and refuses option-like names', async ()
   assert.equal(await git.branchExists(worktree, '--all'), false);
 });
 
+test('currentBranch and commitSha read HEAD and refs, and answer null for what is not there', async () => {
+  assert.equal(await git.currentBranch(worktree), 'feat/12-thing');
+  assert.equal(await git.currentBranch(repo), 'main');
+  assert.equal(await git.currentBranch(path.join(tmp, 'gone')), null);
+  assert.equal(await git.commitSha(repo, 'main'), run(repo, 'rev-parse', 'main').trim());
+  assert.equal(await git.commitSha(repo, 'no-such-branch'), null);
+  assert.equal(await git.commitSha(repo, '--all'), null);
+});
+
 test('aheadBehind counts both sides', async () => {
   assert.deepEqual(await git.aheadBehind(worktree, 'feat/12-thing', 'main'), { ahead: 2, behind: 1 });
   assert.deepEqual(await git.aheadBehind(worktree, 'nope', 'main'), { ahead: 0, behind: 0 });

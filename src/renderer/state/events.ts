@@ -14,6 +14,7 @@ import type { EVENT } from '../../ipc/channels';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { UpdateNotice } from '../../domain/update/release';
+import type { SessionWorkSnapshot } from '../../domain/session-work/model';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ToolbarEvent } from './toolbar-slice';
@@ -41,7 +42,8 @@ export type PushEvent =
   | { type: 'projectsChanged' }
   | { type: 'statusUpdate'; text: string; kind: string }
   | { type: 'fullscreenChanged'; isFullscreen: boolean }
-  | { type: 'updateAvailable'; update: UpdateNotice };
+  | { type: 'updateAvailable'; update: UpdateNotice }
+  | { type: 'sessionWorkSnapshot'; snapshot: SessionWorkSnapshot };
 
 // ── From the renderer itself: user actions and timers ──
 

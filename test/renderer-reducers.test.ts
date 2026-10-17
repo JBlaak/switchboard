@@ -54,6 +54,7 @@ const SAMPLES: { [K in PushEvent['type']]: Extract<PushEvent, { type: K }> } = {
   statusUpdate: { type: 'statusUpdate', text: 'Scanning…', kind: 'active' },
   fullscreenChanged: { type: 'fullscreenChanged', isFullscreen: true },
   updateAvailable: { type: 'updateAvailable', update: { version: '9.9.9', pageUrl: 'u', installable: true } },
+  sessionWorkSnapshot: { type: 'sessionWorkSnapshot', snapshot: { sessionId: 's1', items: [], gh: 'ok', updatedAt: 'now' } },
 };
 
 test('every push event reduces without mutating the state it was given', () => {
@@ -66,7 +67,7 @@ test('pushes that are only prompts to act leave the state as it was', () => {
   // These have follow-ups (a banner, a re-fetch, a class on <html>) but
   // nothing for the store to record. The status line and the update notice
   // are in the store now; see footer-slices.test.ts.
-  for (const type of ['processExited', 'projectsChanged', 'fullscreenChanged'] as const) {
+  for (const type of ['processExited', 'projectsChanged', 'fullscreenChanged', 'sessionWorkSnapshot'] as const) {
     const state = initial();
     assert.strictEqual(rootReducer(state, SAMPLES[type]), state, type);
   }

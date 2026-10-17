@@ -45,6 +45,7 @@ export function installIpcBridge(
     api.onStatusUpdate((text, kind) => send({ type: 'statusUpdate', text, kind })),
     api.onFullscreenChanged((isFullscreen) => send({ type: 'fullscreenChanged', isFullscreen })),
     api.onUpdateAvailable((update) => send({ type: 'updateAvailable', update })),
+    api.onSessionWorkSnapshot((snapshot) => send({ type: 'sessionWorkSnapshot', snapshot })),
   ];
   return () => unsubscribes.forEach(unsubscribe => unsubscribe());
 }

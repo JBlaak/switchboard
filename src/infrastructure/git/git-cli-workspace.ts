@@ -79,6 +79,17 @@ export class GitCliWorkspace implements GitWorkspace {
     return 'main';
   }
 
+  async currentBranch(worktree: string): Promise<string | null> {
+    const result = await git(worktree, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+    return result.code === 0 ? result.stdout.trim() || null : null;
+  }
+
+  async commitSha(worktree: string, ref: string): Promise<string | null> {
+    if (!isSafeRef(ref)) return null;
+    const result = await git(worktree, ['rev-parse', '--verify', '--quiet', ref + '^{commit}']);
+    return result.code === 0 ? result.stdout.trim() || null : null;
+  }
+
   async branchExists(worktree: string, branch: string): Promise<boolean> {
     if (!isSafeRef(branch)) return false;
     const result = await git(worktree, ['show-ref', '--verify', '--quiet', 'refs/heads/' + branch]);

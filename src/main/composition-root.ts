@@ -25,6 +25,7 @@ import { SessionIndex } from '../application/services/session-index';
 import { SessionLauncher } from '../application/services/session-launcher';
 import { SessionLifecycle } from '../application/services/session-lifecycle';
 import { SessionTransitionDetector } from '../application/services/session-transition-detector';
+import { SessionWorkService } from '../application/services/session-work-service';
 import { SettingsService } from '../application/services/settings-service';
 import { UpdateService } from '../application/services/update-service';
 import { WeatherService } from '../application/services/weather-service';
@@ -53,6 +54,11 @@ import { PmsetSleepControl } from '../infrastructure/system/pmset-sleep-control'
 import { BundleInstaller } from '../infrastructure/system/bundle-installer';
 import { GitHubReleaseFeed } from '../infrastructure/github/github-release-feed';
 import { GitCliRemotes } from '../infrastructure/git/git-cli-remotes';
+import { GitCliWorkspace } from '../infrastructure/git/git-cli-workspace';
+import { GhCli, defaultGhRunner } from '../infrastructure/github/gh-cli';
+import { loginShellEnv } from '../infrastructure/shell/login-shell-env';
+import { encodeProjectPath } from '../domain/project/project-path';
+import { isRemoteProjectPath } from '../domain/project/remote-target';
 import { QuestionHookServer } from '../infrastructure/http/question-hook-server';
 
 import type { BrowserWindow } from 'electron';
@@ -85,6 +91,7 @@ export interface Container {
   readonly schedules: ScheduleService;
   readonly weather: WeatherService;
   readonly updates: UpdateService;
+  readonly sessionWork: SessionWorkService;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -202,6 +209,26 @@ export function buildContainer(): Container {
   const sleep = new PmsetSleepControl(log);
   const git = new GitCliRemotes();
 
+  // `gh` runs with the login shell's PATH: launched from the Finder, the app's
+  // own PATH has no Homebrew in it. `git` is /usr/bin's and needs nothing.
+  const toolEnv = loginShellEnv(() => shells.resolve(shellProfileId()).path, terminals.baseEnv, log);
+  const sessionWork = new SessionWorkService({
+    locate: (sessionId) => {
+      const cached = repository.getCachedSession(sessionId);
+      if (cached) return { folder: cached.folder, projectPath: cached.projectPath };
+      // Running but not indexed yet: its folder is the one the CLI writes to.
+      const live = registry.find(sessionId)?.session;
+      if (!live) return null;
+      const remote = isRemoteProjectPath(live.projectPath);
+      return { folder: remote ? null : encodeProjectPath(live.projectPath), projectPath: live.projectPath };
+    },
+    transcripts,
+    git: new GitCliWorkspace(),
+    github: new GhCli({ run: async (args) => defaultGhRunner(await toolEnv())(args) }),
+    remotes: git,
+    renderer, clock, timers, log,
+  });
+
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
   const projectsWatcher = new ProjectsWatcher({
@@ -212,6 +239,7 @@ export function buildContainer(): Container {
         if (transcripts.folderExists(folder)) {
           transitions.detect(folder);
           sessionIndex.refreshFolder(folder);
+          sessionWork.transcriptsChanged(folder);
         } else {
           sessionIndex.forgetFolder(folder);
         }
@@ -225,12 +253,13 @@ export function buildContainer(): Container {
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     questions, questionHook,
-    sessionIndex, projects, usage, schedules, weather, updates,
+    sessionIndex, projects, usage, schedules, weather, updates, sessionWork,
     renderer, dialogs, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     close: () => {
       projectsWatcher.stop();
+      sessionWork.closeAll();
       database.close();
     },
   };

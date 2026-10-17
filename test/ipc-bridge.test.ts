@@ -66,6 +66,7 @@ test('each other push becomes its event', () => {
   fake.push('statusUpdate', 'Scanning', 'active');
   fake.push('fullscreenChanged', true);
   fake.push('updateAvailable', { version: '1' });
+  fake.push('sessionWorkSnapshot', { sessionId: 's1', items: [], gh: 'ok', updatedAt: 'now' });
 
   const remote = sent.find(e => e.type === 'remoteStatus');
   assert.ok(remote && typeof remote.receivedAt === 'number', 'stamped on arrival');
@@ -83,5 +84,6 @@ test('each other push becomes its event', () => {
     { type: 'statusUpdate', text: 'Scanning', kind: 'active' },
     { type: 'fullscreenChanged', isFullscreen: true },
     { type: 'updateAvailable', update: { version: '1' } },
+    { type: 'sessionWorkSnapshot', snapshot: { sessionId: 's1', items: [], gh: 'ok', updatedAt: 'now' } },
   ]);
 });
