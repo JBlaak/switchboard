@@ -21,6 +21,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { mountPatch } from '@jblaak/patch';
 import { answeredCount, isAnswered } from '../../../domain/questions/answer-draft';
+import { dressingOn } from '../../../domain/companion/calendar';
 import { questionBeat } from '../../../domain/companion/question-beats';
 import { timeOfDay } from '../../../domain/companion/patch';
 import { answeredFoot, keyHints, questionCounter } from '../../features/questions/question-copy';
@@ -292,7 +293,7 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
       arriving.current = null;
       if (patchStage.current) patchArrive(patchStage.current);
     }
-    patch.current.appear({ ...questionBeat(said.moment), time: timeOfDay(new Date().getHours()), sky: questionSky() });
+    patch.current.appear({ ...questionBeat(said.moment), time: timeOfDay(new Date().getHours()), sky: questionSky(), ...dressingOn(new Date()) });
   }, [up, leaving, toolUseId, step.toolUseId, said?.seq]);
 
   // ── The keyboard around a showing ──

@@ -52,10 +52,23 @@ test.describe('patch', () => {
   test.describe('in the rain', () => {
     test.use({ stubs: { weather: { sky: 'rain', isDay: true, location: 'Utrecht', fetchedAt: 0 } } });
 
-    test('reads the weather', async ({ page }) => {
+    test('reads the weather, for the season', async ({ page }) => {
       await expect(says(page, FIRST_LINE)).toBeVisible();
       await hideAndShowEmptyScreen(page);
-      await expect(says(page, 'Raining out there. Good day to stay in and ship.')).toBeVisible();
+      // The fixture's clock is in June: summer rain means a puddle, not an umbrella.
+      await expect(says(page, 'Warm rain! Puddle jumping later.')).toBeVisible();
+      await expect(page.locator('#placeholder .patch-scene')).toHaveClass(/patch-has-puddle/);
+      await expect(page.locator('#placeholder .patch-scene')).not.toHaveClass(/patch-has-umbrella/);
+    });
+  });
+
+  test.describe('on Koningsdag', () => {
+    test('dresses for the holiday over the season', async ({ page }) => {
+      await expect(says(page, FIRST_LINE)).toBeVisible();
+      await page.clock.setFixedTime(new Date('2027-04-27T12:00:00Z'));
+      await hideAndShowEmptyScreen(page);
+      await expect(says(page, 'Oranje boven! Fijne Koningsdag!')).toBeVisible();
+      await expect(page.locator('#placeholder .patch-scene')).toHaveClass(/patch-has-crown/);
     });
   });
 
