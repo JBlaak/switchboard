@@ -1027,3 +1027,59 @@
   gap: 8px;
   margin-left: auto;
 }
+
+/* ---- Image compare: the stage (#112) ----
+   The frame an image card's modes draw into (image-compare/ImageStage). The
+   content is transformed by the card's view; the backdrop and grid are laid
+   at the content's on-screen box, unscaled, so a checker square and a grid
+   line keep their size at any zoom. */
+.sw-stage {
+  position: relative;
+  max-height: 80vh;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  background: var(--sb-bg-base);
+
+  &.is-dragging { cursor: grabbing; }
+}
+
+.sw-stage-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+
+  // Inherited, so every <img> and <canvas> a mode puts here follows it.
+  &.is-pixelated { image-rendering: pixelated; }
+
+  img, canvas { display: block; -webkit-user-drag: none; }
+}
+
+.sw-stage-backdrop {
+  position: absolute;
+  pointer-events: none;
+
+  &.is-light { background: var(--sb-stage-light); }
+  &.is-dark { background: var(--sb-stage-dark); }
+
+  &.is-checkerboard {
+    --sw-check: rgba(var(--sb-overlay-rgb), 0.10);
+    background-color: var(--sb-bg-raised);
+    background-image:
+      linear-gradient(45deg, var(--sw-check) 25%, transparent 25%, transparent 75%, var(--sw-check) 75%),
+      linear-gradient(45deg, var(--sw-check) 25%, transparent 25%, transparent 75%, var(--sw-check) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
+  }
+}
+
+// One line on the left and top edge of every image pixel; the stage sets
+// background-size to the zoom, so each tile is one pixel.
+.sw-stage-grid {
+  position: absolute;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(var(--sb-overlay-rgb), 0.22) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(var(--sb-overlay-rgb), 0.22) 1px, transparent 1px);
+}
