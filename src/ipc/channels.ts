@@ -79,6 +79,9 @@ export const SEND = {
   terminalResize: 'terminal-resize',
   closeTerminal: 'close-terminal',
   sessionWorkClose: 'session-work:close',
+  windowDragStart: 'window-drag:start',
+  windowDragMove: 'window-drag:move',
+  windowDragEnd: 'window-drag:end',
 } as const;
 
 /** Main tells the renderer, unprompted. */

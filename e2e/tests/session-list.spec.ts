@@ -15,7 +15,7 @@ import {
 } from '../support/app';
 import { fakeClaude, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
 import { daysAgo, hoursAgo, minutesAgo, sessionId } from '../support/fixture-home';
-import { failStopSession, openedExternally } from '../support/main-process';
+import { failStopSession, openedExternally, windowPosition } from '../support/main-process';
 import { askQuestions } from '../support/questions';
 import {
   allowMotion, collectDialogs, expectInOrder, expectRowsInOrder, failInvoke, listScroller, readMotion,
@@ -689,14 +689,47 @@ test.describe('slug group', () => {
 test.describe('under a short list', () => {
   test.use({ fixture: shortList() });
 
-  test('the space left drags the window', async ({ page }) => {
+  test('the space left runs down to the footer', async ({ page }) => {
     const space = page.getByTestId('sidebar-drag-space');
     const box = (await space.boundingBox())!;
     const footer = (await page.getByTestId('sidebar-footer').boundingBox())!;
     expect(box.height).toBeGreaterThan(100);
     // It runs down to the footer, less the list's bottom padding.
     expect(Math.abs(box.y + box.height - footer.y)).toBeLessThanOrEqual(12);
-  expect(await space.evaluate(el => getComputedStyle(el).getPropertyValue('-webkit-app-region'))).toBe('drag');
+    // Not a CSS drag region: macOS would swallow the click that puts the session away.
+    expect(await space.evaluate(el => getComputedStyle(el).getPropertyValue('-webkit-app-region'))).not.toBe('drag');
+  });
+
+  test('a drag in the empty space moves the window and keeps the session open', async ({ page, app, home }) => {
+    await openSession(page, home, 'A short list, first', sessionId('short-1'));
+    const before = await windowPosition(app);
+    // Dispatched by hand rather than with page.mouse: a real cursor's screenX
+    // stays put as the window moves under it, a synthesized one's does not.
+    await page.getByTestId('sidebar-drag-space').evaluate((space) => {
+      const at = (type: string, screenX: number, screenY: number) =>
+        space.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 7, screenX, screenY }));
+      at('pointerdown', 500, 500);
+      at('pointermove', 502, 501);
+      at('pointermove', 520, 510);
+      at('pointermove', 540, 530);
+      at('pointerup', 540, 530);
+    });
+    await expect.poll(() => windowPosition(app)).toEqual([before[0]! + 40, before[1]! + 30]);
+    // A drag ends in no click, so the session stays on screen.
+    await page.getByTestId('sidebar-drag-space').dispatchEvent('click');
+    await expect(terminalHeader(page)).toBeVisible();
+  });
+
+  test('a press that barely moves is still a click', async ({ page, home }) => {
+    await openSession(page, home, 'A short list, first', sessionId('short-1'));
+    const box = (await page.getByTestId('sidebar-drag-space').boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 2, y + 1);
+    await page.mouse.up();
+    await expect(page.getByTestId('empty-screen')).toBeVisible();
   });
 
   test('a click in the empty space puts the session away, a click on a control does not', async ({ page, home }) => {
