@@ -1,0 +1,1127 @@
+{
+  "data": {
+    "repository": {
+      "issue": {
+        "number": 22,
+        "title": "Spec: James v1",
+        "repository": {
+          "nameWithOwner": "JBlaak/James"
+        },
+        "parent": null,
+        "subIssues": {
+          "nodes": [
+            {
+              "number": 24,
+              "title": "Server walking skeleton: kernel, core seam, /health, MCP auth, GHCR image",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T17:56:01Z",
+              "body": "## Parent\n\n#22\n\n## What to build\n\nStand up the James server as Node + TypeScript with ports and adapters, built like BlaakTasks. Copy the generic kernel from BlaakTasks with a provenance header (`LanguageModel`, `ModelMemo`, the Anthropic and Notion adapters, fakes); no fork. Introduce the application core as the one seam the HTTP API and MCP server sit on, with in-memory fakes for the secondary ports and a `StateStore` over the data directory.\n\nThe server exposes an unauthenticated `/health` and an MCP endpoint guarded by `MCP_TOKEN`. Merging to main builds `ghcr.io/jblaak/james` (`node:24-slim` with Chromium).\n\nThis is the prefactor every other ticket builds on. See #2 and #18.\n\n## Acceptance criteria\n\n- [ ] Kernel files copied from BlaakTasks carry a provenance header; core tests run against the fakes with `pnpm test`\n- [ ] `GET /health` returns OK without auth\n- [ ] MCP requests without a valid `MCP_TOKEN` (≥ 32 chars, timing-safe compare) get 401; 10 failures in 15 minutes return 429\n- [ ] Request bodies are capped\n- [ ] A GitHub Actions workflow builds and pushes `ghcr.io/jblaak/james` on merge to main\n\n## Blocked by\n\nNone (can start immediately)\n",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": []
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 49,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 4856,
+                    "deletions": 1,
+                    "headRefName": "issue-24-server-walking-skeleton",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 25,
+              "title": "Deploy James on HenkOps at james.jblaak.nl",
+              "state": "OPEN",
+              "stateReason": null,
+              "updatedAt": "2026-10-13T20:54:20Z",
+              "body": "## Parent\n\n#22\n\n## What to build\n\nGet James running on the homelab so it is reachable from anywhere. This spans HenkOps and manual one-time steps, see #18:\n\n- VM 126 on `chilli` (10.10.0.26), 2 cores, 4 GB, Docker\n- Traefik route for `james.jblaak.nl`\n- `op://Homelab/James/*` items, injected with `op run`\n- NFS data dir `/mnt/nfs/james/data`, with ZFS snapshots enabled on `henk_fast/data`\n- `make james` rollout with a `/health` smoke test\n- Share Prive › James (`3f894a15c9a280b2b184e52a5a6e6e04`) with the Notion integration\n\n## Acceptance criteria\n\n- [ ] `make james` deploys the latest image and the smoke test passes against `/health`\n- [ ] `https://james.jblaak.nl/health` responds from outside the home network\n- [ ] Secrets come from `op://Homelab/James/*`\n- [ ] The data directory lives on NFS and the share is covered by ZFS snapshots\n- [ ] Prive › James is shared with the Notion integration\n\n## Blocked by\n\n- #24\n",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 24,
+                    "title": "Server walking skeleton: kernel, core seam, /health, MCP auth, GHCR image",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T17:56:01Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": []
+              }
+            },
+            {
+              "number": 26,
+              "title": "Text Capture lands on a List via MCP, with Notion bootstrap",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:10:28Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 24,
+                    "title": "Server walking skeleton: kernel, core seam, /health, MCP auth, GHCR image",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T17:56:01Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 51,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 2320,
+                    "deletions": 12,
+                    "headRefName": "issue-26-text-capture",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 27,
+              "title": "Link Captures: enrichment and duplicate detection",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:32:46Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 26,
+                    "title": "Text Capture lands on a List via MCP, with Notion bootstrap",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:10:28Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 54,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1037,
+                    "deletions": 18,
+                    "headRefName": "issue-27-link-enrichment",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 28,
+              "title": "Local-model Reduce with queueing and Haiku fallback",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:47:16Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 27,
+                    "title": "Link Captures: enrichment and duplicate detection",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:32:46Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 59,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1173,
+                    "deletions": 97,
+                    "headRefName": "issue-28-local-reduce",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 29,
+              "title": "Keep vs do: Hand-off to BlaakTasks",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:35:39Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 26,
+                    "title": "Text Capture lands on a List via MCP, with Notion bootstrap",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:10:28Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 57,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 877,
+                    "deletions": 62,
+                    "headRefName": "issue-29-hand-off",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 30,
+              "title": "Runner-up Question back and Hints via MCP",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:23:03Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 26,
+                    "title": "Text Capture lands on a List via MCP, with Notion bootstrap",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:10:28Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 55,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1180,
+                    "deletions": 32,
+                    "headRefName": "issue-30-question-back-hints",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 31,
+              "title": "Item management and Undo via MCP",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:30:55Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 30,
+                    "title": "Runner-up Question back and Hints via MCP",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:23:03Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 56,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1066,
+                    "deletions": 3,
+                    "headRefName": "issue-31-item-management",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 32,
+              "title": "Recall via MCP: suggest and find",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:19:50Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 26,
+                    "title": "Text Capture lands on a List via MCP, with Notion bootstrap",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:10:28Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 52,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1274,
+                    "deletions": 4,
+                    "headRefName": "issue-32-recall-via-mcp",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 33,
+              "title": "List management via MCP",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:27:36Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 26,
+                    "title": "Text Capture lands on a List via MCP, with Notion bootstrap",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:10:28Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 53,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1364,
+                    "deletions": 20,
+                    "headRefName": "issue-33-list-management",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 34,
+              "title": "Import the Prive lists in reviewed batches",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T19:08:08Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 33,
+                    "title": "List management via MCP",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:27:36Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 28,
+                    "title": "Local-model Reduce with queueing and Haiku fallback",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:47:16Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 60,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1907,
+                    "deletions": 11,
+                    "headRefName": "issue-34-import-prive-lists",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 35,
+              "title": "Sorting eval with corrections as cases",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T19:18:33Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 30,
+                    "title": "Runner-up Question back and Hints via MCP",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:23:03Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 34,
+                    "title": "Import the Prive lists in reviewed batches",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T19:08:08Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 65,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 908,
+                    "deletions": 26,
+                    "headRefName": "issue-35-sorting-eval",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 36,
+              "title": "Device pairing and HTTP API auth",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:02:48Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 24,
+                    "title": "Server walking skeleton: kernel, core seam, /health, MCP auth, GHCR image",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T17:56:01Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 50,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1173,
+                    "deletions": 7,
+                    "headRefName": "issue-36-device-pairing",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 37,
+              "title": "App walking skeleton: pair, type a line, see the Activity",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T18:58:20Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 36,
+                    "title": "Device pairing and HTTP API auth",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:02:48Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 26,
+                    "title": "Text Capture lands on a List via MCP, with Notion bootstrap",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:10:28Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 58,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 3613,
+                    "deletions": 1,
+                    "headRefName": "issue-37-app-walking-skeleton",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 38,
+              "title": "Share links and photos to James from other apps",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T20:28:26Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 28,
+                    "title": "Local-model Reduce with queueing and Haiku fallback",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:47:16Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 37,
+                    "title": "App walking skeleton: pair, type a line, see the Activity",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:58:20Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 63,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1453,
+                    "deletions": 145,
+                    "headRefName": "issue-38-share-target",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 39,
+              "title": "Offline outbox for Captures and changes",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T19:34:39Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 37,
+                    "title": "App walking skeleton: pair, type a line, see the Activity",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:58:20Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 62,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1107,
+                    "deletions": 104,
+                    "headRefName": "issue-39-offline-outbox",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 40,
+              "title": "Activity outcomes in the app: Undo, Question back, Also make a task, duplicate",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T19:12:03Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 30,
+                    "title": "Runner-up Question back and Hints via MCP",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:23:03Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 29,
+                    "title": "Keep vs do: Hand-off to BlaakTasks",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:35:39Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 27,
+                    "title": "Link Captures: enrichment and duplicate detection",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:32:46Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 37,
+                    "title": "App walking skeleton: pair, type a line, see the Activity",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:58:20Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 61,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1103,
+                    "deletions": 112,
+                    "headRefName": "issue-40-activity-outcomes",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 41,
+              "title": "Push notifications for shares, MCP captures and stuck Captures",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T20:53:57Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 28,
+                    "title": "Local-model Reduce with queueing and Haiku fallback",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:47:16Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 40,
+                    "title": "Activity outcomes in the app: Undo, Question back, Also make a task, duplicate",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T19:12:03Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 38,
+                    "title": "Share links and photos to James from other apps",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T20:28:26Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 72,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 2364,
+                    "deletions": 75,
+                    "headRefName": "issue-41-push-notifications",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 42,
+              "title": "Browse Lists and Items, offline from the last load",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T19:25:21Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 31,
+                    "title": "Item management and Undo via MCP",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:30:55Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 37,
+                    "title": "App walking skeleton: pair, type a line, see the Activity",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:58:20Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 64,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 2831,
+                    "deletions": 47,
+                    "headRefName": "issue-42-browse-lists",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 43,
+              "title": "Item actions in the app: Status, move, make a task",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T19:54:18Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 29,
+                    "title": "Keep vs do: Hand-off to BlaakTasks",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:35:39Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 39,
+                    "title": "Offline outbox for Captures and changes",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T19:34:39Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 42,
+                    "title": "Browse Lists and Items, offline from the last load",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T19:25:21Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 68,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1616,
+                    "deletions": 89,
+                    "headRefName": "issue-43-item-actions",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 44,
+              "title": "Recall in the app",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T20:11:42Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 32,
+                    "title": "Recall via MCP: suggest and find",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:19:50Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 37,
+                    "title": "App walking skeleton: pair, type a line, see the Activity",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:58:20Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 66,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1431,
+                    "deletions": 20,
+                    "headRefName": "issue-44-recall-in-app",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 45,
+              "title": "Patch: Compose port and Activity Beats",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T19:47:53Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 37,
+                    "title": "App walking skeleton: pair, type a line, see the Activity",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:58:20Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 67,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 2023,
+                    "deletions": 108,
+                    "headRefName": "issue-45-patch-compose-beats",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 46,
+              "title": "Patch idle Beats, facts and weather",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T20:06:07Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 30,
+                    "title": "Runner-up Question back and Hints via MCP",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:23:03Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 28,
+                    "title": "Local-model Reduce with queueing and Haiku fallback",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:47:16Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 39,
+                    "title": "Offline outbox for Captures and changes",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T19:34:39Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 45,
+                    "title": "Patch: Compose port and Activity Beats",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T19:47:53Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 69,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 2207,
+                    "deletions": 30,
+                    "headRefName": "issue-46-patch-idle-beats",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 47,
+              "title": "Patch line variation with Gemini Nano",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T20:20:00Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 46,
+                    "title": "Patch idle Beats, facts and weather",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T20:06:07Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 70,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 651,
+                    "deletions": 20,
+                    "headRefName": "issue-47-patch-line-variation",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 48,
+              "title": "New Lists in the app: ask by bar, Theme suggestions, move Overig matches",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "updatedAt": "2026-10-13T20:35:45Z",
+              "body": "",
+              "repository": {
+                "nameWithOwner": "JBlaak/James"
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 40,
+                    "title": "Activity outcomes in the app: Undo, Question back, Also make a task, duplicate",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T19:12:03Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 33,
+                    "title": "List management via MCP",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T18:27:36Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  },
+                  {
+                    "number": 44,
+                    "title": "Recall in the app",
+                    "state": "CLOSED",
+                    "stateReason": "COMPLETED",
+                    "updatedAt": "2026-10-13T20:11:42Z",
+                    "repository": {
+                      "nameWithOwner": "JBlaak/James"
+                    }
+                  }
+                ]
+              },
+              "closedByPullRequestsReferences": {
+                "nodes": [
+                  {
+                    "number": 71,
+                    "state": "MERGED",
+                    "isDraft": false,
+                    "additions": 1939,
+                    "deletions": 49,
+                    "headRefName": "issue-48-new-lists",
+                    "baseRefName": "main"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,453 @@
+{
+  "data": {
+    "search": {
+      "nodes": [
+        {
+          "number": 121,
+          "title": "Epic: Plan tab — an epic as a levelled flow diagram",
+          "state": "OPEN",
+          "updatedAt": "2026-10-17T19:24:09Z",
+          "repository": {
+            "nameWithOwner": "JBlaak/switchboard"
+          },
+          "subIssues": {
+            "nodes": [
+              {
+                "number": 122,
+                "state": "OPEN",
+                "stateReason": null,
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 123,
+                "state": "OPEN",
+                "stateReason": null,
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 124,
+                "state": "OPEN",
+                "stateReason": null,
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": [
+                    {
+                      "number": 123,
+                      "repository": {
+                        "nameWithOwner": "JBlaak/switchboard"
+                      }
+                    },
+                    {
+                      "number": 122,
+                      "repository": {
+                        "nameWithOwner": "JBlaak/switchboard"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "number": 125,
+                "state": "OPEN",
+                "stateReason": null,
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": [
+                    {
+                      "number": 123,
+                      "repository": {
+                        "nameWithOwner": "JBlaak/switchboard"
+                      }
+                    },
+                    {
+                      "number": 122,
+                      "repository": {
+                        "nameWithOwner": "JBlaak/switchboard"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "number": 126,
+                "state": "OPEN",
+                "stateReason": null,
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": [
+                    {
+                      "number": 125,
+                      "repository": {
+                        "nameWithOwner": "JBlaak/switchboard"
+                      }
+                    },
+                    {
+                      "number": 124,
+                      "repository": {
+                        "nameWithOwner": "JBlaak/switchboard"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "number": 128,
+                "state": "OPEN",
+                "stateReason": null,
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": [
+                    {
+                      "number": 124,
+                      "repository": {
+                        "nameWithOwner": "JBlaak/switchboard"
+                      }
+                    },
+                    {
+                      "number": 123,
+                      "repository": {
+                        "nameWithOwner": "JBlaak/switchboard"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 112,
+          "title": "Epic: Image compare in the diff view",
+          "state": "CLOSED",
+          "updatedAt": "2026-10-17T18:57:07Z",
+          "repository": {
+            "nameWithOwner": "JBlaak/switchboard"
+          },
+          "subIssues": {
+            "nodes": [
+              {
+                "number": 113,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 114,
+                "state": "OPEN",
+                "stateReason": null,
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 115,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 116,
+                "state": "OPEN",
+                "stateReason": null,
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 70,
+          "title": "Epic: Session work — a session's PRs, review, CI and shipping",
+          "state": "CLOSED",
+          "updatedAt": "2026-10-17T07:35:54Z",
+          "repository": {
+            "nameWithOwner": "JBlaak/switchboard"
+          },
+          "subIssues": {
+            "nodes": [
+              {
+                "number": 71,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 72,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 73,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 74,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 75,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 76,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 77,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 78,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              }
+            ]
+          }
+        },
+        {
+          "number": 66,
+          "title": "Epic: port the renderer to React",
+          "state": "CLOSED",
+          "updatedAt": "2026-10-16T22:50:50Z",
+          "repository": {
+            "nameWithOwner": "JBlaak/switchboard"
+          },
+          "subIssues": {
+            "nodes": [
+              {
+                "number": 53,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 54,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 55,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 56,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 57,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 58,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 59,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 60,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 61,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 62,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 63,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 64,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              },
+              {
+                "number": 65,
+                "state": "CLOSED",
+                "stateReason": "COMPLETED",
+                "repository": {
+                  "nameWithOwner": "JBlaak/switchboard"
+                },
+                "blockedBy": {
+                  "nodes": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
