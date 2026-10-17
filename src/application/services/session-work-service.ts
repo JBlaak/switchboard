@@ -23,7 +23,7 @@ import { imageFormatOf, imagePaths, type ImageFormat } from '../../domain/sessio
 import { deriveWorkItems, workItemKey, type BranchFacts, type WorktreeChanges } from '../../domain/session-work/items';
 import { mergeWorkLocations } from '../../domain/session-work/locations';
 import { isRemoteProjectPath } from '../../domain/project/remote-target';
-import { repoWebUrl } from '../../domain/project/repo-url';
+import { gitHubRepository } from '../../domain/project/repo-url';
 import type { SessionPullRequest } from '../../domain/session/session';
 import type {
   FileDiff, GitHubAvailability, IssueRef, IssueStatus, LineStats, PullRequestStatus, SessionWorkItem,
@@ -32,7 +32,7 @@ import type {
 import type { ActionContext, SessionActivities, WorkPageSource } from './session-action-service';
 import type { Clock, TimerHandle, Timers } from '../ports/clock';
 import type { Disposable, GitWorkspace } from '../ports/git-workspace';
-import type { GitHubCli } from '../ports/github-cli';
+import type { GitHubCli, PlanReads } from '../ports/github-cli';
 import type { GitRemotes } from '../ports/git-remotes';
 import type { Logger } from '../ports/logger';
 import type { RendererGateway } from '../ports/renderer-gateway';
@@ -59,8 +59,8 @@ export interface SessionWorkServiceDeps {
   locate(sessionId: string): SessionWorkTarget | null;
   transcripts: Pick<TranscriptStore, 'locations' | 'issueMentions' | 'readSession'>;
   git: GitWorkspace;
-  /** Reads only: the page writes nothing to GitHub; your review is the review service's. */
-  github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview'>;
+  /** Reads only: the page writes nothing to GitHub; your review is the review service's, plans the plan service's. */
+  github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview' | PlanReads>;
   remotes: GitRemotes;
   renderer: Pick<RendererGateway, 'sessionWorkSnapshot'>;
   /** The actions on the session's items; without it, no item has one. */
@@ -587,9 +587,7 @@ export class SessionWorkService implements WorkPageSource {
   /** `owner/repo` of the origin remote when it is on github.com; '' otherwise. */
   async #repository(projectRoot: string): Promise<string> {
     const origin = await this.deps.remotes.originUrl(projectRoot);
-    const web = origin ? repoWebUrl(origin) : null;
-    const match = web ? /^https:\/\/github\.com\/([^/]+\/[^/]+)$/i.exec(web) : null;
-    return match ? match[1] : '';
+    return origin ? gitHubRepository(origin) : '';
   }
 
   /**

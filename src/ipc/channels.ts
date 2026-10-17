@@ -76,6 +76,10 @@ export const INVOKE = {
   // Plan: sessions on a plan's issues (#125)
   planIssueSessions: 'plan:issue-sessions',
   planPrepareIssueWorktree: 'plan:prepare-issue-worktree',
+  // Plans (#123)
+  planSessionPlans: 'plan:session-plans',
+  planGet: 'plan:get',
+  planProjectPlans: 'plan:project-plans',
 } as const;
 
 /** Renderer tells main; no answer expected. */

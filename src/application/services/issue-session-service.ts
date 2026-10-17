@@ -45,7 +45,7 @@ export interface IssueSessionServiceDeps {
   transcripts: Pick<TranscriptStore, 'locations'>;
   git: Pick<GitWorkspace, 'currentBranch' | 'defaultBranch' | 'branchExists' | 'commitSha'> & GitWorktrees;
   remotes: GitRemotes;
-  github: Pick<GitHubCli, 'available' | 'pullRequests'>;
+  github: Pick<GitHubCli, 'available' | 'closingIssues'>;
   clock: Clock;
   log: Logger;
 }
@@ -112,14 +112,14 @@ export class IssueSessionService {
 
     if (stale.size > 0 && (await this.deps.github.available()) === 'ok') {
       for (const [repo, numbers] of stale) {
-        const statuses = await this.deps.github.pullRequests(repo, [...numbers]);
-        if (!statuses) {
+        const answers = await this.deps.github.closingIssues(repo, [...numbers]);
+        if (!answers) {
           this.deps.log.warn('[issue-sessions] could not read the closing references of', repo, [...numbers].join(', '));
           continue;
         }
         for (const number of numbers) {
-          const status = statuses.find((candidate) => candidate.number === number);
-          const closes = (status?.closes ?? []).map((issue) => ({ repository: issue.repository || repo, number: issue.number }));
+          const answer = answers.find((candidate) => candidate.number === number);
+          const closes = (answer?.closes ?? []).map((issue) => ({ repository: issue.repository || repo, number: issue.number }));
           this.#closes.set(repo + '#' + number, { at: now, closes });
         }
       }
@@ -141,7 +141,7 @@ export class IssueSessionService {
     // A worktree that has been removed still names its repository in its path.
     const at = projectPath.indexOf(WORKTREES_DIR);
     if (!origin && at > 0) origin = await this.deps.remotes.originUrl(projectPath.slice(0, at));
-    const repository = origin ? gitHubRepository(origin) : null;
+    const repository = (origin && gitHubRepository(origin)) || null;
     if (repository) this.#repositories.set(projectPath, repository);
     return repository;
   }
@@ -160,7 +160,7 @@ export class IssueSessionService {
     const root = await git.mainCheckout(projectPath);
     if (!root) return fail('Not a git repository: ' + projectPath);
     const origin = await this.deps.remotes.originUrl(root);
-    const repository = origin ? gitHubRepository(origin) : null;
+    const repository = (origin && gitHubRepository(origin)) || null;
     if (!repository) return fail('Not a GitHub repository: its origin is not on github.com');
     if (issue.repository !== repository) {
       return fail(`#${issue.number} is in ${issue.repository}, not in this project's ${repository}`);

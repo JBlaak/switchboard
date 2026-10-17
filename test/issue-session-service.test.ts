@@ -6,7 +6,7 @@ import {
 } from '../src/application/services/issue-session-service';
 import type { GitWrite } from '../src/application/ports/git-workspace';
 import type { IssueKey, Plan, PlanIssue, PlanPullRequest } from '../src/domain/plan/model';
-import type { PullRequestStatus } from '../src/domain/session-work/model';
+import type { PullRequestCloses } from '../src/application/ports/github-cli';
 import type { TranscriptLocation } from '../src/application/ports/transcript-store';
 import { silentLog } from './support/fakes';
 
@@ -77,7 +77,7 @@ function harness({
 }: {
   sessions?: IssueSessionCandidate[];
   origin?: string | null;
-  statuses?: PullRequestStatus[];
+  statuses?: PullRequestCloses[];
   locations?: Record<string, TranscriptLocation[]>;
 } = {}): Harness {
   const git = new FakeGit();
@@ -92,7 +92,7 @@ function harness({
     remotes: { originUrl: async () => origin },
     github: {
       available: async () => 'ok',
-      pullRequests: async (repo, numbers) => {
+      closingIssues: async (repo, numbers) => {
         ghCalls.push(repo + ' ' + numbers.join(','));
         return statuses.filter((status) => numbers.includes(status.number));
       },
@@ -268,7 +268,7 @@ test('a session just started, with no transcript yet, owns the issue its directo
 
 test('a session whose PR closes an issue owns it, and the closing refs are asked once', async () => {
   /* Given */
-  const closing: PullRequestStatus = { number: 130, url: '', repository: REPO, closes: [{ repository: REPO, number: 114 }] };
+  const closing: PullRequestCloses = { number: 130, closes: [{ repository: REPO, number: 114 }] };
   const { service, ghCalls } = harness({
     sessions: [session('a', { pullRequests: [{ number: 130, url: 'https://github.com/' + REPO + '/pull/130', repository: REPO }] })],
     locations: { a: [at('feature/stage')] },
@@ -289,7 +289,7 @@ test('the closing refs are asked again once they are a few minutes old', async (
   /* Given */
   const { service, ghCalls, now } = harness({
     sessions: [session('a', { pullRequests: [{ number: 130, url: '', repository: REPO }] })],
-    statuses: [{ number: 130, url: '', repository: REPO, closes: [] }],
+    statuses: [{ number: 130, closes: [] }],
   });
   await service.issueSessions(REPO);
 

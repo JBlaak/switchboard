@@ -24,6 +24,7 @@ import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
 import type { Weather, WeatherLocation } from '../domain/weather/weather';
 import type { IssueWorktreeRequest, IssueWorktreeResult } from '../domain/plan/issue-session';
+import type { Plan, PlanSummary } from '../domain/plan/model';
 
 /** Removes the listener an `on*` subscription added. */
 export type Unsubscribe = () => void;
@@ -148,6 +149,15 @@ export interface SwitchboardApi {
    * session (`startIssueSession`), because the row is its to make.
    */
   prepareIssueWorktree(request: IssueWorktreeRequest): Promise<IssueWorktreeResult>;
+  // ── Plans (#123) ──
+  // Each answer is kept for 30 s in main, so polling is cheap. Null when `gh`
+  // could not be asked, or the session or project is not a GitHub repository.
+  /** The plans a session works on (W2, S1), and its repository's open plans as `others` (W3). */
+  sessionPlans(sessionId: string): Promise<{ plans: Plan[]; others: PlanSummary[] } | null>;
+  /** One plan by its issue, for the Plan view without a session (F2). */
+  plan(repo: string, number: number): Promise<Plan | null>;
+  /** A project's plans for the picker (F1): open ones, and closed ones too with `closed` (F3). */
+  projectPlans(projectPath: string, options: { closed: boolean }): Promise<PlanSummary[] | null>;
 
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;

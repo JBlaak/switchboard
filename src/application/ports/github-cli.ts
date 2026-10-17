@@ -11,6 +11,7 @@
  */
 import type { GitHubAvailability, IssueStatus, PendingComment, PullRequestStatus } from '../../domain/session-work/model';
 import type { ReviewEvent } from '../../domain/session-work/review';
+import type { IssueKey, Plan, PlanSummary } from '../../domain/plan/model';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
 export type { GitHubAvailability };
@@ -45,6 +46,33 @@ export interface GitHubCli {
    */
   issues(repo: string, numbers: readonly number[]): Promise<IssueStatus[] | null>;
 
+  // ── Plans (the Plan tab, #121): one GraphQL request each ──
+
+  /**
+   * Issue `number` in `repo` as a plan: its parent and its direct sub-issues
+   * (the first 100), with their "Blocked by" links and closing PRs (P1, P4).
+   * Blockers that are not sub-issues are `outside` (P5). Null when `gh` could
+   * not be asked or the issue does not exist.
+   */
+  plan(repo: string, number: number): Promise<Plan | null>;
+
+  /**
+   * The issues in `repo` that have sub-issues: open ones only, and closed ones
+   * too when `closed` is set (W3, F3). The 50 most recently updated, newest
+   * first. Null when unavailable.
+   */
+  plansIn(repo: string, options: { closed: boolean }): Promise<PlanSummary[] | null>;
+
+  /** The parent of each of these issues, once each; an issue without one is left out. Null when unavailable. */
+  parentsOf(issues: readonly IssueKey[]): Promise<IssueKey[] | null>;
+
+  /**
+   * The issues each of these PRs in `repo` closes, by GitHub's closing
+   * references (S1). A number GitHub does not know is left out. Null when
+   * unavailable.
+   */
+  closingIssues(repo: string, numbers: readonly number[]): Promise<PullRequestCloses[] | null>;
+
   // ── Your review (C3): the only writes Switchboard makes to GitHub ──
 
   /** Start a pending review on a PR (by its GraphQL id), answering the review's id. */
@@ -58,6 +86,15 @@ export interface GitHubCli {
 
   /** Submit a pending review as Request changes or as a comment. */
   submitPendingReview(reviewId: string, event: ReviewEvent): Promise<GitHubWrite>;
+}
+
+/** The reads the plan service makes. */
+export type PlanReads = 'plan' | 'plansIn' | 'parentsOf' | 'closingIssues';
+
+/** A PR and the issues it closes. */
+export interface PullRequestCloses {
+  number: number;
+  closes: IssueKey[];
 }
 
 /** A line comment to add: `line` on `side` of `path`, as GitHub anchors it. */

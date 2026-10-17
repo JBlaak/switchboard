@@ -20,6 +20,11 @@
  */
 import { execFile } from 'node:child_process';
 import type { GitHubAvailability, GitHubCli, GitHubWrite, NewLineComment } from '../../application/ports/github-cli';
+import type { PullRequestCloses } from '../../application/ports/github-cli';
+import type { IssueKey, Plan, PlanSummary } from '../../domain/plan/model';
+import {
+  PLANS_QUERY, closingIssuesQuery, parentsQuery, planQuery, plansSearch, toClosingIssues, toParents, toPlan, toPlanSummaries,
+} from './gh-plans';
 import type { ReviewEvent } from '../../domain/session-work/review';
 import type {
   CheckRun, DiffSide, IssueRef, IssueStatus, MergeMethod, PendingComment, PullRequestStatus, ReviewThread, ThreadComment,
@@ -167,6 +172,43 @@ export class GhCli implements GitHubCli {
       });
     }
     return found;
+  }
+
+  // ── Plans (#121): the queries and their mapping are in `gh-plans.ts` ──
+
+  async plan(repo: string, number: number): Promise<Plan | null> {
+    const parts = REPO.exec(repo);
+    if (!parts || validNumbers([number]).length === 0) return null;
+    const data = await this.#graphql(planQuery(number), { owner: parts[1], name: parts[2] });
+    return data ? toPlan(data, repo) : null;
+  }
+
+  async plansIn(repo: string, options: { closed: boolean }): Promise<PlanSummary[] | null> {
+    if (!REPO.test(repo)) return null;
+    const data = await this.#graphql(PLANS_QUERY, { search: plansSearch(repo, options.closed === true) });
+    return data ? toPlanSummaries(data, repo) : null;
+  }
+
+  async parentsOf(issues: readonly IssueKey[]): Promise<IssueKey[] | null> {
+    const seen = new Set<string>();
+    const wanted = issues.filter((issue) => {
+      const key = issue.repository + '#' + issue.number;
+      if (!REPO.test(issue.repository) || validNumbers([issue.number]).length === 0 || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (wanted.length === 0) return [];
+    const data = await this.#graphql(parentsQuery(wanted), {});
+    return data ? toParents(data, wanted) : null;
+  }
+
+  async closingIssues(repo: string, numbers: readonly number[]): Promise<PullRequestCloses[] | null> {
+    const wanted = validNumbers(numbers);
+    const parts = REPO.exec(repo);
+    if (!parts) return null;
+    if (wanted.length === 0) return [];
+    const data = await this.#graphql(closingIssuesQuery(wanted), { owner: parts[1], name: parts[2] });
+    return data ? toClosingIssues(data, repo, wanted) : null;
   }
 
   // ── Your review (C3) ──

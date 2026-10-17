@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { repoWebUrl } from '../src/domain/project/repo-url';
+import { gitHubRepository, repoWebUrl } from '../src/domain/project/repo-url';
 
 test('turns an scp-style ssh remote into its web page', () => {
   /* When */
@@ -42,4 +42,18 @@ test('answers null for a remote with no web page', () => {
     /* Then */
     assert.equal(url, null, remote);
   }
+});
+
+test('a github.com remote names its owner/repo; any other remote names none', () => {
+  /* When */
+  const ssh = gitHubRepository('git@github.com:JBlaak/switchboard.git');
+  const https = gitHubRepository('https://github.com/JBlaak/James');
+  const gitlab = gitHubRepository('git@gitlab.com:group/repo.git');
+  const local = gitHubRepository('/srv/git/repo.git');
+
+  /* Then */
+  assert.equal(ssh, 'JBlaak/switchboard');
+  assert.equal(https, 'JBlaak/James');
+  assert.equal(gitlab, '');
+  assert.equal(local, '');
 });

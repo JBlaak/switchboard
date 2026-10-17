@@ -94,6 +94,10 @@ const api: SwitchboardApi = {
   // ── Plan: sessions on a plan's issues (#125) ──
   issueSessions: (repository) => ipcRenderer.invoke(INVOKE.planIssueSessions, repository),
   prepareIssueWorktree: (request) => ipcRenderer.invoke(INVOKE.planPrepareIssueWorktree, request),
+  // ── Plans (#123) ──
+  sessionPlans: (sessionId) => ipcRenderer.invoke(INVOKE.planSessionPlans, sessionId),
+  plan: (repo, number) => ipcRenderer.invoke(INVOKE.planGet, repo, number),
+  projectPlans: (projectPath, options) => ipcRenderer.invoke(INVOKE.planProjectPlans, projectPath, options),
 
   // ── Fire-and-forget ──
   sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),

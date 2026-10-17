@@ -27,6 +27,7 @@ import { SessionLifecycle } from '../application/services/session-lifecycle';
 import { SessionTransitionDetector } from '../application/services/session-transition-detector';
 import { SessionWorkService } from '../application/services/session-work-service';
 import { IssueSessionService, type IssueSessionCandidate } from '../application/services/issue-session-service';
+import { PlanService } from '../application/services/plan-service';
 import { ReviewService } from '../application/services/review-service';
 import { SessionActionService } from '../application/services/session-action-service';
 import { PrWatchService } from '../application/services/pr-watch-service';
@@ -104,6 +105,7 @@ export interface Container {
   readonly review: ReviewService
   readonly prWatch: PrWatchService;
   readonly issueSessions: IssueSessionService;
+  readonly plans: PlanService;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -236,16 +238,17 @@ export function buildContainer(): Container {
     prompter, store: new SqliteActivityStore(database.db), github, ids, clock, log,
   });
   const workspace = new GitCliWorkspace();
+  const locateSession = (sessionId: string): { folder: string | null; projectPath: string } | null => {
+    const cached = repository.getCachedSession(sessionId);
+    if (cached) return { folder: cached.folder, projectPath: cached.projectPath };
+    // Running but not indexed yet: its folder is the one the CLI writes to.
+    const live = registry.find(sessionId)?.session;
+    if (!live) return null;
+    const remote = isRemoteProjectPath(live.projectPath);
+    return { folder: remote ? null : encodeProjectPath(live.projectPath), projectPath: live.projectPath };
+  };
   const sessionWork = new SessionWorkService({
-    locate: (sessionId) => {
-      const cached = repository.getCachedSession(sessionId);
-      if (cached) return { folder: cached.folder, projectPath: cached.projectPath };
-      // Running but not indexed yet: its folder is the one the CLI writes to.
-      const live = registry.find(sessionId)?.session;
-      if (!live) return null;
-      const remote = isRemoteProjectPath(live.projectPath);
-      return { folder: remote ? null : encodeProjectPath(live.projectPath), projectPath: live.projectPath };
-    },
+    locate: locateSession,
     transcripts,
     git: workspace,
     github,
@@ -255,6 +258,8 @@ export function buildContainer(): Container {
   });
   sessionActions.attach(sessionWork);
   const review = new ReviewService({ github, page: sessionWork, actions: sessionActions, log });
+  // The Plan tab (#121): reads only, each answer kept for 30 s.
+  const plans = new PlanService({ locate: locateSession, transcripts, git: workspace, remotes: git, github, clock });
 
   // Always on, page or no page (W1): the running Claude sessions' PRs, as
   // their transcripts linked them. Remote sessions are out of scope.
@@ -344,6 +349,7 @@ export function buildContainer(): Container {
     sessionIndex, projects, usage, schedules, weather, updates, sessionWork, sessionActions, prWatch,
     review,
     issueSessions,
+    plans,
     renderer, dialogs, windowDrag, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
