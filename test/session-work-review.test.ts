@@ -30,22 +30,54 @@ function thread(id: string, line: number | null, side: 'LEFT' | 'RIGHT' = 'RIGHT
 
 // ── Placement ──
 
-test('a line answers to its own anchor; a context line to its old number on the left too', () => {
-  const [context, deleted, added] = file.hunks[0].lines;
-  assert.deepEqual(lineAnchorKeys(context), ['RIGHT:10', 'LEFT:10']);
-  assert.deepEqual(lineAnchorKeys(deleted), ['LEFT:11']);
-  assert.deepEqual(lineAnchorKeys(added), ['RIGHT:11']);
+test('a context line answers to its new number on the right and its old number on the left', () => {
+  /* Given */
+  const [context] = file.hunks[0].lines;
+
+  /* When */
+  const keys = lineAnchorKeys(context);
+
+  /* Then */
+  assert.deepEqual(keys, ['RIGHT:10', 'LEFT:10']);
+});
+
+test('a deleted line answers to its old number on the left', () => {
+  /* Given */
+  const [, deleted] = file.hunks[0].lines;
+
+  /* When */
+  const keys = lineAnchorKeys(deleted);
+
+  /* Then */
+  assert.deepEqual(keys, ['LEFT:11']);
+});
+
+test('an added line answers to its new number on the right', () => {
+  /* Given */
+  const [, , added] = file.hunks[0].lines;
+
+  /* When */
+  const keys = lineAnchorKeys(added);
+
+  /* Then */
+  assert.deepEqual(keys, ['RIGHT:11']);
 });
 
 test('threads go under their line; one whose line is gone, or on the file, is outdated', () => {
-  const placed = placeOnFile(file, [
+  /* Given */
+  const threads = [
     thread('added', 11),
     thread('deleted', 11, 'LEFT'),
     thread('context-left', 12, 'LEFT'),
     thread('gone', 40),
     thread('file', null),
     thread('elsewhere', 11, 'RIGHT', 'src/b.ts'),
-  ]);
+  ];
+
+  /* When */
+  const placed = placeOnFile(file, threads);
+
+  /* Then */
   assert.deepEqual([...placed.byLine].map(([key, list]) => [key, list.map((t) => t.id)]), [
     ['RIGHT:11', ['added']],
     ['LEFT:11', ['deleted']],
@@ -56,13 +88,18 @@ test('threads go under their line; one whose line is gone, or on the file, is ou
 });
 
 test('a file review files threads, pending comments and the composer under their lines', () => {
+  /* Given */
   const pr: PullRequestStatus = {
     number: 1, url: 'u', repository: 'o/a', closes: [],
     threads: [thread('T1', 11), thread('T2', 99)],
     pendingReview: [{ path: 'src/a.ts', line: 11, side: 'LEFT', body: 'why?' }, { path: 'src/a.ts', line: 98, side: 'RIGHT', body: 'old' }],
   };
-  const review = fileReview('item', file, pr, true, { itemId: 'item', path: 'src/a.ts', line: 13, side: 'RIGHT' })!;
   const [, deleted, added, , four] = file.hunks[0].lines;
+
+  /* When */
+  const review = fileReview('item', file, pr, true, { itemId: 'item', path: 'src/a.ts', line: 13, side: 'RIGHT' })!;
+
+  /* Then */
   assert.deepEqual(review.notes.get(noteKey(added))!.threads.map((t) => t.id), ['T1']);
   assert.deepEqual(review.notes.get(noteKey(deleted))!.pending.map((c) => c.body), ['why?']);
   assert.equal(review.notes.get(noteKey(four))!.composer, true);
@@ -71,10 +108,26 @@ test('a file review files threads, pending comments and the composer under their
 });
 
 test('a plain diff with nothing on it and no comments to take has no review', () => {
-  assert.equal(fileReview('item', file, null, false, null), null);
-  assert.equal(fileReview('item', file, null, true, null)?.commentable, true);
-  // The composer of another item is not this one's.
+  /* When */
+  const review = fileReview('item', file, null, false, null);
+
+  /* Then */
+  assert.equal(review, null);
+});
+
+test('a plain diff that takes comments has a commentable review', () => {
+  /* When */
+  const review = fileReview('item', file, null, true, null);
+
+  /* Then */
+  assert.equal(review?.commentable, true);
+});
+
+test('the composer of another item is not this one\'s', () => {
+  /* When */
   const other = fileReview('item', file, null, true, { itemId: 'other', path: 'src/a.ts', line: 11, side: 'RIGHT' })!;
+
+  /* Then */
   assert.equal(other.notes.size, 0);
 });
 
@@ -86,37 +139,95 @@ const prItem = (state: PullRequestStatus['state']): SessionWorkItem => ({
 });
 
 test('only an open PR with gh takes comments', () => {
-  assert.equal(canComment(prItem('open'), 'ok'), true);
-  assert.equal(canComment(prItem('draft'), 'ok'), true);
-  assert.equal(canComment(prItem('merged'), 'ok'), false);
-  assert.equal(canComment(prItem('open'), 'missing'), false);
+  /* Given */
+  const cases: [PullRequestStatus['state'], 'ok' | 'missing', boolean][] = [
+    ['open', 'ok', true],
+    ['draft', 'ok', true],
+    ['merged', 'ok', false],
+    ['open', 'missing', false],
+  ];
+
+  for (const [state, gh, expected] of cases) {
+    /* When */
+    const allowed = canComment(prItem(state), gh);
+
+    /* Then */
+    assert.equal(allowed, expected, `${state} with gh ${gh}`);
+  }
 });
 
-test('fix submits as Request changes, submit as a comment', () => {
-  assert.equal(submitEvent('fix'), 'REQUEST_CHANGES');
-  assert.equal(submitEvent('submit'), 'COMMENT');
+test('fix submits as Request changes', () => {
+  /* When */
+  const event = submitEvent('fix');
+
+  /* Then */
+  assert.equal(event, 'REQUEST_CHANGES');
 });
 
-test('threads to fix: every open one, or just the named open ones', () => {
-  const pr: PullRequestStatus = {
-    number: 1, url: 'u', repository: 'o/a', closes: [],
-    threads: [thread('A', 1), thread('B', 2, 'RIGHT', 'src/a.ts', true), thread('C', 3)],
-  };
-  assert.deepEqual(threadsToFix(pr).map((t) => t.id), ['A', 'C']);
-  assert.deepEqual(threadsToFix(pr, ['B', 'C']).map((t) => t.id), ['C']);
+test('submit submits as a comment', () => {
+  /* When */
+  const event = submitEvent('submit');
+
+  /* Then */
+  assert.equal(event, 'COMMENT');
+});
+
+const threeThreads: PullRequestStatus = {
+  number: 1, url: 'u', repository: 'o/a', closes: [],
+  threads: [thread('A', 1), thread('B', 2, 'RIGHT', 'src/a.ts', true), thread('C', 3)],
+};
+
+test('threads to fix: every open one', () => {
+  /* When */
+  const threads = threadsToFix(threeThreads);
+
+  /* Then */
+  assert.deepEqual(threads.map((t) => t.id), ['A', 'C']);
+});
+
+test('threads to fix: just the named open ones', () => {
+  /* When */
+  const threads = threadsToFix(threeThreads, ['B', 'C']);
+
+  /* Then */
+  assert.deepEqual(threads.map((t) => t.id), ['C']);
 });
 
 test('a Fix comments prompt gives its thread ids back, whatever the bodies say', () => {
+  /* Given */
   const tricky = { ...thread('PRRT_x1', 4), comments: [{ author: 'sam', isBot: false, body: 'see (this)', createdAt: '' }] };
   const prompt = renderPrompt({ action: 'fix-comments', number: 1, url: 'u (x)', threads: [tricky, thread('PRRT_y2', null)], worktree: '/w' });
-  assert.deepEqual(promptThreadIds(prompt), ['PRRT_x1', 'PRRT_y2']);
-  assert.deepEqual(promptThreadIds('Ship PR #1 (u).'), []);
+
+  /* When */
+  const ids = promptThreadIds(prompt);
+
+  /* Then */
+  assert.deepEqual(ids, ['PRRT_x1', 'PRRT_y2']);
+});
+
+test('a prompt that is not Fix comments gives no thread ids back', () => {
+  /* When */
+  const ids = promptThreadIds('Ship PR #1 (u).');
+
+  /* Then */
+  assert.deepEqual(ids, []);
 });
 
 test('avatar initials', () => {
-  assert.equal(initials('jane-doe'), 'JD');
-  assert.equal(initials('octocat'), 'OC');
-  assert.equal(initials('dependabot[bot]'), 'DE');
+  /* Given */
+  const cases: [string, string][] = [
+    ['jane-doe', 'JD'],
+    ['octocat', 'OC'],
+    ['dependabot[bot]', 'DE'],
+  ];
+
+  for (const [login, expected] of cases) {
+    /* When */
+    const letters = initials(login);
+
+    /* Then */
+    assert.equal(letters, expected);
+  }
 });
 
 // ── Reducers ──
@@ -136,36 +247,120 @@ const open = (): RendererState => run(initialRendererState('s1'),
 const composerOn = (line = 11): RendererEvent =>
   ({ type: 'sessionWorkComposerOpened', itemId: 'pr:1', path: 'src/a.ts', line, side: 'RIGHT' });
 
-test('the composer opens on a line of the selected item, one at a time, and closes', () => {
-  let state = run(open(), composerOn());
-  assert.deepEqual(state.sessionWork.page!.composer, { itemId: 'pr:1', path: 'src/a.ts', line: 11, side: 'RIGHT' });
-  state = run(state, composerOn(12));
-  assert.equal(state.sessionWork.page!.composer!.line, 12);
-  assert.equal(run(state, { type: 'sessionWorkComposerClosed' }).sessionWork.page!.composer, null);
-  // Not on an item that is not selected; and selecting another closes it.
-  assert.equal(run(open(), { ...composerOn(), itemId: 'pr:2' } as RendererEvent).sessionWork.page!.composer, null);
-  assert.equal(run(state, { type: 'sessionWorkItemSelected', itemId: 'pr:2' }).sessionWork.page!.composer, null);
+test('the composer opens on a line of the selected item', () => {
+  /* Given */
+  const state = open();
+
+  /* When */
+  const next = run(state, composerOn());
+
+  /* Then */
+  assert.deepEqual(next.sessionWork.page!.composer, { itemId: 'pr:1', path: 'src/a.ts', line: 11, side: 'RIGHT' });
 });
 
-test('a comment that went in closes the composer; a refused one keeps it with the reason', () => {
-  const asked = run(open(), composerOn(), { type: 'sessionWorkReviewRequested', sessionId: 's1', itemId: 'pr:1', kind: 'comment' });
-  assert.deepEqual(asked.sessionWork.page!.reviewPending, { itemId: 'pr:1', kind: 'comment' });
-  // A second write waits for the first.
-  assert.equal(run(asked, { type: 'sessionWorkReviewRequested', sessionId: 's1', itemId: 'pr:1', kind: 'submit' }), asked);
+test('the composer is open on one line at a time', () => {
+  /* Given */
+  const state = run(open(), composerOn());
 
+  /* When */
+  const next = run(state, composerOn(12));
+
+  /* Then */
+  assert.equal(next.sessionWork.page!.composer!.line, 12);
+});
+
+test('the composer closes', () => {
+  /* Given */
+  const state = run(open(), composerOn(), composerOn(12));
+
+  /* When */
+  const next = run(state, { type: 'sessionWorkComposerClosed' });
+
+  /* Then */
+  assert.equal(next.sessionWork.page!.composer, null);
+});
+
+test('the composer does not open on an item that is not selected', () => {
+  /* Given */
+  const state = open();
+
+  /* When */
+  const next = run(state, { ...composerOn(), itemId: 'pr:2' } as RendererEvent);
+
+  /* Then */
+  assert.equal(next.sessionWork.page!.composer, null);
+});
+
+test('selecting another item closes the composer', () => {
+  /* Given */
+  const state = run(open(), composerOn(), composerOn(12));
+
+  /* When */
+  const next = run(state, { type: 'sessionWorkItemSelected', itemId: 'pr:2' });
+
+  /* Then */
+  assert.equal(next.sessionWork.page!.composer, null);
+});
+
+const askedToComment = () => run(open(), composerOn(),
+  { type: 'sessionWorkReviewRequested', sessionId: 's1', itemId: 'pr:1', kind: 'comment' });
+
+test('asking to comment marks the review write pending', () => {
+  /* Given */
+  const state = run(open(), composerOn());
+
+  /* When */
+  const asked = run(state, { type: 'sessionWorkReviewRequested', sessionId: 's1', itemId: 'pr:1', kind: 'comment' });
+
+  /* Then */
+  assert.deepEqual(asked.sessionWork.page!.reviewPending, { itemId: 'pr:1', kind: 'comment' });
+});
+
+test('a second review write waits for the first', () => {
+  /* Given */
+  const asked = askedToComment();
+
+  /* When */
+  const next = run(asked, { type: 'sessionWorkReviewRequested', sessionId: 's1', itemId: 'pr:1', kind: 'submit' });
+
+  /* Then */
+  assert.equal(next, asked);
+});
+
+test('a refused comment keeps the composer with the reason', () => {
+  /* Given */
+  const asked = askedToComment();
+
+  /* When */
   const refused = run(asked, { type: 'sessionWorkReviewAnswered', sessionId: 's1', itemId: 'pr:1', kind: 'comment', error: 'nope' });
+
+  /* Then */
   assert.equal(refused.sessionWork.page!.reviewPending, null);
   assert.deepEqual(refused.sessionWork.page!.reviewError, { itemId: 'pr:1', kind: 'comment', message: 'nope' });
   assert.notEqual(refused.sessionWork.page!.composer, null);
+});
 
+test('a comment that went in closes the composer', () => {
+  /* Given */
+  const asked = askedToComment();
+
+  /* When */
   const added = run(asked, { type: 'sessionWorkReviewAnswered', sessionId: 's1', itemId: 'pr:1', kind: 'comment', error: null });
+
+  /* Then */
   assert.equal(added.sessionWork.page!.composer, null);
   assert.equal(added.sessionWork.page!.reviewError, null);
 });
 
 test('one thread\'s Have Claude fix keeps its refusal on that thread', () => {
-  const state = run(open(),
-    { type: 'sessionWorkActionRequested', sessionId: 's1', itemId: 'pr:1', action: 'fix-comments', threadIds: ['T1'] },
+  /* Given */
+  const asked = run(open(),
+    { type: 'sessionWorkActionRequested', sessionId: 's1', itemId: 'pr:1', action: 'fix-comments', threadIds: ['T1'] });
+
+  /* When */
+  const state = run(asked,
     { type: 'sessionWorkActionAnswered', sessionId: 's1', itemId: 'pr:1', error: 'Already queued' });
+
+  /* Then */
   assert.deepEqual(state.sessionWork.page!.actionError, { itemId: 'pr:1', message: 'Already queued', threadIds: ['T1'] });
 });
