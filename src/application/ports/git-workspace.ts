@@ -28,6 +28,15 @@ export interface GitWorkspace {
    */
   defaultBranch(worktree: string): Promise<string>;
 
+  /** The branch checked out in the worktree now; null on a detached HEAD or when it is gone. */
+  currentBranch(worktree: string): Promise<string | null>;
+
+  /**
+   * The commit `ref` points at, or null when it does not resolve. What a
+   * diff is cached against: the same commits make the same diff.
+   */
+  commitSha(worktree: string, ref: string): Promise<string | null>;
+
   /** Does `branch` exist as a local branch? */
   branchExists(worktree: string, branch: string): Promise<boolean>;
 

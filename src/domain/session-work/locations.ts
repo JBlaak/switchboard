@@ -47,20 +47,40 @@ export function workLocations(
   sources: readonly TranscriptSource[],
   worktreeRoots: readonly string[],
 ): WorkLocation[] {
-  const found = new Map<string, WorkLocation>();
+  const entries: WorkLocation[] = [];
   for (const source of sources) {
     for (const line of source.lines) {
       const entry = parseTranscriptLine(line) as { cwd?: unknown; gitBranch?: unknown } | null;
       if (!entry || typeof entry.cwd !== 'string' || !entry.cwd) continue;
       if (typeof entry.gitBranch !== 'string' || !entry.gitBranch || entry.gitBranch === 'HEAD') continue;
-      const worktree = worktreeRootOf(entry.cwd, worktreeRoots);
-      const key = locationKey(worktree, entry.gitBranch);
-      const known = found.get(key);
-      if (known) {
-        if (!source.fromSubagent) known.fromSubagent = false;
-      } else {
-        found.set(key, { worktree, branch: entry.gitBranch, fromSubagent: source.fromSubagent });
-      }
+      entries.push({
+        worktree: worktreeRootOf(entry.cwd, worktreeRoots),
+        branch: entry.gitBranch,
+        fromSubagent: source.fromSubagent,
+      });
+    }
+  }
+  return mergeWorkLocations(entries);
+}
+
+/**
+ * Locations that landed on the same worktree and branch, as one, in the order
+ * they first appear. `fromSubagent` stays true only when every one of them
+ * was a subagent's.
+ *
+ * For when the worktree roots are only known after the fact: the transcript
+ * store reports each `cwd` as written, git resolves it to its root, and two
+ * subdirectories of one worktree become one place.
+ */
+export function mergeWorkLocations(entries: readonly WorkLocation[]): WorkLocation[] {
+  const found = new Map<string, WorkLocation>();
+  for (const entry of entries) {
+    const key = locationKey(entry.worktree, entry.branch);
+    const known = found.get(key);
+    if (known) {
+      if (!entry.fromSubagent) known.fromSubagent = false;
+    } else {
+      found.set(key, { ...entry });
     }
   }
   return [...found.values()];
