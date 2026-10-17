@@ -126,7 +126,7 @@ export class GitCliWorkspace implements GitWorkspace {
     // `--intent-to-add` would write the index. Diffing each against
     // /dev/null reads the same as a new file, without touching anything.
     const others = await git(worktree, ['ls-files', '--others', '--exclude-standard', '-z']);
-    const untracked = others.code === 0 ? others.stdout.split('\0').filter(Boolean) : [];
+    const untracked = others.code === 0 ? others.stdout.split('\0').filter(isUntrackedFile) : [];
     for (const file of untracked) {
       // `--no-index` exits 1 when the files differ, which here they always do.
       const added = await git(worktree, ['diff', '--no-index', ...DIFF_FLAGS, '--', '/dev/null', file]);
@@ -225,12 +225,21 @@ function gitDirs(worktree: string): { gitDir: string; commonDir: string } | null
 }
 
 /**
+ * An untracked entry that is a file. git lists a nested repository it will not
+ * descend into as its directory, with a trailing `/`.
+ */
+function isUntrackedFile(entry: string): boolean {
+  return entry.length > 0 && !entry.endsWith('/');
+}
+
+/**
  * `git status --porcelain=v1 -z` as file changes.
  *
  * Each entry is `XY path`, and a rename or copy is followed by its old path as
  * the next NUL-separated field. X is the index, Y the worktree; a file staged
  * as new and then edited is still a new file, so the index side wins where
- * they disagree, except that a deletion on either side is a deletion.
+ * they disagree, except that a deletion on either side is a deletion. A nested
+ * repository (an untracked entry ending in `/`) is left out.
  */
 export function parseStatus(output: string): FileChange[] {
   const fields = output.split('\0');
@@ -244,7 +253,13 @@ export function parseStatus(output: string): FileChange[] {
     if (x === '!' && y === '!') continue;
 
     let status: FileStatus;
-    if (x === '?' && y === '?') status = 'untracked';
+    if (x === '?' && y === '?') {
+      // A nested repository — an agent's worktree under `.claude/worktrees/`,
+      // a clone inside the checkout — is listed as one entry ending in `/`.
+      // It is another repository's business and has no diff here.
+      if (!isUntrackedFile(filePath)) continue;
+      status = 'untracked';
+    }
     else if (x === 'R' || y === 'R') status = 'renamed';
     else if (x === 'C' || y === 'C') status = 'copied';
     else if (x === 'D' || y === 'D') status = 'deleted';

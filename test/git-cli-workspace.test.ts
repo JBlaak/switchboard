@@ -157,6 +157,32 @@ test('status and workingDiff cover staged, unstaged, renamed and untracked chang
   assert.match(run(dirty, 'status', '--porcelain', '--untracked-files=all'),/^\?\? notes\/untracked\.md$/m);
 });
 
+test('status and workingDiff leave out nested repositories, such as agent worktrees inside the checkout', async () => {
+  const host = path.join(tmp, 'host');
+  fs.mkdirSync(host);
+  run(host, 'init', '-q', '-b', 'main');
+  write(host, 'a.txt', 'one\n');
+  commit(host, 'Initial');
+  // An agent's worktree under the checkout, as Claude Code makes them, and a plain nested clone.
+  run(host, 'worktree', 'add', '-q', '-b', 'agent-1', path.join(host, '.claude', 'worktrees', 'agent-1'), 'main');
+  const nested = path.join(host, 'vendor', 'lib');
+  fs.mkdirSync(nested, { recursive: true });
+  run(nested, 'init', '-q', '-b', 'main');
+  write(nested, 'lib.txt', 'lib\n');
+  write(host, 'loose.txt', 'loose\n');
+
+  // git itself lists them, as directories.
+  assert.match(run(host, 'status', '--porcelain', '--untracked-files=all'), /^\?\? \.claude\/worktrees\/agent-1\/$/m);
+
+  assert.deepEqual(await git.status(host), [{ path: 'loose.txt', status: 'untracked' }]);
+  const files = parseUnifiedDiff(await git.workingDiff(host));
+  assert.deepEqual(files.map((f) => [f.path, f.status]), [['loose.txt', 'added']]);
+
+  fs.rmSync(path.join(host, 'loose.txt'));
+  assert.deepEqual(await git.status(host), [], 'a checkout with only nested repositories is clean');
+  assert.equal(await git.workingDiff(host), '');
+});
+
 test('workingDiff works in a repository with no commits yet', async () => {
   const fresh = path.join(tmp, 'fresh');
   fs.mkdirSync(fresh);
@@ -196,7 +222,7 @@ test('watch fires once a commit lands in a linked worktree, and not after dispos
 });
 
 test('parseStatus reads porcelain v1 -z, including a rename\'s old path and names with spaces', () => {
-  assert.deepEqual(parseStatus('R  new name.txt\0old name.txt\0 M a.txt\0?? b c.txt\0AM d.txt\0 D e.txt\0!! ignored\0'), [
+  assert.deepEqual(parseStatus('R  new name.txt\0old name.txt\0 M a.txt\0?? b c.txt\0AM d.txt\0 D e.txt\0!! ignored\0?? .claude/worktrees/agent-1/\0'), [
     { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed' },
     { path: 'a.txt', status: 'modified' },
     { path: 'b c.txt', status: 'untracked' },
