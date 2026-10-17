@@ -77,7 +77,7 @@ async function applyStoredSettings(): Promise<void> {
   if (!global) return;
 
   if (global.sidebarWidth) {
-    document.getElementById('sidebar')!.style.width = global.sidebarWidth + 'px';
+    document.getElementById('sidebar')!.style.setProperty('--sidebar-width', global.sidebarWidth + 'px');
   }
   if (global.visibleSessionCount) view.visibleSessionCount = Number(global.visibleSessionCount);
   if (global.sessionMaxAgeDays) view.sessionMaxAgeDays = Number(global.sessionMaxAgeDays);

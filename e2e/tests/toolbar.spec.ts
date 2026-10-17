@@ -64,6 +64,21 @@ test.describe('collapse and expand', () => {
     await expect(button(page, 'Show sidebar')).toBeHidden();
   });
 
+  test('Cmd+S hides and shows the sidebar, from the search box too', async ({ page }) => {
+    await page.keyboard.press('Meta+s');
+    await expect(searchBox(page)).toBeHidden();
+    await expect(button(page, 'Show sidebar')).toBeVisible();
+    expect(await sidebarWidth(page)).toBe(42);
+
+    await page.keyboard.press('Meta+s');
+    await expect(searchBox(page)).toBeVisible();
+    await expect(button(page, 'Show sidebar')).toBeHidden();
+
+    await searchBox(page).focus();
+    await page.keyboard.press('Meta+s');
+    await expect(searchBox(page)).toBeHidden();
+  });
+
   test('is not persisted', async ({ page }) => {
     await button(page, 'Hide sidebar').click();
     await expect(searchBox(page)).toBeHidden();

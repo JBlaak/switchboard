@@ -27,6 +27,7 @@ import { headerNameFor } from '../sessions/terminal-header';
 import { loadShellProfile } from '../../ui/terminal/actions';
 import { placeholder, settingsViewer, terminalArea } from '../../lib/dom';
 import { handleSessionNavKey, isSessionNavKey } from '../terminal/session-nav';
+import { isSidebarToggleKey, toggleSidebar } from '../../ui/toolbar/actions';
 import {
   archiveActiveSession, focusSidebar, isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey,
 } from '../sessions/sidebar-keyboard';
@@ -119,6 +120,12 @@ function setupTerminalKeyBindings(
     // Cmd+L: hand the keyboard to the session list
     if (isSidebarFocusKey(e)) {
       if (e.type === 'keydown') { e._handled = true; focusSidebar(); }
+      return false;
+    }
+
+    // Cmd+S: hide or show the sidebar
+    if (isSidebarToggleKey(e)) {
+      if (e.type === 'keydown') { e._handled = true; e.preventDefault(); toggleSidebar(); }
       return false;
     }
 
