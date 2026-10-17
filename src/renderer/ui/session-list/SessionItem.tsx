@@ -16,7 +16,7 @@ import { shallowEqual } from '../../state/store';
 import { useStore } from '../use-store';
 import { HTML } from './markup';
 import { RenameInput } from './RenameInput';
-import { RowMeta } from './RowMeta';
+import { RowMeta, useCanOpenWork } from './RowMeta';
 import {
   openRow, resumeWithConfig, startRename, stopRow, toggleArchive, togglePin,
 } from './actions';
@@ -92,6 +92,8 @@ export function SessionItem({ row, groupId }: SessionItemProps): JSX.Element {
     if (!isLeaving(row.id, groupId)) handler(e.currentTarget);
   };
 
+  const openWork = action(() => void openSessionWorkFromRow(sessionId));
+
   // A terminal — local or remote — gets a glyph rather than a word, because
   // its label is already "Terminal".
   const terminal = session.type === 'terminal' || (session.type === 'remote' && session.remoteKind === 'shell');
@@ -133,11 +135,12 @@ export function SessionItem({ row, groupId }: SessionItemProps): JSX.Element {
             asking={live.asking}
             agents={live.agents}
             now={live.now}
-            onOpenWork={action(() => void openSessionWorkFromRow(sessionId))}
+            onOpenWork={openWork}
           />
         </div>
         <RowActions
           row={row}
+          onOpenWork={openWork}
           onStop={action(() => stopRow(sessionId))}
           onArchive={action(button => item.current && toggleArchive(item.current, row.id, sessionId, button))}
           onResume={action(() => resumeWithConfig(sessionId))}
@@ -149,6 +152,7 @@ export function SessionItem({ row, groupId }: SessionItemProps): JSX.Element {
 
 interface RowActionsProps {
   row: SessionListRow;
+  onOpenWork: (e: MouseEvent<HTMLElement>) => void;
   onStop: (e: MouseEvent<HTMLElement>) => void;
   onArchive: (e: MouseEvent<HTMLElement>) => void;
   onResume: (e: MouseEvent<HTMLElement>) => void;
@@ -161,10 +165,14 @@ interface RowActionsProps {
  * session has no local transcript to relaunch from; archive still works — it
  * is keyed on the session id alone — and doubles as "forget this one". A
  * plain terminal has nothing to archive or resume either. Stop is always
- * there; the stylesheet shows it only while something runs.
+ * there; the stylesheet shows it only while something runs. Session work
+ * appears only when its page can open, the same rule as the meta line.
  */
-function RowActions({ row, onStop, onArchive, onResume }: RowActionsProps): JSX.Element {
+function RowActions({ row, onOpenWork, onStop, onArchive, onResume }: RowActionsProps): JSX.Element {
   const { session } = row;
+  const path = row.projectPath || session.projectPath;
+  const remote = session.type === 'remote' || !!path?.startsWith('ssh://');
+  const canOpenWork = useCanOpenWork(session.sessionId, remote);
   const archive = (
     <button
       className="session-archive-btn"
@@ -175,6 +183,14 @@ function RowActions({ row, onStop, onArchive, onResume }: RowActionsProps): JSX.
   );
   return (
     <div className="session-actions">
+      {canOpenWork === true && (
+        <button
+          className="session-work-btn"
+          title="Open session work · ⌘G"
+          dangerouslySetInnerHTML={HTML.sessionWork}
+          onClick={onOpenWork}
+        />
+      )}
       <button
         className="session-stop-btn"
         title={session.type === 'remote' ? 'Disconnect (keeps running on the remote)' : 'Stop session'}
