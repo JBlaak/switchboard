@@ -2,7 +2,7 @@
 
 A calm home for your Claude Code sessions.
 
-Every session from every project in one quiet list. A real terminal beside it. Your hands stay on
+Every session from every project in one quiet list, with Claude right beside it. Your hands stay on
 the keyboard, and a small jelly friend named Patch keeps you company.
 
 ![Switchboard](build/screenshot.png)
@@ -16,7 +16,7 @@ the keyboard, and a small jelly friend named Patch keeps you company.
 sort themselves into *Needs input*, *Working*, *Pinned* and *Recent*, with live dots so you can
 tell a busy Claude from a waiting one at a glance. Old sessions fold away behind "+3 older".
 
-**Minimalism.** One list, one terminal, no tabs. Archiving a session also stops it. Picking a
+**Minimalism.** One list, one Claude on screen, no tabs. Archiving a session also stops it. Picking a
 project just starts Claude there. When a feature didn't earn its pixels, it went.
 
 **Keyboard first.** Start a session, jump between them, rename, archive and review without
@@ -32,9 +32,9 @@ holidays. Poke Patch and see what happens. Then poke again.
 
 ### Answer Claude's questions properly
 
-When Claude asks you something, the questions open as a proper sheet instead of a menu in the
-terminal: number keys to pick, arrows to move between questions, and an "Other" box to write your
-own answer. Patch keeps count. Press `Esc` to answer in the terminal instead.
+When Claude asks you something, the questions open as a proper sheet instead of a menu in
+Claude's output: number keys to pick, arrows to move between questions, and an "Other" box to write your
+own answer. Patch keeps count. Press `Esc` to answer in Claude instead.
 
 ![Claude's questions](build/screenshot-questions.png)
 
@@ -62,9 +62,9 @@ Claude in, local or remote. `⌘N` starts a quick session in a scratch folder of
 - **Full-text search** across everything you and Claude ever said, not just the titles.
 - **Usage gauges** for your plan's 5-hour and weekly windows, quietly in the corner.
 - **Keep awake.** One click on the zzz keeps your Mac from sleeping while Claude works.
-- **Light and dark**, following your system or pinned. The terminal has themes to match:
+- **Light and dark**, following your system or pinned. Claude's pane has themes to match:
   Switchboard, Ghostty, Tokyo Night, Catppuccin, Dracula, Nord and Solarized.
-- **Your terminal, your way.** Font, size and line height apply live. `Shift+Enter` makes a newline,
+- **Claude, your way.** Font, size and line height apply live. `Shift+Enter` makes a newline,
   holding `Space` works for voice input, and dropping a file pastes its path.
 - **Scheduled tasks.** `.claude/commands/schedule-*.md` files with a cron line run on their own.
 
@@ -81,7 +81,7 @@ Claude in, local or remote. `⌘N` starts a quick session in a scratch folder of
 | `⌘G` | Open or close Session work |
 | `⌘E` | Archive the session on screen 🎉 |
 | `⌘S` | Hide or show the sidebar |
-| `⌘F` | Find in the terminal |
+| `⌘F` | Find in Claude's output |
 
 **In the session list** (after `⌘L`)
 
@@ -92,7 +92,7 @@ Claude in, local or remote. `⌘N` starts a quick session in a scratch folder of
 | `R` or `F2` | Rename |
 | `E` | Archive (a whole group, on a group header) |
 | `A` | New session |
-| `Esc` | Back to the terminal |
+| `Esc` | Back to Claude |
 
 **In Session work**
 
@@ -102,7 +102,7 @@ Claude in, local or remote. `⌘N` starts a quick session in a scratch folder of
 | `N` `P` | Next / previous file |
 | `U` | Unified or split diff |
 | `C` | Comment on the focused line |
-| `Esc` | Back to the terminal |
+| `Esc` | Back to Claude |
 
 **In Claude's questions**
 
@@ -112,7 +112,7 @@ Claude in, local or remote. `⌘N` starts a quick session in a scratch folder of
 | `↑` `↓` | Move between options |
 | `←` `→` or `Enter` | Previous / next question |
 | `Space` | Toggle an option, when you can pick several |
-| `Esc` | Answer in the terminal instead |
+| `Esc` | Answer in Claude instead |
 
 ## Run it
 
