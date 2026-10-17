@@ -9,14 +9,16 @@
 import type { JSX } from 'react';
 import { useStore } from '../use-store';
 import { shallowEqual } from '../../state/store';
-import { closeSessionWork, openOnGitHub } from './actions';
+import { closeSessionWork, openOnGitHub, setWorkTab } from './actions';
 import { agentsLabel, footprintLine, queueLabel, updatedAgo } from './describe';
-import type { SessionWorkPage } from '../../state/session-work-slice';
+import type { SessionWorkPage, WorkTab } from '../../state/session-work-slice';
 import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
 
 const NO_AGENTS: readonly WorkingAgent[] = [];
 
-export function WorkHeader({ page }: { page: SessionWorkPage }): JSX.Element {
+const TABS: readonly { tab: WorkTab; label: string }[] = [{ tab: 'work', label: 'Work' }, { tab: 'plan', label: 'Plan' }];
+
+export function WorkHeader({ page, tab }: { page: SessionWorkPage; tab: WorkTab }): JSX.Element {
   const now = useStore(state => state.sessionWork.now);
   const agents = useStore(state => state.activity.agents[page.sessionId] ?? NO_AGENTS, shallowEqual);
   const { snapshot } = page;
@@ -72,6 +74,21 @@ export function WorkHeader({ page }: { page: SessionWorkPage }): JSX.Element {
           ))}
         </div>
       )}
+      <div className="sw-tabs" role="tablist" aria-label="Session work">
+        {TABS.map(({ tab: id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            className={'sw-tab' + (tab === id ? ' is-current' : '')}
+            aria-selected={tab === id}
+            onClick={() => setWorkTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+        <kbd className="sw-kbd" title="t switches tabs">t</kbd>
+      </div>
     </header>
   );
 }
