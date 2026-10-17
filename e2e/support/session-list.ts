@@ -205,16 +205,6 @@ export async function storedSession(page: Page, sessionId: string): Promise<{
   }, sessionId);
 }
 
-/** Collect every `confirm`/`alert` message, answering confirms with `accept`. */
-export function collectDialogs(page: Page, accept = true): string[] {
-  const messages: string[] = [];
-  page.on('dialog', (dialog) => {
-    messages.push(dialog.message());
-    void (dialog.type() === 'confirm' && !accept ? dialog.dismiss() : dialog.accept());
-  });
-  return messages;
-}
-
 /**
  * Whatever the keyboard cursor is on: a row, a group header or a "more"
  * toggle.

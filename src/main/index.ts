@@ -11,7 +11,7 @@ import log from 'electron-log';
 import { buildContainer, isolateUserDataIfRequested } from './composition-root';
 import { registerIpcHandlers } from './ipc';
 import { buildApplicationMenu } from '../infrastructure/electron/app-menu';
-import { createMainWindow } from '../infrastructure/electron/main-window';
+import { createMainWindow, hiddenForE2e } from '../infrastructure/electron/main-window';
 import { systemTimers } from '../infrastructure/system/timers';
 import { normaliseAppearance } from '../domain/settings/appearance';
 import type { Container } from './composition-root';
@@ -46,6 +46,10 @@ if (!app.requestSingleInstanceLock()) {
 
 function main(): void {
   const container = buildContainer();
+
+  // An accessory app gets no Dock icon and is never made active, so an e2e
+  // run's apps do not take focus from whatever the user is typing in.
+  if (hiddenForE2e() && process.platform === 'darwin') app.setActivationPolicy('accessory');
 
   app.on('second-instance', () => {
     const window = container.getWindow();

@@ -107,7 +107,8 @@ npm run test:e2e -- e2e/tests/sidebar.spec.ts --grep "pinned"
 npm run test:e2e -- --update-snapshots    # rewrite the screenshot baselines
 ```
 
-A window opens for each test (a few at a time); leave it alone while it runs.
+The windows stay hidden and never take focus, so you can keep working while it
+runs. `SB_E2E_HEADED=1` shows them, for watching a test.
 `SB_E2E_SKIP_SCREENSHOTS=1` runs every functional assertion but skips the
 pixel comparisons. CI does that: the baselines are rendered on a developer's
 Mac, and a runner's macOS version and GPU draw text differently enough to fail

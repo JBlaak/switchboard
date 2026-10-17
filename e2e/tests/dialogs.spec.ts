@@ -7,6 +7,7 @@ import { test, expect, forEachAppearance } from '../support/test';
 import { dialog, expectScreen, openSession, rowButton, sessionRow, terminalStatus } from '../support/app';
 import { fakeClaude, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
 import { failStopSession, setHostStub } from '../support/main-process';
+import { answerDialogs, dialogsShown } from '../support/native-dialogs';
 import { LABEL, P, S, standardFixture } from '../fixtures/standard';
 import type { Locator, Page } from '@playwright/test';
 import type { FixtureHome } from '../support/fixture-home';
@@ -114,11 +115,6 @@ forEachAppearance(() => {
 /** Take the focus off whatever has it, so a stray Enter cannot click a button. */
 async function blur(page: Page) {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-}
-
-/** Answer the next native confirm(). */
-function answerNextConfirm(page: Page, accept: boolean) {
-  page.once('dialog', prompt => void (accept ? prompt.accept() : prompt.dismiss()));
 }
 
 /** The picker's project names, top to bottom; each carries its full path as a title. */
@@ -377,7 +373,7 @@ test.describe('project picker', () => {
     await openPicker(page);
     const picker = dialog(page, 'New Session');
     const before = launchedKeys(home);
-    answerNextConfirm(page, false);
+    await answerDialogs(page, false);
     await rowButton(pickerRow(picker, REMOTE_NAME), 'Remove remote project').click();
     await settle(page);
     await expect(pickerRow(picker, REMOTE_NAME)).toBeVisible();
@@ -388,7 +384,7 @@ test.describe('project picker', () => {
   test('remove forgets the remote and redraws the list in place', async ({ page }) => {
     await openPicker(page);
     const picker = dialog(page, 'New Session');
-    answerNextConfirm(page, true);
+    await answerDialogs(page, true);
     await rowButton(pickerRow(picker, REMOTE_NAME), 'Remove remote project').click();
     await expect(pickerRow(picker, REMOTE_NAME)).toHaveCount(0);
     await expect(pickerRow(picker, P.acmeApi)).toBeVisible();
@@ -398,7 +394,7 @@ test.describe('project picker', () => {
   test('hide worktree asks first, then hides it and redraws the list in place', async ({ page, home }) => {
     await openPicker(page);
     const picker = dialog(page, 'New Session');
-    answerNextConfirm(page, true);
+    await answerDialogs(page, true);
     await rowButton(pickerRow(picker, WORKTREE_NAME), 'Hide worktree').click();
     await expect(pickerRow(picker, WORKTREE_NAME)).toHaveCount(0);
     await expect(pickerRow(picker, P.acmeApi)).toBeVisible();
@@ -409,7 +405,7 @@ test.describe('project picker', () => {
     await openPicker(page);
     const picker = dialog(page, 'New Session');
     const before = launchedKeys(home);
-    answerNextConfirm(page, true);
+    await answerDialogs(page, true);
     await rowButton(pickerRow(picker, P.webDashboard), 'Archive all sessions in this project').click();
     await expect.poll(() => page.evaluate(async (path) => {
       const project = (await window.api.getProjects(true)).find(p => p.projectPath === path);
@@ -425,15 +421,12 @@ test.describe('project picker', () => {
     await failStopSession(app, 'still running');
     await openPicker(page);
     const picker = dialog(page, 'New Session');
-    const prompts: string[] = [];
-    page.on('dialog', prompt => {
-      prompts.push(prompt.type());
-      void prompt.accept();
-    });
+    await answerDialogs(page, true);
+    const types = async () => (await dialogsShown(page)).map(shown => shown.type);
     await rowButton(pickerRow(picker, P.webDashboard), 'Archive all sessions in this project').click();
-    await expect.poll(() => prompts).toEqual(['confirm', 'alert']);
+    await expect.poll(types).toEqual(['confirm', 'alert']);
     await settle(page);
-    expect(prompts).toEqual(['confirm', 'alert']);
+    expect(await types()).toEqual(['confirm', 'alert']);
     const archived = await page.evaluate(async (path) => {
       const project = (await window.api.getProjects(true)).find(p => p.projectPath === path);
       return project?.sessions.filter(s => s.archived).length;
