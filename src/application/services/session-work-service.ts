@@ -99,6 +99,8 @@ interface Page {
   poll: TimerHandle | null;
   /** The faster poll, while a Ship it is under way. */
   shipPoll: TimerHandle | null;
+  /** How many worktrees and branches the transcripts name, as last built. */
+  footprint: { worktrees: number; branches: number };
   building: Promise<void> | null;
   again: boolean;
   /** The next build asks `gh` again even if nothing new was linked. */
@@ -176,6 +178,7 @@ export class SessionWorkService implements WorkPageSource {
       debounce: null,
       poll: null,
       shipPoll: null,
+      footprint: { worktrees: 0, branches: 0 },
       building: null,
       again: false,
       askGitHub: true,
@@ -362,6 +365,10 @@ export class SessionWorkService implements WorkPageSource {
     if (page.closed) return;
 
     const ok = github.availability === 'ok';
+    page.footprint = {
+      worktrees: new Set(locations.map((location) => location.worktree)).size,
+      branches: new Set(locations.map((location) => location.branch)).size,
+    };
     const derived = deriveWorkItems({
       locations,
       pullRequests,
@@ -402,14 +409,16 @@ export class SessionWorkService implements WorkPageSource {
       const error = page.diffErrors.get(item.id) ?? item.error;
       return error ? { ...item, error } : item;
     });
+    const { footprint } = page;
     const queued = activities.queued;
-    const key = JSON.stringify({ gh, items, queued });
+    const key = JSON.stringify({ gh, items, footprint, queued });
     if (key === page.lastKey && page.last) return;
     page.lastKey = key;
     page.last = {
       sessionId: page.sessionId,
       repository: page.repository ?? '',
       items,
+      footprint,
       queued,
       gh,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),

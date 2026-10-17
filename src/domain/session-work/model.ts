@@ -214,6 +214,12 @@ export interface SessionWorkSnapshot {
   /** `owner/name` of the session's repository on GitHub, from its origin remote; '' when it is not on GitHub. */
   repository: string;
   items: SessionWorkItem[];
+  /**
+   * How many worktrees and branches the session worked in, whether or not an
+   * item still lives there: a session in the main checkout whose PRs all
+   * merged still worked somewhere.
+   */
+  footprint: { worktrees: number; branches: number };
   /** Actions waiting for the session to go idle, on any item (A2). */
   queued: number;
   gh: GitHubAvailability;

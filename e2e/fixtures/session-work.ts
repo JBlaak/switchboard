@@ -92,11 +92,13 @@ const ITEMS: SessionWorkItem[] = [
 const UPDATED_AT = new Date(FIXTURE_NOW - 4000).toISOString();
 
 export const LOGIN_FIX_WORK: SessionWorkSnapshot = {
-  sessionId: S.loginFix, repository: REPO, items: ITEMS, queued: 0, gh: 'ok', updatedAt: UPDATED_AT,
+  sessionId: S.loginFix, repository: REPO, items: ITEMS, footprint: { worktrees: 2, branches: 3 }, queued: 0, gh: 'ok',
+  updatedAt: UPDATED_AT,
 };
 
 export const DASHBOARD_WORK: SessionWorkSnapshot = {
-  sessionId: S.chartsDarkMode, repository: 'acme/dashboard', items: [], queued: 0, gh: 'unauthenticated', updatedAt: UPDATED_AT,
+  sessionId: S.chartsDarkMode, repository: 'acme/dashboard', items: [], footprint: { worktrees: 1, branches: 1 }, queued: 0,
+  gh: 'unauthenticated', updatedAt: UPDATED_AT,
 };
 
 /** The first PR's item id. */

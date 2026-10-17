@@ -177,7 +177,7 @@ test('gave up: a red card; done: no card', () => {
 
 test('the header says the session is busy while anything is queued', () => {
   const snapshot = (queued: number): SessionWorkSnapshot =>
-    ({ sessionId: 's1', repository: 'acme/api', items: [], queued, gh: 'ok', updatedAt: '' });
+    ({ sessionId: 's1', repository: 'acme/api', items: [], footprint: { worktrees: 0, branches: 0 }, queued, gh: 'ok', updatedAt: '' });
   assert.equal(queueLabel(snapshot(0)), null);
   assert.equal(queueLabel(snapshot(2)), 'Session busy · 2 queued');
 });
@@ -192,7 +192,10 @@ test('an action asked for waits for main; a refusal shows on its item until the 
   const item = pr();
   const opened = run(initialRendererState('s1'),
     { type: 'sessionWorkOpened', sessionId: 's1', name: 'Fix login', at: NOW },
-    { type: 'sessionWorkSnapshot', snapshot: { sessionId: 's1', repository: 'acme/api', items: [item, branch], queued: 0, gh: 'ok', updatedAt: '' } });
+    { type: 'sessionWorkSnapshot', snapshot: {
+      sessionId: 's1', repository: 'acme/api', items: [item, branch], footprint: { worktrees: 2, branches: 2 },
+      queued: 0, gh: 'ok', updatedAt: '',
+    } });
 
   const asked = run(opened, { type: 'sessionWorkActionRequested', sessionId: 's1', itemId: item.id, action: 'ship' });
   assert.deepEqual(asked.sessionWork.page?.pendingAction, { itemId: item.id, action: 'ship' });

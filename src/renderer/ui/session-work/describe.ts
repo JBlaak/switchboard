@@ -357,21 +357,13 @@ export function collapsedText(file: FileDiff): string | null {
   }
 }
 
-/** "N worktrees · M branches" the session's items live in. */
+/**
+ * "N worktrees · M branches" the session worked in: every one its transcripts
+ * name, not only the ones an item still lives in.
+ */
 export function footprintLine(snapshot: SessionWorkSnapshot): string {
-  const worktrees = new Set<string>();
-  const branches = new Set<string>();
-  for (const item of snapshot.items) {
-    if (item.kind === 'issue') continue;
-    const location = item.location;
-    if (location) {
-      worktrees.add(location.worktree);
-      branches.add(location.branch);
-    } else if (item.kind === 'pr' && item.pr.headRef) {
-      branches.add(item.pr.headRef);
-    }
-  }
-  return `${plural(worktrees.size, 'worktree')} · ${plural(branches.size, 'branch', 'branches')}`;
+  const { worktrees, branches } = snapshot.footprint;
+  return `${plural(worktrees, 'worktree')} · ${plural(branches, 'branch', 'branches')}`;
 }
 
 /** "updated 4s ago", from the snapshot's time and the page's clock. */

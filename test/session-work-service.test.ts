@@ -571,3 +571,17 @@ test('while a Ship it is under way gh is asked every 20 s instead of every minut
   service.close('s1');
   assert.equal(timers.intervals.size, 0, 'closing stops both polls');
 });
+
+test('the footprint counts every worktree and branch the session worked in, not only the items\' ones', async () => {
+  // The main checkout on main (no item: it is the default branch) and a PR's
+  // branch in an agent worktree that has since merged (an item, but not one in progress).
+  const { service } = setup({
+    locations: [
+      { cwd: ROOT, branch: 'main', fromSubagent: false },
+      { cwd: AGENT, branch: 'feat/agent', fromSubagent: true },
+    ],
+  });
+  const snapshot = await service.open('s1');
+  assert.deepEqual(snapshot?.items, []);
+  assert.deepEqual(snapshot?.footprint, { worktrees: 2, branches: 2 });
+});

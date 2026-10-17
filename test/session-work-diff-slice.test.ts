@@ -37,7 +37,7 @@ function file(path: string, more: Partial<FileDiff> = {}): FileDiff {
 const FILES = [file('a.ts'), file('package-lock.json', { collapsedReason: 'lockfile', additions: 900 }), file('logo.png', { binary: true, additions: 0, deletions: 0 })];
 
 function snapshot(items: SessionWorkItem[]): SessionWorkSnapshot {
-  return { sessionId: 's1', repository: 'acme/api', items, queued: 0, gh: 'ok', updatedAt: '2026-06-10T14:00:00.000Z' };
+  return { sessionId: 's1', repository: 'acme/api', items, footprint: { worktrees: 2, branches: 2 }, queued: 0, gh: 'ok', updatedAt: '2026-06-10T14:00:00.000Z' };
 }
 
 /** A page open on `items`, the first selected. */
