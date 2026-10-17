@@ -97,3 +97,8 @@ export function holidayOn(date: Date): PatchHoliday | null {
   if (today >= easter - 2 && today <= easter + 1) return 'pasen';
   return null;
 }
+
+/** What Patch dresses for on this day: the season, and the holiday that outranks it. */
+export function dressingOn(date: Date): { season: PatchSeason; holiday: PatchHoliday | null } {
+  return { season: seasonOf(date), holiday: holidayOn(date) };
+}

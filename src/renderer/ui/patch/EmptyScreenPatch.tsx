@@ -3,10 +3,10 @@
  *
  * Patch appears each time the placeholder comes into view, reading the board as
  * it is at that moment: how many sessions run, how close the usage limit is,
- * the weather and the hour. It does not follow those while it is on screen; the
- * next appearance picks up whatever changed. The placeholder is shown and
- * hidden imperatively, with the rest of the main area's panel swap, and
- * `showEmptyScreen` says so with `emptyScreenShown`.
+ * the weather, the hour, the season and any holiday. It does not follow those
+ * while it is on screen; the next appearance picks up whatever changed. The
+ * placeholder is shown and hidden imperatively, with the rest of the main
+ * area's panel swap, and `showEmptyScreen` says so with `emptyScreenShown`.
  *
  * Clicking Patch pokes it, and dragging picks it up; either way it answers
  * straight away with a reaction, dressed as it was, without gathering the
@@ -22,6 +22,7 @@ import '@jblaak/patch/patch.css';
 import {
   RAPID_POKE_WINDOW_MS, beatFor, dropBeat, patchMood, pokeBeat, timeOfDay,
 } from '../../../domain/companion/patch';
+import { dressingOn } from '../../../domain/companion/calendar';
 import { fetchWeather } from '../../app/weather';
 import { getState, onEvent } from '../../state/app-store';
 import { tightestUsage, whenUsageLoaded } from '../../state/usage-store';
@@ -82,7 +83,10 @@ export function EmptyScreenPatch(): JSX.Element {
       const ctx = await gatherContext();
       if (!mounted || token !== c.latest || !visible()) return;
       const beat = beatFor(ctx, c.appearances++);
-      c.shown = { move: beat.move, line: beat.line, mood: patchMood(ctx), sky: ctx.sky, time: timeOfDay(ctx.hour) };
+      c.shown = {
+        move: beat.move, line: beat.line, mood: patchMood(ctx),
+        sky: ctx.sky, time: timeOfDay(ctx.hour), season: ctx.season, holiday: ctx.holiday,
+      };
       patch.appear(c.shown);
     };
 
@@ -108,12 +112,14 @@ async function gatherContext(): Promise<PatchContext> {
     withTimeout(whenUsageLoaded(), undefined),
   ]);
   const usage = tightestUsage();
+  const now = new Date();
   return {
     running,
     usagePercent: usage?.percent ?? null,
     usageReset: usage?.reset ?? null,
     sky,
-    hour: new Date().getHours(),
+    hour: now.getHours(),
+    ...dressingOn(now),
   };
 }
 

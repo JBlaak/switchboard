@@ -14,6 +14,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { mountPatch } from '@jblaak/patch';
+import { dressingOn } from '../../../domain/companion/calendar';
 import { questionBeat } from '../../../domain/companion/question-beats';
 import { timeOfDay } from '../../../domain/companion/patch';
 import { patchArrive, patchLeave } from '../../features/questions/question-motion';
@@ -42,7 +43,7 @@ export function Farewell({ leaving, onStayed, onGone }: FarewellProps): JSX.Elem
   useEffect(() => {
     const el = stage.current!;
     const patch = mountPatch(el);
-    patch.appear({ ...questionBeat({ kind: 'sent' }), time: timeOfDay(new Date().getHours()), sky: questionSky() });
+    patch.appear({ ...questionBeat({ kind: 'sent' }), time: timeOfDay(new Date().getHours()), sky: questionSky(), ...dressingOn(new Date()) });
     patchArrive(el, FAREWELL_DELAY_MS);
     const timer = setTimeout(() => hooks.current.onStayed(), FAREWELL_STAY_MS);
     return () => {
