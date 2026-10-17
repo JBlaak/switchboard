@@ -14,7 +14,7 @@ import { agentsTitle, askingLabel, sessionDisplayName, sessionTimeLabel } from '
 import { useStore } from '../use-store';
 import { canOpenSessionWork } from '../session-work/actions';
 import { isRemoteRow, workTrigger } from './work-trigger';
-import { agentsBadgeHtml } from './markup';
+import { agentsBadgeHtml, HTML } from './markup';
 import { openRepository } from './actions';
 import type { JSX, MouseEvent } from 'react';
 import type { SessionListRow } from '../../state/session-list-layout';
@@ -157,8 +157,14 @@ function PullRequests({ row }: { row: SessionListRow }): JSX.Element | null {
   );
 }
 
-/** A chip's status dot; nothing until the CI watch has said something about it. */
+/**
+ * A chip's status dot, or a check once its PR is merged; nothing until the CI
+ * watch has said something about it.
+ */
 function ChipDot({ dot }: { dot: StatusDot | null }): JSX.Element | null {
   if (!dot) return null;
+  if (dot === 'merged') {
+    return <span className="session-pr-merged" data-dot={dot} aria-hidden="true" dangerouslySetInnerHTML={HTML.mergedCheck} />;
+  }
   return <span className={'session-pr-dot is-' + dot} data-dot={dot} aria-hidden="true" />;
 }

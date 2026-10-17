@@ -679,6 +679,14 @@
   &.is-red { background: var(--sb-red); }
 }
 
+/* A merged PR is done: a purple check where the dot was, the colour GitHub
+   gives merged. */
+.session-pr-merged {
+  display: inline-flex;
+  margin-right: 3px;
+  color: var(--sb-purple);
+}
+
 /* ---- Session action buttons ---- */
 .session-actions {
   flex-shrink: 0;

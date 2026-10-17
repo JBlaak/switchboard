@@ -416,7 +416,7 @@ test('a merged PR ends a give-up and is not asked about again', async () => {
 
   /* Then */
   assert.equal(github.calls.length, 1);
-  assert.deepEqual(dots(), [{ sessionId: 's1', prs: [{ number: 7, dot: 'green' }], needsYou: false }]);
+  assert.deepEqual(dots(), [{ sessionId: 's1', prs: [{ number: 7, dot: 'merged' }], needsYou: false }]);
 });
 
 test('dots are pushed only when they change: amber while Claude fixes it, gone when the session stops', async () => {
