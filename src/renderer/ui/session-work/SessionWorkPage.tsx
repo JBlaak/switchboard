@@ -14,11 +14,20 @@
  * a PR's diff. On an image card `n`/`p` landed on, `1`–`5` pick its mode, `b`
  * flips Blink and `0` fits the view again (C6). None of them is taken from a
  * text field, and an open comment composer takes Esc first.
+ *
+ * Two tabs (W1): Work, all of the above, and Plan, the session's plan as a
+ * flow diagram (`plan/`). `t` switches between them. On the Plan tab the
+ * Work keys rest; Esc closes an open issue detail before it closes the page,
+ * and ↑/↓ step through the issues while the detail is open (D4).
  */
 import { useLayoutEffect, useRef } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
 import { useStore } from '../use-store';
-import { closeSessionWork, imageKey, stepFile, stepWorkItem, toggleDiffMode } from './actions';
+import { closeSessionWork, imageKey, stepFile, stepWorkItem, toggleDiffMode, toggleWorkTab } from './actions';
+import { workTabOf } from '../../state/session-work-slice';
+import type { SessionWorkPage as SessionWorkPageState } from '../../state/session-work-slice';
+import { PlanTab } from './plan/PlanTab';
+import { planKey } from './plan/load';
 import { WorkHeader } from './WorkHeader';
 import { WorkList } from './WorkList';
 import { WorkDetail } from './WorkDetail';
@@ -48,6 +57,7 @@ export function SessionWorkPage(): JSX.Element | null {
   const page = useStore(state => state.sessionWork.page);
   const root = useRef<HTMLDivElement>(null);
   const sessionId = page?.sessionId ?? null;
+  const tab = useStore(state => (sessionId ? workTabOf(state.sessionWork, sessionId) : 'work'));
 
   // Into the page as it opens, so Esc and j/k reach it without a click.
   useLayoutEffect(() => {
@@ -58,12 +68,24 @@ export function SessionWorkPage(): JSX.Element | null {
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const inField = (e.target as HTMLElement).matches('input, textarea, select, [contenteditable="true"]');
+    if (tab === 'plan' && !e.shiftKey && !inField && planKey(e.key)) {
+      e.preventDefault();
+      return;
+    }
     if (e.key === 'Escape') {
       e.preventDefault();
       closeSessionWork();
       return;
     }
-    if (e.shiftKey || (e.target as HTMLElement).matches('input, textarea, select, [contenteditable="true"]')) return;
+    if (e.shiftKey || inField) return;
+    if (e.key === 't') {
+      e.preventDefault();
+      (e.nativeEvent as Event & { _handled?: boolean })._handled = true;
+      toggleWorkTab();
+      return;
+    }
+    if (tab === 'plan') return;
     if (IMAGE_KEYS.has(e.key)) {
       if (!imageKey(e.key)) return;
       e.preventDefault();
@@ -94,8 +116,6 @@ export function SessionWorkPage(): JSX.Element | null {
     }
   };
 
-  const banner = page.snapshot ? githubBanner(page.snapshot.gh) : null;
-
   return (
     <div
       ref={root}
@@ -105,7 +125,17 @@ export function SessionWorkPage(): JSX.Element | null {
       aria-label={'Session work for ' + page.name}
       onKeyDown={onKeyDown}
     >
-      <WorkHeader page={page} />
+      <WorkHeader page={page} tab={tab} />
+      {tab === 'plan' ? <PlanTab sessionId={page.sessionId} /> : <WorkTab page={page} />}
+    </div>
+  );
+}
+
+/** The Work tab: the banner, then the items and the selected one's detail. */
+function WorkTab({ page }: { page: SessionWorkPageState }): JSX.Element {
+  const banner = page.snapshot ? githubBanner(page.snapshot.gh) : null;
+  return (
+    <>
       {banner && <GitHubBanner text={banner} />}
       {page.snapshot && page.snapshot.items.length === 0
         ? <div className="sw-empty">Nothing changed yet in this session.</div>
@@ -115,7 +145,7 @@ export function SessionWorkPage(): JSX.Element | null {
             <WorkDetail page={page} />
           </div>
         )}
-    </div>
+    </>
   );
 }
 

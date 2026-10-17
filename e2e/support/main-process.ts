@@ -28,6 +28,8 @@ import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status'
 import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
 import type { Weather, WeatherLocation } from '../../src/domain/weather/weather';
+import type { Plan } from '../../src/domain/plan/model';
+import type { SessionPlans } from '../../src/application/services/plan-service';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -81,6 +83,21 @@ export interface HostStubs {
    * leaves the real service, which finds no repository in the fixture home.
    */
   sessionWork: SessionWorkStub | null;
+  /**
+   * The Plan tab's back end, standing in for `gh`; null leaves the real
+   * service, which finds no repository in the fixture home.
+   */
+  plans: PlansStub | null;
+}
+
+/** What the plan channels answer: a session's plans, one plan by its issue, and the sessions that own issues. */
+export interface PlansStub {
+  /** By session id; a session not here answers null, as one outside a repository does. */
+  sessionPlans: Record<string, SessionPlans>;
+  /** By `owner/repo#n`. */
+  plans?: Record<string, Plan>;
+  /** By repository: `owner/repo#n` → the session that owns it. */
+  issueSessions?: Record<string, Record<string, string>>;
 }
 
 /**
@@ -158,6 +175,7 @@ export const DEFAULT_STUBS: HostStubs = {
   weather: null,
   geocode: {},
   sessionWork: null,
+  plans: null,
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
@@ -224,6 +242,18 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
         const bytes = work.images?.[[request?.itemId, request?.path, request?.side].join('\n')];
         return bytes ? new Uint8Array(Buffer.from(bytes, 'base64')) : null;
       });
+    }
+
+    if (state.plans) {
+      const plans = state.plans;
+      ipcMain.removeHandler(channels.planSessionPlans);
+      ipcMain.handle(channels.planSessionPlans, (_event, sessionId) => plans.sessionPlans[String(sessionId)] ?? null);
+      ipcMain.removeHandler(channels.planGet);
+      ipcMain.handle(channels.planGet, (_event, repo, number) => plans.plans?.[String(repo) + '#' + String(number)] ?? null);
+      ipcMain.removeHandler(channels.planProjectPlans);
+      ipcMain.handle(channels.planProjectPlans, () => []);
+      ipcMain.removeHandler(channels.planIssueSessions);
+      ipcMain.handle(channels.planIssueSessions, (_event, repo) => plans.issueSessions?.[String(repo)] ?? {});
     }
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {

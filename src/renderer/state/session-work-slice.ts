@@ -68,6 +68,9 @@ export type ReviewKind = 'comment' | ReviewMode;
 
 export type DiffMode = 'unified' | 'split';
 
+/** The page's two tabs (W1): what the session did, and the plan it works on. */
+export type WorkTab = 'work' | 'plan';
+
 /** One item's diff on the page, and what the reader did to it. */
 export interface ItemDiff {
   /** The item it was asked for, as `diffKey` put it: an item that changed asks again. */
@@ -137,11 +140,18 @@ export interface SessionWorkState {
   readonly now: number;
   /** Kept across pages, and across restarts by `image-defaults`. */
   readonly imageDefaults: ImageDefaults;
+  /** sessionId → the tab its page shows, kept across pages; Work when not set. */
+  readonly tabs: IdRecord<WorkTab>;
 }
 
 export const initialSessionWorkState: SessionWorkState = {
-  page: null, canOpen: {}, now: 0, imageDefaults: DEFAULT_IMAGE_DEFAULTS,
+  page: null, canOpen: {}, now: 0, imageDefaults: DEFAULT_IMAGE_DEFAULTS, tabs: {},
 };
+
+/** The tab a session's page shows (W1). */
+export function workTabOf(state: SessionWorkState, sessionId: string): WorkTab {
+  return state.tabs[sessionId] ?? 'work';
+}
 
 export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent): SessionWorkState {
   switch (event.type) {
@@ -341,6 +351,13 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
     case 'sessionWorkDoneToggled':
       return state.page ? { ...state, page: { ...state.page, doneExpanded: !state.page.doneExpanded } } : state;
 
+    case 'sessionWorkTabSet': {
+      const tabs = event.tab === 'work'
+        ? withoutEntry(state.tabs, event.sessionId)
+        : withEntry(state.tabs, event.sessionId, event.tab);
+      return tabs === state.tabs ? state : { ...state, tabs };
+    }
+
     case 'sessionWorkTicked':
       return state.page && state.now !== event.at ? { ...state, now: event.at } : state;
 
@@ -382,8 +399,11 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
 export function rekeySessionWork(state: SessionWorkState, oldId: string, newId: string): SessionWorkState {
   if (oldId === newId) return state;
   const canOpen = movedEntry(state.canOpen, oldId, newId);
+  const tabs = movedEntry(state.tabs, oldId, newId);
   const page = state.page?.sessionId === oldId ? { ...state.page, sessionId: newId } : state.page;
-  return canOpen === state.canOpen && page === state.page ? state : { ...state, canOpen, page };
+  return canOpen === state.canOpen && tabs === state.tabs && page === state.page
+    ? state
+    : { ...state, canOpen, tabs, page };
 }
 
 // ── What the page shows, derived from a snapshot ──

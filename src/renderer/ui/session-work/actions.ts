@@ -11,8 +11,8 @@ import { flushSync } from 'react-dom';
 import { dispatch, getState } from '../../state/app-store';
 import { hasEntry } from '../../state/records';
 import { sessionMap } from '../../state/session-store';
-import { imageKeyEvent, selectedDiff, steppedFilePath, steppedItemId } from '../../state/session-work-slice';
-import type { DiffMode, ReviewKind } from '../../state/session-work-slice';
+import { imageKeyEvent, selectedDiff, steppedFilePath, steppedItemId, workTabOf } from '../../state/session-work-slice';
+import type { DiffMode, ReviewKind, WorkTab } from '../../state/session-work-slice';
 import type { DiffSide } from '../../../domain/session-work/model';
 import type { ReviewMode, ReviewResult } from '../../../domain/session-work/review';
 import { headerNameFor } from '../../features/sessions/terminal-header';
@@ -85,6 +85,18 @@ export async function openSessionWork(sessionId: string): Promise<void> {
 export function closeSessionWork(): void {
   const page = getState().sessionWork.page;
   if (page) dispatch({ type: 'sessionWorkClosed', sessionId: page.sessionId });
+}
+
+/** Show the Work or the Plan tab of the open page (W1); the choice is kept for its session. */
+export function setWorkTab(tab: WorkTab): void {
+  const page = getState().sessionWork.page;
+  if (page) dispatch({ type: 'sessionWorkTabSet', sessionId: page.sessionId, tab });
+}
+
+/** `t`: the other tab. */
+export function toggleWorkTab(): void {
+  const { sessionWork } = getState();
+  if (sessionWork.page) setWorkTab(workTabOf(sessionWork, sessionWork.page.sessionId) === 'work' ? 'plan' : 'work');
 }
 
 /** Cmd+G, wherever the focus is (D3). */

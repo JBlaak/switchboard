@@ -15,7 +15,10 @@ import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { UpdateNotice } from '../../domain/update/release';
 import type { SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
-import type { DiffMode, ImageDefaults, ReviewKind } from './session-work-slice';
+import type { DiffMode, ImageDefaults, ReviewKind, WorkTab } from './session-work-slice';
+import type { PlanSource, SessionPlansAnswer } from './plan-slice';
+import type { IssueKey } from '../../domain/plan/model';
+import type { IssueSessionStart } from '../../domain/plan/issue-session';
 import type { ImageMode } from '../ui/session-work/image-compare/modes/types';
 import type { Background, View } from '../ui/session-work/image-compare/types';
 import type { DiffSide } from '../../domain/session-work/model';
@@ -203,6 +206,31 @@ export type LocalEvent =
   | { type: 'sessionWorkImageBlinked'; itemId: string; path: string }
   /** The background picked on any image card; every card follows it (C3). */
   | { type: 'sessionWorkImageBackgroundSet'; background: Background }
+  /** The page's Work or Plan tab was picked, for that session (W1). */
+  | { type: 'sessionWorkTabSet'; sessionId: string; tab: WorkTab }
+  // The plan view; see `plan-slice`.
+  /** A home put a plan view on screen: the Plan tab, or (#128) the main area. */
+  | { type: 'planViewOpened'; owner: string; source: PlanSource }
+  /** That home's plan view left the screen. */
+  | { type: 'planViewClosed'; owner: string }
+  /** A plan picked from the repository's others (W2), or the way back. */
+  | { type: 'planSourcePicked'; owner: string; source: PlanSource }
+  /** Main answered for a source (`planSourceKey`); null when it could not. */
+  | { type: 'planLoaded'; owner: string; sourceKey: string; answer: SessionPlansAnswer | null }
+  /** A plan picked in the switcher (W2). */
+  | { type: 'planChosen'; plan: IssueKey }
+  /** The pointer is over an issue, or over none (D3). */
+  | { type: 'planIssueHovered'; issue: IssueKey | null }
+  /** An issue was clicked, stepped to with ↑/↓, or walked to through Needs/Unlocks; null closes the detail (D4). */
+  | { type: 'planIssueSelected'; issue: IssueKey | null }
+  /** Which sessions own which issues (S1), asked with every load of the view. */
+  | { type: 'planOwnersLoaded'; owner: string; owners: Record<string, string> }
+  /** Start session pressed on the selected issue: `confirm` for a Locked one, which asks first (A3). */
+  | { type: 'planStartAsked'; issue: IssueKey; confirm: boolean }
+  /** The confirmation was turned down. */
+  | { type: 'planStartCancelled' }
+  /** The start came back: the new session, with a warning, or why it did not start. */
+  | { type: 'planStartAnswered'; issue: IssueKey; result: IssueSessionStart }
   /** The Checks panel asked main for a failing check's log, by the check run's URL. */
   | { type: 'checkLogRequested'; url: string }
   /** Main answered: the log's end, or null when there is none to show. */
