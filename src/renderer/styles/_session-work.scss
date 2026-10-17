@@ -1027,3 +1027,218 @@
   gap: 8px;
   margin-left: auto;
 }
+
+/* ---- Image compare: the stage (#112) ----
+   The frame an image card's modes draw into (image-compare/ImageStage). The
+   content is transformed by the card's view; the backdrop and grid are laid
+   at the content's on-screen box, unscaled, so a checker square and a grid
+   line keep their size at any zoom. */
+.sw-stage {
+  position: relative;
+  max-height: 80vh;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  background: var(--sb-bg-base);
+
+  &.is-dragging { cursor: grabbing; }
+}
+
+.sw-stage-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+
+  // Inherited, so every <img> and <canvas> a mode puts here follows it.
+  &.is-pixelated { image-rendering: pixelated; }
+
+  img, canvas { display: block; -webkit-user-drag: none; }
+}
+
+.sw-stage-backdrop {
+  position: absolute;
+  pointer-events: none;
+
+  &.is-light { background: var(--sb-stage-light); }
+  &.is-dark { background: var(--sb-stage-dark); }
+
+  &.is-checkerboard {
+    --sw-check: rgba(var(--sb-overlay-rgb), 0.10);
+    background-color: var(--sb-bg-raised);
+    background-image:
+      linear-gradient(45deg, var(--sw-check) 25%, transparent 25%, transparent 75%, var(--sw-check) 75%),
+      linear-gradient(45deg, var(--sw-check) 25%, transparent 25%, transparent 75%, var(--sw-check) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 8px 8px;
+  }
+}
+
+// One line on the left and top edge of every image pixel; the stage sets
+// background-size to the zoom, so each tile is one pixel.
+.sw-stage-grid {
+  position: absolute;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(var(--sb-overlay-rgb), 0.22) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(var(--sb-overlay-rgb), 0.22) 1px, transparent 1px);
+}
+
+/* ---- Image compare: the overlay modes (#116) ----
+   Swipe, onion skin, blink and pixel diff. Both sides sit at the content's
+   top-left corner (M1). What a mode draws over its stage at screen size (the
+   swipe divider, the blink label) is a sibling of the stage, so it does not
+   scale with the zoom; the controls row sits under the stage. */
+.sw-swipe,
+.sw-onion,
+.sw-blink,
+.sw-pixel-diff {
+  position: relative;
+}
+
+.sw-stage-content .sw-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+// A divider panned out of the frame is cut off with the image.
+.sw-swipe {
+  overflow: hidden;
+}
+
+// The line is drawn but not hit-tested, so the stage under it still zooms
+// and pans; only the handle takes the pointer.
+.sw-swipe-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--sb-accent);
+  box-shadow: 0 0 0 1px rgba(var(--sb-shadow-rgb), calc(0.25 * var(--sb-shadow-k)));
+  pointer-events: none;
+}
+
+.sw-swipe-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  border-radius: 9px;
+  background: var(--sb-accent);
+  box-shadow: 0 1px 4px rgba(var(--sb-shadow-rgb), calc(0.4 * var(--sb-shadow-k)));
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none;
+
+  .sw-swipe-divider.is-dragging & { background: var(--sb-accent-dim); }
+}
+
+.sw-blink-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sb-text-strong);
+  background: rgba(var(--sb-bg-panel-rgb), 0.85);
+  box-shadow: 0 0 0 1px rgba(var(--sb-overlay-rgb), 0.08);
+  pointer-events: none;
+}
+
+.sw-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--sb-text-muted);
+}
+
+.sw-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sw-mode-slider {
+  width: 160px;
+  accent-color: var(--sb-accent);
+}
+
+.sw-mode-value,
+.sw-pixel-diff-summary {
+  font-variant-numeric: tabular-nums;
+}
+
+.sw-pixel-diff-summary {
+  margin-left: auto;
+  color: var(--sb-text-dim);
+}
+/* ---- end image compare overlay modes ---- */
+
+/* ---- Image compare: the card (#115) ----
+   An image's card body: the toolbar (mode, background) with the metadata
+   line, then the stage(s) of the mode picked. Until the stage has measured
+   its frame and the view is fitted, its content is hidden, so a card never
+   flashes its image at 1:1. */
+.sw-image-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--sb-line);
+
+  .sw-seg { margin-left: 0; }
+}
+
+.sw-image-meta {
+  margin-left: auto;
+  font: 12px var(--sb-font-mono);
+  color: var(--sb-text-muted);
+}
+
+.sw-image-note {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sb-sun);
+  color: var(--sb-yellow);
+  font: 700 11px var(--sb-font-head);
+}
+
+.sw-image.is-fitting {
+  .sw-stage-content, .sw-stage-backdrop, .sw-stage-grid { visibility: hidden; }
+}
+
+.sw-image-loading {
+  padding: 12px;
+
+  .sw-skeleton { height: 160px; }
+}
+
+.sw-side-by-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1px;
+  background: var(--sb-line);
+}
+
+.sw-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  background: var(--sb-bg-panel);
+}
+
+.sw-side-label {
+  padding: 4px 12px;
+  font: 700 11px var(--sb-font-head);
+  color: var(--sb-text-muted);
+}

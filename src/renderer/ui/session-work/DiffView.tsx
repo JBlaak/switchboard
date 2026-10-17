@@ -10,21 +10,33 @@
  * one row. `n`/`p` move between the cards and `u` switches the layout (see
  * `SessionWorkPage`).
  *
+ * An image in a local diff gets an image card instead (#112, `ImageCard`); an
+ * SVG's also switches to its line diff with Source. A binary image from
+ * GitHub's copy keeps its row, with a note that the branch has to be checked
+ * out to compare it (I4).
+ *
  * On an open PR the diff is also where you review it (#77): each line takes a
  * comment, the threads already on GitHub sit under their lines (or at the top
  * of their file when their line is gone), and while your review has pending
  * comments a bar under the diff finishes it.
  */
-import { memo, useMemo, useRef } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { expandFile, setDiffMode } from './actions';
-import { collapsedText, diffSummary, fileStatusPill } from './describe';
+import { IMAGE_GITHUB_NOTE, collapsedText, diffSummary, fileStatusPill } from './describe';
 import { DiffRows } from './DiffRows';
 import { LineCounts } from './LineCounts';
 import { Pills } from './Pills';
-import type { CommentTarget, DiffMode, ItemDiff, SessionWorkPage } from '../../state/session-work-slice';
+import type {
+  CommentTarget, DiffMode, ImageCardState, ItemDiff, SessionWorkPage,
+} from '../../state/session-work-slice';
 import type { FileDiff, PullRequestStatus, SessionWorkItem } from '../../../domain/session-work/model';
 import { canComment } from '../../../domain/session-work/review';
+import { imageFormatOf } from '../../../domain/session-work/image';
+import { useStore } from '../use-store';
+import { ImageCard } from './ImageCard';
+import type { Background } from './image-compare/types';
+import type { ImageMode } from './image-compare/modes/types';
 import { fileReview } from './review-notes';
 import { OutdatedNotes, ReviewBar, ReviewContext } from './ReviewNotes';
 import type { ReviewScope } from './ReviewNotes';
@@ -48,6 +60,7 @@ export function DiffView({ page, item }: { page: SessionWorkPage; item: SessionW
     () => ({ sessionId: page.sessionId, itemId: item.id, fixing: fixingThreads ? new Set(fixingThreads) : NO_THREADS }),
     [page.sessionId, item.id, fixingThreads],
   );
+  const imageDefaults = useStore(state => state.sessionWork.imageDefaults);
   if (item.kind === 'issue') return null;
 
   const pr = item.kind === 'pr' ? item.pr : null;
@@ -80,7 +93,13 @@ export function DiffView({ page, item }: { page: SessionWorkPage; item: SessionW
             : files.map((file, i) => (
               <FileCard
                 key={file.path}
+                sessionId={page.sessionId}
                 itemId={item.id}
+                loadKey={diff.key}
+                github={diff.source === 'github'}
+                image={diff.images[file.path]}
+                background={imageDefaults.background}
+                defaultMode={imageDefaults.mode}
                 file={file}
                 mode={page.diffMode}
                 expanded={diff.expanded.includes(file.path)}
@@ -127,9 +146,19 @@ function DiffSkeleton(): JSX.Element {
 }
 
 const FileCard = memo(function FileCard({
-  itemId, file, mode, expanded, focused, untracked, eager, pr = null, commentable = false, composer = null,
+  sessionId, itemId, loadKey, github, image, background, defaultMode,
+  file, mode, expanded, focused, untracked, eager, pr = null, commentable = false, composer = null,
 }: {
+  sessionId: string;
   itemId: string;
+  /** The item's diff as it was asked for, for an image card to load again when it changes. */
+  loadKey: string;
+  /** The diff is GitHub's copy (D8): an image there has no bytes to compare (I4). */
+  github: boolean;
+  /** The image card's state, once it has been drawn. */
+  image: ImageCardState | undefined;
+  background: Background;
+  defaultMode: ImageMode;
   file: FileDiff;
   mode: DiffMode;
   expanded: boolean;
@@ -150,6 +179,10 @@ const FileCard = memo(function FileCard({
   const reason = collapsedText(file);
   const collapsed = reason !== null && !expanded;
   const pill = fileStatusPill(file, untracked);
+  // An SVG opens rendered; Source is its line diff, where comments still go (C5).
+  const [svgSource, setSvgSource] = useState(false);
+  const svg = file.image?.format === 'svg';
+  const imageCard = !!file.image && !(svg && svgSource);
 
   const showDiff = (): void => {
     // The button goes as the lines come; the focus stays on this file, in the
@@ -172,22 +205,61 @@ const FileCard = memo(function FileCard({
         </span>
         {pill && <Pills pills={[pill]} />}
         {!file.binary && <LineCounts stats={file} />}
+        {svg && <SvgToggle source={svgSource} onChange={setSvgSource} />}
       </header>
       {review && <OutdatedNotes threads={review.outdated} pending={review.outdatedPending} />}
-      {file.binary
-        ? <div className="sw-file-row">Binary file changed</div>
-        : collapsed
+      {imageCard
+        ? (
+          <ImageCard
+            sessionId={sessionId}
+            itemId={itemId}
+            file={file}
+            loadKey={loadKey}
+            expanded={expanded}
+            card={image}
+            background={background}
+            defaultMode={defaultMode}
+            onShowDiff={showDiff}
+          />
+        )
+        : file.binary
           ? (
-            <div className="sw-file-row is-collapsed">
-              <span>{reason}</span>
-              <button type="button" className="sw-btn sw-btn-small" onClick={showDiff}>
-                Show diff
-              </button>
+            <div className="sw-file-row">
+              <span>Binary file changed</span>
+              {github && imageFormatOf(file.path) && <span className="sw-image-note">{IMAGE_GITHUB_NOTE}</span>}
             </div>
           )
-          : file.hunks.length === 0
-            ? <div className="sw-file-row">No changes to the content</div>
-            : <DiffRows file={file} mode={mode} eager={eager} review={review} />}
+          : collapsed
+            ? (
+              <div className="sw-file-row is-collapsed">
+                <span>{reason}</span>
+                <button type="button" className="sw-btn sw-btn-small" onClick={showDiff}>
+                  Show diff
+                </button>
+              </div>
+            )
+            : file.hunks.length === 0
+              ? <div className="sw-file-row">No changes to the content</div>
+              : <DiffRows file={file} mode={mode} eager={eager} review={review} />}
     </section>
   );
 });
+
+/** An SVG card's Rendered | Source switch, in its header. */
+function SvgToggle({ source, onChange }: { source: boolean; onChange(source: boolean): void }): JSX.Element {
+  return (
+    <div className="sw-seg" role="group" aria-label="SVG view">
+      {([false, true] as const).map(option => (
+        <button
+          key={String(option)}
+          type="button"
+          className="sw-seg-btn"
+          aria-pressed={source === option}
+          onClick={() => onChange(option)}
+        >
+          {option ? 'Source' : 'Rendered'}
+        </button>
+      ))}
+    </div>
+  );
+}
