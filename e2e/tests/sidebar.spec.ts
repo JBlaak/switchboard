@@ -62,14 +62,6 @@ test('lists, folds, searches, archives and filters what the index found', async 
   await expect(charts).toHaveCount(0);
 
   /* When */
-  await sidebarFilter(page, 'archived').click();
-
-  /* Then */
-  await expect(sessionRow(page, LABEL.chartsDarkMode)).toBeVisible();
-  await expect(sessionRow(page, LABEL.graphqlSpike)).toBeVisible();
-
-  /* When */
-  await sidebarFilter(page, 'archived').click();
   await expect(sidebar(page).getByText('+1', { exact: true })).toBeVisible();
   // Outside a git repository the meta line is text, so the click is the row's.
   await sidebar(page).getByText('#1320', { exact: true }).click();
@@ -109,22 +101,6 @@ forEachAppearance(() => {
 
     /* When */
     await sidebarFilter(page, 'pinned').click();
-    await sidebarFilter(page, 'today').click();
-    await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
-
-    /* Then */
-    await expectScreen(page, 'sidebar-filter-today', { soft: true });
-
-    /* When */
-    await sidebarFilter(page, 'today').click();
-    await sidebarFilter(page, 'archived').click();
-    await expect(sessionRow(page, LABEL.graphqlSpike)).toBeVisible();
-
-    /* Then */
-    await expectScreen(page, 'sidebar-filter-archived', { soft: true });
-
-    /* When */
-    await sidebarFilter(page, 'archived').click();
     await searchBox(page).fill('login');
     await expect(sessionRow(page, LABEL.chartsDarkMode)).toHaveCount(0);
 

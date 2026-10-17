@@ -75,7 +75,7 @@
 
 /* Filter toggles: borderless, a soft wash on hover, and when switched on the
    pastel fill of whatever they filter for with its ink on top. */
-#star-toggle, #archive-toggle, #running-toggle, #today-toggle {
+#star-toggle, #running-toggle {
   background: transparent;
   border: none;
   color: var(--sb-text-faint);
@@ -94,7 +94,7 @@
   justify-content: center;
 }
 
-#star-toggle:hover, #archive-toggle:hover, #running-toggle:hover, #today-toggle:hover {
+#star-toggle:hover, #running-toggle:hover {
   background: rgba(var(--sb-overlay-rgb),0.06);
   color: var(--sb-text-hover);
 }
@@ -107,16 +107,6 @@
 #star-toggle.active {
   background: var(--sb-sun);
   color: var(--sb-yellow);
-}
-
-#today-toggle.active {
-  background: var(--sb-blue-tint);
-  color: var(--sb-blue);
-}
-
-#archive-toggle.active {
-  background: var(--sb-lav);
-  color: var(--sb-lav-ink);
 }
 
 /* ---- Search ---- */

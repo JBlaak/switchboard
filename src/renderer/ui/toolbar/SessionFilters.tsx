@@ -1,33 +1,28 @@
 /**
- * The filter row: the four filter toggles, the first load's status, and the
+ * The filter row: the two filter toggles, the first load's status, and the
  * three ways to start something — a quick session, a new session in a picked
  * project, and a new project.
  */
-import { ICONS } from '../../lib/icons';
 import { openDialog } from '../dialogs/actions';
 import { launchQuickSession } from '../../features/sessions/quick-session';
 import { useStore } from '../use-store';
 import { toggleFilter } from './actions';
 import {
-  AddProjectIcon, NewSessionIcon, PinIcon, QuickSessionIcon, RunningIcon, TodayIcon,
+  AddProjectIcon, NewSessionIcon, PinIcon, QuickSessionIcon, RunningIcon,
 } from './icons';
 import type { JSX, ReactNode } from 'react';
 import type { RendererState } from '../../state/root';
 import type { SidebarFilter } from '../../state/toolbar-slice';
-
-const ARCHIVE = { __html: ICONS.archive(18) };
 
 interface FilterButtonProps {
   id: string;
   filter: SidebarFilter;
   title: string;
   isOn: (state: RendererState) => boolean;
-  /** The icon, as JSX or (for one shared with vanilla code) as HTML. */
-  children?: ReactNode;
-  html?: { __html: string };
+  children: ReactNode;
 }
 
-function FilterButton({ id, filter, title, isOn, children, html }: FilterButtonProps): JSX.Element {
+function FilterButton({ id, filter, title, isOn, children }: FilterButtonProps): JSX.Element {
   const on = useStore(isOn);
   return (
     <button
@@ -35,7 +30,6 @@ function FilterButton({ id, filter, title, isOn, children, html }: FilterButtonP
       title={title}
       className={on ? 'active' : undefined}
       onClick={() => toggleFilter(filter)}
-      dangerouslySetInnerHTML={html}
     >
       {children}
     </button>
@@ -65,13 +59,6 @@ export function SessionFilters(): JSX.Element {
       <FilterButton id="star-toggle" filter="pinned" title="Show pinned only" isOn={s => s.view.showStarredOnly}>
         <PinIcon />
       </FilterButton>
-      <FilterButton id="today-toggle" filter="today" title="Show today's sessions only" isOn={s => s.view.showTodayOnly}>
-        <TodayIcon />
-      </FilterButton>
-      <FilterButton
-        id="archive-toggle" filter="archived" title="Show archived sessions"
-        isOn={s => s.view.showArchived} html={ARCHIVE}
-      />
       <LoadingStatus />
       {/* Hidden until there is a folder for it to launch in. */}
       <button

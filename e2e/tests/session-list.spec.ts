@@ -16,7 +16,7 @@
 import { test, expect, forEachAppearance } from '../support/test';
 import {
   dialog, expectScreen, openRemoteSession, openSession, rowButton, searchBox, sessionRow, sidebar,
-  sidebarFilter, terminalHeader, terminalStatus,
+  terminalHeader, terminalStatus,
 } from '../support/app';
 import { fakeClaude, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
 import { minutesAgo, sessionId } from '../support/fixture-home';
@@ -467,15 +467,6 @@ test.describe('archive', () => {
 
     /* Then */
     await expect(pending).toHaveCount(0);
-
-    /* When */
-    await sidebarFilter(page, 'archived').click();
-    await sessionRow(page, LABEL.loginFix).hover();
-
-    /* Then */
-    await expect(rowButton(sessionRow(page, LABEL.loginFix), 'Unarchive')).toBeVisible();
-    await expect(sidebar(page).getByText('3 sessions', { exact: true })).toBeVisible();
-    await expect(sessionItem(page, claude.key)).toHaveCount(0);
   });
 
   test('a row or a group comes back, and says so, when archiving or stopping fails', async ({ page, app }) => {
@@ -576,9 +567,8 @@ test.describe('archive', () => {
       expect(Number(sliding.opacity)).toBeLessThan(0.6);
 
       /* When */
-      // A re-sort lands mid-slide: the row keeps its node and its slide.
-      await sidebarFilter(page, 'today').click();
-      await sidebarFilter(page, 'today').click();
+      // A redraw lands mid-slide: the row keeps its node and its slide.
+      await sidebar(page).getByText('+ 3 older', { exact: true }).click();
 
       /* Then */
       expect(await rowNode(page, S.chartsDarkMode)).toMatchObject({ tag: 'leaving', leaving: true, transform: sliding.transform });
