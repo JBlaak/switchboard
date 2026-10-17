@@ -220,6 +220,8 @@ export type WorkItem = { error?: string } & (
 export interface SessionWorkDiff {
   files: FileDiff[];
   source: 'local' | 'github' | null;
+  /** Why it came from GitHub when the branch is checked out here, to say instead of "not checked out". */
+  note?: string;
   error?: string;
 }
 

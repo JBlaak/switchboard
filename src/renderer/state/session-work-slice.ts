@@ -74,6 +74,8 @@ export interface ItemDiff {
   readonly files: readonly FileDiff[];
   /** Where the files came from: `github` when the branch is not checked out here (D8). */
   readonly source: SessionWorkDiff['source'];
+  /** Why the files came from GitHub though the branch is checked out (it differs from the PR). */
+  readonly note?: string;
   /** Why there is no diff; null unless `failed`. */
   readonly error: string | null;
   /** Paths of files that started collapsed and were opened with "Show diff". */
@@ -144,6 +146,7 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
         phase: failed ? 'failed' : 'loaded',
         files,
         source: event.type === 'sessionWorkDiffLoaded' ? event.diff.source : null,
+        note: event.type === 'sessionWorkDiffLoaded' ? event.diff.note : undefined,
         error: failed ? error : null,
         focusedPath: before.focusedPath && files.some(file => file.path === before.focusedPath) ? before.focusedPath : null,
       };

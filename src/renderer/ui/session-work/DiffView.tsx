@@ -67,7 +67,7 @@ export function DiffView({ page, item }: { page: SessionWorkPage; item: SessionW
           </span>
         )}
         {diff?.source === 'github' && (
-          <span className="sw-diff-note" role="note">Branch not checked out locally.</span>
+          <span className="sw-diff-note" role="note">{diff.note ?? 'Branch not checked out locally.'}</span>
         )}
         <ModeToggle mode={page.diffMode} />
       </div>

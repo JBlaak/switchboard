@@ -124,6 +124,9 @@ const NO_DIFF: SessionWorkDiff = { files: [], source: null };
 
 const NOT_CHECKED_OUT ='The branch is not checked out here';
 
+/** Why a checked-out PR shows GitHub's diff: its local branch is at another commit. */
+export const LOCAL_DIFFERS = 'Local branch differs from the PR; showing GitHub\'s diff.';
+
 const NO_ACTIVITIES: SessionActivities = { byItem: new Map(), queued: 0, shipping: false };
 
 export class SessionWorkService implements WorkPageSource {
@@ -583,10 +586,15 @@ export class SessionWorkService implements WorkPageSource {
       return { files: await this.#parse(worktree, await git.workingDiff(worktree)), source: 'local' };
     }
 
+    // A PR's local branch at another commit than GitHub's (unpushed or
+    // unpulled work) has other line numbers: a comment anchored to them
+    // would land on the wrong line, so the PR's own diff is shown instead.
+    let differs = false;
     if (item.diff.kind === 'local') {
       const { worktree, base, head } = item.diff;
       const [headSha, baseSha] = await Promise.all([git.commitSha(worktree, head), git.commitSha(worktree, base)]);
-      if (headSha) {
+      differs = headSha !== null && item.kind === 'pr' && !!item.pr.headSha && headSha !== item.pr.headSha;
+      if (headSha && !differs) {
         const key = ['local', worktree, head, headSha, base, baseSha ?? ''].join('\0');
         const files = await this.#cached(page, key, async () => this.#parse(worktree, await git.branchDiff(worktree, head, base)));
         return { files, source: 'local' };
@@ -611,7 +619,9 @@ export class SessionWorkService implements WorkPageSource {
       return text === null ? null : this.#parse(page.projectRoot, text);
     };
     const fromGitHub = (files: FileDiff[] | null | undefined): SessionWorkDiff =>
-      files ? { files, source: 'github' } : failed('GitHub did not send the diff');
+      files
+        ? { files, source: 'github', ...(differs ? { note: LOCAL_DIFFERS } : {}) }
+        : failed('GitHub did not send the diff');
     if (!pr.headSha) return fromGitHub(await fetch());
     const key = ['pr', repository, String(pr.number), pr.headSha].join('\0');
     const cached = page.diffCache.get(key);
