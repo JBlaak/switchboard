@@ -19,6 +19,9 @@ import type { IdRecord } from './records';
 import type { RendererEvent } from './events';
 import type { DiffSide, FileDiff, SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
 import type { ReviewMode } from '../../domain/session-work/review';
+import { IMAGE_MODES } from '../ui/session-work/image-compare/modes/types';
+import type { ImageMode } from '../ui/session-work/image-compare/modes/types';
+import type { Background, View } from '../ui/session-work/image-compare/types';
 
 export interface SessionWorkPage {
   readonly sessionId: string;
@@ -82,6 +85,48 @@ export interface ItemDiff {
   readonly expanded: readonly string[];
   /** The file `n`/`p` last moved to; null before either was pressed. */
   readonly focusedPath: string | null;
+  /** path → its image card, from when the card was first drawn (#112). */
+  readonly images: IdRecord<ImageCardState>;
+}
+
+/**
+ * One image card's own state (C4, C6). It comes into being when the card's
+ * stage first reports its frame, taking the page's default mode then; a card
+ * picked a mode for keeps it.
+ */
+export interface ImageCardState {
+  readonly mode: ImageMode;
+  /** Where the content sits in the frame: one view for both sides and every mode. */
+  readonly view: View;
+  /** The view that fits the frame as it was last measured, for `0`. */
+  readonly fit: View;
+  /**
+   * Still at `fit`: the view follows the frame as it changes (a resize, or a
+   * mode with a narrower frame) until the user zooms or pans.
+   */
+  readonly fitted: boolean;
+  /** Which side Blink shows. */
+  readonly blink: 'before' | 'after';
+}
+
+/** What a new image card opens with, saved across restarts (C1, C3). */
+export interface ImageDefaults {
+  /** The mode last picked on any card. */
+  readonly mode: ImageMode;
+  /** What sits behind every card's images. */
+  readonly background: Background;
+}
+
+const BACKGROUNDS: readonly Background[] = ['checkerboard', 'light', 'dark'];
+
+export const DEFAULT_IMAGE_DEFAULTS: ImageDefaults = { mode: 'side-by-side', background: 'checkerboard' };
+
+/** The defaults as saved, each falling back on its own when missing or unknown. */
+export function storedImageDefaults(mode: string | null, background: string | null): ImageDefaults {
+  return {
+    mode: IMAGE_MODES.find(known => known === mode) ?? DEFAULT_IMAGE_DEFAULTS.mode,
+    background: BACKGROUNDS.find(known => known === background) ?? DEFAULT_IMAGE_DEFAULTS.background,
+  };
 }
 
 export interface SessionWorkState {
@@ -90,9 +135,13 @@ export interface SessionWorkState {
   readonly canOpen: IdRecord<boolean>;
   /** The page's clock, for "updated Xs ago": stamped when it opens and on each tick. */
   readonly now: number;
+  /** Kept across pages, and across restarts by `image-defaults`. */
+  readonly imageDefaults: ImageDefaults;
 }
 
-export const initialSessionWorkState: SessionWorkState = { page: null, canOpen: {}, now: 0 };
+export const initialSessionWorkState: SessionWorkState = {
+  page: null, canOpen: {}, now: 0, imageDefaults: DEFAULT_IMAGE_DEFAULTS,
+};
 
 export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent): SessionWorkState {
   switch (event.type) {
@@ -127,7 +176,7 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
       if (before?.key === event.key && before.phase === 'loading') return state;
       const diff: ItemDiff = before
         ? { ...before, key: event.key, phase: 'loading', error: null }
-        : { key: event.key, phase: 'loading', files: [], source: null, error: null, expanded: [], focusedPath: null };
+        : { key: event.key, phase: 'loading', files: [], source: null, error: null, expanded: [], focusedPath: null, images: {} };
       return withDiff(state, page, event.itemId, diff);
     }
 
@@ -232,6 +281,62 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
         : page.composer ?? null;
       return { ...state, page: { ...page, reviewPending: null, reviewError, composer } };
     }
+
+    // ── Image cards (#112) ──
+
+    case 'sessionWorkImageDefaultsRestored': {
+      const { mode, background } = event.defaults;
+      const was = state.imageDefaults;
+      return was.mode === mode && was.background === background ? state : { ...state, imageDefaults: event.defaults };
+    }
+
+    case 'sessionWorkImageFramed': {
+      const card = imageCardOf(state, event.itemId, event.path);
+      if (card === undefined) return state;
+      if (card === null) {
+        return withImageCard(state, event.itemId, event.path, {
+          mode: state.imageDefaults.mode, view: event.fit, fit: event.fit, fitted: true, blink: 'before',
+        });
+      }
+      if (sameView(card.fit, event.fit) && (!card.fitted || sameView(card.view, event.fit))) return state;
+      return withImageCard(state, event.itemId, event.path,
+        card.fitted ? { ...card, fit: event.fit, view: event.fit } : { ...card, fit: event.fit });
+    }
+
+    case 'sessionWorkImageViewed': {
+      const card = imageCardOf(state, event.itemId, event.path);
+      if (!card || (!card.fitted && sameView(card.view, event.view))) return state;
+      return withImageCard(state, event.itemId, event.path, { ...card, view: event.view, fitted: false });
+    }
+
+    case 'sessionWorkImageFitted': {
+      const card = imageCardOf(state, event.itemId, event.path);
+      if (!card || (card.fitted && sameView(card.view, card.fit))) return state;
+      return withImageCard(state, event.itemId, event.path, { ...card, view: card.fit, fitted: true });
+    }
+
+    // A mode picked on a card is that card's, and every new card's from now on (C1).
+    case 'sessionWorkImageModeSet': {
+      const card = imageCardOf(state, event.itemId, event.path);
+      const imageDefaults = state.imageDefaults.mode === event.mode
+        ? state.imageDefaults
+        : { ...state.imageDefaults, mode: event.mode };
+      const next = imageDefaults === state.imageDefaults ? state : { ...state, imageDefaults };
+      return card && card.mode !== event.mode
+        ? withImageCard(next, event.itemId, event.path, { ...card, mode: event.mode })
+        : next;
+    }
+
+    case 'sessionWorkImageBlinked': {
+      const card = imageCardOf(state, event.itemId, event.path);
+      if (!card) return state;
+      return withImageCard(state, event.itemId, event.path, { ...card, blink: card.blink === 'before' ? 'after' : 'before' });
+    }
+
+    case 'sessionWorkImageBackgroundSet':
+      return state.imageDefaults.background === event.background
+        ? state
+        : { ...state, imageDefaults: { ...state.imageDefaults, background: event.background } };
 
     case 'sessionWorkDoneToggled':
       return state.page ? { ...state, page: { ...state.page, doneExpanded: !state.page.doneExpanded } } : state;
@@ -356,6 +461,61 @@ export function selectedItem(page: SessionWorkPage): Item | null {
 }
 
 // ── Diffs ──
+
+/**
+ * An image card on the page: undefined when its item has no diff on the page
+ * (or the diff no such file), null when the card has not been drawn yet.
+ */
+function imageCardOf(state: SessionWorkState, itemId: string, path: string): ImageCardState | null | undefined {
+  const diff = state.page?.diffs[itemId];
+  if (!diff || !diff.files.some(file => file.path === path)) return undefined;
+  return diff.images[path] ?? null;
+}
+
+function withImageCard(state: SessionWorkState, itemId: string, path: string, card: ImageCardState): SessionWorkState {
+  const page = state.page!;
+  const diff = page.diffs[itemId]!;
+  return withDiff(state, page, itemId, { ...diff, images: withEntry(diff.images, path, card) });
+}
+
+/** Equal up to float noise, so a frame measured again does not churn the store. */
+function sameView(a: View, b: View): boolean {
+  return Math.abs(a.scale - b.scale) < 1e-6 && Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
+}
+
+/**
+ * The image card a key on the page acts on (C6): the file `n`/`p` last landed
+ * on in the selected item's diff, when it is an image.
+ */
+export function focusedImage(page: SessionWorkPage): { itemId: string; file: FileDiff } | null {
+  const diff = selectedDiff(page);
+  if (!page.selectedItemId || !diff?.focusedPath) return null;
+  const file = diff.files.find(candidate => candidate.path === diff.focusedPath);
+  return file?.image ? { itemId: page.selectedItemId, file } : null;
+}
+
+/** An image with both sides; one with a single side shows only side-by-side (I5). */
+export function comparesImages(file: FileDiff): boolean {
+  return !!file.image?.before && !!file.image.after;
+}
+
+/**
+ * What a key does to the focused image card (C6): `1`–`5` pick a mode, `b`
+ * flips Blink, `0` puts the view back to fit. Null when the key does nothing
+ * there: no image card has the focus, or it has one side and the key is for a
+ * mode it does not offer.
+ */
+export function imageKeyEvent(page: SessionWorkPage, key: string): RendererEvent | null {
+  const focused = focusedImage(page);
+  if (!focused) return null;
+  const { itemId, file } = focused;
+  const { path } = file;
+  if (key === '0') return { type: 'sessionWorkImageFitted', itemId, path };
+  const modes = comparesImages(file) ? IMAGE_MODES : IMAGE_MODES.slice(0, 1);
+  if (key === 'b') return modes.includes('blink') ? { type: 'sessionWorkImageBlinked', itemId, path } : null;
+  const mode = /^[1-9]$/.test(key) ? modes[Number(key) - 1] : undefined;
+  return mode ? { type: 'sessionWorkImageModeSet', itemId, path, mode } : null;
+}
 
 function withDiff(state: SessionWorkState, page: SessionWorkPage, itemId: string, diff: ItemDiff): SessionWorkState {
   return { ...state, page: { ...page, diffs: withEntry(page.diffs, itemId, diff) } };

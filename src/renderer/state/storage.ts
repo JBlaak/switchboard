@@ -16,6 +16,10 @@
 export const STORAGE_KEYS = {
   activeSessionId: 'activeSessionId',
   expandedSlugs: 'expandedSlugs',
+  /** The image compare mode a new card opens in (localStorage, so it outlives a restart). */
+  imageCompareMode: 'imageCompareMode',
+  /** What sits behind an image card's images (localStorage). */
+  imageCompareBackground: 'imageCompareBackground',
 } as const;
 
 /**

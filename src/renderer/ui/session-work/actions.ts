@@ -11,13 +11,15 @@ import { flushSync } from 'react-dom';
 import { dispatch, getState } from '../../state/app-store';
 import { hasEntry } from '../../state/records';
 import { sessionMap } from '../../state/session-store';
-import { selectedDiff, steppedFilePath, steppedItemId } from '../../state/session-work-slice';
+import { imageKeyEvent, selectedDiff, steppedFilePath, steppedItemId } from '../../state/session-work-slice';
 import type { DiffMode, ReviewKind } from '../../state/session-work-slice';
 import type { DiffSide } from '../../../domain/session-work/model';
 import type { ReviewMode, ReviewResult } from '../../../domain/session-work/review';
 import { headerNameFor } from '../../features/sessions/terminal-header';
 import { openSession } from '../../features/sessions/session-actions';
 import type { WorkAction } from '../../../domain/session-work/model';
+import type { ImageMode } from './image-compare/modes/types';
+import type { Background, View } from './image-compare/types';
 
 /** Sessions whose eligibility is being asked right now, so a row asks once. */
 const asking = new Map<string, Promise<boolean>>();
@@ -280,4 +282,38 @@ async function reviewWrite(
   }
   dispatch({ type: 'sessionWorkReviewAnswered', sessionId, itemId, kind, error });
   return error === null;
+}
+
+// ── Image cards (#112) ──
+
+/** An image card's stage measured its frame; `fit` is the view that fits it. */
+export function frameImage(itemId: string, path: string, fit: View): void {
+  dispatch({ type: 'sessionWorkImageFramed', itemId, path, fit });
+}
+
+export function viewImage(itemId: string, path: string, view: View): void {
+  dispatch({ type: 'sessionWorkImageViewed', itemId, path, view });
+}
+
+export function setImageMode(itemId: string, path: string, mode: ImageMode): void {
+  dispatch({ type: 'sessionWorkImageModeSet', itemId, path, mode });
+}
+
+export function blinkImage(itemId: string, path: string): void {
+  dispatch({ type: 'sessionWorkImageBlinked', itemId, path });
+}
+
+export function setImageBackground(background: Background): void {
+  dispatch({ type: 'sessionWorkImageBackgroundSet', background });
+}
+
+/**
+ * `1`–`5`, `b` and `0` on the focused image card (C6). Answers whether the
+ * key did anything there.
+ */
+export function imageKey(key: string): boolean {
+  const page = getState().sessionWork.page;
+  const event = page ? imageKeyEvent(page, key) : null;
+  if (event) dispatch(event);
+  return event !== null;
 }
