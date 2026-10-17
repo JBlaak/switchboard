@@ -86,6 +86,13 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
   const [entrance, setEntrance] = useState<Entrance | null>(null);
   /** Bumped per showing and hiding, so a swap that outlives its set does not land on another. */
   const generation = useRef(0);
+  /**
+   * Bumped per showing, to give the question block a fresh element each time.
+   * Chromium can leave an element it has animated before on a stale inherited
+   * style — the `visibility` and inertness the sheet had while hidden — so a
+   * reused block came back blank and unclickable under a sheet that was up.
+   */
+  const [showing, setShowing] = useState(0);
 
   const q = questions[shownStep];
   const n = q?.options.length ?? 0;
@@ -212,6 +219,7 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
     leavingNow.current = false;
     setLeaving(false);
     setStep({ toolUseId: onScreenId, step: shown.answering.draft.step });
+    setShowing(n => n + 1);
     onShow();
     // Resolve the sheet's new style before anything inside it starts to
     // animate. Chromium caches an animated element's base style, inherited
@@ -357,7 +365,7 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
               );
             })}
           </nav>
-          <div ref={block} className="qp-q">
+          <div key={showing} ref={block} className="qp-q">
             <div className="qp-head">
               <span className="qp-counter">{q ? questionCounter(shownStep, questions.length, q) : ''}</span>
               <h1 className="qp-question">{q?.question ?? ''}</h1>

@@ -21,8 +21,10 @@ function harness(endpoint: QuestionHookEndpoint = { url: 'http://127.0.0.1:4000'
   const registry = new SessionRegistry();
   const renderer = fakeRenderer();
   let now = 1_000;
+  const logged: string[] = [];
+  const log = { ...silentLog, info: (message: string) => { logged.push(message); } };
   const service = new QuestionService({
-    registry, renderer, endpoint, log: silentLog, clock: { now: () => now },
+    registry, renderer, endpoint, log, clock: { now: () => now },
   });
 
   const addSession = (id: string): ActiveSession => {
@@ -46,7 +48,7 @@ function harness(endpoint: QuestionHookEndpoint = { url: 'http://127.0.0.1:4000'
     return { calls, reply: (json: Record<string, unknown>) => { calls.push(json); } };
   };
 
-  return { registry, renderer, service, addSession, replies, setNow: (t: number) => { now = t; } };
+  return { registry, renderer, service, addSession, replies, logged, setNow: (t: number) => { now = t; } };
 }
 
 function asked(toolUseId = 'tu-1'): AskedQuestions {
@@ -90,6 +92,23 @@ test('a question for a running session is shown with its deadline', () => {
     deadline: 1_000 + QUESTION_HOOK_TIMEOUT_SECONDS * 1000,
   });
   assert.equal(h.service.pending().length, 1);
+});
+
+test('the log names the tool-use id of each set asked and settled', () => {
+  /* Given */
+  const h = harness();
+  h.addSession('s1');
+
+  /* When */
+  h.service.receive('s1', asked('tu-1'), h.replies().reply);
+  h.service.receive('s1', asked(''), h.replies().reply);
+
+  /* Then */
+  assert.deepEqual(h.logged, [
+    '[questions] session=s1 tool=tu-1 asked 1 question(s)',
+    '[questions] session=s1 tool=tu-1 withdrawn',
+    '[questions] session=s1 tool=(none) asked 1 question(s)',
+  ]);
 });
 
 test('a question for an unknown session is left to the terminal', () => {
