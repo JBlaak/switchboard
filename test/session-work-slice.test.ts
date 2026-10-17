@@ -3,8 +3,8 @@ import assert from 'node:assert';
 import { initialRendererState, rekeyState, rootReducer } from '../src/renderer/state/root';
 import { selectedItem, steppedItemId, workSections } from '../src/renderer/state/session-work-slice';
 import {
-  closedIssues, footprintLine, githubBanner, itemBranchLine, itemKind, itemPills, itemRef, itemTitle,
-  snapshotRepository, updatedAgo,
+  closedIssues, footprintLine, githubBanner, itemBranchLine, itemKind, itemLineStats, itemPills, itemRef, itemTitle,
+  updatedAgo,
 } from '../src/renderer/ui/session-work/describe';
 import type { RendererEvent } from '../src/renderer/state/events';
 import type { RendererState } from '../src/renderer/state/root';
@@ -36,12 +36,17 @@ const branch: SessionWorkItem = {
   ahead: 2,
   diff: { kind: 'local', worktree: '/w/api-2', base: 'origin/main', head: 'spike' },
   activity: null,
+  additions: 40,
+  deletions: 7,
+  pushed: false,
 };
 const dirty: SessionWorkItem = {
   id: 'dirty:/w/api\0fix/login',
   kind: 'dirty',
   location: { worktree: '/w/api', branch: 'fix/login', fromSubagent: false },
   files: [{ path: 'a.ts', status: 'modified' }, { path: 'b.ts', status: 'untracked' }],
+  additions: 12,
+  deletions: 3,
 };
 const issue: SessionWorkItem = {
   id: 'issue:acme/api#49',
@@ -58,7 +63,7 @@ const merged: SessionWorkItem = {
 };
 
 function snapshot(items: SessionWorkItem[], sessionId = 's1'): SessionWorkSnapshot {
-  return { sessionId, items, gh: 'ok', updatedAt: new Date(AT).toISOString() };
+  return { sessionId, repository: 'acme/api', items, gh: 'ok', updatedAt: new Date(AT).toISOString() };
 }
 
 const opened = (sessionId = 's1'): RendererEvent => ({ type: 'sessionWorkOpened', sessionId, name: 'Fix login', at: AT });
@@ -69,6 +74,7 @@ test('session work: opening shows a skeleton for that session; the first snapsho
   const open = run(initialRendererState('s1'), opened());
   assert.deepStrictEqual(open.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
+    diffMode: 'unified', diffs: {},
   });
   assert.strictEqual(open.sessionWork.now, AT);
 
@@ -114,10 +120,13 @@ test('session work: nothing is remembered once closed', () => {
     { type: 'sessionWorkSnapshot', snapshot: snapshot([openPr, branch, merged]) },
     { type: 'sessionWorkItemSelected', itemId: branch.id },
     { type: 'sessionWorkDoneToggled' },
+    { type: 'sessionWorkDiffModeSet', mode: 'split' },
+    { type: 'sessionWorkDiffRequested', sessionId: 's1', itemId: branch.id, key: 'k' },
     { type: 'sessionWorkClosed', sessionId: 's1' },
     opened());
   assert.deepStrictEqual(used.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
+    diffMode: 'unified', diffs: {},
   });
 });
 
@@ -197,6 +206,25 @@ test('session work: items group as in progress, issues and done', () => {
   assert.deepStrictEqual(sections.done, [merged]);
 });
 
+test('session work: a closed issue goes under Done, after the PRs, and is never selected', () => {
+  const closed: SessionWorkItem = {
+    id: 'issue:acme/api#40', kind: 'issue',
+    issue: { repository: 'acme/api', number: 40, title: 'Fixed elsewhere', state: 'closed', url: 'https://github.com/acme/api/issues/40' },
+  };
+  const bare: SessionWorkItem = { id: 'issue:#41', kind: 'issue', issue: { repository: '', number: 41 } };
+  const snap = snapshot([openPr, closed, issue, bare, merged]);
+  const sections = workSections(snap);
+  assert.deepStrictEqual(sections.issues, [issue, bare], 'open, or unknown without gh');
+  assert.deepStrictEqual(sections.done, [merged, closed]);
+
+  const page = run(initialRendererState('s1'), opened(), { type: 'sessionWorkSnapshot', snapshot: snap }, { type: 'sessionWorkDoneToggled' })
+    .sessionWork.page!;
+  assert.strictEqual(steppedItemId({ ...page, selectedItemId: merged.id }, 1), null, 'the closed issue is a link, not a stop');
+  const selected = run(initialRendererState('s1'), opened(), { type: 'sessionWorkSnapshot', snapshot: snap },
+    { type: 'sessionWorkItemSelected', itemId: closed.id });
+  assert.strictEqual(selected.sessionWork.page!.selectedItemId, openPr.id);
+});
+
 // ── What the page says ──
 
 test('session work: each kind of item has its kind, ref and title', () => {
@@ -218,9 +246,20 @@ test('session work: pills put CI first, then the state, then how far behind', ()
   assert.deepStrictEqual(itemPills(failingDraft), [{ label: 'CI failing', tone: 'red' }, { label: 'Draft', tone: 'grey' }]);
   assert.deepStrictEqual(itemPills(merged), [{ label: 'Merged', tone: 'lavender' }]);
   assert.deepStrictEqual(itemPills(dirty), [{ label: '2 files', tone: 'grey' }]);
+  assert.deepStrictEqual(itemPills(branch), [{ label: 'Not pushed', tone: 'amber' }, { label: '2 commits ahead', tone: 'grey' }]);
+  assert.deepStrictEqual(itemPills({ ...branch, pushed: true } as SessionWorkItem), [{ label: '2 commits ahead', tone: 'grey' }]);
   assert.deepStrictEqual(itemPills(issue), [{ label: 'Open', tone: 'green' }]);
   const unknown: SessionWorkItem = { ...openPr, pr: { number: 1, url: 'u', repository: '', closes: [] } } as SessionWorkItem;
   assert.deepStrictEqual(itemPills(unknown), [], 'no gh, no pills');
+});
+
+test('session work: each item\'s +a −d, unknown for a PR gh has not counted', () => {
+  assert.strictEqual(itemLineStats(openPr), null);
+  const counted = { ...openPr, pr: { ...openPr.pr, additions: 42, deletions: 9 } } as SessionWorkItem;
+  assert.deepStrictEqual(itemLineStats(counted), { additions: 42, deletions: 9 });
+  assert.deepStrictEqual(itemLineStats(branch), { additions: 40, deletions: 7 });
+  assert.deepStrictEqual(itemLineStats(dirty), { additions: 12, deletions: 3 });
+  assert.strictEqual(itemLineStats(issue), null);
 });
 
 test('session work: the detail line, and the issues a PR closes', () => {
@@ -231,8 +270,6 @@ test('session work: the detail line, and the issues a PR closes', () => {
 
 test('session work: the header names the repository, the footprint and how fresh it is', () => {
   const snap = snapshot([issue, openPr, branch, dirty]);
-  assert.strictEqual(snapshotRepository(snap), 'acme/api');
-  assert.strictEqual(snapshotRepository(snapshot([])), '');
   assert.strictEqual(footprintLine(snap), '2 worktrees · 2 branches');
   assert.strictEqual(footprintLine(snapshot([dirty])), '1 worktree · 1 branch');
   assert.strictEqual(updatedAgo(snap.updatedAt, AT + 4_000), 'updated 4s ago');

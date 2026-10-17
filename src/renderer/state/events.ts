@@ -14,7 +14,8 @@ import type { EVENT } from '../../ipc/channels';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { UpdateNotice } from '../../domain/update/release';
-import type { SessionWorkSnapshot } from '../../domain/session-work/model';
+import type { SessionWorkDiff, SessionWorkSnapshot } from '../../domain/session-work/model';
+import type { DiffMode } from './session-work-slice';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ToolbarEvent } from './toolbar-slice';
@@ -150,6 +151,22 @@ export type LocalEvent =
   /** An item was clicked, or `j`/`k` moved to it. */
   | { type: 'sessionWorkItemSelected'; itemId: string }
   | { type: 'sessionWorkDoneToggled' }
+  /**
+   * The selected item's diff was asked of main. `key` is the item as it was
+   * asked for (`diffKey`): a snapshot that changes the item asks again, and an
+   * answer for an older key is dropped.
+   */
+  | { type: 'sessionWorkDiffRequested'; sessionId: string; itemId: string; key: string }
+  /** Main answered an item's diff; one with an `error` and no files is a failure. */
+  | { type: 'sessionWorkDiffLoaded'; sessionId: string; itemId: string; key: string; diff: SessionWorkDiff }
+  /** The request itself failed. */
+  | { type: 'sessionWorkDiffFailed'; sessionId: string; itemId: string; key: string; message: string }
+  /** The Unified/Split toggle, or `u`. */
+  | { type: 'sessionWorkDiffModeSet'; mode: DiffMode }
+  /** "Show diff" on a file that started collapsed (D7). */
+  | { type: 'sessionWorkFileExpanded'; itemId: string; path: string }
+  /** `n`/`p` moved to a file of the item's diff. */
+  | { type: 'sessionWorkFileFocused'; itemId: string; path: string }
   /** The page's once-a-second clock, for "updated Xs ago". Only runs while it is open. */
   | { type: 'sessionWorkTicked'; at: number };
 

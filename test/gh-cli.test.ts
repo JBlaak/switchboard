@@ -61,6 +61,8 @@ test('a recorded response maps to PR statuses, leaving out the number GitHub doe
   assert.equal(open.headSha, 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678');
   assert.equal(open.baseRef, 'main');
   assert.equal(open.mergeable, 'mergeable');
+  assert.deepEqual([open.additions, open.deletions], [120, 14]);
+  assert.equal(draft.additions, undefined, 'a count GitHub did not send stays unknown');
   assert.deepEqual(open.closes, [
     { repository: 'acme/web', number: 7 },
     { repository: 'acme/api', number: 3 },

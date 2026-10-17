@@ -105,6 +105,9 @@ export interface PullRequestStatus {
   headRef?: string;
   headSha?: string;
   baseRef?: string;
+  /** Lines the PR adds and removes, as GitHub counts them. */
+  additions?: number;
+  deletions?: number;
 }
 
 /** The actions a work item can hand to Claude, each one a prompt (A1). */
@@ -141,6 +144,12 @@ export type DiffSource =
 /** How a file changed. `untracked` only occurs in a worktree's uncommitted changes. */
 export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'untracked';
 
+/** Lines added and removed, for the list's `+a −d` without loading a diff. */
+export interface LineStats {
+  additions: number;
+  deletions: number;
+}
+
 /** One uncommitted change in a worktree, from `git status`. */
 export interface FileChange {
   path: string;
@@ -158,11 +167,27 @@ export interface FileChange {
  */
 export type WorkItem = { error?: string } & (
   | { kind: 'pr'; pr: PullRequestStatus; location: WorkLocation | null; diff: DiffSource; activity: Activity | null }
-  | { kind: 'branch'; location: WorkLocation; ahead: number; diff: DiffSource; activity: Activity | null }
-  | { kind: 'dirty'; location: WorkLocation; files: FileChange[] }
+  | ({
+    kind: 'branch'; location: WorkLocation; ahead: number; diff: DiffSource; activity: Activity | null;
+    /** Has an upstream, or a branch of the same name on origin: someone else could see it. */
+    pushed: boolean;
+  } & LineStats)
+  | ({ kind: 'dirty'; location: WorkLocation; files: FileChange[] } & LineStats)
   /** An `IssueStatus` once `gh` confirmed it is an issue; a bare ref without `gh`. */
   | { kind: 'issue'; issue: IssueRef | IssueStatus }
 );
+
+/**
+ * One item's diff as the page receives it: its files, and where they came
+ * from. `local` is the worktree's own; `github` is `gh pr diff`, because the
+ * PR's branch is not checked out here (D8). When no diff could be had, `error`
+ * says why (as the item's `error` in the next snapshot will) and `source` is null.
+ */
+export interface SessionWorkDiff {
+  files: FileDiff[];
+  source: 'local' | 'github' | null;
+  error?: string;
+}
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com (D9). */
 export type GitHubAvailability = 'ok' | 'missing' | 'unauthenticated';
@@ -173,6 +198,8 @@ export type SessionWorkItem = WorkItem & { id: string };
 /** Everything the page shows for one session, pushed whenever it changes. */
 export interface SessionWorkSnapshot {
   sessionId: string;
+  /** `owner/name` of the session's repository on GitHub, from its origin remote; '' when it is not on GitHub. */
+  repository: string;
   items: SessionWorkItem[];
   gh: GitHubAvailability;
   /** ISO-8601: when this snapshot was assembled. */

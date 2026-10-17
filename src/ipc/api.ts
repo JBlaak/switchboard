@@ -15,7 +15,7 @@ import type { EffectiveSettings } from '../domain/settings/settings';
 import type { Appearance } from '../domain/settings/appearance';
 import type { Answers, PendingQuestions, QuestionsSettled } from '../domain/questions/question';
 import type { ShellProfile } from '../domain/shell/shell-profile';
-import type { FileDiff, SessionWorkSnapshot } from '../domain/session-work/model';
+import type { SessionWorkDiff, SessionWorkSnapshot } from '../domain/session-work/model';
 import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
@@ -112,8 +112,8 @@ export interface SwitchboardApi {
   openSessionWork(sessionId: string): Promise<SessionWorkSnapshot | null>;
   /** False for remote sessions and for sessions outside a git repository (D14). */
   canOpenSessionWork(sessionId: string): Promise<boolean>;
-  /** The parsed diff of one item (`SessionWorkItem.id`) of the open page; empty when there is none. */
-  getSessionWorkDiff(request: { sessionId: string; itemId: string }): Promise<FileDiff[]>;
+  /** The parsed diff of one item (`SessionWorkItem.id`) of the open page, and where it came from. */
+  getSessionWorkDiff(request: { sessionId: string; itemId: string }): Promise<SessionWorkDiff>;
 
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;

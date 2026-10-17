@@ -16,7 +16,7 @@ import { openedExternally, pushEvent, sessionWorkClosed } from '../support/main-
 import { hasTerminal } from '../support/terminal';
 import { sessionItem } from '../support/session-list';
 import { LABEL, S } from '../fixtures/standard';
-import { sessionWorkStub } from '../fixtures/session-work';
+import { BIG_FILE_LINES, sessionWorkStub } from '../fixtures/session-work';
 import { EVENT } from '../../src/ipc/channels';
 import type { Page } from '@playwright/test';
 
@@ -122,7 +122,7 @@ test.describe('with a repository', () => {
     await openLoginFixWork(page, home);
     const work = workPage(page);
     await expect(work.getByRole('link', { name: 'acme/api', exact: true })).toBeVisible();
-    await expect(work.getByText('2 worktrees · 2 branches', { exact: true })).toBeVisible();
+    await expect(work.getByText('2 worktrees · 3 branches', { exact: true })).toBeVisible();
     await expect(work.getByText('updated 4s ago', { exact: true })).toBeVisible();
 
     const list = work.getByRole('navigation', { name: 'Work items' });
@@ -132,12 +132,22 @@ test.describe('with a repository', () => {
     await expect(first).toContainText('#1320');
     await expect(first).toContainText('CI passing');
     await expect(first).toContainText('2 behind main');
+    await expect(first).toContainText('+42−9');
     await expect(first).toHaveAttribute('aria-current', 'true');
     await expect(list.getByRole('button', { name: /Add a regression test/ })).toContainText('Draft');
     await expect(list.getByRole('button', { name: /Uncommitted changes in acme-api/ })).toContainText('2 files');
+    await expect(list.getByRole('button', { name: /Uncommitted changes in acme-api/ })).toContainText('+18−4');
+    const branch = list.getByRole('button', { name: /spike\/cookie-store/ });
+    await expect(branch).toContainText('Not pushed');
+    await expect(branch).toContainText('+61−0');
     // Done starts collapsed.
     await expect(list.getByRole('button', { name: /^Done/ })).toHaveAttribute('aria-expanded', 'false');
     await expect(list.getByText('Log the redirect chain')).toHaveCount(0);
+    // A closed issue is done too: not under Issues, but a link under Done.
+    await expect(list.getByText('Session cookie not marked Secure')).toHaveCount(0);
+    await list.getByRole('button', { name: /^Done/ }).click();
+    await expect(list.getByRole('link', { name: /Session cookie not marked Secure/ })).toContainText('Closed');
+    await list.getByRole('button', { name: /^Done/ }).click();
 
     const detail = work.getByRole('region', { name: 'Selected work item' });
     await expect(detail.getByRole('heading', { level: 2 })).toHaveText('Stop the login redirect loop #1320');
@@ -199,6 +209,132 @@ test.describe('with a repository', () => {
     await page.evaluate(id => window.api.canOpenSessionWork(id), S.worktreeTry);
     await expect(workPage(page)).toHaveCount(0);
     await expect(terminalHeader(page)).toBeVisible();
+  });
+});
+
+test.describe('the diff', () => {
+  test.use({ stubs: { sessionWork: sessionWorkStub() } });
+
+  function diffOf(page: Page) {
+    return workPage(page).getByTestId('session-work-diff');
+  }
+
+  function fileCard(page: Page, path: string) {
+    return diffOf(page).getByRole('region', { name: path, exact: true });
+  }
+
+  test('loads for the selected item, one card per file, unified by default', async ({ page, home }) => {
+    await openLoginFixWork(page, home);
+    const diff = diffOf(page);
+    await expect(diff).toHaveAttribute('aria-busy', 'false');
+    await expect(diff.getByTestId('session-work-file')).toHaveCount(4);
+    await expect(diff.getByText('4 files changed', { exact: true })).toBeVisible();
+    await expect(diff.getByRole('button', { name: 'Unified' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(diff.getByText('Branch not checked out locally.')).toHaveCount(0);
+
+    const session = fileCard(page, 'src/session.ts');
+    await expect(session).toContainText('+3−2');
+    await expect(session.locator('.sw-dl[data-kind="hunk"]')).toHaveText('@@ -10,6 +10,7 @@ export function refresh(session: Session) {');
+    await expect(session.locator('.sw-dl[data-kind="delete"]')).toHaveCount(2);
+    await expect(session.locator('.sw-dl[data-kind="add"]')).toHaveCount(3);
+    // The new file's line numbers on additions, the old file's on deletions.
+    await expect(session.locator('.sw-dl[data-kind="add"]').first().locator('.sw-dl-num')).toHaveText(['', '11']);
+    await expect(session.locator('.sw-dl[data-kind="delete"]').first().locator('.sw-dl-num')).toHaveText(['11', '']);
+    await expect(fileCard(page, 'src/fixtures/big.ts')).toContainText('New');
+  });
+
+  test('u and the toggle switch between unified and split', async ({ page, home }) => {
+    await openLoginFixWork(page, home);
+    const diff = diffOf(page);
+    const session = fileCard(page, 'src/session.ts');
+    await expect(session.locator('.sw-dl[data-kind="add"]')).toHaveCount(3);
+
+    await page.keyboard.press('u');
+    await expect(diff.getByRole('button', { name: 'Split' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(session.locator('.sw-lines')).toHaveClass(/\bis-split\b/);
+    // Two deletions beside the first two of three additions; the third has a blank cell beside it.
+    const pairs = session.locator('.sw-dl.is-pair');
+    await expect(pairs.nth(1)).toContainText('return redirect("/login");');
+    await expect(pairs.nth(1)).toContainText('if (!token) return null;');
+    await expect(pairs.nth(2)).toContainText('return renew(token);');
+    await expect(pairs.nth(2)).toContainText('const next = renew(token);');
+    await expect(pairs.nth(3).locator('[data-side="left"][data-kind="empty"]')).toHaveCount(1);
+    await expect(pairs.nth(3)).toContainText('return next ?? null;');
+
+    await diff.getByRole('button', { name: 'Unified' }).click();
+    await expect(session.locator('.sw-lines')).toHaveClass(/\bis-unified\b/);
+    await page.keyboard.press('u');
+    await expect(session.locator('.sw-lines')).toHaveClass(/\bis-split\b/);
+  });
+
+  test('a lock file starts collapsed with its reason until Show diff; a binary file is one row', async ({ page, home }) => {
+    await openLoginFixWork(page, home);
+    const lock = fileCard(page, 'package-lock.json');
+    await expect(lock).toContainText('Lock file');
+    await expect(lock.locator('.sw-dl')).toHaveCount(0);
+    await lock.getByRole('button', { name: 'Show diff' }).click();
+    await expect(lock.locator('.sw-dl[data-kind="add"]')).toHaveText(/"version": "1\.0\.1",/);
+    await expect(lock.getByRole('button', { name: 'Show diff' })).toHaveCount(0);
+
+    const logo = fileCard(page, 'assets/logo.png');
+    await expect(logo.locator('.sw-file-row')).toHaveText('Binary file changed');
+    await expect(logo.locator('.sw-dl')).toHaveCount(0);
+  });
+
+  test('a 5,000-line file draws nothing until opened, then every line without holding up the keyboard', async ({ page, home }) => {
+    await openLoginFixWork(page, home);
+    const big = fileCard(page, 'src/fixtures/big.ts');
+    await expect(big).toContainText(`Large diff · ${BIG_FILE_LINES.toLocaleString('en-US')} lines changed`);
+    await expect(big.locator('.sw-dl')).toHaveCount(0);
+
+    await big.getByRole('button', { name: 'Show diff' }).click();
+    // The page still answers while the file fills in.
+    await page.keyboard.press('u');
+    await expect(diffOf(page).getByRole('button', { name: 'Split' })).toHaveAttribute('aria-pressed', 'true');
+    const lines = big.locator('.sw-lines');
+    await expect(lines).toHaveAttribute('data-shown', String(BIG_FILE_LINES + 1));
+    await expect(big.locator('.sw-dl.is-pair')).toHaveCount(BIG_FILE_LINES);
+    await expect(big.locator('.sw-dl.is-pair').last()).toContainText(`export const line${BIG_FILE_LINES} = ${BIG_FILE_LINES};`);
+  });
+
+  test('n and p move between the files', async ({ page, home }) => {
+    await openLoginFixWork(page, home);
+    const cards = diffOf(page).getByTestId('session-work-file');
+    await expect(cards).toHaveCount(4);
+
+    await page.keyboard.press('n');
+    await expect(cards.nth(0)).toHaveClass(/\bis-focused\b/);
+    await expect(cards.nth(0).locator('.sw-file-head')).toBeFocused();
+    await page.keyboard.press('n');
+    await expect(cards.nth(1)).toHaveClass(/\bis-focused\b/);
+    await expect(cards.nth(0)).not.toHaveClass(/\bis-focused\b/);
+    await page.keyboard.press('n');
+    await page.keyboard.press('p');
+    await expect(cards.nth(1)).toHaveClass(/\bis-focused\b/);
+    await expect(cards.nth(1).locator('.sw-file-head')).toBeFocused();
+  });
+
+  test('a PR whose diff came from GitHub says its branch is not checked out', async ({ page, home }) => {
+    await openLoginFixWork(page, home);
+    const list = workPage(page).getByRole('navigation', { name: 'Work items' });
+    await list.getByRole('button', { name: /^Done/ }).click();
+    await list.getByRole('button', { name: /Log the redirect chain/ }).click();
+
+    const diff = diffOf(page);
+    await expect(diff.getByRole('note')).toHaveText('Branch not checked out locally.');
+    await expect(fileCard(page, 'src/log.ts').locator('.sw-dl[data-kind="add"]')).toHaveText(/export const chain/);
+  });
+});
+
+test.describe('while a diff is on its way', () => {
+  test.use({ stubs: { sessionWork: { ...sessionWorkStub(), diffs: { ['pr:https://github.com/acme/api/pull/1320']: 'never' } } } });
+
+  test('the item\'s header stays up over a skeleton', async ({ page, home }) => {
+    await openLoginFixWork(page, home);
+    const detail = workPage(page).getByRole('region', { name: 'Selected work item' });
+    await expect(detail.getByRole('heading', { level: 2 })).toHaveText('Stop the login redirect loop #1320');
+    await expect(detail.getByTestId('session-work-diff')).toHaveAttribute('aria-busy', 'true');
+    await expect(detail.locator('.sw-diff-skeleton')).toBeVisible();
   });
 });
 

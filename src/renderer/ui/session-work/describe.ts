@@ -4,7 +4,9 @@
  * Pure, so it is tested in node with the slice; the components only lay out
  * what these answer.
  */
-import type { GitHubAvailability, SessionWorkItem, SessionWorkSnapshot } from '../../../domain/session-work/model';
+import type {
+  FileDiff, GitHubAvailability, LineStats, SessionWorkItem, SessionWorkSnapshot,
+} from '../../../domain/session-work/model';
 
 /** The pastel fill and matching ink a pill is drawn in. */
 export type PillTone = 'green' | 'red' | 'amber' | 'grey' | 'lavender';
@@ -66,6 +68,7 @@ export function itemPills(item: SessionWorkItem): Pill[] {
       break;
     }
     case 'branch':
+      if (!item.pushed) pills.push({ label: 'Not pushed', tone: 'amber' });
       pills.push({ label: plural(item.ahead, 'commit') + ' ahead', tone: 'grey' });
       break;
     case 'dirty':
@@ -78,6 +81,24 @@ export function itemPills(item: SessionWorkItem): Pill[] {
       break;
   }
   return pills;
+}
+
+/**
+ * The lines an item adds and removes, for the list's `+a −d`; null when that
+ * is not known (a PR `gh` has not described) or there is nothing to count.
+ */
+export function itemLineStats(item: SessionWorkItem): LineStats | null {
+  switch (item.kind) {
+    case 'pr':
+      return item.pr.additions === undefined || item.pr.deletions === undefined
+        ? null
+        : { additions: item.pr.additions, deletions: item.pr.deletions };
+    case 'branch':
+    case 'dirty':
+      return { additions: item.additions, deletions: item.deletions };
+    case 'issue':
+      return null;
+  }
 }
 
 /** `head → base` for the detail, or just the branch when there is no base. */
@@ -118,31 +139,41 @@ export function itemUrl(item: SessionWorkItem, repository: string): string | nul
   return null;
 }
 
-/**
- * The line where the diff will go (#75), saying what changed as far as the
- * snapshot knows.
- */
-export function itemSummary(item: SessionWorkItem): string {
-  switch (item.kind) {
-    case 'pr': return item.location ? `Changes on ${item.location.branch}` : 'Changes from GitHub';
-    case 'branch': return plural(item.ahead, 'commit') + ' not in a pull request yet';
-    case 'dirty': return plural(item.files.length, 'file') + ' changed';
-    case 'issue': return '';
+// ── The diff ──
+
+/** "3 files changed" over a diff, with its added and removed lines in all. */
+export function diffSummary(files: readonly FileDiff[]): { label: string; stats: LineStats } {
+  let additions = 0;
+  let deletions = 0;
+  for (const file of files) {
+    additions += file.additions;
+    deletions += file.deletions;
   }
+  return { label: plural(files.length, 'file') + ' changed', stats: { additions, deletions } };
 }
 
 /**
- * The session's repository as `owner/name`: the snapshot does not carry it,
- * so it is the first one an item names. '' when none does.
+ * The pill beside a file's path: how it changed, unless it was only modified.
+ * A new file in uncommitted changes that git does not track yet says so.
  */
-export function snapshotRepository(snapshot: SessionWorkSnapshot): string {
-  for (const item of snapshot.items) {
-    if (item.kind === 'pr' && item.pr.repository) return item.pr.repository;
+export function fileStatusPill(file: FileDiff, untracked: boolean): Pill | null {
+  switch (file.status) {
+    case 'added': return untracked ? { label: 'Untracked', tone: 'amber' } : { label: 'New', tone: 'green' };
+    case 'deleted': return { label: 'Deleted', tone: 'red' };
+    case 'renamed': return { label: 'Renamed', tone: 'lavender' };
+    case 'copied': return { label: 'Copied', tone: 'lavender' };
+    case 'modified': return null;
   }
-  for (const item of snapshot.items) {
-    if (item.kind === 'issue' && item.issue.repository) return item.issue.repository;
+}
+
+/** Why a file starts collapsed (D7), in words; null when it does not. */
+export function collapsedText(file: FileDiff): string | null {
+  switch (file.collapsedReason) {
+    case 'lockfile': return 'Lock file';
+    case 'generated': return 'Generated file';
+    case 'large': return `Large diff · ${(file.additions + file.deletions).toLocaleString('en-US')} lines changed`;
+    default: return null;
   }
-  return '';
 }
 
 /** "N worktrees · M branches" the session's items live in. */

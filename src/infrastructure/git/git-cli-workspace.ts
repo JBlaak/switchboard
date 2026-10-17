@@ -14,7 +14,7 @@
 import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { FileChange, FileStatus } from '../../domain/session-work/model';
+import type { FileChange, FileStatus, LineStats } from '../../domain/session-work/model';
 import type { Disposable, GitWorkspace } from '../../application/ports/git-workspace';
 
 /** git's well-known empty tree: what a repository with no commits yet is diffed against. */
@@ -96,6 +96,14 @@ export class GitCliWorkspace implements GitWorkspace {
     return result.code === 0;
   }
 
+  async isPushed(worktree: string, branch: string): Promise<boolean> {
+    if (!isSafeRef(branch)) return false;
+    const upstream = await git(worktree, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}@{upstream}`]);
+    if (upstream.code === 0) return true;
+    const origin = await git(worktree, ['show-ref', '--verify', '--quiet', 'refs/remotes/origin/' + branch]);
+    return origin.code === 0;
+  }
+
   async aheadBehind(worktree: string, branch: string, base: string): Promise<{ ahead: number; behind: number }> {
     if (!isSafeRef(branch) || !isSafeRef(base)) return { ahead: 0, behind: 0 };
     // Left is what only `base` has, right what only `branch` has.
@@ -111,25 +119,40 @@ export class GitCliWorkspace implements GitWorkspace {
     return result.code === 0 ? result.stdout : '';
   }
 
+  async branchLineStats(worktree: string, branch: string, base: string): Promise<LineStats> {
+    if (!isSafeRef(branch) || !isSafeRef(base)) return { additions: 0, deletions: 0 };
+    const result = await git(worktree, ['diff', '--numstat', ...DIFF_FLAGS, `${base}...${branch}`, '--']);
+    return sumNumstat(result.code === 0 ? result.stdout : '');
+  }
+
   async status(worktree: string): Promise<FileChange[]> {
     const result = await git(worktree, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
     return result.code === 0 ? parseStatus(result.stdout) : [];
   }
 
-  async workingDiff(worktree: string): Promise<string> {
+  workingDiff(worktree: string): Promise<string> {
+    return this.#working(worktree, []);
+  }
+
+  async workingLineStats(worktree: string): Promise<LineStats> {
+    return sumNumstat(await this.#working(worktree, ['--numstat']));
+  }
+
+  /** `git diff` of the uncommitted changes in `format`, with untracked files as new ones. */
+  async #working(worktree: string, format: readonly string[]): Promise<string> {
     const head = await git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD']);
     const base = head.code === 0 ? 'HEAD' : EMPTY_TREE;
-    const tracked = await git(worktree, ['diff', ...DIFF_FLAGS, base, '--']);
+    const tracked = await git(worktree, ['diff', ...format, ...DIFF_FLAGS, base, '--']);
     let diff = tracked.code === 0 ? tracked.stdout : '';
 
     // Untracked files are not in any diff git keeps, and adding them with
     // `--intent-to-add` would write the index. Diffing each against
     // /dev/null reads the same as a new file, without touching anything.
     const others = await git(worktree, ['ls-files', '--others', '--exclude-standard', '-z']);
-    const untracked = others.code === 0 ? others.stdout.split('\0').filter(Boolean) : [];
+    const untracked = others.code === 0 ? others.stdout.split('\0').filter(isUntrackedFile) : [];
     for (const file of untracked) {
       // `--no-index` exits 1 when the files differ, which here they always do.
-      const added = await git(worktree, ['diff', '--no-index', ...DIFF_FLAGS, '--', '/dev/null', file]);
+      const added = await git(worktree, ['diff', '--no-index', ...format, ...DIFF_FLAGS, '--', '/dev/null', file]);
       if (added.code === 0 || added.code === 1) diff += added.stdout;
     }
     return diff;
@@ -225,12 +248,37 @@ function gitDirs(worktree: string): { gitDir: string; commonDir: string } | null
 }
 
 /**
+ * The lines added and removed in `git diff --numstat` output. A binary file
+ * counts `-` for both, which adds nothing.
+ */
+export function sumNumstat(output: string): LineStats {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of output.split('\n')) {
+    const [added, removed] = line.split('\t');
+    if (removed === undefined) continue;
+    additions += Number(added) || 0;
+    deletions += Number(removed) || 0;
+  }
+  return { additions, deletions };
+}
+
+/**
+ * An untracked entry that is a file. git lists a nested repository it will not
+ * descend into as its directory, with a trailing `/`.
+ */
+function isUntrackedFile(entry: string): boolean {
+  return entry.length > 0 && !entry.endsWith('/');
+}
+
+/**
  * `git status --porcelain=v1 -z` as file changes.
  *
  * Each entry is `XY path`, and a rename or copy is followed by its old path as
  * the next NUL-separated field. X is the index, Y the worktree; a file staged
  * as new and then edited is still a new file, so the index side wins where
- * they disagree, except that a deletion on either side is a deletion.
+ * they disagree, except that a deletion on either side is a deletion. A nested
+ * repository (an untracked entry ending in `/`) is left out.
  */
 export function parseStatus(output: string): FileChange[] {
   const fields = output.split('\0');
@@ -244,7 +292,13 @@ export function parseStatus(output: string): FileChange[] {
     if (x === '!' && y === '!') continue;
 
     let status: FileStatus;
-    if (x === '?' && y === '?') status = 'untracked';
+    if (x === '?' && y === '?') {
+      // A nested repository — an agent's worktree under `.claude/worktrees/`,
+      // a clone inside the checkout — is listed as one entry ending in `/`.
+      // It is another repository's business and has no diff here.
+      if (!isUntrackedFile(filePath)) continue;
+      status = 'untracked';
+    }
     else if (x === 'R' || y === 'R') status = 'renamed';
     else if (x === 'C' || y === 'C') status = 'copied';
     else if (x === 'D' || y === 'D') status = 'deleted';

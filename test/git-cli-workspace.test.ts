@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { GitCliWorkspace, parseStatus } from '../src/infrastructure/git/git-cli-workspace';
+import { GitCliWorkspace, parseStatus, sumNumstat } from '../src/infrastructure/git/git-cli-workspace';
 import { parseUnifiedDiff } from '../src/domain/session-work/diff';
 
 // Keep the developer's own git config (signing, hooks, a diff tool) out of
@@ -95,6 +95,28 @@ test('branchExists knows local branches and refuses option-like names', async ()
   assert.equal(await git.branchExists(worktree, '--all'), false);
 });
 
+test('isPushed: a branch with an upstream, or one origin has, is pushed; a local-only one is not', async () => {
+  const remote = path.join(tmp, 'pushed-remote.git');
+  const clone = path.join(tmp, 'pushed-clone');
+  run(tmp, 'init', '-q', '--bare', '-b', 'main', remote);
+  fs.mkdirSync(clone);
+  run(clone, 'init', '-q', '-b', 'main');
+  run(clone, 'remote', 'add', 'origin', remote);
+  write(clone, 'a.txt', 'a\n');
+  commit(clone, 'Initial');
+
+  run(clone, 'checkout', '-q', '-b', 'tracked');
+  run(clone, 'push', '-q', '-u', 'origin', 'tracked');
+  run(clone, 'checkout', '-q', '-b', 'copied');
+  run(clone, 'push', '-q', 'origin', 'copied');
+  run(clone, 'checkout', '-q', '-b', 'local-only');
+
+  assert.equal(await git.isPushed(clone, 'tracked'), true, 'has an upstream');
+  assert.equal(await git.isPushed(clone, 'copied'), true, 'origin has it, without tracking');
+  assert.equal(await git.isPushed(clone, 'local-only'), false);
+  assert.equal(await git.isPushed(clone, '--all'), false);
+});
+
 test('currentBranch and commitSha read HEAD and refs, and answer null for what is not there', async () => {
   assert.equal(await git.currentBranch(worktree), 'feat/12-thing');
   assert.equal(await git.currentBranch(repo), 'main');
@@ -116,6 +138,17 @@ test('branchDiff is taken from the merge-base, so what main gained since is not 
     ['src/sub/feature.ts', 'added'],
   ]);
   assert.equal(await git.branchDiff(worktree, 'nope', 'main'), '');
+});
+
+test('branchLineStats counts the same lines as branchDiff, and zeros for what is not there', async () => {
+  assert.deepEqual(await git.branchLineStats(worktree, 'feat/12-thing', 'main'), { additions: 2, deletions: 0 });
+  assert.deepEqual(await git.branchLineStats(worktree, 'nope', 'main'), { additions: 0, deletions: 0 });
+  assert.deepEqual(await git.branchLineStats(worktree, '--all', 'main'), { additions: 0, deletions: 0 });
+});
+
+test('sumNumstat adds up numstat lines, binary files counting nothing', () => {
+  assert.deepEqual(sumNumstat('3\t1\ta.ts\n-\t-\timg.png\n10\t0\told => new\n'), { additions: 13, deletions: 1 });
+  assert.deepEqual(sumNumstat(''), { additions: 0, deletions: 0 });
 });
 
 test('generatedPaths reads linguist-generated from .gitattributes', async () => {
@@ -153,8 +186,37 @@ test('status and workingDiff cover staged, unstaged, renamed and untracked chang
   const untracked = files.find((f) => f.path === 'notes/untracked.md')!;
   assert.deepEqual(untracked.hunks[0].lines.map((l) => [l.kind, l.text]), [['add', '# new']]);
 
+  // a.txt +1, staged.txt +1, c.txt −1, notes/untracked.md +1; the rename changed nothing.
+  assert.deepEqual(await git.workingLineStats(dirty), { additions: 3, deletions: 1 });
+
   // Reading changed nothing: the file is still untracked.
   assert.match(run(dirty, 'status', '--porcelain', '--untracked-files=all'),/^\?\? notes\/untracked\.md$/m);
+});
+
+test('status and workingDiff leave out nested repositories, such as agent worktrees inside the checkout', async () => {
+  const host = path.join(tmp, 'host');
+  fs.mkdirSync(host);
+  run(host, 'init', '-q', '-b', 'main');
+  write(host, 'a.txt', 'one\n');
+  commit(host, 'Initial');
+  // An agent's worktree under the checkout, as Claude Code makes them, and a plain nested clone.
+  run(host, 'worktree', 'add', '-q', '-b', 'agent-1', path.join(host, '.claude', 'worktrees', 'agent-1'), 'main');
+  const nested = path.join(host, 'vendor', 'lib');
+  fs.mkdirSync(nested, { recursive: true });
+  run(nested, 'init', '-q', '-b', 'main');
+  write(nested, 'lib.txt', 'lib\n');
+  write(host, 'loose.txt', 'loose\n');
+
+  // git itself lists them, as directories.
+  assert.match(run(host, 'status', '--porcelain', '--untracked-files=all'), /^\?\? \.claude\/worktrees\/agent-1\/$/m);
+
+  assert.deepEqual(await git.status(host), [{ path: 'loose.txt', status: 'untracked' }]);
+  const files = parseUnifiedDiff(await git.workingDiff(host));
+  assert.deepEqual(files.map((f) => [f.path, f.status]), [['loose.txt', 'added']]);
+
+  fs.rmSync(path.join(host, 'loose.txt'));
+  assert.deepEqual(await git.status(host), [], 'a checkout with only nested repositories is clean');
+  assert.equal(await git.workingDiff(host), '');
 });
 
 test('workingDiff works in a repository with no commits yet', async () => {
@@ -196,7 +258,7 @@ test('watch fires once a commit lands in a linked worktree, and not after dispos
 });
 
 test('parseStatus reads porcelain v1 -z, including a rename\'s old path and names with spaces', () => {
-  assert.deepEqual(parseStatus('R  new name.txt\0old name.txt\0 M a.txt\0?? b c.txt\0AM d.txt\0 D e.txt\0!! ignored\0'), [
+  assert.deepEqual(parseStatus('R  new name.txt\0old name.txt\0 M a.txt\0?? b c.txt\0AM d.txt\0 D e.txt\0!! ignored\0?? .claude/worktrees/agent-1/\0'), [
     { path: 'new name.txt', oldPath: 'old name.txt', status: 'renamed' },
     { path: 'a.txt', status: 'modified' },
     { path: 'b c.txt', status: 'untracked' },

@@ -4,6 +4,8 @@
     "repository": {
       "pr12": {
         "number": 12,
+        "additions": 120,
+        "deletions": 14,
         "url": "https://github.com/acme/web/pull/12",
         "title": "Add the billing page",
         "state": "OPEN",

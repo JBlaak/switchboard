@@ -9,7 +9,7 @@
  * that was deleted, a repository with no commits yet — each is an ordinary
  * state of a session's footprint, and answers with the empty value.
  */
-import type { FileChange } from '../../domain/session-work/model';
+import type { FileChange, LineStats } from '../../domain/session-work/model';
 
 /** Something to stop. */
 export interface Disposable {
@@ -40,17 +40,26 @@ export interface GitWorkspace {
   /** Does `branch` exist as a local branch? */
   branchExists(worktree: string, branch: string): Promise<boolean>;
 
+  /** Has `branch` been pushed: does it have an upstream, or a branch of the same name on origin? */
+  isPushed(worktree: string, branch: string): Promise<boolean>;
+
   /** Commits on `branch` that `base` lacks (`ahead`), and the reverse (`behind`). Zeros when either is unknown. */
   aheadBehind(worktree: string, branch: string, base: string): Promise<{ ahead: number; behind: number }>;
 
   /** The unified diff of `branch` against its merge-base with `base`; '' when either is unknown. */
   branchDiff(worktree: string, branch: string, base: string): Promise<string>;
 
+  /** Lines `branch` adds and removes since its merge-base with `base`; zeros when either is unknown. */
+  branchLineStats(worktree: string, branch: string, base: string): Promise<LineStats>;
+
   /** The worktree's uncommitted changes, untracked files included. */
   status(worktree: string): Promise<FileChange[]>;
 
   /** Staged, unstaged and untracked changes as one unified diff against HEAD; untracked files appear as new files. */
   workingDiff(worktree: string): Promise<string>;
+
+  /** Lines the uncommitted changes add and remove, counted the way `workingDiff` shows them. */
+  workingLineStats(worktree: string): Promise<LineStats>;
 
   /**
    * The ones among `paths` that `.gitattributes` marks `linguist-generated`,

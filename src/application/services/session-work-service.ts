@@ -23,8 +23,8 @@ import { isRemoteProjectPath } from '../../domain/project/remote-target';
 import { repoWebUrl } from '../../domain/project/repo-url';
 import type { SessionPullRequest } from '../../domain/session/session';
 import type {
-  FileDiff, GitHubAvailability, IssueRef, IssueStatus, PullRequestStatus, SessionWorkItem, SessionWorkSnapshot,
-  WorkItem, WorkLocation,
+  FileDiff, GitHubAvailability, IssueRef, IssueStatus, LineStats, PullRequestStatus, SessionWorkItem,
+  SessionWorkDiff, SessionWorkSnapshot, WorkItem, WorkLocation,
 } from '../../domain/session-work/model';
 import type { Clock, TimerHandle, Timers } from '../ports/clock';
 import type { Disposable, GitWorkspace } from '../ports/git-workspace';
@@ -104,7 +104,12 @@ interface Page {
   closed: boolean;
 }
 
-const NOT_CHECKED_OUT = 'The branch is not checked out here';
+const NO_LINES: LineStats = { additions: 0, deletions: 0 };
+
+/** An item with no diff of its own (an issue), or a page that is not open. */
+const NO_DIFF: SessionWorkDiff = { files: [], source: null };
+
+const NOT_CHECKED_OUT ='The branch is not checked out here';
 
 export class SessionWorkService {
   #page: Page | null = null;
@@ -218,25 +223,25 @@ export class SessionWorkService {
    * head commit; uncommitted changes are read fresh each time. When no diff
    * can be had the item says why, and the answer is empty.
    */
-  async diff(sessionId: string, itemId: string): Promise<FileDiff[]> {
+  async diff(sessionId: string, itemId: string): Promise<SessionWorkDiff> {
     const page = this.#page;
-    if (!page || page.sessionId !== sessionId) return [];
+    if (!page || page.sessionId !== sessionId) return NO_DIFF;
     const item = page.items.get(itemId);
-    if (!item) return [];
+    if (!item) return NO_DIFF;
 
-    let result: { files: FileDiff[] } | { error: string };
+    let result: SessionWorkDiff;
     try {
       result = await this.#diffOf(page, item);
     } catch (err) {
-      result = { error: (err as Error).message || 'The diff could not be read' };
+      result = { files: [], source: null, error: (err as Error).message || 'The diff could not be read' };
     }
-    if (page.closed) return 'files' in result ? result.files : [];
+    if (page.closed) return result;
 
     const before = page.diffErrors.get(itemId);
-    if ('error' in result) page.diffErrors.set(itemId, result.error);
+    if (result.error) page.diffErrors.set(itemId, result.error);
     else page.diffErrors.delete(itemId);
     if (before !== page.diffErrors.get(itemId)) this.#publish(page);
-    return 'files' in result ? result.files : [];
+    return result;
   }
 
   // ── Building the snapshot ──
@@ -298,7 +303,9 @@ export class SessionWorkService {
     const changes: WorktreeChanges[] = [];
     for (const worktree of worktrees) {
       const [branch, files] = await Promise.all([git.currentBranch(worktree), git.status(worktree)]);
-      if (branch) changes.push({ worktree, branch, files });
+      if (!branch) continue;
+      const stats = files.length > 0 ? await git.workingLineStats(worktree) : NO_LINES;
+      changes.push({ worktree, branch, files, ...stats });
     }
     const branches: BranchFacts[] = [];
     for (const location of locations) {
@@ -307,7 +314,9 @@ export class SessionWorkService {
       const base = await this.#baseRef(page, location.worktree);
       const isDefault = location.branch === defaultBranch;
       const ahead = isDefault ? 0 : (await git.aheadBehind(location.worktree, location.branch, base)).ahead;
-      branches.push({ worktree: location.worktree, branch: location.branch, isDefault, ahead, base });
+      const stats = ahead > 0 ? await git.branchLineStats(location.worktree, location.branch, base) : NO_LINES;
+      const pushed = ahead > 0 && await git.isPushed(location.worktree, location.branch);
+      branches.push({ worktree: location.worktree, branch: location.branch, isDefault, ahead, base, ...stats, pushed });
     }
     if (page.closed) return;
 
@@ -350,6 +359,7 @@ export class SessionWorkService {
     page.lastKey = key;
     page.last = {
       sessionId: page.sessionId,
+      repository: page.repository ?? '',
       items,
       gh,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),
@@ -473,12 +483,13 @@ export class SessionWorkService {
 
   // ── Diffs ──
 
-  async #diffOf(page: Page, item: SessionWorkItem): Promise<{ files: FileDiff[] } | { error: string }> {
+  async #diffOf(page: Page, item: SessionWorkItem): Promise<SessionWorkDiff> {
     const { git, github } = this.deps;
-    if (item.kind === 'issue') return { files: [] };
+    const failed = (error: string): SessionWorkDiff => ({ files: [], source: null, error });
+    if (item.kind === 'issue') return NO_DIFF;
     if (item.kind === 'dirty') {
       const worktree = item.location.worktree;
-      return { files: await this.#parse(worktree, await git.workingDiff(worktree)) };
+      return { files: await this.#parse(worktree, await git.workingDiff(worktree)), source: 'local' };
     }
 
     if (item.diff.kind === 'local') {
@@ -486,40 +497,37 @@ export class SessionWorkService {
       const [headSha, baseSha] = await Promise.all([git.commitSha(worktree, head), git.commitSha(worktree, base)]);
       if (headSha) {
         const key = ['local', worktree, head, headSha, base, baseSha ?? ''].join('\0');
-        return { files: await this.#cached(page, key, async () => this.#parse(worktree, await git.branchDiff(worktree, head, base))) };
+        const files = await this.#cached(page, key, async () => this.#parse(worktree, await git.branchDiff(worktree, head, base)));
+        return { files, source: 'local' };
       }
       // The branch went between the snapshot and this request: a PR still has GitHub's copy.
-      if (item.kind === 'branch') return { error: 'The branch no longer exists' };
+      if (item.kind === 'branch') return failed('The branch no longer exists');
     }
-    if (item.kind !== 'pr') return { files: [] };
+    if (item.kind !== 'pr') return NO_DIFF;
 
     const pr = item.pr;
     const repository = pr.repository || page.repository || '';
     const availability = page.github?.availability ?? 'missing';
     if (availability !== 'ok') {
-      return {
-        error: NOT_CHECKED_OUT + (availability === 'missing'
-          ? ', and gh is not installed to fetch the diff'
-          : ', and gh is not signed in to fetch the diff'),
-      };
+      return failed(NOT_CHECKED_OUT + (availability === 'missing'
+        ? ', and gh is not installed to fetch the diff'
+        : ', and gh is not signed in to fetch the diff'));
     }
-    if (!repository) return { error: NOT_CHECKED_OUT + ', and the repository is unknown' };
+    if (!repository) return failed(NOT_CHECKED_OUT + ', and the repository is unknown');
 
     const fetch = async (): Promise<FileDiff[] | null> => {
       const text = await github.pullRequestDiff(repository, pr.number);
       return text === null ? null : this.#parse(page.projectRoot, text);
     };
-    if (!pr.headSha) {
-      const files = await fetch();
-      return files ? { files } : { error: 'GitHub did not send the diff' };
-    }
+    const fromGitHub = (files: FileDiff[] | null | undefined): SessionWorkDiff =>
+      files ? { files, source: 'github' } : failed('GitHub did not send the diff');
+    if (!pr.headSha) return fromGitHub(await fetch());
     const key = ['pr', repository, String(pr.number), pr.headSha].join('\0');
     const cached = page.diffCache.get(key);
-    if (cached) return { files: cached };
+    if (cached) return fromGitHub(cached);
     const files = await fetch();
-    if (!files) return { error: 'GitHub did not send the diff' };
-    if (!page.closed) page.diffCache.set(key, files);
-    return { files };
+    if (files && !page.closed) page.diffCache.set(key, files);
+    return fromGitHub(files);
   }
 
   async #cached(page: Page, key: string, read: () => Promise<FileDiff[]>): Promise<FileDiff[]> {

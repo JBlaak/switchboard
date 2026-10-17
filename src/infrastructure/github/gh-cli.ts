@@ -192,7 +192,7 @@ function validNumbers(numbers: readonly number[]): number[] {
 }
 
 const PULL_REQUEST_FIELDS = `
-  number url title state isDraft isCrossRepository mergeable
+  number url title state isDraft isCrossRepository mergeable additions deletions
   headRefName headRefOid baseRefName
   repository { defaultBranchRef { name } }
   headRef { compare(headRef: "HEAD") { aheadBy } }
@@ -247,6 +247,8 @@ function toPullRequest(node: any, repo: string, viewer: string): PullRequestStat
     headSha: node.headRefOid,
     baseRef: node.baseRefName,
   };
+  if (typeof node.additions === 'number') pr.additions = node.additions;
+  if (typeof node.deletions === 'number') pr.deletions = node.deletions;
 
   const behindBy = behindBase(node);
   if (behindBy !== undefined) pr.behindBy = behindBy;

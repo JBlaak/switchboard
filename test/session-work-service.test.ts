@@ -10,7 +10,7 @@ import type { GitHubAvailability, GitHubCli } from '../src/application/ports/git
 import type { TranscriptLocation } from '../src/application/ports/transcript-store';
 import type { Session, SessionPullRequest } from '../src/domain/session/session';
 import type {
-  FileChange, IssueRef, IssueStatus, PullRequestStatus, SessionWorkSnapshot,
+  FileChange, IssueRef, IssueStatus, LineStats, PullRequestStatus, SessionWorkSnapshot,
 } from '../src/domain/session-work/model';
 import { silentLog } from './support/fakes';
 
@@ -74,6 +74,11 @@ interface World {
   shas: Map<string, string>;
   branchDiff: string;
   workingDiff: string;
+  /** Line stats by branch, and of each worktree's uncommitted changes. */
+  /** Branches with an upstream or a copy on origin. */
+  pushed: Set<string>;
+  branchStats: Map<string, LineStats>;
+  workingStats: Map<string, LineStats>;
   generated: string[];
   locations: TranscriptLocation[];
   pullRequests: SessionPullRequest[];
@@ -95,6 +100,9 @@ function setup(overrides: Partial<World> = {}) {
     shas: new Map([['origin/main', 'base-1']]),
     branchDiff: DIFF,
     workingDiff: DIFF,
+    pushed: new Set(),
+    branchStats: new Map(),
+    workingStats: new Map(),
     generated: [],
     locations: [{ cwd: ROOT, branch: 'main', fromSubagent: false }],
     pullRequests: [],
@@ -125,10 +133,13 @@ function setup(overrides: Partial<World> = {}) {
       return world.branches.has(ref) ? 'sha-' + ref : null;
     },
     async branchExists(_worktree, branch) { return world.branches.has(branch); },
+    async isPushed(_worktree, branch) { return world.pushed.has(branch); },
     async aheadBehind(_worktree, branch) { return { ahead: world.ahead.get(branch) ?? 0, behind: 0 }; },
     async branchDiff() { count('branchDiff'); return world.branchDiff; },
     async status(worktree) { return world.status.get(worktree) ?? []; },
+    async branchLineStats(_worktree, branch) { return world.branchStats.get(branch) ?? { additions: 0, deletions: 0 }; },
     async workingDiff() { count('workingDiff'); return world.workingDiff; },
+    async workingLineStats(worktree) { return world.workingStats.get(worktree) ?? { additions: 0, deletions: 0 }; },
     async generatedPaths(_worktree, paths) { return paths.filter((p) => world.generated.includes(p)); },
     watch(worktree, onChange) {
       const watcher = { worktree, onChange, disposed: false };
@@ -201,6 +212,7 @@ test('nothing changed yet: an empty snapshot, pushed once, and not again when a 
   assert.deepEqual(first?.items, []);
   assert.equal(first?.gh, 'ok');
   assert.equal(first?.sessionId, 's1');
+  assert.equal(first?.repository, REPO, 'from the origin remote');
   assert.equal(snapshots.length, 1);
   assert.equal(typeof first?.updatedAt, 'string');
 
@@ -249,9 +261,17 @@ test('a subagent worktree is its own place, marked as the subagent\'s, and watch
     ahead: new Map([['feat/agent', 1]]),
   });
   world.status.set(AGENT, [{ path: 'new.ts', status: 'untracked' }]);
+  world.branchStats.set('feat/agent', { additions: 40, deletions: 7 });
+  world.pushed.add('feat/agent');
+  world.workingStats.set(AGENT, { additions: 3, deletions: 0 });
   const snapshot = await service.open('s1');
   const kinds = snapshot!.items.map((item) => item.kind);
   assert.deepEqual(kinds, ['branch', 'dirty']);
+  assert.deepEqual(snapshot!.items.map((item) => item.kind !== 'pr' && item.kind !== 'issue' && [item.additions, item.deletions]), [
+    [40, 7],
+    [3, 0],
+  ], 'each item counts its own lines');
+  assert.ok(snapshot!.items[0].kind === 'branch' && snapshot!.items[0].pushed, 'pushed');
   for (const item of snapshot!.items) {
     assert.ok(item.kind === 'branch' || item.kind === 'dirty');
     assert.deepEqual(item.location, { worktree: AGENT, branch: 'feat/agent', fromSubagent: true });
@@ -282,7 +302,9 @@ test('a PR whose branch was deleted takes its diff from gh, cached by its head c
   assert.ok(pr.kind === 'pr');
   assert.deepEqual(pr.diff, { kind: 'pull-request', repository: REPO, number: 9 });
 
-  const files = await service.diff('s1', pr.id);
+  const fromGitHub = await service.diff('s1', pr.id);
+  assert.equal(fromGitHub.source, 'github', 'the page says the branch is not checked out');
+  const files = fromGitHub.files;
   assert.deepEqual(files.map((file) => [file.path, file.additions, file.deletions]), [['a.txt', 1, 1]]);
   await service.diff('s1', pr.id);
   assert.equal(calls.pullRequestDiff, 1, 'the second ask is cached');
@@ -306,8 +328,9 @@ test('a PR whose branch is checked out diffs locally, cached by both commits, wi
   assert.ok(pr.kind === 'pr');
   assert.deepEqual(pr.diff, { kind: 'local', worktree: ROOT, base: 'origin/main', head: 'feat/3-x' });
 
-  const files = await service.diff('s1', pr.id);
-  assert.equal(files[0].collapsedReason, 'generated');
+  const local = await service.diff('s1', pr.id);
+  assert.equal(local.source, 'local');
+  assert.equal(local.files[0].collapsedReason, 'generated');
   await service.diff('s1', pr.id);
   assert.equal(calls.branchDiff, 1);
   assert.equal(calls.pullRequestDiff, undefined);
@@ -367,9 +390,11 @@ test('without gh the page has git-only data, says why, and never asks GitHub for
     assert.equal(calls.issues, undefined);
 
     // Its branch is not here and gh cannot fetch it: no diff, and the item says why.
-    assert.deepEqual(await service.diff('s1', pr.id), []);
+    const none = await service.diff('s1', pr.id);
+    assert.deepEqual([none.files, none.source], [[], null]);
+    assert.match(none.error ?? '', gh === 'missing' ? /not installed/ : /not signed in/);
     const marked = snapshots[snapshots.length - 1].items[0];
-    assert.match(marked.error ?? '', gh === 'missing' ? /not installed/ : /not signed in/);
+    assert.equal(marked.error, none.error);
   }
 });
 
@@ -457,7 +482,7 @@ test('close stops the watchers and the polling, and a late event does nothing', 
   watcher.onChange();
   assert.equal(timers.timeouts.size, 0);
   assert.equal(snapshots.length, 1);
-  assert.deepEqual(await service.diff('s1', 'anything'), []);
+  assert.deepEqual(await service.diff('s1', 'anything'), { files: [], source: null });
 });
 
 test('opening a second session closes the first; a stale close for the first is ignored', async () => {
