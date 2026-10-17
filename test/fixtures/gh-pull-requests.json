@@ -15,7 +15,7 @@
         "headRefName": "feat/12-billing",
         "headRefOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
         "baseRefName": "main",
-        "repository": { "defaultBranchRef": { "name": "main" } },
+        "repository": { "defaultBranchRef": { "name": "main" }, "viewerDefaultMergeMethod": "SQUASH", "mergeCommitAllowed": true, "squashMergeAllowed": true, "rebaseMergeAllowed": false },
         "headRef": { "compare": { "aheadBy": 3 } },
         "statusCheckRollup": {
           "contexts": {
@@ -142,7 +142,7 @@
         "headRefName": "fix/rounding-backport",
         "headRefOid": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
         "baseRefName": "release/2.1",
-        "repository": { "defaultBranchRef": { "name": "main" } },
+        "repository": { "defaultBranchRef": { "name": "main" }, "viewerDefaultMergeMethod": "REBASE", "mergeCommitAllowed": true, "squashMergeAllowed": true, "rebaseMergeAllowed": false },
         "headRef": { "compare": { "aheadBy": 40 } },
         "statusCheckRollup": null,
         "closingIssuesReferences": { "nodes": [] },

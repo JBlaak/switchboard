@@ -63,7 +63,7 @@ const merged: SessionWorkItem = {
 };
 
 function snapshot(items: SessionWorkItem[], sessionId = 's1'): SessionWorkSnapshot {
-  return { sessionId, repository: 'acme/api', items, gh: 'ok', updatedAt: new Date(AT).toISOString() };
+  return { sessionId, repository: 'acme/api', items, queued: 0, gh: 'ok', updatedAt: new Date(AT).toISOString() };
 }
 
 const opened = (sessionId = 's1'): RendererEvent => ({ type: 'sessionWorkOpened', sessionId, name: 'Fix login', at: AT });
@@ -74,7 +74,7 @@ test('session work: opening shows a skeleton for that session; the first snapsho
   const open = run(initialRendererState('s1'), opened());
   assert.deepStrictEqual(open.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
-    diffMode: 'unified', diffs: {},
+    diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null,
   });
   assert.strictEqual(open.sessionWork.now, AT);
 
@@ -126,7 +126,7 @@ test('session work: nothing is remembered once closed', () => {
     opened());
   assert.deepStrictEqual(used.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
-    diffMode: 'unified', diffs: {},
+    diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null,
   });
 });
 

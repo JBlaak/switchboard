@@ -61,12 +61,29 @@ const TABLES = [
     type TEXT NOT NULL,
     folder TEXT
   )`,
+  // The Session work queue: one row per action handed to a session, so a
+  // queued one survives a restart (A2). A new table needs no numbered
+  // migration: IF NOT EXISTS creates it on any database, whatever its version.
+  `CREATE TABLE IF NOT EXISTS session_actions (
+    id TEXT PRIMARY KEY,
+    session TEXT NOT NULL,
+    repository TEXT NOT NULL DEFAULT '',
+    item_key TEXT NOT NULL,
+    action TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    queued_at TEXT NOT NULL,
+    sent_at TEXT,
+    done_at TEXT
+  )`,
 ];
 
 const INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_session_cache_folder ON session_cache(folder)',
   'CREATE INDEX IF NOT EXISTS idx_session_cache_slug ON session_cache(slug)',
   'CREATE INDEX IF NOT EXISTS idx_search_map_type_id ON search_map(type, id)',
+  'CREATE INDEX IF NOT EXISTS idx_session_actions_phase ON session_actions(phase)',
 ];
 
 type Migration = (db: Database.Database, result: SchemaResult) => void;

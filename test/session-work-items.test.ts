@@ -161,7 +161,7 @@ test('issues: mentions and branch names, minus what a PR closes and the PRs them
 });
 
 test('the list is ordered: open PRs (needs-you first, then newest), branches, dirty, issues, done', () => {
-  const gaveUp: Activity = { action: 'fix-ci', phase: 'gave-up', origin: 'auto', attempt: 2, queuedAt: '2026-01-01T00:00:00Z' };
+  const gaveUp: Activity = { id: 'a1', action: 'fix-ci', phase: 'gave-up', origin: 'auto', attempt: 2, queuedAt: '2026-01-01T00:00:00Z' };
   const items = deriveWorkItems(facts({
     locations: [loc(AGENT, 'feat/x'), loc(MAIN, 'main')],
     pullRequests: [link(1), link(2), link(3), link(4), link(5), link(6)],
@@ -190,7 +190,7 @@ test('the list is ordered: open PRs (needs-you first, then newest), branches, di
 });
 
 test('activities attach to branches by their key', () => {
-  const opening: Activity = { action: 'open-pr', phase: 'sent', origin: 'manual', queuedAt: '2026-01-01T00:00:00Z' };
+  const opening: Activity = { id: 'a2', action: 'open-pr', phase: 'sent', origin: 'manual', queuedAt: '2026-01-01T00:00:00Z' };
   const items = deriveWorkItems(facts({
     locations: [loc(AGENT, 'feat/a')],
     branches: [{ worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 1, base: 'origin/main', additions: 0, deletions: 0, pushed: true }],

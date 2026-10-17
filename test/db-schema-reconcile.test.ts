@@ -157,3 +157,62 @@ test('a cache without pullRequests gains the column and is cleared for re-index'
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+function sessionActionColumns(dataDir: string): string[] {
+  const r = runInElectronNode(`
+    const Database = require('better-sqlite3');
+    const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'), { readonly: true });
+    console.log(JSON.stringify(db.prepare('PRAGMA table_info(session_actions)').all().map(c => c.name)));
+  `, dataDir);
+  assert.equal(r.status, 0, r.stderr);
+  return JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]');
+}
+
+const SESSION_ACTION_COLUMNS = [
+  'id', 'session', 'repository', 'item_key', 'action', 'origin', 'phase', 'prompt', 'queued_at', 'sent_at', 'done_at',
+];
+
+test('a fresh database gets the session_actions table', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-db-actions-'));
+  try {
+    assert.equal(openDatabase(dir).status, 0);
+    assert.deepEqual(sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The Session work queue must survive a restart, so its table is created on
+// every database, including one a parallel branch migrated past this one's
+// version: a numbered migration would be skipped there.
+test('an existing, foreign higher-version database gains session_actions, and keeps its rows across opens', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-db-actions-foreign-'));
+  try {
+    const seed = runInElectronNode(`
+      const Database = require('better-sqlite3');
+      const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'));
+      db.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
+      db.prepare("INSERT INTO settings (key, value) VALUES ('db_version', '9')").run();
+    `, dir);
+    assert.equal(seed.status, 0, seed.stderr);
+    assert.equal(openDatabase(dir).status, 0);
+    assert.deepEqual(sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
+
+    const queue = runInElectronNode(`
+      const Database = require('better-sqlite3');
+      const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'));
+      db.prepare(\`INSERT INTO session_actions (id, session, item_key, action, origin, phase, prompt, queued_at)
+        VALUES ('a1', 's1', 'pr:x', 'ship', 'manual', 'queued', 'Ship PR #1', '2026-01-01T00:00:00Z')\`).run();
+    `, dir);
+    assert.equal(queue.status, 0, queue.stderr);
+    assert.equal(openDatabase(dir).status, 0);
+    const count = runInElectronNode(`
+      const Database = require('better-sqlite3');
+      const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'), { readonly: true });
+      console.log(String(db.prepare('SELECT COUNT(*) AS n FROM session_actions').get().n));
+    `, dir);
+    assert.equal(count.stdout.trim().split('\n').pop(), '1', 'a queued action survives the next open');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

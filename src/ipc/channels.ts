@@ -66,6 +66,8 @@ export const INVOKE = {
   sessionWorkOpen: 'session-work:open',
   sessionWorkCanOpen: 'session-work:can-open',
   sessionWorkDiff: 'session-work:diff',
+  sessionWorkAction: 'session-work:action',
+  sessionWorkCancel: 'session-work:cancel',
 } as const;
 
 /** Renderer tells main; no answer expected. */

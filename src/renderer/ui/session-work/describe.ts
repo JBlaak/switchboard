@@ -5,8 +5,10 @@
  * what these answer.
  */
 import type {
-  FileDiff, GitHubAvailability, LineStats, SessionWorkItem, SessionWorkSnapshot,
+  Activity, FileDiff, GitHubAvailability, LineStats, SessionWorkItem, SessionWorkSnapshot, WorkAction,
 } from '../../../domain/session-work/model';
+import { availableActions, NOT_RUNNING_REASON, openThreadCount } from '../../../domain/session-work/actions';
+import { shipSteps, type ShipStepState } from '../../../domain/session-work/ship';
 
 /** The pastel fill and matching ink a pill is drawn in. */
 export type PillTone = 'green' | 'red' | 'amber' | 'grey' | 'lavender';
@@ -137,6 +139,185 @@ export function itemUrl(item: SessionWorkItem, repository: string): string | nul
     return repo ? `https://github.com/${repo}/issues/${item.issue.number}` : null;
   }
   return null;
+}
+
+// ── Actions ──
+
+/** One button in an item's action row. */
+export interface ActionButton {
+  /** The action it asks for, or `github` for Open on GitHub, which only links out. */
+  readonly id: WorkAction | 'github';
+  readonly label: string;
+  readonly tone: 'primary' | 'warn' | 'plain';
+  /** What it does, as its title while it can be pressed. */
+  readonly hint: string;
+  /** Why it cannot be pressed now, as its title; null when it can. */
+  readonly disabled: string | null;
+}
+
+/** What the buttons depend on besides the item. */
+export interface ActionState {
+  readonly gh: GitHubAvailability;
+  /** Is the session running? Nothing can be typed into it otherwise. */
+  readonly running: boolean;
+  /** An action asked of main and not answered yet, if any. */
+  readonly pending: { readonly itemId: string; readonly action: WorkAction } | null;
+}
+
+const HINTS: Record<WorkAction, string> = {
+  ship: 'Rebase if behind, wait for CI, merge, clean up',
+  rebase: 'The branch is behind its base',
+  'fix-ci': 'Hand the failing check to Claude',
+  'fix-comments': 'Hand every open thread to Claude',
+  'open-pr': 'Claude pushes the branch and opens a PR',
+};
+
+/** While its action is waiting or with Claude, a button says so instead. */
+const WORKING_LABELS: Partial<Record<WorkAction, string>> = {
+  ship: 'Shipping…',
+  'fix-ci': 'Fixing CI…',
+  'fix-comments': 'Fixing comments…',
+  'open-pr': 'Opening PR…',
+  rebase: 'Rebasing…',
+};
+
+/**
+ * The item's action buttons, in the order they are drawn (A3, A5): what the
+ * item offers, then Open on GitHub for a PR. A button whose action is queued
+ * or with Claude says so and cannot be pressed again, and while the session
+ * is not running none of them can.
+ */
+export function itemButtons(item: SessionWorkItem, state: ActionState): ActionButton[] {
+  const buttons: ActionButton[] = availableActions(item, state.gh).map((action) => {
+    const activity = item.kind === 'pr' || item.kind === 'branch' ? item.activity : null;
+    const working = activity?.action === action && (activity.phase === 'queued' || activity.phase === 'sent');
+    let disabled: string | null = null;
+    if (working) disabled = activity!.phase === 'queued' ? 'Queued: sends when the session is idle' : 'Claude is on it';
+    else if (!state.running) disabled = NOT_RUNNING_REASON;
+    else if (state.pending?.itemId === item.id) disabled = 'Handing it to Claude…';
+    return {
+      id: action,
+      label: working ? WORKING_LABELS[action] ?? actionLabel(item, action) : actionLabel(item, action),
+      tone: action === 'ship' || action === 'open-pr' ? 'primary' : action === 'fix-ci' ? 'warn' : 'plain',
+      hint: HINTS[action],
+      disabled,
+    };
+  });
+  if (item.kind === 'pr') {
+    buttons.push({ id: 'github', label: 'Open on GitHub', tone: 'plain', hint: item.pr.url, disabled: null });
+  }
+  return buttons;
+}
+
+function actionLabel(item: SessionWorkItem, action: WorkAction): string {
+  switch (action) {
+    case 'ship': return 'Ship it';
+    case 'rebase': return 'Rebase on origin/' + (item.kind === 'pr' && item.pr.baseRef ? item.pr.baseRef : 'main');
+    case 'fix-ci': return 'Fix CI';
+    case 'fix-comments': return `Fix comments (${item.kind === 'pr' ? openThreadCount(item.pr) : 0})`;
+    case 'open-pr': return 'Open PR';
+  }
+}
+
+/** The card above an item's diff while an action on it is waiting, with Claude, or given up. */
+export interface ActivityCard {
+  readonly tone: 'grey' | 'amber' | 'blue' | 'red';
+  readonly title: string;
+  readonly detail: string;
+  /** The stored action, for Cancel; only a queued one can be. */
+  readonly cancelId: string | null;
+  /** Whether "View in terminal" is offered: something is happening there. */
+  readonly viewInTerminal: boolean;
+  /** Ship it's four steps; empty for every other action. */
+  readonly steps: ReadonlyArray<{ readonly label: string; readonly state: ShipStepState }>;
+}
+
+/** What an action does, in a few words, for the card's title. */
+function actionPhrase(item: SessionWorkItem, action: WorkAction): string {
+  const ref = item.kind === 'pr' ? ' #' + item.pr.number : '';
+  switch (action) {
+    case 'ship': return 'ship' + ref;
+    case 'rebase': return 'rebase' + ref;
+    case 'fix-ci': return 'fix CI on' + ref;
+    case 'fix-comments': {
+      const n = item.kind === 'pr' ? openThreadCount(item.pr) : 0;
+      return `fix ${plural(n, 'review comment')}`;
+    }
+    case 'open-pr': return 'open a PR for ' + (item.kind === 'branch' ? item.location.branch : 'the branch');
+  }
+}
+
+/**
+ * The selected item's activity card (the States table): grey while it waits
+ * for the session, amber while Claude works on it, blue with its steps for a
+ * Ship it, red once Claude gave up. Null when nothing is going on.
+ */
+export function activityCard(item: SessionWorkItem, now: number): ActivityCard | null {
+  const activity: Activity | null = item.kind === 'pr' || item.kind === 'branch' ? item.activity : null;
+  if (!activity) return null;
+  const phrase = actionPhrase(item, activity.action);
+  const steps = activity.action === 'ship' && item.kind === 'pr'
+    ? shipSteps(item.pr, activity).map(step => ({ label: step.label, state: step.state }))
+    : [];
+  switch (activity.phase) {
+    case 'queued':
+      return {
+        tone: 'grey',
+        title: 'Queued: ' + phrase,
+        detail: 'Sends when the session finishes its current turn',
+        cancelId: activity.id,
+        viewInTerminal: false,
+        steps: [],
+      };
+    case 'sent': {
+      const since = activity.sentAt ? ' · ' + sentAgo(activity.sentAt, now) : '';
+      if (activity.action === 'ship' && item.kind === 'pr') {
+        return {
+          tone: 'blue',
+          title: 'Shipping #' + item.pr.number,
+          detail: 'Claude is working through it in the session' + since,
+          cancelId: null,
+          viewInTerminal: true,
+          steps,
+        };
+      }
+      return {
+        tone: 'amber',
+        title: 'Claude is on it: ' + phrase,
+        detail: 'Sent to the session' + since,
+        cancelId: null,
+        viewInTerminal: true,
+        steps: [],
+      };
+    }
+    case 'gave-up':
+      return {
+        tone: 'red',
+        title: 'Claude gave up: ' + phrase,
+        detail: 'It needs you now. Have a look in the terminal, or try again.',
+        cancelId: null,
+        viewInTerminal: true,
+        steps,
+      };
+    case 'done':
+      return null;
+  }
+}
+
+/** "started 2m ago", from when the prompt was typed in. */
+function sentAgo(sentAt: string, now: number): string {
+  const at = Date.parse(sentAt);
+  if (Number.isNaN(at)) return '';
+  const seconds = Math.max(0, Math.floor((now - at) / 1000));
+  if (seconds < 60) return 'started just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `started ${minutes}m ago`;
+  return `started ${Math.floor(minutes / 60)}h ago`;
+}
+
+/** The header's "Session busy · n queued" while actions wait for the session (A2); null when none do. */
+export function queueLabel(snapshot: SessionWorkSnapshot): string | null {
+  return snapshot.queued > 0 ? `Session busy · ${snapshot.queued} queued` : null;
 }
 
 // ── The diff ──

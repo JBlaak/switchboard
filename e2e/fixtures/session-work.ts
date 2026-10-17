@@ -13,7 +13,7 @@ import { FIXTURE_NOW } from '../support/fixture-home';
 import { S } from './standard';
 import { parseUnifiedDiff } from '../../src/domain/session-work/diff';
 import type { SessionWorkStub } from '../support/main-process';
-import type { SessionWorkItem, SessionWorkSnapshot } from '../../src/domain/session-work/model';
+import type { Activity, PullRequestStatus, SessionWorkItem, SessionWorkSnapshot } from '../../src/domain/session-work/model';
 
 const REPO = 'acme/api';
 const pr = (n: number) => `https://github.com/${REPO}/pull/${n}`;
@@ -92,12 +92,28 @@ const ITEMS: SessionWorkItem[] = [
 const UPDATED_AT = new Date(FIXTURE_NOW - 4000).toISOString();
 
 export const LOGIN_FIX_WORK: SessionWorkSnapshot = {
-  sessionId: S.loginFix, repository: REPO, items: ITEMS, gh: 'ok', updatedAt: UPDATED_AT,
+  sessionId: S.loginFix, repository: REPO, items: ITEMS, queued: 0, gh: 'ok', updatedAt: UPDATED_AT,
 };
 
 export const DASHBOARD_WORK: SessionWorkSnapshot = {
-  sessionId: S.chartsDarkMode, repository: 'acme/dashboard', items: [], gh: 'unauthenticated', updatedAt: UPDATED_AT,
+  sessionId: S.chartsDarkMode, repository: 'acme/dashboard', items: [], queued: 0, gh: 'unauthenticated', updatedAt: UPDATED_AT,
 };
+
+/** The first PR's item id. */
+export const FIRST_PR_ID = 'pr:' + pr(1320);
+
+/**
+ * The login-fix snapshot with an action on its first PR, as the queue would
+ * push it, and `queued` actions waiting in all. `facts` changes what GitHub
+ * says about that PR.
+ */
+export function loginFixWorkWith(
+  activity: Activity, { queued = 0, facts = {} }: { queued?: number; facts?: Partial<PullRequestStatus> } = {},
+): SessionWorkSnapshot {
+  const items = ITEMS.map((item): SessionWorkItem =>
+    item.id === FIRST_PR_ID && item.kind === 'pr' ? { ...item, pr: { ...item.pr, ...facts }, activity } : item);
+  return { ...LOGIN_FIX_WORK, items, queued };
+}
 
 /** How many lines the large file adds: enough that drawing it at once would block input. */
 export const BIG_FILE_LINES = 5000;

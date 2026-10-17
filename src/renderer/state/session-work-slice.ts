@@ -17,7 +17,7 @@
 import { movedEntry, withEntry, withoutEntry } from './records';
 import type { IdRecord } from './records';
 import type { RendererEvent } from './events';
-import type { FileDiff, SessionWorkDiff, SessionWorkSnapshot } from '../../domain/session-work/model';
+import type { FileDiff, SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
 
 export interface SessionWorkPage {
   readonly sessionId: string;
@@ -36,6 +36,10 @@ export interface SessionWorkPage {
    * the page is open, so going back to an item does not ask main again.
    */
   readonly diffs: IdRecord<ItemDiff>;
+  /** The action asked of main and not answered yet: its button does not take a second press. */
+  readonly pendingAction: { readonly itemId: string; readonly action: WorkAction } | null;
+  /** Why main refused the last action, shown on its item until the next one or another selection. */
+  readonly actionError: { readonly itemId: string; readonly message: string } | null;
 }
 
 export type DiffMode = 'unified' | 'split';
@@ -76,7 +80,7 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
         now: event.at,
         page: {
           sessionId: event.sessionId, name: event.name, snapshot: null, selectedItemId: null, doneExpanded: false,
-          diffMode: 'unified', diffs: {},
+          diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null,
         },
       };
     }
@@ -148,7 +152,20 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
       const { page } = state;
       if (!page?.snapshot || page.selectedItemId === event.itemId) return state;
       if (!selectableItems(page.snapshot).some(item => item.id === event.itemId)) return state;
-      return { ...state, page: { ...page, selectedItemId: event.itemId } };
+      return { ...state, page: { ...page, selectedItemId: event.itemId, actionError: null } };
+    }
+
+    case 'sessionWorkActionRequested': {
+      const { page } = state;
+      if (!page || page.sessionId !== event.sessionId || page.pendingAction) return state;
+      return { ...state, page: { ...page, pendingAction: { itemId: event.itemId, action: event.action }, actionError: null } };
+    }
+
+    case 'sessionWorkActionAnswered': {
+      const { page } = state;
+      if (!page || page.sessionId !== event.sessionId) return state;
+      const actionError = event.error === null ? null : { itemId: event.itemId, message: event.error };
+      return { ...state, page: { ...page, pendingAction: null, actionError } };
     }
 
     case 'sessionWorkDoneToggled':

@@ -130,6 +130,31 @@
   }
 }
 
+.sw-btn {
+  &.is-primary {
+    background: var(--sb-text-strong);
+    border-color: var(--sb-text-strong);
+    color: var(--sb-bg-base);
+
+    &:hover { background: var(--sb-text-max); color: var(--sb-bg-base); }
+  }
+
+  &.is-warn {
+    background: rgba(var(--sb-red-rgb), 0.12);
+    border-color: rgba(var(--sb-red-rgb), 0.35);
+    color: var(--sb-red);
+  }
+
+  &[aria-disabled='true'] {
+    opacity: 0.6;
+    cursor: default;
+
+    &:hover { border-color: var(--sb-line); color: var(--sb-text); }
+    &.is-primary:hover { border-color: var(--sb-text-strong); color: var(--sb-bg-base); background: var(--sb-text-strong); }
+    &.is-warn:hover { border-color: rgba(var(--sb-red-rgb), 0.35); color: var(--sb-red); }
+  }
+}
+
 .sw-kbd {
   font: 600 10px var(--sb-font-mono);
   color: var(--sb-text-muted);
@@ -360,6 +385,95 @@
   gap: 8px;
   padding: 18px 24px 14px;
   border-bottom: 1px solid var(--sb-line);
+}
+
+/* The title on the left, the action buttons on the right, wrapping under it when narrow. */
+.sw-detail-top {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  .sw-detail-title { flex: 1 1 360px; min-width: 0; }
+}
+
+.sw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---- The activity card ----
+   Grey while the action waits for the session, amber while Claude works on
+   it, blue for a Ship it with its steps, red once Claude gave up. */
+.sw-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+
+  &.is-grey  { background: var(--sb-bg-panel); box-shadow: inset 0 0 0 1px var(--sb-line); }
+  &.is-amber { background: var(--sb-sun); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sb-yellow) 25%, transparent); }
+  &.is-blue  { background: var(--sb-blue-tint); box-shadow: inset 0 0 0 1px rgba(var(--sb-blue-rgb), 0.25); }
+  &.is-red   { background: var(--sb-peach); box-shadow: inset 0 0 0 1px rgba(var(--sb-red-rgb), 0.35); }
+}
+
+.sw-activity-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.sw-activity-title {
+  font: 800 13.5px var(--sb-font-head);
+  color: var(--sb-text-strong);
+}
+
+.sw-activity-detail {
+  font-size: 12px;
+  color: var(--sb-text-muted);
+}
+
+.sw-activity-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.sw-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sw-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--sb-text-dim);
+}
+
+.sw-step-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font: 800 10px/1 var(--sb-font-head);
+
+  &.is-done    { background: rgba(var(--sb-green-rgb), 0.2); color: var(--sb-green-soft); }
+  &.is-running { background: color-mix(in srgb, var(--sb-yellow) 20%, transparent); color: var(--sb-yellow); }
+  &.is-todo    { background: rgba(var(--sb-overlay-rgb), 0.06); color: var(--sb-text-faint); }
+  &.is-failed  { background: rgba(var(--sb-red-rgb), 0.2); color: var(--sb-red); }
 }
 
 .sw-detail-title {

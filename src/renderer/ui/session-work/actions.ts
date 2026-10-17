@@ -15,6 +15,7 @@ import { selectedDiff, steppedFilePath, steppedItemId } from '../../state/sessio
 import type { DiffMode } from '../../state/session-work-slice';
 import { headerNameFor } from '../../features/sessions/terminal-header';
 import { openSession } from '../../features/sessions/session-actions';
+import type { WorkAction } from '../../../domain/session-work/model';
 
 /** Sessions whose eligibility is being asked right now, so a row asks once. */
 const asking = new Map<string, Promise<boolean>>();
@@ -140,6 +141,46 @@ export function toggleDoneItems(): void {
 /** Open a GitHub page in the browser (main only opens https URLs). */
 export function openOnGitHub(url: string): void {
   void window.api.openExternal(url);
+}
+
+// ── Handing an item to Claude ──
+
+/**
+ * An action button: ask main to queue the action for the page's session. The
+ * activity arrives with the next snapshot; a refusal shows on the item.
+ */
+export async function requestWorkAction(itemId: string, action: WorkAction): Promise<void> {
+  const page = getState().sessionWork.page;
+  if (!page || page.pendingAction) return;
+  const { sessionId } = page;
+  dispatch({ type: 'sessionWorkActionRequested', sessionId, itemId, action });
+  let error: string | null;
+  try {
+    const result = await window.api.sessionWorkAction({ sessionId, itemId, action });
+    error = result.ok ? null : result.reason;
+  } catch (err) {
+    error = (err as Error)?.message || 'The action could not be queued';
+  }
+  dispatch({ type: 'sessionWorkActionAnswered', sessionId, itemId, error });
+}
+
+/** Cancel on a queued action's card. One Claude already has cannot be taken back. */
+export async function cancelWorkAction(itemId: string, activityId: string): Promise<void> {
+  const page = getState().sessionWork.page;
+  if (!page) return;
+  let error: string | null = null;
+  try {
+    const result = await window.api.cancelSessionWorkAction(activityId);
+    if (!result.ok) error = result.reason;
+  } catch (err) {
+    error = (err as Error)?.message || 'The action could not be cancelled';
+  }
+  if (error) dispatch({ type: 'sessionWorkActionAnswered', sessionId: page.sessionId, itemId, error });
+}
+
+/** "View in terminal": back to the session's terminal, where Claude is working on it. */
+export function viewInTerminal(): void {
+  closeSessionWork();
 }
 
 // ── The diff ──

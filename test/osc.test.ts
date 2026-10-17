@@ -147,6 +147,7 @@ test('a 7501 turn: idle → working → blocked → idle → working → done', 
     osc7501('state=done:app=claude-code'),
   ]);
   assert.deepEqual(changes, [
+    { kind: 'ready' },
     { kind: 'busy', busy: true },
     { kind: 'needs-attention' },
     { kind: 'busy', busy: false },
@@ -175,7 +176,7 @@ test('child records do not move the session state', () => {
     osc7501('state=blocked:id=a2b4:kind=question'),
     osc7501('state=clear:id=a2b4'),
   ]);
-  assert.deepEqual(changes, []);
+  assert.deepEqual(changes, [{ kind: 'ready' }], 'the root said done: at its prompt, nothing else');
   assert.equal(tracker.busy, false);
 });
 
@@ -187,9 +188,27 @@ test('once 7501 has spoken, titles and OSC 9;4 no longer drive busy', () => {
     '\x1b]0;◐ Thinking\x07',
     '\x1b]9;4;3;\x07',
   ]);
-  assert.deepEqual(changes, []);
+  assert.deepEqual(changes, [{ kind: 'ready' }]);
   assert.equal(tracker.busy, false);
   assert.equal(tracker.speaksProgramStatus, true);
+});
+
+test('ready: said once, the first time the CLI is at its prompt without a turn before it', () => {
+  // A fresh session: not busy, but not ready for a prompt either until it shows one.
+  assert.equal(new CliBusyTracker().ready, false);
+
+  const viaTitle = run(['\x1b]0;✳ Claude Code\x07', '\x1b]0;✳ Claude Code\x07']);
+  assert.deepEqual(viaTitle.changes, [{ kind: 'ready' }]);
+  assert.equal(viaTitle.tracker.ready, true);
+
+  // A turn that starts before the first prompt: its end is the idle, and makes it ready.
+  const turnFirst = run([osc7501('state=working'), osc7501('state=idle'), osc7501('state=idle')]);
+  assert.deepEqual(turnFirst.changes, [{ kind: 'busy', busy: true }, { kind: 'busy', busy: false }]);
+  assert.equal(turnFirst.tracker.ready, true);
+
+  // Blocked is not a prompt that takes input.
+  const blocked = run([osc7501('state=blocked:kind=permission')]);
+  assert.equal(blocked.tracker.ready, false);
 });
 
 test('a session without 7501 falls back to the title, spinner and all', () => {

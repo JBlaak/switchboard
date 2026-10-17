@@ -76,6 +76,13 @@ test('a recorded response maps to PR statuses, leaving out the number GitHub doe
   assert.equal(merged.mergeable, 'unknown');
 });
 
+test('the merge method is your default where the repository allows it, else the first it allows', async () => {
+  const [open, draft, merged] = (await new GhCli({ run: scripted(partial) }).pullRequests('acme/web', [12, 13, 14]))!;
+  assert.equal(open.mergeMethod, 'squash', 'your default, allowed');
+  assert.equal(draft.mergeMethod, 'merge', 'your default (rebase) is not allowed: the first that is');
+  assert.equal(merged.mergeMethod, undefined, 'GitHub said nothing about it');
+});
+
 test('check runs and status contexts fold into the four states', async () => {
   const [pr] = (await new GhCli({ run: scripted(partial) }).pullRequests('acme/web', [12]))!;
   assert.deepEqual(pr.checks, [

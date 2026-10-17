@@ -15,6 +15,7 @@
  */
 import { ENTER_ALT_SCREEN, HIDE_CURSOR } from '../../domain/terminal/ansi';
 import { PROGRAM_STATUS_REPLY, parseTerminalEvents } from '../../domain/terminal/osc';
+import type { CliStateChange } from '../../domain/terminal/osc';
 import type { ActiveSession } from '../model/active-session';
 import type { SessionRegistry } from '../model/session-registry';
 import type { Timers } from '../ports/clock';
@@ -46,6 +47,12 @@ export interface RemoteObserver {
   markDisconnected(session: ActiveSession): void;
 }
 
+/** Something in main that follows a session's CLI state, as the renderer does. */
+export interface CliStateObserver {
+  /** `sessionId` is the id the session goes by now. */
+  cliStateChanged(sessionId: string, session: ActiveSession, change: CliStateChange): void;
+}
+
 export interface SessionLifecycleDeps {
   registry: SessionRegistry;
   terminals: TerminalGateway;
@@ -53,6 +60,8 @@ export interface SessionLifecycleDeps {
   remote: RemoteObserver;
   timers: Timers;
   log: Logger;
+  /** Told every busy/idle/ready change, after the renderer (the Session work queue). */
+  cliState?: CliStateObserver;
 }
 
 export class SessionLifecycle {
@@ -100,6 +109,7 @@ export class SessionLifecycle {
             const change = session.cliBusy.observe(event);
             if (change?.kind === 'busy') renderer.cliBusyState(currentId, change.busy);
             else if (change?.kind === 'needs-attention') renderer.sessionNeedsAttention(currentId);
+            if (change) this.deps.cliState?.cliStateChanged(currentId, session, change);
             break;
           }
           case 'notification':

@@ -26,6 +26,7 @@ import { SessionLauncher } from '../application/services/session-launcher';
 import { SessionLifecycle } from '../application/services/session-lifecycle';
 import { SessionTransitionDetector } from '../application/services/session-transition-detector';
 import { SessionWorkService } from '../application/services/session-work-service';
+import { SessionActionService } from '../application/services/session-action-service';
 import { SettingsService } from '../application/services/settings-service';
 import { UpdateService } from '../application/services/update-service';
 import { WeatherService } from '../application/services/weather-service';
@@ -41,11 +42,13 @@ import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
 import { NodePtyGateway } from '../infrastructure/pty/node-pty-gateway';
+import { PtySessionPrompter } from '../infrastructure/pty/session-prompter';
 import { SystemShellProfileProvider } from '../infrastructure/shell/shell-discovery';
 import { WorkerProjectScanner } from '../infrastructure/worker/worker-project-scanner';
 import { SqliteSearchIndex } from '../infrastructure/sqlite/search-index';
 import { SqliteSessionRepository } from '../infrastructure/sqlite/session-repository';
 import { SqliteSettingsStore } from '../infrastructure/sqlite/settings-store';
+import { SqliteActivityStore } from '../infrastructure/sqlite/activity-store';
 import { openDatabase } from '../infrastructure/sqlite/database';
 import { resolveClaudePaths } from '../infrastructure/fs/claude-paths';
 import { systemTimers } from '../infrastructure/system/timers';
@@ -92,6 +95,7 @@ export interface Container {
   readonly weather: WeatherService;
   readonly updates: UpdateService;
   readonly sessionWork: SessionWorkService;
+  readonly sessionActions: SessionActionService;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -136,6 +140,8 @@ export function buildContainer(): Container {
   const registry = new SessionRegistry();
   const terminals = new NodePtyGateway();
   const shells = new SystemShellProfileProvider();
+  // Types the Session work actions into a session, and hears it go idle from the lifecycle.
+  const prompter = new PtySessionPrompter({ sessions: registry, timers, log });
 
   // The lifecycle needs the supervisor to interpret a remote session's exit;
   // the supervisor needs the lifecycle to wire the PTY a reconnect produces.
@@ -146,6 +152,7 @@ export function buildContainer(): Container {
   });
   const lifecycle = new SessionLifecycle({
     registry, terminals, renderer, remote, timers, log,
+    cliState: prompter,
   });
   remote.attach(lifecycle);
 
@@ -212,6 +219,12 @@ export function buildContainer(): Container {
   // `gh` runs with the login shell's PATH: launched from the Finder, the app's
   // own PATH has no Homebrew in it. `git` is /usr/bin's and needs nothing.
   const toolEnv = loginShellEnv(() => shells.resolve(shellProfileId()).path, terminals.baseEnv, log);
+  const github = new GhCli({ run: async (args) => defaultGhRunner(await toolEnv())(args) });
+  // The page and its actions need each other: the actions read the page's
+  // items, and the page shows each item's action. Closed with `attach`.
+  const sessionActions = new SessionActionService({
+    prompter, store: new SqliteActivityStore(database.db), github, ids, clock, log,
+  });
   const sessionWork = new SessionWorkService({
     locate: (sessionId) => {
       const cached = repository.getCachedSession(sessionId);
@@ -224,10 +237,12 @@ export function buildContainer(): Container {
     },
     transcripts,
     git: new GitCliWorkspace(),
-    github: new GhCli({ run: async (args) => defaultGhRunner(await toolEnv())(args) }),
+    github,
     remotes: git,
+    activities: sessionActions,
     renderer, clock, timers, log,
   });
+  sessionActions.attach(sessionWork);
 
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
@@ -253,7 +268,7 @@ export function buildContainer(): Container {
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     questions, questionHook,
-    sessionIndex, projects, usage, schedules, weather, updates, sessionWork,
+    sessionIndex, projects, usage, schedules, weather, updates, sessionWork, sessionActions,
     renderer, dialogs, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,

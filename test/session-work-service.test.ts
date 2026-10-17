@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  GITHUB_REFRESH_MS, SessionWorkService, WATCH_DEBOUNCE_MS, type SessionWorkTarget,
+  GITHUB_REFRESH_MS, SHIP_REFRESH_MS, SessionWorkService, WATCH_DEBOUNCE_MS, type SessionWorkTarget,
 } from '../src/application/services/session-work-service';
+import type { SessionActivities } from '../src/application/services/session-action-service';
 import type { Timers } from '../src/application/ports/clock';
 import type { GitWorkspace } from '../src/application/ports/git-workspace';
 import type { GitHubAvailability, GitHubCli } from '../src/application/ports/github-cli';
@@ -88,6 +89,8 @@ interface World {
   prDiff: string | null;
   issues: IssueStatus[] | null;
   targets: Map<string, SessionWorkTarget>;
+  /** What the action service says about the session's items. */
+  activities: SessionActivities;
 }
 
 function setup(overrides: Partial<World> = {}) {
@@ -117,6 +120,7 @@ function setup(overrides: Partial<World> = {}) {
       ['remote', { folder: null, projectPath: 'ssh://me@host/dir' }],
       ['loose', { folder: 'f3', projectPath: '/tmp/not-a-repo' }],
     ]),
+    activities: { byItem: new Map(), queued: 0, shipping: false },
     ...overrides,
   };
 
@@ -171,6 +175,7 @@ function setup(overrides: Partial<World> = {}) {
     github,
     remotes: { async originUrl() { return 'git@github.com:o/app.git'; } },
     renderer: { sessionWorkSnapshot: (snapshot) => snapshots.push(snapshot) },
+    activities: { forSession: () => world.activities },
     clock: { now: () => (now += 1000) },
     timers,
     log: silentLog,
@@ -497,4 +502,72 @@ test('opening a second session closes the first; a stale close for the first is 
   service.close('s1');
   assert.equal(service.openSessionId, 's2');
   assert.ok(watchers.filter((w) => !first.includes(w)).every((w) => !w.disposed));
+});
+
+// ── Actions ──
+
+test('an action\'s phase is laid over its item, and pushed without asking git or gh again', async () => {
+  const { service, world, snapshots, calls, last } = setup({ pullRequests: [prLink(6)], prs: [prStatus(6)] });
+  await service.open('s1');
+  const id = `pr:https://github.com/${REPO}/pull/6`;
+  const before = last().items[0];
+  assert.equal(before.kind === 'pr' && before.activity, null);
+  assert.equal(last().queued, 0);
+  const asked = calls.pullRequests;
+
+  world.activities = {
+    byItem: new Map([[id, { id: 'a1', action: 'rebase', phase: 'queued', origin: 'manual', queuedAt: 'x' }]]),
+    queued: 1,
+    shipping: false,
+  };
+  service.activitiesChanged('s1');
+  assert.equal(snapshots.length, 2);
+  const item = last().items[0];
+  assert.equal(item.kind === 'pr' && item.activity?.phase, 'queued');
+  assert.equal(last().queued, 1);
+  assert.equal(calls.pullRequests, asked);
+
+  service.activitiesChanged('s1');
+  assert.equal(snapshots.length, 2, 'nothing changed, nothing pushed');
+});
+
+test('the open page answers for its items and its context, and nothing for another session', async () => {
+  const { service } = setup({ pullRequests: [prLink(6)], prs: [prStatus(6)] });
+  await service.open('s1');
+  const id = `pr:https://github.com/${REPO}/pull/6`;
+  assert.equal(service.item('s1', id)?.kind, 'pr');
+  assert.equal(service.item('s2', id), null);
+  assert.equal(service.item('s1', 'nope'), null);
+  assert.deepEqual(service.context('s1'), { repository: REPO, mainCheckout: ROOT, gh: 'ok' });
+  assert.equal(service.context('s2'), null);
+});
+
+test('while a Ship it is under way gh is asked every 20 s instead of every minute', async () => {
+  const { service, world, timers, calls } = setup({ pullRequests: [prLink(6)], prs: [prStatus(6)] });
+  await service.open('s1');
+  const cadence = () => [...timers.intervals.values()].map((interval) => interval.ms).sort((a, b) => a - b);
+  assert.deepEqual(cadence(), [GITHUB_REFRESH_MS]);
+
+  world.activities = {
+    byItem: new Map([[`pr:https://github.com/${REPO}/pull/6`, { id: 'a1', action: 'ship', phase: 'sent', origin: 'manual', queuedAt: 'x' }]]),
+    queued: 0,
+    shipping: true,
+  };
+  service.activitiesChanged('s1');
+  assert.deepEqual(cadence(), [SHIP_REFRESH_MS, GITHUB_REFRESH_MS]);
+
+  // Each 20 s tick asks; the minute's tick stands aside while it runs.
+  const asked = calls.pullRequests;
+  timers.fireIntervals();
+  await settle();
+  assert.equal(calls.pullRequests, asked + 1);
+
+  world.activities = { byItem: new Map(), queued: 0, shipping: false };
+  service.activitiesChanged('s1');
+  assert.deepEqual(cadence(), [GITHUB_REFRESH_MS]);
+
+  world.activities = { ...world.activities, shipping: true };
+  service.activitiesChanged('s1');
+  service.close('s1');
+  assert.equal(timers.intervals.size, 0, 'closing stops both polls');
 });

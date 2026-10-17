@@ -5,11 +5,10 @@
  * work, and Switchboard never writes to git itself. The texts are fixed in v1
  * (A6), so they live here, word for word, where a test can hold them still.
  */
-import type { ReviewThread } from './model';
+import type { MergeMethod, ReviewThread } from './model';
 import { MAX_AUTO_FIX_ATTEMPTS } from './auto-fix';
 
-/** How the repository merges a PR, as `gh pr merge` spells it. */
-export type MergeMethod = 'merge' | 'squash' | 'rebase';
+export type { MergeMethod };
 
 export interface ShipPrompt {
   action: 'ship';
@@ -79,10 +78,12 @@ export function renderPrompt(request: PromptRequest): string {
   switch (request.action) {
     case 'ship': {
       const { number: n, url, base, method, worktree, mainCheckout } = request;
+      // A PR worked on in the main checkout has no worktree of its own to remove.
+      const cleanup = worktree === mainCheckout ? '' : `remove the worktree ${worktree} if nothing else is in it, and `;
       return `Ship PR #${n} (${url}). If it is behind origin/${base}, rebase it onto origin/${base} and force-push with lease. ` +
         `Wait for CI with gh pr checks ${n} --watch. If a check fails, fix it and push, at most twice; if it still fails, stop and tell me. ` +
         `When everything is green, merge it with gh pr merge ${n} --${method} --delete-branch, ` +
-        `remove the worktree ${worktree} if nothing else is in it, and pull ${base} in ${mainCheckout}.`;
+        `${cleanup}pull ${base} in ${mainCheckout}.`;
     }
     case 'rebase': {
       const { number: n, headRef, base } = request;

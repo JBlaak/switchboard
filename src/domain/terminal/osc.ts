@@ -237,7 +237,13 @@ export function parseTerminalEvents(data: string): TerminalEvent[] {
  */
 export type CliStateChange =
   | { kind: 'busy'; busy: boolean }
-  | { kind: 'needs-attention' };
+  | { kind: 'needs-attention' }
+  /**
+   * The CLI is at its prompt for the first time, without a turn before it: a
+   * session that just started. Only said once; after a turn, the idle
+   * transition says it.
+   */
+  | { kind: 'ready' };
 
 /**
  * Whether the CLI is mid-turn, tracked across chunks.
@@ -267,9 +273,19 @@ export class CliBusyTracker {
   #speaksProgramStatus = false;
   /** The root record's current block, so a repeated report is not re-announced. */
   #blockedOn: string | null = null;
+  /** Set once the CLI has been seen at its prompt. */
+  #ready = false;
 
   get busy(): boolean {
     return this.#busy;
+  }
+
+  /**
+   * True once the CLI has been seen at its prompt, idle: it can take input.
+   * A session that just started is not busy, but not ready either.
+   */
+  get ready(): boolean {
+    return this.#ready;
   }
 
   /** True once an OSC 0 idle glyph has been seen — the CLI is at a prompt. */
@@ -295,7 +311,12 @@ export class CliBusyTracker {
       if (titleMeansIdle(event.text) && this.#busy) {
         this.#busy = false;
         this.#sawIdleTitle = true;
+        this.#ready = true;
         return { kind: 'busy', busy: false };
+      }
+      if (titleMeansIdle(event.text) && !this.#ready) {
+        this.#ready = true;
+        return { kind: 'ready' };
       }
       return null;
     }
@@ -331,8 +352,13 @@ export class CliBusyTracker {
     this.#blockedOn = null;
 
     const busy = report.state === 'working';
-    if (busy === this.#busy) return null;
+    if (busy === this.#busy) {
+      if (busy || this.#ready) return null;
+      this.#ready = true;
+      return { kind: 'ready' };
+    }
     this.#busy = busy;
+    if (!busy) this.#ready = true;
     return { kind: 'busy', busy };
   }
 }
