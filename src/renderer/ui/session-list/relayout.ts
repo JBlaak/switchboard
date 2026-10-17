@@ -16,6 +16,7 @@ import { sessionKeyIn } from '../../state/keys-slice';
 import { listItems } from '../../state/session-list-layout';
 import { view } from '../../state/session-store';
 import { isFilteringView } from '../../state/view-slice';
+import { projectsToRender } from '../../state/search-narrowing';
 import { localDateKey } from '../../lib/format';
 import type { Project } from '../../../domain/project/project';
 
@@ -39,7 +40,7 @@ export interface RelayoutOptions {
 export function relayoutSessionList({ resort = false }: RelayoutOptions = {}): void {
   const state = getState();
   const now = Date.now();
-  const { items, activeItemId } = listItems(projectsToRender(), {
+  const { items, activeItemId } = listItems(projectsForLayout(), {
     filters: state.view,
     running: state.view.activePtyIds,
     activeSessionId: state.view.activeSessionId,
@@ -59,35 +60,7 @@ export function relayoutSessionList({ resort = false }: RelayoutOptions = {}): v
   });
 }
 
-/**
- * Which projects this layout covers.
- *
- * A search ignores the archive filter — a session you searched for should be
- * findable whether or not it is archived — so it always lays out from the full
- * list, narrowed to the matches.
- */
-function projectsToRender(): Project[] {
-  const matchIds = view.searchMatchIds;
-  const source = matchIds !== null || view.showArchived
-    ? view.cachedAllProjects
-    : view.cachedProjects;
-
-  if (matchIds === null) return source;
-
-  const matchedPaths = view.searchMatchProjectPaths;
-  const narrowed: Project[] = [];
-  for (const project of source) {
-    const hasMatchingSessions = project.sessions.some(s => matchIds.has(s.sessionId));
-    const projectMatched = matchedPaths?.has(project.projectPath) ?? false;
-    if (!hasMatchingSessions && !projectMatched) continue;
-    // A project whose name matches contributes all of its sessions — there is
-    // no directory header left to stand in for the project itself.
-    narrowed.push({
-      ...project,
-      sessions: hasMatchingSessions
-        ? project.sessions.filter(s => matchIds.has(s.sessionId))
-        : project.sessions,
-    });
-  }
-  return narrowed;
+/** Which projects this layout covers: see `projectsToRender`. */
+function projectsForLayout(): readonly Project[] {
+  return projectsToRender(view.cachedProjects, view.cachedAllProjects, view);
 }
