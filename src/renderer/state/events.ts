@@ -139,7 +139,19 @@ export type LocalEvent =
   | { type: 'shellProfileResolved'; sessionId: string; name: string | null }
   /** Cmd+F in a terminal. */
   | { type: 'terminalSearchOpened'; sessionId: string }
-  | { type: 'terminalSearchClosed'; sessionId: string };
+  | { type: 'terminalSearchClosed'; sessionId: string }
+  // The Session work page; see `session-work-slice`.
+  /** The page opened for a session (its list a skeleton until the first snapshot); `at` stamps its clock. */
+  | { type: 'sessionWorkOpened'; sessionId: string; name: string; at: number }
+  /** The page for this session closed: Esc, Back, Cmd+G. A close for a page not open does nothing. */
+  | { type: 'sessionWorkClosed'; sessionId: string }
+  /** Main answered whether the page can open for this session (D14). */
+  | { type: 'sessionWorkEligibility'; sessionId: string; canOpen: boolean }
+  /** An item was clicked, or `j`/`k` moved to it. */
+  | { type: 'sessionWorkItemSelected'; itemId: string }
+  | { type: 'sessionWorkDoneToggled' }
+  /** The page's once-a-second clock, for "updated Xs ago". Only runs while it is open. */
+  | { type: 'sessionWorkTicked'; at: number };
 
 export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent;
 
