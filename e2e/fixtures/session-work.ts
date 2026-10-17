@@ -6,10 +6,12 @@
  * GitHub, so the page's two requests are stubbed (see `HostStubs.sessionWork`):
  * the login-fix session (the standard fixture's acme-api, with its three PRs)
  * and the dashboard one can open; everything else answers as a session outside
- * a repository does. The snapshot has one of every kind of item.
+ * a repository does. The snapshot has one of every kind of item, and the
+ * first and the merged PR have a diff.
  */
 import { FIXTURE_NOW } from '../support/fixture-home';
 import { S } from './standard';
+import { parseUnifiedDiff } from '../../src/domain/session-work/diff';
 import type { SessionWorkStub } from '../support/main-process';
 import type { SessionWorkItem, SessionWorkSnapshot } from '../../src/domain/session-work/model';
 
@@ -97,9 +99,68 @@ export const DASHBOARD_WORK: SessionWorkSnapshot = {
   sessionId: S.chartsDarkMode, repository: 'acme/dashboard', items: [], gh: 'unauthenticated', updatedAt: UPDATED_AT,
 };
 
+/** How many lines the large file adds: enough that drawing it at once would block input. */
+export const BIG_FILE_LINES = 5000;
+
+/**
+ * The first PR's diff, from its local branch: a change to read unified and
+ * split, a lock file and a large file that start collapsed, and a binary file.
+ */
+const LOGIN_LOOP_DIFF = [
+  'diff --git a/src/session.ts b/src/session.ts',
+  'index 1111111..2222222 100644',
+  '--- a/src/session.ts',
+  '+++ b/src/session.ts',
+  '@@ -10,6 +10,7 @@ export function refresh(session: Session) {',
+  '   const token = session.token;',
+  '-  if (!token) return redirect("/login");',
+  '-  return renew(token);',
+  '+  if (!token) return null;',
+  '+  const next = renew(token);',
+  '+  return next ?? null;',
+  '   // never loop back to /login from here',
+  ' }',
+  ' ',
+  'diff --git a/package-lock.json b/package-lock.json',
+  'index 3333333..4444444 100644',
+  '--- a/package-lock.json',
+  '+++ b/package-lock.json',
+  '@@ -1,3 +1,3 @@',
+  ' {',
+  '-  "version": "1.0.0",',
+  '+  "version": "1.0.1",',
+  ' }',
+  'diff --git a/assets/logo.png b/assets/logo.png',
+  'index 5555555..6666666 100644',
+  'Binary files a/assets/logo.png and b/assets/logo.png differ',
+  'diff --git a/src/fixtures/big.ts b/src/fixtures/big.ts',
+  'new file mode 100644',
+  'index 0000000..7777777',
+  '--- /dev/null',
+  '+++ b/src/fixtures/big.ts',
+  `@@ -0,0 +1,${BIG_FILE_LINES} @@`,
+  ...Array.from({ length: BIG_FILE_LINES }, (_, i) => `+export const line${i + 1} = ${i + 1};`),
+  '',
+].join('\n');
+
+/** The merged PR's diff, which came from `gh pr diff`: its branch is not checked out. */
+const REDIRECT_CHAIN_DIFF = [
+  'diff --git a/src/log.ts b/src/log.ts',
+  '--- a/src/log.ts',
+  '+++ b/src/log.ts',
+  '@@ -1 +1,2 @@',
+  ' export const log = console.log;',
+  '+export const chain: string[] = [];',
+  '',
+].join('\n');
+
 export function sessionWorkStub(): SessionWorkStub {
   return {
     canOpen: [S.loginFix, S.chartsDarkMode],
     snapshots: { [S.loginFix]: LOGIN_FIX_WORK, [S.chartsDarkMode]: DASHBOARD_WORK },
+    diffs: {
+      ['pr:' + pr(1320)]: { files: parseUnifiedDiff(LOGIN_LOOP_DIFF), source: 'local' },
+      ['pr:' + pr(1309)]: { files: parseUnifiedDiff(REDIRECT_CHAIN_DIFF), source: 'github' },
+    },
   };
 }

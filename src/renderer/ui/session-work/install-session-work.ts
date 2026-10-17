@@ -1,7 +1,7 @@
 /**
  * The Session work page's work outside React: swapping it in for the terminal
- * and back, telling main when it closes, and the clock its "updated Xs ago"
- * runs on.
+ * and back, telling main when it closes, the clock its "updated Xs ago" runs
+ * on, and fetching the selected item's diff.
  *
  * It follows the store rather than the actions, because the page closes for
  * reasons of its own slice (another session on screen, the screen cleared,
@@ -18,6 +18,8 @@ import { openSessions } from '../../state/session-store';
 import { placeholder, sessionWorkPanel, settingsViewer, terminalArea } from '../../lib/dom';
 import { showEmptyScreen } from '../../features/patch/patch';
 import { fitAndScroll } from '../../features/terminal/terminal-manager';
+import { diffToLoad } from '../../state/session-work-slice';
+import { loadDiff } from './actions';
 import type { RendererState } from '../../state/root';
 
 /** How often "updated Xs ago" moves on while the page is open. */
@@ -28,6 +30,14 @@ export function installSessionWork(): () => void {
   let tick: ReturnType<typeof setInterval> | null = null;
 
   const unsubscribe = store.subscribe((state, previous) => {
+    // The selected item's diff, asked for once it is selected and again when
+    // a snapshot changes it (D8: lazily, never the whole page's at once).
+    const page = state.sessionWork.page;
+    if (page && page !== previous.sessionWork.page) {
+      const wanted = diffToLoad(page);
+      if (wanted) void loadDiff(page.sessionId, wanted.itemId, wanted.key);
+    }
+
     const was = previous.sessionWork.page?.sessionId ?? null;
     const now = state.sessionWork.page?.sessionId ?? null;
     if (was === now) return;

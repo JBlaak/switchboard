@@ -1,13 +1,11 @@
 /**
  * The page's right column: the selected item's header — title and ref, its
- * pills, `branch → base`, the issues it closes — over the place its diff will
- * go (#75).
+ * pills, `branch → base`, the issues it closes — over its diff.
  */
 import type { JSX } from 'react';
 import { openOnGitHub } from './actions';
-import {
-  closedIssues, itemBranchLine, itemPills, itemRef, itemSummary, itemTitle,
-} from './describe';
+import { closedIssues, itemBranchLine, itemPills, itemRef, itemTitle } from './describe';
+import { DiffView } from './DiffView';
 import { Pills } from './Pills';
 import { selectedItem } from '../../state/session-work-slice';
 import type { SessionWorkPage } from '../../state/session-work-slice';
@@ -21,7 +19,6 @@ export function WorkDetail({ page }: { page: SessionWorkPage }): JSX.Element {
   const repository = page.snapshot.repository;
   const branch = itemBranchLine(item);
   const closes = closedIssues(item, repository);
-  const files = item.kind === 'dirty' ? item.files : [];
 
   return (
     <section className="sw-detail" aria-label="Selected work item">
@@ -58,14 +55,7 @@ export function WorkDetail({ page }: { page: SessionWorkPage }): JSX.Element {
         </div>
         {item.error && <div className="sw-item-error" role="status">{item.error}</div>}
       </div>
-      <div className="sw-diff-placeholder" data-testid="session-work-diff">
-        <div className="sw-diff-summary">{itemSummary(item)}</div>
-        {files.length > 0 && (
-          <ul className="sw-file-list">
-            {files.map(file => <li key={file.path}>{file.path}</li>)}
-          </ul>
-        )}
-      </div>
+      <DiffView page={page} item={item} />
     </section>
   );
 }

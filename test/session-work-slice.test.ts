@@ -74,6 +74,7 @@ test('session work: opening shows a skeleton for that session; the first snapsho
   const open = run(initialRendererState('s1'), opened());
   assert.deepStrictEqual(open.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
+    diffMode: 'unified', diffs: {},
   });
   assert.strictEqual(open.sessionWork.now, AT);
 
@@ -119,10 +120,13 @@ test('session work: nothing is remembered once closed', () => {
     { type: 'sessionWorkSnapshot', snapshot: snapshot([openPr, branch, merged]) },
     { type: 'sessionWorkItemSelected', itemId: branch.id },
     { type: 'sessionWorkDoneToggled' },
+    { type: 'sessionWorkDiffModeSet', mode: 'split' },
+    { type: 'sessionWorkDiffRequested', sessionId: 's1', itemId: branch.id, key: 'k' },
     { type: 'sessionWorkClosed', sessionId: 's1' },
     opened());
   assert.deepStrictEqual(used.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
+    diffMode: 'unified', diffs: {},
   });
 });
 

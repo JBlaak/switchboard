@@ -398,24 +398,220 @@
   color: var(--sb-red);
 }
 
-/* Where the diff goes (#75). */
-.sw-diff-placeholder {
-  margin: 16px 24px 32px;
-  padding: 14px 16px;
-  border: 1px solid var(--sb-line);
-  border-radius: var(--sb-r-row);
-  background: var(--sb-bg-panel);
+/* ---- The diff ----
+   A bar (what changed, where it came from, the layout toggle), then one card
+   per file. Lines sit on a grid: an empty first column for #77's
+   "+ comment", the line numbers, the code. Additions and deletions are
+   tinted from the green and red channels at a low alpha, hunk headers from
+   the blue, so both palettes carry them. */
+.sw-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 24px 32px;
 }
 
-.sw-diff-summary {
+.sw-diff-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
   font-size: 12.5px;
   color: var(--sb-text-muted);
 }
 
-.sw-file-list {
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
+.sw-diff-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+
+  .sw-counts { margin-left: 0; }
+}
+
+.sw-diff-note {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sb-sun);
+  color: var(--sb-yellow);
+  font: 700 11px var(--sb-font-head);
+}
+
+.sw-seg {
+  display: inline-flex;
+  margin-left: auto;
+  padding: 2px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-control);
+  background: var(--sb-bg-raised);
+}
+
+.sw-seg-btn {
+  appearance: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--sb-text-muted);
+  font: 700 11.5px var(--sb-font-head);
+  cursor: pointer;
+
+  &:hover { color: var(--sb-text-strong); }
+
+  &[aria-pressed='true'] {
+    background: var(--sb-mint);
+    color: var(--sb-accent);
+  }
+}
+
+.sw-diff-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  .sw-skeleton { height: 120px; }
+}
+
+.sw-diff-empty {
+  padding: 24px 0;
+  font-size: 12.5px;
+  color: var(--sb-text-muted);
+}
+
+.sw-file {
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-row);
+  background: var(--sb-bg-panel);
+  // Clip the rows to the rounded corners without clipping the sticky header.
+  overflow: clip;
+
+  &.is-focused { border-color: rgba(var(--sb-accent-rgb), 0.55); }
+}
+
+.sw-file-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 6px 12px;
+  background: var(--sb-bg-raised);
+  border-bottom: 1px solid var(--sb-line);
+  outline: none;
+
+  .sw-file.is-focused & { box-shadow: inset 3px 0 0 var(--sb-accent); }
+}
+
+.sw-file-path {
+  min-width: 0;
+  font: 600 12px var(--sb-font-mono);
+  color: var(--sb-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.sw-file-old { color: var(--sb-text-faint); }
+
+.sw-file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--sb-text-muted);
+
+  &.is-collapsed { justify-content: space-between; }
+}
+
+.sw-btn-small {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11.5px;
+}
+
+/* ---- Lines ---- */
+.sw-lines {
+  --sw-num-w: calc(var(--sw-digits, 3) * 1ch + 16px);
   font: 12px/20px var(--sb-font-mono);
   color: var(--sb-text);
+}
+
+.sw-chunk { content-visibility: auto; }
+
+.sw-dl {
+  display: grid;
+  grid-template-columns: 20px var(--sw-num-w) var(--sw-num-w) minmax(0, 1fr);
+  min-height: 20px;
+
+  &.is-add { background: rgba(var(--sb-green-rgb), 0.12); }
+  &.is-delete { background: rgba(var(--sb-red-rgb), 0.12); }
+
+  &.is-hunk {
+    grid-template-columns: 20px minmax(0, 1fr);
+    background: rgba(var(--sb-blue-rgb), 0.10);
+    color: var(--sb-blue);
+  }
+}
+
+.is-split .sw-dl.is-pair {
+  grid-template-columns: 20px var(--sw-num-w) minmax(0, 1fr) 20px var(--sw-num-w) minmax(0, 1fr);
+}
+
+/* The narrow first column, left empty for #77's "+ comment". */
+.sw-dl-act { min-width: 0; }
+
+.sw-dl-num {
+  padding: 0 8px;
+  text-align: right;
+  color: var(--sb-text-faint);
+  user-select: none;
+}
+
+.sw-dl-hunk {
+  padding: 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sw-dl-code {
+  display: flex;
+  min-width: 0;
+  padding-right: 12px;
+}
+
+.sw-dl-sign {
+  flex: 0 0 2ch;
+  color: var(--sb-text-faint);
+  user-select: none;
+}
+
+.sw-dl-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+}
+
+/* In the split view each side is tinted on its own cells. */
+.is-split {
+  .is-add { background: rgba(var(--sb-green-rgb), 0.12); }
+  .is-delete { background: rgba(var(--sb-red-rgb), 0.12); }
+  .is-empty { background: rgba(var(--sb-overlay-rgb), 0.03); }
+  .sw-dl.is-pair > :nth-child(4) { border-left: 1px solid var(--sb-line); }
+}
+
+.sw-lines-pending { background: rgba(var(--sb-overlay-rgb), 0.02); }
+
+/* ---- Syntax: highlight.js's classes, drawn in the palette's inks ---- */
+.sw-dl-text {
+  .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-doctag, .hljs-meta .hljs-keyword { color: var(--sb-lav-ink); }
+  .hljs-string, .hljs-regexp, .hljs-template-tag, .hljs-template-variable, .hljs-selector-attr { color: var(--sb-green-soft); }
+  .hljs-number, .hljs-symbol, .hljs-bullet, .hljs-variable.language_ { color: var(--sb-orange); }
+  .hljs-title, .hljs-title.function_, .hljs-title.class_, .hljs-section, .hljs-selector-id, .hljs-selector-class { color: var(--sb-blue); }
+  .hljs-type, .hljs-built_in, .hljs-attr, .hljs-attribute, .hljs-property, .hljs-params { color: var(--sb-yellow); }
+  .hljs-name, .hljs-tag { color: var(--sb-red); }
+  .hljs-comment, .hljs-quote, .hljs-meta { color: var(--sb-text-faint); font-style: italic; }
+  .hljs-emphasis { font-style: italic; }
+  .hljs-strong { font-weight: 700; }
 }

@@ -17,7 +17,7 @@
 import { movedEntry, withEntry, withoutEntry } from './records';
 import type { IdRecord } from './records';
 import type { RendererEvent } from './events';
-import type { SessionWorkSnapshot } from '../../domain/session-work/model';
+import type { FileDiff, SessionWorkDiff, SessionWorkSnapshot } from '../../domain/session-work/model';
 
 export interface SessionWorkPage {
   readonly sessionId: string;
@@ -29,6 +29,32 @@ export interface SessionWorkPage {
   readonly selectedItemId: string | null;
   /** Whether the Done group is expanded. Collapsed each time the page opens. */
   readonly doneExpanded: boolean;
+  /** How diffs are drawn. Unified each time the page opens (D7). */
+  readonly diffMode: DiffMode;
+  /**
+   * itemId → its diff, loaded lazily when the item is selected and kept while
+   * the page is open, so going back to an item does not ask main again.
+   */
+  readonly diffs: IdRecord<ItemDiff>;
+}
+
+export type DiffMode = 'unified' | 'split';
+
+/** One item's diff on the page, and what the reader did to it. */
+export interface ItemDiff {
+  /** The item it was asked for, as `diffKey` put it: an item that changed asks again. */
+  readonly key: string;
+  readonly phase: 'loading' | 'loaded' | 'failed';
+  /** Kept while it loads again, so a refresh does not blank the page. */
+  readonly files: readonly FileDiff[];
+  /** Where the files came from: `github` when the branch is not checked out here (D8). */
+  readonly source: SessionWorkDiff['source'];
+  /** Why there is no diff; null unless `failed`. */
+  readonly error: string | null;
+  /** Paths of files that started collapsed and were opened with "Show diff". */
+  readonly expanded: readonly string[];
+  /** The file `n`/`p` last moved to; null before either was pressed. */
+  readonly focusedPath: string | null;
 }
 
 export interface SessionWorkState {
@@ -48,7 +74,10 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
       return {
         ...state,
         now: event.at,
-        page: { sessionId: event.sessionId, name: event.name, snapshot: null, selectedItemId: null, doneExpanded: false },
+        page: {
+          sessionId: event.sessionId, name: event.name, snapshot: null, selectedItemId: null, doneExpanded: false,
+          diffMode: 'unified', diffs: {},
+        },
       };
     }
 
@@ -59,7 +88,60 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
       const { page } = state;
       if (!page || page.sessionId !== event.snapshot.sessionId) return state;
       const selectedItemId = keptSelection(event.snapshot, page.selectedItemId);
-      return { ...state, page: { ...page, snapshot: event.snapshot, selectedItemId } };
+      const diffs = keptDiffs(page.diffs, event.snapshot);
+      return { ...state, page: { ...page, snapshot: event.snapshot, selectedItemId, diffs } };
+    }
+
+    case 'sessionWorkDiffRequested': {
+      const { page } = state;
+      if (!page || page.sessionId !== event.sessionId) return state;
+      const before = page.diffs[event.itemId];
+      if (before?.key === event.key && before.phase === 'loading') return state;
+      const diff: ItemDiff = before
+        ? { ...before, key: event.key, phase: 'loading', error: null }
+        : { key: event.key, phase: 'loading', files: [], source: null, error: null, expanded: [], focusedPath: null };
+      return withDiff(state, page, event.itemId, diff);
+    }
+
+    case 'sessionWorkDiffLoaded':
+    case 'sessionWorkDiffFailed': {
+      const { page } = state;
+      if (!page || page.sessionId !== event.sessionId) return state;
+      const before = page.diffs[event.itemId];
+      // An answer for an item that has changed since, or was never asked for, is stale.
+      if (!before || before.key !== event.key) return state;
+      const error = event.type === 'sessionWorkDiffFailed' ? event.message : event.diff.error ?? null;
+      const files = event.type === 'sessionWorkDiffLoaded' ? event.diff.files : [];
+      const failed = error !== null && files.length === 0;
+      const diff: ItemDiff = {
+        ...before,
+        phase: failed ? 'failed' : 'loaded',
+        files,
+        source: event.type === 'sessionWorkDiffLoaded' ? event.diff.source : null,
+        error: failed ? error : null,
+        focusedPath: before.focusedPath && files.some(file => file.path === before.focusedPath) ? before.focusedPath : null,
+      };
+      return withDiff(state, page, event.itemId, diff);
+    }
+
+    case 'sessionWorkDiffModeSet':
+      return state.page && state.page.diffMode !== event.mode
+        ? { ...state, page: { ...state.page, diffMode: event.mode } }
+        : state;
+
+    case 'sessionWorkFileExpanded': {
+      const { page } = state;
+      const diff = page?.diffs[event.itemId];
+      if (!page || !diff || diff.expanded.includes(event.path)) return state;
+      return withDiff(state, page, event.itemId, { ...diff, expanded: [...diff.expanded, event.path] });
+    }
+
+    case 'sessionWorkFileFocused': {
+      const { page } = state;
+      const diff = page?.diffs[event.itemId];
+      if (!page || !diff || diff.focusedPath === event.path) return state;
+      if (!diff.files.some(file => file.path === event.path)) return state;
+      return withDiff(state, page, event.itemId, { ...diff, focusedPath: event.path });
     }
 
     case 'sessionWorkItemSelected': {
@@ -189,4 +271,70 @@ export function steppedItemId(page: SessionWorkPage, direction: 1 | -1): string 
 export function selectedItem(page: SessionWorkPage): Item | null {
   if (!page.snapshot || !page.selectedItemId) return null;
   return page.snapshot.items.find(item => item.id === page.selectedItemId) ?? null;
+}
+
+// ── Diffs ──
+
+function withDiff(state: SessionWorkState, page: SessionWorkPage, itemId: string, diff: ItemDiff): SessionWorkState {
+  return { ...state, page: { ...page, diffs: withEntry(page.diffs, itemId, diff) } };
+}
+
+/** The diffs a new snapshot leaves: those of items still in it. A changed item keeps its diff until asked again. */
+function keptDiffs(diffs: IdRecord<ItemDiff>, snapshot: SessionWorkSnapshot): IdRecord<ItemDiff> {
+  const ids = new Set(snapshot.items.map(item => item.id));
+  let kept = diffs;
+  for (const id of Object.keys(diffs)) {
+    if (!ids.has(id)) kept = withoutEntry(kept, id);
+  }
+  return kept;
+}
+
+/**
+ * What an item's diff depends on, as far as the snapshot can tell: its source
+ * and the commits or files behind it. An item whose key changes between
+ * snapshots has a new diff to fetch; '' for an item with no diff (an issue).
+ */
+export function diffKey(item: Item): string {
+  switch (item.kind) {
+    case 'pr':
+      return JSON.stringify(['pr', item.diff, item.pr.headSha ?? null, item.pr.additions ?? null, item.pr.deletions ?? null]);
+    case 'branch':
+      return JSON.stringify(['branch', item.diff, item.ahead, item.additions, item.deletions]);
+    case 'dirty':
+      return JSON.stringify(['dirty', item.files, item.additions, item.deletions]);
+    case 'issue':
+      return '';
+  }
+}
+
+/**
+ * The diff the page should ask main for now: the selected item's, when it has
+ * none yet or the item changed since it was asked for. Null when there is
+ * nothing to ask (no selection, an issue, or it is already on its way).
+ */
+export function diffToLoad(page: SessionWorkPage): { itemId: string; key: string } | null {
+  const item = selectedItem(page);
+  if (!item) return null;
+  const key = diffKey(item);
+  if (!key) return null;
+  const known = page.diffs[item.id];
+  return known?.key === key ? null : { itemId: item.id, key };
+}
+
+/** The selected item's diff, or null before it was asked for. */
+export function selectedDiff(page: SessionWorkPage): ItemDiff | null {
+  return page.selectedItemId ? page.diffs[page.selectedItemId] ?? null : null;
+}
+
+/**
+ * The file `n` (1) or `p` (-1) moves to in a diff: the first one when none has
+ * been moved to yet; null at either end, or when there are no files.
+ */
+export function steppedFilePath(diff: ItemDiff, direction: 1 | -1): string | null {
+  const paths = diff.files.map(file => file.path);
+  if (!paths.length) return null;
+  const at = diff.focusedPath ? paths.indexOf(diff.focusedPath) : -1;
+  if (at === -1) return paths[0];
+  const next = at + direction;
+  return next >= 0 && next < paths.length ? paths[next] : null;
 }

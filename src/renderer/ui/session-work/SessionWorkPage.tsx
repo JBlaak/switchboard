@@ -8,17 +8,21 @@
  * underneath the whole time.
  *
  * The page holds the focus while it is open, so its keys are heard here
- * rather than globally: Esc goes back to the terminal, `j` and `k` move
- * between items (D15).
+ * rather than globally (D15): Esc goes back to the terminal, `j` and `k` move
+ * between items, `n` and `p` between the files of its diff, and `u` switches
+ * the diff between unified and split. None of them is taken from a text field.
  */
 import { useLayoutEffect, useRef } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
 import { useStore } from '../use-store';
-import { closeSessionWork, stepWorkItem } from './actions';
+import { closeSessionWork, stepFile, stepWorkItem, toggleDiffMode } from './actions';
 import { WorkHeader } from './WorkHeader';
 import { WorkList } from './WorkList';
 import { WorkDetail } from './WorkDetail';
 import { githubBanner } from './describe';
+
+/** The single-letter keys the page answers (D15). */
+const PAGE_KEYS = new Set(['j', 'k', 'n', 'p', 'u']);
 
 export function SessionWorkPage(): JSX.Element | null {
   const page = useStore(state => state.sessionWork.page);
@@ -39,11 +43,26 @@ export function SessionWorkPage(): JSX.Element | null {
       closeSessionWork();
       return;
     }
+    if (e.shiftKey || (e.target as HTMLElement).matches('input, textarea, select, [contenteditable="true"]')) return;
+    if (!PAGE_KEYS.has(e.key)) return;
+    e.preventDefault();
+    // The page's keys are its own: a bare N here is "next file", not the
+    // global quick session (see `app/shortcuts`).
+    (e.nativeEvent as Event & { _handled?: boolean })._handled = true;
     if (e.key === 'j' || e.key === 'k') {
-      if ((e.target as HTMLElement).matches('input, textarea, select')) return;
-      e.preventDefault();
       const next = stepWorkItem(e.key === 'j' ? 1 : -1);
       if (next) root.current?.querySelector<HTMLElement>(`[data-item-id="${CSS.escape(next)}"]`)?.focus();
+    } else if (e.key === 'n' || e.key === 'p') {
+      const path = stepFile(e.key === 'n' ? 1 : -1);
+      const head = path
+        ? root.current?.querySelector<HTMLElement>(`.sw-file[data-path="${CSS.escape(path)}"] .sw-file-head`)
+        : null;
+      if (head) {
+        head.focus({ preventScroll: true });
+        head.parentElement!.scrollIntoView({ block: 'start' });
+      }
+    } else {
+      toggleDiffMode();
     }
   };
 

@@ -11,7 +11,8 @@ import { flushSync } from 'react-dom';
 import { dispatch, getState } from '../../state/app-store';
 import { hasEntry } from '../../state/records';
 import { sessionMap } from '../../state/session-store';
-import { steppedItemId } from '../../state/session-work-slice';
+import { selectedDiff, steppedFilePath, steppedItemId } from '../../state/session-work-slice';
+import type { DiffMode } from '../../state/session-work-slice';
 import { headerNameFor } from '../../features/sessions/terminal-header';
 import { openSession } from '../../features/sessions/session-actions';
 
@@ -139,4 +140,53 @@ export function toggleDoneItems(): void {
 /** Open a GitHub page in the browser (main only opens https URLs). */
 export function openOnGitHub(url: string): void {
   void window.api.openExternal(url);
+}
+
+// ── The diff ──
+
+/**
+ * Ask main for an item's diff and file the answer. Called from the store's
+ * follower (`install-session-work`) whenever `diffToLoad` names one, so the
+ * selected item's diff loads lazily, once per change.
+ */
+export async function loadDiff(sessionId: string, itemId: string, key: string): Promise<void> {
+  dispatch({ type: 'sessionWorkDiffRequested', sessionId, itemId, key });
+  try {
+    const diff = await window.api.getSessionWorkDiff({ sessionId, itemId });
+    dispatch({ type: 'sessionWorkDiffLoaded', sessionId, itemId, key, diff });
+  } catch (err) {
+    dispatch({
+      type: 'sessionWorkDiffFailed', sessionId, itemId, key,
+      message: (err as Error)?.message || 'The diff could not be read',
+    });
+  }
+}
+
+export function setDiffMode(mode: DiffMode): void {
+  dispatch({ type: 'sessionWorkDiffModeSet', mode });
+}
+
+/** `u`: unified ↔ split. */
+export function toggleDiffMode(): void {
+  const page = getState().sessionWork.page;
+  if (page) setDiffMode(page.diffMode === 'unified' ? 'split' : 'unified');
+}
+
+/** "Show diff" on a collapsed file. */
+export function expandFile(itemId: string, path: string): void {
+  dispatch({ type: 'sessionWorkFileExpanded', itemId, path });
+}
+
+/**
+ * `n` / `p`: move to the next or previous file of the selected item's diff and
+ * answer its path, for the caller to bring into view; null at either end.
+ */
+export function stepFile(direction: 1 | -1): string | null {
+  const page = getState().sessionWork.page;
+  const diff = page ? selectedDiff(page) : null;
+  const itemId = page?.selectedItemId;
+  if (!itemId || !diff) return null;
+  const path = steppedFilePath(diff, direction);
+  if (path) flushSync(() => dispatch({ type: 'sessionWorkFileFocused', itemId, path }));
+  return path;
 }

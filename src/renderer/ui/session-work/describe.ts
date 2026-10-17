@@ -4,7 +4,9 @@
  * Pure, so it is tested in node with the slice; the components only lay out
  * what these answer.
  */
-import type { GitHubAvailability, LineStats, SessionWorkItem, SessionWorkSnapshot } from '../../../domain/session-work/model';
+import type {
+  FileDiff, GitHubAvailability, LineStats, SessionWorkItem, SessionWorkSnapshot,
+} from '../../../domain/session-work/model';
 
 /** The pastel fill and matching ink a pill is drawn in. */
 export type PillTone = 'green' | 'red' | 'amber' | 'grey' | 'lavender';
@@ -137,16 +139,40 @@ export function itemUrl(item: SessionWorkItem, repository: string): string | nul
   return null;
 }
 
+// ── The diff ──
+
+/** "3 files changed" over a diff, with its added and removed lines in all. */
+export function diffSummary(files: readonly FileDiff[]): { label: string; stats: LineStats } {
+  let additions = 0;
+  let deletions = 0;
+  for (const file of files) {
+    additions += file.additions;
+    deletions += file.deletions;
+  }
+  return { label: plural(files.length, 'file') + ' changed', stats: { additions, deletions } };
+}
+
 /**
- * The line where the diff will go (#75), saying what changed as far as the
- * snapshot knows.
+ * The pill beside a file's path: how it changed, unless it was only modified.
+ * A new file in uncommitted changes that git does not track yet says so.
  */
-export function itemSummary(item: SessionWorkItem): string {
-  switch (item.kind) {
-    case 'pr': return item.location ? `Changes on ${item.location.branch}` : 'Changes from GitHub';
-    case 'branch': return plural(item.ahead, 'commit') + ' not in a pull request yet';
-    case 'dirty': return plural(item.files.length, 'file') + ' changed';
-    case 'issue': return '';
+export function fileStatusPill(file: FileDiff, untracked: boolean): Pill | null {
+  switch (file.status) {
+    case 'added': return untracked ? { label: 'Untracked', tone: 'amber' } : { label: 'New', tone: 'green' };
+    case 'deleted': return { label: 'Deleted', tone: 'red' };
+    case 'renamed': return { label: 'Renamed', tone: 'lavender' };
+    case 'copied': return { label: 'Copied', tone: 'lavender' };
+    case 'modified': return null;
+  }
+}
+
+/** Why a file starts collapsed (D7), in words; null when it does not. */
+export function collapsedText(file: FileDiff): string | null {
+  switch (file.collapsedReason) {
+    case 'lockfile': return 'Lock file';
+    case 'generated': return 'Generated file';
+    case 'large': return `Large diff · ${(file.additions + file.deletions).toLocaleString('en-US')} lines changed`;
+    default: return null;
   }
 }
 

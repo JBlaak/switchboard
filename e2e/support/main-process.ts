@@ -21,7 +21,7 @@
  */
 import type { ElectronApplication } from '@playwright/test';
 import { EVENT, INVOKE, SEND } from '../../src/ipc/channels';
-import type { SessionWorkSnapshot } from '../../src/domain/session-work/model';
+import type { SessionWorkDiff, SessionWorkSnapshot } from '../../src/domain/session-work/model';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
@@ -88,6 +88,8 @@ export interface HostStubs {
 export interface SessionWorkStub {
   canOpen: string[];
   snapshots: Record<string, SessionWorkSnapshot>;
+  /** What `getSessionWorkDiff` answers, by item id: an item not here has no changes, and 'never' never answers. */
+  diffs?: Record<string, SessionWorkDiff | 'never'>;
 }
 
 export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number } | 'fail';
@@ -149,6 +151,12 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
         const snapshot = work.snapshots[String(sessionId)];
         // No snapshot: main is still reading git, and the page stays a skeleton.
         return snapshot ?? new Promise(() => {});
+      });
+      ipcMain.removeHandler(channels.sessionWorkDiff);
+      ipcMain.handle(channels.sessionWorkDiff, (_event, request: { itemId: string }) => {
+        const diff = work.diffs?.[String(request?.itemId)];
+        if (diff === 'never') return new Promise(() => {});
+        return diff ?? { files: [], source: null };
       });
     }
 
