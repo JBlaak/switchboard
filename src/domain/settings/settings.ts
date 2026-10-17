@@ -73,11 +73,10 @@ export const SETTING_DEFAULTS = {
   permissionMode: null,
   dangerouslySkipPermissions: false,
   worktree: false,
-  worktreeName: '',
   chrome: false,
   preLaunchCmd: '',
   addDirs: '',
-  visibleSessionCount: 5,
+  visibleSessionCount: 25,
   sidebarWidth: 340,
   terminalTheme: 'switchboard',
   terminalFontFamily: '',
@@ -96,7 +95,6 @@ export interface EffectiveSettings {
   permissionMode?: string | null;
   dangerouslySkipPermissions?: boolean;
   worktree?: boolean;
-  worktreeName?: string;
   chrome?: boolean;
   preLaunchCmd?: string;
   addDirs?: string;

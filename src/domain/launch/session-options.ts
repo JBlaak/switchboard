@@ -39,7 +39,7 @@ export interface SessionOptions {
  * remembered to edit.
  */
 export const PERMISSION_MODES = [
-  { value: null, label: 'Default', desc: 'Prompt for all actions' },
+  { value: null, label: 'Default', desc: 'Whatever your own Claude settings say' },
   { value: 'auto', label: 'Auto', desc: 'Classifier allows routine work, stops for risky actions' },
   { value: 'acceptEdits', label: 'Accept Edits', desc: 'Auto-accept file edits, prompt for others' },
   { value: 'plan', label: 'Plan Mode', desc: 'Read-only exploration, no writes' },

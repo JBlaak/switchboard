@@ -25,10 +25,9 @@ export async function resolveDefaultSessionOptions(projectPath: string): Promise
     options.permissionMode = effective.permissionMode;
   }
 
-  if (effective.worktree) {
-    options.worktree = true;
-    if (effective.worktreeName) options.worktreeName = effective.worktreeName;
-  }
+  // A stored `worktreeName` is ignored: one fixed name put every new session in
+  // the same worktree, so the CLI names each one instead.
+  if (effective.worktree) options.worktree = true;
   if (effective.chrome) options.chrome = true;
   if (effective.preLaunchCmd) options.preLaunchCmd = effective.preLaunchCmd;
   if (effective.addDirs) options.addDirs = effective.addDirs;

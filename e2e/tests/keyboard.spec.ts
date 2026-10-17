@@ -32,7 +32,7 @@ function terminalInput(page: Page) {
 }
 
 const picker = (page: Page) => dialog(page, 'New Session');
-const globalSettings = (page: Page) => page.getByText('Global Settings — Global', { exact: true });
+const globalSettings = (page: Page) => page.getByText('Global Settings', { exact: true });
 
 /** Take the focus away from everything, so a key lands on the document itself. */
 async function blurAll(page: Page): Promise<void> {
