@@ -143,7 +143,9 @@ modules in `features/`:
   (`lib/dom`), because a terminal can only take focus or be refitted once its
   panel has a layout box, synchronously. The Session work page follows its
   slice (`ui/session-work/install-session-work`): it closes whenever another
-  session, the empty screen or the settings panel takes the main area.
+  session, the empty screen or the settings panel takes the main area. The
+  Plan view without a session (`ui/plan-page/install-plan-page`) is swapped
+  the same way, and closes for the same reasons and for the Session work page.
 - **Motion.** The springs, the list's reflow and the confetti
   (`lib/motion/*`), and the question panel's motion spec, play on the DOM
   React committed, measured before and after.

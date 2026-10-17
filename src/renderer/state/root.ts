@@ -18,6 +18,7 @@ import { initialRemoteState, rekeyRemote, remoteReducer } from './remote-slice';
 import { initialSessionListState, sessionListReducer } from './session-list-slice';
 import { initialSessionWorkState, rekeySessionWork, sessionWorkReducer } from './session-work-slice';
 import { initialPlanState, planReducer, rekeyPlan } from './plan-slice';
+import { initialPlanPageState, planPageReducer } from './plan-page-slice';
 import { initialSettingsState, settingsReducer } from './settings-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialToolbarState, toolbarReducer } from './toolbar-slice';
@@ -36,6 +37,7 @@ import type { RemoteState } from './remote-slice';
 import type { SessionListState } from './session-list-slice';
 import type { SessionWorkState } from './session-work-slice';
 import type { PlanState } from './plan-slice';
+import type { PlanPageState } from './plan-page-slice';
 import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
 import type { ToolbarState } from './toolbar-slice';
@@ -61,6 +63,7 @@ export interface RendererState {
   readonly terminal: TerminalState;
   readonly sessionWork: SessionWorkState;
   readonly plan: PlanState;
+  readonly planPage: PlanPageState;
   readonly ciStatus: CiStatusState;
 }
 
@@ -82,6 +85,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     terminal: initialTerminalState,
     sessionWork: initialSessionWorkState,
     plan: initialPlanState,
+    planPage: initialPlanPageState,
     ciStatus: initialCiStatusState,
   };
 }
@@ -108,11 +112,12 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const terminal = terminalReducer(state.terminal, event);
   const sessionWork = sessionWorkReducer(state.sessionWork, event);
   const plan = planReducer(state.plan, event);
+  const planPage = planPageReducer(state.planPage, event);
   const ciStatus = ciStatusReducer(state.ciStatus, event);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList, sessionWork, plan, ciStatus,
+    terminal, sessionList, sessionWork, plan, planPage, ciStatus,
   });
 }
 
@@ -150,6 +155,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     sessionList: state.sessionList,
     sessionWork: rekeySessionWork(state.sessionWork, oldId, newId),
     plan: rekeyPlan(state.plan, oldId, newId),
+    // Keyed by project and issue, not by session.
+    planPage: state.planPage,
     ciStatus: rekeyCiStatus(state.ciStatus, oldId, newId),
   });
 }

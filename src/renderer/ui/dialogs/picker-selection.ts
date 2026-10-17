@@ -39,3 +39,47 @@ export function nextSelection(selected: number, count: number, event: SelectionE
 export function sessionCountLabel(total: number, running: number): string {
   return running > 0 ? `${running} running` : `${total} session${total === 1 ? '' : 's'}`;
 }
+
+// ── Plans in the picker (F1) ──
+
+/** Which list the picker shows: the projects, or one project's plans. */
+export type PickerMode = 'projects' | 'plans';
+
+/**
+ * What a key in the filter does. `swallow` takes the key and does nothing
+ * (a Tab that has nowhere to go must not move focus out of the filter).
+ */
+export type PickerKeyAction = 'up' | 'down' | 'open' | 'into-plans' | 'back-to-projects' | 'swallow';
+
+/** The key, and where the caret sits in the filter, so ← and → still move it through typed text. */
+export interface PickerKey {
+  key: string;
+  shiftKey: boolean;
+  /** The caret is at the start of the filter with nothing selected (true when it is empty). */
+  caretAtStart: boolean;
+  /** The caret is at the end of the filter with nothing selected (true when it is empty). */
+  caretAtEnd: boolean;
+}
+
+/**
+ * What a key in the picker's filter does. → or Tab on a project that can have
+ * plans opens its plans; ← or Shift-Tab goes back. Null leaves the key to the
+ * input.
+ */
+export function pickerKeyAction(mode: PickerMode, key: PickerKey, canOpenPlans: boolean): PickerKeyAction | null {
+  switch (key.key) {
+    case 'ArrowDown': return 'down';
+    case 'ArrowUp': return 'up';
+    case 'Enter': return 'open';
+    case 'Tab':
+      if (mode === 'projects' && !key.shiftKey && canOpenPlans) return 'into-plans';
+      if (mode === 'plans' && key.shiftKey) return 'back-to-projects';
+      return 'swallow';
+    case 'ArrowRight':
+      return mode === 'projects' && canOpenPlans && key.caretAtEnd ? 'into-plans' : null;
+    case 'ArrowLeft':
+      return mode === 'plans' && key.caretAtStart ? 'back-to-projects' : null;
+    default:
+      return null;
+  }
+}

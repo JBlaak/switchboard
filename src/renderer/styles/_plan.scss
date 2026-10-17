@@ -395,6 +395,9 @@ a.pv-num:hover { color: var(--sb-accent); }
 .pv-arrow {
   --pv-arrow: var(--sb-switch-track);
 
+  /* The switch track is white on the light palette: the arrows take the faint ink there. */
+  @media (prefers-color-scheme: light) { --pv-arrow: var(--sb-text-faint); }
+
   .is-tracing & { --pv-arrow: var(--sb-line); }
   &.is-lit { --pv-arrow: var(--sb-accent); }
 }
