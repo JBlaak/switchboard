@@ -189,7 +189,7 @@ export async function openRemoteSession(page: Page, home: FixtureHome, label: st
 /**
  * Set SB_E2E_SKIP_SCREENSHOTS=1 to run every functional assertion but skip
  * the pixel comparisons — for a machine whose fonts or GPU render differently
- * from the one the baselines were made on (CI does this; see the README).
+ * from the one the baselines were made on (CI does this; see CONTRIBUTING.md).
  */
 export const SCREENSHOTS_SKIPPED = !!process.env.SB_E2E_SKIP_SCREENSHOTS;
 
