@@ -611,20 +611,13 @@
   margin-top: 3px;
 }
 
-/* Sidebar session items: project/time on the left, short session id on the
-   right, wrapping onto further lines rather than clipping anything. */
+/* Sidebar session items: project, time and the rest of the line, wrapping onto
+   further lines rather than clipping anything. */
 .session-item .session-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 8px;
-}
-
-.session-short-id {
-  font-family: var(--sb-font-mono);
-  color: var(--sb-text-ghost);
-  flex-shrink: 0;
-  margin-left: auto;
 }
 
 /* ---- Working agents badge ----

@@ -517,12 +517,11 @@ test.describe('row content', () => {
     await expect(sessionItem(page, S.loginFix).getByTitle(/^1 agent working/)).toHaveText('1');
   });
 
-  test('the project, the time and message count, and the short id', async ({ page }) => {
+  test('the project and the time and message count, but no short id', async ({ page }) => {
     const row = sessionItem(page, S.loginFix);
     await expect(row.getByText(P.acmeApi, { exact: true })).toBeVisible();
     await expect(row.getByText('20m ago · 12 msgs', { exact: true })).toBeVisible();
-    const shortId = row.getByText(S.loginFix.split('-')[0], { exact: true });
-    await expect(shortId).toHaveAttribute('title', S.loginFix);
+    await expect(row.getByText(S.loginFix.split('-')[0], { exact: true })).toHaveCount(0);
     await expect(sessionItem(page, S.parserExperiment).getByText('Development/old-parser ⎇ streaming', { exact: true }))
       .toBeVisible();
   });
