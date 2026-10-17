@@ -652,9 +652,9 @@
   }
 }
 
-/* The PRs a session opened. Quiet by default — one step brighter than the
-   time beside them, on the faintest overlay tint (white on dark, black on
-   light) — and only the accent on hover, where they turn out to be links. */
+/* The PRs a session opened. Quiet — one step brighter than the time beside
+   them, on the faintest overlay tint (white on dark, black on light). Display
+   only: the meta line around them is what opens the PRs (Session work). */
 .session-prs {
   display: inline-flex;
   flex-wrap: wrap;
@@ -668,19 +668,6 @@
   font-family: var(--sb-font-mono);
   color: var(--sb-text-faint);
   background: rgba(var(--sb-overlay-rgb), 0.06);
-}
-
-.session-pr {
-  cursor: pointer;
-
-  &:hover {
-    color: var(--sb-accent);
-    background: rgba(var(--sb-accent-rgb), 0.14);
-  }
-}
-
-.session-pr-more {
-  cursor: default;
 }
 
 /* ---- Session action buttons ---- */

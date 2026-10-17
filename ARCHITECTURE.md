@@ -137,10 +137,12 @@ modules in `features/`:
   owns everything inside: keys, fit, focus, drag-and-drop. Its output goes
   through `features/terminal/write-buffer`, which batches the byte stream
   into frames and holds back synchronised-update blocks.
-- **The main area's panel swap.** The empty screen, the terminal area and the
-  settings panel are shown and hidden by style (`lib/dom`), because a
-  terminal can only take focus or be refitted once its panel has a layout box,
-  synchronously.
+- **The main area's panel swap.** The empty screen, the terminal area, the
+  settings panel and the Session work page are shown and hidden by style
+  (`lib/dom`), because a terminal can only take focus or be refitted once its
+  panel has a layout box, synchronously. The Session work page follows its
+  slice (`ui/session-work/install-session-work`): it closes whenever another
+  session, the empty screen or the settings panel takes the main area.
 - **Motion.** The springs, the list's reflow and the confetti
   (`lib/motion/*`), and the question panel's motion spec, play on the DOM
   React committed, measured before and after.

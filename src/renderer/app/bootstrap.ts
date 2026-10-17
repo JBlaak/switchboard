@@ -30,6 +30,7 @@ import { countRunning } from '../ui/footer/actions';
 import { installFooter } from '../ui/footer/install-footer';
 import { installToolbar } from '../ui/toolbar/actions';
 import { installSessionList } from '../ui/session-list/install-session-list';
+import { installSessionWork } from '../ui/session-work/install-session-work';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -47,6 +48,7 @@ export function bootstrap(): void {
   installSessionList();
   installFooter();
   installQuestions();
+  installSessionWork();
   followColorSchemeInTerminals();
   installTerminalProbe();
   // The surfaces that have moved to React portal out of it.

@@ -12,6 +12,7 @@ import {
 } from '../features/sessions/sidebar-keyboard';
 import { openDialog } from '../ui/dialogs/actions';
 import { handleSessionNavKey } from '../features/terminal/session-nav';
+import { isSessionWorkKey, toggleSessionWork } from '../ui/session-work/actions';
 import {
   isBareQuickSessionKey, isQuickSessionKey, launchQuickSession,
 } from '../features/sessions/quick-session';
@@ -42,6 +43,12 @@ export function installShortcuts(): void {
     if (isArchiveSessionKey(e)) {
       e.preventDefault();
       archiveActiveSession();
+    }
+
+    // Cmd+G opens or closes the Session work page of the session on screen.
+    if (isSessionWorkKey(e)) {
+      e.preventDefault();
+      void toggleSessionWork();
     }
 
     // Cmd+N, or N outside the terminal and text fields, starts a quick session.

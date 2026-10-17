@@ -13,6 +13,7 @@ import { Dialogs } from './dialogs/Dialogs';
 import { Portal } from './Portal';
 import { Footer } from './footer/Footer';
 import { SettingsViewer } from './settings/SettingsViewer';
+import { SessionWorkPage } from './session-work/SessionWorkPage';
 import { EmptyScreenPatch } from './patch/EmptyScreenPatch';
 import { Questions } from './questions/Questions';
 import { QuestionsHeaderButton } from './questions/QuestionsHeaderButton';
@@ -29,6 +30,7 @@ export function Root(): JSX.Element | null {
       <Toolbar />
       <Dialogs />
       <Portal target="settings-viewer"><SettingsViewer /></Portal>
+      <Portal target="session-work"><SessionWorkPage /></Portal>
       <Portal target="sidebar-footer"><Footer /></Portal>
       <Portal target="terminals"><TerminalHost /></Portal>
       <Portal target="terminal-header-info"><TerminalHeaderInfo /></Portal>

@@ -21,6 +21,7 @@ import {
   openRow, resumeWithConfig, startRename, stopRow, toggleArchive, togglePin,
 } from './actions';
 import { isLeaving } from './leave';
+import { openSessionWorkFromRow } from '../session-work/actions';
 import type { JSX, MouseEvent } from 'react';
 import type { SessionListRow } from '../../state/session-list-layout';
 import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
@@ -127,7 +128,13 @@ export function SessionItem({ row, groupId }: SessionItemProps): JSX.Element {
                 {sessionDisplayName(session)}
               </div>
             )}
-          <RowMeta row={row} asking={live.asking} agents={live.agents} now={live.now} />
+          <RowMeta
+            row={row}
+            asking={live.asking}
+            agents={live.agents}
+            now={live.now}
+            onOpenWork={action(() => void openSessionWorkFromRow(sessionId))}
+          />
         </div>
         <RowActions
           row={row}

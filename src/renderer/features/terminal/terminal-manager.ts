@@ -32,6 +32,7 @@ import {
 } from '../sessions/sidebar-keyboard';
 import { openDialog } from '../../ui/dialogs/actions';
 import { isQuickSessionKey, launchQuickSession } from '../sessions/quick-session';
+import { isSessionWorkKey, toggleSessionWork } from '../../ui/session-work/actions';
 import { openSessions, sessionMap } from '../../state/session-store';
 import { remoteStatus } from '../../state/remote-status-store';
 import { TERMINAL_THEME } from '../terminal/terminal-themes';
@@ -131,6 +132,12 @@ function setupTerminalKeyBindings(
     // Cmd+E: archive this session
     if (isArchiveSessionKey(e)) {
       if (e.type === 'keydown') { e._handled = true; archiveActiveSession(); }
+      return false;
+    }
+
+    // Cmd+G: the Session work page, in this terminal's place
+    if (isSessionWorkKey(e)) {
+      if (e.type === 'keydown') { e._handled = true; e.preventDefault(); void toggleSessionWork(); }
       return false;
     }
 
