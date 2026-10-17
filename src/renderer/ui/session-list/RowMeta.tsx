@@ -1,7 +1,6 @@
 /**
  * A row's compact meta line: what it is asking, the project, the time and
- * message count, the agents badge and the PR chips on the left; the session's
- * first id segment on the right.
+ * message count, the agents badge and the PR chips.
  *
  * The whole line is one button that opens the session's Session work page
  * (D2), unless the page cannot open for it — a remote session, or one outside
@@ -42,21 +41,18 @@ export function RowMeta({ row, asking, agents, now, onOpenWork }: RowMetaProps):
   const canOpen = useCanOpenWork(session.sessionId, remote);
 
   const content = (
-    <>
-      <span className="session-meta-left">
-        {/* What the session is blocked on, ahead of everything else on the line. */}
-        {asking > 0 && (
-          <span className="session-asking">
-            {asking === 1 ? 'Asking 1 question' : `Asking ${asking} questions`}
-          </span>
-        )}
-        <ProjectLabel path={path} />
-        <span className="session-time">{sessionTimeLabel(session, now)}</span>
-        {agents.length > 0 && <AgentsBadge agents={agents} />}
-        <PullRequests row={row} />
-      </span>
-      <span className="session-short-id" title={session.sessionId}>{session.sessionId.split('-')[0]}</span>
-    </>
+    <span className="session-meta-left">
+      {/* What the session is blocked on, ahead of everything else on the line. */}
+      {asking > 0 && (
+        <span className="session-asking">
+          {asking === 1 ? 'Asking 1 question' : `Asking ${asking} questions`}
+        </span>
+      )}
+      <ProjectLabel path={path} />
+      <span className="session-time">{sessionTimeLabel(session, now)}</span>
+      {agents.length > 0 && <AgentsBadge agents={agents} />}
+      <PullRequests row={row} />
+    </span>
   );
 
   if (canOpen === true) {
