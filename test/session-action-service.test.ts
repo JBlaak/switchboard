@@ -40,6 +40,15 @@ const branchItem: SessionWorkItem = {
   pushed: false,
 };
 
+const dirtyItem: SessionWorkItem = {
+  id: 'dirty:' + ROOT + '\0main',
+  kind: 'dirty',
+  location: { worktree: ROOT, branch: 'main', fromSubagent: false },
+  files: [{ path: 'a.ts', status: 'modified' }],
+  activity: null,
+  additions: 1,
+  deletions: 0,
+};
 
 function setup({ items = [prItem(12), prItem(13), branchItem], store = new MemoryStore(), prompter = new FakePrompter() } = {}) {
   const page = new Map(items.map((item) => [item.id, item]));
@@ -95,6 +104,14 @@ test('Ship it merges with the repository\'s method', async () => {
   const { service, prompter } = setup({ items: [prItem(12, { mergeMethod: 'squash' })] });
   await service.request('s1', PR12, 'ship');
   assert.match(prompter.sent[0].prompt, /gh pr merge 12 --squash --delete-branch/);
+});
+
+test('uncommitted changes hand Claude a commit-and-PR prompt for their worktree', async () => {
+  const { service, prompter } = setup({ items: [dirtyItem] });
+  await service.request('s1', dirtyItem.id, 'create-pr');
+  assert.equal(prompter.sent[0].prompt,
+    `Commit the uncommitted changes in ${ROOT}, on a new branch if main is the default branch, ` +
+    "then push it and open a pull request for it, following this repo's commit and PR conventions.");
 });
 
 test('while the session is busy, actions queue in order and go in one per turn', async () => {

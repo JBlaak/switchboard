@@ -171,6 +171,7 @@ const HINTS: Record<WorkAction, string> = {
   'fix-ci': 'Hand the failing check to Claude',
   'fix-comments': 'Hand every open thread to Claude',
   'open-pr': 'Claude pushes the branch and opens a PR',
+  'create-pr': 'Claude commits the changes, pushes them and opens a PR',
 };
 
 /** While its action is waiting or with Claude, a button says so instead. */
@@ -179,6 +180,7 @@ const WORKING_LABELS: Partial<Record<WorkAction, string>> = {
   'fix-ci': 'Fixing CI…',
   'fix-comments': 'Fixing comments…',
   'open-pr': 'Opening PR…',
+  'create-pr': 'Creating PR…',
   rebase: 'Rebasing…',
 };
 
@@ -190,7 +192,7 @@ const WORKING_LABELS: Partial<Record<WorkAction, string>> = {
  */
 export function itemButtons(item: SessionWorkItem, state: ActionState): ActionButton[] {
   const buttons: ActionButton[] = availableActions(item, state.gh).map((action) => {
-    const activity = item.kind === 'pr' || item.kind === 'branch' ? item.activity : null;
+    const activity = item.kind === 'issue' ? null : item.activity;
     const working = activity?.action === action && (activity.phase === 'queued' || activity.phase === 'sent');
     let disabled: string | null = null;
     if (working) disabled = activity!.phase === 'queued' ? 'Queued: sends when the session is idle' : 'Claude is on it';
@@ -199,7 +201,7 @@ export function itemButtons(item: SessionWorkItem, state: ActionState): ActionBu
     return {
       id: action,
       label: working ? WORKING_LABELS[action] ?? actionLabel(item, action) : actionLabel(item, action),
-      tone: action === 'ship' || action === 'open-pr' ? 'primary' : action === 'fix-ci' ? 'warn' : 'plain',
+      tone: action === 'ship' || action === 'open-pr' || action === 'create-pr' ? 'primary' : action === 'fix-ci' ? 'warn' : 'plain',
       hint: HINTS[action],
       disabled,
     };
@@ -217,6 +219,7 @@ function actionLabel(item: SessionWorkItem, action: WorkAction): string {
     case 'fix-ci': return 'Fix CI';
     case 'fix-comments': return `Fix comments (${item.kind === 'pr' ? openThreadCount(item.pr) : 0})`;
     case 'open-pr': return 'Open PR';
+    case 'create-pr': return 'Create a pull request';
   }
 }
 
@@ -247,6 +250,7 @@ function actionPhrase(item: SessionWorkItem, action: WorkAction, threadIds?: rea
       return `fix ${plural(n, 'review comment')}`;
     }
     case 'open-pr': return 'open a PR for ' + (item.kind === 'branch' ? item.location.branch : 'the branch');
+    case 'create-pr': return 'create a PR for the uncommitted changes';
   }
 }
 
@@ -256,7 +260,7 @@ function actionPhrase(item: SessionWorkItem, action: WorkAction, threadIds?: rea
  * Ship it, red once Claude gave up. Null when nothing is going on.
  */
 export function activityCard(item: SessionWorkItem, now: number): ActivityCard | null {
-  const activity: Activity | null = item.kind === 'pr' || item.kind === 'branch' ? item.activity : null;
+  const activity: Activity | null = item.kind === 'issue' ? null : item.activity;
   if (!activity) return null;
   const phrase = actionPhrase(item, activity.action, activity.threadIds);
   const steps = activity.action === 'ship' && item.kind === 'pr'

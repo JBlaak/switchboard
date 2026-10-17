@@ -151,7 +151,7 @@ test('a dirty worktree on a branch the transcripts never named still shows', () 
     locations: [loc(AGENT, 'feat/a', true)],
     changes: [{ worktree: AGENT, branch: 'feat/c', files: [{ path: 'x', status: 'added' }], additions: 1, deletions: 0 }],
   }));
-  assert.deepEqual(items, [{ kind: 'dirty', location: loc(AGENT, 'feat/c', true), files: [{ path: 'x', status: 'added' }], additions: 1, deletions: 0 }]);
+  assert.deepEqual(items, [{ kind: 'dirty', location: loc(AGENT, 'feat/c', true), files: [{ path: 'x', status: 'added' }], activity: null, additions: 1, deletions: 0 }]);
 });
 
 test('issues: mentions and branch names, minus what a PR closes and the PRs themselves', () => {

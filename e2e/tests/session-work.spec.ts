@@ -225,7 +225,7 @@ test.describe('actions', () => {
     await workPage(page).getByRole('navigation', { name: 'Work items' }).getByRole('button', { name }).click();
   }
 
-  test('each item offers what it needs: a PR its fixes, a branch Open PR, uncommitted changes nothing', async ({ page, home }) => {
+  test('each item offers what it needs: a PR its fixes, a branch Open PR, uncommitted changes Create a pull request', async ({ page, home }) => {
     await openLoginFixWork(page, home);
     // Behind main, CI passing.
     await expect(actions(page).getByRole('button')).toHaveText(['Ship it', 'Rebase on origin/main', 'Open on GitHub']);
@@ -235,7 +235,7 @@ test.describe('actions', () => {
     await select(page, /spike\/cookie-store/);
     await expect(actions(page).getByRole('button')).toHaveText(['Open PR']);
     await select(page, /Uncommitted changes in acme-api/);
-    await expect(actions(page)).toHaveCount(0);
+    await expect(actions(page).getByRole('button')).toHaveText(['Create a pull request']);
   });
 
   test('a button hands its item to main for the session on screen; a refusal shows on the item', async ({ page, home, app }) => {

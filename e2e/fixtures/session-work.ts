@@ -61,6 +61,7 @@ const ITEMS: SessionWorkItem[] = [
     kind: 'dirty',
     location: { worktree: '/w/acme-api', branch: 'fix/login-loop', fromSubagent: false },
     files: [{ path: 'src/session.ts', status: 'modified' }, { path: 'src/cookie.ts', status: 'untracked' }],
+    activity: null,
     additions: 18,
     deletions: 4,
   },

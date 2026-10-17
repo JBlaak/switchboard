@@ -26,6 +26,7 @@ const dirty: SessionWorkItem = {
   kind: 'dirty',
   location: { worktree: '/w', branch: 'main', fromSubagent: false },
   files: [{ path: 'a.ts', status: 'modified' }],
+  activity: null,
   additions: 1,
   deletions: 1,
 };

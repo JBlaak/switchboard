@@ -42,6 +42,7 @@ const dirty: SessionWorkItem = {
   kind: 'dirty',
   location: { worktree: '/w/api', branch: 'fix/login', fromSubagent: false },
   files: [{ path: 'a.ts', status: 'modified' }],
+  activity: null,
   additions: 1,
   deletions: 1,
 };
@@ -70,11 +71,20 @@ test('a PR offers Ship it, then only what it needs, then Open on GitHub', () => 
   assert.deepEqual(labels(pr({ behindBy: 1, baseRef: 'develop' })), ['Ship it', 'Rebase on origin/develop', 'Open on GitHub']);
 });
 
-test('a merged PR only links out; a branch offers Open PR; uncommitted changes offer nothing', () => {
+test('a merged PR only links out; a branch offers Open PR; uncommitted changes offer Create a pull request', () => {
   assert.deepEqual(labels(pr({ state: 'merged' })), ['Open on GitHub']);
   assert.deepEqual(labels(branch), ['Open PR']);
-  assert.deepEqual(labels(dirty), []);
-  assert.deepEqual(availableActions(dirty, 'ok'), []);
+  assert.deepEqual(labels(dirty), ['Create a pull request']);
+  assert.deepEqual(availableActions(dirty, 'ok'), ['create-pr']);
+  assert.deepEqual(availableActions(dirty, 'missing'), []);
+});
+
+test('Create a pull request says so while Claude is on it', () => {
+  const creating: SessionWorkItem = {
+    ...dirty, activity: { id: 'a1', action: 'create-pr', phase: 'sent', origin: 'manual', queuedAt: '2026-01-01T00:00:00Z' },
+  };
+  assert.deepEqual(itemButtons(creating, RUNNING).map((b) => [b.label, b.tone, b.disabled]),
+    [['Creating PR…', 'primary', 'Claude is on it']]);
 });
 
 test('without gh no action is offered (D9)', () => {

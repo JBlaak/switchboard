@@ -134,7 +134,7 @@ export interface PullRequestStatus {
 }
 
 /** The actions a work item can hand to Claude, each one a prompt (A1). */
-export type WorkAction = 'ship' | 'rebase' | 'fix-ci' | 'fix-comments' | 'open-pr';
+export type WorkAction = 'ship' | 'rebase' | 'fix-ci' | 'fix-comments' | 'open-pr' | 'create-pr';
 
 /** An action on a work item and how far it got. */
 export interface Activity {
@@ -220,7 +220,7 @@ export type WorkItem = { error?: string } & (
     /** Has an upstream, or a branch of the same name on origin: someone else could see it. */
     pushed: boolean;
   } & LineStats)
-  | ({ kind: 'dirty'; location: WorkLocation; files: FileChange[] } & LineStats)
+  | ({ kind: 'dirty'; location: WorkLocation; files: FileChange[]; activity: Activity | null } & LineStats)
   /** An `IssueStatus` once `gh` confirmed it is an issue; a bare ref without `gh`. */
   | { kind: 'issue'; issue: IssueRef | IssueStatus }
 );

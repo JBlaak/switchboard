@@ -198,13 +198,16 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
     if (fromSubagent === undefined) continue;
     seenWorktrees.add(change.worktree);
     const known = locations.get(locationKey(change.worktree, change.branch));
-    dirtyItems.push({
+    const item: WorkItem = {
       kind: 'dirty',
       location: known ?? { worktree: change.worktree, branch: change.branch, fromSubagent },
       files: change.files,
+      activity: null,
       additions: change.additions,
       deletions: change.deletions,
-    });
+    };
+    item.activity = activityOf(workItemKey(item));
+    dirtyItems.push(item);
   }
 
   // Issues no PR closes, and that are not the session's own PRs by another name.

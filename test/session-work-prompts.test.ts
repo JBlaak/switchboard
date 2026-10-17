@@ -78,3 +78,9 @@ test('Open PR', () => {
   assert.equal(renderPrompt({ action: 'open-pr', branch: 'feat/a', worktree: '/wt', base: 'main' }),
     "Push feat/a from /wt and open a pull request for it against main, following this repo's PR conventions.");
 });
+
+test('Create a pull request', () => {
+  assert.equal(renderPrompt({ action: 'create-pr', branch: 'main', worktree: '/wt' }),
+    'Commit the uncommitted changes in /wt, on a new branch if main is the default branch, ' +
+    "then push it and open a pull request for it, following this repo's commit and PR conventions.");
+});
