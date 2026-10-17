@@ -1,12 +1,14 @@
 /**
  * The page's right column: the selected item's header — title and ref, its
- * pills, `branch → base`, the issues it closes — over its diff.
+ * pills, `branch → base`, the issues it closes, its action buttons and the
+ * card of what Claude is doing with it — over its diff.
  */
 import type { JSX } from 'react';
 import { openOnGitHub } from './actions';
 import { closedIssues, itemBranchLine, itemPills, itemRef, itemTitle } from './describe';
 import { DiffView } from './DiffView';
 import { Pills } from './Pills';
+import { ActionRow, ActivityCardView } from './WorkActions';
 import { selectedItem } from '../../state/session-work-slice';
 import type { SessionWorkPage } from '../../state/session-work-slice';
 
@@ -23,9 +25,12 @@ export function WorkDetail({ page }: { page: SessionWorkPage }): JSX.Element {
   return (
     <section className="sw-detail" aria-label="Selected work item">
       <div className="sw-detail-head">
-        <h2 className="sw-detail-title">
-          {itemTitle(item)} <span className="sw-detail-ref">{itemRef(item)}</span>
-        </h2>
+        <div className="sw-detail-top">
+          <h2 className="sw-detail-title">
+            {itemTitle(item)} <span className="sw-detail-ref">{itemRef(item)}</span>
+          </h2>
+          <ActionRow page={page} item={item} />
+        </div>
         <div className="sw-detail-facts">
           <Pills pills={itemPills(item)} />
           {branch && <span className="sw-branch">{branch}</span>}
@@ -54,6 +59,10 @@ export function WorkDetail({ page }: { page: SessionWorkPage }): JSX.Element {
           )}
         </div>
         {item.error && <div className="sw-item-error" role="status">{item.error}</div>}
+        {page.actionError?.itemId === item.id && (
+          <div className="sw-item-error" role="alert">{page.actionError.message}</div>
+        )}
+        <ActivityCardView item={item} />
       </div>
       <DiffView page={page} item={item} />
     </section>

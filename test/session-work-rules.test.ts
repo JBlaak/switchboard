@@ -18,7 +18,7 @@ function pr(more: Partial<PullRequestStatus> = {}): PullRequestStatus {
 const check = (name: string, state: CheckRun['state']): CheckRun => ({ name, state });
 
 function activity(action: Activity['action'], phase: Activity['phase'], origin: Activity['origin'] = 'manual'): Activity {
-  return { action, phase, origin, queuedAt: '2026-01-01T00:00:00Z' };
+  return { id: 'a1', action, phase, origin, queuedAt: '2026-01-01T00:00:00Z' };
 }
 
 const states = (steps: ReturnType<typeof shipSteps>) => steps.map((step) => step.state);

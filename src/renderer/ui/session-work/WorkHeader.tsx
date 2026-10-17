@@ -10,7 +10,7 @@ import type { JSX } from 'react';
 import { useStore } from '../use-store';
 import { shallowEqual } from '../../state/store';
 import { closeSessionWork, openOnGitHub } from './actions';
-import { agentsLabel, footprintLine, updatedAgo } from './describe';
+import { agentsLabel, footprintLine, queueLabel, updatedAgo } from './describe';
 import type { SessionWorkPage } from '../../state/session-work-slice';
 import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
 
@@ -21,6 +21,7 @@ export function WorkHeader({ page }: { page: SessionWorkPage }): JSX.Element {
   const agents = useStore(state => state.activity.agents[page.sessionId] ?? NO_AGENTS, shallowEqual);
   const { snapshot } = page;
   const repository = snapshot ? snapshot.repository : '';
+  const queue = snapshot ? queueLabel(snapshot) : null;
 
   return (
     <header className="sw-header">
@@ -50,6 +51,7 @@ export function WorkHeader({ page }: { page: SessionWorkPage }): JSX.Element {
             {snapshot && <span className="sw-updated">{updatedAgo(snapshot.updatedAt, now)}</span>}
           </div>
         </div>
+        {queue && <span className="sw-pill is-amber" role="status">{queue}</span>}
         <kbd className="sw-kbd" title="Cmd+G toggles this page">⌘G</kbd>
       </div>
       {agents.length > 0 && (

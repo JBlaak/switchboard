@@ -14,7 +14,7 @@ import type { EVENT } from '../../ipc/channels';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { UpdateNotice } from '../../domain/update/release';
-import type { SessionWorkDiff, SessionWorkSnapshot } from '../../domain/session-work/model';
+import type { SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
 import type { DiffMode } from './session-work-slice';
 import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
@@ -168,7 +168,11 @@ export type LocalEvent =
   /** `n`/`p` moved to a file of the item's diff. */
   | { type: 'sessionWorkFileFocused'; itemId: string; path: string }
   /** The page's once-a-second clock, for "updated Xs ago". Only runs while it is open. */
-  | { type: 'sessionWorkTicked'; at: number };
+  | { type: 'sessionWorkTicked'; at: number }
+  /** An action button was pressed: main is asked to queue it (A2). */
+  | { type: 'sessionWorkActionRequested'; sessionId: string; itemId: string; action: WorkAction }
+  /** Main answered: queued (`error` null; the snapshot shows it), or refused with why. */
+  | { type: 'sessionWorkActionAnswered'; sessionId: string; itemId: string; error: string | null };
 
 export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent;
 

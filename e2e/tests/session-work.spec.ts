@@ -12,11 +12,13 @@
 import { test, expect } from '../support/test';
 import { openSession, sessionRow, sidebar, terminalHeader } from '../support/app';
 import { fakeClaude } from '../support/fake-cli';
-import { openedExternally, pushEvent, sessionWorkClosed } from '../support/main-process';
+import {
+  openedExternally, pushEvent, sessionWorkActions, sessionWorkCancels, sessionWorkClosed,
+} from '../support/main-process';
 import { hasTerminal } from '../support/terminal';
 import { sessionItem } from '../support/session-list';
 import { LABEL, S } from '../fixtures/standard';
-import { BIG_FILE_LINES, sessionWorkStub } from '../fixtures/session-work';
+import { BIG_FILE_LINES, FIRST_PR_ID, loginFixWorkWith, sessionWorkStub } from '../fixtures/session-work';
 import { EVENT } from '../../src/ipc/channels';
 import type { Page } from '@playwright/test';
 
@@ -209,6 +211,114 @@ test.describe('with a repository', () => {
     await page.evaluate(id => window.api.canOpenSessionWork(id), S.worktreeTry);
     await expect(workPage(page)).toHaveCount(0);
     await expect(terminalHeader(page)).toBeVisible();
+  });
+});
+
+test.describe('actions', () => {
+  test.use({ stubs: { sessionWork: sessionWorkStub() } });
+
+  function actions(page: Page) {
+    return workPage(page).getByRole('group', { name: 'Actions' });
+  }
+
+  async function select(page: Page, name: RegExp): Promise<void> {
+    await workPage(page).getByRole('navigation', { name: 'Work items' }).getByRole('button', { name }).click();
+  }
+
+  test('each item offers what it needs: a PR its fixes, a branch Open PR, uncommitted changes nothing', async ({ page, home }) => {
+    await openLoginFixWork(page, home);
+    // Behind main, CI passing.
+    await expect(actions(page).getByRole('button')).toHaveText(['Ship it', 'Rebase on origin/main', 'Open on GitHub']);
+    await select(page, /Add a regression test/);
+    // A failing check.
+    await expect(actions(page).getByRole('button')).toHaveText(['Ship it', 'Fix CI', 'Open on GitHub']);
+    await select(page, /spike\/cookie-store/);
+    await expect(actions(page).getByRole('button')).toHaveText(['Open PR']);
+    await select(page, /Uncommitted changes in acme-api/);
+    await expect(actions(page)).toHaveCount(0);
+  });
+
+  test('a button hands its item to main for the session on screen; a refusal shows on the item', async ({ page, home, app }) => {
+    await openLoginFixWork(page, home);
+    await actions(page).getByRole('button', { name: 'Ship it' }).click();
+    await expect.poll(() => sessionWorkActions(app)).toEqual([{ sessionId: S.loginFix, itemId: FIRST_PR_ID, action: 'ship' }]);
+
+    await select(page, /spike\/cookie-store/);
+    await actions(page).getByRole('button', { name: 'Open PR' }).click();
+    await expect.poll(async () => (await sessionWorkActions(app)).map(request => request.action)).toEqual(['ship', 'open-pr']);
+
+    await expect(actions(page).getByRole('button', { name: 'Open on GitHub' })).toHaveCount(0);
+    await select(page, /Stop the login redirect loop/);
+    await actions(page).getByRole('button', { name: 'Open on GitHub' }).click();
+    await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1320');
+  });
+
+  test('queued: the header says the session is busy, the card offers Cancel, and the button waits', async ({ page, home, app }) => {
+    await openLoginFixWork(page, home);
+    await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(
+      { id: 'act-7', action: 'ship', phase: 'queued', origin: 'manual', queuedAt: new Date().toISOString() },
+      { queued: 2 },
+    ));
+    const work = workPage(page);
+    await expect(work.getByText('Session busy · 2 queued', { exact: true })).toBeVisible();
+    const card = page.getByTestId('session-work-activity');
+    await expect(card).toContainText('Queued: ship #1320');
+    await expect(card).toContainText('Sends when the session finishes its current turn');
+    const shipping = actions(page).getByRole('button', { name: 'Shipping…' });
+    await expect(shipping).toHaveAttribute('aria-disabled', 'true');
+    await expect(shipping).toHaveAttribute('title', 'Queued: sends when the session is idle');
+
+    await card.getByRole('button', { name: 'Cancel' }).click();
+    await expect.poll(() => sessionWorkCancels(app)).toEqual(['act-7']);
+    await expect(card.getByRole('button', { name: 'View in terminal' })).toHaveCount(0);
+  });
+
+  test('Ship it: a card with its four steps from what GitHub says, and View in terminal', async ({ page, home, app }) => {
+    await openLoginFixWork(page, home);
+    const shipping = { id: 'act-1', action: 'ship', phase: 'sent', origin: 'manual', queuedAt: new Date().toISOString(), sentAt: new Date().toISOString() } as const;
+    await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(shipping));
+    const card = page.getByTestId('session-work-activity');
+    await expect(card).toContainText('Shipping #1320');
+    const steps = card.getByRole('list', { name: 'Ship it steps' }).getByRole('listitem');
+    await expect(steps).toHaveText(['Rebased', 'Waiting for CI', 'Merge', 'Clean up'].map(label => new RegExp(label + '$')));
+    // Two behind main: Claude is rebasing it.
+    await expect(steps.nth(0)).toHaveAttribute('data-state', 'running');
+    await expect(steps.nth(1)).toHaveAttribute('data-state', 'todo');
+
+    // The next poll: rebased, CI running.
+    await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(shipping, {
+      facts: { behindBy: 0, mergeable: 'mergeable', checks: [{ name: 'test', state: 'pending' }] },
+    }));
+    await expect(steps.nth(0)).toHaveAttribute('data-state', 'done');
+    await expect(steps.nth(0)).toContainText('✓');
+    await expect(steps.nth(1)).toHaveAttribute('data-state', 'running');
+    await expect(steps.nth(2)).toHaveAttribute('data-state', 'todo');
+    await expect(actions(page).getByRole('button', { name: 'Shipping…' })).toHaveAttribute('aria-disabled', 'true');
+
+    await card.getByRole('button', { name: 'View in terminal' }).click();
+    await expectBackOnTerminal(page, home);
+  });
+
+  test('a session that is not running cannot be handed anything, and says why', async ({ page, home, app }) => {
+    await openLoginFixWork(page, home);
+    await fakeClaude(home, S.loginFix).exit();
+    const ship = actions(page).getByRole('button', { name: 'Ship it' });
+    await expect(ship).toHaveAttribute('aria-disabled', 'true');
+    await expect(ship).toHaveAttribute('title', 'Start the session to hand this to Claude');
+    await ship.click({ force: true });
+    expect(await sessionWorkActions(app)).toEqual([]);
+    // Open on GitHub only links out.
+    await expect(actions(page).getByRole('button', { name: 'Open on GitHub' })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+test.describe('actions main refuses', () => {
+  test.use({ stubs: { sessionWork: { ...sessionWorkStub(), refuseActions: 'This item is no longer on the page' } } });
+
+  test('the reason shows on the item', async ({ page, home }) => {
+    await openLoginFixWork(page, home);
+    await workPage(page).getByRole('group', { name: 'Actions' }).getByRole('button', { name: 'Ship it' }).click();
+    await expect(workPage(page).getByRole('alert')).toHaveText('This item is no longer on the page');
   });
 });
 

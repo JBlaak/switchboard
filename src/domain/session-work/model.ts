@@ -80,6 +80,9 @@ export interface PendingComment {
   body: string;
 }
 
+/** How the repository merges a PR, as `gh pr merge` spells it. */
+export type MergeMethod = 'merge' | 'squash' | 'rebase';
+
 /**
  * A pull request the session opened, with whatever `gh` could add to it.
  *
@@ -108,6 +111,11 @@ export interface PullRequestStatus {
   /** Lines the PR adds and removes, as GitHub counts them. */
   additions?: number;
   deletions?: number;
+  /**
+   * How Ship it merges it: your default merge method on the repository when
+   * the repository allows it, otherwise the first one it does allow.
+   */
+  mergeMethod?: MergeMethod;
 }
 
 /** The actions a work item can hand to Claude, each one a prompt (A1). */
@@ -115,8 +123,13 @@ export type WorkAction = 'ship' | 'rebase' | 'fix-ci' | 'fix-comments' | 'open-p
 
 /** An action on a work item and how far it got. */
 export interface Activity {
+  /** The stored action's id: what Cancel names. */
+  id: string;
   action: WorkAction;
-  /** `queued` waits for the session to go idle (A2); `sent` has been typed in. */
+  /**
+   * `queued` waits for the session to go idle (A2); `sent` has been typed in
+   * and Claude is on it; `done` once the session went busy and idle again.
+   */
   phase: 'queued' | 'sent' | 'done' | 'gave-up';
   origin: 'manual' | 'auto';
   /** Which automatic Fix CI attempt this is, 1-based. */
@@ -201,6 +214,14 @@ export interface SessionWorkSnapshot {
   /** `owner/name` of the session's repository on GitHub, from its origin remote; '' when it is not on GitHub. */
   repository: string;
   items: SessionWorkItem[];
+  /**
+   * How many worktrees and branches the session worked in, whether or not an
+   * item still lives there: a session in the main checkout whose PRs all
+   * merged still worked somewhere.
+   */
+  footprint: { worktrees: number; branches: number };
+  /** Actions waiting for the session to go idle, on any item (A2). */
+  queued: number;
   gh: GitHubAvailability;
   /** ISO-8601: when this snapshot was assembled. */
   updatedAt: string;

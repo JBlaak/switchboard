@@ -10,7 +10,9 @@
  * when something in it changed.
  *
  * The page is transient (D4): only one is open at a time, and opening another
- * session's closes the first. Nothing here writes to git or GitHub (A1).
+ * session's closes the first. Nothing here writes to git or GitHub (A1). The
+ * actions on its items are the action service's: their phases are laid over
+ * the items, and while a Ship it is under way `gh` is asked every 20 seconds.
  *
  * Errors belong to the item they happened to. A PR whose status `gh` could not
  * fetch, or whose diff could not be had, says so on that item; the rest of the
@@ -26,6 +28,7 @@ import type {
   FileDiff, GitHubAvailability, IssueRef, IssueStatus, LineStats, PullRequestStatus, SessionWorkItem,
   SessionWorkDiff, SessionWorkSnapshot, WorkItem, WorkLocation,
 } from '../../domain/session-work/model';
+import type { ActionContext, SessionActivities, WorkPageSource } from './session-action-service';
 import type { Clock, TimerHandle, Timers } from '../ports/clock';
 import type { Disposable, GitWorkspace } from '../ports/git-workspace';
 import type { GitHubCli } from '../ports/github-cli';
@@ -39,6 +42,9 @@ export const WATCH_DEBOUNCE_MS = 300;
 
 /** How often `gh` is asked again while the page is open (W1's cadence). */
 export const GITHUB_REFRESH_MS = 60_000;
+
+/** How often while a Ship it is under way, so its steps keep up with GitHub. */
+export const SHIP_REFRESH_MS = 20_000;
 
 /** Where a session's transcripts live and the directory it was started in. */
 export interface SessionWorkTarget {
@@ -55,6 +61,8 @@ export interface SessionWorkServiceDeps {
   github: GitHubCli;
   remotes: GitRemotes;
   renderer: Pick<RendererGateway, 'sessionWorkSnapshot'>;
+  /** The actions on the session's items; without it, no item has one. */
+  activities?: { forSession(sessionId: string): SessionActivities };
   clock: Clock;
   timers: Timers;
   log: Logger;
@@ -89,6 +97,10 @@ interface Page {
   readonly watchers: Map<string, Disposable>;
   debounce: TimerHandle | null;
   poll: TimerHandle | null;
+  /** The faster poll, while a Ship it is under way. */
+  shipPoll: TimerHandle | null;
+  /** How many worktrees and branches the transcripts name, as last built. */
+  footprint: { worktrees: number; branches: number };
   building: Promise<void> | null;
   again: boolean;
   /** The next build asks `gh` again even if nothing new was linked. */
@@ -111,7 +123,9 @@ const NO_DIFF: SessionWorkDiff = { files: [], source: null };
 
 const NOT_CHECKED_OUT ='The branch is not checked out here';
 
-export class SessionWorkService {
+const NO_ACTIVITIES: SessionActivities = { byItem: new Map(), queued: 0, shipping: false };
+
+export class SessionWorkService implements WorkPageSource {
   #page: Page | null = null;
   /** Bumped by every open (and by a close of the one still opening), so only the latest takes effect. */
   #opening = 0;
@@ -163,6 +177,8 @@ export class SessionWorkService {
       watchers: new Map(),
       debounce: null,
       poll: null,
+      shipPoll: null,
+      footprint: { worktrees: 0, branches: 0 },
       building: null,
       again: false,
       askGitHub: true,
@@ -176,6 +192,8 @@ export class SessionWorkService {
     };
     this.#page = page;
     page.poll = this.deps.timers.setInterval(() => {
+      // The Ship it poll asks more often already.
+      if (page.shipPoll) return;
       page.askGitHub = true;
       void this.#refresh(page);
     }, GITHUB_REFRESH_MS);
@@ -204,6 +222,29 @@ export class SessionWorkService {
   /** The session whose page is open, if any. */
   get openSessionId(): string | null {
     return this.#page?.sessionId ?? null;
+  }
+
+  /** An item of the open page, as last built; null when the page is not this session's. */
+  item(sessionId: string, itemId: string): SessionWorkItem | null {
+    const page = this.#page;
+    if (!page || page.sessionId !== sessionId || !page.last) return null;
+    return page.items.get(itemId) ?? null;
+  }
+
+  /** What an action's prompt needs to know about the open page's session. */
+  context(sessionId: string): ActionContext | null {
+    const page = this.#page;
+    if (!page || page.sessionId !== sessionId || !page.last) return null;
+    return { repository: page.repository ?? '', mainCheckout: page.projectRoot, gh: page.github?.availability ?? 'missing' };
+  }
+
+  /**
+   * An action changed phase. The open page shows it at once, without asking
+   * git or `gh` again; a snapshot is pushed when that changed anything.
+   */
+  activitiesChanged(_sessionId: string): void {
+    const page = this.#page;
+    if (page && page.last && !page.closed) this.#publish(page);
   }
 
   /**
@@ -324,6 +365,10 @@ export class SessionWorkService {
     if (page.closed) return;
 
     const ok = github.availability === 'ok';
+    page.footprint = {
+      worktrees: new Set(locations.map((location) => location.worktree)).size,
+      branches: new Set(locations.map((location) => location.branch)).size,
+    };
     const derived = deriveWorkItems({
       locations,
       pullRequests,
@@ -332,6 +377,7 @@ export class SessionWorkService {
       github: ok ? [...github.pullRequests.values()].flatMap((list) => list ?? []) : null,
       issueMentions: ok ? confirmedIssues(mentions, github.issues, repository) : mentions,
       repository,
+      activities: this.#activities(page).byItem,
     });
 
     const items = new Map<string, SessionWorkItem>();
@@ -347,24 +393,55 @@ export class SessionWorkService {
     this.#publish(page);
   }
 
-  /** Push the snapshot when it differs from the last one pushed. */
+  /**
+   * Push the snapshot when it differs from the last one pushed. Each item's
+   * action is laid over it here rather than in the build, so a change of phase
+   * shows without asking git or `gh` again.
+   */
   #publish(page: Page): void {
     const gh = page.github?.availability ?? 'missing';
-    const items = [...page.items.values()].map((item) => {
+    const activities = this.#activities(page);
+    this.#syncShipPoll(page, activities.shipping);
+    const items = [...page.items.values()].map((built) => {
+      const item: SessionWorkItem = built.kind === 'pr' || built.kind === 'branch'
+        ? { ...built, activity: activities.byItem.get(built.id) ?? null }
+        : built;
       const error = page.diffErrors.get(item.id) ?? item.error;
       return error ? { ...item, error } : item;
     });
-    const key = JSON.stringify({ gh, items });
+    const { footprint } = page;
+    const queued = activities.queued;
+    const key = JSON.stringify({ gh, items, footprint, queued });
     if (key === page.lastKey && page.last) return;
     page.lastKey = key;
     page.last = {
       sessionId: page.sessionId,
       repository: page.repository ?? '',
       items,
+      footprint,
+      queued,
       gh,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),
     };
     this.deps.renderer.sessionWorkSnapshot(page.last);
+  }
+
+  #activities(page: Page): SessionActivities {
+    return this.deps.activities?.forSession(page.sessionId) ?? NO_ACTIVITIES;
+  }
+
+  /** Poll `gh` every 20 s instead of every minute while a Ship it is under way. */
+  #syncShipPoll(page: Page, shipping: boolean): void {
+    if (page.closed) return;
+    if (shipping && !page.shipPoll) {
+      page.shipPoll = this.deps.timers.setInterval(() => {
+        page.askGitHub = true;
+        void this.#refresh(page);
+      }, SHIP_REFRESH_MS);
+    } else if (!shipping && page.shipPoll) {
+      this.deps.timers.clearInterval(page.shipPoll);
+      page.shipPoll = null;
+    }
   }
 
   /**
@@ -550,8 +627,10 @@ export class SessionWorkService {
     page.closed = true;
     this.deps.timers.clearTimeout(page.debounce);
     this.deps.timers.clearInterval(page.poll);
+    this.deps.timers.clearInterval(page.shipPoll);
     page.debounce = null;
     page.poll = null;
+    page.shipPoll = null;
     for (const watcher of page.watchers.values()) watcher.dispose();
     page.watchers.clear();
     if (this.#page === page) this.#page = null;

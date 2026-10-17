@@ -63,7 +63,7 @@ const merged: SessionWorkItem = {
 };
 
 function snapshot(items: SessionWorkItem[], sessionId = 's1'): SessionWorkSnapshot {
-  return { sessionId, repository: 'acme/api', items, gh: 'ok', updatedAt: new Date(AT).toISOString() };
+  return { sessionId, repository: 'acme/api', items, footprint: { worktrees: 2, branches: 2 }, queued: 0, gh: 'ok', updatedAt: new Date(AT).toISOString() };
 }
 
 const opened = (sessionId = 's1'): RendererEvent => ({ type: 'sessionWorkOpened', sessionId, name: 'Fix login', at: AT });
@@ -74,7 +74,7 @@ test('session work: opening shows a skeleton for that session; the first snapsho
   const open = run(initialRendererState('s1'), opened());
   assert.deepStrictEqual(open.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
-    diffMode: 'unified', diffs: {},
+    diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null,
   });
   assert.strictEqual(open.sessionWork.now, AT);
 
@@ -126,7 +126,7 @@ test('session work: nothing is remembered once closed', () => {
     opened());
   assert.deepStrictEqual(used.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
-    diffMode: 'unified', diffs: {},
+    diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null,
   });
 });
 
@@ -271,7 +271,9 @@ test('session work: the detail line, and the issues a PR closes', () => {
 test('session work: the header names the repository, the footprint and how fresh it is', () => {
   const snap = snapshot([issue, openPr, branch, dirty]);
   assert.strictEqual(footprintLine(snap), '2 worktrees · 2 branches');
-  assert.strictEqual(footprintLine(snapshot([dirty])), '1 worktree · 1 branch');
+  // Counted from where the session worked, not from the items: nothing left
+  // to show still worked somewhere.
+  assert.strictEqual(footprintLine({ ...snapshot([]), footprint: { worktrees: 1, branches: 1 } }), '1 worktree · 1 branch');
   assert.strictEqual(updatedAgo(snap.updatedAt, AT + 4_000), 'updated 4s ago');
   assert.strictEqual(updatedAgo(snap.updatedAt, AT - 5_000), 'updated 0s ago', 'a clock behind main is "now"');
   assert.strictEqual(updatedAgo(snap.updatedAt, AT + 125_000), 'updated 2m ago');

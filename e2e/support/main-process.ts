@@ -22,6 +22,7 @@
 import type { ElectronApplication } from '@playwright/test';
 import { EVENT, INVOKE, SEND } from '../../src/ipc/channels';
 import type { SessionWorkDiff, SessionWorkSnapshot } from '../../src/domain/session-work/model';
+import type { ActionRequest } from '../../src/domain/session-work/actions';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
@@ -90,6 +91,11 @@ export interface SessionWorkStub {
   snapshots: Record<string, SessionWorkSnapshot>;
   /** What `getSessionWorkDiff` answers, by item id: an item not here has no changes, and 'never' never answers. */
   diffs?: Record<string, SessionWorkDiff | 'never'>;
+  /**
+   * Why every action is refused; unset queues each one, answering `act-<n>`.
+   * Either way the request is recorded (see `sessionWorkActions`).
+   */
+  refuseActions?: string;
 }
 
 export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number } | 'fail';
@@ -105,6 +111,10 @@ interface StubState extends HostStubs {
   clipboard: string[];
   /** Every session the renderer told main its Session work page closed for, in order. */
   sessionWorkClosed: string[];
+  /** Every action the page asked main for, in order. */
+  sessionWorkActions: ActionRequest[];
+  /** Every queued action the page asked main to cancel, by id. */
+  sessionWorkCancels: string[];
 }
 
 /** How often the renderer asked the stubs for something, by channel. */
@@ -135,6 +145,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
   await app.evaluate(({ ipcMain }, { stubs, channels, send }) => {
     const state: StubState = {
       ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0, getWeather: 0 }, clipboard: [], sessionWorkClosed: [],
+      sessionWorkActions: [], sessionWorkCancels: [],
     };
     (globalThis as WithStubs).__switchboardE2E = state;
 
@@ -157,6 +168,20 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
         const diff = work.diffs?.[String(request?.itemId)];
         if (diff === 'never') return new Promise(() => {});
         return diff ?? { files: [], source: null };
+      });
+      // The page's actions would type into the session through the real queue,
+      // which needs the real page; recorded here instead, and the test pushes
+      // the snapshot that shows what the queue would have done.
+      ipcMain.removeHandler(channels.sessionWorkAction);
+      ipcMain.handle(channels.sessionWorkAction, (_event, request: ActionRequest) => {
+        state.sessionWorkActions.push(request);
+        if (work.refuseActions) return { ok: false, reason: work.refuseActions };
+        return { ok: true, activityId: 'act-' + state.sessionWorkActions.length };
+      });
+      ipcMain.removeHandler(channels.sessionWorkCancel);
+      ipcMain.handle(channels.sessionWorkCancel, (_event, activityId) => {
+        state.sessionWorkCancels.push(String(activityId));
+        return { ok: true };
       });
     }
 
@@ -214,6 +239,20 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
 export async function sessionWorkClosed(app: ElectronApplication): Promise<string[]> {
   return await app.evaluate(() => {
     return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkClosed];
+  });
+}
+
+/** The actions the page asked main for, in order. */
+export async function sessionWorkActions(app: ElectronApplication): Promise<ActionRequest[]> {
+  return await app.evaluate(() => {
+    return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkActions];
+  });
+}
+
+/** The queued actions the page asked main to cancel, by id. */
+export async function sessionWorkCancels(app: ElectronApplication): Promise<string[]> {
+  return await app.evaluate(() => {
+    return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkCancels];
   });
 }
 

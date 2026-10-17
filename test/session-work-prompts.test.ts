@@ -17,6 +17,15 @@ test('Ship it', () => {
   'if nothing else is in it, and pull main in /repo.');
 });
 
+test('Ship it from the main checkout has no worktree to remove', () => {
+  assert.equal(renderPrompt({
+    action: 'ship', number: 12, url: URL, base: 'main', method: 'merge', worktree: '/repo', mainCheckout: '/repo',
+  }),
+  'Ship PR #12 (https://github.com/owner/repo/pull/12). If it is behind origin/main, rebase it onto origin/main and force-push with lease. ' +
+  'Wait for CI with gh pr checks 12 --watch. If a check fails, fix it and push, at most twice; if it still fails, stop and tell me. ' +
+  'When everything is green, merge it with gh pr merge 12 --merge --delete-branch, pull main in /repo.');
+});
+
 test('Rebase', () => {
   assert.equal(renderPrompt({ action: 'rebase', number: 12, headRef: 'feat/a', base: 'main' }),
     'Rebase PR #12 (feat/a) onto origin/main and force-push with lease. ' +

@@ -16,6 +16,7 @@ import type { Appearance } from '../domain/settings/appearance';
 import type { Answers, PendingQuestions, QuestionsSettled } from '../domain/questions/question';
 import type { ShellProfile } from '../domain/shell/shell-profile';
 import type { SessionWorkDiff, SessionWorkSnapshot } from '../domain/session-work/model';
+import type { ActionRequest, ActionResult, CancelResult } from '../domain/session-work/actions';
 import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
@@ -114,6 +115,14 @@ export interface SwitchboardApi {
   canOpenSessionWork(sessionId: string): Promise<boolean>;
   /** The parsed diff of one item (`SessionWorkItem.id`) of the open page, and where it came from. */
   getSessionWorkDiff(request: { sessionId: string; itemId: string }): Promise<SessionWorkDiff>;
+  /**
+   * Hand an item of the open page to Claude: its prompt is queued and typed
+   * into the session's terminal once it is idle. Refused, with the reason,
+   * when the session is not running or the item cannot take the action.
+   */
+  sessionWorkAction(request: ActionRequest): Promise<ActionResult>;
+  /** Take a queued action back out of its queue; one already typed in cannot be. */
+  cancelSessionWorkAction(activityId: string): Promise<CancelResult>;
 
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;
