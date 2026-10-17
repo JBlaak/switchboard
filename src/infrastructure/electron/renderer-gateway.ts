@@ -17,6 +17,7 @@ import type { WorkingAgent } from '../../domain/terminal/program-status-children
 import type { UpdateNotice } from '../../domain/update/release';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 import type { SessionWorkSnapshot } from '../../domain/session-work/model';
+import type { PullRequestStatusChange } from '../../domain/session-work/status';
 import type { RendererGateway } from '../../application/ports/renderer-gateway';
 
 export class ElectronRendererGateway implements RendererGateway {
@@ -91,6 +92,10 @@ export class ElectronRendererGateway implements RendererGateway {
   // ── Session work ──
   sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void {
     this.#send(EVENT.sessionWorkSnapshot, snapshot);
+  }
+
+  prStatusChanged(change: PullRequestStatusChange): void {
+    this.#send(EVENT.prStatusChanged, change);
   }
 
   #send(channel: string, ...args: unknown[]): void {

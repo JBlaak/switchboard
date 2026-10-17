@@ -68,6 +68,7 @@ export const INVOKE = {
   sessionWorkDiff: 'session-work:diff',
   sessionWorkAction: 'session-work:action',
   sessionWorkCancel: 'session-work:cancel',
+  sessionWorkCheckLog: 'session-work:check-log',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -95,4 +96,5 @@ export const EVENT = {
   fullscreenChanged: 'fullscreen-changed',
   updateAvailable: 'update-available',
   sessionWorkSnapshot: 'session-work:snapshot',
+  prStatusChanged: 'pr-status:changed',
 } as const;

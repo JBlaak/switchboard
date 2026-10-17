@@ -75,6 +75,11 @@ export function ActivityCardView({ item }: { item: SessionWorkItem }): JSX.Eleme
           )}
         </span>
       </div>
+      {card.lines && card.lines.length > 0 && (
+        <ul className="sw-activity-lines" aria-label="Attempts">
+          {card.lines.map(line => <li key={line}>{line}</li>)}
+        </ul>
+      )}
       {card.steps.length > 0 && (
         <ol className="sw-steps" aria-label="Ship it steps">
           {card.steps.map(step => (

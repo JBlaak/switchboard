@@ -60,6 +60,7 @@ export function pasteBytes(prompt: string): string {
 
 export class PtySessionPrompter implements SessionPrompter {
   readonly #listeners = new Map<string, Set<() => void>>();
+  readonly #exitListeners = new Map<string, Set<() => void>>();
 
   constructor(private readonly deps: { sessions: PromptableSessions; timers: Timers; log: Logger }) {}
 
@@ -76,20 +77,11 @@ export class PtySessionPrompter implements SessionPrompter {
   }
 
   onIdle(sessionId: string, fn: () => void): Disposable {
-    let set = this.#listeners.get(sessionId);
-    if (!set) {
-      set = new Set();
-      this.#listeners.set(sessionId, set);
-    }
-    set.add(fn);
-    return {
-      dispose: () => {
-        const current = this.#listeners.get(sessionId);
-        if (!current) return;
-        current.delete(fn);
-        if (current.size === 0) this.#listeners.delete(sessionId);
-      },
-    };
+    return listen(this.#listeners, sessionId, fn);
+  }
+
+  onExit(sessionId: string, fn: () => void): Disposable {
+    return listen(this.#exitListeners, sessionId, fn);
   }
 
   send(sessionId: string, prompt: string): void {
@@ -112,15 +104,25 @@ export class PtySessionPrompter implements SessionPrompter {
   cliStateChanged(sessionId: string, session: PromptableSession, change: CliStateChange): void {
     const idle = change.kind === 'ready' || (change.kind === 'busy' && !change.busy);
     if (!idle) return;
+    this.#notify(this.#listeners, sessionId, session, 'idle');
+  }
+
+  /** From the lifecycle: a session's process ended for good. */
+  sessionEnded(sessionId: string, session: PromptableSession): void {
+    this.#notify(this.#exitListeners, sessionId, session, 'exit');
+  }
+
+  /** Call every listener filed under any id the session has answered to. */
+  #notify(listeners: Map<string, Set<() => void>>, sessionId: string, session: PromptableSession, what: string): void {
     const fns: Array<() => void> = [];
     for (const id of session.allIds(sessionId)) {
-      for (const fn of this.#listeners.get(id) ?? []) fns.push(fn);
+      for (const fn of listeners.get(id) ?? []) fns.push(fn);
     }
     for (const fn of fns) {
       try {
         fn();
       } catch (err) {
-        this.deps.log.error('[session-work] an idle listener failed:', (err as Error).message);
+        this.deps.log.error(`[session-work] an ${what} listener failed:`, (err as Error).message);
       }
     }
   }
@@ -130,4 +132,21 @@ export class PtySessionPrompter implements SessionPrompter {
     if (!found || found.session.exited || found.session.isPlainTerminal) return null;
     return found;
   }
+}
+
+function listen(listeners: Map<string, Set<() => void>>, sessionId: string, fn: () => void): Disposable {
+  let set = listeners.get(sessionId);
+  if (!set) {
+    set = new Set();
+    listeners.set(sessionId, set);
+  }
+  set.add(fn);
+  return {
+    dispose: () => {
+      const current = listeners.get(sessionId);
+      if (!current) return;
+      current.delete(fn);
+      if (current.size === 0) listeners.delete(sessionId);
+    },
+  };
 }

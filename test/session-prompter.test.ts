@@ -138,3 +138,16 @@ test('a session that moved to a new id is still heard and found by the old one',
   prompter.send('old', 'hi');
   assert.deepEqual(session.pty.writes, ['\x1b[200~hi\x1b[201~']);
 });
+
+test('onExit hears the process end, under any id the session went by, once it is no longer running', () => {
+  const { start, prompter, registry } = harness();
+  const session = start('old');
+  registry.rekey('old', 'new');
+  const heard: Array<string | null> = [];
+  prompter.onExit('old', () => heard.push(prompter.runningId('new')));
+  const other = prompter.onExit('new', () => heard.push('new'));
+  other.dispose();
+
+  session.pty.emitExit(0);
+  assert.deepEqual(heard, [null]);
+});

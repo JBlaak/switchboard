@@ -31,6 +31,9 @@ export interface SessionPrompter {
    */
   onIdle(sessionId: string, fn: () => void): Disposable;
 
+  /** Call `fn` when the session's process ends (not when a remote one only redials). */
+  onExit(sessionId: string, fn: () => void): Disposable;
+
   /** Type `prompt` in and press Enter, so it arrives as one message however many lines it has. */
   send(sessionId: string, prompt: string): void;
 }
