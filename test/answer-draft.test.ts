@@ -423,12 +423,49 @@ test('isAnswered does not count a question that does not exist', () => {
 });
 
 test('next is blocked until the current question is answered', () => {
+  /* Given */
+  const onMulti = after(qs, [{ kind: 'goto', step: 1 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'next' }], onMulti);
+
+  /* Then */
+  assert.deepEqual(r.event, { kind: 'blocked', isLast: false });
+  assert.equal(r.draft.step, 1);
+});
+
+test('next on a fresh single-choice question picks the option under the cursor and advances', () => {
   /* When */
   const r = run(qs, [{ kind: 'next' }]);
 
   /* Then */
+  assert.deepEqual(r.draft.picks[0], ['Short']);
+  assert.deepEqual(r.event, { kind: 'advanced', done: 1, total: 3, isLast: false });
+  assert.equal(r.draft.step, 1);
+});
+
+test('next on a single-choice question with the cursor on a blank Other stays blocked', () => {
+  /* Given */
+  const onOther = after(qs, [{ kind: 'move', by: -1 }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'next' }], onOther);
+
+  /* Then */
   assert.deepEqual(r.event, { kind: 'blocked', isLast: false });
-  assert.equal(r.draft.step, 0);
+  assert.deepEqual(r.draft.picks[0], []);
+});
+
+test('next on a fresh last question submits once it is the only one left', () => {
+  /* Given */
+  const lastOpen = after(qs, [{ kind: 'press', row: 0 }, { kind: 'next' }, { kind: 'press', row: 1 }, { kind: 'next' }]);
+
+  /* When */
+  const r = run(qs, [{ kind: 'next' }], lastOpen);
+
+  /* Then */
+  assert.deepEqual(r.event, { kind: 'submit' });
+  assert.deepEqual(r.draft.picks[2], ['Foo']);
 });
 
 test('next advances with the answered count', () => {
@@ -486,7 +523,7 @@ test('next on the last question is blocked while an earlier one is unanswered', 
 
 test('next on a blank last question is blocked', () => {
   /* Given */
-  const onLast = after(qs, [{ kind: 'goto', step: 2 }]);
+  const onLast = after(qs, [{ kind: 'goto', step: 2 }, { kind: 'move', by: -1 }]);
 
   /* When */
   const blank = run(qs, [{ kind: 'next' }], onLast);
