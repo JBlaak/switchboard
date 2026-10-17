@@ -97,6 +97,11 @@ export function isDone(item: WorkItem): boolean {
  * branch it has checked out now — however many branches the session had it
  * on, and only worktrees and branches the transcripts name are looked at.
  */
+/** True when both repositories are known and differ; GitHub names are case-insensitive. */
+function isForeign(repository: string, sessionRepository: string): boolean {
+  return !!repository && !!sessionRepository && repository.toLowerCase() !== sessionRepository.toLowerCase();
+}
+
 export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
   const activityOf = (key: string) => facts.activities?.get(key) ?? null;
   const locations = new Map<string, WorkLocation>();
@@ -105,11 +110,13 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
     if (!locations.has(key)) locations.set(key, location);
   }
 
-  // PRs, one per URL, with whatever gh added.
+  // PRs, one per URL, with whatever gh added. A link into another repository
+  // is left out: the page is about this repository, and a transcript can carry
+  // a `pr-link` for a PR some tool printed, even a placeholder like owner/repo#12.
   const github = new Map((facts.github ?? []).map((status) => [status.url, status]));
   const pullRequests = new Map<string, { pr: PullRequestStatus; order: number }>();
   facts.pullRequests.forEach((link, order) => {
-    if (pullRequests.has(link.url)) return;
+    if (pullRequests.has(link.url) || isForeign(link.repository, facts.repository)) return;
     const known = github.get(link.url);
     const pr: PullRequestStatus = known
       ? { ...known, number: link.number, url: link.url, repository: known.repository || link.repository }
