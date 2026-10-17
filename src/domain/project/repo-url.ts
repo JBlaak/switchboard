@@ -19,6 +19,13 @@ export function repoWebUrl(remote: string): string | null {
   return null;
 }
 
+/** `owner/repo` of a remote on github.com; '' for any other remote. */
+export function gitHubRepository(remote: string): string {
+  const web = repoWebUrl(remote);
+  const match = web ? /^https:\/\/github\.com\/([^/]+\/[^/]+)$/i.exec(web) : null;
+  return match ? match[1] : '';
+}
+
 function build(host: string, repoPath: string): string | null {
   const clean = repoPath.replace(/\/+$/, '').replace(/\.git$/i, '');
   if (!clean || clean.split('/').some(part => !part)) return null;

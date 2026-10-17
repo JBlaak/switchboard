@@ -72,6 +72,11 @@ export const INVOKE = {
   sessionWorkComment: 'session-work:comment',
   sessionWorkReview: 'session-work:review',
   sessionWorkCheckLog: 'session-work:check-log',
+
+  // Plans (#123)
+  planSessionPlans: 'plan:session-plans',
+  planGet: 'plan:get',
+  planProjectPlans: 'plan:project-plans',
 } as const;
 
 /** Renderer tells main; no answer expected. */

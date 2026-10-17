@@ -71,7 +71,7 @@ the shell profiles, `electron/` behind the window, the menu and the renderer
 gateway, `claude-cli/` behind usage and scheduled runs, `worker/` behind
 the cold-start scanner, `weather/` (Open-Meteo) behind the weather source, `system/` (`pmset`) behind
 the sleep switch and (a bundle swap) behind the app installer, `github/` behind the release feed
-and (the user's own `gh`) behind the Session work page's PRs and issues, `git/` (the `git` CLI)
+and (the user's own `gh`) behind the Session work page's PRs and issues and the Plan tab's plans, `git/` (the `git` CLI)
 behind the remotes and the session's worktrees.
 
 ### `src/main` — the composition root
