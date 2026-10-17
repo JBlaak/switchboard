@@ -14,20 +14,35 @@ import type { WeatherSource } from '../src/application/ports/weather-source';
 // ── WMO mapping ──
 
 test('skyFromWmoCode folds every WMO code into one of four skies', () => {
+  /* Given */
   const table: [number[], string][] = [
     [[0, 1], 'clear'],
     [[2, 3, 45, 48], 'cloudy'],
     [[51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99], 'rain'],
     [[71, 73, 75, 77, 85, 86], 'snow'],
   ];
+
   for (const [codes, sky] of table) {
-    for (const code of codes) assert.strictEqual(skyFromWmoCode(code), sky, `code ${code}`);
+    for (const code of codes) {
+      /* When */
+      const folded = skyFromWmoCode(code);
+
+      /* Then */
+      assert.strictEqual(folded, sky, `code ${code}`);
+    }
   }
 });
 
 test('an unknown WMO code is cloudy', () => {
-  for (const code of [-1, 4, 10, 44, 50, 68, 70, 78, 79, 83, 84, 87, 94, 100, 1.5, NaN]) {
-    assert.strictEqual(skyFromWmoCode(code), 'cloudy', `code ${code}`);
+  /* Given */
+  const unknown = [-1, 4, 10, 44, 50, 68, 70, 78, 79, 83, 84, 87, 94, 100, 1.5, NaN];
+
+  for (const code of unknown) {
+    /* When */
+    const folded = skyFromWmoCode(code);
+
+    /* Then */
+    assert.strictEqual(folded, 'cloudy', `code ${code}`);
   }
 });
 
@@ -36,17 +51,29 @@ test('an unknown WMO code is cloudy', () => {
 const amsterdam = DEFAULT_WEATHER_LOCATION;
 
 test('a forecast response parses into the weather at that location', () => {
-  const weather = parseForecastResponse(
-    { latitude: 52.37, current: { time: '2026-10-08T12:00', weather_code: 61, is_day: 1 } },
-    amsterdam, 1000,
-  );
+  /* Given */
+  const body = { latitude: 52.37, current: { time: '2026-10-08T12:00', weather_code: 61, is_day: 1 } };
+
+  /* When */
+  const weather = parseForecastResponse(body, amsterdam, 1000);
+
+  /* Then */
   assert.deepStrictEqual(weather, { sky: 'rain', isDay: true, location: 'Amsterdam', fetchedAt: 1000 });
-  assert.strictEqual(
-    parseForecastResponse({ current: { weather_code: 0, is_day: 0 } }, amsterdam, 0)?.isDay, false,
-  );
+});
+
+test('a forecast response for the night parses as not day', () => {
+  /* Given */
+  const body = { current: { weather_code: 0, is_day: 0 } };
+
+  /* When */
+  const weather = parseForecastResponse(body, amsterdam, 0);
+
+  /* Then */
+  assert.strictEqual(weather?.isDay, false);
 });
 
 test('a malformed or incomplete forecast response parses to null', () => {
+  /* Given */
   const bad: unknown[] = [
     null, undefined, 'nope', 42, [], {},
     { current: null },
@@ -59,25 +86,35 @@ test('a malformed or incomplete forecast response parses to null', () => {
     { current: { weather_code: Infinity, is_day: 1 } },
     { error: true, reason: 'Latitude must be in range of -90 to 90°.' },
   ];
+
   for (const body of bad) {
-    assert.strictEqual(parseForecastResponse(body, amsterdam, 0), null, JSON.stringify(body));
+    /* When */
+    const weather = parseForecastResponse(body, amsterdam, 0);
+
+    /* Then */
+    assert.strictEqual(weather, null, JSON.stringify(body));
   }
 });
 
 test('a geocoding response parses into its first match', () => {
-  assert.deepStrictEqual(
-    parseGeocodingResponse({
-      results: [
-        { id: 2759794, name: 'Amsterdam', latitude: 52.37403, longitude: 4.88969, country: 'Netherlands' },
-        { id: 1, name: 'Amsterdam', latitude: 42.9, longitude: -74.2 },
-      ],
-      generationtime_ms: 0.5,
-    }),
-    { name: 'Amsterdam', latitude: 52.37403, longitude: 4.88969 },
-  );
+  /* Given */
+  const body = {
+    results: [
+      { id: 2759794, name: 'Amsterdam', latitude: 52.37403, longitude: 4.88969, country: 'Netherlands' },
+      { id: 1, name: 'Amsterdam', latitude: 42.9, longitude: -74.2 },
+    ],
+    generationtime_ms: 0.5,
+  };
+
+  /* When */
+  const location = parseGeocodingResponse(body);
+
+  /* Then */
+  assert.deepStrictEqual(location, { name: 'Amsterdam', latitude: 52.37403, longitude: 4.88969 });
 });
 
 test('no match, or a malformed geocoding response, parses to null', () => {
+  /* Given */
   const bad: unknown[] = [
     null, 'nope', {},
     { generationtime_ms: 0.3 }, // what Open-Meteo sends for no match
@@ -89,21 +126,51 @@ test('no match, or a malformed geocoding response, parses to null', () => {
     { results: [{ name: 'X', longitude: 2 }] },
     { results: [{ name: 'X', latitude: '1', longitude: 2 }] },
   ];
+
   for (const body of bad) {
-    assert.strictEqual(parseGeocodingResponse(body), null, JSON.stringify(body));
+    /* When */
+    const location = parseGeocodingResponse(body);
+
+    /* Then */
+    assert.strictEqual(location, null, JSON.stringify(body));
   }
 });
 
 // ── Settings ──
 
-test('weather is on, in Amsterdam, unless the global settings say otherwise', () => {
-  assert.strictEqual(resolveWeatherEnabled({}), true);
-  assert.strictEqual(resolveWeatherEnabled(null), true);
-  assert.strictEqual(resolveWeatherEnabled({ weatherEnabled: false }), false);
-  assert.deepStrictEqual(resolveWeatherLocation({}), DEFAULT_WEATHER_LOCATION);
-  assert.deepStrictEqual(resolveWeatherLocation({ weatherLocation: { name: 'Oslo' } }), DEFAULT_WEATHER_LOCATION);
+test('weather is on unless the global settings say otherwise', () => {
+  /* Given */
+  const cases: [Parameters<typeof resolveWeatherEnabled>[0], boolean][] = [
+    [{}, true],
+    [null, true],
+    [{ weatherEnabled: false }, false],
+  ];
+
+  for (const [settings, expected] of cases) {
+    /* When */
+    const enabled = resolveWeatherEnabled(settings);
+
+    /* Then */
+    assert.strictEqual(enabled, expected, JSON.stringify(settings));
+  }
+});
+
+test('weather is in Amsterdam unless the global settings hold a whole location', () => {
+  /* Given */
   const oslo = { name: 'Oslo', latitude: 59.91, longitude: 10.75 };
-  assert.deepStrictEqual(resolveWeatherLocation({ weatherLocation: oslo }), oslo);
+  const cases: [Parameters<typeof resolveWeatherLocation>[0], WeatherLocation][] = [
+    [{}, DEFAULT_WEATHER_LOCATION],
+    [{ weatherLocation: { name: 'Oslo' } }, DEFAULT_WEATHER_LOCATION],
+    [{ weatherLocation: oslo }, oslo],
+  ];
+
+  for (const [settings, expected] of cases) {
+    /* When */
+    const location = resolveWeatherLocation(settings);
+
+    /* Then */
+    assert.deepStrictEqual(location, expected, JSON.stringify(settings));
+  }
 });
 
 // ── The service ──
@@ -149,72 +216,183 @@ function setup() {
   return { state, prefs, service, advance };
 }
 
-test('a result is reused for 30 minutes, then fetched again', async () => {
+test('a result is reused for 30 minutes', async () => {
+  /* Given */
   const { state, service, advance } = setup();
-  assert.strictEqual((await service.current())?.sky, 'clear');
+  const first = await service.current();
+  state.next = 'rain';
+
+  /* When */
+  advance(WEATHER_CACHE_MS - 1);
+  const reused = await service.current();
+
+  /* Then */
+  assert.strictEqual(first?.sky, 'clear');
+  assert.strictEqual(reused?.sky, 'clear');
+  assert.strictEqual(state.fetches, 1);
+});
+
+test('a result is fetched again after 30 minutes', async () => {
+  /* Given */
+  const { state, service, advance } = setup();
+  await service.current();
   state.next = 'rain';
   advance(WEATHER_CACHE_MS - 1);
-  assert.strictEqual((await service.current())?.sky, 'clear');
-  assert.strictEqual(state.fetches, 1);
+  await service.current();
+
+  /* When */
   advance(1);
-  assert.strictEqual((await service.current())?.sky, 'rain');
+  const fetched = await service.current();
+
+  /* Then */
+  assert.strictEqual(fetched?.sky, 'rain');
   assert.strictEqual(state.fetches, 2);
 });
 
 test('the cache is per location', async () => {
+  /* Given */
   const { state, prefs, service } = setup();
   await service.current();
   prefs.location = oslo;
+
+  /* When */
   const weather = await service.current();
+
+  /* Then */
   assert.strictEqual(state.fetches, 2);
   assert.strictEqual(weather?.location, 'Oslo');
 });
 
-test('a failed fetch serves the last good value until it is 3 hours old', async () => {
-  for (const failure of [null, 'throw'] as const) {
-    const { state, service, advance } = setup();
-    await service.current();
-    state.next = failure;
+/** A service whose first fetch succeeded and whose next ones fail as given. */
+async function failingAfterOneFetch(failure: null | 'throw') {
+  const harness = setup();
+  await harness.service.current();
+  harness.state.next = failure;
+  return harness;
+}
+
+const FAILURES = [null, 'throw'] as const;
+
+test('a failed fetch serves the last good value once the cache is spent', async () => {
+  for (const failure of FAILURES) {
+    /* Given */
+    const { service, advance } = await failingAfterOneFetch(failure);
+
+    /* When */
     advance(WEATHER_CACHE_MS);
-    assert.strictEqual((await service.current())?.sky, 'clear', `${failure}: still fresh enough`);
-    advance(WEATHER_STALE_MS - WEATHER_CACHE_MS - 1);
-    assert.strictEqual((await service.current())?.sky, 'clear', `${failure}: just under 3h`);
-    advance(1);
-    assert.strictEqual(await service.current(), null, `${failure}: 3h old is too old`);
+    const weather = await service.current();
+
+    /* Then */
+    assert.strictEqual(weather?.sky, 'clear', `${failure}: still fresh enough`);
   }
 });
 
-test('a failed fetch keeps retrying, and a success replaces the stale value', async () => {
-  const { state, service, advance } = setup();
+test('a failed fetch serves the last good value until just under 3 hours old', async () => {
+  for (const failure of FAILURES) {
+    /* Given */
+    const { service, advance } = await failingAfterOneFetch(failure);
+    advance(WEATHER_CACHE_MS);
+    await service.current();
+
+    /* When */
+    advance(WEATHER_STALE_MS - WEATHER_CACHE_MS - 1);
+    const weather = await service.current();
+
+    /* Then */
+    assert.strictEqual(weather?.sky, 'clear', `${failure}: just under 3h`);
+  }
+});
+
+test('a failed fetch serves nothing once the last good value is 3 hours old', async () => {
+  for (const failure of FAILURES) {
+    /* Given */
+    const { service, advance } = await failingAfterOneFetch(failure);
+    advance(WEATHER_CACHE_MS);
+    await service.current();
+    advance(WEATHER_STALE_MS - WEATHER_CACHE_MS - 1);
+    await service.current();
+
+    /* When */
+    advance(1);
+    const weather = await service.current();
+
+    /* Then */
+    assert.strictEqual(weather, null, `${failure}: 3h old is too old`);
+  }
+});
+
+test('a failed fetch keeps retrying', async () => {
+  /* Given */
+  const { state, service, advance } = await failingAfterOneFetch(null);
+  advance(WEATHER_CACHE_MS);
+
+  /* When */
   await service.current();
-  state.next = null;
+  await service.current();
+
+  /* Then */
+  assert.strictEqual(state.fetches, 3, 'a failure is not cached');
+});
+
+test('a success replaces the stale value', async () => {
+  /* Given */
+  const { state, service, advance } = await failingAfterOneFetch(null);
   advance(WEATHER_CACHE_MS);
   await service.current();
   await service.current();
-  assert.strictEqual(state.fetches, 3, 'a failure is not cached');
   state.next = 'snow';
-  assert.strictEqual((await service.current())?.sky, 'snow');
+
+  /* When */
+  const weather = await service.current();
+
+  /* Then */
+  assert.strictEqual(weather?.sky, 'snow');
 });
 
-test('a failure with nothing cached, or cached for another location, is null', async () => {
+test('a failure with nothing cached is null', async () => {
+  /* Given */
+  const { state, service } = setup();
+  state.next = 'throw';
+
+  /* When */
+  const weather = await service.current();
+
+  /* Then */
+  assert.strictEqual(weather, null);
+});
+
+test('a failure with a value cached for another location is null', async () => {
+  /* Given */
   const { state, prefs, service } = setup();
   state.next = 'throw';
-  assert.strictEqual(await service.current(), null);
+  await service.current();
   state.next = 'clear';
   await service.current();
   state.next = null;
   prefs.location = oslo;
-  assert.strictEqual(await service.current(), null);
+
+  /* When */
+  const weather = await service.current();
+
+  /* Then */
+  assert.strictEqual(weather, null);
 });
 
 test('switched off, the service answers null without fetching', async () => {
+  /* Given */
   const { state, prefs, service } = setup();
   prefs.enabled = false;
-  assert.strictEqual(await service.current(), null);
+
+  /* When */
+  const weather = await service.current();
+
+  /* Then */
+  assert.strictEqual(weather, null);
   assert.strictEqual(state.fetches, 0);
 });
 
 test('the service never rejects, even when reading settings throws', async () => {
+  /* Given */
   const { source } = fakeSource();
   const service = new WeatherService({
     source,
@@ -225,17 +403,43 @@ test('the service never rejects, even when reading settings throws', async () =>
     clock: { now: () => 0 },
     log: silentLog,
   });
-  assert.strictEqual(await service.current(), null);
+
+  /* When */
+  const weather = await service.current();
+
+  /* Then */
+  assert.strictEqual(weather, null);
 });
 
-test('geocode trims the name, skips blanks, and swallows failures', async () => {
+test('geocode trims the name', async () => {
+  /* Given */
   const { state, service } = setup();
   state.found = oslo;
-  assert.deepStrictEqual(await service.geocode('  Oslo '), oslo);
-  assert.deepStrictEqual(state.geocodes, ['Oslo']);
-  assert.strictEqual(await service.geocode('   '), null);
-  assert.strictEqual(state.geocodes.length, 1);
 
+  /* When */
+  const found = await service.geocode('  Oslo ');
+
+  /* Then */
+  assert.deepStrictEqual(found, oslo);
+  assert.deepStrictEqual(state.geocodes, ['Oslo']);
+});
+
+test('geocode skips blanks', async () => {
+  /* Given */
+  const { state, service } = setup();
+  state.found = oslo;
+  await service.geocode('  Oslo ');
+
+  /* When */
+  const found = await service.geocode('   ');
+
+  /* Then */
+  assert.strictEqual(found, null);
+  assert.strictEqual(state.geocodes.length, 1);
+});
+
+test('geocode swallows failures', async () => {
+  /* Given */
   const { source } = fakeSource();
   source.geocode = async () => { throw new Error('offline'); };
   const failing = new WeatherService({
@@ -244,5 +448,10 @@ test('geocode trims the name, skips blanks, and swallows failures', async () => 
     clock: { now: () => 0 },
     log: silentLog,
   });
-  assert.strictEqual(await failing.geocode('Oslo'), null);
+
+  /* When */
+  const found = await failing.geocode('Oslo');
+
+  /* Then */
+  assert.strictEqual(found, null);
 });

@@ -8,14 +8,10 @@
  * weekly windows are filtered out before the rows reach the store (see
  * `usageGaugeRows`).
  */
-import { shortUsageLabel } from '../../../domain/usage/usage';
 import { useStore } from '../use-store';
+import { quotaGaugeView } from './footer-view';
 import type { JSX } from 'react';
 import type { UsageLimit } from '../../../domain/usage/usage';
-
-/** Where a bar changes colour. */
-const HIGH_PERCENT = 80;
-const MID_PERCENT = 60;
 
 export function QuotaGauges(): JSX.Element {
   const rows = useStore(state => state.usage.rows);
@@ -29,23 +25,14 @@ export function QuotaGauges(): JSX.Element {
 }
 
 function QuotaGauge({ row }: { row: UsageLimit }): JSX.Element {
-  const { percent } = row;
-  const level = percent >= HIGH_PERCENT ? ' quota-high' : percent >= MID_PERCENT ? ' quota-mid' : '';
-  // The full label ("Week (all models)") is too long for a gauge row; the
-  // tooltip carries it, along with when the window resets.
-  const tooltip = `${row.label}: ${percent}%` + (row.reset ? ` — resets ${row.reset}` : '');
+  const gauge = quotaGaugeView(row);
   return (
-    <span className="quota-item" title={tooltip}>
-      <span className="quota-label">{shortUsageLabel(row)}</span>
+    <span className="quota-item" title={gauge.tooltip}>
+      <span className="quota-label">{gauge.label}</span>
       <span className="quota-track">
-        <span
-          className={'quota-fill' + level}
-          data-testid="quota-fill"
-          // Clamped to a visible minimum: a 0% bar reads as a broken element.
-          style={{ width: Math.min(Math.max(percent, 1), 100) + '%' }}
-        />
+        <span className={gauge.fillClass} data-testid="quota-fill" style={{ width: gauge.width }} />
       </span>
-      <span className="quota-pct">{`${percent}%`}</span>
+      <span className="quota-pct">{gauge.percentText}</span>
     </span>
   );
 }

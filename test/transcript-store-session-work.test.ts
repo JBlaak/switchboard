@@ -63,7 +63,11 @@ after(() => {
 });
 
 test('locations: every cwd + gitBranch in the main transcript and its subagents, once each, in first-seen order', () => {
-  assert.deepEqual(store.locations(FOLDER, SESSION), [
+  /* When */
+  const locations = store.locations(FOLDER, SESSION);
+
+  /* Then */
+  assert.deepEqual(locations, [
     { cwd: ROOT, branch: 'main', fromSubagent: false },
     { cwd: ROOT + '/src', branch: 'main', fromSubagent: false },
     { cwd: AGENT_WT, branch: 'feat/12-billing', fromSubagent: true },
@@ -72,7 +76,11 @@ test('locations: every cwd + gitBranch in the main transcript and its subagents,
 });
 
 test('issueMentions: what was said in the main transcript and its subagents, once each, not tool output', () => {
-  assert.deepEqual(store.issueMentions(FOLDER, SESSION, 'acme/web'), [
+  /* When */
+  const mentions = store.issueMentions(FOLDER, SESSION, 'acme/web');
+
+  /* Then */
+  assert.deepEqual(mentions, [
     { repository: 'acme/web', number: 12 },
     { repository: 'acme/api', number: 3 },
     { repository: 'acme/web', number: 40 },
@@ -80,14 +88,36 @@ test('issueMentions: what was said in the main transcript and its subagents, onc
   ]);
 });
 
-test('a session with no transcript has no locations and no mentions', () => {
-  assert.deepEqual(store.locations(FOLDER, 'missing'), []);
-  assert.deepEqual(store.issueMentions(FOLDER, 'missing', 'acme/web'), []);
-  assert.deepEqual(store.locations('no-such-folder', SESSION), []);
+test('a session with no transcript has no locations', () => {
+  /* When */
+  const locations = store.locations(FOLDER, 'missing');
+
+  /* Then */
+  assert.deepEqual(locations, []);
+});
+
+test('a session with no transcript has no mentions', () => {
+  /* When */
+  const mentions = store.issueMentions(FOLDER, 'missing', 'acme/web');
+
+  /* Then */
+  assert.deepEqual(mentions, []);
+});
+
+test('a project folder that does not exist has no locations', () => {
+  /* When */
+  const locations = store.locations('no-such-folder', SESSION);
+
+  /* Then */
+  assert.deepEqual(locations, []);
 });
 
 test('a subagent-only session still has its subagents\' locations', () => {
-  assert.deepEqual(store.locations(FOLDER, 'other-session'), [
+  /* When */
+  const locations = store.locations(FOLDER, 'other-session');
+
+  /* Then */
+  assert.deepEqual(locations, [
     { cwd: '/elsewhere', branch: 'feat/other', fromSubagent: true },
   ]);
 });

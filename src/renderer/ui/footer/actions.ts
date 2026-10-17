@@ -8,6 +8,7 @@
  */
 import { usageGaugeRows } from '../../../domain/usage/usage';
 import { dispatch, getState } from '../../state/app-store';
+import { installConfirmation } from './footer-view';
 
 /**
  * Fetch the usage windows for the gauges, and for Patch, which reads the same
@@ -43,10 +44,8 @@ export async function installUpdate(): Promise<void> {
   const { update, view } = getState();
   if (!update.notice?.installable || update.installing) return;
 
-  const running = view.activePtyIds.size;
-  if (running > 0 && !confirm(
-    `Restarting to update stops ${running} running session${running === 1 ? '' : 's'}. Install now?`,
-  )) return;
+  const question = installConfirmation(view.activePtyIds.size);
+  if (question && !confirm(question)) return;
 
   dispatch({ type: 'updateInstallStarted' });
   if (!await window.api.installUpdate()) dispatch({ type: 'updateInstallFailed' });

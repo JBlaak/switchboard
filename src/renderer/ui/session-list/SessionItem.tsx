@@ -11,7 +11,7 @@
 import { useRef } from 'react';
 import { askingCountIn } from '../../state/questions-slice';
 import { rowActivity } from '../../state/row-activity';
-import { sessionDisplayName } from '../../state/session-list-layout';
+import { rowButtons, sessionDisplayName, showsTerminalBadge } from '../../state/session-list-layout';
 import { shallowEqual } from '../../state/store';
 import { useStore } from '../use-store';
 import { HTML } from './markup';
@@ -94,9 +94,7 @@ export function SessionItem({ row, groupId }: SessionItemProps): JSX.Element {
 
   const openWork = action(() => void openSessionWorkFromRow(sessionId));
 
-  // A terminal — local or remote — gets a glyph rather than a word, because
-  // its label is already "Terminal".
-  const terminal = session.type === 'terminal' || (session.type === 'remote' && session.remoteKind === 'shell');
+  const terminal = showsTerminalBadge(session);
 
   return (
     <div
@@ -159,28 +157,16 @@ interface RowActionsProps {
 }
 
 /**
- * The row's action buttons.
- *
- * Which ones appear depends on what the session actually supports. A remote
- * session has no local transcript to relaunch from; archive still works — it
- * is keyed on the session id alone — and doubles as "forget this one". A
- * plain terminal has nothing to archive or resume either. Stop is always
- * there; the stylesheet shows it only while something runs. Session work
- * appears only when its page can open, the same rule as the meta line.
+ * The row's action buttons, as `rowButtons` says the session supports them.
+ * Session work appears only when its page can open, the same rule as the
+ * meta line.
  */
 function RowActions({ row, onOpenWork, onStop, onArchive, onResume }: RowActionsProps): JSX.Element {
   const { session } = row;
   const path = row.projectPath || session.projectPath;
   const remote = session.type === 'remote' || !!path?.startsWith('ssh://');
   const canOpenWork = useCanOpenWork(session.sessionId, remote);
-  const archive = (
-    <button
-      className="session-archive-btn"
-      title={session.archived ? 'Unarchive' : 'Archive'}
-      dangerouslySetInnerHTML={HTML.archive16}
-      onClick={onArchive}
-    />
-  );
+  const buttons = rowButtons(session);
   return (
     <div className="session-actions">
       {canOpenWork === true && (
@@ -193,21 +179,25 @@ function RowActions({ row, onOpenWork, onStop, onArchive, onResume }: RowActions
       )}
       <button
         className="session-stop-btn"
-        title={session.type === 'remote' ? 'Disconnect (keeps running on the remote)' : 'Stop session'}
+        title={buttons.stop}
         dangerouslySetInnerHTML={HTML.stop}
         onClick={onStop}
       />
-      {session.type === 'remote' && archive}
-      {session.type !== 'remote' && session.type !== 'terminal' && (
-        <>
-          {archive}
-          <button
-            className="session-launch-config-btn"
-            title="Resume with config"
-            dangerouslySetInnerHTML={HTML.launchConfig}
-            onClick={onResume}
-          />
-        </>
+      {buttons.archive && (
+        <button
+          className="session-archive-btn"
+          title={buttons.archive}
+          dangerouslySetInnerHTML={HTML.archive16}
+          onClick={onArchive}
+        />
+      )}
+      {buttons.resume && (
+        <button
+          className="session-launch-config-btn"
+          title="Resume with config"
+          dangerouslySetInnerHTML={HTML.launchConfig}
+          onClick={onResume}
+        />
       )}
     </div>
   );

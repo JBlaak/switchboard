@@ -22,23 +22,46 @@ const RELEASE: PublishedRelease = {
 // ── Versions ──
 
 test('a later minor or patch is newer, the same or an earlier one is not', () => {
-  assert.equal(isNewer('2.1.0', '2.0.9'), true);
-  assert.equal(isNewer('2.0.10', '2.0.9'), true);
-  assert.equal(isNewer('v2.0.0', '0.0.33'), true);
-  assert.equal(isNewer('2.0.0', '2.0.0'), false);
-  assert.equal(isNewer('2.0.0', '2.1.0'), false);
+  /* Given */
+  const cases: [string, string, boolean][] = [
+    ['2.1.0', '2.0.9', true],
+    ['2.0.10', '2.0.9', true],
+    ['v2.0.0', '0.0.33', true],
+    ['2.0.0', '2.0.0', false],
+    ['2.0.0', '2.1.0', false],
+  ];
+
+  for (const [candidate, current, expected] of cases) {
+    /* When */
+    const newer = isNewer(candidate, current);
+
+    /* Then */
+    assert.equal(newer, expected, `${candidate} vs ${current}`);
+  }
 });
 
 test('an unreadable version is never newer', () => {
-  assert.equal(isNewer('2.1.0-beta.1', '2.0.0'), false);
-  assert.equal(isNewer('latest', '2.0.0'), false);
-  assert.equal(isNewer('2.1.0', 'dev'), false);
+  /* Given */
+  const cases: [string, string][] = [
+    ['2.1.0-beta.1', '2.0.0'],
+    ['latest', '2.0.0'],
+    ['2.1.0', 'dev'],
+  ];
+
+  for (const [candidate, current] of cases) {
+    /* When */
+    const newer = isNewer(candidate, current);
+
+    /* Then */
+    assert.equal(newer, false, `${candidate} vs ${current}`);
+  }
 });
 
 // ── GitHub's answer ──
 
 test('the latest release is read from GitHub\'s response', () => {
-  const release = parseLatestRelease({
+  /* Given */
+  const response = {
     tag_name: 'v2.1.0',
     html_url: RELEASE.pageUrl,
     draft: false,
@@ -47,7 +70,12 @@ test('the latest release is read from GitHub\'s response', () => {
       { name: 'Switchboard-2.1.0-arm64.zip', browser_download_url: 'https://example.test/arm64.zip' },
       { name: 'broken' },
     ],
-  });
+  };
+
+  /* When */
+  const release = parseLatestRelease(response);
+
+  /* Then */
   assert.deepEqual(release, {
     version: '2.1.0',
     pageUrl: RELEASE.pageUrl,
@@ -56,27 +84,56 @@ test('the latest release is read from GitHub\'s response', () => {
 });
 
 test('drafts, pre-releases and odd tags are not releases', () => {
-  assert.equal(parseLatestRelease({ tag_name: 'v2.1.0', draft: true }), null);
-  assert.equal(parseLatestRelease({ tag_name: 'v2.1.0', prerelease: true }), null);
-  assert.equal(parseLatestRelease({ tag_name: 'nightly' }), null);
-  assert.equal(parseLatestRelease(null), null);
+  /* Given */
+  const responses = [
+    { tag_name: 'v2.1.0', draft: true },
+    { tag_name: 'v2.1.0', prerelease: true },
+    { tag_name: 'nightly' },
+    null,
+  ];
+
+  for (const response of responses) {
+    /* When */
+    const release = parseLatestRelease(response);
+
+    /* Then */
+    assert.equal(release, null, JSON.stringify(response));
+  }
 });
 
 // ── Which file to install ──
 
+test('the update asset is the zip for this architecture', () => {
+  /* When */
+  const name = updateAssetName('2.1.0', 'arm64');
+
+  /* Then */
+  assert.equal(name, 'Switchboard-2.1.0-arm64.zip');
+});
+
 test('the update points at the zip for this architecture', () => {
-  assert.equal(updateAssetName('2.1.0', 'arm64'), 'Switchboard-2.1.0-arm64.zip');
-  assert.equal(availableUpdate(RELEASE, '2.0.0', 'x64')?.downloadUrl, 'https://example.test/x64.zip');
+  /* When */
+  const update = availableUpdate(RELEASE, '2.0.0', 'x64');
+
+  /* Then */
+  assert.equal(update?.downloadUrl, 'https://example.test/x64.zip');
 });
 
 test('a release without a zip for this architecture is still offered, without a download', () => {
+  /* When */
   const update = availableUpdate(RELEASE, '2.0.0', 'ia32');
+
+  /* Then */
   assert.equal(update?.version, '2.1.0');
   assert.equal(update?.downloadUrl, null);
 });
 
 test('nothing is offered when the running version is current', () => {
-  assert.equal(availableUpdate(RELEASE, '2.1.0', 'arm64'), null);
+  /* When */
+  const update = availableUpdate(RELEASE, '2.1.0', 'arm64');
+
+  /* Then */
+  assert.equal(update, null);
 });
 
 // ── The service ──
@@ -102,41 +159,91 @@ function harness(opts: { release?: PublishedRelease | null; fails?: boolean; can
 }
 
 test('a newer release is announced once, however often it is found', async () => {
+  /* Given */
   const { service, renderer } = harness();
+
+  /* When */
   await service.check();
   await service.check();
+
+  /* Then */
   assert.deepEqual(renderer.only('updateAvailable'), [['updateAvailable', {
     version: '2.1.0', pageUrl: RELEASE.pageUrl, installable: true,
   }]]);
 });
 
 test('no release, or a failed check, announces nothing', async () => {
-  for (const opts of [{ release: null }, { fails: true }]) {
+  /* Given */
+  const cases = [{ release: null }, { fails: true }];
+
+  for (const opts of cases) {
     const { service, renderer } = harness(opts);
+
+    /* When */
     await service.check();
+
+    /* Then */
     assert.equal(renderer.only('updateAvailable').length, 0);
     assert.equal(service.notice(), null);
   }
 });
 
 test('an app that cannot replace itself is offered the release page instead', async () => {
+  /* Given */
+  const { service } = harness({ canInstall: false });
+
+  /* When */
+  await service.check();
+
+  /* Then */
+  assert.equal(service.notice()?.installable, false);
+});
+
+test('an app that cannot replace itself does not install', async () => {
+  /* Given */
   const { service, installs } = harness({ canInstall: false });
   await service.check();
-  assert.equal(service.notice()?.installable, false);
-  assert.equal(await service.install(), false);
+
+  /* When */
+  const installed = await service.install();
+
+  /* Then */
+  assert.equal(installed, false);
+  assert.deepEqual(installs, []);
+});
+
+test('there is nothing to install before a check', async () => {
+  /* Given */
+  const { service, installs } = harness();
+
+  /* When */
+  const installed = await service.install();
+
+  /* Then */
+  assert.equal(installed, false, 'nothing to install before a check');
   assert.deepEqual(installs, []);
 });
 
 test('install fetches the zip for this architecture', async () => {
+  /* Given */
   const { service, installs } = harness();
-  assert.equal(await service.install(), false, 'nothing to install before a check');
   await service.check();
-  assert.equal(await service.install(), true);
+
+  /* When */
+  const installed = await service.install();
+
+  /* Then */
+  assert.equal(installed, true);
   assert.deepEqual(installs, ['https://example.test/arm64.zip']);
 });
 
 test('checks are scheduled after launch, not during it', () => {
+  /* Given */
   const { service, timers } = harness();
+
+  /* When */
   service.start();
+
+  /* Then */
   assert.equal(timers.pending, 2);
 });

@@ -144,3 +144,18 @@ export function rowOrder(targets: readonly CursorTarget[]): string[] {
   for (const target of targets) if (target.kind === 'row') ids.push(target.sessionId);
   return ids;
 }
+
+/**
+ * The session Cmd+Shift+[ / ] moves to: the next open one in `order` (the
+ * sidebar's row order), wrapping round, skipping any `isOpen` says has ended.
+ * With no open session on screen it goes to the first open one.
+ */
+export function stepOpenSession(
+  order: readonly string[], isOpen: (sessionId: string) => boolean, current: string | null, direction: -1 | 1,
+): string | null {
+  const ids = order.filter(isOpen);
+  if (ids.length === 0) return null;
+  const at = current ? ids.indexOf(current) : -1;
+  if (at === -1) return ids[0];
+  return ids[(at + direction + ids.length) % ids.length];
+}

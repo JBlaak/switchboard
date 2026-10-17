@@ -9,25 +9,7 @@ import { dispatch } from '../../state/app-store';
 import { openSettings } from '../../ui/settings/actions';
 import { launchClaudeSession, projectStub } from './session-actions';
 
-/** Cmd+N. */
-export function isQuickSessionKey(e: KeyboardEvent): boolean {
-  if (e.altKey || e.code !== 'KeyN') return false;
-  return e.metaKey && !e.shiftKey && !e.ctrlKey;
-}
-
-/**
- * A bare N, while the keyboard is not in a terminal or a text field.
- *
- * Anything that takes typing gets the key as a letter: the terminal, a dialog's
- * filter, a settings input, a rename.
- */
-export function isBareQuickSessionKey(e: KeyboardEvent): boolean {
-  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.code !== 'KeyN') return false;
-  const target = e.target as HTMLElement | null;
-  if (!target) return true;
-  if (target.closest('.xterm')) return false;
-  return !target.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
-}
+export { isBareQuickSessionKey, isQuickSessionKey } from '../../lib/shortcut-keys';
 
 export async function launchQuickSession(): Promise<void> {
   const path = await quickSessionPath();

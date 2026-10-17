@@ -11,7 +11,7 @@ import { loadProjects } from '../../features/sessions/session-list';
 import { relayoutSessionList } from './relayout';
 import { dispatch, getState } from '../../state/app-store';
 import { sessionMap } from '../../state/session-store';
-import { fallbackName } from '../../state/session-list-layout';
+import { renamedName } from '../../state/session-list-layout';
 import { bump } from '../../lib/motion/reflow';
 import { openResumeDialog } from '../dialogs/actions';
 import {
@@ -137,21 +137,14 @@ export function cancelRename(rowId: string): void {
   dispatch({ type: 'renameEnded', rowId });
 }
 
-/**
- * Save what was typed.
- *
- * Typing the fallback title back, or nothing at all, means "no rename" rather
- * than "rename to this": the name is cleared, and the row goes back to
- * following the CLI's own title.
- */
+/** Save what was typed, as the name `renamedName` makes of it. */
 export async function finishRename(rowId: string, sessionId: string, typed: string): Promise<void> {
   const session = sessionMap.get(sessionId);
   if (!session) {
     dispatch({ type: 'renameEnded', rowId });
     return;
   }
-  const value = typed.trim();
-  const name = value && value !== fallbackName(session) ? value : null;
+  const name = renamedName(typed, session);
   await window.api.renameSession(sessionId, name);
   session.name = name;
   dispatch({ type: 'sessionRenamed', sessionId, name });

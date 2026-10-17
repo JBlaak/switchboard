@@ -13,31 +13,105 @@ function staleRow(extra = {}) {
 const caps = { count: 99, visibleSessionCount: 25, ageCutoff: NOW - 3 * DAY, isActive: false };
 
 test('a stale local row is truncated', () => {
-  assert.strictEqual(rowSurvivesTruncation(staleRow(), TIER_REST, caps), false);
+  /* Given */
+  const row = staleRow();
+
+  /* When */
+  const survives = rowSurvivesTruncation(row, TIER_REST, caps);
+
+  /* Then */
+  assert.strictEqual(survives, false);
 });
 
 test('a remote row survives however old it looks', () => {
   // The regression this guards: a remote session whose tmux session is still
   // running on the host, but whose `modified` has not moved since the user last
   // opened it, was dropped from the list — indistinguishable from archiving.
-  assert.strictEqual(rowSurvivesTruncation(staleRow({ remote: true }), TIER_REST, caps), true);
-  // Also exempt from the count budget, not just the age cutoff.
-  assert.strictEqual(
-    rowSurvivesTruncation(staleRow({ remote: true, sortTime: NOW }), TIER_REST, caps), true);
+  /* Given */
+  const row = staleRow({ remote: true });
+
+  /* When */
+  const survives = rowSurvivesTruncation(row, TIER_REST, caps);
+
+  /* Then */
+  assert.strictEqual(survives, true);
 });
 
-test('the existing exemptions still hold', () => {
-  assert.strictEqual(rowSurvivesTruncation(staleRow(), TIER_RUNNING, caps), true);
-  assert.strictEqual(rowSurvivesTruncation(staleRow({ pinned: true }), TIER_REST, caps), true);
-  assert.strictEqual(
-    rowSurvivesTruncation(staleRow(), TIER_REST, { ...caps, isActive: true }), true);
+test('a remote row is exempt from the count budget, not just the age cutoff', () => {
+  /* Given */
+  const row = staleRow({ remote: true, sortTime: NOW });
+
+  /* When */
+  const survives = rowSurvivesTruncation(row, TIER_REST, caps);
+
+  /* Then */
+  assert.strictEqual(survives, true);
 });
 
-test('a recent local row survives while there is budget, and not after', () => {
+test('a running row survives however stale', () => {
+  /* Given */
+  const row = staleRow();
+
+  /* When */
+  const survives = rowSurvivesTruncation(row, TIER_RUNNING, caps);
+
+  /* Then */
+  assert.strictEqual(survives, true);
+});
+
+test('a pinned row survives however stale', () => {
+  /* Given */
+  const row = staleRow({ pinned: true });
+
+  /* When */
+  const survives = rowSurvivesTruncation(row, TIER_REST, caps);
+
+  /* Then */
+  assert.strictEqual(survives, true);
+});
+
+test('the active row survives however stale', () => {
+  /* Given */
+  const row = staleRow();
+
+  /* When */
+  const survives = rowSurvivesTruncation(row, TIER_REST, { ...caps, isActive: true });
+
+  /* Then */
+  assert.strictEqual(survives, true);
+});
+
+test('a recent local row survives while there is budget', () => {
+  /* Given */
   const recent = staleRow({ sortTime: NOW - DAY });
-  assert.strictEqual(rowSurvivesTruncation(recent, TIER_REST, { ...caps, count: 24 }), true);
+
+  /* When */
+  const survives = rowSurvivesTruncation(recent, TIER_REST, { ...caps, count: 24 });
+
+  /* Then */
+  assert.strictEqual(survives, true);
+});
+
+test('a recent local row is truncated once the budget is spent', () => {
   // Budget spent: recency alone is not enough.
-  assert.strictEqual(rowSurvivesTruncation(recent, TIER_REST, { ...caps, count: 25 }), false);
+  /* Given */
+  const recent = staleRow({ sortTime: NOW - DAY });
+
+  /* When */
+  const survives = rowSurvivesTruncation(recent, TIER_REST, { ...caps, count: 25 });
+
+  /* Then */
+  assert.strictEqual(survives, false);
+});
+
+test('an in-budget local row older than the cutoff is truncated', () => {
   // In budget but older than the cutoff: the age check is not enough either.
-  assert.strictEqual(rowSurvivesTruncation(staleRow(), TIER_REST, { ...caps, count: 0 }), false);
+  /* Given */
+  const row = staleRow();
+
+  /* When */
+  const survives = rowSurvivesTruncation(row, TIER_REST, { ...caps, count: 0 });
+
+  /* Then */
+  assert.strictEqual(survives, false);
 });

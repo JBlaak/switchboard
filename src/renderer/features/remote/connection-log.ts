@@ -14,6 +14,7 @@ import { COLOUR_WARN, statusBanner } from '../../../domain/terminal/ansi';
 import { dispatch } from '../../state/app-store';
 import { openSessions, view } from '../../state/session-store';
 import { updateTerminalHeader } from '../sessions/terminal-header';
+import { remoteLogLine } from './log-line';
 import type { RemoteStatusPayload, RemoteStatusView } from '../../../domain/remote/remote-status';
 
 /** How long the green "reconnected" beat stays before the card steps aside. */
@@ -28,31 +29,13 @@ const CONNECTED_BEAT_MS = 500;
 export function handleRemoteStatus(
   sessionId: string, status: RemoteStatusPayload, previous: RemoteStatusView | undefined,
 ): void {
-  const target = status.target || 'the remote host';
+  const line = remoteLogLine(status, previous);
+  if (line) writeStatusLine(sessionId, line.text, line.warn ? COLOUR_WARN : undefined);
 
-  switch (status.phase) {
-    case 'connected':
-      // A connect after a numbered attempt is a reconnect: the card holds a
-      // green beat (see `remote-slice`) that this timer ends.
-      if (previous?.attempt) {
-        writeStatusLine(sessionId, 'reconnected');
-        setTimeout(() => dispatch({ type: 'remoteConnectedBeatEnded', sessionId }), CONNECTED_BEAT_MS);
-      }
-      break;
-
-    case 'retrying':
-      // The card only ever shows the break it is currently on; the scrollback
-      // keeps every one.
-      writeStatusLine(sessionId, status.everConnected
-        ? `connection lost: ${status.reason}`
-        : `could not reach ${target}: ${status.reason}`, COLOUR_WARN);
-      break;
-
-    case 'failed':
-      writeStatusLine(sessionId,
-        `gave up ${status.everConnected ? 'reconnecting to' : 'connecting to'} ${target}`,
-        COLOUR_WARN);
-      break;
+  // A connect after a numbered attempt is a reconnect: the card holds a green
+  // beat (see `remote-slice`) that this timer ends.
+  if (status.phase === 'connected' && previous?.attempt) {
+    setTimeout(() => dispatch({ type: 'remoteConnectedBeatEnded', sessionId }), CONNECTED_BEAT_MS);
   }
 
   if (sessionId === view.activeSessionId) updateTerminalHeader();

@@ -12,6 +12,7 @@
 import { visibleUpdate } from '../../state/update-slice';
 import { useStore } from '../use-store';
 import { dismissUpdate, installUpdate, openReleasePage } from './actions';
+import { updateNoticeView } from './footer-view';
 import type { JSX } from 'react';
 
 export function UpdateNotice(): JSX.Element | null {
@@ -20,20 +21,20 @@ export function UpdateNotice(): JSX.Element | null {
   const failed = useStore(state => state.update.failed);
   if (!notice) return null;
 
-  const action = installing ? 'Installing…' : failed ? 'Retry' : notice.installable ? 'Install' : 'View';
+  const shown = updateNoticeView(notice, { installing, failed });
   return (
     <div id="update-notice">
       <span id="update-notice-label">
-        {failed ? 'Update failed' : `Version ${notice.version} is available`}
+        {shown.label}
       </span>
       <button
         id="update-notice-action"
         type="button"
         disabled={installing}
-        title={notice.installable ? 'Download, replace this app and restart' : 'Open the release page'}
+        title={shown.actionTitle}
         onClick={notice.installable ? () => void installUpdate() : openReleasePage}
       >
-        {action}
+        {shown.action}
       </button>
       <button
         id="update-notice-dismiss"

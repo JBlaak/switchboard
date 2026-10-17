@@ -25,6 +25,7 @@ import { dressingOn } from '../../../domain/companion/calendar';
 import { questionBeat } from '../../../domain/companion/question-beats';
 import { timeOfDay } from '../../../domain/companion/patch';
 import { answeredFoot, keyHints, questionCounter } from '../../features/questions/question-copy';
+import { panelKey } from '../../features/questions/question-keys';
 import {
   SHEET_SETTLE_MS, patchArrive, questionIn, questionOut, settle,
 } from '../../features/questions/question-motion';
@@ -151,44 +152,29 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
 
   // ── Keys ──
   // On the panel rather than the window, so they can only act while the
-  // panel has the keyboard. Unmodified keys stop here — none of them is the
-  // terminal's or a global shortcut's to have (a bare N would otherwise start
-  // a quick session); Cmd/Ctrl/Alt combinations go on to the app.
+  // panel has the keyboard. Which keys stop here and what each does is
+  // `panelKey`'s to say; this applies it.
 
   useEffect(() => {
     const el = sheet.current!;
     const onKey = (e: KeyboardEvent): void => {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return;
-      if (e.key === 'Tab') return;
-      e.stopPropagation();
       const now = live.current;
+      const target = e.target as HTMLElement | null;
+      const key = panelKey(e, {
+        inOther: target === otherInput.current,
+        onPatch: !!target?.closest('.patch-poke'),
+        options: now.n,
+      });
+      if (key.does === 'pass') return;
+      e.stopPropagation();
       if (!now.toolUseId || !now.up) return;
       const entry = getState().answers.byToolUse[now.toolUseId];
       if (swapping(entry?.draft.step) || !entry || entry.sending) { e.preventDefault(); return; }
+      if (key.does === 'keep') return;
 
-      const target = e.target as HTMLElement | null;
-      // Enter and Space on Patch poke it, as a button should.
-      if ((e.key === 'Enter' || e.key === ' ') && target?.closest('.patch-poke')) return;
-
-      const inOther = target === otherInput.current;
-      const press = (action: DraftAction): void => { e.preventDefault(); handlers.current.act(action); };
-
-      switch (e.key) {
-        case 'ArrowDown': return press({ kind: 'move', by: 1 });
-        case 'ArrowUp': return press({ kind: 'move', by: -1 });
-        case 'Enter': return press({ kind: 'next' });
-        case 'Escape':
-          e.preventDefault();
-          chooseView(now.toolUseId, 'terminal');
-          return;
-      }
-      // Typing an answer of one's own: numbers, space and ←/→ are the text's.
-      if (inOther) return;
-
-      if (/^[1-9]$/.test(e.key) && Number(e.key) <= now.n + 1) return press({ kind: 'press', row: Number(e.key) - 1 });
-      if (e.key === ' ') return press({ kind: 'space' });
-      if (e.key === 'ArrowLeft') return press({ kind: 'back' });
-      if (e.key === 'ArrowRight') return press({ kind: 'next' });
+      e.preventDefault();
+      if (key.does === 'terminal') chooseView(now.toolUseId, 'terminal');
+      else handlers.current.act(key.action);
     };
     el.addEventListener('keydown', onKey);
     return () => el.removeEventListener('keydown', onKey);

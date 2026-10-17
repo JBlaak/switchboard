@@ -12,28 +12,75 @@ import type { SessionRow } from '../src/domain/session/session';
 
 // ── The dialog slice ──
 
-test('opening a dialog counts the opening and replaces whatever was open', () => {
-  let state = dialogReducer(initialDialogState, { type: 'dialogOpened', request: { kind: 'projectPicker' } });
+const opened = (kind: 'projectPicker' | 'addProject') => ({ type: 'dialogOpened' as const, request: { kind } });
+const pickerThenAdd = () => dialogReducer(dialogReducer(initialDialogState, opened('projectPicker')), opened('addProject'));
+
+test('opening a dialog counts the opening', () => {
+  /* When */
+  const state = dialogReducer(initialDialogState, opened('projectPicker'));
+
+  /* Then */
   assert.deepStrictEqual(state, { open: { kind: 'projectPicker' }, seq: 1 });
-  state = dialogReducer(state, { type: 'dialogOpened', request: { kind: 'addProject' } });
-  assert.deepStrictEqual(state, { open: { kind: 'addProject' }, seq: 2 });
 });
 
-test('a close only closes the opening it names', () => {
-  const first = dialogReducer(initialDialogState, { type: 'dialogOpened', request: { kind: 'projectPicker' } });
-  const second = dialogReducer(first, { type: 'dialogOpened', request: { kind: 'addProject' } });
-  assert.strictEqual(dialogReducer(second, { type: 'dialogClosed', seq: 1 }), second);
-  assert.deepStrictEqual(dialogReducer(second, { type: 'dialogClosed', seq: 2 }), { open: null, seq: 2 });
+test('opening a dialog replaces whatever was open', () => {
+  /* Given */
+  const state = dialogReducer(initialDialogState, opened('projectPicker'));
+
+  /* When */
+  const next = dialogReducer(state, opened('addProject'));
+
+  /* Then */
+  assert.deepStrictEqual(next, { open: { kind: 'addProject' }, seq: 2 });
+});
+
+test('a close naming an earlier opening keeps the state', () => {
+  /* Given */
+  const second = pickerThenAdd();
+
+  /* When */
+  const next = dialogReducer(second, { type: 'dialogClosed', seq: 1 });
+
+  /* Then */
+  assert.strictEqual(next, second);
+});
+
+test('a close naming the current opening closes it', () => {
+  /* Given */
+  const second = pickerThenAdd();
+
+  /* When */
+  const next = dialogReducer(second, { type: 'dialogClosed', seq: 2 });
+
+  /* Then */
+  assert.deepStrictEqual(next, { open: null, seq: 2 });
 });
 
 test('closing when nothing is open keeps the state', () => {
-  assert.strictEqual(dialogReducer(initialDialogState, { type: 'dialogClosed', seq: 0 }), initialDialogState);
+  /* When */
+  const next = dialogReducer(initialDialogState, { type: 'dialogClosed', seq: 0 });
+
+  /* Then */
+  assert.strictEqual(next, initialDialogState);
 });
 
 test('the root reducer carries the dialog slice', () => {
-  const state = rootReducer(initialRendererState(), { type: 'dialogOpened', request: { kind: 'addProject' } });
+  /* When */
+  const state = rootReducer(initialRendererState(), opened('addProject'));
+
+  /* Then */
   assert.deepStrictEqual(state.dialog.open, { kind: 'addProject' });
-  assert.strictEqual(rootReducer(state, { type: 'usageFailed' }).dialog, state.dialog);
+});
+
+test('the root reducer leaves the dialog slice alone for other events', () => {
+  /* Given */
+  const state = rootReducer(initialRendererState(), opened('addProject'));
+
+  /* When */
+  const next = rootReducer(state, { type: 'usageFailed' });
+
+  /* Then */
+  assert.strictEqual(next.dialog, state.dialog);
 });
 
 // ── Ranking the picker ──
@@ -49,46 +96,79 @@ function project(projectPath: string, ...modified: string[]): Project {
 const HOME = '/Users/someone';
 
 test('with no query every project is listed, most recently active first', () => {
-  const ranked = rankProjects([
+  /* Given */
+  const projects = [
     project(`${HOME}/Development/old`, '2026-01-01T00:00:00Z'),
     project(`${HOME}/Development/new`, '2026-03-01T00:00:00Z', '2025-01-01T00:00:00Z'),
     project(`${HOME}/Development/empty`),
-  ], '');
+  ];
+
+  /* When */
+  const ranked = rankProjects(projects, '');
+
+  /* Then */
   assert.deepStrictEqual(ranked.map(c => c.project.projectPath.split('/').pop()), ['new', 'old', 'empty']);
 });
 
 test('a label match outranks a match on the full path alone', () => {
-  const ranked = rankProjects([
+  /* Given */
+  const projects = [
     project('/srv/switchboard-data/website', '2026-03-01T00:00:00Z'),
     project('/srv/code/sb', '2026-01-01T00:00:00Z'),
-  ], 'sb');
+  ];
+
+  /* When */
+  const ranked = rankProjects(projects, 'sb');
+
+  /* Then */
   const sb = ranked.find(c => c.project.projectPath === '/srv/code/sb');
   assert.ok(sb?.onLabel);
   assert.strictEqual(ranked[0], sb);
 });
 
 test('a path-only match has nothing to highlight in the label', () => {
-  const [only] = rankProjects([project('/srv/zz-hidden/code/visible')], 'zz');
+  /* Given */
+  const projects = [project('/srv/zz-hidden/code/visible')];
+
+  /* When */
+  const [only] = rankProjects(projects, 'zz');
+
+  /* Then */
   assert.ok(only);
   assert.strictEqual(only.onLabel, false);
   assert.deepStrictEqual(only.positions, []);
 });
 
 test('nothing matches, nothing is listed', () => {
-  assert.deepStrictEqual(rankProjects([project('/srv/code/sb')], 'qqq'), []);
+  /* Given */
+  const projects = [project('/srv/code/sb')];
+
+  /* When */
+  const ranked = rankProjects(projects, 'qqq');
+
+  /* Then */
+  assert.deepStrictEqual(ranked, []);
 });
 
 // ── Highlight runs ──
 
 test('contiguous matches become one run', () => {
-  assert.deepStrictEqual(labelRuns('acme-api', [0, 1, 2, 3]), [
+  /* When */
+  const runs = labelRuns('acme-api', [0, 1, 2, 3]);
+
+  /* Then */
+  assert.deepStrictEqual(runs, [
     { text: 'acme', matched: true },
     { text: '-api', matched: false },
   ]);
 });
 
 test('scattered matches alternate with the text between them', () => {
-  assert.deepStrictEqual(labelRuns('web', [0, 2]), [
+  /* When */
+  const runs = labelRuns('web', [0, 2]);
+
+  /* Then */
+  assert.deepStrictEqual(runs, [
     { text: 'w', matched: true },
     { text: 'e', matched: false },
     { text: 'b', matched: true },
@@ -96,33 +176,87 @@ test('scattered matches alternate with the text between them', () => {
 });
 
 test('no positions is one plain run', () => {
-  assert.deepStrictEqual(labelRuns('notes', []), [{ text: 'notes', matched: false }]);
+  /* When */
+  const runs = labelRuns('notes', []);
+
+  /* Then */
+  assert.deepStrictEqual(runs, [{ text: 'notes', matched: false }]);
 });
 
 // ── The permission grid ──
 
-test('picking a mode replaces the one before it and clears Dangerous Skip', () => {
-  assert.deepStrictEqual(pickPermission({ mode: 'plan', dangerousSkip: false }, 'auto'), { mode: 'auto', dangerousSkip: false });
-  assert.deepStrictEqual(pickPermission({ mode: null, dangerousSkip: true }, 'plan'), { mode: 'plan', dangerousSkip: false });
-  assert.deepStrictEqual(pickPermission({ mode: 'plan', dangerousSkip: false }, null), { mode: null, dangerousSkip: false });
+test('picking a mode replaces the one before it', () => {
+  /* When */
+  const picked = pickPermission({ mode: 'plan', dangerousSkip: false }, 'auto');
+
+  /* Then */
+  assert.deepStrictEqual(picked, { mode: 'auto', dangerousSkip: false });
 });
 
-test('Dangerous Skip toggles, and turning it on clears the mode', () => {
+test('picking a mode clears Dangerous Skip', () => {
+  /* When */
+  const picked = pickPermission({ mode: null, dangerousSkip: true }, 'plan');
+
+  /* Then */
+  assert.deepStrictEqual(picked, { mode: 'plan', dangerousSkip: false });
+});
+
+test('picking no mode clears the mode', () => {
+  /* When */
+  const picked = pickPermission({ mode: 'plan', dangerousSkip: false }, null);
+
+  /* Then */
+  assert.deepStrictEqual(picked, { mode: null, dangerousSkip: false });
+});
+
+test('turning Dangerous Skip on clears the mode', () => {
+  /* When */
   const on = pickPermission({ mode: 'plan', dangerousSkip: false }, DANGEROUS_SKIP);
+
+  /* Then */
   assert.deepStrictEqual(on, { mode: null, dangerousSkip: true });
-  assert.deepStrictEqual(pickPermission(on, DANGEROUS_SKIP), { mode: null, dangerousSkip: false });
 });
 
-test('a selection folds into the launch options', () => {
-  const dangerous: SessionOptions = {};
-  applyPermissionSelection(dangerous, { mode: 'plan', dangerousSkip: true });
-  assert.deepStrictEqual(dangerous, { dangerouslySkipPermissions: true });
+test('Dangerous Skip toggles off again', () => {
+  /* Given */
+  const on = pickPermission({ mode: 'plan', dangerousSkip: false }, DANGEROUS_SKIP);
 
-  const mode: SessionOptions = {};
-  applyPermissionSelection(mode, { mode: 'plan', dangerousSkip: false });
-  assert.deepStrictEqual(mode, { permissionMode: 'plan' });
+  /* When */
+  const off = pickPermission(on, DANGEROUS_SKIP);
 
-  const none: SessionOptions = {};
-  applyPermissionSelection(none, { mode: null, dangerousSkip: false });
-  assert.deepStrictEqual(none, {});
+  /* Then */
+  assert.deepStrictEqual(off, { mode: null, dangerousSkip: false });
+});
+
+test('a Dangerous Skip selection folds into the launch options, over any mode', () => {
+  /* Given */
+  const options: SessionOptions = {};
+
+  /* When */
+  applyPermissionSelection(options, { mode: 'plan', dangerousSkip: true });
+
+  /* Then */
+  assert.deepStrictEqual(options, { dangerouslySkipPermissions: true });
+});
+
+test('a mode selection folds into the launch options', () => {
+  /* Given */
+  const options: SessionOptions = {};
+
+  /* When */
+  applyPermissionSelection(options, { mode: 'plan', dangerousSkip: false });
+
+  /* Then */
+  assert.deepStrictEqual(options, { permissionMode: 'plan' });
+});
+
+test('an empty selection leaves the launch options empty', () => {
+  /* Given */
+  const options: SessionOptions = {};
+
+  /* When */
+  applyPermissionSelection(options, { mode: null, dangerousSkip: false });
+
+  /* Then */
+  assert.deepStrictEqual(options, {});
 });

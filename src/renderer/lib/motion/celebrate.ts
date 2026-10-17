@@ -12,6 +12,11 @@ const SHAPES = ['', '', '', '★', '✦'];
 const GRAVITY = 1500; // px/s²
 let count = 0;
 
+/** Particles in the `burst`th burst (counted from 1): every fifth one is a bigger one. */
+export function confettiPieces(burst: number): number {
+  return burst % 5 === 0 ? 70 : 28;
+}
+
 interface Particle {
   el: HTMLSpanElement;
   x: number;
@@ -28,14 +33,15 @@ interface Particle {
 
 export function celebrate(x: number, y: number): void {
   if (typeof window === 'undefined' || reducedMotion()) return;
-  const big = ++count % 5 === 0;
+  const pieces = confettiPieces(++count);
+  const big = pieces > 28;
   const layer = document.createElement('div');
   layer.className = 'confetti';
   layer.setAttribute('aria-hidden', 'true');
   document.body.appendChild(layer);
 
   const parts: Particle[] = [];
-  for (let i = 0; i < (big ? 70 : 28); i++) {
+  for (let i = 0; i < pieces; i++) {
     const el = document.createElement('span');
     el.className = 'confetti__piece';
     const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];

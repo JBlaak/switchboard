@@ -8,6 +8,7 @@
  *
  * Pure, so the rules are tested without a DOM.
  */
+import type { EffectiveSettings } from '../../../domain/settings/settings';
 import type { SessionOptions } from '../../../domain/launch/session-options';
 
 export interface PermissionSelection {
@@ -17,6 +18,11 @@ export interface PermissionSelection {
 
 /** What the grid's control for Dangerous Skip is keyed by, beside the mode values. */
 export const DANGEROUS_SKIP = 'dangerous-skip';
+
+/** The selection a dialog opens with: the project's effective settings. */
+export function initialPermissionSelection(settings: EffectiveSettings): PermissionSelection {
+  return { mode: settings.permissionMode ?? null, dangerousSkip: !!settings.dangerouslySkipPermissions };
+}
 
 /**
  * The selection after clicking one option.

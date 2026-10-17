@@ -30,29 +30,51 @@ function fakeApi() {
   };
 }
 
-test('the bridge subscribes to every push channel, and unsubscribes from all of them', () => {
+test('the bridge subscribes to every push channel', () => {
+  /* Given */
+  const fake = fakeApi();
+
+  /* When */
+  installIpcBridge(fake.api, () => {}, () => {});
+
+  /* Then */
+  assert.deepStrictEqual(fake.subscribed(), Object.keys(EVENT).sort());
+});
+
+test('the bridge unsubscribes from every push channel', () => {
+  /* Given */
   const fake = fakeApi();
   const off = installIpcBridge(fake.api, () => {}, () => {});
-  assert.deepStrictEqual(fake.subscribed(), Object.keys(EVENT).sort());
+
+  /* When */
   off();
+
+  /* Then */
   assert.strictEqual(fake.unsubscribed(), Object.keys(EVENT).length);
 });
 
 test('terminal data goes to the terminal, never to the store', () => {
+  /* Given */
   const fake = fakeApi();
   const sent: RendererEvent[] = [];
   const data: [string, string][] = [];
   installIpcBridge(fake.api, e => sent.push(e), (id, chunk) => data.push([id, chunk]));
+
+  /* When */
   fake.push('terminalData', 's1', 'hello');
+
+  /* Then */
   assert.deepStrictEqual(data, [['s1', 'hello']]);
   assert.deepStrictEqual(sent, []);
 });
 
 test('each other push becomes its event', () => {
+  /* Given */
   const fake = fakeApi();
   const sent: RendererEvent[] = [];
   installIpcBridge(fake.api, e => sent.push(e), () => {});
 
+  /* When */
   fake.push('processExited', 's1', 1);
   fake.push('sessionForked', 'a', 'b');
   fake.push('cliBusyState', 's1', true);
@@ -68,6 +90,7 @@ test('each other push becomes its event', () => {
   fake.push('updateAvailable', { version: '1' });
   fake.push('sessionWorkSnapshot', { sessionId: 's1', repository: '', items: [], footprint: { worktrees: 0, branches: 0 }, queued: 0, gh: 'ok', updatedAt: 'now' });
 
+  /* Then */
   const remote = sent.find(e => e.type === 'remoteStatus');
   assert.ok(remote && typeof remote.receivedAt === 'number', 'stamped on arrival');
   assert.deepStrictEqual(sent.map(e => (e.type === 'remoteStatus' ? { ...e, receivedAt: 0 } : e)), [

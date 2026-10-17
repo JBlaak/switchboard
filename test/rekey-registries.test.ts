@@ -62,12 +62,15 @@ function forked(oldId: string, newId: string) {
 }
 
 test('a re-key moves every registry to the new id and leaves nothing under the old one', () => {
+  /* Given */
   const { row, entry } = launch('r-old');
   dispatch({ type: 'activeSessionChanged', sessionId: 'r-old' });
   bufferTerminalData('r-old', 'held');
 
+  /* When */
   forked('r-old', 'r-new');
 
+  /* Then */
   for (const registry of [openSessions, pendingSessions, sessionMap, terminalWriteBuffers]) {
     assert.ok(!registry.has('r-old'));
     assert.ok(registry.has('r-new'));
@@ -82,13 +85,16 @@ test('a re-key moves every registry to the new id and leaves nothing under the o
 });
 
 test('output held under the old id is still written after the re-key', () => {
+  /* Given */
   const { written } = launch('w-old');
   bufferTerminalData('w-old', 'a');
   bufferTerminalData('w-old', 'b');
 
+  /* When */
   forked('w-old', 'w-new');
   runFrames();
 
+  /* Then */
   assert.deepStrictEqual(written, ['ab']);
   assert.ok(!terminalWriteBuffers.has('w-new'));
 });
@@ -96,14 +102,21 @@ test('output held under the old id is still written after the re-key', () => {
 test('an open synchronised block still times out after the re-key', () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
+    /* Given */
     const { written } = launch('t-old');
     bufferTerminalData('t-old', ESC_SYNC_START + 'half a repaint');
 
+    /* When */
     forked('t-old', 't-new');
     runFrames();
+
+    /* Then */
     assert.deepStrictEqual(written, [], 'held while the block is open');
 
+    /* When */
     mock.timers.tick(SYNC_BUFFER_TIMEOUT);
+
+    /* Then */
     assert.deepStrictEqual(written, [ESC_SYNC_START + 'half a repaint']);
   } finally {
     mock.timers.reset();
@@ -111,17 +124,27 @@ test('an open synchronised block still times out after the re-key', () => {
 });
 
 test('the row keeps its local key across the re-key', () => {
+  /* Given */
   launch('k-old');
   const key = getState().keys.byId['k-old'];
-  assert.ok(key);
+
+  /* When */
   forked('k-old', 'k-new');
+
+  /* Then */
+  assert.ok(key);
   assert.strictEqual(getState().keys.byId['k-new'], key);
 });
 
 test('a session on screen elsewhere is not persisted as the one on screen', () => {
+  /* Given */
   launch('bg-old');
   dispatch({ type: 'activeSessionChanged', sessionId: 'someone-else' });
   stored.delete(STORAGE_KEYS.activeSessionId);
+
+  /* When */
   forked('bg-old', 'bg-new');
+
+  /* Then */
   assert.strictEqual(stored.get(STORAGE_KEYS.activeSessionId), undefined);
 });

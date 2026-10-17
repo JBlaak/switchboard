@@ -195,43 +195,70 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 // ── Eligibility ──
 
 test('canOpen is false for remote sessions, sessions outside a repository, and unknown ones', async () => {
+  /* Given */
   const { service } = setup();
-  assert.equal(await service.canOpen('s1'), true);
-  assert.equal(await service.canOpen('remote'), false);
-  assert.equal(await service.canOpen('loose'), false);
-  assert.equal(await service.canOpen('nobody'), false);
+  const cases: [string, boolean][] = [['s1', true], ['remote', false], ['loose', false], ['nobody', false]];
+
+  for (const [sessionId, expected] of cases) {
+    /* When */
+    const can = await service.canOpen(sessionId);
+
+    /* Then */
+    assert.equal(can, expected, sessionId);
+  }
 });
 
 test('open answers null, and starts nothing, where canOpen is false', async () => {
+  /* Given */
   const { service, snapshots, timers } = setup();
-  assert.equal(await service.open('remote'), null);
-  assert.equal(await service.open('loose'), null);
+
+  /* When */
+  const remote = await service.open('remote');
+  const loose = await service.open('loose');
+
+  /* Then */
+  assert.equal(remote, null);
+  assert.equal(loose, null);
   assert.deepEqual(snapshots, []);
   assert.equal(timers.intervals.size, 0);
 });
 
 // ── Snapshots ──
 
-test('nothing changed yet: an empty snapshot, pushed once, and not again when a rebuild finds the same', async () => {
-  const { service, snapshots, timers, live } = setup();
+test('nothing changed yet: an empty snapshot, pushed once', async () => {
+  /* Given */
+  const { service, snapshots } = setup();
+
+  /* When */
   const first = await service.open('s1');
+
+  /* Then */
   assert.deepEqual(first?.items, []);
   assert.equal(first?.gh, 'ok');
   assert.equal(first?.sessionId, 's1');
   assert.equal(first?.repository, REPO, 'from the origin remote');
   assert.equal(snapshots.length, 1);
   assert.equal(typeof first?.updatedAt, 'string');
+});
 
+test('nothing changed yet: not pushed again when a rebuild finds the same', async () => {
+  /* Given */
+  const { service, snapshots, timers, live } = setup();
+  await service.open('s1');
+
+  /* When */
   live()[0].onChange();
   timers.fireTimeouts();
   await settle();
   timers.fireIntervals();
   await settle();
+
+  /* Then */
   assert.equal(snapshots.length, 1, 'nothing new to push');
 });
 
-test('a cwd in a subdirectory resolves to its worktree root, and lines in one root merge into one place', async () => {
-  const { service, world, calls, live } = setup({
+function subdirectorySetup() {
+  const harness = setup({
     locations: [
       { cwd: ROOT + '/src', branch: 'feat/1-thing', fromSubagent: true },
       { cwd: ROOT + '/src/deep', branch: 'feat/1-thing', fromSubagent: false },
@@ -241,23 +268,43 @@ test('a cwd in a subdirectory resolves to its worktree root, and lines in one ro
     ahead: new Map([['feat/1-thing', 2]]),
     gh: 'missing',
   });
-  world.status.set(ROOT, [{ path: 'x.ts', status: 'modified' }]);
+  harness.world.status.set(ROOT, [{ path: 'x.ts', status: 'modified' }]);
+  return harness;
+}
+
+test('a cwd in a subdirectory resolves to its worktree root, and lines in one root merge into one place', async () => {
+  /* Given */
+  const { service, live } = subdirectorySetup();
+
+  /* When */
   const snapshot = await service.open('s1');
+
+  /* Then */
   const branch = snapshot!.items.find((item) => item.kind === 'branch');
   assert.ok(branch && branch.kind === 'branch');
   assert.deepEqual(branch.location, { worktree: ROOT, branch: 'feat/1-thing', fromSubagent: false });
   assert.equal(branch.ahead, 2);
   assert.equal(branch.id, 'branch:' + ROOT + '\0feat/1-thing');
   assert.deepEqual(live().map((watcher) => watcher.worktree), [ROOT], 'one watcher per worktree');
+});
 
+test('each cwd is resolved to its worktree root once', async () => {
+  /* Given */
+  const { service, world, calls } = subdirectorySetup();
+  await service.open('s1');
   const before = calls.worktreeRoot;
+
+  /* When */
   world.locations = [...world.locations];
   await service.open('s1');
+
+  /* Then */
   // Each cwd is resolved once; only the root itself is checked again.
   assert.equal(calls.worktreeRoot - before, 1);
 });
 
 test('a subagent worktree is its own place, marked as the subagent\'s, and watched', async () => {
+  /* Given */
   const { service, world, live } = setup({
     locations: [
       { cwd: ROOT, branch: 'main', fromSubagent: false },
@@ -270,7 +317,11 @@ test('a subagent worktree is its own place, marked as the subagent\'s, and watch
   world.branchStats.set('feat/agent', { additions: 40, deletions: 7 });
   world.pushed.add('feat/agent');
   world.workingStats.set(AGENT, { additions: 3, deletions: 0 });
+
+  /* When */
   const snapshot = await service.open('s1');
+
+  /* Then */
   const kinds = snapshot!.items.map((item) => item.kind);
   assert.deepEqual(kinds, ['branch', 'dirty']);
   assert.deepEqual(snapshot!.items.map((item) => item.kind !== 'pr' && item.kind !== 'issue' && [item.additions, item.deletions]), [
@@ -286,11 +337,16 @@ test('a subagent worktree is its own place, marked as the subagent\'s, and watch
 });
 
 test('a merged PR is listed under Done with what gh said about it', async () => {
+  /* Given */
   const { service } = setup({
     pullRequests: [prLink(7), prLink(8)],
     prs: [prStatus(7, { state: 'merged', title: 'Old' }), prStatus(8, { title: 'New' })],
   });
+
+  /* When */
   const snapshot = await service.open('s1');
+
+  /* Then */
   assert.deepEqual(snapshot!.items.map((item) => item.kind === 'pr' && [item.pr.number, item.pr.state]), [
     [8, 'open'],
     [7, 'merged'],
@@ -298,53 +354,131 @@ test('a merged PR is listed under Done with what gh said about it', async () => 
   assert.ok(snapshot!.items.every((item) => !item.error));
 });
 
-test('a PR whose branch was deleted takes its diff from gh, cached by its head commit', async () => {
-  const { service, world, calls } = setup({
-    pullRequests: [prLink(9)],
-    prs: [prStatus(9, { headRef: 'feat/gone' })],
-  });
+// A PR whose branch was deleted.
+const deletedBranchPr = () => setup({
+  pullRequests: [prLink(9)],
+  prs: [prStatus(9, { headRef: 'feat/gone' })],
+});
+
+test('a PR whose branch was deleted takes its diff from gh', async () => {
+  /* Given */
+  const { service } = deletedBranchPr();
+
+  /* When */
   const snapshot = await service.open('s1');
+
+  /* Then */
   const pr = snapshot!.items[0];
   assert.ok(pr.kind === 'pr');
   assert.deepEqual(pr.diff, { kind: 'pull-request', repository: REPO, number: 9 });
+});
 
-  const fromGitHub = await service.diff('s1', pr.id);
+test('a PR whose branch was deleted is diffed by GitHub', async () => {
+  /* Given */
+  const { service } = deletedBranchPr();
+  const id = (await service.open('s1'))!.items[0].id;
+
+  /* When */
+  const fromGitHub = await service.diff('s1', id);
+
+  /* Then */
   assert.equal(fromGitHub.source, 'github', 'the page says the branch is not checked out');
   const files = fromGitHub.files;
   assert.deepEqual(files.map((file) => [file.path, file.additions, file.deletions]), [['a.txt', 1, 1]]);
-  await service.diff('s1', pr.id);
-  assert.equal(calls.pullRequestDiff, 1, 'the second ask is cached');
+});
 
+test('a PR diff from GitHub is cached by its head commit', async () => {
+  /* Given */
+  const { service, calls } = deletedBranchPr();
+  const id = (await service.open('s1'))!.items[0].id;
+
+  /* When */
+  await service.diff('s1', id);
+  await service.diff('s1', id);
+
+  /* Then */
+  assert.equal(calls.pullRequestDiff, 1, 'the second ask is cached');
+});
+
+test('a new head commit on GitHub is a new diff', async () => {
+  /* Given */
+  const { service, world, calls } = deletedBranchPr();
+  const id = (await service.open('s1'))!.items[0].id;
+  await service.diff('s1', id);
+  await service.diff('s1', id);
+
+  /* When */
   world.prs = [prStatus(9, { headRef: 'feat/gone', headSha: 'pushed-again' })];
   await service.open('s1');
-  await service.diff('s1', pr.id);
+  await service.diff('s1', id);
+
+  /* Then */
   assert.equal(calls.pullRequestDiff, 2, 'a new head commit is a new diff');
 });
 
-test('a PR whose branch is checked out diffs locally, cached by both commits, with generated files collapsed', async () => {
-  const { service, world, calls } = setup({
-    locations: [{ cwd: ROOT, branch: 'feat/3-x', fromSubagent: false }],
-    branches: new Set(['main', 'feat/3-x']),
-    pullRequests: [prLink(3)],
-    prs: [prStatus(3, { headRef: 'feat/3-x', headSha: 'sha-feat/3-x' })],
-    generated: ['a.txt'],
-  });
+// A PR whose branch is checked out.
+const checkedOutBranchPr = () => setup({
+  locations: [{ cwd: ROOT, branch: 'feat/3-x', fromSubagent: false }],
+  branches: new Set(['main', 'feat/3-x']),
+  pullRequests: [prLink(3)],
+  prs: [prStatus(3, { headRef: 'feat/3-x', headSha: 'sha-feat/3-x' })],
+  generated: ['a.txt'],
+});
+
+test('a PR whose branch is checked out diffs locally', async () => {
+  /* Given */
+  const { service } = checkedOutBranchPr();
+
+  /* When */
   const snapshot = await service.open('s1');
+
+  /* Then */
   const pr = snapshot!.items[0];
   assert.ok(pr.kind === 'pr');
   assert.deepEqual(pr.diff, { kind: 'local', worktree: ROOT, base: 'origin/main', head: 'feat/3-x' });
+});
 
-  const local = await service.diff('s1', pr.id);
+test('a local PR diff has generated files collapsed', async () => {
+  /* Given */
+  const { service } = checkedOutBranchPr();
+  const id = (await service.open('s1'))!.items[0].id;
+
+  /* When */
+  const local = await service.diff('s1', id);
+
+  /* Then */
   assert.equal(local.source, 'local');
   assert.equal(local.files[0].collapsedReason, 'generated');
-  await service.diff('s1', pr.id);
+});
+
+test('a local PR diff is cached by both commits, and never asks GitHub', async () => {
+  /* Given */
+  const { service, calls } = checkedOutBranchPr();
+  const id = (await service.open('s1'))!.items[0].id;
+
+  /* When */
+  await service.diff('s1', id);
+  await service.diff('s1', id);
+
+  /* Then */
   assert.equal(calls.branchDiff, 1);
   assert.equal(calls.pullRequestDiff, undefined);
+});
 
+test('a new commit on a checked-out PR branch is a new diff', async () => {
+  /* Given */
+  const { service, world, calls } = checkedOutBranchPr();
+  const id = (await service.open('s1'))!.items[0].id;
+  await service.diff('s1', id);
+  await service.diff('s1', id);
+
+  /* When */
   world.shas.set('feat/3-x', 'new-commit');
   world.prs = [prStatus(3, { headRef: 'feat/3-x', headSha: 'new-commit' })];
   await service.open('s1');
-  await service.diff('s1', pr.id);
+  await service.diff('s1', id);
+
+  /* Then */
   assert.equal(calls.branchDiff, 2, 'a new commit on the branch is a new diff');
 });
 
@@ -361,11 +495,16 @@ function checkedOutPr(localSha: string, prSha: string) {
 }
 
 test('a checked-out PR at GitHub\'s commit diffs locally, and takes comments', async () => {
+  /* Given */
   const { service, calls } = checkedOutPr('abc', 'abc');
   const snapshot = await service.open('s1');
   const pr = snapshot!.items[0];
-  assert.ok(pr.kind === 'pr');
+
+  /* When */
   const diff = await service.diff('s1', pr.id);
+
+  /* Then */
+  assert.ok(pr.kind === 'pr');
   assert.equal(diff.source, 'local');
   assert.equal(diff.note, undefined);
   assert.equal(calls.pullRequestDiff, undefined);
@@ -373,11 +512,16 @@ test('a checked-out PR at GitHub\'s commit diffs locally, and takes comments', a
 });
 
 test('a checked-out PR at another commit shows GitHub\'s diff, says why, and comments go against it', async () => {
+  /* Given */
   const { service, calls } = checkedOutPr('local-unpushed', 'abc');
   const snapshot = await service.open('s1');
   const pr = snapshot!.items[0];
-  assert.ok(pr.kind === 'pr');
+
+  /* When */
   const diff = await service.diff('s1', pr.id);
+
+  /* Then */
+  assert.ok(pr.kind === 'pr');
   assert.equal(diff.source, 'github');
   assert.equal(diff.note, LOCAL_DIFFERS);
   assert.equal(calls.branchDiff, undefined, 'the local lines are never offered');
@@ -387,46 +531,76 @@ test('a checked-out PR at another commit shows GitHub\'s diff, says why, and com
 });
 
 test('uncommitted changes are diffed fresh every time', async () => {
+  /* Given */
   const { service, world, calls } = setup();
   world.status.set(ROOT, [{ path: 'a.txt', status: 'modified' }]);
   const snapshot = await service.open('s1');
   const dirty = snapshot!.items[0];
+
+  /* When */
+  await service.diff('s1', dirty.id);
+  await service.diff('s1', dirty.id);
+
+  /* Then */
   assert.equal(dirty.kind, 'dirty');
-  await service.diff('s1', dirty.id);
-  await service.diff('s1', dirty.id);
   assert.equal(calls.workingDiff, 2);
 });
 
-test('a worktree that is gone drops out, and its watcher with it', async () => {
-  const { service, world, live, timers } = setup({
-    locations: [
-      { cwd: ROOT, branch: 'main', fromSubagent: false },
-      { cwd: AGENT, branch: 'feat/agent', fromSubagent: true },
-      { cwd: '/code/app/.claude/worktrees/removed-long-ago', branch: 'feat/old', fromSubagent: true },
-    ],
-    branches: new Set(['main', 'feat/agent']),
-    ahead: new Map([['feat/agent', 1]]),
-  });
+const withRemovedWorktrees = () => setup({
+  locations: [
+    { cwd: ROOT, branch: 'main', fromSubagent: false },
+    { cwd: AGENT, branch: 'feat/agent', fromSubagent: true },
+    { cwd: '/code/app/.claude/worktrees/removed-long-ago', branch: 'feat/old', fromSubagent: true },
+  ],
+  branches: new Set(['main', 'feat/agent']),
+  ahead: new Map([['feat/agent', 1]]),
+});
+
+test('a worktree that is gone drops out, and is not watched', async () => {
+  /* Given */
+  const { service, live } = withRemovedWorktrees();
+
+  /* When */
   const first = await service.open('s1');
+
+  /* Then */
   assert.deepEqual(first!.items.map((item) => item.kind), ['branch']);
   assert.deepEqual(live().map((watcher) => watcher.worktree).sort(), [AGENT, ROOT].sort());
+});
 
+test('a worktree removed while the page is open drops its watcher on the next rebuild', async () => {
+  /* Given */
+  const { service, world, live, timers } = withRemovedWorktrees();
+  await service.open('s1');
+
+  /* When */
   // The agent's worktree is removed (its branch kept); the next rebuild drops it.
   world.roots.delete(AGENT);
   live().find((watcher) => watcher.worktree === AGENT)!.onChange();
   timers.fireTimeouts();
   await settle();
+
+  /* Then */
   assert.deepEqual(live().map((watcher) => watcher.worktree), [ROOT]);
 });
 
+const withoutGh = (gh: 'missing' | 'unauthenticated') => setup({
+  gh,
+  pullRequests: [prLink(4)],
+  prs: [prStatus(4, { state: 'merged' })],
+});
+
 test('without gh the page has git-only data, says why, and never asks GitHub for PRs', async () => {
-  for (const gh of ['missing', 'unauthenticated'] as const) {
-    const { service, calls, snapshots } = setup({
-      gh,
-      pullRequests: [prLink(4)],
-      prs: [prStatus(4, { state: 'merged' })],
-    });
+  /* Given */
+  const cases = ['missing', 'unauthenticated'] as const;
+
+  for (const gh of cases) {
+    const { service, calls } = withoutGh(gh);
+
+    /* When */
     const snapshot = await service.open('s1');
+
+    /* Then */
     assert.equal(snapshot!.gh, gh);
     const pr = snapshot!.items[0];
     assert.ok(pr.kind === 'pr');
@@ -434,9 +608,22 @@ test('without gh the page has git-only data, says why, and never asks GitHub for
     assert.equal(pr.error, undefined);
     assert.equal(calls.pullRequests, undefined);
     assert.equal(calls.issues, undefined);
+  }
+});
 
-    // Its branch is not here and gh cannot fetch it: no diff, and the item says why.
-    const none = await service.diff('s1', pr.id);
+test('without gh a PR whose branch is not here has no diff, and the item says why', async () => {
+  // Its branch is not here and gh cannot fetch it: no diff, and the item says why.
+  /* Given */
+  const cases = ['missing', 'unauthenticated'] as const;
+
+  for (const gh of cases) {
+    const { service, snapshots } = withoutGh(gh);
+    const id = (await service.open('s1'))!.items[0].id;
+
+    /* When */
+    const none = await service.diff('s1', id);
+
+    /* Then */
     assert.deepEqual([none.files, none.source], [[], null]);
     assert.match(none.error ?? '', gh === 'missing' ? /not installed/ : /not signed in/);
     const marked = snapshots[snapshots.length - 1].items[0];
@@ -445,12 +632,17 @@ test('without gh the page has git-only data, says why, and never asks GitHub for
 });
 
 test('a failed gh request marks its PRs, not the page', async () => {
+  /* Given */
   const { service, world } = setup({
     pullRequests: [prLink(5)],
     prs: null,
   });
   world.status.set(ROOT, [{ path: 'a.txt', status: 'modified' }]);
+
+  /* When */
   const snapshot = await service.open('s1');
+
+  /* Then */
   assert.equal(snapshot!.gh, 'ok');
   const pr = snapshot!.items.find((item) => item.kind === 'pr')!;
   assert.match(pr.error ?? '', /GitHub did not answer/);
@@ -459,11 +651,16 @@ test('a failed gh request marks its PRs, not the page', async () => {
 });
 
 test('issues gh confirms are listed with their title; a mention that is a PR drops out', async () => {
+  /* Given */
   const { service } = setup({
     mentions: [{ repository: '', number: 12 }, { repository: '', number: 88 }],
     issues: [{ repository: REPO, number: 12, title: 'Bug', state: 'open', url: 'https://github.com/o/app/issues/12' }],
   });
+
+  /* When */
   const snapshot = await service.open('s1');
+
+  /* Then */
   assert.deepEqual(snapshot!.items.map((item) => item.kind === 'issue' && item.issue), [
     { repository: '', number: 12, title: 'Bug', state: 'open', url: 'https://github.com/o/app/issues/12' },
   ]);
@@ -471,158 +668,389 @@ test('issues gh confirms are listed with their title; a mention that is a PR dro
 
 // ── Watching ──
 
-test('a burst of watcher events rebuilds once, after the debounce', async () => {
+test('a burst of watcher events schedules one rebuild, after the debounce', async () => {
+  /* Given */
+  const { service, timers, live } = setup();
+  await service.open('s1');
+  const [watcher] = live();
+
+  /* When */
+  watcher.onChange();
+  watcher.onChange();
+  watcher.onChange();
+
+  /* Then */
+  assert.equal(timers.timeouts.size, 1);
+  assert.equal([...timers.timeouts.values()][0].ms, WATCH_DEBOUNCE_MS);
+});
+
+test('a burst of watcher events rebuilds once', async () => {
+  /* Given */
   const { service, world, timers, live, snapshots } = setup();
   await service.open('s1');
   const [watcher] = live();
   watcher.onChange();
   watcher.onChange();
   watcher.onChange();
-  assert.equal(timers.timeouts.size, 1);
-  assert.equal([...timers.timeouts.values()][0].ms, WATCH_DEBOUNCE_MS);
-
   world.status.set(ROOT, [{ path: 'a.txt', status: 'modified' }]);
+
+  /* When */
   timers.fireTimeouts();
   await settle();
+
+  /* Then */
   assert.equal(snapshots.length, 2);
   assert.equal(snapshots[1].items[0].kind, 'dirty');
 });
 
-test('a write to the session\'s transcript folder rebuilds the page; another folder\'s does not', async () => {
+test('a write to another session\'s transcript folder does not rebuild the page', async () => {
+  /* Given */
+  const { service, timers } = setup();
+  await service.open('s1');
+
+  /* When */
+  service.transcriptsChanged('other');
+
+  /* Then */
+  assert.equal(timers.timeouts.size, 0);
+});
+
+test('a write to the session\'s transcript folder rebuilds the page', async () => {
+  /* Given */
   const { service, timers } = setup();
   await service.open('s1');
   service.transcriptsChanged('other');
-  assert.equal(timers.timeouts.size, 0);
+
+  /* When */
   service.transcriptsChanged('f1');
+
+  /* Then */
   assert.equal(timers.timeouts.size, 1);
 });
 
-test('gh is asked again every minute, and only then', async () => {
-  const { service, timers, calls, live } = setup({ pullRequests: [prLink(6)], prs: [prStatus(6)] });
+const polledPr = () => setup({ pullRequests: [prLink(6)], prs: [prStatus(6)] });
+
+test('gh is asked on open, and polled every minute', async () => {
+  /* Given */
+  const { service, timers, calls } = polledPr();
+
+  /* When */
   await service.open('s1');
+
+  /* Then */
   assert.equal(calls.pullRequests, 1);
   assert.deepEqual([...timers.intervals.values()].map((interval) => interval.ms), [GITHUB_REFRESH_MS]);
+});
 
+test('a commit does not ask GitHub', async () => {
+  /* Given */
+  const { service, timers, calls, live } = polledPr();
+  await service.open('s1');
+
+  /* When */
   live()[0].onChange();
   timers.fireTimeouts();
   await settle();
-  assert.equal(calls.pullRequests, 1, 'a commit does not ask GitHub');
 
+  /* Then */
+  assert.equal(calls.pullRequests, 1, 'a commit does not ask GitHub');
+});
+
+test('gh is asked again every minute, and only then', async () => {
+  /* Given */
+  const { service, timers, calls, live } = polledPr();
+  await service.open('s1');
+  live()[0].onChange();
+  timers.fireTimeouts();
+  await settle();
+
+  /* When */
   timers.fireIntervals();
   await settle();
+
+  /* Then */
   assert.equal(calls.pullRequests, 2);
   assert.equal(calls.available, 2);
 });
 
-test('close stops the watchers and the polling, and a late event does nothing', async () => {
+test('close stops the watchers and the polling', async () => {
+  /* Given */
+  const { service, timers, watchers } = setup();
+  await service.open('s1');
+  watchers[0].onChange();
+
+  /* When */
+  service.close('s1');
+
+  /* Then */
+  assert.ok(watchers.every((w) => w.disposed));
+  assert.equal(timers.timeouts.size, 0);
+  assert.equal(timers.intervals.size, 0);
+  assert.equal(service.openSessionId, null);
+});
+
+test('a watcher event after close does nothing', async () => {
+  /* Given */
   const { service, timers, watchers, snapshots } = setup();
   await service.open('s1');
   const [watcher] = watchers;
   watcher.onChange();
   service.close('s1');
-  assert.ok(watchers.every((w) => w.disposed));
-  assert.equal(timers.timeouts.size, 0);
-  assert.equal(timers.intervals.size, 0);
-  assert.equal(service.openSessionId, null);
 
+  /* When */
   watcher.onChange();
+
+  /* Then */
   assert.equal(timers.timeouts.size, 0);
   assert.equal(snapshots.length, 1);
-  assert.deepEqual(await service.diff('s1', 'anything'), { files: [], source: null });
 });
 
-test('opening a second session closes the first; a stale close for the first is ignored', async () => {
+test('a diff asked for after close is empty', async () => {
+  /* Given */
+  const { service } = setup();
+  await service.open('s1');
+  service.close('s1');
+
+  /* When */
+  const diff = await service.diff('s1', 'anything');
+
+  /* Then */
+  assert.deepEqual(diff, { files: [], source: null });
+});
+
+test('opening a second session closes the first', async () => {
+  /* Given */
   const { service, timers, watchers } = setup();
   await service.open('s1');
   const first = [...watchers];
+
+  /* When */
   await service.open('s2');
+
+  /* Then */
   assert.ok(first.every((w) => w.disposed));
   assert.equal(service.openSessionId, 's2');
   assert.equal(timers.intervals.size, 1, 'one poll, for the open page');
+});
 
+test('a stale close for the first session is ignored', async () => {
+  /* Given */
+  const { service, watchers } = setup();
+  await service.open('s1');
+  const first = [...watchers];
+  await service.open('s2');
+
+  /* When */
   service.close('s1');
+
+  /* Then */
   assert.equal(service.openSessionId, 's2');
   assert.ok(watchers.filter((w) => !first.includes(w)).every((w) => !w.disposed));
 });
 
 // ── Actions ──
 
-test('an action\'s phase is laid over its item, and pushed without asking git or gh again', async () => {
-  const { service, world, snapshots, calls, last } = setup({ pullRequests: [prLink(6)], prs: [prStatus(6)] });
+const PR6 = `pr:https://github.com/${REPO}/pull/6`;
+const rebaseQueued = (): SessionActivities => ({
+  byItem: new Map([[PR6, { id: 'a1', action: 'rebase', phase: 'queued', origin: 'manual', queuedAt: 'x' }]]),
+  queued: 1,
+  shipping: false,
+});
+
+test('with nothing under way an item has no activity and nothing is queued', async () => {
+  /* Given */
+  const { service, last } = polledPr();
+
+  /* When */
   await service.open('s1');
-  const id = `pr:https://github.com/${REPO}/pull/6`;
+
+  /* Then */
   const before = last().items[0];
   assert.equal(before.kind === 'pr' && before.activity, null);
   assert.equal(last().queued, 0);
+});
+
+test('an action\'s phase is laid over its item, and pushed without asking git or gh again', async () => {
+  /* Given */
+  const { service, world, snapshots, calls, last } = polledPr();
+  await service.open('s1');
   const asked = calls.pullRequests;
 
-  world.activities = {
-    byItem: new Map([[id, { id: 'a1', action: 'rebase', phase: 'queued', origin: 'manual', queuedAt: 'x' }]]),
-    queued: 1,
-    shipping: false,
-  };
+  /* When */
+  world.activities = rebaseQueued();
   service.activitiesChanged('s1');
+
+  /* Then */
   assert.equal(snapshots.length, 2);
   const item = last().items[0];
   assert.equal(item.kind === 'pr' && item.activity?.phase, 'queued');
   assert.equal(last().queued, 1);
   assert.equal(calls.pullRequests, asked);
+});
 
+test('the same activities again push nothing', async () => {
+  /* Given */
+  const { service, world, snapshots } = polledPr();
+  await service.open('s1');
+  world.activities = rebaseQueued();
   service.activitiesChanged('s1');
+
+  /* When */
+  service.activitiesChanged('s1');
+
+  /* Then */
   assert.equal(snapshots.length, 2, 'nothing changed, nothing pushed');
 });
 
-test('the open page answers for its items and its context, and nothing for another session', async () => {
-  const { service } = setup({ pullRequests: [prLink(6)], prs: [prStatus(6)] });
+test('the open page answers for its items', async () => {
+  /* Given */
+  const { service } = polledPr();
   await service.open('s1');
-  const id = `pr:https://github.com/${REPO}/pull/6`;
-  assert.equal(service.item('s1', id)?.kind, 'pr');
-  assert.equal(service.item('s2', id), null);
-  assert.equal(service.item('s1', 'nope'), null);
-  assert.deepEqual(service.context('s1'), { repository: REPO, mainCheckout: ROOT, gh: 'ok' });
-  assert.equal(service.context('s2'), null);
+
+  /* When */
+  const item = service.item('s1', PR6);
+
+  /* Then */
+  assert.equal(item?.kind, 'pr');
+});
+
+test('the open page answers nothing for another session\'s item or an unknown one', async () => {
+  /* Given */
+  const { service } = polledPr();
+  await service.open('s1');
+
+  /* When */
+  const otherSession = service.item('s2', PR6);
+  const unknown = service.item('s1', 'nope');
+
+  /* Then */
+  assert.equal(otherSession, null);
+  assert.equal(unknown, null);
+});
+
+test('the open page answers for its context', async () => {
+  /* Given */
+  const { service } = polledPr();
+  await service.open('s1');
+
+  /* When */
+  const context = service.context('s1');
+
+  /* Then */
+  assert.deepEqual(context, { repository: REPO, mainCheckout: ROOT, gh: 'ok' });
+});
+
+test('the open page has no context for another session', async () => {
+  /* Given */
+  const { service } = polledPr();
+  await service.open('s1');
+
+  /* When */
+  const context = service.context('s2');
+
+  /* Then */
+  assert.equal(context, null);
+});
+
+const shipping = (): SessionActivities => ({
+  byItem: new Map([[PR6, { id: 'a1', action: 'ship', phase: 'sent', origin: 'manual', queuedAt: 'x' }]]),
+  queued: 0,
+  shipping: true,
+});
+
+async function shippingPage() {
+  const harness = polledPr();
+  await harness.service.open('s1');
+  const cadence = () => [...harness.timers.intervals.values()].map((interval) => interval.ms).sort((a, b) => a - b);
+  return { ...harness, cadence };
+}
+
+test('without a Ship it under way gh is asked every minute', async () => {
+  /* When */
+  const { cadence } = await shippingPage();
+
+  /* Then */
+  assert.deepEqual(cadence(), [GITHUB_REFRESH_MS]);
 });
 
 test('while a Ship it is under way gh is asked every 20 s instead of every minute', async () => {
-  const { service, world, timers, calls } = setup({ pullRequests: [prLink(6)], prs: [prStatus(6)] });
-  await service.open('s1');
-  const cadence = () => [...timers.intervals.values()].map((interval) => interval.ms).sort((a, b) => a - b);
-  assert.deepEqual(cadence(), [GITHUB_REFRESH_MS]);
+  /* Given */
+  const { service, world, cadence } = await shippingPage();
 
-  world.activities = {
-    byItem: new Map([[`pr:https://github.com/${REPO}/pull/6`, { id: 'a1', action: 'ship', phase: 'sent', origin: 'manual', queuedAt: 'x' }]]),
-    queued: 0,
-    shipping: true,
-  };
+  /* When */
+  world.activities = shipping();
   service.activitiesChanged('s1');
-  assert.deepEqual(cadence(), [SHIP_REFRESH_MS, GITHUB_REFRESH_MS]);
 
-  // Each 20 s tick asks; the minute's tick stands aside while it runs.
+  /* Then */
+  assert.deepEqual(cadence(), [SHIP_REFRESH_MS, GITHUB_REFRESH_MS]);
+});
+
+test('while a Ship it is under way each tick asks gh once', async () => {
+  /* Given */
+  const { service, world, timers, calls } = await shippingPage();
+  world.activities = shipping();
+  service.activitiesChanged('s1');
   const asked = calls.pullRequests;
+
+  /* When */
+  // Each 20 s tick asks; the minute's tick stands aside while it runs.
   timers.fireIntervals();
   await settle();
-  assert.equal(calls.pullRequests, asked + 1);
 
+  /* Then */
+  assert.equal(calls.pullRequests, asked + 1);
+});
+
+test('once the Ship it is over gh is asked every minute again', async () => {
+  /* Given */
+  const { service, world, timers, cadence } = await shippingPage();
+  world.activities = shipping();
+  service.activitiesChanged('s1');
+  timers.fireIntervals();
+  await settle();
+
+  /* When */
   world.activities = { byItem: new Map(), queued: 0, shipping: false };
   service.activitiesChanged('s1');
-  assert.deepEqual(cadence(), [GITHUB_REFRESH_MS]);
 
+  /* Then */
+  assert.deepEqual(cadence(), [GITHUB_REFRESH_MS]);
+});
+
+test('closing during a Ship it stops both polls', async () => {
+  /* Given */
+  const { service, world, timers } = await shippingPage();
+  world.activities = shipping();
+  service.activitiesChanged('s1');
+  timers.fireIntervals();
+  await settle();
+  world.activities = { byItem: new Map(), queued: 0, shipping: false };
+  service.activitiesChanged('s1');
   world.activities = { ...world.activities, shipping: true };
   service.activitiesChanged('s1');
+
+  /* When */
   service.close('s1');
+
+  /* Then */
   assert.equal(timers.intervals.size, 0, 'closing stops both polls');
 });
 
 test('the footprint counts every worktree and branch the session worked in, not only the items\' ones', async () => {
   // The main checkout on main (no item: it is the default branch) and a PR's
   // branch in an agent worktree that has since merged (an item, but not one in progress).
+  /* Given */
   const { service } = setup({
     locations: [
       { cwd: ROOT, branch: 'main', fromSubagent: false },
       { cwd: AGENT, branch: 'feat/agent', fromSubagent: true },
     ],
   });
+
+  /* When */
   const snapshot = await service.open('s1');
+
+  /* Then */
   assert.deepEqual(snapshot?.items, []);
   assert.deepEqual(snapshot?.footprint, { worktrees: 2, branches: 2 });
 });

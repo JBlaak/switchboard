@@ -59,8 +59,15 @@ const SAMPLES: { [K in PushEvent['type']]: Extract<PushEvent, { type: K }> } = {
 };
 
 test('every push event reduces without mutating the state it was given', () => {
-  for (const event of Object.values(SAMPLES)) {
-    assert.doesNotThrow(() => rootReducer(deepFreeze(initial()), event), event.type);
+  /* Given */
+  const events = Object.values(SAMPLES);
+
+  for (const event of events) {
+    /* When */
+    const act = () => rootReducer(deepFreeze(initial()), event);
+
+    /* Then */
+    assert.doesNotThrow(act, event.type);
   }
 });
 
@@ -68,96 +75,187 @@ test('pushes that are only prompts to act leave the state as it was', () => {
   // These have follow-ups (a banner, a re-fetch, a class on <html>) but
   // nothing for the store to record. The status line and the update notice
   // are in the store now; see footer-slices.test.ts.
-  for (const type of ['processExited', 'projectsChanged', 'fullscreenChanged', 'sessionWorkSnapshot'] as const) {
+  /* Given */
+  const types = ['processExited', 'projectsChanged', 'fullscreenChanged', 'sessionWorkSnapshot'] as const;
+
+  for (const type of types) {
     const state = initial();
-    assert.strictEqual(rootReducer(state, SAMPLES[type]), state, type);
+
+    /* When */
+    const next = rootReducer(state, SAMPLES[type]);
+
+    /* Then */
+    assert.strictEqual(next, state, type);
   }
 });
 
 // ── cliBusyState ──
 
+/** A turn that started and ended in s1, with `active` on screen. */
+const turnEnded = (active: string | null = null) => run(initial(active),
+  { type: 'cliBusyState', sessionId: 's1', busy: true },
+  { type: 'cliBusyState', sessionId: 's1', busy: false });
+
 test('a turn starting marks the session busy', () => {
+  /* When */
   const state = run(initial(), { type: 'cliBusyState', sessionId: 's1', busy: true });
+
+  /* Then */
   assert.strictEqual(state.activity.busy.s1, true);
   assert.ok(!state.activity.ready.s1);
 });
 
 test('a turn ending off screen leaves the answer unread', () => {
-  const state = run(initial('other'),
-    { type: 'cliBusyState', sessionId: 's1', busy: true },
-    { type: 'cliBusyState', sessionId: 's1', busy: false });
+  /* Given */
+  const busy = run(initial('other'), { type: 'cliBusyState', sessionId: 's1', busy: true });
+
+  /* When */
+  const state = run(busy, { type: 'cliBusyState', sessionId: 's1', busy: false });
+
+  /* Then */
   assert.strictEqual(state.activity.busy.s1, false);
   assert.strictEqual(state.activity.ready.s1, true);
 });
 
 test('a turn ending on screen is read by definition', () => {
-  const state = run(initial('s1'),
-    { type: 'cliBusyState', sessionId: 's1', busy: true },
-    { type: 'cliBusyState', sessionId: 's1', busy: false });
+  /* Given */
+  const busy = run(initial('s1'), { type: 'cliBusyState', sessionId: 's1', busy: true });
+
+  /* When */
+  const state = run(busy, { type: 'cliBusyState', sessionId: 's1', busy: false });
+
+  /* Then */
   assert.ok(!state.activity.ready.s1);
 });
 
 test('a late idle signal does not clear an unread answer', () => {
-  const ready = run(initial(),
-    { type: 'cliBusyState', sessionId: 's1', busy: true },
-    { type: 'cliBusyState', sessionId: 's1', busy: false });
-  assert.strictEqual(run(ready, { type: 'cliBusyState', sessionId: 's1', busy: false }), ready);
+  /* Given */
+  const ready = turnEnded();
+
+  /* When */
+  const state = run(ready, { type: 'cliBusyState', sessionId: 's1', busy: false });
+
+  /* Then */
+  assert.strictEqual(state, ready);
 });
 
 test('a new turn supersedes an unread answer', () => {
-  const state = run(initial(),
-    { type: 'cliBusyState', sessionId: 's1', busy: true },
-    { type: 'cliBusyState', sessionId: 's1', busy: false },
-    { type: 'cliBusyState', sessionId: 's1', busy: true });
+  /* Given */
+  const ready = turnEnded();
+
+  /* When */
+  const state = run(ready, { type: 'cliBusyState', sessionId: 's1', busy: true });
+
+  /* Then */
   assert.ok(!state.activity.ready.s1);
   assert.strictEqual(state.activity.busy.s1, true);
 });
 
-test('busyChanged reports a real busy↔idle flip only', () => {
+test('busyChanged reports an idle→busy flip', () => {
+  /* Given */
   const idle = initial();
   const busy = run(idle, { type: 'cliBusyState', sessionId: 's1', busy: true });
-  assert.ok(busyChanged(idle.activity, busy.activity, 's1'));
-  assert.ok(!busyChanged(busy.activity, run(busy, SAMPLES.cliBusyState).activity, 's1'));
+
+  /* When */
+  const changed = busyChanged(idle.activity, busy.activity, 's1');
+
+  /* Then */
+  assert.ok(changed);
+});
+
+test('busyChanged ignores busy reported again', () => {
+  /* Given */
+  const busy = run(initial(), { type: 'cliBusyState', sessionId: 's1', busy: true });
+  const again = run(busy, SAMPLES.cliBusyState);
+
+  /* When */
+  const changed = busyChanged(busy.activity, again.activity, 's1');
+
+  /* Then */
+  assert.ok(!changed);
+});
+
+test('busyChanged ignores idle for a session never seen busy', () => {
   // Idle reported for a session never seen busy: false either way.
-  assert.ok(!busyChanged(idle.activity, run(idle, { type: 'cliBusyState', sessionId: 's1', busy: false }).activity, 's1'));
+  /* Given */
+  const idle = initial();
+  const stillIdle = run(idle, { type: 'cliBusyState', sessionId: 's1', busy: false });
+
+  /* When */
+  const changed = busyChanged(idle.activity, stillIdle.activity, 's1');
+
+  /* Then */
+  assert.ok(!changed);
 });
 
 // ── Attention ──
 
 test('a notification asking for a person marks the session as needing input', () => {
-  for (const message of ['needs your attention', 'needs your approval for the plan',
-    'needs your permission to use Bash', 'wants to enter plan mode']) {
+  /* Given */
+  const messages = ['needs your attention', 'needs your approval for the plan',
+    'needs your permission to use Bash', 'wants to enter plan mode'];
+
+  for (const message of messages) {
+    /* When */
     const state = run(initial(), { type: 'terminalNotification', sessionId: 's1', message });
+
+    /* Then */
     assert.strictEqual(state.activity.attention.s1, true, message);
   }
 });
 
 test('"waiting for your input" settles the session instead', () => {
-  const state = run(initial('other'),
-    { type: 'cliBusyState', sessionId: 's1', busy: true },
+  /* Given */
+  const busy = run(initial('other'), { type: 'cliBusyState', sessionId: 's1', busy: true });
+
+  /* When */
+  const state = run(busy,
     { type: 'terminalNotification', sessionId: 's1', message: 'Claude is waiting for your input' });
+
+  /* Then */
   assert.strictEqual(state.activity.busy.s1, false);
   assert.strictEqual(state.activity.ready.s1, true);
   assert.ok(!state.activity.attention.s1);
 });
 
 test('any other notification changes nothing', () => {
+  /* Given */
   const state = initial();
-  assert.strictEqual(rootReducer(state, { type: 'terminalNotification', sessionId: 's1', message: 'Build done' }), state);
+
+  /* When */
+  const next = rootReducer(state, { type: 'terminalNotification', sessionId: 's1', message: 'Build done' });
+
+  /* Then */
+  assert.strictEqual(next, state);
 });
 
-test('sessionNeedsAttention marks the session, unless it is on screen', () => {
-  assert.strictEqual(run(initial(), SAMPLES.sessionNeedsAttention).activity.attention.s1, true);
+test('sessionNeedsAttention marks the session', () => {
+  /* When */
+  const state = run(initial(), SAMPLES.sessionNeedsAttention);
+
+  /* Then */
+  assert.strictEqual(state.activity.attention.s1, true);
+});
+
+test('sessionNeedsAttention changes nothing for the session on screen', () => {
+  /* Given */
   const onScreen = initial('s1');
-  assert.strictEqual(rootReducer(onScreen, SAMPLES.sessionNeedsAttention), onScreen);
+
+  /* When */
+  const next = rootReducer(onScreen, SAMPLES.sessionNeedsAttention);
+
+  /* Then */
+  assert.strictEqual(next, onScreen);
 });
 
 test('viewing a session clears its unread and waiting marks, but not its busy state', () => {
-  const state = run(initial('other'),
-    { type: 'cliBusyState', sessionId: 's1', busy: true },
-    { type: 'cliBusyState', sessionId: 's1', busy: false },
-    { type: 'sessionNeedsAttention', sessionId: 's1' },
-    { type: 'sessionViewed', sessionId: 's1' });
+  /* Given */
+  const marked = run(turnEnded('other'), { type: 'sessionNeedsAttention', sessionId: 's1' });
+
+  /* When */
+  const state = run(marked, { type: 'sessionViewed', sessionId: 's1' });
+
+  /* Then */
   assert.ok(!state.activity.ready.s1);
   assert.ok(!state.activity.attention.s1);
   assert.strictEqual(state.activity.busy.s1, false);
@@ -165,88 +263,204 @@ test('viewing a session clears its unread and waiting marks, but not its busy st
 
 // ── Agents ──
 
-test('sessionAgents records the working agents, and an empty list forgets them', () => {
+test('sessionAgents records the working agents', () => {
+  /* When */
   const withAgents = run(initial(), SAMPLES.sessionAgents);
+
+  /* Then */
   assert.strictEqual(withAgents.activity.agents.s1, SAMPLES.sessionAgents.agents);
+});
+
+test('sessionAgents with an empty list forgets them', () => {
+  /* Given */
+  const withAgents = run(initial(), SAMPLES.sessionAgents);
+
+  /* When */
   const cleared = run(withAgents, { type: 'sessionAgents', sessionId: 's1', agents: [] });
+
+  /* Then */
   assert.ok(!('s1' in cleared.activity.agents));
 });
 
+/** s1 busy, waiting and with agents, then all of it cleared. */
+const activityClearedState = () => run(initial(),
+  { type: 'cliBusyState', sessionId: 's1', busy: true },
+  { type: 'sessionNeedsAttention', sessionId: 's1' },
+  SAMPLES.sessionAgents,
+  { type: 'activityCleared', sessionId: 's1' });
+
 test('activityCleared drops everything, the agents included', () => {
-  const state = run(initial(),
+  /* Given */
+  const marked = run(initial(),
     { type: 'cliBusyState', sessionId: 's1', busy: true },
     { type: 'sessionNeedsAttention', sessionId: 's1' },
-    SAMPLES.sessionAgents,
-    { type: 'activityCleared', sessionId: 's1' });
+    SAMPLES.sessionAgents);
+
+  /* When */
+  const state = run(marked, { type: 'activityCleared', sessionId: 's1' });
+
+  /* Then */
   assert.deepStrictEqual(state.activity, { attention: {}, ready: {}, busy: {}, agents: {} });
+});
+
+test('activityCleared again is a no-op', () => {
   // Clearing again is a no-op, so the per-row poll sweep costs nothing.
-  assert.strictEqual(rootReducer(state, { type: 'activityCleared', sessionId: 's1' }), state);
+  /* Given */
+  const state = activityClearedState();
+
+  /* When */
+  const next = rootReducer(state, { type: 'activityCleared', sessionId: 's1' });
+
+  /* Then */
+  assert.strictEqual(next, state);
 });
 
 // ── Remote status ──
 
-test('remoteStatus resolves its timings against when it arrived', () => {
+test('remoteStatus records when a connect started from when it arrived', () => {
+  /* When */
   const connecting = run(initial(), SAMPLES.remoteStatus);
+
+  /* Then */
   assert.strictEqual(connecting.remote.statuses.s1.startedAt, 5);
+});
+
+test('remoteStatus resolves a retry delay against when it arrived', () => {
+  /* Given */
+  const connecting = run(initial(), SAMPLES.remoteStatus);
+
+  /* When */
   const retrying = run(connecting, {
     type: 'remoteStatus', sessionId: 's1', status: { phase: 'retrying', delayMs: 2000 }, receivedAt: 100,
   });
+
+  /* Then */
   assert.strictEqual(retrying.remote.statuses.s1.retryAt, 2100);
   assert.deepStrictEqual(sessionsInFlightIn(retrying.remote), ['s1']);
 });
 
-test('a disconnect, or the terminal going, forgets the status', () => {
+test('a disconnect forgets the status', () => {
+  /* Given */
   const connecting = run(initial(), SAMPLES.remoteStatus);
+
+  /* When */
   const gone = run(connecting, {
     type: 'remoteStatus', sessionId: 's1', status: { phase: 'disconnected' }, receivedAt: 6,
   });
+
+  /* Then */
   assert.deepStrictEqual(gone.remote.statuses, {});
-  assert.deepStrictEqual(run(connecting, { type: 'remoteStatusForgotten', sessionId: 's1' }).remote.statuses, {});
+});
+
+test('the terminal going forgets the status', () => {
+  /* Given */
+  const connecting = run(initial(), SAMPLES.remoteStatus);
+
+  /* When */
+  const gone = run(connecting, { type: 'remoteStatusForgotten', sessionId: 's1' });
+
+  /* Then */
+  assert.deepStrictEqual(gone.remote.statuses, {});
 });
 
 test('a connected session is no longer in flight', () => {
-  const state = run(initial(), SAMPLES.remoteStatus, {
+  /* Given */
+  const connecting = run(initial(), SAMPLES.remoteStatus);
+
+  /* When */
+  const state = run(connecting, {
     type: 'remoteStatus', sessionId: 's1', status: { phase: 'connected' }, receivedAt: 6,
   });
+
+  /* Then */
   assert.deepStrictEqual(sessionsInFlightIn(state.remote), []);
 });
 
 test('remoteTick moves the shared clock', () => {
-  assert.strictEqual(run(initial(), { type: 'remoteTick', at: 42 }).remote.tickAt, 42);
+  /* When */
+  const state = run(initial(), { type: 'remoteTick', at: 42 });
+
+  /* Then */
+  assert.strictEqual(state.remote.tickAt, 42);
 });
 
 // ── Questions ──
 
-test('questionsAsked records the set; the same set again is ignored', () => {
+test('questionsAsked records the set', () => {
+  /* When */
   const state = run(initial(), SAMPLES.questionsAsked);
+
+  /* Then */
   assert.strictEqual(state.questions.bySession.s1.toolUseId, 't1');
-  assert.strictEqual(rootReducer(state, SAMPLES.questionsAsked), state);
-  // A different set replaces it.
-  assert.strictEqual(run(state, { type: 'questionsAsked', pending: asked('s1', 't2') })
-    .questions.bySession.s1.toolUseId, 't2');
+});
+
+test('questionsAsked with the same set again is ignored', () => {
+  /* Given */
+  const state = run(initial(), SAMPLES.questionsAsked);
+
+  /* When */
+  const next = rootReducer(state, SAMPLES.questionsAsked);
+
+  /* Then */
+  assert.strictEqual(next, state);
+});
+
+test('questionsAsked with a different set replaces it', () => {
+  /* Given */
+  const state = run(initial(), SAMPLES.questionsAsked);
+
+  /* When */
+  const next = run(state, { type: 'questionsAsked', pending: asked('s1', 't2') });
+
+  /* Then */
+  assert.strictEqual(next.questions.bySession.s1.toolUseId, 't2');
 });
 
 test('questionsSettled removes the set, found by tool-use id', () => {
-  const state = run(initial(), SAMPLES.questionsAsked, {
+  /* Given */
+  const asking = run(initial(), SAMPLES.questionsAsked);
+
+  /* When */
+  const state = run(asking, {
     type: 'questionsSettled', settled: { sessionId: 'stale-id', toolUseId: 't1', outcome: 'withdrawn' },
   });
+
+  /* Then */
   assert.deepStrictEqual(state.questions.bySession, {});
 });
 
 test('a set settled before the bootstrap fetch returned it stays settled', () => {
-  const state = run(initial(), SAMPLES.questionsSettled, SAMPLES.questionsAsked);
+  /* Given */
+  const settled = run(initial(), SAMPLES.questionsSettled);
+
+  /* When */
+  const state = run(settled, SAMPLES.questionsAsked);
+
+  /* Then */
   assert.deepStrictEqual(state.questions.bySession, {});
 });
 
 test('sessionForked moves a set to the new id', () => {
-  const state = run(initial(), SAMPLES.questionsAsked, SAMPLES.sessionForked);
+  /* Given */
+  const asking = run(initial(), SAMPLES.questionsAsked);
+
+  /* When */
+  const state = run(asking, SAMPLES.sessionForked);
+
+  /* Then */
   assert.ok(!state.questions.bySession.s1);
   assert.strictEqual(state.questions.bySession.s2.sessionId, 's2');
 });
 
 test('sessionForked keeps a set main already asked under the new id', () => {
-  const state = run(initial(), SAMPLES.questionsAsked,
-    { type: 'questionsAsked', pending: asked('s2', 't9') }, SAMPLES.sessionForked);
+  /* Given */
+  const asking = run(initial(), SAMPLES.questionsAsked,
+    { type: 'questionsAsked', pending: asked('s2', 't9') });
+
+  /* When */
+  const state = run(asking, SAMPLES.sessionForked);
+
+  /* Then */
   assert.strictEqual(state.questions.bySession.s2.toolUseId, 't9');
 });
 
@@ -282,14 +496,24 @@ function everythingAbout(sessionId: string): RendererState {
 }
 
 test('after a re-key no slice holds the old id', () => {
-  const state = run(everythingAbout('s1'), SAMPLES.sessionForked);
+  /* Given */
+  const before = everythingAbout('s1');
+
+  /* When */
+  const state = run(before, SAMPLES.sessionForked);
+
+  /* Then */
   assert.ok(!idsHeldIn(state).has('s1'), [...idsHeldIn(state)].join(','));
 });
 
 test('a re-key carries everything over to the new id', () => {
+  /* Given */
   const before = everythingAbout('s1');
+
+  /* When */
   const state = run(before, SAMPLES.sessionForked);
 
+  /* Then */
   assert.strictEqual(state.view.activeSessionId, 's2');
   assert.deepStrictEqual([...state.view.activePtyIds], ['s2']);
   assert.deepStrictEqual([...state.view.searchMatchIds!], ['s2']);
@@ -302,115 +526,226 @@ test('a re-key carries everything over to the new id', () => {
 });
 
 test('a re-key carries the waiting and unread marks of a session off screen', () => {
-  const state = run(initial('elsewhere'),
-    { type: 'cliBusyState', sessionId: 's1', busy: true },
-    { type: 'cliBusyState', sessionId: 's1', busy: false },
-    { type: 'sessionNeedsAttention', sessionId: 's1' },
-    SAMPLES.sessionForked);
+  /* Given */
+  const marked = run(turnEnded('elsewhere'), { type: 'sessionNeedsAttention', sessionId: 's1' });
+
+  /* When */
+  const state = run(marked, SAMPLES.sessionForked);
+
+  /* Then */
   assert.strictEqual(state.activity.ready.s2, true);
   assert.strictEqual(state.activity.attention.s2, true);
   assert.ok(!idsHeldIn(state).has('s1'));
 });
 
 test('a re-key leaves what main already said under the new id', () => {
-  const state = run(initial(),
+  /* Given */
+  const both = run(initial(),
     { type: 'remoteStatus', sessionId: 's1', status: { phase: 'connecting' }, receivedAt: 5 },
-    { type: 'remoteStatus', sessionId: 's2', status: { phase: 'connected' }, receivedAt: 6 },
-    SAMPLES.sessionForked);
+    { type: 'remoteStatus', sessionId: 's2', status: { phase: 'connected' }, receivedAt: 6 });
+
+  /* When */
+  const state = run(both, SAMPLES.sessionForked);
+
+  /* Then */
   assert.strictEqual(state.remote.statuses.s2.phase, 'connected');
   assert.ok(!state.remote.statuses.s1);
 });
 
 test('a re-key of a session nobody knows changes nothing', () => {
+  /* Given */
   const state = initial('other');
-  assert.strictEqual(rootReducer(state, SAMPLES.sessionForked), state);
+
+  /* When */
+  const next = rootReducer(state, SAMPLES.sessionForked);
+
+  /* Then */
+  assert.strictEqual(next, state);
 });
 
 // ── Local keys ──
 
-test('a session seen for the first time gets a key; seeing it again keeps it', () => {
+test('a session seen for the first time gets a key', () => {
+  /* When */
   const state = run(initial(), { type: 'sessionsSeen', sessionIds: ['a', 'b'] });
+
+  /* Then */
   assert.notStrictEqual(state.keys.byId.a, state.keys.byId.b);
-  assert.strictEqual(rootReducer(state, { type: 'sessionsSeen', sessionIds: ['b', 'a'] }), state);
+});
+
+test('seeing a session again keeps its key', () => {
+  /* Given */
+  const state = run(initial(), { type: 'sessionsSeen', sessionIds: ['a', 'b'] });
+
+  /* When */
+  const next = rootReducer(state, { type: 'sessionsSeen', sessionIds: ['b', 'a'] });
+
+  /* Then */
+  assert.strictEqual(next, state);
 });
 
 test('the key follows the session across re-keys, and the old id gets a fresh one', () => {
+  /* Given */
   const seen = run(initial(), { type: 'sessionsSeen', sessionIds: ['a'] });
   const key = sessionKeyIn(seen.keys, 'a');
+
+  /* When */
   const state = run(seen,
     { type: 'sessionForked', oldId: 'a', newId: 'b' },
     { type: 'sessionForked', oldId: 'b', newId: 'c' },
     // The old transcript shows up again as a row of its own.
     { type: 'sessionsSeen', sessionIds: ['a', 'c'] });
+
+  /* Then */
   assert.strictEqual(sessionKeyIn(state.keys, 'c'), key);
   assert.notStrictEqual(sessionKeyIn(state.keys, 'a'), key);
 });
 
 test('the old key wins over one the new id was already given', () => {
+  /* Given */
   const seen = run(initial(), { type: 'sessionsSeen', sessionIds: ['a', 'b'] });
+
+  /* When */
   const state = run(seen, { type: 'sessionForked', oldId: 'a', newId: 'b' });
+
+  /* Then */
   assert.strictEqual(state.keys.byId.b, seen.keys.byId.a);
 });
 
 test('a session never seen is keyed by its id', () => {
-  assert.strictEqual(sessionKeyIn(initial().keys, 'x'), 'x');
+  /* When */
+  const key = sessionKeyIn(initial().keys, 'x');
+
+  /* Then */
+  assert.strictEqual(key, 'x');
 });
 
 // ── View ──
 
-test('viewPatched changes only the fields that differ', () => {
+test('viewPatched with nothing that differs changes nothing', () => {
+  /* Given */
   const state = initial();
-  assert.strictEqual(rootReducer(state, { type: 'viewPatched', patch: { showArchived: false } }), state);
-  const next = run(state, { type: 'viewPatched', patch: { showArchived: true } });
+
+  /* When */
+  const next = rootReducer(state, { type: 'viewPatched', patch: { showArchived: false } });
+
+  /* Then */
+  assert.strictEqual(next, state);
+});
+
+test('viewPatched changes a field that differs', () => {
+  /* When */
+  const next = run(initial(), { type: 'viewPatched', patch: { showArchived: true } });
+
+  /* Then */
   assert.strictEqual(next.view.showArchived, true);
 });
 
 test('ptyStopped drops a session from the running set', () => {
+  /* Given */
   const running = run(initial(), { type: 'viewPatched', patch: { activePtyIds: new Set(['s1', 's2']) } });
+
+  /* When */
   const stopped = run(running, { type: 'ptyStopped', sessionId: 's1' });
+
+  /* Then */
   assert.deepStrictEqual([...stopped.view.activePtyIds], ['s2']);
   assert.ok(running.view.activePtyIds.has('s1'), 'the old set is untouched');
 });
 
 test('activeSessionChanged sets the session on screen', () => {
-  assert.strictEqual(run(initial(), { type: 'activeSessionChanged', sessionId: 's3' }).view.activeSessionId, 's3');
+  /* When */
+  const state = run(initial(), { type: 'activeSessionChanged', sessionId: 's3' });
+
+  /* Then */
+  assert.strictEqual(state.view.activeSessionId, 's3');
 });
 
 // ── Usage ──
 
-test('usage: a fetch records the rows; a failure only marks it loaded', () => {
-  const rows = [
-    { kind: 'a', label: 'A', model: null, percent: 10, reset: null, severity: 'ok' },
-    { kind: 'b', label: 'B', model: null, percent: 70, reset: null, severity: 'ok' },
-  ];
-  const fetched = run(initial(), { type: 'usageFetched', rows });
+const usageRows = [
+  { kind: 'a', label: 'A', model: null, percent: 10, reset: null, severity: 'ok' },
+  { kind: 'b', label: 'B', model: null, percent: 70, reset: null, severity: 'ok' },
+];
+
+test('usage: a fetch records the rows', () => {
+  /* When */
+  const fetched = run(initial(), { type: 'usageFetched', rows: usageRows });
+
+  /* Then */
   assert.strictEqual(tightestIn(fetched.usage)?.label, 'B');
-  assert.strictEqual(run(fetched, { type: 'usageFailed' }), fetched);
-  assert.deepStrictEqual(run(initial(), { type: 'usageFailed' }).usage, { rows: [], loaded: true });
+});
+
+test('usage: a failure after a fetch keeps the rows', () => {
+  /* Given */
+  const fetched = run(initial(), { type: 'usageFetched', rows: usageRows });
+
+  /* When */
+  const failed = run(fetched, { type: 'usageFailed' });
+
+  /* Then */
+  assert.strictEqual(failed, fetched);
+});
+
+test('usage: a failure only marks it loaded', () => {
+  /* When */
+  const failed = run(initial(), { type: 'usageFailed' });
+
+  /* Then */
+  assert.deepStrictEqual(failed.usage, { rows: [], loaded: true });
 });
 
 // ── What the rows show ──
 
 test('rowActivity derives the classes a row renders', () => {
+  /* Given */
   const state = run(initial(), { type: 'questionsAsked', pending: asked('s1', 't1') });
-  assert.deepStrictEqual(rowActivity(state, 's1'),
-    { needsAttention: true, responseReady: false, busy: false, agents: [] });
+
+  /* When */
+  const activity = rowActivity(state, 's1');
+
+  /* Then */
+  assert.deepStrictEqual(activity, { needsAttention: true, responseReady: false, busy: false, agents: [] });
 });
 
 test('a turn ending off screen makes the row ready and no longer busy', () => {
+  /* Given */
   const before = run(initial('other'), { type: 'cliBusyState', sessionId: 's1', busy: true });
+
+  /* When */
   const after = run(before, { type: 'cliBusyState', sessionId: 's1', busy: false });
+
+  /* Then */
   assert.deepStrictEqual(rowActivity(after, 's1'),
     { needsAttention: false, responseReady: true, busy: false, agents: [] });
 });
 
-test('a settled question set clears needs-attention unless OSC 9 also asked', () => {
+test('a pending question set makes the row need attention', () => {
+  /* When */
   const asking = run(initial(), SAMPLES.questionsAsked);
-  const settled = run(asking, SAMPLES.questionsSettled);
-  const id = 's1';
-  assert.strictEqual(rowActivity(asking, id).needsAttention, true);
-  assert.strictEqual(rowActivity(settled, id).needsAttention, false);
 
-  const both = run(asking, SAMPLES.sessionNeedsAttention);
-  assert.strictEqual(rowActivity(run(both, SAMPLES.questionsSettled), id).needsAttention, true);
+  /* Then */
+  assert.strictEqual(rowActivity(asking, 's1').needsAttention, true);
+});
+
+test('a settled question set clears needs-attention', () => {
+  /* Given */
+  const asking = run(initial(), SAMPLES.questionsAsked);
+
+  /* When */
+  const settled = run(asking, SAMPLES.questionsSettled);
+
+  /* Then */
+  assert.strictEqual(rowActivity(settled, 's1').needsAttention, false);
+});
+
+test('a settled question set keeps needs-attention when OSC 9 also asked', () => {
+  /* Given */
+  const both = run(initial(), SAMPLES.questionsAsked, SAMPLES.sessionNeedsAttention);
+
+  /* When */
+  const settled = run(both, SAMPLES.questionsSettled);
+
+  /* Then */
+  assert.strictEqual(rowActivity(settled, 's1').needsAttention, true);
 });

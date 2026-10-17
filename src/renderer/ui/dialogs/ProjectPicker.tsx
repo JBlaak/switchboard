@@ -16,6 +16,7 @@ import { useStore } from '../use-store';
 import { DialogShell } from './DialogShell';
 import { ProjectPickerRow } from './ProjectPickerRow';
 import { rankProjects } from './rank-projects';
+import { clampSelection, nextSelection } from './picker-selection';
 import type { JSX, KeyboardEvent } from 'react';
 import type { Project } from '../../../domain/project/project';
 
@@ -38,7 +39,7 @@ export function ProjectPicker({ onClose }: ProjectPickerProps): JSX.Element {
 
   const trimmed = query.trim();
   const matches = rankProjects(view.cachedProjects, trimmed);
-  const current = matches.length === 0 ? 0 : Math.min(selected, matches.length - 1);
+  const current = clampSelection(selected, matches.length);
 
   useEffect(() => {
     filterRef.current?.focus();
@@ -59,9 +60,8 @@ export function ProjectPicker({ onClose }: ProjectPickerProps): JSX.Element {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       if (matches.length === 0) return;
-      const step = e.key === 'ArrowDown' ? 1 : -1;
       scrollToSelected.current = true;
-      setSelected((current + step + matches.length) % matches.length);
+      setSelected(nextSelection(current, matches.length, { type: 'stepped', step: e.key === 'ArrowDown' ? 1 : -1 }));
       return;
     }
     if (e.key === 'Enter' && matches[current]) activate(matches[current].project);
@@ -83,9 +83,8 @@ export function ProjectPicker({ onClose }: ProjectPickerProps): JSX.Element {
         spellCheck={false}
         value={query}
         onChange={e => {
-          // A new query reorders everything, so start from the best match again.
           setQuery(e.target.value);
-          setSelected(0);
+          setSelected(nextSelection(current, matches.length, { type: 'queried' }));
         }}
         onKeyDown={onKeyDown}
       />
@@ -102,7 +101,7 @@ export function ProjectPicker({ onClose }: ProjectPickerProps): JSX.Element {
               running={candidate.project.sessions.filter(s => activePtyIds.has(s.sessionId)).length}
               // Keep the highlight under the pointer, so the mouse and the arrow
               // keys never disagree about which row Enter would open.
-              onHover={() => setSelected(index)}
+              onHover={() => setSelected(nextSelection(current, matches.length, { type: 'hovered', index }))}
               onActivate={() => activate(candidate.project)}
               onClose={onClose}
               onChanged={redraw}

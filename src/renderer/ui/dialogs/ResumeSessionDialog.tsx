@@ -10,7 +10,7 @@ import { openSession } from '../../features/sessions/session-actions';
 import { DialogShell } from './DialogShell';
 import { PermissionGrid } from './PermissionGrid';
 import { SessionFields, applySessionFields, initialSessionFields } from './SessionFields';
-import { applyPermissionSelection } from './permission-selection';
+import { applyPermissionSelection, initialPermissionSelection } from './permission-selection';
 import type { JSX } from 'react';
 import type { EffectiveSettings } from '../../../domain/settings/settings';
 import type { SessionOptions } from '../../../domain/launch/session-options';
@@ -25,10 +25,7 @@ export interface ResumeSessionDialogProps {
 }
 
 export function ResumeSessionDialog({ session, settings, onClose }: ResumeSessionDialogProps): JSX.Element {
-  const [permissions, setPermissions] = useState<PermissionSelection>(() => ({
-    mode: settings.permissionMode ?? null,
-    dangerousSkip: !!settings.dangerouslySkipPermissions,
-  }));
+  const [permissions, setPermissions] = useState<PermissionSelection>(() => initialPermissionSelection(settings));
   const [fields, setFields] = useState(() => initialSessionFields(settings));
 
   const name = session.name || session.aiTitle || session.summary || session.sessionId.slice(0, 8);

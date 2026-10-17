@@ -1,116 +1,144 @@
 /**
  * The session list: tiers, truncation, slug groups, filters and search, drawn
  * from the standard fixture.
+ *
+ * The order, the folding and the filters are decided by the list's layout
+ * (test/session-list-layout.test.ts, test/session-list-slice.test.ts); this
+ * walks the list the real index drew, and what its clicks ask main for.
  */
 import { test, expect, forEachAppearance } from '../support/test';
 import {
-  expectScreen, openSession, rowButton, searchBox, sessionRow, sidebar, sidebarFilter,
+  expectScreen, openSession, rowButton, searchBox, sessionRow, sidebar, sidebarFilter, terminalStatus,
 } from '../support/app';
 import { openedExternally } from '../support/main-process';
 import { fakeClaude } from '../support/fake-cli';
 import { LABEL, S } from '../fixtures/standard';
 
-test.describe('smoke', () => {
-  test('lists pinned first, then recent, and folds old sessions away', async ({ page }) => {
-    await expect(sidebar(page).getByText('Pinned', { exact: true })).toBeVisible();
-    await expect(sidebar(page).getByText('Recent', { exact: true })).toBeVisible();
-    await expect(sessionRow(page, LABEL.releaseNotes)).toBeVisible();
-    await expect(sessionRow(page, LABEL.meetingNotes)).toBeHidden();
-    await expect(sessionRow(page, LABEL.graphqlSpike)).toHaveCount(0);
+test('lists, folds, searches, archives and filters what the index found', async ({ page, app, home }) => {
+  /* Then */
+  // Pinned first, then recent, and old sessions folded away.
+  await expect(sidebar(page).getByText('Pinned', { exact: true })).toBeVisible();
+  await expect(sidebar(page).getByText('Recent', { exact: true })).toBeVisible();
+  await expect(sessionRow(page, LABEL.releaseNotes)).toBeVisible();
+  await expect(sessionRow(page, LABEL.meetingNotes)).toBeHidden();
+  await expect(sessionRow(page, LABEL.graphqlSpike)).toHaveCount(0);
+  // A renamed session shows by its name, a worktree by its branch.
+  await expect(sessionRow(page, LABEL.chartsDarkMode)).toBeVisible();
+  await expect(sidebar(page).getByText('Development/old-parser ⎇ streaming', { exact: true })).toBeVisible();
+  // A worktree whose checkout still exists lists under its repository.
+  await expect(sessionRow(page, LABEL.worktreeTry)).toBeVisible();
+  await expect(sidebar(page).getByText('Development/acme-api ⎇ session-cookie')).toHaveCount(0);
+  // Sessions sharing a slug fold into one group.
+  await expect(sidebar(page).getByText('3 sessions', { exact: true })).toBeVisible();
+  await expect(sessionRow(page, 'Implement the plan: extract the invoice model')).toBeHidden();
 
-    await sidebar(page).getByText('+ 3 older', { exact: true }).click();
-    await expect(sessionRow(page, LABEL.meetingNotes)).toBeVisible();
-    await expect(sessionRow(page, LABEL.bumpDeps)).toBeVisible();
-  });
+  /* When */
+  await sidebar(page).getByText('+ 3 older', { exact: true }).click();
 
-  test('shows a renamed session by its name and a worktree by its branch', async ({ page }) => {
-    await expect(sessionRow(page, LABEL.chartsDarkMode)).toBeVisible();
-    await expect(sidebar(page).getByText('Development/old-parser ⎇ streaming', { exact: true })).toBeVisible();
-    // A worktree whose checkout still exists lists under its repository.
-    await expect(sessionRow(page, LABEL.worktreeTry)).toBeVisible();
-    await expect(sidebar(page).getByText('Development/acme-api ⎇ session-cookie')).toHaveCount(0);
-  });
+  /* Then */
+  await expect(sessionRow(page, LABEL.meetingNotes)).toBeVisible();
+  await expect(sessionRow(page, LABEL.bumpDeps)).toBeVisible();
 
-  test('folds a slug group and expands it on click', async ({ page }) => {
-    await expect(sidebar(page).getByText('3 sessions', { exact: true })).toBeVisible();
-    await expect(sessionRow(page, 'Implement the plan: extract the invoice model')).toBeHidden();
-    await sessionRow(page, LABEL.billingGroup).first().click();
-    await expect(sessionRow(page, 'Implement the plan: extract the invoice model')).toBeVisible();
-  });
+  /* When */
+  await sessionRow(page, LABEL.billingGroup).first().click();
 
-  test('a pull request chip is display only: it no longer opens the browser', async ({ page, app, home }) => {
-    await expect(sidebar(page).getByText('+1', { exact: true })).toBeVisible();
-    // Outside a git repository the meta line is text, so the click is the row's.
-    await sidebar(page).getByText('#1320', { exact: true }).click();
-    await fakeClaude(home, S.loginFix).launched();
-    expect(await openedExternally(app)).toEqual([]);
-  });
+  /* Then */
+  await expect(sessionRow(page, 'Implement the plan: extract the invoice model')).toBeVisible();
 
-  test('archives from the row and finds it under the archive filter', async ({ page }) => {
-    const row = sessionRow(page, LABEL.chartsDarkMode);
-    await row.hover();
-    await rowButton(row, 'Archive').click();
-    await expect(row).toHaveCount(0);
+  /* When */
+  await searchBox(page).fill('billing');
 
-    await sidebarFilter(page, 'archived').click();
-    await expect(sessionRow(page, LABEL.chartsDarkMode)).toBeVisible();
-    await expect(sessionRow(page, LABEL.graphqlSpike)).toBeVisible();
-  });
+  /* Then */
+  await expect(sessionRow(page, LABEL.loginFix)).toHaveCount(0);
+  await expect(sessionRow(page, LABEL.billingGroup).first()).toBeVisible();
 
-  test('filters by search text', async ({ page }) => {
-    await searchBox(page).fill('billing');
-    await expect(sessionRow(page, LABEL.loginFix)).toHaveCount(0);
-    await expect(sessionRow(page, LABEL.billingGroup).first()).toBeVisible();
-  });
+  /* When */
+  await searchBox(page).fill('');
+  const charts = sessionRow(page, LABEL.chartsDarkMode);
+  await charts.hover();
+  await rowButton(charts, 'Archive').click();
 
-  test('the running filter shows only live sessions', async ({ page, home }) => {
-    await openSession(page, home, LABEL.loginFix, S.loginFix);
-    await sidebarFilter(page, 'running').click();
-    await expect(sessionRow(page, LABEL.loginFix)).toBeVisible();
-    await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
-  });
+  /* Then */
+  await expect(charts).toHaveCount(0);
+
+  /* When */
+  await sidebarFilter(page, 'archived').click();
+
+  /* Then */
+  await expect(sessionRow(page, LABEL.chartsDarkMode)).toBeVisible();
+  await expect(sessionRow(page, LABEL.graphqlSpike)).toBeVisible();
+
+  /* When */
+  await sidebarFilter(page, 'archived').click();
+  await expect(sidebar(page).getByText('+1', { exact: true })).toBeVisible();
+  // Outside a git repository the meta line is text, so the click is the row's.
+  await sidebar(page).getByText('#1320', { exact: true }).click();
+
+  /* Then */
+  // A pull request chip is display only: it no longer opens the browser.
+  await fakeClaude(home, S.loginFix).launched();
+  await expect(terminalStatus(page)).toHaveText('Running');
+  expect(await openedExternally(app)).toEqual([]);
+
+  /* When */
+  await sidebarFilter(page, 'running').click();
+
+  /* Then */
+  await expect(sessionRow(page, LABEL.loginFix)).toBeVisible();
+  await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
 });
 
 forEachAppearance(() => {
-  test('sidebar, default', async ({ page }) => {
-    await expectScreen(page, 'sidebar-default');
-  });
+  test('sidebar screens', async ({ page, home }) => {
+    /* Then */
+    await expectScreen(page, 'sidebar-default', { soft: true });
 
-  test('sidebar, older sessions expanded', async ({ page }) => {
+    /* When */
     await sidebar(page).getByText('+ 3 older', { exact: true }).click();
     await expect(sessionRow(page, LABEL.bumpDeps)).toBeVisible();
-    await expectScreen(page, 'sidebar-older-expanded');
-  });
 
-  test('sidebar, running filter', async ({ page, home }) => {
+    /* Then */
+    await expectScreen(page, 'sidebar-older-expanded', { soft: true });
+
+    /* When */
+    await sidebarFilter(page, 'pinned').click();
+    await expect(sessionRow(page, LABEL.loginFix)).toHaveCount(0);
+
+    /* Then */
+    await expectScreen(page, 'sidebar-filter-pinned', { soft: true });
+
+    /* When */
+    await sidebarFilter(page, 'pinned').click();
+    await sidebarFilter(page, 'today').click();
+    await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
+
+    /* Then */
+    await expectScreen(page, 'sidebar-filter-today', { soft: true });
+
+    /* When */
+    await sidebarFilter(page, 'today').click();
+    await sidebarFilter(page, 'archived').click();
+    await expect(sessionRow(page, LABEL.graphqlSpike)).toBeVisible();
+
+    /* Then */
+    await expectScreen(page, 'sidebar-filter-archived', { soft: true });
+
+    /* When */
+    await sidebarFilter(page, 'archived').click();
+    await searchBox(page).fill('login');
+    await expect(sessionRow(page, LABEL.chartsDarkMode)).toHaveCount(0);
+
+    /* Then */
+    await expectScreen(page, 'sidebar-search', { soft: true });
+
+    /* When */
+    await searchBox(page).fill('');
     const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
     await claude.status({ state: 'working' });
     await sidebarFilter(page, 'running').click();
     await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
-    await expectScreen(page, 'sidebar-filter-running');
-  });
 
-  test('sidebar, pinned filter', async ({ page }) => {
-    await sidebarFilter(page, 'pinned').click();
-    await expect(sessionRow(page, LABEL.loginFix)).toHaveCount(0);
-    await expectScreen(page, 'sidebar-filter-pinned');
-  });
-
-  test('sidebar, today filter', async ({ page }) => {
-    await sidebarFilter(page, 'today').click();
-    await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
-    await expectScreen(page, 'sidebar-filter-today');
-  });
-
-  test('sidebar, archived filter', async ({ page }) => {
-    await sidebarFilter(page, 'archived').click();
-    await expect(sessionRow(page, LABEL.graphqlSpike)).toBeVisible();
-    await expectScreen(page, 'sidebar-filter-archived');
-  });
-
-  test('sidebar, search', async ({ page }) => {
-    await searchBox(page).fill('login');
-    await expect(sessionRow(page, LABEL.chartsDarkMode)).toHaveCount(0);
-    await expectScreen(page, 'sidebar-search');
+    /* Then */
+    await expectScreen(page, 'sidebar-filter-running', { soft: true });
   });
 });

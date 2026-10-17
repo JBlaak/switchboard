@@ -10,9 +10,10 @@
 import { useEffect } from 'react';
 import { pullRequestChips, pullRequestLabel } from '../../../domain/session/pull-requests';
 import { projectLabel } from '../../features/sessions/project-label';
-import { sessionDisplayName, sessionTimeLabel } from '../../state/session-list-layout';
+import { agentsTitle, askingLabel, sessionDisplayName, sessionTimeLabel } from '../../state/session-list-layout';
 import { useStore } from '../use-store';
 import { canOpenSessionWork } from '../session-work/actions';
+import { isRemoteRow, workTrigger } from './work-trigger';
 import { agentsBadgeHtml } from './markup';
 import { openRepository } from './actions';
 import type { JSX, MouseEvent } from 'react';
@@ -31,22 +32,17 @@ export interface RowMetaProps {
   onOpenWork: (e: MouseEvent<HTMLElement>) => void;
 }
 
-const REMOTE_REASON = "Session work isn't available for remote sessions yet";
-const NO_REPO_REASON = 'Not a git repository';
-
 export function RowMeta({ row, asking, agents, now, onOpenWork }: RowMetaProps): JSX.Element {
   const { session } = row;
   const path = row.projectPath || session.projectPath;
-  const remote = session.type === 'remote' || !!path?.startsWith('ssh://');
-  const canOpen = useCanOpenWork(session.sessionId, remote);
+  const remote = isRemoteRow(session, path);
+  const trigger = workTrigger(remote, useCanOpenWork(session.sessionId, remote));
 
   const content = (
     <span className="session-meta-left">
       {/* What the session is blocked on, ahead of everything else on the line. */}
       {asking > 0 && (
-        <span className="session-asking">
-          {asking === 1 ? 'Asking 1 question' : `Asking ${asking} questions`}
-        </span>
+        <span className="session-asking">{askingLabel(asking)}</span>
       )}
       <ProjectLabel path={path} />
       <span className="session-time">{sessionTimeLabel(session, now)}</span>
@@ -55,7 +51,7 @@ export function RowMeta({ row, asking, agents, now, onOpenWork }: RowMetaProps):
     </span>
   );
 
-  if (canOpen === true) {
+  if (trigger.button) {
     return (
       <button
         type="button"
@@ -68,8 +64,7 @@ export function RowMeta({ row, asking, agents, now, onOpenWork }: RowMetaProps):
       </button>
     );
   }
-  const reason = remote ? REMOTE_REASON : canOpen === false ? NO_REPO_REASON : undefined;
-  return <div className="session-meta" title={reason}>{content}</div>;
+  return <div className="session-meta" title={trigger.reason}>{content}</div>;
 }
 
 /**
@@ -123,9 +118,7 @@ export function RepoLink({ path, children }: { path: string; children: string })
  * agent's task.
  */
 function AgentsBadge({ agents }: { agents: readonly WorkingAgent[] }): JSX.Element {
-  const title = `${agents.length} ${agents.length === 1 ? 'agent' : 'agents'} working\n`
-    + agents.map(agent => '• ' + (agent.title || 'Untitled agent')).join('\n');
-  return <span className="session-agents" title={title} dangerouslySetInnerHTML={agentsBadgeHtml(agents.length)} />;
+  return <span className="session-agents" title={agentsTitle(agents)} dangerouslySetInnerHTML={agentsBadgeHtml(agents.length)} />;
 }
 
 /**

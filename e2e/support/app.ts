@@ -213,8 +213,14 @@ export function volatileRegions(page: Page): Locator[] {
  * scheme (`light`/`dark`) is read off the page rather than passed in, so a
  * baseline can never be filed under the wrong one. The pointer is parked in a
  * corner first so no hover state or tooltip leaks in.
+ *
+ * `soft` records a mismatch and carries on, for a test that walks several
+ * screens in one launch: every screen is still compared, not just the ones
+ * before the first that differs.
  */
-export async function expectScreen(page: Page, name: string, { mask = [] as Locator[] } = {}): Promise<void> {
+export async function expectScreen(
+  page: Page, name: string, { mask = [] as Locator[], soft = false } = {},
+): Promise<void> {
   const scheme = await page.evaluate(() =>
     matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const file = `${name}-${scheme}.png`;
@@ -223,7 +229,7 @@ export async function expectScreen(page: Page, name: string, { mask = [] as Loca
     return;
   }
   await page.mouse.move(1279, 799);
-  await expect(page).toHaveScreenshot(file, {
+  await (soft ? expect.soft(page) : expect(page)).toHaveScreenshot(file, {
     mask: [...volatileRegions(page), ...mask],
   });
 }

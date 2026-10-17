@@ -106,13 +106,6 @@ export async function pushQuestions(
   return toolUseId;
 }
 
-/** Tell the renderer a set is over, as main would. */
-export async function pushSettled(
-  app: ElectronApplication, sessionId: string, toolUseId: string, outcome: 'answered' | 'withdrawn' = 'withdrawn',
-): Promise<void> {
-  await pushEvent(app, EVENT.questionsSettled, { sessionId, toolUseId, outcome });
-}
-
 /**
  * The question sheet, by its label. It is a `<section>` with an accessible
  * name, so it is a region while it is up — and out of the accessibility tree

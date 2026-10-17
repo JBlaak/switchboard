@@ -12,7 +12,7 @@
 import { useRef } from 'react';
 import { projectLabel } from '../../features/sessions/project-label';
 import { formatDate } from '../../lib/format';
-import { groupDisplayName } from '../../state/session-list-layout';
+import { groupDisplayName, splitGroupRows } from '../../state/session-list-layout';
 import { useStore } from '../use-store';
 import { archiveGroup, expandSlugGroup, toggleSlugGroup } from './actions';
 import { headerTarget } from './cursor';
@@ -35,8 +35,7 @@ export function SlugGroup({ group }: { group: SessionListGroup }): JSX.Element {
     .map(r => r.session.sessionId).join(' '));
   const running = new Set(runningIds ? runningIds.split(' ') : []);
 
-  const promoted = sessions.filter(r => running.has(r.session.sessionId));
-  const rest = sessions.filter(r => !running.has(r.session.sessionId));
+  const { promoted, rest } = splitGroupRows(sessions, running);
   const newest = sessions[0].session;
 
   const className = 'slug-group' + (expanded ? '' : ' collapsed') + (promoted.length ? ' has-promoted' : '');

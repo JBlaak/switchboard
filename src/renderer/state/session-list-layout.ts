@@ -23,6 +23,7 @@ import { TIER_ORDER, itemTier, rowSurvivesTruncation } from '../../domain/sessio
 import { formatDate, localDateKey } from '../lib/format';
 import type { Project } from '../../domain/project/project';
 import type { SessionRow } from '../../domain/session/session';
+import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 
 /** One session's row, with the copy of the session it was laid out from. */
 export interface SessionListRow {
@@ -114,6 +115,75 @@ export function fallbackName(session: SessionRow): string {
 export function sessionTimeLabel(session: SessionRow, now: number): string {
   const suffix = session.messageCount ? ' · ' + session.messageCount + ' msgs' : '';
   return formatDate(new Date(session.modified), now) + suffix;
+}
+
+/** What the meta line says while the session is asking questions. */
+export function askingLabel(count: number): string {
+  return count === 1 ? 'Asking 1 question' : `Asking ${count} questions`;
+}
+
+/** The agents badge's tooltip: how many are working, and each one's task. */
+export function agentsTitle(agents: readonly WorkingAgent[]): string {
+  return `${agents.length} ${agents.length === 1 ? 'agent' : 'agents'} working\n`
+    + agents.map(agent => '• ' + (agent.title || 'Untitled agent')).join('\n');
+}
+
+/**
+ * The name a rename stores for what was typed.
+ *
+ * Typing the fallback title back, or nothing at all, means "no rename" rather
+ * than "rename to this": the name is cleared, and the row goes back to
+ * following the CLI's own title.
+ */
+export function renamedName(typed: string, session: SessionRow): string | null {
+  const value = typed.trim();
+  return value && value !== fallbackName(session) ? value : null;
+}
+
+/**
+ * Whether a row carries the terminal glyph: a terminal, local or remote, gets a
+ * glyph rather than a word, because its label is already "Terminal".
+ */
+export function showsTerminalBadge(session: SessionRow): boolean {
+  return session.type === 'terminal' || (session.type === 'remote' && session.remoteKind === 'shell');
+}
+
+/** The buttons a row offers, by their titles; `null` or `false` for one it leaves out. */
+export interface RowButtons {
+  readonly stop: string;
+  readonly archive: string | null;
+  readonly resume: boolean;
+}
+
+/**
+ * Which buttons a row offers, depending on what the session actually supports.
+ *
+ * A remote session has no local transcript to relaunch from; archive still
+ * works — it is keyed on the session id alone — and doubles as "forget this
+ * one". A plain terminal has nothing to archive or resume either. Stop is
+ * always there; the stylesheet shows it only while something runs.
+ */
+export function rowButtons(session: SessionRow): RowButtons {
+  const remote = session.type === 'remote';
+  return {
+    stop: remote ? 'Disconnect (keeps running on the remote)' : 'Stop session',
+    archive: session.type === 'terminal' ? null : session.archived ? 'Unarchive' : 'Archive',
+    resume: !remote && session.type !== 'terminal',
+  };
+}
+
+/**
+ * A slug group's sessions split the way it renders them: the running ones
+ * promoted to the top, the rest behind its "+ N more". Each part keeps the
+ * group's newest-first order.
+ */
+export function splitGroupRows(
+  sessions: readonly SessionListRow[], running: ReadonlySet<string>,
+): { promoted: SessionListRow[]; rest: SessionListRow[] } {
+  return {
+    promoted: sessions.filter(r => running.has(r.session.sessionId)),
+    rest: sessions.filter(r => !running.has(r.session.sessionId)),
+  };
 }
 
 // ── Building ──

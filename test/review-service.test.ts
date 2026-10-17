@@ -76,9 +76,16 @@ const comment = (body = 'Rename this', line = 3) =>
   ({ sessionId: 's1', itemId: ITEM, path: 'a.ts', line, side: 'RIGHT' as const, body });
 
 test('the first comment starts a pending review on the PR, and the next goes into the same one', async () => {
+  /* Given */
   const { service, writes, state } = setup();
-  assert.deepEqual(await service.comment(comment()), { ok: true });
-  assert.deepEqual(await service.comment(comment('And this', 4)), { ok: true });
+
+  /* When */
+  const first = await service.comment(comment());
+  const second = await service.comment(comment('And this', 4));
+
+  /* Then */
+  assert.deepEqual(first, { ok: true });
+  assert.deepEqual(second, { ok: true });
   assert.deepEqual(writes, [
     { call: 'start', args: ['PR_12'] },
     { call: 'add', args: ['PRR_1', { path: 'a.ts', line: 3, side: 'RIGHT', body: 'Rename this' }] },
@@ -88,36 +95,59 @@ test('the first comment starts a pending review on the PR, and the next goes int
 });
 
 test('two comments at once still start one review: writes go one at a time', async () => {
+  /* Given */
   const { service, writes } = setup();
+
+  /* When */
   const both = await Promise.all([service.comment(comment('one')), service.comment(comment('two'))]);
+
+  /* Then */
   assert.deepEqual(both, [{ ok: true }, { ok: true }]);
   assert.deepEqual(writes.map((w) => w.call), ['start', 'add', 'add']);
 });
 
 test('a pending review already on GitHub (say, from the browser) is the one commented into', async () => {
+  /* Given */
   const { service, writes } = setup({ item: prItem({ pendingReviewId: 'PRR_browser' }) });
+
+  /* When */
   await service.comment(comment());
+
+  /* Then */
   assert.deepEqual(writes.map((w) => [w.call, w.args[0]]), [['add', 'PRR_browser']]);
 });
 
 test('a blank comment, a bad line or a closed PR is refused without writing', async () => {
-  for (const [setupArgs, request] of [
+  /* Given */
+  const cases = [
     [{}, comment('   ')],
     [{}, comment('x', 0)],
     [{ item: prItem({ state: 'merged' }) }, comment()],
     [{ gh: 'unauthenticated' as GitHubAvailability }, comment()],
     [{}, { ...comment(), itemId: 'gone' }],
-  ] as const) {
+  ] as const;
+
+  for (const [setupArgs, request] of cases) {
     const { service, writes } = setup(setupArgs);
+
+    /* When */
     const result = await service.comment(request);
+
+    /* Then */
     assert.equal(result.ok, false);
     assert.equal(writes.length, 0);
   }
 });
 
 test('a write GitHub refuses comes back with its reason', async () => {
+  /* Given */
   const { service } = setup({ answers: { add: { ok: false, reason: 'Line is not part of the diff' } } });
-  assert.deepEqual(await service.comment(comment()), { ok: false, reason: 'Could not add the comment: Line is not part of the diff' });
+
+  /* When */
+  const result = await service.comment(comment());
+
+  /* Then */
+  assert.deepEqual(result, { ok: false, reason: 'Could not add the comment: Line is not part of the diff' });
 });
 
 const pendingPr = prItem({
@@ -129,54 +159,93 @@ const pendingPr = prItem({
 });
 
 test('Submit only submits the review as a comment and hands nothing to Claude', async () => {
+  /* Given */
   const { service, writes, requests, state } = setup({ item: pendingPr });
-  assert.deepEqual(await service.review({ sessionId: 's1', itemId: ITEM, mode: 'submit' }), { ok: true });
+
+  /* When */
+  const result = await service.review({ sessionId: 's1', itemId: ITEM, mode: 'submit' });
+
+  /* Then */
+  assert.deepEqual(result, { ok: true });
   assert.deepEqual(writes, [{ call: 'submit', args: ['PRR_9', 'COMMENT'] }]);
   assert.equal(requests.length, 0);
   assert.equal(state.refreshes, 1);
 });
 
 test('Submit & have Claude fix requests changes, then hands over exactly the submitted threads', async () => {
+  /* Given */
   const { service, writes, requests } = setup({ item: pendingPr });
-  assert.deepEqual(await service.review({ sessionId: 's1', itemId: ITEM, mode: 'fix' }), { ok: true });
+
+  /* When */
+  const result = await service.review({ sessionId: 's1', itemId: ITEM, mode: 'fix' });
+
+  /* Then */
+  assert.deepEqual(result, { ok: true });
   assert.deepEqual(writes, [{ call: 'submit', args: ['PRR_9', 'REQUEST_CHANGES'] }]);
   assert.deepEqual(requests, [{ itemId: ITEM, action: 'fix-comments', threadIds: ['PRRT_a', 'PRRT_b'] }]);
 });
 
 test('a submitted review whose fix cannot be queued says so', async () => {
+  /* Given */
   const { service } = setup({ item: pendingPr, fix: { ok: false, reason: 'Start the session to hand this to Claude' } });
-  assert.deepEqual(await service.review({ sessionId: 's1', itemId: ITEM, mode: 'fix' }),
-    { ok: false, reason: 'Review submitted, but start the session to hand this to Claude' });
+
+  /* When */
+  const result = await service.review({ sessionId: 's1', itemId: ITEM, mode: 'fix' });
+
+  /* Then */
+  assert.deepEqual(result, { ok: false, reason: 'Review submitted, but start the session to hand this to Claude' });
 });
 
 test('a submit GitHub refuses hands nothing to Claude', async () => {
+  /* Given */
   const { service, requests } = setup({ item: pendingPr, answers: { submit: { ok: false, reason: 'Review is not pending' } } });
-  assert.deepEqual(await service.review({ sessionId: 's1', itemId: ITEM, mode: 'fix' }),
-    { ok: false, reason: 'Could not submit the review: Review is not pending' });
+
+  /* When */
+  const result = await service.review({ sessionId: 's1', itemId: ITEM, mode: 'fix' });
+
+  /* Then */
+  assert.deepEqual(result, { ok: false, reason: 'Could not submit the review: Review is not pending' });
   assert.equal(requests.length, 0);
 });
 
 test('Discard deletes the pending review', async () => {
+  /* Given */
   const { service, writes } = setup({ item: pendingPr });
-  assert.deepEqual(await service.review({ sessionId: 's1', itemId: ITEM, mode: 'discard' }), { ok: true });
+
+  /* When */
+  const result = await service.review({ sessionId: 's1', itemId: ITEM, mode: 'discard' });
+
+  /* Then */
+  assert.deepEqual(result, { ok: true });
   assert.deepEqual(writes, [{ call: 'delete', args: ['PRR_9'] }]);
 });
 
 test('with no review in progress there is nothing to submit or discard', async () => {
+  /* Given */
   const { service, writes } = setup();
+
   for (const mode of ['fix', 'submit', 'discard'] as const) {
-    assert.deepEqual(await service.review({ sessionId: 's1', itemId: ITEM, mode }), { ok: false, reason: 'There is no review in progress' });
+    /* When */
+    const result = await service.review({ sessionId: 's1', itemId: ITEM, mode });
+
+    /* Then */
+    assert.deepEqual(result, { ok: false, reason: 'There is no review in progress' });
   }
   assert.equal(writes.length, 0);
 });
 
 test('after a discard, the next comment starts a new review', async () => {
+  /* Given */
   const { service, writes, state } = setup();
   await service.comment(comment());
   state.item = prItem({ pendingReview: [{ path: 'a.ts', line: 3, side: 'RIGHT', body: 'x', threadId: 'PRRT_1' }] });
   await service.review({ sessionId: 's1', itemId: ITEM, mode: 'discard' });
   state.item = prItem();
+
+  /* When */
   await service.comment(comment());
+
+  /* Then */
   assert.deepEqual(writes.map((w) => [w.call, w.args[0]]), [
     ['start', 'PR_12'], ['add', 'PRR_1'], ['delete', 'PRR_1'], ['start', 'PR_12'], ['add', 'PRR_2'],
   ]);

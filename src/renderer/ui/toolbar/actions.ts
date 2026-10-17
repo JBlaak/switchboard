@@ -8,15 +8,19 @@
  * because a filter or a search is a user's own action, and the one moment the
  * open session gives up the slot it is parked in.
  */
-import { shortProjectPath } from '../../../domain/project/project-path';
 import { nextAppearance, normaliseAppearance } from '../../../domain/settings/appearance';
 import { relayoutSessionList } from '../session-list/relayout';
+import { matchingProjectPaths } from '../../state/search-narrowing';
 import { dispatch, getState } from '../../state/app-store';
 import { openSessions, view } from '../../state/session-store';
 import { safeFit } from '../../features/terminal/terminal-manager';
 import { syncQuickSessionButton } from '../../features/sessions/quick-session';
+import { watchSleepState } from './sleep-switch';
 import type { GlobalSettings } from '../../../domain/settings/settings';
 import type { SidebarFilter } from '../../state/toolbar-slice';
+
+export { toggleSleep } from './sleep-switch';
+export { isSidebarToggleKey } from '../../lib/shortcut-keys';
 
 /** Read the stored preferences the chrome shows, and start the sleep watcher. Called once, at boot. */
 export function installToolbar(): void {
@@ -36,11 +40,6 @@ export function installToolbar(): void {
 
 export function setSidebarCollapsed(collapsed: boolean): void {
   dispatch({ type: 'sidebarCollapsed', collapsed });
-}
-
-/** Cmd+S, wherever the focus is: no text field has a use for it. */
-export function isSidebarToggleKey(e: KeyboardEvent): boolean {
-  return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyS';
 }
 
 export function toggleSidebar(): void {
@@ -123,7 +122,7 @@ async function runSearch(): Promise<void> {
       ids: new Set(results.map(r => r.id)),
       // A project's name is not in any session's body, so full-text search
       // cannot match it; titles-only mode matches it here instead.
-      projectPaths: searchTitlesOnly ? matchingProjectPaths(query) : null,
+      projectPaths: searchTitlesOnly ? matchingProjectPaths(query, view.cachedAllProjects) : null,
     });
     relayoutSessionList({ resort: true });
   } catch {
@@ -131,18 +130,6 @@ async function runSearch(): Promise<void> {
     // back to the unfiltered list.
     dropSearchMatches();
   }
-}
-
-/** Projects whose own short name contains the query. */
-function matchingProjectPaths(query: string): Set<string> | null {
-  const needle = query.toLowerCase();
-  const matched = new Set<string>();
-  for (const project of view.cachedAllProjects) {
-    if (shortProjectPath(project.projectPath).toLowerCase().includes(needle)) {
-      matched.add(project.projectPath);
-    }
-  }
-  return matched.size ? matched : null;
 }
 
 // ── Appearance ──
@@ -156,40 +143,4 @@ export function cycleAppearance(): void {
   const mode = nextAppearance(getState().toolbar.appearance);
   dispatch({ type: 'appearanceChanged', mode });
   void window.api.setAppearance(mode);
-}
-
-// ── Sleep ──
-
-/**
- * The switch is also flipped from a terminal (`pmset disablesleep`), so the
- * state is read again whenever the window regains focus and once a minute,
- * rather than trusted from the last click.
- */
-const SLEEP_POLL_MS = 60_000;
-
-function watchSleepState(): void {
-  window.addEventListener('focus', () => { void readSleepState(); });
-  setInterval(() => { void readSleepState(); }, SLEEP_POLL_MS);
-  void readSleepState();
-}
-
-async function readSleepState(): Promise<void> {
-  // A read mid-click would show the old state before the answer lands.
-  if (getState().toolbar.sleepPending) return;
-  dispatch({ type: 'sleepStateRead', disabled: await window.api.getSleepDisabled() });
-}
-
-/**
- * Waits on the result rather than flipping optimistically: the click may open
- * a password prompt, and a cancelled one leaves the switch as it was.
- */
-export async function toggleSleep(): Promise<void> {
-  const { sleepDisabled, sleepPending } = getState().toolbar;
-  if (sleepDisabled === null || sleepPending) return;
-  dispatch({ type: 'sleepSwitchPending', pending: true });
-  try {
-    dispatch({ type: 'sleepStateRead', disabled: await window.api.setSleepDisabled(!sleepDisabled) });
-  } finally {
-    dispatch({ type: 'sleepSwitchPending', pending: false });
-  }
 }

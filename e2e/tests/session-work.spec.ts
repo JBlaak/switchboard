@@ -1,12 +1,16 @@
 /**
- * The Session work page (#74): opening it from a row's meta line and with
- * Cmd+G, every way of closing it, what it shows, and the rows it cannot open
- * for.
+ * The Session work page (#74) wired into the real app: opening it from a
+ * row's meta line and with Cmd+G, every way of closing it, the keys it takes,
+ * what it hands to main, and the diff.
+ *
+ * What the page shows for a given snapshot (groups, pills, labels, cards,
+ * buttons) is decided by the session-work slice and `describe`, unit tested in
+ * test/session-work-*.test.ts; these tests only prove the wiring.
  *
  * The fixture home has no git repositories and the suite never reaches
  * GitHub, so the page's back end is stubbed (fixtures/session-work.ts): the
  * login-fix and dashboard sessions can open, with a snapshot each. The last
- * group runs against the real service, which finds no repository and so
+ * test runs against the real service, which finds no repository and so
  * leaves every meta line as text.
  */
 import { test, expect } from '../support/test';
@@ -57,14 +61,24 @@ async function expectBackOnTerminal(page: Page, home: Parameters<typeof openSess
   expect(await hasTerminal(page, S.loginFix)).toBe(true);
 }
 
+/** Open the page again with Cmd+G, from the terminal it closed back to. */
+async function reopen(page: Page): Promise<void> {
+  await page.keyboard.press('Meta+g');
+  await expect(workHeading(page)).toHaveText('Work · ' + LABEL.loginFix);
+}
+
 test.describe('with a repository', () => {
   test.use({ stubs: { sessionWork: sessionWorkStub() } });
 
   test('the meta line opens the page, and puts its session on screen first', async ({ page, home }) => {
+    /* Given */
     const trigger = workTrigger(page, LABEL.loginFix);
     await expect(trigger).toHaveAttribute('title', 'Open session work · ⌘G');
+
+    /* When */
     await trigger.click();
 
+    /* Then */
     await fakeClaude(home, S.loginFix).launched();
     await expect(workHeading(page)).toHaveText('Work · ' + LABEL.loginFix);
     await expect(sessionItem(page, S.loginFix)).toHaveClass(/\bactive\b/);
@@ -73,144 +87,117 @@ test.describe('with a repository', () => {
     expect(await hasTerminal(page, S.loginFix)).toBe(true);
   });
 
-  test('Cmd+G opens and closes the page for the session on screen', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
-    await expect(workPage(page)).toBeFocused();
+  test('Cmd+G opens the page for the session on screen; Cmd+G, Esc, Back, its row and another session close it', async ({ page, home, app }) => {
+    /* Given */
+    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await expect(terminalInput(page)).toBeFocused();
+
+    /* When */
     await page.keyboard.press('Meta+g');
-    await expectBackOnTerminal(page, home);
-    await expect.poll(() => sessionWorkClosed(app)).toEqual([S.loginFix]);
-  });
 
-  test('Esc closes it', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
+    /* Then */
+    await expect(workHeading(page)).toHaveText('Work · ' + LABEL.loginFix);
+    await expect(workPage(page)).toBeFocused();
+
+    /* When */
+    await page.keyboard.press('Meta+g');
+
+    /* Then */
+    await expectBackOnTerminal(page, home);
+    await expect.poll(() => sessionWorkClosed(app)).toHaveLength(1);
+
+    /* When */
+    await reopen(page);
     await page.keyboard.press('Escape');
-    await expectBackOnTerminal(page, home);
-    await expect.poll(() => sessionWorkClosed(app)).toEqual([S.loginFix]);
-  });
 
-  test('the Back button closes it', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
+    /* Then */
+    await expectBackOnTerminal(page, home);
+    await expect.poll(() => sessionWorkClosed(app)).toHaveLength(2);
+
+    /* When */
+    await reopen(page);
     await workPage(page).getByRole('button', { name: 'Back to terminal (Esc)' }).click();
-    await expectBackOnTerminal(page, home);
-    await expect.poll(() => sessionWorkClosed(app)).toEqual([S.loginFix]);
-  });
 
-  test('clicking the session\'s row closes it', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
+    /* Then */
+    await expectBackOnTerminal(page, home);
+    await expect.poll(() => sessionWorkClosed(app)).toHaveLength(3);
+
+    /* When */
+    await reopen(page);
     await sessionRow(page, LABEL.loginFix).click();
+
+    /* Then */
     await expectBackOnTerminal(page, home);
-    await expect.poll(() => sessionWorkClosed(app)).toEqual([S.loginFix]);
-  });
+    await expect.poll(() => sessionWorkClosed(app)).toHaveLength(4);
 
-  test('switching session closes it, and opening it again starts afresh', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
-    await workPage(page).getByRole('button', { name: /^Done/ }).click();
-    await expect(workPage(page).getByText('Log the redirect chain')).toBeVisible();
-
+    /* When */
+    await reopen(page);
     await openSession(page, home, LABEL.chartsDarkMode, S.chartsDarkMode);
+
+    /* Then */
     await expect(workPage(page)).toHaveCount(0);
     await expect(terminalHeader(page)).toContainText(LABEL.chartsDarkMode);
-    await expect.poll(() => sessionWorkClosed(app)).toEqual([S.loginFix]);
-
-    // Nothing is remembered: back on login-fix, Done is collapsed again.
-    await sessionRow(page, LABEL.loginFix).click();
-    await page.keyboard.press('Meta+g');
-    await expect(workHeading(page)).toHaveText('Work · ' + LABEL.loginFix);
-    await expect(workPage(page).getByRole('button', { name: /^Done/ })).toHaveAttribute('aria-expanded', 'false');
-    await expect(workPage(page).getByText('Log the redirect chain')).toHaveCount(0);
+    await expect.poll(() => sessionWorkClosed(app)).toEqual(Array(5).fill(S.loginFix));
   });
 
-  test('shows the header, the grouped items and the selected one', async ({ page, home, app }) => {
+  test('the page shows its snapshot, links out, takes j and k, and names the working agents', async ({ page, home, app }) => {
+    /* Given */
     await openLoginFixWork(page, home);
     const work = workPage(page);
+    const list = work.getByRole('navigation', { name: 'Work items' });
+    const detail = work.getByRole('region', { name: 'Selected work item' });
+
+    /* Then */
     await expect(work.getByRole('link', { name: 'acme/api', exact: true })).toBeVisible();
     await expect(work.getByText('2 worktrees · 3 branches', { exact: true })).toBeVisible();
-    await expect(work.getByText('updated 4s ago', { exact: true })).toBeVisible();
-
-    const list = work.getByRole('navigation', { name: 'Work items' });
     await expect(list.getByText('In progress', { exact: true })).toBeVisible();
     await expect(list.getByText('Issues', { exact: true })).toBeVisible();
     const first = list.getByRole('button', { name: /Stop the login redirect loop/ });
     await expect(first).toContainText('#1320');
-    await expect(first).toContainText('CI passing');
-    await expect(first).toContainText('2 behind main');
-    await expect(first).toContainText('+42−9');
     await expect(first).toHaveAttribute('aria-current', 'true');
-    await expect(list.getByRole('button', { name: /Add a regression test/ })).toContainText('Draft');
-    await expect(list.getByRole('button', { name: /Uncommitted changes in acme-api/ })).toContainText('2 files');
-    await expect(list.getByRole('button', { name: /Uncommitted changes in acme-api/ })).toContainText('+18−4');
-    const branch = list.getByRole('button', { name: /spike\/cookie-store/ });
-    await expect(branch).toContainText('Not pushed');
-    await expect(branch).toContainText('+61−0');
-    // Done starts collapsed.
-    await expect(list.getByRole('button', { name: /^Done/ })).toHaveAttribute('aria-expanded', 'false');
-    await expect(list.getByText('Log the redirect chain')).toHaveCount(0);
-    // A closed issue is done too: not under Issues, but a link under Done.
-    await expect(list.getByText('Session cookie not marked Secure')).toHaveCount(0);
-    await list.getByRole('button', { name: /^Done/ }).click();
-    await expect(list.getByRole('link', { name: /Session cookie not marked Secure/ })).toContainText('Closed');
-    await list.getByRole('button', { name: /^Done/ }).click();
-
-    const detail = work.getByRole('region', { name: 'Selected work item' });
     await expect(detail.getByRole('heading', { level: 2 })).toHaveText('Stop the login redirect loop #1320');
-    await expect(detail.getByText('fix/login-loop → main', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('session-work-agents')).toHaveCount(0);
+
+    /* When */
     await detail.getByRole('link', { name: '#1301' }).click();
+
+    /* Then */
     await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/issues/1301');
 
+    /* When */
     // An issue is a link out, not a selection.
     await list.getByRole('link', { name: /Users get logged out on refresh/ }).click();
-    await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/issues/1290');
-  });
 
-  test('j and k move between the items while the page has the focus', async ({ page, home }) => {
-    await openLoginFixWork(page, home);
-    const list = workPage(page).getByRole('navigation', { name: 'Work items' });
-    const second = list.getByRole('button', { name: /Add a regression test/ });
+    /* Then */
+    await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/issues/1290');
+
+    /* When */
+    await work.focus();
     await page.keyboard.press('j');
+
+    /* Then */
+    const second = list.getByRole('button', { name: /Add a regression test/ });
     await expect(second).toHaveAttribute('aria-current', 'true');
     await expect(second).toBeFocused();
-    await expect(workPage(page).getByRole('heading', { level: 2 })).toContainText('Add a regression test');
-    await page.keyboard.press('k');
-    await expect(list.getByRole('button', { name: /Stop the login redirect loop/ })).toHaveAttribute('aria-current', 'true');
-  });
+    await expect(detail.getByRole('heading', { level: 2 })).toContainText('Add a regression test');
 
-  test('the agents strip names what each working agent is doing', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
-    await expect(page.getByTestId('session-work-agents')).toHaveCount(0);
+    /* When */
+    await page.keyboard.press('k');
+
+    /* Then */
+    await expect(first).toHaveAttribute('aria-current', 'true');
+
+    /* When */
     await pushEvent(app, EVENT.sessionAgents, S.loginFix, [
       { id: 'a1', title: 'Audit the cookie flags' },
       { id: 'a2', title: 'Write the redirect test' },
     ]);
+
+    /* Then */
     const strip = page.getByTestId('session-work-agents');
     await expect(strip).toContainText('2 agents working');
     await expect(strip).toContainText('Audit the cookie flags');
     await expect(strip).toContainText('Write the redirect test');
-  });
-
-  test('nothing changed yet, and the gh banner', async ({ page }) => {
-    await workTrigger(page, LABEL.chartsDarkMode).click();
-    const work = workPage(page);
-    await expect(work.getByText('Nothing changed yet in this session.', { exact: true })).toBeVisible();
-    await expect(work.getByRole('status')).toHaveText('Run gh auth login in a terminal to see PR status and CI.');
-  });
-
-  test('a remote row is not a button, and says why', async ({ page }) => {
-    const row = sessionItem(page, S.remoteApi);
-    await expect(row.getByRole('button', { name: /^Open session work/ })).toHaveCount(0);
-    await expect(row.locator('[title="Session work isn\'t available for remote sessions yet"]')).toHaveCount(1);
-  });
-
-  test('a row outside a repository is not a button, and Cmd+G does nothing for it', async ({ page, home }) => {
-    const row = sessionItem(page, S.worktreeTry);
-    await expect(row.locator('[title="Not a git repository"]')).toHaveCount(1);
-    await expect(row.getByRole('button', { name: /^Open session work/ })).toHaveCount(0);
-
-    await openSession(page, home, LABEL.worktreeTry, S.worktreeTry);
-    await page.keyboard.press('Meta+g');
-    // Cmd+G asks main again before giving up; wait for that round trip.
-    await page.evaluate(id => window.api.canOpenSessionWork(id), S.worktreeTry);
-    await expect(workPage(page)).toHaveCount(0);
-    await expect(terminalHeader(page)).toBeVisible();
   });
 });
 
@@ -225,100 +212,56 @@ test.describe('actions', () => {
     await workPage(page).getByRole('navigation', { name: 'Work items' }).getByRole('button', { name }).click();
   }
 
-  test('each item offers what it needs: a PR its fixes, a branch Open PR, uncommitted changes Create a pull request', async ({ page, home }) => {
+  test('a button hands its item to main for the session on screen; the card cancels it, or goes to the terminal', async ({ page, home, app }) => {
+    /* Given */
     await openLoginFixWork(page, home);
-    // Behind main, CI passing.
-    await expect(actions(page).getByRole('button')).toHaveText(['Ship it', 'Rebase on origin/main', 'Open on GitHub']);
-    await select(page, /Add a regression test/);
-    // A failing check.
-    await expect(actions(page).getByRole('button')).toHaveText(['Ship it', 'Fix CI', 'Open on GitHub']);
-    await select(page, /spike\/cookie-store/);
-    await expect(actions(page).getByRole('button')).toHaveText(['Open PR']);
-    await select(page, /Uncommitted changes in acme-api/);
-    await expect(actions(page).getByRole('button')).toHaveText(['Create a pull request']);
-  });
 
-  test('a button hands its item to main for the session on screen; a refusal shows on the item', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
+    /* When */
     await actions(page).getByRole('button', { name: 'Ship it' }).click();
+
+    /* Then */
     await expect.poll(() => sessionWorkActions(app)).toEqual([{ sessionId: S.loginFix, itemId: FIRST_PR_ID, action: 'ship' }]);
 
+    /* When */
     await select(page, /spike\/cookie-store/);
     await actions(page).getByRole('button', { name: 'Open PR' }).click();
-    await expect.poll(async () => (await sessionWorkActions(app)).map(request => request.action)).toEqual(['ship', 'open-pr']);
 
+    /* Then */
+    await expect.poll(async () => (await sessionWorkActions(app)).map(request => request.action)).toEqual(['ship', 'open-pr']);
     await expect(actions(page).getByRole('button', { name: 'Open on GitHub' })).toHaveCount(0);
+
+    /* When */
     await select(page, /Stop the login redirect loop/);
     await actions(page).getByRole('button', { name: 'Open on GitHub' }).click();
-    await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1320');
-  });
 
-  test('queued: the header says the session is busy, the card offers Cancel, and the button waits', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
+    /* Then */
+    await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1320');
+
+    /* When */
     await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(
       { id: 'act-7', action: 'ship', phase: 'queued', origin: 'manual', queuedAt: new Date().toISOString() },
       { queued: 2 },
     ));
-    const work = workPage(page);
-    await expect(work.getByText('Session busy · 2 queued', { exact: true })).toBeVisible();
+
+    /* Then */
     const card = page.getByTestId('session-work-activity');
     await expect(card).toContainText('Queued: ship #1320');
-    await expect(card).toContainText('Sends when the session finishes its current turn');
-    const shipping = actions(page).getByRole('button', { name: 'Shipping…' });
-    await expect(shipping).toHaveAttribute('aria-disabled', 'true');
-    await expect(shipping).toHaveAttribute('title', 'Queued: sends when the session is idle');
 
+    /* When */
     await card.getByRole('button', { name: 'Cancel' }).click();
+
+    /* Then */
     await expect.poll(() => sessionWorkCancels(app)).toEqual(['act-7']);
-    await expect(card.getByRole('button', { name: 'View in terminal' })).toHaveCount(0);
-  });
 
-  test('Ship it: a card with its four steps from what GitHub says, and View in terminal', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
-    const shipping = { id: 'act-1', action: 'ship', phase: 'sent', origin: 'manual', queuedAt: new Date().toISOString(), sentAt: new Date().toISOString() } as const;
-    await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(shipping));
-    const card = page.getByTestId('session-work-activity');
-    await expect(card).toContainText('Shipping #1320');
-    const steps = card.getByRole('list', { name: 'Ship it steps' }).getByRole('listitem');
-    await expect(steps).toHaveText(['Rebased', 'Waiting for CI', 'Merge', 'Clean up'].map(label => new RegExp(label + '$')));
-    // Two behind main: Claude is rebasing it.
-    await expect(steps.nth(0)).toHaveAttribute('data-state', 'running');
-    await expect(steps.nth(1)).toHaveAttribute('data-state', 'todo');
-
-    // The next poll: rebased, CI running.
-    await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(shipping, {
-      facts: { behindBy: 0, mergeable: 'mergeable', checks: [{ name: 'test', state: 'pending' }] },
-    }));
-    await expect(steps.nth(0)).toHaveAttribute('data-state', 'done');
-    await expect(steps.nth(0)).toContainText('✓');
-    await expect(steps.nth(1)).toHaveAttribute('data-state', 'running');
-    await expect(steps.nth(2)).toHaveAttribute('data-state', 'todo');
-    await expect(actions(page).getByRole('button', { name: 'Shipping…' })).toHaveAttribute('aria-disabled', 'true');
-
+    /* When */
+    const now = new Date().toISOString();
+    await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(
+      { id: 'act-1', action: 'ship', phase: 'sent', origin: 'manual', queuedAt: now, sentAt: now },
+    ));
     await card.getByRole('button', { name: 'View in terminal' }).click();
+
+    /* Then */
     await expectBackOnTerminal(page, home);
-  });
-
-  test('a session that is not running cannot be handed anything, and says why', async ({ page, home, app }) => {
-    await openLoginFixWork(page, home);
-    await fakeClaude(home, S.loginFix).exit();
-    const ship = actions(page).getByRole('button', { name: 'Ship it' });
-    await expect(ship).toHaveAttribute('aria-disabled', 'true');
-    await expect(ship).toHaveAttribute('title', 'Start the session to hand this to Claude');
-    await ship.click({ force: true });
-    expect(await sessionWorkActions(app)).toEqual([]);
-    // Open on GitHub only links out.
-    await expect(actions(page).getByRole('button', { name: 'Open on GitHub' })).not.toHaveAttribute('aria-disabled', 'true');
-  });
-});
-
-test.describe('actions main refuses', () => {
-  test.use({ stubs: { sessionWork: { ...sessionWorkStub(), refuseActions: 'This item is no longer on the page' } } });
-
-  test('the reason shows on the item', async ({ page, home }) => {
-    await openLoginFixWork(page, home);
-    await workPage(page).getByRole('group', { name: 'Actions' }).getByRole('button', { name: 'Ship it' }).click();
-    await expect(workPage(page).getByRole('alert')).toHaveText('This item is no longer on the page');
   });
 });
 
@@ -333,135 +276,83 @@ test.describe('the diff', () => {
     return diffOf(page).getByRole('region', { name: path, exact: true });
   }
 
-  test('loads for the selected item, one card per file, unified by default', async ({ page, home }) => {
+  test('loads for the selected item; u, the toggle, n and p work it; a 5,000-line file fills in without holding up the keyboard', async ({ page, home }) => {
+    /* Given */
     await openLoginFixWork(page, home);
     const diff = diffOf(page);
+    const session = fileCard(page, 'src/session.ts');
+    const cards = diff.getByTestId('session-work-file');
+
+    /* Then */
     await expect(diff).toHaveAttribute('aria-busy', 'false');
-    await expect(diff.getByTestId('session-work-file')).toHaveCount(4);
+    await expect(cards).toHaveCount(4);
     await expect(diff.getByText('4 files changed', { exact: true })).toBeVisible();
     await expect(diff.getByRole('button', { name: 'Unified' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(diff.getByText('Branch not checked out locally.')).toHaveCount(0);
-
-    const session = fileCard(page, 'src/session.ts');
-    await expect(session).toContainText('+3−2');
-    await expect(session.locator('.sw-dl[data-kind="hunk"]')).toHaveText('@@ -10,6 +10,7 @@ export function refresh(session: Session) {');
     await expect(session.locator('.sw-dl[data-kind="delete"]')).toHaveCount(2);
     await expect(session.locator('.sw-dl[data-kind="add"]')).toHaveCount(3);
-    // The new file's line numbers on additions, the old file's on deletions.
-    await expect(session.locator('.sw-dl[data-kind="add"]').first().locator('.sw-dl-num')).toHaveText(['', '11']);
-    await expect(session.locator('.sw-dl[data-kind="delete"]').first().locator('.sw-dl-num')).toHaveText(['11', '']);
-    await expect(fileCard(page, 'src/fixtures/big.ts')).toContainText('New');
-  });
 
-  test('u and the toggle switch between unified and split', async ({ page, home }) => {
-    await openLoginFixWork(page, home);
-    const diff = diffOf(page);
-    const session = fileCard(page, 'src/session.ts');
-    await expect(session.locator('.sw-dl[data-kind="add"]')).toHaveCount(3);
-
+    /* When */
     await page.keyboard.press('u');
+
+    /* Then */
     await expect(diff.getByRole('button', { name: 'Split' })).toHaveAttribute('aria-pressed', 'true');
     await expect(session.locator('.sw-lines')).toHaveClass(/\bis-split\b/);
-    // Two deletions beside the first two of three additions; the third has a blank cell beside it.
-    const pairs = session.locator('.sw-dl.is-pair');
-    await expect(pairs.nth(1)).toContainText('return redirect("/login");');
-    await expect(pairs.nth(1)).toContainText('if (!token) return null;');
-    await expect(pairs.nth(2)).toContainText('return renew(token);');
-    await expect(pairs.nth(2)).toContainText('const next = renew(token);');
-    await expect(pairs.nth(3).locator('[data-side="left"][data-kind="empty"]')).toHaveCount(1);
-    await expect(pairs.nth(3)).toContainText('return next ?? null;');
 
+    /* When */
     await diff.getByRole('button', { name: 'Unified' }).click();
+
+    /* Then */
     await expect(session.locator('.sw-lines')).toHaveClass(/\bis-unified\b/);
-    await page.keyboard.press('u');
-    await expect(session.locator('.sw-lines')).toHaveClass(/\bis-split\b/);
-  });
 
-  test('a lock file starts collapsed with its reason until Show diff; a binary file is one row', async ({ page, home }) => {
-    await openLoginFixWork(page, home);
-    const lock = fileCard(page, 'package-lock.json');
-    await expect(lock).toContainText('Lock file');
-    await expect(lock.locator('.sw-dl')).toHaveCount(0);
-    await lock.getByRole('button', { name: 'Show diff' }).click();
-    await expect(lock.locator('.sw-dl[data-kind="add"]')).toHaveText(/"version": "1\.0\.1",/);
-    await expect(lock.getByRole('button', { name: 'Show diff' })).toHaveCount(0);
+    /* When */
+    await workPage(page).focus();
+    await page.keyboard.press('n');
 
-    const logo = fileCard(page, 'assets/logo.png');
-    await expect(logo.locator('.sw-file-row')).toHaveText('Binary file changed');
-    await expect(logo.locator('.sw-dl')).toHaveCount(0);
-  });
+    /* Then */
+    await expect(cards.nth(0)).toHaveClass(/\bis-focused\b/);
+    await expect(cards.nth(0).locator('.sw-file-head')).toBeFocused();
 
-  test('a 5,000-line file draws nothing until opened, then every line without holding up the keyboard', async ({ page, home }) => {
-    await openLoginFixWork(page, home);
+    /* When */
+    await page.keyboard.press('n');
+    await page.keyboard.press('n');
+    await page.keyboard.press('p');
+
+    /* Then */
+    await expect(cards.nth(1)).toHaveClass(/\bis-focused\b/);
+    await expect(cards.nth(0)).not.toHaveClass(/\bis-focused\b/);
+    await expect(cards.nth(1).locator('.sw-file-head')).toBeFocused();
     const big = fileCard(page, 'src/fixtures/big.ts');
     await expect(big).toContainText(`Large diff · ${BIG_FILE_LINES.toLocaleString('en-US')} lines changed`);
     await expect(big.locator('.sw-dl')).toHaveCount(0);
 
+    /* When */
     await big.getByRole('button', { name: 'Show diff' }).click();
     // The page still answers while the file fills in.
     await page.keyboard.press('u');
-    await expect(diffOf(page).getByRole('button', { name: 'Split' })).toHaveAttribute('aria-pressed', 'true');
-    const lines = big.locator('.sw-lines');
-    await expect(lines).toHaveAttribute('data-shown', String(BIG_FILE_LINES + 1));
+
+    /* Then */
+    await expect(diff.getByRole('button', { name: 'Split' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(big.locator('.sw-lines')).toHaveAttribute('data-shown', String(BIG_FILE_LINES + 1));
     await expect(big.locator('.sw-dl.is-pair')).toHaveCount(BIG_FILE_LINES);
     await expect(big.locator('.sw-dl.is-pair').last()).toContainText(`export const line${BIG_FILE_LINES} = ${BIG_FILE_LINES};`);
-  });
-
-  test('n and p move between the files', async ({ page, home }) => {
-    await openLoginFixWork(page, home);
-    const cards = diffOf(page).getByTestId('session-work-file');
-    await expect(cards).toHaveCount(4);
-
-    await page.keyboard.press('n');
-    await expect(cards.nth(0)).toHaveClass(/\bis-focused\b/);
-    await expect(cards.nth(0).locator('.sw-file-head')).toBeFocused();
-    await page.keyboard.press('n');
-    await expect(cards.nth(1)).toHaveClass(/\bis-focused\b/);
-    await expect(cards.nth(0)).not.toHaveClass(/\bis-focused\b/);
-    await page.keyboard.press('n');
-    await page.keyboard.press('p');
-    await expect(cards.nth(1)).toHaveClass(/\bis-focused\b/);
-    await expect(cards.nth(1).locator('.sw-file-head')).toBeFocused();
-  });
-
-  test('a PR whose diff came from GitHub says its branch is not checked out', async ({ page, home }) => {
-    await openLoginFixWork(page, home);
-    const list = workPage(page).getByRole('navigation', { name: 'Work items' });
-    await list.getByRole('button', { name: /^Done/ }).click();
-    await list.getByRole('button', { name: /Log the redirect chain/ }).click();
-
-    const diff = diffOf(page);
-    await expect(diff.getByRole('note')).toHaveText('Branch not checked out locally.');
-    await expect(fileCard(page, 'src/log.ts').locator('.sw-dl[data-kind="add"]')).toHaveText(/export const chain/);
-  });
-});
-
-test.describe('while a diff is on its way', () => {
-  test.use({ stubs: { sessionWork: { ...sessionWorkStub(), diffs: { ['pr:https://github.com/acme/api/pull/1320']: 'never' } } } });
-
-  test('the item\'s header stays up over a skeleton', async ({ page, home }) => {
-    await openLoginFixWork(page, home);
-    const detail = workPage(page).getByRole('region', { name: 'Selected work item' });
-    await expect(detail.getByRole('heading', { level: 2 })).toHaveText('Stop the login redirect loop #1320');
-    await expect(detail.getByTestId('session-work-diff')).toHaveAttribute('aria-busy', 'true');
-    await expect(detail.locator('.sw-diff-skeleton')).toBeVisible();
-  });
-});
-
-test.describe('while the snapshot is on its way', () => {
-  test.use({ stubs: { sessionWork: { canOpen: [S.loginFix], snapshots: {} } } });
-
-  test('the header shows at once over a skeleton list', async ({ page }) => {
-    await workTrigger(page, LABEL.loginFix).click();
-    await expect(workHeading(page)).toHaveText('Work · ' + LABEL.loginFix);
-    await expect(workPage(page).getByRole('navigation', { name: 'Work items' })).toHaveAttribute('aria-busy', 'true');
   });
 });
 
 test.describe('against the real service', () => {
-  test('a session outside a git repository has a plain meta line', async ({ page }) => {
+  test('a session outside a git repository has a plain meta line, and Cmd+G does nothing for it', async ({ page, home }) => {
+    /* Given */
     const row = sessionItem(page, S.loginFix);
     await expect(row.locator('[title="Not a git repository"]')).toHaveCount(1);
     await expect(row.getByRole('button', { name: /^Open session work/ })).toHaveCount(0);
+    await openSession(page, home, LABEL.loginFix, S.loginFix);
+
+    /* When */
+    await page.keyboard.press('Meta+g');
+    // Cmd+G asks main again before giving up; wait for that round trip.
+    await page.evaluate(id => window.api.canOpenSessionWork(id), S.loginFix);
+
+    /* Then */
+    await expect(workPage(page)).toHaveCount(0);
+    await expect(terminalHeader(page)).toBeVisible();
   });
 });

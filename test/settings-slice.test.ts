@@ -21,7 +21,10 @@ function opened(scope: 'global' | 'project', projectPath: string | null = null):
 }
 
 test('settings: opening holds the scope and what is stored for it', () => {
+  /* When */
   const state = run(initialRendererState(), opened('project', '/p'));
+
+  /* Then */
   assert.deepStrictEqual(state.settings.panel, {
     scope: 'project',
     projectPath: '/p',
@@ -35,23 +38,69 @@ test('settings: opening holds the scope and what is stored for it', () => {
 });
 
 test('settings: each open gets a new id, so a reopened form starts afresh', () => {
-  const state = run(initialRendererState(), opened('global'), { type: 'settingsSaved' }, opened('global'));
+  /* Given */
+  const saved = run(initialRendererState(), opened('global'), { type: 'settingsSaved' });
+
+  /* When */
+  const state = run(saved, opened('global'));
+
+  /* Then */
   assert.strictEqual(state.settings.panel?.openId, 2);
   assert.strictEqual(state.settings.panel?.saved, false);
 });
 
-test('settings: saving marks the open panel, closing drops it', () => {
-  const saved = run(initialRendererState(), opened('global'), { type: 'settingsSaved' });
+test('settings: saving marks the open panel', () => {
+  /* Given */
+  const open = run(initialRendererState(), opened('global'));
+
+  /* When */
+  const saved = run(open, { type: 'settingsSaved' });
+
+  /* Then */
   assert.strictEqual(saved.settings.panel?.saved, true);
+});
+
+test('settings: closing drops the panel and keeps the open count', () => {
+  /* Given */
+  const saved = run(initialRendererState(), opened('global'), { type: 'settingsSaved' });
+
+  /* When */
   const closed = run(saved, { type: 'settingsClosed' });
+
+  /* Then */
   assert.strictEqual(closed.settings.panel, null);
   assert.strictEqual(closed.settings.opens, 1);
 });
 
-test('settings: saving or closing a closed panel changes nothing', () => {
+test('settings: saving a closed panel changes nothing', () => {
+  /* Given */
   const initial = initialRendererState();
-  assert.strictEqual(run(initial, { type: 'settingsSaved' }), initial);
-  assert.strictEqual(run(initial, { type: 'settingsClosed' }), initial);
-  const saved = run(initial, opened('global'), { type: 'settingsSaved' });
-  assert.strictEqual(run(saved, { type: 'settingsSaved' }), saved);
+
+  /* When */
+  const next = run(initial, { type: 'settingsSaved' });
+
+  /* Then */
+  assert.strictEqual(next, initial);
+});
+
+test('settings: closing a closed panel changes nothing', () => {
+  /* Given */
+  const initial = initialRendererState();
+
+  /* When */
+  const next = run(initial, { type: 'settingsClosed' });
+
+  /* Then */
+  assert.strictEqual(next, initial);
+});
+
+test('settings: saving an already saved panel changes nothing', () => {
+  /* Given */
+  const saved = run(initialRendererState(), opened('global'), { type: 'settingsSaved' });
+
+  /* When */
+  const next = run(saved, { type: 'settingsSaved' });
+
+  /* Then */
+  assert.strictEqual(next, saved);
 });
