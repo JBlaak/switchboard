@@ -100,6 +100,7 @@ function build(projectsDir: string, meta: Map<string, FolderMeta>) {
 test('reconcile indexes new and stale folders but skips up-to-date ones', () => {
   const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-reconcile-'));
   try {
+    /* Given */
     // Never indexed (no meta), stale (meta older than disk), and up-to-date.
     writeSession(path.join(projectsDir, 'proj-new'), '/tmp/proj-new');
     writeSession(path.join(projectsDir, 'proj-stale'), '/tmp/proj-stale');
@@ -115,8 +116,10 @@ test('reconcile indexes new and stale folders but skips up-to-date ones', () => 
       indexMtimeMs: transcripts.folderIndexMtimeMs('proj-current'),
     });
 
+    /* When */
     index.reconcile();
 
+    /* Then */
     assert.ok(indexedFolders.has('proj-new'), 'a folder with no meta should be indexed');
     assert.ok(indexedFolders.has('proj-stale'), 'a folder newer than its gate should be re-indexed');
     assert.ok(!indexedFolders.has('proj-current'), 'an up-to-date folder should be skipped');
@@ -128,15 +131,22 @@ test('reconcile indexes new and stale folders but skips up-to-date ones', () => 
 test('a folder is re-read only for the transcripts whose mtime moved', () => {
   const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-refresh-'));
   try {
+    /* Given */
     writeSession(path.join(projectsDir, 'proj'), '/tmp/proj');
     const { index, indexedFolders, cached } = build(projectsDir, new Map());
 
+    /* When */
     index.refreshFolder('proj');
+
+    /* Then */
     assert.equal(cached.size, 1, 'the transcript is read the first time');
 
     // Nothing changed on disk, so the fingerprint match short-circuits the read.
+    /* When */
     indexedFolders.clear();
     index.refreshFolder('proj');
+
+    /* Then */
     assert.ok(!indexedFolders.has('proj'), 'an unchanged transcript is not re-read');
   } finally {
     fs.rmSync(projectsDir, { recursive: true, force: true });
@@ -146,6 +156,7 @@ test('a folder is re-read only for the transcripts whose mtime moved', () => {
 test('one deleted transcript among several is dropped from the cache', () => {
   const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-drop-'));
   try {
+    /* Given */
     const folderPath = path.join(projectsDir, 'proj');
     writeSession(folderPath, '/tmp/proj');
     const second = JSON.stringify({
@@ -154,12 +165,18 @@ test('one deleted transcript among several is dropped from the cache', () => {
     fs.writeFileSync(path.join(folderPath, 'other.jsonl'), second + '\n', 'utf8');
 
     const { index, cached } = build(projectsDir, new Map());
+
+    /* When */
     index.refreshFolder('proj');
+
+    /* Then */
     assert.equal(cached.size, 2);
 
+    /* When */
     fs.rmSync(path.join(folderPath, 'other.jsonl'));
     index.refreshFolder('proj');
 
+    /* Then */
     assert.deepEqual([...cached.keys()], ['session'], 'the deleted transcript leaves no row behind');
   } finally {
     fs.rmSync(projectsDir, { recursive: true, force: true });
@@ -169,15 +186,22 @@ test('one deleted transcript among several is dropped from the cache', () => {
 test('a folder that disappears is forgotten entirely', () => {
   const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-gone-'));
   try {
+    /* Given */
     const folderPath = path.join(projectsDir, 'proj');
     writeSession(folderPath, '/tmp/proj');
     const { index, cached } = build(projectsDir, new Map());
 
+    /* When */
     index.refreshFolder('proj');
+
+    /* Then */
     assert.equal(cached.size, 1);
 
+    /* When */
     fs.rmSync(folderPath, { recursive: true });
     index.refreshFolder('proj');
+
+    /* Then */
     assert.equal(cached.size, 0);
   } finally {
     fs.rmSync(projectsDir, { recursive: true, force: true });
