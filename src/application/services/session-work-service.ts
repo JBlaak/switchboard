@@ -350,6 +350,7 @@ export class SessionWorkService {
     page.lastKey = key;
     page.last = {
       sessionId: page.sessionId,
+      repository: page.repository ?? '',
       items,
       gh,
       updatedAt: new Date(this.deps.clock.now()).toISOString(),

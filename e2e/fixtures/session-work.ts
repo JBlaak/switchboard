@@ -68,11 +68,11 @@ const ITEMS: SessionWorkItem[] = [
 const UPDATED_AT = new Date(FIXTURE_NOW - 4000).toISOString();
 
 export const LOGIN_FIX_WORK: SessionWorkSnapshot = {
-  sessionId: S.loginFix, items: ITEMS, gh: 'ok', updatedAt: UPDATED_AT,
+  sessionId: S.loginFix, repository: REPO, items: ITEMS, gh: 'ok', updatedAt: UPDATED_AT,
 };
 
 export const DASHBOARD_WORK: SessionWorkSnapshot = {
-  sessionId: S.chartsDarkMode, items: [], gh: 'unauthenticated', updatedAt: UPDATED_AT,
+  sessionId: S.chartsDarkMode, repository: 'acme/dashboard', items: [], gh: 'unauthenticated', updatedAt: UPDATED_AT,
 };
 
 export function sessionWorkStub(): SessionWorkStub {

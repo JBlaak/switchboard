@@ -131,20 +131,6 @@ export function itemSummary(item: SessionWorkItem): string {
   }
 }
 
-/**
- * The session's repository as `owner/name`: the snapshot does not carry it,
- * so it is the first one an item names. '' when none does.
- */
-export function snapshotRepository(snapshot: SessionWorkSnapshot): string {
-  for (const item of snapshot.items) {
-    if (item.kind === 'pr' && item.pr.repository) return item.pr.repository;
-  }
-  for (const item of snapshot.items) {
-    if (item.kind === 'issue' && item.issue.repository) return item.issue.repository;
-  }
-  return '';
-}
-
 /** "N worktrees · M branches" the session's items live in. */
 export function footprintLine(snapshot: SessionWorkSnapshot): string {
   const worktrees = new Set<string>();

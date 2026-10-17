@@ -6,7 +6,7 @@
 import type { JSX } from 'react';
 import { openOnGitHub } from './actions';
 import {
-  closedIssues, itemBranchLine, itemPills, itemRef, itemSummary, itemTitle, snapshotRepository,
+  closedIssues, itemBranchLine, itemPills, itemRef, itemSummary, itemTitle,
 } from './describe';
 import { Pills } from './Pills';
 import { selectedItem } from '../../state/session-work-slice';
@@ -18,7 +18,7 @@ export function WorkDetail({ page }: { page: SessionWorkPage }): JSX.Element {
     return <section className="sw-detail" aria-label="Selected work item" />;
   }
 
-  const repository = snapshotRepository(page.snapshot);
+  const repository = page.snapshot.repository;
   const branch = itemBranchLine(item);
   const closes = closedIssues(item, repository);
   const files = item.kind === 'dirty' ? item.files : [];

@@ -8,7 +8,7 @@
  */
 import type { JSX } from 'react';
 import { selectWorkItem, openOnGitHub, toggleDoneItems } from './actions';
-import { itemKind, itemPills, itemRef, itemTitle, itemUrl, snapshotRepository } from './describe';
+import { itemKind, itemPills, itemRef, itemTitle, itemUrl } from './describe';
 import { Pills } from './Pills';
 import { workSections } from '../../state/session-work-slice';
 import type { SessionWorkPage } from '../../state/session-work-slice';
@@ -28,7 +28,7 @@ export function WorkList({ page }: { page: SessionWorkPage }): JSX.Element {
   }
 
   const { inProgress, issues, done } = workSections(snapshot);
-  const repository = snapshotRepository(snapshot);
+  const repository = snapshot.repository;
   const row = (item: SessionWorkItem) => (
     <WorkListItem key={item.id} item={item} selected={item.id === page.selectedItemId} />
   );

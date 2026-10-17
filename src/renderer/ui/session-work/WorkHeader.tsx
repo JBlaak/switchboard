@@ -10,7 +10,7 @@ import type { JSX } from 'react';
 import { useStore } from '../use-store';
 import { shallowEqual } from '../../state/store';
 import { closeSessionWork, openOnGitHub } from './actions';
-import { agentsLabel, footprintLine, snapshotRepository, updatedAgo } from './describe';
+import { agentsLabel, footprintLine, updatedAgo } from './describe';
 import type { SessionWorkPage } from '../../state/session-work-slice';
 import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
 
@@ -20,7 +20,7 @@ export function WorkHeader({ page }: { page: SessionWorkPage }): JSX.Element {
   const now = useStore(state => state.sessionWork.now);
   const agents = useStore(state => state.activity.agents[page.sessionId] ?? NO_AGENTS, shallowEqual);
   const { snapshot } = page;
-  const repository = snapshot ? snapshotRepository(snapshot) : '';
+  const repository = snapshot ? snapshot.repository : '';
 
   return (
     <header className="sw-header">

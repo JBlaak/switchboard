@@ -201,6 +201,7 @@ test('nothing changed yet: an empty snapshot, pushed once, and not again when a 
   assert.deepEqual(first?.items, []);
   assert.equal(first?.gh, 'ok');
   assert.equal(first?.sessionId, 's1');
+  assert.equal(first?.repository, REPO, 'from the origin remote');
   assert.equal(snapshots.length, 1);
   assert.equal(typeof first?.updatedAt, 'string');
 

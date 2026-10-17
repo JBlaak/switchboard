@@ -173,6 +173,8 @@ export type SessionWorkItem = WorkItem & { id: string };
 /** Everything the page shows for one session, pushed whenever it changes. */
 export interface SessionWorkSnapshot {
   sessionId: string;
+  /** `owner/name` of the session's repository on GitHub, from its origin remote; '' when it is not on GitHub. */
+  repository: string;
   items: SessionWorkItem[];
   gh: GitHubAvailability;
   /** ISO-8601: when this snapshot was assembled. */

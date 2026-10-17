@@ -4,7 +4,7 @@ import { initialRendererState, rekeyState, rootReducer } from '../src/renderer/s
 import { selectedItem, steppedItemId, workSections } from '../src/renderer/state/session-work-slice';
 import {
   closedIssues, footprintLine, githubBanner, itemBranchLine, itemKind, itemPills, itemRef, itemTitle,
-  snapshotRepository, updatedAgo,
+  updatedAgo,
 } from '../src/renderer/ui/session-work/describe';
 import type { RendererEvent } from '../src/renderer/state/events';
 import type { RendererState } from '../src/renderer/state/root';
@@ -58,7 +58,7 @@ const merged: SessionWorkItem = {
 };
 
 function snapshot(items: SessionWorkItem[], sessionId = 's1'): SessionWorkSnapshot {
-  return { sessionId, items, gh: 'ok', updatedAt: new Date(AT).toISOString() };
+  return { sessionId, repository: 'acme/api', items, gh: 'ok', updatedAt: new Date(AT).toISOString() };
 }
 
 const opened = (sessionId = 's1'): RendererEvent => ({ type: 'sessionWorkOpened', sessionId, name: 'Fix login', at: AT });
@@ -231,8 +231,6 @@ test('session work: the detail line, and the issues a PR closes', () => {
 
 test('session work: the header names the repository, the footprint and how fresh it is', () => {
   const snap = snapshot([issue, openPr, branch, dirty]);
-  assert.strictEqual(snapshotRepository(snap), 'acme/api');
-  assert.strictEqual(snapshotRepository(snapshot([])), '');
   assert.strictEqual(footprintLine(snap), '2 worktrees · 2 branches');
   assert.strictEqual(footprintLine(snapshot([dirty])), '1 worktree · 1 branch');
   assert.strictEqual(updatedAgo(snap.updatedAt, AT + 4_000), 'updated 4s ago');
