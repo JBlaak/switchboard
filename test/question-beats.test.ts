@@ -4,60 +4,172 @@ import { questionBeat, type QuestionMoment } from '../src/domain/companion/quest
 
 const line = (moment: QuestionMoment) => questionBeat(moment).line;
 
-test('arriving counts the questions, singular for one', () => {
-  assert.deepEqual(questionBeat({ kind: 'arrived', count: 3 }), {
+test('arriving counts the questions', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'arrived', count: 3 });
+
+  /* Then */
+  assert.deepEqual(beat, {
     move: 'wave', mood: 'happy', line: 'Claude has 3 questions for you. I’ll keep count!',
   });
-  assert.equal(line({ kind: 'arrived', count: 1 }), 'Claude has a question for you. I’ll keep count!');
 });
 
-test('a pick is cheered differently when it is the recommended one', () => {
-  assert.deepEqual(questionBeat({ kind: 'picked', recommended: true }), {
+test('arriving with one question says it in the singular', () => {
+  /* When */
+  const said = line({ kind: 'arrived', count: 1 });
+
+  /* Then */
+  assert.equal(said, 'Claude has a question for you. I’ll keep count!');
+});
+
+test('picking the recommended option is cheered as a good call', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'picked', recommended: true });
+
+  /* Then */
+  assert.deepEqual(beat, {
     move: 'hop', mood: 'happy', line: 'Good call. Claude liked that one too.',
   });
-  assert.deepEqual(questionBeat({ kind: 'picked', recommended: false }), {
-    move: 'twirl', mood: 'happy', line: 'Going your own way. I like it.',
-  });
-  assert.deepEqual(questionBeat({ kind: 'unpicked' }), { move: 'peek', mood: 'calm', line: 'Changed your mind? Fair.' });
 });
 
-test('multi-count spells out the count, and notices none and all', () => {
-  assert.equal(line({ kind: 'multi-count', count: 1, total: 4 }), 'One picked. Any more?');
-  assert.equal(line({ kind: 'multi-count', count: 2, total: 4 }), 'Two picked. Any more?');
-  assert.equal(line({ kind: 'multi-count', count: 3, total: 4 }), 'Three picked. Any more?');
-  assert.equal(line({ kind: 'multi-count', count: 0, total: 4 }), 'Nothing picked yet…');
-  assert.deepEqual(questionBeat({ kind: 'multi-count', count: 4, total: 4 }), {
+test('picking another option is cheered as going your own way', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'picked', recommended: false });
+
+  /* Then */
+  assert.deepEqual(beat, {
+    move: 'twirl', mood: 'happy', line: 'Going your own way. I like it.',
+  });
+});
+
+test('unpicking notices the change of mind', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'unpicked' });
+
+  /* Then */
+  assert.deepEqual(beat, { move: 'peek', mood: 'calm', line: 'Changed your mind? Fair.' });
+});
+
+test('multi-count spells out the count', () => {
+  /* Given */
+  const cases: Array<[number, string]> = [
+    [1, 'One picked. Any more?'],
+    [2, 'Two picked. Any more?'],
+    [3, 'Three picked. Any more?'],
+  ];
+
+  for (const [count, expected] of cases) {
+    /* When */
+    const said = line({ kind: 'multi-count', count, total: 4 });
+
+    /* Then */
+    assert.equal(said, expected);
+  }
+});
+
+test('multi-count notices when nothing is picked', () => {
+  /* When */
+  const said = line({ kind: 'multi-count', count: 0, total: 4 });
+
+  /* Then */
+  assert.equal(said, 'Nothing picked yet…');
+});
+
+test('multi-count notices when everything is picked', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'multi-count', count: 4, total: 4 });
+
+  /* Then */
+  assert.deepEqual(beat, {
     move: 'jelly', mood: 'happy', line: 'All of them? Bold.',
   });
 });
 
-test('writing an own answer and finishing the set', () => {
-  assert.deepEqual(questionBeat({ kind: 'started-other' }), { move: 'peek', mood: 'calm', line: 'Ooh, writing your own answer.' });
-  assert.deepEqual(questionBeat({ kind: 'all-answered' }), { move: 'hop', mood: 'happy', line: 'That’s everything. Send it!' });
+test('writing an own answer', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'started-other' });
+
+  /* Then */
+  assert.deepEqual(beat, { move: 'peek', mood: 'calm', line: 'Ooh, writing your own answer.' });
 });
 
-test('advancing counts down in words, and calls out the last question', () => {
-  assert.equal(line({ kind: 'advanced', done: 1, total: 3, isLast: false }), 'One down, two to go.');
-  assert.equal(line({ kind: 'advanced', done: 2, total: 4, isLast: false }), 'Two down, two to go.');
-  assert.equal(line({ kind: 'advanced', done: 2, total: 3, isLast: true }), 'Last one!');
-  assert.equal(line({ kind: 'advanced', done: 3, total: 3, isLast: false }), 'All answered. Onward!');
+test('finishing the set', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'all-answered' });
+
+  /* Then */
+  assert.deepEqual(beat, { move: 'hop', mood: 'happy', line: 'That’s everything. Send it!' });
+});
+
+test('advancing counts down in words', () => {
+  /* Given */
+  const cases: Array<[number, number, string]> = [
+    [1, 3, 'One down, two to go.'],
+    [2, 4, 'Two down, two to go.'],
+  ];
+
+  for (const [done, total, expected] of cases) {
+    /* When */
+    const said = line({ kind: 'advanced', done, total, isLast: false });
+
+    /* Then */
+    assert.equal(said, expected);
+  }
+});
+
+test('advancing calls out the last question', () => {
+  /* When */
+  const said = line({ kind: 'advanced', done: 2, total: 3, isLast: true });
+
+  /* Then */
+  assert.equal(said, 'Last one!');
+});
+
+test('advancing past every question says all are answered', () => {
+  /* When */
+  const said = line({ kind: 'advanced', done: 3, total: 3, isLast: false });
+
+  /* Then */
+  assert.equal(said, 'All answered. Onward!');
 });
 
 test('moving to a tab names it', () => {
-  assert.deepEqual(questionBeat({ kind: 'moved-to', header: 'Timeout' }), { move: 'peek', mood: 'calm', line: 'Back to Timeout.' });
+  /* When */
+  const beat = questionBeat({ kind: 'moved-to', header: 'Timeout' });
+
+  /* Then */
+  assert.deepEqual(beat, { move: 'peek', mood: 'calm', line: 'Back to Timeout.' });
 });
 
-test('being blocked worries Patch, with its own line on the last question', () => {
-  assert.deepEqual(questionBeat({ kind: 'blocked', isLast: false }), { move: 'jelly', mood: 'worried', line: 'Pick one first!' });
-  assert.equal(line({ kind: 'blocked', isLast: true }), 'Almost! One still needs an answer.');
+test('being blocked worries Patch', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'blocked', isLast: false });
+
+  /* Then */
+  assert.deepEqual(beat, { move: 'jelly', mood: 'worried', line: 'Pick one first!' });
+});
+
+test('being blocked on the last question has its own line', () => {
+  /* When */
+  const said = line({ kind: 'blocked', isLast: true });
+
+  /* Then */
+  assert.equal(said, 'Almost! One still needs an answer.');
 });
 
 test('coming back', () => {
-  assert.equal(line({ kind: 'returned' }), 'Welcome back. Right where you left off.');
+  /* When */
+  const said = line({ kind: 'returned' });
+
+  /* Then */
+  assert.equal(said, 'Welcome back. Right where you left off.');
 });
 
 test('pokes cycle through four lines', () => {
+  /* When */
   const lines = [1, 2, 3, 4, 5].map(count => line({ kind: 'poked', count }));
+
+  /* Then */
   assert.deepEqual(lines, [
     'Hey! I’m counting.',
     'Hehe. That tickles.',
@@ -65,17 +177,46 @@ test('pokes cycle through four lines', () => {
     'Answer the questions, not me!',
     'Hey! I’m counting.',
   ]);
-  assert.equal(questionBeat({ kind: 'poked', count: 1 }).move, 'jelly');
+});
+
+test('a poke makes Patch jelly', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'poked', count: 1 });
+
+  /* Then */
+  assert.equal(beat.move, 'jelly');
 });
 
 test('waiting dozes and says when the terminal takes over', () => {
-  assert.deepEqual(questionBeat({ kind: 'waiting', minutesLeft: 3 }), {
+  /* When */
+  const beat = questionBeat({ kind: 'waiting', minutesLeft: 3 });
+
+  /* Then */
+  assert.deepEqual(beat, {
     move: 'doze', mood: 'tired', line: 'Still here. The terminal takes over in 3 min.',
   });
-  assert.equal(line({ kind: 'waiting', minutesLeft: 1 }), 'Still here. The terminal takes over in a minute.');
+});
+
+test('waiting with one minute left says a minute', () => {
+  /* When */
+  const said = line({ kind: 'waiting', minutesLeft: 1 });
+
+  /* Then */
+  assert.equal(said, 'Still here. The terminal takes over in a minute.');
 });
 
 test('sending', () => {
-  assert.deepEqual(questionBeat({ kind: 'sent' }), { move: 'love', mood: 'happy', line: 'Off it goes!' });
-  assert.deepEqual(questionBeat({ kind: 'submit' }), questionBeat({ kind: 'sent' }));
+  /* When */
+  const beat = questionBeat({ kind: 'sent' });
+
+  /* Then */
+  assert.deepEqual(beat, { move: 'love', mood: 'happy', line: 'Off it goes!' });
+});
+
+test('submitting reacts the same as sending', () => {
+  /* When */
+  const beat = questionBeat({ kind: 'submit' });
+
+  /* Then */
+  assert.deepEqual(beat, questionBeat({ kind: 'sent' }));
 });
