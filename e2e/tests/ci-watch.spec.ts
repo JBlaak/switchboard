@@ -88,6 +88,15 @@ test('the watch\'s pushes reach the row: a dot per PR chip, the worst on "+N" na
   /* Then */
   await expect(row).toHaveClass(/\bneeds-attention\b/);
   await expect(chip('#1320').locator('.session-pr-dot')).toHaveAttribute('data-dot', 'red');
+
+  /* When */
+  await pushEvent(app, EVENT.prStatusChanged, prStatus([{ number: 1320, dot: 'merged' }]));
+
+  /* Then */
+  // A merged PR swaps its dot for a check.
+  await expect(chip('#1320').locator('.session-pr-dot')).toHaveCount(0);
+  await expect(chip('#1320').locator('.session-pr-merged svg')).toBeVisible();
+  await expect(chip('#1320')).toHaveAttribute('title', 'acme/api#1320 · merged');
 });
 
 test('the Checks panel lists each check, with the failing one\'s log', async ({ page, home, app }) => {

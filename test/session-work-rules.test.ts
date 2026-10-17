@@ -414,11 +414,11 @@ test('red once it needs you', () => {
   assert.equal(dot, 'red');
 });
 
-test('merged and closed PRs are green', () => {
+test('a merged PR is merged, whatever its checks or activity say', () => {
   /* Given */
   const cases: [PullRequestStatus, Activity | null][] = [
     [pr({ state: 'merged', checks: [check('ci', 'failing')] }), null],
-    [pr({ state: 'closed' }), activity('ship', 'gave-up')],
+    [pr({ state: 'merged' }), activity('ship', 'gave-up')],
   ];
 
   for (const [status, act] of cases) {
@@ -426,8 +426,19 @@ test('merged and closed PRs are green', () => {
     const dot = statusDot(status, act);
 
     /* Then */
-    assert.equal(dot, 'green');
+    assert.equal(dot, 'merged');
   }
+});
+
+test('a closed PR is green', () => {
+  /* Given */
+  const status = pr({ state: 'closed' });
+
+  /* When */
+  const dot = statusDot(status, activity('ship', 'gave-up'));
+
+  /* Then */
+  assert.equal(dot, 'green');
 });
 
 test('the +N chip takes the worst of the PRs it hides', () => {
@@ -437,6 +448,8 @@ test('the +N chip takes the worst of the PRs it hides', () => {
     [['green', 'green'], 'green'],
     [['green', 'amber', 'green'], 'amber'],
     [['amber', 'red', 'green'], 'red'],
+    [['merged', 'merged'], 'merged'],
+    [['merged', 'green'], 'green'],
   ];
 
   for (const [dots, expected] of cases) {
