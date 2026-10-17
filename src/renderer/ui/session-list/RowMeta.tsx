@@ -10,7 +10,7 @@
 import { useEffect } from 'react';
 import { pullRequestChips, pullRequestLabel } from '../../../domain/session/pull-requests';
 import { projectLabel } from '../../features/sessions/project-label';
-import { sessionDisplayName, sessionTimeLabel } from '../../state/session-list-layout';
+import { agentsTitle, askingLabel, sessionDisplayName, sessionTimeLabel } from '../../state/session-list-layout';
 import { useStore } from '../use-store';
 import { canOpenSessionWork } from '../session-work/actions';
 import { isRemoteRow, workTrigger } from './work-trigger';
@@ -42,9 +42,7 @@ export function RowMeta({ row, asking, agents, now, onOpenWork }: RowMetaProps):
     <span className="session-meta-left">
       {/* What the session is blocked on, ahead of everything else on the line. */}
       {asking > 0 && (
-        <span className="session-asking">
-          {asking === 1 ? 'Asking 1 question' : `Asking ${asking} questions`}
-        </span>
+        <span className="session-asking">{askingLabel(asking)}</span>
       )}
       <ProjectLabel path={path} />
       <span className="session-time">{sessionTimeLabel(session, now)}</span>
@@ -120,9 +118,7 @@ export function RepoLink({ path, children }: { path: string; children: string })
  * agent's task.
  */
 function AgentsBadge({ agents }: { agents: readonly WorkingAgent[] }): JSX.Element {
-  const title = `${agents.length} ${agents.length === 1 ? 'agent' : 'agents'} working\n`
-    + agents.map(agent => '• ' + (agent.title || 'Untitled agent')).join('\n');
-  return <span className="session-agents" title={title} dangerouslySetInnerHTML={agentsBadgeHtml(agents.length)} />;
+  return <span className="session-agents" title={agentsTitle(agents)} dangerouslySetInnerHTML={agentsBadgeHtml(agents.length)} />;
 }
 
 /**

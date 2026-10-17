@@ -17,6 +17,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { store } from '../../state/app-store';
 import { play, snapshot } from '../../lib/motion/reflow';
+import { redrawGlides } from '../../state/list-reflow';
 import type { Snapshot } from '../../lib/motion/reflow';
 
 /** The list's top-level entries: rows, slug groups, section labels and the "older" toggle — never what sits inside a group. */
@@ -27,10 +28,7 @@ export function useReflow(container: HTMLElement, revision: number): void {
 
   useLayoutEffect(() => store.subscribe((state, previous) => {
     if (state.sessionList.revision === previous.sessionList.revision) return;
-    // The first render has nothing to glide from: everything would fade in at
-    // once. A collapsed sidebar shows no list to watch, so measuring it is
-    // wasted work.
-    const animate = previous.sessionList.layout !== null && !state.toolbar.sidebarCollapsed;
+    const animate = redrawGlides(previous, state);
     // Two redraws before one commit: the first snapshot is still the DOM on screen.
     if (!animate) before.current = null;
     else before.current ??= snapshot(container, REFLOW_SELECTOR);

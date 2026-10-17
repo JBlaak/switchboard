@@ -16,6 +16,11 @@ import { hasMotion, motion, reducedMotion, Spring, type Motion } from './spring'
 /** More arrivals or departures than this in one change is a new screen (a filter, a search), not a change: nothing moves. */
 const SCREEN_CHANGE = 12;
 
+/** Whether a change with this many arrivals and departures is a new screen, which nothing glides into. */
+export function isNewScreen(entering: number, gone: number): boolean {
+  return entering > SCREEN_CHANGE || gone > SCREEN_CHANGE;
+}
+
 interface Pos { x: number; y: number; w: number; h: number }
 
 export interface Snapshot {
@@ -57,7 +62,7 @@ export function play(before: Snapshot): void {
   const entering = now.filter(el => !before.items.has(el.id));
   const nowIds = new Set(now.map(el => el.id));
   const gone = [...before.items.values()].filter(({ el }) => !nowIds.has(el.id) || !el.isConnected);
-  if (entering.length > SCREEN_CHANGE || gone.length > SCREEN_CHANGE) return;
+  if (isNewScreen(entering.length, gone.length)) return;
 
   for (const el of now) {
     // A row playing its own exit (archive) owns its motion; gliding it would retarget its slide.
