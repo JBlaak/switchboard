@@ -237,10 +237,12 @@ export class PrWatchService {
       const item = await this.#item(session, status, pr.key);
       const mainCheckout = (await this.deps.git.worktreeRoot(session.projectPath)) ?? session.projectPath;
       const result = await actions.request(session.sessionId, pr.key, 'fix-ci', 'auto', {
-        item,
-        context: { repository: status.repository, mainCheckout, gh: 'ok' },
-        checkName: decision.checkName,
-        attempt: decision.attempt,
+        resolved: {
+          item,
+          context: { repository: status.repository, mainCheckout, gh: 'ok' },
+          checkName: decision.checkName,
+          attempt: decision.attempt,
+        },
       });
       if (!result.ok) {
         this.deps.log.info(`[pr-watch] auto-fix for ${pr.link.url} not queued: ${result.reason}`);

@@ -12,7 +12,9 @@ import { dispatch, getState } from '../../state/app-store';
 import { hasEntry } from '../../state/records';
 import { sessionMap } from '../../state/session-store';
 import { selectedDiff, steppedFilePath, steppedItemId } from '../../state/session-work-slice';
-import type { DiffMode } from '../../state/session-work-slice';
+import type { DiffMode, ReviewKind } from '../../state/session-work-slice';
+import type { DiffSide } from '../../../domain/session-work/model';
+import type { ReviewMode, ReviewResult } from '../../../domain/session-work/review';
 import { headerNameFor } from '../../features/sessions/terminal-header';
 import { openSession } from '../../features/sessions/session-actions';
 import type { WorkAction } from '../../../domain/session-work/model';
@@ -149,14 +151,14 @@ export function openOnGitHub(url: string): void {
  * An action button: ask main to queue the action for the page's session. The
  * activity arrives with the next snapshot; a refusal shows on the item.
  */
-export async function requestWorkAction(itemId: string, action: WorkAction): Promise<void> {
+export async function requestWorkAction(itemId: string, action: WorkAction, threadIds?: string[]): Promise<void> {
   const page = getState().sessionWork.page;
   if (!page || page.pendingAction) return;
   const { sessionId } = page;
-  dispatch({ type: 'sessionWorkActionRequested', sessionId, itemId, action });
+  dispatch({ type: 'sessionWorkActionRequested', sessionId, itemId, action, ...(threadIds ? { threadIds } : {}) });
   let error: string | null;
   try {
-    const result = await window.api.sessionWorkAction({ sessionId, itemId, action });
+    const result = await window.api.sessionWorkAction({ sessionId, itemId, action, ...(threadIds ? { threadIds } : {}) });
     error = result.ok ? null : result.reason;
   } catch (err) {
     error = (err as Error)?.message || 'The action could not be queued';
@@ -230,4 +232,52 @@ export function stepFile(direction: 1 | -1): string | null {
   const path = steppedFilePath(diff, direction);
   if (path) flushSync(() => dispatch({ type: 'sessionWorkFileFocused', itemId, path }));
   return path;
+}
+
+// ── Your review (C1, C2) ──
+
+/** `+` or `c` on a line: the composer opens under it, closing any other. */
+export function openComposer(itemId: string, path: string, line: number, side: DiffSide): void {
+  flushSync(() => dispatch({ type: 'sessionWorkComposerOpened', itemId, path, line, side }));
+}
+
+export function closeComposer(): void {
+  dispatch({ type: 'sessionWorkComposerClosed' });
+}
+
+/**
+ * Add to review: ask main to put the comment into your pending review. Answers
+ * whether it went in; the snapshot that follows shows it.
+ */
+export async function addReviewComment(body: string): Promise<boolean> {
+  const page = getState().sessionWork.page;
+  const target = page?.composer;
+  if (!page || !target || page.reviewPending) return false;
+  const { sessionId } = page;
+  const { itemId, path, line, side } = target;
+  return reviewWrite(sessionId, itemId, 'comment',
+    () => window.api.sessionWorkComment({ sessionId, itemId, path, line, side, body }));
+}
+
+/** A button of the pending review bar: Submit & have Claude fix, Submit only, or Discard. */
+export async function finishReview(itemId: string, mode: ReviewMode): Promise<boolean> {
+  const page = getState().sessionWork.page;
+  if (!page || page.reviewPending) return false;
+  const { sessionId } = page;
+  return reviewWrite(sessionId, itemId, mode, () => window.api.sessionWorkReview({ sessionId, itemId, mode }));
+}
+
+async function reviewWrite(
+  sessionId: string, itemId: string, kind: ReviewKind, write: () => Promise<ReviewResult>,
+): Promise<boolean> {
+  dispatch({ type: 'sessionWorkReviewRequested', sessionId, itemId, kind });
+  let error: string | null;
+  try {
+    const result = await write();
+    error = result.ok ? null : result.reason;
+  } catch (err) {
+    error = (err as Error)?.message || 'GitHub could not be reached';
+  }
+  dispatch({ type: 'sessionWorkReviewAnswered', sessionId, itemId, kind, error });
+  return error === null;
 }

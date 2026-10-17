@@ -23,6 +23,7 @@ import type { ElectronApplication } from '@playwright/test';
 import { EVENT, INVOKE, SEND } from '../../src/ipc/channels';
 import type { SessionWorkDiff, SessionWorkSnapshot } from '../../src/domain/session-work/model';
 import type { ActionRequest } from '../../src/domain/session-work/actions';
+import type { CommentRequest, ReviewRequest } from '../../src/domain/session-work/review';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { UpdateNotice } from '../../src/domain/update/release';
 import type { Usage } from '../../src/domain/usage/usage';
@@ -96,6 +97,8 @@ export interface SessionWorkStub {
    * Either way the request is recorded (see `sessionWorkActions`).
    */
   refuseActions?: string;
+  /** Why every review write (a comment, submit, discard) is refused; unset, each one goes through. */
+  refuseReview?: string
   /** What the Checks panel's log request answers, by check run URL; a URL not here has no log. */
   checkLogs?: Record<string, string>;
 }
@@ -117,7 +120,12 @@ interface StubState extends HostStubs {
   sessionWorkActions: ActionRequest[];
   /** Every queued action the page asked main to cancel, by id. */
   sessionWorkCancels: string[];
+  /** Every write to your review the page asked main for, in order. */
+  sessionWorkReviews: ReviewWrite[];
 }
+
+/** A comment added to the pending review, or the review finished. */
+export type ReviewWrite = { comment: CommentRequest } | { review: ReviewRequest };
 
 /** How often the renderer asked the stubs for something, by channel. */
 export interface HostStubCalls {
@@ -147,7 +155,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
   await app.evaluate(({ ipcMain }, { stubs, channels, send }) => {
     const state: StubState = {
       ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0, getWeather: 0 }, clipboard: [], sessionWorkClosed: [],
-      sessionWorkActions: [], sessionWorkCancels: [],
+      sessionWorkActions: [], sessionWorkCancels: [], sessionWorkReviews: [],
     };
     (globalThis as WithStubs).__switchboardE2E = state;
 
@@ -185,6 +193,17 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
         state.sessionWorkCancels.push(String(activityId));
         return { ok: true };
       });
+      // Your review would be written to GitHub; recorded here instead.
+      ipcMain.removeHandler(channels.sessionWorkComment);
+      ipcMain.handle(channels.sessionWorkComment, (_event, request: CommentRequest) => {
+        state.sessionWorkReviews.push({ comment: request });
+        return work.refuseReview ? { ok: false, reason: work.refuseReview } : { ok: true };
+      });
+      ipcMain.removeHandler(channels.sessionWorkReview);
+      ipcMain.handle(channels.sessionWorkReview, (_event, request: ReviewRequest) => {
+        state.sessionWorkReviews.push({ review: request });
+        return work.refuseReview ? { ok: false, reason: work.refuseReview } : { ok: true };
+      })
       // The real one would ask `gh` for the log.
       ipcMain.removeHandler(channels.sessionWorkCheckLog);
       ipcMain.handle(channels.sessionWorkCheckLog, (_event, request: { checkRunUrl: string }) =>
@@ -259,6 +278,13 @@ export async function sessionWorkActions(app: ElectronApplication): Promise<Acti
 export async function sessionWorkCancels(app: ElectronApplication): Promise<string[]> {
   return await app.evaluate(() => {
     return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkCancels];
+  });
+}
+
+/** Every write to your review the Session work page asked main for, in order. */
+export async function sessionWorkReviews(app: ElectronApplication): Promise<ReviewWrite[]> {
+  return await app.evaluate(() => {
+    return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkReviews];
   });
 }
 

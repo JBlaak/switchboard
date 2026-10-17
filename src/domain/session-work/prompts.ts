@@ -73,6 +73,22 @@ export function threadLine(thread: ReviewThread): string {
   return `${where} — ${author}: ${body} (${thread.id})`;
 }
 
+/**
+ * The review threads a Fix comments prompt hands over, read back from its
+ * text: each thread line ends with the thread's id in brackets (`threadLine`).
+ * The stored action keeps only its prompt, so this is how a queued Fix
+ * comments still knows its threads after a restart.
+ */
+export function promptThreadIds(prompt: string): string[] {
+  const ids: string[] = [];
+  for (const line of prompt.split('\n')) {
+    if (!line.includes(' — ')) continue;
+    const match = /\(([^()\s]+)\)$/.exec(line);
+    if (match && !ids.includes(match[1])) ids.push(match[1]);
+  }
+  return ids;
+}
+
 /** The prompt for an action, in the exact words of the epic's prompt table. */
 export function renderPrompt(request: PromptRequest): string {
   switch (request.action) {

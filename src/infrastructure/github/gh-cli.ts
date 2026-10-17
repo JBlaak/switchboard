@@ -11,11 +11,16 @@
  * the viewer is, because a review thread "needs you" when Claude — posting as
  * you — had the last word and left it open (C5).
  *
+ * The only writes are your review's (C3): a pending review, its comments, and
+ * submitting or deleting it, each a GraphQL mutation whose values all travel
+ * as variables.
+ *
  * Every command is `execFile('gh', argv)`, never a shell string. The runner is
  * injected so the tests can feed recorded responses without `gh` installed.
  */
 import { execFile } from 'node:child_process';
-import type { GitHubAvailability, GitHubCli } from '../../application/ports/github-cli';
+import type { GitHubAvailability, GitHubCli, GitHubWrite, NewLineComment } from '../../application/ports/github-cli';
+import type { ReviewEvent } from '../../domain/session-work/review';
 import type {
   CheckRun, DiffSide, IssueRef, IssueStatus, MergeMethod, PendingComment, PullRequestStatus, ReviewThread, ThreadComment,
 } from '../../domain/session-work/model';
@@ -164,6 +169,74 @@ export class GhCli implements GitHubCli {
     return found;
   }
 
+  // ── Your review (C3) ──
+  //
+  // Every value goes in as a GraphQL variable, never into the query text: a
+  // comment's body is whatever you typed. Strings go with `-f`, which `gh`
+  // passes verbatim (`-F` would read a body starting with `@` as a file); only
+  // the line number goes with `-F`, which makes it an Int.
+
+  async startPendingReview(pullRequestId: string): Promise<GitHubWrite<{ reviewId: string }>> {
+    const answer = await this.#mutate(START_REVIEW, [['-f', 'pullRequestId', pullRequestId]]);
+    if (!answer.ok) return answer;
+    const reviewId = answer.data.addPullRequestReview?.pullRequestReview?.id;
+    return typeof reviewId === 'string' && reviewId
+      ? { ok: true, reviewId }
+      : { ok: false, reason: 'GitHub did not start the review' };
+  }
+
+  async addPendingComment(reviewId: string, comment: NewLineComment): Promise<GitHubWrite<{ threadId: string }>> {
+    if (!Number.isSafeInteger(comment.line) || comment.line < 1) return { ok: false, reason: 'That line cannot take a comment' };
+    const answer = await this.#mutate(ADD_COMMENT, [
+      ['-f', 'reviewId', reviewId],
+      ['-f', 'path', comment.path],
+      ['-F', 'line', String(comment.line)],
+      ['-f', 'side', comment.side === 'LEFT' ? 'LEFT' : 'RIGHT'],
+      ['-f', 'body', comment.body],
+    ]);
+    if (!answer.ok) return answer;
+    const threadId = answer.data.addPullRequestReviewThread?.thread?.id;
+    return typeof threadId === 'string' && threadId
+      ? { ok: true, threadId }
+      : { ok: false, reason: 'GitHub did not add the comment' };
+  }
+
+  async deletePendingReview(reviewId: string): Promise<GitHubWrite> {
+    const answer = await this.#mutate(DELETE_REVIEW, [['-f', 'reviewId', reviewId]]);
+    return answer.ok ? { ok: true } : answer;
+  }
+
+  async submitPendingReview(reviewId: string, event: ReviewEvent): Promise<GitHubWrite> {
+    const answer = await this.#mutate(SUBMIT_REVIEW, [
+      ['-f', 'reviewId', reviewId],
+      ['-f', 'event', event === 'REQUEST_CHANGES' ? 'REQUEST_CHANGES' : 'COMMENT'],
+    ]);
+    return answer.ok ? { ok: true } : answer;
+  }
+
+  /** Run a mutation; answer its `data`, or why it did not go through. */
+  async #mutate(
+    mutation: string,
+    variables: ReadonlyArray<readonly ['-f' | '-F', string, string]>,
+  ): Promise<{ ok: true; data: any } | { ok: false; reason: string }> {
+    const args = ['api', 'graphql', '-f', 'query=' + mutation];
+    for (const [flag, key, value] of variables) args.push(flag, `${key}=${value}`);
+    const result = await this.#run(args);
+    if (result.missing) return { ok: false, reason: 'gh is not installed' };
+    if (isAuthFailure(result)) return { ok: false, reason: 'gh is not signed in to github.com' };
+    let body: { data?: any; errors?: Array<{ message?: unknown }> } | null = null;
+    try {
+      body = JSON.parse(result.stdout);
+    } catch {
+      body = null;
+    }
+    const error = body?.errors?.find((e) => typeof e?.message === 'string')?.message as string | undefined;
+    if (error) return { ok: false, reason: error };
+    if (result.code === 0 && body?.data && typeof body.data === 'object') return { ok: true, data: body.data };
+    const stderr = result.stderr.trim().split('\n').pop()?.replace(/^gh: /, '');
+    return { ok: false, reason: stderr || 'GitHub did not answer' };
+  }
+
   /**
    * Run a GraphQL query and answer its `data`, or null.
    *
@@ -186,12 +259,36 @@ export class GhCli implements GitHubCli {
   }
 }
 
+/**
+ * The review mutations. A pending review is one started without an `event`;
+ * a thread added to it stays pending, visible only to you, until the review
+ * is submitted.
+ */
+export const START_REVIEW = `mutation($pullRequestId: ID!) {
+  addPullRequestReview(input: { pullRequestId: $pullRequestId }) { pullRequestReview { id } }
+}`;
+
+export const ADD_COMMENT = `mutation($reviewId: ID!, $path: String!, $line: Int!, $side: DiffSide!, $body: String!) {
+  addPullRequestReviewThread(input: {
+    pullRequestReviewId: $reviewId, path: $path, line: $line, side: $side, body: $body
+  }) { thread { id } }
+}`;
+
+export const DELETE_REVIEW = `mutation($reviewId: ID!) {
+  deletePullRequestReview(input: { pullRequestReviewId: $reviewId }) { pullRequestReview { id } }
+}`;
+
+export const SUBMIT_REVIEW = `mutation($reviewId: ID!, $event: PullRequestReviewEvent!) {
+  submitPullRequestReview(input: { pullRequestReviewId: $reviewId, event: $event }) { pullRequestReview { id state } }
+}`;
+
 /** Positive integers only, once each: they are written into the query text. */
 function validNumbers(numbers: readonly number[]): number[] {
   return [...new Set(numbers.filter((n) => Number.isSafeInteger(n) && n > 0))];
 }
 
 const PULL_REQUEST_FIELDS = `
+  id
   number url title state isDraft isCrossRepository mergeable additions deletions
   headRefName headRefOid baseRefName
   repository {
@@ -211,12 +308,12 @@ const PULL_REQUEST_FIELDS = `
   closingIssuesReferences(first: 20) { nodes { number repository { nameWithOwner } } }
   reviewThreads(first: 100) {
     nodes {
-      id path line originalLine diffSide isResolved
+      id path line originalLine diffSide isResolved resolvedBy { login }
       comments(first: 50) { nodes { id state body createdAt author { __typename login } } }
     }
   }
   reviews(states: PENDING, first: 1) {
-    nodes { comments(first: 100) { nodes { id path line originalLine body } } }
+    nodes { id comments(first: 100) { nodes { id path line originalLine body } } }
   }`;
 
 /** One request for every PR: one aliased field each, `pr<number>`. */
@@ -262,6 +359,9 @@ function toPullRequest(node: any, repo: string, viewer: string): PullRequestStat
   const { threads, pending } = reviewThreads(node, viewer);
   pr.threads = threads;
   pr.pendingReview = pending;
+  if (typeof node.id === 'string' && node.id) pr.nodeId = node.id;
+  const pendingReviewId = node.reviews?.nodes?.[0]?.id;
+  if (typeof pendingReviewId === 'string' && pendingReviewId) pr.pendingReviewId = pendingReviewId;
   return pr;
 }
 
@@ -348,12 +448,17 @@ function isBot(author: any): boolean {
 function reviewThreads(node: any, viewer: string): { threads: ReviewThread[]; pending: PendingComment[] } {
   const threads: ReviewThread[] = [];
   const sideOfComment = new Map<string, DiffSide>();
+  const threadOfComment = new Map<string, string>();
 
   for (const thread of node.reviewThreads?.nodes ?? []) {
     if (!thread) continue;
     const side: DiffSide = thread.diffSide === 'LEFT' ? 'LEFT' : 'RIGHT';
     const all = (thread.comments?.nodes ?? []).filter(Boolean);
-    for (const comment of all) if (comment.id) sideOfComment.set(comment.id, side);
+    for (const comment of all) {
+      if (!comment.id) continue;
+      sideOfComment.set(comment.id, side);
+      if (typeof thread.id === 'string') threadOfComment.set(comment.id, thread.id);
+    }
 
     const posted = all.filter((comment: any) => comment.state !== 'PENDING');
     if (posted.length === 0) continue;
@@ -376,6 +481,7 @@ function reviewThreads(node: any, viewer: string): { threads: ReviewThread[]; pe
       // having the last word: it answered and wants your call (C5).
       needsYou: !resolved && viewer !== '' && last.author === viewer,
       comments,
+      ...(resolved && typeof thread.resolvedBy?.login === 'string' ? { resolvedBy: thread.resolvedBy.login } : {}),
     });
   }
 
@@ -384,11 +490,13 @@ function reviewThreads(node: any, viewer: string): { threads: ReviewThread[]; pe
     if (!comment) continue;
     const line = typeof comment.line === 'number' ? comment.line : comment.originalLine;
     if (typeof line !== 'number') continue;
+    const threadId = threadOfComment.get(comment.id);
     pending.push({
       path: comment.path ?? '',
       line,
       side: sideOfComment.get(comment.id) ?? 'RIGHT',
       body: comment.body ?? '',
+      ...(threadId ? { threadId } : {}),
     });
   }
   return { threads, pending };

@@ -13,7 +13,9 @@ import { FIXTURE_NOW } from '../support/fixture-home';
 import { S } from './standard';
 import { parseUnifiedDiff } from '../../src/domain/session-work/diff';
 import type { SessionWorkStub } from '../support/main-process';
-import type { Activity, PullRequestStatus, SessionWorkItem, SessionWorkSnapshot } from '../../src/domain/session-work/model';
+import type {
+  Activity, PendingComment, PullRequestStatus, ReviewThread, SessionWorkItem, SessionWorkSnapshot,
+} from '../../src/domain/session-work/model';
 
 const REPO = 'acme/api';
 const pr = (n: number) => `https://github.com/${REPO}/pull/${n}`;
@@ -115,6 +117,53 @@ export function loginFixWorkWith(
   const items = ITEMS.map((item): SessionWorkItem =>
     item.id === FIRST_PR_ID && item.kind === 'pr' ? { ...item, pr: { ...item.pr, ...facts }, activity } : item);
   return { ...LOGIN_FIX_WORK, items, queued };
+}
+
+/**
+ * The login-fix snapshot with review threads on its first PR's `src/session.ts`
+ * (#77): an open one from a teammate, one from a bot, a resolved one, one that
+ * needs you, and one whose line is gone; plus `pending` comments of your own.
+ */
+export function loginFixWorkWithReview(
+  { pending = [], fixing = [] }: { pending?: PendingComment[]; fixing?: string[] } = {},
+): SessionWorkSnapshot {
+  const at = (minutes: number) => new Date(FIXTURE_NOW - minutes * 60_000).toISOString();
+  const threads: ReviewThread[] = [
+    {
+      id: 'PRRT_open', path: 'src/session.ts', line: 12, side: 'RIGHT', resolved: false,
+      comments: [{ author: 'sam-lee', isBot: false, body: 'Why null rather than a redirect?', createdAt: at(120) }],
+    },
+    {
+      id: 'PRRT_bot', path: 'src/session.ts', line: 13, side: 'RIGHT', resolved: false,
+      comments: [{ author: 'coderabbitai', isBot: true, body: 'Possible null dereference.', createdAt: at(30) }],
+    },
+    {
+      id: 'PRRT_resolved', path: 'src/session.ts', line: 11, side: 'LEFT', resolved: true, resolvedBy: 'sam-lee',
+      comments: [{ author: 'sam-lee', isBot: false, body: 'Keep the redirect for now.', createdAt: at(300) }],
+    },
+    {
+      id: 'PRRT_needs_you', path: 'src/session.ts', line: 16, side: 'RIGHT', resolved: false, needsYou: true,
+      comments: [
+        { author: 'sam-lee', isBot: false, body: 'Close the block here?', createdAt: at(90) },
+        { author: 'joris', isBot: false, body: 'It is closed already; your call.', createdAt: at(60) },
+      ],
+    },
+    {
+      id: 'PRRT_outdated', path: 'src/session.ts', line: null, side: 'RIGHT', resolved: false,
+      comments: [{ author: 'sam-lee', isBot: false, body: 'This helper moved.', createdAt: at(600) }],
+    },
+  ];
+  const items = ITEMS.map((item): SessionWorkItem => (item.id === FIRST_PR_ID && item.kind === 'pr'
+    ? {
+      ...item,
+      pr: {
+        ...item.pr, threads, pendingReview: pending,
+        ...(pending.length ? { pendingReviewId: 'PRR_mine' } : {}),
+      },
+      ...(fixing.length ? { fixingThreads: fixing } : {}),
+    }
+    : item));
+  return { ...LOGIN_FIX_WORK, items };
 }
 
 /** How many lines the large file adds: enough that drawing it at once would block input. */

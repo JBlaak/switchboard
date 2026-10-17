@@ -2,9 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  GITHUB_REFRESH_MS, SHIP_REFRESH_MS, SessionWorkService, WATCH_DEBOUNCE_MS, type SessionWorkTarget,
+  GITHUB_REFRESH_MS, LOCAL_DIFFERS, SHIP_REFRESH_MS, SessionWorkService, WATCH_DEBOUNCE_MS, type SessionWorkTarget,
 } from '../src/application/services/session-work-service';
 import type { SessionActivities } from '../src/application/services/session-action-service';
+import { canComment } from '../src/domain/session-work/review';
 import type { Timers } from '../src/application/ports/clock';
 import type { GitWorkspace } from '../src/application/ports/git-workspace';
 import type { GitHubAvailability, GitHubCli } from '../src/application/ports/github-cli';
@@ -152,7 +153,7 @@ function setup(overrides: Partial<World> = {}) {
     },
   };
 
-  const github: GitHubCli = {
+  const github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview'> = {
     async available() { count('available'); return world.gh; },
     async pullRequests() { count('pullRequests'); return world.prs; },
     async pullRequestDiff() { count('pullRequestDiff'); return world.prDiff; },
@@ -325,7 +326,7 @@ test('a PR whose branch is checked out diffs locally, cached by both commits, wi
     locations: [{ cwd: ROOT, branch: 'feat/3-x', fromSubagent: false }],
     branches: new Set(['main', 'feat/3-x']),
     pullRequests: [prLink(3)],
-    prs: [prStatus(3, { headRef: 'feat/3-x' })],
+    prs: [prStatus(3, { headRef: 'feat/3-x', headSha: 'sha-feat/3-x' })],
     generated: ['a.txt'],
   });
   const snapshot = await service.open('s1');
@@ -341,8 +342,48 @@ test('a PR whose branch is checked out diffs locally, cached by both commits, wi
   assert.equal(calls.pullRequestDiff, undefined);
 
   world.shas.set('feat/3-x', 'new-commit');
+  world.prs = [prStatus(3, { headRef: 'feat/3-x', headSha: 'new-commit' })];
+  await service.open('s1');
   await service.diff('s1', pr.id);
   assert.equal(calls.branchDiff, 2, 'a new commit on the branch is a new diff');
+});
+
+// ── A checked-out PR at another commit than GitHub's (#77) ──
+
+function checkedOutPr(localSha: string, prSha: string) {
+  return setup({
+    locations: [{ cwd: ROOT, branch: 'feat/3-x', fromSubagent: false }],
+    branches: new Set(['main', 'feat/3-x']),
+    shas: new Map([['origin/main', 'base-1'], ['feat/3-x', localSha]]),
+    pullRequests: [prLink(3)],
+    prs: [prStatus(3, { headRef: 'feat/3-x', headSha: prSha })],
+  });
+}
+
+test('a checked-out PR at GitHub\'s commit diffs locally, and takes comments', async () => {
+  const { service, calls } = checkedOutPr('abc', 'abc');
+  const snapshot = await service.open('s1');
+  const pr = snapshot!.items[0];
+  assert.ok(pr.kind === 'pr');
+  const diff = await service.diff('s1', pr.id);
+  assert.equal(diff.source, 'local');
+  assert.equal(diff.note, undefined);
+  assert.equal(calls.pullRequestDiff, undefined);
+  assert.equal(canComment(pr, snapshot!.gh), true);
+});
+
+test('a checked-out PR at another commit shows GitHub\'s diff, says why, and comments go against it', async () => {
+  const { service, calls } = checkedOutPr('local-unpushed', 'abc');
+  const snapshot = await service.open('s1');
+  const pr = snapshot!.items[0];
+  assert.ok(pr.kind === 'pr');
+  const diff = await service.diff('s1', pr.id);
+  assert.equal(diff.source, 'github');
+  assert.equal(diff.note, LOCAL_DIFFERS);
+  assert.equal(calls.branchDiff, undefined, 'the local lines are never offered');
+  assert.equal(calls.pullRequestDiff, 1);
+  assert.deepEqual(diff.files.map((file) => file.path), ['a.txt']);
+  assert.equal(canComment(pr, snapshot!.gh), true);
 });
 
 test('uncommitted changes are diffed fresh every time', async () => {

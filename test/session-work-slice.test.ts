@@ -74,7 +74,7 @@ test('session work: opening shows a skeleton for that session; the first snapsho
   const open = run(initialRendererState('s1'), opened());
   assert.deepStrictEqual(open.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
-    diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null,
+    diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null, composer: null, reviewPending: null, reviewError: null,
   });
   assert.strictEqual(open.sessionWork.now, AT);
 
@@ -126,7 +126,7 @@ test('session work: nothing is remembered once closed', () => {
     opened());
   assert.deepStrictEqual(used.sessionWork.page, {
     sessionId: 's1', name: 'Fix login', snapshot: null, selectedItemId: null, doneExpanded: false,
-    diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null,
+    diffMode: 'unified', diffs: {}, pendingAction: null, actionError: null, composer: null, reviewPending: null, reviewError: null,
   });
 });
 

@@ -3,6 +3,7 @@
     "viewer": { "login": "joris" },
     "repository": {
       "pr12": {
+        "id": "PR_kwDO12",
         "number": 12,
         "additions": 120,
         "deletions": 14,
@@ -83,6 +84,7 @@
               "originalLine": 30,
               "diffSide": "RIGHT",
               "isResolved": true,
+              "resolvedBy": { "login": "sam" },
               "comments": {
                 "nodes": [
                   { "id": "PRRC_5", "state": "SUBMITTED", "body": "Rename this.", "createdAt": "2026-10-16T10:30:00Z", "author": { "__typename": "User", "login": "sam" } },
@@ -121,6 +123,7 @@
         "reviews": {
           "nodes": [
             {
+              "id": "PRR_pending12",
               "comments": {
                 "nodes": [
                   { "id": "PRRC_8", "path": "src/billing.ts", "line": 8, "originalLine": 8, "body": "Why was this removed?" },

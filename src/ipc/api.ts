@@ -18,6 +18,7 @@ import type { ShellProfile } from '../domain/shell/shell-profile';
 import type { SessionWorkDiff, SessionWorkSnapshot } from '../domain/session-work/model';
 import type { PullRequestStatusChange } from '../domain/session-work/status';
 import type { ActionRequest, ActionResult, CancelResult } from '../domain/session-work/actions';
+import type { CommentRequest, ReviewRequest, ReviewResult } from '../domain/session-work/review';
 import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
@@ -124,6 +125,10 @@ export interface SwitchboardApi {
   sessionWorkAction(request: ActionRequest): Promise<ActionResult>;
   /** Take a queued action back out of its queue; one already typed in cannot be. */
   cancelSessionWorkAction(activityId: string): Promise<CancelResult>;
+  /** Add a line comment to your pending review on a PR item, starting the review if there is none (C1, C2). */
+  sessionWorkComment(request: CommentRequest): Promise<ReviewResult>;
+  /** Finish your pending review on a PR item: submit it (and hand its threads to Claude), or discard it (C2). */
+  sessionWorkReview(request: ReviewRequest): Promise<ReviewResult>
   /** The end of a failing check run's log, for the Checks panel; null when `gh` has none. */
   getCheckLog(request: { repository: string; checkRunUrl: string }): Promise<string | null>;
 

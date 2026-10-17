@@ -60,7 +60,7 @@ export function WorkDetail({ page }: { page: SessionWorkPage }): JSX.Element {
           )}
         </div>
         {item.error && <div className="sw-item-error" role="status">{item.error}</div>}
-        {page.actionError?.itemId === item.id && (
+        {page.actionError?.itemId === item.id && !page.actionError.threadIds && (
           <div className="sw-item-error" role="alert">{page.actionError.message}</div>
         )}
         <ActivityCardView item={item} />

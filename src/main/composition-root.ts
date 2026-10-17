@@ -26,6 +26,7 @@ import { SessionLauncher } from '../application/services/session-launcher';
 import { SessionLifecycle } from '../application/services/session-lifecycle';
 import { SessionTransitionDetector } from '../application/services/session-transition-detector';
 import { SessionWorkService } from '../application/services/session-work-service';
+import { ReviewService } from '../application/services/review-service';
 import { SessionActionService } from '../application/services/session-action-service';
 import { PrWatchService } from '../application/services/pr-watch-service';
 import { SettingsService } from '../application/services/settings-service';
@@ -98,6 +99,7 @@ export interface Container {
   readonly updates: UpdateService;
   readonly sessionWork: SessionWorkService;
   readonly sessionActions: SessionActionService;
+  readonly review: ReviewService
   readonly prWatch: PrWatchService;
 
   readonly renderer: ElectronRendererGateway;
@@ -247,6 +249,7 @@ export function buildContainer(): Container {
     renderer, clock, timers, log,
   });
   sessionActions.attach(sessionWork);
+  const review = new ReviewService({ github, page: sessionWork, actions: sessionActions, log });
 
   // Always on, page or no page (W1): the running Claude sessions' PRs, as
   // their transcripts linked them. Remote sessions are out of scope.
@@ -295,6 +298,7 @@ export function buildContainer(): Container {
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     questions, questionHook,
     sessionIndex, projects, usage, schedules, weather, updates, sessionWork, sessionActions, prWatch,
+    review,
     renderer, dialogs, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,

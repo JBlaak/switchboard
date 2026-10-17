@@ -20,7 +20,8 @@
 import {
   availableActions, currentActivity, failingCheck, NOT_RUNNING_REASON, type ActionResult, type CancelResult,
 } from '../../domain/session-work/actions';
-import { renderPrompt, type PromptRequest } from '../../domain/session-work/prompts';
+import { promptThreadIds, renderPrompt, type PromptRequest } from '../../domain/session-work/prompts';
+import { threadsToFix } from '../../domain/session-work/review';
 import type {
   Activity, GitHubAvailability, SessionWorkItem, WorkAction,
 } from '../../domain/session-work/model';
@@ -61,6 +62,14 @@ export interface ResolvedRequest {
   attempt?: number;
 }
 
+/** How an action is asked for, beyond the item and the action. */
+export interface RequestOptions {
+  /** The item and its context, when the caller has them without the open page. */
+  resolved?: ResolvedRequest;
+  /** Fix comments: hand over only these review threads. */
+  threadIds?: readonly string[];
+}
+
 /** What a gave-up card shows: the check, and each attempt with what Claude pushed. */
 export type GaveUpDetails = Required<Pick<ActivityDetails, 'checkName' | 'attempts'>>;
 
@@ -81,6 +90,8 @@ export interface SessionActivities {
   queued: number;
   /** A Ship it is waiting or with Claude: the page polls GitHub faster. */
   shipping: boolean;
+  /** The review threads a waiting or sent Fix comments covers, by item id: "Claude is on it". */
+  fixingThreads?: ReadonlyMap<string, readonly string[]>;
 }
 
 export interface SessionActionServiceDeps {
@@ -131,26 +142,34 @@ export class SessionActionService {
    * Hand an item of the session's open page to Claude: render its prompt,
    * queue it, and type it in now if the session is idle.
    *
-   * `resolved` hands the item and its context in instead, for a caller that
-   * has them without the page (the CI watch's auto-fix).
+   * `options.resolved` hands the item and its context in instead, for a
+   * caller that has them without the page (the CI watch's auto-fix);
+   * `options.threadIds` has a Fix comments hand over only those threads
+   * (Have Claude fix, Submit & have Claude fix).
    */
   async request(
-    sessionId: string, itemId: string, action: WorkAction, origin: Activity['origin'] = 'manual', resolved?: ResolvedRequest,
+    sessionId: string, itemId: string, action: WorkAction, origin: Activity['origin'] = 'manual',
+    options: RequestOptions = {},
   ): Promise<ActionResult> {
     const { prompter } = this.deps;
     if (!prompter.runningId(sessionId)) return { ok: false, reason: NOT_RUNNING_REASON };
     const page = this.#page;
+    const { resolved, threadIds } = options;
     const item = resolved?.item ?? page?.item(sessionId, itemId) ?? null;
     const context = resolved?.context ?? page?.context(sessionId) ?? null;
     if (!item || !context) return { ok: false, reason: 'This item is no longer on the page' };
     if (!availableActions(item, context.gh).includes(action)) {
       return { ok: false, reason: 'This item has nothing for that action to do' };
     }
-    const same = this.#forSession(sessionId).find((existing) =>
+    const same = this.#forSession(sessionId).filter((existing) =>
       existing.itemKey === itemId && existing.action === action && (existing.phase === 'queued' || existing.phase === 'sent'));
-    if (same) return { ok: false, reason: same.phase === 'queued' ? 'Already queued' : 'Claude is already on it' };
+    // Fixing named threads is refused only when every one of them is handed over already.
+    const busy = threadIds && action === 'fix-comments'
+      ? (threadIds.every((id) => same.some((existing) => promptThreadIds(existing.prompt).includes(id))) ? same[0] : undefined)
+      : same[0];
+    if (busy) return { ok: false, reason: busy.phase === 'queued' ? 'Already queued' : 'Claude is already on it' };
 
-    const request = await this.#promptRequest(item, action, context, resolved);
+    const request = await this.#promptRequest(item, action, context, options);
     if (!request) return { ok: false, reason: 'This item has nothing for that action to do' };
     // The session may have ended while the CI log was fetched.
     if (!prompter.runningId(sessionId)) return { ok: false, reason: NOT_RUNNING_REASON };
@@ -255,6 +274,7 @@ export class SessionActionService {
       byItem,
       queued: actions.filter(isQueued).length,
       shipping: actions.some((action) => action.action === 'ship' && (action.phase === 'queued' || action.phase === 'sent')),
+      fixingThreads: fixingThreads(actions),
     };
   }
 
@@ -364,7 +384,7 @@ export class SessionActionService {
 
   /** What the item's prompt needs, from the page's facts; null when the item cannot take the action. */
   async #promptRequest(
-    item: SessionWorkItem, action: WorkAction, context: ActionContext, resolved?: ResolvedRequest,
+    item: SessionWorkItem, action: WorkAction, context: ActionContext, { resolved, threadIds }: RequestOptions = {},
   ): Promise<PromptRequest | null> {
     if (item.kind === 'branch') {
       if (action !== 'open-pr') return null;
@@ -404,8 +424,11 @@ export class SessionActionService {
           ...(automatic === undefined ? {} : { automaticAttempt: automatic }),
         };
       }
-      case 'fix-comments':
-        return { action: 'fix-comments', number: pr.number, url: pr.url, threads: pr.threads ?? [], worktree };
+      case 'fix-comments': {
+        const threads = threadsToFix(pr, threadIds);
+        if (threads.length === 0) return null;
+        return { action: 'fix-comments', number: pr.number, url: pr.url, threads, worktree };
+      }
       case 'open-pr':
         return null;
     }
@@ -425,6 +448,7 @@ function toActivity(action: StoredAction): Activity {
     queuedAt: action.queuedAt,
   };
   if (action.sentAt) activity.sentAt = action.sentAt;
+  if (action.action === 'fix-comments') activity.threadIds = promptThreadIds(action.prompt);
   const details = action.details;
   if (details?.attempt !== undefined) activity.attempt = details.attempt;
   if (details?.checkName !== undefined) activity.checkName = details.checkName;
@@ -434,4 +458,16 @@ function toActivity(action: StoredAction): Activity {
 
 function fixCiDetails(checkName: string, attempt: number | undefined): ActivityDetails {
   return attempt === undefined ? { checkName } : { checkName, attempt };
+}
+
+/** The threads each item's waiting or sent Fix comments cover. */
+function fixingThreads(actions: readonly StoredAction[]): Map<string, string[]> {
+  const byItem = new Map<string, string[]>();
+  for (const action of actions) {
+    if (action.action !== 'fix-comments' || (action.phase !== 'queued' && action.phase !== 'sent')) continue;
+    const ids = byItem.get(action.itemKey) ?? [];
+    for (const id of promptThreadIds(action.prompt)) if (!ids.includes(id)) ids.push(id);
+    byItem.set(action.itemKey, ids);
+  }
+  return byItem;
 }

@@ -274,6 +274,62 @@ test('a session that moved to a new id keeps its queue', async () => {
   assert.equal(service.forSession('s2').byItem.get(PR12)?.phase, 'sent');
 });
 
+// ── Fix comments on named threads (#77) ──
+
+function reviewThread(id: string, resolved = false) {
+  return {
+    id, path: 'a.ts', line: 3, side: 'RIGHT' as const, resolved,
+    comments: [{ author: 'mate', isBot: false, body: 'fix ' + id, createdAt: '' }],
+  };
+}
+
+test('Fix comments on named threads hands over exactly those, and the activity names them', async () => {
+  const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2'), reviewThread('T3'), reviewThread('T4', true)] });
+  const { service, prompter } = setup({ items: [pr] });
+  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T2', 'T4'] })).ok, true);
+  const prompt = prompter.sent[0].prompt;
+  assert.match(prompt, /\(T2\)/);
+  assert.doesNotMatch(prompt, /\(T1\)|\(T3\)|\(T4\)/, 'only the named open threads');
+  assert.deepEqual(service.forSession('s1').byItem.get(PR12)?.threadIds, ['T2']);
+  assert.deepEqual(service.forSession('s1').fixingThreads?.get(PR12), ['T2']);
+});
+
+test('another thread can be handed over while one is with Claude; the same one cannot', async () => {
+  const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2')] });
+  const { service, prompter } = setup({ items: [pr] });
+  prompter.goBusy();
+  assert.equal((await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T1'] })).ok, true);
+  assert.deepEqual(await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T1'] }), { ok: false, reason: 'Already queued' });
+  const second = await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T2'] });
+  assert.ok(second.ok);
+  // In flight like any action, and the item's current one: the CI watch stays out of its way.
+  assert.equal(service.isInFlight(second.activityId), true);
+  assert.equal(service.forSession('s1').byItem.get(PR12)?.action, 'fix-comments');
+  assert.deepEqual(service.forSession('s1').fixingThreads?.get(PR12), ['T1', 'T2']);
+  // Every open thread without naming them: one is already queued.
+  assert.equal((await service.request('s1', PR12, 'fix-comments')).ok, false);
+});
+
+test('naming only resolved or unknown threads has nothing to do', async () => {
+  const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2', true)] });
+  const { service, prompter } = setup({ items: [pr] });
+  const none = await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: [] });
+  assert.equal(none.ok, false, 'naming no thread is not "every thread"');
+  const result = await service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T2', 'nope'] });
+  assert.equal(result.ok, false);
+  assert.equal(prompter.sent.length, 0);
+});
+
+test('a queued Fix comments still knows its threads after a restart', async () => {
+  const pr = prItem(12, { threads: [reviewThread('T1'), reviewThread('T2')] });
+  const store = new MemoryStore();
+  const first = setup({ items: [pr], store });
+  first.prompter.goBusy();
+  await first.service.request('s1', PR12, 'fix-comments', 'manual', { threadIds: ['T2'] });
+  const again = setup({ items: [pr], store });
+  assert.deepEqual(again.service.forSession('s1').fixingThreads?.get(PR12), ['T2']);
+});
+
 test('a session that exits while Claude has an action finishes it; what is queued waits for the next start', async () => {
   const { service, prompter, store } = setup();
   await service.request('s1', PR12, 'ship');
@@ -298,7 +354,7 @@ test('without the page open, an item handed in can be asked for: an automatic Fi
     headSha: 'abc1234', checks: [{ name: 'lint', state: 'failing', url: 'https://github.com/o/app/runs/1' },
       { name: 'test', state: 'failing', url: 'https://github.com/o/app/runs/2' }],
   });
-  const result = await service.request('s1', item.id, 'fix-ci', 'auto', { item, context, checkName: 'test', attempt: 1 });
+  const result = await service.request('s1', item.id, 'fix-ci', 'auto', { resolved: { item, context, checkName: 'test', attempt: 1 } });
   assert.equal(result.ok, true);
   assert.deepEqual(logRequests, [[REPO, 'https://github.com/o/app/runs/2', AUTO_FIX_LOG_TAIL_LINES]]);
   assert.match(prompter.sent[0].prompt, /: test failed on abc1234\. Log tail:\nError: expected 2, got 3\n/);

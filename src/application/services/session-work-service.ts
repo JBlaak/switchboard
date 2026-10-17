@@ -58,7 +58,8 @@ export interface SessionWorkServiceDeps {
   locate(sessionId: string): SessionWorkTarget | null;
   transcripts: Pick<TranscriptStore, 'locations' | 'issueMentions' | 'readSession'>;
   git: GitWorkspace;
-  github: GitHubCli;
+  /** Reads only: the page writes nothing to GitHub; your review is the review service's. */
+  github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview'>;
   remotes: GitRemotes;
   renderer: Pick<RendererGateway, 'sessionWorkSnapshot'>;
   /** The actions on the session's items; without it, no item has one. */
@@ -122,6 +123,9 @@ const NO_LINES: LineStats = { additions: 0, deletions: 0 };
 const NO_DIFF: SessionWorkDiff = { files: [], source: null };
 
 const NOT_CHECKED_OUT ='The branch is not checked out here';
+
+/** Why a checked-out PR shows GitHub's diff: its local branch is at another commit. */
+export const LOCAL_DIFFERS = 'Local branch differs from the PR; showing GitHub\'s diff.';
 
 const NO_ACTIVITIES: SessionActivities = { byItem: new Map(), queued: 0, shipping: false };
 
@@ -245,6 +249,17 @@ export class SessionWorkService implements WorkPageSource {
   activitiesChanged(_sessionId: string): void {
     const page = this.#page;
     if (page && page.last && !page.closed) this.#publish(page);
+  }
+
+  /**
+   * Ask `gh` again now and rebuild, for the open page of this session: after
+   * your review was written, so the page shows what GitHub made of it.
+   */
+  async refreshGitHub(sessionId: string): Promise<void> {
+    const page = this.#page;
+    if (!page || page.sessionId !== sessionId || page.closed) return;
+    page.askGitHub = true;
+    await this.#refresh(page);
   }
 
   /**
@@ -406,6 +421,8 @@ export class SessionWorkService implements WorkPageSource {
       const item: SessionWorkItem = built.kind === 'pr' || built.kind === 'branch'
         ? { ...built, activity: activities.byItem.get(built.id) ?? null }
         : built;
+      const fixing = item.kind === 'pr' ? activities.fixingThreads?.get(item.id) : undefined;
+      if (item.kind === 'pr' && fixing?.length) item.fixingThreads = [...fixing];
       const error = page.diffErrors.get(item.id) ?? item.error;
       return error ? { ...item, error } : item;
     });
@@ -569,10 +586,15 @@ export class SessionWorkService implements WorkPageSource {
       return { files: await this.#parse(worktree, await git.workingDiff(worktree)), source: 'local' };
     }
 
+    // A PR's local branch at another commit than GitHub's (unpushed or
+    // unpulled work) has other line numbers: a comment anchored to them
+    // would land on the wrong line, so the PR's own diff is shown instead.
+    let differs = false;
     if (item.diff.kind === 'local') {
       const { worktree, base, head } = item.diff;
       const [headSha, baseSha] = await Promise.all([git.commitSha(worktree, head), git.commitSha(worktree, base)]);
-      if (headSha) {
+      differs = headSha !== null && item.kind === 'pr' && !!item.pr.headSha && headSha !== item.pr.headSha;
+      if (headSha && !differs) {
         const key = ['local', worktree, head, headSha, base, baseSha ?? ''].join('\0');
         const files = await this.#cached(page, key, async () => this.#parse(worktree, await git.branchDiff(worktree, head, base)));
         return { files, source: 'local' };
@@ -597,7 +619,9 @@ export class SessionWorkService implements WorkPageSource {
       return text === null ? null : this.#parse(page.projectRoot, text);
     };
     const fromGitHub = (files: FileDiff[] | null | undefined): SessionWorkDiff =>
-      files ? { files, source: 'github' } : failed('GitHub did not send the diff');
+      files
+        ? { files, source: 'github', ...(differs ? { note: LOCAL_DIFFERS } : {}) }
+        : failed('GitHub did not send the diff');
     if (!pr.headSha) return fromGitHub(await fetch());
     const key = ['pr', repository, String(pr.number), pr.headSha].join('\0');
     const cached = page.diffCache.get(key);

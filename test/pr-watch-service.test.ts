@@ -225,7 +225,7 @@ test('a manual Fix CI is always allowed and does not count', async () => {
     diff: { kind: 'pull-request' as const, repository: REPO, number: 7 },
   };
   const manual = await actions.request('s1', KEY7, 'fix-ci', 'manual', {
-    item, context: { repository: REPO, mainCheckout: ROOT, gh: 'ok' },
+    resolved: { item, context: { repository: REPO, mainCheckout: ROOT, gh: 'ok' } },
   });
   assert.equal(manual.ok, true);
   assert.equal(prompter.sent.length, 3);
@@ -251,7 +251,7 @@ test('a manual Fix CI that did not fix it leaves both automatic attempts', async
     id: KEY7, kind: 'pr' as const, pr, location: null, activity: null,
     diff: { kind: 'pull-request' as const, repository: REPO, number: 7 },
   };
-  await actions.request('s1', KEY7, 'fix-ci', 'manual', { item, context: { repository: REPO, mainCheckout: ROOT, gh: 'ok' } });
+  await actions.request('s1', KEY7, 'fix-ci', 'manual', { resolved: { item, context: { repository: REPO, mainCheckout: ROOT, gh: 'ok' } } });
   await watch.poll();
   assert.equal(actions.forSession('s1').queued, 1, 'only yours is queued');
   prompter.goIdle();

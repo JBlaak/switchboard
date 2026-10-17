@@ -9,8 +9,10 @@
  *
  * The page holds the focus while it is open, so its keys are heard here
  * rather than globally (D15): Esc goes back to the terminal, `j` and `k` move
- * between items, `n` and `p` between the files of its diff, and `u` switches
- * the diff between unified and split. None of them is taken from a text field.
+ * between items, `n` and `p` between the files of its diff, `u` switches
+ * the diff between unified and split, and `c` comments on the focused line of
+ * a PR's diff. None of them is taken from a text field, and an open comment
+ * composer takes Esc first.
  */
 import { useLayoutEffect, useRef } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
@@ -20,9 +22,23 @@ import { WorkHeader } from './WorkHeader';
 import { WorkList } from './WorkList';
 import { WorkDetail } from './WorkDetail';
 import { githubBanner } from './describe';
+import { openComposerAt } from './ReviewNotes';
 
 /** The single-letter keys the page answers (D15). */
-const PAGE_KEYS = new Set(['j', 'k', 'n', 'p', 'u']);
+const PAGE_KEYS = new Set(['j', 'k', 'n', 'p', 'u', 'c']);
+
+/**
+ * `c`: comment on the line that has the focus (a click puts it there), when
+ * the line takes a comment (C1). Anywhere else it does nothing.
+ */
+function commentOnFocusedLine(target: HTMLElement, itemId: string | null): void {
+  const line = target.closest<HTMLElement>('[data-comment-line]');
+  const path = line?.closest<HTMLElement>('.sw-file')?.dataset.path;
+  if (!line || !path || !itemId) return;
+  const number = Number(line.dataset.commentLine);
+  const side = line.dataset.commentSide === 'LEFT' ? 'LEFT' : 'RIGHT';
+  if (Number.isSafeInteger(number) && number > 0) openComposerAt(itemId, path, number, side, line);
+}
 
 export function SessionWorkPage(): JSX.Element | null {
   const page = useStore(state => state.sessionWork.page);
@@ -52,6 +68,8 @@ export function SessionWorkPage(): JSX.Element | null {
     if (e.key === 'j' || e.key === 'k') {
       const next = stepWorkItem(e.key === 'j' ? 1 : -1);
       if (next) root.current?.querySelector<HTMLElement>(`[data-item-id="${CSS.escape(next)}"]`)?.focus();
+    } else if (e.key === 'c') {
+      commentOnFocusedLine(e.target as HTMLElement, page.selectedItemId);
     } else if (e.key === 'n' || e.key === 'p') {
       const path = stepFile(e.key === 'n' ? 1 : -1);
       const head = path
