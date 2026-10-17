@@ -699,6 +699,7 @@
   opacity: 1;
 }
 
+.session-work-btn,
 .session-stop-btn,
 .session-launch-config-btn,
 .session-archive-btn {
@@ -723,7 +724,8 @@
   outline: none;
 }
 
-.session-archive-btn {
+.session-archive-btn,
+.session-work-btn {
   color: var(--sb-accent-dim);
 }
 
@@ -737,7 +739,8 @@
   background: rgba(var(--sb-green-rgb),0.1);
 }
 
-.session-archive-btn:hover {
+.session-archive-btn:hover,
+.session-work-btn:hover {
   color: var(--sb-accent);
   background: rgba(var(--sb-accent-rgb),0.1);
 }

@@ -23,6 +23,7 @@ export const HTML = {
   archive16: { __html: ICONS.archive(16) },
   archive14: { __html: ICONS.archive(14) },
   launchConfig: { __html: ICONS.launchConfig(14) },
+  sessionWork: { __html: ICONS.branch(14) },
   /** `&#9654;`, the group's disclosure arrow. */
   arrow: { __html: '<span class="arrow">&#9654;</span>' },
 } as const;

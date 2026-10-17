@@ -77,7 +77,7 @@ export function RowMeta({ row, asking, agents, now, onOpenWork }: RowMetaProps):
  * remote one, otherwise main's answer, asked once and kept in the store;
  * undefined while it is being asked.
  */
-function useCanOpenWork(sessionId: string, remote: boolean): boolean | undefined {
+export function useCanOpenWork(sessionId: string, remote: boolean): boolean | undefined {
   const known = useStore(state => (remote ? false : state.sessionWork.canOpen[sessionId]));
   useEffect(() => {
     if (!remote && known === undefined) void canOpenSessionWork(sessionId);
