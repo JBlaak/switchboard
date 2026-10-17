@@ -75,6 +75,8 @@ interface World {
   branchDiff: string;
   workingDiff: string;
   /** Line stats by branch, and of each worktree's uncommitted changes. */
+  /** Branches with an upstream or a copy on origin. */
+  pushed: Set<string>;
   branchStats: Map<string, LineStats>;
   workingStats: Map<string, LineStats>;
   generated: string[];
@@ -98,6 +100,7 @@ function setup(overrides: Partial<World> = {}) {
     shas: new Map([['origin/main', 'base-1']]),
     branchDiff: DIFF,
     workingDiff: DIFF,
+    pushed: new Set(),
     branchStats: new Map(),
     workingStats: new Map(),
     generated: [],
@@ -130,6 +133,7 @@ function setup(overrides: Partial<World> = {}) {
       return world.branches.has(ref) ? 'sha-' + ref : null;
     },
     async branchExists(_worktree, branch) { return world.branches.has(branch); },
+    async isPushed(_worktree, branch) { return world.pushed.has(branch); },
     async aheadBehind(_worktree, branch) { return { ahead: world.ahead.get(branch) ?? 0, behind: 0 }; },
     async branchDiff() { count('branchDiff'); return world.branchDiff; },
     async status(worktree) { return world.status.get(worktree) ?? []; },
@@ -258,6 +262,7 @@ test('a subagent worktree is its own place, marked as the subagent\'s, and watch
   });
   world.status.set(AGENT, [{ path: 'new.ts', status: 'untracked' }]);
   world.branchStats.set('feat/agent', { additions: 40, deletions: 7 });
+  world.pushed.add('feat/agent');
   world.workingStats.set(AGENT, { additions: 3, deletions: 0 });
   const snapshot = await service.open('s1');
   const kinds = snapshot!.items.map((item) => item.kind);
@@ -266,6 +271,7 @@ test('a subagent worktree is its own place, marked as the subagent\'s, and watch
     [40, 7],
     [3, 0],
   ], 'each item counts its own lines');
+  assert.ok(snapshot!.items[0].kind === 'branch' && snapshot!.items[0].pushed, 'pushed');
   for (const item of snapshot!.items) {
     assert.ok(item.kind === 'branch' || item.kind === 'dirty');
     assert.deepEqual(item.location, { worktree: AGENT, branch: 'feat/agent', fromSubagent: true });

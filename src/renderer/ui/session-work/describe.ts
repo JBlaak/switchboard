@@ -66,6 +66,7 @@ export function itemPills(item: SessionWorkItem): Pill[] {
       break;
     }
     case 'branch':
+      if (!item.pushed) pills.push({ label: 'Not pushed', tone: 'amber' });
       pills.push({ label: plural(item.ahead, 'commit') + ' ahead', tone: 'grey' });
       break;
     case 'dirty':

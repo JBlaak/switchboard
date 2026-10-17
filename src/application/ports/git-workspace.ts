@@ -40,6 +40,9 @@ export interface GitWorkspace {
   /** Does `branch` exist as a local branch? */
   branchExists(worktree: string, branch: string): Promise<boolean>;
 
+  /** Has `branch` been pushed: does it have an upstream, or a branch of the same name on origin? */
+  isPushed(worktree: string, branch: string): Promise<boolean>;
+
   /** Commits on `branch` that `base` lacks (`ahead`), and the reverse (`behind`). Zeros when either is unknown. */
   aheadBehind(worktree: string, branch: string, base: string): Promise<{ ahead: number; behind: number }>;
 

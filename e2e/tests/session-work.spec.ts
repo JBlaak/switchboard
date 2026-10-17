@@ -122,7 +122,7 @@ test.describe('with a repository', () => {
     await openLoginFixWork(page, home);
     const work = workPage(page);
     await expect(work.getByRole('link', { name: 'acme/api', exact: true })).toBeVisible();
-    await expect(work.getByText('2 worktrees · 2 branches', { exact: true })).toBeVisible();
+    await expect(work.getByText('2 worktrees · 3 branches', { exact: true })).toBeVisible();
     await expect(work.getByText('updated 4s ago', { exact: true })).toBeVisible();
 
     const list = work.getByRole('navigation', { name: 'Work items' });
@@ -137,6 +137,9 @@ test.describe('with a repository', () => {
     await expect(list.getByRole('button', { name: /Add a regression test/ })).toContainText('Draft');
     await expect(list.getByRole('button', { name: /Uncommitted changes in acme-api/ })).toContainText('2 files');
     await expect(list.getByRole('button', { name: /Uncommitted changes in acme-api/ })).toContainText('+18−4');
+    const branch = list.getByRole('button', { name: /spike\/cookie-store/ });
+    await expect(branch).toContainText('Not pushed');
+    await expect(branch).toContainText('+61−0');
     // Done starts collapsed.
     await expect(list.getByRole('button', { name: /^Done/ })).toHaveAttribute('aria-expanded', 'false');
     await expect(list.getByText('Log the redirect chain')).toHaveCount(0);

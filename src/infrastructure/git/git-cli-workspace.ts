@@ -96,6 +96,14 @@ export class GitCliWorkspace implements GitWorkspace {
     return result.code === 0;
   }
 
+  async isPushed(worktree: string, branch: string): Promise<boolean> {
+    if (!isSafeRef(branch)) return false;
+    const upstream = await git(worktree, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}@{upstream}`]);
+    if (upstream.code === 0) return true;
+    const origin = await git(worktree, ['show-ref', '--verify', '--quiet', 'refs/remotes/origin/' + branch]);
+    return origin.code === 0;
+  }
+
   async aheadBehind(worktree: string, branch: string, base: string): Promise<{ ahead: number; behind: number }> {
     if (!isSafeRef(branch) || !isSafeRef(base)) return { ahead: 0, behind: 0 };
     // Left is what only `base` has, right what only `branch` has.

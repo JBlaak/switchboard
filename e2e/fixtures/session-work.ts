@@ -42,6 +42,17 @@ const ITEMS: SessionWorkItem[] = [
     activity: null,
   },
   {
+    id: 'branch:/w/acme-api-2\0spike/cookie-store',
+    kind: 'branch',
+    location: { worktree: '/w/acme-api-2', branch: 'spike/cookie-store', fromSubagent: true },
+    ahead: 2,
+    diff: { kind: 'local', worktree: '/w/acme-api-2', base: 'origin/main', head: 'spike/cookie-store' },
+    activity: null,
+    additions: 61,
+    deletions: 0,
+    pushed: false,
+  },
+  {
     id: 'dirty:/w/acme-api\0fix/login-loop',
     kind: 'dirty',
     location: { worktree: '/w/acme-api', branch: 'fix/login-loop', fromSubagent: false },

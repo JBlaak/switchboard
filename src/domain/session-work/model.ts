@@ -167,7 +167,11 @@ export interface FileChange {
  */
 export type WorkItem = { error?: string } & (
   | { kind: 'pr'; pr: PullRequestStatus; location: WorkLocation | null; diff: DiffSource; activity: Activity | null }
-  | ({ kind: 'branch'; location: WorkLocation; ahead: number; diff: DiffSource; activity: Activity | null } & LineStats)
+  | ({
+    kind: 'branch'; location: WorkLocation; ahead: number; diff: DiffSource; activity: Activity | null;
+    /** Has an upstream, or a branch of the same name on origin: someone else could see it. */
+    pushed: boolean;
+  } & LineStats)
   | ({ kind: 'dirty'; location: WorkLocation; files: FileChange[] } & LineStats)
   /** An `IssueStatus` once `gh` confirmed it is an issue; a bare ref without `gh`. */
   | { kind: 'issue'; issue: IssueRef | IssueStatus }

@@ -52,7 +52,7 @@ test('without gh, PRs come from the transcript alone, newest first, diffed throu
 test('the default branch is never a branch item, though it can be dirty', () => {
   const items = deriveWorkItems(facts({
     locations: [loc(MAIN, 'main')],
-    branches: [{ worktree: MAIN, branch: 'main', isDefault: true, ahead: 3, base: 'origin/main', additions: 0, deletions: 0 }],
+    branches: [{ worktree: MAIN, branch: 'main', isDefault: true, ahead: 3, base: 'origin/main', additions: 0, deletions: 0, pushed: true }],
     changes: [{ worktree: MAIN, branch: 'main', files: [{ path: 'a.ts', status: 'modified' }], additions: 0, deletions: 0 }],
   }));
   assert.deepEqual(summary(items), [`dirty ${MAIN}`]);
@@ -64,8 +64,8 @@ test('a branch with commits and no PR is an item, diffed locally; one with no co
   const items = deriveWorkItems(facts({
     locations: [loc(AGENT, 'feat/a', true), loc(AGENT, 'feat/empty', true)],
     branches: [
-      { worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 2, base: 'origin/main', additions: 10, deletions: 2 },
-      { worktree: AGENT, branch: 'feat/empty', isDefault: false, ahead: 0, base: 'origin/main', additions: 0, deletions: 0 },
+      { worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 2, base: 'origin/main', additions: 10, deletions: 2, pushed: false },
+      { worktree: AGENT, branch: 'feat/empty', isDefault: false, ahead: 0, base: 'origin/main', additions: 0, deletions: 0, pushed: true },
     ],
   }));
   assert.deepEqual(items, [{
@@ -76,6 +76,7 @@ test('a branch with commits and no PR is an item, diffed locally; one with no co
     activity: null,
     additions: 10,
     deletions: 2,
+    pushed: false,
   }]);
 });
 
@@ -85,8 +86,8 @@ test('a branch that heads a PR becomes part of that PR\'s item', () => {
     pullRequests: [link(5)],
     github: [gh(5, { headRef: 'feat/a', baseRef: 'develop', title: 'A' })],
     branches: [
-      { worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 2, base: 'origin/main', additions: 0, deletions: 0 },
-      { worktree: MAIN, branch: 'feat/a', isDefault: false, ahead: 2, base: 'origin/main', additions: 0, deletions: 0 },
+      { worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 2, base: 'origin/main', additions: 0, deletions: 0, pushed: true },
+      { worktree: MAIN, branch: 'feat/a', isDefault: false, ahead: 2, base: 'origin/main', additions: 0, deletions: 0, pushed: true },
     ],
   }));
   assert.deepEqual(summary(items), ['pr #5']);
@@ -102,7 +103,7 @@ test('without gh a branch cannot be matched to its PR, so both show', () => {
   const items = deriveWorkItems(facts({
     locations: [loc(AGENT, 'feat/a')],
     pullRequests: [link(5)],
-    branches: [{ worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 1, base: 'origin/main', additions: 0, deletions: 0 }],
+    branches: [{ worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 1, base: 'origin/main', additions: 0, deletions: 0, pushed: true }],
   }));
   assert.deepEqual(summary(items), ['pr #5', 'branch feat/a']);
 });
@@ -110,7 +111,7 @@ test('without gh a branch cannot be matched to its PR, so both show', () => {
 test('only branches and worktrees the transcripts name are looked at', () => {
   const items = deriveWorkItems(facts({
     locations: [loc(MAIN, 'main')],
-    branches: [{ worktree: '/other', branch: 'feat/x', isDefault: false, ahead: 4, base: 'origin/main', additions: 0, deletions: 0 }],
+    branches: [{ worktree: '/other', branch: 'feat/x', isDefault: false, ahead: 4, base: 'origin/main', additions: 0, deletions: 0, pushed: true }],
     changes: [{ worktree: '/other', branch: 'feat/x', files: [{ path: 'a', status: 'untracked' }], additions: 0, deletions: 0 }],
   }));
   assert.deepEqual(items, []);
@@ -122,8 +123,8 @@ test('duplicates are dropped by URL and by worktree and branch', () => {
     pullRequests: [link(1), link(1)],
     github: [gh(1, {}), gh(1, { title: 'second' })],
     branches: [
-      { worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 1, base: 'origin/main', additions: 0, deletions: 0 },
-      { worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 9, base: 'origin/main', additions: 0, deletions: 0 },
+      { worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 1, base: 'origin/main', additions: 0, deletions: 0, pushed: true },
+      { worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 9, base: 'origin/main', additions: 0, deletions: 0, pushed: true },
     ],
     changes: [
       { worktree: AGENT, branch: 'feat/b', files: [{ path: 'x', status: 'modified' }], additions: 0, deletions: 0 },
@@ -172,7 +173,7 @@ test('the list is ordered: open PRs (needs-you first, then newest), branches, di
       gh(5, { state: 'open' }),
       gh(6, { state: 'open' }),
     ],
-    branches: [{ worktree: AGENT, branch: 'feat/x', isDefault: false, ahead: 1, base: 'origin/main', additions: 0, deletions: 0 }],
+    branches: [{ worktree: AGENT, branch: 'feat/x', isDefault: false, ahead: 1, base: 'origin/main', additions: 0, deletions: 0, pushed: true }],
     changes: [{ worktree: MAIN, branch: 'main', files: [{ path: 'a', status: 'modified' }], additions: 0, deletions: 0 }],
     issueMentions: [{ repository: REPO, number: 99 }],
     activities: new Map([[`pr:${url(2)}`, gaveUp]]),
@@ -192,7 +193,7 @@ test('activities attach to branches by their key', () => {
   const opening: Activity = { action: 'open-pr', phase: 'sent', origin: 'manual', queuedAt: '2026-01-01T00:00:00Z' };
   const items = deriveWorkItems(facts({
     locations: [loc(AGENT, 'feat/a')],
-    branches: [{ worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 1, base: 'origin/main', additions: 0, deletions: 0 }],
+    branches: [{ worktree: AGENT, branch: 'feat/a', isDefault: false, ahead: 1, base: 'origin/main', additions: 0, deletions: 0, pushed: true }],
     activities: new Map([[`branch:${AGENT}\0feat/a`, opening]]),
   }));
   assert.ok(items[0].kind === 'branch');

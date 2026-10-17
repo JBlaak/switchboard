@@ -27,6 +27,8 @@ export interface BranchFacts {
   /** Lines the branch adds and removes since its merge-base with `base`. */
   additions: number;
   deletions: number;
+  /** Has an upstream, or exists on origin. */
+  pushed: boolean;
 }
 
 /** What `git status` says about one worktree the session worked in. */
@@ -149,6 +151,7 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
       activity: null,
       additions: branch.additions,
       deletions: branch.deletions,
+      pushed: branch.pushed,
     };
     item.activity = activityOf(workItemKey(item));
     branchItems.push(item);

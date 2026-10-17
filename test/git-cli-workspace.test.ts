@@ -95,6 +95,28 @@ test('branchExists knows local branches and refuses option-like names', async ()
   assert.equal(await git.branchExists(worktree, '--all'), false);
 });
 
+test('isPushed: a branch with an upstream, or one origin has, is pushed; a local-only one is not', async () => {
+  const remote = path.join(tmp, 'pushed-remote.git');
+  const clone = path.join(tmp, 'pushed-clone');
+  run(tmp, 'init', '-q', '--bare', '-b', 'main', remote);
+  fs.mkdirSync(clone);
+  run(clone, 'init', '-q', '-b', 'main');
+  run(clone, 'remote', 'add', 'origin', remote);
+  write(clone, 'a.txt', 'a\n');
+  commit(clone, 'Initial');
+
+  run(clone, 'checkout', '-q', '-b', 'tracked');
+  run(clone, 'push', '-q', '-u', 'origin', 'tracked');
+  run(clone, 'checkout', '-q', '-b', 'copied');
+  run(clone, 'push', '-q', 'origin', 'copied');
+  run(clone, 'checkout', '-q', '-b', 'local-only');
+
+  assert.equal(await git.isPushed(clone, 'tracked'), true, 'has an upstream');
+  assert.equal(await git.isPushed(clone, 'copied'), true, 'origin has it, without tracking');
+  assert.equal(await git.isPushed(clone, 'local-only'), false);
+  assert.equal(await git.isPushed(clone, '--all'), false);
+});
+
 test('currentBranch and commitSha read HEAD and refs, and answer null for what is not there', async () => {
   assert.equal(await git.currentBranch(worktree), 'feat/12-thing');
   assert.equal(await git.currentBranch(repo), 'main');

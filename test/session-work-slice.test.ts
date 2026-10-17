@@ -38,6 +38,7 @@ const branch: SessionWorkItem = {
   activity: null,
   additions: 40,
   deletions: 7,
+  pushed: false,
 };
 const dirty: SessionWorkItem = {
   id: 'dirty:/w/api\0fix/login',
@@ -222,6 +223,8 @@ test('session work: pills put CI first, then the state, then how far behind', ()
   assert.deepStrictEqual(itemPills(failingDraft), [{ label: 'CI failing', tone: 'red' }, { label: 'Draft', tone: 'grey' }]);
   assert.deepStrictEqual(itemPills(merged), [{ label: 'Merged', tone: 'lavender' }]);
   assert.deepStrictEqual(itemPills(dirty), [{ label: '2 files', tone: 'grey' }]);
+  assert.deepStrictEqual(itemPills(branch), [{ label: 'Not pushed', tone: 'amber' }, { label: '2 commits ahead', tone: 'grey' }]);
+  assert.deepStrictEqual(itemPills({ ...branch, pushed: true } as SessionWorkItem), [{ label: '2 commits ahead', tone: 'grey' }]);
   assert.deepStrictEqual(itemPills(issue), [{ label: 'Open', tone: 'green' }]);
   const unknown: SessionWorkItem = { ...openPr, pr: { number: 1, url: 'u', repository: '', closes: [] } } as SessionWorkItem;
   assert.deepStrictEqual(itemPills(unknown), [], 'no gh, no pills');

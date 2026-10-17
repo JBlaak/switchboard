@@ -312,7 +312,8 @@ export class SessionWorkService {
       const isDefault = location.branch === defaultBranch;
       const ahead = isDefault ? 0 : (await git.aheadBehind(location.worktree, location.branch, base)).ahead;
       const stats = ahead > 0 ? await git.branchLineStats(location.worktree, location.branch, base) : NO_LINES;
-      branches.push({ worktree: location.worktree, branch: location.branch, isDefault, ahead, base, ...stats });
+      const pushed = ahead > 0 && await git.isPushed(location.worktree, location.branch);
+      branches.push({ worktree: location.worktree, branch: location.branch, isDefault, ahead, base, ...stats, pushed });
     }
     if (page.closed) return;
 
