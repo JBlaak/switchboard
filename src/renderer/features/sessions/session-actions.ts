@@ -136,25 +136,26 @@ export async function openSession(session: SessionRow, options?: SessionOptions)
 
 /**
  * Start a Claude session in a directory with exactly these options, and put
- * it on screen. Answers its id, or why it did not start (also printed in its
- * terminal, as for any launch).
+ * it on screen unless `show` is false (it then runs in its row, like any
+ * session in the background). Answers its id, or why it did not start (also
+ * printed in its terminal, as for any launch).
  */
 export async function startClaudeSessionIn(
-  projectPath: string, options: SessionOptions,
+  projectPath: string, options: SessionOptions, { show = true }: { show?: boolean } = {},
 ): Promise<{ ok: true; sessionId: string } | { ok: false; reason: string }> {
   const session = newSessionRow(projectPath);
   trackPending(session);
-  const error = await spawn(session, { isNew: true, options });
+  const error = await spawn(session, { isNew: true, options, show });
   return error === null ? { ok: true, sessionId: session.sessionId } : { ok: false, reason: error };
 }
 
 /**
- * Create the terminal, ask main to start the process, and show the result.
- * Answers why it could not start, or null when it did.
+ * Create the terminal, ask main to start the process, and show the result
+ * (unless `show` is false). Answers why it could not start, or null when it did.
  */
 async function spawn(
   session: SessionRow,
-  { isNew, options }: { isNew: boolean; options?: SessionOptions },
+  { isNew, options, show = true }: { isNew: boolean; options?: SessionOptions; show?: boolean },
 ): Promise<string | null> {
   const entry = createTerminalEntry(session);
 
@@ -167,7 +168,7 @@ async function spawn(
     return String(result.error ?? 'The session could not start');
   }
 
-  showSession(session.sessionId);
+  if (show) showSession(session.sessionId);
   void pollActiveSessions();
   return null;
 }

@@ -542,7 +542,8 @@ $qp-spring: cubic-bezier(.34, 1.56, .64, 1);
   }
 
   .qp-patch .patch,
-  .qp-farewell .patch {
+  .qp-farewell .patch,
+  .pv-cheer-patch .patch {
     --patch-body: #7fd0b4;
     --patch-body-tired: #a9cfc1;
     --patch-ink: #16181d;

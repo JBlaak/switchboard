@@ -252,10 +252,12 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
 
     if (state.plans) {
       const plans = state.plans;
+      // Read at each call, so `setHostStub(app, 'plans', …)` changes what the next poll answers.
+      const now = (): PlansStub => state.plans ?? plans;
       ipcMain.removeHandler(channels.planSessionPlans);
-      ipcMain.handle(channels.planSessionPlans, (_event, sessionId) => plans.sessionPlans[String(sessionId)] ?? null);
+      ipcMain.handle(channels.planSessionPlans, (_event, sessionId) => now().sessionPlans[String(sessionId)] ?? null);
       ipcMain.removeHandler(channels.planGet);
-      ipcMain.handle(channels.planGet, (_event, repo, number) => plans.plans?.[String(repo) + '#' + String(number)] ?? null);
+      ipcMain.handle(channels.planGet, (_event, repo, number) => now().plans?.[String(repo) + '#' + String(number)] ?? null);
       ipcMain.removeHandler(channels.planProjectPlans);
       ipcMain.handle(channels.planProjectPlans, (_event, projectPath, options: { closed?: boolean } | undefined) => {
         const found = Object.entries(plans.projectPlans ?? {}).find(([end]) => String(projectPath).endsWith('/' + end));

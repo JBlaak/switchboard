@@ -12,6 +12,7 @@ import { planSourceKey } from '../../../state/plan-slice';
 import { workTabOf } from '../../../state/session-work-slice';
 import type { RendererState } from '../../../state/root';
 import { loadPlanView } from './load';
+import { installLevelsSeen } from './levels-seen';
 
 /** How often an open plan view asks again (W4). */
 export const PLAN_POLL_MS = 60_000;
@@ -23,6 +24,7 @@ export function sessionWorkOwner(sessionId: string): string {
 
 /** Start following the plan view. Answers a teardown. */
 export function installPlan(): () => void {
+  const stopLevelsSeen = installLevelsSeen();
   let poll: ReturnType<typeof setInterval> | null = null;
 
   const follow = (state: RendererState, previous: RendererState): void => {
@@ -58,5 +60,6 @@ export function installPlan(): () => void {
   return () => {
     if (poll) clearInterval(poll);
     unsubscribe();
+    stopLevelsSeen();
   };
 }

@@ -738,3 +738,92 @@ a.pv-num:hover { color: var(--sb-accent); }
   &.is-error { background: rgba(var(--sb-red-rgb), 0.12); color: var(--sb-red); }
   &.is-warning { background: var(--sb-sun); color: var(--sb-yellow); }
 }
+
+/* ---- Start level (A1) ---- */
+.pv-band-start {
+  align-self: flex-start;
+  height: 22px;
+  margin-top: 4px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--sb-accent);
+}
+
+.pv-level-start {
+  margin: 0 0 14px;
+
+  &.pv-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    background: var(--sb-bg-raised);
+  }
+}
+
+.pv-level-failed {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* ---- Level up (A4) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .pv-node.is-arriving {
+    animation: pv-arrive 900ms cubic-bezier(.34, 1.56, .64, 1) both;
+  }
+}
+
+@keyframes pv-arrive {
+  0% {
+    background: var(--sb-bg-panel);
+    border-style: dashed;
+    border-color: var(--sb-border-strong);
+    transform: scale(0.92);
+  }
+  60% { transform: scale(1.04); box-shadow: 0 0 0 6px rgba(var(--sb-accent-rgb), 0.18); }
+  100% { transform: none; box-shadow: none; }
+}
+
+.pv-cheer {
+  position: fixed;
+  right: 40px;
+  bottom: 40px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+
+  /* With motion, Patch says the line in its own bubble; this copy is for assistive tech. */
+  &:not(.is-still) .pv-cheer-line {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+.pv-cheer-line {
+  padding: 10px 14px;
+  border-radius: var(--sb-r-card);
+  border: 1px solid color-mix(in srgb, var(--sb-accent) 35%, transparent);
+  background: var(--sb-bg-raised);
+  color: var(--sb-text-strong);
+  font: 700 14px var(--sb-font-head);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+
+.pv-cheer-patch {
+  transform-origin: 50% 100%;
+
+  .patch-svg { width: 110px; height: auto; }
+
+  .patch {
+    --patch-bubble-bg: var(--sb-bg-raised);
+    --patch-bubble-text: var(--sb-text-strong);
+    --patch-font: var(--sb-font-head);
+  }
+}

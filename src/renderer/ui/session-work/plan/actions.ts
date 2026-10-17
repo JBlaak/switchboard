@@ -13,7 +13,8 @@ import type { IssueSessionStart } from '../../../../domain/plan/issue-session';
 /**
  * Start a session on a plan's issue: a worktree on a branch named after it,
  * Claude started there with the project's usual options and the issue's
- * prompt, and put on screen. Locked issues stack on their blocker's PR (A3).
+ * prompt, and put on screen (unless `show: false`, as Start level asks).
+ * Locked issues stack on their blocker's PR (A3).
  *
  * Answers the new session's id, with a warning to show when it started but
  * not as asked (no blocker PR to stack on, a fetch that failed); or why it
@@ -23,7 +24,7 @@ export function startIssueSession(request: StartIssueSessionRequest): Promise<Is
   return startIssueSessionWith({
     prepare: (prepare) => window.api.prepareIssueWorktree(prepare),
     defaultOptions: resolveDefaultSessionOptions,
-    launch: startClaudeSessionIn,
+    launch: (projectPath, options, how) => startClaudeSessionIn(projectPath, options, how),
   }, request);
 }
 

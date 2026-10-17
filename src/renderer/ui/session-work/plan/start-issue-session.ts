@@ -17,8 +17,8 @@ export interface StartIssueSessionSteps {
   prepare(request: IssueWorktreeRequest): Promise<IssueWorktreeResult>;
   /** The options a new session in this project starts with by default. */
   defaultOptions(projectPath: string): Promise<SessionOptions>;
-  /** Start a Claude session in a directory, put it on screen, and answer its id. */
-  launch(projectPath: string, options: SessionOptions): Promise<{ ok: true; sessionId: string } | { ok: false; reason: string }>;
+  /** Start a Claude session in a directory, put it on screen unless `show` is false, and answer its id. */
+  launch(projectPath: string, options: SessionOptions, how: { show: boolean }): Promise<{ ok: true; sessionId: string } | { ok: false; reason: string }>;
 }
 
 export interface StartIssueSessionRequest {
@@ -26,10 +26,12 @@ export interface StartIssueSessionRequest {
   projectPath: string;
   issue: IssueKey;
   plan: Plan;
+  /** Put the new session on screen; false keeps the plan view where it is (Start level). Default true. */
+  show?: boolean;
 }
 
 export async function startIssueSessionWith(
-  steps: StartIssueSessionSteps, { projectPath, issue, plan }: StartIssueSessionRequest,
+  steps: StartIssueSessionSteps, { projectPath, issue, plan, show = true }: StartIssueSessionRequest,
 ): Promise<IssueSessionStart> {
   let prepared: IssueWorktreeResult;
   try {
@@ -41,7 +43,7 @@ export async function startIssueSessionWith(
 
   // The session is in its worktree already; `--worktree` would make another.
   const { worktree: _worktree, worktreeName: _worktreeName, ...defaults } = await steps.defaultOptions(projectPath);
-  const launched = await steps.launch(prepared.worktreePath, { ...defaults, initialPrompt: prepared.prompt });
+  const launched = await steps.launch(prepared.worktreePath, { ...defaults, initialPrompt: prepared.prompt }, { show });
   if (!launched.ok) return launched;
   return prepared.warning
     ? { ok: true, sessionId: launched.sessionId, warning: prepared.warning }

@@ -4,7 +4,7 @@
  * as `PlanUi`, and everything it does goes out through `PlanHandlers`.
  */
 import type { IssueKey, Plan, PlanSummary } from '../../../../domain/plan/model';
-import type { PlanStart, SessionPlansAnswer } from '../../../state/plan-slice';
+import type { PlanLevelStart, PlanStart, SessionPlansAnswer } from '../../../state/plan-slice';
 
 /** A session's plans (W2), or one plan given directly (F2). */
 export type PlanData = { readonly sessionPlans: SessionPlansAnswer } | { readonly plan: Plan };
@@ -57,6 +57,14 @@ export interface IssueActions {
   cancelStart?(): void;
   /** Where the start on the selected issue is. */
   readonly start?: PlanStart | null;
+  /** Start level pressed on the current level (A1): asks to confirm `issues`, its Ready ones. */
+  startLevel?(plan: Plan, level: number, issues: IssueKey[]): void;
+  /** Confirm the level start that is asking. */
+  confirmLevelStart?(plan: Plan): void;
+  /** Turn the confirmation down, or put the answer away. */
+  cancelLevelStart?(): void;
+  /** Where Start level is, for any plan; the view shows it for its own. */
+  readonly levelStart?: PlanLevelStart | null;
 }
 
 export const NO_HANDLERS: PlanHandlers = {

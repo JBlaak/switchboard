@@ -20,6 +20,8 @@ export const STORAGE_KEYS = {
   imageCompareMode: 'imageCompareMode',
   /** What sits behind an image card's images (localStorage). */
   imageCompareBackground: 'imageCompareBackground',
+  /** `owner/repo#n` → the plan's level last seen, as JSON (localStorage), so a level-up outlives a restart (A4). */
+  planLevelsSeen: 'planLevelsSeen',
   /** The plans opened from the New Session picker, per project (localStorage; see `ui/dialogs/recent-plans`). */
   recentPlans: 'recentPlans',
 } as const;

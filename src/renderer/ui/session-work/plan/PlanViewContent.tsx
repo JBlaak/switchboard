@@ -6,19 +6,24 @@ import { useMemo } from 'react';
 import type { JSX } from 'react';
 import { layOutPlan } from '../../../../domain/plan/layout';
 import { sameIssue } from '../../../../domain/plan/model';
-import type { Plan } from '../../../../domain/plan/model';
+import type { IssueKey, Plan } from '../../../../domain/plan/model';
 import { PlanHeader } from './PlanHeader';
 import { OtherPlans, PlanSwitcher } from './PlanSwitcher';
 import { PlanWarnings } from './PlanWarnings';
 import { PlanDiagram, PlanLegend } from './PlanDiagram';
 import { IssueDetail } from './IssueDetail';
+import { LevelStart } from './LevelStart';
 import { NO_HANDLERS, NO_PLAN_UI } from './types';
 import type { IssueActions, PlanData, PlanHandlers, PlanUi } from './types';
 
 export type PlanViewProps = PlanData & { readonly issueActions?: IssueActions };
 
 export function PlanViewContent(
-  props: PlanViewProps & { readonly ui?: PlanUi; readonly on?: PlanHandlers },
+  props: PlanViewProps & {
+    readonly ui?: PlanUi; readonly on?: PlanHandlers;
+    /** Issues a level-up just made Ready (A4). */
+    readonly arriving?: readonly IssueKey[];
+  },
 ): JSX.Element {
   const ui = props.ui ?? NO_PLAN_UI;
   const on = props.on ?? NO_HANDLERS;
@@ -52,8 +57,9 @@ export function PlanViewContent(
         <div className="pv-scroll" data-testid="plan-scroll">
           <PlanHeader plan={plan} layout={layout} on={on} />
           <PlanWarnings plan={plan} layout={layout} />
+          <LevelStart plan={plan} issueActions={props.issueActions} />
           {plan.issues.length
-            ? <PlanDiagram plan={plan} layout={layout} ui={ui} on={on} issueActions={props.issueActions} />
+            ? <PlanDiagram plan={plan} layout={layout} ui={ui} on={on} issueActions={props.issueActions} arriving={props.arriving} />
             : <div className="pv-none pv-empty">This plan has no sub-issues yet.</div>}
           {plan.issues.length > 0 && <PlanLegend />}
         </div>
