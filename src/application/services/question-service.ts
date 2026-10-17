@@ -99,7 +99,7 @@ export class QuestionService {
       deadline: askedAt + QUESTION_HOOK_TIMEOUT_SECONDS * 1000,
     };
     this.#pending.set(session, entry);
-    log.info(`[questions] session=${currentId(session, key)} asked ${asked.questions.length} question(s)`);
+    log.info(`[questions] session=${currentId(session, key)} tool=${toolUseLabel(asked.toolUseId)} asked ${asked.questions.length} question(s)`);
     renderer.questionsAsked(this.#toPending(session, entry));
 
     return {
@@ -141,7 +141,7 @@ export class QuestionService {
   #settle(session: ActiveSession, entry: Entry, outcome: QuestionsOutcome): void {
     this.#pending.delete(session);
     const sessionId = currentId(session, entry.key);
-    this.deps.log.info(`[questions] session=${sessionId} ${outcome}`);
+    this.deps.log.info(`[questions] session=${sessionId} tool=${toolUseLabel(entry.asked.toolUseId)} ${outcome}`);
     this.deps.renderer.questionsSettled({ sessionId, toolUseId: entry.asked.toolUseId, outcome });
   }
 
@@ -154,6 +154,11 @@ export class QuestionService {
       deadline: entry.deadline,
     };
   }
+}
+
+/** A tool-use id for the log; a hook body without one parses to ''. */
+function toolUseLabel(toolUseId: string): string {
+  return toolUseId || '(none)';
 }
 
 /** The id the renderer knows a session by now — as the lifecycle computes it. */

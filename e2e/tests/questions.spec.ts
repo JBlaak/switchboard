@@ -166,6 +166,56 @@ test.describe('data', () => {
   });
 });
 
+// Chromium left a question block it had animated before on the hidden
+// sheet's inherited style, so a later showing came up blank and took no
+// clicks (#120). A click that lands proves the block is drawn and hit.
+test.describe('showing again', () => {
+  const sheetGone = (page: Page) =>
+    expect.poll(() => questionSheet(page).evaluate(el => getComputedStyle(el).visibility)).toBe('hidden');
+
+  test('a later set comes up whole and takes clicks', async ({ page, home }) => {
+    /* Given */
+    const first = await askedOnScreen(page, home);
+    await option(page, /The whole site/).click();
+    await primary(page).click();
+    await option(page, /Unit tests/).click();
+    await primary(page).click();
+    await first.response;
+    await sheetGone(page);
+
+    /* When */
+    const second = await askQuestions(home, S.loginFix, QUESTIONS);
+    await option(page, /Only \/app/).click({ timeout: 3000 });
+    await primary(page).click();
+    await option(page, /Lint/).click({ timeout: 3000 });
+    await primary(page).click();
+
+    /* Then */
+    const reply = await second.response as HookReply;
+    expect(reply.hookSpecificOutput.updatedInput.answers).toEqual({
+      [QUESTIONS[0].question]: 'Only /app',
+      [QUESTIONS[1].question]: 'Lint',
+    });
+  });
+
+  test('a set come back to from the terminal takes clicks', async ({ page, home }) => {
+    /* Given */
+    await askedOnScreen(page, home);
+    await option(page, /The whole site/).click();
+    await primary(page).click();
+    await expect(heading(page, 1)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await sheetGone(page);
+
+    /* When */
+    await waitingPill(page).click();
+    await option(page, /Lint/).click({ timeout: 3000 });
+
+    /* Then */
+    await expect(tab(page, 'Checks')).toHaveClass(/is-done/);
+  });
+});
+
 test.describe('placement', () => {
   test('sits over the terminal of the session asking, following it on screen without transitions', async ({ page, home }) => {
     /* Given */
