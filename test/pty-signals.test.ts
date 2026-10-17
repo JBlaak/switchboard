@@ -46,37 +46,63 @@ test('a stop signals the process group, not the single pid', () => {
   // The regression: node-pty's kill() signals the shell alone, but sessions run
   // as `zsh -l -i -c 'claude …'` (with a preLaunchCmd, another process again),
   // so `claude` could outlive the row that owned it.
+  /* Given */
   const h = harness({ alive: new Set([4242]) });
-  assert.equal(h.gateway.signalTree(fakePty(4242), 'SIGTERM'), true);
+
+  /* When */
+  const signalled = h.gateway.signalTree(fakePty(4242), 'SIGTERM');
+
+  /* Then */
+  assert.equal(signalled, true);
   assert.deepEqual(h.signals, [[-4242, 'SIGTERM']]);
 });
 
 test('signalling falls back to the handle when there is no process group', () => {
   // When the group cannot be signalled, the shell itself still gets the signal.
+  /* Given */
   const h = harness({ throwFor: () => { throw new Error('EPERM'); } });
   const pty = fakePty(4242);
 
-  assert.equal(h.gateway.signalTree(pty, 'SIGTERM'), true);
+  /* When */
+  const signalled = h.gateway.signalTree(pty, 'SIGTERM');
+
+  /* Then */
+  assert.equal(signalled, true);
   assert.deepEqual(h.signals, [[-4242, 'SIGTERM']]);
   assert.deepEqual(pty.kills, ['SIGTERM']);
 });
 
 test('signalling a handle with no pid does nothing', () => {
+  /* Given */
   const h = harness();
-  assert.equal(h.gateway.signalTree(pidlessPty(), 'SIGTERM'), false);
+
+  /* When */
+  const signalled = h.gateway.signalTree(pidlessPty(), 'SIGTERM');
+
+  /* Then */
+  assert.equal(signalled, false);
   assert.deepEqual(h.signals, []);
 });
 
 // --- Liveness ---
 
 test('a live pid reads alive, a reaped one does not', () => {
+  /* Given */
   const h = harness({ alive: new Set([4242]) });
-  assert.equal(h.gateway.isAlive(fakePty(4242)), true);
-  assert.equal(h.gateway.isAlive(fakePty(9999)), false);
-  assert.equal(h.gateway.isAlive(pidlessPty()), false);
+
+  /* When */
+  const live = h.gateway.isAlive(fakePty(4242));
+  const reaped = h.gateway.isAlive(fakePty(9999));
+  const pidless = h.gateway.isAlive(pidlessPty());
+
+  /* Then */
+  assert.equal(live, true);
+  assert.equal(reaped, false);
+  assert.equal(pidless, false);
 });
 
 test('a pid we are not allowed to signal still counts as alive', () => {
+  /* Given */
   const h = harness({
     throwFor: (_pid, signal) => {
       if (signal !== 0) return;
@@ -85,7 +111,12 @@ test('a pid we are not allowed to signal still counts as alive', () => {
       throw err;
     },
   });
-  assert.equal(h.gateway.isAlive(fakePty(4242) as PtyHandle), true);
+
+  /* When */
+  const alive = h.gateway.isAlive(fakePty(4242) as PtyHandle);
+
+  /* Then */
+  assert.equal(alive, true);
 });
 
 // --- The environment children inherit ---
@@ -93,7 +124,8 @@ test('a pid we are not allowed to signal still counts as alive', () => {
 test("Electron's own variables are stripped from a child's environment", () => {
   // They make a nested Electron app — or node-pty inside one — malfunction, and
   // a session that starts an editor or a dev server is exactly that case.
-  const env = cleanChildEnv({
+  /* Given */
+  const parentEnv = {
     PATH: '/usr/bin',
     ELECTRON_RUN_AS_NODE: '1',
     ELECTRON_NO_ATTACH_CONSOLE: '1',
@@ -102,19 +134,28 @@ test("Electron's own variables are stripped from a child's environment", () => {
     ORIGINAL_XDG_CURRENT_DESKTOP: 'GNOME',
     WT_SESSION: 'abc',
     SHELL: '/bin/zsh',
-  });
+  };
 
+  /* When */
+  const env = cleanChildEnv(parentEnv);
+
+  /* Then */
   assert.deepEqual(env, { PATH: '/usr/bin', SHELL: '/bin/zsh' });
 });
 
 test("A Claude Code parent's markers are stripped from a child's environment", () => {
   // Switchboard started from inside a Claude Code session inherits them, and a
   // session that sees CLAUDE_CODE_CHILD_SESSION turns its transcript saving off.
-  const env = cleanChildEnv({
+  /* Given */
+  const parentEnv = {
     PATH: '/usr/bin',
     CLAUDE_CODE_CHILD_SESSION: '1',
     CLAUDECODE: '1',
-  });
+  };
 
+  /* When */
+  const env = cleanChildEnv(parentEnv);
+
+  /* Then */
   assert.deepEqual(env, { PATH: '/usr/bin' });
 });
