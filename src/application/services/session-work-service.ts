@@ -19,6 +19,7 @@
  * page carries on.
  */
 import { parseUnifiedDiff } from '../../domain/session-work/diff';
+import { imageFormatOf, imagePaths, type ImageFormat } from '../../domain/session-work/image';
 import { deriveWorkItems, workItemKey, type BranchFacts, type WorktreeChanges } from '../../domain/session-work/items';
 import { mergeWorkLocations } from '../../domain/session-work/locations';
 import { isRemoteProjectPath } from '../../domain/project/remote-target';
@@ -82,6 +83,24 @@ interface GitHubFacts {
   issues: Map<string, IssueStatus[] | null>;
 }
 
+/**
+ * Where the two sides of a local diff are read, fixed when the diff was made:
+ * an image is served at the same commits its diff shows (L2).
+ */
+interface DiffSides {
+  worktree: string;
+  /** The commit the before side is read at; null in a repository with no commits yet. */
+  before: string | null;
+  /** The commit the after side is read at; null for the working tree. */
+  after: string | null;
+}
+
+/** A parsed diff, and for a local one where its sides are read. */
+interface CachedDiff {
+  files: FileDiff[];
+  sides: DiffSides | null;
+}
+
 /** The one open page. */
 interface Page {
   readonly sessionId: string;
@@ -111,7 +130,12 @@ interface Page {
   items: Map<string, SessionWorkItem>;
   /** Why an item's diff could not be had, until it can. */
   readonly diffErrors: Map<string, string>;
-  readonly diffCache: Map<string, FileDiff[]>;
+  readonly diffCache: Map<string, CachedDiff>;
+  /**
+   * The local diff each item last answered with: the only files `image` will
+   * read, at the only commits it will read them at (L3).
+   */
+  readonly served: Map<string, { files: FileDiff[]; sides: DiffSides }>;
   last: SessionWorkSnapshot | null;
   lastKey: string;
   closed: boolean;
@@ -190,6 +214,7 @@ export class SessionWorkService implements WorkPageSource {
       items: new Map(),
       diffErrors: new Map(),
       diffCache: new Map(),
+      served: new Map(),
       last: null,
       lastKey: '',
       closed: false,
@@ -286,18 +311,48 @@ export class SessionWorkService implements WorkPageSource {
     if (!item) return NO_DIFF;
 
     let result: SessionWorkDiff;
+    let sides: DiffSides | undefined;
     try {
-      result = await this.#diffOf(page, item);
+      ({ sides, ...result } = await this.#diffOf(page, item));
     } catch (err) {
       result = { files: [], source: null, error: (err as Error).message || 'The diff could not be read' };
     }
     if (page.closed) return result;
+
+    if (sides) page.served.set(itemId, { files: result.files, sides });
+    else page.served.delete(itemId);
 
     const before = page.diffErrors.get(itemId);
     if (result.error) page.diffErrors.set(itemId, result.error);
     else page.diffErrors.delete(itemId);
     if (before !== page.diffErrors.get(itemId)) this.#publish(page);
     return result;
+  }
+
+  /**
+   * One side of an image in an item's diff, as bytes; null when there is no
+   * such side to read.
+   *
+   * The renderer names only a file and a side (L3): the path must be an image
+   * in the local diff that item last answered with, and it is read at the
+   * commits that diff was made from — never at a revision, or a path, the
+   * renderer could choose.
+   */
+  async image(sessionId: string, itemId: string, path: string, side: 'before' | 'after'): Promise<Uint8Array | null> {
+    const page = this.#page;
+    if (!page || page.sessionId !== sessionId || !page.items.has(itemId)) return null;
+    const served = page.served.get(itemId);
+    const file = served?.files.find((candidate) => candidate.path === path && candidate.image);
+    if (!served || !file?.image) return null;
+
+    const { git } = this.deps;
+    const { worktree, before, after } = served.sides;
+    const paths = imagePaths(file);
+    if (side === 'before') {
+      return file.image.before && paths.before && before ? git.blob(worktree, before, paths.before) : null;
+    }
+    if (side !== 'after' || !file.image.after || !paths.after) return null;
+    return after ? git.blob(worktree, after, paths.after) : git.workingFile(worktree, paths.after);
   }
 
   // ── Building the snapshot ──
@@ -404,6 +459,9 @@ export class SessionWorkService implements WorkPageSource {
     page.items = items;
     for (const id of [...page.diffErrors.keys()]) {
       if (!items.has(id)) page.diffErrors.delete(id);
+    }
+    for (const id of [...page.served.keys()]) {
+      if (!items.has(id)) page.served.delete(id);
     }
     this.#publish(page);
   }
@@ -577,13 +635,17 @@ export class SessionWorkService implements WorkPageSource {
 
   // ── Diffs ──
 
-  async #diffOf(page: Page, item: SessionWorkItem): Promise<SessionWorkDiff> {
+  /** An item's diff, and for a local one where its sides are read. */
+  async #diffOf(page: Page, item: SessionWorkItem): Promise<SessionWorkDiff & { sides?: DiffSides }> {
     const { git, github } = this.deps;
     const failed = (error: string): SessionWorkDiff => ({ files: [], source: null, error });
     if (item.kind === 'issue') return NO_DIFF;
     if (item.kind === 'dirty') {
       const worktree = item.location.worktree;
-      return { files: await this.#parse(worktree, await git.workingDiff(worktree)), source: 'local' };
+      // HEAD is read before the diff, so the before side is the commit the diff was taken against.
+      const sides: DiffSides = { worktree, before: await git.commitSha(worktree, 'HEAD'), after: null };
+      const files = await this.#withImages(sides, await this.#parse(worktree, await git.workingDiff(worktree)));
+      return { files, source: 'local', sides };
     }
 
     // A PR's local branch at another commit than GitHub's (unpushed or
@@ -595,9 +657,14 @@ export class SessionWorkService implements WorkPageSource {
       const [headSha, baseSha] = await Promise.all([git.commitSha(worktree, head), git.commitSha(worktree, base)]);
       differs = headSha !== null && item.kind === 'pr' && !!item.pr.headSha && headSha !== item.pr.headSha;
       if (headSha && !differs) {
+        // The merge-base follows from both commits, so the key covers the image sides too.
         const key = ['local', worktree, head, headSha, base, baseSha ?? ''].join('\0');
-        const files = await this.#cached(page, key, async () => this.#parse(worktree, await git.branchDiff(worktree, head, base)));
-        return { files, source: 'local' };
+        const { files, sides } = await this.#cached(page, key, async () => {
+          const sides: DiffSides = { worktree, before: await git.mergeBase(worktree, headSha, baseSha ?? base), after: headSha };
+          const parsed = await this.#parse(worktree, await git.branchDiff(worktree, head, base));
+          return { files: await this.#withImages(sides, parsed), sides };
+        });
+        return { files, source: 'local', ...(sides ? { sides } : {}) };
       }
       // The branch went between the snapshot and this request: a PR still has GitHub's copy.
       if (item.kind === 'branch') return failed('The branch no longer exists');
@@ -625,18 +692,59 @@ export class SessionWorkService implements WorkPageSource {
     if (!pr.headSha) return fromGitHub(await fetch());
     const key = ['pr', repository, String(pr.number), pr.headSha].join('\0');
     const cached = page.diffCache.get(key);
-    if (cached) return fromGitHub(cached);
+    if (cached) return fromGitHub(cached.files);
     const files = await fetch();
-    if (files && !page.closed) page.diffCache.set(key, files);
+    if (files && !page.closed) page.diffCache.set(key, { files, sides: null });
     return fromGitHub(files);
   }
 
-  async #cached(page: Page, key: string, read: () => Promise<FileDiff[]>): Promise<FileDiff[]> {
+  async #cached(page: Page, key: string, read: () => Promise<CachedDiff>): Promise<CachedDiff> {
     const cached = page.diffCache.get(key);
     if (cached) return cached;
-    const files = await read();
-    if (!page.closed) page.diffCache.set(key, files);
-    return files;
+    const diff = await read();
+    if (!page.closed) page.diffCache.set(key, diff);
+    return diff;
+  }
+
+  /**
+   * A local diff's images, each marked with its format and the size of each
+   * side, so the page can draw them and decide whether to load them at once
+   * (L1). A side that cannot be found is left null; a file with neither side
+   * stays a plain file.
+   */
+  async #withImages(sides: DiffSides, files: FileDiff[]): Promise<FileDiff[]> {
+    const images = new Map<FileDiff, { format: ImageFormat; before: string | null; after: string | null }>();
+    for (const file of files) {
+      const format = imageFormatOf(file.path);
+      if (format) images.set(file, { format, ...imagePaths(file) });
+    }
+    if (images.size === 0) return files;
+
+    const { git } = this.deps;
+    const { worktree } = sides;
+    const befores = [...images.values()].flatMap((image) => (image.before === null ? [] : [image.before]));
+    const afters = [...images.values()].flatMap((image) => (image.after === null ? [] : [image.after]));
+    const [beforeSizes, afterSizes] = await Promise.all([
+      sides.before && befores.length > 0 ? git.blobSizes(worktree, sides.before, befores) : new Map<string, number>(),
+      afters.length === 0 ? new Map<string, number>()
+        : sides.after ? git.blobSizes(worktree, sides.after, afters) : git.workingFileSizes(worktree, afters),
+    ]);
+
+    return files.map((file) => {
+      const image = images.get(file);
+      if (!image) return file;
+      const before = image.before === null ? undefined : beforeSizes.get(image.before);
+      const after = image.after === null ? undefined : afterSizes.get(image.after);
+      if (before === undefined && after === undefined) return file;
+      return {
+        ...file,
+        image: {
+          format: image.format,
+          before: before === undefined ? null : { bytes: before },
+          after: after === undefined ? null : { bytes: after },
+        },
+      };
+    });
   }
 
   /** Parse a diff, with the files `.gitattributes` marks generated collapsed (D7). */

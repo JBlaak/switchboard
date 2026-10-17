@@ -66,6 +66,7 @@ export const INVOKE = {
   sessionWorkOpen: 'session-work:open',
   sessionWorkCanOpen: 'session-work:can-open',
   sessionWorkDiff: 'session-work:diff',
+  sessionWorkImage: 'session-work:image',
   sessionWorkAction: 'session-work:action',
   sessionWorkCancel: 'session-work:cancel',
   sessionWorkComment: 'session-work:comment',

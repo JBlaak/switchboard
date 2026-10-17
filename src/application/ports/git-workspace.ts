@@ -61,6 +61,27 @@ export interface GitWorkspace {
   /** Lines the uncommitted changes add and remove, counted the way `workingDiff` shows them. */
   workingLineStats(worktree: string): Promise<LineStats>;
 
+  /** The commit a diff of `branch` against `base` starts from; null when either is unknown. */
+  mergeBase(worktree: string, branch: string, base: string): Promise<string | null>;
+
+  /**
+   * The size in bytes of each of `paths` at `revision`, asked in one go. A
+   * path that is not there at that revision is left out.
+   */
+  blobSizes(worktree: string, revision: string, paths: readonly string[]): Promise<Map<string, number>>;
+
+  /** The bytes of `path` at `revision`, untouched by any filter; null when it is not there. */
+  blob(worktree: string, revision: string, path: string): Promise<Uint8Array | null>;
+
+  /** The size in bytes of each of `paths` in the working tree; a path that is not a file there is left out. */
+  workingFileSizes(worktree: string, paths: readonly string[]): Promise<Map<string, number>>;
+
+  /**
+   * The bytes of `path` in the working tree; null when it is not a file
+   * there. Never reads outside the worktree, nor through a symlink.
+   */
+  workingFile(worktree: string, path: string): Promise<Uint8Array | null>;
+
   /**
    * The ones among `paths` that `.gitattributes` marks `linguist-generated`,
    * for the diff parser's collapse rule (D7).

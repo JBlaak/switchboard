@@ -274,6 +274,129 @@ test('branchLineStats counts zeros for what is not there', async () => {
   assert.deepEqual(optionLike, { additions: 0, deletions: 0 });
 });
 
+test('mergeBase is the commit the branch forked from, not where main is now', async () => {
+  /* When */
+  const base = await git.mergeBase(worktree, 'feat/12-thing', 'main');
+
+  /* Then */
+  assert.equal(base, run(repo, 'rev-parse', 'main~1').trim());
+});
+
+test('mergeBase answers null for a branch that is not there, or an option-like one', async () => {
+  /* When */
+  const missing = await git.mergeBase(worktree, 'nope', 'main');
+  const optionLike = await git.mergeBase(worktree, '--all', 'main');
+
+  /* Then */
+  assert.equal(missing, null);
+  assert.equal(optionLike, null);
+});
+
+/** Not valid UTF-8, with NULs and a CR-LF in it: bytes that must come through untouched. */
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0xff, 0xfe, 0x80]);
+
+let images: string | undefined;
+
+/** A repository with images in two commits and a changed working tree; made once, only ever read. */
+function imageRepo(): { dir: string; first: string } {
+  if (!images) {
+    images = path.join(tmp, 'images');
+    fs.mkdirSync(images);
+    run(images, 'init', '-q', '-b', 'main');
+    fs.writeFileSync(path.join(images, 'logo.png'), PNG_BYTES);
+    write(images, 'art/with space.svg', '<svg/>\n');
+    commit(images, 'Add images');
+    write(images, 'art/with space.svg', '<svg></svg>\n');
+    commit(images, 'Change the svg');
+    fs.writeFileSync(path.join(images, 'logo.png'), Buffer.concat([PNG_BYTES, PNG_BYTES]));
+    write(images, 'new.png', 'new');
+    fs.symlinkSync(path.join(tmp, 'outside.png'), path.join(images, 'link.png'));
+    write(tmp, 'outside.png', 'outside the worktree');
+  }
+  return { dir: images, first: run(images, 'rev-parse', 'HEAD~1').trim() };
+}
+
+test('blobSizes sizes each path at a revision in one go, leaving out what is not there', async () => {
+  /* Given */
+  const { dir, first } = imageRepo();
+
+  /* When */
+  const atHead = await git.blobSizes(dir, 'HEAD', ['logo.png', 'art/with space.svg', 'new.png', 'art']);
+  const atFirst = await git.blobSizes(dir, first, ['art/with space.svg']);
+
+  /* Then */
+  assert.deepEqual([...atHead], [['logo.png', PNG_BYTES.length], ['art/with space.svg', 12]], 'new.png is not committed, art is a tree');
+  assert.deepEqual([...atFirst], [['art/with space.svg', 7]]);
+});
+
+test('blobSizes of nothing, or at an option-like revision, is empty', async () => {
+  /* Given */
+  const { dir } = imageRepo();
+
+  /* When */
+  const none = await git.blobSizes(dir, 'HEAD', []);
+  const optionLike = await git.blobSizes(dir, '--all', ['logo.png']);
+
+  /* Then */
+  assert.equal(none.size, 0);
+  assert.equal(optionLike.size, 0);
+});
+
+test('blob answers the committed bytes untouched', async () => {
+  /* Given */
+  const { dir, first } = imageRepo();
+
+  /* When */
+  const logo = await git.blob(dir, 'HEAD', 'logo.png');
+  const svg = await git.blob(dir, first, 'art/with space.svg');
+
+  /* Then */
+  assert.deepEqual(Buffer.from(logo!), PNG_BYTES);
+  assert.equal(Buffer.from(svg!).toString('utf8'), '<svg/>\n');
+});
+
+test('blob answers null for what is not there', async () => {
+  /* Given */
+  const { dir } = imageRepo();
+
+  /* When */
+  const missing = await git.blob(dir, 'HEAD', 'new.png');
+  const noRevision = await git.blob(dir, 'no-such-branch', 'logo.png');
+  const optionLike = await git.blob(dir, '--all', 'logo.png');
+
+  /* Then */
+  assert.equal(missing, null);
+  assert.equal(noRevision, null);
+  assert.equal(optionLike, null);
+});
+
+test('workingFile and workingFileSizes read the file on disk', async () => {
+  /* Given */
+  const { dir } = imageRepo();
+
+  /* When */
+  const sizes = await git.workingFileSizes(dir, ['logo.png', 'new.png', 'gone.png']);
+  const logo = await git.workingFile(dir, 'logo.png');
+
+  /* Then */
+  assert.deepEqual([...sizes], [['logo.png', PNG_BYTES.length * 2], ['new.png', 3]]);
+  assert.deepEqual(Buffer.from(logo!), Buffer.concat([PNG_BYTES, PNG_BYTES]));
+});
+
+test('workingFile never reads outside the worktree, nor through a symlink', async () => {
+  /* Given */
+  const { dir } = imageRepo();
+  const escapes = ['../outside.png', path.join(tmp, 'outside.png'), 'link.png', 'art', ''];
+
+  /* When */
+  const read = await Promise.all(escapes.map((file) => git.workingFile(dir, file)));
+  const sizes = await git.workingFileSizes(dir, escapes);
+
+  /* Then */
+  assert.deepEqual(read, escapes.map(() => null));
+  assert.equal(sizes.size, 0);
+});
+
 test('sumNumstat adds up numstat lines, binary files counting nothing', () => {
   /* When */
   const sum = sumNumstat('3\t1\ta.ts\n-\t-\timg.png\n10\t0\told => new\n');
