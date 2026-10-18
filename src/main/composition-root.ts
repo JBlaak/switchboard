@@ -34,8 +34,10 @@ import { PrWatchService } from '../application/services/pr-watch-service';
 import { SettingsService } from '../application/services/settings-service';
 import { UpdateService } from '../application/services/update-service';
 import { WeatherService } from '../application/services/weather-service';
+import { AskRouteService } from '../application/services/ask-route-service';
 import { SessionRegistry } from '../application/model/session-registry';
 
+import { ShellClaudeCaller } from '../infrastructure/claude-cli/claude-caller';
 import { ClaudeCommandRunner } from '../infrastructure/claude-cli/command-runner';
 import { OAuthUsageService } from '../infrastructure/claude-cli/usage-service';
 import {
@@ -107,6 +109,7 @@ export interface Container {
   readonly prWatch: PrWatchService;
   readonly issueSessions: IssueSessionService;
   readonly plans: PlanService;
+  readonly askRoute: AskRouteService;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -222,6 +225,11 @@ export function buildContainer(): Container {
     fs, transcripts, repository, ids, clock, timers, log,
     commandsDir: paths.commandsDir,
     runner: new ClaudeCommandRunner({ shells, terminals, log, shellProfileId }),
+  });
+  // Ask Patch (#135): one Haiku call per request typed on the empty screen.
+  const askRoute = new AskRouteService({
+    cli: new ShellClaudeCaller({ shells, terminals, log, shellProfileId, homeDir: paths.homeDir }),
+    timers, log,
   });
 
   // ── Host ──
@@ -354,6 +362,7 @@ export function buildContainer(): Container {
     review,
     issueSessions,
     plans,
+    askRoute,
     renderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
