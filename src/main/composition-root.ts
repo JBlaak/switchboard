@@ -43,6 +43,7 @@ import {
 } from '../infrastructure/electron/desktop';
 import { ElectronRendererGateway } from '../infrastructure/electron/renderer-gateway';
 import { ElectronWindowDrag } from '../infrastructure/electron/window-drag';
+import { ElectronDockAttention } from '../infrastructure/electron/dock-attention';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
@@ -110,6 +111,7 @@ export interface Container {
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
   readonly windowDrag: ElectronWindowDrag;
+  readonly dockAttention: ElectronDockAttention;
   readonly system: ElectronSystemGateway;
   readonly appearance: ElectronAppearanceGateway;
   readonly sleep: PmsetSleepControl;
@@ -223,6 +225,7 @@ export function buildContainer(): Container {
   // ── Host ──
   const dialogs = new ElectronDialogService(getWindow);
   const windowDrag = new ElectronWindowDrag(getWindow);
+  const dockAttention = new ElectronDockAttention();
   const system = new ElectronSystemGateway(log);
   const appearance = new ElectronAppearanceGateway();
   const sleep = new PmsetSleepControl(log);
@@ -350,7 +353,7 @@ export function buildContainer(): Container {
     review,
     issueSessions,
     plans,
-    renderer, dialogs, windowDrag, system, appearance, sleep, git, projectsWatcher,
+    renderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     close: () => {

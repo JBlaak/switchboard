@@ -91,6 +91,7 @@ export const SEND = {
   windowDragStart: 'window-drag:start',
   windowDragMove: 'window-drag:move',
   windowDragEnd: 'window-drag:end',
+  needsInputCount: 'needs-input-count',
 } as const;
 
 /** Main tells the renderer, unprompted. */

@@ -26,4 +26,5 @@ export function registerHostHandlers(ipc: IpcRegistrar, app: Container): void {
   ipc.on(SEND.windowDragStart, () => app.windowDrag.start());
   ipc.on(SEND.windowDragMove, (dx: number, dy: number) => app.windowDrag.move(dx, dy));
   ipc.on(SEND.windowDragEnd, () => app.windowDrag.end());
+  ipc.on(SEND.needsInputCount, (count: number) => app.dockAttention.set(count));
 }

@@ -107,6 +107,7 @@ const api: SwitchboardApi = {
   startWindowDrag: () => ipcRenderer.send(SEND.windowDragStart),
   moveWindowDrag: (dx, dy) => ipcRenderer.send(SEND.windowDragMove, dx, dy),
   endWindowDrag: () => ipcRenderer.send(SEND.windowDragEnd),
+  setNeedsInputCount: (count) => ipcRenderer.send(SEND.needsInputCount, count),
 
   // ── Events from main ──
   onTerminalData: (cb) => subscribe(EVENT.terminalData, (_e, sessionId, data) => cb(sessionId, data)),
