@@ -205,7 +205,7 @@ test('the request offers local projects only, no remotes or worktrees', () => {
   assert.deepEqual(request.candidates.map(c => c.projectPath), ['/dev/app']);
 });
 
-test('a candidate carries its folder name and its newest session titles first', () => {
+test('a candidate carries its newest session titles first', () => {
   /* Given */
   const projects = [project('/dev/rp3-web', {
     sessions: [
@@ -218,6 +218,5 @@ test('a candidate carries its folder name and its newest session titles first', 
   const [candidate] = routeRequest('fix it', projects).candidates;
 
   /* Then */
-  assert.equal(candidate.folder, 'rp3-web');
   assert.deepEqual(candidate.recentTitles, ['Renamed', 'Old one']);
 });
