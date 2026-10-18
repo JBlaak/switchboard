@@ -16,6 +16,7 @@ import { loadProjects } from '../features/sessions/session-list';
 import { openSession } from '../features/sessions/session-actions';
 import { schedulePoll } from '../features/sessions/session-poller';
 import { installRemoteTicker } from '../state/remote-ticker';
+import { installDockAttention } from '../state/dock-attention';
 import { dispatch, store } from '../state/app-store';
 import { openSessions, sessionMap, view } from '../state/session-store';
 import { applyTerminalFont, prewarmTerminalRenderer } from '../features/terminal/terminal-manager';
@@ -59,6 +60,7 @@ export function bootstrap(): void {
   mountReactRoot();
 
   installRemoteTicker(store);
+  installDockAttention(store, (count) => window.api.setNeedsInputCount(count));
 
   schedulePoll();
   prewarmTerminalRenderer();

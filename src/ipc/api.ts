@@ -170,6 +170,8 @@ export interface SwitchboardApi {
   /** How far the pointer has come since the drag started, in screen points. */
   moveWindowDrag(dx: number, dy: number): void;
   endWindowDrag(): void;
+  /** How many sessions are in the Needs input block; the dock bounces when it rises. */
+  setNeedsInputCount(count: number): void;
 
   // ── Events from main ──
   // Each answers its unsubscribe, so a listener can be removed again (StrictMode
