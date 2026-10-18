@@ -10,7 +10,9 @@
  *
  * Clicking Patch pokes it, and dragging picks it up; either way it answers
  * straight away with a reaction, dressed as it was, without gathering the
- * board again.
+ * board again. Asking it something in the box below (#135) is answered the
+ * same way: it thinks while the text is routed, and says why when it cannot
+ * tell where the text belongs.
  *
  * Patch itself is the package's imperative handle, mounted into the stage from
  * an effect; the counts that cycle its lines are refs, since nothing renders
@@ -25,6 +27,8 @@ import {
 import { dressingOn } from '../../../domain/companion/calendar';
 import { fetchWeather } from '../../app/weather';
 import { getState, onEvent } from '../../state/app-store';
+import { askOutcome } from '../../state/ask-slice';
+import { CANCELLED_BEAT, outcomeBeat, thinkingBeat } from '../ask/ask-keys';
 import { tightestUsage, whenUsageLoaded } from '../../state/usage-store';
 import type { JSX } from 'react';
 import type { Fling, PatchHandle, PatchScene } from '@jblaak/patch';
@@ -46,6 +50,7 @@ export function EmptyScreenPatch(): JSX.Element {
     latest: 0,
     pokes: 0,
     drops: 0,
+    thoughts: 0,
     /** When the recent pokes landed, oldest first. */
     pokeTimes: [] as number[],
     /** The scene on screen, which a poke keeps the dressing of. */
@@ -93,11 +98,25 @@ export function EmptyScreenPatch(): JSX.Element {
     // Warm main's weather cache, so the first appearance does not wait on it.
     void fetchWeather();
     if (visible()) void appear();
-    const unsubscribe = onEvent('emptyScreenShown', () => void appear());
+    const unsubscribers = [
+      onEvent('emptyScreenShown', () => void appear()),
+      // Only what the box's reducer took: a stale answer, or Enter on nothing, says nothing.
+      onEvent('askSent', (_e, state, previous) => {
+        if (state.ask !== previous.ask) react(thinkingBeat(c.thoughts++));
+      }),
+      onEvent('askCancelled', (_e, state, previous) => {
+        if (state.ask !== previous.ask) react(CANCELLED_BEAT);
+      }),
+      onEvent('askAnswered', (e, state, previous) => {
+        if (state.ask === previous.ask) return;
+        const beat = outcomeBeat(askOutcome(e.result, previous.ask.text));
+        if (beat) react(beat);
+      }),
+    ];
 
     return () => {
       mounted = false;
-      unsubscribe();
+      unsubscribers.forEach(unsubscribe => unsubscribe());
       patch.destroy();
     };
   }, []);

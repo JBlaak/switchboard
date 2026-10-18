@@ -20,7 +20,7 @@ export function Dialogs(): JSX.Element | null {
   const onClose = (): void => closeDialog(seq);
   switch (open.kind) {
     case 'projectPicker':
-      return <ProjectPicker key={seq} onClose={onClose} />;
+      return <ProjectPicker key={seq} onClose={onClose} initialPrompt={open.initialPrompt} />;
     case 'addProject':
       return <AddProjectDialog key={seq} onClose={onClose} />;
     case 'resumeSession':

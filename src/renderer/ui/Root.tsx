@@ -16,6 +16,7 @@ import { SettingsViewer } from './settings/SettingsViewer';
 import { SessionWorkPage } from './session-work/SessionWorkPage';
 import { PlanPage } from './plan-page/PlanPage';
 import { EmptyScreenPatch } from './patch/EmptyScreenPatch';
+import { AskBox } from './ask/AskBox';
 import { Questions } from './questions/Questions';
 import { QuestionsHeaderButton } from './questions/QuestionsHeaderButton';
 import { SessionList } from './session-list/SessionList';
@@ -39,7 +40,7 @@ export function Root(): JSX.Element | null {
       <Portal target="terminal-header-controls"><TerminalHeaderControls /></Portal>
       <Portal target="terminals"><Questions /></Portal>
       <Portal target="terminal-header-questions"><QuestionsHeaderButton /></Portal>
-      <Portal target="placeholder"><EmptyScreenPatch /></Portal>
+      <Portal target="placeholder"><EmptyScreenPatch /><AskBox /></Portal>
       <Portal target="sidebar-content"><SessionList /></Portal>
     </>
   );
