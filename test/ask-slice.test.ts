@@ -15,7 +15,7 @@ function run(state: RendererState, ...events: RendererEvent[]): RendererState {
 }
 
 const TEXT = 'Let’s fix the login in RP3 Web';
-const PROMPT = 'Fix the login.\n\n(Original: "Let’s fix the login in RP3 Web")';
+const PROMPT = 'Fix the login and check that signing in works again.';
 
 function typed(text = TEXT): RendererState {
   return run(initialRendererState(), { type: 'askTextChanged', text });

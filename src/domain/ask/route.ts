@@ -2,8 +2,8 @@
  * The rules for asking Claude where a typed request belongs (#135).
  *
  * One `claude -p` call with Haiku does the routing: it gets the local projects
- * and what the user typed, and answers with a project and a tidied prompt in a
- * fixed JSON shape. Everything about that call that is a decision rather than
+ * and what the user typed, and answers with a project and the session's first
+ * prompt in a fixed JSON shape. Everything about that call that is a decision rather than
  * plumbing lives here: which projects are offered, the command line, the
  * instructions, and how far the answer is trusted. The answer is only ever a
  * suggestion — a path that isn't one of the candidates is treated as unknown,
@@ -68,9 +68,11 @@ export const ROUTE_SCHEMA = {
 /**
  * Who Haiku is for this call, replacing Claude Code's own system prompt.
  *
- * The rewrite rules are P1: the user's request, tidied, in their language —
- * not a plan. A model asked to "clarify" a task will happily add steps and
- * guess at the cause, and then the session starts out chasing the guess.
+ * The user talks to Patch ("let's fix X in Y"); the session needs a request
+ * addressed to Claude. So the rewrite is a full request — the goal and what
+ * done looks like for that kind of task (P1) — but never a guess: a model
+ * asked to flesh out a task will happily name files and causes it can't see,
+ * and then the session starts out chasing the guess.
  */
 export const ROUTE_SYSTEM_PROMPT = [
   'You route a developer\'s request to one of their local projects and tidy the request into the first message of a coding session in that project.',
@@ -82,10 +84,13 @@ export const ROUTE_SYSTEM_PROMPT = [
   '- candidates: up to 3 listed paths that could be meant, best first.',
   '- When nothing fits, projectPath is null and candidates is empty.',
   '',
-  'Rewriting the request into prompt:',
-  '- One clear task statement, phrased as an instruction, in the same language the request was written in.',
+  'Writing prompt, the first message of the coding session:',
+  '- The request is spoken to an assistant who hands it on ("let\'s fix X in Y", "ask Y to …"). Turn it into a request addressed directly to Claude, the coding agent working inside that project.',
+  '- Write one to three complete sentences: state the goal plainly, and say what done looks like for that kind of task (e.g. applied everywhere it is used, verified, a short summary of what changed).',
+  '- Keep everything the request asks for. A question stays a question.',
+  '- Do not name files, components, causes or requirements the request does not mention; you cannot see the code.',
   '- Leave out the mention of the project.',
-  '- Add no steps, guessed causes or requirements that the request does not state.',
+  '- Write in the same language the request was written in.',
 ].join('\n');
 
 /** The message Haiku answers: the projects, then the request. */
@@ -216,21 +221,11 @@ export function routeResultFrom(answer: unknown, request: RouteRequest): RouteRe
 
   if (suggestions.length === 0) return { kind: 'noMatch', reason: NO_MATCH_LINE };
 
-  const rewritten = typeof answer.prompt === 'string' ? answer.prompt.trim() : '';
-  if (!rewritten) return { kind: 'failed', reason: GARBLED_LINE };
-  const prompt = composeInitialPrompt(rewritten, request.text);
+  const prompt = typeof answer.prompt === 'string' ? answer.prompt.trim() : '';
+  if (!prompt) return { kind: 'failed', reason: GARBLED_LINE };
 
   if (projectPath && answer.confident === true) return { kind: 'confident', projectPath, prompt };
   return { kind: 'unsure', candidates: suggestions, prompt };
-}
-
-/**
- * The session's first prompt: the tidied task, with what the user actually
- * typed kept underneath (P2), so a rewrite that lost something can't lose it
- * for good.
- */
-export function composeInitialPrompt(rewritten: string, original: string): string {
-  return `${rewritten}\n\n(Original: "${original}")`;
 }
 
 // ── Failure lines ──

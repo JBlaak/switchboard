@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   GARBLED_LINE, NO_MATCH_LINE, ROUTE_SCHEMA, ROUTE_SYSTEM_PROMPT,
-  composeInitialPrompt, failureLine, readRouteRun, routeArgs, routeCandidates, routePrompt,
+  failureLine, readRouteRun, routeArgs, routeCandidates, routePrompt,
   routeResultFrom, usageLimitLine,
 } from '../src/domain/ask/route';
 import type { RouteRequest } from '../src/domain/ask/model';
@@ -164,7 +164,7 @@ test('routePrompt lists every candidate\'s path, folder name and recent sessions
   assert.ok(prompt.endsWith('Request:\nLet\'s fix the timer in the scoreboard'));
 });
 
-test('the instructions hold Haiku to a rewrite in the user\'s language with nothing added', () => {
+test('the instructions ask for a full request to Claude, in the user\'s language, with nothing guessed', () => {
   /* Given */
   const instructions = ROUTE_SYSTEM_PROMPT;
 
@@ -174,7 +174,9 @@ test('the instructions hold Haiku to a rewrite in the user\'s language with noth
   /* Then */
   assert.ok(lines.some(line => /same language/.test(line)));
   assert.ok(lines.some(line => /Leave out the mention of the project/.test(line)));
-  assert.ok(lines.some(line => /Add no steps, guessed causes or requirements/.test(line)));
+  assert.ok(lines.some(line => /addressed directly to Claude/.test(line)));
+  assert.ok(lines.some(line => /what done looks like/.test(line)));
+  assert.ok(lines.some(line => /Do not name files, components, causes or requirements/.test(line)));
 });
 
 // ── The answer ──
@@ -191,7 +193,7 @@ test('a confident answer with a listed path starts there, with the original kept
   assert.deepEqual(result, {
     kind: 'confident',
     projectPath: APP,
-    prompt: 'Fix the login bug.\n\n(Original: "Let\'s fix the login bug in app")',
+    prompt: 'Fix the login bug.',
   });
 });
 
@@ -207,7 +209,7 @@ test('an unconfident answer offers its pick first, then the other listed candida
   assert.deepEqual(result, {
     kind: 'unsure',
     candidates: [SITE, APP, TOOLS],
-    prompt: composeInitialPrompt('Fix the login bug.', req.text),
+    prompt: 'Fix the login bug.',
   });
 });
 
@@ -245,7 +247,7 @@ test('an invented path counts as unknown, however confident Haiku is', () => {
   const result = routeResultFrom(answer, req);
 
   /* Then */
-  assert.deepEqual(result, { kind: 'unsure', candidates: [SITE], prompt: composeInitialPrompt('Fix it.', req.text) });
+  assert.deepEqual(result, { kind: 'unsure', candidates: [SITE], prompt: 'Fix it.' });
 });
 
 test('an answer with no listed path is no match, in Patch\'s words', () => {
@@ -281,17 +283,6 @@ test('an answer that isn\'t the agreed shape fails', () => {
     /* Then */
     assert.deepEqual(result, { kind: 'failed', reason: GARBLED_LINE }, JSON.stringify(answer));
   }
-});
-
-test('composeInitialPrompt puts the original underneath the rewrite, exactly as typed', () => {
-  /* Given */
-  const original = 'fix "X" in RP3 Web\nASAP ';
-
-  /* When */
-  const prompt = composeInitialPrompt('Fix X.', original);
-
-  /* Then */
-  assert.equal(prompt, 'Fix X.\n\n(Original: "fix "X" in RP3 Web\nASAP ")');
 });
 
 // ── Reading the process's output ──

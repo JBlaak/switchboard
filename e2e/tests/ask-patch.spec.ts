@@ -16,11 +16,11 @@ import type { Page } from '@playwright/test';
 const box = (page: Page) => page.getByTestId('ask-box');
 const says = (page: Page, line: string | RegExp) => page.locator('#placeholder').getByText(line);
 
-test('a confident answer starts the session in that project on the tidied prompt', async ({ page, home }) => {
+test('a confident answer starts the session in that project on the rewritten prompt', async ({ page, home }) => {
   /* Given */
   const route = fakeRoute(home);
   const acmeApi = home.projectPath(P.acmeApi);
-  route.answer({ projectPath: acmeApi, confident: true, candidates: [acmeApi], prompt: 'Fix the login redirect loop.' });
+  route.answer({ projectPath: acmeApi, confident: true, candidates: [acmeApi], prompt: ' Fix the login redirect loop. \n' });
   const before = launchedKeys(home);
 
   /* When */
@@ -32,7 +32,7 @@ test('a confident answer starts the session in that project on the tidied prompt
   const claude = await waitForNewLaunch(home, 'claude', before);
   const launch = await claude.launched();
   expect(launch.cwd).toBe(acmeApi);
-  expect(launch.argv.at(-1)).toBe('Fix the login redirect loop.\n\n(Original: "lets fix the login loop in acme-api")');
+  expect(launch.argv.at(-1)).toBe('Fix the login redirect loop.');
   await expect(box(page)).toHaveValue('');
 
   const [call] = route.calls();
@@ -71,7 +71,7 @@ test('an unsure answer offers the candidates, and Enter starts the one picked', 
   /* Then */
   const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
   expect(launch.cwd).toBe(dashboard);
-  expect(launch.argv.at(-1)).toBe('Make the charts faster.\n\n(Original: "make the charts faster")');
+  expect(launch.argv.at(-1)).toBe('Make the charts faster.');
 });
 
 test('Esc while Patch is thinking cancels, and the text can be edited again', async ({ page, home }) => {

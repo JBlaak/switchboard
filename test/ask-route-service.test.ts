@@ -72,7 +72,7 @@ test('a routing call answers with what Haiku picked', async () => {
   assert.deepEqual(result, {
     kind: 'confident',
     projectPath: APP,
-    prompt: 'Fix the login bug.\n\n(Original: "Fix the login bug in app")',
+    prompt: 'Fix the login bug.',
   });
   assert.equal(timers.pending, 0);
 });
