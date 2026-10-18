@@ -15,7 +15,8 @@ import { placeholder } from '../../lib/dom';
 import { projectLabel } from '../../features/sessions/project-label';
 import { getState, onEvent } from '../../state/app-store';
 import { useStore } from '../use-store';
-import { askKey, boxTakesFocus, isCaretChord } from './ask-keys';
+import { askKey, boxTakesFocus, isCaretChord, opensPickerFromBox } from './ask-keys';
+import { openDialog } from '../dialogs/actions';
 import {
   cancelAsk, changeAskText, closeAskChoices, hoverAskChoice, openPickerFromChoices, sendAsk, startAskChoice,
   stepAskChoice,
@@ -53,6 +54,11 @@ export function AskBox(): JSX.Element {
   }, []);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (opensPickerFromBox(e, ask.text)) {
+      e.preventDefault();
+      openDialog({ kind: 'projectPicker' });
+      return;
+    }
     if (isCaretChord(e)) {
       (e.nativeEvent as MarkedEvent)._handled = true;
       return;

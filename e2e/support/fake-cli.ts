@@ -246,3 +246,54 @@ function readJsonLines<T>(file: string): T[] {
   }
   return text.split('\n').filter(Boolean).map(line => JSON.parse(line) as T);
 }
+
+/** What a routing answer says, before it is wrapped in the CLI's envelope. */
+export interface RouteAnswer {
+  projectPath: string | null;
+  confident: boolean;
+  candidates: string[];
+  prompt: string;
+}
+
+/**
+ * The fake `claude -p` Ask Patch routes with (#135).
+ *
+ * Each call records its argv and prints whatever was last set here, wrapped
+ * the way the real CLI wraps a structured answer; `delayMs` holds the answer
+ * back so a test can see the wait, or cancel it.
+ */
+export class FakeRoute {
+  private readonly dir: string;
+
+  constructor(controlDir: string) {
+    this.dir = path.join(controlDir, 'route');
+    fs.mkdirSync(this.dir, { recursive: true });
+  }
+
+  answer(answer: RouteAnswer, delayMs = 0): void {
+    const envelope = {
+      type: 'result', subtype: 'success', is_error: false,
+      result: JSON.stringify(answer), structured_output: answer,
+    };
+    this.write({ stdout: JSON.stringify(envelope) + '\n', exitCode: 0, delayMs });
+  }
+
+  /** Fail the way the CLI does: the envelope with `is_error`, and exit 1. */
+  fail(message: string): void {
+    const envelope = { type: 'result', subtype: 'success', is_error: true, result: message };
+    this.write({ stdout: JSON.stringify(envelope) + '\n', exitCode: 1 });
+  }
+
+  /** The argv of every routing call so far, oldest first. */
+  calls(): { argv: string[]; cwd: string }[] {
+    return readJsonLines(path.join(this.dir, 'calls.jsonl'));
+  }
+
+  private write(answer: { stdout: string; exitCode: number; delayMs?: number }): void {
+    fs.writeFileSync(path.join(this.dir, 'answer.json'), JSON.stringify(answer));
+  }
+}
+
+export function fakeRoute(home: FixtureHome): FakeRoute {
+  return new FakeRoute(home.controlDir);
+}

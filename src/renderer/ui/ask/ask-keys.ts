@@ -68,6 +68,20 @@ export function isCaretChord(e: { key: string; metaKey: boolean; altKey: boolean
   return e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown';
 }
 
+/**
+ * Cmd+A in an empty box: the New Session picker, as it is everywhere outside
+ * a text field. The box holds the focus on the empty screen, so without this
+ * the app's oldest shortcut would stop working there; once there is text,
+ * Cmd+A is Select All again.
+ */
+export function opensPickerFromBox(
+  e: { code: string; metaKey: boolean; altKey: boolean; shiftKey: boolean; ctrlKey: boolean },
+  text: string,
+): boolean {
+  if (!e.metaKey || e.altKey || e.shiftKey || e.ctrlKey || e.code !== 'KeyA') return false;
+  return text.trim() === '';
+}
+
 // ── What Patch says ──
 
 const THINKING_BEATS: readonly PatchBeat[] = [

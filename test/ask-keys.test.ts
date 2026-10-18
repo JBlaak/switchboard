@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CANCELLED_BEAT, askKey, boxTakesFocus, isCaretChord, outcomeBeat, thinkingBeat,
+  CANCELLED_BEAT, askKey, boxTakesFocus, isCaretChord, opensPickerFromBox, outcomeBeat, thinkingBeat,
 } from '../src/renderer/ui/ask/ask-keys';
 import { routeRequest } from '../src/renderer/ui/ask/route-request';
 import type { AskKeyPress } from '../src/renderer/ui/ask/ask-keys';
@@ -107,6 +107,30 @@ test('a bare arrow, or another Cmd chord, is not claimed', () => {
   /* Then */
   assert.equal(bare, false);
   assert.equal(other, false);
+});
+
+const cmdA = { code: 'KeyA', metaKey: true, altKey: false, shiftKey: false, ctrlKey: false };
+
+test('Cmd+A in an empty box opens the picker, as it does outside text fields', () => {
+  /* When */
+  const empty = opensPickerFromBox(cmdA, '');
+  const blank = opensPickerFromBox(cmdA, '  \n');
+
+  /* Then */
+  assert.equal(empty, true);
+  assert.equal(blank, true);
+});
+
+test('Cmd+A with text in the box is Select All, and other chords are left alone', () => {
+  /* When */
+  const withText = opensPickerFromBox(cmdA, 'fix it');
+  const shifted = opensPickerFromBox({ ...cmdA, shiftKey: true }, '');
+  const bare = opensPickerFromBox({ ...cmdA, metaKey: false }, '');
+
+  /* Then */
+  assert.equal(withText, false);
+  assert.equal(shifted, false);
+  assert.equal(bare, false);
 });
 
 // ── Focus ──
