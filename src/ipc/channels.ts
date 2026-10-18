@@ -38,6 +38,10 @@ export const INVOKE = {
   getWeather: 'get-weather',
   geocodeWeatherLocation: 'geocode-weather-location',
 
+  // Ask Patch
+  askRoute: 'ask-route',
+  cancelAskRoute: 'cancel-ask-route',
+
   // Sleep
   getSleepDisabled: 'get-sleep-disabled',
   setSleepDisabled: 'set-sleep-disabled',

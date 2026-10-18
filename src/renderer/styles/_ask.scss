@@ -1,0 +1,147 @@
+/* ========== ASK PATCH ==========
+   The box under Patch on the empty screen (#135, ui/ask), and the short list
+   of projects it offers when Patch is not sure. The box is the picker's filter
+   field grown into a few lines; the choices are the picker's rows. */
+
+/* Patch above the box, the pair centred in the empty screen. */
+#placeholder {
+  flex-direction: column;
+}
+
+/* The list hangs below the box rather than pushing it, so Patch and the box
+   hold still when it opens. */
+.ask {
+  position: relative;
+  width: 520px;
+  max-width: calc(100% - 64px);
+  margin-top: 12px;
+}
+
+.ask-box {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  /* Grows with its text, up to about five lines, then scrolls (B2). */
+  field-sizing: content;
+  min-height: calc(1.45em + 24px);
+  max-height: calc(5 * 1.45em + 24px);
+  resize: none;
+  overflow-y: auto;
+  background: var(--sb-bg-raised);
+  border: none;
+  box-shadow: var(--sb-edge), inset 0 0 0 1px var(--sb-line);
+  border-radius: var(--sb-r-card);
+  color: var(--sb-text-strong);
+  font-family: var(--sb-font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  padding: 12px 16px;
+  outline: none;
+  transition: box-shadow 0.15s, color 0.15s;
+
+  &::placeholder { color: var(--sb-text-placeholder); }
+
+  &:focus {
+    box-shadow:
+      inset 0 0 0 1px var(--sb-accent),
+      0 0 0 3px rgba(var(--sb-accent-rgb), 0.18);
+  }
+}
+
+/* Locked while Patch thinks (W1): the text stays, dimmed, and the ring breathes. */
+.ask.is-waiting .ask-box {
+  color: var(--sb-text-muted);
+  cursor: progress;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ask.is-waiting .ask-box:focus {
+    animation: ask-thinking 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes ask-thinking {
+  0%, 100% { box-shadow: inset 0 0 0 1px var(--sb-accent-dim), 0 0 0 3px rgba(var(--sb-accent-rgb), 0.08); }
+  50%      { box-shadow: inset 0 0 0 1px var(--sb-accent), 0 0 0 4px rgba(var(--sb-accent-rgb), 0.22); }
+}
+
+/* ---- Not sure: the choices (O2) ---- */
+.ask-choices {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 2;
+  padding: 6px;
+  background: var(--sb-bg-raised);
+  box-shadow: var(--sb-edge), var(--sb-lift);
+  border-radius: var(--sb-r-card);
+  text-align: left;
+}
+
+.ask-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ask-choice {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: var(--sb-r-row);
+  font-family: var(--sb-font-head);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--sb-text);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.12s;
+
+  /* The highlighted choice is what Enter starts; the pointer moves it too. */
+  &.selected {
+    background: var(--sb-mint);
+    color: var(--sb-text-strong);
+  }
+}
+
+/* The rewritten prompt the session will start on, to read, not to edit. */
+.ask-prompt {
+  margin: 6px 6px 0;
+  padding: 8px 10px;
+  border-radius: var(--sb-r-control);
+  background: var(--sb-bg-base);
+  color: var(--sb-text-dim);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  max-height: calc(4 * 1.45em + 16px);
+  overflow-y: auto;
+  user-select: text;
+}
+
+.ask-hints {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 6px 2px;
+  font-size: 12px;
+  color: var(--sb-text-faint);
+
+  span { display: inline-flex; align-items: center; gap: 6px; }
+}
+
+/* ---- The New Session picker opened carrying the text (O3) ---- */
+.project-picker-prompt {
+  margin: -8px 0 12px;
+  color: var(--sb-text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

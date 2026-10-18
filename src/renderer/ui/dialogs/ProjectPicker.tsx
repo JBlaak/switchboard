@@ -15,7 +15,6 @@
  * session (F2).
  */
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
-import { launchClaudeSession } from '../../features/sessions/session-actions';
 import { projectLabel } from '../../features/sessions/project-label';
 import { view } from '../../state/session-store';
 import { useStore } from '../use-store';
@@ -27,13 +26,15 @@ import { rankProjects } from './rank-projects';
 import { clampSelection, nextSelection, pickerKeyAction } from './picker-selection';
 import { filterPlans, orderPlans } from './plan-list';
 import { recentPlansIn } from './recent-plans';
-import { askProjectPlans, canHavePlans } from './actions';
+import { askProjectPlans, canHavePlans, launchFromPicker } from './actions';
 import type { JSX, KeyboardEvent } from 'react';
 import type { Project } from '../../../domain/project/project';
 import type { PickerPlansState, PlanPickerItem } from './PickerPlans';
 
 export interface ProjectPickerProps {
   onClose(): void;
+  /** The prompt a session started from here begins on. */
+  initialPrompt?: string;
 }
 
 /** The plans of the project → was pressed on, and the project list to go back to. */
@@ -44,7 +45,7 @@ interface PlansMode {
   readonly projectSelected: number;
 }
 
-export function ProjectPicker({ onClose }: ProjectPickerProps): JSX.Element {
+export function ProjectPicker({ onClose, initialPrompt }: ProjectPickerProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const [plansMode, setPlansMode] = useState<PlansMode | null>(null);
@@ -79,7 +80,7 @@ export function ProjectPicker({ onClose }: ProjectPickerProps): JSX.Element {
 
   const activate = (project: Project): void => {
     onClose();
-    void launchClaudeSession(project);
+    void launchFromPicker(project, initialPrompt);
   };
 
   const intoPlans = (project: Project): void => {
@@ -175,6 +176,9 @@ export function ProjectPicker({ onClose }: ProjectPickerProps): JSX.Element {
       onClose={onClose}
     >
       <h3>New Session</h3>
+      {initialPrompt !== undefined && !plansMode && (
+        <p className="project-picker-prompt" title={initialPrompt}>{initialPrompt}</p>
+      )}
       <div className="project-picker-search">
         {plansMode && (
           <button type="button" className="project-picker-back" aria-label="Back to projects" onClick={backToProjects}>

@@ -135,8 +135,8 @@ test.describe('project picker', () => {
 
     /* Then */
     await expect(picker).toHaveCount(0);
-    // Focus is not handed back to what had it before the dialog opened.
-    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    // On the empty screen the focus goes back to Ask Patch's box (#135).
+    await expect(page.getByTestId('ask-box')).toBeFocused();
 
     /* When */
     await openPicker(page);

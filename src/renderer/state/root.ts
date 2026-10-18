@@ -9,6 +9,7 @@
  * follow at once (see `rekeyState`).
  */
 import { activityReducer, initialActivityState, rekeyActivity } from './activity-slice';
+import { askReducer, initialAskState } from './ask-slice';
 import { answersReducer, followPending, initialAnswersState } from './answers-slice';
 import { ciStatusReducer, initialCiStatusState, rekeyCiStatus } from './ci-status-slice';
 import { dialogReducer, initialDialogState } from './dialog-slice';
@@ -28,6 +29,7 @@ import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, rekeyView, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
 import type { AnswersState } from './answers-slice';
+import type { AskState } from './ask-slice';
 import type { CiStatusState } from './ci-status-slice';
 import type { DialogState } from './dialog-slice';
 import type { RendererEvent } from './events';
@@ -65,6 +67,7 @@ export interface RendererState {
   readonly plan: PlanState;
   readonly planPage: PlanPageState;
   readonly ciStatus: CiStatusState;
+  readonly ask: AskState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -87,6 +90,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     plan: initialPlanState,
     planPage: initialPlanPageState,
     ciStatus: initialCiStatusState,
+    ask: initialAskState,
   };
 }
 
@@ -114,10 +118,11 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const plan = planReducer(state.plan, event);
   const planPage = planPageReducer(state.planPage, event);
   const ciStatus = ciStatusReducer(state.ciStatus, event);
+  const ask = askReducer(state.ask, event);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList, sessionWork, plan, planPage, ciStatus,
+    terminal, sessionList, sessionWork, plan, planPage, ciStatus, ask,
   });
 }
 
@@ -158,6 +163,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     // Keyed by project and issue, not by session.
     planPage: state.planPage,
     ciStatus: rekeyCiStatus(state.ciStatus, oldId, newId),
+    // The box on the empty screen belongs to no session.
+    ask: state.ask,
   });
 }
 

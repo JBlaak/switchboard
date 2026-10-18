@@ -37,6 +37,10 @@ import path from 'node:path';
 
 const [, , role, controlDir, ...argv] = process.argv;
 
+// A routing call (`-p` with no session to resume) answers once and exits; it
+// has no PTY and no control directory of its own.
+if (role === 'claude' && argv.includes('-p') && !argv.includes('--resume')) await answerRoute();
+
 /** How often the command file is polled. Short: tests wait on every ack. */
 const POLL_MS = 25;
 
@@ -222,6 +226,32 @@ function appendTranscript(sessionId, entries) {
     ...entry,
   }));
   fs.appendFileSync(path.join(folder, sessionId + '.jsonl'), lines.join('\n') + '\n');
+}
+
+// ── Routing calls ──
+
+/**
+ * Ask Patch's routing call (#135): record the argv in `route/calls.jsonl` and
+ * print what the test put in `route/answer.json` — `{ stdout, exitCode?,
+ * delayMs? }` — or, with no answer set, a CLI error. The delay is what lets a
+ * test see the wait and cancel it.
+ */
+async function answerRoute() {
+  const dir = path.join(controlDir, 'route');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.appendFileSync(path.join(dir, 'calls.jsonl'), JSON.stringify({ argv, cwd: process.cwd() }) + '\n');
+  let answer = { stdout: '', exitCode: 1 };
+  try {
+    answer = JSON.parse(fs.readFileSync(path.join(dir, 'answer.json'), 'utf8'));
+  } catch {
+    // No answer set: fail the way a real CLI with no answer would.
+  }
+  process.on('SIGTERM', () => process.exit(143));
+  setTimeout(() => {
+    process.stdout.write(answer.stdout ?? '', () => process.exit(answer.exitCode ?? 0));
+  }, answer.delayMs ?? 0);
+  // Never settles, so the module stops here: the process ends from the timer above.
+  await new Promise(() => {});
 }
 
 // ── Argv ──

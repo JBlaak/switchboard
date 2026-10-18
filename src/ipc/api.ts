@@ -23,6 +23,7 @@ import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
 import type { Weather, WeatherLocation } from '../domain/weather/weather';
+import type { RouteRequest, RouteResult } from '../domain/ask/model';
 import type { IssueWorktreeRequest, IssueWorktreeResult } from '../domain/plan/issue-session';
 import type { Plan, PlanSummary } from '../domain/plan/model';
 
@@ -72,6 +73,15 @@ export interface SwitchboardApi {
   getWeather(): Promise<Weather | null>;
   /** The best match for a city name, or null when there is none. */
   geocodeWeatherLocation(name: string): Promise<WeatherLocation | null>;
+
+  // ── Ask Patch ──
+  /**
+   * Which project the user's text is about, and the prompt to start it on.
+   * Never rejects: a failed call answers `{ kind: 'failed' }`.
+   */
+  askRoute(request: RouteRequest): Promise<RouteResult>;
+  /** Stop the request in flight; it then answers `{ kind: 'cancelled' }`. */
+  cancelAskRoute(): Promise<void>;
 
   // ── Sleep ──
   /** True when `pmset disablesleep 1` is in effect; null when it cannot be read (not a Mac). */

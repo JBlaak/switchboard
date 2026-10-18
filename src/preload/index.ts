@@ -56,6 +56,10 @@ const api: SwitchboardApi = {
   getWeather: () => ipcRenderer.invoke(INVOKE.getWeather),
   geocodeWeatherLocation: (name) => ipcRenderer.invoke(INVOKE.geocodeWeatherLocation, name),
 
+  // ── Ask Patch ──
+  askRoute: (request) => ipcRenderer.invoke(INVOKE.askRoute, request),
+  cancelAskRoute: () => ipcRenderer.invoke(INVOKE.cancelAskRoute),
+
   // ── Sleep ──
   getSleepDisabled: () => ipcRenderer.invoke(INVOKE.getSleepDisabled),
   setSleepDisabled: (disabled) => ipcRenderer.invoke(INVOKE.setSleepDisabled, disabled),

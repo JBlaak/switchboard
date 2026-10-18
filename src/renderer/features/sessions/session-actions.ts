@@ -56,13 +56,22 @@ function trackPending(session: SessionRow, remote = false): void {
   relayoutSessionList();
 }
 
-/** A Claude session with the project's default options, local or remote. */
-export async function launchClaudeSession(project: Project): Promise<void> {
+/**
+ * A Claude session with the project's default options, local or remote.
+ *
+ * `initialPrompt` is what a local session starts on (#135); the options it is
+ * launched with are otherwise exactly the defaults. A remote session does not
+ * take one yet.
+ */
+export async function launchClaudeSession(
+  project: Project, { initialPrompt }: { initialPrompt?: string } = {},
+): Promise<void> {
   if (project.remote) {
     await launchRemoteSession(project);
     return;
   }
-  await launchNewSession(project, await resolveDefaultSessionOptions(project.projectPath));
+  const options = await resolveDefaultSessionOptions(project.projectPath);
+  await launchNewSession(project, initialPrompt ? { ...options, initialPrompt } : options);
 }
 
 /**

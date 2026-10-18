@@ -16,8 +16,13 @@ import type { RendererEvent } from './events';
 import type { SessionRow } from '../../domain/session/session';
 
 export type DialogRequest =
-  /** "New Session": pick a project to start one in. */
-  | { readonly kind: 'projectPicker' }
+  /**
+   * "New Session": pick a project to start one in.
+   *
+   * `initialPrompt` is what the session starts on, when the picker was opened
+   * from the box on the empty screen (#135, O3). Picking a plan ignores it.
+   */
+  | { readonly kind: 'projectPicker'; readonly initialPrompt?: string }
   | { readonly kind: 'addProject' }
   /**
    * Resume a session with different options.

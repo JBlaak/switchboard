@@ -34,6 +34,7 @@ import type { QuestionView } from './answers-slice';
 import type { DialogRequest } from './dialog-slice';
 import type { SettingsRecord, SettingsScope } from './settings-slice';
 import type { ShellProfile } from '../../domain/shell/shell-profile';
+import type { RouteResult } from '../../domain/ask/model';
 
 // ── Pushed by the main process ──
 
@@ -251,7 +252,28 @@ export type LocalEvent =
   /** A plan picked in the New Session picker takes the main area. */
   | { type: 'planPageOpened'; page: PlanPage }
   /** Its Close, or Esc. */
-  | { type: 'planPageClosed' };
+  | { type: 'planPageClosed' }
+  // Asking Patch on the empty screen (#135); see `ask-slice`.
+  /** The user typed in the box. */
+  | { type: 'askTextChanged'; text: string }
+  /** Enter in the box: what is in it goes to main to be routed. */
+  | { type: 'askSent' }
+  /** Esc while waiting: main is told to stop, and the box unlocks at once (W2). */
+  | { type: 'askCancelled' }
+  /** Main answered the send counted as `asked`. */
+  | { type: 'askAnswered'; asked: number; result: RouteResult }
+  /** ↑/↓ in the choice list (O2). */
+  | { type: 'askChoiceStepped'; step: 1 | -1 }
+  /** The pointer is over a choice. */
+  | { type: 'askChoiceHovered'; index: number }
+  /** Enter or a click started a session in a choice. */
+  | { type: 'askChoiceStarted' }
+  /** Esc in the choice list: back to editing the box. */
+  | { type: 'askChoicesClosed' }
+  /** Tab in the choice list: the New Session picker takes over, carrying the prompt. */
+  | { type: 'askChoicesHandedOff' }
+  /** The New Session picker started a session on the prompt it was opened carrying. */
+  | { type: 'pickerPromptLaunched' };
 
 export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent;
 
