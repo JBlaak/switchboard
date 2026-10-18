@@ -180,9 +180,11 @@ export function buildContainer(): Container {
     registry, renderer, clock, log, endpoint: questionHook,
   });
 
+  const workspace = new GitCliWorkspace();
   const launcher = new SessionLauncher({
     registry, terminals, shells, transcripts, settings,
     lifecycle, remote, renderer, questions, clock, timers, log,
+    git: workspace,
     fileExists: (target) => fs.exists(target),
   });
 
@@ -240,7 +242,6 @@ export function buildContainer(): Container {
   const sessionActions = new SessionActionService({
     prompter, store: new SqliteActivityStore(database.db), github, ids, clock, log,
   });
-  const workspace = new GitCliWorkspace();
   const locateSession = (sessionId: string): { folder: string | null; projectPath: string } | null => {
     const cached = repository.getCachedSession(sessionId);
     if (cached) return { folder: cached.folder, projectPath: cached.projectPath };

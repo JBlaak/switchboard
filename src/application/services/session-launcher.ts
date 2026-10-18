@@ -21,6 +21,7 @@ import type { SessionOptions } from '../../domain/launch/session-options';
 import type { ShellProfile } from '../../domain/shell/shell-profile';
 import type { SessionRegistry } from '../model/session-registry';
 import type { Clock, Timers } from '../ports/clock';
+import type { GitWorkspace } from '../ports/git-workspace';
 import type { Logger } from '../ports/logger';
 import type { PtyHandle, TerminalGateway } from '../ports/terminal-gateway';
 import type { ShellProfileProvider } from '../ports/shell-profiles';
@@ -67,6 +68,8 @@ export interface SessionLauncherDeps {
   renderer: RendererGateway;
   /** Supplies each Claude session's question hook, when the hook server is up. */
   questions: Pick<QuestionService, 'settingsFor'>;
+  /** Tells whether a project is in a git repository, which `--worktree` needs. */
+  git: Pick<GitWorkspace, 'worktreeRoot'>;
   clock: Clock;
   timers: Timers;
   log: Logger;
@@ -276,7 +279,16 @@ export class SessionLauncher {
     shell: ShellProfile,
     options?: SessionOptions,
   ): Promise<{ pty: PtyHandle } | { error: string }> {
-    const { terminals } = this.deps;
+    const { terminals, git, log } = this.deps;
+
+    // `--worktree` fails outright outside a git repository, so a folder with
+    // none (a quick session's scratch folder, say) starts without it rather
+    // than not at all.
+    if (isNew && options?.worktree && !(await git.worktreeRoot(projectPath))) {
+      log.info(`[launch] ${projectPath} is not a git repository; starting without --worktree`);
+      const { worktree: _worktree, worktreeName: _worktreeName, ...rest } = options;
+      options = rest;
+    }
 
     let command: string;
     try {
