@@ -51,7 +51,7 @@ function setUp(overrides: Partial<World> = {}) {
   const calls: string[] = [];
   let now = 1_000_000;
 
-  const github: Pick<GitHubCli, 'plan' | 'plansIn' | 'parentsOf' | 'closingIssues'> = {
+  const github: Pick<GitHubCli, 'plan' | 'plansIn' | 'plansOf' | 'closingIssues'> = {
     async plan(repo, number) {
       calls.push(`plan ${repo}#${number}`);
       if (!world.gh) return null;
@@ -62,8 +62,8 @@ function setUp(overrides: Partial<World> = {}) {
       if (!world.gh) return null;
       return world.repoPlans.filter((candidate) => candidate.repository === repo && (closed || candidate.state === 'open'));
     },
-    async parentsOf(issues) {
-      calls.push('parentsOf ' + issues.map((key) => key.repository + '#' + key.number).join(','));
+    async plansOf(issues) {
+      calls.push('plansOf ' + issues.map((key) => key.repository + '#' + key.number).join(','));
       if (!world.gh) return null;
       const found = new Map<string, IssueKey>();
       for (const key of issues) {
@@ -133,7 +133,7 @@ test('a session owns the issues its PRs close, whatever its branch is called (S1
   /* Then */
   assert.deepEqual(answer!.plans.map((found) => found.number), [112]);
   assert.ok(calls.includes(`closingIssues ${REPO} 119`));
-  assert.ok(calls.includes(`parentsOf ${REPO}#113`));
+  assert.ok(calls.includes(`plansOf ${REPO}#113`));
 });
 
 test('a branch and a PR naming the same issue ask for its parent once', async () => {
@@ -148,7 +148,7 @@ test('a branch and a PR naming the same issue ask for its parent once', async ()
   await service.sessionPlans('session-1');
 
   /* Then */
-  assert.ok(calls.includes(`parentsOf ${REPO}#114`));
+  assert.ok(calls.includes(`plansOf ${REPO}#114`));
 });
 
 test('a session whose issues sit in two plans gets both, the most recently active first (W2)', async () => {
@@ -195,7 +195,7 @@ test('a session without issues gets no plans, only the others, without asking fo
 
   /* Then */
   assert.deepEqual(answer, { plans: [], others: [summary(121)] });
-  assert.ok(!calls.some((call) => call.startsWith('parentsOf')));
+  assert.ok(!calls.some((call) => call.startsWith('plansOf')));
 });
 
 test('an issue without a parent leads to no plan', async () => {

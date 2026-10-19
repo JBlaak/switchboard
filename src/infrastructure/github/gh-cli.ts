@@ -23,7 +23,7 @@ import type { GitHubAvailability, GitHubCli, GitHubWrite, NewLineComment } from 
 import type { PullRequestCloses } from '../../application/ports/github-cli';
 import type { IssueKey, Plan, PlanSummary } from '../../domain/plan/model';
 import {
-  PLANS_QUERY, closingIssuesQuery, parentsQuery, planQuery, plansSearch, toClosingIssues, toParents, toPlan, toPlanSummaries,
+  PLANS_QUERY, closingIssuesQuery, planQuery, plansOfQuery, plansSearch, toClosingIssues, toPlan, toPlanSummaries, toPlansOf,
 } from './gh-plans';
 import type { ReviewEvent } from '../../domain/session-work/review';
 import type {
@@ -189,7 +189,7 @@ export class GhCli implements GitHubCli {
     return data ? toPlanSummaries(data, repo) : null;
   }
 
-  async parentsOf(issues: readonly IssueKey[]): Promise<IssueKey[] | null> {
+  async plansOf(issues: readonly IssueKey[]): Promise<IssueKey[] | null> {
     const seen = new Set<string>();
     const wanted = issues.filter((issue) => {
       const key = issue.repository + '#' + issue.number;
@@ -198,8 +198,8 @@ export class GhCli implements GitHubCli {
       return true;
     });
     if (wanted.length === 0) return [];
-    const data = await this.#graphql(parentsQuery(wanted), {});
-    return data ? toParents(data, wanted) : null;
+    const data = await this.#graphql(plansOfQuery(wanted), {});
+    return data ? toPlansOf(data, wanted) : null;
   }
 
   async closingIssues(repo: string, numbers: readonly number[]): Promise<PullRequestCloses[] | null> {
