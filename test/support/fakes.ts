@@ -193,5 +193,7 @@ export function fakeRenderer(): FakeRenderer {
     updateAvailable: record('updateAvailable'),
     sessionWorkSnapshot: record('sessionWorkSnapshot'),
     prStatusChanged: record('prStatusChanged'),
+    launchRequested: record('launchRequested'),
+    pickerRequested: record('pickerRequested'),
   };
 }

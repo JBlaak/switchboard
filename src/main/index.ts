@@ -93,6 +93,7 @@ async function start(container: Container): Promise<void> {
   // Before the window: the chrome's overlay colours are picked at creation, and
   // a renderer that first paints in the wrong scheme flashes on every launch.
   container.appearance.apply(normaliseAppearance(container.settings.global().appearance));
+  container.setWindowOpener((options) => openWindow(container, options));
   openWindow(container);
   // After the main window, which stays the app's first.
   if (container.settings.quickAskEnabled()) container.prepareQuickAsk();
@@ -119,10 +120,11 @@ async function start(container: Container): Promise<void> {
   });
 }
 
-function openWindow(container: Container): void {
+function openWindow(container: Container, { inactive = false } = {}): void {
   const window = createMainWindow({
     timers: systemTimers,
     appDir: __dirname,
+    inactive,
     savedBounds: () => container.settings.global().windowBounds,
     saveBounds: (bounds) => container.settings.updateGlobal((settings) => {
       settings.windowBounds = bounds;

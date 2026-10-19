@@ -47,6 +47,8 @@ export function installIpcBridge(
     api.onUpdateAvailable((update) => send({ type: 'updateAvailable', update })),
     api.onSessionWorkSnapshot((snapshot) => send({ type: 'sessionWorkSnapshot', snapshot })),
     api.onPrStatusChanged((change) => send({ type: 'prStatusChanged', change })),
+    api.onLaunchRequested((projectPath, initialPrompt) => send({ type: 'launchRequested', projectPath, initialPrompt })),
+    api.onPickerRequested((initialPrompt, reason) => send({ type: 'pickerRequested', initialPrompt, reason })),
   ];
   return () => unsubscribes.forEach(unsubscribe => unsubscribe());
 }

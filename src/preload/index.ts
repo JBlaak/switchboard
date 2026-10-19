@@ -115,6 +115,7 @@ const api: SwitchboardApi = {
   moveWindowDrag: (dx, dy) => ipcRenderer.send(SEND.windowDragMove, dx, dy),
   endWindowDrag: () => ipcRenderer.send(SEND.windowDragEnd),
   setNeedsInputCount: (count) => ipcRenderer.send(SEND.needsInputCount, count),
+  rendererReady: () => ipcRenderer.send(SEND.rendererReady),
 
   // ── Events from main ──
   onTerminalData: (cb) => subscribe(EVENT.terminalData, (_e, sessionId, data) => cb(sessionId, data)),
@@ -133,6 +134,8 @@ const api: SwitchboardApi = {
   onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
   onSessionWorkSnapshot: (cb) => subscribe(EVENT.sessionWorkSnapshot, (_e, snapshot) => cb(snapshot)),
   onPrStatusChanged: (cb) => subscribe(EVENT.prStatusChanged, (_e, change) => cb(change)),
+  onLaunchRequested: (cb) => subscribe(EVENT.launchRequested, (_e, projectPath, initialPrompt) => cb(projectPath, initialPrompt)),
+  onPickerRequested: (cb) => subscribe(EVENT.pickerRequested, (_e, initialPrompt, reason) => cb(initialPrompt, reason)),
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),

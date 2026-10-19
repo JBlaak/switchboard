@@ -7,24 +7,11 @@
  * shows what came of it.
  */
 import type { Unsubscribe } from './api';
+import type { QuickAskReply } from '../domain/ask/quick-ask';
 
-/** Where a capture goes: BlaakTasks, or James (C1). */
-export type CaptureTarget = 'tasks' | 'james';
-
-/** What came of a send, or of a choice from the list. */
-export type QuickAskReply =
-  /** The session is starting in this project's folder (B7). */
-  | { kind: 'started'; folder: string }
-  /** Patch is unsure: these projects, best first (R2). */
-  | { kind: 'choose'; candidates: { projectPath: string; folder: string }[] }
-  /** The main window took the text, in its New Session picker (R2). */
-  | { kind: 'handedOff' }
-  /** A task or a save was written (C4). */
-  | { kind: 'saved'; target: CaptureTarget; summary: string }
-  /** A capture failed; the text stays, to retry (C5). */
-  | { kind: 'captureFailed'; reason: string }
-  /** Cancelled: back to editing. */
-  | { kind: 'unlocked' };
+export type { CaptureTarget } from '../domain/ask/model';
+/** What came of a send, or of a choice from the list; main's `QuickAskService` answers it. */
+export type { QuickAskReply };
 
 /** The system's accessibility settings, read as the pop-up shows (#150). */
 export interface QuickAskLooks {

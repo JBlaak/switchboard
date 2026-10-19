@@ -28,6 +28,7 @@ export class QuickAskWindow implements QuickAskPanel {
   readonly #window: BrowserWindow;
   #shown = false;
   #passingThrough = true;
+  readonly #shownListeners: (() => void)[] = [];
 
   /** Created hidden, and loaded, ready for the first press (B1). */
   constructor(appDir: string) {
@@ -85,6 +86,11 @@ export class QuickAskWindow implements QuickAskPanel {
     }
     this.#shown = true;
     this.#send(QUICK_ASK_EVENT.shown, looks());
+    for (const listener of this.#shownListeners) listener();
+  }
+
+  onShown(listener: () => void): void {
+    this.#shownListeners.push(listener);
   }
 
   hide(): void {

@@ -33,7 +33,7 @@ function fakeHotkey() {
 function setup(stored: Record<string, unknown>) {
   const hotkey = fakeHotkey();
   let toggles = 0;
-  const panel: QuickAskPanel = { show() {}, hide() {}, toggle() { toggles++; }, visible: false };
+  const panel: QuickAskPanel = { show() {}, hide() {}, toggle() { toggles++; }, visible: false, onShown() {} };
   const settings = { stored, quickAskEnabled: () => resolveQuickAskEnabled(settings.stored) };
   const service = new QuickAskHotkey({ hotkey, panel, settings, log: silentLog });
   return { hotkey, service, settings, toggles: () => toggles };
