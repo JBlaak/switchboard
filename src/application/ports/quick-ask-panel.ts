@@ -13,6 +13,8 @@ export interface QuickAskPanel {
   /** Show it, or hide it when it is already showing (H1). */
   toggle(): void;
   readonly visible: boolean;
+  /** Call `listener` each time it comes on screen. */
+  onShown(listener: () => void): void;
 }
 
 /** A shortcut that reaches the app from anywhere on the Mac. */

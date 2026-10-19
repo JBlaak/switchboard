@@ -56,6 +56,8 @@ const SAMPLES: { [K in PushEvent['type']]: Extract<PushEvent, { type: K }> } = {
   updateAvailable: { type: 'updateAvailable', update: { version: '9.9.9', pageUrl: 'u', installable: true } },
   sessionWorkSnapshot: { type: 'sessionWorkSnapshot', snapshot: { sessionId: 's1', repository: '', items: [], footprint: { worktrees: 0, branches: 0 }, queued: 0, gh: 'ok', updatedAt: 'now' } },
   prStatusChanged: { type: 'prStatusChanged', change: { sessionId: 's1', prs: [{ number: 7, dot: 'red' }], needsYou: true } },
+  launchRequested: { type: 'launchRequested', projectPath: '/code/app', initialPrompt: 'Fix it.' },
+  pickerRequested: { type: 'pickerRequested', initialPrompt: 'fix it', reason: 'No idea.' },
 };
 
 test('every push event reduces without mutating the state it was given', () => {
@@ -76,7 +78,7 @@ test('pushes that are only prompts to act leave the state as it was', () => {
   // nothing for the store to record. The status line and the update notice
   // are in the store now; see footer-slices.test.ts.
   /* Given */
-  const types = ['processExited', 'projectsChanged', 'fullscreenChanged', 'sessionWorkSnapshot'] as const;
+  const types = ['processExited', 'projectsChanged', 'fullscreenChanged', 'sessionWorkSnapshot', 'launchRequested', 'pickerRequested'] as const;
 
   for (const type of types) {
     const state = initial();

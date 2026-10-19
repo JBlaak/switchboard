@@ -108,6 +108,7 @@ export const SEND = {
   needsInputCount: 'needs-input-count',
   quickAskDismiss: 'quick-ask:dismiss',
   quickAskPointerOverSlab: 'quick-ask:pointer-over-slab',
+  rendererReady: 'renderer-ready',
 } as const;
 
 /** Main tells the renderer, unprompted. */
@@ -128,6 +129,8 @@ export const EVENT = {
   updateAvailable: 'update-available',
   sessionWorkSnapshot: 'session-work:snapshot',
   prStatusChanged: 'pr-status:changed',
+  launchRequested: 'quick-ask:launch-requested',
+  pickerRequested: 'quick-ask:picker-requested',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */

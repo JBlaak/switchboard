@@ -19,6 +19,9 @@ import {
   dropPendingSession, writeExitBanner,
 } from '../features/sessions/session-actions';
 import { pollActiveSessions } from '../features/sessions/session-poller';
+import { launchClaudeSession } from '../features/sessions/session-actions';
+import { projectAt } from '../ui/ask/actions';
+import { openDialog } from '../ui/dialogs/actions';
 import { setHeaderIdentity } from '../features/sessions/terminal-header';
 import { handleRemoteStatus } from '../features/remote/connection-log';
 import { busyChanged } from '../state/activity-slice';
@@ -57,6 +60,16 @@ export function installIpcListeners(): void {
     handleRemoteStatus(sessionId, status, previous.remote.statuses[sessionId]);
   });
   onEvent('projectsChanged', onProjectsChanged);
+
+  // Quick Ask (#142): the pop-up's text, routed in main. The launch only puts
+  // the session on screen here; the window stays behind the app the user is in
+  // (R3). Patch says its line from the empty screen (`EmptyScreenPatch`).
+  onEvent('launchRequested', ({ projectPath, initialPrompt }) => {
+    void launchClaudeSession(projectAt(projectPath), { initialPrompt });
+  });
+  onEvent('pickerRequested', ({ initialPrompt }) => {
+    openDialog({ kind: 'projectPicker', initialPrompt });
+  });
 
   // Fullscreen hides the macOS traffic lights, so the space the collapsed
   // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ASK_ROUTE_TIMEOUT_MS, AskRouteService, TIMEOUT_LINE } from '../src/application/services/ask-route-service';
+import { ASK_PATCH_CALL, ASK_ROUTE_TIMEOUT_MS, AskRouteService, TIMEOUT_LINE } from '../src/application/services/ask-route-service';
 import { NO_MATCH_LINE, routeBootArgs, routePrompt } from '../src/domain/ask/route';
 import { WARM_IDLE_MS } from '../src/application/ports/claude-cli';
 import { fakeTimers, silentLog } from './support/fakes';
@@ -64,7 +64,7 @@ function harness() {
   const timers = fakeTimers();
   const warnings: string[] = [];
   const log = { ...silentLog, warn: (...parts: unknown[]) => { warnings.push(parts.join(' ')); } };
-  const service = new AskRouteService({ cli, timers, log });
+  const service = new AskRouteService({ cli, timers, log, call: ASK_PATCH_CALL });
   return { service, calls, warmed, timers, warnings };
 }
 

@@ -11,9 +11,12 @@
  *
  * Never rejects. Every way this can go wrong ends with Patch saying one line
  * and the New Session picker opening, so a failure is just another answer.
+ *
+ * Quick Ask (#142, R1) has an instance of its own, making its own call, so a
+ * request from the pop-up and one from the empty screen never cancel each other.
  */
 import { readRouteRun, routeArgs, routeBootArgs, routePrompt } from '../../domain/ask/route';
-import type { RouteRequest, RouteResult } from '../../domain/ask/model';
+import type { QuickRouteResult, RouteRequest, RouteResult } from '../../domain/ask/model';
 import type { ClaudeRun } from '../../domain/ask/route';
 import { WARM_IDLE_MS } from '../ports/claude-cli';
 import type { ClaudeCaller, WarmCall } from '../ports/claude-cli';
@@ -25,29 +28,50 @@ export const ASK_ROUTE_TIMEOUT_MS = 30_000;
 
 export const TIMEOUT_LINE = 'Claude took too long to answer. Pick the project yourself?';
 
-interface InFlight {
-  settle(result: RouteResult): void;
+/** The routing call a service makes, and how it reads the answer. */
+export interface RouteCall<R extends QuickRouteResult> {
+  /** Every flag, for a warm process to boot on (S2). */
+  bootArgs(): string[];
+  /** The message, for a warm process. */
+  prompt(request: RouteRequest): string;
+  /** The whole argv of a cold call. */
+  args(request: RouteRequest): string[];
+  read(run: ClaudeRun, request: RouteRequest): R;
 }
 
-export class AskRouteService {
-  #inFlight: InFlight | null = null;
+/** Ask Patch's call, from the empty screen. */
+export const ASK_PATCH_CALL: RouteCall<RouteResult> = {
+  bootArgs: routeBootArgs, prompt: routePrompt, args: routeArgs, read: readRouteRun,
+};
+
+/** How every call can end, whatever it asked. */
+type Ended = Extract<RouteResult, { kind: 'cancelled' | 'failed' }>;
+
+interface InFlight<R> {
+  settle(result: R | Ended): void;
+}
+
+export class AskRouteService<R extends QuickRouteResult = RouteResult> {
+  #inFlight: InFlight<R> | null = null;
   #warm: { call: WarmCall; timer: TimerHandle } | null = null;
 
   constructor(private readonly deps: {
     cli: ClaudeCaller;
     timers: Timers;
     log: Logger;
+    /** Ask Patch's `ASK_PATCH_CALL`, or Quick Ask's. */
+    call: RouteCall<R>;
   }) {}
 
   /** Route one request; a request still in flight answers `cancelled`. */
-  route(request: RouteRequest): Promise<RouteResult> {
+  route(request: RouteRequest): Promise<R | Ended> {
     const { cli, timers, log } = this.deps;
     this.#inFlight?.settle({ kind: 'cancelled' });
 
     const controller = new AbortController();
     return new Promise((resolve) => {
       let settled = false;
-      const flight: InFlight = {
+      const flight: InFlight<R> = {
         settle: (result) => {
           if (settled) return;
           settled = true;
@@ -67,8 +91,9 @@ export class AskRouteService {
 
       this.#run(request, controller.signal).then(
         (run) => {
-          const result = readRouteRun(run, request);
-          if (result.kind === 'failed') log.warn('[ask] routing call failed:', result.reason);
+          const result = this.deps.call.read(run, request);
+          const read: QuickRouteResult = result;
+          if (read.kind === 'failed') log.warn('[ask] routing call failed:', read.reason);
           flight.settle(result);
         },
         (err: Error) => flight.settle({ kind: 'failed', reason: `Couldn’t run claude: ${err.message}` }),
@@ -86,16 +111,16 @@ export class AskRouteService {
     if (this.#warm) return;
     const { cli, timers } = this.deps;
     const timer = timers.setTimeout(() => { this.#warm = null; }, WARM_IDLE_MS);
-    this.#warm = { call: cli.warm(routeBootArgs()), timer };
+    this.#warm = { call: cli.warm(this.deps.call.bootArgs()), timer };
   }
 
   /** Through the warm process when there is one, which this uses up; otherwise a cold call. */
   #run(request: RouteRequest, signal: AbortSignal): Promise<ClaudeRun> {
     const warm = this.#warm;
-    if (!warm) return this.deps.cli.call(routeArgs(request), signal);
+    if (!warm) return this.deps.cli.call(this.deps.call.args(request), signal);
     this.#warm = null;
     this.deps.timers.clearTimeout(warm.timer);
-    return warm.call.send(routePrompt(request), signal);
+    return warm.call.send(this.deps.call.prompt(request), signal);
   }
 
   /** Stop the request in flight, which then answers `cancelled`. */

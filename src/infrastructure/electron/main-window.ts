@@ -63,6 +63,11 @@ export interface MainWindowDeps {
   onClosed(): void;
   /** Directory holding the built bundles — preload, renderer, icon. */
   appDir: string;
+  /**
+   * Show it without making it, or the app, active: Quick Ask opens it to start
+   * a session while the user stays where they are (R4).
+   */
+  inactive?: boolean;
 }
 
 export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
@@ -78,7 +83,7 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
     // The e2e suite runs a few apps at once; shown, they would flash over the
     // desktop of whoever runs it. Hidden, the page still lays out and paints,
     // so Playwright's input and screenshots work the same.
-    ...(hiddenForE2e() ? { show: false } : {}),
+    ...(hiddenForE2e() || deps.inactive ? { show: false } : {}),
     title: 'Switchboard',
     icon: path.join(deps.appDir, '..', 'build', 'icon.png'),
     ...windowChromeOptions(),
@@ -98,6 +103,7 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
     window.setBounds({ ...bounds.position, width: bounds.width, height: bounds.height });
   }
 
+  if (deps.inactive && !hiddenForE2e()) window.once('ready-to-show', () => window.showInactive());
   void window.loadFile(path.join(deps.appDir, 'renderer', 'index.html'));
 
   containNavigation(window);

@@ -34,8 +34,9 @@ import { PrWatchService } from '../application/services/pr-watch-service';
 import { SettingsService } from '../application/services/settings-service';
 import { UpdateService } from '../application/services/update-service';
 import { WeatherService } from '../application/services/weather-service';
-import { AskRouteService } from '../application/services/ask-route-service';
+import { ASK_PATCH_CALL, AskRouteService } from '../application/services/ask-route-service';
 import { QUICK_ASK_ACCELERATOR, QuickAskHotkey } from '../application/services/quick-ask-hotkey';
+import { QUICK_ROUTE_CALL, QuickAskService } from '../application/services/quick-ask-service';
 import { SessionRegistry } from '../application/model/session-registry';
 
 import { ShellClaudeCaller } from '../infrastructure/claude-cli/claude-caller';
@@ -49,6 +50,7 @@ import { ElectronWindowDrag } from '../infrastructure/electron/window-drag';
 import { ElectronDockAttention } from '../infrastructure/electron/dock-attention';
 import { E2eGlobalHotkey, ElectronGlobalHotkey } from '../infrastructure/electron/global-hotkey';
 import { QuickAskWindow } from '../infrastructure/electron/quick-ask-window';
+import { hiddenForE2e } from '../infrastructure/electron/main-window';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
@@ -78,6 +80,7 @@ import { QuestionHookServer } from '../infrastructure/http/question-hook-server'
 
 import type { BrowserWindow } from 'electron';
 import type { GlobalHotkey, QuickAskPanel } from '../application/ports/quick-ask-panel';
+import type { MainWindowHost } from '../application/ports/main-window';
 import type { SwitchboardDatabase } from '../infrastructure/sqlite/database';
 
 /** Everything the IPC layer and the app lifecycle reach for. */
@@ -116,6 +119,7 @@ export interface Container {
   readonly askRoute: AskRouteService;
   readonly quickAskHotkey: QuickAskHotkey;
   readonly quickAskPanel: QuickAskPanel;
+  readonly quickAsk: QuickAskService;
   /** The pop-up's window, once one exists. */
   quickAskWindow(): QuickAskWindow | null;
   /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
@@ -134,6 +138,8 @@ export interface Container {
   /** The window, once one exists. Set by the app lifecycle. */
   setWindow(window: BrowserWindow | null): void;
   getWindow(): BrowserWindow | null;
+  /** How the app lifecycle opens the window, for Quick Ask to open a closed one (R4). */
+  setWindowOpener(open: (options: { inactive: boolean }) => void): void;
 
   close(): void;
 }
@@ -153,6 +159,7 @@ export function buildContainer(): Container {
 
   let window: BrowserWindow | null = null;
   const getWindow = (): BrowserWindow | null => window;
+  let openWindow: (options: { inactive: boolean }) => void = () => {};
   const renderer = new ElectronRendererGateway(getWindow);
 
   // ── Stores ──
@@ -238,23 +245,52 @@ export function buildContainer(): Container {
   });
   // Ask Patch (#135): one Haiku call per request typed on the empty screen.
   const claudeCaller = new ShellClaudeCaller({ shells, terminals, timers, log, shellProfileId, homeDir: paths.homeDir });
-  const askRoute = new AskRouteService({ cli: claudeCaller, timers, log });
+  const askRoute = new AskRouteService({ cli: claudeCaller, timers, log, call: ASK_PATCH_CALL });
 
   // Quick Ask (#142): ⌥Space from anywhere. A window can only be made once the
   // app is ready, so the pop-up's is made by `prepareQuickAsk` at startup, or
   // by the first press when the setting was off then.
   let quickAskWindow: QuickAskWindow | null = null;
-  const prepareQuickAsk = (): QuickAskWindow => (quickAskWindow ??= new QuickAskWindow(appDir()));
+  // Listened to before the window is made, which may be at the first press.
+  const shownListeners: (() => void)[] = [];
+  const prepareQuickAsk = (): QuickAskWindow => {
+    if (quickAskWindow) return quickAskWindow;
+    quickAskWindow = new QuickAskWindow(appDir());
+    quickAskWindow.onShown(() => shownListeners.forEach(listener => listener()));
+    return quickAskWindow;
+  };
   const quickAskPanel: QuickAskPanel = {
     show: () => prepareQuickAsk().show(),
     hide: () => quickAskWindow?.hide(),
     toggle: () => prepareQuickAsk().toggle(),
     get visible() { return quickAskWindow?.visible ?? false; },
+    onShown: (listener) => { shownListeners.push(listener); },
   };
   const quickAskHotkey = new QuickAskHotkey({
     hotkey: process.env.SWITCHBOARD_E2E === '1' ? e2eHotkey(() => quickAskWindow) : new ElectronGlobalHotkey(),
     panel: quickAskPanel,
     settings, log,
+  });
+  // The session starts in the main window, which stays behind the app the user
+  // is in; only the New Session picker brings it forward.
+  const mainWindow: MainWindowHost = {
+    ensureOpen: () => {
+      if (!window) openWindow({ inactive: true });
+    },
+    bringForward: () => {
+      if (!window) openWindow({ inactive: false });
+      if (!window || window.isDestroyed() || hiddenForE2e()) return;
+      if (window.isMinimized()) window.restore();
+      window.show();
+      app.focus({ steal: true });
+      window.focus();
+    },
+  };
+  // Its own routing service (R1): never cancels the empty-screen box's request.
+  const quickAsk = new QuickAskService({
+    router: new AskRouteService({ cli: claudeCaller, timers, log, call: QUICK_ROUTE_CALL }),
+    projects, settings, renderer, mainWindow, log,
+    panel: quickAskPanel,
   });
 
   // ── Host ──
@@ -390,11 +426,13 @@ export function buildContainer(): Container {
     askRoute,
     quickAskHotkey,
     quickAskPanel,
+    quickAsk,
     quickAskWindow: () => quickAskWindow,
     prepareQuickAsk: () => { prepareQuickAsk(); },
     renderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
+    setWindowOpener: (open) => { openWindow = open; },
     close: () => {
       projectsWatcher.stop();
       prWatch.stop();

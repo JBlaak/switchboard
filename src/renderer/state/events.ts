@@ -54,7 +54,11 @@ export type PushEvent =
   | { type: 'fullscreenChanged'; isFullscreen: boolean }
   | { type: 'updateAvailable'; update: UpdateNotice }
   | { type: 'sessionWorkSnapshot'; snapshot: SessionWorkSnapshot }
-  | { type: 'prStatusChanged'; change: PullRequestStatusChange };
+  | { type: 'prStatusChanged'; change: PullRequestStatusChange }
+  /** Quick Ask (#142): start a Claude session there on this prompt (R3). */
+  | { type: 'launchRequested'; projectPath: string; initialPrompt: string }
+  /** Quick Ask: the New Session picker, holding this prompt; `reason` is Patch's line. */
+  | { type: 'pickerRequested'; initialPrompt: string; reason?: string };
 
 // ── From the renderer itself: user actions and timers ──
 
