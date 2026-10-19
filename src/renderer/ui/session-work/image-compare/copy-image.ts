@@ -35,10 +35,11 @@ export function pointedSide(target: Element, clientX: number): Side | null {
   return clientX < divider.getBoundingClientRect().left ? 'before' : 'after';
 }
 
-/** Copy `image`'s first frame to the clipboard as a PNG. */
+/** Copy `image`'s first frame to the clipboard as a PNG; resolves once main has it. */
 export async function copyImage(image: LoadedImage): Promise<void> {
   const canvas = document.createElement('canvas');
   drawPixels(canvas, image.pixels());
   const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-  if (blob) await window.api.writeClipboardImage(new Uint8Array(await blob.arrayBuffer()));
+  if (!blob) throw new Error('The image would not encode as a PNG');
+  await window.api.writeClipboardImage(new Uint8Array(await blob.arrayBuffer()));
 }

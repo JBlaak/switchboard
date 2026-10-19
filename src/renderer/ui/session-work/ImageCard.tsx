@@ -8,8 +8,10 @@
  * the metadata line. The mode, the view and the blink side are the card's
  * own, in the slice; the mode last picked and the background are every new
  * card's (C1, C3). An image that will not decode falls back to the binary
- * row (L4). A right-click on the images copies one (see copy-image.ts).
+ * row (L4). A right-click on the images copies one (see copy-image.ts), and
+ * a toast over the card says so.
  */
+import { useEffect, useState } from 'react';
 import type { JSX, MouseEvent as ReactMouseEvent } from 'react';
 import type { FileDiff } from '../../../domain/session-work/model';
 import { comparesImages } from '../../state/session-work-slice';
@@ -32,6 +34,8 @@ import { useImagePair } from './image-load';
 const PLACEHOLDER_VIEW: View = { scale: 1, x: 0, y: 0 };
 const SIDE_BY_SIDE_ONLY: readonly ImageMode[] = ['side-by-side'];
 const BACKGROUNDS: readonly Background[] = ['checkerboard', 'light', 'dark'];
+/** How long the copied toast stays up. */
+const COPIED_TOAST_MS = 1600;
 
 export function ImageCard({
   sessionId, itemId, file, loadKey, expanded, card, background, defaultMode, onShowDiff,
@@ -54,6 +58,13 @@ export function ImageCard({
   const reason = imageCollapsedText(image);
   const collapsed = reason !== null && !expanded;
   const pair = useImagePair(sessionId, itemId, file, loadKey, !collapsed);
+  // Counts copies, so a copy while the toast is up shows it afresh.
+  const [copied, setCopied] = useState(0);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(0), COPIED_TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
 
   if (collapsed) {
     return (
@@ -96,7 +107,7 @@ export function ImageCard({
     event.preventDefault();
     const side = copiedSide(mode, card?.blink ?? 'before', pointedSide(target, event.clientX));
     const image = (side === 'before' ? before : after) ?? before ?? after;
-    if (image) copyImage(image).catch(() => {});
+    if (image) copyImage(image).then(() => setCopied(n => n + 1), () => {});
   };
 
   let stage: JSX.Element;
@@ -162,6 +173,7 @@ export function ImageCard({
         {firstFrame && <span className="sw-image-note">{IMAGE_FIRST_FRAME}</span>}
       </div>
       {stage}
+      {copied > 0 && <div key={copied} className="sw-image-toast" role="status">Copied to clipboard</div>}
     </div>
   );
 }
