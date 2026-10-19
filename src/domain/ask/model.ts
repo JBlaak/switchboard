@@ -37,3 +37,16 @@ export type RouteResult =
   /** The call failed, timed out or hit a usage limit. */
   | { kind: 'failed'; reason: string }
   | { kind: 'cancelled' };
+
+// ── Quick Ask (#142) ──
+
+/** Where a capture goes: BlaakTasks for a task, James for something to keep. */
+export type CaptureTarget = 'tasks' | 'james';
+
+/**
+ * What came of a Quick Ask request: a routing result, or a capture (C1).
+ *
+ * A capture's `text` is the request without its command words ("create a task
+ * to call Peter" → "call Peter"), otherwise word for word.
+ */
+export type QuickRouteResult = RouteResult | { kind: 'capture'; target: CaptureTarget; text: string };
