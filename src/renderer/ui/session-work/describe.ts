@@ -223,7 +223,7 @@ function actionLabel(item: SessionWorkItem, action: WorkAction): string {
     case 'rebase': return 'Rebase on origin/' + (item.kind === 'pr' && item.pr.baseRef ? item.pr.baseRef : 'main');
     case 'fix-ci': return 'Fix CI';
     case 'fix-comments': return `Fix comments (${item.kind === 'pr' ? openThreadCount(item.pr) : 0})`;
-    case 'open-pr': return 'Open PR';
+    case 'open-pr': return 'Open a new PR';
     case 'create-pr': return 'Create a pull request';
   }
 }

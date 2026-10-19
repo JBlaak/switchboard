@@ -224,7 +224,7 @@ test.describe('actions', () => {
 
     /* When */
     await select(page, /spike\/cookie-store/);
-    await actions(page).getByRole('button', { name: 'Open PR' }).click();
+    await actions(page).getByRole('button', { name: 'Open a new PR' }).click();
 
     /* Then */
     await expect.poll(async () => (await sessionWorkActions(app)).map(request => request.action)).toEqual(['ship', 'open-pr']);
