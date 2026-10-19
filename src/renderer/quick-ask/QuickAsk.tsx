@@ -4,8 +4,9 @@
  *
  * The window is a still transparent area larger than the slab (G3); only the
  * slab takes the mouse, so this reports when the pointer is over it, and main
- * lets everything else through to the window underneath. The box has the focus
- * whenever the pop-up shows, with the draft selected (B6).
+ * lets everything else through to the window underneath. The glass moves inside
+ * the window (`motion`), so the check runs again on every frame it moves. The
+ * box has the focus whenever the pop-up shows, with the draft selected (B6).
  */
 import { useEffect, useRef } from 'react';
 import { useStoreOf } from '../ui/use-store-of';
@@ -13,6 +14,7 @@ import { AskField } from '../ui/ask/AskField';
 import { quickAskPhase } from '../state/quick-ask-slice';
 import { store } from './store';
 import { overSlab, quickAskKey } from './quick-ask-keys';
+import { slabMotion } from './motion';
 import {
   cancel, changeText, close, closeChoices, hoverChoice, openPicker, send, startChoice, stepChoice,
 } from './actions';
@@ -25,6 +27,10 @@ export function QuickAsk(): JSX.Element {
   const state = useStoreOf(store, selectAll);
   const box = useRef<HTMLTextAreaElement>(null);
   const slab = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const mark = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => slabMotion.attach(slab.current!, inner.current!, mark.current!), []);
 
   // The box takes the focus, the draft selected, each time the pop-up shows.
   useEffect(() => {
@@ -39,7 +45,7 @@ export function QuickAsk(): JSX.Element {
   }, []);
 
   // Over the slab or not, told to main only when it changes: as the pointer
-  // moves, and as the slab grows or shrinks under a pointer that holds still.
+  // moves, and as the slab moves under a pointer that holds still.
   useEffect(() => {
     let pointer: { x: number; y: number } | null = null;
     let over = false;
@@ -52,8 +58,7 @@ export function QuickAsk(): JSX.Element {
     };
     const onMove = (e: MouseEvent): void => { pointer = { x: e.clientX, y: e.clientY }; check(); };
     const onLeave = (): void => { pointer = null; check(); };
-    const resized = new ResizeObserver(check);
-    if (slab.current) resized.observe(slab.current);
+    slabMotion.onMove = check;
     document.addEventListener('mousemove', onMove);
     document.documentElement.addEventListener('mouseleave', onLeave);
     // Main lets the mouse through each time it shows the pop-up, until told otherwise.
@@ -62,7 +67,7 @@ export function QuickAsk(): JSX.Element {
     });
     return () => {
       unsubscribe();
-      resized.disconnect();
+      slabMotion.onMove = null;
       document.removeEventListener('mousemove', onMove);
       document.documentElement.removeEventListener('mouseleave', onLeave);
     };
@@ -89,34 +94,53 @@ export function QuickAsk(): JSX.Element {
 
   return (
     <div className={'quick-ask-slab is-' + phase} ref={slab} data-testid="quick-ask">
-      <AskField
-        ask={state.box}
-        boxRef={box}
-        placeholder="Ask Patch anything…"
-        ariaLabel="Ask Patch"
-        choiceLabel={(_projectPath, index) => state.folders[index] ?? _projectPath}
-        onChange={changeText}
-        onKeyDown={onKeyDown}
-        onHoverChoice={hoverChoice}
-        onPickChoice={index => void startChoice(index)}
-      />
-      <QuickAskLine state={state} />
+      <div className="quick-ask-sheen" aria-hidden="true" />
+      <div className="quick-ask-inner" ref={inner}>
+        <span className="quick-ask-mark" ref={mark} aria-hidden="true">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M9.2 1 3 9h4l-1.2 6L12 7H8z" /></svg>
+        </span>
+        <span className="quick-ask-hint" aria-hidden="true">↵ send · esc close</span>
+        <AskField
+          ask={state.box}
+          boxRef={box}
+          placeholder="Ask Patch anything…"
+          ariaLabel="Ask Patch"
+          choiceLabel={(_projectPath, index) => state.folders[index] ?? _projectPath}
+          onChange={changeText}
+          onKeyDown={onKeyDown}
+          onHoverChoice={hoverChoice}
+          onPickChoice={index => void startChoice(index)}
+        />
+        <QuickAskResult state={state} />
+        <QuickAskFoot state={state} />
+      </div>
     </div>
   );
 }
 
-/** What the pop-up says under the box, if anything. */
-function QuickAskLine({ state }: { state: QuickAskState }): JSX.Element | null {
-  const line = lineFor(state);
-  if (!line) return null;
-  return <p className="quick-ask-line" data-testid="quick-ask-line" role="status">{line}</p>;
+/** What came of a send, sliding into the box's row as the text slides out of it. */
+function QuickAskResult({ state }: { state: QuickAskState }): JSX.Element | null {
+  const { result } = state;
+  if (result?.kind !== 'started' && result?.kind !== 'saved') return null;
+  return (
+    <p className="quick-ask-result" data-testid="quick-ask-line" role="status">
+      {result.kind === 'started'
+        ? <><span className="quick-ask-done">Started in</span> <span className="quick-ask-where">{result.folder}</span></>
+        : <span className="quick-ask-done">{result.summary}</span>}
+    </p>
+  );
 }
 
-function lineFor(state: QuickAskState): string {
-  const { result } = state;
-  if (result?.kind === 'started') return `Started in ${result.folder}`;
-  if (result?.kind === 'saving') return 'Saving…';
-  if (result?.kind === 'saved') return result.summary;
-  if (state.box.phase === 'waiting') return 'Thinking…';
-  return state.note;
+/** The line under the box while it waits or saves, or Patch's note after a capture failed. */
+function QuickAskFoot({ state }: { state: QuickAskState }): JSX.Element | null {
+  const busy = state.result?.kind === 'saving' || (!state.result && state.box.phase === 'waiting');
+  const line = state.result?.kind === 'saving' ? 'Saving…' : busy ? 'Thinking…' : state.result ? '' : state.note;
+  if (!line) return null;
+  return (
+    <div className="quick-ask-foot">
+      {/* Under Reduce motion, in place of the rim's orbiting highlight. */}
+      {busy && <span className="quick-ask-spinner" aria-hidden="true" />}
+      <p className="quick-ask-line" data-testid="quick-ask-line" role="status">{line}</p>
+    </div>
+  );
 }

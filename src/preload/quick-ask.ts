@@ -6,11 +6,17 @@
  */
 import { contextBridge, ipcRenderer } from 'electron';
 import { INVOKE, QUICK_ASK_EVENT, SEND } from '../ipc/channels';
-import type { QuickAskApi } from '../ipc/quick-ask-api';
+import type { QuickAskApi, QuickAskLooks } from '../ipc/quick-ask-api';
 import type { Unsubscribe } from '../ipc/api';
 
 function subscribe(channel: string, listener: () => void): Unsubscribe {
   const wrapper = (): void => listener();
+  ipcRenderer.on(channel, wrapper);
+  return () => { ipcRenderer.removeListener(channel, wrapper); };
+}
+
+function subscribeWith<T>(channel: string, listener: (value: T) => void): Unsubscribe {
+  const wrapper = (_event: unknown, value: T): void => listener(value);
   ipcRenderer.on(channel, wrapper);
   return () => { ipcRenderer.removeListener(channel, wrapper); };
 }
@@ -22,9 +28,11 @@ const quickAsk: QuickAskApi = {
   openPicker: () => ipcRenderer.invoke(INVOKE.quickAskOpenPicker),
   undo: () => ipcRenderer.invoke(INVOKE.quickAskUndo),
   dismiss: () => ipcRenderer.send(SEND.quickAskDismiss),
-  onShown: (listener) => subscribe(QUICK_ASK_EVENT.shown, listener),
+  onShown: (listener) => subscribeWith<QuickAskLooks>(QUICK_ASK_EVENT.shown, listener),
   onCloseRequested: (listener) => subscribe(QUICK_ASK_EVENT.closeRequested, listener),
   pointerOverSlab: (over) => ipcRenderer.send(SEND.quickAskPointerOverSlab, over),
 };
 
 contextBridge.exposeInMainWorld('quickAsk', quickAsk);
+// As the main window's preload does: the pop-up's motion jumps to its end, for stable screenshots.
+if (process.env.SWITCHBOARD_E2E === '1') contextBridge.exposeInMainWorld('switchboardE2E', true);

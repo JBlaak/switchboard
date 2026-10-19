@@ -11,11 +11,11 @@ import '@fontsource-variable/nunito-sans';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QuickAsk } from './QuickAsk';
-import { close, shown } from './actions';
+import { close, shown, toggle } from './actions';
 
 window.quickAsk.onShown(shown);
 // ⌥Space while showing (H1).
-window.quickAsk.onCloseRequested(close);
+window.quickAsk.onCloseRequested(toggle);
 // A click anywhere outside the slab lands in the window underneath, which
 // takes the focus from the pop-up (B4).
 window.addEventListener('blur', close);

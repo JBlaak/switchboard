@@ -7,6 +7,8 @@ import type { QuickAskApi } from '../../ipc/quick-ask-api';
 declare global {
   interface Window {
     quickAsk: QuickAskApi;
+    /** The e2e harness launched the app (the pop-up's preload sets it). */
+    switchboardE2E?: true;
   }
 }
 
