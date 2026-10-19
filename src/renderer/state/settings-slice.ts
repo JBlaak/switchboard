@@ -28,6 +28,8 @@ export interface SettingsPanel {
   readonly shellProfiles: readonly ShellProfile[];
   /** The app's version, for global scope's About section; null until known. */
   readonly appVersion: string | null;
+  /** Whether main holds ⌥Space; false with the switch on means another app has it (H3). */
+  readonly quickAskRegistered: boolean;
   readonly openId: number;
   /** Save went through; the panel shows "✓ Saved" until it closes. */
   readonly saved: boolean;
@@ -54,6 +56,7 @@ export function settingsReducer(state: SettingsState, event: RendererEvent): Set
           globalSettings: event.globalSettings,
           shellProfiles: event.shellProfiles,
           appVersion: event.appVersion,
+          quickAskRegistered: event.quickAskRegistered,
           openId,
           saved: false,
         },

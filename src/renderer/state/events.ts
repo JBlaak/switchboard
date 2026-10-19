@@ -117,6 +117,8 @@ export type LocalEvent =
     globalSettings: SettingsRecord;
     shellProfiles: readonly ShellProfile[];
     appVersion: string | null;
+    /** Whether main holds ⌥Space for Quick Ask, as it was when the panel opened. */
+    quickAskRegistered: boolean;
   }
   /** The settings panel's Save went through. */
   | { type: 'settingsSaved' }

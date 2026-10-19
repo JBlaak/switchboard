@@ -51,7 +51,7 @@ for (const [what, event] of [
   ['a session put on screen', { type: 'sessionShown', sessionId: 's2', name: 'Other' }],
   ['the empty screen', { type: 'activeSessionChanged', sessionId: null }],
   ['the settings panel', {
-    type: 'settingsOpened', scope: 'global', projectPath: null, current: {}, globalSettings: {}, shellProfiles: [], appVersion: null,
+    type: 'settingsOpened', scope: 'global', projectPath: null, current: {}, globalSettings: {}, shellProfiles: [], appVersion: null, quickAskRegistered: true,
   }],
   ['the Session work page', { type: 'sessionWorkOpened', sessionId: 's1', name: 'One', at: 0 }],
 ] as const) {

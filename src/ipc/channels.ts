@@ -59,6 +59,7 @@ export const INVOKE = {
   getEffectiveSettings: 'get-effective-settings',
   getShellProfiles: 'get-shell-profiles',
   setAppearance: 'set-appearance',
+  quickAskHotkeyStatus: 'quick-ask:hotkey-status',
 
   // Host
   openExternal: 'open-external',

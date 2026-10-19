@@ -37,6 +37,11 @@ export interface GlobalSettings {
    * `resolveWeatherLocation`, which supplies Amsterdam.
    */
   weatherLocation?: WeatherLocation;
+  /**
+   * Global only. Whether ⌥Space opens Quick Ask; read it through
+   * `resolveQuickAskEnabled`, which supplies the `true` default.
+   */
+  quickAsk?: boolean;
   [key: string]: unknown;
 }
 
@@ -145,6 +150,11 @@ export function resolveShellProfileId(
 /** Whether to fetch the weather. On unless switched off explicitly. */
 export function resolveWeatherEnabled(global: Record<string, unknown> | null | undefined): boolean {
   return global?.weatherEnabled !== false;
+}
+
+/** Whether ⌥Space opens Quick Ask. On unless switched off explicitly (H2). */
+export function resolveQuickAskEnabled(global: Record<string, unknown> | null | undefined): boolean {
+  return global?.quickAsk !== false;
 }
 
 /** Where to fetch the weather for: the stored location if it is a valid one. */

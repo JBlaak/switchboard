@@ -6,7 +6,7 @@
  * decision this used to make is now behind a service — what is left is the
  * order things happen in, which is the one thing an entry point should own.
  */
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, globalShortcut } from 'electron';
 import log from 'electron-log';
 import { buildContainer, isolateUserDataIfRequested } from './composition-root';
 import { registerIpcHandlers } from './ipc';
@@ -69,7 +69,10 @@ function main(): void {
   });
 
   // After the windows are gone, so nothing is mid-query when the handle closes.
-  app.on('will-quit', () => container.close());
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+    container.close();
+  });
 
   void app.whenReady().then(() => start(container));
 }
@@ -91,6 +94,7 @@ async function start(container: Container): Promise<void> {
   // a renderer that first paints in the wrong scheme flashes on every launch.
   container.appearance.apply(normaliseAppearance(container.settings.global().appearance));
   openWindow(container);
+  container.quickAskHotkey.apply();
 
   container.projectsWatcher.start();
   container.schedules.ensureCreatorCommand();
