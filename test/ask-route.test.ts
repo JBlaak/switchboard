@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  GARBLED_LINE, NO_MATCH_LINE, ROUTE_SCHEMA, ROUTE_SYSTEM_PROMPT,
+  GARBLED_LINE, NO_MATCH_LINE, ROUTE_SYSTEM_PROMPT,
   failureLine, readRouteRun, routeArgs, routeCandidates, routePrompt,
   routeResultFrom, usageLimitLine,
 } from '../src/domain/ask/route';
@@ -39,20 +39,22 @@ function project(projectPath: string, sessions: SessionRow[] = [], remote = fals
   return { projectPath, folder: projectPath.replace(/\//g, '-'), sessions, ...(remote ? { remote } : {}) };
 }
 
-/** A real `claude -p --output-format json --json-schema …` answer, trimmed. */
-function envelope(answer: unknown, extra: Record<string, unknown> = {}): string {
+/** A real `claude -p --output-format json` answer, trimmed, with `result` as Haiku wrote it. */
+function envelope(answer: unknown): string {
   return JSON.stringify({
     type: 'result',
     subtype: 'success',
     is_error: false,
     api_error_status: null,
-    num_turns: 2,
-    result: JSON.stringify(answer),
-    structured_output: answer,
-    stop_reason: 'tool_use',
+    num_turns: 1,
+    result: typeof answer === 'string' ? answer : JSON.stringify(answer),
+    stop_reason: 'end_turn',
     terminal_reason: 'completed',
-    ...extra,
   });
+}
+
+function run(answer: unknown): { exitCode: number; stdout: string; stderr: string } {
+  return { exitCode: 0, stdout: envelope(answer) + '\n', stderr: '' };
 }
 
 // ── Candidates ──
@@ -111,7 +113,7 @@ test('routeCandidates names a session the way the list does: rename, then AI tit
 
 // ── The call ──
 
-test('routeArgs asks Haiku for structured JSON with no tools and nothing persisted', () => {
+test('routeArgs asks Haiku for a JSON envelope with no tools and nothing persisted', () => {
   /* Given */
   const req = request();
 
@@ -123,7 +125,6 @@ test('routeArgs asks Haiku for structured JSON with no tools and nothing persist
   const flag = (name: string): string => args[args.indexOf(name) + 1];
   assert.equal(flag('--model'), 'haiku');
   assert.equal(flag('--output-format'), 'json');
-  assert.deepEqual(JSON.parse(flag('--json-schema')), ROUTE_SCHEMA);
   assert.equal(flag('--tools'), '');
   assert.ok(args.includes('--no-session-persistence'));
   assert.equal(args.at(-1), routePrompt(req));
@@ -143,6 +144,29 @@ test('routeArgs skips the user\'s settings, MCP servers and skills, for startup 
   assert.deepEqual(JSON.parse(flag('--mcp-config')), { mcpServers: {} });
   assert.ok(args.includes('--disable-slash-commands'));
   assert.equal(flag('--system-prompt'), ROUTE_SYSTEM_PROMPT);
+});
+
+test('routeArgs leaves out --json-schema, which costs a second model turn', () => {
+  /* Given */
+  const req = request();
+
+  /* When */
+  const args = routeArgs(req);
+
+  /* Then */
+  assert.ok(!args.includes('--json-schema'));
+});
+
+test('the instructions name the JSON shape and ask for nothing around it', () => {
+  /* Given */
+  const instructions = ROUTE_SYSTEM_PROMPT;
+
+  /* When */
+  const shape = instructions.split('\n').find(line => line.includes('"projectPath"')) ?? '';
+
+  /* Then */
+  for (const key of ['projectPath', 'confident', 'candidates', 'prompt']) assert.ok(shape.includes(`"${key}"`), key);
+  assert.match(instructions, /only this JSON object, no prose, no code fence/);
 });
 
 test('routePrompt lists every candidate\'s path, folder name and recent sessions, then the request', () => {
@@ -287,7 +311,7 @@ test('an answer that isn\'t the agreed shape fails', () => {
 
 // ── Reading the process's output ──
 
-test('a successful run is read from the envelope\'s structured output', () => {
+test('a successful run is read from the JSON in the envelope\'s result', () => {
   /* Given */
   const req = request();
   const stdout = envelope({ projectPath: APP, confident: true, candidates: [APP], prompt: 'Fix the login bug.' }) + '\n';
@@ -299,11 +323,56 @@ test('a successful run is read from the envelope\'s structured output', () => {
   assert.equal(result.kind, 'confident');
 });
 
+test('a bare, a fenced and a padded answer all read the same', () => {
+  /* Given */
+  const req = request();
+  const json = JSON.stringify({ projectPath: APP, confident: true, candidates: [APP], prompt: 'Fix the login bug.' });
+  const texts = [json, '```json\n' + json + '\n```', '```\n' + json + '\n```', '\n  ' + json + '  \n', '  ```json\n' + json + '\n```\n'];
+
+  for (const text of texts) {
+    /* When */
+    const result = readRouteRun(run(text), req);
+
+    /* Then */
+    assert.deepEqual(result, { kind: 'confident', projectPath: APP, prompt: 'Fix the login bug.' }, text);
+  }
+});
+
+test('an answer off the agreed shape, with prose around it, or naming an unlisted path is garbled', () => {
+  /* Given */
+  const req = request();
+  const good = { projectPath: APP, confident: true, candidates: [APP], prompt: 'Fix the login bug.' };
+  const texts = [
+    JSON.stringify({ ...good, confident: 'yes' }),
+    JSON.stringify({ ...good, projectPath: 42 }),
+    JSON.stringify({ ...good, candidates: APP }),
+    JSON.stringify({ ...good, candidates: [APP, 7] }),
+    JSON.stringify({ ...good, prompt: null }),
+    JSON.stringify({ ...good, candidates: [APP, SITE, TOOLS, DOCS] }),
+    JSON.stringify({ ...good, reason: 'It says app.' }),
+    JSON.stringify({ projectPath: APP, confident: true, candidates: [APP] }),
+    'Here is the routing: ' + JSON.stringify(good),
+    JSON.stringify(good) + '\nHope that helps!',
+    JSON.stringify({ ...good, projectPath: '/code/elsewhere' }),
+    JSON.stringify({ ...good, candidates: [APP, '/code/elsewhere'] }),
+    '[]',
+    '',
+  ];
+
+  for (const text of texts) {
+    /* When */
+    const result = readRouteRun(run(text), req);
+
+    /* Then */
+    assert.deepEqual(result, { kind: 'failed', reason: GARBLED_LINE }, text);
+  }
+});
+
 test('the envelope is found after whatever the shell profile printed first', () => {
   /* Given */
   const req = request();
   const answer = { projectPath: null, confident: false, candidates: [SITE], prompt: 'Fix it.' };
-  const stdout = 'Welcome back!\n{not json\n' + envelope(answer, { structured_output: undefined }) + '\n';
+  const stdout = 'Welcome back!\n{not json\n' + envelope(answer) + '\n';
 
   /* When */
   const result = readRouteRun({ exitCode: 0, stdout, stderr: '' }, req);
