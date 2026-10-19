@@ -52,6 +52,9 @@ test('an image card loads both sides; n lands on it, 2 picks swipe and 0 fits it
   await expect(logo.getByTestId('image-meta'))
     .toHaveText(`1200×600 → 1600×600 · ${formatBytes(LOGO_BEFORE.length)} → ${formatBytes(LOGO_AFTER.length)} · PNG`);
   await expect(logo.getByRole('button', { name: 'Side-by-side' })).toHaveAttribute('aria-pressed', 'true');
+  // The icon card loading below grows the page, and where scrollbars always
+  // show (CI) one appears and narrows every card; wait for it before fitting.
+  await expect.poll(() => decodedSize(icon.getByRole('img', { name: 'After' }))).toBe('64×64');
 
   /* When */
   await page.keyboard.press('n');
