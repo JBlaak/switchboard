@@ -1,5 +1,6 @@
 // Builds every bundle the app ships: the main process, the preload, the project
-// scanner worker, the renderer, and the stylesheet. Output lands in app/, which
+// scanner worker, the renderer, and the stylesheet; and the Quick Ask pop-up's
+// own preload, renderer and stylesheet. Output lands in app/, which
 // is what package.json's `main` and electron-builder's `files` point at.
 //
 //   node scripts/build.mjs           one-shot build
@@ -52,6 +53,16 @@ const targets = [
     external: nodeExternals,
   },
   {
+    // The Quick Ask pop-up's (#142): it exposes `window.quickAsk`, not `window.api`.
+    name: 'quick-ask-preload',
+    ...common,
+    entryPoints: [path.join(root, 'src/preload/quick-ask.ts')],
+    outfile: path.join(out, 'quick-ask-preload.js'),
+    platform: 'node',
+    format: 'cjs',
+    external: nodeExternals,
+  },
+  {
     // Emitted on its own so the schema-reconciliation test can open the
     // database under Electron-as-Node without booting the app (see
     // test/db-schema-reconcile.test.ts). main.js bundles its own copy.
@@ -90,27 +101,56 @@ const targets = [
     define: { 'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : 'production') },
     loader: { '.png': 'dataurl', '.ttf': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl' },
   },
+  {
+    // The Quick Ask pop-up, a window of its own: the same kind of bundle as
+    // the renderer's, with none of the main window in it.
+    name: 'quick-ask',
+    ...common,
+    entryPoints: [path.join(root, 'src/renderer/quick-ask/index.tsx')],
+    outfile: path.join(out, 'quick-ask/quick-ask.js'),
+    platform: 'browser',
+    format: 'iife',
+    jsx: 'automatic',
+    define: { 'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : 'production') },
+    loader: { '.ttf': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl' },
+  },
+];
+
+/** Each stylesheet: its source, and where it is written. */
+const stylesheets = [
+  { from: 'src/renderer/styles/style.scss', to: 'renderer/style.css' },
+  { from: 'src/renderer/quick-ask/style.scss', to: 'quick-ask/style.css' },
+];
+
+/** Each page: its source, and where it is copied. */
+const pages = [
+  { from: 'src/renderer/index.html', to: 'renderer/index.html' },
+  { from: 'src/renderer/quick-ask/index.html', to: 'quick-ask/index.html' },
 ];
 
 function buildStyles() {
-  const result = sass.compile(path.join(root, 'src/renderer/styles/style.scss'), {
-    style: watch ? 'expanded' : 'compressed',
-    sourceMap: true,
-    // Silence the deprecation chatter from xterm's own CSS import chain.
-    quietDeps: true,
-  });
-  fs.mkdirSync(path.join(out, 'renderer'), { recursive: true });
-  fs.writeFileSync(path.join(out, 'renderer/style.css'), `${result.css}\n/*# sourceMappingURL=style.css.map */`);
-  if (result.sourceMap) {
-    fs.writeFileSync(path.join(out, 'renderer/style.css.map'), JSON.stringify(result.sourceMap));
+  for (const { from, to } of stylesheets) {
+    const result = sass.compile(path.join(root, from), {
+      style: watch ? 'expanded' : 'compressed',
+      sourceMap: true,
+      // Silence the deprecation chatter from xterm's own CSS import chain.
+      quietDeps: true,
+    });
+    const file = path.join(out, to);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${result.css}\n/*# sourceMappingURL=${path.basename(to)}.map */`);
+    if (result.sourceMap) fs.writeFileSync(`${file}.map`, JSON.stringify(result.sourceMap));
+    console.log(`  styles  app/${to}`);
   }
-  console.log('  styles  app/renderer/style.css');
 }
 
 function copyHtml() {
-  fs.mkdirSync(path.join(out, 'renderer'), { recursive: true });
-  fs.copyFileSync(path.join(root, 'src/renderer/index.html'), path.join(out, 'renderer/index.html'));
-  console.log('  html    app/renderer/index.html');
+  for (const { from, to } of pages) {
+    const file = path.join(out, to);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.copyFileSync(path.join(root, from), file);
+    console.log(`  html    app/${to}`);
+  }
 }
 
 async function main() {
@@ -124,12 +164,17 @@ async function main() {
     }
     copyHtml();
     buildStyles();
-    fs.watch(path.join(root, 'src/renderer/styles'), { recursive: true }, () => {
-      try { buildStyles(); } catch (err) { console.error(err.message); }
-    });
-    fs.watch(path.join(root, 'src/renderer/index.html'), () => {
-      try { copyHtml(); } catch (err) { console.error(err.message); }
-    });
+    for (const dir of ['src/renderer/styles', 'src/renderer/quick-ask']) {
+      fs.watch(path.join(root, dir), { recursive: true }, (_event, file) => {
+        if (!String(file).endsWith('.scss')) return;
+        try { buildStyles(); } catch (err) { console.error(err.message); }
+      });
+    }
+    for (const { from } of pages) {
+      fs.watch(path.join(root, from), () => {
+        try { copyHtml(); } catch (err) { console.error(err.message); }
+      });
+    }
     // Hold the process open for the watchers.
     await new Promise(() => {});
   } else {

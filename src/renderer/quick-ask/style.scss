@@ -1,0 +1,70 @@
+// The Quick Ask pop-up's stylesheet (#142).
+//
+// The app's tokens and the empty screen's box, as they are, and the slab that
+// holds them. Plain on purpose: the glass and the motion come in #150, and
+// replace what is under "The slab" below.
+
+@use '../styles/reset';
+@use '../styles/tokens';
+@use '../styles/ask';
+
+/* The window is a still transparent area larger than the slab (G3): nothing
+   but the slab paints. */
+html, body {
+  background: transparent;
+}
+
+body { display: block; }
+
+/* ========== THE SLAB ==========
+   640 wide, centred, 20 px down the window: the window is placed so that this
+   top edge sits a quarter of the way down the display (quick-ask-bounds). */
+.quick-ask-slab {
+  width: 640px;
+  margin: 20px auto 0;
+  padding: 10px;
+  background: var(--sb-bg-panel);
+  box-shadow: var(--sb-edge), var(--sb-lift);
+  border-radius: var(--sb-r-panel);
+
+  /* The box fills the slab, and its list grows the slab instead of hanging
+     below it. */
+  .ask {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .ask-choices {
+    position: static;
+    margin-top: 8px;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+  }
+}
+
+/* What came of a send: "Started in …", the saved line, Patch's note. */
+.quick-ask-line {
+  padding: 8px 6px 2px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--sb-text-muted);
+}
+
+.quick-ask-slab.is-started .quick-ask-line,
+.quick-ask-slab.is-saved .quick-ask-line {
+  color: var(--sb-text-strong);
+  font-family: var(--sb-font-head);
+  font-weight: 700;
+}
+
+/* As on the Session work page, whose hints the list's borrow. */
+.sw-kbd {
+  font: 600 10px var(--sb-font-mono);
+  color: var(--sb-text-muted);
+  border: 1px solid var(--sb-border-strong);
+  border-radius: 5px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}

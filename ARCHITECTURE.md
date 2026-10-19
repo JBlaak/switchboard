@@ -98,6 +98,10 @@ renaming a channel is a compile error rather than a runtime `undefined`.
 - `features/` — the imperative modules: the xterm lifecycle and its write
   buffer, session launch and fetch, the poller, the list's keyboard, motion
   specs
+- `quick-ask/` — the Quick Ask pop-up, a second window with a bundle and a
+  preload of its own (`window.quickAsk`, typed by `src/ipc/quick-ask-api.ts`).
+  It reuses the empty screen's box (`ui/ask/AskField`) and its slice, under a
+  store of its own
 - `lib/` — the containers the imperative code drives, formatting, icons,
   motion
 

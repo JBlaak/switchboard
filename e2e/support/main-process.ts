@@ -406,7 +406,7 @@ export async function clipboardImages(app: ElectronApplication): Promise<string[
 /** Send the renderer an event, as main would. */
 export async function pushEvent(app: ElectronApplication, channel: string, ...args: unknown[]): Promise<void> {
   await app.evaluate(({ BrowserWindow }, { channel, args }) => {
-    BrowserWindow.getAllWindows()[0]?.webContents.send(channel, ...args);
+    BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))?.webContents.send(channel, ...args);
   }, { channel, args });
 }
 
@@ -465,7 +465,8 @@ export async function reconnectRequests(app: ElectronApplication): Promise<strin
 
 /** Where the main window sits on screen, [x, y]. */
 export async function windowPosition(app: ElectronApplication): Promise<number[]> {
-  return await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getPosition());
+  return await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))!.getPosition());
 }
 
 /**
@@ -475,6 +476,8 @@ export async function windowPosition(app: ElectronApplication): Promise<number[]
 interface QuickAskHooks {
   press(): boolean;
   refuse(refusing: boolean): void;
+  visible(): boolean;
+  passingThrough(): boolean;
 }
 
 type WithTestHooks = typeof globalThis & { __switchboardTestHooks: { quickAsk: QuickAskHooks } };
@@ -489,4 +492,27 @@ export async function refuseQuickAskHotkey(app: ElectronApplication, refusing: b
   await app.evaluate((_electron, refusing) => {
     (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.refuse(refusing);
   }, refusing);
+}
+
+/** Whether the Quick Ask pop-up is showing. Under the harness it never comes on screen; this is main's word. */
+export async function quickAskShowing(app: ElectronApplication): Promise<boolean> {
+  return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.visible());
+}
+
+/** Whether a click on the pop-up's window would go to the window underneath. */
+export async function quickAskPassingThrough(app: ElectronApplication): Promise<boolean> {
+  return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.passingThrough());
+}
+
+/** The replies main's stand-in for routing can give (src/main/ipc/quick-ask-handlers.ts, until #149). */
+export type QuickAskStubReply = 'started' | 'choose' | 'handedOff';
+
+/** What main's stand-in answers the pop-up's next send with, and after how long. */
+export async function answerQuickAsk(app: ElectronApplication, reply: QuickAskStubReply, delayMs?: number): Promise<void> {
+  await app.evaluate((_electron, { reply, delayMs }) => {
+    const hooks = (globalThis as typeof globalThis & {
+      __switchboardTestHooks: { quickAskStub: { answer(reply: string, delayMs?: number): void } };
+    }).__switchboardTestHooks;
+    hooks.quickAskStub.answer(reply, delayMs);
+  }, { reply, delayMs });
 }

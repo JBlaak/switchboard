@@ -61,6 +61,13 @@ export const INVOKE = {
   setAppearance: 'set-appearance',
   quickAskHotkeyStatus: 'quick-ask:hotkey-status',
 
+  // Quick Ask: the pop-up's own (#148)
+  quickAskRoute: 'quick-ask:route',
+  quickAskCancel: 'quick-ask:cancel',
+  quickAskStart: 'quick-ask:start',
+  quickAskOpenPicker: 'quick-ask:open-picker',
+  quickAskUndo: 'quick-ask:undo',
+
   // Host
   openExternal: 'open-external',
   openRepository: 'open-repository',
@@ -98,6 +105,8 @@ export const SEND = {
   windowDragMove: 'window-drag:move',
   windowDragEnd: 'window-drag:end',
   needsInputCount: 'needs-input-count',
+  quickAskDismiss: 'quick-ask:dismiss',
+  quickAskPointerOverSlab: 'quick-ask:pointer-over-slab',
 } as const;
 
 /** Main tells the renderer, unprompted. */
@@ -118,4 +127,10 @@ export const EVENT = {
   updateAvailable: 'update-available',
   sessionWorkSnapshot: 'session-work:snapshot',
   prStatusChanged: 'pr-status:changed',
+} as const;
+
+/** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */
+export const QUICK_ASK_EVENT = {
+  shown: 'quick-ask:shown',
+  closeRequested: 'quick-ask:close-requested',
 } as const;
