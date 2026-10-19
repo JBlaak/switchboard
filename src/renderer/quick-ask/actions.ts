@@ -8,7 +8,8 @@
  */
 import { dispatch, getState } from './store';
 import { canClose, quickAskPhase } from '../state/quick-ask-slice';
-import type { QuickAskReply } from '../../ipc/quick-ask-api';
+import { slabMotion } from './motion';
+import type { QuickAskLooks, QuickAskReply } from '../../ipc/quick-ask-api';
 
 /** How long "Started in ‹folder›" shows before the pop-up closes (B7). */
 export const STARTED_MS = 700;
@@ -76,9 +77,12 @@ export function openPicker(): void {
 
 // ── Showing and closing ──
 
-export function shown(): void {
+/** On screen: the system's settings, as they are now, for this open; then it grows from the drop. */
+export function shown(looks?: QuickAskLooks): void {
   clearCloseTimer();
+  if (looks) applyLooks(looks);
   dispatch({ type: 'quickAskShown' });
+  slabMotion.open();
 }
 
 /** Esc, a click away, ⌥Space: close, keeping the draft, unless it waits or saves (B4). */
@@ -86,7 +90,23 @@ export function close(): void {
   if (!canClose(quickAskPhase(getState()))) return;
   clearCloseTimer();
   dispatch({ type: 'quickAskClosed' });
-  window.quickAsk.dismiss();
+  // The window goes once the slab has gone back into the drop.
+  slabMotion.close(() => window.quickAsk.dismiss());
+}
+
+/** ⌥Space while showing (H1): close, or, caught mid-close, come back from where it got to. */
+export function toggle(): void {
+  if (slabMotion.closing) shown();
+  else close();
+}
+
+function applyLooks(looks: QuickAskLooks): void {
+  const reduceMotion = looks.reduceMotion || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduceTransparency = looks.reduceTransparency || matchMedia('(prefers-reduced-transparency: reduce)').matches;
+  slabMotion.setMode(window.switchboardE2E ? 'instant' : reduceMotion ? 'reduced' : 'full');
+  const root = document.documentElement;
+  root.toggleAttribute('data-reduce-motion', reduceMotion);
+  root.toggleAttribute('data-reduce-transparency', reduceTransparency);
 }
 
 async function answer(asked: number, reply: Promise<QuickAskReply>): Promise<void> {
@@ -98,9 +118,11 @@ async function answer(asked: number, reply: Promise<QuickAskReply>): Promise<voi
   if (getState() === waiting) return;
   switch (settled.kind) {
     case 'started':
+      slabMotion.pulse();
       closeAfter(STARTED_MS);
       return;
     case 'saved':
+      slabMotion.pulse();
       closeAfter(SAVED_MS);
       return;
     case 'handedOff':

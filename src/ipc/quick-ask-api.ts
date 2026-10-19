@@ -13,6 +13,14 @@ export type { CaptureTarget } from '../domain/ask/model';
 /** What came of a send, or of a choice from the list; main's `QuickAskService` answers it. */
 export type { QuickAskReply };
 
+/** The system's accessibility settings, read as the pop-up shows (#150). */
+export interface QuickAskLooks {
+  /** Every moment becomes a short fade. */
+  reduceMotion: boolean;
+  /** The glass is a solid surface. */
+  reduceTransparency: boolean;
+}
+
 export interface QuickAskApi {
   route(text: string): Promise<QuickAskReply>;
   cancel(): Promise<void>;
@@ -24,8 +32,8 @@ export interface QuickAskApi {
   undo(): Promise<{ ok: boolean }>;
   /** Hide the pop-up. */
   dismiss(): void;
-  /** The pop-up came on screen. */
-  onShown(listener: () => void): Unsubscribe;
+  /** The pop-up came on screen, with the system's settings as they are now. */
+  onShown(listener: (looks: QuickAskLooks) => void): Unsubscribe;
 
   // ── The window's own plumbing ──
 

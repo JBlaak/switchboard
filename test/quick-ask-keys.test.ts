@@ -101,6 +101,6 @@ test('on a second display, it goes on that display', () => {
   const bounds = quickAskBounds(area);
 
   /* Then */
-  assert.equal(bounds.x, Math.round(-1920 + (1920 - 680) / 2));
+  assert.equal(bounds.x, Math.round(-1920 + (1920 - QUICK_ASK_SIZE.width) / 2));
   assert.equal(bounds.y, Math.round(-300 + 1055 / 4 - SLAB_TOP));
 });

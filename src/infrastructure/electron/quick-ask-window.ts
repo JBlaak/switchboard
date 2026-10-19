@@ -9,17 +9,20 @@
  * The window is a still transparent area larger than the slab (G3). Mouse
  * events pass through it except over the slab, which the pop-up reports as
  * the pointer moves, so a click beside the slab reaches the window underneath.
+ * The glass moves inside it in CSS (#150), and each show tells the pop-up the
+ * system's Reduce motion and Reduce transparency settings.
  *
  * Under the e2e harness's hidden mode it never comes on screen, as the main
  * window does not: `show` only marks it shown and tells the pop-up, whose page
  * still lays out and takes Playwright's input.
  */
-import { BrowserWindow, screen } from 'electron';
+import { BrowserWindow, nativeTheme, screen, systemPreferences } from 'electron';
 import path from 'node:path';
 import { QUICK_ASK_EVENT } from '../../ipc/channels';
 import { containNavigation, hiddenForE2e } from './main-window';
 import { QUICK_ASK_SIZE, quickAskBounds } from './quick-ask-bounds';
 import type { QuickAskPanel } from '../../application/ports/quick-ask-panel';
+import type { QuickAskLooks } from '../../ipc/quick-ask-api';
 
 export class QuickAskWindow implements QuickAskPanel {
   readonly #window: BrowserWindow;
@@ -82,7 +85,7 @@ export class QuickAskWindow implements QuickAskPanel {
       this.#window.focus();
     }
     this.#shown = true;
-    this.#send(QUICK_ASK_EVENT.shown);
+    this.#send(QUICK_ASK_EVENT.shown, looks());
     for (const listener of this.#shownListeners) listener();
   }
 
@@ -109,9 +112,17 @@ export class QuickAskWindow implements QuickAskPanel {
   }
 
   /** Waits for the page on the first press, which can come before it has loaded. */
-  #send(channel: string): void {
+  #send(channel: string, ...args: unknown[]): void {
     const contents = this.#window.webContents;
-    if (contents.isLoading()) contents.once('did-finish-load', () => contents.send(channel));
-    else contents.send(channel);
+    if (contents.isLoading()) contents.once('did-finish-load', () => contents.send(channel, ...args));
+    else contents.send(channel, ...args);
   }
+}
+
+/** Reduce motion and Reduce transparency, read at each show so a change applies from the next open. */
+function looks(): QuickAskLooks {
+  return {
+    reduceMotion: systemPreferences.getAnimationSettings().prefersReducedMotion,
+    reduceTransparency: nativeTheme.prefersReducedTransparency,
+  };
 }

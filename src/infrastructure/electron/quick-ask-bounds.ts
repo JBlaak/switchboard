@@ -5,8 +5,12 @@
  * Pure geometry, so it is tested without a display.
  */
 
-/** The window: a still transparent area, larger than the slab, that the glass moves in (G3). */
-export const QUICK_ASK_SIZE = { width: 680, height: 460 } as const;
+/**
+ * The window: a still transparent area, larger than the slab, that the glass
+ * moves in (G3). Wide enough for the Playful open, whose stretch overshoots
+ * the slab's 640 px to about 750 px (#150).
+ */
+export const QUICK_ASK_SIZE = { width: 800, height: 460 } as const;
 
 /** How far down the window the slab starts (the pop-up's stylesheet sets the same). */
 export const SLAB_TOP = 20;
