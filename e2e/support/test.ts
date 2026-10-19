@@ -22,7 +22,7 @@
 import { test as base, expect } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { fixtureHome } from './fixture-home';
-import { launchApp } from './launch';
+import { launchApp, mainWindow } from './launch';
 import { waitForIndex } from './app';
 import { standardFixture } from '../fixtures/standard';
 import type { FixtureHome, FixtureSpec } from './fixture-home';
@@ -74,7 +74,7 @@ export const test = base.extend<HarnessOptions & HarnessFixtures>({
   },
 
   page: async ({ app }, use) => {
-    await use(await app.firstWindow());
+    await use(await mainWindow(app));
   },
 });
 

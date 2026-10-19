@@ -101,6 +101,10 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
   void window.loadFile(path.join(deps.appDir, 'renderer', 'index.html'));
 
   containNavigation(window);
+  // This window's alone: the shim opens links through `window.api`.
+  window.webContents.on('did-finish-load', () => {
+    void window.webContents.executeJavaScript(WINDOW_OPEN_SHIM);
+  });
   trackBounds(window, deps);
   reportFullscreen(window, deps);
 
@@ -109,8 +113,8 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
   return window;
 }
 
-/** Keep the renderer inside itself. */
-function containNavigation(window: BrowserWindow): void {
+/** Keep the renderer inside itself. The Quick Ask pop-up is held the same way. */
+export function containNavigation(window: BrowserWindow): void {
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isExternalUrl(url)) void shell.openExternal(url).catch(() => {});
     return { action: 'deny' };
@@ -120,10 +124,6 @@ function containNavigation(window: BrowserWindow): void {
     if (url === window.webContents.getURL()) return;
     event.preventDefault();
     if (isExternalUrl(url)) void shell.openExternal(url).catch(() => {});
-  });
-
-  window.webContents.on('did-finish-load', () => {
-    void window.webContents.executeJavaScript(WINDOW_OPEN_SHIM);
   });
 
   // Chromium's built-in reload shortcuts would throw away every terminal on

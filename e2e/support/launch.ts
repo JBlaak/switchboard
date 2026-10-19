@@ -94,7 +94,7 @@ export async function launchApp(
 
   let page: Page;
   try {
-    page = await app.firstWindow();
+    page = await mainWindow(app);
     await installHostStubs(app, { ...DEFAULT_STUBS, ...stubs });
     await settleWindow(app, page, fakeTimers);
   } catch (err) {
@@ -112,6 +112,21 @@ export async function launchApp(
       await quit(app);
     },
   };
+}
+
+/**
+ * The main window's page. Not simply the first window: the Quick Ask pop-up's
+ * is made at the same moment, and either can be reported first.
+ */
+export async function mainWindow(app: ElectronApplication): Promise<Page> {
+  // A page is reported before it has navigated, so its URL is polled for.
+  const deadline = Date.now() + QUIT_TIMEOUT_MS * 3;
+  for (;;) {
+    const found = app.windows().find(page => page.url().endsWith('/renderer/index.html'));
+    if (found) return found;
+    if (Date.now() > deadline) throw new Error('the main window never loaded');
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
 }
 
 /** How long a quit may take before the app is killed instead. */
@@ -138,6 +153,15 @@ async function quit(app: ElectronApplication): Promise<void> {
   }
 }
 
+/** Wait until no window's page is still loading. */
+async function waitForWindowsLoaded(app: ElectronApplication): Promise<void> {
+  const deadline = Date.now() + QUIT_TIMEOUT_MS;
+  while (await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.webContents.isLoading()))) {
+    if (Date.now() > deadline) throw new Error('a window never finished loading');
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+}
+
 /**
  * Bring the window into its deterministic state.
  *
@@ -155,8 +179,11 @@ async function quit(app: ElectronApplication): Promise<void> {
  * clock lets relative times drift away from the screenshots'.
  */
 async function settleWindow(app: ElectronApplication, page: Page, fakeTimers: boolean): Promise<void> {
+  // The Quick Ask pop-up's window loads beside this one. The clock goes into
+  // every page at once, and a page still loading would miss it.
+  await waitForWindowsLoaded(app);
   await app.evaluate(({ BrowserWindow }, size) => {
-    const window = BrowserWindow.getAllWindows()[0];
+    const window = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))!;
     window.setContentSize(size.width, size.height);
     window.center();
   }, WINDOW_SIZE);

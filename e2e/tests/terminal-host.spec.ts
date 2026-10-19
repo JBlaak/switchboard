@@ -39,7 +39,8 @@ async function settle(page: Page, ms = 150): Promise<void> {
 
 async function setContentSize(app: ElectronApplication, width: number, height: number): Promise<void> {
   await app.evaluate(({ BrowserWindow }, size) => {
-    BrowserWindow.getAllWindows()[0].setContentSize(size.width, size.height);
+    BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))!
+      .setContentSize(size.width, size.height);
   }, { width, height });
 }
 

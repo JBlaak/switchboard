@@ -6,7 +6,7 @@
  * decision this used to make is now behind a service — what is left is the
  * order things happen in, which is the one thing an entry point should own.
  */
-import { app, BrowserWindow, globalShortcut } from 'electron';
+import { app, globalShortcut } from 'electron';
 import log from 'electron-log';
 import { buildContainer, isolateUserDataIfRequested } from './composition-root';
 import { registerIpcHandlers } from './ipc';
@@ -94,6 +94,8 @@ async function start(container: Container): Promise<void> {
   // a renderer that first paints in the wrong scheme flashes on every launch.
   container.appearance.apply(normaliseAppearance(container.settings.global().appearance));
   openWindow(container);
+  // After the main window, which stays the app's first.
+  if (container.settings.quickAskEnabled()) container.prepareQuickAsk();
   container.quickAskHotkey.apply();
 
   container.projectsWatcher.start();
@@ -110,9 +112,10 @@ async function start(container: Container): Promise<void> {
   // session cache is intact, so the index alone has to be refilled.
   if (container.searchIndex.wasRecreated()) container.sessionIndex.rebuild();
 
-  // macOS keeps the app alive after its last window closes.
+  // macOS keeps the app alive after its last window closes. The Quick Ask
+  // pop-up is a window too, but not one to come back to.
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) openWindow(container);
+    if (!container.getWindow()) openWindow(container);
   });
 }
 

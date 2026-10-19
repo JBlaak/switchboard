@@ -48,6 +48,7 @@ import { ElectronRendererGateway } from '../infrastructure/electron/renderer-gat
 import { ElectronWindowDrag } from '../infrastructure/electron/window-drag';
 import { ElectronDockAttention } from '../infrastructure/electron/dock-attention';
 import { E2eGlobalHotkey, ElectronGlobalHotkey } from '../infrastructure/electron/global-hotkey';
+import { QuickAskWindow } from '../infrastructure/electron/quick-ask-window';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
@@ -114,6 +115,11 @@ export interface Container {
   readonly plans: PlanService;
   readonly askRoute: AskRouteService;
   readonly quickAskHotkey: QuickAskHotkey;
+  readonly quickAskPanel: QuickAskPanel;
+  /** The pop-up's window, once one exists. */
+  quickAskWindow(): QuickAskWindow | null;
+  /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
+  prepareQuickAsk(): void;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -234,16 +240,19 @@ export function buildContainer(): Container {
   const claudeCaller = new ShellClaudeCaller({ shells, terminals, timers, log, shellProfileId, homeDir: paths.homeDir });
   const askRoute = new AskRouteService({ cli: claudeCaller, timers, log });
 
-  // Quick Ask (#142): ⌥Space from anywhere. The pop-up itself comes in #148;
-  // until then a press only says it arrived.
+  // Quick Ask (#142): ⌥Space from anywhere. A window can only be made once the
+  // app is ready, so the pop-up's is made by `prepareQuickAsk` at startup, or
+  // by the first press when the setting was off then.
+  let quickAskWindow: QuickAskWindow | null = null;
+  const prepareQuickAsk = (): QuickAskWindow => (quickAskWindow ??= new QuickAskWindow(appDir()));
   const quickAskPanel: QuickAskPanel = {
-    show: () => log.info('[quick-ask] show'),
-    hide: () => log.info('[quick-ask] hide'),
-    toggle: () => log.info('[quick-ask] toggle'),
-    visible: false,
+    show: () => prepareQuickAsk().show(),
+    hide: () => quickAskWindow?.hide(),
+    toggle: () => prepareQuickAsk().toggle(),
+    get visible() { return quickAskWindow?.visible ?? false; },
   };
   const quickAskHotkey = new QuickAskHotkey({
-    hotkey: process.env.SWITCHBOARD_E2E === '1' ? e2eHotkey() : new ElectronGlobalHotkey(),
+    hotkey: process.env.SWITCHBOARD_E2E === '1' ? e2eHotkey(() => quickAskWindow) : new ElectronGlobalHotkey(),
     panel: quickAskPanel,
     settings, log,
   });
@@ -380,6 +389,9 @@ export function buildContainer(): Container {
     plans,
     askRoute,
     quickAskHotkey,
+    quickAskPanel,
+    quickAskWindow: () => quickAskWindow,
+    prepareQuickAsk: () => { prepareQuickAsk(); },
     renderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
@@ -397,13 +409,17 @@ export function buildContainer(): Container {
  * The e2e suite's stand-in for ⌥Space, reachable from a test as
  * `globalThis.__switchboardTestHooks.quickAsk`: the real `globalShortcut` would
  * take the key from the developer's own Mac, and Playwright cannot press it.
+ * It also tells whether the pop-up is showing, and whether it lets a click
+ * through to the window underneath, which a hidden window cannot show.
  */
-function e2eHotkey(): GlobalHotkey {
+function e2eHotkey(window: () => QuickAskWindow | null): GlobalHotkey {
   const hotkey = new E2eGlobalHotkey();
   (globalThis as typeof globalThis & { __switchboardTestHooks?: unknown }).__switchboardTestHooks = {
     quickAsk: {
       press: () => hotkey.press(QUICK_ASK_ACCELERATOR),
       refuse: (refusing: boolean) => { hotkey.refusing = refusing; },
+      visible: () => window()?.visible ?? false,
+      passingThrough: () => window()?.passingThrough ?? true,
     },
   };
   return hotkey;
