@@ -35,6 +35,7 @@ import { SettingsService } from '../application/services/settings-service';
 import { UpdateService } from '../application/services/update-service';
 import { WeatherService } from '../application/services/weather-service';
 import { AskRouteService } from '../application/services/ask-route-service';
+import { QUICK_ASK_ACCELERATOR, QuickAskHotkey } from '../application/services/quick-ask-hotkey';
 import { SessionRegistry } from '../application/model/session-registry';
 
 import { ShellClaudeCaller } from '../infrastructure/claude-cli/claude-caller';
@@ -46,6 +47,7 @@ import {
 import { ElectronRendererGateway } from '../infrastructure/electron/renderer-gateway';
 import { ElectronWindowDrag } from '../infrastructure/electron/window-drag';
 import { ElectronDockAttention } from '../infrastructure/electron/dock-attention';
+import { E2eGlobalHotkey, ElectronGlobalHotkey } from '../infrastructure/electron/global-hotkey';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
@@ -74,6 +76,7 @@ import { isRemoteProjectPath } from '../domain/project/remote-target';
 import { QuestionHookServer } from '../infrastructure/http/question-hook-server';
 
 import type { BrowserWindow } from 'electron';
+import type { GlobalHotkey, QuickAskPanel } from '../application/ports/quick-ask-panel';
 import type { SwitchboardDatabase } from '../infrastructure/sqlite/database';
 
 /** Everything the IPC layer and the app lifecycle reach for. */
@@ -110,6 +113,7 @@ export interface Container {
   readonly issueSessions: IssueSessionService;
   readonly plans: PlanService;
   readonly askRoute: AskRouteService;
+  readonly quickAskHotkey: QuickAskHotkey;
 
   readonly renderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
@@ -229,6 +233,20 @@ export function buildContainer(): Container {
   // Ask Patch (#135): one Haiku call per request typed on the empty screen.
   const claudeCaller = new ShellClaudeCaller({ shells, terminals, timers, log, shellProfileId, homeDir: paths.homeDir });
   const askRoute = new AskRouteService({ cli: claudeCaller, timers, log });
+
+  // Quick Ask (#142): ⌥Space from anywhere. The pop-up itself comes in #148;
+  // until then a press only says it arrived.
+  const quickAskPanel: QuickAskPanel = {
+    show: () => log.info('[quick-ask] show'),
+    hide: () => log.info('[quick-ask] hide'),
+    toggle: () => log.info('[quick-ask] toggle'),
+    visible: false,
+  };
+  const quickAskHotkey = new QuickAskHotkey({
+    hotkey: process.env.SWITCHBOARD_E2E === '1' ? e2eHotkey() : new ElectronGlobalHotkey(),
+    panel: quickAskPanel,
+    settings, log,
+  });
 
   // ── Host ──
   const dialogs = new ElectronDialogService(getWindow);
@@ -361,6 +379,7 @@ export function buildContainer(): Container {
     issueSessions,
     plans,
     askRoute,
+    quickAskHotkey,
     renderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
@@ -372,6 +391,22 @@ export function buildContainer(): Container {
       database.close();
     },
   };
+}
+
+/**
+ * The e2e suite's stand-in for ⌥Space, reachable from a test as
+ * `globalThis.__switchboardTestHooks.quickAsk`: the real `globalShortcut` would
+ * take the key from the developer's own Mac, and Playwright cannot press it.
+ */
+function e2eHotkey(): GlobalHotkey {
+  const hotkey = new E2eGlobalHotkey();
+  (globalThis as typeof globalThis & { __switchboardTestHooks?: unknown }).__switchboardTestHooks = {
+    quickAsk: {
+      press: () => hotkey.press(QUICK_ASK_ACCELERATOR),
+      refuse: (refusing: boolean) => { hotkey.refusing = refusing; },
+    },
+  };
+  return hotkey;
 }
 
 /** Where the packaged app keeps its data, isolated per instance when asked. */

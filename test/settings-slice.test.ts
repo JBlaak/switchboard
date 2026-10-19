@@ -17,6 +17,7 @@ function opened(scope: 'global' | 'project', projectPath: string | null = null):
     globalSettings: {},
     shellProfiles: [],
     appVersion: scope === 'global' ? '2.2.0' : null,
+    quickAskRegistered: true,
   };
 }
 
@@ -32,6 +33,7 @@ test('settings: opening holds the scope and what is stored for it', () => {
     globalSettings: {},
     shellProfiles: [],
     appVersion: null,
+    quickAskRegistered: true,
     openId: 1,
     saved: false,
   });

@@ -193,7 +193,7 @@ export function readRouteRun(run: ClaudeRun, request: RouteRequest): RouteResult
  * The call goes through the user's interactive shell, whose profile may print
  * a greeting first, so the envelope is looked for rather than assumed.
  */
-function parseEnvelope(stdout: string): Record<string, unknown> | null {
+export function parseEnvelope(stdout: string): Record<string, unknown> | null {
   const lines = stdout.split('\n').map(line => line.trim()).filter(line => line.startsWith('{'));
   for (let i = lines.length - 1; i >= 0; i--) {
     const parsed = parseJson(lines[i]);

@@ -112,6 +112,8 @@ export interface SwitchboardApi {
    * half of it, main also has to hand it to Electron.
    */
   setAppearance(mode: Appearance): Promise<IpcResult>;
+  /** Whether main holds ⌥Space for Quick Ask; false when it is off or another app has it. */
+  quickAskHotkeyStatus(): Promise<{ registered: boolean }>;
 
   // ── Host ──
   openExternal(url: string): Promise<void>;
