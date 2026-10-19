@@ -114,7 +114,9 @@ function folderName(projectPath: string): string {
 }
 
 /**
- * The `claude` argv for one routing call.
+ * The `claude` argv for one routing call, all but the prompt: what a process
+ * started ahead of the request boots with (S2). A warm process swaps the
+ * output format for stream-json.
  *
  * Everything after `--no-session-persistence` is there for startup time, which
  * the user sits through: without the user's settings (hooks, plugins), MCP
@@ -126,7 +128,7 @@ function folderName(projectPath: string): string {
  * which costs a second model turn (#143). The system prompt asks for bare JSON
  * instead, and `readAnswer` holds it to the same shape.
  */
-export function routeArgs(request: RouteRequest): string[] {
+export function routeBootArgs(): string[] {
   return [
     '-p',
     '--model', 'haiku',
@@ -138,8 +140,12 @@ export function routeArgs(request: RouteRequest): string[] {
     '--mcp-config', '{"mcpServers":{}}',
     '--disable-slash-commands',
     '--system-prompt', ROUTE_SYSTEM_PROMPT,
-    routePrompt(request),
   ];
+}
+
+/** The `claude` argv for one cold routing call: the boot args, then the prompt. */
+export function routeArgs(request: RouteRequest): string[] {
+  return [...routeBootArgs(), routePrompt(request)];
 }
 
 // ── The answer ──
@@ -185,7 +191,7 @@ export function readRouteRun(run: ClaudeRun, request: RouteRequest): RouteResult
  * The call goes through the user's interactive shell, whose profile may print
  * a greeting first, so the envelope is looked for rather than assumed.
  */
-function parseEnvelope(stdout: string): Record<string, unknown> | null {
+export function parseEnvelope(stdout: string): Record<string, unknown> | null {
   const lines = stdout.split('\n').map(line => line.trim()).filter(line => line.startsWith('{'));
   for (let i = lines.length - 1; i >= 0; i--) {
     const parsed = parseJson(lines[i]);

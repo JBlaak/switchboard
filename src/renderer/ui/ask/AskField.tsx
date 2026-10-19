@@ -13,6 +13,8 @@ export interface AskFieldProps {
   ariaLabel: string;
   /** What the choice at `index` is called in the list. */
   choiceLabel(projectPath: string, index: number): string;
+  /** The box took the focus. */
+  onFocus?(): void;
   onChange(text: string): void;
   onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>): void;
   onHoverChoice(index: number): void;
@@ -35,6 +37,7 @@ export function AskField(props: AskFieldProps): JSX.Element {
         spellCheck={false}
         readOnly={locked}
         value={ask.text}
+        onFocus={props.onFocus}
         onChange={e => props.onChange(e.target.value)}
         onKeyDown={props.onKeyDown}
       />

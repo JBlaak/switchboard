@@ -4,8 +4,8 @@
  * The routing rules (the candidates, the call, reading the answer) and the
  * box's state are unit tested (test/ask-route*.test.ts, test/ask-slice.test.ts,
  * test/ask-keys.test.ts). These walk the wired app: the text crosses IPC, main
- * runs the fake `claude -p` through the user's shell, and the answer starts a
- * session, offers the choices, or hands the text to the picker.
+ * sends it to the fake `claude -p` the box warmed on focus, and the answer
+ * starts a session, offers the choices, or hands the text to the picker.
  */
 import { test, expect } from '../support/test';
 import { dialog } from '../support/app';
@@ -35,9 +35,11 @@ test('a confident answer starts the session in that project on the rewritten pro
   expect(launch.argv.at(-1)).toBe('Fix the login redirect loop.');
   await expect(box(page)).toHaveValue('');
 
+  // The box warmed a process when it got focus, and the request went through it.
   const [call] = route.calls();
-  expect(call.argv).toEqual(expect.arrayContaining(['-p', '--model', 'haiku']));
-  const prompt = call.argv.at(-1)!;
+  expect(call.warm).toBe(true);
+  expect(call.argv).toEqual(expect.arrayContaining(['-p', '--model', 'haiku', '--input-format', 'stream-json']));
+  const prompt = call.prompt;
   expect(prompt).toContain(`path: ${acmeApi}`);
   expect(prompt).toContain(`path: ${home.projectPath(P.webDashboard)}`);
   expect(prompt).not.toContain('.claude/worktrees');

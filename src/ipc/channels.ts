@@ -41,6 +41,7 @@ export const INVOKE = {
   // Ask Patch
   askRoute: 'ask-route',
   cancelAskRoute: 'cancel-ask-route',
+  warmAskRoute: 'warm-ask-route',
 
   // Sleep
   getSleepDisabled: 'get-sleep-disabled',

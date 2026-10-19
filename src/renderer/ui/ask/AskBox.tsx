@@ -21,7 +21,7 @@ import { askKey, boxTakesFocus, isCaretChord, opensPickerFromBox } from './ask-k
 import { openDialog } from '../dialogs/actions';
 import {
   cancelAsk, changeAskText, closeAskChoices, hoverAskChoice, openPickerFromChoices, sendAsk, startAskChoice,
-  stepAskChoice,
+  stepAskChoice, warmAsk,
 } from './actions';
 import type { JSX, KeyboardEvent } from 'react';
 
@@ -87,6 +87,7 @@ export function AskBox(): JSX.Element {
       placeholder="What are we working on?"
       ariaLabel="Ask Patch to start a session"
       choiceLabel={projectLabel}
+      onFocus={warmAsk}
       onChange={changeAskText}
       onKeyDown={onKeyDown}
       onHoverChoice={hoverAskChoice}

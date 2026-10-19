@@ -284,8 +284,11 @@ export class FakeRoute {
     this.write({ stdout: JSON.stringify(envelope) + '\n', exitCode: 1 });
   }
 
-  /** The argv of every routing call so far, oldest first. */
-  calls(): { argv: string[]; cwd: string }[] {
+  /**
+   * Every routing call so far, oldest first: its argv, and the prompt it was
+   * given, last on the argv or, for a warm one, as a message on stdin.
+   */
+  calls(): { argv: string[]; cwd: string; prompt: string; warm: boolean }[] {
     return readJsonLines(path.join(this.dir, 'calls.jsonl'));
   }
 

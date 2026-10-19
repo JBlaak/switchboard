@@ -82,6 +82,8 @@ export interface SwitchboardApi {
   askRoute(request: RouteRequest): Promise<RouteResult>;
   /** Stop the request in flight; it then answers `{ kind: 'cancelled' }`. */
   cancelAskRoute(): Promise<void>;
+  /** Start a `claude` process for the next request now, so it answers sooner; one at a time. */
+  warmAskRoute(): Promise<void>;
 
   // ── Sleep ──
   /** True when `pmset disablesleep 1` is in effect; null when it cannot be read (not a Mac). */

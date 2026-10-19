@@ -231,27 +231,62 @@ function appendTranscript(sessionId, entries) {
 // ── Routing calls ──
 
 /**
- * Ask Patch's routing call (#135): record the argv in `route/calls.jsonl` and
- * print what the test put in `route/answer.json` — `{ stdout, exitCode?,
- * delayMs? }` — or, with no answer set, a CLI error. The delay is what lets a
- * test see the wait and cancel it.
+ * Ask Patch's routing call (#135): record the argv and the prompt in
+ * `route/calls.jsonl` and print what the test put in `route/answer.json` —
+ * `{ stdout, exitCode?, delayMs? }` — or, with no answer set, a CLI error. The
+ * delay is what lets a test see the wait and cancel it.
+ *
+ * A warm call (`--input-format stream-json`, S2) is started before the
+ * request and waits for its prompt on stdin, as one user message line. Only
+ * then is the call recorded and the answer read; it is printed after an
+ * `init` event, and the process exits once stdin closes. One that is killed
+ * or closed before a message arrives records nothing.
  */
 async function answerRoute() {
   const dir = path.join(controlDir, 'route');
   fs.mkdirSync(dir, { recursive: true });
-  fs.appendFileSync(path.join(dir, 'calls.jsonl'), JSON.stringify({ argv, cwd: process.cwd() }) + '\n');
+  process.on('SIGTERM', () => process.exit(143));
+  const warm = argv.includes('--input-format') && argv[argv.indexOf('--input-format') + 1] === 'stream-json';
+  const prompt = warm ? await userMessage() : argv.at(-1);
+  if (prompt === null) process.exit(0);
+
+  fs.appendFileSync(path.join(dir, 'calls.jsonl'), JSON.stringify({ argv, cwd: process.cwd(), prompt, warm }) + '\n');
   let answer = { stdout: '', exitCode: 1 };
   try {
     answer = JSON.parse(fs.readFileSync(path.join(dir, 'answer.json'), 'utf8'));
   } catch {
     // No answer set: fail the way a real CLI with no answer would.
   }
-  process.on('SIGTERM', () => process.exit(143));
   setTimeout(() => {
-    process.stdout.write(answer.stdout ?? '', () => process.exit(answer.exitCode ?? 0));
+    if (!warm) {
+      process.stdout.write(answer.stdout ?? '', () => process.exit(answer.exitCode ?? 0));
+      return;
+    }
+    process.stdout.write(JSON.stringify({ type: 'system', subtype: 'init' }) + '\n' + (answer.stdout ?? ''));
+    process.stdin.on('end', () => process.exit(0));
+    process.stdin.resume();
   }, answer.delayMs ?? 0);
   // Never settles, so the module stops here: the process ends from the timer above.
   await new Promise(() => {});
+}
+
+/** The content of the first user message on stdin, or null when stdin closes first. */
+function userMessage() {
+  return new Promise((resolve) => {
+    let buffered = '';
+    const onData = (chunk) => {
+      buffered += chunk.toString();
+      const end = buffered.indexOf('\n');
+      if (end < 0) return;
+      process.stdin.off('data', onData);
+      process.stdin.off('end', onEnd);
+      process.stdin.pause();
+      resolve(JSON.parse(buffered.slice(0, end)).message.content);
+    };
+    const onEnd = () => resolve(null);
+    process.stdin.on('data', onData);
+    process.stdin.on('end', onEnd);
+  });
 }
 
 // ── Argv ──
