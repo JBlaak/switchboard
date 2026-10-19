@@ -198,7 +198,7 @@ test('session work: the settings panel closes it', () => {
   /* When */
   const settings = run(open, {
     type: 'settingsOpened', scope: 'global', projectPath: null, current: {}, globalSettings: {},
-    shellProfiles: [], appVersion: null, quickAskRegistered: true,
+    shellProfiles: [], appVersion: null, quickAskRegistered: true, quickAskMissing: [],
   });
 
   /* Then */

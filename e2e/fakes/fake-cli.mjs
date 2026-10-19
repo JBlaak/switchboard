@@ -241,6 +241,11 @@ function appendTranscript(sessionId, entries) {
  * then is the call recorded and the answer read; it is printed after an
  * `init` event, and the process exits once stdin closes. One that is killed
  * or closed before a message arrives records nothing.
+ *
+ * Quick Ask's capture and undo calls (#151) are allowed one tool; when the
+ * test set `route/answer-<tool>.json`, that call prints it instead. A call
+ * given `--mcp-config` records the file's mode and its servers' names, read
+ * while the call runs, and never what is in them.
  */
 async function answerRoute() {
   const dir = path.join(controlDir, 'route');
@@ -250,10 +255,14 @@ async function answerRoute() {
   const prompt = warm ? await userMessage() : argv.at(-1);
   if (prompt === null) process.exit(0);
 
-  fs.appendFileSync(path.join(dir, 'calls.jsonl'), JSON.stringify({ argv, cwd: process.cwd(), prompt, warm }) + '\n');
+  const mcpConfig = flagValue('--mcp-config');
+  const mcp = mcpConfig === null ? undefined : mcpFacts(mcpConfig);
+  fs.appendFileSync(path.join(dir, 'calls.jsonl'), JSON.stringify({ argv, cwd: process.cwd(), prompt, warm, mcp }) + '\n');
+  const tool = flagValue('--allowedTools');
+  const toolAnswer = tool === null ? null : path.join(dir, `answer-${tool}.json`);
   let answer = { stdout: '', exitCode: 1 };
   try {
-    answer = JSON.parse(fs.readFileSync(path.join(dir, 'answer.json'), 'utf8'));
+    answer = JSON.parse(fs.readFileSync(toolAnswer && fs.existsSync(toolAnswer) ? toolAnswer : path.join(dir, 'answer.json'), 'utf8'));
   } catch {
     // No answer set: fail the way a real CLI with no answer would.
   }
@@ -268,6 +277,21 @@ async function answerRoute() {
   }, answer.delayMs ?? 0);
   // Never settles, so the module stops here: the process ends from the timer above.
   await new Promise(() => {});
+}
+
+function flagValue(name) {
+  const i = argv.indexOf(name);
+  return i < 0 ? null : argv[i + 1] ?? null;
+}
+
+/** An MCP config's path, mode and server names. */
+function mcpFacts(file) {
+  try {
+    const servers = Object.keys(JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers ?? {});
+    return { path: file, mode: fs.statSync(file).mode & 0o777, servers };
+  } catch {
+    return { path: file, mode: null, servers: [] };
+  }
 }
 
 /** The content of the first user message on stdin, or null when stdin closes first. */

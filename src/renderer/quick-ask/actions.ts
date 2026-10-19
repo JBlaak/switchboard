@@ -9,18 +9,26 @@
 import { dispatch, getState } from './store';
 import { canClose, quickAskPhase } from '../state/quick-ask-slice';
 import { slabMotion } from './motion';
-import type { QuickAskLooks, QuickAskReply } from '../../ipc/quick-ask-api';
+import type { CaptureTarget, QuickAskLooks, QuickAskReply } from '../../ipc/quick-ask-api';
 
 /** How long "Started in ‹folder›" shows before the pop-up closes (B7). */
 export const STARTED_MS = 700;
 /** How long the saved line shows (C4). */
 export const SAVED_MS = 3_000;
+/** How long "Undone" shows before the text is back in the box (C4). */
+export const UNDONE_MS = 700;
 
 let closeTimer: ReturnType<typeof setTimeout> | null = null;
+let restoreTimer: ReturnType<typeof setTimeout> | null = null;
 
 function clearCloseTimer(): void {
   if (closeTimer !== null) clearTimeout(closeTimer);
   closeTimer = null;
+}
+
+function clearRestoreTimer(): void {
+  if (restoreTimer !== null) clearTimeout(restoreTimer);
+  restoreTimer = null;
 }
 
 export function changeText(text: string): void {
@@ -41,6 +49,29 @@ export function cancel(): void {
   if (quickAskPhase(getState()) !== 'waiting') return;
   dispatch({ type: 'askCancelled' });
   void window.quickAsk.cancel();
+}
+
+// ── Captures ──
+
+/** Main says the send is a capture into `target`, being written now. */
+export function saving(target: CaptureTarget): void {
+  dispatch({ type: 'quickAskSaving', target });
+}
+
+/** ⌘Z on the saved line: the 3 s stop, main takes it back, and "Undone" gives way to the text. */
+export async function undo(): Promise<void> {
+  const before = getState();
+  dispatch({ type: 'quickAskUndoing' });
+  if (getState() === before) return;
+  clearCloseTimer();
+  const { ok } = await window.quickAsk.undo()
+    .catch(() => ({ ok: false }));
+  const undoing = getState();
+  dispatch({ type: 'quickAskUndone', ok });
+  if (!ok || getState() === undoing) return;
+  slabMotion.pulse();
+  clearRestoreTimer();
+  restoreTimer = setTimeout(() => { restoreTimer = null; dispatch({ type: 'quickAskRestored' }); }, UNDONE_MS);
 }
 
 // ── The choice list ──
@@ -80,6 +111,7 @@ export function openPicker(): void {
 /** On screen: the system's settings, as they are now, for this open; then it grows from the drop. */
 export function shown(looks?: QuickAskLooks): void {
   clearCloseTimer();
+  clearRestoreTimer();
   if (looks) applyLooks(looks);
   dispatch({ type: 'quickAskShown' });
   slabMotion.open();
@@ -89,6 +121,7 @@ export function shown(looks?: QuickAskLooks): void {
 export function close(): void {
   if (!canClose(quickAskPhase(getState()))) return;
   clearCloseTimer();
+  clearRestoreTimer();
   dispatch({ type: 'quickAskClosed' });
   // The window goes once the slab has gone back into the drop.
   slabMotion.close(() => window.quickAsk.dismiss());

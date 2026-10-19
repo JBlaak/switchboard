@@ -45,14 +45,33 @@ test('saving: Esc does not cancel a capture half-written', () => {
   assert.deepEqual(actions, ['swallow', 'swallow']);
 });
 
+test('saved: ⌘Z undoes, and Shift+⌘Z and a plain z are kept', () => {
+  /* When */
+  const actions = [
+    { ...press('z'), metaKey: true }, { ...press('Z', true), metaKey: true }, press('z'), { ...press('z'), metaKey: true },
+  ].map((key, i) => quickAskKey(i < 3 ? 'saved' : 'started', key));
+
+  /* Then */
+  assert.deepEqual(actions, ['undo', 'swallow', 'swallow', 'swallow']);
+});
+
+test('undoing: every key is kept, Esc too', () => {
+  /* When */
+  const actions = [press('Escape'), press('Enter'), press('a')].map(key => quickAskKey('undoing', key));
+
+  /* Then */
+  assert.deepEqual(actions, ['swallow', 'swallow', 'swallow']);
+});
+
 test('a result showing: Esc closes, and every other key is kept', () => {
   /* When */
   const actions = [
     quickAskKey('started', press('Escape')), quickAskKey('started', press('x')), quickAskKey('saved', press('Escape')),
+    quickAskKey('undone', press('Escape')), quickAskKey('undone', press('x')),
   ];
 
   /* Then */
-  assert.deepEqual(actions, ['dismiss', 'swallow', 'dismiss']);
+  assert.deepEqual(actions, ['dismiss', 'swallow', 'dismiss', 'dismiss', 'swallow']);
 });
 
 test('a key mid-composition belongs to the composition', () => {

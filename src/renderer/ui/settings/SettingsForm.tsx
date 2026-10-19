@@ -15,6 +15,7 @@ import { PERMISSION_MODES } from '../../../domain/launch/session-options';
 import { shortProjectPath } from '../../../domain/project/project-path';
 import { resolveQuickAskEnabled, resolveWeatherEnabled, resolveWeatherLocation } from '../../../domain/settings/settings';
 import { DEFAULT_WEATHER_LOCATION } from '../../../domain/weather/weather';
+import { missingServersLine } from '../../../domain/ask/capture';
 import { isFontAvailable } from '../../features/terminal/terminal-manager';
 import {
   DEFAULT_TERMINAL_FONT_FAMILY, DEFAULT_TERMINAL_FONT_SIZE, DEFAULT_TERMINAL_LINE_HEIGHT,
@@ -38,6 +39,13 @@ type ProjectField = typeof PROJECT_FIELDS[number];
 function fontWarningFor(family: string): string {
   const name = family.trim();
   return !name || isFontAvailable(name) ? '' : ` — “${name}” isn't installed; falling back to the default.`;
+}
+
+/** The line under the Quick Ask switch: ⌥Space taken (H3) first, then a capture server missing (C6). */
+function quickAskWarning(enabled: boolean, panel: SettingsPanel): string {
+  if (!enabled) return '';
+  if (!panel.quickAskRegistered) return '⌥Space is in use by another app';
+  return missingServersLine(panel.quickAskMissing);
 }
 
 export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
@@ -179,7 +187,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
         {!isProject && (
           <AppField label="Open Quick Ask with ⌥Space"
             description={<>Ask Patch for a session from any app, while Switchboard runs<span id="sv-quick-ask-warning" className="settings-warning">{
-              resolveQuickAskEnabled(current) && !panel.quickAskRegistered ? '⌥Space is in use by another app' : ''}</span></>}>
+              quickAskWarning(resolveQuickAskEnabled(current), panel)}</span></>}>
             <label className="settings-toggle"><input type="checkbox" id="sv-quick-ask" ref={quickAsk}
               defaultChecked={resolveQuickAskEnabled(current)} /><span className="settings-toggle-slider"></span></label>
           </AppField>

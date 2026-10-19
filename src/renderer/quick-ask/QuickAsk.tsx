@@ -6,17 +6,18 @@
  * slab takes the mouse, so this reports when the pointer is over it, and main
  * lets everything else through to the window underneath. The glass moves inside
  * the window (`motion`), so the check runs again on every frame it moves. The
- * box has the focus whenever the pop-up shows, with the draft selected (B6).
+ * box has the focus whenever the pop-up shows, with the draft selected (B6),
+ * and when a capture undone puts the text back (C4).
  */
 import { useEffect, useRef } from 'react';
 import { useStoreOf } from '../ui/use-store-of';
 import { AskField } from '../ui/ask/AskField';
-import { quickAskPhase } from '../state/quick-ask-slice';
+import { quickAskPhase, savedLabel, savingLine } from '../state/quick-ask-slice';
 import { store } from './store';
 import { overSlab, quickAskKey } from './quick-ask-keys';
 import { slabMotion } from './motion';
 import {
-  cancel, changeText, close, closeChoices, hoverChoice, openPicker, send, startChoice, stepChoice,
+  cancel, changeText, close, closeChoices, hoverChoice, openPicker, send, startChoice, stepChoice, undo,
 } from './actions';
 import type { JSX, KeyboardEvent } from 'react';
 import type { QuickAskState } from '../state/quick-ask-slice';
@@ -32,7 +33,8 @@ export function QuickAsk(): JSX.Element {
 
   useEffect(() => slabMotion.attach(slab.current!, inner.current!, mark.current!), []);
 
-  // The box takes the focus, the draft selected, each time the pop-up shows.
+  // The box takes the focus, the draft selected, each time the pop-up shows,
+  // and once an undo has put the text back, after it is in the box.
   useEffect(() => {
     const focusBox = (): void => {
       box.current?.focus({ preventScroll: true });
@@ -41,6 +43,7 @@ export function QuickAsk(): JSX.Element {
     focusBox();
     return store.subscribe((_state, _previous, event) => {
       if (event.type === 'quickAskShown') focusBox();
+      if (event.type === 'quickAskRestored') setTimeout(focusBox, 0);
     });
   }, []);
 
@@ -76,7 +79,9 @@ export function QuickAsk(): JSX.Element {
   const phase = quickAskPhase(state);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
-    const action = quickAskKey(phase, { key: e.key, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing });
+    const action = quickAskKey(phase, {
+      key: e.key, shiftKey: e.shiftKey, metaKey: e.metaKey, isComposing: e.nativeEvent.isComposing,
+    });
     if (!action) return;
     e.preventDefault();
     switch (action) {
@@ -88,6 +93,7 @@ export function QuickAsk(): JSX.Element {
       case 'picker': openPicker(); return;
       case 'close': closeChoices(); return;
       case 'dismiss': close(); return;
+      case 'undo': void undo(); return;
       case 'swallow': return;
     }
   };
@@ -121,20 +127,51 @@ export function QuickAsk(): JSX.Element {
 /** What came of a send, sliding into the box's row as the text slides out of it. */
 function QuickAskResult({ state }: { state: QuickAskState }): JSX.Element | null {
   const { result } = state;
-  if (result?.kind !== 'started' && result?.kind !== 'saved') return null;
-  return (
-    <p className="quick-ask-result" data-testid="quick-ask-line" role="status">
-      {result.kind === 'started'
-        ? <><span className="quick-ask-done">Started in</span> <span className="quick-ask-where">{result.folder}</span></>
-        : <span className="quick-ask-done">{result.summary}</span>}
-    </p>
-  );
+  switch (result?.kind) {
+    case 'started':
+      return (
+        <p className="quick-ask-result" data-testid="quick-ask-line" role="status">
+          <span className="quick-ask-done">Started in</span> <span className="quick-ask-where">{result.folder}</span>
+        </p>
+      );
+    // "Task added · Call Peter · due Thu", and ⌘Z for the 3 s it shows (C4).
+    case 'saved':
+      return (
+        <>
+          <p className="quick-ask-result has-undo" data-testid="quick-ask-line" role="status">
+            <span className="quick-ask-done">{savedLabel(result.target)}</span>
+            {result.summary && <> <span className="quick-ask-where">· {result.summary}</span></>}
+          </p>
+          {/* A press would take the focus from the box, which keeps ⌘Z and Esc. */}
+          <button type="button" className="quick-ask-undo" onMouseDown={e => e.preventDefault()} onClick={() => void undo()}>
+            <kbd className="sw-kbd">⌘Z</kbd> Undo
+          </button>
+        </>
+      );
+    case 'undoing':
+      return (
+        <p className="quick-ask-result is-busy" data-testid="quick-ask-line" role="status">
+          <span className="quick-ask-spinner" aria-hidden="true" />
+          <span className="quick-ask-where">Taking it back…</span>
+        </p>
+      );
+    case 'undone':
+      return (
+        <p className="quick-ask-result" data-testid="quick-ask-line" role="status">
+          <span className="quick-ask-done">Undone</span>
+        </p>
+      );
+    case 'saving':
+    case undefined:
+      return null;
+  }
 }
 
 /** The line under the box while it waits or saves, or Patch's note after a capture failed. */
 function QuickAskFoot({ state }: { state: QuickAskState }): JSX.Element | null {
-  const busy = state.result?.kind === 'saving' || (!state.result && state.box.phase === 'waiting');
-  const line = state.result?.kind === 'saving' ? 'Saving…' : busy ? 'Thinking…' : state.result ? '' : state.note;
+  const { result } = state;
+  const busy = result?.kind === 'saving' || (!result && state.box.phase === 'waiting');
+  const line = result?.kind === 'saving' ? savingLine(result.target) : busy ? 'Thinking…' : result ? '' : state.note;
   if (!line) return null;
   return (
     <div className="quick-ask-foot">

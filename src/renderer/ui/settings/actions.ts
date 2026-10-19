@@ -38,7 +38,7 @@ export async function openSettings(scope: SettingsScope, projectPath?: string): 
     window.api.getShellProfiles().catch((): ShellProfile[] => []),
     isProject ? Promise.resolve(null) : window.api.getAppVersion().catch(() => null),
     // Unknown counts as held: the "in use" line only shows on a refusal main reported.
-    window.api.quickAskHotkeyStatus().catch(() => ({ registered: true })),
+    window.api.quickAskHotkeyStatus().catch(() => ({ registered: true, missing: [] })),
   ]);
   if (token !== latestOpen) return;
 
@@ -54,6 +54,7 @@ export async function openSettings(scope: SettingsScope, projectPath?: string): 
     shellProfiles,
     appVersion,
     quickAskRegistered: quickAsk.registered,
+    quickAskMissing: quickAsk.missing,
   });
 }
 

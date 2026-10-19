@@ -11,6 +11,7 @@
  * terminal manager instead (see `app/ipc-bridge`).
  */
 import type { EVENT } from '../../ipc/channels';
+import type { CaptureTarget } from '../../domain/ask/model';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
 import type { UpdateNotice } from '../../domain/update/release';
@@ -123,6 +124,8 @@ export type LocalEvent =
     appVersion: string | null;
     /** Whether main holds ⌥Space for Quick Ask, as it was when the panel opened. */
     quickAskRegistered: boolean;
+    /** The capture targets whose server isn't in `~/.claude.json` (C6). */
+    quickAskMissing: readonly CaptureTarget[];
   }
   /** The settings panel's Save went through. */
   | { type: 'settingsSaved' }

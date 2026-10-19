@@ -137,4 +137,5 @@ export const EVENT = {
 export const QUICK_ASK_EVENT = {
   shown: 'quick-ask:shown',
   closeRequested: 'quick-ask:close-requested',
+  saving: 'quick-ask:saving',
 } as const;

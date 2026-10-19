@@ -4,7 +4,9 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canClose, initialQuickAskState, quickAskPhase, quickAskReducer } from '../src/renderer/state/quick-ask-slice';
+import {
+  canClose, initialQuickAskState, quickAskPhase, quickAskReducer, savedLabel, savingLine,
+} from '../src/renderer/state/quick-ask-slice';
 import type { QuickAskEvent, QuickAskState } from '../src/renderer/state/quick-ask-slice';
 import type { QuickAskReply } from '../src/ipc/quick-ask-api';
 
@@ -82,14 +84,14 @@ test('a hand-off keeps the text, as the empty screen’s box does', () => {
   assert.equal(state.box.handedOff, true);
 });
 
-test('a saved reply clears the draft and shows the summary', () => {
+test('a saved reply clears the draft and shows the summary, holding the text for ⌘Z', () => {
   /* When */
-  const state = replied({ kind: 'saved', target: 'tasks', summary: 'Task added · Call Peter · due Thu' });
+  const state = replied({ kind: 'saved', target: 'tasks', summary: 'Call Peter · due Thu' });
 
   /* Then */
   assert.equal(quickAskPhase(state), 'saved');
   assert.equal(state.box.text, '');
-  assert.deepEqual(state.result, { kind: 'saved', target: 'tasks', summary: 'Task added · Call Peter · due Thu' });
+  assert.deepEqual(state.result, { kind: 'saved', target: 'tasks', summary: 'Call Peter · due Thu', text: TEXT });
 });
 
 test('a failed capture keeps the text and Patch’s line, until the text changes', () => {
@@ -151,16 +153,25 @@ test('Esc in the list closes it and keeps the text to edit', () => {
 
 test('a send that turns out to be a capture shows as saving, and cannot be closed', () => {
   /* When */
-  const state = run(waiting(), { type: 'quickAskSaving' });
+  const state = run(waiting(), { type: 'quickAskSaving', target: 'james' });
 
   /* Then */
   assert.equal(quickAskPhase(state), 'saving');
+  assert.deepEqual(state.result, { kind: 'saving', target: 'james' });
   assert.equal(canClose(quickAskPhase(state)), false);
+});
+
+test('saving says where it goes', () => {
+  /* When */
+  const lines = [savingLine('tasks'), savingLine('james'), savedLabel('tasks'), savedLabel('james')];
+
+  /* Then */
+  assert.deepEqual(lines, ['Adding to BlaakTasks…', 'Giving it to James…', 'Task added', 'Kept']);
 });
 
 test('saving only follows a send', () => {
   /* When */
-  const state = run(initialQuickAskState, { type: 'quickAskSaving' });
+  const state = run(initialQuickAskState, { type: 'quickAskSaving', target: 'tasks' });
 
   /* Then */
   assert.equal(state, initialQuickAskState);
@@ -168,12 +179,97 @@ test('saving only follows a send', () => {
 
 // ── Closing and showing again ──
 
-test('it closes while editing, choosing or showing a result, never while waiting or saving', () => {
+test('a failed retry after saving keeps the text again, for the next Enter', () => {
+  /* Given */
+  const saving = run(waiting(), { type: 'quickAskSaving', target: 'james' });
+
   /* When */
-  const closes = (['editing', 'choosing', 'started', 'saved', 'waiting', 'saving'] as const).map(canClose);
+  const state = replied({ kind: 'captureFailed', reason: 'James didn’t answer. Try again?' }, saving);
 
   /* Then */
-  assert.deepEqual(closes, [true, true, true, true, false, false]);
+  assert.equal(quickAskPhase(state), 'editing');
+  assert.equal(state.box.text, TEXT);
+  assert.equal(state.note, 'James didn’t answer. Try again?');
+});
+
+// ── Undo ──
+
+function saved(): QuickAskState {
+  const saving = run(waiting(), { type: 'quickAskSaving', target: 'tasks' });
+  return replied({ kind: 'saved', target: 'tasks', summary: 'Call Peter · due Thu' }, saving);
+}
+
+test('⌘Z on the saved line takes it back, and it cannot be closed meanwhile', () => {
+  /* When */
+  const state = run(saved(), { type: 'quickAskUndoing' });
+
+  /* Then */
+  assert.equal(quickAskPhase(state), 'undoing');
+  assert.equal(canClose(quickAskPhase(state)), false);
+});
+
+test('undone shows "Undone", then the text is back in the box to edit', () => {
+  /* Given */
+  const undoing = run(saved(), { type: 'quickAskUndoing' });
+
+  /* When */
+  const undone = run(undoing, { type: 'quickAskUndone', ok: true });
+
+  /* Then */
+  assert.equal(quickAskPhase(undone), 'undone');
+
+  /* When */
+  const restored = run(undone, { type: 'quickAskRestored' });
+
+  /* Then */
+  assert.equal(quickAskPhase(restored), 'editing');
+  assert.equal(restored.box.text, TEXT);
+  assert.equal(restored.result, null);
+});
+
+test('closed while "Undone" shows, the text is back all the same', () => {
+  /* Given */
+  const undone = run(saved(), { type: 'quickAskUndoing' }, { type: 'quickAskUndone', ok: true });
+
+  /* When */
+  const state = run(undone, { type: 'quickAskClosed' });
+
+  /* Then */
+  assert.equal(state.box.text, TEXT);
+  assert.equal(state.result, null);
+});
+
+test('an undo that failed says it is still there, and the draft stays clear', () => {
+  /* Given */
+  const undoing = run(saved(), { type: 'quickAskUndoing' });
+
+  /* When */
+  const state = run(undoing, { type: 'quickAskUndone', ok: false });
+
+  /* Then */
+  assert.equal(quickAskPhase(state), 'editing');
+  assert.equal(state.box.text, '');
+  assert.equal(state.note, 'Couldn’t take it back. It’s still in BlaakTasks.');
+});
+
+test('⌘Z means nothing without a saved line', () => {
+  /* Given */
+  const started = replied({ kind: 'started', folder: 'switchboard' });
+
+  /* When */
+  const state = run(started, { type: 'quickAskUndoing' }, { type: 'quickAskUndone', ok: true }, { type: 'quickAskRestored' });
+
+  /* Then */
+  assert.equal(state, started);
+});
+
+test('it closes while editing, choosing or showing a result, never while waiting, saving or undoing', () => {
+  /* When */
+  const closes = (['editing', 'choosing', 'started', 'saved', 'undone', 'waiting', 'saving', 'undoing'] as const)
+    .map(canClose);
+
+  /* Then */
+  assert.deepEqual(closes, [true, true, true, true, true, false, false, false]);
 });
 
 test('closing while choosing keeps the draft, and it comes back to edit', () => {

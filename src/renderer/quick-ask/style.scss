@@ -106,8 +106,8 @@ body { display: block; }
   }
 }
 
-/* While Patch routes or a capture saves: a highlight orbits the rim, a lap
-   every 1.6 s (G4). */
+/* While Patch routes, or a capture saves or is taken back: a highlight orbits
+   the rim, a lap every 1.6 s (G4). */
 .quick-ask-sheen {
   position: absolute;
   inset: -1px;
@@ -122,7 +122,8 @@ body { display: block; }
 }
 
 .quick-ask-slab.is-waiting .quick-ask-sheen,
-.quick-ask-slab.is-saving .quick-ask-sheen {
+.quick-ask-slab.is-saving .quick-ask-sheen,
+.quick-ask-slab.is-undoing .quick-ask-sheen {
   opacity: 1;
   animation: qa-orbit 1.6s linear infinite;
 }
@@ -215,7 +216,9 @@ body { display: block; }
 
 /* A result: the text slides out while the result slides in. */
 .quick-ask-slab.is-started,
-.quick-ask-slab.is-saved {
+.quick-ask-slab.is-saved,
+.quick-ask-slab.is-undoing,
+.quick-ask-slab.is-undone {
   .ask-box {
     opacity: 0;
     transform: translateY(-10px);
@@ -250,6 +253,40 @@ body { display: block; }
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+.quick-ask-result.is-busy .quick-ask-where {
+  color: var(--sb-text-muted);
+}
+
+/* ⌘Z, at the row's end while the saved line shows (C4). */
+.quick-ask-result.has-undo {
+  right: 112px;
+}
+
+.quick-ask-undo {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--sb-text-muted);
+  cursor: pointer;
+  transition: background 140ms, color 140ms;
+  animation: qa-fade 220ms both, qa-rise-10 300ms $spring-out both;
+
+  &:hover {
+    background: var(--qa-lens);
+    color: var(--sb-text-strong);
+  }
 }
 
 /* ---- Under the row: waiting, saving, Patch's note ---- */
@@ -344,6 +381,7 @@ body { display: block; }
   }
 
   .quick-ask-result,
+  .quick-ask-undo,
   .quick-ask-foot,
   .quick-ask-slab .ask-choice,
   .quick-ask-slab .ask-hints {

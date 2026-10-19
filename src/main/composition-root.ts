@@ -13,6 +13,7 @@
  */
 import log from 'electron-log';
 import { app } from 'electron';
+import os from 'node:os';
 import path from 'node:path';
 
 import { systemClock } from '../application/ports/clock';
@@ -53,6 +54,7 @@ import { QuickAskWindow } from '../infrastructure/electron/quick-ask-window';
 import { hiddenForE2e } from '../infrastructure/electron/main-window';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
+import { ClaudeJsonMcpServers } from '../infrastructure/claude-cli/mcp-servers';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
 import { NodePtyGateway } from '../infrastructure/pty/node-pty-gateway';
 import { PtySessionPrompter } from '../infrastructure/pty/session-prompter';
@@ -80,6 +82,7 @@ import { QuestionHookServer } from '../infrastructure/http/question-hook-server'
 
 import type { BrowserWindow } from 'electron';
 import type { GlobalHotkey, QuickAskPanel } from '../application/ports/quick-ask-panel';
+import type { McpServers } from '../application/ports/mcp-servers';
 import type { MainWindowHost } from '../application/ports/main-window';
 import type { SwitchboardDatabase } from '../infrastructure/sqlite/database';
 
@@ -120,6 +123,7 @@ export interface Container {
   readonly quickAskHotkey: QuickAskHotkey;
   readonly quickAskPanel: QuickAskPanel;
   readonly quickAsk: QuickAskService;
+  readonly mcpServers: McpServers;
   /** The pop-up's window, once one exists. */
   quickAskWindow(): QuickAskWindow | null;
   /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
@@ -286,11 +290,15 @@ export function buildContainer(): Container {
       window.focus();
     },
   };
+  // Captures read the user's MCP servers from `~/.claude.json` (C2).
+  const mcpServers = new ClaudeJsonMcpServers({ fs, homeDir: paths.homeDir, tempDir: os.tmpdir(), ids, log });
   // Its own routing service (R1): never cancels the empty-screen box's request.
   const quickAsk = new QuickAskService({
     router: new AskRouteService({ cli: claudeCaller, timers, log, call: QUICK_ROUTE_CALL }),
     projects, settings, renderer, mainWindow, log,
     panel: quickAskPanel,
+    popUp: { saving: (target) => quickAskWindow?.saving(target) },
+    cli: claudeCaller, mcpServers, ids, timers,
   });
 
   // ── Host ──
@@ -427,6 +435,7 @@ export function buildContainer(): Container {
     quickAskHotkey,
     quickAskPanel,
     quickAsk,
+    mcpServers,
     quickAskWindow: () => quickAskWindow,
     prepareQuickAsk: () => { prepareQuickAsk(); },
     renderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
@@ -438,6 +447,8 @@ export function buildContainer(): Container {
       prWatch.stop();
       sessionWork.closeAll();
       claudeCaller.close();
+      // A capture cut short by quitting never reaches its `finally`.
+      mcpServers.removeAll();
       database.close();
     },
   };
