@@ -1,0 +1,85 @@
+<!doctype html><meta charset="utf-8"><title>Quick Ask spike</title>
+<style>
+/* CSS glass copied from the motion prototype (quick-ask-motion.html), light + dark tokens. */
+:root {
+  --ink: #1b2130; --muted: #5d6578; --accent: #3b5bdb; --surface: #fff;
+  --glass: rgba(255, 255, 255, 0.36); --glass-rim: rgba(255, 255, 255, 0.72);
+  --glass-hi: rgba(255, 255, 255, 0.9); --glass-lo: rgba(27, 33, 48, 0.08);
+  --lens: rgba(59, 91, 219, 0.16); --divider: rgba(27, 33, 48, 0.10);
+  --shadow: 0 24px 60px rgba(27, 33, 48, 0.24), 0 2px 8px rgba(27, 33, 48, 0.10);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e4e8f1; --muted: #9aa3b6; --accent: #8ea6ff; --surface: #1a1f2a;
+    --glass: rgba(28, 32, 44, 0.42); --glass-rim: rgba(255, 255, 255, 0.22);
+    --glass-hi: rgba(255, 255, 255, 0.30); --glass-lo: rgba(0, 0, 0, 0.35);
+    --lens: rgba(142, 166, 255, 0.24); --divider: rgba(255, 255, 255, 0.12);
+    --shadow: 0 24px 60px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+}
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; font: 400 16px/1.4 -apple-system, system-ui; color: var(--ink); }
+.slab {
+  position: absolute; left: 20px; top: 20px; width: 640px;
+  overflow: hidden; border-radius: 30px; isolation: isolate;
+  background: var(--glass);
+  backdrop-filter: blur(16px) saturate(180%); -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid var(--glass-rim);
+  box-shadow: var(--shadow), inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo);
+}
+.slab::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
+  background: radial-gradient(120% 70% at 22% -20%, var(--glass-hi), transparent 55%); opacity: 0.5;
+}
+/* Native mode: the page draws only the rim and content; NSGlassEffectView is meant to show through. */
+.native .slab { background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: inset 0 1px 0 var(--glass-hi); }
+.native .slab::before { display: none; }
+.fill .slab { left: 0; top: 0; width: 100%; box-sizing: border-box; }
+.field { height: 58px; display: flex; align-items: center; gap: 12px; padding: 0 17px; }
+.mark { flex: none; width: 26px; height: 26px; border-radius: 8px; background: var(--accent); color: var(--surface); display: grid; place-items: center; }
+.mark svg { width: 15px; height: 15px; }
+#qa-input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--ink); font: 400 1.15rem/1.3 -apple-system, system-ui; padding: 0; }
+#qa-input::placeholder { color: var(--muted); }
+.hint { flex: none; font-size: 0.78rem; color: var(--muted); }
+.choices { list-style: none; margin: 0; padding: 6px; border-top: 1px solid var(--divider); display: flex; flex-direction: column; gap: 2px; }
+.choices li { padding: 8px 11px; border-radius: 10px; display: flex; justify-content: space-between; gap: 12px; }
+.choices li.on { background: var(--lens); box-shadow: inset 0 0 0 1px var(--glass-rim); }
+.choices li span:last-child { color: var(--muted); font: 0.76rem ui-monospace, Menlo; }
+.foot { border-top: 1px solid var(--divider); padding: 9px 18px; font-size: 0.86rem; color: var(--muted); }
+.tag { position: absolute; right: 26px; bottom: 16px; font: 11px ui-monospace; color: #000; background: #ffffffcc; padding: 2px 6px; border-radius: 4px; }
+</style>
+<div class="slab" id="slab">
+  <div class="field">
+    <span class="mark"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M9.2 1 3 9h4l-1.2 6L12 7H8z"/></svg></span>
+    <input id="qa-input" type="text" autocomplete="off" spellcheck="false" placeholder="Ask Patch, or create a task…">
+    <span class="hint">↵ send · esc close</span>
+  </div>
+  <div id="extra"></div>
+</div>
+<span class="tag" id="tag"></span>
+<script>
+  const q = new URLSearchParams(location.search);
+  const glass = q.get('glass') || 'css';
+  if (glass === 'native') document.documentElement.classList.add('native');
+  if (q.get('fill') === '1') document.documentElement.classList.add('fill');
+  document.getElementById('tag').textContent = `glass=${glass}`;
+  if (q.get('state') === 'choose') {
+    document.getElementById('qa-input').value = 'fix the flaky upload test in the iOS app';
+    document.getElementById('extra').innerHTML = `
+      <div class="foot">Patch isn't sure which project you mean</div>
+      <ul class="choices">
+        <li class="on"><span>cityrow-ios</span><span>~/Development/MoveLab/cityrow-ios</span></li>
+        <li><span>waterrower-connect-ios</span><span>~/Development/MoveLab/waterrower-connect-ios</span></li>
+        <li><span>KMM-SessionManager</span><span>~/Development/MoveLab/KMM-SessionManager</span></li>
+      </ul>`;
+  }
+  document.getElementById('qa-input').focus();
+  // Forwarded mouse moves arrive even while the window ignores mouse events.
+  const slab = document.getElementById('slab');
+  let inside = false;
+  addEventListener('mousemove', (e) => {
+    const r = slab.getBoundingClientRect();
+    const now = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    if (now !== inside) { inside = now; window.spike?.send('slab-hover', inside); }
+  });
+  addEventListener('mousedown', (e) => window.spike?.send('panel-event', `mousedown ${e.clientX},${e.clientY}`));
+</script>

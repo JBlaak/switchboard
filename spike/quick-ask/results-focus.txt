@@ -1,0 +1,86 @@
+=== SHOW=show HIDE=0
+SPIKE +2424ms spike pid 65713 panel=680x460, main=900x600
+SPIKE +2690ms BEFORE frontmost= TextEdit pid 58302 app.isHidden= false main.isFocused= false
+SPIKE +2714ms BEFORE on-screen Electron windows (front to back):
+SPIKE +2714ms   BEFORE  z=10 owner=Electron pid=65713 layer=0 bounds=450,285 900x600
+SPIKE +3448ms DURING on-screen Electron windows (front to back):
+SPIKE +3448ms   DURING  z=1 owner=Electron pid=65713 layer=101 bounds=560,292 680x460
+SPIKE +3448ms   DURING  z=11 owner=Electron pid=65713 layer=0 bounds=450,285 900x600
+SPIKE +3708ms DURING frontmost= TextEdit pid 58302 panel.isVisible= true panel.isFocused= true main.isFocused= false BrowserWindow.getFocusedWindow= Quick Ask spike (994ms after show)
+SPIKE +4194ms DURING panel input value= ""
+SPIKE +4343ms DURING frontmost after typing= TextEdit
+SPIKE +5319ms AFTER frontmost= TextEdit pid 58302 app.isHidden= false main.isVisible= true
+SPIKE +5332ms AFTER on-screen Electron windows (front to back):
+SPIKE +5332ms   AFTER  z=10 owner=Electron pid=65713 layer=0 bounds=450,285 900x600
+=== SHOW=show HIDE=1
+SPIKE +2414ms spike pid 66200 panel=680x460, main=900x600
+SPIKE +2665ms BEFORE frontmost= TextEdit pid 58302 app.isHidden= false main.isFocused= false
+SPIKE +2682ms BEFORE on-screen Electron windows (front to back):
+SPIKE +2682ms   BEFORE  z=10 owner=Electron pid=66200 layer=0 bounds=450,285 900x600
+SPIKE +3414ms DURING on-screen Electron windows (front to back):
+SPIKE +3414ms   DURING  z=1 owner=Electron pid=66200 layer=101 bounds=560,292 680x460
+SPIKE +3414ms   DURING  z=11 owner=Electron pid=66200 layer=0 bounds=450,285 900x600
+SPIKE +3658ms DURING frontmost= TextEdit pid 58302 panel.isVisible= true panel.isFocused= true main.isFocused= false BrowserWindow.getFocusedWindow= Quick Ask spike (976ms after show)
+SPIKE +4141ms DURING panel input value= ""
+SPIKE +4292ms DURING frontmost after typing= TextEdit
+SPIKE +5268ms AFTER frontmost= TextEdit pid 58302 app.isHidden= true main.isVisible= true
+SPIKE +5282ms AFTER on-screen Electron windows (front to back):
+SPIKE +5282ms   AFTER  z=10 owner=Electron pid=66200 layer=0 bounds=450,285 900x600
+=== SHOW=showInactive HIDE=0
+SPIKE +2418ms spike pid 66685 panel=680x460, main=900x600
+SPIKE +2682ms BEFORE frontmost= TextEdit pid 58302 app.isHidden= false main.isFocused= false
+SPIKE +2697ms BEFORE on-screen Electron windows (front to back):
+SPIKE +2697ms   BEFORE  z=10 owner=Electron pid=66685 layer=0 bounds=450,285 900x600
+SPIKE +3433ms DURING on-screen Electron windows (front to back):
+SPIKE +3433ms   DURING  z=1 owner=Electron pid=66685 layer=101 bounds=560,292 680x460
+SPIKE +3433ms   DURING  z=11 owner=Electron pid=66685 layer=0 bounds=450,285 900x600
+SPIKE +3701ms DURING frontmost= TextEdit pid 58302 panel.isVisible= true panel.isFocused= true main.isFocused= false BrowserWindow.getFocusedWindow= Quick Ask spike (1004ms after show)
+SPIKE +4202ms DURING panel input value= ""
+SPIKE +4343ms DURING frontmost after typing= TextEdit
+SPIKE +5322ms AFTER frontmost= TextEdit pid 58302 app.isHidden= false main.isVisible= true
+SPIKE +5340ms AFTER on-screen Electron windows (front to back):
+SPIKE +5340ms   AFTER  z=10 owner=Electron pid=66685 layer=0 bounds=450,285 900x600
+=== SHOW=show HIDE=0 FS=1
+SPIKE other app entered full screen, pid 67183
+SPIKE +4971ms other app pid 67183
+SPIKE +4974ms spike pid 67178 panel=680x460, main=900x600
+SPIKE +5218ms BEFORE frontmost= Electron pid 67183 app.isHidden= false main.isFocused= false
+SPIKE +5231ms BEFORE on-screen Electron windows (front to back):
+SPIKE +5231ms   BEFORE  z=1 owner=Electron pid=67183 layer=26 bounds=0,0 1800x39
+SPIKE +5231ms   BEFORE  z=4 owner=Electron pid=67183 layer=0 bounds=0,39 1800x32
+SPIKE +5231ms   BEFORE  z=5 owner=Electron pid=67183 layer=0 bounds=0,39 1800x1130
+SPIKE +5957ms DURING on-screen Electron windows (front to back):
+SPIKE +5957ms   DURING  z=1 owner=Electron pid=67178 layer=101 bounds=560,292 680x460
+SPIKE +5957ms   DURING  z=2 owner=Electron pid=67183 layer=26 bounds=0,0 1800x39
+SPIKE +5957ms   DURING  z=5 owner=Electron pid=67183 layer=0 bounds=0,39 1800x32
+SPIKE +5957ms   DURING  z=6 owner=Electron pid=67183 layer=0 bounds=0,39 1800x1130
+SPIKE +6201ms DURING frontmost= Electron pid 67183 panel.isVisible= true panel.isFocused= true main.isFocused= false BrowserWindow.getFocusedWindow= Quick Ask spike (970ms after show)
+SPIKE +6683ms DURING panel input value= ""
+SPIKE +6825ms DURING frontmost after typing= Electron
+SPIKE +7786ms AFTER frontmost= Electron pid 67183 app.isHidden= false main.isVisible= true
+SPIKE +7798ms AFTER on-screen Electron windows (front to back):
+SPIKE +7798ms   AFTER  z=1 owner=Electron pid=67183 layer=26 bounds=0,0 1800x39
+SPIKE +7798ms   AFTER  z=4 owner=Electron pid=67183 layer=0 bounds=0,39 1800x32
+SPIKE +7798ms   AFTER  z=5 owner=Electron pid=67183 layer=0 bounds=0,39 1800x1130
+=== SHOW=show HIDE=1 FS=1
+SPIKE other app entered full screen, pid 67646
+SPIKE +4969ms other app pid 67646
+SPIKE +4973ms spike pid 67601 panel=680x460, main=900x600
+SPIKE +5229ms BEFORE frontmost= Electron pid 67646 app.isHidden= false main.isFocused= false
+SPIKE +5240ms BEFORE on-screen Electron windows (front to back):
+SPIKE +5240ms   BEFORE  z=1 owner=Electron pid=67646 layer=26 bounds=0,0 1800x39
+SPIKE +5241ms   BEFORE  z=4 owner=Electron pid=67646 layer=0 bounds=0,39 1800x32
+SPIKE +5241ms   BEFORE  z=5 owner=Electron pid=67646 layer=0 bounds=0,39 1800x1130
+SPIKE +5973ms DURING on-screen Electron windows (front to back):
+SPIKE +5973ms   DURING  z=1 owner=Electron pid=67601 layer=101 bounds=560,292 680x460
+SPIKE +5973ms   DURING  z=2 owner=Electron pid=67646 layer=26 bounds=0,0 1800x39
+SPIKE +5973ms   DURING  z=5 owner=Electron pid=67646 layer=0 bounds=0,39 1800x32
+SPIKE +5973ms   DURING  z=6 owner=Electron pid=67646 layer=0 bounds=0,39 1800x1130
+SPIKE +6219ms DURING frontmost= Electron pid 67646 panel.isVisible= true panel.isFocused= true main.isFocused= false BrowserWindow.getFocusedWindow= Quick Ask spike (978ms after show)
+SPIKE +6697ms DURING panel input value= ""
+SPIKE +6838ms DURING frontmost after typing= Electron
+SPIKE +7808ms AFTER frontmost= Electron pid 67646 app.isHidden= true main.isVisible= true
+SPIKE +7820ms AFTER on-screen Electron windows (front to back):
+SPIKE +7820ms   AFTER  z=1 owner=Electron pid=67646 layer=26 bounds=0,0 1800x39
+SPIKE +7820ms   AFTER  z=4 owner=Electron pid=67646 layer=0 bounds=0,39 1800x32
+SPIKE +7820ms   AFTER  z=5 owner=Electron pid=67646 layer=0 bounds=0,39 1800x1130

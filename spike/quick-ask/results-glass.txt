@@ -1,0 +1,28 @@
+=== GLASS=native
+SPIKE +1384ms electron-liquid-glass loaded; isGlassSupported= true
+SPIKE +1386ms addView id= 0
+SPIKE +2592ms panel bounds {"x":560,"y":292,"width":680,"height":460}
+SPIKE +2606ms capturePage size 1360x920 pixel in slab (300,45)= {"b":0,"g":0,"r":0,"a":0} pixel in list (300,170)= {"b":0,"g":0,"r":0,"a":0} pixel outside slab (40,430)= {"b":0,"g":0,"r":0,"a":0}
+SPIKE +2643ms screencapture FAILED: could not create image from display
+SPIKE +2645ms desktopCapturer FAILED undefined
+SPIKE +3116ms cursor after synthetic move = {"x":1799,"y":980} target 600,722
+SPIKE +3860ms clicked outside slab at 600,722
+SPIKE +5088ms clicked inside slab at 900,322
+=== GLASS=native-slab
+SPIKE +1392ms electron-liquid-glass loaded; isGlassSupported= true
+SPIKE +1394ms addView id= 0
+SPIKE +2598ms panel bounds {"x":580,"y":292,"width":640,"height":60}
+SPIKE +2611ms capturePage size 1280x120 pixel in slab (300,45)= {"b":0,"g":0,"r":0,"a":0} pixel in list (300,170)= {"b":0,"g":0,"r":0,"a":0} pixel outside slab (40,430)= {"b":0,"g":0,"r":0,"a":0}
+SPIKE +2646ms screencapture FAILED: could not create image from display
+SPIKE +2648ms desktopCapturer FAILED undefined
+SPIKE +3120ms cursor after synthetic move = {"x":1799,"y":980} target 620,322
+SPIKE +3869ms clicked outside slab at 620,322
+SPIKE +5102ms clicked inside slab at 900,322
+=== GLASS=css
+SPIKE +2578ms panel bounds {"x":560,"y":292,"width":680,"height":460}
+SPIKE +2584ms capturePage size 1360x920 pixel in slab (300,45)= {"b":23,"g":18,"r":17,"a":110} pixel in list (300,170)= {"b":18,"g":13,"r":12,"a":107} pixel outside slab (40,430)= {"b":0,"g":0,"r":0,"a":0}
+SPIKE +2613ms screencapture FAILED: could not create image from display
+SPIKE +2615ms desktopCapturer FAILED undefined
+SPIKE +3078ms cursor after synthetic move = {"x":1799,"y":980} target 600,722
+SPIKE +3806ms clicked outside slab at 600,722
+SPIKE +5031ms clicked inside slab at 900,322

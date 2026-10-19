@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Busy backdrop</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;font:600 15px/1.35 -apple-system,system-ui}
+  body{background:
+    repeating-linear-gradient(45deg,rgba(0,0,0,.12) 0 6px,transparent 6px 22px),
+    radial-gradient(circle at 15% 25%,#ff6b35 0,transparent 30%),
+    radial-gradient(circle at 80% 20%,#2f6bff 0,transparent 32%),
+    radial-gradient(circle at 55% 75%,#9b30ff 0,transparent 35%),
+    radial-gradient(circle at 25% 85%,#00c9a7 0,transparent 28%),
+    linear-gradient(120deg,#ffd166,#ef476f 40%,#118ab2 70%,#06d6a0);}
+  .cols{columns:6;column-gap:18px;padding:20px;color:#111}
+  .cols p{margin:0 0 10px;break-inside:avoid}
+  .cols p:nth-child(3n){color:#fff;text-shadow:0 1px 0 #000}
+  .cols p:nth-child(5n){font-size:26px;font-weight:800;color:#002}
+  #log{position:fixed;left:10px;bottom:10px;background:#000;color:#0f0;padding:6px 10px;font:12px ui-monospace}
+</style>
+<div class="cols" id="cols"></div><div id="log">no clicks yet</div>
+<script>
+  const words = 'Switchboard Quick Ask Liquid Glass panel focus capture BlaakTasks James Patch Electron spring drop rim sheen lens'.split(' ');
+  let h = '';
+  for (let i = 0; i < 180; i++) { let s = ''; for (let j = 0; j < 6 + i % 9; j++) s += words[(i * 7 + j * 3) % words.length] + ' '; h += `<p>${s}</p>`; }
+  document.getElementById('cols').innerHTML = h;
+  addEventListener('mousedown', (e) => {
+    document.getElementById('log').textContent = `click ${e.screenX},${e.screenY}`;
+    window.spike?.send('backdrop-click', `${e.screenX},${e.screenY}`);
+  });
+</script>
