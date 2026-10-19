@@ -1,18 +1,21 @@
 /**
- * Quick Ask (#148, #149): the pop-up, opened by ⌥Space's stand-in, and the
- * session it starts in the main window.
+ * Quick Ask (#148, #149, #151): the pop-up, opened by ⌥Space's stand-in, the
+ * session it starts in the main window, and a task it adds to BlaakTasks.
  *
  * Its rules are unit tested (test/quick-ask-slice.test.ts,
  * test/quick-ask-keys.test.ts, test/quick-ask-service.test.ts). These walk
  * the wired app: the hook shows the pop-up, the text crosses IPC, main sends
  * it to the fake `claude -p` the pop-up warmed as it showed, and the answer
  * starts a session in the main window, lists the choices, or hands the text
- * to the main window's New Session picker.
+ * to the main window's New Session picker. A capture goes to the same fake,
+ * allowed one MCP tool, from a `~/.claude.json` with stand-in servers.
  *
  * Under the harness the pop-up never comes on screen; whether it is showing
  * is main's word (`quickAskShowing`), and a click away is the window losing
  * the focus, sent to the page as the OS would.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { test, expect, forEachAppearance } from '../support/test';
 import { dialog, sessionRow } from '../support/app';
 import { fakeRoute, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
@@ -66,6 +69,24 @@ function answerUnsure(route: FakeRoute, home: FixtureHome, prompt: string, delay
 /** Nothing fits. */
 function answerNoMatch(route: FakeRoute): void {
   route.answer({ projectPath: null, confident: false, candidates: [], prompt: '' });
+}
+
+const TASK = 'create a task to call Peter on Thursday';
+/** A stand-in: no real server is ever reached. */
+const TOKEN = 'e2e-stand-in-token';
+
+/** `~/.claude.json` with both servers set up, as Claude Code writes it. */
+function setUpServers(home: FixtureHome): void {
+  const server = (url: string) => ({ type: 'http', url, headers: { Authorization: `Bearer ${TOKEN}` } });
+  fs.writeFileSync(path.join(home.home, '.claude.json'), JSON.stringify({
+    mcpServers: { blaaktasks: server('http://127.0.0.1:9/blaaktasks'), james: server('http://127.0.0.1:9/james') },
+  }));
+}
+
+/** Patch says it is a task, and BlaakTasks files it as "Call Peter · due Thu" after `delayMs`. */
+function answerTask(route: FakeRoute, delayMs = 0): void {
+  route.answer({ kind: 'task', captureText: 'call Peter on Thursday', projectPath: null, confident: false, candidates: [], prompt: '' });
+  route.answerTool('mcp__blaaktasks__capture', { ids: ['task-1'], summary: 'Call Peter · due Thu' }, delayMs);
 }
 
 /** Set the Quick Session Folder, as a save in global settings does. */
@@ -352,6 +373,74 @@ test('with the main window closed, it opens without the focus and the session st
   expect(launch.argv.at(-1)).toBe('Fix the flaky upload test.');
   await expect(sessionRow(reopened, 'New session')).toBeVisible();
   expect(await mainWindowFocused(app)).toBe(false);
+});
+
+// ── A task to BlaakTasks ──
+
+test('a task is added to BlaakTasks, and ⌘Z takes it back and puts the text back', async ({ app, home }) => {
+  /* Given */
+  setUpServers(home);
+  const route = fakeRoute(home);
+  answerTask(route, 300);
+  route.answerTool('mcp__blaaktasks__undo_capture', { ok: true }, 300);
+  const before = launchedKeys(home);
+  const popUp = await open(app);
+  await box(popUp).fill(TASK);
+
+  /* When */
+  await box(popUp).press('Enter');
+
+  /* Then */
+  await expect(line(popUp)).toHaveText('Adding to BlaakTasks…');
+  await clickAway(popUp);
+  expect(await quickAskShowing(app)).toBe(true);
+  await expect(line(popUp)).toHaveText('Task added · Call Peter · due Thu');
+  const capture = route.calls().find(call => call.argv.includes('mcp__blaaktasks__capture'))!;
+  expect(capture.prompt).toBe('Text:\ncall Peter on Thursday');
+  expect(capture.argv).toContain('--strict-mcp-config');
+  expect(capture.mcp).toMatchObject({ mode: 0o600, servers: ['blaaktasks'] });
+  expect(capture.argv.join(' ')).not.toContain(TOKEN);
+  expect(fs.existsSync(capture.mcp!.path)).toBe(false);
+
+  /* When */
+  await box(popUp).press('Meta+z');
+
+  /* Then */
+  await expect(line(popUp)).toHaveText('Taking it back…');
+  await expect(line(popUp)).toHaveText('Undone');
+  await expect(box(popUp)).toHaveValue(TASK);
+  await expect(box(popUp)).toBeFocused();
+  expect(await selection(popUp)).toEqual([0, TASK.length]);
+  expect(await quickAskShowing(app)).toBe(true);
+  const undo = route.calls().find(call => call.argv.includes('mcp__blaaktasks__undo_capture'))!;
+  expect(undo.prompt).toBe('Ids:\n- task-1');
+  expect(undo.mcp).toMatchObject({ mode: 0o600, servers: ['blaaktasks'] });
+  expect(fs.existsSync(undo.mcp!.path)).toBe(false);
+  expect([...launchedKeys(home)].filter(key => !before.has(key))).toEqual([]);
+});
+
+forEachAppearance(() => {
+  test('a capture saving, and saved', async ({ app, home }) => {
+    /* Given */
+    setUpServers(home);
+    answerTask(fakeRoute(home), 1_500);
+    const popUp = await open(app);
+    await box(popUp).fill(TASK);
+
+    /* When */
+    await box(popUp).press('Enter');
+
+    /* Then */
+    await expect(line(popUp)).toHaveText('Adding to BlaakTasks…');
+    await expectPopUp(popUp, 'quick-ask-saving');
+    await expect(line(popUp)).toHaveText('Task added · Call Peter · due Thu');
+    await expectPopUp(popUp, 'quick-ask-saved');
+
+    // It holds 3 s, then closes, and the draft is gone.
+    await expect.poll(() => quickAskShowing(app), { timeout: 6_000 }).toBe(false);
+    await open(app);
+    await expect(box(popUp)).toHaveValue('');
+  });
 });
 
 forEachAppearance(() => {

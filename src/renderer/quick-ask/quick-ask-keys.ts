@@ -10,9 +10,14 @@ import { askKey } from '../ui/ask/ask-keys';
 import type { AskKey, AskKeyPress } from '../ui/ask/ask-keys';
 import type { QuickAskPhase } from '../state/quick-ask-slice';
 
-export type QuickAskKey = AskKey | 'dismiss';
+export type QuickAskKey = AskKey | 'dismiss' | 'undo';
 
-export function quickAskKey(phase: QuickAskPhase, press: AskKeyPress): QuickAskKey | null {
+/** A key press, with ⌘ for ⌘Z on the saved line. */
+export interface QuickAskKeyPress extends AskKeyPress {
+  metaKey?: boolean;
+}
+
+export function quickAskKey(phase: QuickAskPhase, press: QuickAskKeyPress): QuickAskKey | null {
   if (press.isComposing) return null;
   switch (phase) {
     case 'editing':
@@ -23,8 +28,14 @@ export function quickAskKey(phase: QuickAskPhase, press: AskKeyPress): QuickAskK
     // A capture half-written is not cancelled from here (B4).
     case 'saving':
       return press.key === 'Escape' || press.key === 'Enter' || press.key === 'Tab' ? 'swallow' : null;
-    case 'started':
+    // Nor one half taken back, and the box under it, editable again, takes no keys yet.
+    case 'undoing':
+      return 'swallow';
     case 'saved':
+      if (press.metaKey && press.key.toLowerCase() === 'z' && !press.shiftKey) return 'undo';
+      return press.key === 'Escape' ? 'dismiss' : 'swallow';
+    case 'started':
+    case 'undone':
       return press.key === 'Escape' ? 'dismiss' : 'swallow';
   }
 }

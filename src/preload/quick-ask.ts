@@ -6,7 +6,7 @@
  */
 import { contextBridge, ipcRenderer } from 'electron';
 import { INVOKE, QUICK_ASK_EVENT, SEND } from '../ipc/channels';
-import type { QuickAskApi, QuickAskLooks } from '../ipc/quick-ask-api';
+import type { CaptureTarget, QuickAskApi, QuickAskLooks } from '../ipc/quick-ask-api';
 import type { Unsubscribe } from '../ipc/api';
 
 function subscribe(channel: string, listener: () => void): Unsubscribe {
@@ -29,6 +29,7 @@ const quickAsk: QuickAskApi = {
   undo: () => ipcRenderer.invoke(INVOKE.quickAskUndo),
   dismiss: () => ipcRenderer.send(SEND.quickAskDismiss),
   onShown: (listener) => subscribeWith<QuickAskLooks>(QUICK_ASK_EVENT.shown, listener),
+  onSaving: (listener) => subscribeWith<CaptureTarget>(QUICK_ASK_EVENT.saving, listener),
   onCloseRequested: (listener) => subscribe(QUICK_ASK_EVENT.closeRequested, listener),
   pointerOverSlab: (over) => ipcRenderer.send(SEND.quickAskPointerOverSlab, over),
 };

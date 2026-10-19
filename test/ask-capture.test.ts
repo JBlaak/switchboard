@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  QUICK_ASK_SESSION, captureArgs, captureBootArgs, capturePrompt, captureSystemPrompt, mcpServerConfig,
+  QUICK_ASK_SESSION, captureArgs, captureBootArgs, capturePrompt, captureSystemPrompt, mcpServerConfig, missingServersLine,
   noAnswerLine, readCaptureRun, readUndoRun, undoArgs, undoBootArgs, undoPrompt, undoSystemPrompt,
 } from '../src/domain/ask/capture';
 
@@ -59,6 +59,19 @@ test('mcpServerConfig is null for a missing server', () => {
 
   /* Then */
   assert.deepEqual(configs, [null, null, null, null, null]);
+});
+
+test('missingServersLine names what isn\'t set up in Claude Code, for the settings switch', () => {
+  /* When */
+  const lines = [missingServersLine([]), missingServersLine(['tasks']), missingServersLine(['james']), missingServersLine(['james', 'tasks'])];
+
+  /* Then */
+  assert.deepEqual(lines, [
+    '',
+    'BlaakTasks isn’t set up in Claude Code',
+    'James isn’t set up in Claude Code',
+    'BlaakTasks and James aren’t set up in Claude Code',
+  ]);
 });
 
 // ── Capturing ──

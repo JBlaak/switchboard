@@ -22,7 +22,7 @@ import { QUICK_ASK_EVENT } from '../../ipc/channels';
 import { containNavigation, hiddenForE2e } from './main-window';
 import { QUICK_ASK_SIZE, quickAskBounds } from './quick-ask-bounds';
 import type { QuickAskPanel } from '../../application/ports/quick-ask-panel';
-import type { QuickAskLooks } from '../../ipc/quick-ask-api';
+import type { CaptureTarget, QuickAskLooks } from '../../ipc/quick-ask-api';
 
 export class QuickAskWindow implements QuickAskPanel {
   readonly #window: BrowserWindow;
@@ -103,6 +103,11 @@ export class QuickAskWindow implements QuickAskPanel {
   toggle(): void {
     if (this.#shown) this.#send(QUICK_ASK_EVENT.closeRequested);
     else this.show();
+  }
+
+  /** A send turned out to be a capture, into `target`, and it is being written (C4). */
+  saving(target: CaptureTarget): void {
+    if (!this.#window.isDestroyed()) this.#send(QUICK_ASK_EVENT.saving, target);
   }
 
   pointerOverSlab(over: boolean): void {

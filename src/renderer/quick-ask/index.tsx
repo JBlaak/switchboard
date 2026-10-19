@@ -11,9 +11,11 @@ import '@fontsource-variable/nunito-sans';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QuickAsk } from './QuickAsk';
-import { close, shown, toggle } from './actions';
+import { close, saving, shown, toggle } from './actions';
 
 window.quickAsk.onShown(shown);
+// The send is a capture, and main is writing it (C4).
+window.quickAsk.onSaving(saving);
 // ⌥Space while showing (H1).
 window.quickAsk.onCloseRequested(toggle);
 // A click anywhere outside the slab lands in the window underneath, which

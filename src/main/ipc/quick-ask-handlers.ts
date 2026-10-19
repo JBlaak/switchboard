@@ -4,8 +4,7 @@
  *
  * The routing and what follows from it are `QuickAskService`'s; this is the
  * window's own plumbing, hiding it and letting the mouse through beside the
- * slab, and the channels into the service. Undo belongs to captures, which
- * #151 brings; until then there is nothing to undo.
+ * slab, and the channels into the service.
  */
 import { INVOKE, SEND } from '../../ipc/channels';
 import type { Container } from '../composition-root';
@@ -20,5 +19,5 @@ export function registerQuickAskHandlers(ipc: IpcRegistrar, app: Container): voi
   ipc.handle(INVOKE.quickAskCancel, () => app.quickAsk.cancel());
   ipc.handle(INVOKE.quickAskStart, (projectPath: string) => app.quickAsk.start(String(projectPath)));
   ipc.handle(INVOKE.quickAskOpenPicker, () => app.quickAsk.openPicker());
-  ipc.handle(INVOKE.quickAskUndo, () => ({ ok: false }));
+  ipc.handle(INVOKE.quickAskUndo, () => app.quickAsk.undo());
 }

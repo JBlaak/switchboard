@@ -11,6 +11,7 @@
  */
 import type { RendererEvent } from './events';
 import type { ShellProfile } from '../../domain/shell/shell-profile';
+import type { CaptureTarget } from '../../domain/ask/model';
 
 /** A settings blob — open-ended, since each feature writes its own keys. */
 export type SettingsRecord = Readonly<Record<string, any>>;
@@ -30,6 +31,8 @@ export interface SettingsPanel {
   readonly appVersion: string | null;
   /** Whether main holds ⌥Space; false with the switch on means another app has it (H3). */
   readonly quickAskRegistered: boolean;
+  /** Quick Ask's capture targets whose server isn't set up in Claude Code (C6). */
+  readonly quickAskMissing: readonly CaptureTarget[];
   readonly openId: number;
   /** Save went through; the panel shows "✓ Saved" until it closes. */
   readonly saved: boolean;
@@ -57,6 +60,7 @@ export function settingsReducer(state: SettingsState, event: RendererEvent): Set
           shellProfiles: event.shellProfiles,
           appVersion: event.appVersion,
           quickAskRegistered: event.quickAskRegistered,
+          quickAskMissing: event.quickAskMissing,
           openId,
           saved: false,
         },

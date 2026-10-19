@@ -22,6 +22,9 @@ export interface CaptureReceipt {
   summary: string;
 }
 
+/** Every target, in the order lines name them. */
+export const CAPTURE_TARGETS: readonly CaptureTarget[] = ['tasks', 'james'];
+
 /** Each target's server, as `~/.claude.json` names it under `mcpServers`. */
 export const CAPTURE_SERVERS: Record<CaptureTarget, string> = { tasks: 'blaaktasks', james: 'james' };
 
@@ -128,6 +131,18 @@ export function readCaptureRun(run: ClaudeRun, target: CaptureTarget): CaptureRe
 /** Patch's line when a capture didn't go through. */
 export function noAnswerLine(target: CaptureTarget): string {
   return `${TARGET_NAMES[target]} didn’t answer. Try again?`;
+}
+
+/**
+ * The settings switch's line for the targets whose server isn't in
+ * `~/.claude.json` (C6), or '' when both are there.
+ */
+export function missingServersLine(missing: readonly CaptureTarget[]): string {
+  const names = CAPTURE_TARGETS.filter(target => missing.includes(target)).map(target => TARGET_NAMES[target]);
+  if (names.length === 0) return '';
+  return names.length === 1
+    ? `${names[0]} isn’t set up in Claude Code`
+    : `${names.join(' and ')} aren’t set up in Claude Code`;
 }
 
 // ── Undoing ──

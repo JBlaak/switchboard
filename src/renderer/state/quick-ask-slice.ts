@@ -5,24 +5,47 @@
  * The box itself is `ask-slice`'s, moved by its own reducer: editing, waiting
  * and choosing mean what they mean on the empty screen. What the pop-up adds
  * is the `result` on top of the box: "Started in ‹folder›" for 0.7 s before
- * it closes (B7), a capture being saved, and the saved line (C4). Main does
- * the routing (R1), so an answer is a `QuickAskReply`, not a `RouteResult`.
+ * it closes (B7), a capture being saved, the saved line, and ⌘Z taking it
+ * back (C4). Main does the routing (R1), so an answer is a `QuickAskReply`,
+ * not a `RouteResult`.
  *
  * The draft lives here, in the pop-up's memory: closing keeps it, and only a
- * session started or a capture saved clears it (B6).
+ * session started or a capture saved clears it (B6). A capture undone puts it
+ * back, so the saved line holds on to it until the pop-up closes.
  */
 import { askReducer, initialAskState } from './ask-slice';
 import type { AskPhase, AskState } from './ask-slice';
 import type { RendererEvent } from './events';
 import type { CaptureTarget, QuickAskReply } from '../../ipc/quick-ask-api';
 
-export type QuickAskPhase = AskPhase | 'started' | 'saving' | 'saved';
+export type QuickAskPhase = AskPhase | 'started' | 'saving' | 'saved' | 'undoing' | 'undone';
 
 /** What the pop-up shows in place of the box's own phase. */
 export type QuickAskResult =
   | { readonly kind: 'started'; readonly folder: string }
-  | { readonly kind: 'saving' }
-  | { readonly kind: 'saved'; readonly target: CaptureTarget; readonly summary: string };
+  | { readonly kind: 'saving'; readonly target: CaptureTarget }
+  /** `text` is the draft the capture cleared, for ⌘Z to put back. */
+  | { readonly kind: 'saved'; readonly target: CaptureTarget; readonly summary: string; readonly text: string }
+  | { readonly kind: 'undoing'; readonly target: CaptureTarget; readonly summary: string; readonly text: string }
+  /** "Undone", for a moment, before the text goes back in the box. */
+  | { readonly kind: 'undone'; readonly text: string };
+
+const TARGET_NAMES: Record<CaptureTarget, string> = { tasks: 'BlaakTasks', james: 'James' };
+
+/** The line while a capture is written (C4). */
+export function savingLine(target: CaptureTarget): string {
+  return target === 'tasks' ? 'Adding to BlaakTasks…' : 'Giving it to James…';
+}
+
+/** The saved line's first words, before the summary (C4). */
+export function savedLabel(target: CaptureTarget): string {
+  return target === 'tasks' ? 'Task added' : 'Kept';
+}
+
+/** Patch's line when ⌘Z didn't go through: it is still stored. */
+export function undoFailedLine(target: CaptureTarget): string {
+  return `Couldn’t take it back. It’s still in ${TARGET_NAMES[target]}.`;
+}
 
 export interface QuickAskState {
   readonly box: AskState;
@@ -49,8 +72,14 @@ export type QuickAskEvent =
   | { type: 'quickAskReplied'; asked: number; reply: QuickAskReply }
   /** Enter on a choice: the box waits while main starts it. */
   | { type: 'quickAskChoiceSent' }
-  /** The send turned out to be a capture, and it is being written. */
-  | { type: 'quickAskSaving' }
+  /** The send turned out to be a capture into `target`, and it is being written. */
+  | { type: 'quickAskSaving'; target: CaptureTarget }
+  /** ⌘Z on the saved line: main takes the capture back. */
+  | { type: 'quickAskUndoing' }
+  /** Main answered the undo. */
+  | { type: 'quickAskUndone'; ok: boolean }
+  /** "Undone" has shown: the text goes back in the box. */
+  | { type: 'quickAskRestored' }
   /** The pop-up came on screen. */
   | { type: 'quickAskShown' }
   /** The pop-up went away. */
@@ -60,9 +89,9 @@ export function quickAskPhase(state: QuickAskState): QuickAskPhase {
   return state.result?.kind ?? state.box.phase;
 }
 
-/** Esc, a click away and ⌥Space close it, except while it waits or saves (B4). */
+/** Esc, a click away and ⌥Space close it, except while it waits, saves or undoes (B4). */
 export function canClose(phase: QuickAskPhase): boolean {
-  return phase !== 'waiting' && phase !== 'saving';
+  return phase !== 'waiting' && phase !== 'saving' && phase !== 'undoing';
 }
 
 export function quickAskReducer(state: QuickAskState, event: QuickAskEvent): QuickAskState {
@@ -78,12 +107,32 @@ export function quickAskReducer(state: QuickAskState, event: QuickAskEvent): Qui
     }
 
     case 'quickAskSaving':
-      return state.box.phase === 'waiting' && !state.result ? { ...state, result: { kind: 'saving' } } : state;
+      return state.box.phase === 'waiting' && !state.result
+        ? { ...state, result: { kind: 'saving', target: event.target } }
+        : state;
+
+    case 'quickAskUndoing': {
+      const { result } = state;
+      return result?.kind === 'saved' ? { ...state, result: { ...result, kind: 'undoing' } } : state;
+    }
+
+    case 'quickAskUndone': {
+      const { result } = state;
+      if (result?.kind !== 'undoing') return state;
+      return event.ok
+        ? { ...state, result: { kind: 'undone', text: result.text } }
+        : { ...state, result: null, note: undoFailedLine(result.target) };
+    }
+
+    case 'quickAskRestored':
+      return state.result?.kind === 'undone' ? restored(state, state.result.text) : state;
 
     // Back with the draft, to edit; whatever showed last time is over.
     case 'quickAskShown':
     case 'quickAskClosed':
       if (!canClose(quickAskPhase(state))) return state;
+      // Closed before "Undone" had gone: the text is back all the same.
+      if (state.result?.kind === 'undone') return restored(state, state.result.text);
       if (state.result === null && state.box.phase === 'editing') return state;
       return { ...state, box: closed(state.box), result: null, folders: [] };
 
@@ -116,13 +165,18 @@ function replied(state: QuickAskState, reply: QuickAskReply): QuickAskState {
     case 'saved':
       return {
         ...state, box: { ...editing, text: '' }, note: '',
-        result: { kind: 'saved', target: reply.target, summary: reply.summary },
+        result: { kind: 'saved', target: reply.target, summary: reply.summary, text: state.box.text },
       };
     case 'captureFailed':
       return { ...state, box: editing, result: null, note: reply.reason };
     case 'unlocked':
       return { ...state, box: editing, result: null };
   }
+}
+
+/** Undone: the text back in the box, to edit. */
+function restored(state: QuickAskState, text: string): QuickAskState {
+  return { ...state, box: { ...closed(state.box), text }, result: null, note: '' };
 }
 
 /** The box back to editing, its list closed. */

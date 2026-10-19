@@ -247,12 +247,23 @@ function readJsonLines<T>(file: string): T[] {
   return text.split('\n').filter(Boolean).map(line => JSON.parse(line) as T);
 }
 
+/** The `--mcp-config` a call was given, as the fake found it while the call ran. */
+export interface McpFacts {
+  path: string;
+  /** Its permission bits, e.g. 0o600; null when it couldn't be read. */
+  mode: number | null;
+  servers: string[];
+}
+
 /** What a routing answer says, before it is wrapped in the CLI's envelope. */
 export interface RouteAnswer {
   projectPath: string | null;
   confident: boolean;
   candidates: string[];
   prompt: string;
+  /** Quick Ask's routing call only (C1): a session, or a capture of `captureText`. */
+  kind?: 'session' | 'task' | 'save';
+  captureText?: string;
 }
 
 /**
@@ -278,6 +289,19 @@ export class FakeRoute {
     this.write({ stdout: JSON.stringify(envelope) + '\n', exitCode: 0, delayMs });
   }
 
+  /**
+   * What a call allowed only `tool` answers (#151), Haiku's JSON wrapped the
+   * same way; every other call still answers `answer`'s.
+   */
+  answerTool(tool: string, answer: unknown, delayMs = 0): void {
+    const envelope = {
+      type: 'result', subtype: 'success', is_error: false, num_turns: 2, permission_denials: [],
+      result: JSON.stringify(answer),
+    };
+    fs.writeFileSync(path.join(this.dir, `answer-${tool}.json`),
+      JSON.stringify({ stdout: JSON.stringify(envelope) + '\n', exitCode: 0, delayMs }));
+  }
+
   /** Fail the way the CLI does: the envelope with `is_error`, and exit 1. */
   fail(message: string): void {
     const envelope = { type: 'result', subtype: 'success', is_error: true, result: message };
@@ -288,7 +312,7 @@ export class FakeRoute {
    * Every routing call so far, oldest first: its argv, and the prompt it was
    * given, last on the argv or, for a warm one, as a message on stdin.
    */
-  calls(): { argv: string[]; cwd: string; prompt: string; warm: boolean }[] {
+  calls(): { argv: string[]; cwd: string; prompt: string; warm: boolean; mcp?: McpFacts }[] {
     return readJsonLines(path.join(this.dir, 'calls.jsonl'));
   }
 

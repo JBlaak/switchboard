@@ -23,7 +23,7 @@ import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
 import type { Usage } from '../domain/usage/usage';
 import type { Weather, WeatherLocation } from '../domain/weather/weather';
-import type { RouteRequest, RouteResult } from '../domain/ask/model';
+import type { CaptureTarget, RouteRequest, RouteResult } from '../domain/ask/model';
 import type { IssueWorktreeRequest, IssueWorktreeResult } from '../domain/plan/issue-session';
 import type { Plan, PlanSummary } from '../domain/plan/model';
 
@@ -112,8 +112,11 @@ export interface SwitchboardApi {
    * half of it, main also has to hand it to Electron.
    */
   setAppearance(mode: Appearance): Promise<IpcResult>;
-  /** Whether main holds ⌥Space for Quick Ask; false when it is off or another app has it. */
-  quickAskHotkeyStatus(): Promise<{ registered: boolean }>;
+  /**
+   * Whether main holds ⌥Space for Quick Ask, false when it is off or another
+   * app has it; and the capture targets whose server isn't set up in Claude Code.
+   */
+  quickAskHotkeyStatus(): Promise<{ registered: boolean; missing: CaptureTarget[] }>;
 
   // ── Host ──
   openExternal(url: string): Promise<void>;

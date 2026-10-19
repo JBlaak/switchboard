@@ -4,6 +4,7 @@
 import { INVOKE } from '../../ipc/channels';
 import { normaliseAppearance } from '../../domain/settings/appearance';
 import { GLOBAL_SETTINGS_KEY } from '../../domain/settings/settings';
+import { CAPTURE_SERVERS, CAPTURE_TARGETS } from '../../domain/ask/capture';
 import type { Container } from '../composition-root';
 import type { IpcRegistrar } from './registrar';
 
@@ -16,8 +17,14 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
     return { ok: true };
   });
 
-  /** Whether ⌥Space is held, for the settings switch's "in use" line (H3). */
-  ipc.handle(INVOKE.quickAskHotkeyStatus, () => ({ registered: app.quickAskHotkey.registered }));
+  /**
+   * Whether ⌥Space is held, for the settings switch's "in use" line (H3), and
+   * which capture servers aren't set up, for its "isn't set up" line (C6).
+   */
+  ipc.handle(INVOKE.quickAskHotkeyStatus, () => ({
+    registered: app.quickAskHotkey.registered,
+    missing: CAPTURE_TARGETS.filter(target => !app.mcpServers.has(CAPTURE_SERVERS[target])),
+  }));
 
   ipc.handle(INVOKE.getEffectiveSettings, (projectPath: string | null) =>
     app.settings.effective(projectPath));

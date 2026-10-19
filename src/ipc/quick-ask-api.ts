@@ -9,7 +9,9 @@
 import type { Unsubscribe } from './api';
 import type { QuickAskReply } from '../domain/ask/quick-ask';
 
-export type { CaptureTarget } from '../domain/ask/model';
+import type { CaptureTarget } from '../domain/ask/model';
+
+export type { CaptureTarget };
 /** What came of a send, or of a choice from the list; main's `QuickAskService` answers it. */
 export type { QuickAskReply };
 
@@ -32,6 +34,8 @@ export interface QuickAskApi {
   undo(): Promise<{ ok: boolean }>;
   /** Hide the pop-up. */
   dismiss(): void;
+  /** A send turned out to be a capture into `target`, and main is writing it. */
+  onSaving(listener: (target: CaptureTarget) => void): Unsubscribe;
   /** The pop-up came on screen, with the system's settings as they are now. */
   onShown(listener: (looks: QuickAskLooks) => void): Unsubscribe;
 
