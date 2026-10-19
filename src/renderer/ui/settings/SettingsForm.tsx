@@ -13,7 +13,7 @@
 import { useRef, useState } from 'react';
 import { PERMISSION_MODES } from '../../../domain/launch/session-options';
 import { shortProjectPath } from '../../../domain/project/project-path';
-import { resolveWeatherEnabled, resolveWeatherLocation } from '../../../domain/settings/settings';
+import { resolveQuickAskEnabled, resolveWeatherEnabled, resolveWeatherLocation } from '../../../domain/settings/settings';
 import { DEFAULT_WEATHER_LOCATION } from '../../../domain/weather/weather';
 import { isFontAvailable } from '../../features/terminal/terminal-manager';
 import {
@@ -77,6 +77,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
   const visibleCount = useRef<HTMLInputElement>(null);
   const maxAge = useRef<HTMLInputElement>(null);
   const weatherEnabled = useRef<HTMLInputElement>(null);
+  const quickAsk = useRef<HTMLInputElement>(null);
 
   const readers: Record<ProjectField, () => unknown> = {
     permissionMode: () => permMode.current!.value || null,
@@ -95,6 +96,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
     } else {
       for (const field of PROJECT_FIELDS) settings[field] = readers[field]();
       settings.quickSessionPath = quickSessionPath.current!.value.trim();
+      settings.quickAsk = quickAsk.current!.checked;
       settings.visibleSessionCount = parseInt(visibleCount.current!.value) || 25;
       settings.sessionMaxAgeDays = parseInt(maxAge.current!.value) || 3;
       settings.terminalTheme = terminalTheme.current!.value || 'switchboard';
@@ -171,6 +173,15 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
             description="Where the lightning bolt, ⌘N and N (outside a session) start a session straight away">
             <input type="text" className="settings-input" id="sv-quick-session-path" ref={quickSessionPath}
               placeholder="/path/to/folder" defaultValue={fieldValue('quickSessionPath', '') ?? ''} />
+          </AppField>
+        )}
+
+        {!isProject && (
+          <AppField label="Open Quick Ask with ⌥Space"
+            description={<>Ask Patch for a session from any app, while Switchboard runs<span id="sv-quick-ask-warning" className="settings-warning">{
+              resolveQuickAskEnabled(current) && !panel.quickAskRegistered ? '⌥Space is in use by another app' : ''}</span></>}>
+            <label className="settings-toggle"><input type="checkbox" id="sv-quick-ask" ref={quickAsk}
+              defaultChecked={resolveQuickAskEnabled(current)} /><span className="settings-toggle-slider"></span></label>
           </AppField>
         )}
       </div>

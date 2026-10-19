@@ -77,6 +77,7 @@ const api: SwitchboardApi = {
   getEffectiveSettings: (projectPath) => ipcRenderer.invoke(INVOKE.getEffectiveSettings, projectPath),
   getShellProfiles: () => ipcRenderer.invoke(INVOKE.getShellProfiles),
   setAppearance: (mode) => ipcRenderer.invoke(INVOKE.setAppearance, mode),
+  quickAskHotkeyStatus: () => ipcRenderer.invoke(INVOKE.quickAskHotkeyStatus),
 
   // ── Host ──
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),

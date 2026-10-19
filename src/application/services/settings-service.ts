@@ -8,7 +8,7 @@
  */
 import {
   GLOBAL_SETTINGS_KEY, mergeEffectiveSettings, projectSettingsKey, resolveShellProfileId,
-  resolveWeatherEnabled, resolveWeatherLocation,
+  resolveQuickAskEnabled, resolveWeatherEnabled, resolveWeatherLocation,
 } from '../../domain/settings/settings';
 import { remoteProjectPath } from '../../domain/project/remote-target';
 import type {
@@ -78,6 +78,12 @@ export class SettingsService {
 
   weatherLocation(): WeatherLocation {
     return resolveWeatherLocation(this.global());
+  }
+
+  // ── Quick Ask ──
+
+  quickAskEnabled(): boolean {
+    return resolveQuickAskEnabled(this.global());
   }
 
   // ── Hidden projects ──

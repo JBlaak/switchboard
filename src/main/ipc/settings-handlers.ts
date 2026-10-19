@@ -3,6 +3,7 @@
  */
 import { INVOKE } from '../../ipc/channels';
 import { normaliseAppearance } from '../../domain/settings/appearance';
+import { GLOBAL_SETTINGS_KEY } from '../../domain/settings/settings';
 import type { Container } from '../composition-root';
 import type { IpcRegistrar } from './registrar';
 
@@ -10,8 +11,13 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
   ipc.handle(INVOKE.getSetting, (key: string) => app.settings.get(key));
   ipc.handle(INVOKE.setSetting, (key: string, value: unknown) => {
     app.settings.set(key, value);
+    // Saving registers or lets go of ⌥Space at once, no restart (H2).
+    if (key === GLOBAL_SETTINGS_KEY) app.quickAskHotkey.apply();
     return { ok: true };
   });
+
+  /** Whether ⌥Space is held, for the settings switch's "in use" line (H3). */
+  ipc.handle(INVOKE.quickAskHotkeyStatus, () => ({ registered: app.quickAskHotkey.registered }));
 
   ipc.handle(INVOKE.getEffectiveSettings, (projectPath: string | null) =>
     app.settings.effective(projectPath));
