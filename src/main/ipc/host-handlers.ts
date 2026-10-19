@@ -20,6 +20,9 @@ export function registerHostHandlers(ipc: IpcRegistrar, app: Container): void {
   ipc.handle(INVOKE.writeClipboard, (text: string) => {
     app.system.writeClipboard(text);
   });
+  ipc.handle(INVOKE.writeClipboardImage, (png: Uint8Array) => {
+    app.system.writeClipboardImage(png);
+  });
   ipc.handle(INVOKE.getAppVersion, () => app.system.appVersion());
 
   // ── Window ──

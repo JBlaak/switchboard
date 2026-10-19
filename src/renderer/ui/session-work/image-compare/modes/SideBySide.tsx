@@ -17,8 +17,8 @@ export function SideBySide({ before, after, view, onView, onFrameSize, backgroun
   const stage = { view, onView, onFrameSize, background, content };
   return (
     <div className="sw-side-by-side">
-      <SideStage label="Before" image={before} {...stage} />
-      <SideStage label="After" image={after} {...stage} />
+      <SideStage side="before" image={before} {...stage} />
+      <SideStage side="after" image={after} {...stage} />
     </div>
   );
 }
@@ -35,8 +35,8 @@ export function contentSize(...images: (LoadedImage | null)[]): Size {
  * One labelled side in its own stage. Also what a card with a single side
  * (an added or deleted image, I5) draws on its own.
  */
-export function SideStage({ label, image, content, view, onView, onFrameSize, background }: {
-  label: string;
+export function SideStage({ side, image, content, view, onView, onFrameSize, background }: {
+  side: 'before' | 'after';
   image: LoadedImage;
   content: Size;
   view: View;
@@ -44,8 +44,9 @@ export function SideStage({ label, image, content, view, onView, onFrameSize, ba
   onFrameSize(frame: Size): void;
   background: Background;
 }): JSX.Element {
+  const label = side === 'before' ? 'Before' : 'After';
   return (
-    <figure className="sw-side" aria-label={label}>
+    <figure className="sw-side" aria-label={label} data-side={side}>
       <figcaption className="sw-side-label">{label}</figcaption>
       <ImageStage
         view={view}

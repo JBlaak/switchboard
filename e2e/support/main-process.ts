@@ -147,6 +147,8 @@ interface StubState extends HostStubs {
   opened: string[];
   calls: HostStubCalls;
   clipboard: string[];
+  /** Every image written to the clipboard, as base64 PNG. */
+  clipboardImages: string[];
   /** Every session the renderer told main its Session work page closed for, in order. */
   sessionWorkClosed: string[];
   /** Every action the page asked main for, in order. */
@@ -188,7 +190,7 @@ export const DEFAULT_STUBS: HostStubs = {
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
   await app.evaluate(({ ipcMain }, { stubs, channels, send }) => {
     const state: StubState = {
-      ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0, getWeather: 0 }, clipboard: [], sessionWorkClosed: [],
+      ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0, getWeather: 0 }, clipboard: [], clipboardImages: [], sessionWorkClosed: [],
       sessionWorkActions: [], sessionWorkCancels: [], sessionWorkReviews: [],
     };
     (globalThis as WithStubs).__switchboardE2E = state;
@@ -312,6 +314,9 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
     replace(channels.writeClipboard, (text) => {
       state.clipboard.push(String(text));
     });
+    replace(channels.writeClipboardImage, (png) => {
+      state.clipboardImages.push(Buffer.from(png as Uint8Array).toString('base64'));
+    });
     replace(channels.openRepository, (projectPath) => {
       state.opened.push('repository:' + String(projectPath));
       return true;
@@ -388,6 +393,13 @@ export async function hostStubCalls(app: ElectronApplication): Promise<HostStubC
 export async function clipboardWrites(app: ElectronApplication): Promise<string[]> {
   return await app.evaluate(() => {
     return [...(globalThis as WithStubs).__switchboardE2E.clipboard];
+  });
+}
+
+/** Every image the app wrote to the clipboard, as base64 PNG (stubbed, like `clipboardWrites`). */
+export async function clipboardImages(app: ElectronApplication): Promise<string[]> {
+  return await app.evaluate(() => {
+    return [...(globalThis as WithStubs).__switchboardE2E.clipboardImages];
   });
 }
 

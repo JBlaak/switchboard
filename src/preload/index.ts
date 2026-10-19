@@ -82,6 +82,7 @@ const api: SwitchboardApi = {
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
   openRepository: (projectPath) => ipcRenderer.invoke(INVOKE.openRepository, projectPath),
   writeClipboard: (text) => ipcRenderer.invoke(INVOKE.writeClipboard, text),
+  writeClipboardImage: (png) => ipcRenderer.invoke(INVOKE.writeClipboardImage, png),
   getAppVersion: () => ipcRenderer.invoke(INVOKE.getAppVersion),
 
   // ── Session work ──
