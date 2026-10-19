@@ -22,12 +22,31 @@ export interface CommandRunner {
   run(claudeArgs: readonly string[], cwd: string, name: string, onDone: () => void): void;
 }
 
+/** How long a warm process may wait for its request before it is killed (S2). */
+export const WARM_IDLE_MS = 5 * 60_000;
+
+/**
+ * A `claude` process started ahead of the request, booted and waiting for its
+ * prompt (S2). It serves one `send`; what it costs until then is a process,
+ * not a model request.
+ */
+export interface WarmCall {
+  /**
+   * Hand over the prompt and resolve with the answer. The run reads like one
+   * from `call`: `stdout` holds the same result envelope `--output-format
+   * json` prints. Aborting kills the process, as it does a `call`. A process
+   * that died or was killed for idling in the meantime is started again, so a
+   * send always gets an answer, only a slower one.
+   */
+  send(prompt: string, signal: AbortSignal): Promise<ClaudeRun>;
+}
+
 /**
  * Runs one `claude -p` call and hands back what it printed, for Ask Patch.
  *
  * Unlike a scheduled run, the answer is the point, so stdout is kept. The user
- * is waiting on it and may give up: aborting the signal kills the call, shell
- * and all.
+ * is waiting on it and may give up: aborting the signal kills the call and
+ * everything it started.
  */
 export interface ClaudeCaller {
   /**
@@ -35,4 +54,9 @@ export interface ClaudeCaller {
    * included. Rejects only when it could not be started.
    */
   call(claudeArgs: readonly string[], signal: AbortSignal): Promise<ClaudeRun>;
+  /**
+   * Start `claude <bootArgs>` now, to be sent its prompt later. Killed after
+   * `WARM_IDLE_MS` unused, and when the app quits.
+   */
+  warm(bootArgs: readonly string[]): WarmCall;
 }

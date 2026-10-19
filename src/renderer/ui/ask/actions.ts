@@ -41,6 +41,11 @@ export async function sendAsk(): Promise<void> {
   follow(askOutcome(result, text));
 }
 
+/** The box got focus: have main boot a `claude` for the request that may follow (S2). */
+export function warmAsk(): void {
+  void window.api.warmAskRoute().catch(() => {});
+}
+
 /** Esc while waiting: stop the call and unlock the box straight away (W2). */
 export function cancelAsk(): void {
   if (getState().ask.phase !== 'waiting') return;

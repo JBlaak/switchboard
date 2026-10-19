@@ -6,13 +6,18 @@
  * and that one is cancelled rather than left to finish in the background. A
  * cancelled call is killed, not ignored — it runs on the user's own quota.
  *
+ * The box warms a process when it gets focus (S2), and a request goes through
+ * that one when it is there, through a cold call when it isn't.
+ *
  * Never rejects. Every way this can go wrong ends with Patch saying one line
  * and the New Session picker opening, so a failure is just another answer.
  */
-import { readRouteRun, routeArgs } from '../../domain/ask/route';
+import { readRouteRun, routeArgs, routeBootArgs, routePrompt } from '../../domain/ask/route';
 import type { RouteRequest, RouteResult } from '../../domain/ask/model';
-import type { ClaudeCaller } from '../ports/claude-cli';
-import type { Timers } from '../ports/clock';
+import type { ClaudeRun } from '../../domain/ask/route';
+import { WARM_IDLE_MS } from '../ports/claude-cli';
+import type { ClaudeCaller, WarmCall } from '../ports/claude-cli';
+import type { TimerHandle, Timers } from '../ports/clock';
 import type { Logger } from '../ports/logger';
 
 /** How long the user is kept waiting before the call counts as failed. */
@@ -26,6 +31,7 @@ interface InFlight {
 
 export class AskRouteService {
   #inFlight: InFlight | null = null;
+  #warm: { call: WarmCall; timer: TimerHandle } | null = null;
 
   constructor(private readonly deps: {
     cli: ClaudeCaller;
@@ -59,7 +65,7 @@ export class AskRouteService {
         flight.settle({ kind: 'failed', reason: TIMEOUT_LINE });
       }, ASK_ROUTE_TIMEOUT_MS);
 
-      cli.call(routeArgs(request), controller.signal).then(
+      this.#run(request, controller.signal).then(
         (run) => {
           const result = readRouteRun(run, request);
           if (result.kind === 'failed') log.warn('[ask] routing call failed:', result.reason);
@@ -68,6 +74,28 @@ export class AskRouteService {
         (err: Error) => flight.settle({ kind: 'failed', reason: `Couldn’t run claude: ${err.message}` }),
       );
     });
+  }
+
+  /**
+   * Have a `claude` process booted and waiting for the next request (S2), so
+   * the user waits on the model and not on the CLI starting. One at a time: a
+   * second call while one is ready does nothing. One left unused is forgotten
+   * once the caller has killed it for idling, so the next call warms afresh.
+   */
+  warm(): void {
+    if (this.#warm) return;
+    const { cli, timers } = this.deps;
+    const timer = timers.setTimeout(() => { this.#warm = null; }, WARM_IDLE_MS);
+    this.#warm = { call: cli.warm(routeBootArgs()), timer };
+  }
+
+  /** Through the warm process when there is one, which this uses up; otherwise a cold call. */
+  #run(request: RouteRequest, signal: AbortSignal): Promise<ClaudeRun> {
+    const warm = this.#warm;
+    if (!warm) return this.deps.cli.call(routeArgs(request), signal);
+    this.#warm = null;
+    this.deps.timers.clearTimeout(warm.timer);
+    return warm.call.send(routePrompt(request), signal);
   }
 
   /** Stop the request in flight, which then answers `cancelled`. */

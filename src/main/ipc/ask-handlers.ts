@@ -1,5 +1,6 @@
 /**
- * Ask Patch: route what the user typed on the empty screen, or stop routing it.
+ * Ask Patch: route what the user typed on the empty screen, or stop routing
+ * it, and have a process ready before the user is done typing.
  */
 import { INVOKE } from '../../ipc/channels';
 import type { RouteRequest } from '../../domain/ask/model';
@@ -9,4 +10,5 @@ import type { IpcRegistrar } from './registrar';
 export function registerAskHandlers(ipc: IpcRegistrar, app: Container): void {
   ipc.handle(INVOKE.askRoute, (request: RouteRequest) => app.askRoute.route(request));
   ipc.handle(INVOKE.cancelAskRoute, () => app.askRoute.cancel());
+  ipc.handle(INVOKE.warmAskRoute, () => app.askRoute.warm());
 }
