@@ -105,7 +105,7 @@ test('a branch offers Open PR', () => {
   const offered = labels(branch);
 
   /* Then */
-  assert.deepEqual(offered, ['Open PR']);
+  assert.deepEqual(offered, ['Open a new PR']);
 });
 
 test('uncommitted changes offer Create a pull request', () => {
