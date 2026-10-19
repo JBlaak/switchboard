@@ -116,6 +116,8 @@ export interface SwitchboardApi {
   /** Open the project's `origin` in the browser; false when it has none with a web page. */
   openRepository(projectPath: string): Promise<boolean>;
   writeClipboard(text: string): Promise<void>;
+  /** Copy a PNG to the clipboard. */
+  writeClipboardImage(png: Uint8Array): Promise<void>;
   getAppVersion(): Promise<string>;
 
   // ── Session work ──

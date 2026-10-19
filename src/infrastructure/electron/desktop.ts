@@ -2,7 +2,7 @@
  * The handful of host capabilities behind the DialogService, SystemGateway and
  * AppearanceGateway ports.
  */
-import { app, clipboard, dialog, nativeTheme, shell } from 'electron';
+import { app, clipboard, dialog, nativeImage, nativeTheme, shell } from 'electron';
 import type { BrowserWindow } from 'electron';
 import type {
   AppearanceGateway, DialogService, SystemGateway,
@@ -43,6 +43,12 @@ export class ElectronSystemGateway implements SystemGateway {
 
   writeClipboard(text: string): void {
     if (typeof text === 'string') clipboard.writeText(text);
+  }
+
+  writeClipboardImage(png: Uint8Array): void {
+    if (!(png instanceof Uint8Array)) return;
+    const image = nativeImage.createFromBuffer(Buffer.from(png));
+    if (!image.isEmpty()) clipboard.writeImage(image);
   }
 
   appVersion(): string {

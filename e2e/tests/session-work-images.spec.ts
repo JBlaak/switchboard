@@ -1,7 +1,8 @@
 /**
  * The image card in the Session work diff (#115), wired into the real app:
  * both sides fetched over `sessionWorkImage` and decoded, the metadata line,
- * the keys on the card `n` landed on, and an added image's single side.
+ * the keys on the card `n` landed on, an added image's single side, and a
+ * right-click copying an image.
  *
  * Which mode a key picks, how the view refits and what persists are decided
  * by the session-work slice, unit tested in test/session-work-image-card.test.ts;
@@ -12,6 +13,7 @@ import { test, expect } from '../support/test';
 import { openSession } from '../support/app';
 import { LABEL, S } from '../fixtures/standard';
 import { ICON_AFTER, LOGO_AFTER, LOGO_BEFORE, imageWorkStub } from '../fixtures/session-work';
+import { clipboardImages } from '../support/main-process';
 import { formatBytes } from '../../src/renderer/ui/session-work/image-compare/image-meta';
 import type { Locator, Page } from '@playwright/test';
 
@@ -85,4 +87,33 @@ test('an image card loads both sides; n lands on it, 2 picks swipe and 0 fits it
   await expect.poll(() => decodedSize(icon.getByRole('img', { name: 'After' }))).toBe('64×64');
   await expect(icon.getByRole('group', { name: /^Compare mode/ }).getByRole('button')).toHaveText(['Side-by-side']);
   await expect(icon.getByTestId('image-meta')).toHaveText(`64×64 · ${formatBytes(ICON_AFTER.length)} · PNG`);
+});
+
+/** A PNG's size, read off its IHDR chunk. */
+function pngSize(base64: string): string {
+  const bytes = Buffer.from(base64, 'base64');
+  return `${bytes.readUInt32BE(16)}×${bytes.readUInt32BE(20)}`;
+}
+
+test('a right-click on an image copies that side as a PNG; in blink, the side showing', async ({ page, app, home }) => {
+  /* Given */
+  await openSession(page, home, LABEL.loginFix, S.loginFix);
+  await page.keyboard.press('Meta+g');
+  const logo = fileCard(page, 'assets/logo.png');
+  await expect.poll(() => decodedSize(logo.getByRole('img', { name: 'After' }))).toBe('1600×600');
+
+  /* When */
+  await logo.getByRole('figure', { name: 'Before' }).locator('.sw-stage').click({ button: 'right' });
+  await logo.getByRole('figure', { name: 'After' }).locator('.sw-stage').click({ button: 'right' });
+
+  /* Then */
+  await expect.poll(async () => (await clipboardImages(app)).map(pngSize)).toEqual(['1200×600', '1600×600']);
+
+  /* When */
+  await logo.getByRole('button', { name: 'Blink' }).click();
+  await logo.locator('.sw-stage').click({ button: 'right' });
+
+  /* Then */
+  await expect(logo.locator('.sw-blink-label')).toHaveText('Before');
+  await expect.poll(async () => (await clipboardImages(app)).map(pngSize)).toEqual(['1200×600', '1600×600', '1200×600']);
 });

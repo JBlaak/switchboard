@@ -23,6 +23,8 @@ export interface SystemGateway {
    * which is gated on focus and user activation.
    */
   writeClipboard(text: string): void;
+  /** Copy an image, PNG-encoded, to the clipboard; through the host for the same reason. */
+  writeClipboardImage(png: Uint8Array): void;
   appVersion(): string;
 }
 

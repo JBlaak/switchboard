@@ -64,6 +64,7 @@ export const INVOKE = {
   openExternal: 'open-external',
   openRepository: 'open-repository',
   writeClipboard: 'clipboard-write-text',
+  writeClipboardImage: 'clipboard-write-image',
   getAppVersion: 'get-app-version',
 
   // Session work
