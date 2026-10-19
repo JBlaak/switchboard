@@ -30,13 +30,15 @@ export async function openSettings(scope: SettingsScope, projectPath?: string): 
   const token = ++latestOpen;
   const isProject = scope === 'project';
   const settingsKey = isProject ? 'project:' + projectPath : 'global';
-  const [current, globalSettings, shellProfiles, appVersion] = await Promise.all([
+  const [current, globalSettings, shellProfiles, appVersion, quickAsk] = await Promise.all([
     window.api.getSetting<SettingsRecord>(settingsKey).then(found => found || {}),
     isProject
       ? window.api.getSetting<SettingsRecord>('global').then(found => found || {})
       : Promise.resolve({}),
     window.api.getShellProfiles().catch((): ShellProfile[] => []),
     isProject ? Promise.resolve(null) : window.api.getAppVersion().catch(() => null),
+    // Unknown counts as held: the "in use" line only shows on a refusal main reported.
+    window.api.quickAskHotkeyStatus().catch(() => ({ registered: true })),
   ]);
   if (token !== latestOpen) return;
 
@@ -51,6 +53,7 @@ export async function openSettings(scope: SettingsScope, projectPath?: string): 
     globalSettings,
     shellProfiles,
     appVersion,
+    quickAskRegistered: quickAsk.registered,
   });
 }
 

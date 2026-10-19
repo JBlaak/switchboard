@@ -9,7 +9,7 @@
  */
 import { test, expect, forEachAppearance } from '../support/test';
 import { dialog, expectScreen, openSession, rowButton, sidebar, terminalHeader } from '../support/app';
-import { setHostStub } from '../support/main-process';
+import { pressQuickAsk, refuseQuickAskHotkey, setHostStub } from '../support/main-process';
 import { answerDialogs, dialogsAsked } from '../support/native-dialogs';
 import { LABEL, P, S, standardFixture } from '../fixtures/standard';
 import type { Locator, Page } from '@playwright/test';
@@ -239,6 +239,7 @@ test.describe('global save', () => {
       addDirs: '/a, /b',
       preLaunchCmd: 'direnv exec .',
       quickSessionPath: '/tmp/scratch',
+      quickAsk: true,
       terminalTheme: 'nord',
       terminalFontFamily: 'Menlo',
       terminalFontSize: 32,
@@ -313,6 +314,59 @@ test.describe('global cancel', () => {
     /* Then */
     // The next open starts from what is stored, not from the abandoned edit.
     await expect(field(page, 'Pre-launch Command').getByRole('textbox')).toHaveValue('');
+  });
+});
+
+test.describe('quick ask', () => {
+  test('the switch lets go of ⌥Space and takes it back, and says when another app holds it', async ({ page, app }) => {
+    /* Given */
+    const label = 'Open Quick Ask with ⌥Space';
+    const inUse = page.getByText('⌥Space is in use by another app', { exact: true });
+    await openGlobalSettings(page);
+
+    /* Then */
+    // Unset counts as on, and main took the key at startup.
+    await expect(toggle(page, label)).toBeChecked();
+    await expect(inUse).toHaveCount(0);
+    expect(await pressQuickAsk(app)).toBe(true);
+
+    /* When */
+    await toggle(page, label).locator('..').click();
+    await button(page, 'Save Settings').click();
+
+    /* Then */
+    await expect(globalTitle(page)).toBeHidden();
+    expect((await readSetting(page, 'global'))?.quickAsk).toBe(false);
+    expect(await pressQuickAsk(app)).toBe(false);
+
+    /* When */
+    await refuseQuickAskHotkey(app, true);
+    await openGlobalSettings(page);
+    await switchOn(page, label);
+    await button(page, 'Save Settings').click();
+    await expect(globalTitle(page)).toBeHidden();
+    await openGlobalSettings(page);
+
+    /* Then */
+    await expect(toggle(page, label)).toBeChecked();
+    await expect(inUse).toBeVisible();
+    expect(await pressQuickAsk(app)).toBe(false);
+
+    /* When */
+    await refuseQuickAskHotkey(app, false);
+    await toggle(page, label).locator('..').click();
+    await button(page, 'Save Settings').click();
+    await expect(globalTitle(page)).toBeHidden();
+    await openGlobalSettings(page);
+    await switchOn(page, label);
+    await button(page, 'Save Settings').click();
+    await expect(globalTitle(page)).toBeHidden();
+    await openGlobalSettings(page);
+
+    /* Then */
+    // Switching off and on tried again, and this time the key was free.
+    await expect(inUse).toHaveCount(0);
+    expect(await pressQuickAsk(app)).toBe(true);
   });
 });
 

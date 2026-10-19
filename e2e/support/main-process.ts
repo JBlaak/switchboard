@@ -467,3 +467,26 @@ export async function reconnectRequests(app: ElectronApplication): Promise<strin
 export async function windowPosition(app: ElectronApplication): Promise<number[]> {
   return await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getPosition());
 }
+
+/**
+ * Quick Ask's ⌥Space, which Playwright cannot press. Under the harness main
+ * holds a stand-in instead of the real global shortcut, and exposes it here.
+ */
+interface QuickAskHooks {
+  press(): boolean;
+  refuse(refusing: boolean): void;
+}
+
+type WithTestHooks = typeof globalThis & { __switchboardTestHooks: { quickAsk: QuickAskHooks } };
+
+/** Do what pressing ⌥Space does. False when main does not hold the key. */
+export async function pressQuickAsk(app: ElectronApplication): Promise<boolean> {
+  return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.press());
+}
+
+/** Make every registration of ⌥Space fail from now on, as when another app holds it. */
+export async function refuseQuickAskHotkey(app: ElectronApplication, refusing: boolean): Promise<void> {
+  await app.evaluate((_electron, refusing) => {
+    (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.refuse(refusing);
+  }, refusing);
+}
