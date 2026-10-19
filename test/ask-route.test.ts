@@ -157,7 +157,7 @@ test('routeArgs leaves out --json-schema, which costs a second model turn', () =
   assert.ok(!args.includes('--json-schema'));
 });
 
-test('routeBootArgs is the cold call without its prompt and output format, for a warm process', () => {
+test('routeBootArgs is the cold call without its prompt, for a warm process', () => {
   /* Given */
   const req = request();
 
@@ -165,8 +165,7 @@ test('routeBootArgs is the cold call without its prompt and output format, for a
   const boot = routeBootArgs();
 
   /* Then */
-  assert.deepEqual(routeArgs(req), [...boot, '--output-format', 'json', routePrompt(req)]);
-  assert.ok(!boot.includes('--output-format'));
+  assert.deepEqual(routeArgs(req), [...boot, routePrompt(req)]);
   assert.ok(!boot.some(arg => arg.includes(req.text)));
 });
 

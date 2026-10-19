@@ -114,8 +114,9 @@ function folderName(projectPath: string): string {
 }
 
 /**
- * The `claude` argv for one routing call, all but the prompt and the output
- * format: what a process started ahead of the request boots with (S2).
+ * The `claude` argv for one routing call, all but the prompt: what a process
+ * started ahead of the request boots with (S2). A warm process swaps the
+ * output format for stream-json.
  *
  * Everything after `--no-session-persistence` is there for startup time, which
  * the user sits through: without the user's settings (hooks, plugins), MCP
@@ -131,6 +132,7 @@ export function routeBootArgs(): string[] {
   return [
     '-p',
     '--model', 'haiku',
+    '--output-format', 'json',
     '--tools', '',
     '--no-session-persistence',
     '--setting-sources', '',
@@ -141,13 +143,9 @@ export function routeBootArgs(): string[] {
   ];
 }
 
-/**
- * The `claude` argv for one cold routing call: the boot args, then the
- * prompt. The output format is the one thing added, since a warm process
- * answers in stream-json instead.
- */
+/** The `claude` argv for one cold routing call: the boot args, then the prompt. */
 export function routeArgs(request: RouteRequest): string[] {
-  return [...routeBootArgs(), '--output-format', 'json', routePrompt(request)];
+  return [...routeBootArgs(), routePrompt(request)];
 }
 
 // ── The answer ──

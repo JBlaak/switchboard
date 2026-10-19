@@ -10,7 +10,7 @@ import type { TerminalGateway } from '../src/application/ports/terminal-gateway'
 
 /**
  * The real caller against a stand-in `claude`: a shell script that only the
- * home's .zshrc puts on PATH, so finding it at all means the login shell's
+ * shell's rc file puts on PATH, so finding it at all means the login shell's
  * PATH was read (S3). It answers a cold call on stdout, and a warm one once
  * it has read its message from stdin, as the CLI does in stream-json.
  */
@@ -29,21 +29,39 @@ case " $* " in
 esac
 `;
 
+/**
+ * The user's shell: zsh where there is one (every Mac), bash otherwise (a
+ * Linux CI runner has no zsh). Either way the PATH is set in the rc file only
+ * an interactive shell reads, which bash's login shell gets to through
+ * ~/.bash_profile, as a Mac user's usually does.
+ */
+const SHELL = fs.existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/bash';
+
+function writeShellProfile(home: string, bin: string): void {
+  const prepend = `export PATH='${bin}':"$PATH"\n`;
+  if (SHELL.endsWith('zsh')) {
+    fs.writeFileSync(path.join(home, '.zshrc'), prepend);
+    return;
+  }
+  fs.writeFileSync(path.join(home, '.bashrc'), prepend);
+  fs.writeFileSync(path.join(home, '.bash_profile'), '[ -f ~/.bashrc ] && . ~/.bashrc\n');
+}
+
 function harness() {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-claude-caller-'));
-  const bin = path.join(home, 'only-in-zshrc');
+  const bin = path.join(home, 'only-in-rc-file');
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(bin, 'claude'), FAKE_CLAUDE, { mode: 0o755 });
-  fs.writeFileSync(path.join(home, '.zshrc'), `export PATH='${bin}':"$PATH"\n`);
+  writeShellProfile(home, bin);
 
   const timers = fakeTimers();
   const terminals = { baseEnv: { HOME: home, PATH: '/usr/bin:/bin', USER: os.userInfo().username } } as unknown as TerminalGateway;
   const shells = {
     list: () => [],
-    resolve: () => ({ id: 'zsh', name: 'zsh', path: '/bin/zsh' }),
+    resolve: () => ({ id: 'test', name: path.basename(SHELL), path: SHELL }),
   };
   const caller = new ShellClaudeCaller({
-    shells, terminals, timers, log: silentLog, homeDir: home, shellProfileId: () => 'zsh',
+    shells, terminals, timers, log: silentLog, homeDir: home, shellProfileId: () => 'test',
   });
   const launches = (): number[] => {
     try {
@@ -72,7 +90,7 @@ function running(pid: number): boolean {
   }
 }
 
-test('a cold call finds claude on a PATH only the login shell\'s .zshrc sets', async () => {
+test('a cold call finds claude on a PATH only the login shell\'s rc file sets', async () => {
   /* Given */
   const { caller } = harness();
 

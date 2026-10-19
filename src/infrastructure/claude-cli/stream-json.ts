@@ -10,9 +10,16 @@
  */
 import type { ClaudeRun } from '../../domain/ask/route';
 
-/** The flags that turn boot args into a process waiting for its message. */
+/** Flags whose value the stream-json ones replace. */
+const REPLACED = new Set(['--input-format', '--output-format']);
+
+/**
+ * Boot args turned into a process waiting for its message: the cold call's
+ * `--output-format json` is dropped for the stream-json flags.
+ */
 export function streamJsonArgs(bootArgs: readonly string[]): string[] {
-  return [...bootArgs, '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'];
+  const kept = bootArgs.filter((arg, i) => !REPLACED.has(arg) && !REPLACED.has(bootArgs[i - 1]));
+  return [...kept, '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'];
 }
 
 /** The one stdin line that hands the process its prompt. */

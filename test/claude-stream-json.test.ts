@@ -33,6 +33,17 @@ test('streamJsonArgs boots the process to read its message from stdin', () => {
   assert.deepEqual(args, ['-p', '--model', 'haiku', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']);
 });
 
+test('streamJsonArgs swaps the cold call\'s output format for stream-json', () => {
+  /* Given */
+  const boot = ['-p', '--output-format', 'json', '--tools', ''];
+
+  /* When */
+  const args = streamJsonArgs(boot);
+
+  /* Then */
+  assert.deepEqual(args, ['-p', '--tools', '', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose']);
+});
+
 test('userMessageLine is one line holding the prompt as a user message', () => {
   /* Given */
   const prompt = 'Projects:\n- path: /code/app\n\nRequest:\n"quoted" text';
