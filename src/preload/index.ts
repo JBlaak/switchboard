@@ -59,6 +59,7 @@ const api: SwitchboardApi = {
   // ── Ask Patch ──
   askRoute: (request) => ipcRenderer.invoke(INVOKE.askRoute, request),
   cancelAskRoute: () => ipcRenderer.invoke(INVOKE.cancelAskRoute),
+  warmAskRoute: () => ipcRenderer.invoke(INVOKE.warmAskRoute),
 
   // ── Sleep ──
   getSleepDisabled: () => ipcRenderer.invoke(INVOKE.getSleepDisabled),

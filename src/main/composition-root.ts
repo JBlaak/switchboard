@@ -227,10 +227,8 @@ export function buildContainer(): Container {
     runner: new ClaudeCommandRunner({ shells, terminals, log, shellProfileId }),
   });
   // Ask Patch (#135): one Haiku call per request typed on the empty screen.
-  const askRoute = new AskRouteService({
-    cli: new ShellClaudeCaller({ shells, terminals, log, shellProfileId, homeDir: paths.homeDir }),
-    timers, log,
-  });
+  const claudeCaller = new ShellClaudeCaller({ shells, terminals, timers, log, shellProfileId, homeDir: paths.homeDir });
+  const askRoute = new AskRouteService({ cli: claudeCaller, timers, log });
 
   // ── Host ──
   const dialogs = new ElectronDialogService(getWindow);
@@ -370,6 +368,7 @@ export function buildContainer(): Container {
       projectsWatcher.stop();
       prWatch.stop();
       sessionWork.closeAll();
+      claudeCaller.close();
       database.close();
     },
   };

@@ -19,7 +19,7 @@ import { askKey, boxTakesFocus, isCaretChord, opensPickerFromBox } from './ask-k
 import { openDialog } from '../dialogs/actions';
 import {
   cancelAsk, changeAskText, closeAskChoices, hoverAskChoice, openPickerFromChoices, sendAsk, startAskChoice,
-  stepAskChoice,
+  stepAskChoice, warmAsk,
 } from './actions';
 import type { JSX, KeyboardEvent } from 'react';
 
@@ -92,6 +92,7 @@ export function AskBox(): JSX.Element {
         spellCheck={false}
         readOnly={locked}
         value={ask.text}
+        onFocus={warmAsk}
         onChange={e => changeAskText(e.target.value)}
         onKeyDown={onKeyDown}
       />

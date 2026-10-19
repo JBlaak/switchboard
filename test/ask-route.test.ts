@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   GARBLED_LINE, NO_MATCH_LINE, ROUTE_SYSTEM_PROMPT,
-  failureLine, readRouteRun, routeArgs, routeCandidates, routePrompt,
+  failureLine, readRouteRun, routeArgs, routeBootArgs, routeCandidates, routePrompt,
   routeResultFrom, usageLimitLine,
 } from '../src/domain/ask/route';
 import type { RouteRequest } from '../src/domain/ask/model';
@@ -155,6 +155,19 @@ test('routeArgs leaves out --json-schema, which costs a second model turn', () =
 
   /* Then */
   assert.ok(!args.includes('--json-schema'));
+});
+
+test('routeBootArgs is the cold call without its prompt and output format, for a warm process', () => {
+  /* Given */
+  const req = request();
+
+  /* When */
+  const boot = routeBootArgs();
+
+  /* Then */
+  assert.deepEqual(routeArgs(req), [...boot, '--output-format', 'json', routePrompt(req)]);
+  assert.ok(!boot.includes('--output-format'));
+  assert.ok(!boot.some(arg => arg.includes(req.text)));
 });
 
 test('the instructions name the JSON shape and ask for nothing around it', () => {
