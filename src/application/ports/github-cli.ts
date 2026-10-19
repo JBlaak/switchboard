@@ -57,14 +57,19 @@ export interface GitHubCli {
   plan(repo: string, number: number): Promise<Plan | null>;
 
   /**
-   * The issues in `repo` that have sub-issues: open ones only, and closed ones
-   * too when `closed` is set (W3, F3). The 50 most recently updated, newest
-   * first. Null when unavailable.
+   * The plans in `repo`: issues that have sub-issues, and standalone
+   * `ready-for-agent` issues. Open ones only, and closed ones too when
+   * `closed` is set (W3, F3). The 50 most recently updated, newest first. Null
+   * when unavailable.
    */
   plansIn(repo: string, options: { closed: boolean }): Promise<PlanSummary[] | null>;
 
-  /** The parent of each of these issues, once each; an issue without one is left out. Null when unavailable. */
-  parentsOf(issues: readonly IssueKey[]): Promise<IssueKey[] | null>;
+  /**
+   * The plan each of these issues belongs to, once each: its parent, or the
+   * issue itself when it is a standalone `ready-for-agent` issue. An issue in
+   * neither is left out. Null when unavailable.
+   */
+  plansOf(issues: readonly IssueKey[]): Promise<IssueKey[] | null>;
 
   /**
    * The issues each of these PRs in `repo` closes, by GitHub's closing
@@ -89,7 +94,7 @@ export interface GitHubCli {
 }
 
 /** The reads the plan service makes. */
-export type PlanReads = 'plan' | 'plansIn' | 'parentsOf' | 'closingIssues';
+export type PlanReads = 'plan' | 'plansIn' | 'plansOf' | 'closingIssues';
 
 /** A PR and the issues it closes. */
 export interface PullRequestCloses {

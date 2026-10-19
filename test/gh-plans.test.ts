@@ -165,6 +165,46 @@ test('a plan names its parent as a breadcrumb', async () => {
   assert.deepEqual(plan!.parent, { repository: 'JBlaak/James', number: 1, title: 'Roadmap' });
 });
 
+/** A plan answer for James #23 with no sub-issues, carrying `labels` and `parent`. */
+function standalone(labels: string[], parent: unknown = null): unknown {
+  return { data: { repository: { issue: {
+    number: 23, title: 'Retry gh on a 502', state: 'OPEN', stateReason: null, updatedAt: '2026-10-18T09:00:00Z',
+    body: 'Retry once before giving up.',
+    repository: { nameWithOwner: 'JBlaak/James' },
+    labels: { nodes: labels.map((name) => ({ name })) },
+    parent,
+    blockedBy: { nodes: [{ number: 9, title: 'Gh runner', state: 'OPEN', stateReason: null, updatedAt: '', repository: { nameWithOwner: 'JBlaak/James' } }] },
+    closedByPullRequestsReferences: { nodes: [{ number: 30, state: 'OPEN', isDraft: true, additions: 4, deletions: 1, headRefName: 'issue-23', baseRefName: 'main' }] },
+    subIssues: { nodes: [] },
+  } } } };
+}
+
+test('a standalone ready-for-agent issue is a plan with itself as its one issue', async () => {
+  /* When */
+  const plan = await new GhCli({ run: answering(standalone(['bug', 'ready-for-agent'])) }).plan('JBlaak/James', 23);
+
+  /* Then */
+  assert.deepEqual(plan!.issues.map((issue) => issue.number), [23]);
+  const [issue] = plan!.issues;
+  assert.equal(issue.title, 'Retry gh on a 502');
+  assert.equal(issue.summary, 'Retry once before giving up.');
+  assert.deepEqual(issue.blockedBy, [{ repository: 'JBlaak/James', number: 9 }]);
+  assert.deepEqual(issue.pullRequests.map((pr) => [pr.number, pr.draft]), [[30, true]]);
+  assert.deepEqual(plan!.outside.map((ghost) => ghost.number), [9]);
+});
+
+test('an issue without sub-issues is no plan of its own without the label, or with a parent', async () => {
+  /* When */
+  const unlabelled = await new GhCli({ run: answering(standalone(['bug'])) }).plan('JBlaak/James', 23);
+  const parented = await new GhCli({ run: answering(standalone(['ready-for-agent'], {
+    number: 1, title: 'Roadmap', repository: { nameWithOwner: 'JBlaak/James' },
+  })) }).plan('JBlaak/James', 23);
+
+  /* Then */
+  assert.deepEqual(unlabelled!.issues, []);
+  assert.deepEqual(parented!.issues, []);
+});
+
 test('an issue GitHub does not know answers null', async () => {
   /* Given */
   const run = scripted(() => ({
@@ -191,8 +231,9 @@ test('a repository\'s plans come from one search, open ones only unless closed o
   /* Then */
   assert.equal(open.calls.length, 1);
   assert.match(queryOf(open.calls[0]), /search\(type: ISSUE_ADVANCED, query: \$search, first: 50\)/);
-  assert.deepEqual(open.calls[0].slice(-2), ['-f', 'search=repo:JBlaak/switchboard is:issue is:open has:sub-issue sort:updated-desc']);
-  assert.deepEqual(all.calls[0].slice(-2), ['-f', 'search=repo:JBlaak/switchboard is:issue has:sub-issue sort:updated-desc']);
+  const plans = '(has:sub-issue OR (label:ready-for-agent no:parent-issue))';
+  assert.deepEqual(open.calls[0].slice(-2), ['-f', `search=repo:JBlaak/switchboard is:issue is:open ${plans} sort:updated-desc`]);
+  assert.deepEqual(all.calls[0].slice(-2), ['-f', `search=repo:JBlaak/switchboard is:issue ${plans} sort:updated-desc`]);
 });
 
 test('the recorded plans map to summaries with counts, the current level and the number of levels', async () => {
@@ -221,7 +262,27 @@ test('an issue the search answers without sub-issues is not a plan', async () =>
   assert.deepEqual(plans!.map((plan) => plan.number), [121, 70, 66]);
 });
 
-test('parents come from one request, once each, leaving out an issue without one', async () => {
+test('a standalone ready-for-agent issue the search answers is a plan of one', async () => {
+  /* Given */
+  const copy = structuredClone(switchboardPlans) as any;
+  Object.assign(copy.data.search.nodes[1], {
+    state: 'OPEN',
+    stateReason: null,
+    labels: { nodes: [{ name: 'ready-for-agent' }] },
+    parent: null,
+    blockedBy: { nodes: [] },
+    subIssues: { nodes: [] },
+  });
+
+  /* When */
+  const plans = await new GhCli({ run: answering(copy) }).plansIn('JBlaak/switchboard', { closed: true });
+
+  /* Then */
+  const plan = plans!.find((summary) => summary.number === 112)!;
+  assert.deepEqual([plan.state, plan.open, plan.total, plan.current, plan.levels], ['open', 1, 1, 1, 1]);
+});
+
+test('an issue\'s plan is its parent, once each, leaving out an issue without one', async () => {
   /* Given */
   const run = answering({ data: {
     i0: { issue: { parent: { number: 112, repository: { nameWithOwner: 'JBlaak/switchboard' } } } },
@@ -231,7 +292,7 @@ test('parents come from one request, once each, leaving out an issue without one
   } });
 
   /* When */
-  const parents = await new GhCli({ run }).parentsOf([
+  const parents = await new GhCli({ run }).plansOf([
     { repository: 'JBlaak/switchboard', number: 114 },
     { repository: 'JBlaak/switchboard', number: 113 },
     { repository: 'JBlaak/James', number: 25 },
@@ -248,12 +309,32 @@ test('parents come from one request, once each, leaving out an issue without one
   assert.deepEqual(parents, [{ repository: 'JBlaak/switchboard', number: 112 }, { repository: 'JBlaak/James', number: 22 }]);
 });
 
+test('a standalone ready-for-agent issue is its own plan; an unlabelled one has none', async () => {
+  /* Given */
+  const run = answering({ data: {
+    i0: { issue: { parent: null, labels: { nodes: [{ name: 'ready-for-agent' }] } } },
+    i1: { issue: { parent: null, labels: { nodes: [{ name: 'bug' }] } } },
+    i2: { issue: { parent: { number: 22, repository: { nameWithOwner: 'JBlaak/James' } }, labels: { nodes: [{ name: 'ready-for-agent' }] } } },
+  } });
+
+  /* When */
+  const plans = await new GhCli({ run }).plansOf([
+    { repository: 'JBlaak/James', number: 23 },
+    { repository: 'JBlaak/James', number: 24 },
+    { repository: 'JBlaak/James', number: 25 },
+  ]);
+
+  /* Then */
+  assert.match(queryOf(run.calls[0]), /labels\(first: 20\) \{ nodes \{ name \} \}/);
+  assert.deepEqual(plans, [{ repository: 'JBlaak/James', number: 23 }, { repository: 'JBlaak/James', number: 22 }]);
+});
+
 test('no issues need no request', async () => {
   /* Given */
   const run = answering({});
 
   /* When */
-  const parents = await new GhCli({ run }).parentsOf([]);
+  const parents = await new GhCli({ run }).plansOf([]);
 
   /* Then */
   assert.deepEqual(parents, []);
@@ -295,7 +376,7 @@ for (const [why, answer] of [['missing', missing], ['signed out', signedOut]] as
     const answers = await Promise.all([
       gh.plan('JBlaak/James', 22),
       gh.plansIn('JBlaak/James', { closed: false }),
-      gh.parentsOf([{ repository: 'JBlaak/James', number: 25 }]),
+      gh.plansOf([{ repository: 'JBlaak/James', number: 25 }]),
       gh.closingIssues('JBlaak/James', [49]),
     ]);
 
@@ -313,7 +394,7 @@ test('a repository that is not owner/repo is never written into a query', async 
   const answers = await Promise.all([
     gh.plan('evil"/repo', 22),
     gh.plansIn('nope', { closed: false }),
-    gh.parentsOf([{ repository: 'a") { x }', number: 1 }]),
+    gh.plansOf([{ repository: 'a") { x }', number: 1 }]),
   ]);
 
   /* Then */

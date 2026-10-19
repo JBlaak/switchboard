@@ -1,9 +1,14 @@
 /**
  * A plan, as the Plan tab sees it: one issue and its direct sub-issues (P1),
  * with the "Blocked by" links between them, their PRs and a summary of each
- * body. The main process fills these from one GraphQL request; the rules that
- * turn a plan into levels, states and warnings live in `layout.ts`.
+ * body. A standalone issue labelled `ready-for-agent` is a plan too, with
+ * itself as its one issue. The main process fills these from one GraphQL
+ * request; the rules that turn a plan into levels, states and warnings live in
+ * `layout.ts`.
  */
+
+/** The label that makes an issue with no parent and no sub-issues a plan of its own. */
+export const STANDALONE_PLAN_LABEL = 'ready-for-agent';
 
 /** A GitHub issue. `repository` is `owner/repo`; two keys are the same issue when both parts agree. */
 export interface IssueKey { repository: string; number: number }

@@ -3,8 +3,9 @@
  * its issue, and a project's plans for the picker.
  *
  * A session's plans are the parents of the issues it owns (W2, S1): the issues
- * its branches are named after, and the issues its PRs close. Mentions in the
- * conversation do not count. Next to them come the open plans of the session's
+ * its branches are named after, and the issues its PRs close. An owned issue
+ * that is a standalone `ready-for-agent` issue is a plan of its own. Mentions
+ * in the conversation do not count. Next to them come the open plans of the session's
  * repository (W3), for when it owns none or to switch to another.
  *
  * The renderer polls every minute while the tab is on screen (W4) and more
@@ -46,7 +47,7 @@ export interface PlanServiceDeps {
   transcripts: Pick<TranscriptStore, 'locations' | 'readSession'>;
   git: Pick<GitWorkspace, 'worktreeRoot'>;
   remotes: GitRemotes;
-  github: Pick<GitHubCli, 'plan' | 'plansIn' | 'parentsOf' | 'closingIssues'>;
+  github: Pick<GitHubCli, 'plan' | 'plansIn' | 'plansOf' | 'closingIssues'>;
   clock: Clock;
 }
 
@@ -91,11 +92,11 @@ export class PlanService {
 
     const issues = await this.#sessionIssues(sessionId, target, repository);
     if (!issues) return null;
-    const parents = issues.length > 0 ? await this.deps.github.parentsOf(issues) : [];
-    if (!parents) return null;
+    const keys = issues.length > 0 ? await this.deps.github.plansOf(issues) : [];
+    if (!keys) return null;
 
     const [plans, others] = await Promise.all([
-      Promise.all(parents.map((parent) => this.plan(parent.repository, parent.number))),
+      Promise.all(keys.map((key) => this.plan(key.repository, key.number))),
       this.#plansIn(repository, false),
     ]);
     if (!others) return null;
