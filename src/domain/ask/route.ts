@@ -109,7 +109,7 @@ export function routePrompt(request: RouteRequest): string {
  * `RouteCandidate.folder` is the CLI's encoded transcript folder
  * (`-Users-me-code-app`), which no one types.
  */
-function folderName(projectPath: string): string {
+export function folderName(projectPath: string): string {
   return projectPath.replace(/\/+$/, '').split('/').pop() || projectPath;
 }
 

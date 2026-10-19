@@ -43,3 +43,23 @@ export function quickAskOutcome(result: QuickRouteResult, text: string, quickFol
       return { kind: 'unlock' };
   }
 }
+
+/**
+ * What the pop-up is told came of a send, or of a choice from its list.
+ *
+ * By the time it crosses to the pop-up, main has done what the outcome said:
+ * this is only what to show.
+ */
+export type QuickAskReply =
+  /** The session is starting in this project's folder (B7). */
+  | { kind: 'started'; folder: string }
+  /** Patch is unsure: these projects, best first (R2). */
+  | { kind: 'choose'; candidates: { projectPath: string; folder: string }[] }
+  /** The main window took the text, in its New Session picker (R2). */
+  | { kind: 'handedOff' }
+  /** A task or a save was written (C4). */
+  | { kind: 'saved'; target: CaptureTarget; summary: string }
+  /** A capture failed; the text stays, to retry (C5). */
+  | { kind: 'captureFailed'; reason: string }
+  /** Cancelled: back to editing. */
+  | { kind: 'unlocked' };

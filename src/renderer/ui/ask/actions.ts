@@ -100,7 +100,10 @@ function follow(outcome: AskOutcome): void {
   }
 }
 
-/** The loaded project at `projectPath`; main only answers paths it was offered, so a miss is a stub. */
-function projectAt(projectPath: string): Project {
+/**
+ * The loaded project at `projectPath`; main only answers paths it was offered,
+ * so a miss is a stub. Quick Ask's launches (`app/ipc-listeners`) go through it too.
+ */
+export function projectAt(projectPath: string): Project {
   return view.cachedProjects.find(p => p.projectPath === projectPath) ?? projectStub(projectPath);
 }

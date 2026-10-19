@@ -188,6 +188,11 @@ export interface SwitchboardApi {
   endWindowDrag(): void;
   /** How many sessions are in the Needs input block; the dock bounces when it rises. */
   setNeedsInputCount(count: number): void;
+  /**
+   * The projects are loaded and the view restored: main may send what it held
+   * for a window it opened (Quick Ask, R4).
+   */
+  rendererReady(): void;
 
   // ── Events from main ──
   // Each answers its unsubscribe, so a listener can be removed again (StrictMode
@@ -209,6 +214,10 @@ export interface SwitchboardApi {
   onSessionWorkSnapshot(cb: (snapshot: SessionWorkSnapshot) => void): Unsubscribe;
   /** A running session's PR chips changed colour (W4). */
   onPrStatusChanged(cb: (change: PullRequestStatusChange) => void): Unsubscribe;
+  /** Quick Ask: start a Claude session there on this prompt (R3). */
+  onLaunchRequested(cb: (projectPath: string, initialPrompt: string) => void): Unsubscribe;
+  /** Quick Ask: open the New Session picker holding this prompt; `reason` is Patch's line. */
+  onPickerRequested(cb: (initialPrompt: string, reason?: string) => void): Unsubscribe;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

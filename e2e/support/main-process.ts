@@ -504,15 +504,42 @@ export async function quickAskPassingThrough(app: ElectronApplication): Promise<
   return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.passingThrough());
 }
 
-/** The replies main's stand-in for routing can give (src/main/ipc/quick-ask-handlers.ts, until #149). */
-export type QuickAskStubReply = 'started' | 'choose' | 'handedOff';
+/**
+ * Record every call that could bring the main window, or the app, forward:
+ * the window's `show`, `focus` and `moveTop`, its page's `focus`, and
+ * `app.focus`. Under the harness the app is never active, so the window being
+ * unfocused proves little; that none of these ran proves more.
+ */
+export async function watchMainWindowFocus(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ app: electronApp, BrowserWindow }) => {
+    const calls: string[] = [];
+    const spy = (target: Record<string, unknown>, method: string, name: string) => {
+      const original = (target[method] as (...args: unknown[]) => unknown).bind(target);
+      target[method] = (...args: unknown[]) => { calls.push(name); return original(...args); };
+    };
+    const window = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))!;
+    for (const method of ['show', 'focus', 'moveTop']) spy(window as never, method, `window.${method}`);
+    spy(window.webContents as never, 'focus', 'webContents.focus');
+    spy(electronApp as never, 'focus', 'app.focus');
+    (globalThis as typeof globalThis & { __mainWindowFocusCalls?: string[] }).__mainWindowFocusCalls = calls;
+  });
+}
 
-/** What main's stand-in answers the pop-up's next send with, and after how long. */
-export async function answerQuickAsk(app: ElectronApplication, reply: QuickAskStubReply, delayMs?: number): Promise<void> {
-  await app.evaluate((_electron, { reply, delayMs }) => {
-    const hooks = (globalThis as typeof globalThis & {
-      __switchboardTestHooks: { quickAskStub: { answer(reply: string, delayMs?: number): void } };
-    }).__switchboardTestHooks;
-    hooks.quickAskStub.answer(reply, delayMs);
-  }, { reply, delayMs });
+/** What `watchMainWindowFocus` has seen since it started. */
+export async function mainWindowFocusCalls(app: ElectronApplication): Promise<string[]> {
+  return await app.evaluate(() =>
+    [...(globalThis as typeof globalThis & { __mainWindowFocusCalls?: string[] }).__mainWindowFocusCalls ?? []]);
+}
+
+/** Whether the main window has the focus, by main's word. */
+export async function mainWindowFocused(app: ElectronApplication): Promise<boolean> {
+  return await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))?.isFocused() ?? false);
+}
+
+/** Close the main window, leaving the app running in the Dock, as ⌘W does. */
+export async function closeMainWindow(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))!.close();
+  });
 }

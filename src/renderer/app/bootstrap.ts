@@ -69,6 +69,8 @@ export function bootstrap(): void {
   void loadProjects().then(() => {
     countRunning();
     restoreView();
+    // What main held for this window, a Quick Ask launch, can come now (R4).
+    window.api.rendererReady();
   });
 }
 

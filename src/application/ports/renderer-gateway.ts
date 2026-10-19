@@ -53,4 +53,13 @@ export interface RendererGateway {
   sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void
   /** A running session's PR chips changed colour, or whether one needs you. */
   prStatusChanged(change: PullRequestStatusChange): void
+
+  // ── Quick Ask ──
+  /**
+   * Start a Claude session there on this prompt (R3). Held until the window's
+   * renderer has said it is ready, so a window just opened gets it too (R4).
+   */
+  launchRequested(projectPath: string, initialPrompt: string): void
+  /** Open the New Session picker holding this prompt; `reason` is Patch's line. Held as `launchRequested` is. */
+  pickerRequested(initialPrompt: string, reason?: string): void
 }

@@ -112,6 +112,10 @@ export function EmptyScreenPatch(): JSX.Element {
         const beat = outcomeBeat(askOutcome(e.result, previous.ask.text));
         if (beat) react(beat);
       }),
+      // Quick Ask handed its text to the picker (#142): why, as for the box.
+      onEvent('pickerRequested', ({ reason }) => {
+        if (reason) react({ move: 'jelly', line: reason });
+      }),
     ];
 
     return () => {
