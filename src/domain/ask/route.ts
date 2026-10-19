@@ -52,19 +52,6 @@ function recentTitles(sessions: SessionRow[]): string[] {
 
 // ── The call ──
 
-/** The shape Haiku has to answer in, enforced by the CLI's structured output. */
-export const ROUTE_SCHEMA = {
-  type: 'object',
-  properties: {
-    projectPath: { type: ['string', 'null'] },
-    confident: { type: 'boolean' },
-    candidates: { type: 'array', items: { type: 'string' }, maxItems: MAX_SUGGESTIONS },
-    prompt: { type: 'string' },
-  },
-  required: ['projectPath', 'confident', 'candidates', 'prompt'],
-  additionalProperties: false,
-} as const;
-
 /**
  * Who Haiku is for this call, replacing Claude Code's own system prompt.
  *
@@ -91,6 +78,10 @@ export const ROUTE_SYSTEM_PROMPT = [
   '- Do not name files, components, causes or requirements the request does not mention; you cannot see the code.',
   '- Leave out the mention of the project.',
   '- Write in the same language the request was written in.',
+  '',
+  'Answering:',
+  '- Answer with only this JSON object, no prose, no code fence:',
+  '  {"projectPath": "<a listed path>" or null, "confident": true or false, "candidates": ["<a listed path>", ...], "prompt": "<the first message>"}',
 ].join('\n');
 
 /** The message Haiku answers: the projects, then the request. */
@@ -130,13 +121,16 @@ function folderName(projectPath: string): string {
  * servers and skills, a call carries ~4k tokens instead of ~200k and answers in
  * about 2 s instead of 8. Auth is unaffected — it is the CLI's own login, not
  * a setting. `--bare` would go further but never reads the subscription login.
+ *
+ * There is no `--json-schema`: the CLI enforces a schema through a tool call,
+ * which costs a second model turn (#143). The system prompt asks for bare JSON
+ * instead, and `readAnswer` holds it to the same shape.
  */
 export function routeArgs(request: RouteRequest): string[] {
   return [
     '-p',
     '--model', 'haiku',
     '--output-format', 'json',
-    '--json-schema', JSON.stringify(ROUTE_SCHEMA),
     '--tools', '',
     '--no-session-persistence',
     '--setting-sources', '',
@@ -180,7 +174,9 @@ export function readRouteRun(run: ClaudeRun, request: RouteRequest): RouteResult
   if (envelope.is_error === true || run.exitCode !== 0) {
     return { kind: 'failed', reason: failureLine(message || run.stderr, run.exitCode) };
   }
-  return routeResultFrom(structuredAnswer(envelope), request);
+  const answer = readAnswer(message, request);
+  if (!answer) return { kind: 'failed', reason: GARBLED_LINE };
+  return routeResultFrom(answer, request);
 }
 
 /**
@@ -198,10 +194,40 @@ function parseEnvelope(stdout: string): Record<string, unknown> | null {
   return null;
 }
 
-/** The answer itself: `structured_output`, or the same JSON as text in `result`. */
-function structuredAnswer(envelope: Record<string, unknown>): unknown {
-  if (envelope.structured_output !== undefined) return envelope.structured_output;
-  return typeof envelope.result === 'string' ? parseJson(envelope.result) : undefined;
+/** What Haiku answers with, once `readAnswer` has checked it. */
+export interface RouteAnswer {
+  projectPath: string | null;
+  confident: boolean;
+  candidates: string[];
+  prompt: string;
+}
+
+/** A ```` ```json ```` fence around the whole answer, which Haiku sometimes adds anyway. */
+const FENCE = /^```(?:json)?[ \t]*\n?([\s\S]*?)\n?[ \t]*```$/;
+
+/**
+ * The answer as Haiku wrote it in `result`: the agreed JSON object and nothing
+ * else, or null.
+ *
+ * This holds it to the shape `--json-schema` used to enforce — the four keys
+ * with their types, at most three candidates — and to listed paths only: an
+ * answer naming a project it was never shown didn't follow the instructions
+ * either. A fence and whitespace around the object are fine; prose is not.
+ */
+export function readAnswer(text: string, request: RouteRequest): RouteAnswer | null {
+  const trimmed = text.trim();
+  const parsed = parseJson(trimmed.match(FENCE)?.[1] ?? trimmed);
+  if (!isRecord(parsed)) return null;
+  if (Object.keys(parsed).sort().join(',') !== 'candidates,confident,projectPath,prompt') return null;
+
+  const known = new Set(request.candidates.map(candidate => candidate.projectPath));
+  const listed = (path: unknown): path is string => typeof path === 'string' && known.has(path);
+  const { projectPath, confident, candidates, prompt } = parsed;
+  if (projectPath !== null && !listed(projectPath)) return null;
+  if (typeof confident !== 'boolean' || typeof prompt !== 'string') return null;
+  if (!Array.isArray(candidates) || candidates.length > MAX_SUGGESTIONS || !candidates.every(listed)) return null;
+
+  return { projectPath, confident, candidates, prompt };
 }
 
 /**

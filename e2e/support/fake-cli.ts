@@ -259,7 +259,7 @@ export interface RouteAnswer {
  * The fake `claude -p` Ask Patch routes with (#135).
  *
  * Each call records its argv and prints whatever was last set here, wrapped
- * the way the real CLI wraps a structured answer; `delayMs` holds the answer
+ * the way the real CLI wraps Haiku's JSON answer; `delayMs` holds the answer
  * back so a test can see the wait, or cancel it.
  */
 export class FakeRoute {
@@ -273,7 +273,7 @@ export class FakeRoute {
   answer(answer: RouteAnswer, delayMs = 0): void {
     const envelope = {
       type: 'result', subtype: 'success', is_error: false,
-      result: JSON.stringify(answer), structured_output: answer,
+      result: JSON.stringify(answer),
     };
     this.write({ stdout: JSON.stringify(envelope) + '\n', exitCode: 0, delayMs });
   }

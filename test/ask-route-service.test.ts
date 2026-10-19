@@ -52,7 +52,7 @@ function harness() {
 function success(answer: unknown): ClaudeRun {
   return {
     exitCode: 0,
-    stdout: JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify(answer), structured_output: answer }),
+    stdout: JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify(answer) }),
     stderr: '',
   };
 }
