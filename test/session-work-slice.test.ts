@@ -520,6 +520,17 @@ test('session work: each kind of item has its ref', () => {
   assert.deepStrictEqual(refs, ['#52', 'no PR', 'fix/login', '#49']);
 });
 
+test('session work: a PR in another repository is named with its repository', () => {
+  /* Given */
+  const elsewhere: SessionWorkItem = { ...openPr, pr: { ...openPr.pr, repository: 'acme/skills' }, otherRepository: true } as SessionWorkItem;
+
+  /* When */
+  const ref = itemRef(elsewhere);
+
+  /* Then */
+  assert.equal(ref, 'acme/skills#52');
+});
+
 test('session work: each kind of item has its title', () => {
   /* When */
   const titles = [openPr, branch, dirty, issue].map(itemTitle);

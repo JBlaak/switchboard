@@ -215,6 +215,8 @@ export type WorkItem = { error?: string } & (
     kind: 'pr'; pr: PullRequestStatus; location: WorkLocation | null; diff: DiffSource; activity: Activity | null;
     /** Review threads a queued or sent Fix comments covers: "Claude is on it". */
     fixingThreads?: string[];
+    /** In another repository than the session's: no checkout here, so nothing is handed to Claude. */
+    otherRepository?: true;
   }
   | ({
     kind: 'branch'; location: WorkLocation; ahead: number; diff: DiffSource; activity: Activity | null;

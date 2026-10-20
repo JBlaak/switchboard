@@ -56,9 +56,10 @@ export function DiffView({ page, item }: { page: SessionWorkPage; item: SessionW
     [item],
   );
   const fixingThreads = item.kind === 'pr' ? item.fixingThreads : undefined;
+  const canFix = !(item.kind === 'pr' && item.otherRepository);
   const scope = useMemo<ReviewScope>(
-    () => ({ sessionId: page.sessionId, itemId: item.id, fixing: fixingThreads ? new Set(fixingThreads) : NO_THREADS }),
-    [page.sessionId, item.id, fixingThreads],
+    () => ({ sessionId: page.sessionId, itemId: item.id, fixing: fixingThreads ? new Set(fixingThreads) : NO_THREADS, canFix }),
+    [page.sessionId, item.id, fixingThreads, canFix],
   );
   const imageDefaults = useStore(state => state.sessionWork.imageDefaults);
   if (item.kind === 'issue') return null;
@@ -111,7 +112,7 @@ export function DiffView({ page, item }: { page: SessionWorkPage; item: SessionW
                 composer={page.composer}
               />
             ))}
-      {pr && <ReviewBar sessionId={page.sessionId} itemId={item.id} pr={pr} />}
+      {pr && <ReviewBar sessionId={page.sessionId} itemId={item.id} pr={pr} canFix={canFix} />}
     </div>
     </ReviewContext.Provider>
   );

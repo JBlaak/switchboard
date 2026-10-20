@@ -34,10 +34,10 @@ export function itemKind(item: SessionWorkItem): string {
   }
 }
 
-/** The mono reference beside the kind: `#52`, "no PR", or the branch. */
+/** The mono reference beside the kind: `#52` (`owner/repo#52` in another repository), "no PR", or the branch. */
 export function itemRef(item: SessionWorkItem): string {
   switch (item.kind) {
-    case 'pr': return '#' + item.pr.number;
+    case 'pr': return (item.otherRepository ? item.pr.repository : '') + '#' + item.pr.number;
     case 'branch': return 'no PR';
     case 'dirty': return item.location.branch;
     case 'issue': return '#' + item.issue.number;

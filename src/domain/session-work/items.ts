@@ -111,17 +111,19 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
   }
 
   // PRs, one per URL, with whatever gh added. A link into another repository
-  // is left out: the page is about this repository, and a transcript can carry
-  // a `pr-link` for a PR some tool printed, even a placeholder like owner/repo#12.
+  // is kept only when gh knows the PR: a transcript can carry a `pr-link` for
+  // a PR some tool printed, even a placeholder like owner/repo#12.
   const github = new Map((facts.github ?? []).map((status) => [status.url, status]));
-  const pullRequests = new Map<string, { pr: PullRequestStatus; order: number }>();
+  const pullRequests = new Map<string, { pr: PullRequestStatus; order: number; otherRepository: boolean }>();
   facts.pullRequests.forEach((link, order) => {
-    if (pullRequests.has(link.url) || isForeign(link.repository, facts.repository)) return;
+    if (pullRequests.has(link.url)) return;
     const known = github.get(link.url);
+    const otherRepository = isForeign(link.repository, facts.repository);
+    if (otherRepository && !known) return;
     const pr: PullRequestStatus = known
       ? { ...known, number: link.number, url: link.url, repository: known.repository || link.repository }
       : { number: link.number, url: link.url, repository: link.repository, closes: [] };
-    pullRequests.set(link.url, { pr, order });
+    pullRequests.set(link.url, { pr, order, otherRepository });
   });
 
   // Local branches the session touched, and which PR (if any) each one heads.
@@ -130,9 +132,10 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
     const key = locationKey(branch.worktree, branch.branch);
     if (locations.has(key) && !branchFacts.has(key)) branchFacts.set(key, branch);
   }
+  // A PR in another repository heads none of this repository's branches, whatever its name.
   const prByHead = new Map<string, PullRequestStatus>();
-  for (const { pr } of pullRequests.values()) {
-    if (pr.headRef && !prByHead.has(pr.headRef)) prByHead.set(pr.headRef, pr);
+  for (const { pr, otherRepository } of pullRequests.values()) {
+    if (!otherRepository && pr.headRef && !prByHead.has(pr.headRef)) prByHead.set(pr.headRef, pr);
   }
 
   const prLocation = new Map<string, { location: WorkLocation; base: string }>();
@@ -166,7 +169,7 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
 
   const openPrs: Array<{ item: WorkItem; order: number; needsYou: boolean }> = [];
   const donePrs: Array<{ item: WorkItem; order: number }> = [];
-  for (const { pr, order } of pullRequests.values()) {
+  for (const { pr, order, otherRepository } of pullRequests.values()) {
     const local = prLocation.get(pr.url) ?? null;
     const diff: DiffSource = local
       ? {
@@ -176,7 +179,10 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
         head: local.location.branch,
       }
       : { kind: 'pull-request', repository: pr.repository, number: pr.number };
-    const item: WorkItem = { kind: 'pr', pr, location: local?.location ?? null, diff, activity: null };
+    const item: WorkItem = {
+      kind: 'pr', pr, location: local?.location ?? null, diff, activity: null,
+      ...(otherRepository ? { otherRepository: true as const } : {}),
+    };
     item.activity = activityOf(workItemKey(item));
     if (isDone(item)) donePrs.push({ item, order });
     else openPrs.push({ item, order, needsYou: needsYou(pr, item.activity) });

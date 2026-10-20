@@ -196,6 +196,19 @@ test('a submitted review whose fix cannot be queued says so', async () => {
   assert.deepEqual(result, { ok: false, reason: 'Review submitted, but start the session to hand this to Claude' });
 });
 
+test('Submit & have Claude fix on a PR in another repository is refused before anything is submitted', async () => {
+  /* Given */
+  const { service, writes, requests } = setup({ item: { ...pendingPr, otherRepository: true } as SessionWorkItem });
+
+  /* When */
+  const result = await service.review({ sessionId: 's1', itemId: ITEM, mode: 'fix' });
+
+  /* Then */
+  assert.equal(result.ok, false);
+  assert.equal(writes.length, 0);
+  assert.equal(requests.length, 0);
+});
+
 test('a submit GitHub refuses hands nothing to Claude', async () => {
   /* Given */
   const { service, requests } = setup({ item: pendingPr, answers: { submit: { ok: false, reason: 'Review is not pending' } } });

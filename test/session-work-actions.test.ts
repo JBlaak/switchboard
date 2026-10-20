@@ -92,6 +92,18 @@ test('a PR offers a rebase on its own base branch', () => {
   assert.deepEqual(offered, ['Ship it', 'Rebase on origin/develop', 'Open on GitHub']);
 });
 
+test('a PR in another repository only links out: the session has no checkout of it', () => {
+  /* Given */
+  const elsewhere = { ...pr({ behindBy: 1, checks: [{ name: 'test', state: 'failing' }] }), otherRepository: true } as SessionWorkItem;
+
+  /* When */
+  const offered = labels(elsewhere);
+
+  /* Then */
+  assert.deepEqual(availableActions(elsewhere, 'ok'), []);
+  assert.deepEqual(offered, ['Open on GitHub']);
+});
+
 test('a merged PR only links out', () => {
   /* When */
   const offered = labels(pr({ state: 'merged' }));
