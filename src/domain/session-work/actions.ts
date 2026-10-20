@@ -44,7 +44,8 @@ export function failingCheck(pr: PullRequestStatus): CheckRun | null {
  *
  * Without `gh` nothing is offered (D9): every action ends on GitHub, and the
  * facts that decide them (behind, failing, open threads) are unknown. A
- * merged or closed PR has nothing left to do. Rebase only when the branch is
+ * merged or closed PR has nothing left to do, and neither does one in another
+ * repository: the session has no checkout of it to work in. Rebase only when the branch is
  * behind, Fix CI only when a check fails, Fix comments only when a thread is
  * open: an unknown field offers nothing rather than a button that might be a
  * no-op.
@@ -54,7 +55,7 @@ export function availableActions(item: WorkItem, gh: GitHubAvailability): WorkAc
   switch (item.kind) {
     case 'pr': {
       const { pr } = item;
-      if (pr.state === 'merged' || pr.state === 'closed') return [];
+      if (pr.state === 'merged' || pr.state === 'closed' || item.otherRepository) return [];
       const actions: WorkAction[] = ['ship'];
       if ((pr.behindBy ?? 0) > 0) actions.push('rebase');
       if (failingCheck(pr)) actions.push('fix-ci');

@@ -27,6 +27,8 @@ export interface ReviewScope {
   readonly itemId: string;
   /** Threads a waiting or sent Fix comments covers. */
   readonly fixing: ReadonlySet<string>;
+  /** False for a PR in another repository: its threads cannot be handed to Claude. */
+  readonly canFix: boolean;
 }
 
 export const ReviewContext = createContext<ReviewScope | null>(null);
@@ -163,7 +165,7 @@ function ThreadFooter({ thread, fixing }: { thread: ReviewThread; fixing: boolea
       {fixing
         ? <span className="sw-pill is-amber" data-testid="session-work-thread-fixing">Claude is on it</span>
         : thread.needsYou && <span className="sw-pill is-red">needs you</span>}
-      {!fixing && scope && (
+      {!fixing && scope?.canFix && (
         <button
           type="button"
           className="sw-btn sw-btn-small"
@@ -259,7 +261,9 @@ function Composer(): JSX.Element {
  * The bar under the diff while your review has pending comments (C2):
  * Discard, Submit only, and Submit & have Claude fix.
  */
-export function ReviewBar({ sessionId, itemId, pr }: { sessionId: string; itemId: string; pr: PullRequestStatus }): JSX.Element | null {
+export function ReviewBar({ sessionId, itemId, pr, canFix }: {
+  sessionId: string; itemId: string; pr: PullRequestStatus; canFix: boolean;
+}): JSX.Element | null {
   const running = useStore(state => state.view.activePtyIds.has(sessionId));
   const busy = useStore(state => {
     const pending = state.sessionWork.page?.reviewPending;
@@ -296,15 +300,17 @@ export function ReviewBar({ sessionId, itemId, pr }: { sessionId: string; itemId
         >
           {busy === 'submit' ? 'Submitting…' : 'Submit only'}
         </button>
-        <button
-          type="button"
-          className="sw-btn sw-btn-small is-primary"
-          title={fixBlocked ?? 'Submit as Request changes, then hand these comments to Claude'}
-          aria-disabled={busy || fixBlocked ? true : undefined}
-          onClick={() => { if (!busy && !fixBlocked) void finishReview(itemId, 'fix'); }}
-        >
-          {busy === 'fix' ? 'Submitting…' : 'Submit & have Claude fix'}
-        </button>
+        {canFix && (
+          <button
+            type="button"
+            className="sw-btn sw-btn-small is-primary"
+            title={fixBlocked ?? 'Submit as Request changes, then hand these comments to Claude'}
+            aria-disabled={busy || fixBlocked ? true : undefined}
+            onClick={() => { if (!busy && !fixBlocked) void finishReview(itemId, 'fix'); }}
+          >
+            {busy === 'fix' ? 'Submitting…' : 'Submit & have Claude fix'}
+          </button>
+        )}
       </span>
     </div>
   );

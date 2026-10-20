@@ -111,6 +111,10 @@ export class ReviewService {
 
     const pending = pr.pendingReview ?? [];
     if (pending.length === 0) return { ok: false, reason: 'The review has no comments yet' };
+    // Checked before submitting, so a refused hand-over does not leave a Request changes behind.
+    if (mode === 'fix' && found.item.otherRepository) {
+      return { ok: false, reason: 'This PR is in another repository, so Claude cannot fix it from this session' };
+    }
     // The threads are named before submitting: afterwards they are
     // everyone's threads, and only their ids tell them apart.
     const threadIds = pending.flatMap((comment) => (comment.threadId ? [comment.threadId] : []));

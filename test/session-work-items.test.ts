@@ -61,15 +61,61 @@ test('without gh, PRs come from the transcript alone, newest first, diffed throu
 
 const foreign = { number: 12, url: 'https://github.com/someone/else/pull/12', repository: 'someone/else' };
 
-test('a PR in another repository is left out, whatever the case of the repository name', () => {
+test('a PR in another repository that gh knows is kept, marked, and diffed through gh', () => {
+  /* Given */
+  const known = facts({
+    pullRequests: [link(1), foreign],
+    github: [gh(1, {}), { ...foreign, closes: [], state: 'open', title: 'Add a skill' }],
+  });
+
+  /* When */
+  const items = deriveWorkItems(known);
+
+  /* Then */
+  assert.deepEqual(summary(items), ['pr #12', 'pr #1']);
+  const [elsewhere, own] = items;
+  assert.ok(elsewhere.kind === 'pr' && own.kind === 'pr');
+  assert.equal(elsewhere.otherRepository, true);
+  assert.equal(own.otherRepository, undefined);
+  assert.deepEqual(elsewhere.diff, { kind: 'pull-request', repository: 'someone/else', number: 12 });
+});
+
+test('a PR in another repository that gh does not know, like a placeholder a tool printed, is left out', () => {
   /* Given */
   const shouted = { number: 3, url: url(3), repository: REPO.toUpperCase() };
 
   /* When */
-  const items = deriveWorkItems(facts({ pullRequests: [link(1), foreign, shouted] }));
+  const items = deriveWorkItems(facts({ pullRequests: [link(1), foreign, shouted], github: [gh(1, {})] }));
 
   /* Then */
   assert.deepEqual(summary(items), ['pr #3', 'pr #1']);
+});
+
+test('without gh a PR in another repository is left out', () => {
+  /* When */
+  const items = deriveWorkItems(facts({ pullRequests: [link(1), foreign] }));
+
+  /* Then */
+  assert.deepEqual(summary(items), ['pr #1']);
+});
+
+test('a PR in another repository does not claim a local branch of the same name', () => {
+  /* Given */
+  const known = facts({
+    locations: [loc(MAIN, 'fix/login')],
+    branches: [{ worktree: MAIN, branch: 'fix/login', isDefault: false, ahead: 2, base: 'origin/main', additions: 1, deletions: 0, pushed: true }],
+    pullRequests: [foreign],
+    github: [{ ...foreign, closes: [], state: 'open', headRef: 'fix/login' }],
+  });
+
+  /* When */
+  const items = deriveWorkItems(known);
+
+  /* Then */
+  assert.deepEqual(summary(items), ['pr #12', 'branch fix/login']);
+  const [elsewhere] = items;
+  assert.ok(elsewhere.kind === 'pr');
+  assert.equal(elsewhere.location, null);
 });
 
 test('a PR is kept when the session\'s repository is unknown', () => {
