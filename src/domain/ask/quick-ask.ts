@@ -23,8 +23,9 @@ export type QuickAskOutcome =
  *
  * A confident answer starts on the rewritten prompt and an unsure one offers
  * its choices. When nothing fits or the call failed, the text goes on as typed
- * — Haiku's rewrite, if any, was for a project it couldn't name. `quickFolder`
- * is the Quick Session Folder, or '' when none is set.
+ * — Haiku's rewrite, if any, was for a project it couldn't name — unless it
+ * starts on a skill every project has, which the result then carries.
+ * `quickFolder` is the Quick Session Folder, or '' when none is set.
  */
 export function quickAskOutcome(result: QuickRouteResult, text: string, quickFolder: string): QuickAskOutcome {
   switch (result.kind) {
@@ -33,10 +34,12 @@ export function quickAskOutcome(result: QuickRouteResult, text: string, quickFol
     case 'unsure':
       return { kind: 'choose', candidates: result.candidates, prompt: result.prompt };
     case 'noMatch':
-    case 'failed':
+    case 'failed': {
+      const prompt = result.kind === 'noMatch' && result.prompt ? result.prompt : text;
       return quickFolder
-        ? { kind: 'start', projectPath: quickFolder, prompt: text }
-        : { kind: 'picker', prompt: text, reason: result.reason };
+        ? { kind: 'start', projectPath: quickFolder, prompt }
+        : { kind: 'picker', prompt, reason: result.reason };
+    }
     case 'capture':
       return { kind: 'capture', target: result.target, text: result.text };
     case 'cancelled':

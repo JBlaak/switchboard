@@ -10,6 +10,7 @@
  * The empty-screen box keeps `routeArgs` and `readRouteRun` unchanged.
  */
 import type { CaptureTarget, QuickRouteResult, RouteRequest } from './model';
+import { startsOnSharedSkill } from './skills';
 import {
   GARBLED_LINE, ROUTE_SYSTEM_PROMPT, parseEnvelope, readAnswer, readRouteRun, routePrompt, routeResultFrom,
 } from './route';
@@ -30,6 +31,13 @@ export const QUICK_ROUTE_SYSTEM_PROMPT = [
   '- For "task" or "save", captureText is the request without its command words ("create a task to call Peter" becomes "call Peter"), otherwise word for word. Keep URLs, dates and names exactly as written.',
   '- For "session", captureText is "".',
   '- For "task" or "save", still fill the other keys: projectPath null, confident false, candidates [], prompt "".',
+  '',
+  'Skills:',
+  '- The listed skills are the slash commands of the coding session, by name. "Skills in every project" works anywhere; a project\'s own skills only in that project.',
+  '- A skill\'s name or its own words in the request ("grill me" for grill-me, "tdd" for tdd) are a reference to that skill. Never reword them into a description of what the skill does.',
+  '- When the request asks to run a skill ("grill me on X", "use tdd for X", "/review-pr 12"), prompt is "/" and the skill\'s name exactly as listed, a space, then the rest of the request word for word, without the words that named the skill and without the project. A request that is only the skill is only "/" and its name.',
+  '- When the request only mentions a skill along the way, rewrite it as usual and keep the skill\'s name in it as written.',
+  '- Only use a skill listed for every project or for the chosen project. A skill request is a "session", never a "task" or "save".',
   '',
   'Answering:',
   '- Answer with only this JSON object, no prose, no code fence:',
@@ -64,7 +72,7 @@ export function quickRouteBootArgs(): string[] {
   ];
 }
 
-/** The message Haiku answers: the projects, then the request, as for Ask Patch. */
+/** The message Haiku answers: the projects, the skills, then the request, as for Ask Patch. */
 export function quickRoutePrompt(request: RouteRequest): string {
   return routePrompt(request);
 }
@@ -79,7 +87,8 @@ export function quickRouteArgs(request: RouteRequest): string[] {
  *
  * `task` or `save` with some text to capture is a capture. Everything else —
  * `session`, a kind it doesn't know, a capture with no text, a failed call —
- * reads exactly as `readRouteRun` reads it, the two extra keys aside.
+ * reads exactly as `readRouteRun` reads it, the two extra keys aside, except
+ * that no project keeps a prompt that starts on a skill every project has.
  */
 export function readQuickRouteRun(run: ClaudeRun, request: RouteRequest): QuickRouteResult {
   const envelope = parseEnvelope(run.stdout);
@@ -97,7 +106,12 @@ export function readQuickRouteRun(run: ClaudeRun, request: RouteRequest): QuickR
   const routing = Object.fromEntries(Object.entries(answer).filter(([key]) => !QUICK_KEYS.includes(key)));
   const checked = readAnswer(JSON.stringify(routing), request);
   if (!checked) return { kind: 'failed', reason: GARBLED_LINE };
-  return routeResultFrom(checked, request);
+  const result = routeResultFrom(checked, request);
+  // "Grill me" fits every project, so Haiku names none; the command still holds.
+  if (result.kind === 'noMatch' && startsOnSharedSkill(checked.prompt, request.skills)) {
+    return { ...result, prompt: checked.prompt.trim() };
+  }
+  return result;
 }
 
 /** A ```` ```json ```` fence around the whole answer, as `readAnswer` allows. */

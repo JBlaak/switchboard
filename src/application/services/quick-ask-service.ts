@@ -40,6 +40,7 @@ import type { TimerHandle, Timers } from '../ports/clock';
 import type { IdGenerator } from '../ports/ids';
 import type { Logger } from '../ports/logger';
 import type { McpServers } from '../ports/mcp-servers';
+import type { SkillCatalog } from '../ports/skill-catalog';
 import type { MainWindowHost } from '../ports/main-window';
 import type { QuickAskPanel } from '../ports/quick-ask-panel';
 import type { RendererGateway } from '../ports/renderer-gateway';
@@ -66,6 +67,8 @@ export interface QuickRouter {
 export interface QuickAskServiceDeps {
   router: QuickRouter;
   projects: { list(showArchived: boolean): Project[] };
+  /** The skills a request may name, so the route keeps their names. */
+  skills: SkillCatalog;
   settings: { global(): GlobalSettings };
   renderer: Pick<RendererGateway, 'launchRequested' | 'pickerRequested'>;
   mainWindow: MainWindowHost;
@@ -107,7 +110,9 @@ export class QuickAskService {
     const failed = this.#failed;
     if (failed?.typed === text) return this.#capture(failed.target, failed.text, text, failed.captureId);
     this.#failed = null;
-    const result = await router.route({ text, candidates: routeCandidates(projects.list(false)) });
+    const candidates = routeCandidates(projects.list(false));
+    const skills = this.deps.skills.list(candidates.map(candidate => candidate.projectPath));
+    const result = await router.route({ text, candidates, skills });
     log.info(`[quick-ask] routed: ${result.kind}`);
     return this.#follow(quickAskOutcome(result, text, this.#quickFolder()), text);
   }

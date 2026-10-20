@@ -74,3 +74,25 @@ for (const row of rows) {
     assert.deepEqual(outcome, row.withoutFolder);
   });
 }
+
+test('noMatch with a skill command starts a quick session on it, not the text as typed', () => {
+  /* Given */
+  const result: QuickRouteResult = { kind: 'noMatch', reason: 'No idea.', prompt: '/grill-me' };
+
+  /* When */
+  const outcome = quickAskOutcome(result, 'Grill me', QUICK);
+
+  /* Then */
+  assert.deepEqual(outcome, { kind: 'start', projectPath: QUICK, prompt: '/grill-me' });
+});
+
+test('noMatch with a skill command and no quick folder opens the picker on it', () => {
+  /* Given */
+  const result: QuickRouteResult = { kind: 'noMatch', reason: 'No idea.', prompt: '/grill-me' };
+
+  /* When */
+  const outcome = quickAskOutcome(result, 'Grill me', '');
+
+  /* Then */
+  assert.deepEqual(outcome, { kind: 'picker', prompt: '/grill-me', reason: 'No idea.' });
+});

@@ -199,3 +199,74 @@ test('a run with no envelope reads exactly as Ask Patch reads it', () => {
   /* Then */
   assert.deepEqual(result, readRouteRun(crashed, request()));
 });
+
+test('the message lists every project\'s skills, and each project\'s own under it', () => {
+  /* Given */
+  const req: RouteRequest = { ...request('grill me on the upload flow'), skills: { everywhere: ['grill-me', 'tdd'], byProject: { [APP]: ['release'] } } };
+
+  /* When */
+  const prompt = quickRoutePrompt(req);
+
+  /* Then */
+  assert.equal(prompt, [
+    'Projects:',
+    `- path: ${APP}`,
+    '  folder: app',
+    '  skills: release',
+    `- path: ${SITE}`,
+    '  folder: site',
+    '',
+    'Skills in every project:',
+    'grill-me, tdd',
+    '',
+    'Request:',
+    'grill me on the upload flow',
+  ].join('\n'));
+});
+
+test('with no skills, the message is Ask Patch\'s', () => {
+  /* Given */
+  const req: RouteRequest = { ...request(), skills: { everywhere: [], byProject: {} } };
+
+  /* When */
+  const prompt = quickRoutePrompt(req);
+
+  /* Then */
+  assert.equal(prompt, routePrompt(request()));
+});
+
+test('the instructions keep a named skill as its slash command', () => {
+  /* Given */
+  const instructions = QUICK_ROUTE_SYSTEM_PROMPT;
+
+  /* When */
+  const skills = instructions.slice(instructions.indexOf('Skills:'), instructions.indexOf('Answering:'));
+
+  /* Then */
+  assert.match(skills, /Never reword them/);
+  assert.match(skills, /prompt is "\/" and the skill's name exactly as listed/);
+});
+
+test('no project still keeps a prompt that starts on a skill every project has', () => {
+  /* Given */
+  const req: RouteRequest = { ...request('Grill me'), skills: { everywhere: ['grill-me'], byProject: {} } };
+  const answer = { kind: 'session', captureText: '', projectPath: null, confident: false, candidates: [], prompt: '/grill-me' };
+
+  /* When */
+  const result = readQuickRouteRun(run(answer), req);
+
+  /* Then */
+  assert.deepEqual(result, { kind: 'noMatch', reason: NO_MATCH_LINE, prompt: '/grill-me' });
+});
+
+test('no project drops a prompt that starts on a skill that isn\'t listed', () => {
+  /* Given */
+  const req: RouteRequest = { ...request('Grill me'), skills: { everywhere: ['tdd'], byProject: { [APP]: ['grill-me'] } } };
+  const answer = { kind: 'session', captureText: '', projectPath: null, confident: false, candidates: [], prompt: '/grill-me' };
+
+  /* When */
+  const result = readQuickRouteRun(run(answer), req);
+
+  /* Then */
+  assert.deepEqual(result, { kind: 'noMatch', reason: NO_MATCH_LINE });
+});

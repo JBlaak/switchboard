@@ -6,6 +6,7 @@
  * These are the shapes that cross the process boundary. The rules that build
  * the request and read the answer live next to them in this folder.
  */
+import type { RouteSkills } from './skills';
 
 /** One project Claude may route to, as the renderer knows it. */
 export interface RouteCandidate {
@@ -21,6 +22,8 @@ export interface RouteRequest {
   text: string;
   /** Local projects only: no remotes, no worktrees (R2). */
   candidates: RouteCandidate[];
+  /** The skills the request may name; Quick Ask only (#142). */
+  skills?: RouteSkills;
 }
 
 /**
@@ -33,7 +36,8 @@ export type RouteResult =
   | { kind: 'confident'; projectPath: string; prompt: string }
   /** Up to three candidate paths, best first. */
   | { kind: 'unsure'; candidates: string[]; prompt: string }
-  | { kind: 'noMatch'; reason: string }
+  /** Quick Ask (#142) keeps a `prompt` that starts on a skill every project has: it needs no project of its own. */
+  | { kind: 'noMatch'; reason: string; prompt?: string }
   /** The call failed, timed out or hit a usage limit. */
   | { kind: 'failed'; reason: string }
   | { kind: 'cancelled' };
