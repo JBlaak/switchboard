@@ -5,6 +5,7 @@ import { ASK_PATCH_CALL, AskRouteService } from '../src/application/services/ask
 import { QUICK_ROUTE_CALL, QuickAskService } from '../src/application/services/quick-ask-service';
 import { captureArgs, noAnswerLine, undoArgs } from '../src/domain/ask/capture';
 import { NO_MATCH_LINE } from '../src/domain/ask/route';
+import { NO_SKILLS } from '../src/domain/ask/skills';
 import { fakeRenderer, fakeTimers, silentLog } from './support/fakes';
 import type { QuickRouter } from '../src/application/services/quick-ask-service';
 import type { ClaudeCaller } from '../src/application/ports/claude-cli';
@@ -29,6 +30,8 @@ const PROJECTS: Project[] = [
   { projectPath: 'ssh://box/srv', folder: 'ssh', sessions: [], remote: true },
   { projectPath: `${APP}/.claude/worktrees/try`, folder: '-code-app--claude-worktrees-try', sessions: [] },
 ];
+
+const SKILLS = { everywhere: ['grill-me', 'tdd'], byProject: { [APP]: ['release'] } };
 
 /** A router that answers each request when the test says so. */
 function fakeRouter() {
@@ -85,11 +88,13 @@ function harness({ quickSessionPath = '', servers = ['blaaktasks', 'james'] } = 
   const renderer = fakeRenderer();
   const window: string[] = [];
   const saving: CaptureTarget[] = [];
+  const skillLookups: string[][] = [];
   let ids = 0;
   let shown: () => void = () => {};
   const service = new QuickAskService({
     router,
     projects: { list: (showArchived) => (showArchived ? [] : PROJECTS) },
+    skills: { list: (projectPaths) => { skillLookups.push(projectPaths); return SKILLS; } },
     settings: { global: () => ({ quickSessionPath }) },
     renderer,
     mainWindow: { ensureOpen: () => window.push('ensureOpen'), bringForward: () => window.push('bringForward') },
@@ -110,7 +115,7 @@ function harness({ quickSessionPath = '', servers = ['blaaktasks', 'james'] } = 
     while (cliCalls.length < count) await new Promise(resolve => setImmediate(resolve));
     return cliCalls[count - 1];
   };
-  return { service, requests, calls, renderer, window, ask, show: () => shown(), cli, cliCalls, started, mcp, timers, saving };
+  return { service, requests, calls, renderer, window, ask, skillLookups, show: () => shown(), cli, cliCalls, started, mcp, timers, saving };
 }
 
 test('quick ask: the request offers the local projects, not remotes or worktrees', async () => {
@@ -123,6 +128,18 @@ test('quick ask: the request offers the local projects, not remotes or worktrees
   /* Then */
   assert.equal(requests[0].request.text, 'fix the upload test');
   assert.deepEqual(requests[0].request.candidates.map(c => c.projectPath), [APP, API]);
+});
+
+test('quick ask: the request carries the skills of those projects, so the route keeps their names', async () => {
+  /* Given */
+  const { service, requests, skillLookups } = harness();
+
+  /* When */
+  void service.route('grill me on the upload flow');
+
+  /* Then */
+  assert.deepEqual(skillLookups, [[APP, API]]);
+  assert.deepEqual(requests[0].request.skills, SKILLS);
 });
 
 test('quick ask: a confident answer starts the session in the main window, which stays where it is', async () => {
@@ -268,6 +285,7 @@ test('quick ask: a request from the pop-up and one from the empty-screen box nev
   const quickAsk = new QuickAskService({
     router: new AskRouteService({ cli, timers, log: silentLog, call: QUICK_ROUTE_CALL }),
     projects: { list: () => PROJECTS },
+    skills: { list: () => NO_SKILLS },
     settings: { global: () => ({}) },
     renderer,
     mainWindow: { ensureOpen() {}, bringForward() {} },

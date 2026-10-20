@@ -55,6 +55,7 @@ import { hiddenForE2e } from '../infrastructure/electron/main-window';
 import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
 import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
 import { ClaudeJsonMcpServers } from '../infrastructure/claude-cli/mcp-servers';
+import { ClaudeSkillCatalog } from '../infrastructure/claude-cli/skill-catalog';
 import { ProjectsWatcher } from '../infrastructure/fs/projects-watcher';
 import { NodePtyGateway } from '../infrastructure/pty/node-pty-gateway';
 import { PtySessionPrompter } from '../infrastructure/pty/session-prompter';
@@ -296,6 +297,8 @@ export function buildContainer(): Container {
   const quickAsk = new QuickAskService({
     router: new AskRouteService({ cli: claudeCaller, timers, log, call: QUICK_ROUTE_CALL }),
     projects, settings, renderer, mainWindow, log,
+    // So a request that names a skill keeps its name (#142).
+    skills: new ClaudeSkillCatalog({ fs, claudeDir: paths.claudeDir, log }),
     panel: quickAskPanel,
     popUp: { saving: (target) => quickAskWindow?.saving(target) },
     cli: claudeCaller, mcpServers, ids, timers,

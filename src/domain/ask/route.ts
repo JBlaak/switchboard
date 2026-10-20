@@ -84,7 +84,12 @@ export const ROUTE_SYSTEM_PROMPT = [
   '  {"projectPath": "<a listed path>" or null, "confident": true or false, "candidates": ["<a listed path>", ...], "prompt": "<the first message>"}',
 ].join('\n');
 
-/** The message Haiku answers: the projects, then the request. */
+/**
+ * The message Haiku answers: the projects, then the request.
+ *
+ * With skills (Quick Ask), each project lists its own, and the ones every
+ * project has come in a section of their own, before the request.
+ */
 export function routePrompt(request: RouteRequest): string {
   const projects = request.candidates.map(candidate => {
     const lines = [`- path: ${candidate.projectPath}`, `  folder: ${folderName(candidate.projectPath)}`];
@@ -92,12 +97,16 @@ export function routePrompt(request: RouteRequest): string {
       lines.push('  recent sessions:');
       for (const title of candidate.recentTitles) lines.push(`    - ${title}`);
     }
+    const own = request.skills?.byProject[candidate.projectPath] ?? [];
+    if (own.length > 0) lines.push(`  skills: ${own.join(', ')}`);
     return lines.join('\n');
   });
+  const everywhere = request.skills?.everywhere ?? [];
   return [
     'Projects:',
     projects.length > 0 ? projects.join('\n') : '(none)',
     '',
+    ...(everywhere.length > 0 ? ['Skills in every project:', everywhere.join(', '), ''] : []),
     'Request:',
     request.text,
   ].join('\n');
