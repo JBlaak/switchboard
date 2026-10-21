@@ -187,7 +187,7 @@ function RowActions({ row, onOpenWork, onStop, onArchive, onResume }: RowActions
         <button
           className="session-archive-btn"
           title={buttons.archive}
-          dangerouslySetInnerHTML={HTML.archive16}
+          dangerouslySetInnerHTML={session.archived ? HTML.unarchive16 : HTML.archive16}
           onClick={onArchive}
         />
       )}
