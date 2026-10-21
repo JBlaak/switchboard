@@ -54,8 +54,9 @@ jobs:
   # against a fixture home, with fake `claude` and `ssh` on the session PATH.
   # macOS because the app is macOS-only (vibrancy, pmset, the zsh login shell
   # the fakes are put on PATH through) and the baselines are Mac pixels.
+  # Pinned like build.yml: macos-latest stopped being assigned a runner.
   e2e:
-    runs-on: macos-latest
+    runs-on: macos-14
     timeout-minutes: 20
 
     steps:
