@@ -65,15 +65,26 @@ export function resumeWithConfig(sessionId: string): void {
   if (session) void openResumeDialog(session);
 }
 
-/** Archive a row with confetti, or bring one back from the archive without; either way it slides out of this list. */
+/**
+ * Archive a row with confetti, sliding it out of this list, or bring one back
+ * from the archive.
+ *
+ * An unarchived row stays where it is: a search lists archived and active
+ * sessions alike, so it is still listed afterwards, and a slide-out would
+ * leave it collapsed and marked as leaving — invisible even once the search
+ * is cleared.
+ */
 export function toggleArchive(el: HTMLElement, rowId: string, sessionId: string, button: HTMLElement): void {
   const session = sessionMap.get(sessionId);
   if (!session) return;
-  const archived = session.archived ? 0 : 1;
-  if (archived) celebrateFrom(button);
+  if (session.archived) {
+    void archiveSessionRow(session, 0).then(() => loadProjects());
+    return;
+  }
+  celebrateFrom(button);
   leave(el, rowId, async () => {
-    if (!await archiveSessionRow(session, archived)) return false;
-    if (archived) void pollActiveSessions();
+    if (!await archiveSessionRow(session, 1)) return false;
+    void pollActiveSessions();
     void loadProjects();
     return true;
   });

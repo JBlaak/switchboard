@@ -469,6 +469,31 @@ test.describe('archive', () => {
     await expect(pending).toHaveCount(0);
   });
 
+  test('a session found by search is unarchived in place and stays in the list', async ({ page }) => {
+    /* Given */
+    await allowMotion(page);
+    await searchBox(page).fill('GraphQL');
+    const row = sessionRow(page, LABEL.graphqlSpike);
+    await row.hover();
+
+    /* When */
+    await rowButton(row, 'Unarchive').click();
+
+    /* Then */
+    await expect.poll(() => storedSession(page, S.graphqlSpike)).toMatchObject({ archived: 0 });
+    await expect(row).toBeVisible();
+    await expect(sessionItem(page, S.graphqlSpike)).not.toHaveClass(/\barchived-item\b/);
+    expect(await rowNode(page, S.graphqlSpike)).toMatchObject({ leaving: false, height: '' });
+
+    /* When */
+    await searchBox(page).fill('');
+
+    /* Then */
+    await expect(row).toBeVisible();
+    await row.hover();
+    await expect(rowButton(row, 'Archive')).toBeVisible();
+  });
+
   test('a row or a group comes back, and says so, when archiving or stopping fails', async ({ page, app }) => {
     /* Given */
     await failInvoke(app, 'archiveSession', 'the database is locked');
