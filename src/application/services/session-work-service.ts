@@ -32,7 +32,7 @@ import type {
 import type { ActionContext, SessionActivities, WorkPageSource } from './session-action-service';
 import type { Clock, TimerHandle, Timers } from '../ports/clock';
 import type { Disposable, GitWorkspace } from '../ports/git-workspace';
-import type { GitHubCli, PlanReads } from '../ports/github-cli';
+import type { GitHubCli, PlanReads, ProjectReads } from '../ports/github-cli';
 import type { GitRemotes } from '../ports/git-remotes';
 import type { Logger } from '../ports/logger';
 import type { RendererGateway } from '../ports/renderer-gateway';
@@ -60,7 +60,7 @@ export interface SessionWorkServiceDeps {
   transcripts: Pick<TranscriptStore, 'locations' | 'issueMentions' | 'readSession'>;
   git: GitWorkspace;
   /** Reads only: the page writes nothing to GitHub; your review is the review service's, plans the plan service's. */
-  github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview' | PlanReads>;
+  github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview' | PlanReads | ProjectReads>;
   remotes: GitRemotes;
   renderer: Pick<RendererGateway, 'sessionWorkSnapshot'>;
   /** The actions on the session's items; without it, no item has one. */
