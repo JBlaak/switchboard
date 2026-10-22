@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { layOutPlan } from '../src/domain/plan/layout';
 import { issueKeyString } from '../src/domain/plan/model';
 import {
-  arrowInChain, chainOf, inChain, LEVEL_PITCH, NODE_H, NODE_W, planGeometry, spread,
+  arrowInChain, BAND_PAD, chainOf, inChain, LEVEL_PITCH, NODE_H, NODE_W, PAD, planGeometry, spread,
 } from '../src/renderer/ui/session-work/plan/geometry';
 import { diamond, issue, key, needs, plan } from './support/plans';
 
@@ -40,6 +40,16 @@ test('every node fits inside the drawing', () => {
     assert.ok(node.x >= 0 && node.x + NODE_W <= geometry.width);
     assert.ok(node.y >= 0 && node.y + NODE_H <= geometry.height);
   }
+});
+
+test('a band leaves as much room right of its widest row as above and below it', () => {
+  /* When */
+  const { geometry } = geometryOf();
+
+  /* Then */
+  const bandRight = geometry.width - PAD;
+  const rightmost = Math.max(...geometry.nodes.map(node => node.x + NODE_W));
+  assert.equal(bandRight - rightmost, BAND_PAD);
 });
 
 test('an arrow leaves the blocker’s bottom edge and ends on the dependent’s top edge', () => {
