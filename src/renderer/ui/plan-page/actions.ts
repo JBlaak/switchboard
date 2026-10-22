@@ -1,7 +1,8 @@
 /**
  * What the Plan view without a session does (F2, #128): open a plan picked in
  * the New Session picker in the main area, as the route `project → plan`
- * (#168), and close it again.
+ * (#168), inside its project's page (#173). Going back and closing are the
+ * project page's (`ui/project-page/actions`).
  */
 import { dispatch } from '../../state/app-store';
 import { recordRecentPlan } from '../dialogs/recent-plans';
@@ -25,9 +26,4 @@ export function openPlanPage(page: PlanPage): void {
     projectPath: page.projectPath,
     view: { kind: 'plan', repository: page.repository, number: page.number },
   });
-}
-
-/** Close the project: the session it covered comes back, focused, or the empty screen. */
-export function closeProject(): void {
-  dispatch({ type: 'projectClosed' });
 }

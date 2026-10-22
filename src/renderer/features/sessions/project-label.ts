@@ -21,3 +21,13 @@ export function projectLabel(projectPath: string | null | undefined): string {
 export function isWorktreeProject(projectPath: string): boolean {
   return /\/\.claude\/worktrees\//.test(projectPath);
 }
+
+/** The repository a worktree project belongs to; any other project is its own. */
+export function repositoryRoot(projectPath: string): string {
+  return projectPath.match(WORKTREE_PATTERN)?.[1] ?? projectPath;
+}
+
+/** A worktree project's name (its folder under `.claude/worktrees`), or null for any other project. */
+export function worktreeName(projectPath: string): string | null {
+  return projectPath.match(WORKTREE_PATTERN)?.[2] ?? null;
+}
