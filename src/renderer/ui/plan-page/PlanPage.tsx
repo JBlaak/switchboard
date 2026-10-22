@@ -4,26 +4,28 @@
  * the project and closes the view; below it, the same plan view as the
  * Session work page's Plan tab, with its diagram, detail, actions and polling.
  *
- * Rendered into `#plan-page`, which `install-plan-page` shows and hides. Esc
- * closes an open issue detail first, then the view; ↑/↓ step through the
- * issues while the detail is open (D4).
+ * Rendered into `#plan-page` while the main area's route is `project → plan`
+ * (#168); `ui/main-area/install-main-area` shows and hides it. Esc closes an
+ * open issue detail first, then the view, which goes back to the session it
+ * covered; ↑/↓ step through the issues while the detail is open (D4).
  */
 import { useLayoutEffect, useRef } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
 import { useStore } from '../use-store';
-import { planPageOwner } from '../../state/plan-page-slice';
+import { projectPlan, projectPlanOwner } from '../../state/main-area-slice';
 import { projectLabel } from '../../features/sessions/project-label';
 import { PlanView } from '../session-work/plan/PlanView';
 import { planKey } from '../session-work/plan/load';
 import { useIssueActions } from '../session-work/plan/issue-actions';
-import { closePlanPage } from './actions';
+import { closeProject } from './actions';
+import type { PlanPage as Plan } from './actions';
 
 export function PlanPage(): JSX.Element | null {
-  const page = useStore(state => state.planPage.open);
+  const page = useStore(state => projectPlan(state.mainArea), samePlan);
   const view = useStore(state => state.plan.view);
   const root = useRef<HTMLDivElement>(null);
   const issueActions = useIssueActions(page?.projectPath ?? null);
-  const owner = page ? planPageOwner(page) : null;
+  const owner = page ? projectPlanOwner(page) : null;
 
   // Into the page as it opens, so Esc and ↑/↓ reach it without a click.
   useLayoutEffect(() => {
@@ -45,7 +47,7 @@ export function PlanPage(): JSX.Element | null {
     }
     if (e.key === 'Escape') {
       e.preventDefault();
-      closePlanPage();
+      closeProject();
     }
   };
 
@@ -60,7 +62,7 @@ export function PlanPage(): JSX.Element | null {
     >
       <header className="sw-header">
         <div className="sw-header-row">
-          <button type="button" className="sw-btn sw-back" onClick={closePlanPage} aria-label="Close plan (Esc)">
+          <button type="button" className="sw-btn sw-back" onClick={closeProject} aria-label="Close plan (Esc)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M18 6 6 18M6 6l12 12" />
             </svg>
@@ -86,4 +88,9 @@ export function PlanPage(): JSX.Element | null {
         )}
     </div>
   );
+}
+
+/** A fresh object per read, so equal when it names the same plan. */
+function samePlan(a: Plan | null, b: Plan | null): boolean {
+  return a === b || (!!a && !!b && a.projectPath === b.projectPath && a.repository === b.repository && a.number === b.number);
 }

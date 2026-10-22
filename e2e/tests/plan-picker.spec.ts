@@ -1,16 +1,18 @@
 /**
  * Finding a plan in the New Session picker and opening it without a session
  * (#128) in the real app: → on a project lists its plans from a stubbed back
- * end, picking one opens the Plan view in the main area, and Esc closes the
- * detail first and then the view.
+ * end, picking one opens the Plan view in the main area with no sidebar row
+ * lit (#168), and Esc closes the detail first and then the view, back to the
+ * session it covered.
  *
  * The order, the recent list, the filter and the keys are unit tested in
- * test/plan-picker.test.ts; the page's open and close rules in
- * test/plan-page-slice.test.ts.
+ * test/plan-picker.test.ts; the main area's route and its highlight in
+ * test/main-area-slice.test.ts.
  */
 import { test, expect } from '../support/test';
-import { dialog, sidebar } from '../support/app';
-import { P } from '../fixtures/standard';
+import { dialog, openSession, sidebar } from '../support/app';
+import { sessionItem } from '../support/session-list';
+import { LABEL, P, S } from '../fixtures/standard';
 import { plansStub } from '../fixtures/plans';
 import type { Page } from '@playwright/test';
 
@@ -31,6 +33,25 @@ function planPage(page: Page) {
 
 function sessionRows(page: Page) {
   return sidebar(page).locator('[data-session-id]');
+}
+
+/** The lit rows: the highlight is the row's `active` class. */
+function litRows(page: Page) {
+  return sidebar(page).locator('[data-session-id].active');
+}
+
+function terminalInput(page: Page) {
+  return page.getByRole('textbox', { name: 'Terminal input' });
+}
+
+/** Open acme-api's "Login rework" plan through the picker. */
+async function openLoginRework(page: Page): Promise<void> {
+  await openPicker(page);
+  await picker(page).getByPlaceholder('Filter projects...').fill('acme-api');
+  await page.keyboard.press('ArrowRight');
+  await expect(plans(page).getByRole('option').first()).toHaveAccessibleName(/^#1300 /);
+  await page.keyboard.press('Enter');
+  await expect(planPage(page).getByRole('heading', { name: 'Login rework' })).toBeVisible();
 }
 
 async function openPicker(page: Page): Promise<void> {
@@ -84,6 +105,7 @@ test('→ on a project lists its plans, and picking one opens it without a sessi
   await expect(planPage(page).getByTestId('plan-diagram').getByRole('button', { name: /^#1302 / })).toBeVisible();
   await expect(page.getByTestId('empty-screen')).toBeHidden();
   await expect(sessionRows(page)).toHaveCount(rowsBefore);
+  await expect(litRows(page)).toHaveCount(0);
   if (SHOTS) await page.screenshot({ path: SHOTS + '/plan-page.png' });
 
   /* When */
@@ -108,6 +130,44 @@ test('→ on a project lists its plans, and picking one opens it without a sessi
   await expect(planPage(page)).toHaveCount(0);
   await expect(page.getByTestId('plan-page')).toBeHidden();
   await expect(page.getByTestId('empty-screen')).toBeVisible();
+});
+
+test('a plan opened over a session lights no row, and Esc brings the session back, lit and focused', async ({ page, home }) => {
+  /* Given */
+  await openSession(page, home, LABEL.loginFix, S.loginFix);
+  await expect(sessionItem(page, S.loginFix)).toHaveClass(/\bactive\b/);
+
+  /* When */
+  await openLoginRework(page);
+
+  /* Then */
+  await expect(litRows(page)).toHaveCount(0);
+  await expect(page.getByTestId('terminal-header')).toBeHidden();
+
+  /* When */
+  await page.keyboard.press('Escape');
+
+  /* Then */
+  await expect(planPage(page)).toHaveCount(0);
+  await expect(page.getByTestId('terminal-header')).toBeVisible();
+  await expect(sessionItem(page, S.loginFix)).toHaveClass(/\bactive\b/);
+  await expect(litRows(page)).toHaveCount(1);
+  await expect(terminalInput(page)).toBeFocused();
+});
+
+test('clicking a sidebar row while a plan is open shows that session and closes the plan', async ({ page, home }) => {
+  /* Given */
+  await openSession(page, home, LABEL.loginFix, S.loginFix);
+  await openLoginRework(page);
+
+  /* When */
+  await openSession(page, home, LABEL.chartsDarkMode, S.chartsDarkMode);
+
+  /* Then */
+  await expect(planPage(page)).toHaveCount(0);
+  await expect(page.getByTestId('plan-page')).toBeHidden();
+  await expect(sessionItem(page, S.chartsDarkMode)).toHaveClass(/\bactive\b/);
+  await expect(litRows(page)).toHaveCount(1);
 });
 
 test('a plan opened from the picker comes first the next time', async ({ page }) => {

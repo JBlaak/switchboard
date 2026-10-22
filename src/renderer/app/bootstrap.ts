@@ -34,6 +34,7 @@ import { installSessionList } from '../ui/session-list/install-session-list';
 import { installSessionWork } from '../ui/session-work/install-session-work';
 import { installPlan } from '../ui/session-work/plan/install-plan';
 import { installPlanPage } from '../ui/plan-page/install-plan-page';
+import { installMainArea } from '../ui/main-area/install-main-area';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -51,6 +52,7 @@ export function bootstrap(): void {
   installSessionList();
   installFooter();
   installQuestions();
+  installMainArea();
   installSessionWork();
   installPlan();
   installPlanPage();
