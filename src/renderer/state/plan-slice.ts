@@ -68,7 +68,7 @@ export interface PlanState {
   /** A level-up or a cleared plan to play, until the view has played it (A4). */
   readonly celebration: PlanCelebration | null;
   /**
-   * Start level (A1): confirming, on its way, or answered. Its sessions start
+   * Start level (A1): confirming, on its way, or answered. Its session starts
    * in the background, so the view stays and shows the answer inline; kept
    * outside the view so a view closed meanwhile still finds it when it is back.
    */

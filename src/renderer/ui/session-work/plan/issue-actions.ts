@@ -3,7 +3,8 @@
  * and the plan slice: which session owns an issue and whether it is working,
  * Jump to session, and Start session — straight away on a Ready issue, after
  * a confirmation that says what it stacks on for a Locked one — and Start
- * level, every Ready issue on the current level after one confirmation (A1).
+ * level, one session with an agent on every Ready issue of the current level,
+ * after one confirmation (A1).
  *
  * Starting needs a project to make the worktree in; without one the view
  * offers no Start session.
@@ -17,7 +18,7 @@ import { layOutPlan } from '../../../../domain/plan/layout';
 import { issueKeyString, sameIssue } from '../../../../domain/plan/model';
 import type { IssueKey, Plan } from '../../../../domain/plan/model';
 import type { IdRecord } from '../../../state/records';
-import { jumpToSession, startIssueSession } from './actions';
+import { issueSessionSteps, jumpToSession, startIssueSession } from './actions';
 import type { IssueActions, IssueSession } from './types';
 import { startLevelWith } from './start-level';
 import { reloadOwners } from './load';
@@ -52,19 +53,16 @@ async function start(projectPath: string, issue: IssueKey, plan: Plan, show: boo
 }
 
 /**
- * Start level (A1): every asked issue, one after another, each in the
- * background so the plan view stays on screen; then the report, and the
- * owners asked again so each started node shows its session.
+ * Start level (A1): one session in the background, with an agent on every
+ * asked issue, so the plan view stays on screen; then the report, and the
+ * owners asked again.
  */
 async function startLevel(projectPath: string, plan: Plan, pulse: boolean): Promise<void> {
   const asking = getState().plan.levelStart;
   if (asking?.phase !== 'confirm' || !sameIssue(asking.plan, plan)) return;
   dispatch({ type: 'planLevelStartConfirmed' });
-  const report = await startLevelWith(async (issue) => {
-    const result = await startIssueSession({ projectPath, issue, plan, show: false });
-    if (result.ok && pulse) pulseSessionRow(result.sessionId);
-    return result;
-  }, asking.issues);
+  const { sessionId, ...report } = await startLevelWith(issueSessionSteps, { projectPath, plan, level: asking.level, issues: asking.issues });
+  if (sessionId && pulse) pulseSessionRow(sessionId);
   dispatch({ type: 'planLevelStartAnswered', ...report });
   await reloadOwners();
 }

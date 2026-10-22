@@ -4,15 +4,18 @@
  *
  * Levels, states, warnings, geometry and the slice are unit tested in
  * test/plan-*.test.ts; this proves the wiring: the tab asks main for the
- * session's plans and shows them, a click opens an issue, and a level that
- * clears between two polls celebrates once.
+ * session's plans and shows them, a click opens an issue, a level that
+ * clears between two polls celebrates once, and Start level starts one
+ * session that coordinates an agent per Ready issue.
  */
 import { test, expect } from '../support/test';
 import { openSession } from '../support/app';
 import { openedExternally, setHostStub } from '../support/main-process';
 import { LABEL, S } from '../fixtures/standard';
 import { sessionWorkStub } from '../fixtures/session-work';
-import { LOGIN_PLAN_ON_LEVEL_3, plansStub } from '../fixtures/plans';
+import { LOGIN_PLAN, LOGIN_PLAN_ON_LEVEL_3, plansStub } from '../fixtures/plans';
+import { FakeCli } from '../support/fake-cli';
+import fs from 'node:fs';
 import type { Page } from '@playwright/test';
 
 function workPage(page: Page) {
@@ -115,5 +118,46 @@ test.describe('level up', () => {
     /* Then */
     await expect(cheer).toHaveCount(0);
     await expect(workPage(page).getByText('Level 3 of 3')).toBeVisible();
+  });
+});
+
+test.describe('start level', () => {
+  /** The login plan with #1302's PR gone: #1302 and #1303 both Ready on level 2. */
+  const twoReady = { ...LOGIN_PLAN, issues: LOGIN_PLAN.issues.map(i => (i.number === 1302 ? { ...i, pullRequests: [] } : i)) };
+  test.use({ stubs: { sessionWork: sessionWorkStub(), plans: { ...plansStub(twoReady), prepareWorktrees: true } } });
+
+  test('Start level starts one session with an agent per Ready issue, coordinated from it', async ({ page, home }) => {
+    /* Given */
+    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await page.keyboard.press('Meta+g');
+    await workPage(page).getByRole('tab', { name: 'Plan' }).click();
+    const before = fs.readdirSync(home.controlDir);
+
+    /* When */
+    await diagram(page).getByRole('button', { name: 'Start level' }).click();
+
+    /* Then */
+    const confirm = workPage(page).getByRole('group', { name: 'Start level' });
+    await expect(confirm).toContainText('Start a session with 2 agents?');
+    await expect(confirm).toContainText('#1302, #1303');
+
+    /* When */
+    await confirm.getByRole('button', { name: 'Start session' }).click();
+
+    /* Then */
+    await expect(workPage(page).getByText('Started a session with 2 agents.')).toBeVisible();
+    const startedSince = () => fs.readdirSync(home.controlDir).filter(key => !before.includes(key));
+    await expect.poll(startedSince).toHaveLength(1);
+    const started = startedSince();
+    const launch = await new FakeCli(home.controlDir, started[0]).launched();
+    const project = launch.cwd;
+    expect(launch.argv).toContain('--add-dir');
+    expect(launch.argv).toContain(project + '/.claude/worktrees/1302-issue');
+    expect(launch.argv).toContain(project + '/.claude/worktrees/1303-issue');
+    const prompt = launch.argv[launch.argv.length - 1];
+    expect(prompt).toContain('You coordinate level 2 of #1300: 2 issues');
+    expect(prompt).toContain('one agent per issue with the Agent tool');
+    expect(prompt).toContain('- #1302: worktree ' + project + '/.claude/worktrees/1302-issue (branch 1302-issue). Work on #1302.');
+    expect(prompt).toContain('- #1303: worktree ' + project + '/.claude/worktrees/1303-issue (branch 1303-issue). Work on #1303.');
   });
 });
