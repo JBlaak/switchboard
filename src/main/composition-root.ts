@@ -29,6 +29,7 @@ import { SessionTransitionDetector } from '../application/services/session-trans
 import { SessionWorkService } from '../application/services/session-work-service';
 import { IssueSessionService, type IssueSessionCandidate } from '../application/services/issue-session-service';
 import { PlanService } from '../application/services/plan-service';
+import { ProjectOverviewService } from '../application/services/project-overview-service';
 import { ReviewService } from '../application/services/review-service';
 import { SessionActionService } from '../application/services/session-action-service';
 import { PrWatchService } from '../application/services/pr-watch-service';
@@ -120,6 +121,7 @@ export interface Container {
   readonly prWatch: PrWatchService;
   readonly issueSessions: IssueSessionService;
   readonly plans: PlanService;
+  readonly projectOverview: ProjectOverviewService;
   readonly askRoute: AskRouteService;
   readonly quickAskHotkey: QuickAskHotkey;
   readonly quickAskPanel: QuickAskPanel;
@@ -406,6 +408,19 @@ export function buildContainer(): Container {
     clock, log,
   });
 
+  // The project page (#172): one answer, plans through PlanService's cache.
+  const projectOverview = new ProjectOverviewService({
+    plans,
+    owners: issueSessions,
+    running: () => registry.snapshot()
+      .filter(([, session]) => !session.exited && !session.isPlainTerminal)
+      .map(([sessionId, session]) => ({ sessionId, projectPath: session.projectPath })),
+    git: workspace,
+    remotes: git,
+    github,
+    clock,
+  });
+
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
   const projectsWatcher = new ProjectsWatcher({
@@ -434,6 +449,7 @@ export function buildContainer(): Container {
     review,
     issueSessions,
     plans,
+    projectOverview,
     askRoute,
     quickAskHotkey,
     quickAskPanel,
