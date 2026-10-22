@@ -47,7 +47,7 @@ function terminalInput(page: Page) {
 /** Open acme-api's "Login rework" plan through the picker. */
 async function openLoginRework(page: Page): Promise<void> {
   await openPicker(page);
-  await picker(page).getByPlaceholder('Filter projects...').fill('acme-api');
+  await picker(page).getByLabel('Filter projects').fill('acme-api');
   await page.keyboard.press('ArrowRight');
   await expect(plans(page).getByRole('option').first()).toHaveAccessibleName(/^#1300 /);
   await page.keyboard.press('Enter');
