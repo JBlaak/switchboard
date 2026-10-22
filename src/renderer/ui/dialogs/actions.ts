@@ -17,7 +17,6 @@ import type { IpcResult } from '../../../ipc/api';
 import type { ProjectFolderCheck } from '../../../domain/project/folder-check';
 import type { Project } from '../../../domain/project/project';
 import type { SessionRow } from '../../../domain/session/session';
-import type { PlanSummary } from '../../../domain/plan/model';
 
 // ── Opening and closing ──
 
@@ -126,47 +125,6 @@ export async function hideProject(project: Project): Promise<boolean> {
   await window.api.removeProject(project.projectPath);
   await loadProjects();
   return true;
-}
-
-// ── Plans in the picker (F1, F3) ──
-
-/**
- * Projects that answered no plans and gave no sign of being on GitHub: their
- * row loses its → cue for the rest of the run, so the picker stops promising
- * what it cannot show.
- */
-const withoutPlans = new Set<string>();
-
-/**
- * Whether a project's row offers its plans. The renderer has no project's
- * remote, so a local project is assumed to until `projectPlans` says
- * otherwise; an SSH project never does.
- */
-export function canHavePlans(project: Project): boolean {
-  return !project.remote && !withoutPlans.has(project.projectPath);
-}
-
-/** A PR one of its sessions opened on GitHub: the project is a GitHub repository. */
-function onGitHub(project: Project): boolean {
-  return project.sessions.some(session => session.pullRequests?.some(pr => pr.repository));
-}
-
-/**
- * A project's plans (`closed`: open and closed together), or why there are
- * none to show. `projectPlans` answers null both for a project that is not a
- * GitHub repository and when `gh` could not be asked; a project known to be
- * on GitHub can only mean the second.
- */
-export async function askProjectPlans(
-  project: Project, closed: boolean,
-): Promise<{ plans: PlanSummary[] } | { reason: string }> {
-  const plans = await window.api.projectPlans(project.projectPath, { closed }).catch(() => null);
-  if (plans) return { plans };
-  if (onGitHub(project)) {
-    return { reason: 'Couldn’t ask GitHub for this project’s plans. Install the GitHub CLI (gh) and run gh auth login.' };
-  }
-  withoutPlans.add(project.projectPath);
-  return { reason: 'No plans: this project has no GitHub remote, or the GitHub CLI (gh) is missing or signed out.' };
 }
 
 /** Archive every unarchived session in the project, one at a time. */

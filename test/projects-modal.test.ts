@@ -182,18 +182,40 @@ test('⌘. opens the highlighted row’s menu; a bare . is typed', () => {
   assert.equal(dot, null);
 });
 
-test('⌘↵ and ⌘. do nothing among the plans', () => {
+test('→ on a highlighted project opens its page', () => {
+  /* Given */
+  const right = key('ArrowRight');
+
   /* When */
-  const actions = [
-    pickerKeyAction('plans', key('Enter', { metaKey: true }), false),
-    pickerKeyAction('plans', key('.', { metaKey: true }), false),
-  ];
+  const action = pickerKeyAction('projects', right, true);
 
   /* Then */
-  assert.deepEqual(actions, ['swallow', 'swallow']);
+  assert.equal(action, 'open-project');
 });
 
-test('Tab completes a path rather than opening plans, and → stays in the path', () => {
+test('→ does nothing with a prompt waiting or no project highlighted, so the caret is left alone', () => {
+  /* Given: canOpenProject is false while a prompt waits, or on an Add row */
+  const right = key('ArrowRight');
+
+  /* When */
+  const action = pickerKeyAction('projects', right, false);
+
+  /* Then */
+  assert.equal(action, null);
+});
+
+test('→ in the middle of typed text moves the caret instead', () => {
+  /* Given */
+  const right = key('ArrowRight', { caretAtEnd: false });
+
+  /* When */
+  const action = pickerKeyAction('projects', right, true);
+
+  /* Then */
+  assert.equal(action, null);
+});
+
+test('Tab completes a path, and → stays in the path', () => {
   /* When */
   const tab = pickerKeyAction('projects', key('Tab'), true, true);
   const right = pickerKeyAction('projects', key('ArrowRight'), true, true);
@@ -201,6 +223,32 @@ test('Tab completes a path rather than opening plans, and → stays in the path'
   /* Then */
   assert.equal(tab, 'complete-path');
   assert.equal(right, null);
+});
+
+test('Tab and Shift-Tab are swallowed outside a path, so focus stays in the filter and no plans open', () => {
+  /* When */
+  const tab = pickerKeyAction('projects', key('Tab'), true);
+  const shiftTab = pickerKeyAction('projects', key('Tab', { shiftKey: true }), true, true);
+
+  /* Then */
+  assert.equal(tab, 'swallow');
+  assert.equal(shiftTab, 'swallow');
+});
+
+test('← in the list is the field’s: there are no plans to go back from', () => {
+  /* When */
+  const left = pickerKeyAction('projects', key('ArrowLeft'), true);
+
+  /* Then */
+  assert.equal(left, null);
+});
+
+test('the arrows move and a plain letter is typed', () => {
+  /* When */
+  const actions = ['ArrowDown', 'ArrowUp', 'a'].map(name => pickerKeyAction('projects', key(name), false));
+
+  /* Then */
+  assert.deepEqual(actions, ['down', 'up', null]);
 });
 
 test('in the add step ↵ adds, ⌘[ goes back, and ← goes back only from the start of a field', () => {

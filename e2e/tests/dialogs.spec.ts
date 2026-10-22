@@ -12,7 +12,7 @@
  */
 import fs from 'node:fs';
 import { test, expect, forEachAppearance } from '../support/test';
-import { chooseProjectAction, dialog, expectScreen, rowButton, sessionRow, terminalStatus } from '../support/app';
+import { chooseProjectAction, dialog, expectScreen, rowButton, sessionRow, sidebar, terminalStatus } from '../support/app';
 import { fakeClaude, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
 import { failStopSession, setHostStub } from '../support/main-process';
 import { answerDialogs, dialogsShown } from '../support/native-dialogs';
@@ -76,6 +76,16 @@ const REMOTE_PATH = 'ssh://joris@buildbox.local/~/apps/api';
 /** The remote's name is followed by its "SSH" badge, inside the same element. */
 const REMOTE_NAME = /^joris@buildbox\.local\/api/;
 const WORKTREE_NAME = 'Development/old-parser ⎇ streaming';
+
+/** The page of the project the add tests make. */
+function newProjectPage(page: Page) {
+  return page.getByRole('region', { name: 'Project Development/brand-new' });
+}
+
+/** The lit sidebar rows: the highlight is the row's `active` class. */
+function litRows(page: Page) {
+  return sidebar(page).locator('[data-session-id].active');
+}
 
 forEachAppearance(() => {
   test('dialog screens', async ({ page }) => {
@@ -296,7 +306,7 @@ test.describe('projects modal', () => {
 });
 
 test.describe('adding a project', () => {
-  test('⌘A, paste a folder path, ↵: the folder is added and highlighted, ready to start in', async ({ page, home }) => {
+  test('⌘A, paste a folder path, ↵: the folder is added and its page opens, ready to start in', async ({ page, home }) => {
     /* Given */
     const target = home.projectPath('Development/brand-new');
     fs.mkdirSync(target, { recursive: true });
@@ -317,16 +327,16 @@ test.describe('adding a project', () => {
     await page.keyboard.press('Enter');
 
     /* Then */
-    await expect(filter(page)).toHaveValue('');
-    await expect(rowButton(pickerRow(modal, 'Development/brand-new'), 'New session')).toBeVisible();
+    await expect(modal).toHaveCount(0);
+    await expect(newProjectPage(page).getByRole('heading', { level: 1 })).toHaveText('Development/brand-new');
+    await expect(litRows(page)).toHaveCount(0);
     expect(await projectPaths(page)).toContain(target);
 
     /* When */
     const before = launchedKeys(home);
-    await page.keyboard.press('Enter');
+    await newProjectPage(page).getByRole('button', { name: /^New session/ }).click();
 
     /* Then */
-    await expect(modal).toHaveCount(0);
     const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
     expect(launch.cwd).toBe(target);
   });
@@ -404,12 +414,13 @@ test.describe('adding a project', () => {
     await add.getByRole('button', { name: 'Add', exact: true }).click();
 
     /* Then */
-    // Back on the list, with the new project highlighted.
-    await expect(filter(page)).toHaveValue('');
-    await expect(rowButton(pickerRow(projectsModal(page), 'Development/brand-new'), 'New session')).toBeVisible();
+    // The modal gives way to the new project's page.
+    await expect(projectsModal(page)).toHaveCount(0);
+    await expect(newProjectPage(page)).toBeVisible();
+    await expect(litRows(page)).toHaveCount(0);
   });
 
-  test('user@host opens the SSH tab filled in; a duplicate is refused, a new one added and dialled', async ({ page, home }) => {
+  test('user@host opens the SSH tab filled in; a duplicate is refused, a new one added, its page opened and dialled from it', async ({ page, home }) => {
     /* Given */
     await openProjects(page);
     const modal = projectsModal(page);
@@ -452,15 +463,16 @@ test.describe('adding a project', () => {
     await page.keyboard.press('Enter');
 
     /* Then */
+    await expect(modal).toHaveCount(0);
     expect(await projectPaths(page)).toContain('ssh://deploy@staging.example.com:2222');
-    await expect(rowButton(pickerRow(modal, /^deploy@staging\.example\.com/), 'New session')).toBeVisible();
+    const remotePage = page.getByRole('region', { name: /^Project deploy@staging\.example\.com/ });
+    await expect(remotePage).toBeVisible();
 
     /* When */
     const before = launchedKeys(home);
-    await pickerRow(modal, /^deploy@staging\.example\.com/).click();
+    await remotePage.getByRole('button', { name: /^New session/ }).click();
 
     /* Then */
-    await expect(modal).toHaveCount(0);
     await waitForNewLaunch(home, 'ssh', before);
   });
 });
