@@ -1,8 +1,8 @@
 /**
  * One project in the Projects modal: its name with the matched characters
  * picked out, how many sessions it has or has running, and, on the
- * highlighted row only, its buttons: start a session, the → into its plans,
- * and the ⋯ menu that holds the rest (#171).
+ * highlighted row only, its buttons: start a session, open the project's page
+ * (#177), and the ⋯ menu that holds the rest (#171).
  *
  * The buttons never open the row: each stops its click from reaching it, and
  * none takes the focus from the filter.
@@ -25,8 +25,8 @@ export interface ProjectPickerRowProps {
   running: number;
   /** What ↵ does here: "New session", or "Start here" with a prompt waiting. */
   startLabel: string;
-  /** Opens its plans (F1); absent for a project that cannot have any, which shows no → cue. */
-  onOpenPlans?(): void;
+  /** Opens its page (→); absent while a prompt is waiting, which leaving would lose. */
+  onOpenProject?(): void;
   /** The ⋯ button, for the menu to hang off. */
   moreRef?: Ref<HTMLButtonElement>;
   menuOpen: boolean;
@@ -36,7 +36,7 @@ export interface ProjectPickerRowProps {
 }
 
 export function ProjectPickerRow({
-  ref, candidate, nested, highlight, selected, running, startLabel, onOpenPlans, moreRef, menuOpen,
+  ref, candidate, nested, highlight, selected, running, startLabel, onOpenProject, moreRef, menuOpen,
   onToggleMenu, onHover, onActivate,
 }: ProjectPickerRowProps): JSX.Element {
   const { project, label, positions } = candidate;
@@ -64,9 +64,9 @@ export function ProjectPickerRow({
           <RowButton className="projects-go" onClick={onActivate}>
             {startLabel} <kbd className="sw-kbd" aria-hidden="true">↵</kbd>
           </RowButton>
-          {onOpenPlans && (
-            <RowButton className="project-picker-plans-cue" label="Show plans" title="Plans (→ or Tab)" onClick={onOpenPlans}>
-              →
+          {onOpenProject && (
+            <RowButton className="projects-go projects-open" title="Open the project's page (→)" onClick={onOpenProject}>
+              Open <kbd className="sw-kbd" aria-hidden="true">→</kbd>
             </RowButton>
           )}
           <RowButton

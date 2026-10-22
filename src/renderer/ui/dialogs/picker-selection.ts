@@ -41,20 +41,17 @@ export function sessionCountLabel(total: number, running: number): string {
   return running > 0 ? `${running} running` : `${total} session${total === 1 ? '' : 's'}`;
 }
 
-// ── The keys (F1, #171) ──
+// ── The keys (#171, #177) ──
 
-/**
- * Which part of the modal has the keys: the project list, one project's
- * plans, or the add step.
- */
-export type PickerMode = 'projects' | 'plans' | 'add';
+/** Which part of the modal has the keys: the project list, or the add step. */
+export type PickerMode = 'projects' | 'add';
 
 /**
  * What a key does. `swallow` takes the key and does nothing (a Tab that has
  * nowhere to go must not move focus out of the filter).
  */
 export type PickerKeyAction =
-  | 'up' | 'down' | 'open' | 'into-plans' | 'back-to-projects'
+  | 'up' | 'down' | 'open' | 'open-project' | 'back-to-projects'
   | 'add-project' | 'row-menu' | 'complete-path' | 'swallow';
 
 /** The key, and where the caret sits in the field, so ← and → still move it through typed text. */
@@ -73,13 +70,14 @@ export interface PickerKey {
  * What a key does in the modal. Null leaves the key to the field.
  *
  * In the list: ↑/↓ move, ↵ starts a session, ⌘↵ adds a project, ⌘. opens the
- * highlighted row's menu, and → or Tab on a project that can have plans opens
- * them, except that Tab completes the folder while the search is a path
- * (`pathQuery`). In the plans: ← or Shift-Tab goes back. In the add step: ↵
- * adds, and ⌘[ or ← with the caret at the start goes back.
+ * highlighted row's menu, and → with the caret at the end opens the
+ * highlighted project's page (`canOpenProject`: a project is highlighted and
+ * no prompt is waiting, which leaving would lose). Tab completes the folder
+ * while the search is a path (`pathQuery`) and is swallowed otherwise. In the
+ * add step: ↵ adds, and ⌘[ or ← with the caret at the start goes back.
  */
 export function pickerKeyAction(
-  mode: PickerMode, key: PickerKey, canOpenPlans: boolean, pathQuery = false,
+  mode: PickerMode, key: PickerKey, canOpenProject: boolean, pathQuery = false,
 ): PickerKeyAction | null {
   const meta = !!key.metaKey;
   if (mode === 'add') {
@@ -88,21 +86,16 @@ export function pickerKeyAction(
     if (key.key === 'ArrowLeft' && !meta && key.caretAtStart) return 'back-to-projects';
     return null;
   }
-  if (meta && key.key === 'Enter') return mode === 'projects' ? 'add-project' : 'swallow';
-  if (meta && key.key === '.') return mode === 'projects' ? 'row-menu' : 'swallow';
+  if (meta && key.key === 'Enter') return 'add-project';
+  if (meta && key.key === '.') return 'row-menu';
   switch (key.key) {
     case 'ArrowDown': return 'down';
     case 'ArrowUp': return 'up';
     case 'Enter': return 'open';
     case 'Tab':
-      if (mode === 'projects' && !key.shiftKey && pathQuery) return 'complete-path';
-      if (mode === 'projects' && !key.shiftKey && canOpenPlans) return 'into-plans';
-      if (mode === 'plans' && key.shiftKey) return 'back-to-projects';
-      return 'swallow';
+      return !key.shiftKey && pathQuery ? 'complete-path' : 'swallow';
     case 'ArrowRight':
-      return mode === 'projects' && canOpenPlans && !pathQuery && key.caretAtEnd ? 'into-plans' : null;
-    case 'ArrowLeft':
-      return mode === 'plans' && key.caretAtStart ? 'back-to-projects' : null;
+      return canOpenProject && !pathQuery && key.caretAtEnd ? 'open-project' : null;
     default:
       return null;
   }

@@ -1,47 +1,40 @@
 /**
- * The Projects modal (#171): start a session in a project, or add one.
+ * The Projects modal (#171): start a session in a project, open its page, or
+ * add one.
  *
  * It was the "New Session" picker. ↵ still starts a session in the
- * highlighted project. The rest of a project's actions sit in one ⋯ menu on
+ * highlighted project, and → opens the project's page (#177), except while a
+ * prompt is waiting, which leaving would lose. The rest of a project's actions sit in one ⋯ menu on
  * the highlighted row (⌘.): its settings, its GitHub page, archiving all its
  * sessions, and hiding it (or, for a remote, removing it). "Add project…" is
  * always the last row (⌘↵) and opens the add step in the same modal. Search
  * text that is a path offers to add that folder; `user@host` offers to add
- * that machine.
+ * that machine. A project added either way opens on its page.
  *
  * Filtering is fuzzy, and focus stays in the input the whole time so the user
  * can keep typing while the arrow keys move the highlight. That means the
  * selected row is state here rather than real DOM focus.
- *
- * It also finds a plan again (F1, F3): → or Tab on a project that can have
- * plans lists them, the filter then matching titles and `#number`; ← or
- * Shift-Tab goes back. Picking a plan opens it in the main area without a
- * session (F2).
  */
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { projectLabel } from '../../features/sessions/project-label';
 import { view } from '../../state/session-store';
 import { useStore } from '../use-store';
-import { openPlanPage } from '../plan-page/actions';
+import { openProjectPage } from '../project-page/actions';
 import { openSettings } from '../settings/actions';
 import { DialogShell } from './DialogShell';
 import { ProjectPickerRow } from './ProjectPickerRow';
-import { PickerPlans } from './PickerPlans';
 import { AddProjectStep } from './AddProjectStep';
 import { clampSelection, nextSelection, pickerKeyAction, rowMenuKeyAction } from './picker-selection';
 import { classifyQuery } from './projects-query';
 import { projectsRows } from './projects-rows';
 import { folderSummary } from './add-project-request';
-import { filterPlans, orderPlans } from './plan-list';
-import { recentPlansIn } from '../project-page/recent-plans';
 import {
-  addLocalProject, archiveAllSessions, askProjectPlans, canHavePlans, checkProjectFolder, hideProject,
-  launchFromPicker, openProjectOnGitHub, removeRemoteProject,
+  addLocalProject, archiveAllSessions, checkProjectFolder, hideProject, launchFromPicker,
+  openProjectOnGitHub, removeRemoteProject,
 } from './actions';
 import type { JSX, KeyboardEvent, MouseEvent } from 'react';
 import type { Project } from '../../../domain/project/project';
 import type { ProjectFolderCheck } from '../../../domain/project/folder-check';
-import type { PickerPlansState, PlanPickerItem } from './PickerPlans';
 import type { AddStepStart } from './AddProjectStep';
 import type { ProjectsQuery } from './projects-query';
 import type { ProjectsRow } from './projects-rows';
@@ -51,14 +44,6 @@ export interface ProjectsModalProps {
   onClose(): void;
   /** The prompt a session started from here begins on. */
   initialPrompt?: string;
-}
-
-/** The plans of the project → was pressed on, and the project list to go back to. */
-interface PlansMode {
-  readonly project: Project;
-  /** The project filter and highlight as they were, for ←. */
-  readonly projectQuery: string;
-  readonly projectSelected: number;
 }
 
 /** One entry of a row's ⋯ menu. */
@@ -85,16 +70,12 @@ const NO_REMOTE = { user: '', host: '', port: '', dir: '' };
 export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
-  const [plansMode, setPlansMode] = useState<PlansMode | null>(null);
-  const [plans, setPlans] = useState<PickerPlansState>({ phase: 'loading' });
   const [addStep, setAddStep] = useState<AddStepStart | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   /** The last folder check, and the path text it answered. */
   const [folder, setFolder] = useState<{ typed: string; check: ProjectFolderCheck } | null>(null);
   /** Why adding the typed folder failed, for the path it failed on. */
   const [addError, setAddError] = useState<{ path: string; error: string } | null>(null);
-  /** A project just added: the next list that has it highlights it. */
-  const [highlightPath, setHighlightPath] = useState<string | null>(null);
   // The cached projects are not in the store (see `session-store`), so a row
   // action that changes them asks for a redraw once the reload is in.
   const [, redraw] = useReducer((n: number) => n + 1, 0);
@@ -106,22 +87,20 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
   /** Set by the arrow keys: the next commit scrolls the highlight into view. Hovering does not. */
   const scrollToSelected = useRef(false);
-  /** Bumped on every → and ←, so a late answer for a project left behind is dropped. */
-  const asked = useRef(0);
   /** The query as it is now, for an answer that comes back after it may have changed. */
   const queryRef = useRef(query);
   queryRef.current = query;
 
   const trimmed = query.trim();
   const classified = classifyQuery(query);
-  const listing = !plansMode && !addStep;
-  const rows = listing ? projectsRows(view.cachedProjects, classified) : [];
-  const planItems = plansMode ? planPickerItems(plans, plansMode.project, trimmed) : [];
-  const count = plansMode ? planItems.length : rows.length;
+  const rows = addStep ? [] : projectsRows(view.cachedProjects, classified);
+  const count = rows.length;
   const current = clampSelection(selected, count);
-  const highlightedRow = listing ? rows[current] : undefined;
+  const highlightedRow = addStep ? undefined : rows[current];
   const highlighted = highlightedRow?.kind === 'project' ? highlightedRow.candidate.project : null;
   const pathTyped = classified.kind === 'path' ? classified.path : null;
+  /** A prompt from Quick Ask is waiting: leaving for a page would lose it. */
+  const promptWaiting = initialPrompt !== undefined;
 
   // The filter has the focus whenever the list is showing: on opening, and back from the add step.
   useEffect(() => {
@@ -147,19 +126,16 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
     };
   }, [pathTyped]);
 
-  // The project just added is highlighted once the reloaded list has it.
-  const addedIndex = highlightPath === null ? -1
-    : rows.findIndex(row => row.kind === 'project' && row.candidate.project.projectPath === highlightPath);
-  useLayoutEffect(() => {
-    if (addedIndex < 0) return;
-    scrollToSelected.current = true;
-    setSelected(addedIndex);
-    setHighlightPath(null);
-  }, [addedIndex]);
-
   const activate = (project: Project): void => {
     onClose();
     void launchFromPicker(project, initialPrompt);
+  };
+
+  /** → or Open: the project's page (a worktree's repository's); never with a prompt waiting. */
+  const openPage = (project: Project): void => {
+    if (promptWaiting) return;
+    onClose();
+    openProjectPage(project.projectPath);
   };
 
   // ── Adding ──
@@ -171,12 +147,10 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
       : { tab: 'local', path: from.kind === 'path' ? from.path : '', remote: NO_REMOTE });
   };
 
+  /** A project was added: its new page, in place of the modal. */
   const added = (projectPath: string): void => {
-    setAddStep(null);
-    setAddError(null);
-    setQuery('');
-    setSelected(0);
-    setHighlightPath(projectPath);
+    onClose();
+    openProjectPage(projectPath);
   };
 
   const addFolder = async (path: string): Promise<void> => {
@@ -192,59 +166,6 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
     if (!check.completion || queryRef.current.trim() !== typed) return;
     setQuery(check.completion);
     setSelected(0);
-  };
-
-  // ── Plans ──
-
-  const intoPlans = (project: Project): void => {
-    const token = ++asked.current;
-    setMenu(null);
-    setPlansMode({ project, projectQuery: query, projectSelected: current });
-    setPlans({ phase: 'loading' });
-    setQuery('');
-    setSelected(0);
-    filterRef.current?.focus();
-    void askProjectPlans(project, false).then(answer => {
-      if (token !== asked.current) return;
-      setPlans('plans' in answer
-        ? { phase: 'loaded', open: answer.plans, closed: null, closedLoading: false }
-        : { phase: 'unavailable', reason: answer.reason });
-      // A project that turned out to have none loses its cue; redraw the rows behind.
-      if (!('plans' in answer)) redraw();
-    });
-  };
-
-  const backToProjects = (): void => {
-    if (!plansMode) return;
-    asked.current++;
-    setQuery(plansMode.projectQuery);
-    setSelected(plansMode.projectSelected);
-    setPlansMode(null);
-    filterRef.current?.focus();
-  };
-
-  const showClosed = (): void => {
-    if (!plansMode || plans.phase !== 'loaded' || plans.closed || plans.closedLoading) return;
-    const token = asked.current;
-    setPlans({ ...plans, closedLoading: true });
-    // `closed: true` answers the open plans and the closed ones together.
-    void askProjectPlans(plansMode.project, true).then(answer => {
-      if (token !== asked.current) return;
-      setPlans(was => was.phase !== 'loaded' ? was : 'plans' in answer
-        ? { ...was, closed: answer.plans.filter(plan => plan.state === 'closed'), closedLoading: false }
-        : { ...was, closed: [], closedLoading: false });
-    });
-  };
-
-  const activatePlanItem = (index: number): void => {
-    const item = planItems[index];
-    if (!item || !plansMode) return;
-    if (item.kind === 'show-closed') {
-      showClosed();
-      return;
-    }
-    onClose();
-    openPlanPage({ projectPath: plansMode.project.projectPath, repository: item.plan.repository, number: item.plan.number });
   };
 
   // ── The rows ──
@@ -322,8 +243,7 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
       return;
     }
 
-    const action = pickerKeyAction(plansMode ? 'plans' : 'projects', key,
-      !!highlighted && canHavePlans(highlighted), pathTyped !== null);
+    const action = pickerKeyAction('projects', key, !!highlighted && !promptWaiting, pathTyped !== null);
     if (!action) return;
     e.preventDefault();
     switch (action) {
@@ -334,8 +254,10 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
         setSelected(nextSelection(current, count, { type: 'stepped', step: action === 'down' ? 1 : -1 }));
         return;
       case 'open':
-        if (plansMode) activatePlanItem(current);
-        else activateRow(highlightedRow);
+        activateRow(highlightedRow);
+        return;
+      case 'open-project':
+        if (highlighted) openPage(highlighted);
         return;
       case 'add-project':
         openAddStep(classified);
@@ -346,12 +268,7 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
       case 'complete-path':
         if (pathTyped !== null) void completePath(pathTyped);
         return;
-      case 'into-plans':
-        if (highlighted) intoPlans(highlighted);
-        return;
       case 'back-to-projects':
-        backToProjects();
-        return;
       case 'swallow':
         return;
     }
@@ -370,15 +287,15 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
 
   const backFromAdd = (): void => setAddStep(null);
 
-  const title = initialPrompt !== undefined && !plansMode && !addStep ? 'Start this in…' : 'Projects';
-  const startLabel = initialPrompt !== undefined ? 'Start here' : 'New session';
+  const title = promptWaiting && !addStep ? 'Start this in…' : 'Projects';
+  const startLabel = promptWaiting ? 'Start here' : 'New session';
   const alreadyAdded = folder !== null && view.cachedAllProjects.some(p => p.projectPath === folder.check.path);
   const hasProjectRows = rows.some(row => row.kind === 'project');
 
   return (
     <DialogShell
       overlayClass="add-project-overlay"
-      dialogClass={'add-project-dialog project-picker-dialog' + (plansMode ? ' is-plans' : '') + (addStep ? ' is-adding' : '')}
+      dialogClass={'add-project-dialog project-picker-dialog' + (addStep ? ' is-adding' : '')}
       onClose={onClose}
     >
       <div className="projects-modal" ref={bodyRef} onMouseDown={onBodyMouseDown}>
@@ -399,111 +316,90 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
           ? <AddProjectStep start={addStep} onBack={backFromAdd} onClose={onClose} onAdded={added} />
           : (
             <>
-              {initialPrompt !== undefined && !plansMode && (
+              {promptWaiting && (
                 <p className="project-picker-prompt" title={initialPrompt}>“{initialPrompt}”</p>
               )}
-              <div className="project-picker-search">
-                {plansMode && (
-                  <button type="button" className="project-picker-back" aria-label="Back to projects" onClick={backToProjects}>
-                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M10 3 5 8l5 5" /></svg>
-                    <span>{projectLabel(plansMode.project.projectPath)}</span>
-                  </button>
-                )}
-                <input
-                  ref={filterRef}
-                  type="text"
-                  className={'project-picker-filter' + (pathTyped !== null ? ' is-path' : '')}
-                  placeholder={plansMode ? 'Filter plans by title or #number'
-                    : initialPrompt !== undefined ? 'Find a project' : 'Find a project, or paste a path to add one'}
-                  aria-label={plansMode ? 'Filter plans' : 'Filter projects'}
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={query}
-                  onChange={e => {
-                    setQuery(e.target.value);
-                    setMenu(null);
-                    setSelected(nextSelection(current, count, { type: 'queried' }));
-                  }}
-                  onKeyDown={onKeyDown}
-                />
-              </div>
-              <div className="project-picker-list" role={plansMode ? 'listbox' : undefined} aria-label={plansMode ? 'Plans' : undefined}>
-                {plansMode
-                  ? (
-                    <PickerPlans
-                      state={plans}
-                      items={planItems}
-                      selected={current}
-                      filtered={trimmed !== ''}
-                      rowRef={index => (el) => { rowRefs.current[index] = el; }}
-                      onHover={hover}
-                      onActivate={activatePlanItem}
-                    />
-                  )
-                  : rows.map((row, index) => {
-                    const common = {
-                      ref: (el: HTMLDivElement | null) => { rowRefs.current[index] = el; },
-                      selected: index === current,
-                      // Keep the highlight under the pointer, so the mouse and the arrow
-                      // keys never disagree about which row Enter would open.
-                      onHover: () => hover(index),
-                      onActivate: () => activateRow(row),
-                    };
-                    switch (row.kind) {
-                      case 'project':
-                        return (
-                          <ProjectPickerRow
-                            key={row.candidate.project.projectPath}
-                            {...common}
-                            candidate={row.candidate}
-                            nested={row.nested}
-                            highlight={classified.kind === 'filter' && trimmed !== ''}
-                            running={row.candidate.project.sessions.filter(s => activePtyIds.has(s.sessionId)).length}
-                            startLabel={startLabel}
-                            onOpenPlans={canHavePlans(row.candidate.project) ? () => intoPlans(row.candidate.project) : undefined}
-                            moreRef={index === current ? moreRef : undefined}
-                            menuOpen={index === current && menu !== null}
-                            onToggleMenu={() => (menu ? setMenu(null) : openMenu())}
-                          />
-                        );
-                      case 'add-folder': {
-                        const error = addError?.path === row.path ? addError.error : null;
-                        const check = folder?.typed === row.path ? folder.check : null;
-                        return (
-                          <AddRow key="add-folder" {...common} className="projects-add-folder" icon={<FolderPlusIcon />}
-                            title={<>Add folder <span className="projects-path">{row.path}</span></>}
-                            detail={error ?? folderSummary(check, alreadyAdded)} failed={!!error} action="Add" />
-                        );
-                      }
-                      case 'add-remote': {
-                        const target = `${row.user}@${row.host}${row.port ? ':' + row.port : ''}`;
-                        return (
-                          <AddRow key="add-remote" {...common} className="projects-add-remote" icon={<FolderPlusIcon />}
-                            title={<>Add remote <span className="projects-path">{target}</span></>}
-                            detail="Opens the SSH form, filled in" action="Add" />
-                        );
-                      }
-                      case 'add-project':
-                        return (
-                          <div key="add-project">
-                            {!hasProjectRows && (
-                              <div className="project-picker-empty">
-                                {classified.kind === 'path' ? 'No projects match that path.' : 'No matching projects.'}
-                              </div>
-                            )}
-                            <div className="projects-sep" />
-                            <AddRow {...common} className="projects-add-project" icon={<PlusIcon />}
-                              title="Add project…" hint="Local folder or SSH" />
-                          </div>
-                        );
+              <input
+                ref={filterRef}
+                type="text"
+                className={'project-picker-filter' + (pathTyped !== null ? ' is-path' : '')}
+                placeholder={promptWaiting ? 'Find a project' : 'Find a project, or paste a path to add one'}
+                aria-label="Filter projects"
+                autoComplete="off"
+                spellCheck={false}
+                value={query}
+                onChange={e => {
+                  setQuery(e.target.value);
+                  setMenu(null);
+                  setSelected(nextSelection(current, count, { type: 'queried' }));
+                }}
+                onKeyDown={onKeyDown}
+              />
+              <div className="project-picker-list">
+                {rows.map((row, index) => {
+                  const common = {
+                    ref: (el: HTMLDivElement | null) => { rowRefs.current[index] = el; },
+                    selected: index === current,
+                    // Keep the highlight under the pointer, so the mouse and the arrow
+                    // keys never disagree about which row Enter would open.
+                    onHover: () => hover(index),
+                    onActivate: () => activateRow(row),
+                  };
+                  switch (row.kind) {
+                    case 'project':
+                      return (
+                        <ProjectPickerRow
+                          key={row.candidate.project.projectPath}
+                          {...common}
+                          candidate={row.candidate}
+                          nested={row.nested}
+                          highlight={classified.kind === 'filter' && trimmed !== ''}
+                          running={row.candidate.project.sessions.filter(s => activePtyIds.has(s.sessionId)).length}
+                          startLabel={startLabel}
+                          onOpenProject={promptWaiting ? undefined : () => openPage(row.candidate.project)}
+                          moreRef={index === current ? moreRef : undefined}
+                          menuOpen={index === current && menu !== null}
+                          onToggleMenu={() => (menu ? setMenu(null) : openMenu())}
+                        />
+                      );
+                    case 'add-folder': {
+                      const error = addError?.path === row.path ? addError.error : null;
+                      const check = folder?.typed === row.path ? folder.check : null;
+                      return (
+                        <AddRow key="add-folder" {...common} className="projects-add-folder" icon={<FolderPlusIcon />}
+                          title={<>Add folder <span className="projects-path">{row.path}</span></>}
+                          detail={error ?? folderSummary(check, alreadyAdded)} failed={!!error} action="Add" />
+                      );
                     }
-                  })}
+                    case 'add-remote': {
+                      const target = `${row.user}@${row.host}${row.port ? ':' + row.port : ''}`;
+                      return (
+                        <AddRow key="add-remote" {...common} className="projects-add-remote" icon={<FolderPlusIcon />}
+                          title={<>Add remote <span className="projects-path">{target}</span></>}
+                          detail="Opens the SSH form, filled in" action="Add" />
+                      );
+                    }
+                    case 'add-project':
+                      return (
+                        <div key="add-project">
+                          {!hasProjectRows && (
+                            <div className="project-picker-empty">
+                              {classified.kind === 'path' ? 'No projects match that path.' : 'No matching projects.'}
+                            </div>
+                          )}
+                          <div className="projects-sep" />
+                          <AddRow {...common} className="projects-add-project" icon={<PlusIcon />}
+                            title="Add project…" hint="Local folder or SSH" />
+                        </div>
+                      );
+                  }
+                })}
               </div>
             </>
           )}
         <Footer
-          mode={addStep ? 'add' : plansMode ? 'plans' : pathTyped !== null ? 'path' : 'projects'}
-          prompt={initialPrompt !== undefined}
+          mode={addStep ? 'add' : pathTyped !== null ? 'path' : 'projects'}
+          prompt={promptWaiting}
         />
         {menu && highlighted && (
           <div className="projects-menu" role="menu" aria-label={`More for ${projectLabel(highlighted.projectPath)}`}
@@ -608,31 +504,24 @@ function AddRow({
 }
 
 /** The keys that work in each part of the modal. */
-function Footer({ mode, prompt }: { mode: 'projects' | 'path' | 'plans' | 'add'; prompt: boolean }): JSX.Element {
-  const key = (keys: string, what: string): JSX.Element => (
-    <span key={keys}><kbd className="sw-kbd">{keys}</kbd>{what}</span>
+function Footer({ mode, prompt }: { mode: 'projects' | 'path' | 'add'; prompt: boolean }): JSX.Element {
+  const key = (keys: string, what: string, off = false): JSX.Element => (
+    <span key={keys} className={off ? 'is-off' : undefined} aria-disabled={off || undefined}>
+      <kbd className="sw-kbd">{keys}</kbd>{what}
+    </span>
   );
   switch (mode) {
-    case 'plans':
-      return (
-        <div className="plan-picker-footer">
-          {key('↵', 'open plan')}
-          {key('←', 'projects')}
-          {key('↑↓', 'move')}
-          <span className="plan-picker-gap" />
-          <span>Opens the plan without starting a session</span>
-        </div>
-      );
     case 'add':
-      return <div className="plan-picker-footer">{key('↵', 'add')}{key('⌘[', 'back')}{key('esc', 'close')}</div>;
+      return <div className="projects-footer">{key('↵', 'add')}{key('⌘[', 'back')}{key('esc', 'close')}</div>;
     case 'path':
-      return <div className="plan-picker-footer">{key('↵', 'add folder')}{key('⇥', 'complete the path')}{key('esc', 'close')}</div>;
+      return <div className="projects-footer">{key('↵', 'add folder')}{key('⇥', 'complete the path')}{key('esc', 'close')}</div>;
     case 'projects':
       return (
-        <div className="plan-picker-footer">
+        <div className="projects-footer">
           {key('↑↓', 'move')}
           {key('↵', prompt ? 'start with this prompt' : 'new session')}
-          {key('→', 'plans')}
+          {/* With a prompt waiting, → would lose it: still shown, greyed and inert. */}
+          {key('→', 'open project', prompt)}
           {key('⌘↵', 'add project')}
           {key('⌘.', 'more')}
         </div>
@@ -651,18 +540,4 @@ function FolderPlusIcon(): JSX.Element {
       <path d="M12 11.5v5M9.5 14h5" />
     </svg>
   );
-}
-
-/** The plan list's rows: the open plans in order, then the closed ones, or Show closed (F1, F3). */
-function planPickerItems(state: PickerPlansState, project: Project, query: string): PlanPickerItem[] {
-  if (state.phase !== 'loaded') return [];
-  const recent = recentPlansIn(project.projectPath);
-  const open = filterPlans(orderPlans(state.open, recent), query);
-  const items: PlanPickerItem[] = open.map(plan => ({ kind: 'plan', plan }));
-  if (state.closed) {
-    for (const plan of filterPlans(orderPlans(state.closed, recent), query)) items.push({ kind: 'plan', plan });
-  } else {
-    items.push({ kind: 'show-closed' });
-  }
-  return items;
 }
