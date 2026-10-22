@@ -34,7 +34,7 @@ import type { ViewState } from './view-slice';
 import type { DraftAction } from '../../domain/questions/answer-draft';
 import type { QuestionView } from './answers-slice';
 import type { DialogRequest } from './dialog-slice';
-import type { SettingsRecord, SettingsScope } from './settings-slice';
+import type { SettingsRecord } from './settings-slice';
 import type { ShellProfile } from '../../domain/shell/shell-profile';
 import type { RouteResult } from '../../domain/ask/model';
 
@@ -114,13 +114,10 @@ export type LocalEvent =
   | { type: 'dialogOpened'; request: DialogRequest }
   /** Close the dialog opened as `seq`; a stale close from a replaced one does nothing. */
   | { type: 'dialogClosed'; seq: number }
-  /** The settings panel opened on a scope, with what is stored for it. */
+  /** The settings panel opened, with what is stored. */
   | {
     type: 'settingsOpened';
-    scope: SettingsScope;
-    projectPath: string | null;
     current: SettingsRecord;
-    globalSettings: SettingsRecord;
     shellProfiles: readonly ShellProfile[];
     appVersion: string | null;
     /** Whether main holds ⌥Space for Quick Ask, as it was when the panel opened. */
@@ -132,6 +129,10 @@ export type LocalEvent =
   | { type: 'settingsSaved' }
   /** The settings panel closed, or the terminal took its place. */
   | { type: 'settingsClosed' }
+  /** A project's settings view (#176) read what the project and the global settings store. */
+  | { type: 'projectSettingsLoaded'; projectPath: string; current: SettingsRecord; globalSettings: SettingsRecord }
+  /** A change on a project's settings view was stored; `current` is the project's blob as written. */
+  | { type: 'projectSettingsSaved'; projectPath: string; current: SettingsRecord }
   /** The project list loaded with this many sessions running. */
   | { type: 'runningCounted'; running: number }
   /** A done status message has lingered long enough. */

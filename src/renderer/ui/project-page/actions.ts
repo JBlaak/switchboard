@@ -11,7 +11,7 @@ import { relayoutSessionList } from '../session-list/relayout';
 import { launchClaudeSession, openSession, startClaudeSessionIn } from '../../features/sessions/session-actions';
 import { resolveDefaultSessionOptions } from '../../features/dialogs/launch-options';
 import { projectLabel, repositoryRoot } from '../../features/sessions/project-label';
-import { openSettings } from '../settings/actions';
+import { loadProjectSettings } from './settings-actions';
 import { repositoryProjects } from './project-sessions';
 import { encodeProjectPath } from '../../../domain/project/project-path';
 import type { Project } from '../../../domain/project/project';
@@ -70,12 +70,14 @@ export function startProjectSession(projectPath: string): void {
 }
 
 /**
- * The header's Settings button. For now the project's settings in the
- * settings panel, as the picker's gear opens them; #176 moves them onto the
- * page as `project → settings`.
+ * The project's settings, on its page (#176): the header's Settings button,
+ * ⌘, on the page, and "Project settings" in the Projects modal's ⋯ menu. A
+ * worktree opens its repository's, as its page does.
  */
 export function openProjectSettings(projectPath: string): void {
-  void openSettings('project', projectPath);
+  const repository = repositoryRoot(projectPath);
+  dispatch({ type: 'projectOpened', projectPath: repository, view: { kind: 'settings' } });
+  void loadProjectSettings(repository);
 }
 
 /** Open one of the project's sessions, the way its sidebar row does; the page gives way. */

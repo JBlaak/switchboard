@@ -32,6 +32,14 @@ export function isArchiveSessionKey(e: KeyboardEvent): boolean {
   return isCommandKey(e, 'KeyE');
 }
 
+/**
+ * Cmd+, opens the project's settings while its page has the keyboard (#176).
+ * Free everywhere else: the app menu has no Settings item to claim it.
+ */
+export function isProjectSettingsKey(e: KeyboardEvent): boolean {
+  return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'Comma';
+}
+
 /** Cmd plus `code`, unless the key is going into a text field. */
 function isCommandKey(e: KeyboardEvent, code: string): boolean {
   if (e.altKey || e.shiftKey || e.ctrlKey || !e.metaKey || e.code !== code) return false;

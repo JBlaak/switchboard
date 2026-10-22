@@ -1,16 +1,21 @@
 /**
- * The settings viewer, in its global and per-project forms.
+ * The global settings viewer, and a project's settings on its page (#176).
  *
  * The weather city lookup's cases are unit tested
- * (test/settings-weather-city.test.ts) and the panel's open/save/close state
- * too (test/settings-slice.test.ts). These tests keep what needs the app: the
- * stored settings read and written through main, the panel swapped in for the
- * terminal or the empty screen, and what saving changes elsewhere.
+ * (test/settings-weather-city.test.ts), the panel's open/save/close state and
+ * the project view's too (test/settings-slice.test.ts), and what a project's
+ * change stores, when a field overrides the global default and what Reset
+ * leaves (test/project-overrides.test.ts). These tests keep what needs the
+ * app: the stored settings read and written through main, the panel or the
+ * page swapped in for the terminal or the empty screen, the keys that move
+ * between them, and what saving changes elsewhere, a launch among it.
  */
 import { test, expect, forEachAppearance } from '../support/test';
 import { chooseProjectAction, expectScreen, openSession, sidebar, terminalHeader } from '../support/app';
+import { launchedKeys, waitForNewLaunch } from '../support/fake-cli';
 import { pressQuickAsk, refuseQuickAskHotkey, setHostStub } from '../support/main-process';
 import { answerDialogs, dialogsAsked } from '../support/native-dialogs';
+import { sessionItem } from '../support/session-list';
 import { LABEL, P, S, standardFixture } from '../fixtures/standard';
 import type { Locator, Page } from '@playwright/test';
 
@@ -22,33 +27,39 @@ async function openGlobalSettings(page: Page) {
   await expect(globalTitle(page)).toBeVisible();
 }
 
+/** A project's settings, from the Projects modal's ⋯ menu. */
 async function openProjectSettings(page: Page, label: string) {
   await page.getByRole('button', { name: 'Projects', exact: true }).click();
   await chooseProjectAction(page, label, 'Project settings');
-  await expect(projectTitle(page, label)).toBeVisible();
+  await expect(projectSettings(page, label)).toBeVisible();
 }
 
 function globalTitle(page: Page): Locator {
   return page.getByText('Global Settings', { exact: true });
 }
 
-function projectTitle(page: Page, label: string): Locator {
-  return page.getByText(`Project Settings — ${label}`, { exact: true });
+/** A project's settings view, on its page. */
+function projectSettings(page: Page, label: string): Locator {
+  return page.getByRole('region', { name: `Settings for ${label}` });
+}
+
+/** One field of a project's settings view, found through its label. */
+function projectField(page: Page, label: string): Locator {
+  return projectSettings(page, P.acmeApi).getByText(label, { exact: true })
+    .locator("xpath=ancestor::*[contains(concat(' ', @class, ' '), ' ps-field ')][1]");
 }
 
 /**
- * One row of the form, found through its label.
+ * One row of the global form, found through its label.
  *
  * The labels are bare spans, not `<label for>`, so this climbs from the label
- * to the nearest ancestor that holds the row's own control — skipping the
- * "Use global default" checkbox, which sits next to the label in project scope.
+ * to the nearest ancestor that holds the row's own control.
  */
 function field(page: Page, label: string): Locator {
-  return page.getByText(label, { exact: true }).locator(
-    "xpath=ancestor::*[.//select or .//input[not(ancestor::label[contains(., 'Use global default')])]][1]");
+  return page.getByText(label, { exact: true }).locator('xpath=ancestor::*[.//select or .//input][1]');
 }
 
-/** A row's on/off switch: the last checkbox in the row (after "Use global default"). */
+/** A row's on/off switch. */
 function toggle(page: Page, label: string): Locator {
   return field(page, label).getByRole('checkbox').last();
 }
@@ -60,10 +71,6 @@ function toggle(page: Page, label: string): Locator {
 async function switchOn(page: Page, label: string): Promise<void> {
   await toggle(page, label).locator('..').click();
   await expect(toggle(page, label)).toBeChecked();
-}
-
-function useGlobal(page: Page, label: string): Locator {
-  return field(page, label).getByRole('checkbox', { name: 'Use global default', exact: true });
 }
 
 function button(page: Page, name: string): Locator {
@@ -427,107 +434,184 @@ test.describe('weather city', () => {
   });
 });
 
-test.describe('project scope', () => {
-  test.use({
-    fixture: {
-      ...standardFixture(),
-      settings: { preLaunchCmd: 'global-pre', permissionMode: 'plan' },
-      projectSettings: { [P.acmeApi]: { addDirs: '/proj' } },
-    },
-  });
+test.describe('project settings on the project page', () => {
+  const OVERRIDES = {
+    ...standardFixture(),
+    settings: { preLaunchCmd: 'env SB_GLOBAL=1', permissionMode: 'plan', worktree: true },
+    projectSettings: { [P.acmeApi]: { addDirs: '/proj', chrome: true } },
+  };
+  test.use({ fixture: OVERRIDES });
 
-  test('shows the project fields only, global values behind "Use global default"', async ({ page }) => {
+  test('shows every field at the value sessions launch with, and which ones override the global default', async ({ page }) => {
     /* When */
     await openProjectSettings(page, P.acmeApi);
 
     /* Then */
-    // Inherited: the global value, checked and disabled.
-    await expect(useGlobal(page, 'Pre-launch Command')).toBeChecked();
-    await expect(field(page, 'Pre-launch Command').getByRole('textbox')).toHaveValue('global-pre');
-    await expect(field(page, 'Pre-launch Command').getByRole('textbox')).toBeDisabled();
-    await expect(useGlobal(page, 'Permission Mode')).toBeChecked();
-    await expect(field(page, 'Permission Mode').getByRole('combobox')).toHaveValue('plan');
-    await expect(field(page, 'Permission Mode').getByRole('combobox')).toBeDisabled();
-    await expect(toggle(page, 'Chrome')).toBeDisabled();
-    // Overridden: the project's value, unchecked and enabled.
-    await expect(useGlobal(page, 'Additional Directories')).not.toBeChecked();
-    await expect(field(page, 'Additional Directories').getByRole('textbox')).toHaveValue('/proj');
-    await expect(field(page, 'Additional Directories').getByRole('textbox')).toBeEnabled();
-    // The application settings are global only.
-    for (const label of ['Quick Session Folder', 'Terminal Theme', 'Terminal Font', 'City', 'Version']) {
+    const view = projectSettings(page, P.acmeApi);
+    await expect(view).toBeFocused();
+    await expect(view.getByRole('heading', { level: 1 })).toHaveText(`Settings · ${P.acmeApi}`);
+    // Inherited: the global value, the same as global.
+    await expect(view.getByRole('radio', { name: 'Plan', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(projectField(page, 'Permission mode')).toContainText('Same as global.');
+    await expect(view.getByLabel('Before Claude starts')).toHaveValue('env SB_GLOBAL=1');
+    await expect(projectField(page, 'Before Claude starts')).toContainText('Same as global.');
+    await expect(view.getByRole('switch', { name: 'Start new sessions in a worktree' })).toHaveAttribute('aria-checked', 'true');
+    // Overridden: the project's value, and the global one it replaces.
+    await expect(view.getByLabel('Extra directories')).toHaveValue('/proj');
+    await expect(projectField(page, 'Extra directories')).toContainText('Overrides the global default (none).');
+    await expect(view.getByRole('switch', { name: 'Chrome' })).toHaveAttribute('aria-checked', 'true');
+    await expect(projectField(page, 'Chrome')).toContainText('Overrides the global default (off).');
+    // The application settings are global only, and the old panel stays shut.
+    for (const label of ['Quick Session Folder', 'Terminal Theme', 'City', 'Version']) {
       await expect(page.getByText(label, { exact: true })).toHaveCount(0);
     }
+    await expect(globalTitle(page)).toBeHidden();
   });
 
-  test('Save stores only the fields not using the global default', async ({ page, home }) => {
+  test('a change saves at once, and the next session started in the project launches with it', async ({ page, home }) => {
     /* Given */
     await openProjectSettings(page, P.acmeApi);
-    // Unchecking "Use global default" enables the field; the fill and switch would fail on a disabled one.
-    await useGlobal(page, 'Chrome').uncheck();
-    await switchOn(page, 'Chrome');
-    await useGlobal(page, 'Permission Mode').uncheck();
-    await field(page, 'Permission Mode').getByRole('combobox').selectOption('auto');
-    // Back to the global value: dropped from the project's settings.
-    await useGlobal(page, 'Additional Directories').check();
-    // Edited but still inherited: not saved.
-    await useGlobal(page, 'Pre-launch Command').uncheck();
-    await field(page, 'Pre-launch Command').getByRole('textbox').fill('direnv exec .');
-    await useGlobal(page, 'Pre-launch Command').check();
+    const view = projectSettings(page, P.acmeApi);
+    const saved = view.getByText('Saved · applies to new sessions', { exact: true });
+    await expect(saved).toHaveCount(0);
 
     /* When */
-    await button(page, 'Save Settings').click();
+    await view.getByRole('radio', { name: 'Accept edits', exact: true }).click();
 
     /* Then */
-    await expect(button(page, '✓ Saved')).toBeVisible();
-    await expect(projectTitle(page, P.acmeApi)).toBeHidden();
-    await expect(emptyScreen(page)).toBeVisible();
-    expect(await readSetting(page, 'project:' + home.projectPath(P.acmeApi)))
-      .toEqual({ chrome: true, permissionMode: 'auto' });
+    await expect(saved).toBeVisible();
+    await expect(projectField(page, 'Permission mode')).toContainText('Overrides the global default (Plan).');
+    await expect.poll(() => readSetting(page, 'project:' + home.projectPath(P.acmeApi)))
+      .toEqual({ addDirs: '/proj', chrome: true, permissionMode: 'acceptEdits' });
+
+    /* When */
+    // Back to the global value: no longer the project's own.
+    await view.getByRole('switch', { name: 'Chrome' }).click();
+    await view.getByLabel('Extra directories').fill('/a, /b');
+    await view.getByLabel('Extra directories').press('Enter');
+
+    /* Then */
+    await expect(projectField(page, 'Chrome')).toContainText('Same as global.');
+    await expect.poll(() => readSetting(page, 'project:' + home.projectPath(P.acmeApi)))
+      .toEqual({ addDirs: '/a, /b', permissionMode: 'acceptEdits' });
     // Global settings are untouched.
-    expect(await readSetting(page, 'global')).toMatchObject({ preLaunchCmd: 'global-pre', permissionMode: 'plan' });
-  });
-
-  test('Cancel closes without saving', async ({ page, home }) => {
-    /* Given */
-    await openProjectSettings(page, P.acmeApi);
-    await useGlobal(page, 'Chrome').uncheck();
-    await field(page, 'Additional Directories').getByRole('textbox').fill('/changed');
+    expect(await readSetting(page, 'global')).toMatchObject({ preLaunchCmd: 'env SB_GLOBAL=1', permissionMode: 'plan', worktree: true });
 
     /* When */
-    await button(page, 'Cancel').click();
+    await view.getByLabel('Before Claude starts').fill('env SB_PROJECT=1');
+    // ⌘[ with the edit still in the box: it is stored as the view closes.
+    await page.keyboard.press('Meta+BracketLeft');
 
     /* Then */
-    await expect(projectTitle(page, P.acmeApi)).toBeHidden();
-    await expect(emptyScreen(page)).toBeVisible();
-    expect(await readSetting(page, 'project:' + home.projectPath(P.acmeApi))).toEqual({ addDirs: '/proj' });
+    const overview = page.getByRole('region', { name: 'Project ' + P.acmeApi });
+    await expect(overview).toBeFocused();
+    await expect.poll(async () => (await readSetting(page, 'project:' + home.projectPath(P.acmeApi)))?.preLaunchCmd)
+      .toBe('env SB_PROJECT=1');
+
+    /* When */
+    const before = launchedKeys(home);
+    await overview.getByRole('button', { name: 'New session', exact: true }).click();
+
+    /* Then */
+    const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
+    const argv = launch.argv.join(' ');
+    expect(argv).toContain('--permission-mode acceptEdits');
+    expect(argv).toContain('--add-dir /a --add-dir /b');
+    expect(argv).not.toContain('--chrome');
   });
 
-  test('Hide Project asks first, then hides it and shows the empty screen', async ({ page, home }) => {
+  test('Reset to global settings drops every override', async ({ page, home }) => {
     /* Given */
     await openProjectSettings(page, P.acmeApi);
+    const view = projectSettings(page, P.acmeApi);
+    const reset = view.getByRole('button', { name: 'Reset to global settings', exact: true });
+
+    /* When */
+    await reset.click();
+
+    /* Then */
+    await expect(view.getByLabel('Extra directories')).toHaveValue('');
+    await expect(view.getByRole('switch', { name: 'Chrome' })).toHaveAttribute('aria-checked', 'false');
+    for (const label of ['Permission mode', 'Skip permission prompts', 'Start new sessions in a worktree', 'Chrome', 'Before Claude starts', 'Extra directories']) {
+      await expect(projectField(page, label)).toContainText('Same as global.');
+    }
+    await expect(reset).toBeDisabled();
+    await expect.poll(() => readSetting(page, 'project:' + home.projectPath(P.acmeApi))).toEqual({});
+  });
+
+  test('the header’s Settings and ⌘, open it from the page, ⌘[ goes back, and Esc closes the page', async ({ page, home }) => {
+    /* Given */
+    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await sessionItem(page, S.loginFix).getByTestId('project-link').click();
+    const overview = page.getByRole('region', { name: 'Project ' + P.acmeApi });
+    await expect(overview).toBeFocused();
+
+    /* When */
+    await overview.getByRole('button', { name: 'Settings', exact: true }).click();
+
+    /* Then */
+    await expect(projectSettings(page, P.acmeApi)).toBeFocused();
+
+    /* When */
+    await projectSettings(page, P.acmeApi).getByRole('button', { name: `Back to ${P.acmeApi} (⌘[)` }).click();
+
+    /* Then */
+    await expect(overview).toBeFocused();
+
+    /* When */
+    await page.keyboard.press('Meta+Comma');
+
+    /* Then */
+    await expect(projectSettings(page, P.acmeApi)).toBeFocused();
+    await expect(globalTitle(page)).toBeHidden();
+
+    /* When */
+    await page.keyboard.press('Escape');
+
+    /* Then */
+    await expect(projectSettings(page, P.acmeApi)).toHaveCount(0);
+    await expect(terminalHeader(page)).toBeVisible();
+    await expect(sessionItem(page, S.loginFix)).toHaveClass(/\bactive\b/);
+  });
+
+  test('Hide project asks first, then hides it and shows the empty screen', async ({ page, home }) => {
+    /* Given */
+    await openProjectSettings(page, P.acmeApi);
+    const hide = projectSettings(page, P.acmeApi).getByRole('button', { name: 'Hide project', exact: true });
     await answerDialogs(page, false);
 
     /* When */
-    await button(page, 'Hide Project').click();
+    await hide.click();
 
     /* Then */
     expect(await dialogsAsked(page)).toEqual([
-      `Hide project "${P.acmeApi}" from Switchboard?\n\nThis hides the project from the sidebar. Your session files are not deleted.`,
+      `Hide ${P.acmeApi}?\n\nSession files are not deleted. Add the folder again to bring it back.`,
     ]);
-    await expect(projectTitle(page, P.acmeApi)).toBeVisible();
+    await expect(projectSettings(page, P.acmeApi)).toBeVisible();
 
     /* When */
     await answerDialogs(page, true);
-    await button(page, 'Hide Project').click();
+    await hide.click();
 
     /* Then */
-    await expect(projectTitle(page, P.acmeApi)).toBeHidden();
+    await expect(projectSettings(page, P.acmeApi)).toHaveCount(0);
     await expect(emptyScreen(page)).toBeVisible();
     await expect.poll(async () => page.evaluate(async (projectPath) => {
       const projects = await window.api.getProjects(false);
       return projects.some(project => project.projectPath === projectPath);
     }, home.projectPath(P.acmeApi))).toBe(false);
     await expect(sidebar(page).getByText(LABEL.loginFix, { exact: true })).toHaveCount(0);
+  });
+
+  forEachAppearance(() => {
+    test('project settings', async ({ page }) => {
+      /* When */
+      await openProjectSettings(page, P.acmeApi);
+
+      /* Then */
+      await expect(projectSettings(page, P.acmeApi).getByLabel('Extra directories')).toHaveValue('/proj');
+      await expectScreen(page, 'settings-project');
+    });
   });
 });
 
@@ -538,13 +622,5 @@ forEachAppearance(() => {
 
     /* Then */
     await expectScreen(page, 'settings-global');
-  });
-
-  test('project settings', async ({ page }) => {
-    /* When */
-    await openProjectSettings(page, P.acmeApi);
-
-    /* Then */
-    await expectScreen(page, 'settings-project');
   });
 });

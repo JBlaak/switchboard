@@ -26,7 +26,7 @@ import { PullRequestsSection } from './PullRequestsSection';
 import { WorktreesSection } from './WorktreesSection';
 import { GitHubMessage, RemoteNote, StaleLine } from './EdgeStates';
 import {
-  closeProject, openIssueOnGitHub, openProjectPlan, openProjectSession, openPullRequestOnGitHub,
+  closeProject, openIssueOnGitHub, openProjectSettings, openProjectPlan, openProjectSession, openPullRequestOnGitHub,
   startPageIssueSession, startWorktreeSession,
 } from './actions';
 import {
@@ -35,6 +35,7 @@ import {
 } from './page-rows';
 import { githubPart, showsWorktrees } from './page-state';
 import { pageKeyAction } from './page-keys';
+import { isProjectSettingsKey } from '../../lib/shortcut-keys';
 
 /** Every row on the page now, in the order the cursor walks them. */
 function currentRows(projectPath: string): PageRow[] {
@@ -84,6 +85,11 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    if (isProjectSettingsKey(e.nativeEvent)) {
+      e.preventDefault();
+      openProjectSettings(projectPath);
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if ((e.target as HTMLElement).matches('input, textarea, select, [contenteditable="true"]')) return;
     if (e.key === 'Escape' && !e.shiftKey) {
