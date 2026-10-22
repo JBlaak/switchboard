@@ -21,6 +21,7 @@ import { jumpToSession, startIssueSession } from './actions';
 import type { IssueActions, IssueSession } from './types';
 import { startLevelWith } from './start-level';
 import { reloadOwners } from './load';
+import { pulseSessionRow } from '../../session-list/pulse';
 
 const NO_OWNERS: IdRecord<string> = {};
 const NO_BUSY: IdRecord<boolean> = {};
@@ -40,11 +41,13 @@ function nameOf(sessionId: string): string | null {
   return session ? headerNameFor(session) : null;
 }
 
-async function start(projectPath: string, issue: IssueKey, plan: Plan): Promise<void> {
+async function start(projectPath: string, issue: IssueKey, plan: Plan, show: boolean): Promise<void> {
   dispatch({ type: 'planStartAsked', issue, confirm: false });
-  const result = await startIssueSession({ projectPath, issue, plan }).catch((err: Error) => ({
+  const result = await startIssueSession({ projectPath, issue, plan, show }).catch((err: Error) => ({
     ok: false as const, reason: err.message || 'Could not start the session',
   }));
+  // Started without taking the screen: its new row says so instead.
+  if (result.ok && !show) pulseSessionRow(result.sessionId);
   dispatch({ type: 'planStartAnswered', issue, result });
 }
 
@@ -53,17 +56,26 @@ async function start(projectPath: string, issue: IssueKey, plan: Plan): Promise<
  * background so the plan view stays on screen; then the report, and the
  * owners asked again so each started node shows its session.
  */
-async function startLevel(projectPath: string, plan: Plan): Promise<void> {
+async function startLevel(projectPath: string, plan: Plan, pulse: boolean): Promise<void> {
   const asking = getState().plan.levelStart;
   if (asking?.phase !== 'confirm' || !sameIssue(asking.plan, plan)) return;
   dispatch({ type: 'planLevelStartConfirmed' });
-  const report = await startLevelWith(issue => startIssueSession({ projectPath, issue, plan, show: false }), asking.issues);
+  const report = await startLevelWith(async (issue) => {
+    const result = await startIssueSession({ projectPath, issue, plan, show: false });
+    if (result.ok && pulse) pulseSessionRow(result.sessionId);
+    return result;
+  }, asking.issues);
   dispatch({ type: 'planLevelStartAnswered', ...report });
   await reloadOwners();
 }
 
-/** The actions for a plan view whose sessions start in `projectPath`; null starts none. */
-export function useIssueActions(projectPath: string | null): IssueActions {
+/**
+ * The actions for a plan view whose sessions start in `projectPath`; null
+ * starts none. A session started on one issue is put on screen, unless `show`
+ * is false: the project page keeps the main area (#173), and every row it
+ * starts, one issue's or a level's, pulses once in the sidebar instead.
+ */
+export function useIssueActions(projectPath: string | null, { show = true }: { show?: boolean } = {}): IssueActions {
   const owners = useStore(state => state.plan.view?.owners ?? NO_OWNERS);
   const busy = useStore(state => state.activity.busy ?? NO_BUSY);
   const pending = useStore(state => state.plan.view?.start ?? null);
@@ -81,16 +93,16 @@ export function useIssueActions(projectPath: string | null): IssueActions {
       ...actions,
       startSession: (issue, plan) => {
         if (layOutPlan(plan).stateOf(issue) === 'locked') dispatch({ type: 'planStartAsked', issue, confirm: true });
-        else void start(projectPath, issue, plan);
+        else void start(projectPath, issue, plan, show);
       },
       confirmStart: (plan) => {
         const asking = getState().plan.view?.start;
-        if (asking?.phase === 'confirm') void start(projectPath, asking.issue, plan);
+        if (asking?.phase === 'confirm') void start(projectPath, asking.issue, plan, show);
       },
       cancelStart: () => dispatch({ type: 'planStartCancelled' }),
       startLevel: (plan, level, issues) => dispatch({ type: 'planLevelStartAsked', plan, level, issues }),
-      confirmLevelStart: (plan) => { void startLevel(projectPath, plan); },
+      confirmLevelStart: (plan) => { void startLevel(projectPath, plan, !show); },
       cancelLevelStart: () => dispatch({ type: 'planLevelStartCancelled' }),
     };
-  }, [owners, busy, pending, levelStart, projectPath]);
+  }, [owners, busy, pending, levelStart, projectPath, show]);
 }

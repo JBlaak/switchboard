@@ -1,13 +1,15 @@
 /**
- * The Plan view without a session (F2, #128): a plan picked in the New
- * Session picker, in the main area, with no session started. A header names
- * the project and closes the view; below it, the same plan view as the
- * Session work page's Plan tab, with its diagram, detail, actions and polling.
+ * A plan inside the project page (F2, #128, #173): the route `project → plan`,
+ * with no session started. A breadcrumb leads back to the project's overview
+ * (‹ project / Plans, ⌘[); below it, the same plan view as the Session work
+ * page's Plan tab, with its diagram, detail, actions and polling.
  *
- * Rendered into `#plan-page` while the main area's route is `project → plan`
- * (#168); `ui/main-area/install-main-area` shows and hides it. Esc closes an
- * open issue detail first, then the view, which goes back to the session it
- * covered; ↑/↓ step through the issues while the detail is open (D4).
+ * Starting a session here keeps the page where it is: the new row appears in
+ * the sidebar and pulses once instead of taking the main area.
+ *
+ * Rendered by `ui/project-page/ProjectPage`. Esc closes an open issue detail
+ * first, then the page, which goes back to the session it covered; ↑/↓ step
+ * through the issues while the detail is open (D4).
  */
 import { useLayoutEffect, useRef } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
@@ -17,14 +19,14 @@ import { projectLabel } from '../../features/sessions/project-label';
 import { PlanView } from '../session-work/plan/PlanView';
 import { planKey } from '../session-work/plan/load';
 import { useIssueActions } from '../session-work/plan/issue-actions';
-import { closeProject } from './actions';
+import { backToProject, closeProject } from '../project-page/actions';
 import type { PlanPage as Plan } from './actions';
 
 export function PlanPage(): JSX.Element | null {
   const page = useStore(state => projectPlan(state.mainArea), samePlan);
   const view = useStore(state => state.plan.view);
   const root = useRef<HTMLDivElement>(null);
-  const issueActions = useIssueActions(page?.projectPath ?? null);
+  const issueActions = useIssueActions(page?.projectPath ?? null, { show: false });
   const owner = page ? projectPlanOwner(page) : null;
 
   // Into the page as it opens, so Esc and ↑/↓ reach it without a click.
@@ -39,6 +41,11 @@ export function PlanPage(): JSX.Element | null {
   const name = projectLabel(page.projectPath);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    if (isBackKey(e)) {
+      e.preventDefault();
+      backToProject();
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     if ((e.target as HTMLElement).matches('input, textarea, select, [contenteditable="true"]')) return;
     if (planKey(e.key)) {
@@ -60,22 +67,18 @@ export function PlanPage(): JSX.Element | null {
       aria-label={'Plan in ' + name}
       onKeyDown={onKeyDown}
     >
-      <header className="sw-header">
-        <div className="sw-header-row">
-          <button type="button" className="sw-btn sw-back" onClick={closeProject} aria-label="Close plan (Esc)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" />
+      <header className="sw-header pp-crumbs-header">
+        <nav className="pp-crumbs" aria-label="Breadcrumb">
+          <button type="button" className="pp-crumb" onClick={backToProject} aria-label={'Back to ' + name + ' (⌘[)'}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="m15 6-6 6 6 6" />
             </svg>
-            Close <kbd className="sw-kbd">esc</kbd>
+            {name}
           </button>
-          <div className="sw-heading">
-            <h1 className="sw-title">{'Plan · ' + name}</h1>
-            <div className="sw-subline">
-              <span>{page.repository + '#' + page.number}</span>
-              <span className="sw-updated">No session. Start one from an issue.</span>
-            </div>
-          </div>
-        </div>
+          <span className="pp-crumb-sep" aria-hidden="true">/</span>
+          <span className="pp-crumb-here" aria-current="page">Plans</span>
+          <kbd className="sw-kbd">⌘[</kbd>
+        </nav>
       </header>
       {plan
         ? <PlanView plan={plan} issueActions={issueActions} />
@@ -88,6 +91,11 @@ export function PlanPage(): JSX.Element | null {
         )}
     </div>
   );
+}
+
+/** ⌘[ : back from the plan to the project's overview. */
+function isBackKey(e: KeyboardEvent<HTMLElement>): boolean {
+  return e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.code === 'BracketLeft';
 }
 
 /** A fresh object per read, so equal when it names the same plan. */

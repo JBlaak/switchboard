@@ -118,13 +118,6 @@ export function archiveGroup(el: HTMLElement, groupId: string, sessionIds: reado
   });
 }
 
-// ── Links ──
-
-/** A slug group's project label opens its repository (never for a remote: its git lives on another host). */
-export function openRepository(projectPath: string): void {
-  void window.api.openRepository(projectPath);
-}
-
 // ── Folding ──
 
 export function toggleSlugGroup(groupId: string): void {

@@ -20,6 +20,7 @@ import { initialSessionListState, sessionListReducer } from './session-list-slic
 import { initialSessionWorkState, rekeySessionWork, sessionWorkReducer } from './session-work-slice';
 import { initialPlanState, planReducer, rekeyPlan } from './plan-slice';
 import { highlightedSession, initialMainAreaState, mainAreaReducer, rekeyMainArea } from './main-area-slice';
+import { initialProjectPageState, projectPageReducer } from './project-page-slice';
 import { initialSettingsState, settingsReducer } from './settings-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialToolbarState, toolbarReducer } from './toolbar-slice';
@@ -40,6 +41,7 @@ import type { SessionListState } from './session-list-slice';
 import type { SessionWorkState } from './session-work-slice';
 import type { PlanState } from './plan-slice';
 import type { MainAreaState } from './main-area-slice';
+import type { ProjectPageState } from './project-page-slice';
 import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
 import type { ToolbarState } from './toolbar-slice';
@@ -66,6 +68,7 @@ export interface RendererState {
   readonly sessionWork: SessionWorkState;
   readonly plan: PlanState;
   readonly mainArea: MainAreaState;
+  readonly projectPage: ProjectPageState;
   readonly ciStatus: CiStatusState;
   readonly ask: AskState;
 }
@@ -89,6 +92,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     sessionWork: initialSessionWorkState,
     plan: initialPlanState,
     mainArea: initialMainAreaState,
+    projectPage: initialProjectPageState,
     ciStatus: initialCiStatusState,
     ask: initialAskState,
   };
@@ -119,12 +123,13 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const plan = planReducer(state.plan, event);
   // Closing a page goes back to the active session as this event left it.
   const mainArea = mainAreaReducer(state.mainArea, event, view.activeSessionId);
+  const projectPage = projectPageReducer(state.projectPage, event);
   const ciStatus = ciStatusReducer(state.ciStatus, event);
   const ask = askReducer(state.ask, event);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList, sessionWork, plan, mainArea, ciStatus, ask,
+    terminal, sessionList, sessionWork, plan, mainArea, projectPage, ciStatus, ask,
   });
 }
 
@@ -164,6 +169,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     plan: rekeyPlan(state.plan, oldId, newId),
     // The session on screen keeps the main area under its new id.
     mainArea: rekeyMainArea(state.mainArea, oldId, newId),
+    // Keyed by project path and row ids, which a re-key leaves alone.
+    projectPage: state.projectPage,
     ciStatus: rekeyCiStatus(state.ciStatus, oldId, newId),
     // The box on the empty screen belongs to no session.
     ask: state.ask,

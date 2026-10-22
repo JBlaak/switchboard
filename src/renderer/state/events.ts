@@ -29,6 +29,7 @@ import type { UsageLimit } from '../../domain/usage/usage';
 import type { WorkingAgent } from '../../domain/terminal/program-status-children';
 import type { ToolbarEvent } from './toolbar-slice';
 import type { SessionListEvent } from './session-list-slice';
+import type { ProjectPageEvent } from './project-page-slice';
 import type { ViewState } from './view-slice';
 import type { DraftAction } from '../../domain/questions/answer-draft';
 import type { QuestionView } from './answers-slice';
@@ -258,7 +259,7 @@ export type LocalEvent =
   /** Main answered: the log's end, or null when there is none to show. */
   | { type: 'checkLogLoaded'; url: string; text: string | null }
   // What the main area shows (#168); see `main-area-slice`.
-  /** A project takes the main area, showing `view` (so far: a plan picked in the New Session picker). */
+  /** A project takes the main area, showing `view`: its page (#173), one of its plans, or its settings. */
   | { type: 'projectOpened'; projectPath: string; view: ProjectView }
   /** Its Close, or Esc: back to the session to return to, or the empty screen. */
   | { type: 'projectClosed' }
@@ -288,7 +289,7 @@ export type LocalEvent =
   /** The New Session picker started a session on the prompt it was opened carrying. */
   | { type: 'pickerPromptLaunched' };
 
-export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent;
+export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent | ProjectPageEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

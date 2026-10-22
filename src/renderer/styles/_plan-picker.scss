@@ -1,15 +1,7 @@
-/* ========== PLANS IN THE PICKER, AND THE PLAN VIEW WITHOUT A SESSION (#128) ==========
-   The New Session picker's plan list (F1, F3), and the main-area panel a
-   picked plan opens in (F2). The plan view itself is styled in _plan.scss. */
-
-/* ---- The main-area panel, swapped in like #session-work ---- */
-#plan-page {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--sb-bg-base);
-}
+/* ========== PLANS IN THE PICKER (#128) ==========
+   The New Session picker's plan list (F1, F3). A picked plan opens inside its
+   project's page (_project-page.scss); the plan view itself is styled in
+   _plan.scss. */
 
 /* ---- The project rows' cue: this one has plans behind → ---- */
 .project-picker-plans-cue {

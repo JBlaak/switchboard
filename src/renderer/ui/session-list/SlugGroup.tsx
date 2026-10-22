@@ -17,7 +17,7 @@ import { useStore } from '../use-store';
 import { archiveGroup, expandSlugGroup, toggleSlugGroup } from './actions';
 import { headerTarget } from './cursor';
 import { HTML } from './markup';
-import { RepoLink } from './RowMeta';
+import { ProjectLink } from '../project-page/ProjectLink';
 import { SessionItem } from './SessionItem';
 import type { JSX } from 'react';
 import type { SessionListGroup } from '../../state/session-list-layout';
@@ -55,8 +55,8 @@ export function SlugGroup({ group }: { group: SessionListGroup }): JSX.Element {
             <div className="slug-group-name">{groupDisplayName(group)}</div>
             <div className="slug-group-meta">
               <span className={'slug-group-dot' + (promoted.length ? ' running' : '')} />
-              {projectPath && !projectPath.startsWith('ssh://')
-                ? <RepoLink path={projectPath}>{projectLabel(projectPath)}</RepoLink>
+              {projectPath
+                ? <ProjectLink path={projectPath} className={'session-project' + (projectPath.startsWith('ssh://') ? ' is-remote' : '')}>{projectLabel(projectPath)}</ProjectLink>
                 : <span className="session-project">{projectLabel(projectPath)}</span>}
               <span className="slug-group-count">{sessions.length} sessions</span>
               {' ' + formatDate(new Date(newest.modified), now)}
