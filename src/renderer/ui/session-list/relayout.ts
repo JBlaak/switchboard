@@ -18,6 +18,7 @@ import { view } from '../../state/session-store';
 import { isFilteringView } from '../../state/view-slice';
 import { projectsToRender } from '../../state/search-narrowing';
 import { localDateKey } from '../../lib/format';
+import { highlightedSession } from '../../state/main-area-slice';
 import type { Project } from '../../../domain/project/project';
 
 export interface RelayoutOptions {
@@ -43,7 +44,8 @@ export function relayoutSessionList({ resort = false }: RelayoutOptions = {}): v
   const { items, activeItemId } = listItems(projectsForLayout(), {
     filters: state.view,
     running: state.view.activePtyIds,
-    activeSessionId: state.view.activeSessionId,
+    // The session on screen, whose folded group opens to show its lit row.
+    activeSessionId: highlightedSession(state.mainArea),
     tierOf,
     keyOf: (sessionId) => sessionKeyIn(getState().keys, sessionId),
     today: localDateKey(new Date(now)),

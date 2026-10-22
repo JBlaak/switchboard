@@ -14,6 +14,7 @@ import { dispatch, getState, onEvent } from '../../state/app-store';
 import { addPendingQuestions, settleQuestions } from '../../state/question-store';
 import { sessionAsking } from '../../state/questions-slice';
 import { openSessions } from '../../state/session-store';
+import { highlightedSession } from '../../state/main-area-slice';
 import type { DraftAction } from '../../../domain/questions/answer-draft';
 import type { PatchSky } from '@jblaak/patch';
 import type { QuestionView } from '../../state/answers-slice';
@@ -80,7 +81,7 @@ export function pokePatch(toolUseId: string): void {
 
 /** Put the keyboard in the terminal of the session on screen. */
 export function focusTerminal(): void {
-  const id = getState().view.activeSessionId;
+  const id = highlightedSession(getState().mainArea);
   if (id) openSessions.get(id)?.terminal.focus();
 }
 
@@ -119,7 +120,7 @@ async function send(toolUseId: string): Promise<void> {
  */
 function tickDoze(): void {
   const state = getState();
-  const id = state.view.activeSessionId;
+  const id = highlightedSession(state.mainArea);
   const pending = id ? state.questions.bySession[id] : undefined;
   const entry = pending ? state.answers.byToolUse[pending.toolUseId] : undefined;
   if (!pending || !entry || entry.view !== 'questions' || entry.sending) return;

@@ -6,7 +6,7 @@
  * through `showEmptyScreen`, which is what makes "comes into view" a single
  * event rather than a display change scattered across the features. The
  * placeholder itself is shown and hidden by style, like the rest of the main
- * area's panels (see `ui/settings/actions`).
+ * area's panels (see `ui/main-area/install-main-area`).
  */
 import { dispatch } from '../../state/app-store';
 import { placeholder } from '../../lib/dom';

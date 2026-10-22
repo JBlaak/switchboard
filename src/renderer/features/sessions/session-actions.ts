@@ -20,7 +20,6 @@ import { dispatch } from '../../state/app-store';
 import { sidebarContent } from '../../lib/dom';
 import { bump } from '../../lib/motion/reflow';
 import { createTerminalEntry, destroySession, showSession } from '../terminal/terminal-manager';
-import { showEmptyScreen } from '../patch/patch';
 import type { Project } from '../../../domain/project/project';
 import type { SessionRow } from '../../../domain/session/session';
 import type { SessionOptions } from '../../../domain/launch/session-options';
@@ -192,7 +191,7 @@ export async function confirmAndStopSession(sessionId: string): Promise<void> {
 
   await window.api.stopSession(sessionId);
   dispatch({ type: 'ptyStopped', sessionId });
-  if (view.activeSessionId === sessionId) clearScreen();
+  if (view.activeSessionId === sessionId) forgetActiveSession();
   relayoutSessionList();
   settleStoppedRow(sessionId);
 }
@@ -256,14 +255,24 @@ export function dropPendingSession(sessionId: string): void {
   closeSessionView(sessionId);
 }
 
-/** Tear down a session's terminal, and clear the screen if it was the one showing. */
+/** Tear down a session's terminal, and forget it as the session to return to. */
 function closeSessionView(sessionId: string): void {
   if (openSessions.has(sessionId)) destroySession(sessionId);
-  if (view.activeSessionId === sessionId) clearScreen();
+  if (view.activeSessionId === sessionId) forgetActiveSession();
 }
 
 /**
- * Nothing is on screen: hide the terminal and its chrome and show the placeholder.
+ * The active session went away. When it was on screen, the empty screen takes
+ * its place; a project or the settings covering it stay, with nothing to go
+ * back to (see `main-area-slice`).
+ */
+function forgetActiveSession(): void {
+  setActiveSession(null);
+}
+
+/**
+ * Nothing is on screen: the empty screen takes the main area, whatever had
+ * it, and there is no session to return to.
  *
  * The session's terminal stays alive; opening the row again shows it as it was.
  * No session active is what takes the terminal and the header off screen (see
@@ -271,7 +280,7 @@ function closeSessionView(sessionId: string): void {
  */
 export function clearScreen(): void {
   setActiveSession(null);
-  showEmptyScreen();
+  dispatch({ type: 'screenCleared' });
 }
 
 /** Write the exit banner into a terminal whose process has ended. */
