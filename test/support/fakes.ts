@@ -9,7 +9,10 @@
 import type { PendingQuestions, QuestionsSettled } from '../../src/domain/questions/question';
 import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
 import type { WorkingAgent } from '../../src/domain/terminal/program-status-children';
+import type { RepositoryIssue, RepositoryPullRequest, WorktreeSummary } from '../../src/domain/project/overview';
 import type { Timers } from '../../src/application/ports/clock';
+import type { GitWorkspace } from '../../src/application/ports/git-workspace';
+import type { GitHubCli, ProjectReads } from '../../src/application/ports/github-cli';
 import type { Logger } from '../../src/application/ports/logger';
 import type { RendererGateway } from '../../src/application/ports/renderer-gateway';
 import type {
@@ -196,4 +199,58 @@ export function fakeRenderer(): FakeRenderer {
     launchRequested: record('launchRequested'),
     pickerRequested: record('pickerRequested'),
   };
+}
+
+// ── The project page's reads (#167) ──
+
+export interface FakeProjectGitHub extends Pick<GitHubCli, ProjectReads> {
+  /** What `issuesIn` answers; null as when `gh` could not be asked. */
+  issues: RepositoryIssue[] | null;
+  /** What `pullRequestsIn` answers; null as when `gh` could not be asked. */
+  pullRequests: RepositoryPullRequest[] | null;
+  /** Every read it was asked for, as `issuesIn owner/repo` or `pullRequestsIn owner/repo`. */
+  readonly calls: string[];
+}
+
+/**
+ * A repository's issues and PRs, as `gh` would answer them. Closed issues and
+ * merged PRs are only answered when asked for, like the real reads.
+ */
+export function fakeProjectGitHub(
+  issues: RepositoryIssue[] | null = [],
+  pullRequests: RepositoryPullRequest[] | null = [],
+): FakeProjectGitHub {
+  const fake: FakeProjectGitHub = {
+    issues,
+    pullRequests,
+    calls: [],
+    async issuesIn(repo, options) {
+      fake.calls.push('issuesIn ' + repo);
+      return fake.issues && fake.issues.filter((issue) => options.closed || issue.state === 'open');
+    },
+    async pullRequestsIn(repo, options) {
+      fake.calls.push('pullRequestsIn ' + repo);
+      return fake.pullRequests && fake.pullRequests.filter((pr) => options.merged || pr.state === 'open');
+    },
+  };
+  return fake;
+}
+
+export interface FakeWorktrees extends Pick<GitWorkspace, 'worktrees'> {
+  /** The checkouts each repository answers with; any other answers none. */
+  readonly byRepository: Map<string, WorktreeSummary[]>;
+  /** Every repository it was asked about. */
+  readonly calls: string[];
+}
+
+export function fakeWorktrees(byRepository: Record<string, WorktreeSummary[]> = {}): FakeWorktrees {
+  const fake: FakeWorktrees = {
+    byRepository: new Map(Object.entries(byRepository)),
+    calls: [],
+    async worktrees(repository) {
+      fake.calls.push(repository);
+      return fake.byRepository.get(repository) ?? [];
+    },
+  };
+  return fake;
 }

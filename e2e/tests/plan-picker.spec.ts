@@ -1,5 +1,5 @@
 /**
- * Finding a plan in the New Session picker and opening it without a session
+ * Finding a plan in the Projects modal and opening it without a session
  * (#128) in the real app: → on a project lists its plans from a stubbed back
  * end, picking one opens the Plan view in the main area with no sidebar row
  * lit (#168), and Esc closes the detail first and then the view, back to the
@@ -20,7 +20,7 @@ import type { Page } from '@playwright/test';
 const SHOTS = process.env.SB_E2E_PLAN_PICKER_SHOTS;
 
 function picker(page: Page) {
-  return dialog(page, 'New Session');
+  return dialog(page, 'Projects');
 }
 
 function plans(page: Page) {
@@ -47,7 +47,7 @@ function terminalInput(page: Page) {
 /** Open acme-api's "Login rework" plan through the picker. */
 async function openLoginRework(page: Page): Promise<void> {
   await openPicker(page);
-  await picker(page).getByPlaceholder('Filter projects...').fill('acme-api');
+  await picker(page).getByLabel('Filter projects').fill('acme-api');
   await page.keyboard.press('ArrowRight');
   await expect(plans(page).getByRole('option').first()).toHaveAccessibleName(/^#1300 /);
   await page.keyboard.press('Enter');
@@ -55,7 +55,7 @@ async function openLoginRework(page: Page): Promise<void> {
 }
 
 async function openPicker(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'New session', exact: true }).click();
+  await page.getByRole('button', { name: 'Projects', exact: true }).click();
   await expect(picker(page).getByText(P.acmeApi, { exact: true })).toBeVisible();
 }
 
@@ -66,7 +66,7 @@ test('→ on a project lists its plans, and picking one opens it without a sessi
   const rowsBefore = await sessionRows(page).count();
   await openPicker(page);
   if (SHOTS) await picker(page).screenshot({ path: SHOTS + '/plan-picker-projects.png', animations: 'disabled' });
-  await picker(page).getByPlaceholder('Filter projects...').fill('acme-api');
+  await picker(page).getByLabel('Filter projects').fill('acme-api');
 
   /* When */
   await page.keyboard.press('ArrowRight');
@@ -173,7 +173,7 @@ test('clicking a sidebar row while a plan is open shows that session and closes 
 test('a plan opened from the picker comes first the next time', async ({ page }) => {
   /* Given */
   await openPicker(page);
-  await picker(page).getByPlaceholder('Filter projects...').fill('acme-api');
+  await picker(page).getByLabel('Filter projects').fill('acme-api');
   await page.keyboard.press('Tab');
   await plans(page).getByRole('option', { name: /#1200 / }).click();
   await expect(planPage(page)).toBeVisible();
@@ -182,7 +182,7 @@ test('a plan opened from the picker comes first the next time', async ({ page })
 
   /* When */
   await openPicker(page);
-  await picker(page).getByPlaceholder('Filter projects...').fill('acme-api');
+  await picker(page).getByLabel('Filter projects').fill('acme-api');
   await page.keyboard.press('Tab');
 
   /* Then */
@@ -192,13 +192,13 @@ test('a plan opened from the picker comes first the next time', async ({ page })
   await page.keyboard.press('Shift+Tab');
 
   /* Then */
-  await expect(picker(page).getByPlaceholder('Filter projects...')).toHaveValue('acme-api');
+  await expect(picker(page).getByLabel('Filter projects')).toHaveValue('acme-api');
 });
 
 test('a project with no GitHub remote says so, and loses its → cue', async ({ page }) => {
   /* Given */
   await openPicker(page);
-  await picker(page).getByPlaceholder('Filter projects...').fill('web-dashboard');
+  await picker(page).getByLabel('Filter projects').fill('web-dashboard');
   const cue = picker(page).getByRole('button', { name: 'Show plans' });
   await expect(cue).toHaveCount(1);
 

@@ -31,7 +31,7 @@ const clearButton = (page: Page) => button(page, 'Clear search');
 const titlesToggle = (page: Page) => button(page, 'Search titles only');
 const appearanceButton = (page: Page) => button(page, /^Appearance: /);
 const sleepButton = (page: Page) => button(page, /sleep|awake/i);
-const quickSessionButton = (page: Page) => page.getByTitle('Quick session (⌘N)');
+const quickSessionButton = (page: Page) => button(page, 'Quick session (⌘N)');
 const resizeHandle = (page: Page) => page.getByTestId('sidebar-resize-handle');
 
 const SLEEP_ALLOWED = 'This Mac can sleep (click to keep it awake)';
@@ -388,6 +388,11 @@ forEachAppearance(() => {
       /* Then */
       await expect(sessionRow(page, LABEL.loginFix)).toHaveCount(0);
       await expectScreen(page, 'toolbar-all-controls');
+      // Two buttons create something: the quick session and Projects (#171).
+      // The tooltips name their keys.
+      await expect(page.locator('#session-filters').getByRole('button')).toHaveCount(4);
+      await expect(quickSessionButton(page)).toHaveAttribute('title', 'Quick session in /tmp (⌘N)');
+      await expect(button(page, 'Projects')).toHaveAttribute('title', 'Projects: start, open or add (⌘A)');
 
       // The header drags the window, and its controls opt out so a click on
       // one is a click: Playwright's clicks would land either way.
@@ -395,7 +400,7 @@ forEachAppearance(() => {
         locator.evaluate(el => getComputedStyle(el).getPropertyValue('-webkit-app-region'));
       const parentRegion = (locator: Locator) =>
         locator.evaluate(el => getComputedStyle(el.closest('#sidebar > *')!).getPropertyValue('-webkit-app-region'));
-      for (const name of ['Global settings', 'Hide sidebar', 'New session', 'Add project']) {
+      for (const name of ['Global settings', 'Hide sidebar', 'Quick session (⌘N)', 'Projects']) {
         expect(await region(button(page, name))).toBe('no-drag');
       }
       for (const filter of ['running', 'pinned'] as const) {

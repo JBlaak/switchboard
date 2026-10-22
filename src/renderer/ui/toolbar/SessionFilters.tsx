@@ -1,15 +1,13 @@
 /**
- * The filter row: the two filter toggles, the first load's status, and the
- * three ways to start something — a quick session, a new session in a picked
- * project, and a new project.
+ * The filter row: the two filter toggles on the left, the first load's status,
+ * and the two ways to start something on the right — a quick session, and the
+ * Projects modal, which starts a session in a project or adds one (#171).
  */
 import { openDialog } from '../dialogs/actions';
 import { launchQuickSession } from '../../features/sessions/quick-session';
 import { useStore } from '../use-store';
 import { toggleFilter } from './actions';
-import {
-  AddProjectIcon, NewSessionIcon, PinIcon, QuickSessionIcon, RunningIcon,
-} from './icons';
+import { PinIcon, ProjectsIcon, QuickSessionIcon, RunningIcon } from './icons';
 import type { JSX, ReactNode } from 'react';
 import type { RendererState } from '../../state/root';
 import type { SidebarFilter } from '../../state/toolbar-slice';
@@ -49,8 +47,15 @@ function LoadingStatus(): JSX.Element {
   );
 }
 
+/** A home-folder path the way the tooltip says it: `~/Scratch` rather than `/Users/me/Scratch`. */
+function tildePath(path: string): string {
+  return path.replace(/^\/Users\/[^/]+(?=\/|$)/, '~');
+}
+
 export function SessionFilters(): JSX.Element {
   const quickSessionPath = useStore(s => s.toolbar.quickSessionPath);
+  // Only a list known to be empty earns the first-run dot, not one still loading.
+  const noProjects = useStore(s => s.toolbar.hasProjects === false);
   return (
     <div id="session-filters">
       <FilterButton id="running-toggle" filter="running" title="Show running only" isOn={s => s.view.showRunningOnly}>
@@ -62,16 +67,19 @@ export function SessionFilters(): JSX.Element {
       <LoadingStatus />
       {/* Hidden until there is a folder for it to launch in. */}
       <button
-        id="quick-session-btn" hidden={!quickSessionPath} title="Quick session (⌘N)"
+        id="quick-session-btn" hidden={!quickSessionPath} aria-label="Quick session (⌘N)"
+        title={`Quick session in ${tildePath(quickSessionPath)} (⌘N)`}
         onClick={() => void launchQuickSession()}
       >
         <QuickSessionIcon />
       </button>
-      <button id="new-session-btn" title="New session" onClick={() => openDialog({ kind: 'projectPicker' })}>
-        <NewSessionIcon />
-      </button>
-      <button id="add-project-btn" title="Add project" onClick={() => openDialog({ kind: 'addProject' })}>
-        <AddProjectIcon />
+      <button
+        id="projects-btn" aria-label="Projects" title="Projects: start, open or add (⌘A)"
+        className={noProjects ? 'first-run' : undefined}
+        onClick={() => openDialog({ kind: 'projectPicker' })}
+      >
+        <ProjectsIcon />
+        {noProjects && <span className="projects-btn-dot" aria-hidden="true" />}
       </button>
     </div>
   );

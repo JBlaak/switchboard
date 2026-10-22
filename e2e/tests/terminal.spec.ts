@@ -152,8 +152,8 @@ test.describe('smoke', () => {
     const before = launchedKeys(home);
 
     /* When */
-    await page.getByRole('button', { name: 'New session', exact: true }).click();
-    await dialog(page, 'New Session').getByText('Development/web-dashboard', { exact: true }).click();
+    await page.getByRole('button', { name: 'Projects', exact: true }).click();
+    await dialog(page, 'Projects').getByText('Development/web-dashboard', { exact: true }).click();
 
     /* Then */
     const claude = await waitForNewLaunch(home, 'claude', before);

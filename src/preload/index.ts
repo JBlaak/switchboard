@@ -32,6 +32,7 @@ const api: SwitchboardApi = {
   removeProject: (projectPath) => ipcRenderer.invoke(INVOKE.removeProject, projectPath),
   addRemoteProject: (config) => ipcRenderer.invoke(INVOKE.addRemoteProject, config),
   removeRemoteProject: (projectPath) => ipcRenderer.invoke(INVOKE.removeRemoteProject, projectPath),
+  checkProjectFolder: (typed) => ipcRenderer.invoke(INVOKE.checkProjectFolder, typed),
 
   // ── Sessions ──
   getActiveSessions: () => ipcRenderer.invoke(INVOKE.getActiveSessions),

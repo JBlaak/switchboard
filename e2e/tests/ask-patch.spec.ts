@@ -110,7 +110,7 @@ test('a failed call says why and opens the picker, which starts on the text as t
 
   /* Then */
   await expect(says(page, 'You’ve hit your usage limit — resets 3pm (UTC).')).toBeVisible();
-  const picker = dialog(page, 'New Session');
+  const picker = dialog(page, 'Start this in…');
   await expect(picker).toBeVisible();
   await expect(picker).toContainText('fix the login loop');
 
@@ -133,7 +133,7 @@ test('⌘Enter without a quick folder opens the picker on the text as typed, wit
   await box(page).press('Meta+Enter');
 
   /* Then */
-  const picker = dialog(page, 'New Session');
+  const picker = dialog(page, 'Start this in…');
   await expect(picker).toBeVisible();
   await expect(picker).toContainText('jot down an idea');
   await expect(says(page, 'There’s no Quick Session Folder yet. Pick a project, or set one in Settings?')).toBeVisible();
@@ -159,6 +159,6 @@ test.describe('with a quick folder', () => {
     expect(fs.realpathSync(launch.cwd)).toBe(fs.realpathSync('/tmp'));
     expect(launch.argv.at(-1)).toBe('lets fix the login loop in acme-api');
     expect(route.calls().filter(call => call.prompt?.includes('lets fix the login loop'))).toEqual([]);
-    await expect(dialog(page, 'New Session')).toBeHidden();
+    await expect(dialog(page, 'Start this in…')).toBeHidden();
   });
 });

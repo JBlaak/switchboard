@@ -38,6 +38,7 @@ export async function loadProjects({ resort = false }: LoadOptions = {}): Promis
   view.cachedProjects = defaultProjects;
   view.cachedAllProjects = allProjects;
   dispatch({ type: 'projectsLoading', loading: false });
+  dispatch({ type: 'projectsCounted', any: allProjects.length > 0 });
 
   adoptSessions(view.cachedProjects);
   adoptSessions(view.cachedAllProjects);

@@ -15,6 +15,7 @@ import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { FileChange, FileStatus, LineStats } from '../../domain/session-work/model';
+import type { WorktreeSummary } from '../../domain/project/overview';
 import type { Disposable, GitWorkspace, GitWorktrees, GitWrite } from '../../application/ports/git-workspace';
 
 /** git's well-known empty tree: what a repository with no commits yet is diffed against. */
@@ -246,6 +247,34 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
     return generated;
   }
 
+  async worktrees(repository: string): Promise<WorktreeSummary[]> {
+    const list = await git(repository, ['worktree', 'list', '--porcelain', '-z']);
+    if (list.code !== 0) return [];
+    const entries = parseWorktreeList(list.stdout).filter((entry) => !entry.bare && !entry.prunable);
+    if (entries.length === 0) return [];
+
+    // A merged PR lands on origin's default branch; the local one may lag.
+    const defaultBranch = await this.defaultBranch(repository);
+    const remote = 'origin/' + defaultBranch;
+    const base = (await this.commitSha(repository, remote)) ? remote
+      : (await this.commitSha(repository, defaultBranch)) ? defaultBranch : null;
+
+    return Promise.all(entries.map(async (entry): Promise<WorktreeSummary> => {
+      const tip = entry.branch ?? entry.head;
+      const { ahead } = base && tip ? await this.aheadBehind(repository, tip, base) : { ahead: 0 };
+      const changes = await this.status(entry.path);
+      return {
+        path: entry.path,
+        branch: entry.branch,
+        main: entry.main,
+        locked: entry.locked,
+        changedFiles: changes.length,
+        ahead,
+        merged: base !== null && entry.branch !== null && entry.branch !== defaultBranch && ahead === 0,
+      };
+    }));
+  }
+
   watch(worktree: string, onChange: () => void): Disposable {
     const dirs = gitDirs(worktree);
     const watchers: fs.FSWatcher[] = [];
@@ -401,6 +430,59 @@ export function sumNumstat(output: string): LineStats {
  */
 function isUntrackedFile(entry: string): boolean {
   return entry.length > 0 && !entry.endsWith('/');
+}
+
+/** One record of `git worktree list --porcelain`. */
+export interface WorktreeListEntry {
+  path: string;
+  /** The commit checked out; null in a bare repository. */
+  head: string | null;
+  /** The branch checked out, without `refs/heads/`; null on a detached HEAD or in a bare repository. */
+  branch: string | null;
+  /** The first record: the main checkout, or the bare repository the others were added from. */
+  main: boolean;
+  bare: boolean;
+  detached: boolean;
+  locked: boolean;
+  /** Its directory has gone; `git worktree prune` would drop it. */
+  prunable: boolean;
+}
+
+/**
+ * `git worktree list --porcelain -z` as records.
+ *
+ * Each attribute is its own NUL-terminated field, `label` or `label value`,
+ * and an empty field ends a record. `locked` and `prunable` may carry a
+ * reason after the label, which is not kept.
+ */
+export function parseWorktreeList(output: string): WorktreeListEntry[] {
+  const entries: WorktreeListEntry[] = [];
+  let entry: WorktreeListEntry | null = null;
+  for (const field of output.split('\0')) {
+    if (field === '') {
+      entry = null;
+      continue;
+    }
+    const space = field.indexOf(' ');
+    const label = space === -1 ? field : field.slice(0, space);
+    const value = space === -1 ? '' : field.slice(space + 1);
+    if (label === 'worktree') {
+      entry = {
+        path: value, head: null, branch: null, main: entries.length === 0,
+        bare: false, detached: false, locked: false, prunable: false,
+      };
+      entries.push(entry);
+      continue;
+    }
+    if (!entry) continue;
+    if (label === 'HEAD') entry.head = value || null;
+    else if (label === 'branch') entry.branch = value.replace(/^refs\/heads\//, '') || null;
+    else if (label === 'bare') entry.bare = true;
+    else if (label === 'detached') entry.detached = true;
+    else if (label === 'locked') entry.locked = true;
+    else if (label === 'prunable') entry.prunable = true;
+  }
+  return entries;
 }
 
 /**
