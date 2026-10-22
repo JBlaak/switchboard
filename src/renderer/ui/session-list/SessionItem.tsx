@@ -22,6 +22,7 @@ import {
 } from './actions';
 import { isLeaving } from './leave';
 import { openSessionWorkFromRow } from '../session-work/actions';
+import { highlightedSession } from '../../state/main-area-slice';
 import type { JSX, MouseEvent } from 'react';
 import type { SessionListRow } from '../../state/session-list-layout';
 import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
@@ -51,7 +52,7 @@ function useLiveRow(rowId: string, sessionId: string): LiveRow {
     const activity = rowActivity(s, sessionId);
     return {
       running: s.view.activePtyIds.has(sessionId),
-      active: s.view.activeSessionId === sessionId,
+      active: highlightedSession(s.mainArea) === sessionId,
       needsAttention: activity.needsAttention,
       responseReady: activity.responseReady,
       busy: activity.busy,

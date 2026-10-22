@@ -24,6 +24,8 @@ function run(state: RendererState, ...events: RendererEvent[]): RendererState {
 }
 
 const initial = (active: string | null = null) => initialRendererState(active);
+/** `id` active and its terminal on screen, as `showSession` leaves it: the main area's route is what "on screen" means. */
+const shownOnScreen = (id: string) => run(initial(id), { type: 'sessionShown', sessionId: id, name: id });
 
 function asked(sessionId: string, toolUseId: string, count = 1): PendingQuestions {
   return {
@@ -121,7 +123,7 @@ test('a turn ending off screen leaves the answer unread', () => {
 
 test('a turn ending on screen is read by definition', () => {
   /* Given */
-  const busy = run(initial('s1'), { type: 'cliBusyState', sessionId: 's1', busy: true });
+  const busy = run(shownOnScreen('s1'), { type: 'cliBusyState', sessionId: 's1', busy: true });
 
   /* When */
   const state = run(busy, { type: 'cliBusyState', sessionId: 's1', busy: false });
@@ -241,7 +243,7 @@ test('sessionNeedsAttention marks the session', () => {
 
 test('sessionNeedsAttention changes nothing for the session on screen', () => {
   /* Given */
-  const onScreen = initial('s1');
+  const onScreen = shownOnScreen('s1');
 
   /* When */
   const next = rootReducer(onScreen, SAMPLES.sessionNeedsAttention);

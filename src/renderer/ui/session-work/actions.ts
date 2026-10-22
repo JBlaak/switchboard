@@ -10,6 +10,7 @@
 import { flushSync } from 'react-dom';
 import { dispatch, getState } from '../../state/app-store';
 import { hasEntry } from '../../state/records';
+import { highlightedSession } from '../../state/main-area-slice';
 import { sessionMap } from '../../state/session-store';
 import { imageKeyEvent, selectedDiff, steppedFilePath, steppedItemId, workTabOf } from '../../state/session-work-slice';
 import type { DiffMode, ReviewKind, WorkTab } from '../../state/session-work-slice';
@@ -106,8 +107,8 @@ export function isSessionWorkKey(e: KeyboardEvent): boolean {
 
 /** Cmd+G: the page for the session on screen, open or closed. Nothing when it cannot open. */
 export async function toggleSessionWork(): Promise<void> {
-  const { view, sessionWork } = getState();
-  const sessionId = view.activeSessionId;
+  const { mainArea, sessionWork } = getState();
+  const sessionId = highlightedSession(mainArea);
   if (!sessionId) return;
   if (sessionWork.page?.sessionId === sessionId) {
     closeSessionWork();
@@ -116,7 +117,7 @@ export async function toggleSessionWork(): Promise<void> {
   const cached = sessionWork.canOpen[sessionId];
   const canOpen = cached === true || await canOpenSessionWork(sessionId, { fresh: cached === false });
   // The user may have moved on while main answered.
-  if (!canOpen || getState().view.activeSessionId !== sessionId) return;
+  if (!canOpen || highlightedSession(getState().mainArea) !== sessionId) return;
   await openSessionWork(sessionId);
 }
 
@@ -125,11 +126,11 @@ export async function toggleSessionWork(): Promise<void> {
  * open its page.
  */
 export async function openSessionWorkFromRow(sessionId: string): Promise<void> {
-  if (getState().view.activeSessionId !== sessionId) {
+  if (highlightedSession(getState().mainArea) !== sessionId) {
     const session = sessionMap.get(sessionId);
     if (!session) return;
     await openSession(session);
-    if (getState().view.activeSessionId !== sessionId) return;
+    if (highlightedSession(getState().mainArea) !== sessionId) return;
   }
   await openSessionWork(sessionId);
 }

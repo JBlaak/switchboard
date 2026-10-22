@@ -29,6 +29,7 @@ import {
   expandSlugGroup, openRow, startRename, toggleOlder, toggleSlugGroup,
 } from '../../ui/session-list/actions';
 import { cursorElement, pressArchive, setListCursor } from '../../ui/session-list/cursor';
+import { highlightedSession } from '../../state/main-area-slice';
 import type { CursorTarget } from '../../state/list-cursor';
 
 export { isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey } from '../../lib/shortcut-keys';
@@ -40,9 +41,9 @@ export { isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey } from '../.
  * happen here too.
  */
 export function archiveActiveSession(): void {
-  const { activeSessionId } = getState().view;
-  if (!activeSessionId) return;
-  const row = targets().find(t => t.kind === 'row' && t.sessionId === activeSessionId);
+  const onScreen = highlightedSession(getState().mainArea);
+  if (!onScreen) return;
+  const row = targets().find(t => t.kind === 'row' && t.sessionId === onScreen);
   if (row) pressArchive(row.name);
 }
 
@@ -65,7 +66,7 @@ export function isSidebarFocused(): boolean {
 export function focusSidebar(): void {
   const state = getState();
   if (state.toolbar.sidebarCollapsed) return;
-  const start = startTarget(state.sessionList, targets(), state.view.activeSessionId);
+  const start = startTarget(state.sessionList, targets(), highlightedSession(state.mainArea));
   if (!start) return;
   sidebarContent.focus({ preventScroll: true });
   moveCursorTo(start);
@@ -180,8 +181,8 @@ function archiveAtCursor(): void {
 
 function backToTerminal(): void {
   clearCursor();
-  const { activeSessionId } = getState().view;
-  const open = activeSessionId ? openSessions.get(activeSessionId) : undefined;
+  const onScreen = highlightedSession(getState().mainArea);
+  const open = onScreen ? openSessions.get(onScreen) : undefined;
   if (open) open.terminal.focus();
   else sidebarContent.blur();
 }
