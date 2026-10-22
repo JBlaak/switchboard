@@ -1,42 +1,43 @@
 /**
- * One project in the picker: its name with the matched characters picked out,
- * how many sessions it has or has running, and its actions.
+ * One project in the Projects modal: its name with the matched characters
+ * picked out, how many sessions it has or has running, and, on the
+ * highlighted row only, its buttons: start a session, the → into its plans,
+ * and the ⋯ menu that holds the rest (#171).
  *
- * The actions never open the row: each stops its click from reaching it.
+ * The buttons never open the row: each stops its click from reaching it, and
+ * none takes the focus from the filter.
  */
-import { ICONS } from '../../lib/icons';
 import { isWorktreeProject } from '../../features/sessions/project-label';
-import { openSettings } from '../settings/actions';
-import { archiveAllSessions, hideWorktree, removeRemoteProject } from './actions';
-import { tooltip } from './DialogShell';
 import { labelRuns } from './rank-projects';
 import { sessionCountLabel } from './picker-selection';
-import type { JSX, MouseEvent, Ref } from 'react';
+import type { JSX, MouseEvent, ReactNode, Ref } from 'react';
 import type { Candidate } from './rank-projects';
-import type { Project } from '../../../domain/project/project';
-
-const CLOSE_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 
 export interface ProjectPickerRowProps {
   ref?: Ref<HTMLDivElement>;
   candidate: Candidate;
+  /** A worktree listed under its repository. */
+  nested: boolean;
   /** Pick out the matched characters; off while the filter is empty. */
   highlight: boolean;
   selected: boolean;
   /** How many of its sessions have a live PTY. */
   running: number;
+  /** What ↵ does here: "New session", or "Start here" with a prompt waiting. */
+  startLabel: string;
   /** Opens its plans (F1); absent for a project that cannot have any, which shows no → cue. */
   onOpenPlans?(): void;
+  /** The ⋯ button, for the menu to hang off. */
+  moreRef?: Ref<HTMLButtonElement>;
+  menuOpen: boolean;
+  onToggleMenu(): void;
   onHover(): void;
   onActivate(): void;
-  /** Close the picker, for an action that leads somewhere else. */
-  onClose(): void;
-  /** An action changed the project list; the picker redraws. */
-  onChanged(): void;
 }
 
 export function ProjectPickerRow({
-  ref, candidate, highlight, selected, running, onOpenPlans, onHover, onActivate, onClose, onChanged,
+  ref, candidate, nested, highlight, selected, running, startLabel, onOpenPlans, moreRef, menuOpen,
+  onToggleMenu, onHover, onActivate,
 }: ProjectPickerRowProps): JSX.Element {
   const { project, label, positions } = candidate;
   const total = project.sessions.length;
@@ -44,7 +45,7 @@ export function ProjectPickerRow({
   return (
     <div
       ref={ref}
-      className={'project-picker-row' + (selected ? ' selected' : '')}
+      className={'project-picker-row' + (selected ? ' selected' : '') + (nested ? ' nested' : '')}
       onMouseEnter={onHover}
       onClick={onActivate}
     >
@@ -54,80 +55,64 @@ export function ProjectPickerRow({
           : run.text)}
         {project.remote && <span className="remote-badge">SSH</span>}
       </div>
+      {isWorktreeProject(project.projectPath) && <span className="worktree-badge">WORKTREE</span>}
       <span className={'project-picker-count' + (running > 0 ? ' running' : '')}>
         {sessionCountLabel(total, running)}
       </span>
-      <RowActions project={project} onClose={onClose} onChanged={onChanged} />
-      {onOpenPlans && (
-        <button
-          type="button"
-          className="project-picker-plans-cue"
-          aria-label="Show plans"
-          title="Plans (→ or Tab)"
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation();
-            onOpenPlans();
-          }}
-        >
-          →
-        </button>
+      {selected && (
+        <>
+          <RowButton className="projects-go" onClick={onActivate}>
+            {startLabel} <kbd className="sw-kbd" aria-hidden="true">↵</kbd>
+          </RowButton>
+          {onOpenPlans && (
+            <RowButton className="project-picker-plans-cue" label="Show plans" title="Plans (→ or Tab)" onClick={onOpenPlans}>
+              →
+            </RowButton>
+          )}
+          <RowButton
+            ref={moreRef}
+            className={'projects-more' + (menuOpen ? ' open' : '')}
+            label={`More for ${label}`}
+            title="More (⌘.)"
+            expanded={menuOpen}
+            onClick={onToggleMenu}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
+          </RowButton>
+        </>
       )}
     </div>
   );
 }
 
-interface RowActionsProps {
-  project: Project;
-  onClose(): void;
-  onChanged(): void;
-}
-
-function RowActions({ project, onClose, onChanged }: RowActionsProps): JSX.Element {
-  const redrawIfChanged = (done: Promise<boolean>): void => {
-    void done.then(changed => { if (changed) onChanged(); });
-  };
-
-  return (
-    <div className="project-picker-actions">
-      {project.remote
-        // A remote project has no local settings to edit; it gets a remove
-        // button instead, since it lives in settings and nothing else offers
-        // removal.
-        ? <ActionButton className="picker-remove-btn" label="Remove remote project" icon={CLOSE_ICON}
-            onClick={() => redrawIfChanged(removeRemoteProject(project))} />
-        : <ActionButton className="picker-settings-btn" label="Project settings" icon={ICONS.gear(16)}
-            onClick={() => {
-              onClose();
-              void openSettings('project', project.projectPath);
-            }} />}
-      <ActionButton className="picker-archive-btn" label="Archive all sessions in this project"
-        icon={ICONS.archive(18)} onClick={() => redrawIfChanged(archiveAllSessions(project))} />
-      {isWorktreeProject(project.projectPath) && (
-        <ActionButton className="picker-hide-btn" label="Hide worktree" icon={CLOSE_ICON}
-          onClick={() => redrawIfChanged(hideWorktree(project))} />
-      )}
-    </div>
-  );
-}
-
-interface ActionButtonProps {
+interface RowButtonProps {
+  ref?: Ref<HTMLButtonElement>;
   className: string;
-  label: string;
-  /** Trusted markup from `lib/icons`, or the close glyph above. */
-  icon: string;
+  label?: string;
+  title?: string;
+  expanded?: boolean;
   onClick(): void;
+  children: ReactNode;
 }
 
-function ActionButton({ className, label, icon, onClick }: ActionButtonProps): JSX.Element {
+/** A button on the row that keeps the focus in the filter and the click off the row. */
+function RowButton({ ref, className, label, title, expanded, onClick, children }: RowButtonProps): JSX.Element {
   return (
     <button
+      ref={ref}
+      type="button"
       className={className}
-      {...tooltip(label)}
-      dangerouslySetInnerHTML={{ __html: icon }}
+      aria-label={label}
+      aria-haspopup={expanded === undefined ? undefined : 'menu'}
+      aria-expanded={expanded}
+      title={title}
+      onMouseDown={(e: MouseEvent) => e.preventDefault()}
       onClick={(e: MouseEvent) => {
         e.stopPropagation();
         onClick();
       }}
-    />
+    >
+      {children}
+    </button>
   );
 }

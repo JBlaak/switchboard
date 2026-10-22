@@ -21,6 +21,8 @@ export type ToolbarEvent =
   | { type: 'sidebarCollapsed'; collapsed: boolean }
   /** The project list is being fetched for the first time (or has been). */
   | { type: 'projectsLoading'; loading: boolean }
+  /** A fetched project list had projects in it, or had none (archived ones count). */
+  | { type: 'projectsCounted'; any: boolean }
   /** A filter toggle was clicked; the view slice applies the rule. */
   | { type: 'filterToggled'; filter: SidebarFilter }
   /** What is in the search box, as typed. The query itself runs later. */
@@ -43,6 +45,11 @@ export interface ToolbarState {
   /** Not persisted: every launch starts with the sidebar open. */
   readonly sidebarCollapsed: boolean;
   readonly projectsLoading: boolean;
+  /**
+   * Whether there is any project at all; null until the first list is in.
+   * With none, the Projects button carries a dot and the list points at it.
+   */
+  readonly hasProjects: boolean | null;
   readonly searchQuery: string;
   readonly searchTitlesOnly: boolean;
   readonly appearance: Appearance;
@@ -54,6 +61,7 @@ export interface ToolbarState {
 export const initialToolbarState: ToolbarState = {
   sidebarCollapsed: false,
   projectsLoading: false,
+  hasProjects: null,
   searchQuery: '',
   searchTitlesOnly: false,
   // The default straight away, so the button is never empty while the stored
@@ -70,6 +78,8 @@ export function toolbarReducer(state: ToolbarState, event: RendererEvent): Toolb
       return set(state, 'sidebarCollapsed', event.collapsed);
     case 'projectsLoading':
       return set(state, 'projectsLoading', event.loading);
+    case 'projectsCounted':
+      return set(state, 'hasProjects', event.any);
     case 'searchTyped':
       return set(state, 'searchQuery', event.query);
     case 'searchTitlesOnlyChanged':

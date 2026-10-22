@@ -3,6 +3,7 @@
  */
 import { INVOKE } from '../../ipc/channels';
 import { encodeProjectPath } from '../../domain/project/project-path';
+import { expandHome } from '../../domain/project/folder-check';
 import {
   normalizeRemoteDir, remoteProjectPath, validateRemoteInput,
 } from '../../domain/project/remote-target';
@@ -41,7 +42,9 @@ export function registerProjectHandlers(ipc: IpcRegistrar, app: Container): void
    * seeding it, which is what makes the project resolvable and gives it a row
    * to launch the first session from.
    */
-  ipc.handle(INVOKE.addProject, (projectPath: string) => {
+  ipc.handle(INVOKE.addProject, (typed: string) => {
+    // A path typed or pasted into the Projects modal may start with `~`.
+    const projectPath = expandHome(String(typed).trim(), app.fs.homeDir).replace(/(.)\/+$/, '$1');
     if (!app.fs.exists(projectPath)) return { error: 'Path does not exist' };
     if (!app.fs.isDirectory(projectPath)) return { error: 'Path is not a directory' };
 
@@ -60,6 +63,9 @@ export function registerProjectHandlers(ipc: IpcRegistrar, app: Container): void
 
     return { ok: true, folder, projectPath };
   });
+
+  /** What adding a typed path would add, for the Projects modal's inline check (#171). */
+  ipc.handle(INVOKE.checkProjectFolder, (typed: string) => app.projectFolders.check(String(typed ?? '')));
 
   /**
    * Remove a project.

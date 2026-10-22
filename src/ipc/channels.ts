@@ -16,6 +16,7 @@ export const INVOKE = {
   removeProject: 'remove-project',
   addRemoteProject: 'add-remote-project',
   removeRemoteProject: 'remove-remote-project',
+  checkProjectFolder: 'check-project-folder',
 
   // Sessions
   getActiveSessions: 'get-active-sessions',
