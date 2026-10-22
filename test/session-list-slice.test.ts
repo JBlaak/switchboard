@@ -27,7 +27,7 @@ function row(id: string, msAgo = HOUR): SessionListRow {
 }
 
 function item(entry: SessionListRow | SessionListGroup, tier = TIER_REST, msAgo = HOUR): ListItem {
-  return { entry, sortTime: NOW - msAgo, pinned: false, tier, remote: false };
+  return { entry, sortTime: NOW - msAgo, startTime: NOW - msAgo, pinned: false, tier, remote: false };
 }
 
 function built(items: ListItem[], extra: Partial<Extract<RendererEvent, { type: 'sessionListBuilt' }>> = {}): RendererEvent {

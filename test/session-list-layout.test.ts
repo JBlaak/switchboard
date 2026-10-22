@@ -102,6 +102,20 @@ test('a group takes the newest time, any pin, the highest tier and any remote of
     { sortTime: NOW - HOUR, pinned: true, tier: TIER_RUNNING, remote: true });
 });
 
+test('a group is started when its newest-started session was', () => {
+  /* Given */
+  const projects = [project('/p', [
+    session('a', { slug: 'plan', created: at(DAY), modified: at(HOUR) }),
+    session('b', { slug: 'plan', created: at(2 * HOUR), modified: at(5 * HOUR) }),
+  ])];
+
+  /* When */
+  const { items } = listItems(projects, inputs());
+
+  /* Then */
+  assert.equal(items[0].startTime, NOW - 2 * HOUR);
+});
+
 const activeProjects = () => [project('/one', [session('a', { slug: 'plan' }), session('b', { slug: 'plan' }), session('c')])];
 
 test('the active item is the row', () => {
@@ -200,6 +214,52 @@ test('needs input, ready, working, pinned, then the rest, newest first within ea
     [TIER_ATTENTION, TIER_READY, TIER_RUNNING, TIER_PINNED, TIER_REST, TIER_REST]);
 });
 
+test('working sessions keep their order while their transcripts are written to', () => {
+  /* Given */
+  const working = (modified: Record<string, number>) => [project('/p', [
+    session('first', { created: at(3 * HOUR), modified: at(modified.first) }),
+    session('second', { created: at(2 * HOUR), modified: at(modified.second) }),
+    session('third', { created: at(HOUR), modified: at(modified.third) }),
+  ])];
+  const before = layout(working({ first: 30, second: 20, third: 10 }), { tierOf: () => TIER_RUNNING });
+
+  /* When */
+  const after = layout(working({ first: 1, second: 3, third: 2 }), { tierOf: () => TIER_RUNNING }, {
+    previous: before.order,
+  });
+
+  /* Then */
+  assert.deepEqual(ids(before.layout.visible), [r('third'), r('second'), r('first')]);
+  assert.deepEqual(ids(after.layout.visible), ids(before.layout.visible));
+});
+
+test('a newly started session lands on top of Working', () => {
+  /* Given */
+  const sessions = [
+    session('older', { created: at(2 * HOUR), modified: at(0) }),
+    session('old', { created: at(HOUR), modified: at(0) }),
+  ];
+  const before = layout([project('/p', sessions)], { tierOf: () => TIER_RUNNING });
+
+  /* When */
+  const after = layout([project('/p', [...sessions, session('new', { created: at(10), modified: at(10) })])],
+    { tierOf: () => TIER_RUNNING }, { previous: before.order });
+
+  /* Then */
+  assert.deepEqual(ids(after.layout.visible), [r('new'), r('old'), r('older')]);
+});
+
+test('a re-sort keeps Working in start order', () => {
+  /* Given */
+  const next = items([['a', 0, TIER_RUNNING, 2 * HOUR], ['b', HOUR, TIER_RUNNING, HOUR]]);
+
+  /* When */
+  const laid = orderEntries(next, null, true, []);
+
+  /* Then */
+  assert.deepEqual(laid.map(l => l.entry.id), ['b', 'a']);
+});
+
 test('a live pinned session files under its live section, not under Pinned', () => {
   /* Given */
   const projects = [project('/p', [session('a', { starred: 1 })])];
@@ -211,10 +271,10 @@ test('a live pinned session files under its live section, not under Pinned', () 
   assert.equal(laid.visible[0].tier, TIER_RUNNING);
 });
 
-function items(spec: [id: string, msAgo: number, tier?: number][]): ListItem[] {
-  return spec.map(([id, msAgo, tier = TIER_REST]) => ({
+function items(spec: [id: string, msAgo: number, tier?: number, startedMsAgo?: number][]): ListItem[] {
+  return spec.map(([id, msAgo, tier = TIER_REST, startedMsAgo = msAgo]) => ({
     entry: { kind: 'row', id, session: session(id), projectPath: '/p' },
-    sortTime: NOW - msAgo, pinned: false, tier, remote: false,
+    sortTime: NOW - msAgo, startTime: NOW - startedMsAgo, pinned: false, tier, remote: false,
   }));
 }
 
@@ -260,7 +320,7 @@ test('on a re-sort recency wins', () => {
 test('the anchor holds only within its section: a busy↔idle flip moves the row', () => {
   /* Given */
   const previous = [{ id: 'a', tier: TIER_READY }, { id: 'b', tier: TIER_RUNNING }, { id: 'c', tier: TIER_RUNNING }];
-  // a went busy: it is filed under Working, by recency, whatever slot it had.
+  // a went busy: it is filed under Working, by start time, whatever slot it had.
   const next = items([['a', 3 * HOUR, TIER_RUNNING], ['b', HOUR, TIER_RUNNING], ['c', 2 * HOUR, TIER_RUNNING]]);
 
   /* When */
@@ -288,7 +348,7 @@ function truncate(spec: (Partial<ListItem> & { id: string; msAgo: number; tier?:
 } = {}) {
   const list: ListItem[] = spec.map(({ id, msAgo, tier = TIER_REST, pinned = false, remote = false }) => ({
     entry: { kind: 'row', id, session: session(id), projectPath: '/p' },
-    sortTime: NOW - msAgo, pinned, tier, remote,
+    sortTime: NOW - msAgo, startTime: NOW - msAgo, pinned, tier, remote,
   }));
   const ordered = list.map(item => ({ entry: item.entry, tier: item.tier }));
   const { visible, older } = truncateEntries(ordered, new Map(list.map(i => [i.entry.id, i])), active,
