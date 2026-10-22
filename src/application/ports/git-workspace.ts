@@ -14,6 +14,7 @@
  * and adds a worktree for it, because the user asked for exactly that.
  */
 import type { FileChange, LineStats } from '../../domain/session-work/model';
+import type { WorktreeSummary } from '../../domain/project/overview';
 
 /** Something to stop. */
 export interface Disposable {
@@ -91,6 +92,16 @@ export interface GitWorkspace {
    * for the diff parser's collapse rule (D7).
    */
   generatedPaths(worktree: string, paths: readonly string[]): Promise<string[]>;
+
+  /**
+   * Every checkout of the repository at `repository`, the main one first, for
+   * the project page (#167): its branch, how many files it has changed, how
+   * many commits it is ahead of the default branch (`origin`'s when there is
+   * one) and whether its branch is merged into it. A bare main repository has
+   * no checkout and a worktree whose directory has gone cannot be read, so
+   * both are left out. Empty outside a repository.
+   */
+  worktrees(repository: string): Promise<WorktreeSummary[]>;
 
   /**
    * Call `onChange` when the worktree's HEAD, index or refs change: a commit,

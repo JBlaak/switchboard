@@ -165,6 +165,7 @@ test('each chrome event sets its own field', () => {
   assert.deepStrictEqual(state.toolbar, {
     sidebarCollapsed: true,
     projectsLoading: true,
+    hasProjects: null,
     searchQuery: '',
     searchTitlesOnly: false,
     appearance: 'dark',
@@ -172,6 +173,18 @@ test('each chrome event sets its own field', () => {
     sleepPending: true,
     quickSessionPath: '/tmp',
   });
+});
+
+test('whether there are projects is unknown until a list is counted, then follows it', () => {
+  /* When */
+  const unknown = run();
+  const empty = run({ type: 'projectsCounted', any: false });
+  const some = run({ type: 'projectsCounted', any: false }, { type: 'projectsCounted', any: true });
+
+  /* Then */
+  assert.strictEqual(unknown.toolbar.hasProjects, null);
+  assert.strictEqual(empty.toolbar.hasProjects, false);
+  assert.strictEqual(some.toolbar.hasProjects, true);
 });
 
 test('writing a chrome field back unchanged keeps the same state', () => {

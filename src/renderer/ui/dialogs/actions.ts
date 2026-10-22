@@ -13,6 +13,8 @@ import { projectLabel } from '../../features/sessions/project-label';
 import { localProjectRequest, remoteProjectRequest } from './add-project-request';
 import type { RemoteFields } from './add-project-request';
 import type { DialogRequest } from '../../state/dialog-slice';
+import type { IpcResult } from '../../../ipc/api';
+import type { ProjectFolderCheck } from '../../../domain/project/folder-check';
 import type { Project } from '../../../domain/project/project';
 import type { SessionRow } from '../../../domain/session/session';
 import type { PlanSummary } from '../../../domain/plan/model';
@@ -59,25 +61,48 @@ export async function launchFromPicker(project: Project, initialPrompt?: string)
 
 export type { RemoteFields } from './add-project-request';
 
+/** What adding a project came to: the error to show, or the path it was added as. */
+export type AddOutcome = { error: string } | { projectPath: string };
+
 /**
- * Add a local folder. Answers with an error message, or null on success.
+ * Add a local folder (a leading `~` is fine), then reload the projects so the
+ * modal can list it.
  *
  * Only the empty field is caught here, so the user is not waiting on a round
  * trip to be told it is blank; the validation that matters is in main.
  */
-export async function addLocalProject(projectPath: string): Promise<string | null> {
+export async function addLocalProject(projectPath: string): Promise<AddOutcome> {
   const request = localProjectRequest(projectPath);
-  if ('error' in request) return request.error;
-  const result = await window.api.addProject(request.path);
-  return result.error ?? null;
+  if ('error' in request) return request;
+  return added(await window.api.addProject(request.path));
 }
 
-/** Add a machine over SSH. Answers with an error message, or null on success. */
-export async function addRemoteProject(fields: RemoteFields): Promise<string | null> {
+/** Add a machine over SSH, then reload the projects. */
+export async function addRemoteProject(fields: RemoteFields): Promise<AddOutcome> {
   const request = remoteProjectRequest(fields);
-  if ('error' in request) return request.error;
-  const result = await window.api.addRemoteProject(request.config);
-  return result.error ?? null;
+  if ('error' in request) return request;
+  return added(await window.api.addRemoteProject(request.config));
+}
+
+async function added(result: IpcResult): Promise<AddOutcome> {
+  if (result.error) return { error: result.error };
+  await loadProjects();
+  return { projectPath: String(result.projectPath) };
+}
+
+/** What the folder the user is typing would give, for the inline check (#171). */
+export function checkProjectFolder(typed: string): Promise<ProjectFolderCheck> {
+  return window.api.checkProjectFolder(typed);
+}
+
+/** The native folder picker; null when it was cancelled. */
+export function browseForFolder(): Promise<string | null> {
+  return window.api.browseFolder();
+}
+
+/** The project's repository in the browser; nothing happens for one without a web page. */
+export function openProjectOnGitHub(project: Project): void {
+  void window.api.openRepository(project.projectPath);
 }
 
 // ── The project picker's row actions ──
@@ -95,10 +120,9 @@ export async function removeRemoteProject(project: Project): Promise<boolean> {
   return true;
 }
 
-/** Hide a worktree project. Its session files stay on disk. */
-export async function hideWorktree(project: Project): Promise<boolean> {
-  const name = project.projectPath.split('/').pop();
-  if (!confirm(`Hide worktree "${name}"?\n\nSession files are not deleted.`)) return false;
+/** Hide a local project until it is added again. Its session files stay on disk. */
+export async function hideProject(project: Project): Promise<boolean> {
+  if (!confirm(`Hide ${projectLabel(project.projectPath)}?\n\nSession files are not deleted. Add the folder again to bring it back.`)) return false;
   await window.api.removeProject(project.projectPath);
   await loadProjects();
   return true;

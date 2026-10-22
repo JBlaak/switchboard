@@ -18,7 +18,7 @@ export function isSidebarToggleKey(e: KeyboardEvent): boolean {
 }
 
 /**
- * Cmd+A opens the new-session picker.
+ * Cmd+A opens the Projects modal.
  *
  * Except in a text field, where it stays Select All — the picker's own filter
  * among them.

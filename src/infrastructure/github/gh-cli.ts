@@ -25,6 +25,8 @@ import type { IssueKey, Plan, PlanSummary } from '../../domain/plan/model';
 import {
   PLANS_QUERY, closingIssuesQuery, planQuery, plansOfQuery, plansSearch, toClosingIssues, toPlan, toPlanSummaries, toPlansOf,
 } from './gh-plans';
+import { issuesQuery, pullRequestsInQuery, toRepositoryIssues, toRepositoryPullRequests } from './gh-overview';
+import type { RepositoryIssue, RepositoryPullRequest } from '../../domain/project/overview';
 import type { ReviewEvent } from '../../domain/session-work/review';
 import type {
   CheckRun, DiffSide, IssueRef, IssueStatus, MergeMethod, PendingComment, PullRequestStatus, ReviewThread, ThreadComment,
@@ -209,6 +211,22 @@ export class GhCli implements GitHubCli {
     if (wanted.length === 0) return [];
     const data = await this.#graphql(closingIssuesQuery(wanted), { owner: parts[1], name: parts[2] });
     return data ? toClosingIssues(data, repo, wanted) : null;
+  }
+
+  // ── The project page (#167): the queries and their mapping are in `gh-overview.ts` ──
+
+  async issuesIn(repo: string, options: { closed: boolean }): Promise<RepositoryIssue[] | null> {
+    const parts = REPO.exec(repo);
+    if (!parts) return null;
+    const data = await this.#graphql(issuesQuery(options.closed === true), { owner: parts[1], name: parts[2] });
+    return data ? toRepositoryIssues(data, repo) : null;
+  }
+
+  async pullRequestsIn(repo: string, options: { merged: boolean }): Promise<RepositoryPullRequest[] | null> {
+    const parts = REPO.exec(repo);
+    if (!parts) return null;
+    const data = await this.#graphql(pullRequestsInQuery(options.merged === true), { owner: parts[1], name: parts[2] });
+    return data ? toRepositoryPullRequests(data, repo) : null;
   }
 
   // ── Your review (C3) ──

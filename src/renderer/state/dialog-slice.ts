@@ -17,13 +17,12 @@ import type { SessionRow } from '../../domain/session/session';
 
 export type DialogRequest =
   /**
-   * "New Session": pick a project to start one in.
+   * "Projects": pick a project to start a session in, or add one (#171).
    *
-   * `initialPrompt` is what the session starts on, when the picker was opened
+   * `initialPrompt` is what the session starts on, when the modal was opened
    * from the box on the empty screen (#135, O3). Picking a plan ignores it.
    */
   | { readonly kind: 'projectPicker'; readonly initialPrompt?: string }
-  | { readonly kind: 'addProject' }
   /**
    * Resume a session with different options.
    *

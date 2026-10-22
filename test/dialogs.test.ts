@@ -6,18 +6,22 @@ import { labelRuns, rankProjects } from '../src/renderer/ui/dialogs/rank-project
 import {
   DANGEROUS_SKIP, applyPermissionSelection, pickPermission,
 } from '../src/renderer/ui/dialogs/permission-selection';
+import type { DialogRequest } from '../src/renderer/state/dialog-slice';
 import type { Project } from '../src/domain/project/project';
 import type { SessionOptions } from '../src/domain/launch/session-options';
 import type { SessionRow } from '../src/domain/session/session';
 
 // ── The dialog slice ──
 
-const opened = (kind: 'projectPicker' | 'addProject') => ({ type: 'dialogOpened' as const, request: { kind } });
-const pickerThenAdd = () => dialogReducer(dialogReducer(initialDialogState, opened('projectPicker')), opened('addProject'));
+const PICKER: DialogRequest = { kind: 'projectPicker' };
+/** The same modal opened again, carrying a prompt from the empty screen. */
+const PICKER_WITH_PROMPT: DialogRequest = { kind: 'projectPicker', initialPrompt: 'fix the login loop' };
+const opened = (request: DialogRequest) => ({ type: 'dialogOpened' as const, request });
+const pickerTwice = () => dialogReducer(dialogReducer(initialDialogState, opened(PICKER)), opened(PICKER_WITH_PROMPT));
 
 test('opening a dialog counts the opening', () => {
   /* When */
-  const state = dialogReducer(initialDialogState, opened('projectPicker'));
+  const state = dialogReducer(initialDialogState, opened(PICKER));
 
   /* Then */
   assert.deepStrictEqual(state, { open: { kind: 'projectPicker' }, seq: 1 });
@@ -25,18 +29,18 @@ test('opening a dialog counts the opening', () => {
 
 test('opening a dialog replaces whatever was open', () => {
   /* Given */
-  const state = dialogReducer(initialDialogState, opened('projectPicker'));
+  const state = dialogReducer(initialDialogState, opened(PICKER));
 
   /* When */
-  const next = dialogReducer(state, opened('addProject'));
+  const next = dialogReducer(state, opened(PICKER_WITH_PROMPT));
 
   /* Then */
-  assert.deepStrictEqual(next, { open: { kind: 'addProject' }, seq: 2 });
+  assert.deepStrictEqual(next, { open: PICKER_WITH_PROMPT, seq: 2 });
 });
 
 test('a close naming an earlier opening keeps the state', () => {
   /* Given */
-  const second = pickerThenAdd();
+  const second = pickerTwice();
 
   /* When */
   const next = dialogReducer(second, { type: 'dialogClosed', seq: 1 });
@@ -47,7 +51,7 @@ test('a close naming an earlier opening keeps the state', () => {
 
 test('a close naming the current opening closes it', () => {
   /* Given */
-  const second = pickerThenAdd();
+  const second = pickerTwice();
 
   /* When */
   const next = dialogReducer(second, { type: 'dialogClosed', seq: 2 });
@@ -66,15 +70,15 @@ test('closing when nothing is open keeps the state', () => {
 
 test('the root reducer carries the dialog slice', () => {
   /* When */
-  const state = rootReducer(initialRendererState(), opened('addProject'));
+  const state = rootReducer(initialRendererState(), opened(PICKER_WITH_PROMPT));
 
   /* Then */
-  assert.deepStrictEqual(state.dialog.open, { kind: 'addProject' });
+  assert.deepStrictEqual(state.dialog.open, PICKER_WITH_PROMPT);
 });
 
 test('the root reducer leaves the dialog slice alone for other events', () => {
   /* Given */
-  const state = rootReducer(initialRendererState(), opened('addProject'));
+  const state = rootReducer(initialRendererState(), opened(PICKER_WITH_PROMPT));
 
   /* When */
   const next = rootReducer(state, { type: 'usageFailed' });

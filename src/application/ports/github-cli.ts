@@ -12,6 +12,7 @@
 import type { GitHubAvailability, IssueStatus, PendingComment, PullRequestStatus } from '../../domain/session-work/model';
 import type { ReviewEvent } from '../../domain/session-work/review';
 import type { IssueKey, Plan, PlanSummary } from '../../domain/plan/model';
+import type { RepositoryIssue, RepositoryPullRequest } from '../../domain/project/overview';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
 export type { GitHubAvailability };
@@ -78,6 +79,23 @@ export interface GitHubCli {
    */
   closingIssues(repo: string, numbers: readonly number[]): Promise<PullRequestCloses[] | null>;
 
+  // ── The project page (#167): one GraphQL request each ──
+
+  /**
+   * The issues in `repo`, each with its labels, its parent and how many
+   * sub-issues it has. Open ones only, and closed ones too when `closed` is
+   * set. The 100 most recently updated, newest first. Null when unavailable.
+   */
+  issuesIn(repo: string, options: { closed: boolean }): Promise<RepositoryIssue[] | null>;
+
+  /**
+   * The pull requests in `repo`, each with its checks taken together, its
+   * review decision and the issues it closes. Open ones only, and merged ones
+   * too when `merged` is set. The 50 most recently updated, newest first. Null
+   * when unavailable.
+   */
+  pullRequestsIn(repo: string, options: { merged: boolean }): Promise<RepositoryPullRequest[] | null>;
+
   // ── Your review (C3): the only writes Switchboard makes to GitHub ──
 
   /** Start a pending review on a PR (by its GraphQL id), answering the review's id. */
@@ -95,6 +113,9 @@ export interface GitHubCli {
 
 /** The reads the plan service makes. */
 export type PlanReads = 'plan' | 'plansIn' | 'plansOf' | 'closingIssues';
+
+/** The reads the project page makes. */
+export type ProjectReads = 'issuesIn' | 'pullRequestsIn';
 
 /** A PR and the issues it closes. */
 export interface PullRequestCloses {
