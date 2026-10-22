@@ -13,7 +13,8 @@
  * Pure, so it is tested in node.
  */
 import { issueKeyString } from '../../../domain/plan/model';
-import type { IssueKey } from '../../../domain/plan/model';
+import type { IssueKey, NodeState } from '../../../domain/plan/model';
+import { levelBullets, type LevelBullet } from '../../../domain/plan/level-progress';
 import type {
   LooseIssueRow, OverviewPlan, OverviewPullRequestRow, PlanIssueRow, ProjectOverviewGroups,
 } from '../../../domain/plan/project-overview';
@@ -119,19 +120,14 @@ export function plansViewOf(page: ProjectPageState, projectPath: string): PlansV
 }
 
 /**
- * A plan's progress bar, one segment per issue in level order: the closed
- * ones, the next open one (in the accent, while the plan is open), and the rest.
+ * A plan's progress, one bullet per level; a plan nobody levelled yet is one
+ * level of all its sub-issues.
  */
-export function progressSegments(plan: Plan): ('closed' | 'next' | 'rest')[] {
-  let next = plan.state === 'open';
-  return plan.progress.segments.map(segment => {
-    if (segment === 'merged' || segment === 'closed' || segment === 'not-planned') return 'closed';
-    if (next) {
-      next = false;
-      return 'next';
-    }
-    return 'rest';
-  });
+export function planBullets(plan: Plan): LevelBullet[] {
+  if (!plan.levelled) return levelBullets([plan.progress.segments]);
+  const levels: NodeState[][] = Array.from({ length: plan.progress.levels }, () => []);
+  for (const row of plan.issues) levels[row.level - 1]?.push(row.segment);
+  return levelBullets(levels);
 }
 
 /** How many sessions are running on a plan: its issues', or the plan's own. */

@@ -75,6 +75,7 @@
   /* One-off hues, folded into the same family. */
   --sb-orange:        #eeab94;  /* needs-attention marker, section 4 label: peach ink */
   --sb-orange-rgb:    238, 171, 148;
+  --sb-progress-orange: #f2a35a;  /* a plan level in progress */
   --sb-amber:         #f0cf7e;  /* quota gauge, middle band */
   --sb-warning-text:  #f0cf7e;  /* inline caveats in settings */
   --sb-danger:        #ee8b8b;  /* form errors, destructive hovers */
@@ -181,6 +182,7 @@
 
     --sb-orange:        #9a3c22;
     --sb-orange-rgb:    154, 60, 34;
+    --sb-progress-orange: #d9771f;
     --sb-amber:         #b8860b;
     --sb-warning-text:  #7a5a0c;
     --sb-danger:        #c0392b;

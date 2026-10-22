@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { initialRendererState, rootReducer } from '../src/renderer/state/root';
 import { NO_MEMORY, overviewRequest } from '../src/renderer/state/project-page-slice';
 import {
-  LOOSE_SHOWN, cursorId, matchesFilter, pageRows, planRows, plansView, plansViewOf, progressSegments, runningCount,
+  LOOSE_SHOWN, cursorId, matchesFilter, pageRows, planRows, plansView, planBullets, plansViewOf, runningCount,
   sessionRows,
 } from '../src/renderer/ui/project-page/page-rows';
 import type { PageRow, PlansViewOptions } from '../src/renderer/ui/project-page/page-rows';
@@ -277,16 +277,28 @@ test('the filter finds loose issues by number, title or label, every word ignori
   assert.equal(matchesFilter('anything', '  '), true);
 });
 
-test('the progress bar marks closed issues, then the next open one, and greys the rest', () => {
+test('a plan shows one bullet per level, not one per issue', () => {
   /* Given */
   const login = groups().plans[0];
 
   /* When */
-  const segments = progressSegments(login);
+  const bullets = planBullets(login);
 
   /* Then */
-  assert.deepEqual(segments, ['closed', 'next', 'rest', 'rest']);
+  assert.deepEqual(bullets, ['done', 'open', 'open']);
   assert.equal(runningCount(login), 1);
+});
+
+test('a plan nobody levelled yet shows its sub-issues as one level', () => {
+  /* Given */
+  const epic = { ...groups().plans[0], levelled: false };
+  epic.progress = { ...epic.progress, segments: ['closed', 'ready'] };
+
+  /* When */
+  const bullets = planBullets(epic);
+
+  /* Then */
+  assert.deepEqual(bullets, ['in-progress']);
 });
 
 test('a plan with nothing behind its view state answers no rows until there is an answer', () => {
