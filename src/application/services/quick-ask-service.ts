@@ -18,6 +18,8 @@
  * capture keeps its `captureId`, and sending the same text again retries it
  * without routing it again, so James never stores it twice (C5).
  *
+ * ⌘Enter skips the routing call: a quick session starts on the text as typed.
+ *
  * The capture call is cold. Warming it would mean warming both servers'
  * processes each time the pop-up shows, before the route says which one, and
  * keeping a config with the token on disk while they wait; captures are the
@@ -27,7 +29,7 @@ import { routeCandidates, folderName, NO_MATCH_LINE } from '../../domain/ask/rou
 import {
   CAPTURE_SERVERS, captureArgs, noAnswerLine, readCaptureRun, readUndoRun, undoArgs,
 } from '../../domain/ask/capture';
-import { quickAskOutcome } from '../../domain/ask/quick-ask';
+import { NO_QUICK_FOLDER_LINE, quickAskOutcome } from '../../domain/ask/quick-ask';
 import { quickRouteArgs, quickRouteBootArgs, quickRoutePrompt, readQuickRouteRun } from '../../domain/ask/quick-route';
 import type { QuickAskOutcome, QuickAskReply } from '../../domain/ask/quick-ask';
 import type { CaptureReceipt } from '../../domain/ask/capture';
@@ -115,6 +117,20 @@ export class QuickAskService {
     const result = await router.route({ text, candidates, skills });
     log.info(`[quick-ask] routed: ${result.kind}`);
     return this.#follow(quickAskOutcome(result, text, this.#quickFolder()), text);
+  }
+
+  /**
+   * ⌘Enter: a quick session on the text as typed. No routing call, so there
+   * is nothing to wait on; without a Quick Session Folder there is nowhere to
+   * start it, and the text goes to the picker instead.
+   */
+  quick(text: string): QuickAskReply {
+    this.#choosing = null;
+    this.#failed = null;
+    const folder = this.#quickFolder();
+    if (folder) return this.#launch(folder, text);
+    this.#handOff(text, NO_QUICK_FOLDER_LINE);
+    return { kind: 'handedOff' };
   }
 
   /** A choice from the list, started on the rewritten prompt. */

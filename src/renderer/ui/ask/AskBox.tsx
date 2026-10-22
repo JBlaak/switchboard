@@ -20,8 +20,8 @@ import { AskField } from './AskField';
 import { askKey, boxTakesFocus, isCaretChord, opensPickerFromBox } from './ask-keys';
 import { openDialog } from '../dialogs/actions';
 import {
-  cancelAsk, changeAskText, closeAskChoices, hoverAskChoice, openPickerFromChoices, sendAsk, startAskChoice,
-  stepAskChoice, warmAsk,
+  cancelAsk, changeAskText, closeAskChoices, hoverAskChoice, openPickerFromChoices, sendAsk, sendQuickAsk,
+  startAskChoice, stepAskChoice, warmAsk,
 } from './actions';
 import type { JSX, KeyboardEvent } from 'react';
 
@@ -65,11 +65,14 @@ export function AskBox(): JSX.Element {
       (e.nativeEvent as MarkedEvent)._handled = true;
       return;
     }
-    const action = askKey(ask.phase, { key: e.key, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing });
+    const action = askKey(ask.phase, {
+      key: e.key, shiftKey: e.shiftKey, metaKey: e.metaKey, isComposing: e.nativeEvent.isComposing,
+    });
     if (!action) return;
     e.preventDefault();
     switch (action) {
       case 'send': void sendAsk(); return;
+      case 'quick': sendQuickAsk(); return;
       case 'cancel': cancelAsk(); return;
       case 'up': stepAskChoice(-1); return;
       case 'down': stepAskChoice(1); return;

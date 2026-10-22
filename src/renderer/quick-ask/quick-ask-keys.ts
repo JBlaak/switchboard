@@ -12,10 +12,8 @@ import type { QuickAskPhase } from '../state/quick-ask-slice';
 
 export type QuickAskKey = AskKey | 'dismiss' | 'undo';
 
-/** A key press, with ⌘ for ⌘Z on the saved line. */
-export interface QuickAskKeyPress extends AskKeyPress {
-  metaKey?: boolean;
-}
+/** A key press, with ⌘ for ⌘Enter and for ⌘Z on the saved line. */
+export type QuickAskKeyPress = AskKeyPress;
 
 export function quickAskKey(phase: QuickAskPhase, press: QuickAskKeyPress): QuickAskKey | null {
   if (press.isComposing) return null;

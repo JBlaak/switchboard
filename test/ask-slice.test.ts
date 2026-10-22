@@ -79,6 +79,39 @@ for (const [what, text] of [['an empty box', ''], ['a box of whitespace', ' \n\t
   });
 }
 
+test('⌘Enter with a quick folder clears the box without waiting', () => {
+  /* When */
+  const state = run(typed(), { type: 'askQuickSent', quickFolder: '/dev/scratch' });
+
+  /* Then */
+  assert.equal(state.ask.phase, 'editing');
+  assert.equal(state.ask.text, '');
+  assert.equal(state.ask.asked, 0);
+});
+
+test('⌘Enter without a quick folder keeps the text for the picker that carries it', () => {
+  /* When */
+  const state = run(typed(), { type: 'askQuickSent', quickFolder: '' });
+
+  /* Then */
+  assert.equal(state.ask.phase, 'editing');
+  assert.equal(state.ask.text, TEXT);
+  assert.equal(state.ask.handedOff, true);
+});
+
+test('⌘Enter on a blank box, or while waiting, does nothing', () => {
+  /* Given */
+  const blank = typed('  ');
+  const busy = waiting();
+
+  /* When */
+  const states = [run(blank, { type: 'askQuickSent', quickFolder: '/dev/scratch' }), run(busy, { type: 'askQuickSent', quickFolder: '/dev/scratch' })];
+
+  /* Then */
+  assert.equal(states[0], blank);
+  assert.equal(states[1], busy);
+});
+
 test('typing while waiting changes nothing: the box is locked', () => {
   /* Given */
   const state = waiting();

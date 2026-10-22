@@ -26,6 +26,15 @@ test('Enter sends', () => {
   assert.equal(action, 'send');
 });
 
+test('⌘Enter starts a quick session, and Shift+⌘Enter is a new line', () => {
+  /* When */
+  const actions = [press('Enter', { metaKey: true }), press('Enter', { metaKey: true, shiftKey: true })]
+    .map(key => askKey('editing', key));
+
+  /* Then */
+  assert.deepEqual(actions, ['quick', null]);
+});
+
 test('Shift+Enter is left to the box, for a new line', () => {
   /* When */
   const action = askKey('editing', press('Enter', { shiftKey: true }));

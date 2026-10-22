@@ -20,6 +20,15 @@ test('editing: Enter sends, Shift+Enter is a new line, Esc closes', () => {
   assert.deepEqual(actions, ['send', null, 'dismiss', null]);
 });
 
+test('editing: ⌘Enter sends to a quick session, and Shift+⌘Enter is a new line', () => {
+  /* When */
+  const actions = [{ ...press('Enter'), metaKey: true }, { ...press('Enter', true), metaKey: true }]
+    .map(key => quickAskKey('editing', key));
+
+  /* Then */
+  assert.deepEqual(actions, ['quick', null]);
+});
+
 test('waiting: Esc cancels, and Enter and Tab are kept from the box', () => {
   /* When */
   const actions = [press('Escape'), press('Enter'), press('Tab')].map(key => quickAskKey('waiting', key));

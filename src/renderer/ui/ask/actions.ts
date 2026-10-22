@@ -41,6 +41,19 @@ export async function sendAsk(): Promise<void> {
   follow(askOutcome(result, text));
 }
 
+/**
+ * ⌘Enter: a quick session on the text as typed, with no routing call, so
+ * nothing is waited on. Without a Quick Session Folder the picker carries it.
+ */
+export function sendQuickAsk(): void {
+  const before = getState().ask;
+  const quickFolder = getState().toolbar.quickSessionPath;
+  dispatch({ type: 'askQuickSent', quickFolder });
+  if (getState().ask === before) return;
+  if (quickFolder) void launchClaudeSession(projectAt(quickFolder), { initialPrompt: before.text });
+  else openDialog({ kind: 'projectPicker', initialPrompt: before.text });
+}
+
 /** The box got focus: have main boot a `claude` for the request that may follow (S2). */
 export function warmAsk(): void {
   void window.api.warmAskRoute().catch(() => {});

@@ -37,11 +37,20 @@ export function changeText(text: string): void {
 
 /** Enter: main routes the text (R1). */
 export async function send(): Promise<void> {
+  await sendBy(text => window.quickAsk.route(text));
+}
+
+/** ⌘Enter: main starts a quick session on the text as typed, without routing it. */
+export async function sendQuick(): Promise<void> {
+  await sendBy(text => window.quickAsk.quick(text));
+}
+
+async function sendBy(ask: (text: string) => Promise<QuickAskReply>): Promise<void> {
   const before = getState().box;
   dispatch({ type: 'askSent' });
   const sent = getState().box;
   if (sent === before) return;
-  await answer(sent.asked, window.quickAsk.route(sent.text));
+  await answer(sent.asked, ask(sent.text));
 }
 
 /** Esc while waiting: unlock straight away; main's answer to the cancel is dropped. */

@@ -17,7 +17,7 @@ import { store } from './store';
 import { overSlab, quickAskKey } from './quick-ask-keys';
 import { slabMotion } from './motion';
 import {
-  cancel, changeText, close, closeChoices, hoverChoice, openPicker, send, startChoice, stepChoice, undo,
+  cancel, changeText, close, closeChoices, hoverChoice, openPicker, send, sendQuick, startChoice, stepChoice, undo,
 } from './actions';
 import type { JSX, KeyboardEvent } from 'react';
 import type { QuickAskState } from '../state/quick-ask-slice';
@@ -86,6 +86,7 @@ export function QuickAsk(): JSX.Element {
     e.preventDefault();
     switch (action) {
       case 'send': void send(); return;
+      case 'quick': void sendQuick(); return;
       case 'cancel': cancel(); return;
       case 'up': stepChoice(-1); return;
       case 'down': stepChoice(1); return;

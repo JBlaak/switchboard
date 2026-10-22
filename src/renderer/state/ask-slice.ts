@@ -100,6 +100,12 @@ export function askReducer(state: AskState, event: RendererEvent): AskState {
       if (state.phase !== 'editing' || !canSend(state.text)) return state;
       return { ...state, phase: 'waiting', asked: state.asked + 1, handedOff: false };
 
+    // ⌘Enter: no routing, so no waiting. The session starts and clears the
+    // box; with no Quick Session Folder the picker carries the text instead.
+    case 'askQuickSent':
+      if (state.phase !== 'editing' || !canSend(state.text)) return state;
+      return event.quickFolder ? { ...state, text: '', handedOff: false } : { ...state, handedOff: true };
+
     // Unlocked straight away; main's `cancelled` answer comes later and is dropped.
     case 'askCancelled':
       return state.phase === 'waiting' ? { ...state, phase: 'editing' } : state;

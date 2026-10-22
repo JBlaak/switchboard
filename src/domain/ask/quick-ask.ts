@@ -7,6 +7,9 @@
  */
 import type { CaptureTarget, QuickRouteResult } from './model';
 
+/** Patch's line when ⌘Enter has no Quick Session Folder to start in. */
+export const NO_QUICK_FOLDER_LINE = 'There’s no Quick Session Folder yet. Pick a project, or set one in Settings?';
+
 export type QuickAskOutcome =
   /** Start a session there on `prompt`. */
   | { kind: 'start'; projectPath: string; prompt: string }

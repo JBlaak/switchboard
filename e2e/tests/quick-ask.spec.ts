@@ -353,6 +353,29 @@ test('no match with a quick folder starts a quick session on the text exactly as
   await expect(dialog(page, 'New Session')).toBeHidden();
 });
 
+test('⌘Enter starts a quick session on the text as typed, with no routing call', async ({ app, page, home }) => {
+  /* Given */
+  const quickFolder = home.projectPath(P.notes);
+  await setQuickSessionFolder(page, quickFolder);
+  const route = fakeRoute(home);
+  answerSure(route, home, 'Fix the flaky upload test.');
+  const before = launchedKeys(home);
+  const popUp = await open(app);
+  await box(popUp).fill(TEXT);
+
+  /* When */
+  await box(popUp).press('Meta+Enter');
+
+  /* Then */
+  await expect(line(popUp)).toHaveText('Started in notes');
+  const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
+  expect(launch.cwd).toBe(quickFolder);
+  expect(launch.argv.at(-1)).toBe(TEXT);
+  expect(route.calls().filter(call => call.prompt?.includes(TEXT))).toEqual([]);
+  await expect(dialog(page, 'New Session')).toBeHidden();
+  expect(await mainWindowFocused(app)).toBe(false);
+});
+
 test('with the main window closed, it opens without the focus and the session starts in it', async ({ app, home }) => {
   /* Given */
   answerSure(fakeRoute(home), home, 'Fix the flaky upload test.');
