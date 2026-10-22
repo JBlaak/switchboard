@@ -1,21 +1,33 @@
 /**
  * What the Plan view without a session does (F2, #128): open a plan picked in
- * the New Session picker in the main area, and close it again.
+ * the New Session picker in the main area, as the route `project → plan`
+ * (#168), and close it again.
  */
 import { dispatch } from '../../state/app-store';
-import { closeSessionWork } from '../session-work/actions';
 import { recordRecentPlan } from '../dialogs/recent-plans';
-import type { PlanPage } from '../../state/plan-page-slice';
 
-/** Show `page`'s plan in the main area, and remember it as opened in its project. */
-export function openPlanPage(page: PlanPage): void {
-  recordRecentPlan(page.projectPath, page);
-  // One page in the main area at a time: the Session work page gives way.
-  closeSessionWork();
-  dispatch({ type: 'planPageOpened', page });
+/** A plan, and the project it was picked in: new issue sessions start there. */
+export interface PlanPage {
+  readonly projectPath: string;
+  readonly repository: string;
+  readonly number: number;
 }
 
-/** Close the view; what it covered comes back. */
-export function closePlanPage(): void {
-  dispatch({ type: 'planPageClosed' });
+/**
+ * Show `page`'s plan in the main area, and remember it as opened in its
+ * project. Whatever had the main area gives way (the Session work page closes
+ * on the same event); the session on screen stays the one to return to.
+ */
+export function openPlanPage(page: PlanPage): void {
+  recordRecentPlan(page.projectPath, page);
+  dispatch({
+    type: 'projectOpened',
+    projectPath: page.projectPath,
+    view: { kind: 'plan', repository: page.repository, number: page.number },
+  });
+}
+
+/** Close the project: the session it covered comes back, focused, or the empty screen. */
+export function closeProject(): void {
+  dispatch({ type: 'projectClosed' });
 }

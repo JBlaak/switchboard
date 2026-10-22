@@ -30,11 +30,14 @@ export function openRow(rowId: string, sessionId: string, groupId?: string): voi
   if (session) void openSession(session);
 }
 
-/** Clicking the list anywhere but on a row or a control puts the session away. */
+/**
+ * Clicking the list anywhere but on a row or a control puts away whatever the
+ * main area shows, a project included: the empty screen takes its place.
+ */
 export function clearScreenFromList(target: Element): void {
   if (target.closest(
     '.session-item, .slug-group-header, .slug-group-more, .sessions-more-toggle, button, a, input')) return;
-  if (getState().view.activeSessionId) clearScreen();
+  if (getState().mainArea.route.kind !== 'empty') clearScreen();
 }
 
 // ── Row buttons ──

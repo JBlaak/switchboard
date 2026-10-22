@@ -19,7 +19,7 @@ import { initialRemoteState, rekeyRemote, remoteReducer } from './remote-slice';
 import { initialSessionListState, sessionListReducer } from './session-list-slice';
 import { initialSessionWorkState, rekeySessionWork, sessionWorkReducer } from './session-work-slice';
 import { initialPlanState, planReducer, rekeyPlan } from './plan-slice';
-import { initialPlanPageState, planPageReducer } from './plan-page-slice';
+import { highlightedSession, initialMainAreaState, mainAreaReducer, rekeyMainArea } from './main-area-slice';
 import { initialSettingsState, settingsReducer } from './settings-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialToolbarState, toolbarReducer } from './toolbar-slice';
@@ -39,7 +39,7 @@ import type { RemoteState } from './remote-slice';
 import type { SessionListState } from './session-list-slice';
 import type { SessionWorkState } from './session-work-slice';
 import type { PlanState } from './plan-slice';
-import type { PlanPageState } from './plan-page-slice';
+import type { MainAreaState } from './main-area-slice';
 import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
 import type { ToolbarState } from './toolbar-slice';
@@ -65,7 +65,7 @@ export interface RendererState {
   readonly terminal: TerminalState;
   readonly sessionWork: SessionWorkState;
   readonly plan: PlanState;
-  readonly planPage: PlanPageState;
+  readonly mainArea: MainAreaState;
   readonly ciStatus: CiStatusState;
   readonly ask: AskState;
 }
@@ -88,7 +88,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     terminal: initialTerminalState,
     sessionWork: initialSessionWorkState,
     plan: initialPlanState,
-    planPage: initialPlanPageState,
+    mainArea: initialMainAreaState,
     ciStatus: initialCiStatusState,
     ask: initialAskState,
   };
@@ -99,8 +99,9 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
 
   const view = viewReducer(state.view, event);
   // The session on screen *when the event arrived*: none of the activity
-  // events move it.
-  const activity = activityReducer(state.activity, event, state.view.activeSessionId);
+  // events move it. Not the active session: one covered by a project or the
+  // settings is not being looked at.
+  const activity = activityReducer(state.activity, event, highlightedSession(state.mainArea));
   const questions = questionsReducer(state.questions, event);
   // The sets as this event left them, so an entry comes and goes with its set.
   const answers = answersReducer(state.answers, event, questions);
@@ -116,13 +117,14 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const terminal = terminalReducer(state.terminal, event);
   const sessionWork = sessionWorkReducer(state.sessionWork, event);
   const plan = planReducer(state.plan, event);
-  const planPage = planPageReducer(state.planPage, event);
+  // Closing a page goes back to the active session as this event left it.
+  const mainArea = mainAreaReducer(state.mainArea, event, view.activeSessionId);
   const ciStatus = ciStatusReducer(state.ciStatus, event);
   const ask = askReducer(state.ask, event);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList, sessionWork, plan, planPage, ciStatus, ask,
+    terminal, sessionList, sessionWork, plan, mainArea, ciStatus, ask,
   });
 }
 
@@ -160,8 +162,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     sessionList: state.sessionList,
     sessionWork: rekeySessionWork(state.sessionWork, oldId, newId),
     plan: rekeyPlan(state.plan, oldId, newId),
-    // Keyed by project and issue, not by session.
-    planPage: state.planPage,
+    // The session on screen keeps the main area under its new id.
+    mainArea: rekeyMainArea(state.mainArea, oldId, newId),
     ciStatus: rekeyCiStatus(state.ciStatus, oldId, newId),
     // The box on the empty screen belongs to no session.
     ask: state.ask,

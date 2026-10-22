@@ -1,20 +1,17 @@
 /**
  * What the settings panel does outside its own form: reading and writing the
- * stored settings, applying them to the rest of the app, and swapping the
- * panel in for the terminal or the empty screen.
+ * stored settings, applying them to the rest of the app, and opening and
+ * closing the panel.
  *
- * The swap stays imperative: the terminal area, the placeholder and the panel
- * are containers in `index.html` shown and hidden by style, and a terminal can
- * only be refitted once it has a layout box again — which has to be true
- * synchronously, before `refitOpenTerminals` runs, not whenever React next
- * commits.
+ * The panel is swapped in for the terminal or the empty screen by the main
+ * area's route (`ui/main-area/install-main-area`), synchronously as the open
+ * or close is dispatched, so the terminals have their layout box back before
+ * `refitOpenTerminals` runs.
  */
 import { loadProjects } from '../../features/sessions/session-list';
 import { relayoutSessionList } from '../session-list/relayout';
-import { placeholder, settingsViewer, terminalArea, terminalHeader } from '../../lib/dom';
 import { dispatch } from '../../state/app-store';
-import { openSessions, view } from '../../state/session-store';
-import { showEmptyScreen } from '../../features/patch/patch';
+import { view } from '../../state/session-store';
 import { syncQuickSessionButton } from '../../features/sessions/quick-session';
 import { applyTerminalFont, refitOpenTerminals } from '../../features/terminal/terminal-manager';
 import { applyTerminalTheme } from '../../features/terminal/terminal-themes';
@@ -42,9 +39,6 @@ export async function openSettings(scope: SettingsScope, projectPath?: string): 
   ]);
   if (token !== latestOpen) return;
 
-  placeholder.style.display = 'none';
-  terminalArea.style.display = 'none';
-  settingsViewer.style.display = 'flex';
   dispatch({
     type: 'settingsOpened',
     scope,
@@ -58,17 +52,9 @@ export async function openSettings(scope: SettingsScope, projectPath?: string): 
   });
 }
 
-/** Close the panel and put back what it covered: the open terminal, or the empty screen. */
+/** Close the panel and put back what it covered: the session to return to, or the empty screen. */
 export function closeSettings(): void {
-  settingsViewer.style.display = 'none';
   dispatch({ type: 'settingsClosed' });
-  const { activeSessionId } = view;
-  if (activeSessionId && openSessions.has(activeSessionId)) {
-    terminalArea.style.display = '';
-    terminalHeader.style.display = '';
-  } else {
-    showEmptyScreen();
-  }
   // Terminals had no layout box while the panel covered them, so anything that
   // changed their metrics in the meantime (font size, line height) could not fit
   // itself and would leave output running off the right edge until the next resize.
@@ -118,9 +104,8 @@ export async function saveSettings(
 export async function hideProject(projectPath: string, shortName: string): Promise<void> {
   if (!confirm(`Hide project "${shortName}" from Switchboard?\n\nThis hides the project from the sidebar. Your session files are not deleted.`)) return;
   await window.api.removeProject(projectPath);
-  settingsViewer.style.display = 'none';
-  dispatch({ type: 'settingsClosed' });
-  showEmptyScreen();
+  // The empty screen in the panel's place.
+  dispatch({ type: 'screenCleared' });
   void loadProjects();
 }
 

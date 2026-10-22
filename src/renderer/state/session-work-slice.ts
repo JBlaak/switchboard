@@ -4,8 +4,8 @@
  *
  * The page is transient (D4). It belongs to the session on screen, so anything
  * that puts another session on screen, clears the screen, or opens the
- * settings panel in its place closes it — and so does showing its own session
- * again, which is what a click on that session's row does. Nothing about a
+ * settings panel or a project in its place closes it — and so does showing
+ * its own session again, which is what a click on that session's row does. Nothing about a
  * closed page is kept: opening it again starts from a skeleton.
  *
  * `canOpen` is the one thing kept across pages: every row asks once whether
@@ -381,8 +381,9 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
       return { ...state, page: null, canOpen };
     }
 
-    // The settings panel takes the main area in the page's place.
+    // The settings panel or a project takes the main area in the page's place.
     case 'settingsOpened':
+    case 'projectOpened':
       return state.page ? { ...state, page: null } : state;
 
     case 'headerRenamed':
