@@ -277,23 +277,7 @@
   color: var(--sb-text-dimmest);
 }
 
-.pp-segments {
-  display: flex;
-  flex-shrink: 0;
-  gap: 3px;
-  margin-left: auto;
-
-  span {
-    display: block;
-    width: 18px;
-    height: 6px;
-    border-radius: 3px;
-    background: var(--sb-border-strong);
-  }
-
-  .is-closed { background: var(--sb-purple); }
-  .is-next { background: var(--sb-accent); }
-}
+.pp-bullets { margin-left: auto; }
 
 .pp-fraction {
   flex-shrink: 0;

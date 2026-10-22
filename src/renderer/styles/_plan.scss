@@ -296,17 +296,29 @@ a.pv-num:hover { color: var(--sb-accent); }
   .pv-here { color: var(--sb-accent); }
 }
 
-.pv-progress {
+/* A plan's progress, one bullet per level: the header and the project page. */
+.level-bullets {
   display: flex;
-  gap: 4px;
-  width: 300px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
 }
 
-.pv-progress-seg {
-  flex: 1;
+.level-bullet {
+  display: block;
+  width: 8px;
   height: 8px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, var(--sb-purple) 0 var(--pv-share), var(--sb-line) var(--pv-share) 100%);
+  border-radius: 50%;
+  background: var(--sb-text-dimmest);
+
+  &.is-done { background: var(--sb-green); }
+  &.is-in-progress { background: var(--sb-progress-orange); }
+}
+
+.pv-progress {
+  gap: 8px;
+
+  .level-bullet { width: 10px; height: 10px; }
 }
 
 /* ---- Warnings (D5) ---- */

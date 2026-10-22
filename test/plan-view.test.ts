@@ -76,6 +76,24 @@ test('the bands say where you are, what cleared early, and what is locked (D2)',
   assert.equal(levelStatus(p2, layout2, 3).label, 'Cleared early');
 });
 
+test('the header shows one coloured bullet per level, not one per issue (D2)', () => {
+  /* Given */
+  const p = plan([
+    merged(1), merged(2), merged(3), merged(4),
+    merged(5, [1]), needs(6, [1], { pullRequests: [pr(60, 'open')] }), needs(7, [1]), needs(8, [1]),
+    ...[9, 10, 11, 12].map(n => needs(n, [5])),
+    ...[13, 14, 15, 16].map(n => needs(n, [9])),
+    ...[17, 18, 19, 20].map(n => needs(n, [13])),
+  ]);
+
+  /* When */
+  const html = renderToStaticMarkup(createElement(PlanViewContent, { plan: p }));
+
+  /* Then */
+  const bullets = [...html.matchAll(/class="level-bullet is-([a-z-]+)"/g)].map(match => match[1]);
+  assert.deepEqual(bullets, ['done', 'in-progress', 'open', 'open', 'open']);
+});
+
 test('starting a Locked issue early says what it stacks on (A3)', () => {
   /* Given */
   const stacked = plan([needs(1, [], { pullRequests: [pr(50, 'open')] }), needs(2, [1])]);

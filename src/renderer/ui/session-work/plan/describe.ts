@@ -3,6 +3,7 @@
  * status, the warnings, a node's last line and the header's counts. Pure, so
  * they are tested in node next to the slice.
  */
+import { levelBullets, type LevelBullet } from '../../../../domain/plan/level-progress';
 import { sameIssue } from '../../../../domain/plan/model';
 import type { IssueKey, NodeState, Plan, PlanIssue, PlanLayout, PlanSummary, PlanWarning } from '../../../../domain/plan/model';
 
@@ -47,10 +48,9 @@ export function hereLabel(layout: PlanLayout): string {
   return layout.current === null ? 'Plan cleared' : `Level ${layout.current} of ${layout.levels.length}`;
 }
 
-/** How much of each level is closed, 0 to 1, for the progress bar (D2). */
-export function levelProgress(plan: Plan, layout: PlanLayout): number[] {
-  return layout.levels.map(row =>
-    row.length ? row.filter(issue => issueIn(plan, issue)?.state === 'closed').length / row.length : 0);
+/** One bullet per level for the header's progress (D2). */
+export function planLevelBullets(layout: PlanLayout): LevelBullet[] {
+  return levelBullets(layout.levels.map(row => row.map(issue => layout.stateOf(issue))));
 }
 
 export function closedCount(plan: Plan): number {

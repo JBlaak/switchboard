@@ -22,7 +22,8 @@ import type { IssueKey } from '../../../domain/plan/model';
 import type { IssueLabel, ProjectPullRequest } from '../../../domain/project/overview';
 import type { IssueRowStatus, PlanIssueRow } from '../../../domain/plan/project-overview';
 import type { ProjectIssueStart } from '../../state/project-page-slice';
-import { cursorId, plansViewOf, progressSegments, runningCount, type PlanOnScreen } from './page-rows';
+import { LevelBullets } from '../session-work/plan/LevelBullets';
+import { cursorId, planBullets, plansViewOf, runningCount, type PlanOnScreen } from './page-rows';
 import { openIssueOnGitHub, openProjectPlan, startPageIssueSession } from './actions';
 import { dispatch } from '../../state/app-store';
 import type { SectionProps } from './slots';
@@ -141,9 +142,7 @@ function PlanRows({ projectPath, onScreen, cursor, start }: PlanRowsProps): JSX.
         {running > 0 && (
           <span className="pp-pill is-running"><span className="pp-pill-dot" />{running} running</span>
         )}
-        <span className="pp-segments" aria-hidden="true">
-          {progressSegments(plan).map((segment, i) => <span key={i} className={'is-' + segment} />)}
-        </span>
+        <LevelBullets bullets={planBullets(plan)} className="pp-bullets" />
         <span className="pp-fraction" title={`${plan.progress.closed} of ${plan.progress.total} closed`}>
           {plan.progress.closed}/{plan.progress.total}
         </span>

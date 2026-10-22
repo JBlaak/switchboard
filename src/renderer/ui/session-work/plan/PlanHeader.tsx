@@ -1,15 +1,16 @@
 /**
  * The plan's header (D2): where it lives, its title and the parent above it,
- * the level you are on, how much is closed, the linked PRs, and a progress bar
- * with one segment per level.
+ * the level you are on, how much is closed, the linked PRs, and one progress
+ * bullet per level.
  */
 import type { JSX } from 'react';
 import type { Plan, PlanLayout } from '../../../../domain/plan/model';
-import { closedCount, hereLabel, issueUrl, levelProgress, linkedPrCount, shortRef } from './describe';
+import { closedCount, hereLabel, issueUrl, linkedPrCount, planLevelBullets, shortRef } from './describe';
+import { LevelBullets } from './LevelBullets';
 import type { PlanHandlers } from './types';
 
 export function PlanHeader({ plan, layout, on }: { plan: Plan; layout: PlanLayout; on: PlanHandlers }): JSX.Element {
-  const progress = levelProgress(plan, layout);
+  const bullets = planLevelBullets(layout);
   return (
     <div className="pv-header">
       <div className="pv-heading">
@@ -45,17 +46,7 @@ export function PlanHeader({ plan, layout, on }: { plan: Plan; layout: PlanLayou
           <span><b>{closedCount(plan)}</b> of {plan.issues.length} closed</span>
           <span><b>{linkedPrCount(plan)}</b> PRs linked</span>
         </div>
-        {progress.length > 0 && (
-          <div className="pv-progress" role="img" aria-label="Progress by level">
-            {progress.map((share, i) => (
-              <div
-                key={i}
-                className="pv-progress-seg"
-                style={{ ['--pv-share' as string]: Math.round(share * 100) + '%' }}
-              />
-            ))}
-          </div>
-        )}
+        {bullets.length > 0 && <LevelBullets bullets={bullets} className="pv-progress" />}
       </div>
     </div>
   );
