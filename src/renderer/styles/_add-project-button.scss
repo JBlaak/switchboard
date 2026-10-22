@@ -1,9 +1,8 @@
-/* ========== ADD PROJECT BUTTON ==========
-   Shaped like the filter toggles beside them: borderless, a soft wash on
-   hover. */
+/* ========== THE CREATE BUTTONS ==========
+   The quick session and the Projects button (#171), shaped like the filter
+   toggles beside them: borderless, a soft wash on hover. */
 #quick-session-btn,
-#new-session-btn,
-#add-project-btn {
+#projects-btn {
   background: transparent;
   border: none;
   color: var(--sb-text-faint);
@@ -25,18 +24,36 @@
 /* The first of the create buttons pushes the group right; the lightning bolt
    is hidden until a quick session folder is set. */
 #quick-session-btn,
-#quick-session-btn[hidden] + #new-session-btn { margin-left: auto; }
+#quick-session-btn[hidden] + #projects-btn { margin-left: auto; }
 #quick-session-btn[hidden] { display: none; }
 
-#add-project-btn:hover {
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  color: var(--sb-text-hover);
-}
-
-/* The buttons in the row that create something; they take the mint fill on
-   hover so they read as the primary actions next to the view toggles. */
+/* They take the mint fill on hover, so they read as the primary actions next
+   to the view toggles. */
 #quick-session-btn:hover,
-#new-session-btn:hover {
+#projects-btn:hover {
   background: var(--sb-mint);
   color: var(--sb-accent);
+}
+
+/* With no project yet, a mint dot says where to start. */
+#projects-btn {
+  position: relative;
+}
+
+.projects-btn-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sb-accent);
+}
+
+/* The empty list's pointer at it. */
+.session-list-first-run {
+  margin: 14px var(--sb-sidebar-gutter) 0;
+  color: var(--sb-text-faint);
+  font-size: 12px;
+  line-height: 17px;
 }

@@ -20,6 +20,7 @@ import { systemClock } from '../application/ports/clock';
 import { uuidGenerator } from '../application/ports/ids';
 import { QuestionService } from '../application/services/question-service';
 import { ProjectListService } from '../application/services/project-list-service';
+import { ProjectFolderService } from '../application/services/project-folder-service';
 import { RemoteConnectionSupervisor } from '../application/services/remote-connection-supervisor';
 import { ScheduleService } from '../application/services/schedule-service';
 import { SessionIndex } from '../application/services/session-index';
@@ -110,6 +111,8 @@ export interface Container {
 
   readonly sessionIndex: SessionIndex;
   readonly projects: ProjectListService;
+  /** Checks a folder before it is added as a project (#171). */
+  readonly projectFolders: ProjectFolderService;
   readonly usage: OAuthUsageService;
   readonly schedules: ScheduleService;
   readonly weather: WeatherService;
@@ -312,6 +315,7 @@ export function buildContainer(): Container {
   const appearance = new ElectronAppearanceGateway();
   const sleep = new PmsetSleepControl(log);
   const git = new GitCliRemotes();
+  const projectFolders = new ProjectFolderService({ fs, git: workspace, remotes: git });
 
   // `gh` runs with the login shell's PATH: launched from the Finder, the app's
   // own PATH has no Homebrew in it. `git` is /usr/bin's and needs nothing.
@@ -430,7 +434,7 @@ export function buildContainer(): Container {
     settings, repository, searchIndex, transcripts, fs,
     registry, terminals, shells, lifecycle, remote, launcher, transitions,
     questions, questionHook,
-    sessionIndex, projects, usage, schedules, weather, updates, sessionWork, sessionActions, prWatch,
+    sessionIndex, projects, projectFolders, usage, schedules, weather, updates, sessionWork, sessionActions, prWatch,
     review,
     issueSessions,
     plans,

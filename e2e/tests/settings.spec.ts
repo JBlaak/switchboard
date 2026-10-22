@@ -8,7 +8,7 @@
  * terminal or the empty screen, and what saving changes elsewhere.
  */
 import { test, expect, forEachAppearance } from '../support/test';
-import { dialog, expectScreen, openSession, rowButton, sidebar, terminalHeader } from '../support/app';
+import { chooseProjectAction, expectScreen, openSession, sidebar, terminalHeader } from '../support/app';
 import { pressQuickAsk, refuseQuickAskHotkey, setHostStub } from '../support/main-process';
 import { answerDialogs, dialogsAsked } from '../support/native-dialogs';
 import { LABEL, P, S, standardFixture } from '../fixtures/standard';
@@ -23,8 +23,8 @@ async function openGlobalSettings(page: Page) {
 }
 
 async function openProjectSettings(page: Page, label: string) {
-  await page.getByRole('button', { name: 'New session', exact: true }).click();
-  await rowButton(dialog(page, 'New Session').getByText(label, { exact: true }), 'Project settings').click();
+  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await chooseProjectAction(page, label, 'Project settings');
   await expect(projectTitle(page, label)).toBeVisible();
 }
 

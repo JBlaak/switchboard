@@ -135,6 +135,19 @@ export function rowButton(row: Locator, name: string): Locator {
 }
 
 /**
+ * Pick an entry from a project's ⋯ menu in the open Projects modal (#171).
+ *
+ * Only the highlighted row shows its ⋯, so the pointer goes over the row
+ * first, which highlights it.
+ */
+export async function chooseProjectAction(page: Page, label: string | RegExp, item: string | RegExp): Promise<void> {
+  const modal = dialog(page, 'Projects');
+  await modal.getByText(label, { exact: true }).hover();
+  await modal.getByRole('button', { name: /^More for / }).click();
+  await page.getByRole('menuitem', { name: item, exact: true }).click();
+}
+
+/**
  * A modal dialog, by its title.
  *
  * The vanilla dialogs are plain divs with an `<h3>` title, so this is the
