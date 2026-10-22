@@ -126,7 +126,7 @@ test('a Ready issue gets a worktree on its own branch off the fetched default br
     ok: true,
     worktreePath: ROOT + '/.claude/worktrees/114-zoom-and-pan',
     branch: '114-zoom-and-pan',
-    prompt: 'Work on #114, part of #112. Read the epic and the issue first. Open a PR that says "Closes #114".',
+    prompt: 'Work on #114, part of #112. Read the epic and the issue first. Open a PR titled with a short summary of what you implemented, with "Closes #114" in its description.',
   });
   assert.deepEqual(git.writes, [
     'fetch main',

@@ -50,7 +50,7 @@ test('the session prompt names the issue and the epic', () => {
   const prompt = issueSessionPrompt(issue, plan);
 
   /* Then */
-  assert.equal(prompt, 'Work on #114, part of #112. Read the epic and the issue first. Open a PR that says "Closes #114".');
+  assert.equal(prompt, 'Work on #114, part of #112. Read the epic and the issue first. Open a PR titled with a short summary of what you implemented, with "Closes #114" in its description.');
 });
 
 test('a stacked session is asked to branch off the blocker\'s PR and target it', () => {
@@ -63,7 +63,7 @@ test('a stacked session is asked to branch off the blocker\'s PR and target it',
 
   /* Then */
   assert.equal(prompt,
-    'Work on #114, part of #112. Read the epic and the issue first. Open a PR that says "Closes #114". ' +
+    'Work on #114, part of #112. Read the epic and the issue first. Open a PR titled with a short summary of what you implemented, with "Closes #114" in its description. ' +
     'Branch off PR #118\'s branch and open your PR against it.');
 });
 
