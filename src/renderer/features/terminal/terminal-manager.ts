@@ -25,7 +25,6 @@ import { dispatch } from '../../state/app-store';
 import { setActiveSession } from '../sessions/active-session';
 import { headerNameFor } from '../sessions/terminal-header';
 import { loadShellProfile } from '../../ui/terminal/actions';
-import { placeholder, settingsViewer, terminalArea } from '../../lib/dom';
 import { handleSessionNavKey, isSessionNavKey } from '../terminal/session-nav';
 import { isSidebarToggleKey, toggleSidebar } from '../../ui/toolbar/actions';
 import {
@@ -399,21 +398,15 @@ export function showSession(sessionId: string): void {
   const session = sessionMap.get(sessionId) || (entry && entry.session);
 
   // React puts the session's container and header on screen, and highlights its
-  // row in the sidebar. Rendered now: the terminal cannot take focus or measure
-  // itself until it is displayed.
+  // row in the sidebar; the main area's route swaps the terminal area in for
+  // whatever page had it (`ui/main-area/install-main-area`). Rendered now: the
+  // terminal cannot take focus or measure itself until it is displayed.
   flushSync(() => {
     setActiveSession(sessionId);
     dispatch({ type: 'sessionShown', sessionId, name: session ? headerNameFor(session) : '' });
   });
   clearNotifications(sessionId);
 
-  // Terminals and the settings panel share the main area, and only one may be
-  // visible: putting the terminal back hides settings, so it cannot linger
-  // behind it.
-  placeholder.style.display = 'none';
-  settingsViewer.style.display = 'none';
-  dispatch({ type: 'settingsClosed' });
-  terminalArea.style.display = '';
   if (session) void loadShellProfile(session);
   if (entry) {
     entry.terminal.focus();

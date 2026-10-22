@@ -142,14 +142,17 @@ modules in `features/`:
   owns everything inside: keys, fit, focus, drag-and-drop. Its output goes
   through `features/terminal/write-buffer`, which batches the byte stream
   into frames and holds back synchronised-update blocks.
-- **The main area's panel swap.** The empty screen, the terminal area, the
-  settings panel and the Session work page are shown and hidden by style
-  (`lib/dom`), because a terminal can only take focus or be refitted once its
-  panel has a layout box, synchronously. The Session work page follows its
-  slice (`ui/session-work/install-session-work`): it closes whenever another
-  session, the empty screen or the settings panel takes the main area. The
-  Plan view without a session (`ui/plan-page/install-plan-page`) is swapped
-  the same way, and closes for the same reasons and for the Session work page.
+- **The main area's panel swap.** What the main area shows is one route
+  (`state/main-area-slice`): a session, a session's work page, a project
+  (so far the Plan view without a session), the app settings, or the empty
+  screen. The panels are shown and hidden by style (`lib/dom`), following
+  that route in one place (`ui/main-area/install-main-area`), because a
+  terminal can only take focus or be refitted once its panel has a layout
+  box, synchronously. Surfaces only dispatch what they want on screen; none
+  of them closes itself on another's events. The sidebar highlight is derived
+  from the route (`highlightedSession`), not from the active session id,
+  which is the session to return to: the one Esc on a project, closing the
+  settings or the Session work page goes back to.
 - **Motion.** The springs, the list's reflow and the confetti
   (`lib/motion/*`), and the question panel's motion spec, play on the DOM
   React committed, measured before and after.

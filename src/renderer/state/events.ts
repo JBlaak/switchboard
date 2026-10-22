@@ -18,7 +18,7 @@ import type { UpdateNotice } from '../../domain/update/release';
 import type { SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
 import type { DiffMode, ImageDefaults, ReviewKind, WorkTab } from './session-work-slice';
 import type { PlanSource, SessionPlansAnswer } from './plan-slice';
-import type { PlanPage } from './plan-page-slice';
+import type { ProjectView } from './main-area-slice';
 import type { IssueKey } from '../../domain/plan/model';
 import type { IssueSessionStart } from '../../domain/plan/issue-session';
 import type { ImageMode } from '../ui/session-work/image-compare/modes/types';
@@ -257,11 +257,13 @@ export type LocalEvent =
   | { type: 'checkLogRequested'; url: string }
   /** Main answered: the log's end, or null when there is none to show. */
   | { type: 'checkLogLoaded'; url: string; text: string | null }
-  // The Plan view without a session (#128); see `plan-page-slice`.
-  /** A plan picked in the New Session picker takes the main area. */
-  | { type: 'planPageOpened'; page: PlanPage }
-  /** Its Close, or Esc. */
-  | { type: 'planPageClosed' }
+  // What the main area shows (#168); see `main-area-slice`.
+  /** A project takes the main area, showing `view` (so far: a plan picked in the New Session picker). */
+  | { type: 'projectOpened'; projectPath: string; view: ProjectView }
+  /** Its Close, or Esc: back to the session to return to, or the empty screen. */
+  | { type: 'projectClosed' }
+  /** The empty screen, asked for outright, whatever had the main area. */
+  | { type: 'screenCleared' }
   // Asking Patch on the empty screen (#135); see `ask-slice`.
   /** The user typed in the box. */
   | { type: 'askTextChanged'; text: string }

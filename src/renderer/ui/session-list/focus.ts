@@ -8,6 +8,7 @@
 import { isSidebarFocused } from '../../features/sessions/sidebar-keyboard';
 import { getState } from '../../state/app-store';
 import { openSessions } from '../../state/session-store';
+import { highlightedSession } from '../../state/main-area-slice';
 
 export function restoreTerminalFocus(): void {
   if (isSidebarFocused()) return;
@@ -20,7 +21,8 @@ export function restoreTerminalFocus(): void {
   // status change, so the redraw it causes must not hand keys to the terminal.
   if (active?.closest('section.qp')) return;
 
-  const { activeSessionId } = getState().view;
-  const open = activeSessionId ? openSessions.get(activeSessionId) : undefined;
+  // Only the terminal on screen: a project or the settings keep the keys.
+  const onScreen = highlightedSession(getState().mainArea);
+  const open = onScreen ? openSessions.get(onScreen) : undefined;
   open?.terminal.focus();
 }
