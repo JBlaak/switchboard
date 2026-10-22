@@ -5,8 +5,8 @@
  * One flat list across every project, never grouped by directory. Sessions
  * waiting on the user sort to the top, then the ones that finished unread, then
  * the ones still working, then pinned, then the rest — each block most recent
- * first. Sessions sharing a slug fold into a group, but only within their own
- * project.
+ * first, except Working, which is newest *started* first (see `sortKey`).
+ * Sessions sharing a slug fold into a group, but only within their own project.
  *
  * The list is *anchored*: the session the user is working in keeps the slot it
  * already had, so the list cannot slide out from under the cursor while the
@@ -19,7 +19,7 @@
  */
 import { byMostRecentlyModified } from '../../domain/session/session';
 import { cleanDisplayName } from '../../domain/session/title';
-import { TIER_ORDER, itemTier, rowSurvivesTruncation } from '../../domain/session/tiers';
+import { TIER_ORDER, TIER_RUNNING, itemTier, rowSurvivesTruncation } from '../../domain/session/tiers';
 import { formatDate, localDateKey } from '../lib/format';
 import type { Project } from '../../domain/project/project';
 import type { SessionRow } from '../../domain/session/session';
@@ -52,6 +52,8 @@ export interface ListItem {
   readonly entry: SessionListEntry;
   /** Epoch ms of the newest session behind this entry. */
   readonly sortTime: number;
+  /** Epoch ms the newest-started session behind this entry was started. */
+  readonly startTime: number;
   readonly pinned: boolean;
   /** The highest tier of its sessions, before pinning is taken into account. */
   readonly tier: number;
@@ -268,6 +270,7 @@ export function listItems(
       items.push({
         entry,
         sortTime: new Date(session.modified).getTime(),
+        startTime: new Date(session.created).getTime(),
         pinned: !!session.starred,
         tier: inputs.tierOf(session.sessionId),
         remote: session.type === 'remote',
@@ -289,6 +292,7 @@ export function listItems(
       items.push({
         entry,
         sortTime: Math.max(...sorted.map(s => new Date(s.modified).getTime())),
+        startTime: Math.max(...sorted.map(s => new Date(s.created).getTime())),
         pinned: sorted.some(s => !!s.starred),
         tier: Math.max(...sorted.map(s => inputs.tierOf(s.sessionId))),
         remote: sorted.some(s => s.type === 'remote'),
@@ -300,6 +304,19 @@ export function listItems(
 }
 
 // ── Ordering ──
+
+/**
+ * The time an entry is ordered by within its section.
+ *
+ * A working session writes to its transcript all the time, so its last
+ * activity keeps moving and ordering Working by it reshuffled the block with
+ * every write. When it was started never changes: the block stays put while
+ * its sessions work, and a newly started one lands on top. The other sections
+ * only change when a session lands in or leaves them, so recency suits them.
+ */
+function sortKey(item: ListItem, tier: number): number {
+  return tier === TIER_RUNNING ? item.startTime : item.sortTime;
+}
 
 /**
  * Move the anchored entry back to the index it held last time, leaving
@@ -337,7 +354,7 @@ export function orderEntries(
   for (const tier of TIER_ORDER) {
     const bucket = buckets.get(tier);
     if (!bucket) continue;
-    bucket.sort((a, b) => b.sortTime - a.sortTime);
+    bucket.sort((a, b) => sortKey(b, tier) - sortKey(a, tier));
     // Anchoring only holds while the session stays in the same block: once its
     // tier changes, the slot it used to occupy belongs to another section, and
     // holding it there would file the row under the wrong heading.
