@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isArchiveSessionKey, isBareQuickSessionKey, isQuickSessionKey, isSessionNavKey, isSessionPickerKey,
-  isSidebarFocusKey, isSidebarToggleKey, listCursorKey, sessionNavDirection,
+  isProjectSettingsKey, isSidebarFocusKey, isSidebarToggleKey, listCursorKey, sessionNavDirection,
 } from '../src/renderer/lib/shortcut-keys';
 
 /** Where a key lands: nowhere in particular, a text field, or xterm's own textarea. */
@@ -30,6 +30,23 @@ function keydown(press: Press, landing: Landing = 'page'): KeyboardEvent {
 }
 
 const cmd = (code: string, key = '') => keydown({ code, key, metaKey: true });
+
+// ── Cmd+, ──
+
+test('Cmd+, is the project settings key, in a text field too, and no other chord with the comma is', () => {
+  /* Given */
+  const presses = [
+    cmd('Comma', ','), keydown({ code: 'Comma', key: ',', metaKey: true }, 'textField'),
+    keydown({ code: 'Comma', key: ',' }), keydown({ code: 'Comma', key: '<', metaKey: true, shiftKey: true }),
+    keydown({ code: 'Comma', key: ',', metaKey: true, altKey: true }), keydown({ code: 'Comma', key: ',', ctrlKey: true }),
+  ];
+
+  /* When */
+  const results = presses.map(isProjectSettingsKey);
+
+  /* Then */
+  assert.deepEqual(results, [true, true, false, false, false, false]);
+});
 
 // ── Cmd+L ──
 

@@ -22,7 +22,7 @@ export function SidebarToolbar(): JSX.Element {
         id="global-settings-btn"
         title="Global settings"
         dangerouslySetInnerHTML={GEAR}
-        onClick={() => void openSettings('global')}
+        onClick={() => void openSettings()}
       />
       <button id="sidebar-collapse-btn" title="Hide sidebar" onClick={() => setSidebarCollapsed(true)}>
         <SidebarCollapseIcon />

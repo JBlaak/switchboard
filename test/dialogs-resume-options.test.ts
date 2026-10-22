@@ -42,6 +42,14 @@ test('the fields start from the effective settings', () => {
   assert.deepEqual(selection, { mode: 'plan', dangerousSkip: false });
 });
 
+test('a project that stores Default as an empty mode opens on Default', () => {
+  /* When */
+  const selection = initialPermissionSelection({ ...PROJECT, permissionMode: '' });
+
+  /* Then */
+  assert.deepEqual(selection, { mode: null, dangerousSkip: false });
+});
+
 test('a project that skips permissions opens with Dangerous Skip on', () => {
   /* When */
   const selection = initialPermissionSelection({ permissionMode: 'plan', dangerouslySkipPermissions: true });

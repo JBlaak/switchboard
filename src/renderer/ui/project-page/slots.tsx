@@ -4,9 +4,8 @@
  *
  * - `PlansSection`, the plans and the issues outside them: #174.
  * - `PullRequestsSection` and `WorktreesSection`: #175.
- * - `ProjectSettingsSlot`, the route `project → settings`: #176. Until then
- *   the header's Settings button opens the settings panel instead, so nothing
- *   routes here yet.
+ *
+ * The route `project → settings` (#176) is `ProjectSettings`.
  *
  * Each renders nothing for now, so the page shows only what the renderer
  * already has. Their props are what the page gives each of them; the overview
@@ -31,10 +30,5 @@ export function PullRequestsSection(_props: SectionProps): JSX.Element | null {
 
 /** Worktrees, under the sessions in the right column (#175). */
 export function WorktreesSection(_props: SectionProps): JSX.Element | null {
-  return null;
-}
-
-/** The project's settings, as the page's `settings` view (#176). */
-export function ProjectSettingsSlot(_props: SectionProps): JSX.Element | null {
   return null;
 }

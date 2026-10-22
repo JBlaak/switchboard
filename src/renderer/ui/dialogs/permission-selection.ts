@@ -21,7 +21,7 @@ export const DANGEROUS_SKIP = 'dangerous-skip';
 
 /** The selection a dialog opens with: the project's effective settings. */
 export function initialPermissionSelection(settings: EffectiveSettings): PermissionSelection {
-  return { mode: settings.permissionMode ?? null, dangerousSkip: !!settings.dangerouslySkipPermissions };
+  return { mode: settings.permissionMode || null, dangerousSkip: !!settings.dangerouslySkipPermissions };
 }
 
 /**

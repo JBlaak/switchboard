@@ -12,7 +12,8 @@ import { projectLabel } from '../../features/sessions/project-label';
 import { ProjectHeader } from './ProjectHeader';
 import { SessionsSection } from './SessionsSection';
 import { PlansSection, PullRequestsSection, WorktreesSection } from './slots';
-import { closeProject } from './actions';
+import { closeProject, openProjectSettings } from './actions';
+import { isProjectSettingsKey } from '../../lib/shortcut-keys';
 
 export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.Element {
   const root = useRef<HTMLDivElement>(null);
@@ -23,6 +24,11 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
   }, [projectPath]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    if (isProjectSettingsKey(e.nativeEvent)) {
+      e.preventDefault();
+      openProjectSettings(projectPath);
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
     if ((e.target as HTMLElement).matches('input, textarea, select, [contenteditable="true"]')) return;
     if (e.key === 'Escape') {

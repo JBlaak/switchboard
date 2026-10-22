@@ -14,7 +14,7 @@ export { isBareQuickSessionKey, isQuickSessionKey } from '../../lib/shortcut-key
 export async function launchQuickSession(): Promise<void> {
   const path = await quickSessionPath();
   if (!path) {
-    await openSettings('global');
+    await openSettings();
     return;
   }
   await launchClaudeSession(projectStub(path));

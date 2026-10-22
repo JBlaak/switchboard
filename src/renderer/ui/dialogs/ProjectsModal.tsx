@@ -23,7 +23,7 @@ import { projectLabel } from '../../features/sessions/project-label';
 import { view } from '../../state/session-store';
 import { useStore } from '../use-store';
 import { openPlanPage } from '../plan-page/actions';
-import { openSettings } from '../settings/actions';
+import { openProjectSettings } from '../project-page/actions';
 import { DialogShell } from './DialogShell';
 import { ProjectPickerRow } from './ProjectPickerRow';
 import { PickerPlans } from './PickerPlans';
@@ -556,7 +556,7 @@ function rowMenu(project: Project, on: { close(): void; changed(): void }): Menu
       label: 'Project settings',
       run: () => {
         on.close();
-        void openSettings('project', project.projectPath);
+        openProjectSettings(project.projectPath);
       },
     },
     { label: 'Open on GitHub', run: () => openProjectOnGitHub(project) },
