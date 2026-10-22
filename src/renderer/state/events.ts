@@ -267,6 +267,8 @@ export type LocalEvent =
   | { type: 'askTextChanged'; text: string }
   /** Enter in the box: what is in it goes to main to be routed. */
   | { type: 'askSent' }
+  /** ⌘Enter: a quick session in `quickFolder`, or the picker when it is ''. */
+  | { type: 'askQuickSent'; quickFolder: string }
   /** Esc while waiting: main is told to stop, and the box unlocks at once (W2). */
   | { type: 'askCancelled' }
   /** Main answered the send counted as `asked`. */

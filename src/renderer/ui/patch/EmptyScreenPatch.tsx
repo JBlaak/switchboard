@@ -28,6 +28,7 @@ import { dressingOn } from '../../../domain/companion/calendar';
 import { fetchWeather } from '../../app/weather';
 import { getState, onEvent } from '../../state/app-store';
 import { askOutcome } from '../../state/ask-slice';
+import { NO_QUICK_FOLDER_LINE } from '../../../domain/ask/quick-ask';
 import { CANCELLED_BEAT, outcomeBeat, thinkingBeat } from '../ask/ask-keys';
 import { tightestUsage, whenUsageLoaded } from '../../state/usage-store';
 import type { JSX } from 'react';
@@ -111,6 +112,10 @@ export function EmptyScreenPatch(): JSX.Element {
         if (state.ask === previous.ask) return;
         const beat = outcomeBeat(askOutcome(e.result, previous.ask.text));
         if (beat) react(beat);
+      }),
+      // ⌘Enter with no Quick Session Folder: the picker has the text, and Patch says why.
+      onEvent('askQuickSent', (e, state, previous) => {
+        if (state.ask !== previous.ask && !e.quickFolder) react({ move: 'jelly', line: NO_QUICK_FOLDER_LINE });
       }),
       // Quick Ask handed its text to the picker (#142): why, as for the box.
       onEvent('pickerRequested', ({ reason }) => {

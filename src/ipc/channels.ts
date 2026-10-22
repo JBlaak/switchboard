@@ -64,6 +64,7 @@ export const INVOKE = {
 
   // Quick Ask: the pop-up's own (#148)
   quickAskRoute: 'quick-ask:route',
+  quickAskQuick: 'quick-ask:quick',
   quickAskCancel: 'quick-ask:cancel',
   quickAskStart: 'quick-ask:start',
   quickAskOpenPicker: 'quick-ask:open-picker',

@@ -7,10 +7,11 @@
  * sends it to the fake `claude -p` the box warmed on focus, and the answer
  * starts a session, offers the choices, or hands the text to the picker.
  */
+import fs from 'node:fs';
 import { test, expect } from '../support/test';
 import { dialog } from '../support/app';
 import { fakeRoute, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
-import { P } from '../fixtures/standard';
+import { P, standardFixture } from '../fixtures/standard';
 import type { Page } from '@playwright/test';
 
 const box = (page: Page) => page.getByTestId('ask-box');
@@ -120,4 +121,44 @@ test('a failed call says why and opens the picker, which starts on the text as t
   const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
   expect(launch.cwd).toBe(home.projectPath(P.acmeApi));
   expect(launch.argv.at(-1)).toBe('fix the login loop');
+});
+
+test('⌘Enter without a quick folder opens the picker on the text as typed, with no routing call, and Patch says why', async ({ page, home }) => {
+  /* Given */
+  const route = fakeRoute(home);
+  route.answer({ projectPath: null, confident: false, candidates: [], prompt: '' });
+
+  /* When */
+  await box(page).fill('jot down an idea');
+  await box(page).press('Meta+Enter');
+
+  /* Then */
+  const picker = dialog(page, 'New Session');
+  await expect(picker).toBeVisible();
+  await expect(picker).toContainText('jot down an idea');
+  await expect(says(page, 'There’s no Quick Session Folder yet. Pick a project, or set one in Settings?')).toBeVisible();
+  expect(route.calls().filter(call => call.prompt?.includes('jot down an idea'))).toEqual([]);
+});
+
+test.describe('with a quick folder', () => {
+  test.use({ fixture: { ...standardFixture(), settings: { quickSessionPath: '/tmp' } } });
+
+  test('⌘Enter starts a quick session on the text as typed, with no routing call', async ({ page, home }) => {
+    /* Given */
+    const route = fakeRoute(home);
+    const acmeApi = home.projectPath(P.acmeApi);
+    route.answer({ projectPath: acmeApi, confident: true, candidates: [acmeApi], prompt: 'Fix the login redirect loop.' });
+    const before = launchedKeys(home);
+
+    /* When */
+    await box(page).fill('lets fix the login loop in acme-api');
+    await box(page).press('Meta+Enter');
+
+    /* Then */
+    const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
+    expect(fs.realpathSync(launch.cwd)).toBe(fs.realpathSync('/tmp'));
+    expect(launch.argv.at(-1)).toBe('lets fix the login loop in acme-api');
+    expect(route.calls().filter(call => call.prompt?.includes('lets fix the login loop'))).toEqual([]);
+    await expect(dialog(page, 'New Session')).toBeHidden();
+  });
 });

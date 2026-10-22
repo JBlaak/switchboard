@@ -25,6 +25,8 @@ export interface QuickAskLooks {
 
 export interface QuickAskApi {
   route(text: string): Promise<QuickAskReply>;
+  /** ⌘Enter: a quick session on the text as typed, with no routing call. */
+  quick(text: string): Promise<QuickAskReply>;
   cancel(): Promise<void>;
   /** A choice from the list. */
   start(projectPath: string): Promise<QuickAskReply>;

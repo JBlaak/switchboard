@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { ASK_PATCH_CALL, AskRouteService } from '../src/application/services/ask-route-service';
 import { QUICK_ROUTE_CALL, QuickAskService } from '../src/application/services/quick-ask-service';
 import { captureArgs, noAnswerLine, undoArgs } from '../src/domain/ask/capture';
+import { NO_QUICK_FOLDER_LINE } from '../src/domain/ask/quick-ask';
 import { NO_MATCH_LINE } from '../src/domain/ask/route';
 import { NO_SKILLS } from '../src/domain/ask/skills';
 import { fakeRenderer, fakeTimers, silentLog } from './support/fakes';
@@ -233,6 +234,34 @@ test('quick ask: no match without a quick folder brings the main window forward 
   /* Then */
   assert.deepEqual(reply, { kind: 'handedOff' });
   assert.deepEqual(renderer.only('pickerRequested'), [['pickerRequested', 'jot down an idea', NO_MATCH_LINE]]);
+  assert.deepEqual(window, ['bringForward']);
+});
+
+test('quick ask: ⌘Enter starts a quick session on the text as typed, without routing it', () => {
+  /* Given */
+  const { service, requests, renderer, window } = harness({ quickSessionPath: ` ${QUICK} ` });
+
+  /* When */
+  const reply = service.quick('jot down an idea');
+
+  /* Then */
+  assert.deepEqual(reply, { kind: 'started', folder: 'scratch' });
+  assert.equal(requests.length, 0);
+  assert.deepEqual(renderer.only('launchRequested'), [['launchRequested', QUICK, 'jot down an idea']]);
+  assert.deepEqual(window, ['ensureOpen']);
+});
+
+test('quick ask: ⌘Enter without a quick folder hands the text as typed to the picker, without routing it', () => {
+  /* Given */
+  const { service, requests, renderer, window } = harness();
+
+  /* When */
+  const reply = service.quick('jot down an idea');
+
+  /* Then */
+  assert.deepEqual(reply, { kind: 'handedOff' });
+  assert.equal(requests.length, 0);
+  assert.deepEqual(renderer.only('pickerRequested'), [['pickerRequested', 'jot down an idea', NO_QUICK_FOLDER_LINE]]);
   assert.deepEqual(window, ['bringForward']);
 });
 

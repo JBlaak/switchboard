@@ -16,6 +16,7 @@ export function registerQuickAskHandlers(ipc: IpcRegistrar, app: Container): voi
   ipc.on(SEND.rendererReady, () => app.renderer.rendererReady());
 
   ipc.handle(INVOKE.quickAskRoute, (text: string) => app.quickAsk.route(String(text)));
+  ipc.handle(INVOKE.quickAskQuick, (text: string) => app.quickAsk.quick(String(text)));
   ipc.handle(INVOKE.quickAskCancel, () => app.quickAsk.cancel());
   ipc.handle(INVOKE.quickAskStart, (projectPath: string) => app.quickAsk.start(String(projectPath)));
   ipc.handle(INVOKE.quickAskOpenPicker, () => app.quickAsk.openPicker());

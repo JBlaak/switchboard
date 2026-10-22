@@ -23,6 +23,7 @@ function subscribeWith<T>(channel: string, listener: (value: T) => void): Unsubs
 
 const quickAsk: QuickAskApi = {
   route: (text) => ipcRenderer.invoke(INVOKE.quickAskRoute, text),
+  quick: (text) => ipcRenderer.invoke(INVOKE.quickAskQuick, text),
   cancel: () => ipcRenderer.invoke(INVOKE.quickAskCancel),
   start: (projectPath) => ipcRenderer.invoke(INVOKE.quickAskStart, projectPath),
   openPicker: () => ipcRenderer.invoke(INVOKE.quickAskOpenPicker),

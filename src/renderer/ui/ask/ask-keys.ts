@@ -14,6 +14,8 @@ import type { PatchBeat } from '../../../domain/companion/patch';
 export type AskKey =
   /** Editing: send what is in the box. */
   | 'send'
+  /** Editing: start a quick session on what is in the box, without routing it. */
+  | 'quick'
   /** Waiting: stop asking and unlock the box (W2). */
   | 'cancel'
   /** Choosing: move the highlight. */
@@ -30,17 +32,22 @@ export type AskKey =
 export interface AskKeyPress {
   key: string;
   shiftKey: boolean;
+  metaKey?: boolean;
   /** Mid-composition (an IME, a dead key): the Enter belongs to the composition. */
   isComposing: boolean;
 }
 
-/** Enter sends and Shift+Enter is a new line; the rest only count while waiting or choosing. */
+/**
+ * Enter sends, ⌘Enter starts a quick session and Shift+Enter is a new line;
+ * the rest only count while waiting or choosing.
+ */
 export function askKey(phase: AskPhase, press: AskKeyPress): AskKey | null {
   if (press.isComposing) return null;
   const { key, shiftKey } = press;
   switch (phase) {
     case 'editing':
-      return key === 'Enter' && !shiftKey ? 'send' : null;
+      if (key !== 'Enter' || shiftKey) return null;
+      return press.metaKey ? 'quick' : 'send';
     case 'waiting':
       if (key === 'Escape') return 'cancel';
       return key === 'Enter' || key === 'Tab' ? 'swallow' : null;
