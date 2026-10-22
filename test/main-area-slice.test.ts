@@ -19,7 +19,7 @@ const PLAN: RendererEvent = {
 };
 
 const SETTINGS: RendererEvent = {
-  type: 'settingsOpened', scope: 'global', projectPath: null, current: {}, globalSettings: {}, shellProfiles: [], appVersion: null, quickAskRegistered: true, quickAskMissing: [],
+  type: 'settingsOpened', current: {}, shellProfiles: [], appVersion: null, quickAskRegistered: true, quickAskMissing: [],
 };
 
 /** `id` put on screen the way `showSession` does it. */

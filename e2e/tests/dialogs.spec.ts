@@ -298,7 +298,8 @@ test.describe('projects modal', () => {
 
     /* Then */
     await expect(modal).toHaveCount(0);
-    await expect(page.getByText(`Project Settings — ${P.acmeApi}`, { exact: true })).toBeVisible();
+    // The project's settings, on its page (#176).
+    await expect(page.getByRole('region', { name: `Settings for ${P.acmeApi}` })).toBeVisible();
     await settle(page);
     expect(launchedKeys(home)).toEqual(before);
   });

@@ -118,21 +118,6 @@
 }
 
 /* --- Use-global checkbox --- */
-.settings-use-global {
-  font: 700 11.5px var(--sb-font-head);
-  color: var(--sb-text-faint);
-  display: flex;
-  align-items: center;
-  margin-left: 12px;
-  gap: 4px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.settings-use-global input {
-  accent-color: var(--sb-accent);
-}
-
 /* --- Toggle switch: a mint-ink track when on --- */
 .settings-toggle {
   position: relative;
@@ -285,8 +270,7 @@
 }
 
 .settings-cancel-btn,
-.settings-save-btn,
-.settings-remove-btn {
+.settings-save-btn {
   border: none;
   border-radius: var(--sb-r-control);
   padding: 10px 20px;
@@ -330,17 +314,4 @@
 
 .settings-warning:empty {
   display: none;
-}
-
-.settings-remove-btn {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--sb-line);
-  color: var(--sb-danger-soft);
-  margin-left: auto;
-}
-
-.settings-remove-btn:hover {
-  background: var(--sb-peach);
-  box-shadow: none;
-  color: var(--sb-danger);
 }

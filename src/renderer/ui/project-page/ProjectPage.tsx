@@ -11,7 +11,7 @@ import type { JSX } from 'react';
 import { useStore } from '../use-store';
 import { PlanPage } from '../plan-page/PlanPage';
 import { ProjectOverview } from './ProjectOverview';
-import { ProjectSettingsSlot } from './slots';
+import { ProjectSettings } from './ProjectSettings';
 
 export function ProjectPage(): JSX.Element | null {
   const project = useStore(state => (state.mainArea.route.kind === 'project' ? state.mainArea.route : null));
@@ -22,6 +22,6 @@ export function ProjectPage(): JSX.Element | null {
     case 'plan':
       return <PlanPage />;
     case 'settings':
-      return <ProjectSettingsSlot projectPath={project.projectPath} />;
+      return <ProjectSettings projectPath={project.projectPath} />;
   }
 }

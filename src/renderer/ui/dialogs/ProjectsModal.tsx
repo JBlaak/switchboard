@@ -19,8 +19,7 @@ import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import { projectLabel } from '../../features/sessions/project-label';
 import { view } from '../../state/session-store';
 import { useStore } from '../use-store';
-import { openProjectPage } from '../project-page/actions';
-import { openSettings } from '../settings/actions';
+import { openProjectPage, openProjectSettings } from '../project-page/actions';
 import { DialogShell } from './DialogShell';
 import { ProjectPickerRow } from './ProjectPickerRow';
 import { AddProjectStep } from './AddProjectStep';
@@ -452,7 +451,7 @@ function rowMenu(project: Project, on: { close(): void; changed(): void }): Menu
       label: 'Project settings',
       run: () => {
         on.close();
-        void openSettings('project', project.projectPath);
+        openProjectSettings(project.projectPath);
       },
     },
     { label: 'Open on GitHub', run: () => openProjectOnGitHub(project) },
