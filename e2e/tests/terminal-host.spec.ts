@@ -315,6 +315,9 @@ test.describe('terminal scrolling and resize', () => {
   test('the terminal refits at the end of a sidebar resize, and when settings close', async ({ page, home, app }) => {
     /* Given */
     await openSession(page, home, LABEL.loginFix, S.loginFix);
+    // The first fit follows the route a frame after the session shows; read
+    // the width before it and the terminal still reports xterm's default 80.
+    await settle(page);
     const initial = await terminalState(page, S.loginFix);
     const box = (await sidebar(page).boundingBox())!;
 
