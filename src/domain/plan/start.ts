@@ -28,7 +28,7 @@ export function issueBranchName(issue: IssueKey & { title: string }): string {
 export function issueSessionPrompt(issue: IssueKey, plan: IssueKey, stackedOn?: number): string {
   const planRef = plan.repository === issue.repository ? '#' + plan.number : plan.repository + '#' + plan.number;
   let prompt = `Work on #${issue.number}, part of ${planRef}. Read the epic and the issue first. ` +
-    `Open a PR that says "Closes #${issue.number}".`;
+    `Open a PR titled with a short summary of what you implemented, with "Closes #${issue.number}" in its description.`;
   if (stackedOn !== undefined) prompt += ` Branch off PR #${stackedOn}'s branch and open your PR against it.`;
   return prompt;
 }
