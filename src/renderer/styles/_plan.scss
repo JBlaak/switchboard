@@ -750,7 +750,9 @@ a.pv-num:hover { color: var(--sb-accent); }
 }
 
 .pv-level-start {
-  margin: 0 0 14px;
+  position: sticky;
+  left: 0;
+  margin: 14px 24px 0;
 
   &.pv-inline {
     display: flex;

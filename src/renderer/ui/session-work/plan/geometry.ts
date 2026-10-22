@@ -135,7 +135,8 @@ export function planGeometry(plan: Plan, layout: PlanLayout): PlanGeometry {
     bands.push({ level: i + 1, top: y - BAND_PAD, height: NODE_H + 2 * BAND_PAD, nodeTop: y });
   });
   const height = bands.length ? y + NODE_H + BAND_PAD + PAD : 0;
-  const width = left + area + PAD;
+  // The band reaches as far past the widest row as it does above and below it.
+  const width = left + area + BAND_PAD + PAD;
 
   const isOpen = (issue: IssueKey): boolean =>
     [...plan.issues, ...plan.outside].find(other => sameIssue(other, issue))?.state !== 'closed';
