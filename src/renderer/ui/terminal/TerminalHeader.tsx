@@ -18,8 +18,14 @@ import { shallowEqual } from '../../state/store';
 import { headerShellIn, headerTitleIn } from '../../state/terminal-slice';
 import { useStore } from '../use-store';
 import { stopSessionOnScreen } from './actions';
+import { sessionMap } from '../../state/session-store';
+import { projectLabel } from '../../features/sessions/project-label';
+import { ProjectLink } from '../project-page/ProjectLink';
 
-/** The session's name, the process title (or a CLI notice), its id and its shell. */
+/**
+ * The session's name, its project (a way into the project page, #173), the
+ * process title (or a CLI notice), its id and its shell.
+ */
 export function TerminalHeaderInfo(): JSX.Element {
   const { onScreen, name, title, shell } = useStore(state => ({
     onScreen: state.terminal.onScreen,
@@ -33,9 +39,17 @@ export function TerminalHeaderInfo(): JSX.Element {
     if (header) header.style.display = onScreen ? '' : 'none';
   }, [onScreen]);
 
+  // The row is shared and its project never changes, so it is read as rendered.
+  const projectPath = onScreen ? sessionMap.get(onScreen)?.projectPath ?? null : null;
+
   return (
     <>
       <span id="terminal-header-name">{name}</span>
+      {projectPath && (
+        <ProjectLink id="terminal-header-project" className={projectPath.startsWith('ssh://') ? 'is-remote' : undefined} path={projectPath}>
+          {projectLabel(projectPath)}
+        </ProjectLink>
+      )}
       <span id="terminal-header-pty-title" style={title ? undefined : { display: 'none' }}>{title}</span>
       <span id="terminal-header-id">{onScreen ?? ''}</span>
       <span id="terminal-header-shell" style={shell ? undefined : { display: 'none' }}>{shell ?? ''}</span>

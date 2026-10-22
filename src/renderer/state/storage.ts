@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   planLevelsSeen: 'planLevelsSeen',
   /** The plans opened from the New Session picker, per project (localStorage; see `ui/dialogs/recent-plans`). */
   recentPlans: 'recentPlans',
+  /** Each project page's expanded plans and Show closed, per project (localStorage; see `project-page-slice`). */
+  projectPages: 'projectPages',
 } as const;
 
 /**

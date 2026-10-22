@@ -266,13 +266,6 @@
   color: var(--sb-blue);
 }
 
-.session-project.is-repo-link {
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
 
 .slug-group-meta .session-project {
   margin-right: 6px;
