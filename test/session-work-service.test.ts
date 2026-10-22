@@ -8,7 +8,7 @@ import type { SessionActivities } from '../src/application/services/session-acti
 import { canComment } from '../src/domain/session-work/review';
 import type { Timers } from '../src/application/ports/clock';
 import type { GitWorkspace } from '../src/application/ports/git-workspace';
-import type { GitHubAvailability, GitHubCli, PlanReads } from '../src/application/ports/github-cli';
+import type { GitHubAvailability, GitHubCli, PlanReads, ProjectReads } from '../src/application/ports/github-cli';
 import type { TranscriptLocation } from '../src/application/ports/transcript-store';
 import type { Session, SessionPullRequest } from '../src/domain/session/session';
 import type {
@@ -165,6 +165,7 @@ function setup(overrides: Partial<World> = {}) {
     async blob(_worktree, revision, path) { reads.push(revision + ':' + path); return bytes(world.blobs.get(revision + ':' + path)); },
     async workingFileSizes(worktree, paths) { return sizes(world.files, worktree + ':', paths); },
     async workingFile(worktree, path) { reads.push(worktree + ':' + path); return bytes(world.files.get(worktree + ':' + path)); },
+    async worktrees() { return []; },
     watch(worktree, onChange) {
       const watcher = { worktree, onChange, disposed: false };
       watchers.push(watcher);
@@ -172,7 +173,7 @@ function setup(overrides: Partial<World> = {}) {
     },
   };
 
-  const github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview' | PlanReads> = {
+  const github: Omit<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview' | PlanReads | ProjectReads> = {
     async available() { count('available'); return world.gh; },
     async pullRequests() { count('pullRequests'); return world.prs; },
     async pullRequestDiff() { count('pullRequestDiff'); return world.prDiff; },
