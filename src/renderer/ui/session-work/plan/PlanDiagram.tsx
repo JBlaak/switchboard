@@ -57,7 +57,7 @@ export function PlanDiagram(
                 <button
                   type="button"
                   className="pv-pill pv-band-start"
-                  title={`Start a session on each Ready issue on level ${band.level}`}
+                  title={`Start one session with an agent on each Ready issue on level ${band.level}`}
                   onClick={() => issueActions!.startLevel!(plan, band.level, ready)}
                 >
                   Start level

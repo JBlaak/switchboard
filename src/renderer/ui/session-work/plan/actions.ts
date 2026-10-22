@@ -7,7 +7,7 @@
 import { openSession, startClaudeSessionIn } from '../../../features/sessions/session-actions';
 import { resolveDefaultSessionOptions } from '../../../features/dialogs/launch-options';
 import { sessionMap } from '../../../state/session-store';
-import { startIssueSessionWith, type StartIssueSessionRequest } from './start-issue-session';
+import { startIssueSessionWith, type StartIssueSessionRequest, type StartIssueSessionSteps } from './start-issue-session';
 import type { IssueSessionStart } from '../../../../domain/plan/issue-session';
 
 /**
@@ -21,12 +21,15 @@ import type { IssueSessionStart } from '../../../../domain/plan/issue-session';
  * did not start.
  */
 export function startIssueSession(request: StartIssueSessionRequest): Promise<IssueSessionStart> {
-  return startIssueSessionWith({
-    prepare: (prepare) => window.api.prepareIssueWorktree(prepare),
-    defaultOptions: resolveDefaultSessionOptions,
-    launch: (projectPath, options, how) => startClaudeSessionIn(projectPath, options, how),
-  }, request);
+  return startIssueSessionWith(issueSessionSteps, request);
 }
+
+/** The real steps: main prepares the worktree, the renderer starts the session. Start level uses them too. */
+export const issueSessionSteps: StartIssueSessionSteps = {
+  prepare: (prepare) => window.api.prepareIssueWorktree(prepare),
+  defaultOptions: resolveDefaultSessionOptions,
+  launch: (projectPath, options, how) => startClaudeSessionIn(projectPath, options, how),
+};
 
 /** Put a session on screen, the way a click on its row does. False when no row goes by that id. */
 export async function jumpToSession(sessionId: string): Promise<boolean> {

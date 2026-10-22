@@ -113,6 +113,12 @@ export interface PlansStub {
    * not here has none; null answers as a project with no GitHub remote does.
    */
   projectPlans?: Record<string, PlanSummary[] | null>;
+  /**
+   * Answer Start session's worktree request without git: a worktree named
+   * after the issue under the project's `.claude/worktrees/`, never made on
+   * disk. Unset, the real service answers (and needs a GitHub repository).
+   */
+  prepareWorktrees?: boolean;
 }
 
 /**
@@ -279,6 +285,13 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       });
       ipcMain.removeHandler(channels.planIssueSessions);
       ipcMain.handle(channels.planIssueSessions, (_event, repo) => plans.issueSessions?.[String(repo)] ?? {});
+      if (plans.prepareWorktrees) {
+        ipcMain.removeHandler(channels.planPrepareIssueWorktree);
+        ipcMain.handle(channels.planPrepareIssueWorktree, (_event, request: { projectPath: string; issue: { number: number } }) => {
+          const branch = request.issue.number + '-issue';
+          return { ok: true, worktreePath: request.projectPath + '/.claude/worktrees/' + branch, branch, prompt: 'Work on #' + request.issue.number + '.' };
+        });
+      }
     }
 
     if (state.projectOverview) {

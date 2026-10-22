@@ -1,7 +1,7 @@
 /**
  * Start level above the diagram (A1): the confirmation that names the count,
- * the starts on their way, and the report of how many started and which
- * failed. Shown for the plan it was asked on.
+ * the session on its way, and the report of how many agents it started with
+ * and which issues failed. Shown for the plan it was asked on.
  */
 import type { JSX } from 'react';
 import { sameIssue } from '../../../../domain/plan/model';
@@ -14,19 +14,19 @@ export function LevelStart({ plan, issueActions }: { plan: Plan; issueActions?: 
   const asked = issueActions?.levelStart;
   if (!asked || !sameIssue(asked.plan, plan)) return null;
   const count = asked.issues.length;
-  const sessions = count === 1 ? '1 session' : `${count} sessions`;
+  const agents = count === 1 ? '1 agent' : `${count} agents`;
 
   if (asked.phase === 'confirm') {
     return (
       <div className="pv-confirm pv-level-start" role="group" aria-label="Start level">
-        <strong>{`Start ${sessions}?`}</strong>
+        <strong>{`Start a session with ${agents}?`}</strong>
         <span>
-          {`One worktree and session for each Ready issue on level ${asked.level}: `
-            + asked.issues.map(issue => shortRef(plan, issue)).join(', ') + ', one after another.'}
+          {`One session for level ${asked.level}, with a worktree and an agent for each Ready issue: `
+            + asked.issues.map(issue => shortRef(plan, issue)).join(', ') + '. The session coordinates them.'}
         </span>
         <div className="pv-confirm-buttons">
           <button type="button" className="sw-btn is-primary" onClick={() => issueActions!.confirmLevelStart?.(plan)}>
-            {`Start ${sessions}`}
+            Start session
           </button>
           <button type="button" className="sw-btn" onClick={() => issueActions!.cancelLevelStart?.()}>Cancel</button>
         </div>
@@ -35,7 +35,7 @@ export function LevelStart({ plan, issueActions }: { plan: Plan; issueActions?: 
   }
 
   if (asked.phase !== 'answered') {
-    return <div className="pv-inline pv-level-start" role="status">{`Starting ${sessions}…`}</div>;
+    return <div className="pv-inline pv-level-start" role="status">{`Starting a session with ${agents}…`}</div>;
   }
 
   return (
