@@ -5,7 +5,7 @@
  * project page's (`ui/project-page/actions`).
  */
 import { dispatch } from '../../state/app-store';
-import { recordRecentPlan } from '../dialogs/recent-plans';
+import { recordRecentPlan } from '../project-page/recent-plans';
 
 /** A plan, and the project it was picked in: new issue sessions start there. */
 export interface PlanPage {

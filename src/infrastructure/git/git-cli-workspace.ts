@@ -263,6 +263,8 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
       const tip = entry.branch ?? entry.head;
       const { ahead } = base && tip ? await this.aheadBehind(repository, tip, base) : { ahead: 0 };
       const changes = await this.status(entry.path);
+      const last = await git(entry.path, ['log', '-1', '--format=%ct', 'HEAD']);
+      const seconds = last.code === 0 ? Number(last.stdout.trim()) : NaN;
       return {
         path: entry.path,
         branch: entry.branch,
@@ -271,6 +273,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         changedFiles: changes.length,
         ahead,
         merged: base !== null && entry.branch !== null && entry.branch !== defaultBranch && ahead === 0,
+        lastCommitAt: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : null,
       };
     }));
   }

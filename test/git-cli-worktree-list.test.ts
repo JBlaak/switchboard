@@ -127,9 +127,11 @@ after(() => {
 
 test('worktrees lists each checkout with its branch, changes, ahead count and whether it is merged', async () => {
   /* When */
-  const worktrees = await git.worktrees(repo);
+  const listed = await git.worktrees(repo);
 
   /* Then */
+  for (const worktree of listed) assert.equal(typeof worktree.lastCommitAt, 'number');
+  const worktrees = listed.map(({ lastCommitAt: _at, ...rest }) => rest);
   assert.deepEqual(worktrees[0], { path: repo, branch: 'main', main: true, locked: false, changedFiles: 0, ahead: 0, merged: false });
   // git lists linked worktrees in the order it finds them on disk.
   const byPath = (a: { path: string }, b: { path: string }) => a.path.localeCompare(b.path);

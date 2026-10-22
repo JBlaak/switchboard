@@ -14,6 +14,7 @@ import { registerSessionHandlers } from './session-handlers';
 import { registerSessionWorkHandlers } from './session-work-handlers';
 import { registerIssueSessionHandlers } from './issue-session-handlers';
 import { registerPlanHandlers } from './plan-handlers';
+import { registerProjectOverviewHandlers } from './project-overview-handlers';
 import { registerSettingsHandlers } from './settings-handlers';
 import { registerSleepHandlers } from './sleep-handlers';
 import { registerTerminalHandlers } from './terminal-handlers';
@@ -38,6 +39,7 @@ export function registerIpcHandlers(app: Container): void {
   registerSessionWorkHandlers(ipc, app);
   registerIssueSessionHandlers(ipc, app);
   registerPlanHandlers(ipc, app);
+  registerProjectOverviewHandlers(ipc, app);
   registerAskHandlers(ipc, app);
   registerQuickAskHandlers(ipc, app);
 }

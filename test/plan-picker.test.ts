@@ -1,13 +1,12 @@
 /**
  * Plans in the New Session picker (#128, F1, F3): their order (opened
- * recently first, then by activity), the recent list, the filter, what a row
+ * recently first, then by activity), the filter, what a row
  * says, and the picker's keys into and out of a project's plans.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  RECENT_PLANS_CAP, filterPlans, orderPlans, parseRecentPlans, planClosedLabel, planLevelLabel, planLevelSegments,
-  rememberPlan,
+  filterPlans, orderPlans, planClosedLabel, planLevelLabel, planLevelSegments,
 } from '../src/renderer/ui/dialogs/plan-list';
 import { pickerKeyAction } from '../src/renderer/ui/dialogs/picker-selection';
 import type { PickerKey } from '../src/renderer/ui/dialogs/picker-selection';
@@ -67,60 +66,6 @@ test('a recent plan that is no longer listed changes nothing', () => {
 
   /* Then */
   assert.deepEqual(numbers(ordered), [2, 1]);
-});
-
-// ── The recent list ──
-
-test('opening a plan puts it first in its project’s recent list', () => {
-  /* Given */
-  const recent = { '/p': [REPO + '#1', REPO + '#2'] };
-
-  /* When */
-  const next = rememberPlan(recent, '/p', { repository: REPO, number: 3 });
-
-  /* Then */
-  assert.deepEqual(next['/p'], [REPO + '#3', REPO + '#1', REPO + '#2']);
-});
-
-test('opening a plan again moves it to the front rather than listing it twice', () => {
-  /* Given */
-  const recent = { '/p': [REPO + '#1', REPO + '#2', REPO + '#3'] };
-
-  /* When */
-  const next = rememberPlan(recent, '/p', { repository: REPO, number: 2 });
-
-  /* Then */
-  assert.deepEqual(next['/p'], [REPO + '#2', REPO + '#1', REPO + '#3']);
-});
-
-test('the recent list keeps the last ten per project, and other projects’ lists alone', () => {
-  /* Given */
-  const full = Array.from({ length: RECENT_PLANS_CAP }, (_, i) => REPO + '#' + (i + 1));
-  const recent = { '/p': full, '/q': [REPO + '#7'] };
-
-  /* When */
-  const next = rememberPlan(recent, '/p', { repository: REPO, number: 50 });
-
-  /* Then */
-  assert.equal(RECENT_PLANS_CAP, 10);
-  assert.equal(next['/p'].length, RECENT_PLANS_CAP);
-  assert.equal(next['/p'][0], REPO + '#50');
-  assert.ok(!next['/p'].includes(REPO + '#' + RECENT_PLANS_CAP));
-  assert.deepEqual(next['/q'], [REPO + '#7']);
-});
-
-test('a stored recent list reads back; anything unreadable reads as none', () => {
-  /* Given */
-  const stored = JSON.stringify({ '/p': [REPO + '#1', 4, REPO + '#2'], '/q': 'nope' });
-
-  /* When */
-  const read = parseRecentPlans(stored);
-
-  /* Then */
-  assert.deepEqual(read, { '/p': [REPO + '#1', REPO + '#2'] });
-  assert.deepEqual(parseRecentPlans('{not json'), {});
-  assert.deepEqual(parseRecentPlans(null), {});
-  assert.deepEqual(parseRecentPlans('[1,2]'), {});
 });
 
 // ── The filter ──
