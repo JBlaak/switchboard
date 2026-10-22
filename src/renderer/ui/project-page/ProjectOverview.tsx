@@ -8,6 +8,11 @@
  * the cursor, S starts a session on it, / filters the rows, and Esc closes
  * the page, back to the session it covered, focused. What each key does is
  * `page-keys`; the rows it walks are `page-rows`.
+ *
+ * The body follows the GitHub part's state (#175, `page-state`): a project
+ * with no GitHub remote, or a remote one, has a single column of what is
+ * local; when GitHub could not be asked, one message takes the place of Plans
+ * and Pull requests; stale data is dimmed under a line saying how old it is.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
@@ -17,21 +22,34 @@ import { projectLabel } from '../../features/sessions/project-label';
 import { ProjectHeader } from './ProjectHeader';
 import { PlansSection } from './PlansSection';
 import { SessionsSection, sessionsShown } from './SessionsSection';
-import { PullRequestsSection, WorktreesSection } from './slots';
+import { PullRequestsSection } from './PullRequestsSection';
+import { WorktreesSection } from './WorktreesSection';
+import { GitHubMessage, RemoteNote, StaleLine } from './EdgeStates';
 import {
-  closeProject, openIssueOnGitHub, openProjectPlan, openProjectSession, startPageIssueSession,
+  closeProject, openIssueOnGitHub, openProjectPlan, openProjectSession, openPullRequestOnGitHub,
+  startPageIssueSession, startWorktreeSession,
 } from './actions';
-import { pageRows, planRows, plansViewOf, sessionRows, type PageRow } from './page-rows';
+import {
+  pageRows, planRows, plansViewOf, pullRequestRows, pullRequestsViewOf, sessionRows, worktreeRows, worktreesView,
+  type PageRow,
+} from './page-rows';
+import { githubPart, showsWorktrees } from './page-state';
 import { pageKeyAction } from './page-keys';
 
 /** Every row on the page now, in the order the cursor walks them. */
 function currentRows(projectPath: string): PageRow[] {
   const state = getState();
-  const plans = plansViewOf(state.projectPage, projectPath);
-  const sessions = sessionsShown(projectPath, state.view.activePtyIds, state.projectPage.filter);
+  const page = state.projectPage;
+  const plans = plansViewOf(page, projectPath);
+  const pullRequests = pullRequestsViewOf(page, projectPath);
+  const sessions = sessionsShown(projectPath, state.view.activePtyIds, page.filter);
+  const answered = page.overview?.projectPath === projectPath ? page.overview : null;
+  const worktrees = answered && showsWorktrees(answered, projectPath) ? worktreesView(answered, page.filter) : [];
   return pageRows({
     plans: plans ? planRows(plans) : [],
+    pullRequests: pullRequests ? pullRequestRows(pullRequests) : [],
     sessions: sessionRows(sessions.lines.map(line => line.session.sessionId)),
+    worktrees: worktreeRows(worktrees),
   });
 }
 
@@ -40,6 +58,8 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
   const filterInput = useRef<HTMLInputElement>(null);
   const cursor = useStore(state => state.projectPage.cursor);
   const filter = useStore(state => state.projectPage.filter);
+  const overview = useStore(state => state.projectPage.overview);
+  const github = githubPart(overview, projectPath);
   const [filtering, setFiltering] = useState(false);
 
   // Into the page as it opens, so its keys reach it without a click.
@@ -86,6 +106,8 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
       case 'open-session': openProjectSession(action.sessionId); break;
       case 'show-more-loose': dispatch({ type: 'projectLooseExpanded' }); break;
       case 'start': void startPageIssueSession(projectPath, action.issue, action.plan); break;
+      case 'open-pull-request': openPullRequestOnGitHub(action.pullRequest); break;
+      case 'start-worktree': void startWorktreeSession(projectPath, action.path); break;
       case 'filter': setFiltering(true); break;
     }
   };
@@ -136,16 +158,30 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
           <kbd className="sw-kbd">esc</kbd>
         </div>
       )}
-      <div className="pp-body">
-        <div className="pp-column">
-          <PlansSection projectPath={projectPath} />
-          <PullRequestsSection projectPath={projectPath} />
+      {github.kind === 'remote' || github.kind === 'none' ? (
+        <div className="pp-body is-local">
+          <div className="pp-column">
+            <SessionsSection projectPath={projectPath} />
+            {github.kind === 'remote' ? <RemoteNote /> : <WorktreesSection projectPath={projectPath} />}
+          </div>
         </div>
-        <div className="pp-column pp-side">
-          <SessionsSection projectPath={projectPath} />
-          <WorktreesSection projectPath={projectPath} />
+      ) : (
+        <div className="pp-body">
+          <div className={'pp-column' + (github.kind === 'ok' && github.stale ? ' is-stale' : '')}>
+            {github.kind === 'ok' && github.stale && <StaleLine fetchedAt={github.fetchedAt} />}
+            {github.kind === 'unavailable' ? <GitHubMessage reason={github.reason} /> : (
+              <>
+                <PlansSection projectPath={projectPath} />
+                <PullRequestsSection projectPath={projectPath} />
+              </>
+            )}
+          </div>
+          <div className="pp-column pp-side">
+            <SessionsSection projectPath={projectPath} />
+            <WorktreesSection projectPath={projectPath} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

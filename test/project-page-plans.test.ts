@@ -109,7 +109,7 @@ test('the overview is kept for the project whose page is open', () => {
   const state = opened();
 
   /* When */
-  const next = run(state, { type: 'projectOverviewAnswered', projectPath: APP, closed: false, overview: overview() });
+  const next = run(state, { type: 'projectOverviewAnswered', projectPath: APP, closed: false, merged: false, overview: overview() });
 
   /* Then */
   assert.equal(next.projectPage.overview?.repository, REPO);
@@ -120,8 +120,8 @@ test('an answer for another project, or one asked before Show closed flipped, is
   const state = run(opened(), { type: 'projectShowClosedToggled' });
 
   /* When */
-  const other = run(state, { type: 'projectOverviewAnswered', projectPath: '/dev/other', closed: true, overview: overview() });
-  const stale = run(state, { type: 'projectOverviewAnswered', projectPath: APP, closed: false, overview: overview() });
+  const other = run(state, { type: 'projectOverviewAnswered', projectPath: '/dev/other', closed: true, merged: false, overview: overview() });
+  const stale = run(state, { type: 'projectOverviewAnswered', projectPath: APP, closed: false, merged: false, overview: overview() });
 
   /* Then */
   assert.equal(other.projectPage.overview, null);
@@ -130,7 +130,7 @@ test('an answer for another project, or one asked before Show closed flipped, is
 
 test('reopening the same project keeps its last answer on screen; another project starts without one', () => {
   /* Given */
-  const answered = run(opened(), { type: 'projectOverviewAnswered', projectPath: APP, closed: false, overview: overview() }, { type: 'projectLooseExpanded' });
+  const answered = run(opened(), { type: 'projectOverviewAnswered', projectPath: APP, closed: false, merged: false, overview: overview() }, { type: 'projectLooseExpanded' });
 
   /* When */
   const same = run(answered, { type: 'projectPageRestored', projectPath: APP, memory: NO_MEMORY });
@@ -182,7 +182,7 @@ test('the overview is asked for while the page shows its overview, with closed p
   const request = overviewRequest(onPage);
 
   /* Then */
-  assert.deepEqual(request, { projectPath: APP, closed: true });
+  assert.deepEqual(request, { projectPath: APP, closed: true, merged: false });
 });
 
 test('nothing is asked while the page is closed, shows one of its plans, or has not read its memory back yet', () => {
@@ -295,7 +295,7 @@ test('a plan with nothing behind its view state answers no rows until there is a
 
   /* When */
   const before = plansViewOf(state, APP);
-  const after = plansViewOf(run(opened(), { type: 'projectOverviewAnswered', projectPath: APP, closed: false, overview: overview() }).projectPage, APP);
+  const after = plansViewOf(run(opened(), { type: 'projectOverviewAnswered', projectPath: APP, closed: false, merged: false, overview: overview() }).projectPage, APP);
 
   /* Then */
   assert.equal(before, null);

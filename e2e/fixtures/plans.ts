@@ -9,7 +9,7 @@ import james22 from '../../test/fixtures/gh-plan-james-22.json';
 import type { Plan, PlanIssue, PlanPullRequest, PlanSummary } from '../../src/domain/plan/model';
 import type { PlansStub } from '../support/main-process';
 import { groupOverview } from '../../src/domain/plan/project-overview';
-import type { ProjectIssue, ProjectOverview, ProjectPullRequest } from '../../src/domain/project/overview';
+import type { ProjectIssue, ProjectOverview, ProjectPullRequest, WorktreeOverview } from '../../src/domain/project/overview';
 
 const REPO = 'acme/api';
 
@@ -97,10 +97,22 @@ function overviewIssue(number: number, title: string, labels: string[], fields: 
   };
 }
 
+/** A pull request of acme/api, open and passing unless `fields` says otherwise. */
+function overviewPullRequest(number: number, title: string, headRef: string, fields: Partial<ProjectPullRequest> = {}): ProjectPullRequest {
+  return {
+    repository: REPO, number, title, state: 'open', draft: false, headRef, updatedAt: '2026-10-17T10:00:00Z',
+    checks: { state: 'passing', failing: 0 }, review: null, closes: [], ...fields,
+  };
+}
+
 /**
  * acme/api's project page as main would answer it: the login plan (with
  * #1302 owned by the login-fix session and closed by PR #1320), the closed
  * Postgres plan, and three issues in no plan. Grouped by the real rule.
+ * Three open PRs (one closing #1302, a draft, one failing its checks) and,
+ * for Show merged, one merged PR (#175); the main checkout and three
+ * worktrees: one with a session running, one to start a session in, and a
+ * merged one.
  */
 export function acmeOverview(): ProjectOverview {
   const loginIssues = LOGIN_PLAN.issues.filter(i => i.state === 'open')
@@ -118,21 +130,40 @@ export function acmeOverview(): ProjectOverview {
       overviewIssue(1402, 'Document the rate limits', ['docs', 'ready-for-agent', 'good first issue']),
       overviewIssue(1403, 'Retry webhooks with backoff', [], { updatedAt: '2026-10-15T10:00:00Z' }),
     ],
-    pullRequests: [{
-      repository: REPO, number: 1320, title: 'Stop the login redirect loop', state: 'open', draft: false,
-      headRef: 'fix/1320', updatedAt: '2026-10-17T10:00:00Z', checks: { state: 'passing', failing: 0 },
-      review: 'review_required', closes: [1302],
-    }],
+    pullRequests: [
+      overviewPullRequest(1320, 'Stop the login redirect loop', 'fix/1320', {
+        checks: { state: 'running', failing: 0 }, review: 'review_required', closes: [1302],
+      }),
+      overviewPullRequest(1330, 'Try a token-bucket rate limiter', 'rate-limiter', { draft: true, updatedAt: '2026-10-16T10:00:00Z' }),
+      overviewPullRequest(1331, 'Bump express to 5.1', 'dependabot/npm/express-5.1', {
+        checks: { state: 'failing', failing: 2 }, review: 'approved', updatedAt: '2026-10-15T10:00:00Z',
+      }),
+    ],
     sessions: { owners: { [REPO + '#1302']: S.loginFix }, running: new Set() },
+  });
+  // Merged PRs come after the open ones, grouped on their own as main does.
+  const merged = groupOverview<ProjectIssue, ProjectPullRequest>({
+    repository: REPO, plans: [], issues: [],
+    pullRequests: [overviewPullRequest(1310, 'Cookie store behind a port', 'cookie-store', { state: 'merged', closes: [1301] })],
+    sessions: { owners: {}, running: new Set() },
+  }).pullRequests;
+  groups.pullRequests.push(...merged);
+  const worktree = (path: string, fields: Partial<WorktreeOverview>): WorktreeOverview => ({
+    path, branch: null, main: false, locked: false, changedFiles: 0, ahead: 0, merged: false, lastCommitAt: null, running: [], ...fields,
   });
   return {
     projectPath: P.acmeApi,
     remote: false,
     repository: REPO,
     github: { ok: true, fetchedAt: 0, stale: false, ...groups },
-    worktrees: [{
-      path: P.acmeApi, branch: 'main', main: true, locked: false, changedFiles: 0, ahead: 0, merged: false, running: [],
-    }],
+    worktrees: [
+      worktree(P.acmeApi + '/.claude/worktrees/cookie-store', { branch: 'cookie-store', merged: true, lastCommitAt: Date.parse('2026-10-10T10:00:00Z') }),
+      worktree(P.acmeApi + '/.claude/worktrees/rate-limiter', { branch: 'rate-limiter', ahead: 1, lastCommitAt: Date.parse('2026-10-16T10:00:00Z') }),
+      worktree(P.acmeApi, { branch: 'main', main: true, lastCommitAt: Date.parse('2026-10-01T10:00:00Z') }),
+      worktree(P.acmeApi + '/.claude/worktrees/fix-1320', {
+        branch: 'fix/1320', changedFiles: 2, ahead: 3, lastCommitAt: Date.parse('2026-10-17T10:00:00Z'), running: [S.loginFix],
+      }),
+    ],
     running: [],
   };
 }

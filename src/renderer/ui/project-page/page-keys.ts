@@ -2,7 +2,8 @@
  * What a key does on the project page (#174), from the rows on screen and
  * the cursor: ↑/↓ move through every row across sections, → expands a plan,
  * ← collapses it or goes from an issue up to its plan, ↵ opens what is under
- * the cursor, S starts a session on a startable issue, / filters.
+ * the cursor (a PR on GitHub, #175), S starts a session on a startable issue
+ * or (#175) in a worktree with none running, / filters.
  *
  * Only bare keys reach this: `ProjectOverview` leaves modified keys, and keys
  * typed into an input, alone. Pure, so it is tested in node; the page carries
@@ -24,6 +25,10 @@ export type PageKeyAction =
   | { readonly kind: 'open-session'; readonly sessionId: string }
   | { readonly kind: 'show-more-loose' }
   | { readonly kind: 'start'; readonly issue: IssueKey; readonly plan: IssueKey }
+  /** A pull request, on GitHub. */
+  | { readonly kind: 'open-pull-request'; readonly pullRequest: IssueKey }
+  /** A session in one of the project's worktrees, by its path. */
+  | { readonly kind: 'start-worktree'; readonly path: string }
   | { readonly kind: 'filter' };
 
 /** What `key` does with the cursor on `cursor` among `rows`; null for nothing. */
@@ -49,11 +54,14 @@ export function pageKeyAction(key: string, rows: readonly PageRow[], cursor: str
         case 'loose-issue': return { kind: 'open-issue', issue: row.issue };
         case 'more-loose': return { kind: 'show-more-loose' };
         case 'session': return { kind: 'open-session', sessionId: row.sessionId };
+        case 'pull-request': return { kind: 'open-pull-request', pullRequest: row.pullRequest };
       }
       return null;
     case 's':
     case 'S':
-      return row.kind === 'plan-issue' && row.startable ? { kind: 'start', issue: row.issue, plan: row.plan } : null;
+      if (row.kind === 'plan-issue' && row.startable) return { kind: 'start', issue: row.issue, plan: row.plan };
+      if (row.kind === 'worktree' && row.startable) return { kind: 'start-worktree', path: row.path };
+      return null;
     default:
       return null;
   }

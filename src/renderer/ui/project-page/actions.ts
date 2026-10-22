@@ -2,12 +2,14 @@
  * What the project page does (#173): opening it on a project, moving between
  * its views and closing it, the header's and the Sessions section's buttons,
  * and (#174) asking for the project's overview and the Plans & issues
- * section's actions. The components call these, never `window.api` or the store.
+ * section's actions, and (#175) the Pull requests and Worktrees sections' and
+ * the GitHub message's. The components call these, never `window.api` or the store.
  */
 import { dispatch, getState } from '../../state/app-store';
 import { sessionMap, view } from '../../state/session-store';
 import { relayoutSessionList } from '../session-list/relayout';
-import { launchClaudeSession, openSession } from '../../features/sessions/session-actions';
+import { launchClaudeSession, openSession, startClaudeSessionIn } from '../../features/sessions/session-actions';
+import { resolveDefaultSessionOptions } from '../../features/dialogs/launch-options';
 import { projectLabel, repositoryRoot } from '../../features/sessions/project-label';
 import { openSettings } from '../settings/actions';
 import { repositoryProjects } from './project-sessions';
@@ -19,6 +21,8 @@ import type { IssueSessionStart } from '../../../domain/plan/issue-session';
 import { openPlanPage } from '../plan-page/actions';
 import { startIssueSession } from '../session-work/plan/actions';
 import { pulseSessionRow } from '../session-list/pulse';
+import { cursorId } from './page-rows';
+import { AUTH_COMMAND } from './page-state';
 
 /** True for an ssh:// project: no GitHub link, nothing local to read. */
 export function isRemoteProject(projectPath: string): boolean {
@@ -101,13 +105,14 @@ function cachedProject(projectPath: string): Project {
 // ── Plans & issues (#174) ──
 
 /**
- * Ask main for the project's overview, closed plans included or not, and keep
- * the answer. A failed call keeps what the page had: the next poll asks again.
+ * Ask main for the project's overview, closed plans and merged pull requests
+ * included or not, and keep the answer. A failed call keeps what the page
+ * had: the next poll asks again.
  */
-export async function loadProjectOverview(projectPath: string, closed: boolean): Promise<void> {
+export async function loadProjectOverview(projectPath: string, closed: boolean, merged: boolean): Promise<void> {
   try {
-    const overview = await window.api.projectOverview(projectPath, { closed });
-    dispatch({ type: 'projectOverviewAnswered', projectPath, closed, overview });
+    const overview = await window.api.projectOverview(projectPath, { closed, merged });
+    dispatch({ type: 'projectOverviewAnswered', projectPath, closed, merged, overview });
   } catch {
     // Main could not answer at all; the section stays as it was.
   }
@@ -115,8 +120,8 @@ export async function loadProjectOverview(projectPath: string, closed: boolean):
 
 /** Ask again now, for whatever the page shows: after a session started from it, say. */
 export function reloadProjectOverview(): void {
-  const { projectPath, showClosed } = getState().projectPage;
-  if (projectPath) void loadProjectOverview(projectPath, showClosed);
+  const { projectPath, showClosed, showMerged } = getState().projectPage;
+  if (projectPath) void loadProjectOverview(projectPath, showClosed, showMerged);
 }
 
 /** A plan row's click or ↵: the plan inside the page. */
@@ -142,6 +147,45 @@ export async function startPageIssueSession(projectPath: string, issue: IssueKey
   const result = await startOn(projectPath, issue, plan);
   if (result.ok) pulseSessionRow(result.sessionId);
   dispatch({ type: 'projectIssueStartAnswered', issue: key, result });
+  if (result.ok) reloadProjectOverview();
+}
+
+// ── Pull requests, worktrees and the edge states (#175) ──
+
+/** A PR row's click or ↵: the pull request on GitHub. */
+export function openPullRequestOnGitHub(pullRequest: IssueKey): void {
+  void window.api.openExternal(`https://github.com/${pullRequest.repository}/pull/${pullRequest.number}`);
+}
+
+/** A PR's "in #n" chip: that plan expanded in place, with the cursor on it. */
+export function revealPlan(plan: IssueKey): void {
+  dispatch({ type: 'projectPlanExpanded', plan: issueKeyString(plan) });
+  dispatch({ type: 'projectCursorMoved', target: cursorId.plan(plan) });
+}
+
+/** Copy command: the command that signs `gh` in, on the clipboard. */
+export function copyAuthCommand(): void {
+  void window.api.writeClipboard(AUTH_COMMAND);
+}
+
+/**
+ * Start session in one of the project's worktrees: Claude started there with
+ * the project's usual options, minus `--worktree` (it is in one already),
+ * without leaving the page. Its new sidebar row pulses once instead, and the
+ * overview is asked again so the worktree shows its session.
+ */
+export async function startWorktreeSession(projectPath: string, path: string): Promise<void> {
+  if (getState().projectPage.worktreeStart?.phase === 'starting') return;
+  dispatch({ type: 'projectWorktreeStartAsked', path });
+  let result: { ok: true; sessionId: string } | { ok: false; reason: string };
+  try {
+    const { worktree: _worktree, worktreeName: _worktreeName, ...options } = await resolveDefaultSessionOptions(projectPath);
+    result = await startClaudeSessionIn(path, options, { show: false });
+  } catch (err) {
+    result = { ok: false, reason: (err as Error).message || 'Could not start the session' };
+  }
+  if (result.ok) pulseSessionRow(result.sessionId);
+  dispatch({ type: 'projectWorktreeStartAnswered', path, result });
   if (result.ok) reloadProjectOverview();
 }
 
