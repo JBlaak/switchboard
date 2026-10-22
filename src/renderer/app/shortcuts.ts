@@ -40,7 +40,7 @@ export function installShortcuts(): void {
       toggleSidebar();
     }
 
-    // Cmd+A opens the new-session picker; in a text field it is Select All.
+    // Cmd+A opens the Projects modal; in a text field it is Select All.
     if (isSessionPickerKey(e)) {
       e.preventDefault();
       openDialog({ kind: 'projectPicker' });

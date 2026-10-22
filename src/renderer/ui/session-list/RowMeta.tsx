@@ -5,7 +5,8 @@
  * The whole line is one button that opens the session's Session work page
  * (D2), unless the page cannot open for it — a remote session, or one outside
  * a git repository (D14) — when it is plain text whose tooltip says why. The
- * project label and the PR chips inside it are display only.
+ * project label inside it keeps its own click, which opens the project page
+ * (#173); the PR chips are display only.
  */
 import { useEffect } from 'react';
 import { pullRequestChips, pullRequestLabel } from '../../../domain/session/pull-requests';
@@ -15,7 +16,7 @@ import { useStore } from '../use-store';
 import { canOpenSessionWork } from '../session-work/actions';
 import { isRemoteRow, workTrigger } from './work-trigger';
 import { agentsBadgeHtml, HTML } from './markup';
-import { openRepository } from './actions';
+import { ProjectLink } from '../project-page/ProjectLink';
 import type { JSX, MouseEvent } from 'react';
 import type { SessionListRow } from '../../state/session-list-layout';
 import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
@@ -81,34 +82,17 @@ export function useCanOpenWork(sessionId: string, remote: boolean): boolean | un
 }
 
 /**
- * The project the row belongs to. Display only: a click on it is a click on
- * the line (which opens Session work) or, where the line is text, on the row.
+ * The project the row belongs to, as a way into its page: a click on it opens
+ * the project page rather than whatever the line or the row would, and
+ * ⌘-click opens GitHub.
  */
 function ProjectLabel({ path }: { path: string | null | undefined }): JSX.Element | null {
   const label = projectLabel(path);
   if (!path || !label) return null;
-  if (path.startsWith('ssh://')) return <span className="session-project is-remote" title={path}>{label}</span>;
-  return <span className="session-project" title={path}>{label}</span>;
-}
-
-/**
- * A project label that opens the repository, instead of the group it sits in.
- * Only the slug group header still has one; a row's label is part of its
- * Session work button.
- */
-export function RepoLink({ path, children }: { path: string; children: string }): JSX.Element {
   return (
-    <span
-      className="session-project is-repo-link"
-      data-project-path={path}
-      title={path + '\nClick to open the repository in your browser'}
-      onClick={(e) => {
-        e.stopPropagation();
-        openRepository(path);
-      }}
-    >
-      {children}
-    </span>
+    <ProjectLink path={path} className={'session-project' + (path.startsWith('ssh://') ? ' is-remote' : '')}>
+      {label}
+    </ProjectLink>
   );
 }
 

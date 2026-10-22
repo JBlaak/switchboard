@@ -8,6 +8,7 @@
  */
 import type { Project } from '../domain/project/project';
 import type { RemoteConfig } from '../domain/project/remote-target';
+import type { ProjectFolderCheck } from '../domain/project/folder-check';
 import type { RemoteStatusPayload } from '../domain/remote/remote-status';
 import type { SearchResult, SearchType } from '../domain/search/search';
 import type { SessionOptions } from '../domain/launch/session-options';
@@ -46,6 +47,11 @@ export interface SwitchboardApi {
   removeProject(projectPath: string): Promise<IpcResult>;
   addRemoteProject(config: Partial<RemoteConfig>): Promise<IpcResult>;
   removeRemoteProject(projectPath: string): Promise<IpcResult>;
+  /**
+   * What adding the typed path would add: whether it is there, a repository,
+   * on GitHub, and how far Tab completes it. A leading `~` is expanded.
+   */
+  checkProjectFolder(typed: string): Promise<ProjectFolderCheck>;
 
   // ── Sessions ──
   getActiveSessions(): Promise<string[]>;

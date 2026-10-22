@@ -31,7 +31,7 @@ function terminalInput(page: Page) {
   return page.getByRole('textbox', { name: 'Terminal input' });
 }
 
-const picker = (page: Page) => dialog(page, 'New Session');
+const picker = (page: Page) => dialog(page, 'Projects');
 const globalSettings = (page: Page) => page.getByText('Global Settings', { exact: true });
 
 /** Take the focus away from everything, so a key lands on the document itself. */

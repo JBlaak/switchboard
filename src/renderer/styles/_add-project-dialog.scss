@@ -1,6 +1,7 @@
-/* ========== ADD PROJECT DIALOG ==========
-   The project picker reuses this overlay and dialog shell, so both share the
-   BlaakTasks modal look: a borderless raised panel lifted by shadow. */
+/* ========== THE MODAL SHELL, AND THE ADD STEP'S FORMS ==========
+   The Projects modal (and the resume dialog) use this overlay and dialog
+   shell: the BlaakTasks modal look, a borderless raised panel lifted by
+   shadow. The forms below are the Projects modal's add step (#171). */
 .add-project-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -129,7 +130,6 @@
   color: var(--sb-danger);
   font-size: 12px;
   margin-top: 8px;
-  display: none;
 }
 
 /* Local / Remote (SSH) mode toggle in the add-project dialog, drawn as a

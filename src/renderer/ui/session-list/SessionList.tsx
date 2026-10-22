@@ -49,12 +49,15 @@ export function SessionList(): JSX.Element | null {
   const dragSpace = useRef<HTMLDivElement>(null);
   useEffect(() => (dragSpace.current ? installDragSpace(dragSpace.current) : undefined), [layout !== null]);
 
-  if (!layout) return null;
+  const noProjects = useStore(s => s.toolbar.hasProjects === false);
+
+  if (!layout) return noProjects ? <FirstRunHint /> : null;
   const { visible, older, filtering } = layout;
 
   return (
     <>
       <div className="session-list" id="session-list">
+        {noProjects && <FirstRunHint />}
         {sections(visible, filtering)}
         {older.length > 0 && (
           <>
@@ -97,6 +100,15 @@ function sections(visible: readonly LaidEntry[], filtering: boolean): JSX.Elemen
     out.push(<Entry key={laid.entry.id} laid={laid} />);
   }
   return out;
+}
+
+/** With no project at all, where to start: the Projects button above, which carries a dot (#171). */
+function FirstRunHint(): JSX.Element {
+  return (
+    <p className="session-list-first-run">
+      No sessions yet. Add a project with the Projects button above, or press <kbd className="sw-kbd">⌘A</kbd>.
+    </p>
+  );
 }
 
 function Entry({ laid }: { laid: LaidEntry }): JSX.Element {

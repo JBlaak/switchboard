@@ -1,9 +1,48 @@
-/* ========== PROJECT PICKER ==========
-   The dialog shell comes from the add-project dialog; this styles what sits in
-   it — a find-style filter field above a list of soft rows. */
+/* ========== THE PROJECTS MODAL (#171) ==========
+   The dialog shell comes from _add-project-dialog; this styles what sits in
+   it — a find-style filter field above a list of soft rows, the add rows, the
+   ⋯ menu and the add step. */
 .project-picker-dialog {
-  width: 520px;
+  width: 540px;
   max-width: 90vw;
+}
+
+/* What the ⋯ menu and the esc chip are positioned against. */
+.projects-modal {
+  position: relative;
+}
+
+.projects-esc {
+  position: absolute;
+  top: 4px;
+  right: 0;
+}
+
+/* The add step's title: a way back, then where you are. */
+.projects-crumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.projects-crumb-back {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--sb-text-muted);
+  font: 700 14px var(--sb-font-head);
+  cursor: pointer;
+
+  &:hover { color: var(--sb-text-strong); }
+}
+
+.projects-crumb-sep {
+  color: var(--sb-text-dimmest);
+  font-weight: 400;
 }
 
 .project-picker-filter {
@@ -19,6 +58,12 @@
   outline: none;
   margin-bottom: 10px;
   transition: box-shadow 0.15s;
+}
+
+/* A path reads as one, in the monospace the add step's field uses. */
+.project-picker-filter.is-path {
+  font-family: var(--sb-font-mono);
+  font-size: 13px;
 }
 
 .project-picker-filter:focus {
@@ -43,7 +88,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 6px 8px 6px 12px;
   border-radius: var(--sb-r-row);
   cursor: pointer;
@@ -60,8 +105,18 @@
   background: var(--sb-mint);
 }
 
+/* A worktree, under the repository it was cut from. */
+.project-picker-row.nested {
+  padding-left: 28px;
+
+  .project-picker-name {
+    font-weight: 400;
+    color: var(--sb-text-dim);
+  }
+}
+
 .project-picker-name {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   font-family: var(--sb-font-head);
   font-size: 14px;
@@ -83,9 +138,21 @@
   font-weight: 800;
 }
 
-/* Session count as a pill chip: neutral at rest, mint while any are running. */
+.worktree-badge {
+  flex-shrink: 0;
+  font: 800 9px var(--sb-font-head);
+  letter-spacing: 0.06em;
+  color: var(--sb-lav-ink);
+  background: var(--sb-lav);
+  border-radius: 99px;
+  padding: 1px 6px;
+}
+
+/* Session count as a pill chip: neutral at rest, mint while any are running.
+   It starts the row's right-hand side. */
 .project-picker-count {
   flex-shrink: 0;
+  margin-left: auto;
   padding: 2px 8px;
   border-radius: 99px;
   font-family: var(--sb-font-head);
@@ -107,80 +174,184 @@
   box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb),0.35);
 }
 
-.project-picker-actions {
-  display: flex;
+/* ---- The highlighted row's buttons ---- */
+.projects-go {
+  appearance: none;
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-
-.project-picker-row:hover .project-picker-actions,
-.project-picker-row.selected .project-picker-actions {
-  opacity: 1;
-}
-
-.project-picker-actions button {
-  background: transparent;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
   border: none;
-  color: var(--sb-text-faint);
+  border-radius: 8px;
+  background: rgba(var(--sb-overlay-rgb),0.08);
+  color: var(--sb-text-strong);
+  font: 700 11.5px var(--sb-font-body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.projects-more {
+  appearance: none;
+  flex-shrink: 0;
   width: 26px;
   height: 26px;
-  border-radius: 8px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  cursor: pointer;
-  position: relative;
-}
-
-.project-picker-actions button svg {
-  display: block;
-}
-
-/* Hover label for the icon-only row actions. It sits to the left of the button
-   because the list scrolls vertically — a tooltip above would be clipped. */
-.project-picker-actions button[data-tooltip]::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  right: calc(100% + 6px);
-  top: 50%;
-  transform: translateY(-50%);
-  white-space: nowrap;
-  font-family: var(--sb-font-head);
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--sb-text-strong);
-  background: var(--sb-bg-raised);
+  border: none;
   border-radius: 8px;
-  padding: 4px 8px;
+  background: transparent;
+  color: var(--sb-text-muted);
+  cursor: pointer;
+
+  &:hover,
+  &.open {
+    background: rgba(var(--sb-overlay-rgb),0.1);
+    color: var(--sb-text-strong);
+  }
+}
+
+/* ---- The ⋯ menu ---- */
+.projects-menu {
+  position: absolute;
+  z-index: 3;
+  width: 236px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--sb-r-row);
+  background: var(--sb-bg-raised);
   box-shadow:
     inset 0 0 0 1px var(--sb-line),
-    0 6px 16px -4px rgba(var(--sb-shadow-rgb),calc(0.4 * var(--sb-shadow-k)));
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.1s;
-  z-index: 5;
+    0 16px 32px -10px rgba(var(--sb-shadow-rgb),calc(0.75 * var(--sb-shadow-k)));
 }
 
-.project-picker-actions button[data-tooltip]:hover::after {
-  opacity: 1;
+.projects-menu-item {
+  appearance: none;
+  width: 100%;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--sb-text);
+  font: 12.5px var(--sb-font-body);
+  text-align: left;
+  cursor: pointer;
+
+  &.highlighted { background: rgba(var(--sb-overlay-rgb),0.07); }
+  &.danger { color: var(--sb-danger); }
+  &:disabled { color: var(--sb-text-dimmest); cursor: default; }
 }
 
-.project-picker-actions button:hover {
-  background: rgba(var(--sb-overlay-rgb),0.08);
-  color: var(--sb-text-strong);
+.projects-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--sb-line);
 }
 
-.project-picker-actions .picker-hide-btn:hover,
-.project-picker-actions .picker-remove-btn:hover {
-  background: rgba(var(--sb-danger-rgb),0.12);
-  color: var(--sb-danger);
+/* ---- The rows that add something ---- */
+.projects-sep {
+  height: 1px;
+  margin: 2px 4px 4px;
+  background: var(--sb-line);
+}
+
+.projects-add-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--sb-text-muted);
+}
+
+.projects-add-folder .projects-add-icon,
+.projects-add-remote .projects-add-icon {
+  color: var(--sb-accent);
+}
+
+.projects-add-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.projects-add-project .project-picker-name {
+  color: var(--sb-text-muted);
+  font-weight: 600;
+}
+
+.projects-path {
+  font-family: var(--sb-font-mono);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.projects-add-detail {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--sb-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.failed { color: var(--sb-danger); }
+}
+
+.projects-add-hint {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--sb-text-dimmest);
 }
 
 .project-picker-empty {
   padding: 14px 12px;
   font-size: 13px;
   color: var(--sb-text-faint);
+}
+
+/* ---- The add step ---- */
+.projects-add-step .add-project-tabs {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.projects-add-check {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: var(--sb-r-control);
+  background: var(--sb-mint);
+  font-size: 12px;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--sb-text-dim);
+  }
+
+  li.ok svg { color: var(--sb-green); }
+  li.not svg { color: var(--sb-text-faint); }
+}
+
+.projects-add-step .add-project-hint {
+  margin: 10px 2px 0;
+}
+
+.projects-add-step #add-project-remote .add-project-hint {
+  margin: 0 0 12px;
+}
+
+.add-project-add-btn .sw-kbd {
+  margin-left: 4px;
+  color: inherit;
+  border-color: currentColor;
+  opacity: 0.6;
 }

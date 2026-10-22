@@ -458,8 +458,8 @@ test.describe('archive', () => {
 
     /* When */
     const before = launchedKeys(home);
-    await page.getByRole('button', { name: 'New session', exact: true }).click();
-    await dialog(page, 'New Session').getByText(P.webDashboard, { exact: true }).click();
+    await page.getByRole('button', { name: 'Projects', exact: true }).click();
+    await dialog(page, 'Projects').getByText(P.webDashboard, { exact: true }).click();
     const claude = await waitForNewLaunch(home, 'claude', before);
     const pending = sessionItem(page, claude.key);
     await pending.hover();

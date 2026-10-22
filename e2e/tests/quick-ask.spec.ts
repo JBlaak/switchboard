@@ -7,7 +7,7 @@
  * the wired app: the hook shows the pop-up, the text crosses IPC, main sends
  * it to the fake `claude -p` the pop-up warmed as it showed, and the answer
  * starts a session in the main window, lists the choices, or hands the text
- * to the main window's New Session picker. A capture goes to the same fake,
+ * to the main window's Projects modal. A capture goes to the same fake,
  * allowed one MCP tool, from a `~/.claude.json` with stand-in servers.
  *
  * Under the harness the pop-up never comes on screen; whether it is showing
@@ -300,7 +300,7 @@ test('Tab from the list opens the picker in the main window with the rewritten p
   await box(popUp).press('Tab');
 
   /* Then */
-  const picker = dialog(page, 'New Session');
+  const picker = dialog(page, 'Start this in…');
   await expect(picker).toBeVisible();
   await expect(picker).toContainText('Fix the flaky upload test.');
   await expect.poll(() => quickAskShowing(app)).toBe(false);
@@ -317,7 +317,7 @@ test('no match without a quick folder hands the text to the picker, with Patch�
   await box(popUp).press('Enter');
 
   /* Then */
-  const picker = dialog(page, 'New Session');
+  const picker = dialog(page, 'Start this in…');
   await expect(picker).toBeVisible();
   await expect(picker).toContainText(TEXT);
   await expect(says(page, NO_MATCH_LINE)).toBeVisible();
@@ -350,7 +350,7 @@ test('no match with a quick folder starts a quick session on the text exactly as
   const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
   expect(launch.cwd).toBe(quickFolder);
   expect(launch.argv.at(-1)).toBe(TEXT);
-  await expect(dialog(page, 'New Session')).toBeHidden();
+  await expect(dialog(page, 'Start this in…')).toBeHidden();
 });
 
 test('⌘Enter starts a quick session on the text as typed, with no routing call', async ({ app, page, home }) => {
@@ -372,7 +372,7 @@ test('⌘Enter starts a quick session on the text as typed, with no routing call
   expect(launch.cwd).toBe(quickFolder);
   expect(launch.argv.at(-1)).toBe(TEXT);
   expect(route.calls().filter(call => call.prompt?.includes(TEXT))).toEqual([]);
-  await expect(dialog(page, 'New Session')).toBeHidden();
+  await expect(dialog(page, 'Start this in…')).toBeHidden();
   expect(await mainWindowFocused(app)).toBe(false);
 });
 

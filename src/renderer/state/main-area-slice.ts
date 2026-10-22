@@ -14,7 +14,7 @@
  */
 import type { RendererEvent } from './events';
 
-/** What a project route shows: so far only a plan (#128); the overview and settings come with the project page. */
+/** What a project route shows: its page (#173), one of its plans (#128), or its settings (#176). */
 export type ProjectView =
   | { readonly kind: 'overview' }
   | { readonly kind: 'plan'; readonly repository: string; readonly number: number }
@@ -105,6 +105,12 @@ export function rekeyMainArea(state: MainAreaState, oldId: string, newId: string
 export function highlightedSession(state: MainAreaState): string | null {
   const { route } = state;
   return route.kind === 'session' || route.kind === 'sessionWork' ? route.sessionId : null;
+}
+
+/** The project the main area shows, and which of its views; null for any other route. */
+export function projectRoute(state: MainAreaState): { readonly projectPath: string; readonly view: ProjectView } | null {
+  const { route } = state;
+  return route.kind === 'project' ? { projectPath: route.projectPath, view: route.view } : null;
 }
 
 /** The project route's plan, when it shows one. */

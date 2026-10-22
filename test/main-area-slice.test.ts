@@ -85,6 +85,25 @@ test('Esc on a project goes back to the session to return to, lit again', () => 
   assert.equal(highlightedSession(next.mainArea), 's1');
 });
 
+test('back from a plan to its project’s page still lights no row, and Esc there still goes back to the session', () => {
+  /* Given */
+  const state = run(onScreen('s1'), PLAN);
+
+  /* When */
+  const overview = run(state, { type: 'projectOpened', projectPath: '/dev/app', view: { kind: 'overview' } });
+
+  /* Then */
+  assert.deepEqual(overview.mainArea.route, { kind: 'project', projectPath: '/dev/app', view: { kind: 'overview' } });
+  assert.equal(projectPlan(overview.mainArea), null);
+  assert.equal(highlightedSession(overview.mainArea), null);
+
+  /* When */
+  const back = run(overview, { type: 'projectClosed' });
+
+  /* Then */
+  assert.deepEqual(back.mainArea.route, { kind: 'session', sessionId: 's1' });
+});
+
 test('Esc on a project with no session to return to goes to the empty screen', () => {
   /* Given */
   const state = run(initialRendererState(), PLAN);

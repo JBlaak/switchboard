@@ -1,0 +1,243 @@
+/* ========== THE PROJECT PAGE (#173) ==========
+   A project's page in the main area: its header, the two-column body, the
+   Sessions section, and a plan inside it under a breadcrumb. The header and
+   its buttons are the Session work page's (.sw-header, .sw-btn); the plan view
+   itself is styled in _plan.scss. Also the project's name as a link, wherever
+   it is shown, and the pulse of a row started from the page. */
+
+/* ---- The main-area panel, swapped in like #session-work ---- */
+#project-page {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sb-bg-base);
+}
+
+/* ---- Header ---- */
+.pp-header .sw-header-row { align-items: flex-start; }
+
+.pp-title {
+  font-size: 22px;
+  line-height: 28px;
+}
+
+.pp-path {
+  font: 11.5px var(--sb-font-mono);
+  color: var(--sb-text-dimmest);
+  overflow-wrap: anywhere;
+}
+
+.pp-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---- Body: the sections, and a 340 px column beside them ---- */
+.pp-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-content: start;
+  gap: 36px;
+  padding: 22px 28px 28px;
+}
+
+.pp-column {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+/* ---- A section: its heading line, then a card of rows ---- */
+.pp-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding: 0 4px;
+
+  h2 {
+    margin: 0;
+    font: 800 11px var(--sb-font-head);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sb-text-muted);
+  }
+}
+
+.pp-count {
+  font-size: 12px;
+  color: var(--sb-text-dimmest);
+}
+
+.pp-link {
+  appearance: none;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sb-text-faint);
+  font: 600 12px var(--sb-font-body);
+  cursor: pointer;
+
+  &:hover { color: var(--sb-text-strong); }
+}
+
+.pp-card {
+  padding: 6px;
+  border-radius: var(--sb-r-card);
+  background: var(--sb-bg-panel);
+  box-shadow: var(--sb-edge);
+}
+
+.pp-quiet {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--sb-text-faint);
+}
+
+/* ---- Rows: a session (44 px) ---- */
+.pp-row {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--sb-r-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover { background: rgba(var(--sb-overlay-rgb), 0.04); }
+}
+
+.pp-dot {
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: rgba(var(--sb-overlay-rgb), 0.18);
+
+  &.is-running { background: var(--sb-green); }
+}
+
+.pp-row-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.pp-row-title,
+.pp-row-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pp-row-title {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--sb-text-strong);
+}
+
+.pp-row-meta {
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--sb-text-dimmest);
+}
+
+.pp-mono { font-family: var(--sb-font-mono); }
+
+.pp-age {
+  align-self: flex-start;
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--sb-text-dimmest);
+}
+
+/* ---- A plan inside the page: the breadcrumb back to the project ---- */
+.pp-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  font: 700 12.5px var(--sb-font-head);
+  color: var(--sb-text-faint);
+
+  .sw-kbd { margin-left: 6px; }
+}
+
+.pp-crumb {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: -8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--sb-text-muted);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(var(--sb-overlay-rgb), 0.06);
+    color: var(--sb-text-strong);
+  }
+}
+
+.pp-crumb-sep { color: var(--sb-switch-track); }
+.pp-crumb-here { color: var(--sb-text-muted); }
+
+/* ---- A project's name, wherever it is shown: the way into its page ---- */
+.project-link {
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover {
+    background: rgba(var(--sb-accent-rgb), 0.14);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+#terminal-header-project {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 25%;
+  font: 700 12px var(--sb-font-head);
+  color: var(--sb-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  /* A remote project, in the blue the sidebar names it in. */
+  &.is-remote { color: var(--sb-blue); }
+}
+
+/* ---- A row started from the page pulses once (ui/session-list/pulse) ---- */
+@keyframes session-row-pulse {
+  0%   { background-color: rgba(var(--sb-accent-rgb), 0); }
+  30%  { background-color: rgba(var(--sb-accent-rgb), 0.24); }
+  100% { background-color: rgba(var(--sb-accent-rgb), 0); }
+}
+
+.session-item[data-pulse] > .session-row {
+  animation: session-row-pulse 1.1s ease-out 1;
+}
