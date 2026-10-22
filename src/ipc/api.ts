@@ -27,6 +27,7 @@ import type { Weather, WeatherLocation } from '../domain/weather/weather';
 import type { CaptureTarget, RouteRequest, RouteResult } from '../domain/ask/model';
 import type { IssueWorktreeRequest, IssueWorktreeResult } from '../domain/plan/issue-session';
 import type { Plan, PlanSummary } from '../domain/plan/model';
+import type { ProjectOverview, ProjectOverviewOptions } from '../domain/project/overview';
 
 /** Removes the listener an `on*` subscription added. */
 export type Unsubscribe = () => void;
@@ -183,6 +184,14 @@ export interface SwitchboardApi {
   plan(repo: string, number: number): Promise<Plan | null>;
   /** A project's plans for the picker (F1): open ones, and closed ones too with `closed` (F3). */
   projectPlans(projectPath: string, options: { closed: boolean }): Promise<PlanSummary[] | null>;
+  // ── The project page (#172) ──
+  /**
+   * Everything the project page shows in one answer: its repository, grouped
+   * plans, loose issues and PRs, worktrees and running sessions. The GitHub
+   * part is kept for 30 s in main, and served stale when a refresh fails.
+   * Closed plans and merged PRs only when asked.
+   */
+  projectOverview(projectPath: string, options?: ProjectOverviewOptions): Promise<ProjectOverview>;
 
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;

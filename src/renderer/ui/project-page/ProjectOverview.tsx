@@ -2,32 +2,106 @@
  * The project page's overview (#173): the header, and the body's two columns,
  * the sections on the left and a 340 px column on the right.
  *
- * Only the Sessions section has its data yet, from the cached projects; the
- * others are slots (`slots.tsx`) that the project overview (#172) fills.
- * Esc closes the page, back to the session it covered, focused.
+ * The page's keys (#174), while it has the focus and never in an input: ↑/↓
+ * move the cursor through every row across sections, → and ← expand and
+ * collapse a plan (← on an issue goes up to its plan), ↵ opens what is under
+ * the cursor, S starts a session on it, / filters the rows, and Esc closes
+ * the page, back to the session it covered, focused. What each key does is
+ * `page-keys`; the rows it walks are `page-rows`.
  */
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
+import { dispatch, getState } from '../../state/app-store';
+import { useStore } from '../use-store';
 import { projectLabel } from '../../features/sessions/project-label';
 import { ProjectHeader } from './ProjectHeader';
-import { SessionsSection } from './SessionsSection';
-import { PlansSection, PullRequestsSection, WorktreesSection } from './slots';
-import { closeProject } from './actions';
+import { PlansSection } from './PlansSection';
+import { SessionsSection, sessionsShown } from './SessionsSection';
+import { PullRequestsSection, WorktreesSection } from './slots';
+import {
+  closeProject, openIssueOnGitHub, openProjectPlan, openProjectSession, startPageIssueSession,
+} from './actions';
+import { pageRows, planRows, plansViewOf, sessionRows, type PageRow } from './page-rows';
+import { pageKeyAction } from './page-keys';
+
+/** Every row on the page now, in the order the cursor walks them. */
+function currentRows(projectPath: string): PageRow[] {
+  const state = getState();
+  const plans = plansViewOf(state.projectPage, projectPath);
+  const sessions = sessionsShown(projectPath, state.view.activePtyIds, state.projectPage.filter);
+  return pageRows({
+    plans: plans ? planRows(plans) : [],
+    sessions: sessionRows(sessions.lines.map(line => line.session.sessionId)),
+  });
+}
 
 export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.Element {
   const root = useRef<HTMLDivElement>(null);
+  const filterInput = useRef<HTMLInputElement>(null);
+  const cursor = useStore(state => state.projectPage.cursor);
+  const filter = useStore(state => state.projectPage.filter);
+  const [filtering, setFiltering] = useState(false);
 
-  // Into the page as it opens, so Esc reaches it without a click.
+  // Into the page as it opens, so its keys reach it without a click.
   useLayoutEffect(() => {
     root.current?.focus({ preventScroll: true });
   }, [projectPath]);
 
+  // The row under the cursor stays in view.
+  useEffect(() => {
+    if (!cursor) return;
+    root.current?.querySelector(`[data-cursor-id="${CSS.escape(cursor)}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [cursor]);
+
+  useLayoutEffect(() => {
+    if (filtering) filterInput.current?.focus();
+  }, [filtering]);
+
+  const closeFilter = (clear: boolean): void => {
+    if (clear) dispatch({ type: 'projectFilterChanged', filter: '' });
+    setFiltering(false);
+    root.current?.focus({ preventScroll: true });
+  };
+
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
-    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     if ((e.target as HTMLElement).matches('input, textarea, select, [contenteditable="true"]')) return;
+    if (e.key === 'Escape' && !e.shiftKey) {
+      e.preventDefault();
+      if (filter) dispatch({ type: 'projectFilterChanged', filter: '' });
+      else closeProject();
+      return;
+    }
+    // S is the only key that comes shifted as well; the rest are bare.
+    if (e.shiftKey && e.key !== 'S') return;
+    const action = pageKeyAction(e.key, currentRows(projectPath), getState().projectPage.cursor);
+    if (!action) return;
+    e.preventDefault();
+    switch (action.kind) {
+      case 'cursor': dispatch({ type: 'projectCursorMoved', target: action.target }); break;
+      case 'expand': dispatch({ type: 'projectPlanExpanded', plan: action.plan }); break;
+      case 'collapse': dispatch({ type: 'projectPlanCollapsed', plan: action.plan }); break;
+      case 'open-plan': openProjectPlan(projectPath, action.plan); break;
+      case 'open-issue': openIssueOnGitHub(action.issue); break;
+      case 'open-session': openProjectSession(action.sessionId); break;
+      case 'show-more-loose': dispatch({ type: 'projectLooseExpanded' }); break;
+      case 'start': void startPageIssueSession(projectPath, action.issue, action.plan); break;
+      case 'filter': setFiltering(true); break;
+    }
+  };
+
+  const onFilterKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      closeProject();
+      e.stopPropagation();
+      closeFilter(true);
+    } else if (e.key === 'Enter' || e.key === 'ArrowDown') {
+      // Back to the rows, the cursor on the first that is left.
+      e.preventDefault();
+      e.stopPropagation();
+      const first = currentRows(projectPath)[0];
+      dispatch({ type: 'projectCursorMoved', target: first?.id ?? null });
+      closeFilter(false);
     }
   };
 
@@ -41,6 +115,27 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
       onKeyDown={onKeyDown}
     >
       <ProjectHeader projectPath={projectPath} />
+      {(filtering || filter) && (
+        <div className="pp-filter">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-4-4" />
+          </svg>
+          <input
+            ref={filterInput}
+            type="text"
+            className="pp-filter-input"
+            aria-label="Filter rows"
+            placeholder="Filter rows"
+            value={filter}
+            spellCheck={false}
+            onChange={e => dispatch({ type: 'projectFilterChanged', filter: e.target.value })}
+            onKeyDown={onFilterKeyDown}
+            onBlur={() => { if (!getState().projectPage.filter) setFiltering(false); }}
+          />
+          <kbd className="sw-kbd">esc</kbd>
+        </div>
+      )}
       <div className="pp-body">
         <div className="pp-column">
           <PlansSection projectPath={projectPath} />

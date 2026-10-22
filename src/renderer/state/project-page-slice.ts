@@ -9,21 +9,39 @@
  * back as the page opens and writes it as it changes); the cursor and the
  * filter start empty every time the page opens.
  *
- * What the page shows is not here: the route says which project and which of
- * its views (`main-area-slice`), and the sessions come from the cached
- * projects. GitHub's side of the page (#172's overview) is for the sections
- * that read it to add.
+ * The project's overview (#172) is kept here too, as main last answered it
+ * for the open project: `ui/project-page/install-project-page` asks for it as
+ * the page opens and every minute while it stays on screen (#174). Which of
+ * its rows are on screen is `ui/project-page/page-rows`.
+ *
+ * What else the page shows is not here: the route says which project and
+ * which of its views (`main-area-slice`), and the sessions come from the
+ * cached projects.
  *
  * The events are declared here rather than in `events.ts`, like the session
  * list's, so the page's vocabulary stays in one file.
  */
 import type { RendererEvent } from './events';
+import type { RendererState } from './root';
+import { projectRoute } from './main-area-slice';
+import type { ProjectOverview } from '../../domain/project/overview';
+import type { IssueSessionStart } from '../../domain/plan/issue-session';
 
 export type ProjectPageEvent =
   /** The page opened on `projectPath`, with what it remembered of it. */
   | { type: 'projectPageRestored'; projectPath: string; memory: ProjectPageMemory }
   /** A plan (`owner/repo#n`) expanded or collapsed in place. */
   | { type: 'projectPlanToggled'; plan: string }
+  /** A plan expanded (→), or collapsed (←); nothing when it already is. */
+  | { type: 'projectPlanExpanded'; plan: string }
+  | { type: 'projectPlanCollapsed'; plan: string }
+  /** Main answered the overview of `projectPath`, asked with closed plans or without. */
+  | { type: 'projectOverviewAnswered'; projectPath: string; closed: boolean; overview: ProjectOverview }
+  /** Show N more: every issue that is not in a plan, not only the first few. */
+  | { type: 'projectLooseExpanded' }
+  /** Start session on an issue (`owner/repo#n`) under the page, and how it went. */
+  | { type: 'projectIssueStartAsked'; issue: string }
+  | { type: 'projectIssueStartAnswered'; issue: string; result: IssueSessionStart }
   | { type: 'projectShowClosedToggled' }
   /** The keyboard cursor moved to a row (null: it is gone). */
   | { type: 'projectCursorMoved'; target: string | null }
@@ -43,12 +61,22 @@ export interface ProjectPageState extends ProjectPageMemory {
   /** The row the keyboard cursor is on, by the id its section gives it. */
   readonly cursor: string | null;
   readonly filter: string;
+  /** Main's last answer for the project; null until the first one comes. */
+  readonly overview: ProjectOverview | null;
+  /** Show N more was clicked: the issues not in a plan are listed in full. */
+  readonly looseExpanded: boolean;
+  /** A session starting on one of the page's issues, or why the last one did not. */
+  readonly start: ProjectIssueStart | null;
 }
+
+export type ProjectIssueStart =
+  | { readonly issue: string; readonly phase: 'starting' }
+  | { readonly issue: string; readonly phase: 'failed'; readonly reason: string };
 
 export const NO_MEMORY: ProjectPageMemory = { expandedPlans: [], showClosed: false };
 
 export const initialProjectPageState: ProjectPageState = {
-  projectPath: null, ...NO_MEMORY, cursor: null, filter: '',
+  projectPath: null, ...NO_MEMORY, cursor: null, filter: '', overview: null, looseExpanded: false, start: null,
 };
 
 export function projectPageReducer(state: ProjectPageState, event: RendererEvent): ProjectPageState {
@@ -60,6 +88,10 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
         showClosed: event.memory.showClosed,
         cursor: null,
         filter: '',
+        // The same project again keeps its last answer on screen until the next.
+        overview: state.projectPath === event.projectPath ? state.overview : null,
+        looseExpanded: false,
+        start: null,
       };
 
     case 'projectPlanToggled': {
@@ -70,6 +102,32 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
         expandedPlans: open ? state.expandedPlans.filter(p => p !== event.plan) : [...state.expandedPlans, event.plan],
       };
     }
+
+    case 'projectPlanExpanded':
+      if (state.projectPath === null || state.expandedPlans.includes(event.plan)) return state;
+      return { ...state, expandedPlans: [...state.expandedPlans, event.plan] };
+
+    case 'projectPlanCollapsed':
+      if (!state.expandedPlans.includes(event.plan)) return state;
+      return { ...state, expandedPlans: state.expandedPlans.filter(p => p !== event.plan) };
+
+    case 'projectOverviewAnswered':
+      // An answer for another project, or one asked before Show closed flipped, is old news.
+      if (event.projectPath !== state.projectPath || event.closed !== state.showClosed) return state;
+      return { ...state, overview: event.overview };
+
+    case 'projectLooseExpanded':
+      return state.looseExpanded ? state : { ...state, looseExpanded: true };
+
+    case 'projectIssueStartAsked':
+      return state.projectPath === null ? state : { ...state, start: { issue: event.issue, phase: 'starting' } };
+
+    case 'projectIssueStartAnswered':
+      if (state.start?.issue !== event.issue) return state;
+      return {
+        ...state,
+        start: event.result.ok ? null : { issue: event.issue, phase: 'failed', reason: event.result.reason },
+      };
 
     case 'projectShowClosedToggled':
       return state.projectPath === null ? state : { ...state, showClosed: !state.showClosed };
@@ -83,6 +141,19 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
     default:
       return state;
   }
+}
+
+/**
+ * What the overview is asked for now (#174): the project, and whether closed
+ * plans are included, while the page shows its overview. Null while nothing
+ * should be asked: the page closed, one of its plans on screen, or the moment
+ * between the route opening a project and its memory (Show closed among it)
+ * being read back.
+ */
+export function overviewRequest(state: RendererState): { projectPath: string; closed: boolean } | null {
+  const route = projectRoute(state.mainArea);
+  if (!route || route.view.kind !== 'overview' || state.projectPage.projectPath !== route.projectPath) return null;
+  return { projectPath: route.projectPath, closed: state.projectPage.showClosed };
 }
 
 /** What the page remembers of its project, to persist. */

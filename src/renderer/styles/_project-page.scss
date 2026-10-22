@@ -169,6 +169,295 @@
   color: var(--sb-text-dimmest);
 }
 
+/* ---- Header facts from the overview (#174): repository, branch, freshness ---- */
+.pp-subline { gap: 2px 14px; }
+
+.pp-repo {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 11.5px var(--sb-font-mono);
+  color: var(--sb-text-muted);
+  cursor: pointer;
+
+  &:hover { color: var(--sb-text-strong); }
+}
+
+.pp-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 11.5px var(--sb-font-mono);
+  color: var(--sb-text-faint);
+}
+
+.pp-updated { color: var(--sb-text-dimmest); }
+
+/* ---- The filter (/), between the header and the sections ---- */
+.pp-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  margin: 14px 28px 0;
+  padding: 0 12px;
+  border-radius: var(--sb-r-control);
+  background: var(--sb-bg-panel);
+  box-shadow: var(--sb-edge);
+  color: var(--sb-text-ghost);
+}
+
+.pp-filter-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--sb-text-strong);
+  font: 13px var(--sb-font-body);
+
+  &::placeholder { color: var(--sb-text-placeholder); }
+}
+
+/* ---- The row under the keyboard cursor, in any section (#174) ---- */
+.pp-card .is-cursor,
+.pp-card .is-cursor:hover {
+  background: var(--sb-mint);
+  box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.25);
+}
+
+/* ---- Plans & issues (#174): a plan row (48 px), its issues (36 px) ---- */
+.pp-plan-group.is-closed { opacity: 0.55; }
+
+.pp-plan {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 10px 0 6px;
+  border-radius: var(--sb-r-row);
+  cursor: pointer;
+
+  &:hover { background: rgba(var(--sb-overlay-rgb), 0.04); }
+}
+
+.pp-chevron {
+  appearance: none;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--sb-text-faint);
+  cursor: pointer;
+
+  svg { transition: transform 0.15s; }
+  &.is-open svg { transform: rotate(90deg); }
+  &:hover { background: rgba(var(--sb-overlay-rgb), 0.06); color: var(--sb-text-strong); }
+}
+
+.pp-plan-title {
+  min-width: 0;
+  font: 700 14px var(--sb-font-head);
+  color: var(--sb-text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pp-num {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--sb-text-dimmest);
+}
+
+.pp-segments {
+  display: flex;
+  flex-shrink: 0;
+  gap: 3px;
+  margin-left: auto;
+
+  span {
+    display: block;
+    width: 18px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--sb-border-strong);
+  }
+
+  .is-closed { background: var(--sb-purple); }
+  .is-next { background: var(--sb-accent); }
+}
+
+.pp-fraction {
+  flex-shrink: 0;
+  width: 34px;
+  font-size: 12px;
+  text-align: right;
+  color: var(--sb-text-muted);
+}
+
+.pp-level {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--sb-mint);
+  color: var(--sb-accent);
+  font: 700 11px var(--sb-font-head);
+
+  &.is-done {
+    background: color-mix(in srgb, var(--sb-purple) 14%, transparent);
+    color: var(--sb-purple);
+  }
+}
+
+.pp-pill {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: rgba(var(--sb-overlay-rgb), 0.06);
+  color: var(--sb-text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &.is-running,
+  &.is-pr-open { background: rgba(var(--sb-green-rgb), 0.12); color: var(--sb-green); }
+  &.is-pr-merged { background: color-mix(in srgb, var(--sb-purple) 14%, transparent); color: var(--sb-purple); }
+  &.is-bug { background: rgba(var(--sb-red-rgb), 0.12); color: var(--sb-red); }
+  &.is-agent { background: rgba(var(--sb-blue-rgb), 0.12); color: var(--sb-blue); }
+}
+
+.pp-pill-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pp-plan-issues { padding-bottom: 6px; }
+
+.pp-issue {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px 0 40px;
+  border-radius: var(--sb-r-control);
+  cursor: pointer;
+
+  &:hover { background: rgba(var(--sb-overlay-rgb), 0.04); }
+  &.is-loose { padding-left: 14px; }
+}
+
+.pp-state {
+  flex-shrink: 0;
+
+  &.is-open { color: var(--sb-green); }
+  &.is-closed { color: var(--sb-purple); }
+  &.is-blocked { color: var(--sb-text-faint); }
+}
+
+.pp-issue-title {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--sb-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  .is-closed > & { color: var(--sb-text-faint); }
+}
+
+.pp-right {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.pp-waits {
+  font-size: 11.5px;
+  color: var(--sb-text-faint);
+  white-space: nowrap;
+}
+
+/* Start session: on hover, or under the cursor, and while it starts. */
+.pp-start {
+  appearance: none;
+  display: none;
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--sb-text-strong);
+  color: var(--sb-bg-base);
+  font: 700 11.5px var(--sb-font-body);
+  cursor: pointer;
+
+  .pp-issue:hover &,
+  .pp-issue.is-cursor &,
+  &.is-starting { display: inline-flex; align-items: center; }
+  &:disabled { cursor: default; opacity: 0.7; }
+}
+
+.pp-start-failed {
+  font-size: 11.5px;
+  color: var(--sb-red);
+}
+
+.pp-subhead {
+  padding: 10px 10px 4px 14px;
+  font: 700 11px var(--sb-font-head);
+  color: var(--sb-text-dimmest);
+}
+
+.pp-more {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--sb-r-control);
+  background: none;
+  color: var(--sb-text-faint);
+  font: 600 12px var(--sb-font-body);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover { color: var(--sb-text-strong); background: rgba(var(--sb-overlay-rgb), 0.04); }
+}
+
+/* Waiting for the first answer: the section's rows as grey bars. */
+.pp-skeleton {
+  height: 36px;
+  margin: 6px 4px;
+  border-radius: var(--sb-r-control);
+  background: rgba(var(--sb-overlay-rgb), 0.06);
+  animation: loading-pulse 1.6s ease-in-out infinite;
+
+  & + & { animation-delay: 0.2s; }
+  & + & + & { animation-delay: 0.4s; }
+
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+}
+
 /* ---- A plan inside the page: the breadcrumb back to the project ---- */
 .pp-crumbs {
   display: flex;

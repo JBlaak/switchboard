@@ -30,6 +30,7 @@ import type { Usage } from '../../src/domain/usage/usage';
 import type { Weather, WeatherLocation } from '../../src/domain/weather/weather';
 import type { Plan, PlanSummary } from '../../src/domain/plan/model';
 import type { SessionPlans } from '../../src/application/services/plan-service';
+import type { ProjectOverview } from '../../src/domain/project/overview';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -88,6 +89,14 @@ export interface HostStubs {
    * service, which finds no repository in the fixture home.
    */
   plans: PlansStub | null;
+  /**
+   * What `projectOverview` answers, standing in for git and `gh`, by the end of
+   * the project's path (`Development/acme-api`); null leaves the real service,
+   * which finds no repository in the fixture home. A project not listed has no
+   * GitHub remote. Closed plans are left out unless asked for, and an answered
+   * GitHub part is dated the moment it is asked.
+   */
+  projectOverview: Record<string, ProjectOverview> | null;
 }
 
 /** What the plan channels answer: a session's plans, one plan by its issue, and the sessions that own issues. */
@@ -184,6 +193,7 @@ export const DEFAULT_STUBS: HostStubs = {
   geocode: {},
   sessionWork: null,
   plans: null,
+  projectOverview: null,
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
@@ -269,6 +279,25 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       });
       ipcMain.removeHandler(channels.planIssueSessions);
       ipcMain.handle(channels.planIssueSessions, (_event, repo) => plans.issueSessions?.[String(repo)] ?? {});
+    }
+
+    if (state.projectOverview) {
+      // Read at each call, so `setHostStub(app, 'projectOverview', …)` changes what the next poll answers.
+      ipcMain.removeHandler(channels.projectOverview);
+      ipcMain.handle(channels.projectOverview, (_event, projectPath, options: { closed?: boolean } | undefined) => {
+        const path = String(projectPath);
+        const found = Object.entries(state.projectOverview ?? {}).find(([end]) => path.endsWith('/' + end));
+        if (!found) return { projectPath: path, remote: false, repository: null, github: null, worktrees: [], running: [] };
+        const overview = found[1];
+        const github = overview.github?.ok
+          ? {
+              ...overview.github,
+              fetchedAt: Date.now(),
+              plans: options?.closed ? overview.github.plans : overview.github.plans.filter(plan => plan.state === 'open'),
+            }
+          : overview.github;
+        return { ...overview, projectPath: path, github };
+      });
     }
 
     const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {

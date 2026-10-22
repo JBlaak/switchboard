@@ -33,7 +33,7 @@ import { classifyQuery } from './projects-query';
 import { projectsRows } from './projects-rows';
 import { folderSummary } from './add-project-request';
 import { filterPlans, orderPlans } from './plan-list';
-import { recentPlansIn } from './recent-plans';
+import { recentPlansIn } from '../project-page/recent-plans';
 import {
   addLocalProject, archiveAllSessions, askProjectPlans, canHavePlans, checkProjectFolder, hideProject,
   launchFromPicker, openProjectOnGitHub, removeRemoteProject,

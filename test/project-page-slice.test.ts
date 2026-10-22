@@ -41,6 +41,7 @@ test('a page opens on what its project remembered, with no cursor and no filter'
   /* Then */
   assert.deepEqual(state.projectPage, {
     projectPath: APP, expandedPlans: ['acme/app#121'], showClosed: true, cursor: null, filter: '',
+    overview: null, looseExpanded: false, start: null,
   });
 });
 
