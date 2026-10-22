@@ -40,6 +40,21 @@
   margin-top: 44px;
 }
 
+/* The rail also leaves the traffic lights hanging over the left end of whichever
+   header the main area shows. The lights end at x:78 (x:18 plus a 60px cluster)
+   and the main area starts at the rail's 42px, so each header's content starts
+   16px clear of them. Every view's top-strip header is listed here: the terminal,
+   Settings, and the Session work and Plan pages (.sw-header). Fullscreen has no
+   traffic lights, so the headers keep their own padding there. */
+:root:not(.fullscreen) #sidebar.collapsed ~ #main :is(#terminal-header, #settings-viewer-header, .sw-header) {
+  padding-left: 52px;
+}
+
+/* Slides with the sidebar, so the title does not jump ahead of it. */
+#sidebar.animating ~ #main :is(#terminal-header, #settings-viewer-header, .sw-header) {
+  transition: padding-left 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 /* Fullscreen hides the traffic lights entirely — reclaim their space. */
 .fullscreen #sidebar.collapsed #sidebar-expand-btn {
   margin-top: 12px;
