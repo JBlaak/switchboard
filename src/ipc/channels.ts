@@ -96,6 +96,8 @@ export const INVOKE = {
   planSessionPlans: 'plan:session-plans',
   planGet: 'plan:get',
   planProjectPlans: 'plan:project-plans',
+  // The project page (#172)
+  projectOverview: 'project:overview',
 } as const;
 
 /** Renderer tells main; no answer expected. */
