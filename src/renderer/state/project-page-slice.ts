@@ -35,14 +35,19 @@ export type ProjectPageEvent =
   /** A plan expanded (→), or collapsed (←); nothing when it already is. */
   | { type: 'projectPlanExpanded'; plan: string }
   | { type: 'projectPlanCollapsed'; plan: string }
-  /** Main answered the overview of `projectPath`, asked with closed plans or without. */
-  | { type: 'projectOverviewAnswered'; projectPath: string; closed: boolean; overview: ProjectOverview }
+  /** Main answered the overview of `projectPath`, asked with closed plans and merged PRs or without. */
+  | { type: 'projectOverviewAnswered'; projectPath: string; closed: boolean; merged: boolean; overview: ProjectOverview }
   /** Show N more: every issue that is not in a plan, not only the first few. */
   | { type: 'projectLooseExpanded' }
   /** Start session on an issue (`owner/repo#n`) under the page, and how it went. */
   | { type: 'projectIssueStartAsked'; issue: string }
   | { type: 'projectIssueStartAnswered'; issue: string; result: IssueSessionStart }
   | { type: 'projectShowClosedToggled' }
+  /** Show merged in the Pull requests section (#175). */
+  | { type: 'projectShowMergedToggled' }
+  /** Start session on one of the project's worktrees (#175), by its path, and how it went. */
+  | { type: 'projectWorktreeStartAsked'; path: string }
+  | { type: 'projectWorktreeStartAnswered'; path: string; result: { ok: true; sessionId: string } | { ok: false; reason: string } }
   /** The keyboard cursor moved to a row (null: it is gone). */
   | { type: 'projectCursorMoved'; target: string | null }
   /** The text the page's rows are filtered by (`/`). */
@@ -67,16 +72,25 @@ export interface ProjectPageState extends ProjectPageMemory {
   readonly looseExpanded: boolean;
   /** A session starting on one of the page's issues, or why the last one did not. */
   readonly start: ProjectIssueStart | null;
+  /** Show merged: merged pull requests are listed after the open ones (#175). Not remembered. */
+  readonly showMerged: boolean;
+  /** A session starting in one of the project's worktrees, or why the last one did not (#175). */
+  readonly worktreeStart: ProjectWorktreeStart | null;
 }
 
 export type ProjectIssueStart =
   | { readonly issue: string; readonly phase: 'starting' }
   | { readonly issue: string; readonly phase: 'failed'; readonly reason: string };
 
+export type ProjectWorktreeStart =
+  | { readonly path: string; readonly phase: 'starting' }
+  | { readonly path: string; readonly phase: 'failed'; readonly reason: string };
+
 export const NO_MEMORY: ProjectPageMemory = { expandedPlans: [], showClosed: false };
 
 export const initialProjectPageState: ProjectPageState = {
   projectPath: null, ...NO_MEMORY, cursor: null, filter: '', overview: null, looseExpanded: false, start: null,
+  showMerged: false, worktreeStart: null,
 };
 
 export function projectPageReducer(state: ProjectPageState, event: RendererEvent): ProjectPageState {
@@ -92,6 +106,8 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
         overview: state.projectPath === event.projectPath ? state.overview : null,
         looseExpanded: false,
         start: null,
+        showMerged: false,
+        worktreeStart: null,
       };
 
     case 'projectPlanToggled': {
@@ -112,8 +128,8 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
       return { ...state, expandedPlans: state.expandedPlans.filter(p => p !== event.plan) };
 
     case 'projectOverviewAnswered':
-      // An answer for another project, or one asked before Show closed flipped, is old news.
-      if (event.projectPath !== state.projectPath || event.closed !== state.showClosed) return state;
+      // An answer for another project, or one asked before Show closed or Show merged flipped, is old news.
+      if (event.projectPath !== state.projectPath || event.closed !== state.showClosed || event.merged !== state.showMerged) return state;
       return { ...state, overview: event.overview };
 
     case 'projectLooseExpanded':
@@ -132,6 +148,19 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
     case 'projectShowClosedToggled':
       return state.projectPath === null ? state : { ...state, showClosed: !state.showClosed };
 
+    case 'projectShowMergedToggled':
+      return state.projectPath === null ? state : { ...state, showMerged: !state.showMerged };
+
+    case 'projectWorktreeStartAsked':
+      return state.projectPath === null ? state : { ...state, worktreeStart: { path: event.path, phase: 'starting' } };
+
+    case 'projectWorktreeStartAnswered':
+      if (state.worktreeStart?.path !== event.path) return state;
+      return {
+        ...state,
+        worktreeStart: event.result.ok ? null : { path: event.path, phase: 'failed', reason: event.result.reason },
+      };
+
     case 'projectCursorMoved':
       return state.cursor === event.target ? state : { ...state, cursor: event.target };
 
@@ -145,15 +174,15 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
 
 /**
  * What the overview is asked for now (#174): the project, and whether closed
- * plans are included, while the page shows its overview. Null while nothing
+ * plans and (#175) merged pull requests are included, while the page shows its overview. Null while nothing
  * should be asked: the page closed, one of its plans on screen, or the moment
  * between the route opening a project and its memory (Show closed among it)
  * being read back.
  */
-export function overviewRequest(state: RendererState): { projectPath: string; closed: boolean } | null {
+export function overviewRequest(state: RendererState): { projectPath: string; closed: boolean; merged: boolean } | null {
   const route = projectRoute(state.mainArea);
   if (!route || route.view.kind !== 'overview' || state.projectPage.projectPath !== route.projectPath) return null;
-  return { projectPath: route.projectPath, closed: state.projectPage.showClosed };
+  return { projectPath: route.projectPath, closed: state.projectPage.showClosed, merged: state.projectPage.showMerged };
 }
 
 /** What the page remembers of its project, to persist. */

@@ -93,7 +93,7 @@ export interface HostStubs {
    * What `projectOverview` answers, standing in for git and `gh`, by the end of
    * the project's path (`Development/acme-api`); null leaves the real service,
    * which finds no repository in the fixture home. A project not listed has no
-   * GitHub remote. Closed plans are left out unless asked for, and an answered
+   * GitHub remote. Closed plans and merged PRs are left out unless asked for, and an answered
    * GitHub part is dated the moment it is asked.
    */
   projectOverview: Record<string, ProjectOverview> | null;
@@ -284,7 +284,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
     if (state.projectOverview) {
       // Read at each call, so `setHostStub(app, 'projectOverview', …)` changes what the next poll answers.
       ipcMain.removeHandler(channels.projectOverview);
-      ipcMain.handle(channels.projectOverview, (_event, projectPath, options: { closed?: boolean } | undefined) => {
+      ipcMain.handle(channels.projectOverview, (_event, projectPath, options: { closed?: boolean; merged?: boolean } | undefined) => {
         const path = String(projectPath);
         const found = Object.entries(state.projectOverview ?? {}).find(([end]) => path.endsWith('/' + end));
         if (!found) return { projectPath: path, remote: false, repository: null, github: null, worktrees: [], running: [] };
@@ -294,6 +294,9 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
               ...overview.github,
               fetchedAt: Date.now(),
               plans: options?.closed ? overview.github.plans : overview.github.plans.filter(plan => plan.state === 'open'),
+              pullRequests: options?.merged
+                ? overview.github.pullRequests
+                : overview.github.pullRequests.filter(row => row.pullRequest.state !== 'merged'),
             }
           : overview.github;
         return { ...overview, projectPath: path, github };

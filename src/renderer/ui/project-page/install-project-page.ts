@@ -30,14 +30,15 @@ export function installProjectPage(): () => void {
 
   const follow = (state: RendererState): void => {
     const request = overviewRequest(state);
-    const key = request ? request.projectPath + '\0' + String(request.closed) : null;
+    const key = request ? [request.projectPath, request.closed, request.merged].join('\0') : null;
     if (key === polling) return;
     polling = key;
     if (poll) clearInterval(poll);
     poll = null;
     if (!request) return;
-    void loadProjectOverview(request.projectPath, request.closed);
-    poll = setInterval(() => { void loadProjectOverview(request.projectPath, request.closed); }, OVERVIEW_POLL_MS);
+    const load = (): void => { void loadProjectOverview(request.projectPath, request.closed, request.merged); };
+    load();
+    poll = setInterval(load, OVERVIEW_POLL_MS);
   };
 
   const unsubscribe = store.subscribe((state, previous) => {

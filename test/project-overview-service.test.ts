@@ -47,7 +47,7 @@ function pullRequest(number: number, closes: number[], state: 'open' | 'merged' 
 }
 
 function checkout(path: string, main = false): WorktreeSummary {
-  return { path, branch: main ? 'main' : 'branch', main, locked: false, changedFiles: 0, ahead: 0, merged: false };
+  return { path, branch: main ? 'main' : 'branch', main, locked: false, changedFiles: 0, ahead: 0, merged: false, lastCommitAt: null };
 }
 
 interface World {

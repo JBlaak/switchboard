@@ -72,6 +72,8 @@ export interface WorktreeSummary {
    * HEAD, nor for the default branch itself.
    */
   merged: boolean;
+  /** When the commit it is on was made, epoch ms; null when git could not say. */
+  lastCommitAt: number | null;
 }
 
 // ── The answer to a project page (#172) ──
