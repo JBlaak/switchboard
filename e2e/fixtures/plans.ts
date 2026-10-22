@@ -8,6 +8,8 @@ import { toPlan } from '../../src/infrastructure/github/gh-plans';
 import james22 from '../../test/fixtures/gh-plan-james-22.json';
 import type { Plan, PlanIssue, PlanPullRequest, PlanSummary } from '../../src/domain/plan/model';
 import type { PlansStub } from '../support/main-process';
+import { groupOverview } from '../../src/domain/plan/project-overview';
+import type { ProjectIssue, ProjectOverview, ProjectPullRequest } from '../../src/domain/project/overview';
 
 const REPO = 'acme/api';
 
@@ -71,6 +73,69 @@ export const ACME_PLANS: PlanSummary[] = [
   planSummary(1300, 'Login rework', { updatedAt: '2026-10-17T10:00:00Z', open: 3, total: 5, current: 2, levels: 3 }),
   planSummary(900, 'Move to Postgres 16', { state: 'closed', open: 0, total: 6, current: null, levels: 2 }),
 ];
+
+// ── The project page's overview (#174) ──
+
+/** A closed plan, for Show closed. */
+const POSTGRES_PLAN: Plan = {
+  repository: REPO,
+  number: 900,
+  title: 'Move to Postgres 16',
+  parent: null,
+  issues: [
+    issue(901, 'Dump and restore in CI', { state: 'closed', closedAs: 'completed', pullRequests: [pr(910, 'merged')] }),
+    issue(902, 'Switch the connection pool', { state: 'closed', closedAs: 'completed', pullRequests: [pr(911, 'merged')] }),
+  ],
+  outside: [],
+};
+
+function overviewIssue(number: number, title: string, labels: string[], fields: Partial<ProjectIssue> = {}): ProjectIssue {
+  return {
+    repository: REPO, number, title, state: 'open', updatedAt: '2026-10-16T10:00:00Z',
+    labels: labels.map(name => ({ name, color: name === 'bug' ? 'd73a4a' : 'ededed' })), parent: null, subIssueCount: 0,
+    ...fields,
+  };
+}
+
+/**
+ * acme/api's project page as main would answer it: the login plan (with
+ * #1302 owned by the login-fix session and closed by PR #1320), the closed
+ * Postgres plan, and three issues in no plan. Grouped by the real rule.
+ */
+export function acmeOverview(): ProjectOverview {
+  const loginIssues = LOGIN_PLAN.issues.filter(i => i.state === 'open')
+    .map(i => overviewIssue(i.number, i.title, [], { parent: 1300 }));
+  const groups = groupOverview<ProjectIssue, ProjectPullRequest>({
+    repository: REPO,
+    plans: [
+      { plan: LOGIN_PLAN, state: 'open', updatedAt: '2026-10-17T10:00:00Z' },
+      { plan: POSTGRES_PLAN, state: 'closed', updatedAt: '2026-09-01T10:00:00Z' },
+    ],
+    issues: [
+      overviewIssue(1300, LOGIN_PLAN.title, [], { subIssueCount: LOGIN_PLAN.issues.length }),
+      ...loginIssues,
+      overviewIssue(1401, 'Health check times out behind the proxy', ['bug'], { updatedAt: '2026-10-17T09:00:00Z' }),
+      overviewIssue(1402, 'Document the rate limits', ['docs', 'ready-for-agent', 'good first issue']),
+      overviewIssue(1403, 'Retry webhooks with backoff', [], { updatedAt: '2026-10-15T10:00:00Z' }),
+    ],
+    pullRequests: [{
+      repository: REPO, number: 1320, title: 'Stop the login redirect loop', state: 'open', draft: false,
+      headRef: 'fix/1320', updatedAt: '2026-10-17T10:00:00Z', checks: { state: 'passing', failing: 0 },
+      review: 'review_required', closes: [1302],
+    }],
+    sessions: { owners: { [REPO + '#1302']: S.loginFix }, running: new Set() },
+  });
+  return {
+    projectPath: P.acmeApi,
+    remote: false,
+    repository: REPO,
+    github: { ok: true, fetchedAt: 0, stale: false, ...groups },
+    worktrees: [{
+      path: P.acmeApi, branch: 'main', main: true, locked: false, changedFiles: 0, ahead: 0, merged: false, running: [],
+    }],
+    running: [],
+  };
+}
 
 /** `login`: the login plan as GitHub answers it now; a test swaps in another with `setHostStub`. */
 export function plansStub(login: Plan = LOGIN_PLAN): PlansStub {

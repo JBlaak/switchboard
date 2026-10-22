@@ -2,7 +2,8 @@
  * The project page's places for what GitHub knows about the project (#167):
  * empty until the project overview (#172) is there to fill them.
  *
- * - `PlansSection`, the plans and the issues outside them: #174.
+ * - `PlansSection`, the plans and the issues outside them: #174, filled in
+ *   `PlansSection.tsx`, which also shows how a section reads the overview.
  * - `PullRequestsSection` and `WorktreesSection`: #175.
  * - `ProjectSettingsSlot`, the route `project → settings`: #176. Until then
  *   the header's Settings button opens the settings panel instead, so nothing
@@ -17,11 +18,6 @@ import type { JSX } from 'react';
 export interface SectionProps {
   /** The repository the page is for (never a worktree). */
   readonly projectPath: string;
-}
-
-/** Plans & issues, at the top of the left column (#174). */
-export function PlansSection(_props: SectionProps): JSX.Element | null {
-  return null;
 }
 
 /** Pull requests, under the plans in the left column (#175). */

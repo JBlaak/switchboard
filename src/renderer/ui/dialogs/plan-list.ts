@@ -3,42 +3,10 @@
  * in what order, what each row says, and the plans opened recently.
  *
  * Pure, so the rules run under the node test runner without a DOM; the
- * picker reads and writes the recent list through `recent-plans`.
+ * recent list is the project page's (`ui/project-page/recent-plans`, #174).
  */
 import { issueKeyString } from '../../../domain/plan/model';
-import type { IssueKey, PlanSummary } from '../../../domain/plan/model';
-
-/** How many recently opened plans a project remembers. */
-export const RECENT_PLANS_CAP = 10;
-
-/** Per project path, the plans opened from the picker, the latest first, as `owner/repo#n`. */
-export type RecentPlans = Readonly<Record<string, readonly string[]>>;
-
-/** The recent list as stored; anything unreadable reads as none. */
-export function parseRecentPlans(raw: string | null): RecentPlans {
-  if (!raw) return {};
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    const recent: Record<string, string[]> = {};
-    for (const [project, keys] of Object.entries(parsed)) {
-      if (!Array.isArray(keys)) continue;
-      const strings = keys.filter((key): key is string => typeof key === 'string');
-      if (strings.length) recent[project] = strings.slice(0, RECENT_PLANS_CAP);
-    }
-    return recent;
-  } catch {
-    return {};
-  }
-}
-
-/** `plan` opened in `projectPath`: first in that project's list, once, and the list kept to the cap. */
-export function rememberPlan(recent: RecentPlans, projectPath: string, plan: IssueKey): RecentPlans {
-  const key = issueKeyString(plan);
-  const before = recent[projectPath] ?? [];
-  const list = [key, ...before.filter(other => other !== key)].slice(0, RECENT_PLANS_CAP);
-  return { ...recent, [projectPath]: list };
-}
+import type { PlanSummary } from '../../../domain/plan/model';
 
 /** The plans opened recently first, latest first; then the rest by their latest activity (F1). */
 export function orderPlans(plans: readonly PlanSummary[], recent: readonly string[]): PlanSummary[] {
