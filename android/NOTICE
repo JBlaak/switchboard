@@ -1,0 +1,8 @@
+Switchboard for Android bundles these fonts, each under the SIL Open Font
+License 1.1. The full license texts are in licenses/.
+
+  Mulish         app/src/main/res/font/mulish.ttf          licenses/OFL-mulish.txt
+  Nunito Sans    app/src/main/res/font/nunito_sans.ttf     licenses/OFL-nunito-sans.txt
+  JetBrains Mono app/src/main/res/font/jetbrains_mono.ttf  licenses/OFL-jetbrains-mono.txt
+
+The files are the variable fonts from https://github.com/google/fonts (ofl/).
