@@ -16,7 +16,9 @@ const EVERY_MESSAGE: ClientMessage[] = [
   { type: 'input', sessionId: 's1', data: 'fix the bug\r' },
   { type: 'answer', sessionId: 's1', toolUseId: 'tu1', answers: { 'Which one?': 'A, B', 'Anything else?': '' } },
   { type: 'ask', requestId: 'r1', text: 'add dark mode to the settings page' },
+  { type: 'ask', requestId: 'r2', text: 'fix the flaky test', cols: 48, rows: 30 },
   { type: 'ask-cancel', requestId: 'r1' },
+  { type: 'ask-start', requestId: 'r2', projectPath: '/Users/joris/Development/switchboard', prompt: 'Fix it', cols: 48, rows: 30 },
   { type: 'ask-start', requestId: 'r1', projectPath: '/Users/joris/Development/switchboard', prompt: 'Add dark mode' },
   { type: 'list-projects' },
 ];
@@ -80,6 +82,12 @@ const MALFORMED: Record<string, unknown[]> = {
     { type: 'ask', requestId: 'r1' },
     { type: 'ask', requestId: 'r1', text: '  ' },
     { type: 'ask', requestId: 'r1', text: 'x'.repeat(100_001) },
+    { type: 'ask', requestId: 'r1', text: 'hi', cols: 48 },
+    { type: 'ask', requestId: 'r1', text: 'hi', rows: 30 },
+    { type: 'ask', requestId: 'r1', text: 'hi', cols: 0, rows: 30 },
+    { type: 'ask', requestId: 'r1', text: 'hi', cols: 48, rows: 1001 },
+    { type: 'ask', requestId: 'r1', text: 'hi', cols: '48', rows: 30 },
+    { type: 'ask', requestId: 'r1', text: 'hi', cols: 48, rows: null },
   ],
   'ask-cancel': [{ type: 'ask-cancel' }, { type: 'ask-cancel', requestId: '' }],
   'ask-start': [
@@ -87,6 +95,10 @@ const MALFORMED: Record<string, unknown[]> = {
     { type: 'ask-start', requestId: 'r1', prompt: 'hi' },
     { type: 'ask-start', requestId: 'r1', projectPath: '/p' },
     { type: 'ask-start', requestId: 'r1', projectPath: 'x'.repeat(4097), prompt: 'hi' },
+    { type: 'ask-start', requestId: 'r1', projectPath: '/p', prompt: 'hi', cols: 48 },
+    { type: 'ask-start', requestId: 'r1', projectPath: '/p', prompt: 'hi', rows: 30 },
+    { type: 'ask-start', requestId: 'r1', projectPath: '/p', prompt: 'hi', cols: 48.5, rows: 30 },
+    { type: 'ask-start', requestId: 'r1', projectPath: '/p', prompt: 'hi', cols: 48, rows: -1 },
   ],
 };
 
@@ -103,7 +115,7 @@ test('every client message round-trips through JSON', () => {
 
 test('the malformed cases cover every message type', () => {
   /* Given */
-  const types = EVERY_MESSAGE.map((message) => message.type).filter((type) => type !== 'list-projects');
+  const types = [...new Set(EVERY_MESSAGE.map((message) => message.type))].filter((type) => type !== 'list-projects');
 
   /* When */
   const covered = Object.keys(MALFORMED);

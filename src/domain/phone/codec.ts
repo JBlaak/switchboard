@@ -74,7 +74,9 @@ export function parseClientMessage(text: string): ClientMessage | null {
     }
     case 'ask': {
       if (!isText(raw.requestId, MAX_ID) || !isText(raw.text, MAX_TEXT) || !raw.text.trim()) return null;
-      return { type: 'ask', requestId: raw.requestId, text: raw.text };
+      const size = parseOptionalSize(raw);
+      if (!size) return null;
+      return { type: 'ask', requestId: raw.requestId, text: raw.text, ...size.value };
     }
     case 'ask-cancel': {
       if (!isText(raw.requestId, MAX_ID)) return null;
@@ -82,7 +84,9 @@ export function parseClientMessage(text: string): ClientMessage | null {
     }
     case 'ask-start': {
       if (!isText(raw.requestId, MAX_ID) || !isText(raw.projectPath, MAX_PATH) || !isText(raw.prompt, MAX_TEXT)) return null;
-      return { type: 'ask-start', requestId: raw.requestId, projectPath: raw.projectPath, prompt: raw.prompt };
+      const size = parseOptionalSize(raw);
+      if (!size) return null;
+      return { type: 'ask-start', requestId: raw.requestId, projectPath: raw.projectPath, prompt: raw.prompt, ...size.value };
     }
     case 'list-projects':
       return { type: 'list-projects' };
@@ -108,6 +112,16 @@ function parseAnswers(value: unknown): Answers | null {
     answers[question] = answer;
   }
   return answers;
+}
+
+/**
+ * The optional size on `ask` and `ask-start`: both or neither, since half a
+ * size can't size a PTY. Null when malformed; `value` is empty when absent.
+ */
+function parseOptionalSize(raw: Record<string, unknown>): { value: { cols?: number; rows?: number } } | null {
+  if (raw.cols === undefined && raw.rows === undefined) return { value: {} };
+  if (!isCells(raw.cols) || !isCells(raw.rows)) return null;
+  return { value: { cols: raw.cols, rows: raw.rows } };
 }
 
 // ── Terminal frames ──
