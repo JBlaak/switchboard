@@ -2,15 +2,20 @@
  * The Mac's TLS identity behind the ServerIdentityStore port.
  *
  * The key and the self-signed certificate are made by the system `openssl`
- * (LibreSSL on macOS, OpenSSL elsewhere; the one command below works on both)
- * in a single call that writes both PEM blocks to its stdout, so the
- * unencrypted key only ever exists in a pipe and in memory, never in a file.
- * It is written to disk encrypted with what the composition root passes in
- * (Electron safeStorage); the certificate is public and kept as plain PEM.
+ * (LibreSSL on macOS, OpenSSL elsewhere; the one command below works on both).
+ * The certificate comes back on stdout. The key cannot: Node gives a child a
+ * socket, not a pipe, and Linux will not open /dev/stdout on one. So openssl
+ * writes the key to a private temp directory, already encrypted with a random
+ * one-time passphrase that reaches it only through its environment, never
+ * argv. Node decrypts it in memory and the temp directory is removed straight
+ * after, so the unencrypted key never touches disk. What is kept is the key
+ * encrypted with what the composition root passes in (Electron safeStorage);
+ * the certificate is public and kept as plain PEM.
  */
 import { execFile } from 'node:child_process';
-import { createPrivateKey, X509Certificate } from 'node:crypto';
+import { createPrivateKey, randomBytes, X509Certificate } from 'node:crypto';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import type { ServerIdentity, ServerIdentityStore } from '../../application/ports/phone-access';
 
@@ -20,8 +25,8 @@ export interface Encryption {
   decrypt(data: Buffer): string;
 }
 
-/** Runs a program and answers its stdout; rejects when it fails. */
-export type Exec = (file: string, args: readonly string[]) => Promise<string>;
+/** Runs a program with these extra environment variables and answers its stdout; rejects when it fails. */
+export type Exec = (file: string, args: readonly string[], env: Record<string, string>) => Promise<string>;
 
 export interface IdentityStoreOptions {
   /** Where the key and certificate files live; made if missing. */
@@ -37,8 +42,11 @@ const CERT_FILE = 'phone-server-cert.pem';
 
 const VALID_DAYS = 3650;
 
-const execOutput: Exec = (file, args) => new Promise((resolve, reject) => {
-  execFile(file, [...args], { timeout: 60_000, encoding: 'utf8' }, (err, stdout, stderr) => {
+/** The environment variable the one-time passphrase reaches openssl in. */
+const PASSPHRASE_VAR = 'SWITCHBOARD_KEY_PASSPHRASE';
+
+const execOutput: Exec = (file, args, env) => new Promise((resolve, reject) => {
+  execFile(file, [...args], { timeout: 60_000, encoding: 'utf8', env: { ...process.env, ...env } }, (err, stdout, stderr) => {
     if (err) reject(new Error(`${file} ${args[0] ?? ''} failed: ${stderr.trim() || err.message}`));
     else resolve(stdout);
   });
@@ -115,15 +123,7 @@ export class OpensslIdentityStore implements ServerIdentityStore {
   }
 
   async #create(): Promise<ServerIdentity> {
-    const output = await this.#exec(this.#openssl, [
-      'req', '-x509',
-      '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1',
-      '-nodes', '-keyout', '/dev/stdout', '-out', '/dev/stdout',
-      '-subj', '/CN=Switchboard', '-days', String(VALID_DAYS), '-sha256',
-    ]);
-    const keyPem = pemBlock(output, 'PRIVATE KEY') ?? pemBlock(output, 'EC PRIVATE KEY');
-    const certPem = pemBlock(output, 'CERTIFICATE');
-    if (!keyPem || !certPem) throw new Error('openssl did not print a key and a certificate');
+    const { keyPem, certPem } = await this.#generate();
 
     await fs.mkdir(this.#directory, { recursive: true });
     // Each file is written beside its final name and renamed over it, so a
@@ -132,6 +132,30 @@ export class OpensslIdentityStore implements ServerIdentityStore {
     await this.#writeAtomically(CERT_FILE, certPem);
 
     return { keyPem, certPem, fingerprint: certificateFingerprint(certPem) };
+  }
+
+  /** A fresh key and certificate; the key is only ever on disk encrypted, and only for this call. */
+  async #generate(): Promise<{ keyPem: string; certPem: string }> {
+    const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'switchboard-identity-'));
+    try {
+      await fs.chmod(scratch, 0o700);
+      const keyFile = path.join(scratch, 'key.pem');
+      const passphrase = randomBytes(32).toString('hex');
+      const output = await this.#exec(this.#openssl, [
+        'req', '-x509',
+        '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1',
+        '-keyout', keyFile, '-passout', `env:${PASSPHRASE_VAR}`,
+        '-subj', '/CN=Switchboard', '-days', String(VALID_DAYS), '-sha256',
+      ], { [PASSPHRASE_VAR]: passphrase });
+      const certPem = pemBlock(output, 'CERTIFICATE');
+      if (!certPem) throw new Error('openssl did not print a certificate');
+      const encryptedKey = await fs.readFile(keyFile, 'utf8');
+      const keyPem = createPrivateKey({ key: encryptedKey, format: 'pem', passphrase })
+        .export({ type: 'pkcs8', format: 'pem' }) as string;
+      return { keyPem, certPem };
+    } finally {
+      await fs.rm(scratch, { recursive: true, force: true });
+    }
   }
 
   async #writeAtomically(name: string, data: Buffer | string): Promise<void> {

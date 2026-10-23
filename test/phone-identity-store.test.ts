@@ -49,7 +49,7 @@ test('the first load makes an EC P-256 identity for CN Switchboard, valid for ab
   assert.equal(cert.publicKey.asymmetricKeyDetails?.namedCurve, 'prime256v1');
   const years = (Date.parse(cert.validTo) - Date.parse(cert.validFrom)) / (365 * 24 * 3600 * 1000);
   assert.ok(years > 9.9 && years < 10.1, `valid for ${years} years`);
-  assert.match(identity.keyPem, /-----BEGIN (EC )?PRIVATE KEY-----/);
+  assert.match(identity.keyPem, /-----BEGIN PRIVATE KEY-----/);
 });
 
 test('a later load answers the same identity, also from a new store on the same directory', async () => {
@@ -106,22 +106,33 @@ test('the key is written only encrypted', async () => {
   assert.equal(fs.readdirSync(directory).length, 2, 'only the encrypted key and the certificate');
 });
 
-test('openssl writes the key to its stdout, never to a file', async () => {
+/** Runs openssl for real, the way the store's own exec does. */
+function runOpenssl(file: string, args: readonly string[], env: Record<string, string>): string {
+  return execFileSync(file, [...args], { encoding: 'utf8', env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'ignore'] });
+}
+
+test('the key file openssl writes only ever holds an encrypted key, and is gone afterwards', async () => {
   /* Given */
-  const calls: string[][] = [];
-  const recording: Exec = (file, args) => {
-    calls.push([...args]);
-    return new Promise((resolve) => resolve(execFileSync(file, [...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })));
+  let keyFile = '';
+  let keyFileContents = '';
+  let passphraseInArgs = true;
+  const recording: Exec = async (file, args, env) => {
+    const output = runOpenssl(file, args, env);
+    keyFile = args[args.indexOf('-keyout') + 1];
+    keyFileContents = fs.readFileSync(keyFile, 'utf8');
+    passphraseInArgs = Object.values(env).some(value => args.some(arg => arg.includes(value)));
+    return output;
   };
 
   /* When */
-  await storeIn(tempDir(), recording).load();
+  const identity = await storeIn(tempDir(), recording).load();
 
   /* Then */
-  assert.equal(calls.length, 1);
-  const args = calls[0];
-  assert.equal(args[args.indexOf('-keyout') + 1], '/dev/stdout');
-  assert.equal(args[args.indexOf('-out') + 1], '/dev/stdout');
+  assert.match(keyFileContents, /^-----BEGIN ENCRYPTED PRIVATE KEY-----/);
+  assert.ok(!keyFileContents.includes(identity.keyPem.split('\n')[1]), 'no line of the plain key in the file');
+  assert.equal(passphraseInArgs, false, 'the passphrase reaches openssl only through its environment');
+  assert.equal(fs.existsSync(path.dirname(keyFile)), false, 'the temp directory is removed');
+  assert.match(identity.keyPem, /^-----BEGIN PRIVATE KEY-----/);
 });
 
 test('the fingerprint matches openssl x509 -fingerprint -sha256 for the same certificate', async () => {
@@ -160,9 +171,9 @@ test('a key that does not match the stored certificate is replaced', async () =>
 test('a failing openssl rejects the load, and the next load tries again', async () => {
   /* Given */
   let failing = true;
-  const flaky: Exec = (file, args) => failing
+  const flaky: Exec = (file, args, env) => failing
     ? Promise.reject(new Error('openssl: not found'))
-    : new Promise((resolve) => resolve(execFileSync(file, [...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })));
+    : Promise.resolve(runOpenssl(file, args, env));
   const store = storeIn(tempDir(), flaky);
   await assert.rejects(store.load(), /not found/);
   failing = false;
