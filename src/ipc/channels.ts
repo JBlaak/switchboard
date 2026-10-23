@@ -149,6 +149,7 @@ export const EVENT = {
   pickerRequested: 'quick-ask:picker-requested',
   phoneAccessChanged: 'phone-access:changed',
   terminalOwnerChanged: 'terminal-owner:changed',
+  sessionStarted: 'session:started',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */

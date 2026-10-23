@@ -13,7 +13,7 @@ import type { IpcRegistrar } from './registrar';
 export function registerQuickAskHandlers(ipc: IpcRegistrar, app: Container): void {
   ipc.on(SEND.quickAskDismiss, () => app.quickAskPanel.hide());
   ipc.on(SEND.quickAskPointerOverSlab, (over: boolean) => app.quickAskWindow()?.pointerOverSlab(!!over));
-  ipc.on(SEND.rendererReady, () => app.renderer.rendererReady());
+  ipc.on(SEND.rendererReady, () => app.windowRenderer.rendererReady());
 
   ipc.handle(INVOKE.quickAskRoute, (text: string) => app.quickAsk.route(String(text)));
   ipc.handle(INVOKE.quickAskQuick, (text: string) => app.quickAsk.quick(String(text)));

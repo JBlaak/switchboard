@@ -66,7 +66,9 @@ export type PushEvent =
   /** Phone access (#194): the whole snapshot, on every change. */
   | { type: 'phoneAccessChanged'; state: PhoneAccessState }
   /** A session's terminal moved to a phone, or back to the Mac. */
-  | { type: 'terminalOwnerChanged'; sessionId: string; owner: TerminalOwner };
+  | { type: 'terminalOwnerChanged'; sessionId: string; owner: TerminalOwner }
+  /** Main started a Claude session the renderer didn't ask for (a phone's Ask Patch). */
+  | { type: 'sessionStarted'; sessionId: string; projectPath: string };
 
 // ── From the renderer itself: user actions and timers ──
 

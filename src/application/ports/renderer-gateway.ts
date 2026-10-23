@@ -69,4 +69,10 @@ export interface RendererGateway {
   phoneAccessChanged(state: PhoneAccessState): void
   /** A session's terminal moved to a phone, or back to the Mac. */
   terminalOwnerChanged(sessionId: string, owner: TerminalOwner): void
+  /**
+   * Main started a Claude session the renderer didn't ask for (a phone's Ask
+   * Patch): it gets a row now, as one started here would, rather than once
+   * its transcript is indexed.
+   */
+  sessionStarted(sessionId: string, projectPath: string): void
 }

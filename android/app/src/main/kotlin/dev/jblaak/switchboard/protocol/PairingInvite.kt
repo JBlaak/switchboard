@@ -46,7 +46,8 @@ data class PairingInvite(
 
         private fun decodeOrNull(value: String): String? {
             return try {
-                URLDecoder.decode(value, Charsets.UTF_8)
+                // The Charset overload is API 33; the name overload works back to minSdk.
+                URLDecoder.decode(value, "UTF-8")
             } catch (exception: IllegalArgumentException) {
                 null
             }

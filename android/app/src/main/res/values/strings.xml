@@ -4,6 +4,8 @@
     <string name="camera_allow">Allow camera</string>
     <string name="camera_needed">Switchboard needs the camera to read the pairing code on your Mac.</string>
     <string name="camera_open_settings">Open settings</string>
+    <string name="forget_mac_title">Forget %1$s?</string>
+    <string name="forget_mac_body">This phone stops reaching your sessions. To use it again, pair it from Settings → Phone access on the Mac.</string>
     <string name="cancel">Cancel</string>
     <string name="confirm_checking_code">Checking the code</string>
     <string name="confirm_checking_description">Switchboard on your Mac is checking the code.</string>
@@ -60,7 +62,6 @@
     <string name="pair_privacy">The code holds your Mac\'s fingerprint and a one-time key. Nothing leaves your Wi-Fi.</string>
     <string name="pair_title">Pair with your Mac</string>
     <string name="pair_unlock_title">Unlock to pair</string>
-    <string name="placeholder_description">Connected to your Mac. Your sessions show up here.</string>
     <string name="try_again">Try again</string>
     <string name="turned_off_description">Phone access was turned off on your Mac. Turn it on in Switchboard → Settings → Phone access, then try again.</string>
     <string name="turned_off_description_named">Phone access was turned off on %1$s. Turn it on in Switchboard → Settings → Phone access, then try again.</string>
