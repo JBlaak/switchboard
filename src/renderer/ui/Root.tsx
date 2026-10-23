@@ -22,6 +22,7 @@ import { QuestionsHeaderButton } from './questions/QuestionsHeaderButton';
 import { SessionList } from './session-list/SessionList';
 import { TerminalHost } from './terminal/TerminalHost';
 import { TerminalHeaderControls, TerminalHeaderInfo } from './terminal/TerminalHeader';
+import { PairConfirmDialog } from './phone-access/PairConfirmDialog';
 import type { JSX } from 'react';
 import type { Root as ReactRoot } from 'react-dom/client';
 
@@ -31,6 +32,7 @@ export function Root(): JSX.Element | null {
     <>
       <Toolbar />
       <Dialogs />
+      <PairConfirmDialog />
       <Portal target="settings-viewer"><SettingsViewer /></Portal>
       <Portal target="session-work"><SessionWorkPage /></Portal>
       <Portal target="project-page"><ProjectPage /></Portal>

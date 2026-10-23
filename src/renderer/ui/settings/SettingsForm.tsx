@@ -20,6 +20,7 @@ import { TERMINAL_THEMES } from '../../features/terminal/terminal-themes';
 import { closeSettings, saveSettings } from './actions';
 import { AppField, LaunchField } from './SettingsField';
 import { useWeatherCity } from './use-weather-city';
+import { PhoneAccessSection } from '../phone-access/PhoneAccessSection';
 import type { JSX } from 'react';
 import type { SettingsPanel } from '../../state/settings-slice';
 
@@ -229,6 +230,8 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
             placeholder={DEFAULT_WEATHER_LOCATION.name} defaultValue={resolveWeatherLocation(current).name} style={{ width: '180px' }} />
         </AppField>
       </div>
+
+      <PhoneAccessSection />
 
       <div className="settings-section">
         <div className="settings-section-title">About</div>
