@@ -52,6 +52,25 @@ test('the first load makes an EC P-256 identity for CN Switchboard, valid for ab
   assert.match(identity.keyPem, /-----BEGIN PRIVATE KEY-----/);
 });
 
+/** The system openssl as well as the one on PATH: macOS ships LibreSSL in /usr/bin. */
+const openssls = ['openssl', ...(fs.existsSync('/usr/bin/openssl') ? ['/usr/bin/openssl'] : [])];
+
+for (const openssl of openssls) {
+  test(`the certificate from ${openssl} names its curve rather than spelling out its parameters`, async () => {
+    /* Given */
+    const store = new OpensslIdentityStore({ directory: tempDir(), encryption: fakeEncryption, openssl });
+
+    /* When */
+    const identity = await store.load();
+
+    /* Then */
+    // A named P-256 key is 91 bytes of SPKI; spelled-out parameters, which
+    // Electron's BoringSSL refuses, make it well over 200.
+    const spki = new X509Certificate(identity.certPem).publicKey.export({ type: 'spki', format: 'der' });
+    assert.equal(spki.length, 91);
+  });
+}
+
 test('a later load answers the same identity, also from a new store on the same directory', async () => {
   /* Given */
   const directory = tempDir();
