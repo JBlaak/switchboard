@@ -11,6 +11,10 @@
  * after, so the unencrypted key never touches disk. What is kept is the key
  * encrypted with what the composition root passes in (Electron safeStorage);
  * the certificate is public and kept as plain PEM.
+ *
+ * The curve is named rather than spelled out (`ec_param_enc:named_curve`):
+ * LibreSSL spells it out by default, and Electron's BoringSSL refuses a
+ * certificate like that with an elliptic curve DECODE_ERROR.
  */
 import { execFile } from 'node:child_process';
 import { createPrivateKey, randomBytes, X509Certificate } from 'node:crypto';
@@ -143,7 +147,7 @@ export class OpensslIdentityStore implements ServerIdentityStore {
       const passphrase = randomBytes(32).toString('hex');
       const output = await this.#exec(this.#openssl, [
         'req', '-x509',
-        '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1',
+        '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:prime256v1', '-pkeyopt', 'ec_param_enc:named_curve',
         '-keyout', keyFile, '-passout', `env:${PASSPHRASE_VAR}`,
         '-subj', '/CN=Switchboard', '-days', String(VALID_DAYS), '-sha256',
       ], { [PASSPHRASE_VAR]: passphrase });
