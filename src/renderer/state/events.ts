@@ -31,6 +31,7 @@ import type { WorkingAgent } from '../../domain/terminal/program-status-children
 import type { ToolbarEvent } from './toolbar-slice';
 import type { SessionListEvent } from './session-list-slice';
 import type { ProjectPageEvent } from './project-page-slice';
+import type { PhoneAccessEvent } from './phone-access-slice';
 import type { ViewState } from './view-slice';
 import type { DraftAction } from '../../domain/questions/answer-draft';
 import type { QuestionView } from './answers-slice';
@@ -297,7 +298,7 @@ export type LocalEvent =
   /** The New Session picker started a session on the prompt it was opened carrying. */
   | { type: 'pickerPromptLaunched' };
 
-export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent | ProjectPageEvent;
+export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent | ProjectPageEvent | PhoneAccessEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the
