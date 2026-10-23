@@ -261,6 +261,8 @@ export interface SwitchboardApi {
   onPhoneAccessChanged(cb: (state: PhoneAccessState) => void): Unsubscribe;
   /** A session's terminal moved to another device, or back to the Mac. */
   onTerminalOwnerChanged(cb: (sessionId: string, owner: TerminalOwner) => void): Unsubscribe;
+  /** Main started a Claude session on its own (a phone's Ask Patch): give it a row now. */
+  onSessionStarted(cb: (sessionId: string, projectPath: string) => void): Unsubscribe;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

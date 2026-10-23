@@ -76,7 +76,9 @@ behind the remotes and the session's worktrees.
 
 ### `src/main` — the composition root
 
-`composition-root.ts` is the only file that constructs adapters, and
+`composition-root.ts` is the only file that constructs adapters (with
+`phone-access.ts`, Phone access's part of it, kept free of Electron so it is
+tested in node against a real listener), and
 `ipc/` maps channels to use cases, one module per feature area. `index.ts` is
 bootstrap: build, register, open a window, start the background work, shut down.
 

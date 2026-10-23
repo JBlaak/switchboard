@@ -4,6 +4,10 @@
  *
  * Input and resize are fire-and-forget by design — they happen per keystroke
  * and per drag frame, and an invoke round-trip per character would be felt.
+ *
+ * Both are the Mac's only while it owns the session's terminal (#194): with a
+ * phone active, the keys are dropped and the size is only remembered for
+ * when the Mac takes it back.
  */
 import { INVOKE, SEND } from '../../ipc/channels';
 import type { SessionOptions } from '../../domain/launch/session-options';
@@ -22,24 +26,30 @@ const RESIZE_SETTLE_MS = 200;
 const NUDGE_DELAY_MS = 50;
 
 export function registerTerminalHandlers(ipc: IpcRegistrar, app: Container): void {
-  ipc.handle(INVOKE.openTerminal, (
+  ipc.handle(INVOKE.openTerminal, async (
     sessionId: string,
     projectPath: string,
     isNew: boolean,
     options?: SessionOptions,
   ) => {
     if (!app.renderer.attached) return { ok: false, error: 'no window' };
-    return app.launcher.open({ sessionId, projectPath, isNew, options });
+    const opened = await app.launcher.open({ sessionId, projectPath, isNew, options });
+    // A new session is in the phones' list before it has a transcript.
+    if (opened.ok && !opened.reattached) app.phoneSessions.sessionsChanged();
+    return opened;
   });
 
   ipc.on(SEND.terminalInput, (sessionId: string, data: string) => {
     const session = app.registry.get(sessionId);
-    if (session && !session.exited) session.pty.write(data);
+    if (!session || session.exited) return;
+    if (!app.phoneSessions.macInputAllowed(sessionId)) return;
+    session.pty.write(data);
   });
 
   ipc.on(SEND.terminalResize, (sessionId: string, cols: number, rows: number) => {
     const session = app.registry.get(sessionId);
     if (!session) return;
+    if (!app.phoneSessions.macResized(sessionId, cols, rows)) return;
 
     // Remembered even while a remote connection is down: the next ssh spawns at
     // this size so tmux repaints to fit instead of reflowing after the fact.

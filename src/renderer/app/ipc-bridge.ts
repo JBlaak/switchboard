@@ -51,6 +51,7 @@ export function installIpcBridge(
     api.onPickerRequested((initialPrompt, reason) => send({ type: 'pickerRequested', initialPrompt, reason })),
     api.onPhoneAccessChanged((state) => send({ type: 'phoneAccessChanged', state })),
     api.onTerminalOwnerChanged((sessionId, owner) => send({ type: 'terminalOwnerChanged', sessionId, owner })),
+    api.onSessionStarted((sessionId, projectPath) => send({ type: 'sessionStarted', sessionId, projectPath })),
   ];
   return () => unsubscribes.forEach(unsubscribe => unsubscribe());
 }
