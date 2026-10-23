@@ -22,7 +22,8 @@ import { UnicodeGraphemesAddon } from '@xterm/addon-unicode-graphemes';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { flushSync } from 'react-dom';
 import { clearNotifications } from '../../state/activity-store';
-import { dispatch } from '../../state/app-store';
+import { dispatch, getState } from '../../state/app-store';
+import { deviceOwnerIn } from '../../state/phone-access-slice';
 import { setActiveSession } from '../sessions/active-session';
 import { headerNameFor } from '../sessions/terminal-header';
 import { loadShellProfile } from '../../ui/terminal/actions';
@@ -83,6 +84,43 @@ export function applyTerminalFont(font?: StoredFontSettings): void {
     entry.terminal.options.lineHeight = TERMINAL_FONT.lineHeight;
   }
   refitOpenTerminals();
+}
+
+// --- Which device has the terminal (#194) ---
+// A session a paired phone has is sized for the phone, and its panel shows a
+// placeholder instead (`ui/phone-access/TerminalPlaceholder`). Nothing typed or
+// dropped here reaches it, and its xterm's own resizes are not passed on, until
+// Use here gives it back.
+
+function macHasTerminal(sessionId: string): boolean {
+  return deviceOwnerIn(getState().phoneAccess, sessionId) === null;
+}
+
+/** Input from this window, for a session the Mac has. */
+function sendInput(sessionId: string, data: string): void {
+  if (macHasTerminal(sessionId)) window.api.sendInput(sessionId, data);
+}
+
+/** A phone took the session: the terminal lets go of the keyboard. */
+export function releaseTerminal(sessionId: string): void {
+  openSessions.get(sessionId)?.terminal.blur();
+}
+
+/**
+ * The session is the Mac's again: fit it to its panel and tell main its size
+ * whether or not the fit changed the grid, since the PTY was the phone's size
+ * meanwhile. A terminal behind another session fits once it is shown.
+ */
+export function reclaimTerminal(sessionId: string): void {
+  const entry = openSessions.get(sessionId);
+  if (!entry) return;
+  requestAnimationFrame(() => {
+    if (entry.closed || !openSessions.has(entry.session.sessionId)) return;
+    safeFit(entry);
+    window.api.resizeTerminal(entry.session.sessionId, entry.terminal.cols, entry.terminal.rows);
+    entry.terminal.scrollToBottom();
+  });
+  if (getState().terminal.onScreen === sessionId) entry.terminal.focus();
 }
 
 // --- Terminal key bindings ---
@@ -160,7 +198,7 @@ function setupTerminalKeyBindings(
     if (enterSeq) {
       if (e.type === 'keydown') {
         const sid = getSessionId();
-        if (sid) window.api.sendInput(sid, enterSeq);
+        if (sid) sendInput(sid, enterSeq);
       }
       return false;
     }
@@ -180,7 +218,7 @@ function setupTerminalKeyBindings(
         e.preventDefault();
         {
           const sid = getSessionId();
-          if (sid) window.api.sendInput(sid, ' ');
+          if (sid) sendInput(sid, ' ');
         }
       }
       return false;
@@ -338,10 +376,10 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
   // Wire up IPC (use entry.session.sessionId so fork re-keying works)
   terminal.onData(data => {
     if (data === '\x1b[I' || data === '\x1b[O') return;
-    window.api.sendInput(entry.session.sessionId, data);
+    sendInput(entry.session.sessionId, data);
   });
   terminal.onResize(({ cols, rows }) => {
-    window.api.resizeTerminal(entry.session.sessionId, cols, rows);
+    if (macHasTerminal(entry.session.sessionId)) window.api.resizeTerminal(entry.session.sessionId, cols, rows);
   });
   terminal.onTitleChange(title => {
     dispatch({ type: 'ptyTitleChanged', sessionId: entry.session.sessionId, title });
@@ -454,7 +492,7 @@ function bangCommandLinks(terminal: Terminal, getSessionId: () => string): ILink
 
 function runBangCommand(sessionId: string, command: string): void {
   bangCommandKeys(command).forEach((key, i) => {
-    setTimeout(() => window.api.sendInput(sessionId, key), i * BANG_KEY_GAP_MS);
+    setTimeout(() => sendInput(sessionId, key), i * BANG_KEY_GAP_MS);
   });
 }
 
@@ -484,7 +522,7 @@ function setupDragAndDrop(container: HTMLElement, getSessionId: () => string | n
     if (!files || !files.length) return;
     const paths = Array.from(files).map(f => posixQuote(window.api.getPathForFile(f)));
     const sid = getSessionId();
-    if (sid) window.api.sendInput(sid, paths.join(' '));
+    if (sid) sendInput(sid, paths.join(' '));
   });
 }
 

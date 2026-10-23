@@ -22,6 +22,7 @@ import { onEvent } from '../../state/app-store';
 import { openSessions } from '../../state/session-store';
 import { peek } from './actions';
 import { Farewell } from './Farewell';
+import { AnsweredOnPhone } from './AnsweredOnPhone';
 import { QuestionPanel } from './QuestionPanel';
 import { useOnScreen } from './use-on-screen';
 import type { JSX } from 'react';
@@ -76,6 +77,7 @@ export function Questions(): JSX.Element {
           Back to questions<kbd className="qp-peek-key">T</kbd>
         </button>
       )}
+      <AnsweredOnPhone />
       {farewells.map(f => (
         <Farewell
           key={f.id}

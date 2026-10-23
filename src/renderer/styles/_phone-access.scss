@@ -1,0 +1,397 @@
+/* ========== PHONE ACCESS (#194) ==========
+   The settings card, the toolbar indicator, the pairing confirmation and the
+   placeholder over a terminal a phone has. Drawn from the settings viewer's
+   and the dialogs' own pieces; only what they lack is here, and every colour
+   is a token. */
+
+/* --- Toolbar indicator: a quiet pill while on, mint with the phone's name while one is connected --- */
+#phone-access-indicator {
+  margin-left: auto;
+  height: 28px;
+  max-width: 150px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(var(--sb-overlay-rgb), 0.08);
+  color: var(--sb-text-dim);
+  font: 700 12px var(--sb-font-head);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+#phone-access-indicator svg { flex-shrink: 0; }
+
+#phone-access-indicator .pa-indicator-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#phone-access-indicator:hover {
+  background: rgba(var(--sb-overlay-rgb), 0.12);
+  color: var(--sb-text-strong);
+}
+
+#phone-access-indicator.is-connected,
+#phone-access-indicator.is-connected:hover {
+  background: var(--sb-mint);
+  color: var(--sb-accent);
+}
+
+/* The indicator takes the toolbar's auto margin, so the icons after it stay together on the right. */
+#phone-access-indicator ~ #sleep-toggle-btn,
+#phone-access-indicator ~ #appearance-toggle-btn {
+  margin-left: 0;
+}
+
+/* --- Settings card --- */
+.pa-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: var(--sb-r-row);
+  font-family: var(--sb-font-body);
+  font-size: 13px;
+  color: var(--sb-text-strong);
+  background: rgba(var(--sb-overlay-rgb), 0.05);
+}
+
+.pa-status .pa-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--sb-text-faint);
+}
+
+.pa-status.is-listening { background: var(--sb-mint); }
+.pa-status.is-listening .pa-dot { background: var(--sb-green); }
+.pa-status.is-failed { background: var(--sb-peach); }
+.pa-status.is-failed .pa-dot { background: var(--sb-danger); }
+
+.pa-host {
+  font-family: var(--sb-font-mono);
+  font-size: 12.5px;
+  color: var(--sb-accent);
+}
+
+.pa-error {
+  display: block;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: var(--sb-r-control);
+  background: var(--sb-peach);
+  color: var(--sb-danger);
+  font: 600 12.5px var(--sb-font-body);
+  line-height: 1.45;
+}
+
+/* The section's buttons: ghost, ghost in red, and a red wash for Reset. */
+.pa-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--sb-r-control);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--sb-border-strong);
+  color: var(--sb-text);
+  font: 700 13px var(--sb-font-head);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.pa-btn:hover {
+  background: rgba(var(--sb-overlay-rgb), 0.06);
+  color: var(--sb-text-strong);
+}
+
+.pa-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pa-btn.pa-btn-danger {
+  box-shadow: inset 0 0 0 1px rgba(var(--sb-danger-rgb), 0.4);
+  color: var(--sb-danger);
+}
+
+.pa-btn.pa-btn-danger:hover { background: rgba(var(--sb-danger-rgb), 0.1); }
+
+.pa-btn.pa-btn-danger-fill {
+  box-shadow: none;
+  background: rgba(var(--sb-danger-rgb), 0.12);
+  color: var(--sb-danger);
+  font-weight: 800;
+}
+
+.pa-btn.pa-btn-danger-fill:hover { background: rgba(var(--sb-danger-rgb), 0.2); }
+
+/* Pairing: the code on its white card beside the steps. */
+.settings-field.pa-pairing {
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 24px;
+  padding: 16px 0;
+}
+
+.pa-qr-frame {
+  flex-shrink: 0;
+  width: 184px;
+  height: 184px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #ffffff; /* a QR code is dark on white in either theme */
+  box-shadow: inset 0 0 0 1px var(--sb-line);
+}
+
+.pa-qr {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pa-pairing-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pa-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-family: var(--sb-font-body);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--sb-text-dim);
+}
+
+.pa-expiry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.pa-expiry-pill {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  background: var(--sb-sun);
+  color: var(--sb-warning-text);
+  font: 700 12px var(--sb-font-head);
+  font-variant-numeric: tabular-nums;
+}
+
+.pa-expiry-note {
+  font-family: var(--sb-font-body);
+  font-size: 12px;
+  color: var(--sb-text-faint);
+}
+
+/* Paired phones: one row each, hairline-separated. */
+.pa-devices-field { align-items: flex-start; }
+
+.pa-devices {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.pa-device {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+}
+
+.pa-device + .pa-device { border-top: 1px solid var(--sb-line); }
+
+.pa-device-icon {
+  display: inline-flex;
+  color: var(--sb-text-dim);
+}
+
+.pa-device-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pa-device-name {
+  font: 700 14px var(--sb-font-head);
+  color: var(--sb-text-strong);
+}
+
+.pa-device-line {
+  font-family: var(--sb-font-body);
+  font-size: 12.5px;
+  color: var(--sb-text-muted);
+}
+
+.pa-connected { color: var(--sb-green); }
+
+/* --- Confirm a pairing: the resume dialog's panel, narrower --- */
+.new-session-dialog.pa-confirm {
+  width: 440px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pa-confirm-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.new-session-dialog.pa-confirm h3 { margin: 0; }
+
+.pa-confirm-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sb-mint);
+  color: var(--sb-accent);
+}
+
+.pa-confirm-body,
+.pa-confirm-note {
+  margin: 0;
+  font-family: var(--sb-font-body);
+  line-height: 1.5;
+}
+
+.pa-confirm-body { font-size: 14px; color: var(--sb-text-dim); }
+.pa-confirm-note { font-size: 13px; color: var(--sb-text-muted); }
+.pa-confirm .pa-error { margin: 0; }
+
+.pa-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+/* --- The placeholder over a terminal a phone has ---
+   Opaque, over the xterm and its find bar and connection card, so nothing of
+   the phone-sized grid shows through and no click reaches it. */
+.pa-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 40px;
+  text-align: center;
+  background: var(--sb-bg-base);
+  animation: rc-appear 160ms ease-out;
+}
+
+.pa-placeholder-icon {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sb-bg-panel);
+  color: var(--sb-text-dim);
+}
+
+.pa-placeholder-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.pa-placeholder-title {
+  margin: 0;
+  font: 800 22px var(--sb-font-head);
+  letter-spacing: -0.02em;
+  color: var(--sb-text-strong);
+}
+
+.pa-placeholder-body {
+  margin: 0;
+  font-family: var(--sb-font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--sb-text-muted);
+}
+
+.pa-use-here {
+  height: 38px;
+  padding: 0 22px;
+  border: none;
+  border-radius: var(--sb-r-control);
+  background: var(--sb-action);
+  color: var(--sb-action-text);
+  font: 800 14px var(--sb-font-head);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.pa-use-here:hover { opacity: 0.88; }
+
+.pa-placeholder .pa-error { margin: 0; }
+
+.pa-placeholder-note {
+  max-width: 420px;
+  font-family: var(--sb-font-body);
+  font-size: 12px;
+  color: var(--sb-text-faint);
+}
+
+/* --- "Answered on phone", where the question panel was --- */
+.qp-answered-on-phone {
+  position: absolute;
+  bottom: 20px;
+  left: calc(50% - 10px);
+  z-index: 6;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--sb-mint);
+  color: var(--sb-accent);
+  font: 800 13px var(--sb-font-head);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(var(--sb-shadow-rgb), calc(0.18 * var(--sb-shadow-k)));
+  transform: translateX(-50%);
+  animation: pa-note 3200ms ease both;
+}
+
+@keyframes pa-note {
+  0% { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  8%, 85% { opacity: 1; transform: translateX(-50%); }
+  100% { opacity: 0; transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pa-placeholder,
+  .qp-answered-on-phone { animation: none; }
+}
