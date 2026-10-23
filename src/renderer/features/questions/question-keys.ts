@@ -25,6 +25,8 @@ export interface PanelKeyPlace {
   onPatch: boolean;
   /** How many options the question on screen has (the Other row comes after). */
   options: number;
+  /** The panel has stepped aside to show the terminal. */
+  peeking: boolean;
 }
 
 export type PanelKey =
@@ -34,6 +36,8 @@ export type PanelKey =
   | { does: 'keep' }
   /** Answer in the terminal instead. */
   | { does: 'terminal' }
+  /** Look at the terminal under the questions, or come back from looking. */
+  | { does: 'peek'; peeking: boolean }
   | { does: 'act'; action: DraftAction };
 
 const PASS: PanelKey = { does: 'pass' };
@@ -43,6 +47,9 @@ const act = (action: DraftAction): PanelKey => ({ does: 'act', action });
 export function panelKey(e: PanelKeyEvent, at: PanelKeyPlace): PanelKey {
   if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return PASS;
   if (e.key === 'Tab') return PASS;
+  // While the terminal shows, T or Esc brings the questions back; nothing
+  // else may answer a question no one can see.
+  if (at.peeking) return e.key === 't' || e.key === 'T' || e.key === 'Escape' ? { does: 'peek', peeking: false } : KEEP;
   // Enter and Space on Patch poke it, as a button should.
   if ((e.key === 'Enter' || e.key === ' ') && at.onPatch) return KEEP;
 
@@ -57,6 +64,7 @@ export function panelKey(e: PanelKeyEvent, at: PanelKeyPlace): PanelKey {
 
   if (/^[1-9]$/.test(e.key) && Number(e.key) <= at.options + 1) return act({ kind: 'press', row: Number(e.key) - 1 });
   if (e.key === ' ') return act({ kind: 'space' });
+  if (e.key === 't' || e.key === 'T') return { does: 'peek', peeking: true };
   if (e.key === 'ArrowLeft') return act({ kind: 'back' });
   if (e.key === 'ArrowRight') return act({ kind: 'next' });
   return KEEP;

@@ -13,6 +13,10 @@
  * which entrance to play, and Patch, an imperative handle mounted once and
  * told what to say whenever the entry's `said` moves on.
  *
+ * Peeking keeps the panel up but steps it aside, so the terminal under it can
+ * be read (and scrolled) for context; the keyboard stays on the sheet, so T or
+ * Esc brings it straight back.
+ *
  * Keys are a native listener on the sheet rather than a React handler: the
  * sheet must stop unmodified keys from reaching the window's shortcuts, and
  * doing it at the element itself keeps that independent of where React
@@ -30,7 +34,7 @@ import {
   SHEET_SETTLE_MS, patchArrive, questionIn, questionOut, settle,
 } from '../../features/questions/question-motion';
 import { getState, onEvent } from '../../state/app-store';
-import { answer, chooseView, focusTerminal, greet, pokePatch, questionSky } from './actions';
+import { answer, chooseView, focusTerminal, greet, peek, pokePatch, questionSky } from './actions';
 import { OptionRow, OtherRow } from './QuestionRows';
 import type { CSSProperties, JSX } from 'react';
 import type { PatchHandle } from '@jblaak/patch';
@@ -62,7 +66,7 @@ interface Entrance {
 }
 
 export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Element {
-  const { up } = screen;
+  const { up, peeking } = screen;
   const sheet = useRef<HTMLElement>(null);
   const block = useRef<HTMLDivElement>(null);
   const group = useRef<HTMLDivElement>(null);
@@ -98,8 +102,8 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
   const n = q?.options.length ?? 0;
 
   // What the handlers need, as of the last render.
-  const live = useRef({ toolUseId, up, shownStep, n });
-  live.current = { toolUseId, up, shownStep, n };
+  const live = useRef({ toolUseId, up, peeking, shownStep, n });
+  live.current = { toolUseId, up, peeking, shownStep, n };
 
   // ── Acting ──
 
@@ -171,6 +175,7 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
         inOther: target === otherInput.current,
         onPatch: !!target?.closest('.patch-poke'),
         options: now.n,
+        peeking: now.peeking,
       });
       if (key.does === 'pass') return;
       e.stopPropagation();
@@ -181,6 +186,7 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
 
       e.preventDefault();
       if (key.does === 'terminal') chooseView(now.toolUseId, 'terminal');
+      else if (key.does === 'peek') peek(now.toolUseId, key.peeking);
       else handlers.current.act(key.action);
     };
     el.addEventListener('keydown', onKey);
@@ -309,6 +315,14 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
     return () => { current = false; };
   }, [screen.shown]);
 
+  // Peeking leaves the keyboard on the sheet, so T or Esc can bring the panel
+  // back; coming back (from the pill, too) puts it where the cursor is.
+  useLayoutEffect(() => {
+    if (!up) return;
+    sheet.current?.focus({ preventScroll: true });
+    if (!peeking) handlers.current.syncFocus();
+  }, [peeking]);
+
   // A set that settles while the panel has the keyboard hands it to the terminal.
   useEffect(() => onEvent('questionsSettled', ({ settled }) => {
     if (settled.toolUseId !== live.current.toolUseId) return;
@@ -329,7 +343,7 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
   return (
     <section
       ref={sheet}
-      className={up ? 'qp is-up' : 'qp'}
+      className={up ? (peeking ? 'qp is-up is-peeking' : 'qp is-up') : 'qp'}
       tabIndex={-1}
       aria-label="Questions from Claude"
       aria-hidden={up ? 'false' : 'true'}
@@ -369,6 +383,7 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
             <div className="qp-head">
               <span className="qp-counter">{q ? questionCounter(shownStep, questions.length, q) : ''}</span>
               <h1 className="qp-question">{q?.question ?? ''}</h1>
+              {q?.detail && <p className="qp-detail">{q.detail}</p>}
             </div>
             <div ref={group} className={q?.multiSelect ? 'qp-options is-multi' : 'qp-options'} role="group" aria-label={q?.question}>
               {q?.options.map((option, i) => (
@@ -405,6 +420,9 @@ export function QuestionPanel({ screen, onShow }: QuestionPanelProps): JSX.Eleme
               ))}
             </span>
             <span className="qp-spacer" />
+            <button type="button" className="qp-peek" tabIndex={-1} onClick={() => { if (toolUseId) peek(toolUseId, true); }}>
+              Peek at terminal<kbd className="qp-peek-key">T</kbd>
+            </button>
             <button type="button" className="qp-back" tabIndex={-1} hidden={!!shown && shownStep === 0} onClick={() => act({ kind: 'back' })}>Back</button>
             <button
               type="button"

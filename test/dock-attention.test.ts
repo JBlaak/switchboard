@@ -10,6 +10,7 @@ function asked(sessionId: string): PendingQuestions {
   return {
     sessionId,
     toolUseId: `t-${sessionId}`,
+    source: 'ask',
     questions: [{ question: 'Scope?', header: 'Scope', multiSelect: false, options: [{ label: 'Site', description: '' }] }],
     askedAt: 0,
     deadline: 600_000,

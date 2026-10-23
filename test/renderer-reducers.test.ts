@@ -31,6 +31,7 @@ function asked(sessionId: string, toolUseId: string, count = 1): PendingQuestion
   return {
     sessionId,
     toolUseId,
+    source: 'ask',
     questions: Array.from({ length: count }, (_, i) => ({
       question: `q${i}`, header: 'h', multiSelect: false, options: [{ label: 'a', description: '' }],
     })) as unknown as PendingQuestions['questions'],

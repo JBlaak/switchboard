@@ -35,6 +35,11 @@ export interface Said {
 export interface Answering {
   readonly draft: AnswerDraft;
   readonly view: QuestionView;
+  /**
+   * The panel has stepped aside to show the terminal under it, without
+   * leaving the questions: a look for context, not answering there instead.
+   */
+  readonly peeking: boolean;
   /** Patch has said hello to this set; a later showing is a return, not an arrival. */
   readonly greeted: boolean;
   /** How many times Patch has been poked beside this set, for its cycle of lines. */
@@ -59,6 +64,7 @@ export function startAnswering(questions: Parameters<typeof createDraft>[0]): An
   return {
     draft: createDraft(questions),
     view: 'questions',
+    peeking: false,
     greeted: false,
     pokes: 0,
     dozedAt: null,
@@ -98,10 +104,16 @@ export function answersReducer(state: AnswersState, event: RendererEvent, questi
       const entry = synced.byToolUse[event.toolUseId];
       const pending = pendingFor(questions, event.toolUseId);
       if (!entry || !pending || entry.view === event.view) return synced;
-      const moved = { ...entry, view: event.view };
+      const moved = { ...entry, view: event.view, peeking: false };
       if (event.view === 'terminal') return put(synced, event.toolUseId, moved);
       return put(synced, event.toolUseId,
         moved.greeted ? say(moved, { kind: 'returned' }) : greet(moved, pending.questions.length));
+    }
+
+    case 'answersPeeked': {
+      const entry = synced.byToolUse[event.toolUseId];
+      if (!entry || entry.view !== 'questions' || entry.peeking === event.peeking) return synced;
+      return put(synced, event.toolUseId, { ...entry, peeking: event.peeking });
     }
 
     case 'answersPatchPoked': {

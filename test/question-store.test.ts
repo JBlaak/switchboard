@@ -10,6 +10,7 @@ function asked(sessionId: string, toolUseId: string): PendingQuestions {
   return {
     sessionId,
     toolUseId,
+    source: 'ask',
     questions: [{ question: 'q', header: 'h', multiSelect: false, options: [{ label: 'a', description: '' }] }] as never,
     askedAt: 0,
     deadline: 600_000,

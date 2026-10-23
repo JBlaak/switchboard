@@ -7,7 +7,7 @@ import type { PanelKey, PanelKeyEvent, PanelKeyPlace } from '../src/renderer/fea
 function press(key: string, at: Partial<PanelKeyPlace> = {}, mods: Partial<PanelKeyEvent> = {}): PanelKey {
   return panelKey(
     { key, metaKey: false, ctrlKey: false, altKey: false, isComposing: false, ...mods },
-    { inOther: false, onPatch: false, options: 2, ...at },
+    { inOther: false, onPatch: false, options: 2, peeking: false, ...at },
   );
 }
 
@@ -139,4 +139,43 @@ test('other keys on Patch still act on the panel', () => {
 
   /* Then */
   assert.deepEqual(pressed, { does: 'act', action: { kind: 'press', row: 1 } });
+});
+
+test('T peeks at the terminal', () => {
+  /* When */
+  const pressed = keys(['t', 'T']);
+
+  /* Then */
+  assert.deepEqual(pressed, [{ does: 'peek', peeking: true }, { does: 'peek', peeking: true }]);
+});
+
+test('T is typed, not a peek, in the Other field', () => {
+  /* When */
+  const pressed = press('t', { inOther: true });
+
+  /* Then */
+  assert.deepEqual(pressed, { does: 'keep' });
+});
+
+test('while peeking, T or Esc comes back and nothing else answers', () => {
+  /* When */
+  const pressed = keys(['t', 'Escape', '1', 'Enter', 'ArrowDown', ' '], { peeking: true });
+
+  /* Then */
+  assert.deepEqual(pressed, [
+    { does: 'peek', peeking: false },
+    { does: 'peek', peeking: false },
+    { does: 'keep' },
+    { does: 'keep' },
+    { does: 'keep' },
+    { does: 'keep' },
+  ]);
+});
+
+test('while peeking, app shortcuts still go on', () => {
+  /* When */
+  const pressed = press('k', { peeking: true }, { metaKey: true });
+
+  /* Then */
+  assert.deepEqual(pressed, { does: 'pass' });
 });

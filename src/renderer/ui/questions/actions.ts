@@ -65,6 +65,11 @@ export function answer(toolUseId: string, action: DraftAction): void {
   if (before && after && !before.sending && after.sending) void send(toolUseId);
 }
 
+/** T, the peek button or the pill over the terminal: look at the terminal under the set, or come back. */
+export function peek(toolUseId: string, peeking: boolean): void {
+  dispatch({ type: 'answersPeeked', toolUseId, peeking });
+}
+
 /** Esc, the header button, or the pill: which of the two the set shows. */
 export function chooseView(toolUseId: string, view: QuestionView): void {
   dispatch({ type: 'answerViewChosen', toolUseId, view });
@@ -123,7 +128,9 @@ function tickDoze(): void {
   const id = highlightedSession(state.mainArea);
   const pending = id ? state.questions.bySession[id] : undefined;
   const entry = pending ? state.answers.byToolUse[pending.toolUseId] : undefined;
-  if (!pending || !entry || entry.view !== 'questions' || entry.sending) return;
+  if (!pending || !entry || entry.view !== 'questions' || entry.peeking || entry.sending) return;
+  // A grilling round has no deadline: it waits at the prompt.
+  if (pending.deadline === null) return;
   if (!id || !openSessions.has(id)) return;
   const minutesLeft = dozeMinute(pending.deadline, Date.now(), entry.dozedAt);
   if (minutesLeft === null) return;

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { buildClaudeArgs, buildClaudeCommand } from '../src/domain/launch/claude-command';
 import { questionHookSettings } from '../src/domain/questions/question';
 
-const settings = questionHookSettings('http://127.0.0.1:4321/questions', "tok'en");
+const settings = questionHookSettings({ ask: 'http://127.0.0.1:4321/ask/abc', stop: 'http://127.0.0.1:4321/stop/abc', prompt: 'http://127.0.0.1:4321/prompt/abc' }, "tok'en");
 const fresh = { sessionId: 'abc', isNew: true };
 const resumed = { sessionId: 'abc', isNew: false };
 

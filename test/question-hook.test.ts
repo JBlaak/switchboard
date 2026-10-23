@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  parseQuestionHookInput, questionHookResponse, questionHookSettings,
+  NOTICE_HOOK_TIMEOUT_SECONDS, parseQuestionHookInput, parseStopHookInput, questionHookResponse, questionHookSettings,
   QUESTION_HOOK_STATUS, QUESTION_HOOK_TIMEOUT_SECONDS, QUESTION_HOOK_TOKEN_HEADER,
 } from '../src/domain/questions/question';
 
@@ -169,23 +169,43 @@ test('the response does not mutate the tool input', () => {
   assert.deepEqual(toolInput, { questions: [{ question: 'Q?' }], extra: 1 }, 'the input is not mutated');
 });
 
-test('the settings install one http PreToolUse hook for AskUserQuestion only', () => {
+test('the settings install the held AskUserQuestion hook and the two quick notices', () => {
   /* When */
-  const settings = JSON.parse(questionHookSettings('http://127.0.0.1:4321/questions', 's3cret'));
+  const settings = JSON.parse(questionHookSettings({
+    ask: 'http://127.0.0.1:4321/ask/s1',
+    stop: 'http://127.0.0.1:4321/stop/s1',
+    prompt: 'http://127.0.0.1:4321/prompt/s1',
+  }, 's3cret'));
 
   /* Then */
+  const headers = { [QUESTION_HOOK_TOKEN_HEADER]: 's3cret' };
   assert.deepEqual(settings, {
     hooks: {
       PreToolUse: [{
         matcher: 'AskUserQuestion',
         hooks: [{
           type: 'http',
-          url: 'http://127.0.0.1:4321/questions',
-          headers: { [QUESTION_HOOK_TOKEN_HEADER]: 's3cret' },
+          url: 'http://127.0.0.1:4321/ask/s1',
+          headers,
           statusMessage: QUESTION_HOOK_STATUS,
           timeout: QUESTION_HOOK_TIMEOUT_SECONDS,
         }],
       }],
+      Stop: [{ hooks: [{ type: 'http', url: 'http://127.0.0.1:4321/stop/s1', headers, timeout: NOTICE_HOOK_TIMEOUT_SECONDS }] }],
+      UserPromptSubmit: [{ hooks: [{ type: 'http', url: 'http://127.0.0.1:4321/prompt/s1', headers, timeout: NOTICE_HOOK_TIMEOUT_SECONDS }] }],
     },
   });
+});
+
+test('a Stop request gives the last message; anything else gives nothing', () => {
+  /* When */
+  const parsed = [
+    parseStopHookInput({ hook_event_name: 'Stop', last_assistant_message: 'Done.' }),
+    parseStopHookInput({ hook_event_name: 'Stop' }),
+    parseStopHookInput({ hook_event_name: 'SubagentStop', last_assistant_message: 'Done.' }),
+    parseStopHookInput('Stop'),
+  ];
+
+  /* Then */
+  assert.deepEqual(parsed, ['Done.', null, null, null]);
 });

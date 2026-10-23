@@ -8,6 +8,11 @@
  * main process and waits. Answering means replying with the tool input plus an
  * `answers` map; the CLI then never shows its own prompt. Not answering in time
  * makes the CLI give up on the hook and ask in the terminal, as it always did.
+ *
+ * The same settings carry two more hooks for the questions a grilling session
+ * writes out as text (`grill.ts`): Stop, whose input holds the turn's last
+ * message, and UserPromptSubmit, which says the user has replied some other
+ * way. Neither is held: the server answers them at once.
  */
 
 /** One choice on a question. */
@@ -31,6 +36,8 @@ export interface Question {
   header: string;
   options: QuestionOption[];
   multiSelect: boolean;
+  /** More about the question, as plain text, shown under it. Only a grilling round has one. */
+  detail?: string;
 }
 
 /** What a hook request carried, once checked. */
@@ -47,16 +54,27 @@ export interface AskedQuestions {
 /** Question text → the answer: an option label, labels joined with ", ", or free text. */
 export type Answers = Record<string, string>;
 
+/**
+ * Where a set came from: an AskUserQuestion call held on the hook, or a
+ * grilling round written out in a reply, which is answered by typing.
+ */
+export type QuestionsSource = 'ask' | 'grill';
+
 /** A set of questions a session is blocked on, as the renderer sees it. */
 export interface PendingQuestions {
   /** The session's current id (what the renderer knows it as). */
   sessionId: string;
+  /** The tool call's id; for a grilling round, one made up for it. */
   toolUseId: string;
+  source: QuestionsSource;
   questions: Question[];
   /** Epoch ms the hook request arrived. */
   askedAt: number;
-  /** Epoch ms the CLI gives up on the hook and asks in the terminal instead. */
-  deadline: number;
+  /**
+   * Epoch ms the CLI gives up on the hook and asks in the terminal instead;
+   * null for a grilling round, which waits at the prompt for as long as it takes.
+   */
+  deadline: number | null;
 }
 
 /**
@@ -76,6 +94,9 @@ export const QUESTION_HOOK_TIMEOUT_SECONDS = 600;
 
 /** The CLI shows this in its spinner while the hook waits. */
 export const QUESTION_HOOK_STATUS = 'Waiting for your answer in Switchboard';
+
+/** How long the CLI waits on the Stop and UserPromptSubmit hooks, which are answered at once. */
+export const NOTICE_HOOK_TIMEOUT_SECONDS = 10;
 
 /** The header carrying the per-run secret, so only our own sessions can post. */
 export const QUESTION_HOOK_TOKEN_HEADER = 'X-Switchboard-Token';
@@ -104,6 +125,15 @@ export function parseQuestionHookInput(body: unknown): AskedQuestions | null {
 
   const toolUseId = typeof body.tool_use_id === 'string' ? body.tool_use_id : '';
   return { toolUseId, questions, toolInput };
+}
+
+/**
+ * The text of the turn's last message, from a Stop hook request; null for
+ * anything else, or a Stop that carries none.
+ */
+export function parseStopHookInput(body: unknown): string | null {
+  if (!isRecord(body) || body.hook_event_name !== 'Stop') return null;
+  return typeof body.last_assistant_message === 'string' ? body.last_assistant_message : null;
 }
 
 function parseQuestion(raw: unknown): Question | null {
@@ -150,27 +180,42 @@ export function questionHookResponse(toolInput: Record<string, unknown>, answers
   };
 }
 
+/** Where one session's hooks post to. */
+export interface QuestionHookUrls {
+  /** AskUserQuestion, held until answered. */
+  ask: string;
+  /** The end of each turn, to look for a grilling round. */
+  stop: string;
+  /** A prompt submitted, which ends any grilling round still waiting. */
+  prompt: string;
+}
+
 /**
- * The `--settings` value that installs the hook for one session.
+ * The `--settings` value that installs the hooks for one session.
  *
  * A PreToolUse hook matched to AskUserQuestion only, of type `http`, posting to
- * `url` with the token header, a `statusMessage` of QUESTION_HOOK_STATUS and a
- * `timeout` of QUESTION_HOOK_TIMEOUT_SECONDS. Hooks merge with the user's own
- * settings rather than replacing them.
+ * `urls.ask` with the token header, a `statusMessage` of QUESTION_HOOK_STATUS
+ * and a `timeout` of QUESTION_HOOK_TIMEOUT_SECONDS; and Stop and
+ * UserPromptSubmit hooks posting to `urls.stop` and `urls.prompt`, quietly and
+ * briefly. Hooks merge with the user's own settings rather than replacing them.
  */
-export function questionHookSettings(url: string, token: string): string {
+export function questionHookSettings(urls: QuestionHookUrls, token: string): string {
+  const headers = { [QUESTION_HOOK_TOKEN_HEADER]: token };
+  const notice = (url: string) => [{ hooks: [{ type: 'http', url, headers, timeout: NOTICE_HOOK_TIMEOUT_SECONDS }] }];
   return JSON.stringify({
     hooks: {
       PreToolUse: [{
         matcher: 'AskUserQuestion',
         hooks: [{
           type: 'http',
-          url,
-          headers: { [QUESTION_HOOK_TOKEN_HEADER]: token },
+          url: urls.ask,
+          headers,
           statusMessage: QUESTION_HOOK_STATUS,
           timeout: QUESTION_HOOK_TIMEOUT_SECONDS,
         }],
       }],
+      Stop: notice(urls.stop),
+      UserPromptSubmit: notice(urls.prompt),
     },
   });
 }

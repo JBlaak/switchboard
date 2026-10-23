@@ -102,6 +102,8 @@ export type LocalEvent =
   | { type: 'answersGreeted'; toolUseId: string }
   /** Answer this set in the terminal instead, or go back to the panel. */
   | { type: 'answerViewChosen'; toolUseId: string; view: QuestionView }
+  /** Look at the terminal under this set for a moment, or stop looking; the draft stays as it is. */
+  | { type: 'answersPeeked'; toolUseId: string; peeking: boolean }
   /** Patch was poked beside this set. */
   | { type: 'answersPatchPoked'; toolUseId: string }
   /** The doze timer: this set has `minutesLeft` before the terminal takes over. */

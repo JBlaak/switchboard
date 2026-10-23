@@ -14,6 +14,7 @@ import { FIXTURE_NOW } from './fixture-home';
 import { pushEvent } from './main-process';
 import type { ElectronApplication, Locator, Page } from '@playwright/test';
 import type { FixtureHome } from './fixture-home';
+import type { HttpHook } from './fake-cli';
 
 export interface QuestionOption {
   label: string;
@@ -76,6 +77,38 @@ export async function askQuestions(
 }
 
 /**
+ * End the session's turn with `lastMessage`, as the CLI's Stop hook does; a
+ * grilling round in it comes up as questions. Resolves once main has replied,
+ * which it does at once.
+ */
+export async function endTurn(home: FixtureHome, sessionId: string, lastMessage: string): Promise<void> {
+  const hook = await noticeHook(home, sessionId, 'Stop');
+  await postHook(hook, { session_id: sessionId, hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: lastMessage });
+}
+
+/** A prompt went in, as the CLI's UserPromptSubmit hook reports it. */
+export async function submitPrompt(home: FixtureHome, sessionId: string, prompt: string): Promise<void> {
+  const hook = await noticeHook(home, sessionId, 'UserPromptSubmit');
+  await postHook(hook, { session_id: sessionId, hook_event_name: 'UserPromptSubmit', prompt });
+}
+
+async function noticeHook(home: FixtureHome, sessionId: string, event: 'Stop' | 'UserPromptSubmit'): Promise<HttpHook> {
+  const launch = await fakeClaude(home, sessionId).launched();
+  const hook = launch.settings?.hooks?.[event]?.[0]?.hooks[0];
+  if (!hook) throw new Error(`session ${sessionId} was launched without a ${event} hook`);
+  return hook;
+}
+
+async function postHook(hook: HttpHook, body: Record<string, unknown>): Promise<void> {
+  const res = await fetch(hook.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...hook.headers },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`hook answered ${res.status}`);
+}
+
+/**
  * Tell the renderer a set is pending, as main would, without a hook request
  * behind it.
  *
@@ -93,6 +126,7 @@ export async function pushQuestions(
   const pending = {
     sessionId,
     toolUseId,
+    source: 'ask',
     questions: questions.map(q => ({
       question: q.question,
       header: q.header ?? '',

@@ -8,6 +8,11 @@
  * timeout, the session stopped, the CLI interrupted) the CLI asks in its
  * terminal instead and the pending set is withdrawn.
  *
+ * Two more routes take notices, answered at once: `POST /stop/<launchId>` at
+ * the end of each turn, whose last message may be a grilling round, and
+ * `POST /prompt/<launchId>` when a prompt goes in, which ends a round still
+ * waiting.
+ *
  * Loopback only, on a random port, behind a per-run secret: any local process
  * can reach 127.0.0.1, and without the token one could answer a session's
  * questions for it.
@@ -16,7 +21,8 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 
-import { parseQuestionHookInput, QUESTION_HOOK_TOKEN_HEADER } from '../../domain/questions/question';
+import { parseGrillRound } from '../../domain/questions/grill';
+import { parseQuestionHookInput, parseStopHookInput, QUESTION_HOOK_TOKEN_HEADER } from '../../domain/questions/question';
 import type { Logger } from '../../application/ports/logger';
 import type { QuestionHookEndpoint } from '../../application/ports/question-hook';
 import type { QuestionService } from '../../application/services/question-service';
@@ -24,14 +30,16 @@ import type { QuestionService } from '../../application/services/question-servic
 /** Far more than any question set; a body this big is not from the CLI. */
 const MAX_BODY_BYTES = 1024 * 1024;
 
-const ASK_PATH = /^\/ask\/([^/?#]+)$/;
+const HOOK_PATH = /^\/(ask|stop|prompt)\/([^/?#]+)$/;
+
+type Route = 'ask' | 'stop' | 'prompt';
 
 export interface QuestionHookServerDeps {
   /**
-   * Where valid requests go. Only `receive`, so the composition root can build
+   * Where valid requests go. Only these, so the composition root can build
    * the server before the service that reads its address.
    */
-  receiver: Pick<QuestionService, 'receive'>;
+  receiver: Pick<QuestionService, 'receive' | 'receiveRound' | 'promptSubmitted'>;
   log: Logger;
 }
 
@@ -88,13 +96,14 @@ export class QuestionHookServer implements QuestionHookEndpoint {
   }
 
   #handle(req: http.IncomingMessage, res: http.ServerResponse): void {
-    const match = req.method === 'POST' ? ASK_PATH.exec(req.url ?? '') : null;
+    const match = req.method === 'POST' ? HOOK_PATH.exec(req.url ?? '') : null;
     if (!match) return this.#end(res, 404);
     if (!this.#authorised(req.headers[QUESTION_HOOK_TOKEN_HEADER.toLowerCase()])) return this.#end(res, 401);
 
+    const route = match[1] as Route;
     let launchId: string;
     try {
-      launchId = decodeURIComponent(match[1]);
+      launchId = decodeURIComponent(match[2]);
     } catch {
       return this.#end(res, 404);
     }
@@ -115,17 +124,24 @@ export class QuestionHookServer implements QuestionHookEndpoint {
     });
     req.on('end', () => {
       if (tooLarge) return;
-      this.#dispatch(launchId, Buffer.concat(chunks).toString('utf8'), res);
+      this.#dispatch(route, launchId, Buffer.concat(chunks).toString('utf8'), res);
     });
   }
 
-  #dispatch(launchId: string, raw: string, res: http.ServerResponse): void {
+  #dispatch(route: Route, launchId: string, raw: string, res: http.ServerResponse): void {
     let body: unknown;
     try {
       body = JSON.parse(raw);
     } catch {
       body = null;
     }
+    if (route === 'stop') return this.#stopped(launchId, body, res);
+    if (route === 'prompt') {
+      this.#json(res, {});
+      this.deps.receiver.promptSubmitted(launchId);
+      return;
+    }
+
     const asked = parseQuestionHookInput(body);
     // Not something we can show: no decision, so the CLI carries on as usual.
     if (!asked) return this.#json(res, {});
@@ -145,6 +161,14 @@ export class QuestionHookServer implements QuestionHookEndpoint {
         handle.withdraw();
       }
     });
+  }
+
+  /** The turn is over either way: let the CLI go, then look for a round in what it said. */
+  #stopped(launchId: string, body: unknown, res: http.ServerResponse): void {
+    this.#json(res, {});
+    const text = parseStopHookInput(body);
+    const questions = text ? parseGrillRound(text) : null;
+    if (questions) this.deps.receiver.receiveRound(launchId, questions);
   }
 
   #authorised(header: string | string[] | undefined): boolean {
