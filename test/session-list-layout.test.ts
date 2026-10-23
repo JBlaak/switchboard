@@ -40,12 +40,16 @@ function project(projectPath: string, sessions: SessionRow[], extra: Partial<Pro
 
 function inputs(extra: Partial<BuildInputs> = {}): BuildInputs {
   return {
-    filters: { showArchived: false, showStarredOnly: false, showRunningOnly: false, showTodayOnly: false },
+    filters: {
+      showArchived: false, showStarredOnly: false, showRunningOnly: false, showSnoozedOnly: false, showTodayOnly: false,
+      searchMatchIds: null,
+    },
     running: new Set(),
     activeSessionId: null,
     tierOf: () => TIER_REST,
     keyOf: (id) => 'k-' + id,
     today: localDateKey(new Date(NOW)),
+    now: NOW,
     ...extra,
   };
 }
@@ -169,6 +173,47 @@ test('the filters: archived shows only archived, the others narrow', () => {
     /* Then */
     assert.deepEqual(visible, expected, JSON.stringify(filters));
   }
+});
+
+test('a snoozed session is out of the list until its time', () => {
+  /* Given */
+  const sessions = [session('asleep', { snoozedUntil: at(-HOUR) }), session('woken', { snoozedUntil: at(HOUR) })];
+
+  /* When */
+  const { items } = listItems([project('/p', sessions)], inputs());
+
+  /* Then */
+  assert.deepEqual(items.map(i => i.entry.id), [r('woken')]);
+});
+
+test('the snoozed filter lists only the sessions still asleep', () => {
+  /* Given */
+  const sessions = [
+    session('asleep', { snoozedUntil: at(-HOUR) }),
+    session('woken', { snoozedUntil: at(HOUR) }),
+    session('awake'),
+  ];
+
+  /* When */
+  const { items } = listItems([project('/p', sessions)], inputs({
+    filters: { ...inputs().filters, showSnoozedOnly: true },
+  }));
+
+  /* Then */
+  assert.deepEqual(items.map(i => i.entry.id), [r('asleep')]);
+});
+
+test('a search finds a snoozed session, so it can be woken early', () => {
+  /* Given */
+  const sessions = [session('asleep', { snoozedUntil: at(-HOUR) })];
+
+  /* When */
+  const { items } = listItems([project('/p', sessions)], inputs({
+    filters: { ...inputs().filters, searchMatchIds: new Set(['asleep']) },
+  }));
+
+  /* Then */
+  assert.deepEqual(items.map(i => i.entry.id), [r('asleep')]);
 });
 
 test('a row is a copy: changing the shared session afterwards does not change the layout', () => {

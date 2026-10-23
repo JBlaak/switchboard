@@ -87,4 +87,8 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
     app.repository.setArchived(sessionId, archived);
     return { archived: archived ? 1 : 0 };
   });
+
+  ipc.handle(INVOKE.snoozeSession, (sessionId: string, until: string | null) => {
+    app.repository.setSnoozedUntil(sessionId, until);
+  });
 }

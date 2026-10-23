@@ -18,6 +18,7 @@ import { view } from '../../state/session-store';
 import { isFilteringView } from '../../state/view-slice';
 import { projectsToRender } from '../../state/search-narrowing';
 import { localDateKey } from '../../lib/format';
+import { nextWake } from '../../../domain/session/snooze';
 import { highlightedSession } from '../../state/main-area-slice';
 import type { Project } from '../../../domain/project/project';
 
@@ -49,6 +50,7 @@ export function relayoutSessionList({ resort = false }: RelayoutOptions = {}): v
     tierOf,
     keyOf: (sessionId) => sessionKeyIn(getState().keys, sessionId),
     today: localDateKey(new Date(now)),
+    now,
   });
   dispatch({
     type: 'sessionListBuilt',
@@ -60,6 +62,25 @@ export function relayoutSessionList({ resort = false }: RelayoutOptions = {}): v
     sessionMaxAgeDays: state.view.sessionMaxAgeDays,
     now,
   });
+  wakeSnoozedAt(nextWake(view.cachedProjects.flatMap(p => p.sessions.map(s => s.snoozedUntil)), now));
+}
+
+/**
+ * Never wait longer than this before checking a snooze again: a timer can
+ * sleep through the Mac sleeping, and would then wake the row late.
+ */
+const WAKE_CHECK_MS = 60000;
+let wakeTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Lay the list out again once the next snoozed session wakes. */
+function wakeSnoozedAt(at: number | null): void {
+  clearTimeout(wakeTimer);
+  if (at === null) return;
+  const check = (): void => {
+    if (Date.now() >= at) relayoutSessionList();
+    else wakeTimer = setTimeout(check, Math.min(WAKE_CHECK_MS, at - Date.now()));
+  };
+  wakeTimer = setTimeout(check, Math.min(WAKE_CHECK_MS, at - Date.now()));
 }
 
 /** Which projects this layout covers: see `projectsToRender`. */

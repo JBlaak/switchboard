@@ -21,6 +21,7 @@ export interface ViewState {
   readonly showArchived: boolean;
   readonly showStarredOnly: boolean;
   readonly showRunningOnly: boolean;
+  readonly showSnoozedOnly: boolean;
   readonly showTodayOnly: boolean;
 
   /** null = no search active; a Set = the matched session ids. */
@@ -39,6 +40,7 @@ export function initialViewState(activeSessionId: string | null = null): ViewSta
     showArchived: false,
     showStarredOnly: false,
     showRunningOnly: false,
+    showSnoozedOnly: false,
     showTodayOnly: false,
     searchMatchIds: null,
     searchMatchProjectPaths: null,
@@ -113,17 +115,18 @@ function movedId(ids: ReadonlySet<string>, oldId: string, newId: string): Readon
   return next;
 }
 
-/** The three toggles that replace one another, by the view field each sets. */
+/** The toggles that replace one another, by the view field each sets. */
 const EXCLUSIVE_FILTERS = {
   archived: 'showArchived',
   pinned: 'showStarredOnly',
   running: 'showRunningOnly',
+  snoozed: 'showSnoozedOnly',
 } as const;
 
 /**
  * Flip one filter.
  *
- * Archived, pinned and running are mutually exclusive rather than cumulative:
+ * Archived, pinned, running and snoozed are mutually exclusive rather than cumulative:
  * each answers a different question about the whole list, and combining them
  * mostly produces an empty one. Today narrows whichever of those is on, so it
  * stacks.
@@ -131,13 +134,13 @@ const EXCLUSIVE_FILTERS = {
 function toggleFilter(state: ViewState, filter: SidebarFilter): ViewState {
   if (filter === 'today') return { ...state, showTodayOnly: !state.showTodayOnly };
   const field = EXCLUSIVE_FILTERS[filter];
-  const next = { ...state, showArchived: false, showStarredOnly: false, showRunningOnly: false };
+  const next = { ...state, showArchived: false, showStarredOnly: false, showRunningOnly: false, showSnoozedOnly: false };
   next[field] = !state[field];
   return next;
 }
 
 /** True when any filter or a search is narrowing the list. */
 export function isFilteringView(view: ViewState): boolean {
-  return view.showStarredOnly || view.showRunningOnly || view.showTodayOnly
+  return view.showStarredOnly || view.showRunningOnly || view.showSnoozedOnly || view.showTodayOnly
     || view.showArchived || view.searchMatchIds !== null;
 }

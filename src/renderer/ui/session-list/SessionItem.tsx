@@ -8,7 +8,7 @@
  * vanilla list got by patching classes in place; here it is simply what each
  * row subscribes to.
  */
-import { useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { askingCountIn } from '../../state/questions-slice';
 import { rowActivity } from '../../state/row-activity';
 import { rowButtons, sessionDisplayName, showsTerminalBadge } from '../../state/session-list-layout';
@@ -18,9 +18,10 @@ import { HTML } from './markup';
 import { RenameInput } from './RenameInput';
 import { RowMeta, useCanOpenWork } from './RowMeta';
 import {
-  openRow, resumeWithConfig, startRename, stopRow, toggleArchive, togglePin,
+  openRow, resumeWithConfig, snoozeRow, startRename, stopRow, toggleArchive, togglePin,
 } from './actions';
 import { isLeaving } from './leave';
+import { SnoozeMenu, snoozeTime } from './SnoozeMenu';
 import { openSessionWorkFromRow } from '../session-work/actions';
 import { highlightedSession } from '../../state/main-area-slice';
 import type { JSX, MouseEvent } from 'react';
@@ -142,6 +143,9 @@ export function SessionItem({ row, groupId }: SessionItemProps): JSX.Element {
           onOpenWork={openWork}
           onStop={action(() => stopRow(sessionId))}
           onArchive={action(button => item.current && toggleArchive(item.current, row.id, sessionId, button))}
+          onSnooze={(moon, until) => {
+            if (item.current && !isLeaving(row.id, groupId)) snoozeRow(item.current, row.id, sessionId, moon, until);
+          }}
           onResume={action(() => resumeWithConfig(sessionId))}
         />
       </div>
@@ -154,6 +158,8 @@ interface RowActionsProps {
   onOpenWork: (e: MouseEvent<HTMLElement>) => void;
   onStop: (e: MouseEvent<HTMLElement>) => void;
   onArchive: (e: MouseEvent<HTMLElement>) => void;
+  /** A time from the snooze menu, or null for Wake; `moon` is the icon that nods off. */
+  onSnooze: (moon: HTMLElement, until: Date | null) => void;
   onResume: (e: MouseEvent<HTMLElement>) => void;
 }
 
@@ -162,14 +168,18 @@ interface RowActionsProps {
  * Session work appears only when its page can open, the same rule as the
  * meta line.
  */
-function RowActions({ row, onOpenWork, onStop, onArchive, onResume }: RowActionsProps): JSX.Element {
+function RowActions({ row, onOpenWork, onStop, onArchive, onSnooze, onResume }: RowActionsProps): JSX.Element {
   const { session } = row;
   const path = row.projectPath || session.projectPath;
   const remote = session.type === 'remote' || !!path?.startsWith('ssh://');
   const canOpenWork = useCanOpenWork(session.sessionId, remote);
   const buttons = rowButtons(session);
+  const snooze = useRef<HTMLButtonElement>(null);
+  const [snoozing, setSnoozing] = useState(false);
+  const closeSnooze = useCallback(() => setSnoozing(false), []);
+  const snoozedUntil = session.snoozedUntil && Date.parse(session.snoozedUntil) > Date.now() ? session.snoozedUntil : null;
   return (
-    <div className="session-actions">
+    <div className={'session-actions' + (snoozing ? ' menu-open' : '')}>
       {canOpenWork === true && (
         <button
           className="session-work-btn"
@@ -190,6 +200,33 @@ function RowActions({ row, onOpenWork, onStop, onArchive, onResume }: RowActions
           title={buttons.archive}
           dangerouslySetInnerHTML={session.archived ? HTML.unarchive16 : HTML.archive16}
           onClick={onArchive}
+        />
+      )}
+      {buttons.snooze && (
+        <button
+          ref={snooze}
+          className={'session-snooze-btn' + (snoozedUntil ? ' snoozed' : '')}
+          title={snoozedUntil ? `Snoozed until ${snoozeTime(new Date(snoozedUntil), new Date())}` : 'Snooze'}
+          aria-haspopup="menu"
+          aria-expanded={snoozing}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSnoozing(!snoozing);
+          }}
+        >
+          <span className="snooze-moon" dangerouslySetInnerHTML={HTML.moon} />
+        </button>
+      )}
+      {snoozing && snooze.current && (
+        <SnoozeMenu
+          anchor={snooze.current}
+          snoozedUntil={snoozedUntil}
+          onClose={closeSnooze}
+          onPick={(until) => {
+            setSnoozing(false);
+            const moon = snooze.current?.querySelector<HTMLElement>('.snooze-moon');
+            if (moon) onSnooze(moon, until);
+          }}
         />
       )}
       {buttons.resume && (

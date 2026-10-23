@@ -44,6 +44,20 @@ test('running replaces archived', () => {
   });
 });
 
+test('snoozed replaces running', () => {
+  /* Given */
+  const state = run({ type: 'filterToggled', filter: 'running' });
+
+  /* When */
+  const snoozed = rootReducer(state, { type: 'filterToggled', filter: 'snoozed' });
+
+  /* Then */
+  assert.deepStrictEqual(filters(snoozed), {
+    showArchived: false, showStarredOnly: false, showRunningOnly: false, showTodayOnly: false,
+  });
+  assert.strictEqual(snoozed.view.showSnoozedOnly, true);
+});
+
 test('toggling the active exclusive filter turns it off', () => {
   /* When */
   const state = run(

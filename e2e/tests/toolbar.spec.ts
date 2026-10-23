@@ -390,7 +390,7 @@ forEachAppearance(() => {
       await expectScreen(page, 'toolbar-all-controls');
       // Two buttons create something: the quick session and Projects (#171).
       // The tooltips name their keys.
-      await expect(page.locator('#session-filters').getByRole('button')).toHaveCount(4);
+      await expect(page.locator('#session-filters').getByRole('button')).toHaveCount(5);
       await expect(quickSessionButton(page)).toHaveAttribute('title', 'Quick session in /tmp (⌘N)');
       await expect(button(page, 'Projects')).toHaveAttribute('title', 'Projects: start, open or add (⌘A)');
 
@@ -403,7 +403,7 @@ forEachAppearance(() => {
       for (const name of ['Global settings', 'Hide sidebar', 'Quick session (⌘N)', 'Projects']) {
         expect(await region(button(page, name))).toBe('no-drag');
       }
-      for (const filter of ['running', 'pinned'] as const) {
+      for (const filter of ['running', 'pinned', 'snoozed'] as const) {
         expect(await region(sidebarFilter(page, filter))).toBe('no-drag');
       }
       expect(await region(appearanceButton(page))).toBe('no-drag');

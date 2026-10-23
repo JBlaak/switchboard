@@ -15,8 +15,9 @@ import { renamedName } from '../../state/session-list-layout';
 import { bump } from '../../lib/motion/reflow';
 import { openResumeDialog } from '../dialogs/actions';
 import {
-  archiveSessionRow, clearScreen, confirmAndStopSession, openSession,
+  archiveSessionRow, clearScreen, confirmAndStopSession, openSession, snoozeSessionRow,
 } from '../../features/sessions/session-actions';
+import { doze, wakeUp } from '../../lib/motion/sleep';
 import { pollActiveSessions } from '../../features/sessions/session-poller';
 import { celebrateFrom, isLeaving, leave } from './leave';
 import type { SessionRow } from '../../../domain/session/session';
@@ -91,6 +92,34 @@ export function toggleArchive(el: HTMLElement, rowId: string, sessionId: string,
     void loadProjects();
     return true;
   });
+}
+
+/**
+ * Snooze a row until `until`, or wake it with null.
+ *
+ * The moon nods off and the row dozes first, then it slides out like an
+ * archived one. While a search is on the row stays: a search lists snoozed
+ * sessions, so a slide-out would leave it collapsed and marked as leaving.
+ */
+export function snoozeRow(el: HTMLElement, rowId: string, sessionId: string, moon: HTMLElement, until: Date | null): void {
+  const session = sessionMap.get(sessionId);
+  if (!session) return;
+  if (!until) {
+    wakeUp(moon);
+    void snoozeSessionRow(session, null).then(() => relayoutSessionList());
+    return;
+  }
+  const wait = doze(moon, el);
+  const save = async (): Promise<boolean> => {
+    await snoozeSessionRow(session, until.toISOString());
+    relayoutSessionList();
+    return true;
+  };
+  if (getState().view.searchMatchIds !== null) {
+    setTimeout(() => void save(), wait);
+    return;
+  }
+  setTimeout(() => leave(el, rowId, save), wait);
 }
 
 /** Archive every unarchived session in one slug group, sliding the group out first. */

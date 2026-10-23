@@ -15,7 +15,7 @@
  */
 import { test, expect, forEachAppearance } from '../support/test';
 import {
-  dialog, expectScreen, openRemoteSession, openSession, rowButton, searchBox, sessionRow, sidebar,
+  dialog, expectScreen, openRemoteSession, openSession, rowButton, searchBox, sessionRow, sidebar, sidebarFilter,
   terminalHeader, terminalStatus,
 } from '../support/app';
 import { fakeClaude, launchedKeys, waitForNewLaunch } from '../support/fake-cli';
@@ -426,6 +426,81 @@ test.describe('stop', () => {
     await expect(page.getByTestId('empty-screen')).toBeVisible();
     await expect(terminalHeader(page)).toBeHidden();
     await expect(sessionItem(page, S.loginFix)).not.toHaveClass(/\bhas-running-pty\b/);
+  });
+});
+
+// FIXTURE_NOW is Wednesday 10 June 2026, 14:00 UTC, and the app runs in UTC.
+test.describe('snooze', () => {
+  /** The open snooze menu's entries, as their text. */
+  function snoozeMenu(page: Page) {
+    return page.getByRole('menu', { name: 'Snooze until' }).getByRole('menuitem');
+  }
+
+  test('offers the times still ahead, hides the row until its time, and its filter or a search finds it to wake', async ({ page }) => {
+    /* Given */
+    const row = sessionRow(page, LABEL.loginFix);
+    await row.hover();
+
+    /* When */
+    await rowButton(row, 'Snooze').click();
+
+    /* Then */
+    await expect(snoozeMenu(page)).toHaveText([
+      'Later today15:00', 'This evening18:00', 'TomorrowThu 08:00', 'This weekendFri 18:00',
+    ]);
+
+    /* When */
+    await snoozeMenu(page).getByText('This evening').click();
+
+    /* Then */
+    await expect(sessionItem(page, S.loginFix)).toHaveCount(0);
+    await expect.poll(() => storedSession(page, S.loginFix))
+      .toMatchObject({ snoozedUntil: '2026-06-10T18:00:00.000Z', archived: 0 });
+
+    /* When */
+    const filter = sidebarFilter(page, 'snoozed');
+    await filter.click();
+
+    /* Then */
+    await expect(sidebar(page).locator('.session-item')).toHaveCount(1);
+    await expect(row).toBeVisible();
+
+    /* When */
+    await filter.click();
+    await searchBox(page).fill(LABEL.loginFix);
+    await row.hover();
+    await rowButton(row, 'Snoozed until 18:00').click();
+    await snoozeMenu(page).getByText('Wake').click();
+
+    /* Then */
+    await expect.poll(() => storedSession(page, S.loginFix)).toMatchObject({ snoozedUntil: null });
+    await searchBox(page).fill('');
+    await expect(row).toBeVisible();
+  });
+
+  test.describe('on time', () => {
+    test.use({ fakeTimers: true });
+
+    test('a snoozed row comes back by itself once its time has come', async ({ page }) => {
+      /* Given */
+      const row = sessionRow(page, LABEL.loginFix);
+      await row.hover();
+      await rowButton(row, 'Snooze').click();
+      await snoozeMenu(page).getByText('Later today').click();
+      await expect(sessionItem(page, S.loginFix)).toHaveCount(0);
+
+      /* When */
+      await page.clock.fastForward('59:00');
+
+      /* Then */
+      await expect(sessionItem(page, S.loginFix)).toHaveCount(0);
+
+      /* When */
+      await page.clock.fastForward('02:00');
+
+      /* Then */
+      await expect(row).toBeVisible();
+    });
   });
 });
 

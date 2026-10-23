@@ -14,8 +14,8 @@ import { normaliseAppearance } from '../../domain/settings/appearance';
 import type { Appearance } from '../../domain/settings/appearance';
 import type { RendererEvent } from './events';
 
-/** The four filter toggles above the list. */
-export type SidebarFilter = 'running' | 'pinned' | 'archived' | 'today';
+/** The filter toggles above the list. */
+export type SidebarFilter = 'running' | 'pinned' | 'snoozed' | 'archived' | 'today';
 
 export type ToolbarEvent =
   | { type: 'sidebarCollapsed'; collapsed: boolean }

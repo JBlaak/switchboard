@@ -65,6 +65,8 @@ export interface SwitchboardApi {
   /** `null` clears the rename, falling back to the AI/first-prompt title. */
   renameSession(id: string, name: string | null): Promise<IpcResult>;
   archiveSession(id: string, archived: boolean): Promise<{ archived: number }>;
+  /** Keep a session's row out of the list until `until` (an ISO time), or wake it with null. */
+  snoozeSession(id: string, until: string | null): Promise<void>;
 
   // ── Questions ──
   /** Every set of questions a running session is blocked on, for a renderer that (re)loads. */

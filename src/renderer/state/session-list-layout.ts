@@ -18,6 +18,7 @@
  * tested in node with a plain record.
  */
 import { byMostRecentlyModified } from '../../domain/session/session';
+import { isSnoozed } from '../../domain/session/snooze';
 import { cleanDisplayName } from '../../domain/session/title';
 import { TIER_ORDER, TIER_RUNNING, itemTier, rowSurvivesTruncation } from '../../domain/session/tiers';
 import { formatDate, localDateKey } from '../lib/format';
@@ -154,6 +155,8 @@ export function showsTerminalBadge(session: SessionRow): boolean {
 export interface RowButtons {
   readonly stop: string;
   readonly archive: string | null;
+  /** Snoozing is keyed on the session id, like archiving; an archived row has nothing to snooze. */
+  readonly snooze: boolean;
   readonly resume: boolean;
 }
 
@@ -170,6 +173,7 @@ export function rowButtons(session: SessionRow): RowButtons {
   return {
     stop: remote ? 'Disconnect (keeps running on the remote)' : 'Stop session',
     archive: session.type === 'terminal' ? null : session.archived ? 'Unarchive' : 'Archive',
+    snooze: session.type !== 'terminal' && !session.archived,
     resume: !remote && session.type !== 'terminal',
   };
 }
@@ -195,7 +199,10 @@ export interface ListFilters {
   readonly showArchived: boolean;
   readonly showStarredOnly: boolean;
   readonly showRunningOnly: boolean;
+  readonly showSnoozedOnly: boolean;
   readonly showTodayOnly: boolean;
+  /** null = no search active; a search lists snoozed sessions too. */
+  readonly searchMatchIds: ReadonlySet<string> | null;
 }
 
 /** The live facts building needs, handed in so building stays pure. */
@@ -210,6 +217,8 @@ export interface BuildInputs {
   keyOf(sessionId: string): string;
   /** Today, as `localDateKey` spells it. */
   readonly today: string;
+  /** The time, in ms: a snoozed session stays out of the list until its own. */
+  readonly now: number;
 }
 
 export function passesFilters(sessions: readonly SessionRow[], inputs: BuildInputs): SessionRow[] {
@@ -218,6 +227,11 @@ export function passesFilters(sessions: readonly SessionRow[], inputs: BuildInpu
   // The archive filter is the only way archived sessions surface: when it is on
   // we show exactly the archived ones, when it is off they are hidden entirely.
   if (filters.showArchived) filtered = filtered.filter(s => s.archived);
+  // A snoozed session is out of the list until its time, but its own filter
+  // lists it, a search still finds it and the archive shows what it holds, so
+  // it can be woken early.
+  else if (filters.showSnoozedOnly) filtered = filtered.filter(s => isSnoozed(s.snoozedUntil, inputs.now));
+  else if (filters.searchMatchIds === null) filtered = filtered.filter(s => !isSnoozed(s.snoozedUntil, inputs.now));
   if (filters.showStarredOnly) filtered = filtered.filter(s => s.starred);
   if (filters.showRunningOnly) filtered = filtered.filter(s => inputs.running.has(s.sessionId));
   if (filters.showTodayOnly) {

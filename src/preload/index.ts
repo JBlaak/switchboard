@@ -44,6 +44,7 @@ const api: SwitchboardApi = {
   toggleStar: (id) => ipcRenderer.invoke(INVOKE.toggleStar, id),
   renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
   archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
+  snoozeSession: (id, until) => ipcRenderer.invoke(INVOKE.snoozeSession, id, until),
 
   // ── Questions ──
   getPendingQuestions: () => ipcRenderer.invoke(INVOKE.getPendingQuestions),

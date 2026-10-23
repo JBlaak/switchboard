@@ -1,5 +1,5 @@
 /**
- * The filter row: the two filter toggles on the left, the first load's status,
+ * The filter row: the three filter toggles on the left, the first load's status,
  * and the two ways to start something on the right — a quick session, and the
  * Projects modal, which starts a session in a project or adds one (#171).
  */
@@ -7,7 +7,7 @@ import { openDialog } from '../dialogs/actions';
 import { launchQuickSession } from '../../features/sessions/quick-session';
 import { useStore } from '../use-store';
 import { toggleFilter } from './actions';
-import { PinIcon, ProjectsIcon, QuickSessionIcon, RunningIcon } from './icons';
+import { MoonIcon, PinIcon, ProjectsIcon, QuickSessionIcon, RunningIcon } from './icons';
 import type { JSX, ReactNode } from 'react';
 import type { RendererState } from '../../state/root';
 import type { SidebarFilter } from '../../state/toolbar-slice';
@@ -63,6 +63,9 @@ export function SessionFilters(): JSX.Element {
       </FilterButton>
       <FilterButton id="star-toggle" filter="pinned" title="Show pinned only" isOn={s => s.view.showStarredOnly}>
         <PinIcon />
+      </FilterButton>
+      <FilterButton id="snoozed-toggle" filter="snoozed" title="Show snoozed only" isOn={s => s.view.showSnoozedOnly}>
+        <MoonIcon />
       </FilterButton>
       <LoadingStatus />
       {/* Hidden until there is a folder for it to launch in. */}

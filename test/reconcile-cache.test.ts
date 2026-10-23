@@ -41,6 +41,7 @@ function fakeRepository(meta: Map<string, FolderMeta>) {
     setName() {},
     toggleStar: () => 0,
     setArchived() {},
+    setSnoozedUntil() {},
 
     isCachePopulated: () => cached.size > 0,
     getAllCached: () => [...cached.values()],

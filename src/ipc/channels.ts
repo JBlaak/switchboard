@@ -27,6 +27,7 @@ export const INVOKE = {
   toggleStar: 'toggle-star',
   renameSession: 'rename-session',
   archiveSession: 'archive-session',
+  snoozeSession: 'snooze-session',
 
   // Questions
   getPendingQuestions: 'get-pending-questions',
