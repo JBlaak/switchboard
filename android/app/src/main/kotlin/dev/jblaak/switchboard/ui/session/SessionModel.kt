@@ -111,6 +111,11 @@ class SessionModel(
         link.send(ClientMessage.Input(facts.value.sessionId, key.bytes))
     }
 
+    /** Bytes the terminal page made itself, such as a scroll of a full-screen program. */
+    fun terminalInput(data: String) {
+        link.send(ClientMessage.Input(facts.value.sessionId, data))
+    }
+
     fun startedNoteDismissed() {
         facts.update { it.copy(startedIn = null) }
     }

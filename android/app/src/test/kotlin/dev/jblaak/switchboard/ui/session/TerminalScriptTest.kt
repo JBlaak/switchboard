@@ -60,6 +60,30 @@ class TerminalScriptTest {
     }
 
     @Test
+    fun `the page's input is read as the bytes it carries`() {
+        /* Given */
+        val message = "input ${base64("\u001b[<65;20;10M\u001b[<65;20;10M")}"
+
+        /* When */
+        val event = terminalEventOrNull(message)
+
+        /* Then */
+        assertEquals(TerminalEvent.Input("\u001b[<65;20;10M\u001b[<65;20;10M"), event)
+    }
+
+    @Test
+    fun `input that is not base64 is ignored`() {
+        /* Given */
+        val message = "input not*base64"
+
+        /* When */
+        val event = terminalEventOrNull(message)
+
+        /* Then */
+        assertNull(event)
+    }
+
+    @Test
     fun `anything else from the page is ignored`() {
         /* Given */
         val message = "size 0 30"

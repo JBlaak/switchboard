@@ -234,6 +234,18 @@ class SessionModelTest {
     }
 
     @Test
+    fun `the terminal's own input goes to the session`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+
+        /* When */
+        model.terminalInput("\u001b[<64;20;10M")
+
+        /* Then */
+        assertEquals(listOf(ClientMessage.Input("s-1", "\u001b[<64;20;10M")), link.sent)
+    }
+
+    @Test
     fun `a re-keyed session is followed under its new id`() = runTest(UnconfinedTestDispatcher()) {
         /* Given */
         val model = newModel()
