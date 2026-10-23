@@ -25,6 +25,9 @@ val AddIcon: ImageVector by lazy { lineIcon("Add", "M12 5v14M5 12h14") }
 val UpIcon: ImageVector by lazy { lineIcon("Up", "M12 19V5", "M6 11l6-6 6 6") }
 val DownIcon: ImageVector by lazy { lineIcon("Down", "M12 5v14", "M6 13l6 6 6-6") }
 val EnterIcon: ImageVector by lazy { lineIcon("Enter", "M20 5v7a3 3 0 0 1-3 3H5", "M9 11l-4 4 4 4") }
+val ArchiveIcon: ImageVector by lazy {
+    lineIcon("Archive", "M4 4h16v4H4z", "M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8", "M12 11v6", "M9 14l3 3 3-3")
+}
 val CheckIcon: ImageVector by lazy { lineIcon("Check", "M5 12.5l4.5 4.5L19 7.5") }
 val SearchIcon: ImageVector by lazy { lineIcon("Search", "M17.5 11a6.5 6.5 0 1 1-13 0a6.5 6.5 0 1 1 13 0z", "M20 20l-4-4") }
 val MicIcon: ImageVector by lazy {

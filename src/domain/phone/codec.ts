@@ -58,7 +58,8 @@ export function parseClientMessage(text: string): ClientMessage | null {
       return { type: raw.type, sessionId: raw.sessionId, cols: raw.cols, rows: raw.rows };
     }
     case 'detach':
-    case 'use-here': {
+    case 'use-here':
+    case 'archive': {
       if (!isText(raw.sessionId, MAX_ID)) return null;
       return { type: raw.type, sessionId: raw.sessionId };
     }

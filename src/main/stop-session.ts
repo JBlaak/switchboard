@@ -1,6 +1,9 @@
 /**
- * Stopping a session, for the renderer's Stop and archive.
+ * Stopping a session, for the renderer's Stop and archive, and a phone's
+ * archive, which does here what the renderer's archive does there.
  */
+import type { RendererGateway } from '../application/ports/renderer-gateway';
+import type { SessionRepository } from '../application/ports/session-repository';
 import type { Container } from './composition-root';
 
 export type SessionStopper = Pick<Container, 'registry' | 'remote' | 'lifecycle' | 'terminals'>;
@@ -48,3 +51,22 @@ export function stopSession(app: SessionStopper, sessionId: string): StopResult 
   return { ok: true };
 }
 
+/**
+ * A phone's archive, as the renderer's (`archiveSessionRow`): stopped first,
+ * then the row archived, then the window told, so it closes the session as
+ * archiving it there would.
+ */
+export function sessionArchiver(app: SessionStopper & {
+  repository: Pick<SessionRepository, 'setArchived'>;
+  renderer: Pick<RendererGateway, 'sessionArchived'>;
+}): { archive(sessionId: string): { ok: boolean } } {
+  return {
+    archive(sessionId) {
+      const stopped = stopSession(app, sessionId);
+      if (!stopped.ok) return { ok: false };
+      app.repository.setArchived(sessionId, true);
+      app.renderer.sessionArchived(sessionId);
+      return { ok: true };
+    },
+  };
+}

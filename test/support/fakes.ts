@@ -201,6 +201,7 @@ export function fakeRenderer(): FakeRenderer {
     phoneAccessChanged: record('phoneAccessChanged'),
     terminalOwnerChanged: record('terminalOwnerChanged'),
     sessionStarted: record('sessionStarted'),
+    sessionArchived: record('sessionArchived'),
   };
 }
 

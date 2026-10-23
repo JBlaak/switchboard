@@ -89,6 +89,7 @@ import { LanWatcher } from '../infrastructure/phone/lan-watcher';
 import { SqliteDeviceRegistry } from '../infrastructure/sqlite/device-registry';
 import { bonjourHostName, computerName } from '../infrastructure/system/computer-name';
 import { PhoneEventTee, buildPhoneAccess } from './phone-access';
+import { sessionArchiver } from './stop-session';
 import type { PhoneAccessService } from '../application/services/phone-access-service';
 import type { PhoneSessionsService } from '../application/services/phone-sessions-service';
 import type { DeviceRegistry, ServiceAdvertiser } from '../application/ports/phone-access';
@@ -495,6 +496,7 @@ export function buildContainer(): Container {
     // Its own instance per phone (#194): a phone's request never cancels the Mac's.
     router: () => new AskRouteService({ cli: claudeCaller, timers, log, call: ASK_PATCH_CALL }),
     launcher,
+    archiver: sessionArchiver({ registry, remote, lifecycle, terminals, repository, renderer }),
     settings,
     renderer,
     ids, clock, timers, log,

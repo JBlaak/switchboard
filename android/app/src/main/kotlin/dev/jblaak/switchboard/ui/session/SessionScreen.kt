@@ -30,19 +30,26 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -58,6 +65,7 @@ import dev.jblaak.switchboard.protocol.Question
 import dev.jblaak.switchboard.protocol.QuestionsSource
 import dev.jblaak.switchboard.theme.SwitchboardTheme
 import dev.jblaak.switchboard.theme.TerminalTextStyle
+import dev.jblaak.switchboard.ui.connected.ArchiveIcon
 import dev.jblaak.switchboard.ui.connected.BackIcon
 import dev.jblaak.switchboard.ui.connected.DownIcon
 import dev.jblaak.switchboard.ui.connected.EnterIcon
@@ -87,13 +95,15 @@ fun SessionScreen(
     onUseHere: () -> Unit,
     onAnswer: () -> Unit,
     onStartedNoteDismissed: () -> Unit,
+    /** With the middle of the Archive button, in window coordinates, for the confetti. */
+    onArchive: (from: Offset) -> Unit,
     onBack: () -> Unit,
     terminal: @Composable (Modifier) -> Unit,
 ) {
     val colors = SwitchboardTheme.colors
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding()) {
-            SessionTopBar(state, onBack)
+            SessionTopBar(state, onArchive, onBack)
             Box(Modifier.weight(1f)) {
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
@@ -130,7 +140,7 @@ fun SessionScreen(
 }
 
 @Composable
-private fun SessionTopBar(state: SessionScreenState, onBack: () -> Unit) {
+private fun SessionTopBar(state: SessionScreenState, onArchive: (from: Offset) -> Unit, onBack: () -> Unit) {
     val colors = SwitchboardTheme.colors
     ScreenTopBar(
         title = state.name ?: stringResource(R.string.session_new),
@@ -150,8 +160,29 @@ private fun SessionTopBar(state: SessionScreenState, onBack: () -> Unit) {
                 )
             }
         },
-        trailing = { AccessChip(state.access) },
+        trailing = {
+            AccessChip(state.access)
+            ArchiveButton(onArchive)
+        },
     )
+}
+
+@Composable
+private fun ArchiveButton(onArchive: (from: Offset) -> Unit) {
+    var middle by remember { mutableStateOf(Offset.Zero) }
+    IconButton(
+        onClick = { onArchive(middle) },
+        modifier = Modifier
+            .size(48.dp)
+            .onGloballyPositioned { middle = it.boundsInWindow().center },
+    ) {
+        Icon(
+            ArchiveIcon,
+            contentDescription = stringResource(R.string.session_archive),
+            tint = SwitchboardTheme.colors.textDim,
+            modifier = Modifier.size(22.dp),
+        )
+    }
 }
 
 @Composable
@@ -530,6 +561,7 @@ private fun SessionScreenPreviewOf(state: SessionScreenState) {
             onUseHere = {},
             onAnswer = {},
             onStartedNoteDismissed = {},
+            onArchive = {},
             onBack = {},
             terminal = { PreviewTerminal(it) },
         )

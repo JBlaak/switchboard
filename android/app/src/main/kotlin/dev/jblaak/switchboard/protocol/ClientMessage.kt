@@ -80,4 +80,9 @@ sealed interface ClientMessage {
     @Serializable
     @SerialName("list-projects")
     data object ListProjects : ClientMessage
+
+    /** Archive the session, as ⌘E does on the Mac: it is stopped first, and stays listed if that fails. */
+    @Serializable
+    @SerialName("archive")
+    data class Archive(val sessionId: String) : ClientMessage
 }

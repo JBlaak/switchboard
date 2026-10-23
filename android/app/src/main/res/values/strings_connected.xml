@@ -55,6 +55,9 @@
     <string name="questions_skip">Skip</string>
     <string name="questions_step">%1$d of %2$d</string>
     <string name="questions_try_again">Try again</string>
+    <string name="session_archive">Archive</string>
+    <string name="session_archive_failed">Couldn’t archive this session: %1$s</string>
+    <string name="session_archive_offline">Not connected to your Mac</string>
     <string name="session_back">Back to sessions</string>
     <string name="session_chip_here">Here</string>
     <string name="session_chip_mac">Mac</string>

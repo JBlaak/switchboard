@@ -343,4 +343,48 @@ class SessionModelTest {
         assertEquals(null, model.state.value.startedIn)
         assertFalse(model.state.value.waitingInTerminal)
     }
+
+    @Test
+    fun `archive asks the Mac to archive the session under its current id`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        link.macSays(ServerMessage.SessionRekeyed(from = "s-1", to = "s-2"))
+
+        /* When */
+        val archived = model.archive()
+
+        /* Then */
+        assertTrue(archived)
+        assertEquals(listOf(ClientMessage.Archive("s-2")), link.sent)
+    }
+
+    @Test
+    fun `archive while not connected says so`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        link.state.value = LinkState.Reconnecting
+
+        /* When */
+        val archived = model.archive()
+
+        /* Then */
+        assertFalse(archived)
+    }
+
+    @Test
+    fun `an archived session keeps its name and its terminal until the screen goes`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("s-1"))))
+        model.terminalOpened(size)
+        link.macSays(ServerMessage.Attached("s-1", THIS_PHONE))
+
+        /* When */
+        model.archive()
+        link.macSays(ServerMessage.Exited("s-1", exitCode = 0))
+
+        /* Then */
+        assertEquals("Session s-1", model.state.value.name)
+        assertEquals(TerminalAccess.Here, model.state.value.access)
+    }
 }

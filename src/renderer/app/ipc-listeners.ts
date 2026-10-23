@@ -16,7 +16,7 @@
 import { loadProjects } from '../features/sessions/session-list';
 import { relayoutSessionList } from '../ui/session-list/relayout';
 import {
-  dropPendingSession, writeExitBanner,
+  closeArchivedSession, dropPendingSession, writeExitBanner,
 } from '../features/sessions/session-actions';
 import { pollActiveSessions } from '../features/sessions/session-poller';
 import { launchClaudeSession, trackStartedElsewhere } from '../features/sessions/session-actions';
@@ -72,6 +72,11 @@ export function installIpcListeners(): void {
   });
   // Phone access (#194): a session a phone started is in the sidebar at once.
   onEvent('sessionStarted', ({ sessionId, projectPath }) => trackStartedElsewhere(sessionId, projectPath));
+  // A phone archived a session: it leaves the window as ⌘E would take it, then the list refetches.
+  onEvent('sessionArchived', ({ sessionId }) => {
+    closeArchivedSession(sessionId);
+    onProjectsChanged();
+  });
 
   // Fullscreen hides the macOS traffic lights, so the space the collapsed
   // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.

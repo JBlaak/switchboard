@@ -73,6 +73,8 @@ function harness() {
   const caller = fakeCaller();
   const ptys = new Map<string, Pty>();
   const launches: OpenSessionRequest[] = [];
+  const archived: string[] = [];
+  let archiveResult: { ok: boolean; error?: string } = { ok: true };
   let projects: Project[] = [
     { projectPath: APP, folder: '-code-app', sessions: [] },
     { projectPath: SITE, folder: '-code-site', sessions: [] },
@@ -131,6 +133,12 @@ function harness() {
         return { ok: true, reattached: false };
       },
     },
+    archiver: {
+      archive(sessionId) {
+        archived.push(sessionId);
+        return archiveResult;
+      },
+    },
     settings: { effective: () => ({ permissionMode: 'auto', worktree: true }) },
     renderer,
     ids: { newId: () => `new-${++ids}` },
@@ -152,8 +160,9 @@ function harness() {
   });
 
   return {
-    service, registry, renderer, timers, caller, ptys, launches, questions, addSession, connect, send, ask,
+    service, registry, renderer, timers, caller, ptys, launches, archived, questions, addSession, connect, send, ask,
     setProjects: (next: Project[]) => { projects = next; },
+    failArchive: (error: string) => { archiveResult = { ok: false, error }; },
   };
 }
 
@@ -285,6 +294,52 @@ test('a re-key moves the row and the stream, and an exit is told once under the 
   assert.deepEqual(phone.of('session-rekeyed'), [{ type: 'session-rekeyed', from: 'old', to: 'new' }]);
   assert.deepEqual(phone.frames, [['new', 'after']]);
   assert.deepEqual(phone.of('exited'), [{ type: 'exited', sessionId: 'new', exitCode: 0 }]);
+});
+
+// ── Archiving ──
+
+test('archive archives the session under its current id and answers the phone under the id it sent', () => {
+  /* Given */
+  const h = harness();
+  h.addSession('old');
+  const phone = h.connect();
+  h.registry.rekey('old', 'new');
+  h.service.sessionForked('old', 'new');
+  phone.clear();
+
+  /* When */
+  h.send(phone, { type: 'archive', sessionId: 'old' });
+
+  /* Then */
+  assert.deepEqual(h.archived, ['new']);
+  assert.deepEqual(phone.of('archive-result'), [{ type: 'archive-result', sessionId: 'old', ok: true }]);
+});
+
+test('a session that has already exited can still be archived', () => {
+  /* Given */
+  const h = harness();
+  const phone = h.connect();
+
+  /* When */
+  h.send(phone, { type: 'archive', sessionId: 'gone' });
+
+  /* Then */
+  assert.deepEqual(h.archived, ['gone']);
+  assert.deepEqual(phone.of('archive-result'), [{ type: 'archive-result', sessionId: 'gone', ok: true }]);
+});
+
+test('an archive that fails tells the phone why', () => {
+  /* Given */
+  const h = harness();
+  h.addSession('s1');
+  h.failArchive('Could not stop it');
+  const phone = h.connect();
+
+  /* When */
+  h.send(phone, { type: 'archive', sessionId: 's1' });
+
+  /* Then */
+  assert.deepEqual(phone.of('archive-result'), [{ type: 'archive-result', sessionId: 's1', ok: false, error: 'Could not stop it' }]);
 });
 
 // ── The terminal ──

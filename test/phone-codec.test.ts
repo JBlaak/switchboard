@@ -21,6 +21,7 @@ const EVERY_MESSAGE: ClientMessage[] = [
   { type: 'ask-start', requestId: 'r2', projectPath: '/Users/joris/Development/switchboard', prompt: 'Fix it', cols: 48, rows: 30 },
   { type: 'ask-start', requestId: 'r1', projectPath: '/Users/joris/Development/switchboard', prompt: 'Add dark mode' },
   { type: 'list-projects' },
+  { type: 'archive', sessionId: 's1' },
 ];
 
 /** Each message with one field broken, per field and per way it can break. */
@@ -59,6 +60,7 @@ const MALFORMED: Record<string, unknown[]> = {
     { type: 'size', cols: 80, rows: 24 },
   ],
   'use-here': [{ type: 'use-here' }, { type: 'use-here', sessionId: null }],
+  archive: [{ type: 'archive' }, { type: 'archive', sessionId: '' }, { type: 'archive', sessionId: 7 }],
   input: [
     { type: 'input', sessionId: 's1' },
     { type: 'input', sessionId: 's1', data: '' },

@@ -24,6 +24,11 @@ class ConnectedNavigation {
         mutableRoute.value = ConnectedRoute.Session(sessionId, startedIn = project, questionsOpen = false)
     }
 
+    /** Archived from its screen: back to the list, unless something else has been opened meanwhile. */
+    fun sessionArchived(sessionId: String) {
+        if ((mutableRoute.value as? ConnectedRoute.Session)?.sessionId == sessionId) backToSessions()
+    }
+
     fun backToSessions() {
         mutableRoute.value = ConnectedRoute.Sessions
     }

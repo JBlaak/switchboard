@@ -246,8 +246,13 @@ export async function archiveSessionRow(session: SessionRow, archived: number): 
   return true;
 }
 
-/** What goes with an archived row: main has already stopped the session and archived the row. */
-function closeArchivedSession(sessionId: string): void {
+/**
+ * What goes with an archived row, here or from a phone: main has already
+ * stopped the session and archived the row.
+ */
+export function closeArchivedSession(sessionId: string): void {
+  const row = sessionMap.get(sessionId);
+  if (row) row.archived = 1;
   // A pending row has no transcript to resume from, so archiving it means
   // forgetting it — and leaving the pending entry behind would re-inject the
   // row on the next refresh with its own `archived: 0`.

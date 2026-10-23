@@ -46,10 +46,13 @@ class SessionModel(
     private val scope: CoroutineScope,
 ) {
 
-    private val facts = MutableStateFlow(Facts(sessionId, owner = null, ended = false, startedIn = startedIn))
+    private val facts = MutableStateFlow(Facts(sessionId, owner = null, ended = false, archived = false, startedIn = startedIn))
     private val writes = Channel<TerminalWrite>(Channel.UNLIMITED)
     private var size: TerminalSize? = null
     private var attached = false
+
+    /** The session as last listed, so an archived one keeps its name while the confetti plays. */
+    private var lastListed: PhoneSession? = null
 
     /** For the terminal view, in order; a [TerminalWrite.Reset] comes before each replay. */
     val terminalWrites: Flow<TerminalWrite> = writes.receiveAsFlow()
@@ -90,6 +93,16 @@ class SessionModel(
         this.size = size
         board.terminalMeasured(size)
         if (attached) link.send(ClientMessage.Size(facts.value.sessionId, size.cols, size.rows))
+    }
+
+    /**
+     * Archives the session; false when it couldn't be sent, so nothing happened. The screen stays as it is until
+     * it goes, rather than showing the session ending.
+     */
+    fun archive(): Boolean {
+        val sent = board.archive(facts.value.sessionId) == SendOutcome.Sent
+        if (sent) facts.update { it.copy(archived = true) }
+        return sent
     }
 
     fun useHere() {
@@ -148,7 +161,9 @@ class SessionModel(
         }
     }
 
-    private fun screenStateOf(facts: Facts, session: PhoneSession?, pending: List<PendingQuestions>): SessionScreenState {
+    private fun screenStateOf(facts: Facts, listed: PhoneSession?, pending: List<PendingQuestions>): SessionScreenState {
+        if (listed != null) lastListed = listed
+        val session = listed ?: lastListed?.takeIf { facts.archived }
         val owner = facts.owner ?: session?.owner
         val questions = pending.filter { it.sessionId == facts.sessionId }
         return SessionScreenState(
@@ -157,7 +172,7 @@ class SessionModel(
             project = session?.project ?: facts.startedIn,
             status = session?.state?.let(::statusOf),
             access = when {
-                facts.ended -> TerminalAccess.Ended
+                facts.ended && !facts.archived -> TerminalAccess.Ended
                 owner == null -> TerminalAccess.Unknown
                 else -> when (val place = owner.placeFor(deviceId)) {
                     TerminalPlace.ThisPhone -> TerminalAccess.Here
@@ -175,6 +190,8 @@ class SessionModel(
         /** From `attached` and `owner`; until one comes, the list's owner stands in. */
         val owner: TerminalOwner?,
         val ended: Boolean,
+        /** Archived from here: the screen is about to go. */
+        val archived: Boolean,
         val startedIn: String?,
     )
 }

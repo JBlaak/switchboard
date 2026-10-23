@@ -68,7 +68,9 @@ export type PushEvent =
   /** A session's terminal moved to a phone, or back to the Mac. */
   | { type: 'terminalOwnerChanged'; sessionId: string; owner: TerminalOwner }
   /** Main started a Claude session the renderer didn't ask for (a phone's Ask Patch). */
-  | { type: 'sessionStarted'; sessionId: string; projectPath: string };
+  | { type: 'sessionStarted'; sessionId: string; projectPath: string }
+  /** A phone archived a session; main has stopped it and archived its row. */
+  | { type: 'sessionArchived'; sessionId: string };
 
 // ── From the renderer itself: user actions and timers ──
 

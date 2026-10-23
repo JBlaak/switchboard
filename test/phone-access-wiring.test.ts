@@ -153,6 +153,7 @@ async function mac() {
     questions,
     router: () => ({ route: async () => ({ kind: 'cancelled' as const }), cancel() {} }),
     launcher,
+    archiver: { archive: () => ({ ok: true }) },
     settings: {
       get: <T>(key: string) => (settings.get(key) ?? null) as T | null,
       set: (key: string, value: unknown) => { settings.set(key, value); },
