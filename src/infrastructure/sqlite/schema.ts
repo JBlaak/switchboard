@@ -91,6 +91,16 @@ const TABLES = [
     activity_id TEXT,
     at TEXT NOT NULL
   )`,
+  // The phones enrolled for Phone access (#194), one row per paired device.
+  // The fingerprint is what a phone is recognised by during the TLS handshake,
+  // so no two rows may share one. Times are epoch ms.
+  `CREATE TABLE IF NOT EXISTS phone_devices (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    fingerprint TEXT NOT NULL UNIQUE,
+    paired_at INTEGER NOT NULL,
+    last_seen_at INTEGER
+  )`,
 ];
 
 const INDEXES = [
