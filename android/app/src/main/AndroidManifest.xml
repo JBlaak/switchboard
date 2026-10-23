@@ -17,8 +17,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Switchboard">
 
+        <!-- Folding, unfolding or turning the phone only resizes the window: Compose and the terminal's WebView
+             refit in place, so the open session and its scrollback stay put instead of the activity starting over. -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
