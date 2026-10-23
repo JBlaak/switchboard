@@ -28,6 +28,7 @@ import type { CaptureTarget, RouteRequest, RouteResult } from '../domain/ask/mod
 import type { IssueWorktreeRequest, IssueWorktreeResult } from '../domain/plan/issue-session';
 import type { Plan, PlanSummary } from '../domain/plan/model';
 import type { ProjectOverview, ProjectOverviewOptions } from '../domain/project/overview';
+import type { PhoneAccessState, TerminalOwner } from '../domain/phone/state';
 
 /** Removes the listener an `on*` subscription added. */
 export type Unsubscribe = () => void;
@@ -214,6 +215,24 @@ export interface SwitchboardApi {
    */
   rendererReady(): void;
 
+  // ── Phone access (#194) ──
+  getPhoneAccess(): Promise<PhoneAccessState>;
+  /** Turn the listener on or off; answers the state it ended in. */
+  setPhoneAccessEnabled(enabled: boolean): Promise<PhoneAccessState>;
+  /** Make a fresh one-time code and show it as a QR code. */
+  startPhonePairing(): Promise<PhoneAccessState>;
+  stopPhonePairing(): Promise<PhoneAccessState>;
+  /** The user's answer to "Pair 'Pixel 9 Pro'?". */
+  confirmPhonePairing(requestId: string, accept: boolean): Promise<PhoneAccessState>;
+  /** Un-pair one phone; its live connection drops at once. */
+  revokePhoneDevice(deviceId: string): Promise<PhoneAccessState>;
+  /** New Mac identity; every phone is un-paired. */
+  resetPhoneIdentity(): Promise<PhoneAccessState>;
+  /** Which device each running session's terminal is sized for; sessions not listed are the Mac's. */
+  getTerminalOwners(): Promise<Record<string, TerminalOwner>>;
+  /** Use here: make the Mac the active device for the session and resize it back. */
+  useTerminalHere(sessionId: string): Promise<IpcResult>;
+
   // ── Events from main ──
   // Each answers its unsubscribe, so a listener can be removed again (StrictMode
   // mounts twice; a hot reload re-installs the bridge).
@@ -238,6 +257,10 @@ export interface SwitchboardApi {
   onLaunchRequested(cb: (projectPath: string, initialPrompt: string) => void): Unsubscribe;
   /** Quick Ask: open the New Session picker holding this prompt; `reason` is Patch's line. */
   onPickerRequested(cb: (initialPrompt: string, reason?: string) => void): Unsubscribe;
+  /** Phone access changed: the setting, the listener, a device, the pairing code or a confirm request. */
+  onPhoneAccessChanged(cb: (state: PhoneAccessState) => void): Unsubscribe;
+  /** A session's terminal moved to another device, or back to the Mac. */
+  onTerminalOwnerChanged(cb: (sessionId: string, owner: TerminalOwner) => void): Unsubscribe;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

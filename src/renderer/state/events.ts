@@ -14,6 +14,7 @@ import type { EVENT } from '../../ipc/channels';
 import type { CaptureTarget } from '../../domain/ask/model';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
+import type { PhoneAccessState, TerminalOwner } from '../../domain/phone/state';
 import type { UpdateNotice } from '../../domain/update/release';
 import type { SessionWorkDiff, SessionWorkSnapshot, WorkAction } from '../../domain/session-work/model';
 import type { DiffMode, ImageDefaults, ReviewKind, WorkTab } from './session-work-slice';
@@ -60,7 +61,11 @@ export type PushEvent =
   /** Quick Ask (#142): start a Claude session there on this prompt (R3). */
   | { type: 'launchRequested'; projectPath: string; initialPrompt: string }
   /** Quick Ask: the New Session picker, holding this prompt; `reason` is Patch's line. */
-  | { type: 'pickerRequested'; initialPrompt: string; reason?: string };
+  | { type: 'pickerRequested'; initialPrompt: string; reason?: string }
+  /** Phone access (#194): the whole snapshot, on every change. */
+  | { type: 'phoneAccessChanged'; state: PhoneAccessState }
+  /** A session's terminal moved to a phone, or back to the Mac. */
+  | { type: 'terminalOwnerChanged'; sessionId: string; owner: TerminalOwner };
 
 // ── From the renderer itself: user actions and timers ──
 

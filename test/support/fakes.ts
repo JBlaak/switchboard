@@ -198,6 +198,8 @@ export function fakeRenderer(): FakeRenderer {
     prStatusChanged: record('prStatusChanged'),
     launchRequested: record('launchRequested'),
     pickerRequested: record('pickerRequested'),
+    phoneAccessChanged: record('phoneAccessChanged'),
+    terminalOwnerChanged: record('terminalOwnerChanged'),
   };
 }
 

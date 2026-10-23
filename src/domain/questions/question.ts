@@ -87,6 +87,8 @@ export interface QuestionsSettled {
   sessionId: string;
   toolUseId: string;
   outcome: QuestionsOutcome;
+  /** Where an answer came from (#194): the Mac's panel or a paired phone. Absent when withdrawn. */
+  answeredOn?: 'mac' | 'phone';
 }
 
 /** How long the CLI waits on the hook before asking in the terminal. */

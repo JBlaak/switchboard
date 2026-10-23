@@ -13,6 +13,7 @@ import type { UpdateNotice } from '../../domain/update/release';
 import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
 import type { SessionWorkSnapshot } from '../../domain/session-work/model';
 import type { PullRequestStatusChange } from '../../domain/session-work/status';
+import type { PhoneAccessState, TerminalOwner } from '../../domain/phone/state';
 
 export interface RendererGateway {
   /** True while there is a window listening; every send is a no-op without one. */
@@ -62,4 +63,10 @@ export interface RendererGateway {
   launchRequested(projectPath: string, initialPrompt: string): void
   /** Open the New Session picker holding this prompt; `reason` is Patch's line. Held as `launchRequested` is. */
   pickerRequested(initialPrompt: string, reason?: string): void
+
+  // ── Phone access (#194) ──
+  /** The whole Phone access snapshot changed. */
+  phoneAccessChanged(state: PhoneAccessState): void
+  /** A session's terminal moved to a phone, or back to the Mac. */
+  terminalOwnerChanged(sessionId: string, owner: TerminalOwner): void
 }

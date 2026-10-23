@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { PHONE_ACCESS_OFF } from '../src/domain/phone/state';
 import assert from 'node:assert';
 import { initialRendererState, rootReducer } from '../src/renderer/state/root';
 import { busyChanged } from '../src/renderer/state/activity-slice';
@@ -61,6 +62,8 @@ const SAMPLES: { [K in PushEvent['type']]: Extract<PushEvent, { type: K }> } = {
   prStatusChanged: { type: 'prStatusChanged', change: { sessionId: 's1', prs: [{ number: 7, dot: 'red' }], needsYou: true } },
   launchRequested: { type: 'launchRequested', projectPath: '/code/app', initialPrompt: 'Fix it.' },
   pickerRequested: { type: 'pickerRequested', initialPrompt: 'fix it', reason: 'No idea.' },
+  phoneAccessChanged: { type: 'phoneAccessChanged', state: PHONE_ACCESS_OFF },
+  terminalOwnerChanged: { type: 'terminalOwnerChanged', sessionId: 's1', owner: { kind: 'device', deviceId: 'd1', name: 'Pixel 9 Pro' } },
 };
 
 test('every push event reduces without mutating the state it was given', () => {
