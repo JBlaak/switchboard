@@ -12,9 +12,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.theme.SwitchboardTheme
 import dev.jblaak.switchboard.ui.connected.PhoneLink
-import dev.jblaak.switchboard.ui.connected.rememberDictation
 import dev.jblaak.switchboard.ui.connected.rememberScopedModel
-import dev.jblaak.switchboard.ui.connected.withDictated
+import dev.jblaak.switchboard.ui.voice.rememberHoldToTalk
+import dev.jblaak.switchboard.ui.voice.withDictated
 
 /** The question sheet over a session, for one [set]; [onClose] when it is answered, withdrawn or put off. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -26,7 +26,7 @@ fun QuestionSheetRoute(link: PhoneLink, set: PendingQuestions, sessionName: Stri
     LaunchedEffect(state.phase) {
         if (state.phase == QuestionPhase.Done || state.phase == QuestionPhase.Withdrawn) close()
     }
-    val dictate = rememberDictation { heard -> model.type(withDictated(model.state.value.draft.ownWords, heard)) }
+    val voice = rememberHoldToTalk(set.sessionId) { heard -> model.type(withDictated(model.state.value.draft.ownWords, heard)) }
     val actions = remember(model) {
         object : QuestionSheetActions {
             override fun pick(label: String) = model.pick(label)
@@ -35,7 +35,6 @@ fun QuestionSheetRoute(link: PhoneLink, set: PendingQuestions, sessionName: Stri
             override fun back() = model.back()
             override fun skip() = model.skip()
             override fun acceptRecommendation() = model.acceptRecommendation()
-            override fun dictate() = dictate()
             override fun failureSeen() = model.failureSeen()
             override fun later() = close()
         }
@@ -45,6 +44,6 @@ fun QuestionSheetRoute(link: PhoneLink, set: PendingQuestions, sessionName: Stri
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = SwitchboardTheme.colors.bgPanel,
     ) {
-        QuestionSheetContent(state, sessionName, actions)
+        QuestionSheetContent(state, sessionName, actions, voice)
     }
 }

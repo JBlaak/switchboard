@@ -74,11 +74,18 @@ import dev.jblaak.switchboard.ui.connected.PhoneIcon
 import dev.jblaak.switchboard.ui.connected.ScreenTopBar
 import dev.jblaak.switchboard.ui.connected.SendIcon
 import dev.jblaak.switchboard.ui.connected.UpIcon
+import dev.jblaak.switchboard.ui.connected.typingBoxMaxHeight
 import dev.jblaak.switchboard.ui.sessions.Dot
 import dev.jblaak.switchboard.ui.sessions.SessionStatus
 import dev.jblaak.switchboard.ui.sessions.TerminalPlace
 import dev.jblaak.switchboard.ui.sessions.placeIconOf
 import dev.jblaak.switchboard.ui.sessions.statusColorsOf
+import dev.jblaak.switchboard.ui.voice.HoldToTalk
+import dev.jblaak.switchboard.ui.voice.HoldToTalkMic
+import dev.jblaak.switchboard.ui.voice.VoiceState
+import dev.jblaak.switchboard.ui.voice.VoiceStrip
+import dev.jblaak.switchboard.ui.voice.isBusy
+import dev.jblaak.switchboard.ui.voice.previewHoldToTalk
 
 /**
  * A session: its terminal with the key bar and prompt box while this phone is the active device, "Active on
@@ -92,6 +99,8 @@ fun SessionScreen(
     onPromptChange: (String) -> Unit,
     onSend: () -> Unit,
     onKey: (TerminalKey) -> Unit,
+    /** The prompt box's mic; left out when null. */
+    voice: HoldToTalk?,
     onUseHere: () -> Unit,
     onAnswer: () -> Unit,
     onStartedNoteDismissed: () -> Unit,
@@ -122,7 +131,7 @@ fun SessionScreen(
                             }
                         }
                     }
-                    SessionFooter(prompt, onPromptChange, onSend, onKey)
+                    SessionFooter(prompt, onPromptChange, onSend, onKey, voice)
                 }
                 Crossfade(targetState = state.access, label = "terminal access") { access ->
                     when (access) {
@@ -400,7 +409,7 @@ private fun SessionEnded(onBack: () -> Unit) {
 }
 
 @Composable
-private fun SessionFooter(prompt: String, onPromptChange: (String) -> Unit, onSend: () -> Unit, onKey: (TerminalKey) -> Unit) {
+private fun SessionFooter(prompt: String, onPromptChange: (String) -> Unit, onSend: () -> Unit, onKey: (TerminalKey) -> Unit, voice: HoldToTalk?) {
     val colors = SwitchboardTheme.colors
     Column(
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -408,9 +417,17 @@ private fun SessionFooter(prompt: String, onPromptChange: (String) -> Unit, onSe
             .background(colors.bgPanel)
             .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp),
     ) {
-        KeyBar(onKey)
+        // While the mic is busy its strip stands in for the key bar, so the terminal keeps its size.
+        Crossfade(targetState = voice != null && voice.isBusy(), label = "key bar or voice") { busy ->
+            if (busy && voice != null) {
+                VoiceStrip(voice, Modifier.fillMaxWidth().padding(horizontal = 4.dp))
+            } else {
+                KeyBar(onKey)
+            }
+        }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PromptBox(prompt, onPromptChange, Modifier.weight(1f))
+            if (voice != null) HoldToTalkMic(voice, size = 48.dp, idleContainer = colors.line, idleContent = colors.textStrong)
             FilledIconButton(
                 onClick = onSend,
                 enabled = prompt.isNotBlank(),
@@ -487,8 +504,7 @@ private fun PromptBox(prompt: String, onPromptChange: (String) -> Unit, modifier
         onValueChange = onPromptChange,
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.textStrong),
         cursorBrush = SolidColor(colors.accent),
-        maxLines = 5,
-        modifier = modifier,
+        modifier = modifier.heightIn(max = typingBoxMaxHeight()),
         decorationBox = { field ->
             Box(
                 contentAlignment = Alignment.CenterStart,
@@ -550,14 +566,15 @@ private fun previewState(access: TerminalAccess, startedIn: String?, questions: 
 }
 
 @Composable
-private fun SessionScreenPreviewOf(state: SessionScreenState) {
+private fun SessionScreenPreviewOf(state: SessionScreenState, prompt: String = "", voice: HoldToTalk? = null) {
     SwitchboardTheme {
         SessionScreen(
             state = state,
-            prompt = "",
+            prompt = prompt,
             onPromptChange = {},
             onSend = {},
             onKey = {},
+            voice = voice,
             onUseHere = {},
             onAnswer = {},
             onStartedNoteDismissed = {},
@@ -573,6 +590,17 @@ private fun SessionScreenPreviewOf(state: SessionScreenState) {
 @Composable
 internal fun SessionScreenHerePreview() {
     SessionScreenPreviewOf(previewState(TerminalAccess.Here, startedIn = null, questions = false, waitingInTerminal = false))
+}
+
+@Preview(name = "Recording dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Recording light", uiMode = Configuration.UI_MODE_NIGHT_NO)
+@Composable
+internal fun SessionScreenRecordingPreview() {
+    SessionScreenPreviewOf(
+        previewState(TerminalAccess.Here, startedIn = null, questions = false, waitingInTerminal = false),
+        prompt = "Write the release notes for v2.8.2, and keep them short.",
+        voice = previewHoldToTalk(VoiceState.Recording(level = 0.7f, elapsedMillis = 63_000)),
+    )
 }
 
 @Preview(name = "Started dark", uiMode = Configuration.UI_MODE_NIGHT_YES)

@@ -178,6 +178,14 @@ async function mac() {
       effective: () => ({ permissionMode: 'auto', worktree: false }),
     },
     renderer,
+    voice: {
+      transcriber: { available: async () => true, transcribe: async () => ' um, fix the login\n' },
+      model: { path: '/models/whisper.bin', present: async () => true, download: async () => {} },
+      cli: {
+        call: async () => ({ exitCode: 0, stdout: JSON.stringify({ type: 'result', result: 'Fix the login.' }), stderr: '' }),
+        warm() { throw new Error('not warmed'); },
+      },
+    },
     ids: { newId: () => `id-${++ids}` },
     clock: { now: () => Date.now() },
     timers: systemTimers,
@@ -523,5 +531,31 @@ test('bringing a session back on the Mac pushes nothing to the phones', async (t
 
   /* Then */
   assert.deepEqual(phone.of('archived'), []);
+  phone.close();
+});
+
+/** 200 ms of a 200 Hz tone, loud enough that the Mac takes it for speech. */
+function speechLevelTone(): Buffer {
+  const audio = Buffer.alloc(6400);
+  for (let i = 0; i < 3200; i++) audio.writeInt16LE(Math.round(6000 * Math.sin((2 * Math.PI * 200 * i) / 16_000)), i * 2);
+  return audio;
+}
+
+test('a phone that holds the mic gets the voice status on welcome and the cleaned-up text when it lets go', async (t) => {
+  /* Given */
+  const m = await mac();
+  t.after(() => m.access.shutdown());
+  const phone = await pairedPhone(m);
+  const status = await phone.next('voice-status');
+
+  /* When */
+  phone.send({ type: 'voice-start', voiceId: 'v1' });
+  phone.send({ type: 'voice-chunk', voiceId: 'v1', seq: 0, audio: speechLevelTone().toString('base64') });
+  phone.send({ type: 'voice-end', voiceId: 'v1' });
+  const result = await phone.next('voice-result');
+
+  /* Then */
+  assert.deepEqual(status, { type: 'voice-status', status: { kind: 'ready' } });
+  assert.deepEqual(result, { type: 'voice-result', voiceId: 'v1', result: { kind: 'text', text: 'Fix the login.' } });
   phone.close();
 });

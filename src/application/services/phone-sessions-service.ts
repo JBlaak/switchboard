@@ -43,6 +43,7 @@ import type { Logger } from '../ports/logger';
 import type { DeviceConnection } from '../ports/phone-access';
 import type { RendererGateway } from '../ports/renderer-gateway';
 import type { QuestionService } from './question-service';
+import type { VoiceService } from './voice-service';
 import type { OpenSessionRequest, OpenSessionResult } from './session-launcher';
 
 /**
@@ -84,6 +85,8 @@ export interface PhoneSessionsServiceDeps {
   archiver: { archive(sessionId: string): { ok: boolean; error?: string } };
   settings: { effective(projectPath: string): EffectiveSettings };
   renderer: Pick<RendererGateway, 'terminalOwnerChanged' | 'projectsChanged'>;
+  /** Hold-to-talk, which keeps its own state per connection. */
+  voice: Pick<VoiceService, 'connected' | 'message' | 'disconnected'>;
   ids: IdGenerator;
   clock: Clock;
   timers: Timers;
@@ -121,7 +124,7 @@ export class PhoneSessionsService {
 
   // ── The phones ──
 
-  /** An enrolled phone said hello and was welcomed: it gets the list and the questions. */
+  /** An enrolled phone said hello and was welcomed: it gets the list, the questions and the voice status. */
   connected(connection: DeviceConnection, device: { id: string; name: string }): void {
     this.#names.set(device.id, device.name);
     this.#phones.set(connection.id, {
@@ -129,6 +132,7 @@ export class PhoneSessionsService {
     });
     connection.send({ type: 'sessions', sessions: this.#sessionList() });
     connection.send({ type: 'questions', pending: this.deps.questions.pending() });
+    this.deps.voice.connected(connection);
   }
 
   message(connection: DeviceConnection, message: ClientMessage): void {
@@ -168,6 +172,11 @@ export class PhoneSessionsService {
         return;
       case 'archive':
         return this.#archive(phone, message.sessionId);
+      case 'voice-start':
+      case 'voice-chunk':
+      case 'voice-end':
+      case 'voice-cancel':
+        return this.deps.voice.message(connection, message);
       case 'hello':
       case 'pair':
         // The access service's; one after welcome is noise.
@@ -183,6 +192,7 @@ export class PhoneSessionsService {
     this.#phones.delete(connection.id);
     // Killed, not left to finish on the user's quota.
     phone.router?.cancel();
+    this.deps.voice.disconnected(connection);
     this.#apply({ type: 'device-left', device: phone.deviceId });
   }
 

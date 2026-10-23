@@ -22,6 +22,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -133,4 +135,11 @@ fun PatchFigure(state: PatchState, size: Dp, modifier: Modifier) {
                 }
             },
     )
+}
+
+/** The tallest a box being typed in grows before it scrolls inside: 40% of the window, so what is around it stays in sight. */
+@Composable
+fun typingBoxMaxHeight(): Dp {
+    val window = LocalWindowInfo.current.containerSize
+    return with(LocalDensity.current) { (window.height * 0.4f).toDp() }
 }

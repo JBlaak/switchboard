@@ -29,6 +29,8 @@ const MAX_TEXT = 100_000;
 const MAX_ANSWERS = 50;
 /** No phone has a terminal this big; the cap keeps a bad size from reaching the PTY. */
 export const MAX_TERMINAL_CELLS = 1000;
+/** One voice chunk's base64; the phone sends about 11 kB every quarter second. */
+export const MAX_VOICE_CHUNK_CHARS = 64 * 1024;
 
 /** The session id's byte length is a u16 in the frame header. */
 const MAX_FRAME_SESSION_ID_BYTES = 0xffff;
@@ -91,6 +93,22 @@ export function parseClientMessage(text: string): ClientMessage | null {
     }
     case 'list-projects':
       return { type: 'list-projects' };
+    case 'voice-start': {
+      if (!isText(raw.voiceId, MAX_ID)) return null;
+      if (raw.sessionId === undefined) return { type: 'voice-start', voiceId: raw.voiceId };
+      if (!isText(raw.sessionId, MAX_ID)) return null;
+      return { type: 'voice-start', voiceId: raw.voiceId, sessionId: raw.sessionId };
+    }
+    case 'voice-chunk': {
+      if (!isText(raw.voiceId, MAX_ID) || !isSeq(raw.seq) || !isText(raw.audio, MAX_VOICE_CHUNK_CHARS)) return null;
+      if (!BASE64.test(raw.audio)) return null;
+      return { type: 'voice-chunk', voiceId: raw.voiceId, seq: raw.seq, audio: raw.audio };
+    }
+    case 'voice-end':
+    case 'voice-cancel': {
+      if (!isText(raw.voiceId, MAX_ID)) return null;
+      return { type: raw.type, voiceId: raw.voiceId };
+    }
     default:
       return null;
   }
@@ -218,6 +236,12 @@ function isProtocolNumber(value: unknown): value is number {
 
 function isCells(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_TERMINAL_CELLS;
+}
+
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+function isSeq(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 1_000_000;
 }
 
 function parseDecimal(text: string): number | null {

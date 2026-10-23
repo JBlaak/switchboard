@@ -5,7 +5,6 @@
     <string name="ask_box_hint">Patch picks the project and writes the first prompt</string>
     <string name="ask_cancel">Cancel</string>
     <string name="ask_close">Close</string>
-    <string name="ask_dictate">Dictate</string>
     <string name="ask_filter">Filter projects</string>
     <string name="ask_first_prompt">First prompt Patch wrote</string>
     <string name="ask_not_connected">Not connected to your Mac. Try again in a moment.</string>
@@ -36,7 +35,6 @@
     <string name="questions_back">Back</string>
     <string name="questions_claude_recommends">Claude recommends</string>
     <string name="questions_close">Close</string>
-    <string name="questions_dictate">Dictate</string>
     <string name="questions_grill_one_reply">All of them go back as one reply</string>
     <string name="questions_grill_own_words">Or answer in your own words</string>
     <string name="questions_grill_round">Grill round</string>
@@ -117,4 +115,17 @@
     <string name="sessions_ssh">SSH</string>
     <string name="sessions_title">Sessions</string>
     <string name="sessions_waiting_terminal">waiting in the terminal</string>
+    <string name="voice_failed">Couldn’t transcribe: %1$s</string>
+    <string name="voice_hold_to_talk">Hold to talk</string>
+    <string name="voice_no_microphone">Couldn’t open the microphone</string>
+    <string name="voice_no_permission">Switchboard needs the microphone</string>
+    <string name="voice_no_whisper">Voice needs whisper-cpp on your Mac: brew install whisper-cpp</string>
+    <string name="voice_not_connected">Not connected to your Mac</string>
+    <string name="voice_nothing_heard">Didn’t catch that</string>
+    <string name="voice_prepare_failed">Couldn’t get voice ready: %1$s</string>
+    <string name="voice_preparing">Getting voice ready on your Mac</string>
+    <string name="voice_preparing_progress">Getting voice ready on your Mac, %1$d%%</string>
+    <string name="voice_release_to_cancel">Let go to cancel</string>
+    <string name="voice_slide_to_cancel">Slide away to cancel</string>
+    <string name="voice_transcribing">Transcribing…</string>
 </resources>

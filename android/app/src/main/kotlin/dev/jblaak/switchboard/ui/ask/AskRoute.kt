@@ -8,9 +8,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import dev.jblaak.switchboard.ui.connected.PhoneLink
 import dev.jblaak.switchboard.ui.connected.SessionBoard
-import dev.jblaak.switchboard.ui.connected.rememberDictation
 import dev.jblaak.switchboard.ui.connected.rememberScopedModel
-import dev.jblaak.switchboard.ui.connected.withDictated
+import dev.jblaak.switchboard.ui.voice.rememberHoldToTalk
+import dev.jblaak.switchboard.ui.voice.withDictated
 import java.util.UUID
 
 /** Ask Patch, wired to its [AskModel]. */
@@ -31,7 +31,7 @@ fun AskRoute(
         AskModel(link, board, events, newRequestId = { UUID.randomUUID().toString() }, scope)
     }
     val step by model.state.collectAsState()
-    val dictate = rememberDictation { heard ->
+    val voice = rememberHoldToTalk(sessionId = null) { heard ->
         val compose = model.state.value as? AskStep.Compose
         if (compose != null) model.type(withDictated(compose.text, heard))
     }
@@ -39,7 +39,6 @@ fun AskRoute(
         object : AskActions {
             override fun type(text: String) = model.type(text)
             override fun ask() = model.ask()
-            override fun dictate() = dictate()
             override fun pickProjectMyself() = model.pickProjectMyself()
             override fun anotherProject() = model.anotherProject()
             override fun filter(text: String) = model.filter(text)
@@ -48,5 +47,5 @@ fun AskRoute(
         }
     }
     BackHandler(onBack = model::back)
-    AskScreen(step, actions)
+    AskScreen(step, actions, voice)
 }

@@ -114,6 +114,16 @@ sealed interface ServerMessage {
     @SerialName("projects")
     data class Projects(val projects: List<PhoneProject>) : ServerMessage
 
+    /** Sent on welcome and whenever it changes (download progress in whole percents). */
+    @Serializable
+    @SerialName("voice-status")
+    data class VoiceStatusChanged(val status: VoiceStatus) : ServerMessage
+
+    /** Exactly one per [ClientMessage.VoiceStart] that wasn't cancelled. */
+    @Serializable
+    @SerialName("voice-result")
+    data class VoiceTranscribed(val voiceId: String, val result: VoiceResult) : ServerMessage
+
     /** Sent before [CloseReason.NotPaired] when the device is revoked or the Mac's identity is reset. */
     @Serializable
     @SerialName("revoked")

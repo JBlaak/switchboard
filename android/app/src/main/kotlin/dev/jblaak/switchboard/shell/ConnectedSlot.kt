@@ -17,6 +17,7 @@ import dev.jblaak.switchboard.link.MacLink
 import dev.jblaak.switchboard.ui.connected.ConnectedApp
 import dev.jblaak.switchboard.ui.connected.PhoneLink
 import dev.jblaak.switchboard.ui.connected.SessionBoard
+import dev.jblaak.switchboard.ui.voice.VoiceControls
 
 /**
  * What the shell shows while the link is connected, or reconnecting after it was: the connected app, kept on
@@ -24,7 +25,7 @@ import dev.jblaak.switchboard.ui.connected.SessionBoard
  * The session list's menu asks before forgetting the Mac, the one thing it offers so far.
  */
 @Composable
-fun ConnectedSlot(link: MacLink, phoneLink: PhoneLink, board: SessionBoard) {
+fun ConnectedSlot(link: MacLink, phoneLink: PhoneLink, board: SessionBoard, voice: VoiceControls) {
     val state by link.state.collectAsState()
     val last = remember { mutableStateOf<LinkState.Connected?>(null) }
     (state as? LinkState.Connected)?.let { last.value = it }
@@ -34,6 +35,7 @@ fun ConnectedSlot(link: MacLink, phoneLink: PhoneLink, board: SessionBoard) {
     ConnectedApp(
         link = phoneLink,
         board = board,
+        voice = voice,
         deviceId = connected.deviceId,
         macName = connected.macName,
         onMenuClick = { confirmingForget = true },

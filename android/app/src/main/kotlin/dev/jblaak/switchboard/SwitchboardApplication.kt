@@ -10,6 +10,8 @@ import dev.jblaak.switchboard.shell.AppScreenModel
 import dev.jblaak.switchboard.ui.connected.PhoneLink
 import dev.jblaak.switchboard.ui.connected.SessionBoard
 import dev.jblaak.switchboard.ui.connected.asPhoneLink
+import dev.jblaak.switchboard.ui.voice.MicAudioSource
+import dev.jblaak.switchboard.ui.voice.VoiceInput
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,10 @@ class SwitchboardApplication : Application() {
     lateinit var board: SessionBoard
         private set
 
+    /** Hold-to-talk, listening from the start like the board: the Mac's voice status comes with welcome. */
+    lateinit var voice: VoiceInput
+        private set
+
     override fun onCreate() {
         super.onCreate()
         link = createMacLink(this, scope)
@@ -41,6 +47,7 @@ class SwitchboardApplication : Application() {
         // them, so the board has to be listening before the link starts.
         phoneLink = link.asPhoneLink()
         board = SessionBoard(phoneLink, scope)
+        voice = VoiceInput(phoneLink, MicAudioSource(), scope)
         screens = AppScreenModel(
             appVersion = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty(),
             knownMacName = SharedPreferencesPairingStore(getSharedPreferences("pairing", Context.MODE_PRIVATE)).loadOrNull()?.macName,

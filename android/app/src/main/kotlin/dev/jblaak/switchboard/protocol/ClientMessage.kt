@@ -85,4 +85,27 @@ sealed interface ClientMessage {
     @Serializable
     @SerialName("archive")
     data class Archive(val sessionId: String) : ClientMessage
+
+    /**
+     * Voice input: a recording starts. [sessionId], when the phone is in a session, primes Whisper and the cleanup
+     * with that session's project. One recording at a time; a new start drops the previous one.
+     */
+    @Serializable
+    @SerialName("voice-start")
+    data class VoiceStart(val voiceId: String, val sessionId: String? = null) : ClientMessage
+
+    /** The next piece of audio: base64 of 16 kHz mono signed 16-bit little-endian PCM. [seq] counts from 0, without gaps. */
+    @Serializable
+    @SerialName("voice-chunk")
+    data class VoiceChunk(val voiceId: String, val seq: Int, val audio: String) : ClientMessage
+
+    /** The user let go: transcribe what arrived. One [ServerMessage.VoiceTranscribed] follows. */
+    @Serializable
+    @SerialName("voice-end")
+    data class VoiceEnd(val voiceId: String) : ClientMessage
+
+    /** The user slid off the mic: drop the recording. Nothing follows. */
+    @Serializable
+    @SerialName("voice-cancel")
+    data class VoiceCancel(val voiceId: String) : ClientMessage
 }
