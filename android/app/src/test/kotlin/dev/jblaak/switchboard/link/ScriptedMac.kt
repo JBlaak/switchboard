@@ -56,6 +56,16 @@ internal class ScriptedMac : AutoCloseable {
         return (handshake.peerCertificates.firstOrNull() as? X509Certificate)?.sha256Fingerprint()
     }
 
+    /**
+     * The client certificate fingerprints of every connection recorded so far, in order;
+     * null for a connection that presented none. Waits briefly for each, so a connection
+     * still being recorded when the test asks is counted rather than missed.
+     */
+    fun clientFingerprints(): List<String?> = List(server.requestCount) {
+        val request = server.takeRequest(5, java.util.concurrent.TimeUnit.SECONDS) ?: return@List null
+        (request.handshake?.peerCertificates?.firstOrNull() as? X509Certificate)?.sha256Fingerprint()
+    }
+
     override fun close() {
         server.close()
     }
