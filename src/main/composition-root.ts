@@ -12,7 +12,8 @@
  * `attach` below.
  */
 import log from 'electron-log';
-import { app } from 'electron';
+import { app, safeStorage } from 'electron';
+import { randomBytes } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -82,6 +83,17 @@ import { loginShellEnv } from '../infrastructure/shell/login-shell-env';
 import { encodeProjectPath } from '../domain/project/project-path';
 import { isRemoteProjectPath } from '../domain/project/remote-target';
 import { QuestionHookServer } from '../infrastructure/http/question-hook-server';
+import { OpensslIdentityStore } from '../infrastructure/phone/identity-store';
+import { DnsSdAdvertiser } from '../infrastructure/phone/dns-sd-advertiser';
+import { LanWatcher } from '../infrastructure/phone/lan-watcher';
+import { SqliteDeviceRegistry } from '../infrastructure/sqlite/device-registry';
+import { computerName } from '../infrastructure/system/computer-name';
+import { PhoneEventTee, buildPhoneAccess } from './phone-access';
+import type { PhoneAccessService } from '../application/services/phone-access-service';
+import type { PhoneSessionsService } from '../application/services/phone-sessions-service';
+import type { DeviceRegistry, ServiceAdvertiser } from '../application/ports/phone-access';
+import type { RendererGateway } from '../application/ports/renderer-gateway';
+import type { Encryption } from '../infrastructure/phone/identity-store';
 
 import type { BrowserWindow } from 'electron';
 import type { GlobalHotkey, QuickAskPanel } from '../application/ports/quick-ask-panel';
@@ -135,7 +147,10 @@ export interface Container {
   /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
   prepareQuickAsk(): void;
 
-  readonly renderer: ElectronRendererGateway;
+  /** The window's gateway with the phones listening in; what every service pushes through. */
+  readonly renderer: RendererGateway;
+  /** The window's own gateway, for what only it does (Quick Ask's ready handshake). */
+  readonly windowRenderer: ElectronRendererGateway;
   readonly dialogs: ElectronDialogService;
   readonly windowDrag: ElectronWindowDrag;
   readonly dockAttention: ElectronDockAttention;
@@ -144,6 +159,15 @@ export interface Container {
   readonly sleep: PmsetSleepControl;
   readonly git: GitCliRemotes;
   readonly projectsWatcher: ProjectsWatcher;
+
+  // ── Phone access (#194) ──
+  readonly phoneAccess: PhoneAccessService;
+  /** The phones' side of the sessions; the terminal handlers ask it who owns a terminal. */
+  readonly phoneSessions: PhoneSessionsService;
+  /** Withdrawn by hand at quit, before the async shutdown, so no `dns-sd` outlives the app. */
+  readonly phoneAdvertiser: ServiceAdvertiser;
+  /** Restarts the listener when the Mac's LAN addresses change. */
+  readonly lanWatcher: LanWatcher;
 
   /** The window, once one exists. Set by the app lifecycle. */
   setWindow(window: BrowserWindow | null): void;
@@ -170,7 +194,10 @@ export function buildContainer(): Container {
   let window: BrowserWindow | null = null;
   const getWindow = (): BrowserWindow | null => window;
   let openWindow: (options: { inactive: boolean }) => void = () => {};
-  const renderer = new ElectronRendererGateway(getWindow);
+  const windowRenderer = new ElectronRendererGateway(getWindow);
+  // Built last, under Phone access; until then the tee only feeds the window.
+  let phoneSessions: PhoneSessionsService | null = null;
+  const renderer = new PhoneEventTee(windowRenderer, () => phoneSessions);
 
   // ── Stores ──
   const database: SwitchboardDatabase = openDatabase();
@@ -448,6 +475,44 @@ export function buildContainer(): Container {
     },
   });
 
+  // ── Phone access (#194) ──
+  // The e2e suite listens on loopback, keeps its key out of the Keychain and
+  // never advertises: a run must not put a service on the developer's Wi-Fi.
+  const e2e = process.env.SWITCHBOARD_E2E === '1';
+  const phoneAdvertiser: ServiceAdvertiser = e2e ? loopbackAdvertiser() : new DnsSdAdvertiser({ log });
+  const phone = buildPhoneAccess({
+    identity: new OpensslIdentityStore({
+      directory: path.join(app.getPath('userData'), 'phone-access'),
+      encryption: e2e ? plainEncryption : keychainEncryption,
+    }),
+    devices: whileOpen(new SqliteDeviceRegistry(database.db), () => database.db.open),
+    advertiser: phoneAdvertiser,
+    ...(e2e ? { addresses: () => ['127.0.0.1'] } : {}),
+    registry,
+    running: lifecycle,
+    projects,
+    questions,
+    // Its own instance per phone (#194): a phone's request never cancels the Mac's.
+    router: () => new AskRouteService({ cli: claudeCaller, timers, log, call: ASK_PATCH_CALL }),
+    launcher,
+    settings,
+    renderer,
+    ids, clock, timers, log,
+    randomBytes: (length) => randomBytes(length),
+    macName: computerName(),
+    appVersion: app.getVersion(),
+  });
+  phoneSessions = phone.sessions;
+  // Loopback never changes, so the e2e suite has nothing to watch.
+  const lanWatcher = new LanWatcher({
+    timers,
+    ...(e2e ? { addresses: () => ['127.0.0.1'] } : {}),
+    onChange: () => {
+      log.info('[phone] the LAN addresses changed; restarting the listener');
+      phone.access.restart().catch((err: Error) => log.error('[phone] restart failed:', err.message));
+    },
+  });
+
   return {
     log, paths,
     settings, repository, searchIndex, transcripts, fs,
@@ -465,7 +530,11 @@ export function buildContainer(): Container {
     mcpServers,
     quickAskWindow: () => quickAskWindow,
     prepareQuickAsk: () => { prepareQuickAsk(); },
-    renderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
+    phoneAccess: phone.access,
+    phoneSessions: phone.sessions,
+    phoneAdvertiser,
+    lanWatcher,
+    renderer, windowRenderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     setWindowOpener: (open) => { openWindow = open; },
@@ -499,6 +568,56 @@ function e2eHotkey(window: () => QuickAskWindow | null): GlobalHotkey {
     },
   };
   return hotkey;
+}
+
+/**
+ * The Mac's Phone access key at rest: Electron safeStorage, which on macOS is
+ * a key in the login Keychain. Checked per call, since it is only usable once
+ * the app is ready and the identity is first read well after that.
+ */
+const keychainEncryption: Encryption = {
+  encrypt: (text) => {
+    requireSafeStorage();
+    return safeStorage.encryptString(text);
+  },
+  decrypt: (data) => {
+    requireSafeStorage();
+    return safeStorage.decryptString(data);
+  },
+};
+
+function requireSafeStorage(): void {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('the Keychain cannot encrypt it on this Mac');
+}
+
+/** The e2e suite's stand-in: its keys are throwaways in a fixture directory, and a Keychain prompt would hang the run. */
+const plainEncryption: Encryption = {
+  encrypt: (text) => Buffer.from(text, 'utf8'),
+  decrypt: (data) => data.toString('utf8'),
+};
+
+/**
+ * The device table, read as empty once quitting has closed the database: a
+ * phone's connection that only finishes closing after that must not throw.
+ */
+function whileOpen(devices: DeviceRegistry, open: () => boolean): DeviceRegistry {
+  return {
+    list: () => (open() ? devices.list() : []),
+    findByFingerprint: (fingerprint) => (open() ? devices.findByFingerprint(fingerprint) : null),
+    add: (device) => devices.add(device),
+    remove: (id) => devices.remove(id),
+    touch: (id, at) => { if (open()) devices.touch(id, at); },
+    clear: () => devices.clear(),
+  };
+}
+
+/** The e2e suite's advertiser: says where it would advertise, and doesn't. */
+function loopbackAdvertiser(): ServiceAdvertiser {
+  return {
+    advertise: (name, port) => log.info(`[phone] (e2e) not advertising "${name}" on port ${port}`),
+    withdraw: () => {},
+    hostName: () => '127.0.0.1',
+  };
 }
 
 /** Where the packaged app keeps its data, isolated per instance when asked. */

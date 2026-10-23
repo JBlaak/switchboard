@@ -19,7 +19,7 @@ import {
   dropPendingSession, writeExitBanner,
 } from '../features/sessions/session-actions';
 import { pollActiveSessions } from '../features/sessions/session-poller';
-import { launchClaudeSession } from '../features/sessions/session-actions';
+import { launchClaudeSession, trackStartedElsewhere } from '../features/sessions/session-actions';
 import { projectAt } from '../ui/ask/actions';
 import { openDialog } from '../ui/dialogs/actions';
 import { setHeaderIdentity } from '../features/sessions/terminal-header';
@@ -70,6 +70,8 @@ export function installIpcListeners(): void {
   onEvent('pickerRequested', ({ initialPrompt }) => {
     openDialog({ kind: 'projectPicker', initialPrompt });
   });
+  // Phone access (#194): a session a phone started is in the sidebar at once.
+  onEvent('sessionStarted', ({ sessionId, projectPath }) => trackStartedElsewhere(sessionId, projectPath));
 
   // Fullscreen hides the macOS traffic lights, so the space the collapsed
   // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.

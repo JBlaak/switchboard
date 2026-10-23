@@ -63,6 +63,15 @@ function main(): void {
   app.on('window-all-closed', () => {});
 
   app.on('before-quit', () => {
+    // Phone access first. The advertisement goes synchronously, so no
+    // `dns-sd` outlives the app; the phones are told "going away" while the
+    // windows close, and a connection still closing when the process ends
+    // goes with it. Not awaited: holding the quit back with preventDefault
+    // leaves a SIGTERM'd app running with no window.
+    container.lanWatcher.stop();
+    container.phoneAdvertiser.withdraw();
+    container.phoneAccess.shutdown().catch((err: Error) =>
+      container.log.warn('[phone] shutdown failed:', err.message));
     container.projectsWatcher.stop();
     container.questionHook.stop();
     container.lifecycle.terminateAll();
@@ -108,6 +117,12 @@ async function start(container: Container): Promise<void> {
   // The CI watch asks the user's own `gh` about real PRs; the end-to-end suite
   // must never reach GitHub, and drives the dots and cards by pushing instead.
   if (process.env.SWITCHBOARD_E2E !== '1') container.prWatch.start();
+
+  // Phone access, if it was left on (#194). Its failures land in its own
+  // state, which Settings shows; only a bug gets as far as this catch.
+  container.phoneAccess.start().catch((err: Error) =>
+    container.log.error('[phone] failed to start:', err.message));
+  container.lanWatcher.start();
 
   // A migration that recreated the search index leaves it empty even though the
   // session cache is intact, so the index alone has to be refilled.

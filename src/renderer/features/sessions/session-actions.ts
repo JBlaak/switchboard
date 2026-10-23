@@ -56,6 +56,17 @@ function trackPending(session: SessionRow, remote = false): void {
 }
 
 /**
+ * A session main started without being asked here (a phone's Ask Patch,
+ * #194): the same pending row one started here gets, so it is in the sidebar
+ * before its transcript is. Nothing is spawned; opening the row reattaches.
+ */
+export function trackStartedElsewhere(sessionId: string, projectPath: string): void {
+  if (sessionMap.has(sessionId) || pendingSessions.has(sessionId)) return;
+  trackPending(newSessionRow(projectPath, { sessionId }));
+  void pollActiveSessions();
+}
+
+/**
  * A Claude session with the project's default options, local or remote.
  *
  * `initialPrompt` is what a local session starts on (#135); the options it is

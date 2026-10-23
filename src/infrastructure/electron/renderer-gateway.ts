@@ -138,6 +138,10 @@ export class ElectronRendererGateway implements RendererGateway {
     this.#send(EVENT.terminalOwnerChanged, sessionId, owner);
   }
 
+  sessionStarted(sessionId: string, projectPath: string): void {
+    this.#send(EVENT.sessionStarted, sessionId, projectPath);
+  }
+
   #sendWhenReady(channel: string, ...args: unknown[]): void {
     const window = this.getWindow();
     // A reload or a new window says it is ready again.

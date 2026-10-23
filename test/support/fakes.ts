@@ -200,6 +200,7 @@ export function fakeRenderer(): FakeRenderer {
     pickerRequested: record('pickerRequested'),
     phoneAccessChanged: record('phoneAccessChanged'),
     terminalOwnerChanged: record('terminalOwnerChanged'),
+    sessionStarted: record('sessionStarted'),
   };
 }
 
