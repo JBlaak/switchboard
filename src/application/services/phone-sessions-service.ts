@@ -315,6 +315,12 @@ export class PhoneSessionsService {
     this.#schedulePush();
   }
 
+  /** A session was archived, on the Mac or from a phone: every phone closes it, under the id it knows. */
+  sessionArchived(sessionId: string): void {
+    this.#broadcast({ type: 'archived', sessionId: this.#currentId(sessionId) ?? sessionId });
+    this.#schedulePush();
+  }
+
   // ── The terminal ──
 
   /** `attached`, then the replay, then live output as it comes. A second attach replays again. */

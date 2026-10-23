@@ -163,6 +163,7 @@ internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
     ),
     "archive-result" to ServerMessage.ArchiveResult(sessionId = "s-1", ok = true, error = null),
     "archive-result-error" to ServerMessage.ArchiveResult(sessionId = "s-1", ok = false, error = "Could not stop the session"),
+    "archived" to ServerMessage.Archived(sessionId = "s-1"),
     "ask-result-confident" to ServerMessage.AskResult(
         requestId = "r-1",
         result = PhoneAskResult.Confident(sessionId = "s-4", project = "switchboard"),

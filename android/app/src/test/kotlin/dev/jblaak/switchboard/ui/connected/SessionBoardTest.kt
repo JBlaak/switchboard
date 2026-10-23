@@ -3,6 +3,7 @@ package dev.jblaak.switchboard.ui.connected
 import dev.jblaak.switchboard.link.LinkState
 import dev.jblaak.switchboard.link.SendOutcome
 import dev.jblaak.switchboard.protocol.ClientMessage
+import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.protocol.ServerMessage
 import dev.jblaak.switchboard.ui.session.TerminalSize
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -159,5 +160,20 @@ class SessionBoardTest {
         /* Then */
         assertEquals(SendOutcome.NotConnected, outcome)
         assertEquals(listOf("a"), board.sessions.value.map { it.id })
+    }
+
+    @Test
+    fun `a session archived elsewhere leaves the list with its questions`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("a"), phoneSession("b"))))
+        link.macSays(ServerMessage.Questions(listOf(pendingQuestions("a"))))
+
+        /* When */
+        link.macSays(ServerMessage.Archived("a"))
+
+        /* Then */
+        assertEquals(listOf("b"), board.sessions.value.map { it.id })
+        assertEquals(emptyList<PendingQuestions>(), board.pending.value)
     }
 }

@@ -158,6 +158,8 @@ export type ServerMessage =
   | { type: 'answer-result'; sessionId: string; toolUseId: string; ok: boolean; error?: string }
   /** `error` is only there when `ok` is false. */
   | { type: 'archive-result'; sessionId: string; ok: boolean; error?: string }
+  /** Archived on the Mac or from another phone: an open screen of it closes, as the Mac's view does. */
+  | { type: 'archived'; sessionId: string }
   | { type: 'ask-result'; requestId: string; result: PhoneAskResult }
   | { type: 'ask-started'; requestId: string; sessionId: string }
   | { type: 'ask-error'; requestId: string; error: string }

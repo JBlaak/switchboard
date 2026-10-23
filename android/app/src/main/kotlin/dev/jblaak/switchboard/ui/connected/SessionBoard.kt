@@ -87,12 +87,8 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
                 }
                 publish()
             }
-            is ServerMessage.Exited -> {
-                received = received.filterNot { it.id == message.sessionId }
-                archiving = archiving - message.sessionId
-                publish()
-                mutablePending.value = mutablePending.value.filterNot { it.sessionId == message.sessionId }
-            }
+            is ServerMessage.Exited -> drop(message.sessionId)
+            is ServerMessage.Archived -> drop(message.sessionId)
             is ServerMessage.ArchiveResult -> if (!message.ok) {
                 archiving = archiving - message.sessionId
                 publish()
@@ -100,6 +96,14 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
             }
             else -> Unit
         }
+    }
+
+    /** Ended or archived: off the list, with its questions, before the Mac's next list says so. */
+    private fun drop(sessionId: String) {
+        received = received.filterNot { it.id == sessionId }
+        archiving = archiving - sessionId
+        publish()
+        mutablePending.value = mutablePending.value.filterNot { it.sessionId == sessionId }
     }
 
     private fun publish() {

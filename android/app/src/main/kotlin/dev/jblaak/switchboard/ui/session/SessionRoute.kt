@@ -48,6 +48,9 @@ fun SessionRoute(
             sheetWanted = false
         }
     }
+    LaunchedEffect(state.archivedElsewhere) {
+        if (state.archivedElsewhere) onBack()
+    }
     BackHandler(onBack = onBack)
 
     SessionScreen(
