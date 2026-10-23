@@ -182,9 +182,40 @@ test('answering replies with the tool input plus answers and settles it', () => 
   assert.deepEqual(result, { ok: true });
   assert.deepEqual(r.calls, [questionHookResponse(asked().toolInput, { 'Which database?': 'SQLite' })]);
   assert.deepEqual(h.renderer.only('questionsSettled'), [
-    ['questionsSettled', { sessionId: 's1', toolUseId: 'tu-1', outcome: 'answered' }],
+    ['questionsSettled', { sessionId: 's1', toolUseId: 'tu-1', outcome: 'answered', answeredOn: 'mac' }],
   ]);
   assert.deepEqual(h.service.pending(), []);
+});
+
+test('an answer from a phone is settled as answered on the phone', () => {
+  /* Given */
+  const h = harness();
+  h.addSession('s1');
+  h.service.receive('s1', asked(), h.replies().reply);
+
+  /* When */
+  const result = h.service.answer('s1', 'tu-1', { 'Which database?': 'SQLite' }, 'phone');
+
+  /* Then */
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(h.renderer.only('questionsSettled'), [
+    ['questionsSettled', { sessionId: 's1', toolUseId: 'tu-1', outcome: 'answered', answeredOn: 'phone' }],
+  ]);
+});
+
+test('a withdrawn set says nowhere it was answered', () => {
+  /* Given */
+  const h = harness();
+  h.addSession('s1');
+  const handle = h.service.receive('s1', asked(), h.replies().reply);
+
+  /* When */
+  handle.withdraw();
+
+  /* Then */
+  assert.deepEqual(h.renderer.only('questionsSettled'), [
+    ['questionsSettled', { sessionId: 's1', toolUseId: 'tu-1', outcome: 'withdrawn' }],
+  ]);
 });
 
 test('the request closing after the reply is not a withdrawal', () => {
@@ -437,7 +468,7 @@ test('answering a grilling round types the reply into the session', () => {
   assert.deepEqual(result, { ok: true });
   assert.deepEqual(h.prompter.sent, [['s1', 'Q1: yes\nQ2: A) SQLite — one file']]);
   const settled = h.renderer.only('questionsSettled')[0][1] as QuestionsSettled;
-  assert.deepEqual(settled, { sessionId: 's1', toolUseId, outcome: 'answered' });
+  assert.deepEqual(settled, { sessionId: 's1', toolUseId, outcome: 'answered', answeredOn: 'mac' });
   assert.equal(h.prompter.watching('s1'), 0, 'stops watching for the exit');
 });
 

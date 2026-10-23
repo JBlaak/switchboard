@@ -256,3 +256,48 @@ export function fakeWorktrees(byRepository: Record<string, WorktreeSummary[]> = 
   };
   return fake;
 }
+
+// ── A phone's connection (#194) ──
+
+import type { DeviceConnection } from '../../src/application/ports/phone-access';
+import type { ServerMessage } from '../../src/domain/phone/protocol';
+
+export interface FakeDeviceConnection extends DeviceConnection {
+  /** Every JSON message sent to it, in order. */
+  readonly sent: ServerMessage[];
+  /** Every terminal frame sent to it, as [session id, output]. */
+  readonly frames: [string, string][];
+  /** Set once `close` was called. */
+  closed: { code: number; reason: string } | null;
+  /** Just the messages of one type. */
+  of<T extends ServerMessage['type']>(type: T): Extract<ServerMessage, { type: T }>[];
+  /** Forget what it was sent so far. */
+  clear(): void;
+}
+
+export function fakeDeviceConnection(id = 'conn-1', deviceId = 'phone-1'): FakeDeviceConnection {
+  const fake: FakeDeviceConnection = {
+    id,
+    fingerprint: `fp-${deviceId}`,
+    grant: { kind: 'device', deviceId },
+    sent: [],
+    frames: [],
+    closed: null,
+    send(message) { fake.sent.push(message); },
+    sendTerminal(sessionId, data) { fake.frames.push([sessionId, data]); },
+    close(code, reason) { fake.closed = { code, reason }; },
+    of: (type) => fake.sent.filter(message => message.type === type) as never,
+    clear() {
+      fake.sent.length = 0;
+      fake.frames.length = 0;
+    },
+  };
+  return fake;
+}
+
+/** A fake PTY that also records every resize, as [cols, rows]. */
+export function resizingPty(pid = 4242): FakePty & { readonly resizes: [number, number][] } {
+  const resizes: [number, number][] = [];
+  const pty = makePty(pid);
+  return Object.assign(pty, { resizes, resize(cols: number, rows: number) { resizes.push([cols, rows]); } });
+}
