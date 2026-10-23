@@ -30,6 +30,11 @@ export interface DnsSdAdvertiserDeps {
   spawn?: (command: string, args: string[]) => AdvertiserProcess;
   /** The machine's host name; `os.hostname()` by default. */
   hostname?: () => string;
+  /**
+   * The Mac's own Bonjour name ("Joriss-MacBook-Pro-2.local"), used as is
+   * when given and known; null falls back to `localHostName` of the host name.
+   */
+  localName?: () => string | null;
 }
 
 /**
@@ -74,6 +79,6 @@ export class DnsSdAdvertiser implements ServiceAdvertiser {
   }
 
   hostName(): string {
-    return localHostName((this.deps.hostname ?? os.hostname)());
+    return this.deps.localName?.() ?? localHostName((this.deps.hostname ?? os.hostname)());
   }
 }

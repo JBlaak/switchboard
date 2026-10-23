@@ -87,7 +87,7 @@ import { OpensslIdentityStore } from '../infrastructure/phone/identity-store';
 import { DnsSdAdvertiser } from '../infrastructure/phone/dns-sd-advertiser';
 import { LanWatcher } from '../infrastructure/phone/lan-watcher';
 import { SqliteDeviceRegistry } from '../infrastructure/sqlite/device-registry';
-import { computerName } from '../infrastructure/system/computer-name';
+import { bonjourHostName, computerName } from '../infrastructure/system/computer-name';
 import { PhoneEventTee, buildPhoneAccess } from './phone-access';
 import type { PhoneAccessService } from '../application/services/phone-access-service';
 import type { PhoneSessionsService } from '../application/services/phone-sessions-service';
@@ -479,7 +479,7 @@ export function buildContainer(): Container {
   // The e2e suite listens on loopback, keeps its key out of the Keychain and
   // never advertises: a run must not put a service on the developer's Wi-Fi.
   const e2e = process.env.SWITCHBOARD_E2E === '1';
-  const phoneAdvertiser: ServiceAdvertiser = e2e ? loopbackAdvertiser() : new DnsSdAdvertiser({ log });
+  const phoneAdvertiser: ServiceAdvertiser = e2e ? loopbackAdvertiser() : new DnsSdAdvertiser({ log, localName: bonjourHostName });
   const phone = buildPhoneAccess({
     identity: new OpensslIdentityStore({
       directory: path.join(app.getPath('userData'), 'phone-access'),
