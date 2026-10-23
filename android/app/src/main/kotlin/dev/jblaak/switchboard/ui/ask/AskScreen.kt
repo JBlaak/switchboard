@@ -53,18 +53,23 @@ import dev.jblaak.switchboard.protocol.PhoneProject
 import dev.jblaak.switchboard.theme.SwitchboardTheme
 import dev.jblaak.switchboard.ui.connected.BackIcon
 import dev.jblaak.switchboard.ui.connected.CloseIcon
-import dev.jblaak.switchboard.ui.connected.MicIcon
 import dev.jblaak.switchboard.ui.connected.PatchSays
 import dev.jblaak.switchboard.ui.connected.ScreenTopBar
 import dev.jblaak.switchboard.ui.connected.SearchIcon
 import dev.jblaak.switchboard.ui.connected.SendIcon
+import dev.jblaak.switchboard.ui.connected.typingBoxMaxHeight
+import dev.jblaak.switchboard.ui.voice.HoldToTalk
+import dev.jblaak.switchboard.ui.voice.HoldToTalkMic
+import dev.jblaak.switchboard.ui.voice.VoiceState
+import dev.jblaak.switchboard.ui.voice.VoiceStrip
+import dev.jblaak.switchboard.ui.voice.isBusy
+import dev.jblaak.switchboard.ui.voice.previewHoldToTalk
 import nl.jblaak.patch.PatchMood
 
 /** What the Ask Patch screens can be asked to do. */
 interface AskActions {
     fun type(text: String)
     fun ask()
-    fun dictate()
     fun pickProjectMyself()
     fun anotherProject()
     fun filter(text: String)
@@ -72,8 +77,9 @@ interface AskActions {
     fun back()
 }
 
+/** Ask Patch; [voice] is the mic on the request box, left out when null. */
 @Composable
-fun AskScreen(step: AskStep, actions: AskActions) {
+fun AskScreen(step: AskStep, actions: AskActions, voice: HoldToTalk?) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         AnimatedContent(
             targetState = step,
@@ -82,7 +88,7 @@ fun AskScreen(step: AskStep, actions: AskActions) {
             modifier = Modifier.safeDrawingPadding(),
         ) { current ->
             when (current) {
-                is AskStep.Compose -> ComposeStep(current, actions)
+                is AskStep.Compose -> ComposeStep(current, actions, voice)
                 is AskStep.Pick -> PickStep(current, actions)
                 is AskStep.Projects -> ProjectsStep(current, actions)
             }
@@ -104,7 +110,7 @@ private fun AskTopBar(title: String, closes: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun ComposeStep(step: AskStep.Compose, actions: AskActions) {
+private fun ComposeStep(step: AskStep.Compose, actions: AskActions, voice: HoldToTalk?) {
     val colors = SwitchboardTheme.colors
     Column(Modifier.fillMaxSize()) {
         AskTopBar(stringResource(R.string.ask_title), closes = !step.thinking, onBack = actions::back)
@@ -116,7 +122,7 @@ private fun ComposeStep(step: AskStep.Compose, actions: AskActions) {
                 .padding(start = 20.dp, end = 20.dp, top = 28.dp),
         ) {
             PatchSays(stringResource(R.string.ask_question), avatarSize = 56.dp, mood = PatchMood.Calm)
-            AskBox(step, actions)
+            AskBox(step, actions, voice)
             step.problem?.let { ProblemText(it) }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
@@ -152,7 +158,7 @@ private fun ComposeStep(step: AskStep.Compose, actions: AskActions) {
 }
 
 @Composable
-private fun AskBox(step: AskStep.Compose, actions: AskActions) {
+private fun AskBox(step: AskStep.Compose, actions: AskActions, voice: HoldToTalk?) {
     val colors = SwitchboardTheme.colors
     val shape = MaterialTheme.shapes.large
     Column(
@@ -170,29 +176,28 @@ private fun AskBox(step: AskStep.Compose, actions: AskActions) {
             enabled = !step.thinking,
             textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, lineHeight = 25.sp, color = colors.textStrong),
             cursorBrush = SolidColor(colors.accent),
-            minLines = 5,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = typingBoxMaxHeight()),
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = stringResource(if (step.thinking) R.string.ask_thinking else R.string.ask_box_hint),
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                color = colors.textFaint,
-                modifier = Modifier.weight(1f),
-            )
+            if (voice != null && voice.isBusy()) {
+                VoiceStrip(voice, Modifier.weight(1f))
+            } else {
+                Text(
+                    text = stringResource(if (step.thinking) R.string.ask_thinking else R.string.ask_box_hint),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = colors.textFaint,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             if (step.thinking) {
                 CircularProgressIndicator(color = colors.accent, strokeWidth = 2.dp, modifier = Modifier.size(24.dp))
                 TextButton(onClick = actions::back) {
                     Text(stringResource(R.string.ask_cancel), style = MaterialTheme.typography.labelLarge, color = colors.accent)
                 }
             } else {
-                FilledIconButton(
-                    onClick = actions::dictate,
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.line, contentColor = colors.textStrong),
-                    modifier = Modifier.size(44.dp),
-                ) {
-                    Icon(MicIcon, contentDescription = stringResource(R.string.ask_dictate), modifier = Modifier.size(20.dp))
-                }
+                if (voice != null) HoldToTalkMic(voice, size = 44.dp, idleContainer = colors.line, idleContent = colors.textStrong)
                 FilledIconButton(
                     onClick = actions::ask,
                     enabled = step.text.isNotBlank(),
@@ -441,7 +446,6 @@ private fun ProjectRow(project: PhoneProject, starting: String?, onStart: () -> 
 private val previewActions = object : AskActions {
     override fun type(text: String) = Unit
     override fun ask() = Unit
-    override fun dictate() = Unit
     override fun pickProjectMyself() = Unit
     override fun anotherProject() = Unit
     override fun filter(text: String) = Unit
@@ -452,8 +456,8 @@ private val previewActions = object : AskActions {
 private const val PREVIEW_TEXT = "The key bar in the phone session view should wrap onto two rows on narrow screens"
 
 @Composable
-private fun AskPreviewOf(step: AskStep) {
-    SwitchboardTheme { AskScreen(step, previewActions) }
+private fun AskPreviewOf(step: AskStep, voice: HoldToTalk? = null) {
+    SwitchboardTheme { AskScreen(step, previewActions, voice) }
 }
 
 @Preview(name = "Ask dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
@@ -461,6 +465,16 @@ private fun AskPreviewOf(step: AskStep) {
 @Composable
 internal fun AskComposePreview() {
     AskPreviewOf(AskStep.Compose(PREVIEW_TEXT, thinking = false, problem = null))
+}
+
+@Preview(name = "Recording dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Recording light", uiMode = Configuration.UI_MODE_NIGHT_NO)
+@Composable
+internal fun AskRecordingPreview() {
+    AskPreviewOf(
+        AskStep.Compose(PREVIEW_TEXT, thinking = false, problem = null),
+        voice = previewHoldToTalk(VoiceState.Recording(level = 0.5f, elapsedMillis = 4_200)),
+    )
 }
 
 @Preview(name = "Thinking dark", uiMode = Configuration.UI_MODE_NIGHT_YES)

@@ -22,6 +22,11 @@ const EVERY_MESSAGE: ClientMessage[] = [
   { type: 'ask-start', requestId: 'r1', projectPath: '/Users/joris/Development/switchboard', prompt: 'Add dark mode' },
   { type: 'list-projects' },
   { type: 'archive', sessionId: 's1' },
+  { type: 'voice-start', voiceId: 'v1' },
+  { type: 'voice-start', voiceId: 'v2', sessionId: 's1' },
+  { type: 'voice-chunk', voiceId: 'v1', seq: 0, audio: 'AAABAAIA/38AgA==' },
+  { type: 'voice-end', voiceId: 'v1' },
+  { type: 'voice-cancel', voiceId: 'v2' },
 ];
 
 /** Each message with one field broken, per field and per way it can break. */
@@ -61,6 +66,27 @@ const MALFORMED: Record<string, unknown[]> = {
   ],
   'use-here': [{ type: 'use-here' }, { type: 'use-here', sessionId: null }],
   archive: [{ type: 'archive' }, { type: 'archive', sessionId: '' }, { type: 'archive', sessionId: 7 }],
+  'voice-start': [
+    { type: 'voice-start' },
+    { type: 'voice-start', voiceId: '' },
+    { type: 'voice-start', voiceId: 'x'.repeat(257) },
+    { type: 'voice-start', voiceId: 'v1', sessionId: '' },
+    { type: 'voice-start', voiceId: 'v1', sessionId: 7 },
+    { type: 'voice-start', voiceId: 'v1', sessionId: null },
+  ],
+  'voice-chunk': [
+    { type: 'voice-chunk', seq: 0, audio: 'AAAA' },
+    { type: 'voice-chunk', voiceId: 'v1', audio: 'AAAA' },
+    { type: 'voice-chunk', voiceId: 'v1', seq: -1, audio: 'AAAA' },
+    { type: 'voice-chunk', voiceId: 'v1', seq: 1.5, audio: 'AAAA' },
+    { type: 'voice-chunk', voiceId: 'v1', seq: '0', audio: 'AAAA' },
+    { type: 'voice-chunk', voiceId: 'v1', seq: 0 },
+    { type: 'voice-chunk', voiceId: 'v1', seq: 0, audio: '' },
+    { type: 'voice-chunk', voiceId: 'v1', seq: 0, audio: 'not base64!' },
+    { type: 'voice-chunk', voiceId: 'v1', seq: 0, audio: 'A'.repeat(64 * 1024 + 4) },
+  ],
+  'voice-end': [{ type: 'voice-end' }, { type: 'voice-end', voiceId: '' }, { type: 'voice-end', voiceId: 7 }],
+  'voice-cancel': [{ type: 'voice-cancel' }, { type: 'voice-cancel', voiceId: '' }, { type: 'voice-cancel', voiceId: ['v1'] }],
   input: [
     { type: 'input', sessionId: 's1' },
     { type: 'input', sessionId: 's1', data: '' },

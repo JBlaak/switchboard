@@ -2,6 +2,7 @@ package dev.jblaak.switchboard.ui.questions
 
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,7 +29,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -53,8 +53,12 @@ import dev.jblaak.switchboard.protocol.QuestionOption
 import dev.jblaak.switchboard.protocol.QuestionsSource
 import dev.jblaak.switchboard.theme.SwitchboardTheme
 import dev.jblaak.switchboard.ui.connected.CheckIcon
-import dev.jblaak.switchboard.ui.connected.MicIcon
 import dev.jblaak.switchboard.ui.connected.PhoneIcon
+import dev.jblaak.switchboard.ui.connected.typingBoxMaxHeight
+import dev.jblaak.switchboard.ui.voice.HoldToTalk
+import dev.jblaak.switchboard.ui.voice.HoldToTalkMic
+import dev.jblaak.switchboard.ui.voice.VoiceStrip
+import dev.jblaak.switchboard.ui.voice.isBusy
 
 /** What the question sheet can be asked to do. */
 interface QuestionSheetActions {
@@ -64,14 +68,13 @@ interface QuestionSheetActions {
     fun back()
     fun skip()
     fun acceptRecommendation()
-    fun dictate()
     fun failureSeen()
     fun later()
 }
 
-/** The inside of the question sheet: a question of the set, or why the set went away. */
+/** The inside of the question sheet: a question of the set, or why the set went away; [voice] is the own-words mic. */
 @Composable
-fun QuestionSheetContent(state: QuestionSheetState, sessionName: String?, actions: QuestionSheetActions) {
+fun QuestionSheetContent(state: QuestionSheetState, sessionName: String?, actions: QuestionSheetActions, voice: HoldToTalk?) {
     Column(Modifier.navigationBarsPadding()) {
         when (val phase = state.phase) {
             is QuestionPhase.AnsweredElsewhere -> AnsweredElsewhere(phase.on, actions)
@@ -85,7 +88,7 @@ fun QuestionSheetContent(state: QuestionSheetState, sessionName: String?, action
                     val question = state.set.questions[step]
                     val draft = state.drafts[step]
                     Column {
-                        if (state.isGrill) GrillQuestion(question, draft, actions) else AskQuestion(question, draft, actions)
+                        if (state.isGrill) GrillQuestion(question, draft, actions, voice) else AskQuestion(question, draft, actions, voice)
                     }
                 }
                 SheetFooter(state, actions)
@@ -155,7 +158,7 @@ private fun SheetHeader(state: QuestionSheetState, sessionName: String?) {
 }
 
 @Composable
-private fun ColumnScope.AskQuestion(question: Question, draft: Draft, actions: QuestionSheetActions) {
+private fun ColumnScope.AskQuestion(question: Question, draft: Draft, actions: QuestionSheetActions, voice: HoldToTalk?) {
     val colors = SwitchboardTheme.colors
     QuestionTitle(question.question)
     Text(
@@ -178,7 +181,7 @@ private fun ColumnScope.AskQuestion(question: Question, draft: Draft, actions: Q
             text = draft.ownWords,
             placeholder = stringResource(R.string.questions_own_words),
             onChange = actions::type,
-            onDictate = actions::dictate,
+            voice = voice,
             shape = MaterialTheme.shapes.medium,
         )
     }
@@ -275,7 +278,7 @@ private fun OwnWordsField(
     text: String,
     placeholder: String,
     onChange: (String) -> Unit,
-    onDictate: () -> Unit,
+    voice: HoldToTalk?,
     shape: androidx.compose.ui.graphics.Shape,
 ) {
     val colors = SwitchboardTheme.colors
@@ -284,7 +287,7 @@ private fun OwnWordsField(
         onValueChange = onChange,
         textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, color = colors.textStrong),
         cursorBrush = SolidColor(colors.accent),
-        maxLines = 4,
+        modifier = Modifier.heightIn(max = typingBoxMaxHeight()),
         decorationBox = { field ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -300,16 +303,27 @@ private fun OwnWordsField(
                     if (text.isEmpty()) Text(placeholder, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp), color = colors.textFaint)
                     field()
                 }
-                IconButton(onClick = onDictate, modifier = Modifier.size(40.dp)) {
-                    Icon(MicIcon, contentDescription = stringResource(R.string.questions_dictate), tint = colors.textDim, modifier = Modifier.size(20.dp))
+                if (voice != null) {
+                    HoldToTalkMic(
+                        voice,
+                        size = 40.dp,
+                        idleContainer = colors.bgRaised,
+                        idleContent = colors.textDim,
+                        modifier = Modifier.padding(vertical = 6.dp),
+                    )
                 }
             }
         },
     )
+    if (voice != null) {
+        AnimatedVisibility(voice.isBusy()) {
+            VoiceStrip(voice, Modifier.padding(horizontal = 16.dp))
+        }
+    }
 }
 
 @Composable
-private fun ColumnScope.GrillQuestion(question: Question, draft: Draft, actions: QuestionSheetActions) {
+private fun ColumnScope.GrillQuestion(question: Question, draft: Draft, actions: QuestionSheetActions, voice: HoldToTalk?) {
     val colors = SwitchboardTheme.colors
     val recommendation = question.options.firstOrNull()
     Column(
@@ -368,7 +382,7 @@ private fun ColumnScope.GrillQuestion(question: Question, draft: Draft, actions:
             text = draft.ownWords,
             placeholder = stringResource(R.string.questions_grill_own_words),
             onChange = actions::type,
-            onDictate = actions::dictate,
+            voice = voice,
             shape = RoundedCornerShape(26.dp),
         )
     }
@@ -517,7 +531,6 @@ private val previewActions = object : QuestionSheetActions {
     override fun back() = Unit
     override fun skip() = Unit
     override fun acceptRecommendation() = Unit
-    override fun dictate() = Unit
     override fun failureSeen() = Unit
     override fun later() = Unit
 }
@@ -564,7 +577,7 @@ private val previewGrillQuestions = listOf(
 private fun SheetPreviewOf(state: QuestionSheetState) {
     SwitchboardTheme {
         Surface(color = SwitchboardTheme.colors.bgPanel, shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) {
-            QuestionSheetContent(state, sessionName = "Phone access pairing flow", actions = previewActions)
+            QuestionSheetContent(state, sessionName = "Phone access pairing flow", actions = previewActions, voice = null)
         }
     }
 }

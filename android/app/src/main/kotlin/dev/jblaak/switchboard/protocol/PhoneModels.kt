@@ -107,6 +107,58 @@ sealed interface PhoneAskResult {
     data object Cancelled : PhoneAskResult
 }
 
+/** Whether the Mac can turn speech into text right now. Whisper runs on the Mac; its model downloads on first use. */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+@JsonClassDiscriminator("kind")
+sealed interface VoiceStatus {
+
+    @Serializable
+    @SerialName("ready")
+    data object Ready : VoiceStatus
+
+    /** `whisper-cli` isn't installed: `brew install whisper-cpp`. */
+    @Serializable
+    @SerialName("no-whisper")
+    data object NoWhisper : VoiceStatus
+
+    /** The model is downloading; [progress] is 0–1, null while the size is unknown. */
+    @Serializable
+    @SerialName("preparing")
+    data class Preparing(val progress: Double?) : VoiceStatus
+
+    /** The download failed; the next recording tries again. */
+    @Serializable
+    @SerialName("prepare-failed")
+    data class PrepareFailed(val reason: String) : VoiceStatus
+}
+
+/** What came of one recording. */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+@JsonClassDiscriminator("kind")
+sealed interface VoiceResult {
+
+    /** Whisper's transcript after Haiku's cleanup, or the raw transcript if the cleanup failed. */
+    @Serializable
+    @SerialName("text")
+    data class Text(val text: String) : VoiceResult
+
+    /** Nothing was heard. */
+    @Serializable
+    @SerialName("empty")
+    data object Empty : VoiceResult
+
+    /** Sent straight after the start when the Mac can't transcribe; never [VoiceStatus.Ready]. */
+    @Serializable
+    @SerialName("unavailable")
+    data class Unavailable(val status: VoiceStatus) : VoiceResult
+
+    @Serializable
+    @SerialName("failed")
+    data class Failed(val reason: String) : VoiceResult
+}
+
 /** A project Patch thinks the request may be about, with its most recent session title. */
 @Serializable
 data class AskCandidate(

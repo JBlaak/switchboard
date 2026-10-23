@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -23,6 +24,8 @@ import dev.jblaak.switchboard.ui.sessions.SessionStatus
 import dev.jblaak.switchboard.ui.sessions.SessionsScreen
 import dev.jblaak.switchboard.ui.sessions.Waiting
 import dev.jblaak.switchboard.ui.sessions.sessionListOf
+import dev.jblaak.switchboard.ui.voice.LocalVoiceControls
+import dev.jblaak.switchboard.ui.voice.VoiceControls
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -34,13 +37,15 @@ private val BACK_AFTER_ARCHIVE = 260.milliseconds
  * Switchboard on the phone once it is connected: the session list, a session's terminal and its questions, and
  * Ask Patch. It owns its own navigation; the app shell shows it while the link is connected (or reconnecting).
  *
- * [board] must have been created before the link started (see [SessionBoard]). [deviceId] is this phone's, from
- * [LinkState.Connected], and [macName] the Mac's. [onMenuClick] is the session list's menu (pairing and settings).
+ * [board] and [voice] must have been created before the link started (see [SessionBoard]); the screens get [voice]
+ * as [LocalVoiceControls]. [deviceId] is this phone's, from [LinkState.Connected], and [macName] the Mac's.
+ * [onMenuClick] is the session list's menu (pairing and settings).
  */
 @Composable
 fun ConnectedApp(
     link: PhoneLink,
     board: SessionBoard,
+    voice: VoiceControls,
     deviceId: String,
     macName: String,
     onMenuClick: () -> Unit,
@@ -59,35 +64,37 @@ fun ConnectedApp(
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
-        AnimatedContent(targetState = route, contentKey = { it::class }, label = "connected route") { current ->
-            when (current) {
-                ConnectedRoute.Sessions -> SessionsRoute(link, board, deviceId, macName, navigation, onMenuClick)
-                is ConnectedRoute.Session -> SessionRoute(
-                    link = link,
-                    board = board,
-                    deviceId = deviceId,
-                    sessionId = current.sessionId,
-                    startedIn = current.startedIn,
-                    questionsOpen = current.questionsOpen,
-                    onArchived = { from ->
-                        confetti.burst(from, density)
-                        scope.launch {
-                            delay(BACK_AFTER_ARCHIVE)
-                            navigation.sessionArchived(current.sessionId)
-                        }
-                    },
-                    onBack = navigation::backToSessions,
-                )
-                ConnectedRoute.Ask -> AskRoute(
-                    link = link,
-                    board = board,
-                    onSessionStarted = navigation::sessionStarted,
-                    onClose = navigation::backToSessions,
-                )
+    CompositionLocalProvider(LocalVoiceControls provides voice) {
+        Box(Modifier.fillMaxSize()) {
+            AnimatedContent(targetState = route, contentKey = { it::class }, label = "connected route") { current ->
+                when (current) {
+                    ConnectedRoute.Sessions -> SessionsRoute(link, board, deviceId, macName, navigation, onMenuClick)
+                    is ConnectedRoute.Session -> SessionRoute(
+                        link = link,
+                        board = board,
+                        deviceId = deviceId,
+                        sessionId = current.sessionId,
+                        startedIn = current.startedIn,
+                        questionsOpen = current.questionsOpen,
+                        onArchived = { from ->
+                            confetti.burst(from, density)
+                            scope.launch {
+                                delay(BACK_AFTER_ARCHIVE)
+                                navigation.sessionArchived(current.sessionId)
+                            }
+                        },
+                        onBack = navigation::backToSessions,
+                    )
+                    ConnectedRoute.Ask -> AskRoute(
+                        link = link,
+                        board = board,
+                        onSessionStarted = navigation::sessionStarted,
+                        onClose = navigation::backToSessions,
+                    )
+                }
             }
+            ConfettiLayer(confetti, Modifier.fillMaxSize())
         }
-        ConfettiLayer(confetti, Modifier.fillMaxSize())
     }
 }
 

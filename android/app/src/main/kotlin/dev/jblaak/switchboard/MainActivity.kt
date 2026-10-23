@@ -28,7 +28,7 @@ class MainActivity : FragmentActivity() {
                     model = app.screens,
                     unlock = unlock,
                     deviceName = Build.MODEL,
-                    connectedContent = { ConnectedSlot(app.link, app.phoneLink, app.board) },
+                    connectedContent = { ConnectedSlot(app.link, app.phoneLink, app.board, app.voice) },
                 )
             }
         }

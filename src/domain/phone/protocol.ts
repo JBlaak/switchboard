@@ -89,6 +89,30 @@ export type PhoneAskResult =
   | { kind: 'failed'; reason: string }
   | { kind: 'cancelled' };
 
+/**
+ * Whether the Mac can turn speech into text right now. Whisper (whisper.cpp's
+ * `whisper-cli`, from Homebrew) runs on the Mac; its model is downloaded on
+ * first use.
+ */
+export type VoiceStatus =
+  | { kind: 'ready' }
+  /** `whisper-cli` isn't installed; the phone says `brew install whisper-cpp`. */
+  | { kind: 'no-whisper' }
+  /** The model is downloading; `progress` is 0–1, null while the size is unknown. */
+  | { kind: 'preparing'; progress: number | null }
+  /** The download failed; the next `voice-start` tries again. */
+  | { kind: 'prepare-failed'; reason: string };
+
+/** What came of one recording. */
+export type VoiceResult =
+  /** Whisper's transcript after Haiku's cleanup, or the raw transcript if the cleanup failed. */
+  | { kind: 'text'; text: string }
+  /** Nothing was heard. */
+  | { kind: 'empty' }
+  /** Sent straight after `voice-start` when the Mac can't transcribe; the phone stops recording. */
+  | { kind: 'unavailable'; status: Exclude<VoiceStatus, { kind: 'ready' }> }
+  | { kind: 'failed'; reason: string };
+
 /** Why a pairing attempt was turned away. */
 export type PairRejection = 'expired' | 'wrong-code' | 'locked-out' | 'declined' | 'not-pairing';
 
@@ -127,7 +151,22 @@ export type ClientMessage =
   }
   | { type: 'list-projects' }
   /** Archive the session, as ⌘E does on the Mac: it is stopped first, and stays listed if that fails. */
-  | { type: 'archive'; sessionId: string };
+  | { type: 'archive'; sessionId: string }
+  /**
+   * Voice input: a recording starts. `sessionId`, when the phone is in a
+   * session, primes Whisper and the cleanup with that session's project. A
+   * device has one recording at a time; a new start drops the previous one.
+   */
+  | { type: 'voice-start'; voiceId: string; sessionId?: string }
+  /**
+   * The next piece of audio: base64 of 16 kHz mono signed 16-bit
+   * little-endian PCM. `seq` counts from 0 per recording, without gaps.
+   */
+  | { type: 'voice-chunk'; voiceId: string; seq: number; audio: string }
+  /** The user let go: transcribe what arrived. One `voice-result` follows. */
+  | { type: 'voice-end'; voiceId: string }
+  /** The user slid off the mic: drop the recording. Nothing follows. */
+  | { type: 'voice-cancel'; voiceId: string };
 
 // ── Mac → Phone ──
 
@@ -164,6 +203,10 @@ export type ServerMessage =
   | { type: 'ask-started'; requestId: string; sessionId: string }
   | { type: 'ask-error'; requestId: string; error: string }
   | { type: 'projects'; projects: PhoneProject[] }
+  /** Sent on welcome and to every phone whenever it changes (download progress in whole percents). */
+  | { type: 'voice-status'; status: VoiceStatus }
+  /** Exactly one per `voice-start` that wasn't cancelled. */
+  | { type: 'voice-result'; voiceId: string; result: VoiceResult }
   /** Sent before close(notPaired) when the device is revoked or the Mac's identity is reset. */
   | { type: 'revoked' };
 

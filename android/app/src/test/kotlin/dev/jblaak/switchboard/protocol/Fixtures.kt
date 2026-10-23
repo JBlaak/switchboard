@@ -47,6 +47,11 @@ internal val clientFixtures: List<Pair<String, ClientMessage>> = listOf(
     ),
     "list-projects" to ClientMessage.ListProjects,
     "archive" to ClientMessage.Archive(sessionId = "s-1"),
+    "voice-start" to ClientMessage.VoiceStart(voiceId = "v-1"),
+    "voice-start-in-session" to ClientMessage.VoiceStart(voiceId = "v-1", sessionId = "s-1"),
+    "voice-chunk" to ClientMessage.VoiceChunk(voiceId = "v-1", seq = 0, audio = "AAABAP//"),
+    "voice-end" to ClientMessage.VoiceEnd(voiceId = "v-1"),
+    "voice-cancel" to ClientMessage.VoiceCancel(voiceId = "v-1"),
 )
 
 private const val SWITCHBOARD_PATH = "/Users/joris/Development/switchboard"
@@ -164,6 +169,14 @@ internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
     "archive-result" to ServerMessage.ArchiveResult(sessionId = "s-1", ok = true, error = null),
     "archive-result-error" to ServerMessage.ArchiveResult(sessionId = "s-1", ok = false, error = "Could not stop the session"),
     "archived" to ServerMessage.Archived(sessionId = "s-1"),
+    "voice-status-ready" to ServerMessage.VoiceStatusChanged(VoiceStatus.Ready),
+    "voice-status-no-whisper" to ServerMessage.VoiceStatusChanged(VoiceStatus.NoWhisper),
+    "voice-status-preparing" to ServerMessage.VoiceStatusChanged(VoiceStatus.Preparing(progress = 0.43)),
+    "voice-status-prepare-failed" to ServerMessage.VoiceStatusChanged(VoiceStatus.PrepareFailed(reason = "The download stopped.")),
+    "voice-result-text" to ServerMessage.VoiceTranscribed(voiceId = "v-1", result = VoiceResult.Text(text = "Fix the failing test in the codec.")),
+    "voice-result-empty" to ServerMessage.VoiceTranscribed(voiceId = "v-1", result = VoiceResult.Empty),
+    "voice-result-unavailable" to ServerMessage.VoiceTranscribed(voiceId = "v-1", result = VoiceResult.Unavailable(VoiceStatus.Preparing(progress = null))),
+    "voice-result-failed" to ServerMessage.VoiceTranscribed(voiceId = "v-1", result = VoiceResult.Failed(reason = "Whisper stopped.")),
     "ask-result-confident" to ServerMessage.AskResult(
         requestId = "r-1",
         result = PhoneAskResult.Confident(sessionId = "s-4", project = "switchboard"),

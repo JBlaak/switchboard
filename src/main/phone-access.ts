@@ -1,6 +1,7 @@
 /**
  * Phone access (#194), put together: the listener, the access service that
- * owns it, and the sessions service the enrolled phones talk to.
+ * owns it, the sessions service the enrolled phones talk to, and the voice
+ * service it hands their hold-to-talk to.
  *
  * Kept apart from `composition-root.ts` and free of Electron so the whole of
  * it can be driven in node against a real listener (test/phone-access-wiring
@@ -15,6 +16,7 @@
 import { encodeTerminalFrame, parseClientMessage } from '../domain/phone/codec';
 import { PhoneAccessService } from '../application/services/phone-access-service';
 import { PhoneSessionsService } from '../application/services/phone-sessions-service';
+import { VoiceService } from '../application/services/voice-service';
 import { TlsDeviceLink } from '../infrastructure/phone/tls-device-link';
 import type { PhoneAccessState, TerminalOwner } from '../domain/phone/state';
 import type { PendingQuestions, QuestionsSettled } from '../domain/questions/question';
@@ -24,11 +26,13 @@ import type { PullRequestStatusChange } from '../domain/session-work/status';
 import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
 import type { Clock, Timers } from '../application/ports/clock';
+import type { ClaudeCaller } from '../application/ports/claude-cli';
 import type { IdGenerator } from '../application/ports/ids';
 import type { Logger } from '../application/ports/logger';
 import type { DeviceRegistry, ServerIdentityStore, ServiceAdvertiser } from '../application/ports/phone-access';
 import type { RendererGateway } from '../application/ports/renderer-gateway';
 import type { SettingsStore } from '../application/ports/settings-store';
+import type { Transcriber, VoiceModelStore } from '../application/ports/voice';
 import type { PhoneSessionsServiceDeps } from '../application/services/phone-sessions-service';
 
 /** What the sessions service is told of, from where the renderer is. */
@@ -152,7 +156,7 @@ export class PhoneEventTee implements RendererGateway {
   }
 }
 
-export interface PhoneAccessDeps extends Omit<PhoneSessionsServiceDeps, 'settings' | 'renderer'> {
+export interface PhoneAccessDeps extends Omit<PhoneSessionsServiceDeps, 'settings' | 'renderer' | 'voice'> {
   identity: ServerIdentityStore;
   devices: DeviceRegistry;
   advertiser: ServiceAdvertiser;
@@ -162,6 +166,8 @@ export interface PhoneAccessDeps extends Omit<PhoneSessionsServiceDeps, 'setting
   settings: Pick<SettingsStore, 'get' | 'set'> & PhoneSessionsServiceDeps['settings'];
   /** The tee in front of the window's gateway. */
   renderer: RendererGateway;
+  /** Hold-to-talk: Whisper, its model, and `claude` for the cleanup. */
+  voice: { transcriber: Transcriber; model: VoiceModelStore; cli: ClaudeCaller };
   ids: IdGenerator;
   clock: Clock;
   timers: Timers;
@@ -185,9 +191,11 @@ export function buildPhoneAccess(deps: PhoneAccessDeps): PhoneAccess {
     log,
     ...(deps.addresses ? { addresses: deps.addresses } : {}),
   });
+  const voice = new VoiceService({ ...deps.voice, registry: deps.registry, projects: deps.projects, timers: deps.timers, log });
   const sessions = new PhoneSessionsService({
     ...deps,
     renderer,
+    voice,
     // A session a phone starts gets its row on the Mac at once (#194 story
     // 69), not only once its transcript has been written and indexed.
     launcher: {

@@ -86,6 +86,8 @@ import { QuestionHookServer } from '../infrastructure/http/question-hook-server'
 import { OpensslIdentityStore } from '../infrastructure/phone/identity-store';
 import { DnsSdAdvertiser } from '../infrastructure/phone/dns-sd-advertiser';
 import { LanWatcher } from '../infrastructure/phone/lan-watcher';
+import { WhisperCliTranscriber } from '../infrastructure/voice/whisper-cli-transcriber';
+import { WhisperModelStore } from '../infrastructure/voice/whisper-model-store';
 import { SqliteDeviceRegistry } from '../infrastructure/sqlite/device-registry';
 import { bonjourHostName, computerName } from '../infrastructure/system/computer-name';
 import { PhoneEventTee, buildPhoneAccess } from './phone-access';
@@ -499,6 +501,12 @@ export function buildContainer(): Container {
     archiver: sessionArchiver({ registry, remote, lifecycle, terminals, repository, renderer }),
     settings,
     renderer,
+    // Hold-to-talk: Whisper's model is fetched into user data on first use.
+    voice: {
+      transcriber: new WhisperCliTranscriber({ log }),
+      model: new WhisperModelStore({ directory: path.join(app.getPath('userData'), 'voice'), log }),
+      cli: claudeCaller,
+    },
     ids, clock, timers, log,
     randomBytes: (length) => randomBytes(length),
     macName: computerName(),

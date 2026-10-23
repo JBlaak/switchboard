@@ -81,6 +81,8 @@ function harness() {
     { projectPath: 'ssh://me@host/srv', folder: 'srv', sessions: [], remote: true },
   ];
   let ids = 0;
+  /** What the voice service was handed, as [call, connection id, message type]. */
+  const voiceCalls: [string, string, string?][] = [];
 
   const addSession = (id: string, fields: { projectPath?: string; openedAt?: number; plain?: boolean } = {}): Pty => {
     const pty = resizingPty();
@@ -141,6 +143,11 @@ function harness() {
     },
     settings: { effective: () => ({ permissionMode: 'auto', worktree: true }) },
     renderer,
+    voice: {
+      connected(connection) { voiceCalls.push(['connected', connection.id]); },
+      message(connection, message) { voiceCalls.push(['message', connection.id, message.type]); },
+      disconnected(connection) { voiceCalls.push(['disconnected', connection.id]); },
+    },
     ids: { newId: () => `new-${++ids}` },
     clock: { now: () => 9_000 },
     timers,
@@ -160,7 +167,7 @@ function harness() {
   });
 
   return {
-    service, registry, renderer, timers, caller, ptys, launches, archived, questions, addSession, connect, send, ask,
+    service, registry, renderer, timers, caller, ptys, launches, archived, questions, addSession, connect, send, ask, voiceCalls,
     setProjects: (next: Project[]) => { projects = next; },
     failArchive: (error: string) => { archiveResult = { ok: false, error }; },
   };
@@ -822,4 +829,29 @@ test('nothing is pushed while no phone is connected', () => {
 
   /* Then */
   assert.equal(h.timers.pending, 0);
+});
+
+// ── Voice ──
+
+test('a phone is handed to the voice service on welcome, with its voice messages, and when it goes', () => {
+  /* Given */
+  const h = harness();
+  const phone = h.connect();
+
+  /* When */
+  h.send(phone, { type: 'voice-start', voiceId: 'v1', sessionId: 's1' });
+  h.send(phone, { type: 'voice-chunk', voiceId: 'v1', seq: 0, audio: 'AAAA' });
+  h.send(phone, { type: 'voice-end', voiceId: 'v1' });
+  h.send(phone, { type: 'voice-cancel', voiceId: 'v1' });
+  h.service.disconnected(phone);
+
+  /* Then */
+  assert.deepEqual(h.voiceCalls, [
+    ['connected', phone.id],
+    ['message', phone.id, 'voice-start'],
+    ['message', phone.id, 'voice-chunk'],
+    ['message', phone.id, 'voice-end'],
+    ['message', phone.id, 'voice-cancel'],
+    ['disconnected', phone.id],
+  ]);
 });

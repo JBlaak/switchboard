@@ -18,6 +18,8 @@ import dev.jblaak.switchboard.ui.connected.PhoneLink
 import dev.jblaak.switchboard.ui.connected.SessionBoard
 import dev.jblaak.switchboard.ui.connected.rememberScopedModel
 import dev.jblaak.switchboard.ui.questions.QuestionSheetRoute
+import dev.jblaak.switchboard.ui.voice.rememberHoldToTalk
+import dev.jblaak.switchboard.ui.voice.withDictated
 
 /** A session's screen, wired to its [SessionModel], with the question sheet over it when asked for. */
 @Composable
@@ -38,6 +40,7 @@ fun SessionRoute(
     }
     val state by model.state.collectAsState()
     var prompt by rememberSaveable { mutableStateOf("") }
+    val voice = rememberHoldToTalk(sessionId) { heard -> prompt = withDictated(prompt, heard) }
     var sheetSet by remember { mutableStateOf<PendingQuestions?>(null) }
     var sheetWanted by remember { mutableStateOf(questionsOpen) }
 
@@ -62,6 +65,7 @@ fun SessionRoute(
             prompt = ""
         },
         onKey = model::press,
+        voice = voice,
         onUseHere = model::useHere,
         onAnswer = { sheetWanted = true },
         onStartedNoteDismissed = model::startedNoteDismissed,
