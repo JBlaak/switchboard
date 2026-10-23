@@ -155,7 +155,7 @@ class MacLink(
                 }
                 is Dial.Failed -> {
                     refusals = if (TransportFailure.Refused in dial.failures) refusals + 1 else 0
-                    if (refusals >= 2) return unpairRevoked()
+                    if (refusals >= 2) return show(LinkState.NotPaired)
                 }
             }
             if (identity.access() == KeyAccess.Locked) return lock(Goal.StayConnected)
@@ -188,12 +188,13 @@ class MacLink(
         val connection = dial.connection
         connection.send(codec.encode(ClientMessage.Hello(PROTOCOL_VERSION, appVersion)))
         var welcomed = false
+        var revoked = false
         while (true) {
             val event = nextEvent(connection, welcomed) ?: return SessionEnd.Lost(welcomed)
             when (event) {
                 TransportEvent.Opened -> Unit
                 is TransportEvent.Binary -> TerminalFrame.decodeOrNull(event.bytes)?.let { mutableTerminalFrames.emit(it) }
-                is TransportEvent.Closed -> return endOfPairedSession(event.code, welcomed)
+                is TransportEvent.Closed -> return endOfPairedSession(event.code, welcomed, revoked)
                 is TransportEvent.Failed -> return SessionEnd.Lost(welcomed)
                 is TransportEvent.Text -> {
                     val message = decodedOrNull(event.text) ?: continue
@@ -204,7 +205,8 @@ class MacLink(
                             connected.set(connection)
                             show(LinkState.Connected(message.deviceId, message.macName))
                         }
-                        is ServerMessage.Pairing -> return SessionEnd.Revoked
+                        is ServerMessage.Pairing -> return SessionEnd.Final(LinkState.NotPaired)
+                        ServerMessage.Revoked -> revoked = true
                         is ServerMessage.UpdateRequired -> return SessionEnd.Final(LinkState.UpdateRequired(message.macVersion))
                         else -> Unit
                     }
@@ -214,10 +216,14 @@ class MacLink(
         }
     }
 
-    private fun endOfPairedSession(code: Int, welcomed: Boolean): SessionEnd {
+    /**
+     * Only a `revoked` message, the Mac saying so explicitly, deletes the pairing; a bare 4003 shows "No longer
+     * paired" and leaves Pair again or Forget this Mac to the user.
+     */
+    private fun endOfPairedSession(code: Int, welcomed: Boolean, revoked: Boolean): SessionEnd {
         return when (CloseReason.fromCodeOrNull(code)) {
             CloseReason.UpdateRequired -> SessionEnd.Final(LinkState.UpdateRequired(null))
-            CloseReason.NotPaired -> SessionEnd.Revoked
+            CloseReason.NotPaired -> if (revoked) SessionEnd.Revoked else SessionEnd.Final(LinkState.NotPaired)
             CloseReason.TurnedOff -> SessionEnd.Final(LinkState.TurnedOff)
             CloseReason.PairingOver -> SessionEnd.Again
             CloseReason.ProtocolError, null -> SessionEnd.Lost(welcomed)

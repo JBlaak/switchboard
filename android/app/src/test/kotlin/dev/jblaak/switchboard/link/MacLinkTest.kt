@@ -173,7 +173,35 @@ class MacLinkTest {
     }
 
     @Test
-    fun `close 4003 throws the key and the stored pairing away`() = runTest {
+    fun `a revoked message before close 4003 throws the key and the stored pairing away`() = runTest {
+        /* Given */
+        connectedLink()
+
+        /* When */
+        transport.last.macSays("""{"type":"revoked"}""")
+        transport.last.macCloses(4003)
+        runCurrent()
+
+        /* Then */
+        assertFalse(identity.exists())
+        assertNull(store.pairing)
+    }
+
+    @Test
+    fun `a bare close 4003 means no longer paired`() = runTest {
+        /* Given */
+        val link = connectedLink()
+
+        /* When */
+        transport.last.macCloses(4003)
+        runCurrent()
+
+        /* Then */
+        assertEquals(LinkState.NotPaired, link.state.value)
+    }
+
+    @Test
+    fun `a bare close 4003 keeps the key and the stored pairing`() = runTest {
         /* Given */
         connectedLink()
 
@@ -182,8 +210,8 @@ class MacLinkTest {
         runCurrent()
 
         /* Then */
-        assertFalse(identity.exists())
-        assertNull(store.pairing)
+        assertTrue(identity.exists())
+        assertEquals(storedPairing(), store.pairing)
     }
 
     @Test
@@ -327,6 +355,21 @@ class MacLinkTest {
     }
 
     @Test
+    fun `being refused twice keeps the key and the stored pairing for the user to decide`() = runTest {
+        /* Given */
+        transport.firstEvent = { TransportEvent.Failed(TransportFailure.Refused) }
+        val link = newLink()
+
+        /* When */
+        link.start()
+        settle()
+
+        /* Then */
+        assertTrue(identity.exists())
+        assertEquals(storedPairing(), store.pairing)
+    }
+
+    @Test
     fun `a pairing answer to hello on a paired connection means no longer paired`() = runTest {
         /* Given */
         val link = newLink()
@@ -339,6 +382,22 @@ class MacLinkTest {
 
         /* Then */
         assertEquals(LinkState.NotPaired, link.state.value)
+    }
+
+    @Test
+    fun `a pairing answer to hello keeps the key and the stored pairing`() = runTest {
+        /* Given */
+        val link = newLink()
+        link.start()
+        runCurrent()
+
+        /* When */
+        transport.last.macSays("""{"type":"pairing","protocol":1,"macName":"Studio"}""")
+        runCurrent()
+
+        /* Then */
+        assertTrue(identity.exists())
+        assertEquals(storedPairing(), store.pairing)
     }
 
     @Test
