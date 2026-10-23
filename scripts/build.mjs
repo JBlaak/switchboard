@@ -17,10 +17,13 @@ const watch = process.argv.includes('--watch');
 
 // Native addons and Electron's own module can't be bundled — they have to be
 // require()d from node_modules at runtime. electron-log is left external too:
-// it resolves app paths relative to its own location.
+// it resolves app paths relative to its own location. bufferutil and
+// utf-8-validate are ws's optional native speed-ups: ws require()s them inside
+// a try and falls back to plain JS, and we don't install them, so they stay
+// external and that require fails quietly at runtime.
 const nodeExternals = [
   'electron', 'node-pty', 'better-sqlite3', 'electron-log',
-  'electron-reloader',
+  'electron-reloader', 'bufferutil', 'utf-8-validate',
 ];
 
 /** @type {import('esbuild').BuildOptions} */
