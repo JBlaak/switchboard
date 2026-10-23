@@ -6,3 +6,12 @@ License 1.1. The full license texts are in licenses/.
   JetBrains Mono app/src/main/res/font/jetbrains_mono.ttf  licenses/OFL-jetbrains-mono.txt
 
 The files are the variable fonts from https://github.com/google/fonts (ofl/).
+
+The session terminal runs xterm.js, bundled unmodified under the MIT License.
+The full license texts are in licenses/.
+
+  @xterm/xterm 6.0.0       app/src/main/assets/terminal/xterm.js, xterm.css  licenses/MIT-xterm.txt
+  @xterm/addon-fit 0.11.0  app/src/main/assets/terminal/addon-fit.js         licenses/MIT-xterm-addon-fit.txt
+
+The versions are the ones the desktop app uses (package-lock.json); the files are lib/ and css/ from the
+npm packages.
