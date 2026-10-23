@@ -35,7 +35,16 @@ class MicAudioSource : AudioSource {
                 if (read < 0) throw MicrophoneUnavailableException("AudioRecord.read failed: $read")
                 if (read > 0) emit(frameOf(buffer, read))
             }
-            // Let go: catch up on what the mic recorded meanwhile, stop it, and take whatever it still holds.
+            // Let go: the finger lifts on the last syllable, and what was said just before is still on its way
+            // through the audio pipeline, so record a little longer before catching up and stopping.
+            var tail = AFTER_LET_GO_BYTES
+            while (tail > 0) {
+                currentCoroutineContext().ensureActive()
+                val read = record.read(buffer, 0, minOf(buffer.size, tail))
+                if (read < 0) throw MicrophoneUnavailableException("AudioRecord.read failed: $read")
+                if (read > 0) emit(frameOf(buffer, read))
+                tail -= read
+            }
             drain(record, buffer)
             record.stop()
             drain(record, buffer)
@@ -79,6 +88,9 @@ class MicAudioSource : AudioSource {
     private companion object {
         const val CHANNEL = AudioFormat.CHANNEL_IN_MONO
         const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
+
+        /** 400 ms recorded after the let go, so a quick release doesn't clip the last word. */
+        const val AFTER_LET_GO_BYTES = BYTES_PER_SECOND * 2 / 5
 
         /** A second of frames: more than the mic buffers. */
         const val MAX_DRAIN_READS = 20

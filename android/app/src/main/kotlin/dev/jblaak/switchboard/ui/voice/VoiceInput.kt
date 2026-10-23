@@ -30,7 +30,7 @@ private const val CHUNK_BYTES = BYTES_PER_SECOND / 4
 
 private val TICK = 100.milliseconds
 
-/** The mic hands over what it already recorded within a read or two; a mic that takes longer is cut off. */
+/** The mic records a moment past the let go and hands over what it holds; a mic that takes longer is cut off. */
 private val DRAIN_TIMEOUT = 2.seconds
 
 /** Whisper and Haiku take seconds; past this the Mac isn't going to answer. */

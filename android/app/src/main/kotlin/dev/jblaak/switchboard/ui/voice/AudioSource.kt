@@ -13,8 +13,8 @@ const val BYTES_PER_SECOND = SAMPLE_RATE * 2
 interface AudioSource {
 
     /**
-     * Records in short frames of [SAMPLE_RATE] mono PCM16 until [letGo] turns true, then hands over what was
-     * already recorded and completes, so the last word isn't clipped. Cancelling the collector drops the rest at
+     * Records in short frames of [SAMPLE_RATE] mono PCM16 until [letGo] turns true, then records a moment longer,
+     * hands over what was already recorded and completes, so the last word isn't clipped. Cancelling the collector drops the rest at
      * once. Fails with [MicrophoneUnavailableException] when there is no microphone to open, or
      * [SecurityException] without RECORD_AUDIO.
      */

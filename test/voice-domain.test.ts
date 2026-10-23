@@ -280,6 +280,53 @@ test('a voice at speaking level is speech', () => {
   assert.equal(heard, true);
 });
 
+/** `parts` one after the other. */
+function joined(...parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
+test('a quiet voice over a quiet room is speech', () => {
+  /* Given: the phone's raw mic has no gain, so speech at screen distance is near −50 dBFS over a room near −64 */
+  const room = tone(1_000, 30);
+  const voice = tone(1_500, 150);
+
+  /* When */
+  const heard = hasSpeech(joined(room, voice, room));
+
+  /* Then */
+  assert.equal(heard, true);
+});
+
+test('a quiet room after the mic warms up is not speech', () => {
+  /* Given: some mics hand over digital silence before the room comes in */
+  const warmUp = new Uint8Array(16_000);
+  const room = tone(2_000, 30);
+
+  /* When */
+  const heard = hasSpeech(joined(warmUp, room));
+
+  /* Then */
+  assert.equal(heard, false);
+});
+
+test('a short bump over a quiet room is not speech', () => {
+  /* Given */
+  const room = tone(1_000, 30);
+  const bump = tone(90, 3_000);
+
+  /* When */
+  const heard = hasSpeech(joined(room, bump, room));
+
+  /* Then */
+  assert.equal(heard, false);
+});
+
 test('a single click is not speech', () => {
   /* Given */
   const click = tone(30, 20_000);
