@@ -243,6 +243,17 @@ export async function archiveSessionRow(session: SessionRow, archived: number): 
 }
 
 /**
+ * Snooze a session until `until` (an ISO time), or wake it with null.
+ *
+ * Unlike archiving, nothing is stopped: a snoozed session only leaves the
+ * list, and anything running under it keeps running.
+ */
+export async function snoozeSessionRow(session: SessionRow, until: string | null): Promise<void> {
+  await window.api.snoozeSession(session.sessionId, until);
+  session.snoozedUntil = until;
+}
+
+/**
  * Forget a row the renderer invented and nothing ever came of.
  *
  * Takes its terminal with it, so a header still naming that pane would be

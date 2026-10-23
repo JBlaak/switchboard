@@ -29,6 +29,13 @@ export function PinIcon(): JSX.Element {
   );
 }
 
+/** The snooze moon, as on a row's snooze button. */
+export function MoonIcon(): JSX.Element {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M20 14.6A8.5 8.5 0 1 1 9.4 4a6.8 6.8 0 0 0 10.6 10.6z" /></svg>
+  );
+}
+
 export function QuickSessionIcon(): JSX.Element {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 9-12h-7z" /></svg>;
 }

@@ -106,20 +106,20 @@ test('a terminal badge on terminals, local and remote, and on nothing else', () 
   assert.deepEqual(badges, [true, true, false, false]);
 });
 
-test('a Claude session can be stopped, archived and resumed with a config', () => {
+test('a Claude session can be stopped, archived, snoozed and resumed with a config', () => {
   /* When */
   const buttons = rowButtons(session('c'));
 
   /* Then */
-  assert.deepEqual(buttons, { stop: 'Stop session', archive: 'Archive', resume: true });
+  assert.deepEqual(buttons, { stop: 'Stop session', archive: 'Archive', snooze: true, resume: true });
 });
 
-test('a remote session can be disconnected and archived, not resumed', () => {
+test('a remote session can be disconnected, archived and snoozed, not resumed', () => {
   /* When */
   const buttons = rowButtons(session('r', { type: 'remote', remoteKind: 'claude' }));
 
   /* Then */
-  assert.deepEqual(buttons, { stop: 'Disconnect (keeps running on the remote)', archive: 'Archive', resume: false });
+  assert.deepEqual(buttons, { stop: 'Disconnect (keeps running on the remote)', archive: 'Archive', snooze: true, resume: false });
 });
 
 test('a plain terminal can only be stopped', () => {
@@ -127,7 +127,7 @@ test('a plain terminal can only be stopped', () => {
   const buttons = rowButtons(session('t', { type: 'terminal' }));
 
   /* Then */
-  assert.deepEqual(buttons, { stop: 'Stop session', archive: null, resume: false });
+  assert.deepEqual(buttons, { stop: 'Stop session', archive: null, snooze: false, resume: false });
 });
 
 test('an archived session offers to unarchive', () => {
@@ -136,6 +136,14 @@ test('an archived session offers to unarchive', () => {
 
   /* Then */
   assert.equal(buttons.archive, 'Unarchive');
+});
+
+test('an archived session cannot be snoozed', () => {
+  /* When */
+  const buttons = rowButtons(session('c', { archived: 1 }));
+
+  /* Then */
+  assert.equal(buttons.snooze, false);
 });
 
 // ── Rename ──

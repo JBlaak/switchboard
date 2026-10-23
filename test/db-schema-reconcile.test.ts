@@ -296,3 +296,20 @@ test('the auto-fix history table is created, and its rows survive the next open'
   const rows = sqlite(dir, `console.log(JSON.stringify(db.prepare('SELECT kind, head_sha FROM auto_fix_attempts').all()));`, true);
   assert.deepEqual(JSON.parse(rows || '[]'), [{ kind: 'attempt', head_sha: 'aaa' }]);
 });
+
+test('a session_meta table from before snoozing gains snoozedUntil, and keeps its rows', () => {
+  /* Given */
+  const dir = dataDir('switchboard-db-snooze-');
+  sqlite(dir, `
+    db.exec('CREATE TABLE session_meta (sessionId TEXT PRIMARY KEY, name TEXT, starred INTEGER DEFAULT 0, archived INTEGER DEFAULT 0)');
+    db.prepare("INSERT INTO session_meta (sessionId, name) VALUES ('s1', 'Kept')").run();
+  `);
+
+  /* When */
+  const r = openDatabase(dir);
+
+  /* Then */
+  assert.equal(r.status, 0, r.stderr);
+  const row = JSON.parse(sqlite(dir, `console.log(JSON.stringify(db.prepare("SELECT * FROM session_meta WHERE sessionId = 's1'").get()))`, true));
+  assert.deepEqual(row, { sessionId: 's1', name: 'Kept', starred: 0, archived: 0, snoozedUntil: null });
+});

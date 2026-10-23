@@ -174,6 +174,11 @@ function reconcileColumns(db: Database.Database): void {
     db.exec('DELETE FROM cache_meta');
   }
 
+  // When a snoozed session's row comes back, as an ISO time; NULL when awake.
+  const metaColumns = new Set(
+    db.prepare<[], { name: string }>('PRAGMA table_info(session_meta)').all().map(c => c.name));
+  if (!metaColumns.has('snoozedUntil')) db.exec('ALTER TABLE session_meta ADD COLUMN snoozedUntil TEXT');
+
   // An action's card details (an auto-fix attempt, the attempts it gave up
   // after), as JSON. A queue table from before it has no rows that need any.
   const actionColumns = new Set(

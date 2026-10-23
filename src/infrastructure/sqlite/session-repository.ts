@@ -25,6 +25,7 @@ export class SqliteSessionRepository implements SessionRepository {
   readonly #metaUpsertName;
   readonly #metaToggleStar;
   readonly #metaUpsertArchived;
+  readonly #metaUpsertSnoozed;
 
   readonly #cacheCount;
   readonly #cacheGetAll;
@@ -56,6 +57,10 @@ export class SqliteSessionRepository implements SessionRepository {
     this.#metaUpsertArchived = db.prepare<[string, 0 | 1]>(`
       INSERT INTO session_meta (sessionId, archived) VALUES (?, ?)
       ON CONFLICT(sessionId) DO UPDATE SET archived = excluded.archived
+    `);
+    this.#metaUpsertSnoozed = db.prepare<[string, string | null]>(`
+      INSERT INTO session_meta (sessionId, snoozedUntil) VALUES (?, ?)
+      ON CONFLICT(sessionId) DO UPDATE SET snoozedUntil = excluded.snoozedUntil
     `);
 
     this.#cacheCount = db.prepare<[], { cnt: number }>('SELECT COUNT(*) as cnt FROM session_cache');
@@ -127,6 +132,10 @@ export class SqliteSessionRepository implements SessionRepository {
 
   setArchived(sessionId: string, archived: boolean): void {
     this.#metaUpsertArchived.run(sessionId, archived ? 1 : 0);
+  }
+
+  setSnoozedUntil(sessionId: string, until: string | null): void {
+    this.#metaUpsertSnoozed.run(sessionId, until);
   }
 
   // ── Cache ──

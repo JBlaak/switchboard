@@ -85,10 +85,11 @@ function newestVisibleLabel(spec: FixtureSpec): string | null {
 // ── Sidebar ──
 
 /** A sidebar filter toggle, by its tooltip. */
-export function sidebarFilter(page: Page, filter: 'running' | 'pinned'): Locator {
+export function sidebarFilter(page: Page, filter: 'running' | 'pinned' | 'snoozed'): Locator {
   const names = {
     running: 'Show running only',
     pinned: 'Show pinned only',
+    snoozed: 'Show snoozed only',
   } as const;
   return page.getByRole('button', { name: names[filter], exact: true });
 }

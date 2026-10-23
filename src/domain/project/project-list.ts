@@ -127,6 +127,7 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
         name: meta?.name || null,
         starred: meta?.starred || 0,
         archived: meta?.archived || 0,
+        snoozedUntil: meta?.snoozedUntil || null,
         type: 'remote',
         remoteKind: record.kind,
       }));

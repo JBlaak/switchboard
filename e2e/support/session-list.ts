@@ -191,15 +191,20 @@ export async function failInvoke(app: ElectronApplication, channel: keyof typeof
   }, { channel: INVOKE[channel], message });
 }
 
-/** What main has stored for one session (name, star, archive), read the way the renderer reads it. */
+/** What main has stored for one session (name, star, archive, snooze), read the way the renderer reads it. */
 export async function storedSession(page: Page, sessionId: string): Promise<{
-  name: string | null; starred: number; archived: number;
+  name: string | null; starred: number; archived: number; snoozedUntil: string | null;
 } | null> {
   return await page.evaluate(async (id) => {
     const projects = await window.api.getProjects(true);
     for (const project of projects) {
       const found = project.sessions.find(s => s.sessionId === id);
-      if (found) return { name: found.name ?? null, starred: found.starred ?? 0, archived: found.archived ?? 0 };
+      if (found) {
+        return {
+          name: found.name ?? null, starred: found.starred ?? 0, archived: found.archived ?? 0,
+          snoozedUntil: found.snoozedUntil ?? null,
+        };
+      }
     }
     return null;
   }, sessionId);

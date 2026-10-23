@@ -17,6 +17,8 @@ export interface SessionRepository {
   /** Flips the star and answers with the value it settled on. */
   toggleStar(sessionId: string): 0 | 1;
   setArchived(sessionId: string, archived: boolean): void;
+  /** An ISO time the row stays out of the list until, or null to wake it. */
+  setSnoozedUntil(sessionId: string, until: string | null): void;
 
   // ── Cache: a rebuildable copy of what the transcripts say ──
   isCachePopulated(): boolean;

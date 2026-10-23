@@ -53,6 +53,8 @@ export interface SessionMeta {
   name: string | null;
   starred: 0 | 1;
   archived: 0 | 1;
+  /** An ISO time; null when the session is not snoozed. */
+  snoozedUntil: string | null;
 }
 
 /** A cached session: `Session` minus the fields too large to keep in the cache. */
@@ -95,6 +97,8 @@ export interface SessionRow {
   name: string | null;
   starred: number;
   archived: number;
+  /** An ISO time the row stays out of the list until; absent or null when awake. */
+  snoozedUntil?: string | null;
   /** Absent for ordinary Claude sessions read off disk. */
   type?: SessionKind;
   remoteKind?: string;
@@ -124,6 +128,7 @@ export function toSessionRow(cached: CachedSession, meta: SessionMeta | null | u
     name: meta?.name || null,
     starred: meta?.starred || 0,
     archived: meta?.archived || 0,
+    snoozedUntil: meta?.snoozedUntil || null,
   };
 }
 
