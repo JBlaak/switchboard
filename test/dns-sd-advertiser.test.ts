@@ -93,3 +93,15 @@ test('the host name is the first label of the machine name, under .local', () =>
   assert.equal(localHostName('joris-mbp.local.'), 'joris-mbp.local');
   assert.equal(localHostName('joris-mbp'), 'joris-mbp.local');
 });
+
+test('the Mac\'s own Bonjour name wins over the host name, which stays the fallback', () => {
+  /* Given */
+  const named = new DnsSdAdvertiser({ log: silentLog, hostname: () => 'mac', localName: () => 'Joriss-MacBook-Pro-2.local' });
+  const unnamed = new DnsSdAdvertiser({ log: silentLog, hostname: () => 'Joris-MBP.fritz.box', localName: () => null });
+
+  /* When */
+  const names = [named.hostName(), unnamed.hostName()];
+
+  /* Then */
+  assert.deepEqual(names, ['Joriss-MacBook-Pro-2.local', 'joris-mbp.local']);
+});
