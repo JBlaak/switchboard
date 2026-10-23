@@ -1,9 +1,7 @@
 package dev.jblaak.switchboard.ui.connected
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -21,16 +19,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.jblaak.switchboard.R
-import dev.jblaak.switchboard.theme.StatusColors
 import dev.jblaak.switchboard.theme.SwitchboardTheme
+import nl.jblaak.patch.PatchAvatar
+import nl.jblaak.patch.PatchColors
+import nl.jblaak.patch.PatchMood
+import nl.jblaak.patch.PatchStyle
 
 /** A screen's top bar: back (or close), a title with an optional line under it, and anything at the end. */
 @Composable
@@ -68,36 +65,19 @@ fun ScreenTopBar(
     }
 }
 
-/** Patch, as the small rounded tile that speaks in the Ask Patch flow. */
+/** What Patch says, in a bubble beside Patch itself, wearing [mood]'s face. */
 @Composable
-fun PatchAvatar(size: Dp, tone: StatusColors) {
-    val label = stringResource(R.string.ask_patch_name)
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .size(size)
-            .clip(RoundedCornerShape(size * 0.36f))
-            .background(tone.fill)
-            .border(1.dp, tone.ink.copy(alpha = 0.35f), RoundedCornerShape(size * 0.36f))
-            .semantics { contentDescription = label },
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = (size.value / 5).sp, letterSpacing = 0.sp),
-            color = tone.ink,
-        )
-    }
-}
-
-/** What Patch says, in a bubble beside its avatar. */
-@Composable
-fun PatchSays(text: String, avatarSize: Dp, tone: StatusColors, modifier: Modifier = Modifier) {
+fun PatchSays(text: String, avatarSize: Dp, mood: PatchMood, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier,
     ) {
-        PatchAvatar(avatarSize, tone)
+        PatchAvatar(
+            mood = mood,
+            modifier = Modifier.size(avatarSize),
+            colors = PatchColors.of(PatchStyle.Patch, dark = SwitchboardTheme.colors.isDark),
+        )
         Text(
             text = text,
             style = MaterialTheme.typography.titleMedium,

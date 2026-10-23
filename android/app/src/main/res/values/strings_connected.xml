@@ -9,7 +9,6 @@
     <string name="ask_filter">Filter projects</string>
     <string name="ask_first_prompt">First prompt Patch wrote</string>
     <string name="ask_not_connected">Not connected to your Mac. Try again in a moment.</string>
-    <string name="ask_patch_name">Patch</string>
     <string name="ask_pick_myself">Pick the project myself</string>
     <string name="ask_pick_title">Pick a project</string>
     <string name="ask_projects_another">Which project should it start in?</string>
