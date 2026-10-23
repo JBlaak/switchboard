@@ -313,3 +313,30 @@ test('a session_meta table from before snoozing gains snoozedUntil, and keeps it
   const row = JSON.parse(sqlite(dir, `console.log(JSON.stringify(db.prepare("SELECT * FROM session_meta WHERE sessionId = 's1'").get()))`, true));
   assert.deepEqual(row, { sessionId: 's1', name: 'Kept', starred: 0, archived: 0, snoozedUntil: null });
 });
+
+// The enrolled phones (#194) must be there on every database, including one a
+// parallel branch migrated past this one's version.
+test('a foreign higher-version database gains phone_devices, and its rows survive the next open', () => {
+  /* Given */
+  const dir = dataDir('switchboard-db-phone-devices-');
+  sqlite(dir, FOREIGN_V9);
+  opened(dir);
+  sqlite(dir, `
+    db.prepare(\`INSERT INTO phone_devices (id, name, fingerprint, paired_at, last_seen_at)
+      VALUES ('d1', 'Pixel 9 Pro', 'aa', 1700000000000, NULL)\`).run();
+  `);
+
+  /* When */
+  const r = openDatabase(dir);
+
+  /* Then */
+  assert.equal(r.status, 0, r.stderr);
+  const state = JSON.parse(sqlite(dir, `console.log(JSON.stringify({
+    cols: db.prepare('PRAGMA table_info(phone_devices)').all().map(c => c.name),
+    rows: db.prepare('SELECT id FROM phone_devices').all(),
+  }));`, true));
+  assert.deepEqual(state, {
+    cols: ['id', 'name', 'fingerprint', 'paired_at', 'last_seen_at'],
+    rows: [{ id: 'd1' }],
+  });
+});

@@ -36,6 +36,7 @@ import { installPlan } from '../ui/session-work/plan/install-plan';
 import { installPlanPage } from '../ui/plan-page/install-plan-page';
 import { installProjectPage } from '../ui/project-page/install-project-page';
 import { installMainArea } from '../ui/main-area/install-main-area';
+import { installPhoneAccess } from '../ui/phone-access/install-phone-access';
 import type { GlobalSettings } from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -58,6 +59,7 @@ export function bootstrap(): void {
   installPlan();
   installPlanPage();
   installProjectPage();
+  installPhoneAccess();
   followColorSchemeInTerminals();
   installTerminalProbe();
   // The surfaces that have moved to React portal out of it.
