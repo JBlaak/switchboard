@@ -342,6 +342,38 @@ test('an archive that fails tells the phone why', () => {
   assert.deepEqual(phone.of('archive-result'), [{ type: 'archive-result', sessionId: 's1', ok: false, error: 'Could not stop it' }]);
 });
 
+test('a session archived elsewhere is pushed to every phone, under the id it is running under now', () => {
+  /* Given */
+  const h = harness();
+  h.addSession('old');
+  const phone = h.connect();
+  const other = h.connect(OTHER_PHONE);
+  h.registry.rekey('old', 'new');
+  h.service.sessionForked('old', 'new');
+  phone.clear();
+  other.clear();
+
+  /* When */
+  h.service.sessionArchived('old');
+
+  /* Then */
+  assert.deepEqual(phone.of('archived'), [{ type: 'archived', sessionId: 'new' }]);
+  assert.deepEqual(other.of('archived'), [{ type: 'archived', sessionId: 'new' }]);
+});
+
+test('a session that has already exited is pushed as archived under the id it had', () => {
+  /* Given */
+  const h = harness();
+  const phone = h.connect();
+  phone.clear();
+
+  /* When */
+  h.service.sessionArchived('gone');
+
+  /* Then */
+  assert.deepEqual(phone.of('archived'), [{ type: 'archived', sessionId: 'gone' }]);
+});
+
 // ── The terminal ──
 
 test('attach sends attached, replays the buffer, then streams; a second phone gets its own replay', () => {

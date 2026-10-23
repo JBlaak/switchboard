@@ -46,7 +46,7 @@ class SessionModel(
     private val scope: CoroutineScope,
 ) {
 
-    private val facts = MutableStateFlow(Facts(sessionId, owner = null, ended = false, archived = false, startedIn = startedIn))
+    private val facts = MutableStateFlow(Facts(sessionId, owner = null, ended = false, archived = false, archivedElsewhere = false, startedIn = startedIn))
     private val writes = Channel<TerminalWrite>(Channel.UNLIMITED)
     private var size: TerminalSize? = null
     private var attached = false
@@ -157,6 +157,11 @@ class SessionModel(
                 attached = false
                 facts.update { it.copy(ended = true) }
             }
+            // Archived from here, the screen is going already, after its confetti.
+            is ServerMessage.Archived -> if (message.sessionId == sessionId && !facts.value.archived) {
+                attached = false
+                facts.update { it.copy(archivedElsewhere = true) }
+            }
             else -> Unit
         }
     }
@@ -182,6 +187,7 @@ class SessionModel(
             pendingQuestions = questions.firstOrNull(),
             waitingInTerminal = questions.isEmpty() && session?.waiting == WaitingReason.Terminal,
             startedIn = facts.startedIn,
+            archivedElsewhere = facts.archivedElsewhere,
         )
     }
 
@@ -192,6 +198,8 @@ class SessionModel(
         val ended: Boolean,
         /** Archived from here: the screen is about to go. */
         val archived: Boolean,
+        /** Archived on the Mac or another phone. */
+        val archivedElsewhere: Boolean,
         val startedIn: String?,
     )
 }
@@ -208,6 +216,8 @@ data class SessionScreenState(
     val pendingQuestions: PendingQuestions?,
     val waitingInTerminal: Boolean,
     val startedIn: String?,
+    /** Archived on the Mac or another phone: the screen goes back to the list, as the Mac's view closes. */
+    val archivedElsewhere: Boolean = false,
 )
 
 /** Whether this phone shows the terminal, and if not, why. */

@@ -48,8 +48,10 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
     return { name: name || null };
   });
 
+  // The window has closed it already; a phone with it open closes it too.
   ipc.handle(INVOKE.archiveSession, (sessionId: string, archived: boolean) => {
     app.repository.setArchived(sessionId, archived);
+    if (archived) app.phoneSessions.sessionArchived(sessionId);
     return { archived: archived ? 1 : 0 };
   });
 

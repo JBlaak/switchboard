@@ -93,6 +93,11 @@ sealed interface ServerMessage {
         val error: String? = null,
     ) : ServerMessage
 
+    /** Archived on the Mac or from another phone: an open screen of it closes. */
+    @Serializable
+    @SerialName("archived")
+    data class Archived(val sessionId: String) : ServerMessage
+
     @Serializable
     @SerialName("ask-result")
     data class AskResult(val requestId: String, val result: PhoneAskResult) : ServerMessage

@@ -387,4 +387,58 @@ class SessionModelTest {
         assertEquals("Session s-1", model.state.value.name)
         assertEquals(TerminalAccess.Here, model.state.value.access)
     }
+
+    @Test
+    fun `a session archived elsewhere closes its screen`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("s-1"))))
+        model.terminalOpened(size)
+
+        /* When */
+        link.macSays(ServerMessage.Exited("s-1", exitCode = 0))
+        link.macSays(ServerMessage.Archived("s-1"))
+
+        /* Then */
+        assertTrue(model.state.value.archivedElsewhere)
+    }
+
+    @Test
+    fun `another session archived elsewhere leaves this screen open`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+
+        /* When */
+        link.macSays(ServerMessage.Archived("s-2"))
+
+        /* Then */
+        assertFalse(model.state.value.archivedElsewhere)
+    }
+
+    @Test
+    fun `a session archived from here waits for its confetti rather than closing at once`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("s-1"))))
+
+        /* When */
+        model.archive()
+        link.macSays(ServerMessage.Archived("s-1"))
+
+        /* Then */
+        assertFalse(model.state.value.archivedElsewhere)
+    }
+
+    @Test
+    fun `a session archived elsewhere under its new id closes its screen`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        link.macSays(ServerMessage.SessionRekeyed(from = "s-1", to = "s-2"))
+
+        /* When */
+        link.macSays(ServerMessage.Archived("s-2"))
+
+        /* Then */
+        assertTrue(model.state.value.archivedElsewhere)
+    }
 }

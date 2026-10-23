@@ -19,6 +19,8 @@ import { INVOKE, SEND } from '../src/ipc/channels';
 import { PhoneEventTee, buildPhoneAccess } from '../src/main/phone-access';
 import { registerPhoneAccessHandlers } from '../src/main/ipc/phone-access-handlers';
 import { registerQuestionHandlers } from '../src/main/ipc/question-handlers';
+import { registerSessionHandlers } from '../src/main/ipc/session-handlers';
+import { sessionArchiver } from '../src/main/stop-session';
 import { registerTerminalHandlers } from '../src/main/ipc/terminal-handlers';
 import { fakeRenderer, resizingPty, silentLog } from './support/fakes';
 import type { FakeRenderer } from './support/fakes';
@@ -28,6 +30,7 @@ import type { ClientMessage, ServerMessage } from '../src/domain/phone/protocol'
 import type { PhoneAccessState } from '../src/domain/phone/state';
 import type { Project } from '../src/domain/project/project';
 import type { Container } from '../src/main/composition-root';
+import type { SessionStopper } from '../src/main/stop-session';
 import type { IpcRegistrar } from '../src/main/ipc/registrar';
 
 /**
@@ -138,6 +141,21 @@ async function mac() {
     },
   };
 
+  // Stopping a session ends it at once, as a kill that lands would.
+  const archived = new Set<string>();
+  const stopper: SessionStopper = {
+    registry,
+    remote: {} as SessionStopper['remote'],
+    lifecycle: {
+      stop: (key: string, session: ActiveSession) => { session.exited = true; renderer.processExited(key, 0); },
+      retire: (key: string, session: ActiveSession) => { session.exited = true; renderer.processExited(key, 0); },
+    } as unknown as SessionStopper['lifecycle'],
+    terminals: { isAlive: () => true } as unknown as SessionStopper['terminals'],
+  };
+  const repository = {
+    setArchived: (id: string, value: boolean) => { if (value) archived.add(id); else archived.delete(id); },
+  };
+
   const devices = memoryDevices();
   const phone = buildPhoneAccess({
     identity: new OpensslIdentityStore({
@@ -153,7 +171,7 @@ async function mac() {
     questions,
     router: () => ({ route: async () => ({ kind: 'cancelled' as const }), cancel() {} }),
     launcher,
-    archiver: { archive: () => ({ ok: true }) },
+    archiver: sessionArchiver({ ...stopper, repository, renderer }),
     settings: {
       get: <T>(key: string) => (settings.get(key) ?? null) as T | null,
       set: (key: string, value: unknown) => { settings.set(key, value); },
@@ -171,12 +189,15 @@ async function mac() {
   sessions = phone.sessions;
 
   const ipc = recordingRegistrar();
-  const app = { registry, renderer, launcher, questions, phoneAccess: phone.access, phoneSessions: phone.sessions } as unknown as Container;
+  const app = {
+    ...stopper, repository, renderer, launcher, questions, phoneAccess: phone.access, phoneSessions: phone.sessions,
+  } as unknown as Container;
   registerTerminalHandlers(ipc.ipc, app);
+  registerSessionHandlers(ipc.ipc, app);
   registerQuestionHandlers(ipc.ipc, app);
   registerPhoneAccessHandlers(ipc.ipc, app);
 
-  return { ...phone, registry, devices, window, renderer, questions, advertised, launches, addSession, ipc };
+  return { ...phone, registry, devices, window, renderer, questions, advertised, launches, addSession, ipc, archived };
 }
 
 // ── The phone ──
@@ -443,5 +464,64 @@ test('a session a phone starts is given a row on the Mac at once, owned by the p
   assert.equal(m.launches[0].options?.initialPrompt, 'Fix the login');
   assert.deepEqual(m.window.only('sessionStarted'), [['sessionStarted', started.sessionId, APP]]);
   assert.deepEqual(m.window.only('terminalOwnerChanged'), [['terminalOwnerChanged', started.sessionId, { kind: 'device', deviceId: 'pixel', name: 'Pixel 9 Pro' }]]);
+  phone.close();
+});
+
+test('a session archived on the Mac leaves the phone: it ends, is pushed as archived, and drops off the list', async (t) => {
+  /* Given */
+  const m = await mac();
+  t.after(() => m.access.shutdown());
+  m.addSession('s1');
+  const phone = await pairedPhone(m);
+  await until(() => phone.of('sessions').at(-1)?.sessions.length === 1, 's1 in the list');
+  phone.send({ type: 'attach', sessionId: 's1', cols: 40, rows: 20 });
+  await phone.next('attached');
+
+  /* When */
+  // What the renderer's archive does (`archiveSessionRow`): stop, then archive the row.
+  await m.ipc.invoke(INVOKE.stopSession, 's1');
+  await m.ipc.invoke(INVOKE.archiveSession, 's1', true);
+
+  /* Then */
+  assert.deepEqual(await phone.next('archived'), { type: 'archived', sessionId: 's1' });
+  await until(() => phone.of('sessions').at(-1)?.sessions.length === 0, 's1 off the list');
+  assert.deepEqual(phone.of('exited'), [{ type: 'exited', sessionId: 's1', exitCode: 0 }]);
+  assert.ok(m.archived.has('s1'));
+  phone.close();
+});
+
+test('a session archived on a phone leaves the Mac and every other phone', async (t) => {
+  /* Given */
+  const m = await mac();
+  t.after(() => m.access.shutdown());
+  m.addSession('s1');
+  const phone = await pairedPhone(m);
+  await until(() => phone.of('sessions').at(-1)?.sessions.length === 1, 's1 in the list');
+
+  /* When */
+  phone.send({ type: 'archive', sessionId: 's1' });
+
+  /* Then */
+  assert.deepEqual(await phone.next('archive-result'), { type: 'archive-result', sessionId: 's1', ok: true });
+  assert.deepEqual(await phone.next('archived'), { type: 'archived', sessionId: 's1' });
+  await until(() => phone.of('sessions').at(-1)?.sessions.length === 0, 's1 off the list');
+  assert.ok(m.archived.has('s1'));
+  assert.deepEqual(m.window.only('sessionArchived'), [['sessionArchived', 's1']]);
+  phone.close();
+});
+
+test('bringing a session back on the Mac pushes nothing to the phones', async (t) => {
+  /* Given */
+  const m = await mac();
+  t.after(() => m.access.shutdown());
+  const phone = await pairedPhone(m);
+  phone.clear();
+
+  /* When */
+  await m.ipc.invoke(INVOKE.archiveSession, 's1', false);
+  await nudged();
+
+  /* Then */
+  assert.deepEqual(phone.of('archived'), []);
   phone.close();
 });

@@ -34,7 +34,7 @@ import type { PhoneSessionsServiceDeps } from '../application/services/phone-ses
 /** What the sessions service is told of, from where the renderer is. */
 export type PhoneSessionEvents = Pick<PhoneSessionsService,
   | 'terminalData' | 'processExited' | 'sessionForked' | 'cliBusyState' | 'sessionNeedsAttention'
-  | 'questionsAsked' | 'questionsSettled' | 'sessionsChanged'>;
+  | 'questionsAsked' | 'questionsSettled' | 'sessionsChanged' | 'sessionArchived'>;
 
 /**
  * The renderer gateway, with the phones listening in: every push goes to the
@@ -148,6 +148,7 @@ export class PhoneEventTee implements RendererGateway {
 
   sessionArchived(sessionId: string): void {
     this.inner.sessionArchived(sessionId);
+    this.phones()?.sessionArchived(sessionId);
   }
 }
 
