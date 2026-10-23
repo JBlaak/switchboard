@@ -27,6 +27,10 @@ internal class ScriptedMac : AutoCloseable {
 
     val server = MockWebServer()
 
+    /** The Mac's side of every WebSocket that opened, closed before the server so shutdown never waits on one. */
+    private val openSockets = java.util.concurrent.CopyOnWriteArrayList<WebSocket>()
+
+
     val address: MacAddress get() = MacAddress(server.hostName, server.port)
 
     init {
@@ -42,6 +46,10 @@ internal class ScriptedMac : AutoCloseable {
     /** The next connection upgrades to a WebSocket whose text frames go to [script] by their `type`. */
     fun enqueueWebSocket(script: (type: String, webSocket: WebSocket) -> Unit) {
         val listener = object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
+                openSockets += webSocket
+            }
+
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val type = Json.parseToJsonElement(text).jsonObject.getValue("type").jsonPrimitive.content
                 script(type, webSocket)
@@ -67,6 +75,7 @@ internal class ScriptedMac : AutoCloseable {
     }
 
     override fun close() {
+        openSockets.forEach { runCatching { it.close(1001, "Test over") } }
         server.close()
     }
 

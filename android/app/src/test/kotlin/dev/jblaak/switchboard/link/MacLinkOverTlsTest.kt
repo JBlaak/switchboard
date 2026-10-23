@@ -37,6 +37,7 @@ class MacLinkOverTlsTest {
 
     @After
     fun tearDown() {
+        link.stop()
         scope.cancel()
         mac.close()
     }
