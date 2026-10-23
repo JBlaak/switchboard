@@ -99,6 +99,17 @@ export const INVOKE = {
   planProjectPlans: 'plan:project-plans',
   // The project page (#172)
   projectOverview: 'project:overview',
+
+  // Phone access (#194)
+  phoneAccessGet: 'phone-access:get',
+  phoneAccessSetEnabled: 'phone-access:set-enabled',
+  phoneAccessStartPairing: 'phone-access:start-pairing',
+  phoneAccessStopPairing: 'phone-access:stop-pairing',
+  phoneAccessConfirmPairing: 'phone-access:confirm-pairing',
+  phoneAccessRevoke: 'phone-access:revoke',
+  phoneAccessReset: 'phone-access:reset',
+  terminalOwners: 'terminal-owners',
+  useTerminalHere: 'use-terminal-here',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -136,6 +147,8 @@ export const EVENT = {
   prStatusChanged: 'pr-status:changed',
   launchRequested: 'quick-ask:launch-requested',
   pickerRequested: 'quick-ask:picker-requested',
+  phoneAccessChanged: 'phone-access:changed',
+  terminalOwnerChanged: 'terminal-owner:changed',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */

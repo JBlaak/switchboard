@@ -23,6 +23,7 @@ import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/
 import type { SessionWorkSnapshot } from '../../domain/session-work/model';
 import type { PullRequestStatusChange } from '../../domain/session-work/status';
 import type { RendererGateway } from '../../application/ports/renderer-gateway';
+import type { PhoneAccessState, TerminalOwner } from '../../domain/phone/state';
 
 export class ElectronRendererGateway implements RendererGateway {
   /** The window whose renderer said it is ready, while it is the current one. */
@@ -127,6 +128,14 @@ export class ElectronRendererGateway implements RendererGateway {
 
   pickerRequested(initialPrompt: string, reason?: string): void {
     this.#sendWhenReady(EVENT.pickerRequested, initialPrompt, reason);
+  }
+
+  phoneAccessChanged(state: PhoneAccessState): void {
+    this.#send(EVENT.phoneAccessChanged, state);
+  }
+
+  terminalOwnerChanged(sessionId: string, owner: TerminalOwner): void {
+    this.#send(EVENT.terminalOwnerChanged, sessionId, owner);
   }
 
   #sendWhenReady(channel: string, ...args: unknown[]): void {

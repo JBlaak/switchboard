@@ -51,6 +51,17 @@ const api: SwitchboardApi = {
   answerQuestions: (sessionId, toolUseId, answers) =>
     ipcRenderer.invoke(INVOKE.answerQuestions, sessionId, toolUseId, answers),
 
+  // ── Phone access (#194) ──
+  getPhoneAccess: () => ipcRenderer.invoke(INVOKE.phoneAccessGet),
+  setPhoneAccessEnabled: (enabled) => ipcRenderer.invoke(INVOKE.phoneAccessSetEnabled, enabled),
+  startPhonePairing: () => ipcRenderer.invoke(INVOKE.phoneAccessStartPairing),
+  stopPhonePairing: () => ipcRenderer.invoke(INVOKE.phoneAccessStopPairing),
+  confirmPhonePairing: (requestId, accept) => ipcRenderer.invoke(INVOKE.phoneAccessConfirmPairing, requestId, accept),
+  revokePhoneDevice: (deviceId) => ipcRenderer.invoke(INVOKE.phoneAccessRevoke, deviceId),
+  resetPhoneIdentity: () => ipcRenderer.invoke(INVOKE.phoneAccessReset),
+  getTerminalOwners: () => ipcRenderer.invoke(INVOKE.terminalOwners),
+  useTerminalHere: (sessionId) => ipcRenderer.invoke(INVOKE.useTerminalHere, sessionId),
+
   // ── Usage ──
   getUsage: () => ipcRenderer.invoke(INVOKE.getUsage),
 
@@ -140,6 +151,8 @@ const api: SwitchboardApi = {
   onPrStatusChanged: (cb) => subscribe(EVENT.prStatusChanged, (_e, change) => cb(change)),
   onLaunchRequested: (cb) => subscribe(EVENT.launchRequested, (_e, projectPath, initialPrompt) => cb(projectPath, initialPrompt)),
   onPickerRequested: (cb) => subscribe(EVENT.pickerRequested, (_e, initialPrompt, reason) => cb(initialPrompt, reason)),
+  onPhoneAccessChanged: (cb) => subscribe(EVENT.phoneAccessChanged, (_e, state) => cb(state)),
+  onTerminalOwnerChanged: (cb) => subscribe(EVENT.terminalOwnerChanged, (_e, sessionId, owner) => cb(sessionId, owner)),
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),
