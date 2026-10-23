@@ -14,6 +14,7 @@ import type { StoredFontSettings } from '../terminal/terminal-input';
 import type { OpenSession } from '../../state/session-store';
 import type { SessionRow } from '../../../domain/session/session';
 import { Terminal } from '@xterm/xterm';
+import type { ILink, ILinkProvider } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
@@ -38,6 +39,7 @@ import { remoteStatus } from '../../state/remote-status-store';
 import { TERMINAL_THEME } from '../terminal/terminal-themes';
 import { isAtBottom } from './write-buffer';
 import { posixQuote } from '../../../domain/shell/quoting';
+import { bangCommandKeys, findBangCommands, type BangCell } from '../../../domain/terminal/bang-command';
 
 // --- Terminal font ---
 // Global font settings shared by every xterm instance. Mutated by applyTerminalFont
@@ -318,6 +320,10 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
   terminal.loadAddon(new WebLinksAddon((_event, url) => {
     window.api.openExternal(url);
   }));
+  // A plain terminal has no Claude prompt to take `!`; there it is history expansion.
+  if (session.type !== 'terminal') {
+    terminal.registerLinkProvider(bangCommandLinks(terminal, () => entry.session.sessionId));
+  }
   const searchAddon = new SearchAddon();
   terminal.loadAddon(searchAddon);
   terminal.loadAddon(new UnicodeGraphemesAddon());
@@ -412,6 +418,44 @@ export function showSession(sessionId: string): void {
     entry.terminal.focus();
     fitAndScroll(entry);
   }
+}
+
+// --- Clickable `! command`s ---
+// A command Claude suggests running as `! git push …` is a link; clicking it
+// types it at the prompt, so it runs in the session. See `domain/terminal/bang-command`.
+
+/** The gap between the keys a command is typed as, so each lands before the next. */
+const BANG_KEY_GAP_MS = 150;
+
+function bangCommandLinks(terminal: Terminal, getSessionId: () => string): ILinkProvider {
+  return {
+    provideLinks(y, callback) {
+      const line = terminal.buffer.active.getLine(y - 1);
+      if (!line) { callback(undefined); return; }
+      const cells: BangCell[] = [];
+      for (let x = 0; x < line.length; x++) {
+        const cell = line.getCell(x);
+        if (!cell) break;
+        cells.push({
+          text: cell.getChars() || (cell.getWidth() === 0 ? '' : ' '),
+          style: `${cell.getFgColorMode()}:${cell.getFgColor()}`,
+          plain: cell.isFgDefault(),
+        });
+      }
+      const links = findBangCommands(cells).map(({ start, end, command }): ILink => ({
+        range: { start: { x: start + 1, y }, end: { x: end + 1, y } },
+        text: command,
+        activate: () => runBangCommand(getSessionId(), command),
+      }));
+      callback(links.length ? links : undefined);
+    },
+  };
+}
+
+function runBangCommand(sessionId: string, command: string): void {
+  bangCommandKeys(command).forEach((key, i) => {
+    setTimeout(() => window.api.sendInput(sessionId, key), i * BANG_KEY_GAP_MS);
+  });
 }
 
 function setupDragAndDrop(container: HTMLElement, getSessionId: () => string | null): void {

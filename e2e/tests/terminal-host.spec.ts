@@ -135,6 +135,29 @@ test.describe('terminal host', () => {
       }, { message: `${url} to open` }).toContain(url);
     }
   });
+
+  test('clicking a `! command` types it at the prompt, so it runs in the session', async ({ page, home }) => {
+    /* Given */
+    const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
+    // Inline code the way the CLI draws it: no backticks, a colour of its own.
+    await claude.println('To push, run \x1b[38;2;177;185;249m! git push -u origin nohrd-faq-sync\x1b[39m in the prompt.');
+    await expectTerminalText(page, S.loginFix, 'in the prompt.');
+
+    /* When */
+    const at = await findInTerminal(page, S.loginFix, '! git push');
+    const point = await cellPoint(page, S.loginFix, at.column + 6, at.viewportRow);
+    // Hovered until xterm finds the link and shows the pointer, then clicked once.
+    await expect.poll(async () => {
+      await page.mouse.move(point.x, point.y);
+      await page.mouse.move(point.x + 1, point.y);
+      return page.locator('.terminal-container.visible .xterm-cursor-pointer').count();
+    }, { message: 'the command to be a link' }).toBe(1);
+    await page.mouse.click(point.x + 1, point.y);
+
+    /* Then */
+    await claude.waitForInput('\r');
+    expect(claude.input()).toBe('!git push -u origin nohrd-faq-sync\r');
+  });
 });
 
 test.describe('terminal input', () => {
