@@ -28,6 +28,8 @@ export interface OnScreen {
   answering: Answering | undefined;
   /** The panel is up: a set is on screen and the user has not chosen the terminal. */
   up: boolean;
+  /** The panel is up but stepped aside, showing the terminal under it. */
+  peeking: boolean;
   /** Bumped each time a session is shown, even the one already active. */
   shown: number;
 }
@@ -41,5 +43,6 @@ export function useOnScreen(): OnScreen {
   const pending = useStore(s => (open && sessionId ? s.questions.bySession[sessionId] : undefined));
   const answering = useStore(s => (pending ? s.answers.byToolUse[pending.toolUseId] : undefined));
   const up = !!pending && !!answering && answering.view === 'questions';
-  return { sessionId, open, pending, answering, up, shown };
+  const peeking = up && answering.peeking;
+  return { sessionId, open, pending, answering, up, peeking, shown };
 }

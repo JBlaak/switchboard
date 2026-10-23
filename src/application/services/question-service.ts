@@ -7,6 +7,11 @@
  * request and the renderer — it does not know it is HTTP, only that it was
  * handed a way to reply and will be told if the request is withdrawn.
  *
+ * A grilling round is the other kind of set: questions written out at the end
+ * of a turn, which the Stop hook hands us after the fact. Nothing is held for
+ * it. It waits until it is answered — by typing the reply into the session —
+ * or until the user replies in the terminal, or the session ends.
+ *
  * Pending sets are keyed by the ActiveSession object rather than an id,
  * because a fork or plan-accept re-keys a running session while its question
  * is still on screen; the renderer always hears about it under the session's
@@ -15,15 +20,18 @@
 import {
   QUESTION_HOOK_TIMEOUT_SECONDS, questionHookResponse, questionHookSettings,
 } from '../../domain/questions/question';
+import { grillReply } from '../../domain/questions/grill';
 import type {
-  Answers, AskedQuestions, PendingQuestions, QuestionsOutcome,
+  Answers, AskedQuestions, PendingQuestions, Question, QuestionsOutcome,
 } from '../../domain/questions/question';
 import type { ActiveSession } from '../model/active-session';
 import type { SessionRegistry } from '../model/session-registry';
 import type { Clock } from '../ports/clock';
 import type { Logger } from '../ports/logger';
 import type { QuestionHookEndpoint } from '../ports/question-hook';
+import type { Disposable } from '../ports/git-workspace';
 import type { RendererGateway } from '../ports/renderer-gateway';
+import type { SessionPrompter } from '../ports/session-prompter';
 
 /** How the hook request is answered; called at most once per request. */
 export type QuestionReply = (json: Record<string, unknown>) => void;
@@ -43,25 +51,45 @@ const NO_DECISION: Record<string, unknown> = {};
 
 const NO_OP_HANDLE: PendingQuestionsHandle = { withdraw() {} };
 
-interface Entry {
+interface BaseEntry {
   /** The registry key at the time of asking; the fallback when never re-keyed. */
   readonly key: string;
+  readonly toolUseId: string;
+  readonly questions: Question[];
+  readonly askedAt: number;
+}
+
+/** An AskUserQuestion call, its hook request held open. */
+interface AskEntry extends BaseEntry {
+  readonly source: 'ask';
   readonly asked: AskedQuestions;
   readonly reply: QuestionReply;
-  readonly askedAt: number;
   readonly deadline: number;
 }
+
+/** A grilling round, answered by typing into the session. */
+interface GrillEntry extends BaseEntry {
+  readonly source: 'grill';
+  /** Withdraws the round if the session ends first. */
+  exitWatch: Disposable | null;
+}
+
+type Entry = AskEntry | GrillEntry;
 
 export interface QuestionServiceDeps {
   registry: SessionRegistry;
   renderer: RendererGateway;
   endpoint: QuestionHookEndpoint;
+  /** Types a grilling round's answers in, and says when its session ends. */
+  prompter: Pick<SessionPrompter, 'send' | 'onExit'>;
   clock: Clock;
   log: Logger;
 }
 
 export class QuestionService {
   readonly #pending = new Map<ActiveSession, Entry>();
+  /** Numbers the made-up ids of grilling rounds. */
+  #rounds = 0;
 
   constructor(private readonly deps: QuestionServiceDeps) {}
 
@@ -84,15 +112,14 @@ export class QuestionService {
     }
     const { key, session } = found;
 
-    const previous = this.#pending.get(session);
-    if (previous) {
-      this.#settle(session, previous, 'withdrawn');
-      previous.reply(NO_DECISION);
-    }
+    this.#replace(session);
 
     const askedAt = clock.now();
-    const entry: Entry = {
+    const entry: AskEntry = {
+      source: 'ask',
       key,
+      toolUseId: asked.toolUseId,
+      questions: asked.questions,
       asked,
       reply,
       askedAt,
@@ -111,15 +138,56 @@ export class QuestionService {
     };
   }
 
+  /**
+   * A turn ended with a grilling round, for the session launched as
+   * `launchId`. Like a new AskUserQuestion, it replaces whatever the session
+   * was still asking: Claude has moved on from it.
+   */
+  receiveRound(launchId: string, questions: Question[]): void {
+    const { registry, renderer, prompter, clock, log } = this.deps;
+    const found = registry.find(launchId);
+    if (!found) return;
+    const { key, session } = found;
+    this.#replace(session);
+
+    const askedAt = clock.now();
+    const entry: GrillEntry = {
+      source: 'grill',
+      key,
+      toolUseId: `grill-${askedAt}-${++this.#rounds}`,
+      questions,
+      askedAt,
+      exitWatch: null,
+    };
+    this.#pending.set(session, entry);
+    entry.exitWatch = prompter.onExit(key, () => {
+      if (this.#pending.get(session) === entry) this.#settle(session, entry, 'withdrawn');
+    });
+    log.info(`[questions] session=${currentId(session, key)} tool=${entry.toolUseId} grilling round of ${questions.length} question(s)`);
+    renderer.questionsAsked(this.#toPending(session, entry));
+  }
+
+  /**
+   * A prompt went in to the session launched as `launchId`. A grilling round
+   * still waiting has been answered in the terminal, or passed over.
+   */
+  promptSubmitted(launchId: string): void {
+    const found = this.deps.registry.find(launchId);
+    const entry = found ? this.#pending.get(found.session) : undefined;
+    if (found && entry?.source === 'grill') this.#settle(found.session, entry, 'withdrawn');
+  }
+
   /** Answer a pending set; `sessionId` may be any id the session has had. */
   answer(sessionId: string, toolUseId: string, answers: Answers): { ok: boolean; error?: string } {
     const found = this.deps.registry.find(sessionId);
     const entry = found ? this.#pending.get(found.session) : undefined;
-    if (!found || !entry || entry.asked.toolUseId !== toolUseId) {
+    if (!found || !entry || entry.toolUseId !== toolUseId) {
       return { ok: false, error: 'These questions are no longer waiting' };
     }
+    // Settled first: the prompt typed in fires UserPromptSubmit, which must find nothing left to withdraw.
     this.#settle(found.session, entry, 'answered');
-    entry.reply(questionHookResponse(entry.asked.toolInput, answers));
+    if (entry.source === 'ask') entry.reply(questionHookResponse(entry.asked.toolInput, answers));
+    else this.deps.prompter.send(found.key, grillReply(entry.questions, answers));
     return { ok: true };
   }
 
@@ -135,23 +203,37 @@ export class QuestionService {
   settingsFor(sessionId: string): string | null {
     const { url, token } = this.deps.endpoint;
     if (!url) return null;
-    return questionHookSettings(`${url}/ask/${encodeURIComponent(sessionId)}`, token);
+    const id = encodeURIComponent(sessionId);
+    return questionHookSettings({ ask: `${url}/ask/${id}`, stop: `${url}/stop/${id}`, prompt: `${url}/prompt/${id}` }, token);
+  }
+
+  /**
+   * A session is about to ask something new: whatever it was still asking is
+   * stale. A held request is released with no decision.
+   */
+  #replace(session: ActiveSession): void {
+    const previous = this.#pending.get(session);
+    if (!previous) return;
+    this.#settle(session, previous, 'withdrawn');
+    if (previous.source === 'ask') previous.reply(NO_DECISION);
   }
 
   #settle(session: ActiveSession, entry: Entry, outcome: QuestionsOutcome): void {
     this.#pending.delete(session);
+    if (entry.source === 'grill') entry.exitWatch?.dispose();
     const sessionId = currentId(session, entry.key);
-    this.deps.log.info(`[questions] session=${sessionId} tool=${toolUseLabel(entry.asked.toolUseId)} ${outcome}`);
-    this.deps.renderer.questionsSettled({ sessionId, toolUseId: entry.asked.toolUseId, outcome });
+    this.deps.log.info(`[questions] session=${sessionId} tool=${toolUseLabel(entry.toolUseId)} ${outcome}`);
+    this.deps.renderer.questionsSettled({ sessionId, toolUseId: entry.toolUseId, outcome });
   }
 
   #toPending(session: ActiveSession, entry: Entry): PendingQuestions {
     return {
       sessionId: currentId(session, entry.key),
-      toolUseId: entry.asked.toolUseId,
-      questions: entry.asked.questions,
+      toolUseId: entry.toolUseId,
+      source: entry.source,
+      questions: entry.questions,
       askedAt: entry.askedAt,
-      deadline: entry.deadline,
+      deadline: entry.source === 'ask' ? entry.deadline : null,
     };
   }
 }

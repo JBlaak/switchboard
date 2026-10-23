@@ -24,7 +24,7 @@ const QUESTIONS: Question[] = [
 ];
 
 function asked(sessionId: string, toolUseId: string, questions = QUESTIONS): PendingQuestions {
-  return { sessionId, toolUseId, questions, askedAt: 0, deadline: 600_000 };
+  return { sessionId, toolUseId, source: 'ask', questions, askedAt: 0, deadline: 600_000 };
 }
 
 const askedT1: RendererEvent = { type: 'questionsAsked', pending: asked('s1', 't1') };
@@ -257,4 +257,45 @@ test('the prompt to show the empty screen leaves the state as it was', () => {
 
   /* Then */
   assert.strictEqual(next, state);
+});
+
+const peeked = (peeking: boolean): RendererEvent => ({ type: 'answersPeeked', toolUseId: 't1', peeking });
+
+test('peeking shows the terminal and keeps the draft', () => {
+  /* Given */
+  const picked = run(initialRendererState(), askedT1, greetedT1, action({ kind: 'press', row: 1 }));
+
+  /* When */
+  const peeking = run(picked, peeked(true));
+
+  /* Then */
+  const entry = peeking.answers.byToolUse.t1;
+  assert.strictEqual(entry.peeking, true);
+  assert.strictEqual(entry.view, 'questions');
+  assert.strictEqual(entry.draft, picked.answers.byToolUse.t1.draft);
+});
+
+test('peeking and coming back says nothing new', () => {
+  /* Given */
+  const greeted = run(initialRendererState(), askedT1, greetedT1);
+
+  /* When */
+  const back = run(greeted, peeked(true), peeked(false));
+
+  /* Then */
+  assert.strictEqual(back.answers.byToolUse.t1.peeking, false);
+  assert.strictEqual(back.answers.byToolUse.t1.said, greeted.answers.byToolUse.t1.said);
+});
+
+test('going to the terminal ends a peek, and a set answered there cannot peek', () => {
+  /* Given */
+  const peeking = run(initialRendererState(), askedT1, greetedT1, peeked(true));
+
+  /* When */
+  const away = run(peeking, viewChosen('terminal'));
+  const again = run(away, peeked(true));
+
+  /* Then */
+  assert.strictEqual(away.answers.byToolUse.t1.peeking, false);
+  assert.strictEqual(again, away);
 });

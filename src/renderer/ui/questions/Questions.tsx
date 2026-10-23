@@ -13,10 +13,14 @@
  * under the panel (`qp-under`) and letting a session switch land without
  * transitions (`qp-instant` on #terminals) are class changes made here, from
  * the same state the panel renders from.
+ *
+ * While the user peeks, the terminal comes back up from under the sheet and a
+ * pill over it offers the way back to the questions.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { onEvent } from '../../state/app-store';
 import { openSessions } from '../../state/session-store';
+import { peek } from './actions';
 import { Farewell } from './Farewell';
 import { QuestionPanel } from './QuestionPanel';
 import { useOnScreen } from './use-on-screen';
@@ -41,7 +45,7 @@ export function Questions(): JSX.Element {
 
   useLayoutEffect(() => {
     for (const [, other] of openSessions) {
-      const under = screen.up && other === screen.open;
+      const under = screen.up && !screen.peeking && other === screen.open;
       if (other.element.classList.contains('qp-under') !== under) other.element.classList.toggle('qp-under', under);
     }
   });
@@ -62,6 +66,16 @@ export function Questions(): JSX.Element {
   return (
     <>
       <QuestionPanel screen={screen} onShow={dismissAll} />
+      {screen.peeking && screen.pending && (
+        <button
+          type="button"
+          className="qp-peek-back"
+          tabIndex={-1}
+          onClick={() => { if (screen.pending) peek(screen.pending.toolUseId, false); }}
+        >
+          Back to questions<kbd className="qp-peek-key">T</kbd>
+        </button>
+      )}
       {farewells.map(f => (
         <Farewell
           key={f.id}

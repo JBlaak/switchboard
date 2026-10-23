@@ -30,10 +30,19 @@ export interface FakeLaunch {
   settings?: QuestionHookSettings | null;
 }
 
-/** The part of `--settings` the question hook lives in. */
+/** One `http` hook as `--settings` carries it. */
+export interface HttpHook {
+  type: string;
+  url: string;
+  headers: Record<string, string>;
+}
+
+/** The part of `--settings` the question hooks live in. */
 export interface QuestionHookSettings {
   hooks?: {
-    PreToolUse?: { matcher: string; hooks: { type: string; url: string; headers: Record<string, string> }[] }[];
+    PreToolUse?: { matcher: string; hooks: HttpHook[] }[];
+    Stop?: { hooks: HttpHook[] }[];
+    UserPromptSubmit?: { hooks: HttpHook[] }[];
   };
 }
 

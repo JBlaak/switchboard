@@ -203,11 +203,15 @@ export function buildContainer(): Container {
   // address into each launch, the server hands each request to the service.
   // The server only calls `receive` once a request arrives, long after both exist.
   const questionHook = new QuestionHookServer({
-    receiver: { receive: (...args) => questions.receive(...args) },
+    receiver: {
+      receive: (...args) => questions.receive(...args),
+      receiveRound: (...args) => questions.receiveRound(...args),
+      promptSubmitted: (...args) => questions.promptSubmitted(...args),
+    },
     log,
   });
   const questions = new QuestionService({
-    registry, renderer, clock, log, endpoint: questionHook,
+    registry, renderer, prompter, clock, log, endpoint: questionHook,
   });
 
   const workspace = new GitCliWorkspace();
