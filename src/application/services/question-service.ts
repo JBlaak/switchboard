@@ -177,15 +177,21 @@ export class QuestionService {
     if (found && entry?.source === 'grill') this.#settle(found.session, entry, 'withdrawn');
   }
 
-  /** Answer a pending set; `sessionId` may be any id the session has had. */
-  answer(sessionId: string, toolUseId: string, answers: Answers): { ok: boolean; error?: string } {
+  /**
+   * Answer a pending set; `sessionId` may be any id the session has had.
+   * `answeredOn` is where the answer came from (#194), carried on the settled
+   * set so the other device can say "Answered on phone" or "Answered on Mac".
+   */
+  answer(
+    sessionId: string, toolUseId: string, answers: Answers, answeredOn: 'mac' | 'phone' = 'mac',
+  ): { ok: boolean; error?: string } {
     const found = this.deps.registry.find(sessionId);
     const entry = found ? this.#pending.get(found.session) : undefined;
     if (!found || !entry || entry.toolUseId !== toolUseId) {
       return { ok: false, error: 'These questions are no longer waiting' };
     }
     // Settled first: the prompt typed in fires UserPromptSubmit, which must find nothing left to withdraw.
-    this.#settle(found.session, entry, 'answered');
+    this.#settle(found.session, entry, 'answered', answeredOn);
     if (entry.source === 'ask') entry.reply(questionHookResponse(entry.asked.toolInput, answers));
     else this.deps.prompter.send(found.key, grillReply(entry.questions, answers));
     return { ok: true };
@@ -218,12 +224,12 @@ export class QuestionService {
     if (previous.source === 'ask') previous.reply(NO_DECISION);
   }
 
-  #settle(session: ActiveSession, entry: Entry, outcome: QuestionsOutcome): void {
+  #settle(session: ActiveSession, entry: Entry, outcome: QuestionsOutcome, answeredOn?: 'mac' | 'phone'): void {
     this.#pending.delete(session);
     if (entry.source === 'grill') entry.exitWatch?.dispose();
     const sessionId = currentId(session, entry.key);
-    this.deps.log.info(`[questions] session=${sessionId} tool=${toolUseLabel(entry.toolUseId)} ${outcome}`);
-    this.deps.renderer.questionsSettled({ sessionId, toolUseId: entry.toolUseId, outcome });
+    this.deps.log.info(`[questions] session=${sessionId} tool=${toolUseLabel(entry.toolUseId)} ${outcome}${answeredOn ? ` on ${answeredOn}` : ''}`);
+    this.deps.renderer.questionsSettled({ sessionId, toolUseId: entry.toolUseId, outcome, ...(answeredOn ? { answeredOn } : {}) });
   }
 
   #toPending(session: ActiveSession, entry: Entry): PendingQuestions {

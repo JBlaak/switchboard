@@ -21,6 +21,7 @@ import { initialSessionWorkState, rekeySessionWork, sessionWorkReducer } from '.
 import { initialPlanState, planReducer, rekeyPlan } from './plan-slice';
 import { highlightedSession, initialMainAreaState, mainAreaReducer, rekeyMainArea } from './main-area-slice';
 import { initialProjectPageState, projectPageReducer } from './project-page-slice';
+import { initialPhoneAccessState, phoneAccessReducer, rekeyPhoneAccess } from './phone-access-slice';
 import { initialSettingsState, settingsReducer } from './settings-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialToolbarState, toolbarReducer } from './toolbar-slice';
@@ -42,6 +43,7 @@ import type { SessionWorkState } from './session-work-slice';
 import type { PlanState } from './plan-slice';
 import type { MainAreaState } from './main-area-slice';
 import type { ProjectPageState } from './project-page-slice';
+import type { PhoneAccessSliceState } from './phone-access-slice';
 import type { SettingsState } from './settings-slice';
 import type { StatusState } from './status-slice';
 import type { ToolbarState } from './toolbar-slice';
@@ -71,6 +73,7 @@ export interface RendererState {
   readonly projectPage: ProjectPageState;
   readonly ciStatus: CiStatusState;
   readonly ask: AskState;
+  readonly phoneAccess: PhoneAccessSliceState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -95,6 +98,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     projectPage: initialProjectPageState,
     ciStatus: initialCiStatusState,
     ask: initialAskState,
+    phoneAccess: initialPhoneAccessState,
   };
 }
 
@@ -126,10 +130,11 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const projectPage = projectPageReducer(state.projectPage, event);
   const ciStatus = ciStatusReducer(state.ciStatus, event);
   const ask = askReducer(state.ask, event);
+  const phoneAccess = phoneAccessReducer(state.phoneAccess, event);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList, sessionWork, plan, mainArea, projectPage, ciStatus, ask,
+    terminal, sessionList, sessionWork, plan, mainArea, projectPage, ciStatus, ask, phoneAccess,
   });
 }
 
@@ -174,6 +179,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     ciStatus: rekeyCiStatus(state.ciStatus, oldId, newId),
     // The box on the empty screen belongs to no session.
     ask: state.ask,
+    // A re-keyed session stays on the phone it was on.
+    phoneAccess: rekeyPhoneAccess(state.phoneAccess, oldId, newId),
   });
 }
 
