@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The whole pairing sequence against a scripted Mac over real mutual TLS. */
@@ -36,6 +37,7 @@ class MacLinkOverTlsTest {
 
     @After
     fun tearDown() {
+        link.stop()
         scope.cancel()
         mac.close()
     }
@@ -99,9 +101,8 @@ class MacLinkOverTlsTest {
 
         /* Then */
         val deviceFingerprint = identity.held?.certificate?.sha256Fingerprint()
-        assertEquals(
-            listOf(deviceFingerprint, deviceFingerprint),
-            listOf(mac.takeClientFingerprintOrNull(), mac.takeClientFingerprintOrNull()),
-        )
+        val presented = mac.clientFingerprints()
+        assertTrue("both the pairing and the paired connection reached the Mac: $presented", presented.size >= 2)
+        assertEquals("every connection presented the pairing's key: $presented", listOf(deviceFingerprint), presented.distinct())
     }
 }
