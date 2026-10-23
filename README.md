@@ -68,6 +68,24 @@ Claude in, local or remote. `⌘N` starts a quick session in a scratch folder of
   holding `Space` works for voice input, and dropping a file pastes its path.
 - **Scheduled tasks.** `.claude/commands/schedule-*.md` files with a cron line run on their own.
 
+## Phone access
+
+Keep an eye on your sessions from an Android phone: see what Claude is doing, answer its questions
+and type into a session's terminal. The phone talks to your Mac directly over your local network,
+never through a server, and both sides prove who they are with mutual TLS, so only phones you have
+paired get in. It's off until you switch it on.
+
+1. Download `Switchboard-<version>.apk` from the [latest release](https://github.com/JBlaak/switchboard/releases/latest)
+   on your phone and open it. Android asks you to allow installing apps from your browser or files
+   app the first time.
+2. On the Mac, open Settings → Phone access, switch it on and click **Pair a phone**. The first
+   time, macOS may ask whether Switchboard can accept incoming network connections: allow it, or
+   the phone can't reach the Mac.
+3. Open Switchboard on the phone and scan the QR code.
+4. Confirm the phone's name on the Mac.
+
+Paired phones are listed in the same place, where you can revoke one at any time.
+
 ## Keyboard
 
 **Anywhere**
