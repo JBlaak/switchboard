@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import dev.jblaak.switchboard.lock.BiometricUnlock
 import dev.jblaak.switchboard.shell.AppShell
+import dev.jblaak.switchboard.shell.ConnectedSlot
 import dev.jblaak.switchboard.theme.SwitchboardTheme
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -27,7 +28,7 @@ class MainActivity : FragmentActivity() {
                     model = app.screens,
                     unlock = unlock,
                     deviceName = Build.MODEL,
-                    connectedContent = { PlaceholderScreen() },
+                    connectedContent = { ConnectedSlot(app.link, app.phoneLink, app.board) },
                 )
             }
         }

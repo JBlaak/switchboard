@@ -7,6 +7,9 @@ import dev.jblaak.switchboard.link.createMacLink
 import dev.jblaak.switchboard.link.pairing.SharedPreferencesPairingStore
 import dev.jblaak.switchboard.lock.AppLock
 import dev.jblaak.switchboard.shell.AppScreenModel
+import dev.jblaak.switchboard.ui.connected.PhoneLink
+import dev.jblaak.switchboard.ui.connected.SessionBoard
+import dev.jblaak.switchboard.ui.connected.asPhoneLink
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,9 +27,20 @@ class SwitchboardApplication : Application() {
     lateinit var screens: AppScreenModel
         private set
 
+    /** The phone's view of the link, and the board that keeps the session list and questions it sends. */
+    lateinit var phoneLink: PhoneLink
+        private set
+
+    lateinit var board: SessionBoard
+        private set
+
     override fun onCreate() {
         super.onCreate()
         link = createMacLink(this, scope)
+        // The Mac sends the session list and the questions right after welcome, and the link doesn't replay
+        // them, so the board has to be listening before the link starts.
+        phoneLink = link.asPhoneLink()
+        board = SessionBoard(phoneLink, scope)
         screens = AppScreenModel(
             appVersion = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty(),
             knownMacName = SharedPreferencesPairingStore(getSharedPreferences("pairing", Context.MODE_PRIVATE)).loadOrNull()?.macName,
