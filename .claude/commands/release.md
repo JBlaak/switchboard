@@ -6,7 +6,7 @@ Perform a release for this project. Steps:
 4. Create a git tag `v{version}`
 5. Push commits and tag: `git push && git push --tags`
 6. Wait for the GitHub Actions build to complete using `gh run watch` on the latest run
-7. Once the build finishes and creates a draft release, publish it with release notes using `gh release edit v{version} --draft=false --notes "..."`
+7. Once the build finishes and creates a draft release, check it has the DMG and zip and `Switchboard-{version}.apk` (the APK is only built when the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets are set; without them the run leaves a notice, so say the APK is missing). Then publish it with release notes using `gh release edit v{version} --draft=false --notes "..."`
 8. Release notes format:
    ```
    ## What's Changed
