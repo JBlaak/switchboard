@@ -111,10 +111,20 @@ export type ClientMessage =
   /** Answering also makes this device the active one. */
   | { type: 'answer'; sessionId: string; toolUseId: string; answers: Answers }
   /** Ask Patch: route `text` to a project. One request per device at a time. */
-  | { type: 'ask'; requestId: string; text: string }
+  | {
+    type: 'ask'; requestId: string; text: string;
+    /** The phone's terminal size, so a session it starts opens at its size. Both or neither. */
+    cols?: number;
+    rows?: number;
+  }
   | { type: 'ask-cancel'; requestId: string }
   /** Start the session in a project the user picked; `prompt` is Patch's (unsure) or the typed text (no match). */
-  | { type: 'ask-start'; requestId: string; projectPath: string; prompt: string }
+  | {
+    type: 'ask-start'; requestId: string; projectPath: string; prompt: string;
+    /** The phone's terminal size, so a session it starts opens at its size. Both or neither. */
+    cols?: number;
+    rows?: number;
+  }
   | { type: 'list-projects' };
 
 // ── Mac → Phone ──
