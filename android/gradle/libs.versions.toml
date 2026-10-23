@@ -9,6 +9,7 @@ serialization = "1.11.0"
 [libraries]
 androidx-activity-compose = "androidx.activity:activity-compose:1.13.0"
 androidx-core-ktx = "androidx.core:core-ktx:1.19.0"
+androidx-webkit = "androidx.webkit:webkit:1.14.0"
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
