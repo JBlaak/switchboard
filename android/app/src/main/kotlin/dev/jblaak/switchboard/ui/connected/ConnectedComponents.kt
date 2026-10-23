@@ -17,16 +17,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jblaak.switchboard.theme.SwitchboardTheme
+import nl.jblaak.patch.Patch
 import nl.jblaak.patch.PatchAvatar
 import nl.jblaak.patch.PatchColors
 import nl.jblaak.patch.PatchMood
+import nl.jblaak.patch.PatchState
 import nl.jblaak.patch.PatchStyle
 
 /** A screen's top bar: back (or close), a title with an optional line under it, and anything at the end. */
@@ -89,4 +95,42 @@ fun PatchSays(text: String, avatarSize: Dp, mood: PatchMood, modifier: Modifier 
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         )
     }
+}
+
+/** The width and height of Patch's art in the library (Art.kt), which Patch is drawn in. */
+private const val ART_WIDTH = 220f
+private const val ART_HEIGHT = 200f
+
+/** How much of the art's top is cut off: the bubble's tail reaches this far into it, Patch's body at rest does not. */
+private const val ART_TOP = 24f
+
+/**
+ * Patch at [size] wide, without its own speech bubble, as James stands in the James app's header. Patch always draws
+ * its bubble above the art, so this lays Patch out at full size, scales it down around the art's bottom centre and
+ * clips away what sits above the art, and the [ART_TOP] the bubble's tail still reaches.
+ */
+@Composable
+fun PatchFigure(state: PatchState, size: Dp, modifier: Modifier) {
+    val scale = size.value / ART_WIDTH
+    Patch(
+        state = state,
+        onPoke = null,
+        onGrab = null,
+        onDrop = null,
+        colors = PatchColors.of(PatchStyle.Patch, dark = SwitchboardTheme.colors.isDark),
+        modifier = modifier
+            .clipToBounds()
+            .layout { measurable, _ ->
+                val placeable = measurable.measure(Constraints())
+                val width = (ART_WIDTH * scale).dp.roundToPx()
+                val height = ((ART_HEIGHT - ART_TOP) * scale).dp.roundToPx()
+                layout(width, height) {
+                    placeable.placeWithLayer((width - placeable.width) / 2, height - placeable.height) {
+                        scaleX = scale
+                        scaleY = scale
+                        transformOrigin = TransformOrigin(0.5f, 1f)
+                    }
+                }
+            },
+    )
 }

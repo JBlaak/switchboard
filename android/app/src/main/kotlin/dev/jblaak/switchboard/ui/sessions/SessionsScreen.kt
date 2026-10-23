@@ -49,9 +49,15 @@ import dev.jblaak.switchboard.theme.SwitchboardTheme
 import dev.jblaak.switchboard.ui.connected.AddIcon
 import dev.jblaak.switchboard.ui.connected.LaptopIcon
 import dev.jblaak.switchboard.ui.connected.MoreIcon
+import dev.jblaak.switchboard.ui.connected.PatchFigure
 import dev.jblaak.switchboard.ui.connected.PhoneIcon
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.delay
+import nl.jblaak.patch.PatchMood
+import nl.jblaak.patch.PatchMove
+import nl.jblaak.patch.PatchScene
+import nl.jblaak.patch.PatchTime
+import nl.jblaak.patch.rememberPatchState
 
 /** How the link stands, for the line under the title. */
 enum class LinkStatus { Connected, Reconnecting, Offline }
@@ -111,10 +117,18 @@ private fun rememberMinuteClock(): Long {
 @Composable
 private fun SessionsHeader(macName: String, linkStatus: LinkStatus, onMenuClick: () -> Unit) {
     val colors = SwitchboardTheme.colors
+    val mood = if (linkStatus == LinkStatus.Connected) PatchMood.Calm else PatchMood.Worried
+    val scene = PatchScene(PatchMove.Wave, mood, line = "", PatchTime.Day, sky = null)
+    val patch = rememberPatchState(scene)
+    LaunchedEffect(mood) {
+        if (patch.scene != scene) patch.appear(scene)
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 12.dp),
     ) {
+        PatchFigure(state = patch, size = 60.dp, modifier = Modifier)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = stringResource(R.string.sessions_title),
