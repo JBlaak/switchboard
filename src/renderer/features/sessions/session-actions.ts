@@ -242,15 +242,19 @@ export async function archiveSessionRow(session: SessionRow, archived: number): 
 
   await window.api.archiveSession(sessionId, Boolean(archived));
   session.archived = archived;
+  if (archived) closeArchivedSession(sessionId);
+  return true;
+}
 
+/** What goes with an archived row: main has already stopped the session and archived the row. */
+function closeArchivedSession(sessionId: string): void {
   // A pending row has no transcript to resume from, so archiving it means
   // forgetting it — and leaving the pending entry behind would re-inject the
   // row on the next refresh with its own `archived: 0`.
-  if (archived && pendingSessions.has(sessionId)) dropPendingSession(sessionId);
+  if (pendingSessions.has(sessionId)) dropPendingSession(sessionId);
   // Its terminal goes too, rather than staying on screen with an exit banner
   // in it for a session that is no longer in the list.
-  else if (archived) closeSessionView(sessionId);
-  return true;
+  else closeSessionView(sessionId);
 }
 
 /**
