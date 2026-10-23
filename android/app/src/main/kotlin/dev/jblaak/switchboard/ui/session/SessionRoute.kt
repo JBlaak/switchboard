@@ -61,6 +61,7 @@ fun SessionRoute(
                 writes = model.terminalWrites,
                 onOpened = model::terminalOpened,
                 onResized = model::terminalResized,
+                onInput = model::terminalInput,
                 modifier = modifier,
             )
         },

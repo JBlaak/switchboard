@@ -34,13 +34,15 @@ val TerminalBackground = Color(0xFF141517)
 /**
  * A session's terminal: xterm.js from the APK's assets in a WebView that loads nothing else. [writes] are fed to
  * it a frame at a time; [onOpened] comes each time the page has loaded and fitted itself (an empty terminal to
- * replay into), [onResized] whenever the fit changes. The terminal takes no typing of its own.
+ * replay into), [onResized] whenever the fit changes. The terminal takes no typing of its own; [onInput] is
+ * what a scroll on the alternate screen sends the program.
  */
 @Composable
 fun TerminalView(
     writes: Flow<TerminalWrite>,
     onOpened: (TerminalSize) -> Unit,
     onResized: (TerminalSize) -> Unit,
+    onInput: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (LocalInspectionMode.current) {
@@ -49,11 +51,13 @@ fun TerminalView(
     }
     val opened = rememberUpdatedState(onOpened)
     val resized = rememberUpdatedState(onResized)
+    val input = rememberUpdatedState(onInput)
     val bridge = remember {
         TerminalBridge { event ->
             when (event) {
                 is TerminalEvent.Ready -> opened.value(event.size)
                 is TerminalEvent.Resized -> resized.value(event.size)
+                is TerminalEvent.Input -> input.value(event.data)
             }
         }
     }
