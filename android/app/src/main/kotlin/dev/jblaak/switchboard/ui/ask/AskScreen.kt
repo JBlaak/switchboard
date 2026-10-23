@@ -58,6 +58,7 @@ import dev.jblaak.switchboard.ui.connected.PatchSays
 import dev.jblaak.switchboard.ui.connected.ScreenTopBar
 import dev.jblaak.switchboard.ui.connected.SearchIcon
 import dev.jblaak.switchboard.ui.connected.SendIcon
+import nl.jblaak.patch.PatchMood
 
 /** What the Ask Patch screens can be asked to do. */
 interface AskActions {
@@ -114,7 +115,7 @@ private fun ComposeStep(step: AskStep.Compose, actions: AskActions) {
                 .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, top = 28.dp),
         ) {
-            PatchSays(stringResource(R.string.ask_question), avatarSize = 56.dp, tone = colors.running)
+            PatchSays(stringResource(R.string.ask_question), avatarSize = 56.dp, mood = PatchMood.Calm)
             AskBox(step, actions)
             step.problem?.let { ProblemText(it) }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -236,7 +237,7 @@ private fun PickStep(step: AskStep.Pick, actions: AskActions) {
                 .padding(start = 20.dp, end = 20.dp, top = 20.dp),
         ) {
             YourRequest(step.text)
-            PatchSays(stringResource(R.string.ask_unsure), avatarSize = 44.dp, tone = colors.running)
+            PatchSays(stringResource(R.string.ask_unsure), avatarSize = 44.dp, mood = PatchMood.Calm)
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 step.candidates.forEachIndexed { index, candidate ->
                     CandidateRow(candidate, best = index == 0, starting = step.starting, onStart = { actions.start(candidate.path) })
@@ -350,7 +351,7 @@ private fun ProjectsStep(step: AskStep.Projects, actions: AskActions) {
                 is ProjectsReason.Failed -> stringResource(R.string.ask_projects_failed, reason.reason)
             },
             avatarSize = 44.dp,
-            tone = if (failed) colors.needsYou else colors.running,
+            mood = if (failed) PatchMood.Worried else PatchMood.Calm,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 18.dp),
         )
         FilterField(step.filter, actions::filter)

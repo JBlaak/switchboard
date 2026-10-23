@@ -94,6 +94,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mlkit.barcode.scanning)
     implementation(libs.okhttp)
+    implementation(libs.patch)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.foundation)
