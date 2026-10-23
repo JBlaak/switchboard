@@ -75,4 +75,6 @@ export interface RendererGateway {
    * its transcript is indexed.
    */
   sessionStarted(sessionId: string, projectPath: string): void
+  /** A phone archived a session: it was stopped and its row archived, so its view closes as ⌘E closes it. */
+  sessionArchived(sessionId: string): void
 }

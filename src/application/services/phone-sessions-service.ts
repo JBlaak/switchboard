@@ -80,6 +80,8 @@ export interface PhoneSessionsServiceDeps {
   /** A router of the phone's own, so two phones (or a phone and the Mac) never cancel each other. */
   router(): PhoneRouter;
   launcher: { open(request: OpenSessionRequest): Promise<OpenSessionResult> };
+  /** Stop the session and archive its row, as the Mac's archive does; `ok: false` leaves it running and listed. */
+  archiver: { archive(sessionId: string): { ok: boolean; error?: string } };
   settings: { effective(projectPath: string): EffectiveSettings };
   renderer: Pick<RendererGateway, 'terminalOwnerChanged' | 'projectsChanged'>;
   ids: IdGenerator;
@@ -164,6 +166,8 @@ export class PhoneSessionsService {
       case 'list-projects':
         connection.send({ type: 'projects', projects: this.#projects() });
         return;
+      case 'archive':
+        return this.#archive(phone, message.sessionId);
       case 'hello':
       case 'pair':
         // The access service's; one after welcome is noise.
@@ -344,6 +348,22 @@ export class PhoneSessionsService {
     if (!result.ok) return;
     const sessionId = this.#currentId(requested);
     if (sessionId) this.#apply({ type: 'answered', sessionId, device: phone.deviceId });
+  }
+
+  /**
+   * Archive under the session's current id, or the one asked for once it has
+   * exited: a row with nothing running under it can still be archived.
+   */
+  #archive(phone: Phone, requested: string): void {
+    const sessionId = this.#currentId(requested) ?? requested;
+    let result: { ok: boolean; error?: string };
+    try {
+      result = this.deps.archiver.archive(sessionId);
+    } catch (err) {
+      result = { ok: false, error: (err as Error).message };
+    }
+    this.deps.log.info(`[phone] archive ${sessionId}: ${result.ok ? 'done' : result.error}`);
+    phone.connection.send({ type: 'archive-result', sessionId: requested, ...result });
   }
 
   /** Feed an event to the ownership rules, and do what they say. */

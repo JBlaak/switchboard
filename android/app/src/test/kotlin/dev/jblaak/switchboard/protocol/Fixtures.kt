@@ -46,6 +46,7 @@ internal val clientFixtures: List<Pair<String, ClientMessage>> = listOf(
         rows = 30,
     ),
     "list-projects" to ClientMessage.ListProjects,
+    "archive" to ClientMessage.Archive(sessionId = "s-1"),
 )
 
 private const val SWITCHBOARD_PATH = "/Users/joris/Development/switchboard"
@@ -160,6 +161,8 @@ internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
         ok = false,
         error = "The questions were already answered",
     ),
+    "archive-result" to ServerMessage.ArchiveResult(sessionId = "s-1", ok = true, error = null),
+    "archive-result-error" to ServerMessage.ArchiveResult(sessionId = "s-1", ok = false, error = "Could not stop the session"),
     "ask-result-confident" to ServerMessage.AskResult(
         requestId = "r-1",
         result = PhoneAskResult.Confident(sessionId = "s-4", project = "switchboard"),

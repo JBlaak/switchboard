@@ -145,6 +145,10 @@ export class PhoneEventTee implements RendererGateway {
     this.inner.sessionStarted(sessionId, projectPath);
     this.phones()?.sessionsChanged();
   }
+
+  sessionArchived(sessionId: string): void {
+    this.inner.sessionArchived(sessionId);
+  }
 }
 
 export interface PhoneAccessDeps extends Omit<PhoneSessionsServiceDeps, 'settings' | 'renderer'> {

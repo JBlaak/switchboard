@@ -125,7 +125,9 @@ export type ClientMessage =
     cols?: number;
     rows?: number;
   }
-  | { type: 'list-projects' };
+  | { type: 'list-projects' }
+  /** Archive the session, as ⌘E does on the Mac: it is stopped first, and stays listed if that fails. */
+  | { type: 'archive'; sessionId: string };
 
 // ── Mac → Phone ──
 
@@ -154,6 +156,8 @@ export type ServerMessage =
   | { type: 'questions'; pending: PendingQuestions[] }
   | { type: 'questions-settled'; sessionId: string; toolUseId: string; outcome: QuestionsOutcome; answeredOn: 'mac' | 'phone' | null }
   | { type: 'answer-result'; sessionId: string; toolUseId: string; ok: boolean; error?: string }
+  /** `error` is only there when `ok` is false. */
+  | { type: 'archive-result'; sessionId: string; ok: boolean; error?: string }
   | { type: 'ask-result'; requestId: string; result: PhoneAskResult }
   | { type: 'ask-started'; requestId: string; sessionId: string }
   | { type: 'ask-error'; requestId: string; error: string }

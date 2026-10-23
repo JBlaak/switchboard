@@ -150,6 +150,7 @@ export const EVENT = {
   phoneAccessChanged: 'phone-access:changed',
   terminalOwnerChanged: 'terminal-owner:changed',
   sessionStarted: 'session:started',
+  sessionArchived: 'session:archived',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */

@@ -84,6 +84,15 @@ sealed interface ServerMessage {
         val error: String? = null,
     ) : ServerMessage
 
+    /** [error] is only there when [ok] is false. */
+    @Serializable
+    @SerialName("archive-result")
+    data class ArchiveResult(
+        val sessionId: String,
+        val ok: Boolean,
+        val error: String? = null,
+    ) : ServerMessage
+
     @Serializable
     @SerialName("ask-result")
     data class AskResult(val requestId: String, val result: PhoneAskResult) : ServerMessage

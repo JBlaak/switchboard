@@ -42,4 +42,28 @@ class ConnectedNavigationTest {
         /* Then */
         assertEquals(ConnectedRoute.Sessions, navigation.route.value)
     }
+
+    @Test
+    fun `archiving the open session goes back to the list`() {
+        /* Given */
+        navigation.sessionOpened("s-1", questionsOpen = false)
+
+        /* When */
+        navigation.sessionArchived("s-1")
+
+        /* Then */
+        assertEquals(ConnectedRoute.Sessions, navigation.route.value)
+    }
+
+    @Test
+    fun `archiving a session that is no longer open leaves the screen alone`() {
+        /* Given */
+        navigation.askOpened()
+
+        /* When */
+        navigation.sessionArchived("s-1")
+
+        /* Then */
+        assertEquals(ConnectedRoute.Ask, navigation.route.value)
+    }
 }

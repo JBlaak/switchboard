@@ -154,6 +154,7 @@ const api: SwitchboardApi = {
   onPhoneAccessChanged: (cb) => subscribe(EVENT.phoneAccessChanged, (_e, state) => cb(state)),
   onTerminalOwnerChanged: (cb) => subscribe(EVENT.terminalOwnerChanged, (_e, sessionId, owner) => cb(sessionId, owner)),
   onSessionStarted: (cb) => subscribe(EVENT.sessionStarted, (_e, sessionId, projectPath) => cb(sessionId, projectPath)),
+  onSessionArchived: (cb) => subscribe(EVENT.sessionArchived, (_e, sessionId) => cb(sessionId)),
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),

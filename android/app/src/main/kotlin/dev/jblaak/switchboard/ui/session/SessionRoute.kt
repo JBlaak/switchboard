@@ -1,5 +1,6 @@
 package dev.jblaak.switchboard.ui.session
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -9,6 +10,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
+import dev.jblaak.switchboard.R
 import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.ui.connected.PhoneLink
 import dev.jblaak.switchboard.ui.connected.SessionBoard
@@ -24,8 +28,11 @@ fun SessionRoute(
     sessionId: String,
     startedIn: String?,
     questionsOpen: Boolean,
+    /** The session was archived from here: confetti from [from], then back to the list. */
+    onArchived: (from: Offset) -> Unit,
     onBack: () -> Unit,
 ) {
+    val context = LocalContext.current
     val model = rememberScopedModel(sessionId, onLeave = SessionModel::close) { scope ->
         SessionModel(link, board, deviceId, sessionId, startedIn, scope)
     }
@@ -55,6 +62,13 @@ fun SessionRoute(
         onUseHere = model::useHere,
         onAnswer = { sheetWanted = true },
         onStartedNoteDismissed = model::startedNoteDismissed,
+        onArchive = { from ->
+            if (model.archive()) {
+                onArchived(from)
+            } else {
+                Toast.makeText(context, R.string.session_archive_offline, Toast.LENGTH_SHORT).show()
+            }
+        },
         onBack = onBack,
         terminal = { modifier ->
             TerminalView(
