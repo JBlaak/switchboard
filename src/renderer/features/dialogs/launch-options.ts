@@ -6,31 +6,10 @@
  * configured defaults apply whether the session was started from the sidebar,
  * a dialog or a restored tab.
  */
+import { defaultSessionOptions } from '../../../domain/launch/session-options';
 import type { SessionOptions } from '../../../domain/launch/session-options';
 
-/**
- * The options a session in this project starts with by default.
- *
- * Only settings that are actually set are copied across: an absent key means
- * "let the CLI apply the user's own default", which is not the same as sending
- * the flag with a falsy value.
- */
+/** The options a session in this project starts with by default (`defaultSessionOptions`). */
 export async function resolveDefaultSessionOptions(projectPath: string): Promise<SessionOptions> {
-  const effective = await window.api.getEffectiveSettings(projectPath);
-  const options: SessionOptions = {};
-
-  if (effective.dangerouslySkipPermissions) {
-    options.dangerouslySkipPermissions = true;
-  } else if (effective.permissionMode) {
-    options.permissionMode = effective.permissionMode;
-  }
-
-  // A stored `worktreeName` is ignored: one fixed name put every new session in
-  // the same worktree, so the CLI names each one instead.
-  if (effective.worktree) options.worktree = true;
-  if (effective.chrome) options.chrome = true;
-  if (effective.preLaunchCmd) options.preLaunchCmd = effective.preLaunchCmd;
-  if (effective.addDirs) options.addDirs = effective.addDirs;
-
-  return options;
+  return defaultSessionOptions(await window.api.getEffectiveSettings(projectPath));
 }

@@ -7,6 +7,8 @@
  * the ones acted on need naming here.
  */
 
+import type { EffectiveSettings } from '../settings/settings';
+
 export interface SessionOptions {
   /** 'terminal' for a plain shell; absent or 'claude' for a CLI session. */
   type?: string;
@@ -52,3 +54,32 @@ export const PERMISSION_MODES = [
   { value: 'dontAsk', label: "Don't Ask", desc: 'Auto-deny tools not explicitly allowed' },
   { value: 'bypassPermissions', label: 'Bypass', desc: 'Auto-accept all tool calls' },
 ];
+
+/**
+ * The options a session in a project starts with by default, from that
+ * project's effective settings. Every launch path goes through it, the
+ * renderer's and a phone's (#194), so a project's configured defaults apply
+ * wherever the session was started from.
+ *
+ * Only settings that are actually set are copied across: an absent key means
+ * "let the CLI apply the user's own default", which is not the same as sending
+ * the flag with a falsy value.
+ */
+export function defaultSessionOptions(effective: EffectiveSettings): SessionOptions {
+  const options: SessionOptions = {};
+
+  if (effective.dangerouslySkipPermissions) {
+    options.dangerouslySkipPermissions = true;
+  } else if (effective.permissionMode) {
+    options.permissionMode = effective.permissionMode;
+  }
+
+  // A stored `worktreeName` is ignored: one fixed name put every new session in
+  // the same worktree, so the CLI names each one instead.
+  if (effective.worktree) options.worktree = true;
+  if (effective.chrome) options.chrome = true;
+  if (effective.preLaunchCmd) options.preLaunchCmd = effective.preLaunchCmd;
+  if (effective.addDirs) options.addDirs = effective.addDirs;
+
+  return options;
+}
