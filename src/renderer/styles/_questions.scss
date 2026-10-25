@@ -367,7 +367,9 @@ $qp-spring: cubic-bezier(.34, 1.56, .64, 1);
   font-weight: 700;
   font-size: 15px;
   color: var(--sb-text-strong);
-  flex-shrink: 0;
+  /* A long label wraps inside the row rather than running out of it. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .qp-chip {
