@@ -3,8 +3,21 @@ name: Build & Release
 on:
   push:
     tags: ['v*']
+  # Packaging a DMG takes a macOS runner, so a pull request only gets one when
+  # it changes what goes into the package; `npm run build` in test.yml already
+  # covers the code itself.
   pull_request:
     branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'build/**'
+      - 'scripts/**'
+      - '.github/workflows/build.yml'
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
@@ -55,6 +68,9 @@ jobs:
             dist/*.zip.blockmap
             dist/latest*.yml
           if-no-files-found: ignore
+          # The publish job picks these up within minutes; a pull request's
+          # DMG is only for trying out, so it need not sit in storage long.
+          retention-days: 3
 
   # The phone app ships with each release (#208). PR checks for it live in
   # android.yml, so this only runs on tags. Without the signing secrets it
