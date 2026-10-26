@@ -77,6 +77,14 @@ function isSafeRef(ref: string): boolean {
 }
 
 export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
+  /**
+   * `toolEnv` is the environment the fetch and the worktree checkout run in.
+   * Launched from the Finder the app's PATH has no Homebrew, and a checkout
+   * runs the repository's filters (`git-lfs`) off that PATH: without it git
+   * fails "the remote end hung up unexpectedly".
+   */
+  constructor(private readonly toolEnv: () => Promise<Record<string, string | undefined>> = async () => process.env) {}
+
   async worktreeRoot(cwd: string): Promise<string | null> {
     const result = await git(cwd, ['rev-parse', '--show-toplevel']);
     return result.code === 0 ? result.stdout.trim() || null : null;
@@ -339,12 +347,14 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
   async fetchBranch(repository: string, branch: string): Promise<GitWrite> {
     if (!isSafeRef(branch)) return { ok: false, reason: 'Not a branch name: ' + branch };
     return gitWrite(repository, ['fetch', '--quiet', '--no-tags', 'origin',
-      `+refs/heads/${branch}:refs/remotes/origin/${branch}`], FETCH_TIMEOUT_MS);
+      `+refs/heads/${branch}:refs/remotes/origin/${branch}`], FETCH_TIMEOUT_MS, await this.toolEnv());
   }
 
   async addWorktree(repository: string, worktree: string, branch: string, base: string): Promise<GitWrite> {
     if (!isSafeRef(branch) || !isSafeRef(base)) return { ok: false, reason: 'Not a branch name: ' + branch };
-    return gitWrite(repository, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, worktree, base], TIMEOUT_MS);
+    // The checkout runs LFS's smudge filter, which may download: give it the fetch's time.
+    return gitWrite(repository, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, worktree, base],
+      FETCH_TIMEOUT_MS, await this.toolEnv());
   }
 }
 
@@ -352,10 +362,12 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
 const FETCH_TIMEOUT_MS = 60_000;
 
 /** Run a git command that changes something, answering git's own last word when it fails. */
-function gitWrite(cwd: string, args: readonly string[], timeout: number): Promise<GitWrite> {
+function gitWrite(
+  cwd: string, args: readonly string[], timeout: number, baseEnv: Record<string, string | undefined>,
+): Promise<GitWrite> {
   return new Promise((resolve) => {
     // Never wait on a credential prompt nobody can see.
-    const env = { ...GIT_OPTIONS.env, GIT_TERMINAL_PROMPT: '0' };
+    const env = { ...baseEnv, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0' };
     execFile('git', ['-C', cwd, ...args], { ...GIT_OPTIONS, timeout, env, encoding: 'utf8' }, (err, _stdout, stderr) => {
       if (!err) {
         resolve({ ok: true });

@@ -114,3 +114,29 @@ test('mainCheckout finds the main checkout from a linked worktree and from a sub
   assert.equal(fromSub, repo);
   assert.equal(outside, null);
 });
+
+test('addWorktree runs the checkout\'s filters off the tool environment\'s PATH', async () => {
+  /* Given */
+  // A repository whose checkout needs a filter that, like Homebrew's git-lfs,
+  // is only on the login shell's PATH.
+  const tools = path.join(tmp, 'tools');
+  fs.mkdirSync(tools);
+  fs.writeFileSync(path.join(tools, 'fake-smudge'), '#!/bin/sh\ncat\n', { mode: 0o755 });
+  const filtered = path.join(tmp, 'filtered');
+  run(tmp, 'init', '-q', '-b', 'main', filtered);
+  fs.writeFileSync(path.join(filtered, '.gitattributes'), '*.bin filter=fake\n');
+  commit(filtered, 'asset.bin', 'Asset');
+  run(filtered, 'config', 'filter.fake.smudge', 'fake-smudge');
+  run(filtered, 'config', 'filter.fake.required', 'true');
+  const bare = new GitCliWorkspace(async () => ({ ...process.env, PATH: '/usr/bin:/bin' }));
+  const login = new GitCliWorkspace(async () => ({ ...process.env, PATH: `${tools}:/usr/bin:/bin` }));
+
+  /* When */
+  const withoutTool = await bare.addWorktree(filtered, path.join(tmp, 'filtered-bare'), '116-bare', 'main');
+  const withTool = await login.addWorktree(filtered, path.join(tmp, 'filtered-login'), '116-login', 'main');
+
+  /* Then */
+  assert.equal(withoutTool.ok, false);
+  assert.deepEqual(withTool, { ok: true });
+  assert.equal(fs.readFileSync(path.join(tmp, 'filtered-login', 'asset.bin'), 'utf8'), 'Asset\n');
+});
