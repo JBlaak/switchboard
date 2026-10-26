@@ -244,7 +244,10 @@ export function buildContainer(): Container {
     registry, renderer, prompter, clock, log, endpoint: questionHook,
   });
 
-  const workspace = new GitCliWorkspace();
+  // `gh`, and the filters a git checkout runs (`git-lfs`), need the login
+  // shell's PATH: launched from the Finder, the app's own has no Homebrew in it.
+  const toolEnv = loginShellEnv(() => shells.resolve(shellProfileId()).path, terminals.baseEnv, log);
+  const workspace = new GitCliWorkspace(toolEnv);
   const launcher = new SessionLauncher({
     registry, terminals, shells, transcripts, settings,
     lifecycle, remote, renderer, questions, clock, timers, log,
@@ -353,9 +356,6 @@ export function buildContainer(): Container {
   const git = new GitCliRemotes();
   const projectFolders = new ProjectFolderService({ fs, git: workspace, remotes: git });
 
-  // `gh` runs with the login shell's PATH: launched from the Finder, the app's
-  // own PATH has no Homebrew in it. `git` is /usr/bin's and needs nothing.
-  const toolEnv = loginShellEnv(() => shells.resolve(shellProfileId()).path, terminals.baseEnv, log);
   const github = new GhCli({ run: async (args) => defaultGhRunner(await toolEnv())(args) });
   // The page and its actions need each other: the actions read the page's
   // items, and the page shows each item's action. Closed with `attach`.
