@@ -432,7 +432,7 @@ a.pv-num:hover { color: var(--sb-accent); }
 .is-merged      { --pv-ink: var(--sb-purple); }
 .is-closed      { --pv-ink: var(--sb-purple); }
 .is-not-planned { --pv-ink: var(--sb-text-faint); }
-.is-review      { --pv-ink: var(--sb-green); }
+.is-review      { --pv-ink: var(--sb-progress-orange); }
 .is-draft       { --pv-ink: var(--sb-yellow); }
 .is-ready       { --pv-ink: var(--sb-accent); }
 .is-locked      { --pv-ink: var(--sb-text-faint); }
@@ -458,7 +458,7 @@ a.pv-num:hover { color: var(--sb-accent); }
 
   &.is-closed { border: 1px dashed color-mix(in srgb, var(--sb-purple) 45%, transparent); }
   &.is-not-planned { border: 1px dashed var(--sb-border-strong); }
-  &.is-review { border-color: rgba(var(--sb-green-rgb), 0.55); }
+  &.is-review { border-color: color-mix(in srgb, var(--sb-progress-orange) 55%, transparent); }
   &.is-draft { border-color: color-mix(in srgb, var(--sb-yellow) 50%, transparent); }
   &.is-ready { background: var(--sb-mint); border-color: var(--sb-accent-dim); }
   &.is-locked { background: var(--sb-bg-panel); border: 1px dashed var(--sb-border-strong); }
