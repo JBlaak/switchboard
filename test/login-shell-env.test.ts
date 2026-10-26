@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { pathFromShellOutput, withFallbackPath } from '../src/infrastructure/shell/login-shell-env';
+import { pathFromShellOutput, sshAuthSockFromShellOutput, withFallbackPath } from '../src/infrastructure/shell/login-shell-env';
 
 test('the login PATH is read from between the markers, whatever the shell printed around it', () => {
   /* Given */
@@ -40,4 +40,27 @@ test('without a login PATH, Homebrew\'s directories are added to the one the app
   assert.equal(neither, '/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin');
   assert.equal(oneAlready, '/usr/local/bin:/usr/bin:/opt/homebrew/bin');
   assert.equal(none, '/opt/homebrew/bin:/usr/local/bin');
+});
+
+test('the login shell\'s SSH agent is read from between its own markers, next to the PATH', () => {
+  /* Given */
+  const output = '__SWITCHBOARD_PATH__/usr/bin__SWITCHBOARD_PATH__' +
+    '__SWITCHBOARD_SSH_AUTH_SOCK__/Users/me/Library/Group Containers/1password/t/agent.sock\n__SWITCHBOARD_SSH_AUTH_SOCK__';
+
+  /* When */
+  const sshAuthSock = sshAuthSockFromShellOutput(output);
+  const loginPath = pathFromShellOutput(output);
+
+  /* Then */
+  assert.equal(sshAuthSock, '/Users/me/Library/Group Containers/1password/t/agent.sock');
+  assert.equal(loginPath, '/usr/bin');
+});
+
+test('a login shell without an SSH agent yields none', () => {
+  /* When */
+  const sshAuthSock = sshAuthSockFromShellOutput('__SWITCHBOARD_PATH__/usr/bin__SWITCHBOARD_PATH__' +
+    '__SWITCHBOARD_SSH_AUTH_SOCK____SWITCHBOARD_SSH_AUTH_SOCK__');
+
+  /* Then */
+  assert.equal(sshAuthSock, null);
 });
