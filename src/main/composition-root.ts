@@ -411,26 +411,30 @@ export function buildContainer(): Container {
   });
 
   // Sessions on a plan's issues (#125): every listed session and every running
-  // one may own an issue, and a new one starts in a worktree made here.
+  // one may own an issue, and a new one starts in a worktree made here. The
+  // archived ones own none, but may be the one an existing branch was worked on in.
   const issueSessions = new IssueSessionService({
     sessions: () => {
       const meta = repository.getAllMeta();
       const candidates = new Map<string, IssueSessionCandidate>();
       for (const cached of repository.getAllCached()) {
-        if (meta.get(cached.sessionId)?.archived) continue;
         candidates.set(cached.sessionId, {
           sessionId: cached.sessionId,
           projectPath: cached.projectPath,
           folder: cached.folder,
           activeAt: Date.parse(cached.modified) || 0,
           pullRequests: cached.pullRequests ?? [],
+          ...(meta.get(cached.sessionId)?.archived ? { archived: true } : {}),
         });
       }
       for (const [sessionId, live] of registry.snapshot()) {
         if (live.exited || live.isPlainTerminal) continue;
         const listed = candidates.get(sessionId);
-        if (listed) listed.activeAt = Math.max(listed.activeAt, live.openedAt);
-        else {
+        if (listed) {
+          listed.activeAt = Math.max(listed.activeAt, live.openedAt);
+          // Running, it may own an issue though it is archived.
+          delete listed.archived;
+        } else {
           candidates.set(sessionId, {
             sessionId,
             projectPath: live.projectPath,

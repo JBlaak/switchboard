@@ -33,6 +33,17 @@ export function issueSessionPrompt(issue: IssueKey, plan: IssueKey, stackedOn?: 
   return prompt;
 }
 
+/**
+ * The prompt for continuing on an issue's branch that exists already: the
+ * work so far is on it, so it is read before anything new is done.
+ */
+export function issueContinuePrompt(issue: IssueKey, plan: IssueKey): string {
+  const planRef = plan.repository === issue.repository ? '#' + plan.number : plan.repository + '#' + plan.number;
+  return `Continue work on #${issue.number}, part of ${planRef}: this branch already has earlier work on it. ` +
+    'Read the epic and the issue, then what the branch has so far (its commits, and any uncommitted changes) before going on. ' +
+    `Open a PR titled with a short summary of what you implemented, with "Closes #${issue.number}" in its description, unless one is open already.`;
+}
+
 /** One issue of a level, its worktree made, as the level's session hands it to an agent. */
 export interface LevelAgent {
   issue: IssueKey;

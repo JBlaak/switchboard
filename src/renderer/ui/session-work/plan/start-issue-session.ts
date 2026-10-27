@@ -28,14 +28,16 @@ export interface StartIssueSessionRequest {
   plan: Plan;
   /** Put the new session on screen; false keeps the plan view where it is (Start level). Default true. */
   show?: boolean;
+  /** What to do with the issue's branch when it exists already (see `IssueWorktreeRequest`). */
+  existing?: IssueWorktreeRequest['existing'];
 }
 
 export async function startIssueSessionWith(
-  steps: StartIssueSessionSteps, { projectPath, issue, plan, show = true }: StartIssueSessionRequest,
+  steps: StartIssueSessionSteps, { projectPath, issue, plan, show = true, existing }: StartIssueSessionRequest,
 ): Promise<IssueSessionStart> {
   let prepared: IssueWorktreeResult;
   try {
-    prepared = await steps.prepare({ projectPath, issue, plan });
+    prepared = await steps.prepare({ projectPath, issue, plan, ...(existing ? { existing } : {}) });
   } catch (err) {
     return { ok: false, reason: (err as Error).message || 'Could not prepare the worktree' };
   }

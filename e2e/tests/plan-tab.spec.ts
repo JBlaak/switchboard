@@ -5,13 +5,15 @@
  * Levels, states, warnings, geometry and the slice are unit tested in
  * test/plan-*.test.ts; this proves the wiring: the tab asks main for the
  * session's plans and shows them, a click opens an issue, a level that
- * clears between two polls celebrates once, and Start level starts one
- * session that coordinates an agent per Ready issue.
+ * clears between two polls celebrates once, Start level starts one
+ * session that coordinates an agent per Ready issue, and a start refused
+ * over an existing branch offers to continue on it, open its session, or
+ * delete it and start again.
  */
 import { test, expect } from '../support/test';
-import { openSession } from '../support/app';
-import { openedExternally, setHostStub } from '../support/main-process';
-import { LABEL, S } from '../fixtures/standard';
+import { openSession, terminalHeader } from '../support/app';
+import { existingBranchAsks, openedExternally, setHostStub } from '../support/main-process';
+import { LABEL, P, S } from '../fixtures/standard';
 import { sessionWorkStub } from '../fixtures/session-work';
 import { LOGIN_PLAN, LOGIN_PLAN_ON_LEVEL_3, plansStub } from '../fixtures/plans';
 import { FakeCli } from '../support/fake-cli';
@@ -159,5 +161,83 @@ test.describe('start level', () => {
     expect(prompt).toContain('one agent per issue with the Agent tool');
     expect(prompt).toContain('- #1302: worktree ' + project + '/.claude/worktrees/1302-issue (branch 1302-issue). Work on #1302.');
     expect(prompt).toContain('- #1303: worktree ' + project + '/.claude/worktrees/1303-issue (branch 1303-issue). Work on #1303.');
+  });
+});
+
+test.describe('an existing branch', () => {
+  /** The login plan with #1302's PR gone: #1303 is Ready, and its branch exists from an archived session. */
+  const twoReady = { ...LOGIN_PLAN, issues: LOGIN_PLAN.issues.map(i => (i.number === 1302 ? { ...i, pullRequests: [] } : i)) };
+  test.use({
+    stubs: {
+      sessionWork: sessionWorkStub(),
+      plans: { ...plansStub(twoReady), prepareWorktrees: true, existingBranches: { issues: [1303], session: S.graphqlSpike } },
+    },
+  });
+
+  async function startOn1303(page: Page, home: Parameters<typeof openSession>[1]) {
+    // The stub makes no worktree on disk, and a session only starts in a directory that exists.
+    fs.mkdirSync(home.projectPath(P.acmeApi + '/.claude/worktrees/1303-issue'), { recursive: true });
+    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    await page.keyboard.press('Meta+g');
+    await workPage(page).getByRole('tab', { name: 'Plan' }).click();
+    await node(page, 1303).click();
+    await detail(page).getByRole('button', { name: 'Start session on #1303' }).click();
+    return detail(page).getByRole('alert', { name: 'Branch exists' });
+  }
+
+  function startedSince(home: { controlDir: string }, before: string[]) {
+    return fs.readdirSync(home.controlDir).filter(key => !before.includes(key));
+  }
+
+  test('Continue work starts a session in its worktree, told to pick up the work', async ({ page, home, app }) => {
+    /* Given */
+    const refused = await startOn1303(page, home);
+    const before = fs.readdirSync(home.controlDir);
+    await expect(refused).toContainText('in a worktree with 2 uncommitted files and 1 commit not on the default branch');
+
+    /* When */
+    await refused.getByRole('button', { name: 'Continue work' }).click();
+
+    /* Then */
+    await expect.poll(() => startedSince(home, before)).toHaveLength(1);
+    const launch = await new FakeCli(home.controlDir, startedSince(home, before)[0]).launched();
+    expect(launch.cwd).toMatch(/\/\.claude\/worktrees\/1303-issue$/);
+    expect(launch.argv[launch.argv.length - 1]).toBe('Continue work on #1303.');
+    expect(await existingBranchAsks(app)).toEqual([null, 'reuse']);
+  });
+
+  test('Delete asks once more, then starts afresh', async ({ page, home, app }) => {
+    /* Given */
+    const refused = await startOn1303(page, home);
+    const before = fs.readdirSync(home.controlDir);
+
+    /* When */
+    await refused.getByRole('button', { name: 'Delete worktree and branch…' }).click();
+
+    /* Then */
+    const confirm = detail(page).getByRole('alertdialog', { name: 'Delete worktree and branch' });
+    await expect(confirm).toContainText('Delete its worktree and branch, with 2 uncommitted files and 1 commit not on the default branch?');
+    expect(await existingBranchAsks(app)).toEqual([null]);
+
+    /* When */
+    await confirm.getByRole('button', { name: 'Delete and start again' }).click();
+
+    /* Then */
+    await expect.poll(() => startedSince(home, before)).toHaveLength(1);
+    const launch = await new FakeCli(home.controlDir, startedSince(home, before)[0]).launched();
+    expect(launch.argv[launch.argv.length - 1]).toBe('Work on #1303.');
+    expect(await existingBranchAsks(app)).toEqual([null, 'replace']);
+  });
+
+  test('Open its session puts the session that worked on it on screen, archived or not', async ({ page, home }) => {
+    /* Given */
+    const refused = await startOn1303(page, home);
+
+    /* When */
+    await refused.getByRole('button', { name: 'Open its session' }).click();
+
+    /* Then */
+    await new FakeCli(home.controlDir, S.graphqlSpike).launched();
+    await expect(terminalHeader(page)).toContainText(LABEL.graphqlSpike);
   });
 });

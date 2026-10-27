@@ -92,3 +92,22 @@ test('a start puts its session on screen unless asked not to', async () => {
   assert.deepEqual(shown, [true, false]);
   assert.deepEqual(hidden, { ok: true, sessionId: 'new-session' });
 });
+
+test('a refusal over an existing branch passes on what is there, and the choice made about it reaches main', async () => {
+  /* Given */
+  const existing = {
+    branch: '114-stage', worktreePath: null, main: false, changedFiles: 0, ahead: 0, sessionId: 'earlier',
+  };
+  const requests: unknown[] = [];
+  const { fake } = steps({ ok: false, reason: 'Branch 114-stage already exists', existing });
+  const prepare = fake.prepare;
+  fake.prepare = async (request) => { requests.push(request.existing); return prepare(request); };
+
+  /* When */
+  const refused = await startIssueSessionWith(fake, REQUEST);
+  await startIssueSessionWith(fake, { ...REQUEST, existing: 'reuse' });
+
+  /* Then */
+  assert.deepEqual(refused, { ok: false, reason: 'Branch 114-stage already exists', existing });
+  assert.deepEqual(requests, [undefined, 'reuse']);
+});

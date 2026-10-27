@@ -357,8 +357,24 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
       FETCH_TIMEOUT_MS, await this.toolEnv());
   }
 
-  async removeWorktree(repository: string, worktree: string): Promise<GitWrite> {
-    return gitWrite(repository, ['worktree', 'remove', worktree], REMOVE_TIMEOUT_MS, await this.toolEnv());
+  async checkoutWorktree(repository: string, worktree: string, branch: string): Promise<GitWrite> {
+    if (!isSafeRef(branch)) return { ok: false, reason: 'Not a branch name: ' + branch };
+    return gitWrite(repository, ['worktree', 'add', '--quiet', worktree, branch], FETCH_TIMEOUT_MS, await this.toolEnv());
+  }
+
+  async removeWorktree(repository: string, worktree: string, { force = false }: { force?: boolean } = {}): Promise<GitWrite> {
+    // Twice: once for changes, once more for a locked worktree.
+    const args = force ? ['worktree', 'remove', '-f', '-f', worktree] : ['worktree', 'remove', worktree];
+    return gitWrite(repository, args, REMOVE_TIMEOUT_MS, await this.toolEnv());
+  }
+
+  async pruneWorktrees(repository: string): Promise<GitWrite> {
+    return gitWrite(repository, ['worktree', 'prune'], REMOVE_TIMEOUT_MS, await this.toolEnv());
+  }
+
+  async deleteBranch(repository: string, branch: string): Promise<GitWrite> {
+    if (!isSafeRef(branch)) return { ok: false, reason: 'Not a branch name: ' + branch };
+    return gitWrite(repository, ['branch', '-D', branch], REMOVE_TIMEOUT_MS, await this.toolEnv());
   }
 }
 

@@ -17,6 +17,28 @@ export interface IssueWorktreeRequest {
   issue: IssueKey;
   /** The plan the issue is in, as the renderer has it: its blockers and their PRs decide the base (A3). */
   plan: Plan;
+  /**
+   * What to do when the issue's branch exists already: `replace` deletes its
+   * worktree (changes and all) and the branch, then starts afresh; `reuse`
+   * starts in its worktree, adding one for the branch when it has none.
+   * Without it, an existing branch answers `existing` and nothing is written.
+   */
+  existing?: 'replace' | 'reuse';
+}
+
+/** The branch an issue's session would start on exists already: where, and what is on it. */
+export interface ExistingIssueBranch {
+  branch: string;
+  /** The checkout it is in; null when no worktree has it checked out. */
+  worktreePath: string | null;
+  /** It is checked out in the repository's main checkout, which is never deleted. */
+  main: boolean;
+  /** Uncommitted changes in its worktree, untracked files included. */
+  changedFiles: number;
+  /** Commits on it that the default branch lacks; 0 when it has no worktree to ask. */
+  ahead: number;
+  /** The session that worked in its worktree or on it most recently, archived ones included; null when none did. */
+  sessionId: string | null;
 }
 
 /** A worktree made for an issue, with the prompt Claude starts with; or why there is none. */
@@ -31,10 +53,16 @@ export type IssueWorktreeResult =
     /** Something the renderer shows: it started, but not as asked (no blocker PR, a fetch that failed). */
     warning?: string;
   }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; existing?: ExistingIssueBranch };
 
-/** What `startIssueSession` answers (the contract's shape, plus the warning to show). */
-export type IssueSessionStart = { ok: true; sessionId: string; warning?: string } | { ok: false; reason: string };
+/**
+ * What `startIssueSession` answers (the contract's shape, plus the warning to
+ * show). A refusal over a branch that exists already says what is there, so
+ * the renderer can offer to replace it, continue on it, or open its session.
+ */
+export type IssueSessionStart =
+  | { ok: true; sessionId: string; warning?: string }
+  | { ok: false; reason: string; existing?: ExistingIssueBranch };
 
 /**
  * Where an issue's worktree branches off (A3).

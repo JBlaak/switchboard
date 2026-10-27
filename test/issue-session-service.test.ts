@@ -5,6 +5,7 @@ import {
   CLOSING_REFS_TTL_MS, IssueSessionService, type IssueSessionCandidate, type IssueSessionServiceDeps,
 } from '../src/application/services/issue-session-service';
 import type { GitWrite } from '../src/application/ports/git-workspace';
+import type { WorktreeSummary } from '../src/domain/project/overview';
 import type { IssueKey, Plan, PlanIssue, PlanPullRequest } from '../src/domain/plan/model';
 import type { PullRequestCloses } from '../src/application/ports/github-cli';
 import type { TranscriptLocation } from '../src/application/ports/transcript-store';
@@ -42,6 +43,10 @@ class FakeGit {
   readonly unfetchable = new Map<string, string>();
   checkout: string | null = ROOT;
   current = new Map<string, string>();
+  /** The checkouts `worktrees` lists, the main one first. */
+  checkouts: WorktreeSummary[] = [];
+  /** A write that fails, by its first word (`remove`, `delete`, `checkout`), with git's reason. */
+  readonly failing = new Map<string, string>();
 
   readonly port: IssueSessionServiceDeps['git'] = {
     mainCheckout: async () => this.checkout,
@@ -62,7 +67,26 @@ class FakeGit {
       this.branches.add(branch);
       return { ok: true };
     },
+    worktrees: async () => this.checkouts,
+    checkoutWorktree: async (_repo, path, branch) => this.write('checkout', `worktree add ${path} ${branch}`),
+    removeWorktree: async (_repo, path, options) => this.write('remove', `worktree remove ${options?.force ? '--force ' : ''}${path}`),
+    pruneWorktrees: async () => this.write('prune', 'worktree prune'),
+    deleteBranch: async (_repo, branch) => {
+      const result = this.write('delete', 'branch -D ' + branch);
+      if (result.ok) this.branches.delete(branch);
+      return result;
+    },
   };
+
+  private write(kind: string, command: string): GitWrite {
+    this.writes.push(command);
+    const reason = this.failing.get(kind);
+    return reason ? { ok: false, reason } : { ok: true };
+  }
+}
+
+function checkout(path: string, branch: string, fields: Partial<WorktreeSummary> = {}): WorktreeSummary {
+  return { path, branch, main: false, locked: false, changedFiles: 0, ahead: 0, merged: false, lastCommitAt: null, ...fields };
 }
 
 interface Harness {
@@ -187,17 +211,152 @@ test('a blocker PR whose branch cannot be fetched falls back to the default bran
   assert.doesNotMatch(result.ok ? result.prompt : '', /Branch off/);
 });
 
-test('a branch that already exists is refused, and nothing is written', async () => {
+test('a branch that already exists is refused, saying where it is and what is on it, and nothing is written', async () => {
   /* Given */
-  const { service, git } = harness();
+  const worktree = ROOT + '/.claude/worktrees/114-stage';
+  const { service, git } = harness({
+    sessions: [
+      session('older', { projectPath: worktree, activeAt: 1, archived: true }),
+      session('newer', { projectPath: worktree, activeAt: 2, archived: true }),
+      session('elsewhere', { activeAt: 3 }),
+    ],
+  });
+  git.branches.add('114-stage');
+  git.checkouts = [checkout(ROOT, 'main', { main: true }), checkout(worktree, '114-stage', { changedFiles: 3, ahead: 2 })];
+
+  /* When */
+  const result = await service.prepareIssueWorktree({ projectPath: ROOT, issue: key(114), plan: plan([issue(114, 'Stage')]) });
+
+  /* Then */
+  assert.deepEqual(result, {
+    ok: false,
+    reason: 'Branch 114-stage already exists',
+    existing: { branch: '114-stage', worktreePath: worktree, main: false, changedFiles: 3, ahead: 2, sessionId: 'newer' },
+  });
+  assert.deepEqual(git.writes, []);
+});
+
+test('an existing branch without a worktree names the session whose transcripts were written on it', async () => {
+  /* Given */
+  const { service, git } = harness({
+    sessions: [session('on-it', { activeAt: 5, archived: true }), session('other', { activeAt: 9 })],
+    locations: { 'on-it': [at('114-stage')], other: [at('main')] },
+  });
   git.branches.add('114-stage');
 
   /* When */
   const result = await service.prepareIssueWorktree({ projectPath: ROOT, issue: key(114), plan: plan([issue(114, 'Stage')]) });
 
   /* Then */
-  assert.deepEqual(result, { ok: false, reason: 'Branch 114-stage already exists' });
+  assert.deepEqual(!result.ok && result.existing, {
+    branch: '114-stage', worktreePath: null, main: false, changedFiles: 0, ahead: 0, sessionId: 'on-it',
+  });
+});
+
+test('continuing on an existing branch starts in its worktree, with the prompt to pick up the work', async () => {
+  /* Given */
+  const worktree = '/elsewhere/114-stage';
+  const { service, git } = harness();
+  git.branches.add('114-stage');
+  git.checkouts = [checkout(worktree, '114-stage')];
+
+  /* When */
+  const result = await service.prepareIssueWorktree({
+    projectPath: ROOT, issue: key(114), plan: plan([issue(114, 'Stage')]), existing: 'reuse',
+  });
+
+  /* Then */
+  assert.equal(result.ok && result.worktreePath, worktree);
+  assert.equal(result.ok && result.branch, '114-stage');
+  assert.match(result.ok ? result.prompt : '', /^Continue work on #114, part of #112/);
   assert.deepEqual(git.writes, []);
+});
+
+test('continuing on an existing branch without a worktree adds one for it', async () => {
+  /* Given */
+  const { service, git } = harness();
+  git.branches.add('114-stage');
+
+  /* When */
+  const result = await service.prepareIssueWorktree({
+    projectPath: ROOT, issue: key(114), plan: plan([issue(114, 'Stage')]), existing: 'reuse',
+  });
+
+  /* Then */
+  assert.equal(result.ok && result.worktreePath, ROOT + '/.claude/worktrees/114-stage');
+  assert.deepEqual(git.writes, ['worktree prune', `worktree add ${ROOT}/.claude/worktrees/114-stage 114-stage`]);
+});
+
+test('replacing an existing branch deletes its worktree and branch, then starts afresh from the default branch', async () => {
+  /* Given */
+  const worktree = ROOT + '/.claude/worktrees/114-stage';
+  const { service, git } = harness();
+  git.branches.add('114-stage');
+  git.checkouts = [checkout(worktree, '114-stage', { changedFiles: 1 })];
+
+  /* When */
+  const result = await service.prepareIssueWorktree({
+    projectPath: ROOT, issue: key(114), plan: plan([issue(114, 'Stage')]), existing: 'replace',
+  });
+
+  /* Then */
+  assert.equal(result.ok && result.worktreePath, worktree);
+  assert.match(result.ok ? result.prompt : '', /^Work on #114/);
+  assert.deepEqual(git.writes, [
+    `worktree remove --force ${worktree}`,
+    'worktree prune',
+    'branch -D 114-stage',
+    'fetch main',
+    `worktree add -b 114-stage ${worktree} origin/main`,
+  ]);
+});
+
+test('replacing an existing branch stops, with git\'s reason, when its worktree cannot be deleted', async () => {
+  /* Given */
+  const worktree = ROOT + '/.claude/worktrees/114-stage';
+  const { service, git } = harness();
+  git.branches.add('114-stage');
+  git.checkouts = [checkout(worktree, '114-stage')];
+  git.failing.set('remove', 'Permission denied');
+
+  /* When */
+  const result = await service.prepareIssueWorktree({
+    projectPath: ROOT, issue: key(114), plan: plan([issue(114, 'Stage')]), existing: 'replace',
+  });
+
+  /* Then */
+  assert.deepEqual(result, { ok: false, reason: 'Could not delete the worktree: Permission denied' });
+  assert.deepEqual(git.writes, [`worktree remove --force ${worktree}`]);
+});
+
+test('a branch checked out in the main checkout is never deleted', async () => {
+  /* Given */
+  const { service, git } = harness();
+  git.branches.add('114-stage');
+  git.checkouts = [checkout(ROOT, '114-stage', { main: true })];
+
+  /* When */
+  const result = await service.prepareIssueWorktree({
+    projectPath: ROOT, issue: key(114), plan: plan([issue(114, 'Stage')]), existing: 'replace',
+  });
+
+  /* Then */
+  assert.equal(!result.ok && result.reason, 'Branch 114-stage is checked out in the main checkout, which is never deleted');
+  assert.deepEqual(git.writes, []);
+});
+
+test('an archived session owns no issue', async () => {
+  /* Given */
+  const { service } = harness({
+    sessions: [session('archived', { activeAt: 5, archived: true })],
+    locations: { archived: [at('114-stage')] },
+  });
+
+  /* When */
+  const owners = await service.issueSessions(REPO);
+
+  /* Then */
+  assert.deepEqual(owners, {});
 });
 
 test('a project whose origin is not on GitHub is refused', async () => {

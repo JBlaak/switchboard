@@ -11,10 +11,10 @@ import { isRemoteProjectPath } from '../../domain/project/remote-target';
 import { gitHubRepository } from '../../domain/project/repo-url';
 import {
   issueLabel, issueOwners, startBase,
-  type IssueOwnerCandidate, type IssueWorktreeRequest, type IssueWorktreeResult,
+  type ExistingIssueBranch, type IssueOwnerCandidate, type IssueWorktreeRequest, type IssueWorktreeResult,
 } from '../../domain/plan/issue-session';
 import { sameIssue, type IssueKey } from '../../domain/plan/model';
-import { issueBranchName, issueSessionPrompt } from '../../domain/plan/start';
+import { issueBranchName, issueContinuePrompt, issueSessionPrompt } from '../../domain/plan/start';
 import type { SessionPullRequest } from '../../domain/session/session';
 import type { Clock } from '../ports/clock';
 import type { GitWorkspace, GitWorktrees } from '../ports/git-workspace';
@@ -38,12 +38,14 @@ export interface IssueSessionCandidate {
   /** Epoch ms of its last activity. */
   activeAt: number;
   pullRequests: readonly SessionPullRequest[];
+  /** Archived: it owns no issue, but may still be the session an existing branch was worked on in. */
+  archived?: boolean;
 }
 
 export interface IssueSessionServiceDeps {
   sessions(): IssueSessionCandidate[];
   transcripts: Pick<TranscriptStore, 'locations'>;
-  git: Pick<GitWorkspace, 'currentBranch' | 'defaultBranch' | 'branchExists' | 'commitSha'> & Omit<GitWorktrees, 'removeWorktree'>;
+  git: Pick<GitWorkspace, 'currentBranch' | 'defaultBranch' | 'branchExists' | 'commitSha' | 'worktrees'> & GitWorktrees;
   remotes: GitRemotes;
   github: Pick<GitHubCli, 'available' | 'closingIssues'>;
   clock: Clock;
@@ -66,7 +68,7 @@ export class IssueSessionService {
   async issueSessions(repository: string): Promise<Record<string, string>> {
     const candidates: { session: IssueSessionCandidate; branches: string[] }[] = [];
     for (const session of this.deps.sessions()) {
-      if (isRemoteProjectPath(session.projectPath)) continue;
+      if (session.archived || isRemoteProjectPath(session.projectPath)) continue;
       if ((await this.#repositoryOf(session.projectPath)) !== repository) continue;
       candidates.push({ session, branches: await this.#branchesOf(session) });
     }
@@ -153,8 +155,11 @@ export class IssueSessionService {
    * after it, under the repository's `.claude/worktrees/`, off the default
    * branch, or off its blocker's open PR when it is Locked (A3). Answers the
    * worktree and the prompt, or why there is none.
+   *
+   * When the branch exists already, nothing is written unless the request
+   * says what to do with it (`existing`); the refusal says what is there.
    */
-  async prepareIssueWorktree({ projectPath, issue, plan }: IssueWorktreeRequest): Promise<IssueWorktreeResult> {
+  async prepareIssueWorktree({ projectPath, issue, plan, existing }: IssueWorktreeRequest): Promise<IssueWorktreeResult> {
     const { git } = this.deps;
     if (isRemoteProjectPath(projectPath)) return fail('A session on an issue can only start in a local project');
     const root = await git.mainCheckout(projectPath);
@@ -169,7 +174,28 @@ export class IssueSessionService {
     if (!planIssue) return fail(`#${issue.number} is not part of plan #${plan.number}`);
 
     const branch = issueBranchName(planIssue);
-    if (await git.branchExists(root, branch)) return fail(`Branch ${branch} already exists`);
+    const worktreePath = root.replace(/\/+$/, '') + WORKTREES_DIR + branch;
+    if (await git.branchExists(root, branch)) {
+      const found = await this.#existingBranch(root, branch);
+      if (existing === 'reuse') {
+        if (!found.worktreePath) {
+          // A worktree whose directory has gone still holds its branch until it is pruned.
+          await git.pruneWorktrees(root);
+          const added = await git.checkoutWorktree(root, worktreePath, branch);
+          if (!added.ok) return fail('Could not create the worktree: ' + added.reason);
+        }
+        return { ok: true, worktreePath: found.worktreePath ?? worktreePath, branch, prompt: issueContinuePrompt(issue, plan) };
+      }
+      if (existing !== 'replace') return { ok: false, reason: `Branch ${branch} already exists`, existing: found };
+      if (found.main) return fail(`Branch ${branch} is checked out in the main checkout, which is never deleted`);
+      if (found.worktreePath) {
+        const removed = await git.removeWorktree(root, found.worktreePath, { force: true });
+        if (!removed.ok) return fail('Could not delete the worktree: ' + removed.reason);
+      }
+      await git.pruneWorktrees(root);
+      const deleted = await git.deleteBranch(root, branch);
+      if (!deleted.ok) return fail(`Could not delete branch ${branch}: ` + deleted.reason);
+    }
 
     const warnings: string[] = [];
     const defaultBranch = await git.defaultBranch(root);
@@ -200,7 +226,6 @@ export class IssueSessionService {
       if (!fetched.ok) warnings.push(`Could not fetch ${defaultBranch} (${fetched.reason}); started from the last one fetched.`);
     }
 
-    const worktreePath = root.replace(/\/+$/, '') + WORKTREES_DIR + branch;
     const added = await git.addWorktree(root, worktreePath, branch, base);
     if (!added.ok) return fail('Could not create the worktree: ' + added.reason);
 
@@ -213,6 +238,44 @@ export class IssueSessionService {
       ...(warnings.length ? { warning: warnings.join(' ') } : {}),
     };
   }
+
+  /**
+   * Where an existing branch is checked out, what is on it, and the session
+   * that worked there last: one in its worktree, else one whose transcripts
+   * were written on the branch.
+   */
+  async #existingBranch(root: string, branch: string): Promise<ExistingIssueBranch> {
+    const checkout = (await this.deps.git.worktrees(root)).find((worktree) => worktree.branch === branch) ?? null;
+    const local = this.deps.sessions().filter((session) => !isRemoteProjectPath(session.projectPath));
+    const newest = (sessions: IssueSessionCandidate[]) =>
+      sessions.reduce<IssueSessionCandidate | null>((best, session) => (!best || session.activeAt > best.activeAt ? session : best), null);
+
+    let session = checkout && !checkout.main
+      ? newest(local.filter((candidate) => isUnder(candidate.projectPath, checkout.path)))
+      : null;
+    if (!session) {
+      const onBranch: IssueSessionCandidate[] = [];
+      for (const candidate of local) {
+        if (!isUnder(candidate.projectPath, root)) continue;
+        if ((await this.#branchesOf(candidate)).includes(branch)) onBranch.push(candidate);
+      }
+      session = newest(onBranch);
+    }
+    return {
+      branch,
+      worktreePath: checkout?.path ?? null,
+      main: checkout?.main ?? false,
+      changedFiles: checkout?.changedFiles ?? 0,
+      ahead: checkout?.ahead ?? 0,
+      sessionId: session?.sessionId ?? null,
+    };
+  }
+}
+
+/** `path` is `dir` or a directory under it. */
+function isUnder(path: string, dir: string): boolean {
+  const base = dir.replace(/\/+$/, '');
+  return path === base || path.startsWith(base + '/');
 }
 
 function fail(reason: string): IssueWorktreeResult {
