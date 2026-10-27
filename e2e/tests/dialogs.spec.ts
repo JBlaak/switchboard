@@ -420,6 +420,29 @@ test.describe('adding a project', () => {
     await expect(litRows(page)).toHaveCount(0);
   });
 
+  test('the Add project button beside the title opens the add step, and a folder added there opens its page', async ({ page, home }) => {
+    /* Given */
+    const target = home.projectPath('Development/brand-new');
+    fs.mkdirSync(target, { recursive: true });
+    await openProjects(page);
+    const add = dialog(page, /Add project$/);
+
+    /* When */
+    await projectsModal(page).getByRole('button', { name: 'Add project', exact: true }).click();
+
+    /* Then */
+    await expect(add.getByPlaceholder('/path/to/project')).toBeFocused();
+    await expect(add.getByRole('button', { name: 'Add project', exact: true })).toHaveCount(0);
+
+    /* When */
+    await add.getByPlaceholder('/path/to/project').fill(target);
+    await add.getByRole('button', { name: 'Add', exact: true }).click();
+
+    /* Then */
+    await expect(projectsModal(page)).toHaveCount(0);
+    await expect(newProjectPage(page)).toBeVisible();
+  });
+
   test('user@host opens the SSH tab filled in; a duplicate is refused, a new one added, its page opened and dialled from it', async ({ page, home }) => {
     /* Given */
     await openProjects(page);

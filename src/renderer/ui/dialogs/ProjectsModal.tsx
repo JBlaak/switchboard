@@ -7,7 +7,8 @@
  * prompt is waiting, which leaving would lose. The rest of a project's actions sit in one ⋯ menu on
  * the highlighted row (⌘.): its settings, its GitHub page, archiving all its
  * sessions, and hiding it (or, for a remote, removing it). "Add project…" is
- * always the last row (⌘↵) and opens the add step in the same modal. Search
+ * always the last row (⌘↵), and a button beside the title that no scrolling
+ * hides; both open the add step in the same modal. Search
  * text that is a path offers to add that folder; `user@host` offers to add
  * that machine. A project added either way opens on its page.
  *
@@ -310,6 +311,17 @@ export function ProjectsModal({ onClose, initialPrompt }: ProjectsModalProps): J
             </h3>
           )
           : <h3>{title}</h3>}
+        {!addStep && (
+          <button
+            type="button"
+            className="projects-add-btn"
+            title="Add a local folder or an SSH remote (⌘↵)"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => openAddStep(classified)}
+          >
+            <PlusIcon /> Add project
+          </button>
+        )}
         <kbd className="sw-kbd projects-esc" aria-hidden="true">esc</kbd>
         {addStep
           ? <AddProjectStep start={addStep} onBack={backFromAdd} onClose={onClose} onAdded={added} />

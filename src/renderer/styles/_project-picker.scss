@@ -2,8 +2,9 @@
    The dialog shell comes from _add-project-dialog; this styles what sits in
    it — a find-style filter field above a list of soft rows, the add rows, the
    ⋯ menu and the add step. */
+/* Wide enough that the highlighted row's buttons leave a long name room. */
 .project-picker-dialog {
-  width: 540px;
+  width: 760px;
   max-width: 90vw;
 }
 
@@ -16,6 +17,29 @@
   position: absolute;
   top: 4px;
   right: 0;
+}
+
+/* Add project, beside the title: always in sight, however long the list. */
+.projects-add-btn {
+  appearance: none;
+  position: absolute;
+  top: -1px;
+  right: 46px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px 0 9px;
+  border: none;
+  border-radius: 8px;
+  background: var(--sb-mint);
+  color: var(--sb-accent);
+  font: 700 12.5px var(--sb-font-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: box-shadow 0.12s;
+
+  &:hover { box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb),0.35); }
 }
 
 /* The add step's title: a way back, then where you are. */
@@ -77,7 +101,7 @@
 }
 
 .project-picker-list {
-  max-height: 50vh;
+  max-height: 60vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
