@@ -48,7 +48,7 @@ import { ShellClaudeCaller } from '../infrastructure/claude-cli/claude-caller';
 import { ClaudeCommandRunner } from '../infrastructure/claude-cli/command-runner';
 import { OAuthUsageService } from '../infrastructure/claude-cli/usage-service';
 import {
-  ElectronAppearanceGateway, ElectronDialogService, ElectronSystemGateway,
+  ElectronAppIconGateway, ElectronAppearanceGateway, ElectronDialogService, ElectronSystemGateway,
 } from '../infrastructure/electron/desktop';
 import { ElectronRendererGateway } from '../infrastructure/electron/renderer-gateway';
 import { ElectronWindowDrag } from '../infrastructure/electron/window-drag';
@@ -163,6 +163,7 @@ export interface Container {
   readonly dockAttention: ElectronDockAttention;
   readonly system: ElectronSystemGateway;
   readonly appearance: ElectronAppearanceGateway;
+  readonly appIcon: ElectronAppIconGateway;
   readonly sleep: PmsetSleepControl;
   readonly git: GitCliRemotes;
   readonly projectsWatcher: ProjectsWatcher;
@@ -367,6 +368,8 @@ export function buildContainer(): Container {
   const dockAttention = new ElectronDockAttention();
   const system = new ElectronSystemGateway(log);
   const appearance = new ElectronAppearanceGateway();
+  // Beside the window icon: build/ is packaged next to app/.
+  const appIcon = new ElectronAppIconGateway(path.join(appDir(), '..', 'build', 'dock'), log);
   const sleep = new PmsetSleepControl(log);
   const git = new GitCliRemotes();
   const projectFolders = new ProjectFolderService({ fs, git: workspace, remotes: git });
@@ -583,7 +586,7 @@ export function buildContainer(): Container {
     phoneSessions: phone.sessions,
     phoneAdvertiser,
     lanWatcher,
-    renderer, windowRenderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
+    renderer, windowRenderer, dialogs, windowDrag, dockAttention, system, appearance, appIcon, sleep, git, projectsWatcher,
     setWindow: (next) => { window = next; },
     getWindow,
     setWindowOpener: (open) => { openWindow = open; },

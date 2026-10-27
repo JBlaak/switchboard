@@ -230,6 +230,7 @@ test.describe('global save', () => {
     await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('4');
     await field(page, 'Session Max Age (days)').getByRole('spinbutton').fill('2');
     await switchOn(page, 'Show weather on the empty screen');
+    await field(page, 'Dock Icon').getByRole('combobox').selectOption('patch');
     await button(page, 'Save Settings').click();
 
     /* Then */
@@ -257,6 +258,7 @@ test.describe('global save', () => {
       sessionMaxAgeDays: 2,
       weatherEnabled: true,
       weatherLocation: { name: 'Amsterdam', latitude: 52.3676, longitude: 4.9041 },
+      appIcon: 'patch',
     });
     await expect(quick).toBeVisible();
   });

@@ -11,6 +11,7 @@ import { PERMISSION_MODES } from '../../../domain/launch/session-options';
 import {
   resolveQuickAskEnabled, resolveRemoveWorktreeOnArchive, resolveWeatherEnabled, resolveWeatherLocation,
 } from '../../../domain/settings/settings';
+import { APP_ICONS, APP_ICON_LABELS, normaliseAppIcon } from '../../../domain/settings/app-icon';
 import { DEFAULT_WEATHER_LOCATION } from '../../../domain/weather/weather';
 import { missingServersLine } from '../../../domain/ask/capture';
 import { isFontAvailable } from '../../features/terminal/terminal-manager';
@@ -73,6 +74,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
   const weatherEnabled = useRef<HTMLInputElement>(null);
   const quickAsk = useRef<HTMLInputElement>(null);
   const removeWorktree = useRef<HTMLInputElement>(null);
+  const appIcon = useRef<HTMLSelectElement>(null);
 
   const readers: Record<LaunchOption, () => unknown> = {
     permissionMode: () => permMode.current!.value || null,
@@ -88,6 +90,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
     settings.quickSessionPath = quickSessionPath.current!.value.trim();
     settings.quickAsk = quickAsk.current!.checked;
     settings.removeWorktreeOnArchive = removeWorktree.current!.checked;
+    settings.appIcon = normaliseAppIcon(appIcon.current!.value);
     settings.visibleSessionCount = parseInt(visibleCount.current!.value) || 25;
     settings.sessionMaxAgeDays = parseInt(maxAge.current!.value) || 3;
     settings.terminalTheme = terminalTheme.current!.value || 'switchboard';
@@ -238,6 +241,17 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
           description={<>Weather for <span id="sv-weather-resolved">{weather.resolvedName}</span><span id="sv-weather-warning" className="settings-warning">{weather.warning}</span></>}>
           <input type="text" className="settings-input" id="sv-weather-city" ref={weather.cityRef}
             placeholder={DEFAULT_WEATHER_LOCATION.name} defaultValue={resolveWeatherLocation(current).name} style={{ width: '180px' }} />
+        </AppField>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">App Icon</div>
+
+        <AppField label="Dock Icon"
+          description="The icon Switchboard shows in the Dock while it runs. Closed, it shows the Switchboard icon.">
+          <select className="settings-select" id="sv-app-icon" ref={appIcon} defaultValue={normaliseAppIcon(current.appIcon)}>
+            {APP_ICONS.map(icon => <option key={icon} value={icon}>{APP_ICON_LABELS[icon]}</option>)}
+          </select>
         </AppField>
       </div>
 

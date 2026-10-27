@@ -8,6 +8,7 @@
  */
 import type { RemoteConfig } from '../project/remote-target';
 import type { RemoteSessionRecord } from '../session/session';
+import type { AppIcon } from './app-icon';
 import type { Appearance } from './appearance';
 import { DEFAULT_WEATHER_LOCATION, parseWeatherLocation } from '../weather/weather';
 import type { WeatherLocation } from '../weather/weather';
@@ -48,6 +49,11 @@ export interface GlobalSettings {
    * `false` default.
    */
   removeWorktreeOnArchive?: boolean;
+  /**
+   * Global only. Which icon the running app shows in the Dock; read it through
+   * `normaliseAppIcon`, which supplies 'switchboard'.
+   */
+  appIcon?: AppIcon;
   [key: string]: unknown;
 }
 

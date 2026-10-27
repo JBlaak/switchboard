@@ -1,13 +1,15 @@
 /**
- * The handful of host capabilities behind the DialogService, SystemGateway and
- * AppearanceGateway ports.
+ * The handful of host capabilities behind the DialogService, SystemGateway,
+ * AppearanceGateway and AppIconGateway ports.
  */
+import path from 'node:path';
 import { app, clipboard, dialog, nativeImage, nativeTheme, shell } from 'electron';
 import type { BrowserWindow } from 'electron';
 import type {
-  AppearanceGateway, DialogService, SystemGateway,
+  AppIconGateway, AppearanceGateway, DialogService, SystemGateway,
 } from '../../application/ports/desktop';
 import type { Logger } from '../../application/ports/logger';
+import type { AppIcon } from '../../domain/settings/app-icon';
 import type { Appearance } from '../../domain/settings/appearance';
 
 export class ElectronDialogService implements DialogService {
@@ -66,5 +68,33 @@ export class ElectronSystemGateway implements SystemGateway {
 export class ElectronAppearanceGateway implements AppearanceGateway {
   apply(mode: Appearance): void {
     nativeTheme.themeSource = mode;
+  }
+}
+
+/**
+ * The Dock tile's icon, via `app.dock.setIcon`.
+ *
+ * It only lasts while the app runs, so it is applied at every launch. Until a
+ * different icon is asked for, the tile shows the bundle's own icon, which is
+ * the Switchboard one: asking for that first changes nothing, so a packaged
+ * app keeps the crisp .icns rather than a PNG standing in for it.
+ */
+export class ElectronAppIconGateway implements AppIconGateway {
+  /** The icon on the tile; 'switchboard' until a different one is set. */
+  private shown: AppIcon = 'switchboard';
+
+  /** `dir` holds one PNG per icon, already inset the way the Dock expects. */
+  constructor(private readonly dir: string, private readonly log: Logger) {}
+
+  apply(icon: AppIcon): void {
+    const dock = app.dock;
+    if (!dock || icon === this.shown) return;
+    const image = nativeImage.createFromPath(path.join(this.dir, `${icon}.png`));
+    if (image.isEmpty()) {
+      this.log.error('[app-icon] no Dock icon for', icon, 'in', this.dir);
+      return;
+    }
+    dock.setIcon(image);
+    this.shown = icon;
   }
 }

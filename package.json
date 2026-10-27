@@ -66,6 +66,7 @@
     "files": [
       "app/**/*",
       "build/icon.png",
+      "build/dock/*.png",
       "node_modules/**/*"
     ],
     "asarUnpack": [
