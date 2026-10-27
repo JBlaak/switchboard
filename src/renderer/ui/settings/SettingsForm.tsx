@@ -8,7 +8,9 @@
  */
 import { useRef, useState } from 'react';
 import { PERMISSION_MODES } from '../../../domain/launch/session-options';
-import { resolveQuickAskEnabled, resolveWeatherEnabled, resolveWeatherLocation } from '../../../domain/settings/settings';
+import {
+  resolveQuickAskEnabled, resolveRemoveWorktreeOnArchive, resolveWeatherEnabled, resolveWeatherLocation,
+} from '../../../domain/settings/settings';
 import { DEFAULT_WEATHER_LOCATION } from '../../../domain/weather/weather';
 import { missingServersLine } from '../../../domain/ask/capture';
 import { isFontAvailable } from '../../features/terminal/terminal-manager';
@@ -70,6 +72,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
   const maxAge = useRef<HTMLInputElement>(null);
   const weatherEnabled = useRef<HTMLInputElement>(null);
   const quickAsk = useRef<HTMLInputElement>(null);
+  const removeWorktree = useRef<HTMLInputElement>(null);
 
   const readers: Record<LaunchOption, () => unknown> = {
     permissionMode: () => permMode.current!.value || null,
@@ -84,6 +87,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
     for (const field of LAUNCH_FIELDS) settings[field] = readers[field]();
     settings.quickSessionPath = quickSessionPath.current!.value.trim();
     settings.quickAsk = quickAsk.current!.checked;
+    settings.removeWorktreeOnArchive = removeWorktree.current!.checked;
     settings.visibleSessionCount = parseInt(visibleCount.current!.value) || 25;
     settings.sessionMaxAgeDays = parseInt(maxAge.current!.value) || 3;
     settings.terminalTheme = terminalTheme.current!.value || 'switchboard';
@@ -160,6 +164,12 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
             quickAskWarning(resolveQuickAskEnabled(current), panel)}</span></>}>
           <label className="settings-toggle"><input type="checkbox" id="sv-quick-ask" ref={quickAsk}
             defaultChecked={resolveQuickAskEnabled(current)} /><span className="settings-toggle-slider"></span></label>
+        </AppField>
+
+        <AppField label="Remove Worktree on Archive"
+          description="Archiving a session removes the git worktrees it worked in, when nothing in them is uncommitted. Their branches are kept; ignored files such as node_modules go with them">
+          <label className="settings-toggle"><input type="checkbox" id="sv-remove-worktree-on-archive" ref={removeWorktree}
+            defaultChecked={resolveRemoveWorktreeOnArchive(current)} /><span className="settings-toggle-slider"></span></label>
         </AppField>
       </div>
 

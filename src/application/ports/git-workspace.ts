@@ -11,7 +11,9 @@
  *
  * `GitWorktrees`, at the end, is the one exception to "only questions":
  * starting a session on a plan's issue (A2) fetches the branch it starts from
- * and adds a worktree for it, because the user asked for exactly that.
+ * and adds a worktree for it, because the user asked for exactly that; and
+ * archiving a session removes the worktrees it worked in, when the user has
+ * switched that on.
  */
 import type { FileChange, LineStats } from '../../domain/session-work/model';
 import type { WorktreeSummary } from '../../domain/project/overview';
@@ -115,8 +117,9 @@ export interface GitWorkspace {
 export type GitWrite = { ok: true } | { ok: false; reason: string };
 
 /**
- * The worktree a session on a plan's issue starts in (A2, A3). Writes, and
- * only these: a fetch of the branch it starts from, and the worktree itself.
+ * The worktree a session on a plan's issue starts in (A2, A3), and its removal
+ * once the session is archived. Writes, and only these: a fetch of the branch
+ * it starts from, the worktree itself, and taking the worktree away again.
  */
 export interface GitWorktrees {
   /**
@@ -133,4 +136,11 @@ export interface GitWorktrees {
    * nothing, so it only counts as pushed once it has been.
    */
   addWorktree(repository: string, path: string, branch: string, base: string): Promise<GitWrite>;
+
+  /**
+   * `git worktree remove <path>`, never forced: git refuses a worktree with
+   * uncommitted or untracked changes, or a locked one, and says why. Its
+   * branch is kept. Files `.gitignore` covers go with the directory.
+   */
+  removeWorktree(repository: string, path: string): Promise<GitWrite>;
 }

@@ -43,7 +43,7 @@ export interface IssueSessionCandidate {
 export interface IssueSessionServiceDeps {
   sessions(): IssueSessionCandidate[];
   transcripts: Pick<TranscriptStore, 'locations'>;
-  git: Pick<GitWorkspace, 'currentBranch' | 'defaultBranch' | 'branchExists' | 'commitSha'> & GitWorktrees;
+  git: Pick<GitWorkspace, 'currentBranch' | 'defaultBranch' | 'branchExists' | 'commitSha'> & Omit<GitWorktrees, 'removeWorktree'>;
   remotes: GitRemotes;
   github: Pick<GitHubCli, 'available' | 'closingIssues'>;
   clock: Clock;

@@ -140,3 +140,37 @@ test('addWorktree runs the checkout\'s filters off the tool environment\'s PATH'
   assert.deepEqual(withTool, { ok: true });
   assert.equal(fs.readFileSync(path.join(tmp, 'filtered-login', 'asset.bin'), 'utf8'), 'Asset\n');
 });
+
+test('removeWorktree removes a clean worktree, its ignored files with it, and keeps its branch', async () => {
+  /* Given */
+  const worktree = path.join(tmp, 'clean');
+  run(repo, 'worktree', 'add', '-q', '-b', '117-clean', worktree, 'main');
+  fs.writeFileSync(path.join(worktree, '.gitignore'), 'node_modules/\n');
+  run(worktree, 'add', '.gitignore');
+  run(worktree, 'commit', '-q', '-m', 'Ignore node_modules');
+  fs.mkdirSync(path.join(worktree, 'node_modules'));
+  fs.writeFileSync(path.join(worktree, 'node_modules', 'dep.js'), '');
+
+  /* When */
+  const result = await git.removeWorktree(repo, worktree);
+
+  /* Then */
+  assert.deepEqual(result, { ok: true });
+  assert.equal(fs.existsSync(worktree), false);
+  assert.equal(await git.branchExists(repo, '117-clean'), true);
+});
+
+test('removeWorktree refuses a worktree with untracked files, with git\'s reason', async () => {
+  /* Given */
+  const worktree = path.join(tmp, 'dirty');
+  run(repo, 'worktree', 'add', '-q', '-b', '118-dirty', worktree, 'main');
+  fs.writeFileSync(path.join(worktree, 'notes.txt'), 'not committed\n');
+
+  /* When */
+  const result = await git.removeWorktree(repo, worktree);
+
+  /* Then */
+  assert.equal(result.ok, false);
+  assert.match(result.ok ? '' : result.reason, /untracked/);
+  assert.equal(fs.existsSync(path.join(worktree, 'notes.txt')), true);
+});

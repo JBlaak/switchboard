@@ -42,6 +42,12 @@ export interface GlobalSettings {
    * `resolveQuickAskEnabled`, which supplies the `true` default.
    */
   quickAsk?: boolean;
+  /**
+   * Global only. Whether archiving a session removes the worktrees it worked
+   * in; read it through `resolveRemoveWorktreeOnArchive`, which supplies the
+   * `false` default.
+   */
+  removeWorktreeOnArchive?: boolean;
   [key: string]: unknown;
 }
 
@@ -155,6 +161,11 @@ export function resolveWeatherEnabled(global: Record<string, unknown> | null | u
 /** Whether ⌥Space opens Quick Ask. On unless switched off explicitly (H2). */
 export function resolveQuickAskEnabled(global: Record<string, unknown> | null | undefined): boolean {
   return global?.quickAsk !== false;
+}
+
+/** Whether archiving a session removes its worktrees. Off unless switched on explicitly. */
+export function resolveRemoveWorktreeOnArchive(global: Record<string, unknown> | null | undefined): boolean {
+  return global?.removeWorktreeOnArchive === true;
 }
 
 /** Where to fetch the weather for: the stored location if it is a valid one. */

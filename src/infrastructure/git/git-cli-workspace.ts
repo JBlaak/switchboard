@@ -332,7 +332,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
     };
   }
 
-  // ── GitWorktrees: the worktree a session on a plan's issue starts in (A2) ──
+  // ── GitWorktrees: the worktree a session on a plan's issue starts in (A2), and its removal on archive ──
 
   async mainCheckout(cwd: string): Promise<string | null> {
     const result = await git(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
@@ -356,10 +356,17 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
     return gitWrite(repository, ['worktree', 'add', '--quiet', '--no-track', '-b', branch, worktree, base],
       FETCH_TIMEOUT_MS, await this.toolEnv());
   }
+
+  async removeWorktree(repository: string, worktree: string): Promise<GitWrite> {
+    return gitWrite(repository, ['worktree', 'remove', worktree], REMOVE_TIMEOUT_MS, await this.toolEnv());
+  }
 }
 
 /** How long a fetch may take: it goes over the network. */
 const FETCH_TIMEOUT_MS = 60_000;
+
+/** How long removing a worktree may take: a large `node_modules` is slow to delete. */
+const REMOVE_TIMEOUT_MS = 60_000;
 
 /** Run a git command that changes something, answering git's own last word when it fails. */
 function gitWrite(
