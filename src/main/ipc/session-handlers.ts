@@ -48,10 +48,14 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
     return { name: name || null };
   });
 
-  // The window has closed it already; a phone with it open closes it too.
+  // The window has closed it already; a phone with it open closes it too, and
+  // its worktrees go after, when Settings says so.
   ipc.handle(INVOKE.archiveSession, (sessionId: string, archived: boolean) => {
     app.repository.setArchived(sessionId, archived);
-    if (archived) app.phoneSessions.sessionArchived(sessionId);
+    if (archived) {
+      app.phoneSessions.sessionArchived(sessionId);
+      void app.worktreeCleanup.afterArchive(sessionId);
+    }
     return { archived: archived ? 1 : 0 };
   });
 

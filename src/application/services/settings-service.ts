@@ -8,7 +8,7 @@
  */
 import {
   GLOBAL_SETTINGS_KEY, mergeEffectiveSettings, projectSettingsKey, resolveShellProfileId,
-  resolveQuickAskEnabled, resolveWeatherEnabled, resolveWeatherLocation,
+  resolveQuickAskEnabled, resolveRemoveWorktreeOnArchive, resolveWeatherEnabled, resolveWeatherLocation,
 } from '../../domain/settings/settings';
 import { remoteProjectPath } from '../../domain/project/remote-target';
 import type {
@@ -84,6 +84,12 @@ export class SettingsService {
 
   quickAskEnabled(): boolean {
     return resolveQuickAskEnabled(this.global());
+  }
+
+  // ── Archive ──
+
+  removeWorktreeOnArchive(): boolean {
+    return resolveRemoveWorktreeOnArchive(this.global());
   }
 
   // ── Hidden projects ──

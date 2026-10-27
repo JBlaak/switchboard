@@ -4,6 +4,7 @@
  */
 import type { RendererGateway } from '../application/ports/renderer-gateway';
 import type { SessionRepository } from '../application/ports/session-repository';
+import type { WorktreeCleanupService } from '../application/services/worktree-cleanup-service';
 import type { Container } from './composition-root';
 
 export type SessionStopper = Pick<Container, 'registry' | 'remote' | 'lifecycle' | 'terminals'>;
@@ -54,11 +55,12 @@ export function stopSession(app: SessionStopper, sessionId: string): StopResult 
 /**
  * A phone's archive, as the renderer's (`archiveSessionRow`): stopped first,
  * then the row archived, then the window told, so it closes the session as
- * archiving it there would.
+ * archiving it there would. Its worktrees are cleaned up after, on their own.
  */
 export function sessionArchiver(app: SessionStopper & {
   repository: Pick<SessionRepository, 'setArchived'>;
   renderer: Pick<RendererGateway, 'sessionArchived'>;
+  worktreeCleanup: Pick<WorktreeCleanupService, 'afterArchive'>;
 }): { archive(sessionId: string): { ok: boolean } } {
   return {
     archive(sessionId) {
@@ -66,6 +68,7 @@ export function sessionArchiver(app: SessionStopper & {
       if (!stopped.ok) return { ok: false };
       app.repository.setArchived(sessionId, true);
       app.renderer.sessionArchived(sessionId);
+      void app.worktreeCleanup.afterArchive(sessionId);
       return { ok: true };
     },
   };

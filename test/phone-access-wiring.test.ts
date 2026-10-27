@@ -157,6 +157,7 @@ async function mac() {
   };
 
   const devices = memoryDevices();
+  const worktreeCleanup = { afterArchive: async () => {} };
   const phone = buildPhoneAccess({
     identity: new OpensslIdentityStore({
       directory: path.join(dir, `identity-${crypto.randomUUID()}`),
@@ -171,7 +172,7 @@ async function mac() {
     questions,
     router: () => ({ route: async () => ({ kind: 'cancelled' as const }), cancel() {} }),
     launcher,
-    archiver: sessionArchiver({ ...stopper, repository, renderer }),
+    archiver: sessionArchiver({ ...stopper, repository, renderer, worktreeCleanup }),
     settings: {
       get: <T>(key: string) => (settings.get(key) ?? null) as T | null,
       set: (key: string, value: unknown) => { settings.set(key, value); },
@@ -199,6 +200,7 @@ async function mac() {
   const ipc = recordingRegistrar();
   const app = {
     ...stopper, repository, renderer, launcher, questions, phoneAccess: phone.access, phoneSessions: phone.sessions,
+    worktreeCleanup,
   } as unknown as Container;
   registerTerminalHandlers(ipc.ipc, app);
   registerSessionHandlers(ipc.ipc, app);

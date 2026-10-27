@@ -25,6 +25,7 @@ function harness({ alive = true } = {}) {
         renderer.sessionArchived(id);
       },
     },
+    worktreeCleanup: { afterArchive: async (id) => { steps.push(`cleaned up ${id}`); } },
   });
   const addSession = (id: string) => {
     registry.add(id, new ActiveSession({
@@ -45,7 +46,7 @@ test('a phone’s archive stops the session, then archives its row, then tells t
 
   /* Then */
   assert.deepEqual(result, { ok: true });
-  assert.deepEqual(h.steps, ['stop s1', 'archived s1 true', 'told the window s1']);
+  assert.deepEqual(h.steps, ['stop s1', 'archived s1 true', 'told the window s1', 'cleaned up s1']);
 });
 
 test('a session whose process is already gone is retired rather than stopped, and still archived', () => {
@@ -57,7 +58,7 @@ test('a session whose process is already gone is retired rather than stopped, an
   h.archiver.archive('s1');
 
   /* Then */
-  assert.deepEqual(h.steps, ['retire s1', 'archived s1 true', 'told the window s1']);
+  assert.deepEqual(h.steps, ['retire s1', 'archived s1 true', 'told the window s1', 'cleaned up s1']);
 });
 
 test('a session with nothing running is only archived', () => {
@@ -69,5 +70,5 @@ test('a session with nothing running is only archived', () => {
 
   /* Then */
   assert.deepEqual(result, { ok: true });
-  assert.deepEqual(h.steps, ['archived gone true', 'told the window gone']);
+  assert.deepEqual(h.steps, ['archived gone true', 'told the window gone', 'cleaned up gone']);
 });

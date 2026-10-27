@@ -36,6 +36,7 @@ import { ReviewService } from '../application/services/review-service';
 import { SessionActionService } from '../application/services/session-action-service';
 import { PrWatchService } from '../application/services/pr-watch-service';
 import { SettingsService } from '../application/services/settings-service';
+import { WorktreeCleanupService } from '../application/services/worktree-cleanup-service';
 import { UpdateService } from '../application/services/update-service';
 import { WeatherService } from '../application/services/weather-service';
 import { ASK_PATCH_CALL, AskRouteService } from '../application/services/ask-route-service';
@@ -138,6 +139,8 @@ export interface Container {
   readonly review: ReviewService
   readonly prWatch: PrWatchService;
   readonly issueSessions: IssueSessionService;
+  /** Removes an archived session's worktrees, when Settings says to. */
+  readonly worktreeCleanup: WorktreeCleanupService;
   readonly plans: PlanService;
   readonly projectOverview: ProjectOverviewService;
   readonly askRoute: AskRouteService;
@@ -446,6 +449,25 @@ export function buildContainer(): Container {
     clock, log,
   });
 
+  // Archiving removes the session's worktrees, when Settings says to.
+  const worktreeCleanup = new WorktreeCleanupService({
+    enabled: () => settings.removeWorktreeOnArchive(),
+    locate: locateSession,
+    transcripts,
+    git: workspace,
+    otherSessionPaths: (sessionId) => {
+      const meta = repository.getAllMeta();
+      const paths = repository.getAllCached()
+        .filter((cached) => cached.sessionId !== sessionId && !meta.get(cached.sessionId)?.archived)
+        .map((cached) => cached.projectPath);
+      for (const [id, live] of registry.snapshot()) {
+        if (id !== sessionId && !live.exited) paths.push(live.projectPath);
+      }
+      return paths;
+    },
+    log,
+  });
+
   // The project page (#172): one answer, plans through PlanService's cache.
   const projectOverview = new ProjectOverviewService({
     plans,
@@ -498,7 +520,7 @@ export function buildContainer(): Container {
     // Its own instance per phone (#194): a phone's request never cancels the Mac's.
     router: () => new AskRouteService({ cli: claudeCaller, timers, log, call: ASK_PATCH_CALL }),
     launcher,
-    archiver: sessionArchiver({ registry, remote, lifecycle, terminals, repository, renderer }),
+    archiver: sessionArchiver({ registry, remote, lifecycle, terminals, repository, renderer, worktreeCleanup }),
     settings,
     renderer,
     // Hold-to-talk: Whisper's model is fetched into user data on first use.
@@ -531,6 +553,7 @@ export function buildContainer(): Container {
     sessionIndex, projects, projectFolders, usage, schedules, weather, updates, sessionWork, sessionActions, prWatch,
     review,
     issueSessions,
+    worktreeCleanup,
     plans,
     projectOverview,
     askRoute,

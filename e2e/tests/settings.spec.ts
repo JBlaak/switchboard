@@ -247,6 +247,7 @@ test.describe('global save', () => {
       preLaunchCmd: 'direnv exec .',
       quickSessionPath: '/tmp/scratch',
       quickAsk: true,
+      removeWorktreeOnArchive: false,
       terminalTheme: 'nord',
       terminalFontFamily: 'Menlo',
       terminalFontSize: 32,
