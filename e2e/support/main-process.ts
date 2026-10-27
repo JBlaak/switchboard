@@ -119,6 +119,14 @@ export interface PlansStub {
    * disk. Unset, the real service answers (and needs a GitHub repository).
    */
   prepareWorktrees?: boolean;
+  /**
+   * With `prepareWorktrees`: the issues whose branch exists already. Asked
+   * without `existing`, one answers the refusal, naming `session` as the one
+   * that worked on it; with `reuse` it answers the continue prompt, and with
+   * `replace` a fresh start. Every request's `existing` is kept, in order, on
+   * `globalThis.__existingAsked` in main.
+   */
+  existingBranches?: { issues: number[]; session: string | null };
 }
 
 /**
@@ -287,9 +295,25 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
       ipcMain.handle(channels.planIssueSessions, (_event, repo) => plans.issueSessions?.[String(repo)] ?? {});
       if (plans.prepareWorktrees) {
         ipcMain.removeHandler(channels.planPrepareIssueWorktree);
-        ipcMain.handle(channels.planPrepareIssueWorktree, (_event, request: { projectPath: string; issue: { number: number } }) => {
+        ipcMain.handle(channels.planPrepareIssueWorktree, (_event, request: {
+          projectPath: string; issue: { number: number }; existing?: 'replace' | 'reuse';
+        }) => {
           const branch = request.issue.number + '-issue';
-          return { ok: true, worktreePath: request.projectPath + '/.claude/worktrees/' + branch, branch, prompt: 'Work on #' + request.issue.number + '.' };
+          const worktreePath = request.projectPath + '/.claude/worktrees/' + branch;
+          const exists = plans.existingBranches?.issues.includes(request.issue.number);
+          if (exists) {
+            const asked = ((globalThis as { __existingAsked?: (string | null)[] }).__existingAsked ??= []);
+            asked.push(request.existing ?? null);
+          }
+          if (exists && !request.existing) {
+            return {
+              ok: false,
+              reason: `Branch ${branch} already exists`,
+              existing: { branch, worktreePath, main: false, changedFiles: 2, ahead: 1, sessionId: plans.existingBranches!.session },
+            };
+          }
+          const prompt = (request.existing === 'reuse' ? 'Continue work on #' : 'Work on #') + request.issue.number + '.';
+          return { ok: true, worktreePath, branch, prompt };
         });
       }
     }
@@ -374,6 +398,11 @@ export async function sessionWorkClosed(app: ElectronApplication): Promise<strin
   return await app.evaluate(() => {
     return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkClosed];
   });
+}
+
+/** What each Start session on an issue with an existing branch asked to do with it (null: nothing yet), in order. */
+export async function existingBranchAsks(app: ElectronApplication): Promise<(string | null)[]> {
+  return await app.evaluate(() => [...((globalThis as { __existingAsked?: (string | null)[] }).__existingAsked ?? [])]);
 }
 
 /** The actions the page asked main for, in order. */

@@ -7,11 +7,14 @@
  * Open issue and Open PR always show. Jump to session and Start session come
  * through `IssueActions` (#125, wired in `issue-actions`), and show nothing
  * without them. A Locked issue asks before it starts, saying what it stacks
- * on (A3); a warning or a refusal shows inline.
+ * on (A3); a warning or a refusal shows inline. A refusal because the
+ * issue's branch exists already offers what to do with it: continue work on
+ * it, open the session that worked on it, or delete its worktree and branch
+ * (after a second ask) and start again.
  */
-import type { JSX } from 'react';
+import { useState, type JSX } from 'react';
 import { issueKeyString, sameIssue } from '../../../../domain/plan/model';
-import { startBase } from '../../../../domain/plan/issue-session';
+import { startBase, type ExistingIssueBranch } from '../../../../domain/plan/issue-session';
 import type { IssueKey, Plan, PlanIssue, PlanLayout } from '../../../../domain/plan/model';
 import {
   isHolding, issueIn, issueUrl, mainPullRequest, pullRequestUrl, shortRef, shortTitle, STATE_LABEL,
@@ -33,6 +36,8 @@ export function IssueDetail(
   const session = issueActions?.sessionFor?.(issue) ?? null;
   const canStart = !!issueActions?.startSession && (state === 'ready' || state === 'locked') && !session;
   const start = issueActions?.start && sameIssue(issueActions.start.issue, issue) ? issueActions.start : null;
+  // Its options replace Start session, which would only be refused again.
+  const existing = start?.phase === 'answered' && !start.result.ok ? start.result.existing ?? null : null;
 
   const pill = (key: IssueKey) => {
     const other = issueIn(plan, key);
@@ -154,7 +159,10 @@ export function IssueDetail(
           </div>
         </div>
       )}
-      {start?.phase === 'answered' && !start.result.ok && (
+      {existing && (
+        <ExistingBranch key={issueKeyString(issue)} plan={plan} issue={issue} existing={existing} issueActions={issueActions!} />
+      )}
+      {start?.phase === 'answered' && !start.result.ok && !existing && (
         <div className="pv-inline is-error" role="alert">{start.result.reason}</div>
       )}
       {start?.phase === 'answered' && start.result.ok && start.result.warning && (
@@ -167,7 +175,7 @@ export function IssueDetail(
             {'Jump to ' + session.name}
           </button>
         )}
-        {canStart && start?.phase !== 'confirm' && (
+        {canStart && start?.phase !== 'confirm' && !existing && (
           <button
             type="button"
             className="sw-btn is-primary"
@@ -186,6 +194,80 @@ export function IssueDetail(
       </div>
     </aside>
   );
+}
+
+/**
+ * The issue's branch exists already: what is on it, and what to do. Deleting
+ * asks once more, naming what goes with it.
+ */
+function ExistingBranch(
+  { plan, issue, existing, issueActions }:
+  { plan: Plan; issue: PlanIssue; existing: ExistingIssueBranch; issueActions: IssueActions },
+): JSX.Element {
+  const [deleting, setDeleting] = useState(false);
+  const { branch, worktreePath, sessionId } = existing;
+
+  if (deleting) {
+    return (
+      <div className="pv-confirm is-error" role="alertdialog" aria-label="Delete worktree and branch">
+        <span>{deleteLine(existing)}</span>
+        <div className="pv-confirm-buttons">
+          <button type="button" className="sw-btn is-warn" onClick={() => issueActions.startAgain?.(issue, plan, 'replace')}>
+            Delete and start again
+          </button>
+          <button type="button" className="sw-btn" onClick={() => setDeleting(false)}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="pv-confirm" role="alert" aria-label="Branch exists">
+      <span>{existingLine(existing)}</span>
+      <div className="pv-confirm-buttons">
+        <button type="button" className="sw-btn is-primary" onClick={() => issueActions.startAgain?.(issue, plan, 'reuse')}>
+          Continue work
+        </button>
+        {sessionId && issueActions.jumpToSession && (
+          <button type="button" className="sw-btn" onClick={() => issueActions.jumpToSession!(sessionId)}>
+            Open its session
+          </button>
+        )}
+        {!existing.main && (
+          <button type="button" className="sw-btn is-warn" onClick={() => setDeleting(true)}>
+            {worktreePath ? 'Delete worktree and branch…' : 'Delete branch…'}
+          </button>
+        )}
+      </div>
+      <span className="pv-confirm-note">{'Branch ' + branch}</span>
+    </div>
+  );
+}
+
+/** Where the existing branch is and what is on it. */
+export function existingLine({ worktreePath, main, changedFiles, ahead }: ExistingIssueBranch): string {
+  if (main) return 'Its branch exists already, checked out in the main checkout.';
+  if (!worktreePath) return 'Its branch exists already, without a worktree.';
+  const work = [
+    changedFiles ? plural(changedFiles, 'uncommitted file') : '',
+    ahead ? plural(ahead, 'commit') + ' not on the default branch' : '',
+  ].filter(Boolean);
+  return 'Its branch exists already, in a worktree with ' + (work.length ? work.join(' and ') : 'no work on it yet') + '.';
+}
+
+/** What deleting takes with it, asked before it does. */
+export function deleteLine({ worktreePath, changedFiles, ahead }: ExistingIssueBranch): string {
+  const lost = [
+    changedFiles ? plural(changedFiles, 'uncommitted file') : '',
+    ahead ? plural(ahead, 'commit') + ' not on the default branch' : '',
+  ].filter(Boolean);
+  const what = worktreePath ? 'its worktree and branch' : 'its branch';
+  return lost.length
+    ? `Delete ${what}, with ${lost.join(' and ')}? Anything not pushed is gone for good.`
+    : `Delete ${what}, then start again from scratch? Anything not pushed is gone for good.`;
+}
+
+function plural(count: number, noun: string): string {
+  return count + ' ' + noun + (count === 1 ? '' : 's');
 }
 
 /** What starting a Locked issue early stacks on (A3), said before it is confirmed. */

@@ -738,7 +738,18 @@ a.pv-num:hover { color: var(--sb-accent); }
 
 .pv-confirm-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.pv-confirm.is-error {
+  border-color: rgba(var(--sb-red-rgb), 0.35);
+}
+
+.pv-confirm-note {
+  font: 500 11px var(--sb-font-mono);
+  color: var(--sb-text-muted);
+  overflow-wrap: anywhere;
 }
 
 .pv-inline {

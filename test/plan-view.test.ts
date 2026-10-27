@@ -5,7 +5,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { layOutPlan } from '../src/domain/plan/layout';
 import { PlanViewContent } from '../src/renderer/ui/session-work/plan/PlanViewContent';
 import { hereLabel, levelStatus, warningText } from '../src/renderer/ui/session-work/plan/describe';
-import { stackLine } from '../src/renderer/ui/session-work/plan/IssueDetail';
+import { deleteLine, existingLine, stackLine } from '../src/renderer/ui/session-work/plan/IssueDetail';
+import type { IssueActions } from '../src/renderer/ui/session-work/plan/types';
+import type { ExistingIssueBranch } from '../src/domain/plan/issue-session';
 import { diamond, issue, key, merged, needs, plan, pr } from './support/plans';
 
 test('the view draws a plan given directly, with no session around it (F2)', () => {
@@ -106,4 +108,84 @@ test('starting a Locked issue early says what it stacks on (A3)', () => {
   /* Then */
   assert.match(onPr, /Stacked on #1: branches off PR #50/);
   assert.match(noPr, /ahead of #1/);
+});
+
+function existingBranch(fields: Partial<ExistingIssueBranch> = {}): ExistingIssueBranch {
+  return {
+    branch: '10-issue', worktreePath: '/dev/app/.claude/worktrees/10-issue', main: false,
+    changedFiles: 0, ahead: 0, sessionId: null, ...fields,
+  };
+}
+
+function refusedOver(existing: ExistingIssueBranch): IssueActions {
+  return {
+    startSession: () => {},
+    startAgain: () => {},
+    jumpToSession: () => {},
+    start: { issue: key(10), phase: 'answered', result: { ok: false, reason: 'Branch 10-issue already exists', existing } },
+  };
+}
+
+test('a start refused over an existing branch offers to continue, open its session, or delete it', () => {
+  /* Given */
+  const actions = refusedOver(existingBranch({ sessionId: 'earlier', changedFiles: 2, ahead: 1 }));
+
+  /* When */
+  const html = renderToStaticMarkup(createElement(PlanViewContent, {
+    plan: diamond(), ui: { chosen: null, hovered: null, selected: key(10) }, issueActions: actions,
+  }));
+
+  /* Then */
+  assert.match(html, /in a worktree with 2 uncommitted files and 1 commit not on the default branch/);
+  assert.match(html, />Continue work</);
+  assert.match(html, />Open its session</);
+  assert.match(html, />Delete worktree and branch…</);
+  assert.match(html, /Branch 10-issue/);
+  assert.doesNotMatch(html, /pv-inline is-error/);
+  assert.doesNotMatch(html, /Start session on #10/);
+});
+
+test('an existing branch no session worked on offers no session to open', () => {
+  /* Given */
+  const actions = refusedOver(existingBranch({ worktreePath: null }));
+
+  /* When */
+  const html = renderToStaticMarkup(createElement(PlanViewContent, {
+    plan: diamond(), ui: { chosen: null, hovered: null, selected: key(10) }, issueActions: actions,
+  }));
+
+  /* Then */
+  assert.match(html, /exists already, without a worktree/);
+  assert.match(html, />Delete branch…</);
+  assert.doesNotMatch(html, /Open its session/);
+});
+
+test('an existing branch in the main checkout is never offered for deletion', () => {
+  /* Given */
+  const actions = refusedOver(existingBranch({ worktreePath: '/dev/app', main: true, sessionId: 'earlier' }));
+
+  /* When */
+  const html = renderToStaticMarkup(createElement(PlanViewContent, {
+    plan: diamond(), ui: { chosen: null, hovered: null, selected: key(10) }, issueActions: actions,
+  }));
+
+  /* Then */
+  assert.match(html, /checked out in the main checkout/);
+  assert.match(html, />Continue work</);
+  assert.doesNotMatch(html, /Delete/);
+});
+
+test('deleting an existing branch names what goes with it', () => {
+  /* Given */
+  const dirty = existingBranch({ changedFiles: 1, ahead: 3 });
+  const clean = existingBranch({ worktreePath: null });
+
+  /* When */
+  const withWork = deleteLine(dirty);
+  const without = deleteLine(clean);
+
+  /* Then */
+  assert.equal(withWork, 'Delete its worktree and branch, with 1 uncommitted file and 3 commits not on the default branch? Anything not pushed is gone for good.');
+  assert.equal(without, 'Delete its branch, then start again from scratch? Anything not pushed is gone for good.');
+  assert.equal(existingLine(existingBranch()), 'Its branch exists already, in a worktree with no work on it yet.');
 });

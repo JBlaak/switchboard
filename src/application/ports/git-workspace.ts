@@ -11,9 +11,10 @@
  *
  * `GitWorktrees`, at the end, is the one exception to "only questions":
  * starting a session on a plan's issue (A2) fetches the branch it starts from
- * and adds a worktree for it, because the user asked for exactly that; and
- * archiving a session removes the worktrees it worked in, when the user has
- * switched that on.
+ * and adds a worktree for it, because the user asked for exactly that;
+ * when its branch exists already, the user may ask to continue on it or to
+ * delete it and start afresh; and archiving a session removes the worktrees
+ * it worked in, when the user has switched that on.
  */
 import type { FileChange, LineStats } from '../../domain/session-work/model';
 import type { WorktreeSummary } from '../../domain/project/overview';
@@ -137,10 +138,20 @@ export interface GitWorktrees {
    */
   addWorktree(repository: string, path: string, branch: string, base: string): Promise<GitWrite>;
 
+  /** `git worktree add <path> <branch>`: a worktree on a branch that exists already. */
+  checkoutWorktree(repository: string, path: string, branch: string): Promise<GitWrite>;
+
   /**
-   * `git worktree remove <path>`, never forced: git refuses a worktree with
-   * uncommitted or untracked changes, or a locked one, and says why. Its
-   * branch is kept. Files `.gitignore` covers go with the directory.
+   * `git worktree remove <path>`: git refuses a worktree with uncommitted or
+   * untracked changes, or a locked one, and says why, unless `force` (asked
+   * for only when the user chose to throw those changes away). Its branch is
+   * kept. Files `.gitignore` covers go with the directory.
    */
-  removeWorktree(repository: string, path: string): Promise<GitWrite>;
+  removeWorktree(repository: string, path: string, options?: { force?: boolean }): Promise<GitWrite>;
+
+  /** `git worktree prune`: forget worktrees whose directory has gone, so their branch is free again. */
+  pruneWorktrees(repository: string): Promise<GitWrite>;
+
+  /** `git branch -D <branch>`: deleted whether merged or not. */
+  deleteBranch(repository: string, branch: string): Promise<GitWrite>;
 }

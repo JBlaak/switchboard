@@ -174,3 +174,51 @@ test('removeWorktree refuses a worktree with untracked files, with git\'s reason
   assert.match(result.ok ? '' : result.reason, /untracked/);
   assert.equal(fs.existsSync(path.join(worktree, 'notes.txt')), true);
 });
+
+test('removeWorktree with force removes a worktree with uncommitted changes', async () => {
+  /* Given */
+  const worktree = path.join(tmp, 'forced');
+  run(repo, 'worktree', 'add', '-q', '-b', '119-forced', worktree, 'main');
+  fs.writeFileSync(path.join(worktree, 'notes.txt'), 'not committed\n');
+
+  /* When */
+  const result = await git.removeWorktree(repo, worktree, { force: true });
+
+  /* Then */
+  assert.deepEqual(result, { ok: true });
+  assert.equal(fs.existsSync(worktree), false);
+});
+
+test('deleteBranch deletes a branch with commits nothing else has', async () => {
+  /* Given */
+  const worktree = path.join(tmp, 'unmerged');
+  run(repo, 'worktree', 'add', '-q', '-b', '120-unmerged', worktree, 'main');
+  commit(worktree, 'd.txt', 'Unmerged work');
+  run(repo, 'worktree', 'remove', worktree);
+
+  /* When */
+  const result = await git.deleteBranch(repo, '120-unmerged');
+
+  /* Then */
+  assert.deepEqual(result, { ok: true });
+  assert.equal(await git.branchExists(repo, '120-unmerged'), false);
+});
+
+test('a branch whose worktree directory has gone is free again after pruneWorktrees, and checkoutWorktree adds one for it', async () => {
+  /* Given */
+  const gone = path.join(tmp, 'gone');
+  const again = path.join(tmp, 'again');
+  run(repo, 'worktree', 'add', '-q', '-b', '121-gone', gone, 'main');
+  commit(gone, 'e.txt', 'Earlier work');
+  fs.rmSync(gone, { recursive: true, force: true });
+
+  /* When */
+  const pruned = await git.pruneWorktrees(repo);
+  const added = await git.checkoutWorktree(repo, again, '121-gone');
+
+  /* Then */
+  assert.deepEqual(pruned, { ok: true });
+  assert.deepEqual(added, { ok: true });
+  assert.equal(await git.currentBranch(again), '121-gone');
+  assert.equal(fs.existsSync(path.join(again, 'e.txt')), true);
+});

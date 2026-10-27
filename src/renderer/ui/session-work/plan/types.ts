@@ -55,6 +55,11 @@ export interface IssueActions {
   /** Confirm the start that is asking. */
   confirmStart?(plan: Plan): void;
   cancelStart?(): void;
+  /**
+   * Start again on an issue whose branch exists already: `replace` deletes its
+   * worktree and branch first, `reuse` continues in them.
+   */
+  startAgain?(issue: IssueKey, plan: Plan, existing: 'replace' | 'reuse'): void;
   /** Where the start on the selected issue is. */
   readonly start?: PlanStart | null;
   /** Start level pressed on the current level (A1): asks to confirm `issues`, its Ready ones. */

@@ -4,7 +4,9 @@
  * Jump to session, and Start session — straight away on a Ready issue, after
  * a confirmation that says what it stacks on for a Locked one — and Start
  * level, one session with an agent on every Ready issue of the current level,
- * after one confirmation (A1).
+ * after one confirmation (A1). A start refused because the issue's branch
+ * exists already can be started again, replacing that branch or continuing
+ * on it.
  *
  * Starting needs a project to make the worktree in; without one the view
  * offers no Start session.
@@ -42,9 +44,11 @@ function nameOf(sessionId: string): string | null {
   return session ? headerNameFor(session) : null;
 }
 
-async function start(projectPath: string, issue: IssueKey, plan: Plan, show: boolean): Promise<void> {
+async function start(
+  projectPath: string, issue: IssueKey, plan: Plan, show: boolean, existing?: 'replace' | 'reuse',
+): Promise<void> {
   dispatch({ type: 'planStartAsked', issue, confirm: false });
-  const result = await startIssueSession({ projectPath, issue, plan, show }).catch((err: Error) => ({
+  const result = await startIssueSession({ projectPath, issue, plan, show, existing }).catch((err: Error) => ({
     ok: false as const, reason: err.message || 'Could not start the session',
   }));
   // Started without taking the screen: its new row says so instead.
@@ -98,6 +102,9 @@ export function useIssueActions(projectPath: string | null, { show = true }: { s
         if (asking?.phase === 'confirm') void start(projectPath, asking.issue, plan, show);
       },
       cancelStart: () => dispatch({ type: 'planStartCancelled' }),
+      startAgain: (issue, plan, existing) => {
+        if (getState().plan.view?.start?.phase !== 'starting') void start(projectPath, issue, plan, show, existing);
+      },
       startLevel: (plan, level, issues) => dispatch({ type: 'planLevelStartAsked', plan, level, issues }),
       confirmLevelStart: (plan) => { void startLevel(projectPath, plan, !show); },
       cancelLevelStart: () => dispatch({ type: 'planLevelStartCancelled' }),
