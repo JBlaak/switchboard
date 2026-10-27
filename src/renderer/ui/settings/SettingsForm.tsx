@@ -244,6 +244,8 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
         </AppField>
       </div>
 
+      <PhoneAccessSection />
+
       <div className="settings-section">
         <div className="settings-section-title">App Icon</div>
 
@@ -254,8 +256,6 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
           </select>
         </AppField>
       </div>
-
-      <PhoneAccessSection />
 
       <div className="settings-section">
         <div className="settings-section-title">About</div>

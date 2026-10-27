@@ -626,4 +626,18 @@ forEachAppearance(() => {
     /* Then */
     await expectScreen(page, 'settings-global');
   });
+
+  test('global settings, scrolled down to the app icon', async ({ page }) => {
+    /* Given */
+    await openGlobalSettings(page);
+    const body = page.locator('#settings-viewer-body');
+
+    /* When */
+    await body.evaluate(el => el.scrollTo(0, el.scrollHeight));
+
+    /* Then */
+    await expect(field(page, 'Dock Icon').getByRole('combobox')).toBeInViewport();
+    await expectScreen(page, 'settings-global-app-icon');
+  });
+
 });
