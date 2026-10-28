@@ -13,12 +13,16 @@ import { closeSessionWork, openOnGitHub, setWorkTab } from './actions';
 import { agentsLabel, footprintLine, queueLabel, updatedAgo } from './describe';
 import type { SessionWorkPage, WorkTab } from '../../state/session-work-slice';
 import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
+import { LinkTaskButton } from '../session-task/LinkTask';
 
 const NO_AGENTS: readonly WorkingAgent[] = [];
 
-const TABS: readonly { tab: WorkTab; label: string }[] = [{ tab: 'work', label: 'Work' }, { tab: 'plan', label: 'Plan' }];
+const TABS: readonly { tab: WorkTab; label: string }[] = [
+  { tab: 'work', label: 'Work' }, { tab: 'plan', label: 'Plan' }, { tab: 'task', label: 'Task' },
+];
 
-export function WorkHeader({ page, tab }: { page: SessionWorkPage; tab: WorkTab }): JSX.Element {
+/** `tabs` are the ones this session's page has: Task only while it works on one (#250). */
+export function WorkHeader({ page, tab, tabs }: { page: SessionWorkPage; tab: WorkTab; tabs: readonly WorkTab[] }): JSX.Element {
   const now = useStore(state => state.sessionWork.now);
   const agents = useStore(state => state.activity.agents[page.sessionId] ?? NO_AGENTS, shallowEqual);
   const { snapshot } = page;
@@ -75,7 +79,7 @@ export function WorkHeader({ page, tab }: { page: SessionWorkPage; tab: WorkTab 
         </div>
       )}
       <div className="sw-tabs" role="tablist" aria-label="Session work">
-        {TABS.map(({ tab: id, label }) => (
+        {TABS.filter(({ tab: id }) => tabs.includes(id)).map(({ tab: id, label }) => (
           <button
             key={id}
             type="button"
@@ -88,6 +92,7 @@ export function WorkHeader({ page, tab }: { page: SessionWorkPage; tab: WorkTab 
           </button>
         ))}
         <kbd className="sw-kbd" title="t switches tabs">t</kbd>
+        <LinkTaskButton sessionId={page.sessionId} />
       </div>
     </header>
   );

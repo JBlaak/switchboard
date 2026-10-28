@@ -24,6 +24,7 @@ import { isLeaving } from './leave';
 import { SnoozeMenu, snoozeTime } from './SnoozeMenu';
 import { openSessionWorkFromRow } from '../session-work/actions';
 import { highlightedSession } from '../../state/main-area-slice';
+import { TaskMarker } from '../session-task/TaskMarker';
 import type { JSX, MouseEvent } from 'react';
 import type { SessionListRow } from '../../state/session-list-layout';
 import type { WorkingAgent } from '../../../domain/terminal/program-status-children';
@@ -127,6 +128,7 @@ export function SessionItem({ row, groupId }: SessionItemProps): JSX.Element {
                 }}
               >
                 {terminal && <span className="terminal-badge" data-testid="terminal-badge" dangerouslySetInnerHTML={HTML.terminal} />}
+                <TaskMarker sessionId={sessionId} />
                 {sessionDisplayName(session)}
               </div>
             )}

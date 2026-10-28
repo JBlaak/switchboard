@@ -10,9 +10,10 @@
  * stand-in BlaakTasks: a local HTTP server speaking MCP, found through
  * `~/.claude.json` as the real one is. No real BlaakTasks is ever reached.
  *
- * The Tasks page and the session's task chip (#249, #250) drive this from
- * the UI; until then the steps are the ones their start helper takes
- * (`startTaskSessionWith`), called through `window.api`.
+ * The Tasks page (#249) drives the start from the UI; until then the steps
+ * are the ones its start helper takes (`startTaskSessionWith`), called
+ * through `window.api`. A linked session's chip, Task tab and sidebar marker
+ * (#250) are walked through the UI at the end.
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -20,7 +21,9 @@ import http from 'node:http';
 import path from 'node:path';
 import { test, expect } from '../support/test';
 import { FakeCli } from '../support/fake-cli';
-import { P } from '../fixtures/standard';
+import { LABEL, P, S } from '../fixtures/standard';
+import { openSession } from '../support/app';
+import { sessionWorkStub } from '../fixtures/session-work';
 import type { AddressInfo } from 'node:net';
 
 const TASK = '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9';
@@ -34,8 +37,8 @@ interface ToolCall {
   authorization: string | undefined;
 }
 
-/** A stand-in BlaakTasks on loopback: records each `tools/call` and answers with the task. */
-async function fakeBlaakTasks(): Promise<{ url: string; calls: ToolCall[]; close(): Promise<void> }> {
+/** A stand-in BlaakTasks on loopback: records each `tools/call` and answers with the task (with `task`'s fields over it). */
+async function fakeBlaakTasks(task: Record<string, unknown> = {}): Promise<{ url: string; calls: ToolCall[]; close(): Promise<void> }> {
   const calls: ToolCall[] = [];
   const server = http.createServer((req, res) => {
     let body = '';
@@ -43,8 +46,10 @@ async function fakeBlaakTasks(): Promise<{ url: string; calls: ToolCall[]; close
     req.on('end', () => {
       const request = JSON.parse(body) as { id: number; params: { name: string; arguments: Record<string, unknown> } };
       calls.push({ tool: request.params.name, args: request.params.arguments, authorization: req.headers.authorization });
-      const task = { id: TASK, title: TITLE, status: 'In progress', today: true, pullRequests: [], brief: '', progress: [], url: 'https://www.notion.so/x' };
-      const value = request.params.name === 'list' ? [task] : task;
+      const answer = {
+        id: TASK, title: TITLE, status: 'In progress', today: true, pullRequests: [], brief: '', progress: [], url: 'https://www.notion.so/x', ...task,
+      };
+      const value = request.params.name === 'list' ? [answer] : answer;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: { content: [{ type: 'text', text: JSON.stringify(value) }] } }));
     });
@@ -131,4 +136,64 @@ test('with no BlaakTasks URL set, nothing is started and nothing is linked', asy
 
   /* Then */
   expect(answers).toEqual({ prepared: { kind: 'off' }, listed: { kind: 'off' }, linked: {} });
+});
+
+test.describe('the task on its session', () => {
+  test.use({ stubs: { sessionWork: sessionWorkStub() } });
+
+  test('a linked session shows its task: the chip, the Task tab and the sidebar marker', async ({ page, home }) => {
+    /* Given: BlaakTasks on, and a session on screen with no task */
+    const blaakTasks = await fakeBlaakTasks({
+      brief: 'The login page loops back to itself after the cookie expires.',
+      progress: [
+        { day: '2026-10-27', text: 'Claude started work' },
+        { day: '2026-10-28', text: 'Found the cause: the cookie path' },
+      ],
+      pullRequests: ['https://github.com/acme/api/pull/1320'],
+    });
+    try {
+      fs.writeFileSync(path.join(home.home, '.claude.json'), JSON.stringify({
+        mcpServers: { blaaktasks: { type: 'http', url: blaakTasks.url, headers: { Authorization: `Bearer ${TOKEN}` } } },
+      }));
+      await page.evaluate(async (url) => {
+        const global = await window.api.getSetting<Record<string, unknown>>('global');
+        await window.api.setSetting('global', { ...global, blaakTasksUrl: url });
+      }, blaakTasks.url);
+      await openSession(page, home, LABEL.loginFix, S.loginFix);
+      const chip = page.locator('#terminal-header-task');
+      const marker = page.locator(`[data-session-id="${S.loginFix}"]`).getByTestId('session-task-marker');
+      await expect(chip).toHaveCount(0);
+      await expect(marker).toHaveCount(0);
+
+      /* When: the session is linked to the task */
+      await page.evaluate(({ sessionId, task }) => window.api.linkSessionTask(sessionId, task), { sessionId: S.loginFix, task: TASK });
+
+      /* Then: the chip names the task and its status, and the row is marked */
+      await expect(chip).toContainText(TITLE);
+      await expect(chip).toContainText('In progress');
+      await expect(marker).toHaveAttribute('title', 'Task: ' + TITLE);
+
+      /* When: the chip is clicked */
+      await chip.click();
+
+      /* Then: Session work opens on the Task tab, oldest progress first, with the PR's state */
+      const work = page.getByRole('region', { name: /^Session work for / });
+      await expect(work.getByRole('tab', { name: 'Task' })).toHaveAttribute('aria-selected', 'true');
+      const tab = work.getByTestId('session-task-tab');
+      await expect(tab.getByRole('heading', { name: TITLE })).toBeVisible();
+      await expect(tab).toContainText('The login page loops back to itself after the cookie expires.');
+      await expect(tab.locator('.st-log li')).toHaveText([/Claude started work/, /Found the cause: the cookie path/]);
+      await expect(tab.getByRole('button', { name: '#1320 open' })).toBeVisible();
+      for (const name of ['Mark done', 'Snooze', 'Open in Notion']) await expect(tab.getByRole('button', { name })).toBeVisible();
+
+      /* When: unlinked */
+      await page.evaluate((sessionId) => window.api.unlinkSessionTask(sessionId), S.loginFix);
+
+      /* Then: the tab and the marker go */
+      await expect(work.getByRole('tab', { name: 'Task' })).toHaveCount(0);
+      await expect(marker).toHaveCount(0);
+    } finally {
+      await blaakTasks.close();
+    }
+  });
 });
