@@ -94,3 +94,19 @@ test('a session a phone archived leaves the window, as archiving it here would',
   await expect(terminalHeader(page)).toBeHidden();
   await expect(sessionRow(page, LABEL.loginFix)).toHaveCount(0);
 });
+
+test('a session archived from elsewhere leaves with confetti, as a click on its archive button would', async ({ page, app, home }) => {
+  /* Given */
+  // The harness launches with reduced motion on, and under it there is no confetti.
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await openSession(page, home, LABEL.loginFix, S.loginFix);
+
+  /* When */
+  // What main does when the session asked to be archived (or a phone did) and its turn ended.
+  await page.evaluate((id) => window.api.archiveSession(id, true), S.loginFix);
+  await pushEvent(app, EVENT.sessionArchived, S.loginFix);
+
+  /* Then */
+  await expect(page.locator('.confetti .confetti__piece').first()).toBeAttached();
+  await expect(sessionRow(page, LABEL.loginFix)).toHaveCount(0);
+});
