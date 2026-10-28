@@ -123,6 +123,8 @@ async function start(container: Container): Promise<void> {
   container.phoneAccess.start().catch((err: Error) =>
     container.log.error('[phone] failed to start:', err.message));
   container.lanWatcher.start();
+  // BlaakTasks, when a URL is set: the linked sessions' PRs catch up (#248).
+  container.tasks.start();
 
   // A migration that recreated the search index leaves it empty even though the
   // session cache is intact, so the index alone has to be refilled.

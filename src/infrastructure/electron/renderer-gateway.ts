@@ -24,6 +24,7 @@ import type { SessionWorkSnapshot } from '../../domain/session-work/model';
 import type { PullRequestStatusChange } from '../../domain/session-work/status';
 import type { RendererGateway } from '../../application/ports/renderer-gateway';
 import type { PhoneAccessState, TerminalOwner } from '../../domain/phone/state';
+import type { TasksUpdate } from '../../domain/tasks/surface';
 
 export class ElectronRendererGateway implements RendererGateway {
   /** The window whose renderer said it is ready, while it is the current one. */
@@ -144,6 +145,14 @@ export class ElectronRendererGateway implements RendererGateway {
 
   sessionArchived(sessionId: string): void {
     this.#send(EVENT.sessionArchived, sessionId);
+  }
+
+  tasksChanged(update: TasksUpdate): void {
+    this.#send(EVENT.tasksChanged, update);
+  }
+
+  sessionTaskChanged(sessionId: string, taskId: string | null): void {
+    this.#send(EVENT.sessionTaskChanged, sessionId, taskId);
   }
 
   #sendWhenReady(channel: string, ...args: unknown[]): void {

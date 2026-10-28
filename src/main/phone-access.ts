@@ -25,6 +25,7 @@ import type { SessionWorkSnapshot } from '../domain/session-work/model';
 import type { PullRequestStatusChange } from '../domain/session-work/status';
 import type { WorkingAgent } from '../domain/terminal/program-status-children';
 import type { UpdateNotice } from '../domain/update/release';
+import type { TasksUpdate } from '../domain/tasks/surface';
 import type { Clock, Timers } from '../application/ports/clock';
 import type { ClaudeCaller } from '../application/ports/claude-cli';
 import type { IdGenerator } from '../application/ports/ids';
@@ -153,6 +154,15 @@ export class PhoneEventTee implements RendererGateway {
   sessionArchived(sessionId: string): void {
     this.inner.sessionArchived(sessionId);
     this.phones()?.sessionArchived(sessionId);
+  }
+
+  // Tasks are not on the phones (#244): the window's alone.
+  tasksChanged(update: TasksUpdate): void {
+    this.inner.tasksChanged(update);
+  }
+
+  sessionTaskChanged(sessionId: string, taskId: string | null): void {
+    this.inner.sessionTaskChanged(sessionId, taskId);
   }
 }
 

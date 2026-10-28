@@ -23,6 +23,7 @@ import { registerWeatherHandlers } from './weather-handlers';
 import { registerAskHandlers } from './ask-handlers';
 import { registerQuickAskHandlers } from './quick-ask-handlers';
 import { registerPhoneAccessHandlers } from './phone-access-handlers';
+import { registerTasksHandlers } from './tasks-handlers';
 import type { Container } from '../composition-root';
 
 export function registerIpcHandlers(app: Container): void {
@@ -44,4 +45,5 @@ export function registerIpcHandlers(app: Container): void {
   registerAskHandlers(ipc, app);
   registerQuickAskHandlers(ipc, app);
   registerPhoneAccessHandlers(ipc, app);
+  registerTasksHandlers(ipc, app);
 }

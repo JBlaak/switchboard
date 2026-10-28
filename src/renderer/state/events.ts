@@ -39,6 +39,7 @@ import type { DialogRequest } from './dialog-slice';
 import type { SettingsRecord } from './settings-slice';
 import type { ShellProfile } from '../../domain/shell/shell-profile';
 import type { RouteResult } from '../../domain/ask/model';
+import type { TasksUpdate } from '../../domain/tasks/surface';
 
 // ── Pushed by the main process ──
 
@@ -70,7 +71,11 @@ export type PushEvent =
   /** Main started a Claude session the renderer didn't ask for (a phone's Ask Patch). */
   | { type: 'sessionStarted'; sessionId: string; projectPath: string }
   /** A phone archived a session; main has stopped it and archived its row. */
-  | { type: 'sessionArchived'; sessionId: string };
+  | { type: 'sessionArchived'; sessionId: string }
+  /** A watched task list after a poll or a change (#248): its rows, or that BlaakTasks is down, off or not set up. */
+  | { type: 'tasksChanged'; update: TasksUpdate }
+  /** A session's task changed: a task id when linked, null when unlinked. */
+  | { type: 'sessionTaskChanged'; sessionId: string; taskId: string | null };
 
 // ── From the renderer itself: user actions and timers ──
 
@@ -300,7 +305,12 @@ export type LocalEvent =
   /** Tab in the choice list: the New Session picker takes over, carrying the prompt. */
   | { type: 'askChoicesHandedOff' }
   /** The New Session picker started a session on the prompt it was opened carrying. */
-  | { type: 'pickerPromptLaunched' };
+  | { type: 'pickerPromptLaunched' }
+  /**
+   * You archived a session whose task's PRs are all merged (#248): offer to
+   * mark that task done. A prompt to act; the offer is the task surfaces' to show.
+   */
+  | { type: 'taskMarkDoneOffered'; sessionId: string; taskId: string };
 
 export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent | ProjectPageEvent | PhoneAccessEvent;
 

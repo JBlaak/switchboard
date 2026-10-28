@@ -6,7 +6,7 @@ import { sessionArchiver } from '../src/main/stop-session';
 import { fakeRenderer, resizingPty } from './support/fakes';
 import type { SessionStopper } from '../src/main/stop-session';
 
-function harness({ alive = true } = {}) {
+function harness({ alive = true, withTasks = false } = {}) {
   const registry = new SessionRegistry();
   const renderer = fakeRenderer();
   const steps: string[] = [];
@@ -26,6 +26,14 @@ function harness({ alive = true } = {}) {
       },
     },
     worktreeCleanup: { afterArchive: async (id) => { steps.push(`cleaned up ${id}`); } },
+    ...(withTasks ? {
+      tasks: {
+        archived: async (id: string, archive: { byUser: boolean }) => {
+          steps.push(`task line for ${id}, by the user: ${archive.byUser}`);
+          return null;
+        },
+      },
+    } : {}),
   });
   const addSession = (id: string) => {
     registry.add(id, new ActiveSession({
@@ -71,4 +79,16 @@ test('a session with nothing running is only archived', () => {
   /* Then */
   assert.deepEqual(result, { ok: true });
   assert.deepEqual(h.steps, ['archived gone true', 'told the window gone', 'cleaned up gone']);
+});
+
+test('a phone’s or a session’s own archive writes the task line, and never as archived by you (#248)', () => {
+  /* Given */
+  const h = harness({ withTasks: true });
+  h.addSession('s1');
+
+  /* When */
+  h.archiver.archive('s1');
+
+  /* Then */
+  assert.deepEqual(h.steps, ['stop s1', 'archived s1 true', 'told the window s1', 'cleaned up s1', 'task line for s1, by the user: false']);
 });
