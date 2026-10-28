@@ -15,6 +15,7 @@
  */
 import { loadProjects } from '../features/sessions/session-list';
 import { relayoutSessionList } from '../ui/session-list/relayout';
+import { celebrateArchivedRow } from '../ui/session-list/leave';
 import {
   closeArchivedSession, dropPendingSession, writeExitBanner,
 } from '../features/sessions/session-actions';
@@ -72,8 +73,10 @@ export function installIpcListeners(): void {
   });
   // Phone access (#194): a session a phone started is in the sidebar at once.
   onEvent('sessionStarted', ({ sessionId, projectPath }) => trackStartedElsewhere(sessionId, projectPath));
-  // A phone archived a session: it leaves the window as ⌘E would take it, then the list refetches.
+  // A phone archived a session, or the session archived itself: it leaves the
+  // window as ⌘E would take it, confetti and all, then the list refetches.
   onEvent('sessionArchived', ({ sessionId }) => {
+    celebrateArchivedRow(sessionId);
     closeArchivedSession(sessionId);
     onProjectsChanged();
   });
