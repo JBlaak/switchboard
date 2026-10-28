@@ -230,6 +230,7 @@ test.describe('global save', () => {
     await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('4');
     await field(page, 'Session Max Age (days)').getByRole('spinbutton').fill('2');
     await switchOn(page, 'Show weather on the empty screen');
+    await field(page, 'BlaakTasks URL').getByRole('textbox').fill('https://tasks.example.com/mcp');
     await button(page, 'Save Settings').click();
 
     /* Then */
@@ -248,6 +249,7 @@ test.describe('global save', () => {
       quickSessionPath: '/tmp/scratch',
       quickAsk: true,
       removeWorktreeOnArchive: false,
+      blaakTasksUrl: 'https://tasks.example.com/mcp',
       terminalTheme: 'nord',
       terminalFontFamily: 'Menlo',
       terminalFontSize: 32,

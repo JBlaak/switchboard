@@ -75,12 +75,22 @@ const TASK = 'create a task to call Peter on Thursday';
 /** A stand-in: no real server is ever reached. */
 const TOKEN = 'e2e-stand-in-token';
 
-/** `~/.claude.json` with both servers set up, as Claude Code writes it. */
-function setUpServers(home: FixtureHome): void {
+/** A stand-in BlaakTasks URL: the capture goes through the fake `claude`, never to it. */
+const TASKS_URL = 'https://tasks.example.com/mcp';
+
+/**
+ * `~/.claude.json` with both servers set up, as Claude Code writes it, and
+ * BlaakTasks switched on with the URL of its entry (#252).
+ */
+async function setUpServers(app: ElectronApplication, home: FixtureHome): Promise<void> {
   const server = (url: string) => ({ type: 'http', url, headers: { Authorization: `Bearer ${TOKEN}` } });
   fs.writeFileSync(path.join(home.home, '.claude.json'), JSON.stringify({
-    mcpServers: { blaaktasks: server('http://127.0.0.1:9/blaaktasks'), james: server('http://127.0.0.1:9/james') },
+    mcpServers: { blaaktasks: server(TASKS_URL), james: server('http://127.0.0.1:9/james') },
   }));
+  await (await mainWindow(app)).evaluate(async (url) => {
+    const global = await window.api.getSetting<Record<string, unknown>>('global');
+    await window.api.setSetting('global', { ...global, blaakTasksUrl: url });
+  }, TASKS_URL);
 }
 
 /** Patch says it is a task, and BlaakTasks files it as "Call Peter · due Thu" after `delayMs`. */
@@ -402,7 +412,7 @@ test('with the main window closed, it opens without the focus and the session st
 
 test('a task is added to BlaakTasks, and ⌘Z takes it back and puts the text back', async ({ app, home }) => {
   /* Given */
-  setUpServers(home);
+  await setUpServers(app, home);
   const route = fakeRoute(home);
   answerTask(route, 300);
   route.answerTool('mcp__blaaktasks__undo_capture', { ok: true }, 300);
@@ -445,7 +455,7 @@ test('a task is added to BlaakTasks, and ⌘Z takes it back and puts the text ba
 forEachAppearance(() => {
   test('a capture saving, and saved', async ({ app, home }) => {
     /* Given */
-    setUpServers(home);
+    await setUpServers(app, home);
     answerTask(fakeRoute(home), 1_500);
     const popUp = await open(app);
     await box(popUp).fill(TASK);
