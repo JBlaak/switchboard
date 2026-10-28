@@ -6,6 +6,7 @@
  * small separate ports rather than one "electron" grab-bag so a use case
  * declares only what it actually reaches for.
  */
+import type { AppIcon } from '../../domain/settings/app-icon';
 import type { Appearance } from '../../domain/settings/appearance';
 
 export interface DialogService {
@@ -36,4 +37,9 @@ export interface AppearanceGateway {
    * the stylesheet, the window chrome and the terminal all read from.
    */
   apply(mode: Appearance): void;
+}
+
+export interface AppIconGateway {
+  /** Show this icon on the running app's Dock tile. */
+  apply(icon: AppIcon): void;
 }

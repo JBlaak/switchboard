@@ -2,6 +2,7 @@
  * Settings and shell profiles.
  */
 import { INVOKE } from '../../ipc/channels';
+import { normaliseAppIcon } from '../../domain/settings/app-icon';
 import { normaliseAppearance } from '../../domain/settings/appearance';
 import { GLOBAL_SETTINGS_KEY } from '../../domain/settings/settings';
 import { CAPTURE_SERVERS, CAPTURE_TARGETS } from '../../domain/ask/capture';
@@ -12,8 +13,11 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
   ipc.handle(INVOKE.getSetting, (key: string) => app.settings.get(key));
   ipc.handle(INVOKE.setSetting, (key: string, value: unknown) => {
     app.settings.set(key, value);
-    // Saving registers or lets go of ⌥Space at once, no restart (H2).
-    if (key === GLOBAL_SETTINGS_KEY) app.quickAskHotkey.apply();
+    // Saving registers or lets go of ⌥Space, and swaps the Dock icon, at once, no restart (H2).
+    if (key === GLOBAL_SETTINGS_KEY) {
+      app.quickAskHotkey.apply();
+      app.appIcon.apply(normaliseAppIcon(app.settings.global().appIcon));
+    }
     return { ok: true };
   });
 
