@@ -33,6 +33,7 @@ import type { SessionListEvent } from './session-list-slice';
 import type { ProjectPageEvent } from './project-page-slice';
 import type { TasksPageEvent } from './tasks-slice';
 import type { PhoneAccessEvent } from './phone-access-slice';
+import type { SessionTaskEvent } from './session-task-slice';
 import type { ViewState } from './view-slice';
 import type { DraftAction } from '../../domain/questions/answer-draft';
 import type { QuestionView } from './answers-slice';
@@ -314,7 +315,8 @@ export type LocalEvent =
   | { type: 'taskMarkDoneOffered'; sessionId: string; taskId: string };
 
 export type RendererEvent =
-  PushEvent | LocalEvent | ToolbarEvent | SessionListEvent | ProjectPageEvent | PhoneAccessEvent | TasksPageEvent;
+  | PushEvent | LocalEvent | ToolbarEvent | SessionListEvent | ProjectPageEvent | PhoneAccessEvent | SessionTaskEvent
+  | TasksPageEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the
