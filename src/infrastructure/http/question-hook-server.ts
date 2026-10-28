@@ -11,7 +11,11 @@
  * Two more routes take notices, answered at once: `POST /stop/<launchId>` at
  * the end of each turn, whose last message may be a grilling round, and
  * `POST /prompt/<launchId>` when a prompt goes in, which ends a round still
- * waiting.
+ * waiting. The end of a turn is also when a session that asked to be archived
+ * is archived.
+ *
+ * And `POST /mcp/<launchId>` serves the session Switchboard's own MCP server,
+ * with its one tool, `archive_session`.
  *
  * Loopback only, on a random port, behind a per-run secret: any local process
  * can reach 127.0.0.1, and without the token one could answer a session's
@@ -22,17 +26,19 @@ import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 
 import { parseGrillRound } from '../../domain/questions/grill';
+import { archiveToolReply } from '../../domain/session/archive-tool';
 import { parseQuestionHookInput, parseStopHookInput, QUESTION_HOOK_TOKEN_HEADER } from '../../domain/questions/question';
 import type { Logger } from '../../application/ports/logger';
 import type { QuestionHookEndpoint } from '../../application/ports/question-hook';
+import type { ArchiveToolService } from '../../application/services/archive-tool-service';
 import type { QuestionService } from '../../application/services/question-service';
 
 /** Far more than any question set; a body this big is not from the CLI. */
 const MAX_BODY_BYTES = 1024 * 1024;
 
-const HOOK_PATH = /^\/(ask|stop|prompt)\/([^/?#]+)$/;
+const HOOK_PATH = /^\/(ask|stop|prompt|mcp)\/([^/?#]+)$/;
 
-type Route = 'ask' | 'stop' | 'prompt';
+type Route = 'ask' | 'stop' | 'prompt' | 'mcp';
 
 export interface QuestionHookServerDeps {
   /**
@@ -40,6 +46,8 @@ export interface QuestionHookServerDeps {
    * the server before the service that reads its address.
    */
   receiver: Pick<QuestionService, 'receive' | 'receiveRound' | 'promptSubmitted'>;
+  /** Where the archive tool's calls, and the ends of turns, go. */
+  archiveTool?: Pick<ArchiveToolService, 'request' | 'turnEnded'>;
   log: Logger;
 }
 
@@ -136,6 +144,7 @@ export class QuestionHookServer implements QuestionHookEndpoint {
       body = null;
     }
     if (route === 'stop') return this.#stopped(launchId, body, res);
+    if (route === 'mcp') return this.#mcp(launchId, body, res);
     if (route === 'prompt') {
       this.#json(res, {});
       this.deps.receiver.promptSubmitted(launchId);
@@ -169,6 +178,15 @@ export class QuestionHookServer implements QuestionHookEndpoint {
     const text = parseStopHookInput(body);
     const questions = text ? parseGrillRound(text) : null;
     if (questions) this.deps.receiver.receiveRound(launchId, questions);
+    this.deps.archiveTool?.turnEnded(launchId);
+  }
+
+  #mcp(launchId: string, body: unknown, res: http.ServerResponse): void {
+    const { archiveTool } = this.deps;
+    if (!archiveTool) return this.#end(res, 404);
+    const reply = archiveToolReply(body, () => archiveTool.request(launchId));
+    if (reply) this.#json(res, reply);
+    else this.#end(res, 202);
   }
 
   #authorised(header: string | string[] | undefined): boolean {

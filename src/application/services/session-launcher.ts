@@ -30,6 +30,7 @@ import type { RendererGateway } from '../ports/renderer-gateway';
 import type { RemoteConnectionSupervisor } from './remote-connection-supervisor';
 import type { SessionLifecycle } from './session-lifecycle';
 import type { QuestionService } from './question-service';
+import type { ArchiveToolService } from './archive-tool-service';
 import type { SettingsService } from './settings-service';
 
 /** The spawn geometry before the renderer reports its real terminal size. */
@@ -68,6 +69,8 @@ export interface SessionLauncherDeps {
   renderer: RendererGateway;
   /** Supplies each Claude session's question hook, when the hook server is up. */
   questions: Pick<QuestionService, 'settingsFor'>;
+  /** Supplies each Claude session's archive tool, when the hook server is up. */
+  archiveTool?: Pick<ArchiveToolService, 'launchFor'>;
   /** Tells whether a project is in a git repository, which `--worktree` needs. */
   git: Pick<GitWorkspace, 'worktreeRoot'>;
   clock: Clock;
@@ -298,6 +301,7 @@ export class SessionLauncher {
         target: { sessionId, isNew },
         options,
         settings: this.deps.questions.settingsFor(sessionId) ?? undefined,
+        tools: this.deps.archiveTool?.launchFor(sessionId) ?? undefined,
       });
     } catch (err) {
       return { error: (err as Error).message };

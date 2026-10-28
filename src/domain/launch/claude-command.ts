@@ -17,6 +17,13 @@ export interface SessionTarget {
   isNew: boolean;
 }
 
+/** Switchboard's own MCP server for a session, and the tools on it the session may call unasked. */
+export interface SessionTools {
+  /** Inline JSON for `--mcp-config`; added to the user's own servers, not in place of them. */
+  mcpConfig: string;
+  allowedTools: string[];
+}
+
 /** Raised when a launch option cannot be made safe. */
 export class UnsafeLaunchOptionError extends Error {}
 
@@ -29,12 +36,20 @@ export class UnsafeLaunchOptionError extends Error {}
  * supplied them (sidebar click, schedule creator, …). Otherwise a resume
  * tries to spin up a new worktree and fails to attach.
  */
-export function buildClaudeArgs(target: SessionTarget, options?: SessionOptions, settings?: string): string[] {
+export function buildClaudeArgs(
+  target: SessionTarget, options?: SessionOptions, settings?: string, tools?: SessionTools,
+): string[] {
   const args: string[] = [];
 
-  // Switchboard's own per-session settings (the question hook). Ahead of the
-  // early return: a session launched with no options still gets it.
+  // Switchboard's own per-session settings (the question hook) and tools (the
+  // archive tool). Ahead of the early return: a session launched with no
+  // options still gets them. Both flags take any number of values, so each is
+  // followed by another flag, never by a bare value.
   if (settings) args.push('--settings', settings);
+  if (tools) {
+    args.push('--mcp-config', tools.mcpConfig);
+    if (tools.allowedTools.length) args.push('--allowedTools', tools.allowedTools.join(','));
+  }
 
   if (target.isNew) {
     args.push('--session-id', String(target.sessionId));
@@ -83,6 +98,7 @@ export interface ClaudeCommandSpec {
   options?: SessionOptions;
   /** Inline JSON for `--settings`; merged by the CLI with the user's own settings files. */
   settings?: string;
+  tools?: SessionTools;
 }
 
 /**
@@ -90,8 +106,8 @@ export interface ClaudeCommandSpec {
  *
  * @throws UnsafeLaunchOptionError when `preLaunchCmd` spans more than one line.
  */
-export function buildClaudeCommand({ target, options, settings }: ClaudeCommandSpec): string {
-  let command = 'claude ' + quoteArgvForShell(buildClaudeArgs(target, options, settings));
+export function buildClaudeCommand({ target, options, settings, tools }: ClaudeCommandSpec): string {
+  let command = 'claude ' + quoteArgvForShell(buildClaudeArgs(target, options, settings, tools));
 
   if (options?.preLaunchCmd) {
     const pre = String(options.preLaunchCmd);

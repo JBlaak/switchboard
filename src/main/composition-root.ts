@@ -84,6 +84,7 @@ import { loginShellEnv } from '../infrastructure/shell/login-shell-env';
 import { encodeProjectPath } from '../domain/project/project-path';
 import { isRemoteProjectPath } from '../domain/project/remote-target';
 import { QuestionHookServer } from '../infrastructure/http/question-hook-server';
+import { ArchiveToolService } from '../application/services/archive-tool-service';
 import { OpensslIdentityStore } from '../infrastructure/phone/identity-store';
 import { DnsSdAdvertiser } from '../infrastructure/phone/dns-sd-advertiser';
 import { LanWatcher } from '../infrastructure/phone/lan-watcher';
@@ -241,10 +242,21 @@ export function buildContainer(): Container {
       receiveRound: (...args) => questions.receiveRound(...args),
       promptSubmitted: (...args) => questions.promptSubmitted(...args),
     },
+    archiveTool: {
+      request: (...args) => archiveTool.request(...args),
+      turnEnded: (...args) => archiveTool.turnEnded(...args),
+    },
     log,
   });
   const questions = new QuestionService({
     registry, renderer, prompter, clock, log, endpoint: questionHook,
+  });
+  // A session archiving itself (`archive_session`), as a phone's archive does.
+  // The archiver is built on the first call: the worktree cleanup it ends with
+  // is made further down.
+  const archiveTool = new ArchiveToolService({
+    registry, endpoint: questionHook, log,
+    archiver: { archive: (sessionId) => sessionArchiver({ registry, remote, lifecycle, terminals, repository, renderer, worktreeCleanup }).archive(sessionId) },
   });
 
   // `gh`, and the filters a git checkout runs (`git-lfs`), need the login
@@ -253,7 +265,7 @@ export function buildContainer(): Container {
   const workspace = new GitCliWorkspace(toolEnv);
   const launcher = new SessionLauncher({
     registry, terminals, shells, transcripts, settings,
-    lifecycle, remote, renderer, questions, clock, timers, log,
+    lifecycle, remote, renderer, questions, archiveTool, clock, timers, log,
     git: workspace,
     fileExists: (target) => fs.exists(target),
   });
