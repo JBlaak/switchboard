@@ -126,6 +126,18 @@ test('mcp servers: the headers of the server with that URL, bearer and all', (t)
   assert.deepEqual(h.logged, []);
 });
 
+test('mcp servers: the name of the server with that URL, whatever it is called', (t) => {
+  /* Given */
+  const h = harness(JSON.stringify({ mcpServers: { 'my-tasks': ENTRY, james: { type: 'http', url: 'https://james' } } }));
+  t.after(h.cleanup);
+
+  /* When */
+  const names = [h.servers.nameFor('https://tasks.example.com/mcp'), h.servers.nameFor('https://other.example.com/mcp')];
+
+  /* Then */
+  assert.deepEqual(names, ['my-tasks', null]);
+});
+
 test('mcp servers: a URL no server has, or no ~/.claude.json, has no headers', (t) => {
   /* Given */
   const h = harness();

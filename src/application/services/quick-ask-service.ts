@@ -20,7 +20,8 @@
  *
  * Capturing a task is offered only while a BlaakTasks URL is set (#252): with
  * it empty, the routing call doesn't know the "task" kind, and a task capture
- * that comes back anyway takes the no-match path.
+ * that comes back anyway takes the no-match path. With it set, the capture
+ * goes to the `~/.claude.json` server with that URL, whatever its name.
  *
  * ⌘Enter skips the routing call: a quick session starts on the text as typed.
  *
@@ -72,6 +73,21 @@ export function offeredTargets(global: GlobalSettings): CaptureTarget[] {
   return captureTargets(resolveBlaakTasksUrl(global) !== '');
 }
 
+/**
+ * The `~/.claude.json` server a capture into `target` goes to, or null when
+ * it isn't set up (C6): `james` for James, and for BlaakTasks the server with
+ * the URL in Settings, whatever it is called (#252).
+ */
+export function captureServer(
+  target: CaptureTarget, global: GlobalSettings, mcpServers: Pick<McpServers, 'has' | 'nameFor'>,
+): string | null {
+  if (target === 'tasks') {
+    const url = resolveBlaakTasksUrl(global);
+    return url ? mcpServers.nameFor(url) : null;
+  }
+  return mcpServers.has(CAPTURE_SERVERS[target]) ? CAPTURE_SERVERS[target] : null;
+}
+
 /** How long a capture or an undo may take before it counts as failed. */
 export const CAPTURE_TIMEOUT_MS = 30_000;
 
@@ -116,8 +132,8 @@ export class QuickAskService {
   /** The rewritten prompt of the last unsure answer, for a choice from the list or Tab. */
   #choosing: { prompt: string; candidates: string[] } | null = null;
   #failed: FailedCapture | null = null;
-  /** The last capture's ids, for ⌘Z, until they expire. */
-  #kept: { receipt: CaptureReceipt; timer: TimerHandle } | null = null;
+  /** The last capture's ids and the server that stored them, for ⌘Z, until they expire. */
+  #kept: { receipt: CaptureReceipt; server: string; timer: TimerHandle } | null = null;
 
   constructor(private readonly deps: QuickAskServiceDeps) {
     // A process booted while the user types, so Enter waits on the model only (S2).
@@ -174,11 +190,12 @@ export class QuickAskService {
     if (!kept) return { ok: false };
     this.#forget();
     const { target, ids } = kept.receipt;
-    const run = await this.#oneToolCall(target, path => undoArgs(target, ids, path));
+    const { server } = kept;
+    const run = await this.#oneToolCall(server, path => undoArgs(target, ids, path, server));
     const ok = run !== null && readUndoRun(run);
-    if (ok) this.deps.log.info(`[quick-ask] undid a capture in ${CAPTURE_SERVERS[target]}`);
+    if (ok) this.deps.log.info(`[quick-ask] undid a capture in ${server}`);
     // The ids, so whatever is left can be found and removed by hand.
-    else this.deps.log.warn(`[quick-ask] could not undo a capture in ${CAPTURE_SERVERS[target]}: ${ids.join(', ')}`);
+    else this.deps.log.warn(`[quick-ask] could not undo a capture in ${server}: ${ids.join(', ')}`);
     return { ok };
   }
 
@@ -219,30 +236,31 @@ export class QuickAskService {
       log.info('[quick-ask] that capture is off; no match instead');
       return this.#follow(quickAskOutcome({ kind: 'noMatch', reason: NO_MATCH_LINE }, typed, this.#quickFolder()), typed);
     }
-    if (!mcpServers.has(CAPTURE_SERVERS[target])) {
+    const server = captureServer(target, settings.global(), mcpServers);
+    if (!server) {
       log.info(`[quick-ask] ${CAPTURE_SERVERS[target]} isn't set up; no match instead`);
       return this.#follow(quickAskOutcome({ kind: 'noMatch', reason: NO_MATCH_LINE }, typed, this.#quickFolder()), typed);
     }
     popUp.saving(target);
-    const run = await this.#oneToolCall(target, path => captureArgs(target, text, captureId, path));
+    const run = await this.#oneToolCall(server, path => captureArgs(target, text, captureId, path, server));
     const read = run ? readCaptureRun(run, target) : { kind: 'failed' as const, reason: noAnswerLine(target) };
     if ('kind' in read) {
-      log.warn(`[quick-ask] capture into ${CAPTURE_SERVERS[target]} failed`);
+      log.warn(`[quick-ask] capture into ${server} failed`);
       this.#failed = { typed, target, text, captureId };
       return { kind: 'captureFailed', reason: read.reason };
     }
-    log.info(`[quick-ask] captured into ${CAPTURE_SERVERS[target]}: ${read.ids.join(', ')}`);
-    this.#keep(read);
+    log.info(`[quick-ask] captured into ${server}: ${read.ids.join(', ')}`);
+    this.#keep(read, server);
     return { kind: 'saved', target, summary: read.summary };
   }
 
   /**
-   * One call allowed a single tool of `target`'s server, from a config written
+   * One call allowed a single tool of `server`, from a config written
    * for it and removed however the call ends. Null when it couldn't run: the
    * server went missing, the config couldn't be written, `claude` couldn't
    * start, or it took too long and was killed.
    */
-  async #oneToolCall(target: CaptureTarget, args: (mcpConfigPath: string) => string[]): Promise<ClaudeRun | null> {
+  async #oneToolCall(server: string, args: (mcpConfigPath: string) => string[]): Promise<ClaudeRun | null> {
     const { mcpServers, cli, timers, log } = this.deps;
     const controller = new AbortController();
     const timer = timers.setTimeout(() => {
@@ -251,7 +269,7 @@ export class QuickAskService {
     }, CAPTURE_TIMEOUT_MS);
     let config: ReturnType<McpServers['write']> = null;
     try {
-      config = mcpServers.write(CAPTURE_SERVERS[target]);
+      config = mcpServers.write(server);
       if (!config) return null;
       const run = await cli.call(args(config.path), controller.signal);
       return controller.signal.aborted ? null : run;
@@ -265,10 +283,10 @@ export class QuickAskService {
   }
 
   /** Hold the ids for ⌘Z, for ten minutes; a newer capture replaces them. */
-  #keep(receipt: CaptureReceipt): void {
+  #keep(receipt: CaptureReceipt, server: string): void {
     this.#forget();
     const timer = this.deps.timers.setTimeout(() => { this.#kept = null; }, UNDO_KEPT_MS);
-    this.#kept = { receipt, timer };
+    this.#kept = { receipt, server, timer };
   }
 
   #forget(): void {

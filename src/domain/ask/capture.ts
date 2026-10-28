@@ -33,7 +33,11 @@ export function captureTargets(blaakTasksOn: boolean): CaptureTarget[] {
   return CAPTURE_TARGETS.filter(target => target !== 'tasks' || blaakTasksOn);
 }
 
-/** Each target's server, as `~/.claude.json` names it under `mcpServers`. */
+/**
+ * Each target's server, as `~/.claude.json` names it under `mcpServers`.
+ * BlaakTasks's is only the default: Quick Ask uses the entry with the
+ * BlaakTasks URL, whatever its name (#252).
+ */
 export const CAPTURE_SERVERS: Record<CaptureTarget, string> = { tasks: 'blaaktasks', james: 'james' };
 
 /** The `session` BlaakTasks files a Quick Ask task under (C3). */
@@ -44,12 +48,18 @@ const MAX_SUMMARY = 100;
 
 const TARGET_NAMES: Record<CaptureTarget, string> = { tasks: 'BlaakTasks', james: 'James' };
 
-export function captureTool(target: CaptureTarget): string {
-  return `mcp__${CAPTURE_SERVERS[target]}__capture`;
+/**
+ * `server` below is the name the target's server has in `~/.claude.json`.
+ * James's is always `james`; BlaakTasks's is whatever the entry with the
+ * BlaakTasks URL is called (#252), `blaaktasks` when it was added as Settings
+ * says.
+ */
+export function captureTool(target: CaptureTarget, server = CAPTURE_SERVERS[target]): string {
+  return `mcp__${server}__capture`;
 }
 
-export function undoTool(target: CaptureTarget): string {
-  return `mcp__${CAPTURE_SERVERS[target]}__undo_capture`;
+export function undoTool(target: CaptureTarget, server = CAPTURE_SERVERS[target]): string {
+  return `mcp__${server}__undo_capture`;
 }
 
 // ── The server config ──
@@ -72,12 +82,23 @@ export function mcpServerConfig(claudeJson: unknown, name: string): { mcpServers
  * hold the bearer token: whoever asks keeps them in main.
  */
 export function mcpServerHeaders(claudeJson: unknown, url: string): Record<string, string> | null {
+  const found = serverWithUrl(claudeJson, url);
+  if (!found) return null;
+  const headers = isRecord(found.entry.headers) ? found.entry.headers : {};
+  return Object.fromEntries(Object.entries(headers).filter((pair): pair is [string, string] => typeof pair[1] === 'string'));
+}
+
+/** The name of the server whose `url` is `url`, or null when none has it (#252). */
+export function mcpServerName(claudeJson: unknown, url: string): string | null {
+  return serverWithUrl(claudeJson, url)?.name ?? null;
+}
+
+/** The first server whose `url` is `url`, with its name. */
+function serverWithUrl(claudeJson: unknown, url: string): { name: string; entry: Record<string, unknown> } | null {
   const wanted = sameUrl(url);
   if (!wanted || !isRecord(claudeJson) || !isRecord(claudeJson.mcpServers)) return null;
-  for (const entry of Object.values(claudeJson.mcpServers)) {
-    if (!isRecord(entry) || typeof entry.url !== 'string' || sameUrl(entry.url) !== wanted) continue;
-    const headers = isRecord(entry.headers) ? entry.headers : {};
-    return Object.fromEntries(Object.entries(headers).filter((pair): pair is [string, string] => typeof pair[1] === 'string'));
+  for (const [name, entry] of Object.entries(claudeJson.mcpServers)) {
+    if (isRecord(entry) && typeof entry.url === 'string' && sameUrl(entry.url) === wanted) return { name, entry };
   }
   return null;
 }
@@ -96,8 +117,8 @@ const ANSWER_LINES = [
 ];
 
 /** Who Haiku is for a capture: one tool call with the text verbatim, then the receipt. */
-export function captureSystemPrompt(target: CaptureTarget): string {
-  const tool = captureTool(target);
+export function captureSystemPrompt(target: CaptureTarget, server = CAPTURE_SERVERS[target]): string {
+  const tool = captureTool(target, server);
   const call = target === 'tasks'
     ? [
         `- Call ${tool} exactly once, with text set to everything after the "Text:" line, exactly as written, and session set to "${QUICK_ASK_SESSION}". Pass no other fields.`,
@@ -120,8 +141,8 @@ export function captureSystemPrompt(target: CaptureTarget): string {
 }
 
 /** Every flag of a capture call, without the message, so a warm process can start on them. */
-export function captureBootArgs(target: CaptureTarget, mcpConfigPath: string): string[] {
-  return oneToolArgs(captureTool(target), mcpConfigPath, captureSystemPrompt(target));
+export function captureBootArgs(target: CaptureTarget, mcpConfigPath: string, server = CAPTURE_SERVERS[target]): string[] {
+  return oneToolArgs(captureTool(target, server), mcpConfigPath, captureSystemPrompt(target, server));
 }
 
 /** The message for one capture: James's `captureId`, then the text. */
@@ -130,8 +151,10 @@ export function capturePrompt(target: CaptureTarget, text: string, captureId: st
 }
 
 /** The `claude` argv for one cold capture call. */
-export function captureArgs(target: CaptureTarget, text: string, captureId: string, mcpConfigPath: string): string[] {
-  return [...captureBootArgs(target, mcpConfigPath), capturePrompt(target, text, captureId)];
+export function captureArgs(
+  target: CaptureTarget, text: string, captureId: string, mcpConfigPath: string, server = CAPTURE_SERVERS[target],
+): string[] {
+  return [...captureBootArgs(target, mcpConfigPath, server), capturePrompt(target, text, captureId)];
 }
 
 /**
@@ -181,8 +204,8 @@ export function missingServersLine(missing: readonly CaptureTarget[]): string {
  * Who Haiku is for an undo. BlaakTasks takes every id in one call; James takes
  * one id per call, so it gets one call per id.
  */
-export function undoSystemPrompt(target: CaptureTarget): string {
-  const tool = undoTool(target);
+export function undoSystemPrompt(target: CaptureTarget, server = CAPTURE_SERVERS[target]): string {
+  const tool = undoTool(target, server);
   const call = target === 'tasks'
     ? `- Call ${tool} exactly once, with ids set to every listed id.`
     : `- Call ${tool} once for each listed id, with id set to that id.`;
@@ -198,8 +221,8 @@ export function undoSystemPrompt(target: CaptureTarget): string {
 }
 
 /** Every flag of an undo call, without the message. */
-export function undoBootArgs(target: CaptureTarget, mcpConfigPath: string): string[] {
-  return oneToolArgs(undoTool(target), mcpConfigPath, undoSystemPrompt(target));
+export function undoBootArgs(target: CaptureTarget, mcpConfigPath: string, server = CAPTURE_SERVERS[target]): string[] {
+  return oneToolArgs(undoTool(target, server), mcpConfigPath, undoSystemPrompt(target, server));
 }
 
 /** The message for one undo: the ids to take back. */
@@ -208,8 +231,10 @@ export function undoPrompt(ids: readonly string[]): string {
 }
 
 /** The `claude` argv for one cold undo call. */
-export function undoArgs(target: CaptureTarget, ids: readonly string[], mcpConfigPath: string): string[] {
-  return [...undoBootArgs(target, mcpConfigPath), undoPrompt(ids)];
+export function undoArgs(
+  target: CaptureTarget, ids: readonly string[], mcpConfigPath: string, server = CAPTURE_SERVERS[target],
+): string[] {
+  return [...undoBootArgs(target, mcpConfigPath, server), undoPrompt(ids)];
 }
 
 /** Whether an undo call went through: only an answer of `{"ok": true}` says so. */

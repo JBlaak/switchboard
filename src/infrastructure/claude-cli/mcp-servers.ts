@@ -9,7 +9,7 @@
  * `~/.claude.json` is read afresh each time. It is the CLI's file and changes
  * under us, and a server added in Claude Code should work on the next capture.
  */
-import { mcpServerConfig, mcpServerHeaders } from '../../domain/ask/capture';
+import { mcpServerConfig, mcpServerHeaders, mcpServerName } from '../../domain/ask/capture';
 import type { FileSystem } from '../../application/ports/file-system';
 import type { IdGenerator } from '../../application/ports/ids';
 import type { Logger } from '../../application/ports/logger';
@@ -51,6 +51,11 @@ export class ClaudeJsonMcpServers implements McpServers {
   headersFor(url: string): Record<string, string> | null {
     const claudeJson = this.#claudeJson();
     return claudeJson === null ? null : mcpServerHeaders(claudeJson, url);
+  }
+
+  nameFor(url: string): string | null {
+    const claudeJson = this.#claudeJson();
+    return claudeJson === null ? null : mcpServerName(claudeJson, url);
   }
 
   removeAll(): void {

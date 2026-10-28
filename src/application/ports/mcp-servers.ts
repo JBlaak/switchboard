@@ -27,6 +27,8 @@ export interface McpServers {
    * them), or null when no server has it. `{}` for a server without headers.
    */
   headersFor(url: string): Record<string, string> | null;
+  /** The name of the server whose URL is `url`, or null when no server has it. */
+  nameFor(url: string): string | null;
   /** Delete every file still on disk, for quitting mid-call. */
   removeAll(): void;
 }

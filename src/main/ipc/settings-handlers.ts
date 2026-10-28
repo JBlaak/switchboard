@@ -4,8 +4,7 @@
 import { INVOKE } from '../../ipc/channels';
 import { normaliseAppearance } from '../../domain/settings/appearance';
 import { GLOBAL_SETTINGS_KEY } from '../../domain/settings/settings';
-import { CAPTURE_SERVERS } from '../../domain/ask/capture';
-import { offeredTargets } from '../../application/services/quick-ask-service';
+import { captureServer, offeredTargets } from '../../application/services/quick-ask-service';
 import type { Container } from '../composition-root';
 import type { IpcRegistrar } from './registrar';
 
@@ -23,11 +22,13 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
    * which capture servers aren't set up, for its "isn't set up" line (C6).
    * Only the targets offered count: with BlaakTasks off, it isn't missing.
    */
-  ipc.handle(INVOKE.quickAskHotkeyStatus, () => ({
-    registered: app.quickAskHotkey.registered,
-    missing: offeredTargets(app.settings.global())
-      .filter(target => !app.mcpServers.has(CAPTURE_SERVERS[target])),
-  }));
+  ipc.handle(INVOKE.quickAskHotkeyStatus, () => {
+    const global = app.settings.global();
+    return {
+      registered: app.quickAskHotkey.registered,
+      missing: offeredTargets(global).filter(target => captureServer(target, global, app.mcpServers) === null),
+    };
+  });
 
   /**
    * Whether a server in `~/.claude.json` has this BlaakTasks URL (#252), for
