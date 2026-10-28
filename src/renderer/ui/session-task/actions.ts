@@ -8,8 +8,6 @@
 import { dispatch, getState } from '../../state/app-store';
 import { tomorrow } from '../../state/session-task-slice';
 import type { TaskAction } from '../../state/session-task-slice';
-import type { GlobalSettings } from '../../../domain/settings/settings';
-import { resolveBlaakTasksUrl } from '../../../domain/settings/settings';
 import { answerOfferWith, changeError, markDoneWith, type OfferSteps } from './offer';
 import { canOpenSessionWork, openSessionWork } from '../session-work/actions';
 
@@ -20,21 +18,19 @@ const PICKER_LIMIT = 20;
 const asking = new Set<string>();
 
 /**
- * Ask main whether BlaakTasks is on and which sessions are linked, then
- * fetch the linked tasks the chip, the marker and the tab name.
+ * While BlaakTasks is on (`tasks.enabled`), ask main which sessions are
+ * linked, then fetch the linked tasks the chip, the marker and the tab name.
  */
 export async function loadSessionTasks(): Promise<void> {
-  let enabled = false;
-  let links: Record<string, string> = {};
+  if (!getState().tasks.enabled) return;
+  let links: Record<string, string>;
   try {
-    const global = await window.api.getSetting<GlobalSettings>('global');
-    enabled = resolveBlaakTasksUrl(global as Record<string, unknown> | null) !== '';
-    if (enabled) links = await window.api.sessionTasks();
+    links = await window.api.sessionTasks();
   } catch {
-    // Kept as it was; the next save of Settings asks again.
+    // Kept as it was; the next switch asks again.
     return;
   }
-  dispatch({ type: 'sessionTasksLoaded', enabled, links });
+  dispatch({ type: 'sessionTasksLoaded', links });
   for (const taskId of new Set(Object.values(links))) loadTask(taskId);
 }
 

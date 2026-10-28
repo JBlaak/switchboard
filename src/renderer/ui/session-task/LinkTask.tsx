@@ -20,7 +20,7 @@ const SEARCH_DEBOUNCE_MS = 250;
 
 export function LinkTaskButton({ sessionId }: { sessionId: string }): JSX.Element | null {
   const { enabled, open, linked } = useStore(state => ({
-    enabled: state.sessionTask.enabled,
+    enabled: state.tasks.enabled,
     open: state.sessionTask.picker?.sessionId === sessionId,
     linked: sessionTaskOf(state.sessionTask, sessionId) !== null,
   }), shallowEqual);

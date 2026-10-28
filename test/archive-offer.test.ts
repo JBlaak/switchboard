@@ -68,7 +68,7 @@ test('Leave it marks nothing', async () => {
 test('the whole archive, through the slice: offered, then D, then gone and Done asked', async () => {
   /* Given */
   const { steps, events, updates } = fakeSteps({ kind: 'queued' });
-  let state = sessionTaskReducer(initialSessionTaskState, { type: 'sessionTasksLoaded', enabled: true, links: { s1: 'task-1' } });
+  let state = sessionTaskReducer(initialSessionTaskState, { type: 'sessionTasksLoaded', links: { s1: 'task-1' } });
   for (const event of archiveAnswerEvents('s1', { markDone: { taskId: 'task-1' } })) state = sessionTaskReducer(state, event);
   assert.deepEqual(state.offer, offer);
 

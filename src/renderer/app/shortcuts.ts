@@ -14,6 +14,9 @@ import { openDialog } from '../ui/dialogs/actions';
 import { handleSessionNavKey } from '../features/terminal/session-nav';
 import { isSessionWorkKey, toggleSessionWork } from '../ui/session-work/actions';
 import { isSidebarToggleKey, toggleSidebar } from '../ui/toolbar/actions';
+import { isTasksPageKey } from '../lib/shortcut-keys';
+import { toggleTasksPage } from '../ui/tasks-page/actions';
+import { getState } from '../state/app-store';
 import {
   isBareQuickSessionKey, isQuickSessionKey, launchQuickSession,
 } from '../features/sessions/quick-session';
@@ -56,6 +59,12 @@ export function installShortcuts(): void {
     if (isSessionWorkKey(e)) {
       e.preventDefault();
       void toggleSessionWork();
+    }
+
+    // Cmd+T opens or closes the Tasks page, while BlaakTasks is on.
+    if (isTasksPageKey(e) && getState().tasks.enabled) {
+      e.preventDefault();
+      toggleTasksPage();
     }
 
     // Cmd+N, or N outside the terminal and text fields, starts a quick session.

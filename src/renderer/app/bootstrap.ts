@@ -35,6 +35,8 @@ import { installSessionWork } from '../ui/session-work/install-session-work';
 import { installPlan } from '../ui/session-work/plan/install-plan';
 import { installPlanPage } from '../ui/plan-page/install-plan-page';
 import { installProjectPage } from '../ui/project-page/install-project-page';
+import { installTasksPage } from '../ui/tasks-page/install-tasks-page';
+import { followBlaakTasksSwitch } from '../ui/tasks-page/actions';
 import { installMainArea } from '../ui/main-area/install-main-area';
 import { installPhoneAccess } from '../ui/phone-access/install-phone-access';
 import { installSessionTask } from '../ui/session-task/install-session-task';
@@ -60,6 +62,7 @@ export function bootstrap(): void {
   installPlan();
   installPlanPage();
   installProjectPage();
+  installTasksPage();
   installPhoneAccess();
   installSessionTask();
   followColorSchemeInTerminals();
@@ -90,6 +93,8 @@ export function bootstrap(): void {
  */
 async function applyStoredSettings(): Promise<void> {
   const global = await window.api.getSetting<GlobalSettings>('global');
+  // The Tasks page, its shortcut and its entry point, while a BlaakTasks URL is set (#249).
+  followBlaakTasksSwitch(global as Record<string, unknown> | null);
   if (!global) return;
 
   if (global.sidebarWidth) {

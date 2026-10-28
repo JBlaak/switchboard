@@ -4,10 +4,11 @@
  * the Mark done offer an archive can bring.
  *
  * Main owns the links (#245, #248); this keeps the renderer's copy, filled
- * from `sessionTasks()` at start and whenever Settings are saved, and kept
- * up by the `sessionTaskChanged` pushes. While BlaakTasks is off (no URL in
- * Settings) nothing here shows: main answers no links then, and `enabled`
- * keeps Link task… off the Session work page.
+ * from `sessionTasks()` whenever BlaakTasks is switched on (at launch, or a
+ * Settings save; `blaakTasksSwitched`, whose flag is `tasks.enabled` in
+ * `tasks-slice`), and kept up by the `sessionTaskChanged` pushes. Switched
+ * off, the links, the picker and the offer are dropped, so nothing here
+ * shows; Link task… reads the same flag.
  *
  * The tasks themselves are fetched one by one (`getTask`) for the chip, the
  * Task tab and the offer, and kept while the app runs; a change from here
@@ -25,8 +26,8 @@ import { statusDotLabel, type StatusDot } from '../../domain/session-work/status
 import { SESSION_ARCHIVED_LINE } from '../../domain/tasks/writes';
 
 export type SessionTaskEvent =
-  /** What main says now: whether BlaakTasks is on, and every linked session's task. */
-  | { type: 'sessionTasksLoaded'; enabled: boolean; links: Record<string, string> }
+  /** What main says now: every linked session's task. */
+  | { type: 'sessionTasksLoaded'; links: Record<string, string> }
   /** A task's detail was asked of main. */
   | { type: 'sessionTaskDetailRequested'; taskId: string }
   /** Main answered a task's detail. */
@@ -70,8 +71,6 @@ export interface TaskPicker {
 }
 
 export interface SessionTaskState {
-  /** A BlaakTasks URL is set in Settings. */
-  readonly enabled: boolean;
   /** sessionId → the id of the task it works on. */
   readonly links: IdRecord<string>;
   /** taskId → what is known of it. */
@@ -86,28 +85,22 @@ export interface SessionTaskState {
 }
 
 export const initialSessionTaskState: SessionTaskState = {
-  enabled: false, links: {}, tasks: {}, pending: null, actionError: null, picker: null, offer: null,
+  links: {}, tasks: {}, pending: null, actionError: null, picker: null, offer: null,
 };
 
-export function sessionTaskReducer(state: SessionTaskState, event: RendererEvent): SessionTaskState {
+/** `blaakTasksOn` is `tasks.enabled` as this event left it: Link task… opens only while it is on. */
+export function sessionTaskReducer(state: SessionTaskState, event: RendererEvent, blaakTasksOn = true): SessionTaskState {
   switch (event.type) {
-    case 'sessionTasksLoaded': {
-      const links = event.enabled ? { ...event.links } : {};
-      return {
-        ...state,
-        enabled: event.enabled,
-        links,
-        picker: event.enabled ? state.picker : null,
-        offer: event.enabled ? state.offer : null,
-      };
-    }
+    case 'sessionTasksLoaded':
+      return { ...state, links: { ...event.links } };
+    // Off: no session has a task, and nothing asks about one.
+    case 'blaakTasksSwitched':
+      return event.on ? state : { ...state, links: {}, picker: null, offer: null };
     case 'sessionTaskChanged': {
       const links = event.taskId
         ? withEntry(state.links, event.sessionId, event.taskId)
         : withoutEntry(state.links, event.sessionId);
-      // Main only links while BlaakTasks is on.
-      const enabled = state.enabled || event.taskId !== null;
-      return links === state.links && enabled === state.enabled ? state : { ...state, links, enabled };
+      return links === state.links ? state : { ...state, links };
     }
     case 'sessionTaskDetailRequested': {
       const known = state.tasks[event.taskId];
@@ -135,7 +128,7 @@ export function sessionTaskReducer(state: SessionTaskState, event: RendererEvent
       return { ...state, pending: null, actionError: null, tasks };
     }
     case 'sessionTaskPickerOpened':
-      if (!state.enabled) return state;
+      if (!blaakTasksOn) return state;
       return {
         ...state,
         picker: { sessionId: event.sessionId, query: '', phase: 'searching', results: [], cursor: 0, error: null },
@@ -160,8 +153,7 @@ export function sessionTaskReducer(state: SessionTaskState, event: RendererEvent
       return cursor === picker.cursor ? state : { ...state, picker: { ...picker, cursor } };
     }
     case 'taskMarkDoneOffered':
-      // Main offers it only while BlaakTasks is on, so it is on.
-      return { ...state, enabled: true, offer: { sessionId: event.sessionId, taskId: event.taskId } };
+      return { ...state, offer: { sessionId: event.sessionId, taskId: event.taskId } };
     case 'sessionTaskOfferClosed':
       return state.offer ? { ...state, offer: null } : state;
     case 'tasksChanged':
@@ -210,9 +202,9 @@ export function rekeySessionTask(state: SessionTaskState, oldId: string, newId: 
 
 // ── Reading it ──
 
-/** The id of the task a session works on, or null (always null while BlaakTasks is off). */
+/** The id of the task a session works on, or null (always null while BlaakTasks is off: it has no links then). */
 export function taskIdOf(state: SessionTaskState, sessionId: string | null | undefined): string | null {
-  if (!state.enabled || !sessionId) return null;
+  if (!sessionId) return null;
   return state.links[sessionId] ?? null;
 }
 

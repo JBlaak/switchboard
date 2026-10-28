@@ -26,9 +26,9 @@ const detail = (over: Partial<TaskDetail> = {}): TaskDetail => ({
 });
 
 const run = (events: RendererEvent[], state: SessionTaskState = initialSessionTaskState): SessionTaskState =>
-  events.reduce(sessionTaskReducer, state);
+  events.reduce((s, event) => sessionTaskReducer(s, event), state);
 
-const on: RendererEvent = { type: 'sessionTasksLoaded', enabled: true, links: { s1: TASK } };
+const on: RendererEvent = { type: 'sessionTasksLoaded', links: { s1: TASK } };
 
 test('a linked session has its task; an unlinked one has none', () => {
   /* When */
@@ -40,21 +40,22 @@ test('a linked session has its task; an unlinked one has none', () => {
   assert.equal(sessionTaskOf(state, 's2'), null);
 });
 
-test('while BlaakTasks is off no session has a task, whatever main said before', () => {
+test('switching BlaakTasks off drops every link, the picker and the offer', () => {
   /* Given */
-  const state = run([on]);
+  const state = run([on, { type: 'sessionTaskPickerOpened', sessionId: 's1' }, { type: 'taskMarkDoneOffered', sessionId: 's1', taskId: TASK }]);
 
   /* When */
-  const off = run([{ type: 'sessionTasksLoaded', enabled: false, links: { s1: TASK } }], state);
+  const off = run([{ type: 'blaakTasksSwitched', on: false }], state);
 
   /* Then */
-  assert.equal(off.enabled, false);
   assert.equal(taskIdOf(off, 's1'), null);
+  assert.equal(off.picker, null);
+  assert.equal(off.offer, null);
 });
 
 test('a link pushed by main shows at once, and an unlink takes it away', () => {
   /* Given */
-  const state = run([{ type: 'sessionTasksLoaded', enabled: true, links: {} }]);
+  const state = run([{ type: 'sessionTasksLoaded', links: {} }]);
 
   /* When */
   const linked = run([{ type: 'sessionTaskChanged', sessionId: 's2', taskId: 'task-2' }], state);
@@ -153,7 +154,7 @@ test('Link task… searches, drops a stale answer, and steps through the results
 
 test('Link task… does not open while BlaakTasks is off', () => {
   /* When */
-  const state = run([{ type: 'sessionTaskPickerOpened', sessionId: 's1' }]);
+  const state = sessionTaskReducer(initialSessionTaskState, { type: 'sessionTaskPickerOpened', sessionId: 's1' }, false);
 
   /* Then */
   assert.equal(state.picker, null);
