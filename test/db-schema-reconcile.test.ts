@@ -343,7 +343,7 @@ test('a foreign higher-version database gains phone_devices, and its rows surviv
 
 // Which session works on which task (#245) must be there on every database,
 // including one a parallel branch migrated past this one's version.
-test('a foreign higher-version database gains task_links, and its rows survive the next open', () => {
+test('a foreign higher-version database gains task_links and task_unlinks, and their rows survive the next open', () => {
   /* Given */
   const dir = dataDir('switchboard-db-task-links-');
   sqlite(dir, FOREIGN_V9);
@@ -351,6 +351,7 @@ test('a foreign higher-version database gains task_links, and its rows survive t
   sqlite(dir, `
     db.prepare(\`INSERT INTO task_links (task_id, project_path, session_id, source, linked_at)
       VALUES ('1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9', '/code/app', 's1', 'start', 1700000000000)\`).run();
+    db.prepare("INSERT INTO task_unlinks (session_id, unlinked_at) VALUES ('s2', 1700000000000)").run();
   `);
 
   /* When */
@@ -361,9 +362,13 @@ test('a foreign higher-version database gains task_links, and its rows survive t
   const state = JSON.parse(sqlite(dir, `console.log(JSON.stringify({
     cols: db.prepare('PRAGMA table_info(task_links)').all().map(c => c.name),
     rows: db.prepare('SELECT session_id FROM task_links').all(),
+    unlinkCols: db.prepare('PRAGMA table_info(task_unlinks)').all().map(c => c.name),
+    unlinks: db.prepare('SELECT session_id FROM task_unlinks').all(),
   }));`, true));
   assert.deepEqual(state, {
     cols: ['id', 'task_id', 'project_path', 'session_id', 'source', 'linked_at'],
     rows: [{ session_id: 's1' }],
+    unlinkCols: ['session_id', 'unlinked_at'],
+    unlinks: [{ session_id: 's2' }],
   });
 });

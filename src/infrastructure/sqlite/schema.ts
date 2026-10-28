@@ -111,6 +111,12 @@ const TABLES = [
     source TEXT NOT NULL,
     linked_at INTEGER NOT NULL
   )`,
+  // When a session was unlinked from its task by hand, so detection does not
+  // relink it from a tool call made before (#245). Epoch ms.
+  `CREATE TABLE IF NOT EXISTS task_unlinks (
+    session_id TEXT PRIMARY KEY,
+    unlinked_at INTEGER NOT NULL
+  )`,
 ];
 
 const INDEXES = [

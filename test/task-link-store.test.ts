@@ -73,10 +73,25 @@ test('unlinking drops the session\'s link and nothing else', () => {
   const given = link(TASK, 's1', 1) + link(TASK, 's2', 2);
 
   /* When */
-  const state = withStore(`${given} store.unlink('s1'); return { s1: store.forSession('s1'), all: store.all().map(l => l.sessionId) };`);
+  const state = withStore(`${given} store.unlink('s1', 5);
+    return { s1: store.forSession('s1'), all: store.all().map(l => l.sessionId), unlinkedAt: store.unlinkedAt('s1') };`);
 
   /* Then */
-  assert.deepEqual(state, { s1: null, all: ['s2'] });
+  assert.deepEqual(state, { s1: null, all: ['s2'], unlinkedAt: 5 });
+});
+
+test('an unlink is remembered until the session is linked again', () => {
+  /* Given */
+  const given = link(TASK, 's1', 1) + `store.unlink('s1', 5); store.unlink('s1', 7);`;
+
+  /* When */
+  const state = withStore(`${given}
+    const before = store.unlinkedAt('s1');
+    ${link(OTHER, 's1', 9)}
+    return { before, after: store.unlinkedAt('s1'), never: store.unlinkedAt('s2') };`);
+
+  /* Then */
+  assert.deepEqual(state, { before: 7, after: null, never: null });
 });
 
 test('a repo set by hand is one row without a session, replaced by the next', () => {

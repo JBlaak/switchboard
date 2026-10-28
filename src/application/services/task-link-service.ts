@@ -46,9 +46,9 @@ export class TaskLinkService {
     return link;
   }
 
-  /** The session no longer works on a task. */
+  /** The session no longer works on a task, until it names one again after now. */
   unlink(sessionId: string): void {
-    this.deps.store.unlink(sessionId);
+    this.deps.store.unlink(sessionId, this.deps.clock.now());
   }
 
   /** The task the session works on, or null. */
@@ -100,11 +100,14 @@ export class TaskLinkService {
   /**
    * Reads a session's transcript for the task it says it works on, and links it
    * when that is news: no link yet, or a different task named after the link
-   * was made. Answers the new link, or null when nothing changed.
+   * was made. A session unlinked by hand is relinked only by a call made
+   * after the unlink. Answers the new link, or null when nothing changed.
    */
   scan(sessionId: string, transcript: readonly string[], projectPath: string): TaskLink | null {
     const detected = detectTask(transcript);
-    if (!detected || !detectedLinkWins(this.deps.store.forSession(sessionId), detected)) return null;
+    if (!detected) return null;
+    const { store } = this.deps;
+    if (!detectedLinkWins(store.forSession(sessionId), detected, store.unlinkedAt(sessionId))) return null;
     return this.link(detected.taskId, sessionId, projectPath, 'detected');
   }
 }

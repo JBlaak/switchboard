@@ -120,10 +120,16 @@ export function repoTasks(links: readonly TaskLink[], projectPath: string): stri
  * Whether a task a session's transcript names should become its link. Only
  * when it names a different task than the session has, and named it after
  * that link was made: a link made by hand since is not undone by an older
- * call. A call without a time only counts for a session with no link at all.
+ * call. A session unlinked by hand stays unlinked until a call newer than the
+ * unlink (`unlinkedAt`, epoch ms). A call without a time only counts for a
+ * session that was never linked.
  */
-export function detectedLinkWins(current: TaskLink | null, detected: { taskId: string; at: number | null }): boolean {
-  if (!current) return true;
+export function detectedLinkWins(
+  current: TaskLink | null,
+  detected: { taskId: string; at: number | null },
+  unlinkedAt: number | null = null,
+): boolean {
+  if (!current) return unlinkedAt === null || (detected.at !== null && detected.at > unlinkedAt);
   if (current.taskId === detected.taskId) return false;
   return detected.at !== null && detected.at > current.linkedAt;
 }

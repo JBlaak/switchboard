@@ -209,6 +209,31 @@ test('a task named before the session\'s link was made leaves the link alone', (
   assert.equal(wins, false);
 });
 
+test('a call made before a session was unlinked does not relink it', () => {
+  /* Given */
+  const unlinkedAt = 100;
+
+  /* When */
+  const wins = [
+    detectedLinkWins(null, { taskId: TASK, at: 50 }, unlinkedAt),
+    detectedLinkWins(null, { taskId: TASK, at: null }, unlinkedAt),
+  ];
+
+  /* Then */
+  assert.deepEqual(wins, [false, false]);
+});
+
+test('a call made after a session was unlinked links it again', () => {
+  /* Given */
+  const unlinkedAt = 100;
+
+  /* When */
+  const wins = detectedLinkWins(null, { taskId: TASK, at: 150 }, unlinkedAt);
+
+  /* Then */
+  assert.equal(wins, true);
+});
+
 test('the task the session is linked to already is no news', () => {
   /* Given */
   const current = link('s1', { linkedAt: 100 });

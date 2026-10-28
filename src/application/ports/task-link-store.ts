@@ -18,10 +18,15 @@ export interface TaskLinkStore {
   forTask(taskId: string): TaskLink[];
   /** The session's link, or null when it has none. */
   forSession(sessionId: string): TaskLink | null;
-  /** Links the session, replacing any link it had. */
+  /** Links the session, replacing any link it had, and forgets an earlier unlink. */
   link(link: SessionTaskLink): void;
-  /** Drops the session's link, if it has one. */
-  unlink(sessionId: string): void;
+  /**
+   * Drops the session's link, if it has one, and remembers when (epoch ms), so
+   * detection does not relink it from a call made before.
+   */
+  unlink(sessionId: string, at: number): void;
+  /** When the session was last unlinked by hand, or null when it was not since its last link. */
+  unlinkedAt(sessionId: string): number | null;
   /** Sets a task's repo by hand: a link without a session, replacing an earlier one. */
   setRepo(taskId: string, projectPath: string, at: number): void;
 }

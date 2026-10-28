@@ -11,11 +11,20 @@ const OTHER = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
 /** The store as the SQLite one behaves: one link per session, one repo set by hand per task. */
 class MemoryTaskLinkStore implements TaskLinkStore {
   links: TaskLink[] = [];
+  unlinks = new Map<string, number>();
   all(): TaskLink[] { return [...this.links]; }
   forTask(taskId: string): TaskLink[] { return this.links.filter((link) => link.taskId === taskId); }
   forSession(sessionId: string): TaskLink | null { return this.links.find((link) => link.sessionId === sessionId) ?? null; }
-  link(link: SessionTaskLink): void { this.unlink(link.sessionId); this.links.push({ ...link }); }
-  unlink(sessionId: string): void { this.links = this.links.filter((link) => link.sessionId !== sessionId); }
+  link(link: SessionTaskLink): void {
+    this.links = this.links.filter((other) => other.sessionId !== link.sessionId);
+    this.links.push({ ...link });
+    this.unlinks.delete(link.sessionId);
+  }
+  unlink(sessionId: string, at: number): void {
+    this.links = this.links.filter((link) => link.sessionId !== sessionId);
+    this.unlinks.set(sessionId, at);
+  }
+  unlinkedAt(sessionId: string): number | null { return this.unlinks.get(sessionId) ?? null; }
   setRepo(taskId: string, projectPath: string, at: number): void {
     this.links = this.links.filter((link) => !(link.taskId === taskId && link.sessionId === null));
     this.links.push({ taskId, projectPath, sessionId: null, source: 'manual', linkedAt: at });
@@ -206,6 +215,43 @@ test('a scan moves the session to a task it named after its link', () => {
   /* Then */
   assert.equal(linked?.taskId, TASK);
   assert.equal(service.taskOf('s1'), TASK);
+});
+
+test('an unlinked session stays unlinked when the same transcript is scanned again', () => {
+  /* Given */
+  const { service, clock } = setup();
+  const transcript = [toolCall('mcp__blaaktasks__update', TASK, '1970-01-01T00:00:00.500Z')];
+  service.scan('s1', transcript, '/code/app');
+  clock.at = 2_000;
+  service.unlink('s1');
+  clock.at = 3_000;
+
+  /* When */
+  const linked = service.scan('s1', transcript, '/code/app');
+
+  /* Then */
+  assert.equal(linked, null);
+  assert.equal(service.taskOf('s1'), null);
+});
+
+test('an unlinked session links again from a call made after the unlink', () => {
+  /* Given */
+  const { service, clock } = setup();
+  service.link(TASK, 's1', '/code/app', 'detected');
+  clock.at = 2_000;
+  service.unlink('s1');
+  clock.at = 4_000;
+  const transcript = [
+    toolCall('mcp__blaaktasks__update', TASK, '1970-01-01T00:00:00.500Z'),
+    toolCall('mcp__blaaktasks__progress', OTHER, '1970-01-01T00:00:03.000Z'),
+  ];
+
+  /* When */
+  const linked = service.scan('s1', transcript, '/code/app');
+
+  /* Then */
+  assert.equal(linked?.taskId, OTHER);
+  assert.equal(service.taskOf('s1'), OTHER);
 });
 
 test('a transcript without a blaaktasks call links nothing', () => {
