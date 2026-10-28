@@ -591,3 +591,18 @@ test('without the watch on (the e2e suite), a finished action asks gh nothing', 
   /* Then */
   assert.equal(github.calls.length, 1);
 });
+
+test('a PR\'s state is what gh last answered, and unknown before it answered', async () => {
+  /* Given */
+  const { watch, github } = setup();
+  github.prs.set(7, status('aaa', 'passing', { state: 'merged' }));
+  const before = watch.stateOf(url(7));
+
+  /* When */
+  await watch.poll();
+
+  /* Then */
+  assert.equal(before, null);
+  assert.equal(watch.stateOf(url(7)), 'merged');
+  assert.equal(watch.stateOf(url(8)), null);
+});
