@@ -21,9 +21,15 @@ export interface TaskStartInput {
 /** The branch of a task with no letters or digits in its title. */
 const UNTITLED_BRANCH = 'task';
 
-/** The issue rule without the number: the title's first five words, as a slug. */
+/**
+ * The issue rule without the number: the title's first five words, as a slug.
+ * A slug that starts with a digit gets `task-` in front, or `issueFromBranch`
+ * would read it as an issue's branch.
+ */
 export function taskBranchName(title: string): string {
-  return titleSlug(title) || UNTITLED_BRANCH;
+  const slug = titleSlug(title);
+  if (!slug) return UNTITLED_BRANCH;
+  return /^[0-9]/.test(slug) ? UNTITLED_BRANCH + '-' + slug : slug;
 }
 
 /** The first prompt of a new session on a task. */

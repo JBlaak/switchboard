@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { issueBranchName } from '../src/domain/plan/start';
+import { issueFromBranch } from '../src/domain/session-work/issues';
 import {
   taskBranchName, taskContinuePrompt, taskRouteText, taskSessionPrompt, type TaskStartInput,
 } from '../src/domain/tasks/start';
@@ -30,6 +31,18 @@ test('a task branch keeps the first five words of the title, lower case and with
 
   /* Then */
   assert.equal(branch, 'eerst-de-offerte-voor-peter');
+});
+
+test('a title starting with a number gets task- in front, so its branch is never read as an issue\'s', () => {
+  /* Given */
+  const title = '2026 budget review';
+
+  /* When */
+  const branch = taskBranchName(title);
+
+  /* Then */
+  assert.equal(branch, 'task-2026-budget-review');
+  assert.equal(issueFromBranch(branch, 'o/r'), null);
 });
 
 test('a title without letters or digits still names a branch', () => {
