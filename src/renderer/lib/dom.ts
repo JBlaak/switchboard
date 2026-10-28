@@ -7,8 +7,8 @@
  *
  * - `sidebarContent` holds the keyboard focus while the list cursor is out,
  *   hears the list's keys, and is the scrolling container the reflow measures.
- * - `placeholder`, `terminalArea`, `settingsViewer`, `sessionWorkPanel` and
- *   `projectPagePanel` are the main area's panels, swapped by style following
+ * - `placeholder`, `terminalArea`, `settingsViewer`, `sessionWorkPanel`,
+ *   `projectPagePanel` and `tasksPagePanel` are the main area's panels, swapped by style following
  *   its route (`ui/main-area/install-main-area`): a terminal can only take
  *   focus or be refitted once its panel has a layout box, which has to be
  *   true before the next line runs, not whenever React next commits.
@@ -36,3 +36,5 @@ export const settingsViewer = el('settings-viewer');
 export const sessionWorkPanel = el('session-work');
 /** A project's panel: its page, a plan inside it, or its settings (#173). */
 export const projectPagePanel = el('project-page');
+/** The Tasks page (#249). */
+export const tasksPagePanel = el('tasks-page');

@@ -40,6 +40,14 @@ export function isProjectSettingsKey(e: KeyboardEvent): boolean {
   return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'Comma';
 }
 
+/**
+ * Cmd+T opens or closes the Tasks page (#249), wherever the focus is. Only
+ * while BlaakTasks is on; the caller checks that.
+ */
+export function isTasksPageKey(e: KeyboardEvent): boolean {
+  return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyT';
+}
+
 /** Cmd plus `code`, unless the key is going into a text field. */
 function isCommandKey(e: KeyboardEvent, code: string): boolean {
   if (e.altKey || e.shiftKey || e.ctrlKey || !e.metaKey || e.code !== code) return false;

@@ -13,6 +13,7 @@ import { relayoutSessionList } from '../session-list/relayout';
 import { dispatch } from '../../state/app-store';
 import { view } from '../../state/session-store';
 import { syncQuickSessionButton } from '../../features/sessions/quick-session';
+import { followBlaakTasksSwitch } from '../tasks-page/actions';
 import { applyTerminalFont, refitOpenTerminals } from '../../features/terminal/terminal-manager';
 import { applyTerminalTheme } from '../../features/terminal/terminal-themes';
 import type { SettingsRecord } from '../../state/settings-slice';
@@ -77,6 +78,7 @@ export async function saveSettings(form: Record<string, unknown>): Promise<void>
   });
   relayoutSessionList();
   void syncQuickSessionButton();
+  followBlaakTasksSwitch(settings);
 
   dispatch({ type: 'settingsSaved' });
   setTimeout(() => closeSettings(), 600);

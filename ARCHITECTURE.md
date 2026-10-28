@@ -146,8 +146,8 @@ modules in `features/`:
   into frames and holds back synchronised-update blocks.
 - **The main area's panel swap.** What the main area shows is one route
   (`state/main-area-slice`): a session, a session's work page, a project
-  (so far the Plan view without a session), the app settings, or the empty
-  screen. The panels are shown and hidden by style (`lib/dom`), following
+  (so far the Plan view without a session), the app settings, the Tasks page
+  (while BlaakTasks is on), or the empty screen. The panels are shown and hidden by style (`lib/dom`), following
   that route in one place (`ui/main-area/install-main-area`), because a
   terminal can only take focus or be refitted once its panel has a layout
   box, synchronously. Surfaces only dispatch what they want on screen; none

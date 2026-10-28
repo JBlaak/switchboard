@@ -31,6 +31,7 @@ import type { WorkingAgent } from '../../domain/terminal/program-status-children
 import type { ToolbarEvent } from './toolbar-slice';
 import type { SessionListEvent } from './session-list-slice';
 import type { ProjectPageEvent } from './project-page-slice';
+import type { TasksPageEvent } from './tasks-slice';
 import type { PhoneAccessEvent } from './phone-access-slice';
 import type { ViewState } from './view-slice';
 import type { DraftAction } from '../../domain/questions/answer-draft';
@@ -312,7 +313,8 @@ export type LocalEvent =
    */
   | { type: 'taskMarkDoneOffered'; sessionId: string; taskId: string };
 
-export type RendererEvent = PushEvent | LocalEvent | ToolbarEvent | SessionListEvent | ProjectPageEvent | PhoneAccessEvent;
+export type RendererEvent =
+  PushEvent | LocalEvent | ToolbarEvent | SessionListEvent | ProjectPageEvent | PhoneAccessEvent | TasksPageEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

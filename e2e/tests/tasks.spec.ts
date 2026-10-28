@@ -10,9 +10,11 @@
  * stand-in BlaakTasks: a local HTTP server speaking MCP, found through
  * `~/.claude.json` as the real one is. No real BlaakTasks is ever reached.
  *
- * The Tasks page and the session's task chip (#249, #250) drive this from
- * the UI; until then the steps are the ones their start helper takes
- * (`startTaskSessionWith`), called through `window.api`.
+ * The first test takes the steps the start helper takes
+ * (`startTaskSessionWith`) through `window.api`; the Tasks page (#249) drives
+ * the same start from the UI: switched on in Settings, opened with ⌘T, and
+ * S on the task's row. The page's views, keys and routing outcomes are unit
+ * tested (test/tasks-slice.test.ts, test/tasks-page-actions.test.ts).
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -21,6 +23,7 @@ import path from 'node:path';
 import { test, expect } from '../support/test';
 import { FakeCli } from '../support/fake-cli';
 import { P } from '../fixtures/standard';
+import { sidebar } from '../support/app';
 import type { AddressInfo } from 'node:net';
 
 const TASK = '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9';
@@ -131,4 +134,58 @@ test('with no BlaakTasks URL set, nothing is started and nothing is linked', asy
 
   /* Then */
   expect(answers).toEqual({ prepared: { kind: 'off' }, listed: { kind: 'off' }, linked: {} });
+});
+
+test('the Tasks page opens with ⌘T once BlaakTasks is on, and S starts a session on the task without leaving it', async ({ page, home }) => {
+  /* Given: BlaakTasks set up in Claude Code, a repository the task is linked to, and no Tasks page yet */
+  const blaakTasks = await fakeBlaakTasks();
+  try {
+    fs.writeFileSync(path.join(home.home, '.claude.json'), JSON.stringify({
+      mcpServers: { blaaktasks: { type: 'http', url: blaakTasks.url, headers: { Authorization: `Bearer ${TOKEN}` } } },
+    }));
+    const projectPath = home.projectPath(P.acmeApi);
+    makeRepository(projectPath);
+    const tasksPage = page.getByRole('region', { name: 'Tasks' });
+    await expect(page.getByRole('button', { name: 'Tasks', exact: true })).toHaveCount(0);
+
+    /* When: the URL is saved in Settings */
+    await page.getByRole('button', { name: 'Global settings', exact: true }).click();
+    await page.getByText('BlaakTasks URL', { exact: true }).locator('xpath=ancestor::*[.//input][1]').getByRole('textbox').fill(blaakTasks.url);
+    await page.getByRole('button', { name: 'Save Settings' }).click();
+    await expect(page.getByText('Global Settings', { exact: true })).toBeHidden();
+    await page.evaluate(({ task, projectPath }) => window.api.setTaskRepo(task, projectPath), { task: TASK, projectPath });
+
+    /* Then: the page has its entry point, and ⌘T opens it on ★ Today with the task's row */
+    await expect(page.getByRole('button', { name: 'Tasks', exact: true })).toBeVisible();
+    await page.keyboard.press('Meta+t');
+    await expect(tasksPage).toBeFocused();
+    await expect(tasksPage.getByRole('tab', { name: '★ Today' })).toHaveAttribute('aria-selected', 'true');
+    await expect(tasksPage.getByRole('radio', { name: 'Work' })).toHaveAttribute('aria-checked', 'true');
+    const row = tasksPage.locator(`[data-task-id="${TASK}"]`);
+    await expect(row).toContainText(TITLE);
+    await expect(row).toContainText('In progress');
+    await expect(row).toHaveAttribute('aria-selected', 'true');
+
+    /* When: S on the row under the cursor */
+    await page.keyboard.press('s');
+
+    /* Then: Claude started in the task's worktree, the page kept the main area, and the session has a sidebar row */
+    await expect(row.getByRole('status')).toContainText('Started in');
+    let owner: string | null = null;
+    await expect.poll(async () => (owner = (await page.evaluate((task) => window.api.taskSessions(task), TASK)).owner)).not.toBeNull();
+    const launch = await new FakeCli(home.controlDir, owner!).launched();
+    expect(fs.realpathSync(launch.cwd)).toBe(fs.realpathSync(path.join(projectPath, '.claude/worktrees/fix-the-flaky-upload-test')));
+    await expect(sidebar(page).locator(`[data-session-id="${owner}"]`)).toBeVisible();
+    await expect(tasksPage).toBeVisible();
+    await expect.poll(() => blaakTasks.calls.some((call) => call.tool === 'update' && call.args.id === TASK)).toBe(true);
+
+    /* When: Esc */
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+
+    /* Then */
+    await expect(tasksPage).toHaveCount(0);
+  } finally {
+    await blaakTasks.close();
+  }
 });
