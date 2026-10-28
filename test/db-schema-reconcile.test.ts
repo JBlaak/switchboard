@@ -340,3 +340,30 @@ test('a foreign higher-version database gains phone_devices, and its rows surviv
     rows: [{ id: 'd1' }],
   });
 });
+
+// Which session works on which task (#245) must be there on every database,
+// including one a parallel branch migrated past this one's version.
+test('a foreign higher-version database gains task_links, and its rows survive the next open', () => {
+  /* Given */
+  const dir = dataDir('switchboard-db-task-links-');
+  sqlite(dir, FOREIGN_V9);
+  opened(dir);
+  sqlite(dir, `
+    db.prepare(\`INSERT INTO task_links (task_id, project_path, session_id, source, linked_at)
+      VALUES ('1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9', '/code/app', 's1', 'start', 1700000000000)\`).run();
+  `);
+
+  /* When */
+  const r = openDatabase(dir);
+
+  /* Then */
+  assert.equal(r.status, 0, r.stderr);
+  const state = JSON.parse(sqlite(dir, `console.log(JSON.stringify({
+    cols: db.prepare('PRAGMA table_info(task_links)').all().map(c => c.name),
+    rows: db.prepare('SELECT session_id FROM task_links').all(),
+  }));`, true));
+  assert.deepEqual(state, {
+    cols: ['id', 'task_id', 'project_path', 'session_id', 'source', 'linked_at'],
+    rows: [{ session_id: 's1' }],
+  });
+});

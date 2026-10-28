@@ -101,6 +101,16 @@ const TABLES = [
     paired_at INTEGER NOT NULL,
     last_seen_at INTEGER
   )`,
+  // Which session works on which BlaakTasks task, and in which repo (#245). A
+  // row without a session is a task's repo set by hand. Times are epoch ms.
+  `CREATE TABLE IF NOT EXISTS task_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    project_path TEXT NOT NULL,
+    session_id TEXT,
+    source TEXT NOT NULL,
+    linked_at INTEGER NOT NULL
+  )`,
 ];
 
 const INDEXES = [
@@ -109,6 +119,9 @@ const INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_search_map_type_id ON search_map(type, id)',
   'CREATE INDEX IF NOT EXISTS idx_session_actions_phase ON session_actions(phase)',
   'CREATE INDEX IF NOT EXISTS idx_auto_fix_attempts_pr ON auto_fix_attempts(repository, number)',
+  'CREATE INDEX IF NOT EXISTS idx_task_links_task ON task_links(task_id)',
+  // A session works on at most one task.
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_task_links_session ON task_links(session_id) WHERE session_id IS NOT NULL',
 ];
 
 type Migration = (db: Database.Database, result: SchemaResult) => void;
