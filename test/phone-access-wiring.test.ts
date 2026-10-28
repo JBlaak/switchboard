@@ -201,6 +201,8 @@ async function mac() {
   const app = {
     ...stopper, repository, renderer, launcher, questions, phoneAccess: phone.access, phoneSessions: phone.sessions,
     worktreeCleanup,
+    // BlaakTasks off: archiving offers nothing (#248).
+    tasks: { archived: async () => null },
   } as unknown as Container;
   registerTerminalHandlers(ipc.ipc, app);
   registerSessionHandlers(ipc.ipc, app);

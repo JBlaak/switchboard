@@ -29,6 +29,11 @@ import type { IssueWorktreeRequest, IssueWorktreeResult } from '../domain/plan/i
 import type { Plan, PlanSummary } from '../domain/plan/model';
 import type { ProjectOverview, ProjectOverviewOptions } from '../domain/project/overview';
 import type { PhoneAccessState, TerminalOwner } from '../domain/phone/state';
+import type { BlaakTasksResult, TaskDetail, TaskRow } from '../domain/tasks/model';
+import type {
+  MarkDoneOffer, TaskChange, TaskQuery, TaskSessions, TaskStartPreparation, TaskStartRequest,
+  TaskUpdateResult, TasksUpdate,
+} from '../domain/tasks/surface';
 
 /** Removes the listener an `on*` subscription added. */
 export type Unsubscribe = () => void;
@@ -65,7 +70,11 @@ export interface SwitchboardApi {
   toggleStar(id: string): Promise<{ starred: number }>;
   /** `null` clears the rename, falling back to the AI/first-prompt title. */
   renameSession(id: string, name: string | null): Promise<IpcResult>;
-  archiveSession(id: string, archived: boolean): Promise<{ archived: number }>;
+  /**
+   * Archive a session, or bring it back. Archiving a session of a task whose
+   * PRs are all merged answers `markDone`: offer to mark that task done (#248).
+   */
+  archiveSession(id: string, archived: boolean): Promise<{ archived: number; markDone?: MarkDoneOffer }>;
   /** Keep a session's row out of the list until `until` (an ISO time), or wake it with null. */
   snoozeSession(id: string, until: string | null): Promise<void>;
 
@@ -198,6 +207,49 @@ export interface SwitchboardApi {
    */
   projectOverview(projectPath: string, options?: ProjectOverviewOptions): Promise<ProjectOverview>;
 
+  // ── Tasks: BlaakTasks in Switchboard (#248) ──
+  // While no BlaakTasks URL is set, the BlaakTasks calls answer `{ kind: 'off' }`
+  // and the link reads answer nothing; none of them reaches BlaakTasks.
+  /** One list now: a view, or a search with `options.query`. Never rejects. */
+  listTasks(query: TaskQuery): Promise<BlaakTasksResult<TaskRow[]>>;
+  /** One task in full: its brief, progress log and Notion page. */
+  getTask(taskId: string): Promise<BlaakTasksResult<TaskDetail>>;
+  /** ★, snooze, or Done (only ever because you pressed for it; retried until it gets through). */
+  updateTask(taskId: string, change: TaskChange): Promise<TaskUpdateResult>;
+  /** Move the task to another repo by hand. */
+  setTaskRepo(taskId: string, projectPath: string): Promise<IpcResult>;
+  /**
+   * The worktree and first prompt of a new session on a task: in `projectPath`,
+   * else the task's repo, else the one Ask Patch picks. The renderer starts
+   * the session (`startTaskSession`), because the row is its to make.
+   */
+  prepareTaskStart(request: TaskStartRequest): Promise<TaskStartPreparation>;
+  /**
+   * The session started from the task has started: link it (in `projectPath`,
+   * the preparation's main checkout) and set the task In progress and ★.
+   */
+  taskSessionStarted(taskId: string, sessionId: string, projectPath: string): Promise<IpcResult>;
+  /** "Link task…": the session works on this task now, replacing any it had. */
+  linkSessionTask(sessionId: string, taskId: string): Promise<IpcResult>;
+  /** The session no longer works on a task. */
+  unlinkSessionTask(sessionId: string): Promise<IpcResult>;
+  /** The id of the task the session works on, or null. */
+  sessionTask(sessionId: string): Promise<string | null>;
+  /** Every linked session's task id, by session id. */
+  sessionTasks(): Promise<Record<string, string>>;
+  /** A task's sessions, the most recently linked first, and the one that owns it. */
+  taskSessions(taskId: string): Promise<TaskSessions>;
+  /** The ids of the tasks whose repo is this project, the most recently linked first. */
+  projectTasks(projectPath: string): Promise<string[]>;
+  /**
+   * A surface shows this list: it is pushed now and on every poll (about a
+   * minute) as `onTasksChanged`, until `unwatchTasks`. Watching again under the
+   * same id switches its list. A null query only keeps the poll (and the
+   * retries of failed writes) running. Main polls only while something watches.
+   */
+  watchTasks(watchId: string, query: TaskQuery | null): Promise<void>;
+  unwatchTasks(watchId: string): Promise<void>;
+
   // ── Fire-and-forget ──
   sendInput(id: string, data: string): void;
   resizeTerminal(id: string, cols: number, rows: number): void;
@@ -267,6 +319,10 @@ export interface SwitchboardApi {
   onSessionStarted(cb: (sessionId: string, projectPath: string) => void): Unsubscribe;
   /** A phone archived a session: close it as archiving it here would. */
   onSessionArchived(cb: (sessionId: string) => void): Unsubscribe;
+  /** A watched task list after a poll, or after a change: its rows, or that BlaakTasks is down, off or not set up. */
+  onTasksChanged(cb: (update: TasksUpdate) => void): Unsubscribe;
+  /** A session's task changed: a task id when it was linked, null when unlinked. */
+  onSessionTaskChanged(cb: (sessionId: string, taskId: string | null) => void): Unsubscribe;
 
   // ── Host facts the renderer needs synchronously ──
   /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

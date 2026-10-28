@@ -17,6 +17,8 @@ import type { RouteRequest, RouteResult } from '../../src/domain/ask/model';
 import type { GitHubCli, ProjectReads } from '../../src/application/ports/github-cli';
 import type { Logger } from '../../src/application/ports/logger';
 import type { RendererGateway } from '../../src/application/ports/renderer-gateway';
+import type { SessionTaskLink, TaskLinkStore } from '../../src/application/ports/task-link-store';
+import type { TaskLink } from '../../src/domain/tasks/links';
 import type {
   PtyHandle, SpawnSpec, TerminalGateway,
 } from '../../src/application/ports/terminal-gateway';
@@ -204,6 +206,8 @@ export function fakeRenderer(): FakeRenderer {
     terminalOwnerChanged: record('terminalOwnerChanged'),
     sessionStarted: record('sessionStarted'),
     sessionArchived: record('sessionArchived'),
+    tasksChanged: record('tasksChanged'),
+    sessionTaskChanged: record('sessionTaskChanged'),
   };
 }
 
@@ -382,4 +386,29 @@ export function fakeRouter(result: RouteResult): FakeRouter {
       return result;
     },
   };
+}
+
+// ── Task links (#245) ──
+
+/** The store as the SQLite one behaves: one link per session, one repo set by hand per task. */
+export class MemoryTaskLinkStore implements TaskLinkStore {
+  links: TaskLink[] = [];
+  unlinks = new Map<string, number>();
+  all(): TaskLink[] { return [...this.links]; }
+  forTask(taskId: string): TaskLink[] { return this.links.filter((link) => link.taskId === taskId); }
+  forSession(sessionId: string): TaskLink | null { return this.links.find((link) => link.sessionId === sessionId) ?? null; }
+  link(link: SessionTaskLink): void {
+    this.links = this.links.filter((other) => other.sessionId !== link.sessionId);
+    this.links.push({ ...link });
+    this.unlinks.delete(link.sessionId);
+  }
+  unlink(sessionId: string, at: number): void {
+    this.links = this.links.filter((link) => link.sessionId !== sessionId);
+    this.unlinks.set(sessionId, at);
+  }
+  unlinkedAt(sessionId: string): number | null { return this.unlinks.get(sessionId) ?? null; }
+  setRepo(taskId: string, projectPath: string, at: number): void {
+    this.links = this.links.filter((link) => !(link.taskId === taskId && link.sessionId === null));
+    this.links.push({ taskId, projectPath, sessionId: null, source: 'manual', linkedAt: at });
+  }
 }

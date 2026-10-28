@@ -42,6 +42,10 @@ import { WeatherService } from '../application/services/weather-service';
 import { ASK_PATCH_CALL, AskRouteService } from '../application/services/ask-route-service';
 import { QUICK_ASK_ACCELERATOR, QuickAskHotkey } from '../application/services/quick-ask-hotkey';
 import { QuickAskService, quickRouteCall } from '../application/services/quick-ask-service';
+import { TaskLinkService } from '../application/services/task-link-service';
+import { TaskSessionService } from '../application/services/task-session-service';
+import { TaskWritesService } from '../application/services/task-writes-service';
+import { TasksService } from '../application/services/tasks-service';
 import { SessionRegistry } from '../application/model/session-registry';
 
 import { ShellClaudeCaller } from '../infrastructure/claude-cli/claude-caller';
@@ -70,6 +74,8 @@ import { SqliteSessionRepository } from '../infrastructure/sqlite/session-reposi
 import { SqliteSettingsStore } from '../infrastructure/sqlite/settings-store';
 import { SqliteActivityStore } from '../infrastructure/sqlite/activity-store';
 import { SqliteAutoFixHistory } from '../infrastructure/sqlite/auto-fix-history';
+import { SqliteTaskLinkStore } from '../infrastructure/sqlite/task-link-store';
+import { McpBlaakTasks } from '../infrastructure/blaaktasks/mcp-blaak-tasks';
 import { openDatabase } from '../infrastructure/sqlite/database';
 import { resolveClaudePaths } from '../infrastructure/fs/claude-paths';
 import { systemTimers } from '../infrastructure/system/timers';
@@ -83,6 +89,8 @@ import { GhCli, defaultGhRunner } from '../infrastructure/github/gh-cli';
 import { loginShellEnv } from '../infrastructure/shell/login-shell-env';
 import { encodeProjectPath } from '../domain/project/project-path';
 import { isRemoteProjectPath } from '../domain/project/remote-target';
+import { routeCandidates } from '../domain/ask/route';
+import { resolveBlaakTasksUrl } from '../domain/settings/settings';
 import { QuestionHookServer } from '../infrastructure/http/question-hook-server';
 import { ArchiveToolService } from '../application/services/archive-tool-service';
 import { OpensslIdentityStore } from '../infrastructure/phone/identity-store';
@@ -149,6 +157,8 @@ export interface Container {
   readonly quickAskPanel: QuickAskPanel;
   readonly quickAsk: QuickAskService;
   readonly mcpServers: McpServers;
+  /** BlaakTasks (#248): its services exist only while a URL is set in Settings. */
+  readonly tasks: TasksService;
   /** The pop-up's window, once one exists. */
   quickAskWindow(): QuickAskWindow | null;
   /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
@@ -189,6 +199,9 @@ export interface Container {
 function appDir(): string {
   return __dirname;
 }
+
+/** How much of a transcript's end is read for the task its BlaakTasks calls name. */
+const TASK_SCAN_BYTES = 512 * 1024;
 
 export function buildContainer(): Container {
   // ── Primitives ──
@@ -256,7 +269,7 @@ export function buildContainer(): Container {
   // is made further down.
   const archiveTool = new ArchiveToolService({
     registry, endpoint: questionHook, log,
-    archiver: { archive: (sessionId) => sessionArchiver({ registry, remote, lifecycle, terminals, repository, renderer, worktreeCleanup }).archive(sessionId) },
+    archiver: { archive: (sessionId) => sessionArchiver({ registry, remote, lifecycle, terminals, repository, renderer, worktreeCleanup, tasks }).archive(sessionId) },
   });
 
   // `gh`, and the filters a git checkout runs (`git-lfs`), need the login
@@ -425,39 +438,40 @@ export function buildContainer(): Container {
   // Sessions on a plan's issues (#125): every listed session and every running
   // one may own an issue, and a new one starts in a worktree made here. The
   // archived ones own none, but may be the one an existing branch was worked on in.
-  const issueSessions = new IssueSessionService({
-    sessions: () => {
-      const meta = repository.getAllMeta();
-      const candidates = new Map<string, IssueSessionCandidate>();
-      for (const cached of repository.getAllCached()) {
-        candidates.set(cached.sessionId, {
-          sessionId: cached.sessionId,
-          projectPath: cached.projectPath,
-          folder: cached.folder,
-          activeAt: Date.parse(cached.modified) || 0,
-          pullRequests: cached.pullRequests ?? [],
-          ...(meta.get(cached.sessionId)?.archived ? { archived: true } : {}),
+  const sessionCandidates = (): IssueSessionCandidate[] => {
+    const meta = repository.getAllMeta();
+    const candidates = new Map<string, IssueSessionCandidate>();
+    for (const cached of repository.getAllCached()) {
+      candidates.set(cached.sessionId, {
+        sessionId: cached.sessionId,
+        projectPath: cached.projectPath,
+        folder: cached.folder,
+        activeAt: Date.parse(cached.modified) || 0,
+        pullRequests: cached.pullRequests ?? [],
+        ...(meta.get(cached.sessionId)?.archived ? { archived: true } : {}),
+      });
+    }
+    for (const [sessionId, live] of registry.snapshot()) {
+      if (live.exited || live.isPlainTerminal) continue;
+      const listed = candidates.get(sessionId);
+      if (listed) {
+        listed.activeAt = Math.max(listed.activeAt, live.openedAt);
+        // Running, it may own an issue though it is archived.
+        delete listed.archived;
+      } else {
+        candidates.set(sessionId, {
+          sessionId,
+          projectPath: live.projectPath,
+          folder: live.projectFolder ?? encodeProjectPath(live.projectPath),
+          activeAt: live.openedAt,
+          pullRequests: [],
         });
       }
-      for (const [sessionId, live] of registry.snapshot()) {
-        if (live.exited || live.isPlainTerminal) continue;
-        const listed = candidates.get(sessionId);
-        if (listed) {
-          listed.activeAt = Math.max(listed.activeAt, live.openedAt);
-          // Running, it may own an issue though it is archived.
-          delete listed.archived;
-        } else {
-          candidates.set(sessionId, {
-            sessionId,
-            projectPath: live.projectPath,
-            folder: live.projectFolder ?? encodeProjectPath(live.projectPath),
-            activeAt: live.openedAt,
-            pullRequests: [],
-          });
-        }
-      }
-      return [...candidates.values()];
-    },
+    }
+    return [...candidates.values()];
+  };
+  const issueSessions = new IssueSessionService({
+    sessions: sessionCandidates,
     transcripts,
     git: workspace,
     remotes: git,
@@ -497,6 +511,46 @@ export function buildContainer(): Container {
     clock,
   });
 
+  // BlaakTasks (#248): built only while a URL is set, and again when it changes.
+  // Starting from a task routes with its own Ask Patch, never cancelling the
+  // empty screen's request; the writes read a PR's state as the CI watch heard it.
+  const taskLinkStore = new SqliteTaskLinkStore(database.db);
+  const tasks = new TasksService({
+    url: () => resolveBlaakTasksUrl(settings.global() as Record<string, unknown>),
+    build: (url) => {
+      const blaakTasks = new McpBlaakTasks({ url: () => url, mcpServers, log });
+      const links = new TaskLinkService({ store: taskLinkStore, sessions: sessionCandidates, clock });
+      const starts = new TaskSessionService({
+        sessions: sessionCandidates,
+        transcripts,
+        git: workspace,
+        repoOf: (taskId) => links.repoOf(taskId),
+        candidates: () => routeCandidates(projects.list(false)),
+        router: new AskRouteService({ cli: claudeCaller, timers, log, call: ASK_PATCH_CALL }),
+      });
+      const writes = new TaskWritesService({
+        tasks: blaakTasks,
+        links,
+        pullRequests: (sessionId) => repository.getCachedSession(sessionId)?.pullRequests ?? [],
+        pullRequestState: (url) => prWatch.stateOf(url) ?? null,
+        log,
+      });
+      return { tasks: blaakTasks, links, starts, writes };
+    },
+    renderer,
+    sessionsIn: (folder) => registry.snapshot()
+      .filter(([, session]) => !session.exited && !session.isPlainTerminal && !isRemoteProjectPath(session.projectPath))
+      .filter(([, session]) => (session.projectFolder ?? encodeProjectPath(session.projectPath)) === folder)
+      .map(([sessionId, session]) => ({ sessionId, projectPath: session.projectPath })),
+    transcript: (folder, sessionId) => transcripts.readTail(folder, sessionId, TASK_SCAN_BYTES).split('\n'),
+    modifiedAt: (folder, sessionId) => transcripts.sessionMtimeMs(folder, sessionId),
+    pullRequests: (sessionId) => repository.getCachedSession(sessionId)?.pullRequests ?? [],
+    archived: (sessionId) => Boolean(repository.getAllMeta().get(sessionId)?.archived),
+    sessionProject: (sessionId) => locateSession(sessionId)?.projectPath ?? null,
+    repoRoot: async (projectPath) => (await workspace.mainCheckout(projectPath)) ?? projectPath,
+    clock, timers, log,
+  });
+
   // Every write the CLI makes to a transcript arrives here: re-index the folder,
   // check whether a session forked, and refresh the sidebar once per burst.
   const projectsWatcher = new ProjectsWatcher({
@@ -508,6 +562,8 @@ export function buildContainer(): Container {
           transitions.detect(folder);
           sessionIndex.refreshFolder(folder);
           sessionWork.transcriptsChanged(folder);
+          // After the index, so the PRs it just read go on the session's task.
+          void tasks.transcriptsChanged(folder);
         } else {
           sessionIndex.forgetFolder(folder);
         }
@@ -536,7 +592,7 @@ export function buildContainer(): Container {
     // Its own instance per phone (#194): a phone's request never cancels the Mac's.
     router: () => new AskRouteService({ cli: claudeCaller, timers, log, call: ASK_PATCH_CALL }),
     launcher,
-    archiver: sessionArchiver({ registry, remote, lifecycle, terminals, repository, renderer, worktreeCleanup }),
+    archiver: sessionArchiver({ registry, remote, lifecycle, terminals, repository, renderer, worktreeCleanup, tasks }),
     settings,
     renderer,
     // Hold-to-talk: Whisper's model is fetched into user data on first use.
@@ -577,6 +633,7 @@ export function buildContainer(): Container {
     quickAskPanel,
     quickAsk,
     mcpServers,
+    tasks,
     quickAskWindow: () => quickAskWindow,
     prepareQuickAsk: () => { prepareQuickAsk(); },
     phoneAccess: phone.access,
@@ -584,7 +641,11 @@ export function buildContainer(): Container {
     phoneAdvertiser,
     lanWatcher,
     renderer, windowRenderer, dialogs, windowDrag, dockAttention, system, appearance, sleep, git, projectsWatcher,
-    setWindow: (next) => { window = next; },
+    setWindow: (next) => {
+      // A closed window's task surfaces watch nothing any more.
+      if (next !== window) tasks.unwatchAll();
+      window = next;
+    },
     getWindow,
     setWindowOpener: (open) => { openWindow = open; },
     close: () => {

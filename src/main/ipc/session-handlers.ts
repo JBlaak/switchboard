@@ -49,14 +49,16 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
   });
 
   // The window has closed it already; a phone with it open closes it too, and
-  // its worktrees go after, when Settings says so.
-  ipc.handle(INVOKE.archiveSession, (sessionId: string, archived: boolean) => {
+  // its worktrees go after, when Settings says so. Its task (#248) gets a line,
+  // and when every PR the session opened is merged the answer offers Mark done:
+  // archived here, it was archived by you.
+  ipc.handle(INVOKE.archiveSession, async (sessionId: string, archived: boolean) => {
     app.repository.setArchived(sessionId, archived);
-    if (archived) {
-      app.phoneSessions.sessionArchived(sessionId);
-      void app.worktreeCleanup.afterArchive(sessionId);
-    }
-    return { archived: archived ? 1 : 0 };
+    if (!archived) return { archived: 0 };
+    app.phoneSessions.sessionArchived(sessionId);
+    void app.worktreeCleanup.afterArchive(sessionId);
+    const markDone = await app.tasks.archived(sessionId, { byUser: true });
+    return markDone ? { archived: 1, markDone } : { archived: 1 };
   });
 
   ipc.handle(INVOKE.snoozeSession, (sessionId: string, until: string | null) => {

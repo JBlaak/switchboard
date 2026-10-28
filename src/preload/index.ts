@@ -122,6 +122,23 @@ const api: SwitchboardApi = {
   // ── The project page (#172) ──
   projectOverview: (projectPath, options) => ipcRenderer.invoke(INVOKE.projectOverview, projectPath, options),
 
+  // ── Tasks (#248) ──
+  listTasks: (query) => ipcRenderer.invoke(INVOKE.tasksList, query),
+  getTask: (taskId) => ipcRenderer.invoke(INVOKE.tasksGet, taskId),
+  updateTask: (taskId, change) => ipcRenderer.invoke(INVOKE.tasksUpdate, taskId, change),
+  setTaskRepo: (taskId, projectPath) => ipcRenderer.invoke(INVOKE.tasksSetRepo, taskId, projectPath),
+  prepareTaskStart: (request) => ipcRenderer.invoke(INVOKE.tasksPrepareStart, request),
+  taskSessionStarted: (taskId, sessionId, projectPath) =>
+    ipcRenderer.invoke(INVOKE.tasksSessionStarted, taskId, sessionId, projectPath),
+  linkSessionTask: (sessionId, taskId) => ipcRenderer.invoke(INVOKE.tasksLinkSession, sessionId, taskId),
+  unlinkSessionTask: (sessionId) => ipcRenderer.invoke(INVOKE.tasksUnlinkSession, sessionId),
+  sessionTask: (sessionId) => ipcRenderer.invoke(INVOKE.tasksSessionTask, sessionId),
+  sessionTasks: () => ipcRenderer.invoke(INVOKE.tasksSessionTasks),
+  taskSessions: (taskId) => ipcRenderer.invoke(INVOKE.tasksTaskSessions, taskId),
+  projectTasks: (projectPath) => ipcRenderer.invoke(INVOKE.tasksProjectTasks, projectPath),
+  watchTasks: (watchId, query) => ipcRenderer.invoke(INVOKE.tasksWatch, watchId, query),
+  unwatchTasks: (watchId) => ipcRenderer.invoke(INVOKE.tasksUnwatch, watchId),
+
   // ── Fire-and-forget ──
   sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),
   resizeTerminal: (id, cols, rows) => ipcRenderer.send(SEND.terminalResize, id, cols, rows),
@@ -156,6 +173,8 @@ const api: SwitchboardApi = {
   onTerminalOwnerChanged: (cb) => subscribe(EVENT.terminalOwnerChanged, (_e, sessionId, owner) => cb(sessionId, owner)),
   onSessionStarted: (cb) => subscribe(EVENT.sessionStarted, (_e, sessionId, projectPath) => cb(sessionId, projectPath)),
   onSessionArchived: (cb) => subscribe(EVENT.sessionArchived, (_e, sessionId) => cb(sessionId)),
+  onTasksChanged: (cb) => subscribe(EVENT.tasksChanged, (_e, update) => cb(update)),
+  onSessionTaskChanged: (cb) => subscribe(EVENT.sessionTaskChanged, (_e, sessionId, taskId) => cb(sessionId, taskId)),
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),

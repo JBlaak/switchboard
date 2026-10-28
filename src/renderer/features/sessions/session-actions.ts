@@ -240,9 +240,11 @@ export async function archiveSessionRow(session: SessionRow, archived: number): 
     dispatch({ type: 'ptyStopped', sessionId });
   }
 
-  await window.api.archiveSession(sessionId, Boolean(archived));
+  const answer = await window.api.archiveSession(sessionId, Boolean(archived));
   session.archived = archived;
   if (archived) closeArchivedSession(sessionId);
+  // Its task's PRs are all merged: Mark task done? (#248)
+  if (answer?.markDone) dispatch({ type: 'taskMarkDoneOffered', sessionId, taskId: answer.markDone.taskId });
   return true;
 }
 

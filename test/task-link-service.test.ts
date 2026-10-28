@@ -2,34 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { TaskLinkService, type TaskLinkSession } from '../src/application/services/task-link-service';
-import type { SessionTaskLink, TaskLinkStore } from '../src/application/ports/task-link-store';
-import type { TaskLink } from '../src/domain/tasks/links';
+import { MemoryTaskLinkStore } from './support/fakes';
 
 const TASK = '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9';
 const OTHER = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
-
-/** The store as the SQLite one behaves: one link per session, one repo set by hand per task. */
-class MemoryTaskLinkStore implements TaskLinkStore {
-  links: TaskLink[] = [];
-  unlinks = new Map<string, number>();
-  all(): TaskLink[] { return [...this.links]; }
-  forTask(taskId: string): TaskLink[] { return this.links.filter((link) => link.taskId === taskId); }
-  forSession(sessionId: string): TaskLink | null { return this.links.find((link) => link.sessionId === sessionId) ?? null; }
-  link(link: SessionTaskLink): void {
-    this.links = this.links.filter((other) => other.sessionId !== link.sessionId);
-    this.links.push({ ...link });
-    this.unlinks.delete(link.sessionId);
-  }
-  unlink(sessionId: string, at: number): void {
-    this.links = this.links.filter((link) => link.sessionId !== sessionId);
-    this.unlinks.set(sessionId, at);
-  }
-  unlinkedAt(sessionId: string): number | null { return this.unlinks.get(sessionId) ?? null; }
-  setRepo(taskId: string, projectPath: string, at: number): void {
-    this.links = this.links.filter((link) => !(link.taskId === taskId && link.sessionId === null));
-    this.links.push({ taskId, projectPath, sessionId: null, source: 'manual', linkedAt: at });
-  }
-}
 
 function setup(sessions: TaskLinkSession[] = []) {
   const store = new MemoryTaskLinkStore();

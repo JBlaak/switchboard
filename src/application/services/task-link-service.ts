@@ -56,6 +56,14 @@ export class TaskLinkService {
     return this.deps.store.forSession(sessionId)?.taskId ?? null;
   }
 
+  /** Every linked session's task, by session id: for the sidebar's task markers. */
+  sessionTasks(): Record<string, string> {
+    const tasks: Record<string, string> = {};
+    // Oldest first, so a session's newest link is the one left standing.
+    for (const link of this.deps.store.all()) if (link.sessionId !== null) tasks[link.sessionId] = link.taskId;
+    return tasks;
+  }
+
   /** Where the task's work happens: its latest link's project, or null when it has none. */
   repoOf(taskId: string): string | null {
     const id = taskIdFrom(taskId);
