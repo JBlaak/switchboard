@@ -39,7 +39,7 @@ export const MAX_REFUSED_ATTEMPTS = 3;
 export type TaskWriteOutcome = 'sent' | 'queued' | 'dropped' | 'skipped';
 
 export interface TaskWritesServiceDeps {
-  tasks: Pick<BlaakTasks, 'update' | 'progress'>;
+  tasks: Pick<BlaakTasks, 'get' | 'update' | 'progress'>;
   links: Pick<TaskLinkService, 'taskOf'>;
   /** The PRs a session opened, from its transcript's `pr-link` lines. */
   pullRequests(sessionId: string): readonly SessionPullRequest[];
@@ -54,6 +54,9 @@ interface Queued {
   refused: number;
   outcome: TaskWriteOutcome;
 }
+
+/** A PR line for a PR the task already carries: nothing to write. */
+const ALREADY_THERE = Symbol('already there');
 
 export class TaskWritesService {
   readonly #queue: Queued[] = [];
@@ -71,7 +74,11 @@ export class TaskWritesService {
     return this.#send({ kind: 'update', taskId, patch: { ...STARTED_PATCH } });
   }
 
-  /** The session opened (or linked) a PR: one "Opened PR #n" line for it, ever. */
+  /**
+   * The session opened (or linked) a PR: one "Opened PR #n" line for it, ever.
+   * The task is read first, and a PR it already carries is not written again,
+   * so replaying a session's `pr-link`s after a restart logs nothing twice.
+   */
   pullRequestOpened(sessionId: string, pr: SessionPullRequest): Promise<TaskWriteOutcome> {
     const taskId = this.deps.links.taskOf(sessionId);
     if (!taskId) return Promise.resolve('skipped');
@@ -133,7 +140,9 @@ export class TaskWritesService {
     while (this.#queue.length > 0) {
       const entry = this.#queue[0];
       const result = await this.#call(entry.write);
-      if (result.kind === 'ok') {
+      if (result === ALREADY_THERE) {
+        entry.outcome = 'skipped';
+      } else if (result.kind === 'ok') {
         entry.outcome = 'sent';
       } else if (result.kind === 'off' || result.kind === 'notSetUp') {
         // Nowhere to send it: BlaakTasks is not on, so there is nothing to catch up on.
@@ -149,8 +158,18 @@ export class TaskWritesService {
     }
   }
 
-  async #call(write: TaskWrite): Promise<BlaakTasksResult<unknown>> {
+  /**
+   * Sends one write. A PR line first reads the task, and answers
+   * `ALREADY_THERE` when the task carries that PR already; a read that does
+   * not get through holds the write back like the write itself would.
+   */
+  async #call(write: TaskWrite): Promise<BlaakTasksResult<unknown> | typeof ALREADY_THERE> {
     try {
+      if (write.kind === 'progress' && write.pullRequest) {
+        const task = await this.deps.tasks.get(write.taskId);
+        if (task.kind !== 'ok') return task;
+        if (task.value.pullRequests.includes(write.pullRequest)) return ALREADY_THERE;
+      }
       return write.kind === 'update'
         ? await this.deps.tasks.update(write.taskId, write.patch)
         : await this.deps.tasks.progress(write.taskId, write.text, write.pullRequest);

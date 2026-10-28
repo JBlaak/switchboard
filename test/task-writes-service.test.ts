@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { MAX_REFUSED_ATTEMPTS, TaskWritesService } from '../src/application/services/task-writes-service';
 import { silentLog } from './support/fakes';
 import type { BlaakTasks } from '../src/application/ports/blaak-tasks';
-import type { BlaakTasksResult, TaskPatch, TaskRow } from '../src/domain/tasks/model';
+import type { BlaakTasksResult, TaskDetail, TaskPatch, TaskRow } from '../src/domain/tasks/model';
 import type { SessionPullRequest } from '../src/domain/session/session';
 import type { PullRequestState } from '../src/domain/tasks/writes';
 
@@ -19,10 +19,22 @@ type Call =
 const ROW = { id: TASK } as TaskRow;
 
 /** BlaakTasks, recording every write and answering what the test says it should. */
-class FakeBlaakTasks implements Pick<BlaakTasks, 'update' | 'progress'> {
+class FakeBlaakTasks implements Pick<BlaakTasks, 'get' | 'update' | 'progress'> {
   calls: Call[] = [];
+  /** The ids `get` was asked for. */
+  reads: string[] = [];
+  /** The PRs the task carries already, as `get` answers them. */
+  carried: string[] = [];
   /** The answer every call gets, until the test changes it. */
   answer: BlaakTasksResult<TaskRow> = { kind: 'ok', value: ROW };
+  /** `get`'s answer when it differs from every other call's. */
+  getAnswer: BlaakTasksResult<TaskDetail> | null = null;
+  async get(id: string): Promise<BlaakTasksResult<TaskDetail>> {
+    this.reads.push(id);
+    if (this.getAnswer) return this.getAnswer;
+    if (this.answer.kind !== 'ok') return this.answer;
+    return { kind: 'ok', value: { ...ROW, pullRequests: [...this.carried] } as TaskDetail };
+  }
   async update(id: string, patch: TaskPatch) {
     this.calls.push(['update', id, patch]);
     return this.answer;
@@ -267,4 +279,53 @@ test('a port that throws after all is an outage, not a crash', async () => {
   /* Then */
   assert.equal(outcome, 'queued');
   assert.equal(service.pending().length, 1);
+});
+
+test('a PR the task already carries is not written again, as after a restart replaying its pr-links', async () => {
+  /* Given */
+  const { tasks, service } = setup();
+  tasks.carried = [pr(7).url];
+
+  /* When */
+  const known = await service.pullRequestOpened('s1', pr(7));
+  const fresh = await service.pullRequestOpened('s1', pr(8));
+
+  /* Then */
+  assert.deepEqual([known, fresh], ['skipped', 'sent']);
+  assert.deepEqual(tasks.reads, [TASK, TASK]);
+  assert.deepEqual(tasks.calls, [['progress', TASK, 'Opened PR #8', pr(8).url]]);
+});
+
+test('a PR line whose task cannot be read is queued, and checked again when retried', async () => {
+  /* Given */
+  const { tasks, service } = setup();
+  tasks.getAnswer = { kind: 'unreachable', reason: 'timeout' };
+  const outcome = await service.pullRequestOpened('s1', pr(7));
+  tasks.getAnswer = null;
+  // Meanwhile the PR reached the task some other way.
+  tasks.carried = [pr(7).url];
+
+  /* When */
+  await service.retry();
+
+  /* Then */
+  assert.equal(outcome, 'queued');
+  assert.deepEqual(tasks.reads, [TASK, TASK]);
+  assert.deepEqual(tasks.calls, []);
+  assert.deepEqual(service.pending(), []);
+});
+
+test('a queued PR line the task does not carry yet is written once BlaakTasks is back', async () => {
+  /* Given */
+  const { tasks, service } = setup();
+  tasks.getAnswer = { kind: 'unreachable', reason: 'timeout' };
+  await service.pullRequestOpened('s1', pr(7));
+  tasks.getAnswer = null;
+
+  /* When */
+  await service.retry();
+
+  /* Then */
+  assert.deepEqual(tasks.calls, [['progress', TASK, 'Opened PR #7', pr(7).url]]);
+  assert.deepEqual(service.pending(), []);
 });
