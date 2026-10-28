@@ -18,6 +18,10 @@
  * capture keeps its `captureId`, and sending the same text again retries it
  * without routing it again, so James never stores it twice (C5).
  *
+ * Capturing a task is offered only while a BlaakTasks URL is set (#252): with
+ * it empty, the routing call doesn't know the "task" kind, and a task capture
+ * that comes back anyway takes the no-match path.
+ *
  * ⌘Enter skips the routing call: a quick session starts on the text as typed.
  *
  * The capture call is cold. Warming it would mean warming both servers'
@@ -27,7 +31,7 @@
  */
 import { routeCandidates, folderName, NO_MATCH_LINE } from '../../domain/ask/route';
 import {
-  CAPTURE_SERVERS, captureArgs, noAnswerLine, readCaptureRun, readUndoRun, undoArgs,
+  CAPTURE_SERVERS, captureArgs, captureTargets, noAnswerLine, readCaptureRun, readUndoRun, undoArgs,
 } from '../../domain/ask/capture';
 import { NO_QUICK_FOLDER_LINE, quickAskOutcome } from '../../domain/ask/quick-ask';
 import { quickRouteArgs, quickRouteBootArgs, quickRoutePrompt, readQuickRouteRun } from '../../domain/ask/quick-route';
@@ -36,6 +40,7 @@ import type { CaptureReceipt } from '../../domain/ask/capture';
 import type { CaptureTarget, QuickRouteResult, RouteRequest } from '../../domain/ask/model';
 import type { ClaudeRun } from '../../domain/ask/route';
 import type { Project } from '../../domain/project/project';
+import { resolveBlaakTasksUrl } from '../../domain/settings/settings';
 import type { GlobalSettings } from '../../domain/settings/settings';
 import type { ClaudeCaller } from '../ports/claude-cli';
 import type { TimerHandle, Timers } from '../ports/clock';
@@ -48,10 +53,24 @@ import type { QuickAskPanel } from '../ports/quick-ask-panel';
 import type { RendererGateway } from '../ports/renderer-gateway';
 import type { RouteCall } from './ask-route-service';
 
-/** Quick Ask's routing call: Ask Patch's, also asking whether it is a capture (C1). */
-export const QUICK_ROUTE_CALL: RouteCall<QuickRouteResult> = {
-  bootArgs: quickRouteBootArgs, prompt: quickRoutePrompt, args: quickRouteArgs, read: readQuickRouteRun,
-};
+/**
+ * Quick Ask's routing call: Ask Patch's, also asking whether it is a capture
+ * (C1), into the targets `settings` offers now (#252).
+ */
+export function quickRouteCall(settings: { global(): GlobalSettings }): RouteCall<QuickRouteResult> {
+  const targets = () => offeredTargets(settings.global());
+  return {
+    bootArgs: () => quickRouteBootArgs(targets()),
+    prompt: quickRoutePrompt,
+    args: (request) => quickRouteArgs(request, targets()),
+    read: (run, request) => readQuickRouteRun(run, request, targets()),
+  };
+}
+
+/** The capture targets Quick Ask offers: tasks only while a BlaakTasks URL is set. */
+export function offeredTargets(global: GlobalSettings): CaptureTarget[] {
+  return captureTargets(resolveBlaakTasksUrl(global) !== '');
+}
 
 /** How long a capture or an undo may take before it counts as failed. */
 export const CAPTURE_TIMEOUT_MS = 30_000;
@@ -59,7 +78,7 @@ export const CAPTURE_TIMEOUT_MS = 30_000;
 /** How long a capture's ids are kept for ⌘Z. */
 export const UNDO_KEPT_MS = 10 * 60_000;
 
-/** The part of `AskRouteService` this uses: its own instance, on `QUICK_ROUTE_CALL`. */
+/** The part of `AskRouteService` this uses: its own instance, on `quickRouteCall`. */
 export interface QuickRouter {
   route(request: RouteRequest): Promise<QuickRouteResult>;
   cancel(): void;
@@ -189,12 +208,17 @@ export class QuickAskService {
   }
 
   /**
-   * Write a task or a save. A server that isn't set up in Claude Code takes
-   * the no-match path, with the text as typed (C6).
+   * Write a task or a save. A target that isn't offered (#252), or whose
+   * server isn't set up in Claude Code (C6), takes the no-match path, with the
+   * text as typed.
    */
   async #capture(target: CaptureTarget, text: string, typed: string, captureId: string): Promise<QuickAskReply> {
-    const { mcpServers, popUp, log } = this.deps;
+    const { mcpServers, popUp, settings, log } = this.deps;
     this.#failed = null;
+    if (!offeredTargets(settings.global()).includes(target)) {
+      log.info('[quick-ask] that capture is off; no match instead');
+      return this.#follow(quickAskOutcome({ kind: 'noMatch', reason: NO_MATCH_LINE }, typed, this.#quickFolder()), typed);
+    }
     if (!mcpServers.has(CAPTURE_SERVERS[target])) {
       log.info(`[quick-ask] ${CAPTURE_SERVERS[target]} isn't set up; no match instead`);
       return this.#follow(quickAskOutcome({ kind: 'noMatch', reason: NO_MATCH_LINE }, typed, this.#quickFolder()), typed);

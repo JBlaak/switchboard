@@ -41,7 +41,7 @@ import { UpdateService } from '../application/services/update-service';
 import { WeatherService } from '../application/services/weather-service';
 import { ASK_PATCH_CALL, AskRouteService } from '../application/services/ask-route-service';
 import { QUICK_ASK_ACCELERATOR, QuickAskHotkey } from '../application/services/quick-ask-hotkey';
-import { QUICK_ROUTE_CALL, QuickAskService } from '../application/services/quick-ask-service';
+import { QuickAskService, quickRouteCall } from '../application/services/quick-ask-service';
 import { SessionRegistry } from '../application/model/session-registry';
 
 import { ShellClaudeCaller } from '../infrastructure/claude-cli/claude-caller';
@@ -352,7 +352,7 @@ export function buildContainer(): Container {
   const mcpServers = new ClaudeJsonMcpServers({ fs, homeDir: paths.homeDir, tempDir: os.tmpdir(), ids, log });
   // Its own routing service (R1): never cancels the empty-screen box's request.
   const quickAsk = new QuickAskService({
-    router: new AskRouteService({ cli: claudeCaller, timers, log, call: QUICK_ROUTE_CALL }),
+    router: new AskRouteService({ cli: claudeCaller, timers, log, call: quickRouteCall(settings) }),
     projects, settings, renderer, mainWindow, log,
     // So a request that names a skill keeps its name (#142).
     skills: new ClaudeSkillCatalog({ fs, claudeDir: paths.claudeDir, log }),

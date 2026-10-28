@@ -25,6 +25,14 @@ export interface CaptureReceipt {
 /** Every target, in the order lines name them. */
 export const CAPTURE_TARGETS: readonly CaptureTarget[] = ['tasks', 'james'];
 
+/**
+ * The targets Quick Ask offers: James always, BlaakTasks only while its URL is
+ * set (#252). With it off, nothing in Quick Ask mentions BlaakTasks.
+ */
+export function captureTargets(blaakTasksOn: boolean): CaptureTarget[] {
+  return CAPTURE_TARGETS.filter(target => target !== 'tasks' || blaakTasksOn);
+}
+
 /** Each target's server, as `~/.claude.json` names it under `mcpServers`. */
 export const CAPTURE_SERVERS: Record<CaptureTarget, string> = { tasks: 'blaaktasks', james: 'james' };
 
@@ -55,6 +63,28 @@ export function mcpServerConfig(claudeJson: unknown, name: string): { mcpServers
   const entry = claudeJson.mcpServers[name];
   if (!isRecord(entry)) return null;
   return { mcpServers: { [name]: entry } };
+}
+
+/**
+ * The headers of the server whose `url` is `url`, from the parsed
+ * `~/.claude.json`, or null when no server has that URL (#252). Only string
+ * values count. A trailing slash on either side doesn't matter. The headers
+ * hold the bearer token: whoever asks keeps them in main.
+ */
+export function mcpServerHeaders(claudeJson: unknown, url: string): Record<string, string> | null {
+  const wanted = sameUrl(url);
+  if (!wanted || !isRecord(claudeJson) || !isRecord(claudeJson.mcpServers)) return null;
+  for (const entry of Object.values(claudeJson.mcpServers)) {
+    if (!isRecord(entry) || typeof entry.url !== 'string' || sameUrl(entry.url) !== wanted) continue;
+    const headers = isRecord(entry.headers) ? entry.headers : {};
+    return Object.fromEntries(Object.entries(headers).filter((pair): pair is [string, string] => typeof pair[1] === 'string'));
+  }
+  return null;
+}
+
+/** A URL as compared: trimmed, without a trailing slash. */
+function sameUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '');
 }
 
 // ── Capturing ──

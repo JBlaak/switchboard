@@ -16,39 +16,56 @@ import {
 } from './route';
 import type { ClaudeRun } from './route';
 
+/** Where each capture kind goes. */
+const CAPTURE_KINDS: Record<string, CaptureTarget> = { task: 'tasks', save: 'james' };
+
+/** Every capture target, the default when the caller doesn't narrow them. */
+const ALL_TARGETS: readonly CaptureTarget[] = Object.values(CAPTURE_KINDS);
+
 /**
  * Ask Patch's instructions, plus the kind of request and, for a capture, its
  * text. The answer is the routing object with two more keys.
+ *
+ * Without the `tasks` target (BlaakTasks off, #252) there is no "task" kind:
+ * a reminder reads as a session, and the instructions don't mention tasks.
  */
-export const QUICK_ROUTE_SYSTEM_PROMPT = [
-  // Its own "Answering" section gives way to this call's, which adds two keys.
-  ROUTE_SYSTEM_PROMPT.replace(/\n+Answering:[\s\S]*$/, ''),
-  '',
-  'Choosing kind:',
-  '- "task" when the request explicitly asks for a task or a reminder: "create a task", "add a task", "remind me to", "todo".',
-  '- "save" when it explicitly asks to save, keep or bookmark something, or is only a URL.',
-  '- "session" for everything else. When in doubt, answer "session".',
-  '- For "task" or "save", captureText is the request without its command words ("create a task to call Peter" becomes "call Peter"), otherwise word for word. Keep URLs, dates and names exactly as written.',
-  '- For "session", captureText is "".',
-  '- For "task" or "save", still fill the other keys: projectPath null, confident false, candidates [], prompt "".',
-  '',
-  'Skills:',
-  '- The listed skills are the slash commands of the coding session, by name. "Skills in every project" works anywhere; a project\'s own skills only in that project.',
-  '- A skill\'s name or its own words in the request ("grill me" for grill-me, "tdd" for tdd) are a reference to that skill. Never reword them into a description of what the skill does.',
-  '- When the request asks to run a skill ("grill me on X", "use tdd for X", "/review-pr 12"), prompt is "/" and the skill\'s name exactly as listed, a space, then the rest of the request word for word, without the words that named the skill and without the project. A request that is only the skill is only "/" and its name.',
-  '- When the request only mentions a skill along the way, rewrite it as usual and keep the skill\'s name in it as written.',
-  '- Only use a skill listed for every project or for the chosen project. A skill request is a "session", never a "task" or "save".',
-  '',
-  'Answering:',
-  '- Answer with only this JSON object, no prose, no code fence:',
-  '  {"kind": "session" or "task" or "save", "captureText": "<the text to capture>" or "", "projectPath": "<a listed path>" or null, "confident": true or false, "candidates": ["<a listed path>", ...], "prompt": "<the first message>"}',
-].join('\n');
+export function quickRouteSystemPrompt(targets: readonly CaptureTarget[] = ALL_TARGETS): string {
+  const tasks = targets.includes('tasks');
+  const captures = tasks ? '"task" or "save"' : '"save"';
+  return [
+    // Its own "Answering" section gives way to this call's, which adds two keys.
+    ROUTE_SYSTEM_PROMPT.replace(/\n+Answering:[\s\S]*$/, ''),
+    '',
+    'Choosing kind:',
+    ...(tasks
+      ? ['- "task" when the request explicitly asks for a task or a reminder: "create a task", "add a task", "remind me to", "todo".']
+      : []),
+    '- "save" when it explicitly asks to save, keep or bookmark something, or is only a URL.',
+    '- "session" for everything else. When in doubt, answer "session".',
+    tasks
+      ? '- For "task" or "save", captureText is the request without its command words ("create a task to call Peter" becomes "call Peter"), otherwise word for word. Keep URLs, dates and names exactly as written.'
+      : '- For "save", captureText is the request without its command words ("save this https://example.com/a" becomes "https://example.com/a"), otherwise word for word. Keep URLs, dates and names exactly as written.',
+    '- For "session", captureText is "".',
+    `- For ${captures}, still fill the other keys: projectPath null, confident false, candidates [], prompt "".`,
+    '',
+    'Skills:',
+    '- The listed skills are the slash commands of the coding session, by name. "Skills in every project" works anywhere; a project\'s own skills only in that project.',
+    '- A skill\'s name or its own words in the request ("grill me" for grill-me, "tdd" for tdd) are a reference to that skill. Never reword them into a description of what the skill does.',
+    '- When the request asks to run a skill ("grill me on X", "use tdd for X", "/review-pr 12"), prompt is "/" and the skill\'s name exactly as listed, a space, then the rest of the request word for word, without the words that named the skill and without the project. A request that is only the skill is only "/" and its name.',
+    '- When the request only mentions a skill along the way, rewrite it as usual and keep the skill\'s name in it as written.',
+    `- Only use a skill listed for every project or for the chosen project. A skill request is a "session", never a ${captures}.`,
+    '',
+    'Answering:',
+    '- Answer with only this JSON object, no prose, no code fence:',
+    `  {"kind": "session" or ${captures}, "captureText": "<the text to capture>" or "", "projectPath": "<a listed path>" or null, "confident": true or false, "candidates": ["<a listed path>", ...], "prompt": "<the first message>"}`,
+  ].join('\n');
+}
+
+/** The instructions with every capture target offered. */
+export const QUICK_ROUTE_SYSTEM_PROMPT = quickRouteSystemPrompt();
 
 /** The two extra keys of a quick answer. */
 const QUICK_KEYS = ['kind', 'captureText'];
-
-/** Where each capture kind goes. */
-const CAPTURE_KINDS: Record<string, CaptureTarget> = { task: 'tasks', save: 'james' };
 
 /**
  * Every flag of the quick routing call, without the message, so a warm
@@ -57,7 +74,7 @@ const CAPTURE_KINDS: Record<string, CaptureTarget> = { task: 'tasks', save: 'jam
  * The same flags as `routeArgs`, for the same reasons, with this call's
  * instructions.
  */
-export function quickRouteBootArgs(): string[] {
+export function quickRouteBootArgs(targets: readonly CaptureTarget[] = ALL_TARGETS): string[] {
   return [
     '-p',
     '--model', 'haiku',
@@ -68,7 +85,7 @@ export function quickRouteBootArgs(): string[] {
     '--strict-mcp-config',
     '--mcp-config', '{"mcpServers":{}}',
     '--disable-slash-commands',
-    '--system-prompt', QUICK_ROUTE_SYSTEM_PROMPT,
+    '--system-prompt', quickRouteSystemPrompt(targets),
   ];
 }
 
@@ -78,8 +95,8 @@ export function quickRoutePrompt(request: RouteRequest): string {
 }
 
 /** The `claude` argv for one cold quick routing call. */
-export function quickRouteArgs(request: RouteRequest): string[] {
-  return [...quickRouteBootArgs(), quickRoutePrompt(request)];
+export function quickRouteArgs(request: RouteRequest, targets: readonly CaptureTarget[] = ALL_TARGETS): string[] {
+  return [...quickRouteBootArgs(targets), quickRoutePrompt(request)];
 }
 
 /**
@@ -89,8 +106,12 @@ export function quickRouteArgs(request: RouteRequest): string[] {
  * `session`, a kind it doesn't know, a capture with no text, a failed call —
  * reads exactly as `readRouteRun` reads it, the two extra keys aside, except
  * that no project keeps a prompt that starts on a skill every project has.
+ * A capture for a target not in `targets` isn't one: its routing keys are read
+ * as for a session.
  */
-export function readQuickRouteRun(run: ClaudeRun, request: RouteRequest): QuickRouteResult {
+export function readQuickRouteRun(
+  run: ClaudeRun, request: RouteRequest, targets: readonly CaptureTarget[] = ALL_TARGETS,
+): QuickRouteResult {
   const envelope = parseEnvelope(run.stdout);
   if (!envelope || envelope.is_error === true || run.exitCode !== 0 || typeof envelope.result !== 'string') {
     return readRouteRun(run, request);
@@ -101,7 +122,7 @@ export function readQuickRouteRun(run: ClaudeRun, request: RouteRequest): QuickR
 
   const target = typeof answer.kind === 'string' ? CAPTURE_KINDS[answer.kind] : undefined;
   const text = typeof answer.captureText === 'string' ? answer.captureText.trim() : '';
-  if (target && text) return { kind: 'capture', target, text };
+  if (target && targets.includes(target) && text) return { kind: 'capture', target, text };
 
   const routing = Object.fromEntries(Object.entries(answer).filter(([key]) => !QUICK_KEYS.includes(key)));
   const checked = readAnswer(JSON.stringify(routing), request);

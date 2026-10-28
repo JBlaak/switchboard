@@ -4,7 +4,8 @@
 import { INVOKE } from '../../ipc/channels';
 import { normaliseAppearance } from '../../domain/settings/appearance';
 import { GLOBAL_SETTINGS_KEY } from '../../domain/settings/settings';
-import { CAPTURE_SERVERS, CAPTURE_TARGETS } from '../../domain/ask/capture';
+import { CAPTURE_SERVERS } from '../../domain/ask/capture';
+import { offeredTargets } from '../../application/services/quick-ask-service';
 import type { Container } from '../composition-root';
 import type { IpcRegistrar } from './registrar';
 
@@ -20,11 +21,20 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
   /**
    * Whether ⌥Space is held, for the settings switch's "in use" line (H3), and
    * which capture servers aren't set up, for its "isn't set up" line (C6).
+   * Only the targets offered count: with BlaakTasks off, it isn't missing.
    */
   ipc.handle(INVOKE.quickAskHotkeyStatus, () => ({
     registered: app.quickAskHotkey.registered,
-    missing: CAPTURE_TARGETS.filter(target => !app.mcpServers.has(CAPTURE_SERVERS[target])),
+    missing: offeredTargets(app.settings.global())
+      .filter(target => !app.mcpServers.has(CAPTURE_SERVERS[target])),
   }));
+
+  /**
+   * Whether a server in `~/.claude.json` has this BlaakTasks URL (#252), for
+   * the Settings field's "add it" line. A yes or no only: the headers stay here.
+   */
+  ipc.handle(INVOKE.blaakTasksSetUp, (url: unknown) =>
+    typeof url === 'string' && url.trim() !== '' && app.mcpServers.headersFor(url) !== null);
 
   ipc.handle(INVOKE.getEffectiveSettings, (projectPath: string | null) =>
     app.settings.effective(projectPath));
