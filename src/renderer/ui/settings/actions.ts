@@ -86,3 +86,11 @@ export async function saveSettings(form: Record<string, unknown>): Promise<void>
 export function geocodeCity(name: string): Promise<WeatherLocation | null> {
   return window.api.geocodeWeatherLocation(name);
 }
+
+/**
+ * Whether a server in `~/.claude.json` has this BlaakTasks URL (#252).
+ * Unknown counts as yes: the "add it" line only shows on a no main gave.
+ */
+export function blaakTasksSetUp(url: string): Promise<boolean> {
+  return window.api.blaakTasksSetUp(url).catch(() => true);
+}

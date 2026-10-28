@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ASK_PATCH_CALL, AskRouteService } from '../src/application/services/ask-route-service';
-import { QUICK_ROUTE_CALL, QuickAskService } from '../src/application/services/quick-ask-service';
+import { QuickAskService, quickRouteCall } from '../src/application/services/quick-ask-service';
 import { captureArgs, noAnswerLine, undoArgs } from '../src/domain/ask/capture';
 import { NO_QUICK_FOLDER_LINE } from '../src/domain/ask/quick-ask';
 import { NO_MATCH_LINE } from '../src/domain/ask/route';
@@ -62,8 +62,11 @@ function success(answer: unknown): ClaudeRun {
   return { exitCode: 0, stdout: JSON.stringify({ type: 'result', is_error: false, result: JSON.stringify(answer) }), stderr: '' };
 }
 
-/** The servers in `~/.claude.json`, writing each config to a numbered path and noting what is removed. */
-function fakeMcpServers(names: string[] = ['blaaktasks', 'james']) {
+/**
+ * The servers in `~/.claude.json`, writing each config to a numbered path and
+ * noting what is removed. `urls` gives a server its URL.
+ */
+function fakeMcpServers(names: string[] = ['blaaktasks', 'james'], urls: Record<string, string> = { blaaktasks: TASKS_URL }) {
   const written: string[] = [];
   const removed: string[] = [];
   const servers: McpServers = {
@@ -74,6 +77,8 @@ function fakeMcpServers(names: string[] = ['blaaktasks', 'james']) {
       written.push(path);
       return { path, remove: () => { removed.push(path); } };
     },
+    headersFor: () => null,
+    nameFor: (url) => names.find(name => urls[name] === url) ?? null,
     removeAll() {},
   };
   /** The configs written and not removed. */
@@ -81,10 +86,16 @@ function fakeMcpServers(names: string[] = ['blaaktasks', 'james']) {
   return { servers, written, removed, left };
 }
 
-function harness({ quickSessionPath = '', servers = ['blaaktasks', 'james'] } = {}) {
+/** The BlaakTasks URL the tests set, so a task capture is offered (#252). */
+const TASKS_URL = 'https://tasks.example.com/mcp';
+
+function harness({
+  quickSessionPath = '', servers = ['blaaktasks', 'james'], blaakTasksUrl = TASKS_URL,
+  urls = { blaaktasks: TASKS_URL } as Record<string, string>,
+} = {}) {
   const { router, requests, calls } = fakeRouter();
   const { cli, calls: cliCalls } = fakeCaller();
-  const mcp = fakeMcpServers(servers);
+  const mcp = fakeMcpServers(servers, urls);
   const timers = fakeTimers();
   const renderer = fakeRenderer();
   const window: string[] = [];
@@ -96,7 +107,7 @@ function harness({ quickSessionPath = '', servers = ['blaaktasks', 'james'] } = 
     router,
     projects: { list: (showArchived) => (showArchived ? [] : PROJECTS) },
     skills: { list: (projectPaths) => { skillLookups.push(projectPaths); return SKILLS; } },
-    settings: { global: () => ({ quickSessionPath }) },
+    settings: { global: () => ({ quickSessionPath, blaakTasksUrl }) },
     renderer,
     mainWindow: { ensureOpen: () => window.push('ensureOpen'), bringForward: () => window.push('bringForward') },
     panel: { onShown: (listener) => { shown = listener; } },
@@ -312,7 +323,7 @@ test('quick ask: a request from the pop-up and one from the empty-screen box nev
   const box = new AskRouteService({ cli, timers, log: silentLog, call: ASK_PATCH_CALL });
   const renderer = fakeRenderer();
   const quickAsk = new QuickAskService({
-    router: new AskRouteService({ cli, timers, log: silentLog, call: QUICK_ROUTE_CALL }),
+    router: new AskRouteService({ cli, timers, log: silentLog, call: quickRouteCall({ global: () => ({}) }) }),
     projects: { list: () => PROJECTS },
     skills: { list: () => NO_SKILLS },
     settings: { global: () => ({}) },
@@ -505,6 +516,111 @@ test('quick ask: a server missing, with a quick folder, starts a quick session o
   /* Then */
   assert.deepEqual(reply, { kind: 'started', folder: 'scratch' });
   assert.deepEqual(h.renderer.only('launchRequested'), [['launchRequested', QUICK, SAVE_TEXT]]);
+});
+
+// ── BlaakTasks off (#252) ──
+
+test('quick ask: with no BlaakTasks URL a task capture takes the no-match path, with no call and no config', async () => {
+  /* Given */
+  const h = harness({ blaakTasksUrl: '' });
+
+  /* When */
+  const reply = await captureSent(h, TASK_TEXT, 'tasks', 'call Peter on Thursday');
+
+  /* Then */
+  assert.deepEqual(reply, { kind: 'handedOff' });
+  assert.deepEqual(h.renderer.only('pickerRequested'), [['pickerRequested', TASK_TEXT, NO_MATCH_LINE]]);
+  assert.deepEqual([h.cliCalls.length, h.mcp.written.length, h.saving.length], [0, 0, 0]);
+});
+
+test('quick ask: with no BlaakTasks URL a save still goes to James', async () => {
+  /* Given */
+  const h = harness({ blaakTasksUrl: '  ' });
+
+  /* When */
+  const reply = captureSent(h, SAVE_TEXT, 'james', 'https://example.com/liquid-glass');
+  (await h.started(1)).finish(success({ ids: ['j-9'], summary: 'The Liquid Glass article' }));
+
+  /* Then */
+  assert.deepEqual(await reply, { kind: 'saved', target: 'james', summary: 'The Liquid Glass article' });
+});
+
+test('quick ask: the routing call offers the "task" kind only while a BlaakTasks URL is set', () => {
+  /* Given */
+  let url = '';
+  const call = quickRouteCall({ global: () => ({ blaakTasksUrl: url }) });
+  const instructions = () => { const boot = call.bootArgs(); return boot[boot.indexOf('--system-prompt') + 1]; };
+
+  /* When */
+  const off = instructions();
+  url = TASKS_URL;
+  const on = instructions();
+
+  /* Then */
+  assert.doesNotMatch(off, /"task"|BlaakTasks|remind me to/);
+  assert.match(off, /"kind": "session" or "save"/);
+  assert.match(on, /"kind": "session" or "task" or "save"/);
+});
+
+test('quick ask: with no BlaakTasks URL a "task" answer is not read as a capture', () => {
+  /* Given */
+  const call = quickRouteCall({ global: () => ({}) });
+  const request = { text: 'remind me to call Peter', candidates: [], skills: NO_SKILLS };
+  const answer = { kind: 'task', captureText: 'call Peter', projectPath: null, confident: false, candidates: [], prompt: '' };
+
+  /* When */
+  const result = call.read(success(answer), request);
+
+  /* Then */
+  assert.notEqual(result.kind, 'capture');
+});
+
+test('quick ask: a task goes to the server with the BlaakTasks URL, under whatever name it has', async () => {
+  /* Given */
+  const h = harness({ servers: ['my-tasks', 'james'], urls: { 'my-tasks': TASKS_URL } });
+  const written: string[] = [];
+  const write = h.mcp.servers.write;
+  h.mcp.servers.write = (name) => { written.push(name); return write(name); };
+
+  /* When */
+  const reply = captureSent(h, TASK_TEXT, 'tasks', 'call Peter on Thursday');
+  const call = await h.started(1);
+  call.finish(success({ ids: ['task-1'], summary: 'Call Peter' }));
+
+  /* Then */
+  assert.deepEqual(written, ['my-tasks']);
+  assert.deepEqual(call.args, captureArgs('tasks', 'call Peter on Thursday', 'capture-1', h.mcp.written[0], 'my-tasks'));
+  assert.ok(call.args.includes('mcp__my-tasks__capture'));
+  assert.ok(!call.args.some(arg => arg.includes('mcp__blaaktasks__')));
+  assert.deepEqual(await reply, { kind: 'saved', target: 'tasks', summary: 'Call Peter' });
+});
+
+test('quick ask: ⌘Z on a task undoes it through the server it went to, under its own name', async () => {
+  /* Given */
+  const h = harness({ servers: ['my-tasks', 'james'], urls: { 'my-tasks': TASKS_URL } });
+  await saved(h, 'tasks', ['task-1']);
+
+  /* When */
+  const undo = h.service.undo();
+  const call = await h.started(2);
+  call.finish(success({ ok: true }));
+
+  /* Then */
+  assert.deepEqual(call.args, undoArgs('tasks', ['task-1'], h.mcp.written[1], 'my-tasks'));
+  assert.ok(call.args.includes('mcp__my-tasks__undo_capture'));
+  assert.deepEqual(await undo, { ok: true });
+});
+
+test('quick ask: a server named blaaktasks at another URL is not the one, and the task takes the no-match path', async () => {
+  /* Given */
+  const h = harness({ urls: { blaaktasks: 'https://elsewhere.example.com/mcp' } });
+
+  /* When */
+  const reply = await captureSent(h, TASK_TEXT, 'tasks', 'call Peter on Thursday');
+
+  /* Then */
+  assert.deepEqual(reply, { kind: 'handedOff' });
+  assert.deepEqual([h.cliCalls.length, h.mcp.written.length], [0, 0]);
 });
 
 // ── Undo ──

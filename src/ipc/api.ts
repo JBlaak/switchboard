@@ -127,6 +127,8 @@ export interface SwitchboardApi {
    * app has it; and the capture targets whose server isn't set up in Claude Code.
    */
   quickAskHotkeyStatus(): Promise<{ registered: boolean; missing: CaptureTarget[] }>;
+  /** Whether a server in `~/.claude.json` has this BlaakTasks URL (#252). Never the token itself. */
+  blaakTasksSetUp(url: string): Promise<boolean>;
 
   // ── Host ──
   openExternal(url: string): Promise<void>;

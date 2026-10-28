@@ -92,6 +92,7 @@ const api: SwitchboardApi = {
   getShellProfiles: () => ipcRenderer.invoke(INVOKE.getShellProfiles),
   setAppearance: (mode) => ipcRenderer.invoke(INVOKE.setAppearance, mode),
   quickAskHotkeyStatus: () => ipcRenderer.invoke(INVOKE.quickAskHotkeyStatus),
+  blaakTasksSetUp: (url) => ipcRenderer.invoke(INVOKE.blaakTasksSetUp, url),
 
   // ── Host ──
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),

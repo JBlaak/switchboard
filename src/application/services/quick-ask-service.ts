@@ -18,6 +18,11 @@
  * capture keeps its `captureId`, and sending the same text again retries it
  * without routing it again, so James never stores it twice (C5).
  *
+ * Capturing a task is offered only while a BlaakTasks URL is set (#252): with
+ * it empty, the routing call doesn't know the "task" kind, and a task capture
+ * that comes back anyway takes the no-match path. With it set, the capture
+ * goes to the `~/.claude.json` server with that URL, whatever its name.
+ *
  * ⌘Enter skips the routing call: a quick session starts on the text as typed.
  *
  * The capture call is cold. Warming it would mean warming both servers'
@@ -27,7 +32,7 @@
  */
 import { routeCandidates, folderName, NO_MATCH_LINE } from '../../domain/ask/route';
 import {
-  CAPTURE_SERVERS, captureArgs, noAnswerLine, readCaptureRun, readUndoRun, undoArgs,
+  CAPTURE_SERVERS, captureArgs, captureTargets, noAnswerLine, readCaptureRun, readUndoRun, undoArgs,
 } from '../../domain/ask/capture';
 import { NO_QUICK_FOLDER_LINE, quickAskOutcome } from '../../domain/ask/quick-ask';
 import { quickRouteArgs, quickRouteBootArgs, quickRoutePrompt, readQuickRouteRun } from '../../domain/ask/quick-route';
@@ -36,6 +41,7 @@ import type { CaptureReceipt } from '../../domain/ask/capture';
 import type { CaptureTarget, QuickRouteResult, RouteRequest } from '../../domain/ask/model';
 import type { ClaudeRun } from '../../domain/ask/route';
 import type { Project } from '../../domain/project/project';
+import { resolveBlaakTasksUrl } from '../../domain/settings/settings';
 import type { GlobalSettings } from '../../domain/settings/settings';
 import type { ClaudeCaller } from '../ports/claude-cli';
 import type { TimerHandle, Timers } from '../ports/clock';
@@ -48,10 +54,39 @@ import type { QuickAskPanel } from '../ports/quick-ask-panel';
 import type { RendererGateway } from '../ports/renderer-gateway';
 import type { RouteCall } from './ask-route-service';
 
-/** Quick Ask's routing call: Ask Patch's, also asking whether it is a capture (C1). */
-export const QUICK_ROUTE_CALL: RouteCall<QuickRouteResult> = {
-  bootArgs: quickRouteBootArgs, prompt: quickRoutePrompt, args: quickRouteArgs, read: readQuickRouteRun,
-};
+/**
+ * Quick Ask's routing call: Ask Patch's, also asking whether it is a capture
+ * (C1), into the targets `settings` offers now (#252).
+ */
+export function quickRouteCall(settings: { global(): GlobalSettings }): RouteCall<QuickRouteResult> {
+  const targets = () => offeredTargets(settings.global());
+  return {
+    bootArgs: () => quickRouteBootArgs(targets()),
+    prompt: quickRoutePrompt,
+    args: (request) => quickRouteArgs(request, targets()),
+    read: (run, request) => readQuickRouteRun(run, request, targets()),
+  };
+}
+
+/** The capture targets Quick Ask offers: tasks only while a BlaakTasks URL is set. */
+export function offeredTargets(global: GlobalSettings): CaptureTarget[] {
+  return captureTargets(resolveBlaakTasksUrl(global) !== '');
+}
+
+/**
+ * The `~/.claude.json` server a capture into `target` goes to, or null when
+ * it isn't set up (C6): `james` for James, and for BlaakTasks the server with
+ * the URL in Settings, whatever it is called (#252).
+ */
+export function captureServer(
+  target: CaptureTarget, global: GlobalSettings, mcpServers: Pick<McpServers, 'has' | 'nameFor'>,
+): string | null {
+  if (target === 'tasks') {
+    const url = resolveBlaakTasksUrl(global);
+    return url ? mcpServers.nameFor(url) : null;
+  }
+  return mcpServers.has(CAPTURE_SERVERS[target]) ? CAPTURE_SERVERS[target] : null;
+}
 
 /** How long a capture or an undo may take before it counts as failed. */
 export const CAPTURE_TIMEOUT_MS = 30_000;
@@ -59,7 +94,7 @@ export const CAPTURE_TIMEOUT_MS = 30_000;
 /** How long a capture's ids are kept for ⌘Z. */
 export const UNDO_KEPT_MS = 10 * 60_000;
 
-/** The part of `AskRouteService` this uses: its own instance, on `QUICK_ROUTE_CALL`. */
+/** The part of `AskRouteService` this uses: its own instance, on `quickRouteCall`. */
 export interface QuickRouter {
   route(request: RouteRequest): Promise<QuickRouteResult>;
   cancel(): void;
@@ -97,8 +132,8 @@ export class QuickAskService {
   /** The rewritten prompt of the last unsure answer, for a choice from the list or Tab. */
   #choosing: { prompt: string; candidates: string[] } | null = null;
   #failed: FailedCapture | null = null;
-  /** The last capture's ids, for ⌘Z, until they expire. */
-  #kept: { receipt: CaptureReceipt; timer: TimerHandle } | null = null;
+  /** The last capture's ids and the server that stored them, for ⌘Z, until they expire. */
+  #kept: { receipt: CaptureReceipt; server: string; timer: TimerHandle } | null = null;
 
   constructor(private readonly deps: QuickAskServiceDeps) {
     // A process booted while the user types, so Enter waits on the model only (S2).
@@ -155,11 +190,12 @@ export class QuickAskService {
     if (!kept) return { ok: false };
     this.#forget();
     const { target, ids } = kept.receipt;
-    const run = await this.#oneToolCall(target, path => undoArgs(target, ids, path));
+    const { server } = kept;
+    const run = await this.#oneToolCall(server, path => undoArgs(target, ids, path, server));
     const ok = run !== null && readUndoRun(run);
-    if (ok) this.deps.log.info(`[quick-ask] undid a capture in ${CAPTURE_SERVERS[target]}`);
+    if (ok) this.deps.log.info(`[quick-ask] undid a capture in ${server}`);
     // The ids, so whatever is left can be found and removed by hand.
-    else this.deps.log.warn(`[quick-ask] could not undo a capture in ${CAPTURE_SERVERS[target]}: ${ids.join(', ')}`);
+    else this.deps.log.warn(`[quick-ask] could not undo a capture in ${server}: ${ids.join(', ')}`);
     return { ok };
   }
 
@@ -189,36 +225,42 @@ export class QuickAskService {
   }
 
   /**
-   * Write a task or a save. A server that isn't set up in Claude Code takes
-   * the no-match path, with the text as typed (C6).
+   * Write a task or a save. A target that isn't offered (#252), or whose
+   * server isn't set up in Claude Code (C6), takes the no-match path, with the
+   * text as typed.
    */
   async #capture(target: CaptureTarget, text: string, typed: string, captureId: string): Promise<QuickAskReply> {
-    const { mcpServers, popUp, log } = this.deps;
+    const { mcpServers, popUp, settings, log } = this.deps;
     this.#failed = null;
-    if (!mcpServers.has(CAPTURE_SERVERS[target])) {
+    if (!offeredTargets(settings.global()).includes(target)) {
+      log.info('[quick-ask] that capture is off; no match instead');
+      return this.#follow(quickAskOutcome({ kind: 'noMatch', reason: NO_MATCH_LINE }, typed, this.#quickFolder()), typed);
+    }
+    const server = captureServer(target, settings.global(), mcpServers);
+    if (!server) {
       log.info(`[quick-ask] ${CAPTURE_SERVERS[target]} isn't set up; no match instead`);
       return this.#follow(quickAskOutcome({ kind: 'noMatch', reason: NO_MATCH_LINE }, typed, this.#quickFolder()), typed);
     }
     popUp.saving(target);
-    const run = await this.#oneToolCall(target, path => captureArgs(target, text, captureId, path));
+    const run = await this.#oneToolCall(server, path => captureArgs(target, text, captureId, path, server));
     const read = run ? readCaptureRun(run, target) : { kind: 'failed' as const, reason: noAnswerLine(target) };
     if ('kind' in read) {
-      log.warn(`[quick-ask] capture into ${CAPTURE_SERVERS[target]} failed`);
+      log.warn(`[quick-ask] capture into ${server} failed`);
       this.#failed = { typed, target, text, captureId };
       return { kind: 'captureFailed', reason: read.reason };
     }
-    log.info(`[quick-ask] captured into ${CAPTURE_SERVERS[target]}: ${read.ids.join(', ')}`);
-    this.#keep(read);
+    log.info(`[quick-ask] captured into ${server}: ${read.ids.join(', ')}`);
+    this.#keep(read, server);
     return { kind: 'saved', target, summary: read.summary };
   }
 
   /**
-   * One call allowed a single tool of `target`'s server, from a config written
+   * One call allowed a single tool of `server`, from a config written
    * for it and removed however the call ends. Null when it couldn't run: the
    * server went missing, the config couldn't be written, `claude` couldn't
    * start, or it took too long and was killed.
    */
-  async #oneToolCall(target: CaptureTarget, args: (mcpConfigPath: string) => string[]): Promise<ClaudeRun | null> {
+  async #oneToolCall(server: string, args: (mcpConfigPath: string) => string[]): Promise<ClaudeRun | null> {
     const { mcpServers, cli, timers, log } = this.deps;
     const controller = new AbortController();
     const timer = timers.setTimeout(() => {
@@ -227,7 +269,7 @@ export class QuickAskService {
     }, CAPTURE_TIMEOUT_MS);
     let config: ReturnType<McpServers['write']> = null;
     try {
-      config = mcpServers.write(CAPTURE_SERVERS[target]);
+      config = mcpServers.write(server);
       if (!config) return null;
       const run = await cli.call(args(config.path), controller.signal);
       return controller.signal.aborted ? null : run;
@@ -241,10 +283,10 @@ export class QuickAskService {
   }
 
   /** Hold the ids for ⌘Z, for ten minutes; a newer capture replaces them. */
-  #keep(receipt: CaptureReceipt): void {
+  #keep(receipt: CaptureReceipt, server: string): void {
     this.#forget();
     const timer = this.deps.timers.setTimeout(() => { this.#kept = null; }, UNDO_KEPT_MS);
-    this.#kept = { receipt, timer };
+    this.#kept = { receipt, server, timer };
   }
 
   #forget(): void {

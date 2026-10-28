@@ -48,6 +48,13 @@ export interface GlobalSettings {
    * `false` default.
    */
   removeWorktreeOnArchive?: boolean;
+  /**
+   * Global only. The BlaakTasks MCP address, e.g. `https://tasks.example.com/mcp`:
+   * the one switch for every part of Switchboard that talks to BlaakTasks
+   * (#244). Empty, the default, keeps it all off. Read it through
+   * `resolveBlaakTasksUrl`.
+   */
+  blaakTasksUrl?: string;
   [key: string]: unknown;
 }
 
@@ -166,6 +173,12 @@ export function resolveQuickAskEnabled(global: Record<string, unknown> | null | 
 /** Whether archiving a session removes its worktrees. Off unless switched on explicitly. */
 export function resolveRemoveWorktreeOnArchive(global: Record<string, unknown> | null | undefined): boolean {
   return global?.removeWorktreeOnArchive === true;
+}
+
+/** The BlaakTasks address, trimmed; '' while BlaakTasks is off, which it is unless one is entered. */
+export function resolveBlaakTasksUrl(global: Record<string, unknown> | null | undefined): string {
+  const url = global?.blaakTasksUrl;
+  return typeof url === 'string' ? url.trim() : '';
 }
 
 /** Where to fetch the weather for: the stored location if it is a valid one. */

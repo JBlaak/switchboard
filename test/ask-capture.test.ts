@@ -223,7 +223,7 @@ test('BlaakTasks undoes every id in one call; James one call per id', () => {
   const targets = ['tasks', 'james'] as const;
 
   /* When */
-  const [tasks, james] = targets.map(undoSystemPrompt);
+  const [tasks, james] = targets.map(target => undoSystemPrompt(target));
 
   /* Then */
   assert.match(tasks, /exactly once, with ids set to every listed id/);

@@ -9,8 +9,10 @@
 import { useRef, useState } from 'react';
 import { PERMISSION_MODES } from '../../../domain/launch/session-options';
 import {
-  resolveQuickAskEnabled, resolveRemoveWorktreeOnArchive, resolveWeatherEnabled, resolveWeatherLocation,
+  resolveBlaakTasksUrl, resolveQuickAskEnabled, resolveRemoveWorktreeOnArchive, resolveWeatherEnabled,
+  resolveWeatherLocation,
 } from '../../../domain/settings/settings';
+import { ADD_TO_CLAUDE_LINE, addToClaudeCommand } from '../../../domain/tasks/model';
 import { DEFAULT_WEATHER_LOCATION } from '../../../domain/weather/weather';
 import { missingServersLine } from '../../../domain/ask/capture';
 import { isFontAvailable } from '../../features/terminal/terminal-manager';
@@ -22,6 +24,7 @@ import { TERMINAL_THEMES } from '../../features/terminal/terminal-themes';
 import { closeSettings, saveSettings } from './actions';
 import { AppField, LaunchField } from './SettingsField';
 import { useWeatherCity } from './use-weather-city';
+import { useBlaakTasksUrl } from './use-blaak-tasks-url';
 import { PhoneAccessSection } from '../phone-access/PhoneAccessSection';
 import type { JSX } from 'react';
 import type { SettingsPanel } from '../../state/settings-slice';
@@ -56,6 +59,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
   const fontFamilyValue: string = fieldValue('terminalFontFamily', '') ?? '';
   const [fontWarning, setFontWarning] = useState(() => fontWarningFor(fontFamilyValue));
   const weather = useWeatherCity(resolveWeatherLocation(current));
+  const blaakTasks = useBlaakTasksUrl(resolveBlaakTasksUrl(current));
 
   const permMode = useRef<HTMLSelectElement>(null);
   const worktree = useRef<HTMLInputElement>(null);
@@ -88,6 +92,7 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
     settings.quickSessionPath = quickSessionPath.current!.value.trim();
     settings.quickAsk = quickAsk.current!.checked;
     settings.removeWorktreeOnArchive = removeWorktree.current!.checked;
+    settings.blaakTasksUrl = blaakTasks.urlRef.current!.value.trim();
     settings.visibleSessionCount = parseInt(visibleCount.current!.value) || 25;
     settings.sessionMaxAgeDays = parseInt(maxAge.current!.value) || 3;
     settings.terminalTheme = terminalTheme.current!.value || 'switchboard';
@@ -170,6 +175,21 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
           description="Archiving a session removes the git worktrees it worked in, when nothing in them is uncommitted. Their branches are kept; ignored files such as node_modules go with them">
           <label className="settings-toggle"><input type="checkbox" id="sv-remove-worktree-on-archive" ref={removeWorktree}
             defaultChecked={resolveRemoveWorktreeOnArchive(current)} /><span className="settings-toggle-slider"></span></label>
+        </AppField>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-title">BlaakTasks</div>
+
+        <AppField wide label="BlaakTasks URL"
+          description={<>Your tasks' MCP address. Leave it empty to keep BlaakTasks out of Switchboard{
+            blaakTasks.checked && blaakTasks.setUp === false && (
+              <span id="sv-blaak-tasks-warning" className="settings-warning">
+                {ADD_TO_CLAUDE_LINE}: <code className="settings-copyable">{addToClaudeCommand(blaakTasks.checked)}</code>
+              </span>
+            )}</>}>
+          <input type="text" className="settings-input" id="sv-blaak-tasks-url" ref={blaakTasks.urlRef}
+            placeholder="https://tasks.example.com/mcp" defaultValue={resolveBlaakTasksUrl(current)} />
         </AppField>
       </div>
 

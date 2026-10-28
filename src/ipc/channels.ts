@@ -63,6 +63,7 @@ export const INVOKE = {
   getShellProfiles: 'get-shell-profiles',
   setAppearance: 'set-appearance',
   quickAskHotkeyStatus: 'quick-ask:hotkey-status',
+  blaakTasksSetUp: 'blaak-tasks:set-up',
 
   // Quick Ask: the pop-up's own (#148)
   quickAskRoute: 'quick-ask:route',
