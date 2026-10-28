@@ -3,7 +3,9 @@
  * the cursor: ↑/↓ move through every row across sections, → expands a plan,
  * ← collapses it or goes from an issue up to its plan, ↵ opens what is under
  * the cursor (a PR on GitHub, #175), S starts a session on a startable issue
- * or (#175) in a worktree with none running, / filters.
+ * or (#175) in a worktree with none running, / filters. On a task (#251) the
+ * Tasks page's keys: S starts a session on it, * stars it for today, D marks
+ * it done, Z snoozes it to tomorrow, O opens it in Notion, ↵ its detail.
  *
  * Only bare keys reach this: `ProjectOverview` leaves modified keys, and keys
  * typed into an input, alone. Pure, so it is tested in node; the page carries
@@ -29,7 +31,15 @@ export type PageKeyAction =
   | { readonly kind: 'open-pull-request'; readonly pullRequest: IssueKey }
   /** A session in one of the project's worktrees, by its path. */
   | { readonly kind: 'start-worktree'; readonly path: string }
+  /** A task's row key (#251), as the Tasks page has them. */
+  | { readonly kind: 'task'; readonly key: 'start' | 'star' | 'done' | 'snooze' | 'notion' | 'detail'; readonly taskId: string }
   | { readonly kind: 'filter' };
+
+/** A task row's keys, as the Tasks page has them (`tasks-page/page-keys`). */
+const TASK_KEYS: ReadonlyMap<string, Extract<PageKeyAction, { kind: 'task' }>['key']> = new Map([
+  ['s', 'start'], ['S', 'start'], ['*', 'star'], ['d', 'done'], ['D', 'done'], ['z', 'snooze'], ['Z', 'snooze'],
+  ['o', 'notion'], ['O', 'notion'], ['Enter', 'detail'],
+] as const);
 
 /** What `key` does with the cursor on `cursor` among `rows`; null for nothing. */
 export function pageKeyAction(key: string, rows: readonly PageRow[], cursor: string | null): PageKeyAction | null {
@@ -40,6 +50,10 @@ export function pageKeyAction(key: string, rows: readonly PageRow[], cursor: str
 
   const row = rows.find(candidate => candidate.id === cursor);
   if (!row) return null;
+  if (row.kind === 'task') {
+    const taskKey = TASK_KEYS.get(key);
+    return taskKey ? { kind: 'task', key: taskKey, taskId: row.taskId } : null;
+  }
   switch (key) {
     case 'ArrowRight':
       return row.kind === 'plan' && !row.expanded ? { kind: 'expand', plan: issueKeyString(row.plan) } : null;
