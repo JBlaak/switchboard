@@ -12,7 +12,10 @@ import { dispatch, getState } from '../../state/app-store';
 import { hasEntry } from '../../state/records';
 import { highlightedSession } from '../../state/main-area-slice';
 import { sessionMap } from '../../state/session-store';
-import { imageKeyEvent, selectedDiff, steppedFilePath, steppedItemId, workTabOf } from '../../state/session-work-slice';
+import {
+  imageKeyEvent, nextWorkTab, selectedDiff, steppedFilePath, steppedItemId, workTabOf, workTabsFor,
+} from '../../state/session-work-slice';
+import { taskIdOf } from '../../state/session-task-slice';
 import type { DiffMode, ReviewKind, WorkTab } from '../../state/session-work-slice';
 import type { DiffSide } from '../../../domain/session-work/model';
 import type { ReviewMode, ReviewResult } from '../../../domain/session-work/review';
@@ -94,10 +97,12 @@ export function setWorkTab(tab: WorkTab): void {
   if (page) dispatch({ type: 'sessionWorkTabSet', sessionId: page.sessionId, tab });
 }
 
-/** `t`: the other tab. */
+/** `t`: the next tab, Task included while the session works on a task (#250). */
 export function toggleWorkTab(): void {
-  const { sessionWork } = getState();
-  if (sessionWork.page) setWorkTab(workTabOf(sessionWork, sessionWork.page.sessionId) === 'work' ? 'plan' : 'work');
+  const { sessionWork, sessionTask } = getState();
+  if (!sessionWork.page) return;
+  const hasTask = taskIdOf(sessionTask, sessionWork.page.sessionId) !== null;
+  setWorkTab(nextWorkTab(workTabOf(sessionWork, sessionWork.page.sessionId, hasTask), workTabsFor(hasTask)));
 }
 
 /** Cmd+G, wherever the focus is (D3). */
