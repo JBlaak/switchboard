@@ -11,7 +11,9 @@ import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status'
 import type { WorkingAgent } from '../../src/domain/terminal/program-status-children';
 import type { RepositoryIssue, RepositoryPullRequest, WorktreeSummary } from '../../src/domain/project/overview';
 import type { Timers } from '../../src/application/ports/clock';
-import type { GitWorkspace } from '../../src/application/ports/git-workspace';
+import type { GitWorkspace, GitWrite } from '../../src/application/ports/git-workspace';
+import type { BranchWorktreesDeps } from '../../src/application/services/branch-worktrees';
+import type { RouteRequest, RouteResult } from '../../src/domain/ask/model';
 import type { GitHubCli, ProjectReads } from '../../src/application/ports/github-cli';
 import type { Logger } from '../../src/application/ports/logger';
 import type { RendererGateway } from '../../src/application/ports/renderer-gateway';
@@ -302,4 +304,82 @@ export function resizingPty(pid = 4242): FakePty & { readonly resizes: [number, 
   const resizes: [number, number][] = [];
   const pty = makePty(pid);
   return Object.assign(pty, { resizes, resize(cols: number, rows: number) { resizes.push([cols, rows]); } });
+}
+
+// ── A repository to start sessions in ──
+
+/** A repository with `main` on origin, for starting a session on a branch: records every write. */
+export class FakeStartGit {
+  readonly writes: string[] = [];
+  readonly branches = new Set<string>(['main']);
+  readonly remoteBranches = new Set<string>(['main']);
+  /** Branches whose fetch fails, with git's reason. */
+  readonly unfetchable = new Map<string, string>();
+  checkout: string | null;
+  current = new Map<string, string>();
+  /** The checkouts `worktrees` lists, the main one first. */
+  checkouts: WorktreeSummary[] = [];
+  /** A write that fails, by its first word (`remove`, `delete`, `checkout`), with git's reason. */
+  readonly failing = new Map<string, string>();
+
+  /** `root` is the main checkout `mainCheckout` answers. */
+  constructor(root: string) {
+    this.checkout = root;
+  }
+
+  readonly port: BranchWorktreesDeps['git'] = {
+    mainCheckout: async () => this.checkout,
+    defaultBranch: async () => 'main',
+    currentBranch: async (worktree) => this.current.get(worktree) ?? null,
+    branchExists: async (_repo, branch) => this.branches.has(branch),
+    commitSha: async (_repo, ref) => {
+      if (ref.startsWith('origin/')) return this.remoteBranches.has(ref.slice('origin/'.length)) ? 'sha' : null;
+      return this.branches.has(ref) ? 'sha' : null;
+    },
+    fetchBranch: async (_repo, branch): Promise<GitWrite> => {
+      this.writes.push('fetch ' + branch);
+      const reason = this.unfetchable.get(branch);
+      return reason ? { ok: false, reason } : { ok: true };
+    },
+    addWorktree: async (_repo, path, branch, base): Promise<GitWrite> => {
+      this.writes.push(`worktree add -b ${branch} ${path} ${base}`);
+      this.branches.add(branch);
+      return { ok: true };
+    },
+    worktrees: async () => this.checkouts,
+    checkoutWorktree: async (_repo, path, branch) => this.write('checkout', `worktree add ${path} ${branch}`),
+    removeWorktree: async (_repo, path, options) => this.write('remove', `worktree remove ${options?.force ? '--force ' : ''}${path}`),
+    pruneWorktrees: async () => this.write('prune', 'worktree prune'),
+    deleteBranch: async (_repo, branch) => {
+      const result = this.write('delete', 'branch -D ' + branch);
+      if (result.ok) this.branches.delete(branch);
+      return result;
+    },
+  };
+
+  private write(kind: string, command: string): GitWrite {
+    this.writes.push(command);
+    const reason = this.failing.get(kind);
+    return reason ? { ok: false, reason } : { ok: true };
+  }
+}
+
+// ── Ask Patch's routing call ──
+
+export interface FakeRouter {
+  route(request: RouteRequest): Promise<RouteResult>;
+  /** Every request it was asked, in order. */
+  readonly requests: RouteRequest[];
+}
+
+/** A router that answers every request with `result`. */
+export function fakeRouter(result: RouteResult): FakeRouter {
+  const requests: RouteRequest[] = [];
+  return {
+    requests,
+    async route(request) {
+      requests.push(request);
+      return result;
+    },
+  };
 }
