@@ -24,6 +24,7 @@ import { initialProjectPageState, projectPageReducer } from './project-page-slic
 import { initialTasksState, tasksReducer } from './tasks-slice';
 import { initialPhoneAccessState, phoneAccessReducer, rekeyPhoneAccess } from './phone-access-slice';
 import { initialSettingsState, settingsReducer } from './settings-slice';
+import { initialSessionTaskState, rekeySessionTask, sessionTaskReducer } from './session-task-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialToolbarState, toolbarReducer } from './toolbar-slice';
 import { initialUpdateState, updateReducer } from './update-slice';
@@ -47,6 +48,7 @@ import type { ProjectPageState } from './project-page-slice';
 import type { TasksState } from './tasks-slice';
 import type { PhoneAccessSliceState } from './phone-access-slice';
 import type { SettingsState } from './settings-slice';
+import type { SessionTaskState } from './session-task-slice';
 import type { StatusState } from './status-slice';
 import type { ToolbarState } from './toolbar-slice';
 import type { UpdateState } from './update-slice';
@@ -77,6 +79,7 @@ export interface RendererState {
   readonly ciStatus: CiStatusState;
   readonly ask: AskState;
   readonly phoneAccess: PhoneAccessSliceState;
+  readonly sessionTask: SessionTaskState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -103,6 +106,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     ciStatus: initialCiStatusState,
     ask: initialAskState,
     phoneAccess: initialPhoneAccessState,
+    sessionTask: initialSessionTaskState,
   };
 }
 
@@ -136,10 +140,12 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const ciStatus = ciStatusReducer(state.ciStatus, event);
   const ask = askReducer(state.ask, event);
   const phoneAccess = phoneAccessReducer(state.phoneAccess, event);
+  // Link task… follows the BlaakTasks switch as this event left it.
+  const sessionTask = sessionTaskReducer(state.sessionTask, event, tasks.enabled);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList, sessionWork, plan, mainArea, projectPage, tasks, ciStatus, ask, phoneAccess,
+    terminal, sessionList, sessionWork, plan, mainArea, projectPage, tasks, ciStatus, ask, phoneAccess, sessionTask,
   });
 }
 
@@ -188,6 +194,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     ask: state.ask,
     // A re-keyed session stays on the phone it was on.
     phoneAccess: rekeyPhoneAccess(state.phoneAccess, oldId, newId),
+    // A re-keyed session keeps its task.
+    sessionTask: rekeySessionTask(state.sessionTask, oldId, newId),
   });
 }
 
