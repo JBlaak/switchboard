@@ -15,6 +15,10 @@
  * the same start from the UI: switched on in Settings, opened with ⌘T, and
  * S on the task's row. The page's views, keys and routing outcomes are unit
  * tested (test/tasks-slice.test.ts, test/tasks-page-actions.test.ts).
+ *
+ * The project page's Tasks section (#251) lists the task linked to its repo,
+ * and S there starts it in that repo, with no routing, keeping the page. What
+ * it lists and its keys are unit tested (test/project-page-tasks.test.ts).
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -22,7 +26,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { test, expect } from '../support/test';
 import { FakeCli } from '../support/fake-cli';
-import { P } from '../fixtures/standard';
+import { P, S } from '../fixtures/standard';
 import { sidebar } from '../support/app';
 import type { AddressInfo } from 'node:net';
 
@@ -185,6 +189,50 @@ test('the Tasks page opens with ⌘T once BlaakTasks is on, and S starts a sessi
 
     /* Then */
     await expect(tasksPage).toHaveCount(0);
+  } finally {
+    await blaakTasks.close();
+  }
+});
+
+test('the project page lists the repo’s linked task, and S starts it in this repo without leaving the page', async ({ page, home }) => {
+  /* Given: BlaakTasks on, and the task linked to the repository */
+  const blaakTasks = await fakeBlaakTasks();
+  try {
+    fs.writeFileSync(path.join(home.home, '.claude.json'), JSON.stringify({
+      mcpServers: { blaaktasks: { type: 'http', url: blaakTasks.url, headers: { Authorization: `Bearer ${TOKEN}` } } },
+    }));
+    const projectPath = home.projectPath(P.acmeApi);
+    makeRepository(projectPath);
+    await page.getByRole('button', { name: 'Global settings', exact: true }).click();
+    await page.getByText('BlaakTasks URL', { exact: true }).locator('xpath=ancestor::*[.//input][1]').getByRole('textbox').fill(blaakTasks.url);
+    await page.getByRole('button', { name: 'Save Settings' }).click();
+    await expect(page.getByText('Global Settings', { exact: true })).toBeHidden();
+    await page.evaluate(({ task, projectPath }) => window.api.setTaskRepo(task, projectPath), { task: TASK, projectPath });
+
+    /* When: the project's page opens */
+    await sidebar(page).locator(`[data-session-id="${S.loginFix}"]`).getByTestId('project-link').click();
+
+    /* Then: its Tasks section lists the task */
+    const projectPage = page.getByRole('region', { name: /^Project / });
+    const section = projectPage.getByRole('region', { name: 'Tasks' });
+    const row = section.locator(`[data-task-id="${TASK}"]`);
+    await expect(row).toContainText(TITLE);
+    await expect(row).toContainText('In progress');
+    expect(blaakTasks.calls.filter((call) => call.tool === 'get').map((call) => call.args.task)).toContain(TASK);
+
+    /* When: S on the task's row */
+    await row.click();
+    await expect(row).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('s');
+
+    /* Then: Claude started in the task's worktree in this repo, and the page kept the main area */
+    await expect(row.getByRole('status')).toContainText('Started in');
+    let owner: string | null = null;
+    await expect.poll(async () => (owner = (await page.evaluate((task) => window.api.taskSessions(task), TASK)).owner)).not.toBeNull();
+    const launch = await new FakeCli(home.controlDir, owner!).launched();
+    expect(fs.realpathSync(launch.cwd)).toBe(fs.realpathSync(path.join(projectPath, '.claude/worktrees/fix-the-flaky-upload-test')));
+    await expect(sidebar(page).locator(`[data-session-id="${owner}"]`)).toBeVisible();
+    await expect(projectPage).toBeVisible();
   } finally {
     await blaakTasks.close();
   }

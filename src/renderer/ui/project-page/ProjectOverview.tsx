@@ -13,6 +13,11 @@
  * with no GitHub remote, or a remote one, has a single column of what is
  * local; when GitHub could not be asked, one message takes the place of Plans
  * and Pull requests; stale data is dimmed under a line saying how old it is.
+ *
+ * While BlaakTasks is on, the Tasks section (#251) lists the repo's open
+ * tasks under Pull requests (at the top of the one column without GitHub),
+ * with the Tasks page's keys on its rows. Esc puts away a task's project
+ * list, start answer or detail before it clears the filter or closes the page.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
@@ -24,17 +29,22 @@ import { PlansSection } from './PlansSection';
 import { SessionsSection, sessionsShown } from './SessionsSection';
 import { PullRequestsSection } from './PullRequestsSection';
 import { WorktreesSection } from './WorktreesSection';
+import { TasksSection } from './TasksSection';
 import { GitHubMessage, RemoteNote, StaleLine } from './EdgeStates';
 import {
   closeProject, openIssueOnGitHub, openProjectSettings, openProjectPlan, openProjectSession, openPullRequestOnGitHub,
   startPageIssueSession, startWorktreeSession,
 } from './actions';
+import { openProjectTaskDetail, startProjectTask } from './project-tasks';
 import {
-  pageRows, planRows, plansViewOf, pullRequestRows, pullRequestsViewOf, sessionRows, worktreeRows, worktreesView,
-  type PageRow,
+  pageRows, planRows, plansViewOf, pullRequestRows, pullRequestsViewOf, sessionRows, taskRows, tasksViewOf,
+  worktreeRows, worktreesView, type PageRow,
 } from './page-rows';
 import { githubPart, showsWorktrees } from './page-state';
-import { pageKeyAction } from './page-keys';
+import { pageKeyAction, type PageKeyAction } from './page-keys';
+import {
+  closeProjectList, closeTaskDetail, dismissStart, markTaskDone, openTaskInNotion, snoozeTask, starTask,
+} from '../tasks-page/actions';
 import { isProjectSettingsKey } from '../../lib/shortcut-keys';
 
 /** Every row on the page now, in the order the cursor walks them. */
@@ -46,12 +56,31 @@ function currentRows(projectPath: string): PageRow[] {
   const sessions = sessionsShown(projectPath, state.view.activePtyIds, page.filter);
   const answered = page.overview?.projectPath === projectPath ? page.overview : null;
   const worktrees = answered && showsWorktrees(answered, projectPath) ? worktreesView(answered, page.filter) : [];
+  const tasks = state.tasks.enabled && githubPart(page.overview, projectPath).kind !== 'remote' ? tasksViewOf(page, projectPath) : null;
   return pageRows({
     plans: plans ? planRows(plans) : [],
     pullRequests: pullRequests ? pullRequestRows(pullRequests) : [],
+    tasks: tasks ? taskRows(tasks) : [],
     sessions: sessionRows(sessions.lines.map(line => line.session.sessionId)),
     worktrees: worktreeRows(worktrees),
   });
+}
+
+/** A task row's key (#251), carried out with the Tasks page's actions. */
+function onTaskKey(projectPath: string, action: Extract<PageKeyAction, { kind: 'task' }>): void {
+  const task = getState().projectPage.tasks?.rows.find(row => row.id === action.taskId);
+  if (!task) return;
+  switch (action.key) {
+    case 'start': void startProjectTask(projectPath, task); break;
+    case 'star': void starTask(task); break;
+    case 'done': void markTaskDone(task); break;
+    case 'snooze': void snoozeTask(task); break;
+    case 'notion': void openTaskInNotion(task.id); break;
+    case 'detail':
+      if (getState().tasks.detail?.taskId === task.id) closeTaskDetail();
+      else openProjectTaskDetail(task.id);
+      break;
+  }
 }
 
 export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.Element {
@@ -94,12 +123,16 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
     if ((e.target as HTMLElement).matches('input, textarea, select, [contenteditable="true"]')) return;
     if (e.key === 'Escape' && !e.shiftKey) {
       e.preventDefault();
-      if (filter) dispatch({ type: 'projectFilterChanged', filter: '' });
+      const tasks = getState().tasks;
+      if (tasks.picker) closeProjectList();
+      else if (tasks.start?.phase === 'answered') dismissStart();
+      else if (tasks.detail) closeTaskDetail();
+      else if (filter) dispatch({ type: 'projectFilterChanged', filter: '' });
       else closeProject();
       return;
     }
-    // S is the only key that comes shifted as well; the rest are bare.
-    if (e.shiftKey && e.key !== 'S') return;
+    // S and * are the only keys that come shifted as well; the rest are bare.
+    if (e.shiftKey && e.key !== 'S' && e.key !== '*') return;
     const action = pageKeyAction(e.key, currentRows(projectPath), getState().projectPage.cursor);
     if (!action) return;
     e.preventDefault();
@@ -114,6 +147,7 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
       case 'start': void startPageIssueSession(projectPath, action.issue, action.plan); break;
       case 'open-pull-request': openPullRequestOnGitHub(action.pullRequest); break;
       case 'start-worktree': void startWorktreeSession(projectPath, action.path); break;
+      case 'task': onTaskKey(projectPath, action); break;
       case 'filter': setFiltering(true); break;
     }
   };
@@ -167,6 +201,7 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
       {github.kind === 'remote' || github.kind === 'none' ? (
         <div className="pp-body is-local">
           <div className="pp-column">
+            {github.kind === 'none' && <TasksSection projectPath={projectPath} />}
             <SessionsSection projectPath={projectPath} />
             {github.kind === 'remote' ? <RemoteNote /> : <WorktreesSection projectPath={projectPath} />}
           </div>
@@ -181,6 +216,7 @@ export function ProjectOverview({ projectPath }: { projectPath: string }): JSX.E
                 <PullRequestsSection projectPath={projectPath} />
               </>
             )}
+            <TasksSection projectPath={projectPath} />
           </div>
           <div className="pp-column pp-side">
             <SessionsSection projectPath={projectPath} />

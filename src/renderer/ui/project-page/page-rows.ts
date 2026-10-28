@@ -9,6 +9,7 @@
  * `id` is what `projectPage.cursor` holds, and what the row's element carries
  * as `data-cursor-id`. The Pull requests and Worktrees sections (#175) add
  * theirs: a PR (↵ opens it on GitHub) and a worktree (S starts a session there).
+ * The Tasks section (#251) adds a task, with the Tasks page's keys on it.
  *
  * Pure, so it is tested in node.
  */
@@ -22,6 +23,7 @@ import type {
   CheckRollup, ProjectIssue, ProjectOverview, ProjectPullRequest, WorktreeOverview,
 } from '../../../domain/project/overview';
 import type { ProjectPageState } from '../../state/project-page-slice';
+import type { BlaakTasksResult, TaskDetail, TaskRow } from '../../../domain/tasks/model';
 
 /** How many issues "Not in a plan" lists before "Show N more". */
 export const LOOSE_SHOWN = 8;
@@ -35,7 +37,8 @@ export type PageRow =
   | { readonly kind: 'more-loose'; readonly id: string }
   | { readonly kind: 'session'; readonly id: string; readonly sessionId: string }
   | { readonly kind: 'pull-request'; readonly id: string; readonly pullRequest: IssueKey }
-  | { readonly kind: 'worktree'; readonly id: string; readonly path: string; readonly startable: boolean };
+  | { readonly kind: 'worktree'; readonly id: string; readonly path: string; readonly startable: boolean }
+  | { readonly kind: 'task'; readonly id: string; readonly taskId: string };
 
 /** The cursor ids, one way of spelling each kind of row. */
 export const cursorId = {
@@ -45,6 +48,7 @@ export const cursorId = {
   session: (sessionId: string): string => 'session:' + sessionId,
   pullRequest: (pr: IssueKey): string => 'pr:' + issueKeyString(pr),
   worktree: (path: string): string => 'worktree:' + path,
+  task: (taskId: string): string => 'task:' + taskId,
 };
 
 /** True when every word of `filter` is in `text`, ignoring case; an empty filter keeps everything. */
@@ -168,15 +172,20 @@ export function sessionRows(sessionIds: readonly string[]): PageRow[] {
 /**
  * Every row on the page, in the order ↑/↓ walk them: the left column's
  * sections, then the right column's. #175 passes its Pull requests and
- * Worktrees rows in their places.
+ * Worktrees rows in their places, and #251 its Tasks rows: under Pull
+ * requests, or at the top of the one column of a page without GitHub.
  */
 export function pageRows(sections: {
   readonly plans: readonly PageRow[];
   readonly pullRequests?: readonly PageRow[];
+  readonly tasks?: readonly PageRow[];
   readonly sessions: readonly PageRow[];
   readonly worktrees?: readonly PageRow[];
 }): PageRow[] {
-  return [...sections.plans, ...(sections.pullRequests ?? []), ...sections.sessions, ...(sections.worktrees ?? [])];
+  return [
+    ...sections.plans, ...(sections.pullRequests ?? []), ...(sections.tasks ?? []), ...sections.sessions,
+    ...(sections.worktrees ?? []),
+  ];
 }
 
 // ── Pull requests (#175) ──
@@ -302,4 +311,66 @@ function folderOf(path: string): string {
 /** The Worktrees section's cursor rows. */
 export function worktreeRows(rows: readonly WorktreeOnScreen[]): PageRow[] {
   return rows.map(row => ({ kind: 'worktree', id: cursorId.worktree(row.worktree.path), path: row.worktree.path, startable: row.startable }));
+}
+
+// ── Tasks (#251) ──
+
+/**
+ * How many of the project's linked tasks, newest link first, are asked of
+ * BlaakTasks on each refresh: one `get` each, so a repo with a long history
+ * of finished tasks stays cheap.
+ */
+export const PROJECT_TASKS_ASKED = 20;
+
+/** `YYYY-MM-DD` of `now`, in local time. */
+export function localDay(now: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** Not Done or Dropped, and not snoozed past `today` (Z takes it off the list until tomorrow). */
+export function isOpenTask(task: TaskRow, today: string): boolean {
+  if (task.status === 'Done' || task.status === 'Dropped') return false;
+  return !task.snoozedUntil || task.snoozedUntil.slice(0, 10) <= today;
+}
+
+/** A task's detail as a row: the list's fields only. */
+function rowOf(detail: TaskDetail): TaskRow {
+  const { notes: _notes, url: _url, brief: _brief, progress: _progress, ...row } = detail;
+  return row;
+}
+
+/**
+ * The Tasks section's rows from what BlaakTasks answered for each linked task
+ * (`ids` newest link first, `answers` in the same order): the open ones, in
+ * link order. A task BlaakTasks did not answer for keeps the row it had in
+ * `previous`, so an outage doesn't empty the section.
+ */
+export function projectTaskRows(
+  ids: readonly string[], answers: readonly BlaakTasksResult<TaskDetail>[], previous: readonly TaskRow[], today: string,
+): TaskRow[] {
+  const rows: TaskRow[] = [];
+  ids.forEach((id, i) => {
+    const answer = answers[i];
+    const row = answer?.kind === 'ok' ? rowOf(answer.value) : previous.find(candidate => candidate.id === id);
+    if (row && isOpenTask(row, today)) rows.push(row);
+  });
+  return rows;
+}
+
+/**
+ * The Tasks section's rows for the page's state, narrowed by the filter; null
+ * while it has none to show for `projectPath` (BlaakTasks off, no answer yet,
+ * or no open task linked to it), when the section is left out.
+ */
+export function tasksViewOf(page: ProjectPageState, projectPath: string): TaskRow[] | null {
+  const tasks = page.tasks?.projectPath === projectPath ? page.tasks : null;
+  if (!tasks || !tasks.rows.length) return null;
+  return tasks.rows.filter(task =>
+    matchesFilter([task.title, task.summary ?? '', task.bucket ?? '', task.client ?? ''].join(' '), page.filter));
+}
+
+/** The Tasks section's cursor rows. */
+export function taskRows(rows: readonly TaskRow[]): PageRow[] {
+  return rows.map(task => ({ kind: 'task', id: cursorId.task(task.id), taskId: task.id }));
 }

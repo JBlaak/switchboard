@@ -15,6 +15,9 @@
  * What each task is linked to in Switchboard (its repo and how many sessions
  * worked on it) is read from main's links, beside the rows.
  *
+ * The project page's Tasks section (#251) shares the start, the detail, the
+ * project list and the notice: one surface is on screen at a time.
+ *
  * The events are declared here rather than in `events.ts`, like the project
  * page's, so the page's vocabulary stays in one file.
  */
@@ -151,6 +154,14 @@ export function tasksReducer(state: TasksState, event: RendererEvent): TasksStat
     // nothing left open from last time. The view and filter stay as they were.
     case 'tasksOpened':
       return { ...state, cursor: null, detail: null, start: null, picker: null, notice: null };
+
+    // The project page's Tasks section (#251) uses the same start, detail,
+    // project list and notice for its rows: a page opening on a project
+    // starts with none of them left over.
+    case 'projectPageRestored':
+      return state.detail || state.start || state.picker || state.notice
+        ? { ...state, detail: null, start: null, picker: null, notice: null }
+        : state;
 
     case 'tasksTabChosen':
       return state.tab === event.tab ? state : { ...state, tab: event.tab, cursor: null, notice: null };
