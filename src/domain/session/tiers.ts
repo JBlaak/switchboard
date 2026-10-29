@@ -6,19 +6,23 @@
  * or a renderer state module.
  */
 
-// Sort tiers, highest first. The active block is split by what the session
-// wants from the user: first the ones blocking on input, then the ones that
-// finished and haven't been read, then the ones still working. Those three
-// always outrank pinned and plain recent rows regardless of age.
+// Sort tiers, highest first. Pinned plans come first of all: the user put them
+// on top to keep them there, so they hold their place whatever their sessions
+// are doing. Then the active block, split by what the session wants from the
+// user: first the ones blocking on input, then the ones that finished and
+// haven't been read, then the ones still working. Those three always outrank
+// pinned and plain recent rows regardless of age.
+export const TIER_PINNED_PLAN = 5;
 export const TIER_ATTENTION = 4;
 export const TIER_READY = 3;
 export const TIER_RUNNING = 2;
 export const TIER_PINNED = 1;
 export const TIER_REST = 0;
 
-export const TIER_ORDER = [TIER_ATTENTION, TIER_READY, TIER_RUNNING, TIER_PINNED, TIER_REST];
+export const TIER_ORDER = [TIER_PINNED_PLAN, TIER_ATTENTION, TIER_READY, TIER_RUNNING, TIER_PINNED, TIER_REST];
 
 export const TIER_LABELS: Record<number, string> = {
+  [TIER_PINNED_PLAN]: 'Pinned plans',
   [TIER_ATTENTION]: 'Needs input',
   [TIER_READY]: 'Ready',
   [TIER_RUNNING]: 'Working',
@@ -43,6 +47,8 @@ export interface SessionSignals {
 /** A row as the truncation rules see it. */
 export interface TruncatableRow {
   pinned?: boolean;
+  /** A plan (a slug group) the user pinned to the top of the list. */
+  pinnedPlan?: boolean;
   remote?: boolean;
   /** Epoch ms the row is ordered by. */
   sortTime: number;
@@ -99,12 +105,16 @@ export function rowSurvivesTruncation(
   tier: number,
   { count, visibleSessionCount, ageCutoff, isActive }: TruncationCaps,
 ): boolean {
-  if (tier >= TIER_RUNNING || item.pinned || item.remote || isActive) return true;
+  if (tier >= TIER_RUNNING || item.pinned || item.pinnedPlan || item.remote || isActive) return true;
   return count < visibleSessionCount && item.sortTime >= ageCutoff;
 }
 
-/** Pinning only decides where a row lands once it has nothing live to say. */
+/**
+ * A pinned plan stays on top whatever its sessions are doing; pinning a
+ * session only decides where its row lands once it has nothing live to say.
+ */
 export function itemTier(item: TruncatableRow & { tier: number }): number {
+  if (item.pinnedPlan) return TIER_PINNED_PLAN;
   if (item.tier >= TIER_RUNNING) return item.tier;
   if (item.pinned) return TIER_PINNED;
   return TIER_REST;

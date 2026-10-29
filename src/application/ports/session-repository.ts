@@ -8,6 +8,7 @@
  * transaction boundary in the adapter, but nothing above it may confuse them.
  */
 import type { CachedSession, FolderMeta, SessionMeta } from '../../domain/session/session';
+import type { PlanPin } from '../../domain/project/project-list';
 
 export interface SessionRepository {
   // ── Metadata: the user's own state, which no re-index may touch ──
@@ -19,6 +20,10 @@ export interface SessionRepository {
   setArchived(sessionId: string, archived: boolean): void;
   /** An ISO time the row stays out of the list until, or null to wake it. */
   setSnoozedUntil(sessionId: string, until: string | null): void;
+  /** Every pinned plan, as the project it is in and its slug. */
+  getPinnedPlans(): PlanPin[];
+  /** Pins or unpins a plan and answers whether it is pinned now. */
+  togglePlanPin(projectPath: string, slug: string): boolean;
 
   // ── Cache: a rebuildable copy of what the transcripts say ──
   isCachePopulated(): boolean;

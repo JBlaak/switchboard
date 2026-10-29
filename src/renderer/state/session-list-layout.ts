@@ -7,6 +7,7 @@
  * the ones still working, then pinned, then the rest — each block most recent
  * first, except Working, which is newest *started* first (see `sortKey`).
  * Sessions sharing a slug fold into a group, but only within their own project.
+ * A plan the user pinned (such a group) sits above all of them.
  *
  * The list is *anchored*: the session the user is working in keeps the slot it
  * already had, so the list cannot slide out from under the cursor while the
@@ -56,6 +57,8 @@ export interface ListItem {
   /** Epoch ms the newest-started session behind this entry was started. */
   readonly startTime: number;
   readonly pinned: boolean;
+  /** A plan pinned to the top of the list. */
+  readonly pinnedPlan: boolean;
   /** The highest tier of its sessions, before pinning is taken into account. */
   readonly tier: number;
   readonly remote: boolean;
@@ -286,6 +289,7 @@ export function listItems(
         sortTime: new Date(session.modified).getTime(),
         startTime: new Date(session.created).getTime(),
         pinned: !!session.starred,
+        pinnedPlan: false,
         tier: inputs.tierOf(session.sessionId),
         remote: session.type === 'remote',
       });
@@ -293,7 +297,10 @@ export function listItems(
 
     for (const [slug, sessions] of bySlug) {
       const sorted = [...sessions].sort(byMostRecentlyModified);
-      const entry: SessionListEntry = sorted.length === 1
+      // A pinned plan keeps its group header even with one session left, as
+      // that is where the pin is.
+      const pinnedPlan = !!project.pinnedPlans?.includes(slug);
+      const entry: SessionListEntry = sorted.length === 1 && !pinnedPlan
         ? row(sorted[0], project.projectPath)
         : {
           kind: 'group',
@@ -308,6 +315,7 @@ export function listItems(
         sortTime: Math.max(...sorted.map(s => new Date(s.modified).getTime())),
         startTime: Math.max(...sorted.map(s => new Date(s.created).getTime())),
         pinned: sorted.some(s => !!s.starred),
+        pinnedPlan,
         tier: Math.max(...sorted.map(s => inputs.tierOf(s.sessionId))),
         remote: sorted.some(s => s.type === 'remote'),
       });

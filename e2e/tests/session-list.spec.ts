@@ -393,6 +393,47 @@ test.describe('pin', () => {
   });
 });
 
+test.describe('pin a plan', () => {
+  test('a pinned plan sits above every unpinned session, live ones included, and stays pinned after a reload', async ({ page, app, home }) => {
+    /* Given */
+    const login = await openSession(page, home, LABEL.loginFix, S.loginFix);
+    const charts = await openSession(page, home, LABEL.chartsDarkMode, S.chartsDarkMode);
+    await charts.status({ state: 'working' });
+    await login.status({ state: 'blocked', kind: 'permission' });
+    await redraw(page, app, S.bumpDeps);
+    expect(await sectionOf(page, LABEL.loginFix)).toBe('Needs input');
+    const header = sidebar(page).locator('.slug-group-header').filter({ hasText: LABEL.billingGroup });
+
+    /* When */
+    await header.hover();
+    await header.getByTestId('plan-pin').click();
+
+    /* Then */
+    await expect.poll(() => sectionOf(page, LABEL.billingGroup)).toBe('Pinned plans');
+    await expect(header.getByTestId('plan-pin')).toHaveClass(/\bpinned\b/);
+    await expectInOrder(page, [
+      'Pinned plans', LABEL.billingGroup, 'Needs input', LABEL.loginFix, 'Working', LABEL.chartsDarkMode,
+      'Pinned', LABEL.releaseNotes, 'Recent',
+    ]);
+    // The plan's sessions keep their own stars.
+    expect(await storedSession(page, S.billingStep1)).toMatchObject({ starred: 0 });
+
+    /* When */
+    await page.reload();
+
+    /* Then */
+    await expect.poll(() => sectionOf(page, LABEL.billingGroup)).toBe('Pinned plans');
+
+    /* When */
+    await header.hover();
+    await header.getByTestId('plan-pin').click();
+
+    /* Then */
+    await expect.poll(() => sectionOf(page, LABEL.billingGroup)).toBe('Recent');
+    await expect(sidebar(page).getByText('Pinned plans', { exact: true })).toHaveCount(0);
+  });
+});
+
 test.describe('stop', () => {
   test('asks first, says "disconnect" for a remote, and stops and clears the screen once confirmed', async ({ page, home }) => {
     /* Given */

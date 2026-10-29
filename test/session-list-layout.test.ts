@@ -4,7 +4,7 @@ import {
   layoutSessionList, listItems, orderEntries, rowId, slugId, truncateEntries,
 } from '../src/renderer/state/session-list-layout';
 import {
-  TIER_ATTENTION, TIER_PINNED, TIER_READY, TIER_REST, TIER_RUNNING, sessionTier,
+  TIER_ATTENTION, TIER_PINNED, TIER_PINNED_PLAN, TIER_READY, TIER_REST, TIER_RUNNING, sessionTier,
 } from '../src/domain/session/tiers';
 import { localDateKey } from '../src/renderer/lib/format';
 import type { BuildInputs, ListItem, OrderedEntry } from '../src/renderer/state/session-list-layout';
@@ -316,10 +316,90 @@ test('a live pinned session files under its live section, not under Pinned', () 
   assert.equal(laid.visible[0].tier, TIER_RUNNING);
 });
 
+// ── Pinned plans ──
+
+test('a pinned plan sits above every unpinned session, live ones included', () => {
+  /* Given */
+  const tiers: Record<string, number> = { asking: TIER_ATTENTION, ready: TIER_READY, working: TIER_RUNNING };
+  const projects = [
+    project('/p', [
+      session('asking', { modified: at(0) }),
+      session('ready', { modified: at(0) }),
+      session('working', { modified: at(0) }),
+      session('starred', { starred: 1, modified: at(0) }),
+      session('recent', { modified: at(0) }),
+      session('p1', { slug: 'plan', modified: at(5 * DAY) }),
+      session('p2', { slug: 'plan', modified: at(6 * DAY) }),
+    ], { pinnedPlans: ['plan'] }),
+  ];
+
+  /* When */
+  const { layout: laid } = layout(projects, { tierOf: id => tiers[id] ?? TIER_REST });
+
+  /* Then */
+  assert.deepEqual(ids(laid.visible), [slugId('plan', '/p'), r('asking'), r('ready'), r('working'), r('starred'), r('recent')]);
+  assert.equal(laid.visible[0].tier, TIER_PINNED_PLAN);
+});
+
+test('a pinned plan stays on top while its own sessions ask, finish and work', () => {
+  /* Given */
+  const projects = [project('/p', [
+    session('other', { modified: at(0) }),
+    session('p1', { slug: 'plan' }),
+    session('p2', { slug: 'plan' }),
+  ], { pinnedPlans: ['plan'] })];
+
+  for (const tier of [TIER_ATTENTION, TIER_READY, TIER_RUNNING]) {
+    /* When */
+    const { layout: laid } = layout(projects, { tierOf: id => (id === 'p1' ? tier : TIER_ATTENTION) });
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [slugId('plan', '/p'), r('other')]);
+  }
+});
+
+test('a pinned plan with one session left still shows as its plan', () => {
+  /* Given */
+  const projects = [project('/p', [session('p1', { slug: 'plan' })], { pinnedPlans: ['plan'] })];
+
+  /* When */
+  const { layout: laid } = layout(projects);
+
+  /* Then */
+  assert.equal(laid.visible[0].entry.kind, 'group');
+  assert.equal(laid.visible[0].tier, TIER_PINNED_PLAN);
+});
+
+test('pinning a plan pins only that plan in that project', () => {
+  /* Given */
+  const projects = [
+    project('/one', [session('a', { slug: 'plan' }), session('b', { slug: 'plan' })], { pinnedPlans: ['plan'] }),
+    project('/two', [
+      session('c', { slug: 'plan', projectPath: '/two' }), session('d', { slug: 'plan', projectPath: '/two' }),
+    ]),
+  ];
+
+  /* When */
+  const { layout: laid } = layout(projects);
+
+  /* Then */
+  assert.deepEqual(laid.visible.map(l => [l.entry.id, l.tier]),
+    [[slugId('plan', '/one'), TIER_PINNED_PLAN], [slugId('plan', '/two'), TIER_REST]]);
+});
+
+test('a pinned plan never folds away, however old', () => {
+  /* When */
+  const laid = truncate([{ id: 'fresh', msAgo: HOUR }, { id: 'plan', msAgo: 30 * DAY, pinnedPlan: true }],
+    { visibleSessionCount: 1 });
+
+  /* Then */
+  assert.deepEqual(laid, { visible: ['fresh', 'plan'], older: [] });
+});
+
 function items(spec: [id: string, msAgo: number, tier?: number, startedMsAgo?: number][]): ListItem[] {
   return spec.map(([id, msAgo, tier = TIER_REST, startedMsAgo = msAgo]) => ({
     entry: { kind: 'row', id, session: session(id), projectPath: '/p' },
-    sortTime: NOW - msAgo, startTime: NOW - startedMsAgo, pinned: false, tier, remote: false,
+    sortTime: NOW - msAgo, startTime: NOW - startedMsAgo, pinned: false, pinnedPlan: false, tier, remote: false,
   }));
 }
 
@@ -391,9 +471,9 @@ test('an anchor past the end of its shrunken section lands last', () => {
 function truncate(spec: (Partial<ListItem> & { id: string; msAgo: number; tier?: number })[], {
   active = null as string | null, visibleSessionCount = 25,
 } = {}) {
-  const list: ListItem[] = spec.map(({ id, msAgo, tier = TIER_REST, pinned = false, remote = false }) => ({
+  const list: ListItem[] = spec.map(({ id, msAgo, tier = TIER_REST, pinned = false, pinnedPlan = false, remote = false }) => ({
     entry: { kind: 'row', id, session: session(id), projectPath: '/p' },
-    sortTime: NOW - msAgo, startTime: NOW - msAgo, pinned, tier, remote,
+    sortTime: NOW - msAgo, startTime: NOW - msAgo, pinned, pinnedPlan, tier, remote,
   }));
   const ordered = list.map(item => ({ entry: item.entry, tier: item.tier }));
   const { visible, older } = truncateEntries(ordered, new Map(list.map(i => [i.entry.id, i])), active,

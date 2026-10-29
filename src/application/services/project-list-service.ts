@@ -34,6 +34,7 @@ export class ProjectListService {
       knownProjectPaths: this.#knownProjectPaths(),
       activeTerminals: this.#activeTerminals(registry),
       remoteProjects: settings.remoteProjects(),
+      pinnedPlans: repository.getPinnedPlans(),
       showArchived,
     });
   }

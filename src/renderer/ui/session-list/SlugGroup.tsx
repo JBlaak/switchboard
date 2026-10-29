@@ -14,7 +14,7 @@ import { projectLabel } from '../../features/sessions/project-label';
 import { formatDate } from '../../lib/format';
 import { groupDisplayName, splitGroupRows } from '../../state/session-list-layout';
 import { useStore } from '../use-store';
-import { archiveGroup, expandSlugGroup, toggleSlugGroup } from './actions';
+import { archiveGroup, expandSlugGroup, togglePlanPin, toggleSlugGroup } from './actions';
 import { headerTarget } from './cursor';
 import { HTML } from './markup';
 import { ProjectLink } from '../project-page/ProjectLink';
@@ -22,9 +22,9 @@ import { SessionItem } from './SessionItem';
 import type { JSX } from 'react';
 import type { SessionListGroup } from '../../state/session-list-layout';
 
-export function SlugGroup({ group }: { group: SessionListGroup }): JSX.Element {
+export function SlugGroup({ group, pinned }: { group: SessionListGroup; pinned: boolean }): JSX.Element {
   const el = useRef<HTMLDivElement>(null);
-  const { id, sessions, projectPath } = group;
+  const { id, slug, sessions, projectPath } = group;
   const expanded = useStore(s => !!s.sessionList.expandedSlugs[id]);
   const leaving = useStore(s => !!s.sessionList.leaving[id]);
   const headerCursor = useStore(s => s.sessionList.cursor === headerTarget(id));
@@ -45,12 +45,24 @@ export function SlugGroup({ group }: { group: SessionListGroup }): JSX.Element {
       <div
         className={'slug-group-header' + (headerCursor ? ' kbd-cursor' : '')}
         onClick={(e) => {
-          if ((e.target as HTMLElement).closest('.slug-group-archive-btn')) return;
+          if ((e.target as HTMLElement).closest('.slug-group-archive-btn, .slug-group-pin')) return;
           toggleSlugGroup(id);
         }}
       >
         <div className="slug-group-row">
-          <span className="slug-group-expand" dangerouslySetInnerHTML={HTML.arrow} />
+          <span className="slug-group-expand">
+            <span
+              className={'session-pin slug-group-pin' + (pinned ? ' pinned' : '')}
+              data-testid="plan-pin"
+              title={pinned ? 'Unpin plan' : 'Pin plan to the top'}
+              dangerouslySetInnerHTML={pinned ? HTML.pinFilled : HTML.pinOutline}
+              onClick={(e) => {
+                e.stopPropagation();
+                void togglePlanPin(projectPath, slug, e.currentTarget);
+              }}
+            />
+            <span className="slug-group-arrow" dangerouslySetInnerHTML={HTML.arrow} />
+          </span>
           <div className="slug-group-info">
             <div className="slug-group-name">{groupDisplayName(group)}</div>
             <div className="slug-group-meta">

@@ -14,6 +14,12 @@ import type { Project } from './project';
 import type { CachedSession, SessionMeta, SessionRow } from '../session/session';
 import type { RemoteProjectSetting } from '../settings/settings';
 
+/** A plan pinned to the top of the session list: the slug its sessions share, in one project. */
+export interface PlanPin {
+  projectPath: string;
+  slug: string;
+}
+
 /** A plain terminal, which has no transcript and lives only while it runs. */
 export interface ActiveTerminalRow {
   sessionId: string;
@@ -36,6 +42,7 @@ export interface ProjectListInputs {
   knownProjectPaths: Iterable<string>;
   activeTerminals: Iterable<ActiveTerminalRow>;
   remoteProjects: Iterable<RemoteProjectSetting>;
+  pinnedPlans: Iterable<PlanPin>;
   showArchived: boolean;
 }
 
@@ -132,6 +139,13 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
         remoteKind: record.kind,
       }));
     }
+  }
+
+  // A pin on a project that has no row (hidden, or nothing left in it) has
+  // nowhere to show, and stays stored for when it does.
+  for (const pin of inputs.pinnedPlans) {
+    const project = projects.get(pin.projectPath);
+    if (project) (project.pinnedPlans ??= []).push(pin.slug);
   }
 
   const list = [...projects.values()];

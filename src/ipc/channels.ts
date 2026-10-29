@@ -25,6 +25,7 @@ export const INVOKE = {
   stopSession: 'stop-session',
   reconnectRemote: 'reconnect-remote',
   toggleStar: 'toggle-star',
+  togglePlanPin: 'toggle-plan-pin',
   renameSession: 'rename-session',
   archiveSession: 'archive-session',
   snoozeSession: 'snooze-session',
