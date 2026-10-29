@@ -179,10 +179,10 @@ export function SettingsForm({ panel }: { panel: SettingsPanel }): JSX.Element {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-title">BlaakTasks</div>
+        <div className="settings-section-title">Tasks</div>
 
-        <AppField wide label="BlaakTasks URL"
-          description={<>Your tasks' MCP address. Leave it empty to keep BlaakTasks out of Switchboard{
+        <AppField wide label="Tasks URL"
+          description={<>Your tasks' MCP address. Leave it empty to keep tasks out of Switchboard{
             blaakTasks.checked && blaakTasks.setUp === false && (
               <span id="sv-blaak-tasks-warning" className="settings-warning">
                 {ADD_TO_CLAUDE_LINE}: <code className="settings-copyable">{addToClaudeCommand(blaakTasks.checked)}</code>

@@ -5,10 +5,12 @@
  * them.
  *
  * Its keys, while it has the focus and never in an input: ↑/↓ (J/K) move the
- * cursor, and on the row under it S starts a session, * stars it for today,
- * D marks it done, Z snoozes it to tomorrow, O opens it in Notion and Enter
- * opens its detail; / searches; Esc puts away what is open, then closes the
+ * cursor, and on the row under it S starts a session (asking for any extra
+ * instructions first), * stars it for today, D marks it done, Z snoozes it to
+ * tomorrow, O opens it in Notion and Enter opens its detail; / searches; Esc puts away what is open, then closes the
  * page. What each key does is `page-keys`.
+ *
+ * A click on a row opens its detail too.
  *
  * Rendered into `#tasks-page`, which `ui/main-area/install-main-area` shows
  * and hides with the route.
@@ -26,8 +28,8 @@ import { StartPanel } from './StartPanel';
 import { TaskDetailPane } from './TaskDetailPane';
 import { tasksKeyAction } from './page-keys';
 import {
-  closeProjectList, closeTaskDetail, closeTasksPage, dismissStart, markTaskDone, openTaskDetail, openTaskInNotion,
-  snoozeTask, starTask, startFromTask,
+  askStartInstructions, closeProjectList, closeTaskDetail, closeTasksPage, dismissStart, markTaskDone, openTaskDetail,
+  openTaskInNotion, snoozeTask, starTask,
 } from './actions';
 
 export function TasksPage(): JSX.Element | null {
@@ -75,7 +77,7 @@ function TasksView(): JSX.Element {
     if (e.key === 'Escape' && !e.shiftKey) {
       e.preventDefault();
       if (state.picker) closeProjectList();
-      else if (state.start?.phase === 'answered') dismissStart();
+      else if (state.start && state.start.phase !== 'starting') dismissStart();
       else if (state.detail) closeTaskDetail();
       else closeTasksPage();
       return;
@@ -91,7 +93,7 @@ function TasksView(): JSX.Element {
         dispatch({ type: 'tasksTabChosen', tab: 'search' });
         searchInput.current?.focus();
         break;
-      case 'start': void startFromTask(action.task); break;
+      case 'start': askStartInstructions(action.task); break;
       case 'star': void starTask(action.task); break;
       case 'done': void markTaskDone(action.task); break;
       case 'snooze': void snoozeTask(action.task); break;
@@ -197,8 +199,11 @@ function TasksView(): JSX.Element {
                 sessions={tasks.links.sessions[task.id] ?? 0}
                 cursor={under?.id === task.id}
                 starting={tasks.start?.taskId === task.id && tasks.start.phase === 'starting'}
-                onClick={() => { dispatch({ type: 'tasksCursorMoved', taskId: task.id }); backToRows(); }}
-                onDoubleClick={() => void openTaskDetail(task.id)}
+                onClick={() => {
+                  dispatch({ type: 'tasksCursorMoved', taskId: task.id });
+                  backToRows();
+                  if (getState().tasks.detail?.taskId !== task.id) void openTaskDetail(task.id);
+                }}
               >
                 {tasks.start?.taskId === task.id && <StartPanel task={task} start={tasks.start} />}
               </TaskRow>

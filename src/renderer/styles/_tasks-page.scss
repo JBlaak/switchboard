@@ -136,6 +136,22 @@
   &.has-detail { grid-template-columns: minmax(0, 1fr) 360px; }
 }
 
+/* The detail opens by its column growing from nothing: the list makes room
+   and the pane, kept at its full width and clipped, slides in from the edge. */
+@media (prefers-reduced-motion: no-preference) {
+  .tk-body.has-detail {
+    overflow: hidden;
+    animation: tk-detail-open 240ms cubic-bezier(.2, .8, .2, 1);
+
+    .tk-detail { min-width: 360px; }
+  }
+}
+
+@keyframes tk-detail-open {
+  from { grid-template-columns: minmax(0, 1fr) 0px; gap: 0; }
+  to { grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; }
+}
+
 .tk-list-wrap {
   min-height: 0;
   overflow: auto;
@@ -249,6 +265,29 @@
 
   b { color: var(--sb-text-strong); }
 }
+
+.tk-instructions {
+  align-items: stretch;
+  cursor: auto;
+}
+
+.tk-instructions-input {
+  resize: vertical;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid var(--sb-line);
+  border-radius: var(--sb-r-control);
+  outline: none;
+  background: var(--sb-bg-panel);
+  color: var(--sb-text-strong);
+  font: 12.5px/1.45 var(--sb-font-body);
+
+  &::placeholder { color: var(--sb-text-placeholder); }
+  &:focus { border-color: rgba(var(--sb-accent-rgb), 0.5); }
+}
+
+/* In the detail it takes the actions' place, without the row's indent. */
+.tk-detail-actions .tk-instructions { margin: 0; }
 
 .tk-start-text.is-warning { color: var(--sb-yellow); }
 

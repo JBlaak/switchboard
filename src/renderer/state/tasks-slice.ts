@@ -66,13 +66,19 @@ export interface TaskDetailView {
 }
 
 /**
- * A start from the page (S): asked, then how it ended. `routed` names the
- * project Ask Patch picked for a task that had none ("Patch's line").
+ * A start from the page (S): any extra instructions asked for, the start
+ * asked, then how it ended. `instructions` stay with it, so a choice taken
+ * from its answer (a project, Continue) starts with them too. `routed` names
+ * the project Ask Patch picked for a task that had none ("Patch's line").
  * `picking` is the project list: "Other project…", no match, or Change repo.
  */
 export type TasksStart =
-  | { readonly taskId: string; readonly phase: 'starting' }
-  | { readonly taskId: string; readonly phase: 'answered'; readonly outcome: TaskSessionStart; readonly routed: boolean };
+  | { readonly taskId: string; readonly phase: 'instructing' }
+  | { readonly taskId: string; readonly phase: 'starting'; readonly instructions: string }
+  | {
+    readonly taskId: string; readonly phase: 'answered'; readonly instructions: string;
+    readonly outcome: TaskSessionStart; readonly routed: boolean;
+  };
 
 /** The project list, open for a start (S) or for the detail's Change repo. */
 export interface TasksPicker {
@@ -136,9 +142,11 @@ export type TasksPageEvent =
   | { type: 'tasksDetailOpened'; taskId: string }
   | { type: 'tasksDetailLoaded'; taskId: string; detail: TaskDetail | null; error: string | null; sessions: TaskSessions | null }
   | { type: 'tasksDetailClosed' }
-  | { type: 'tasksStartAsked'; taskId: string }
+  /** Start session: first, any extra instructions. */
+  | { type: 'tasksStartInstructing'; taskId: string }
+  | { type: 'tasksStartAsked'; taskId: string; instructions: string }
   | { type: 'tasksStartAnswered'; taskId: string; outcome: TaskSessionStart; routed: boolean }
-  /** The start's answer put away: another key, Esc, or a choice taken. */
+  /** The start's answer, or its instructions, put away: another key, Esc, or a choice taken. */
   | { type: 'tasksStartDismissed' }
   | { type: 'tasksPickerOpened'; taskId: string; purpose: TasksPicker['purpose'] }
   | { type: 'tasksPickerClosed' };
@@ -220,19 +228,25 @@ export function tasksReducer(state: TasksState, event: RendererEvent): TasksStat
     case 'tasksDetailClosed':
       return state.detail ? { ...state, detail: null, picker: state.picker?.purpose === 'repo' ? null : state.picker } : state;
 
+    case 'tasksStartInstructing':
+      return state.start?.phase === 'starting'
+        ? state
+        : { ...state, start: { taskId: event.taskId, phase: 'instructing' }, picker: null, notice: null };
+
     case 'tasksStartAsked':
-      return { ...state, start: { taskId: event.taskId, phase: 'starting' }, picker: null, notice: null };
+      return { ...state, start: { taskId: event.taskId, phase: 'starting', instructions: event.instructions }, picker: null, notice: null };
 
     case 'tasksStartAnswered': {
       if (state.start?.taskId !== event.taskId) return state;
       const { outcome } = event;
       // No match: the project list, to pick from yourself.
       const picker: TasksPicker | null = outcome.kind === 'noMatch' ? { taskId: event.taskId, purpose: 'start' } : null;
-      return { ...state, start: { taskId: event.taskId, phase: 'answered', outcome, routed: event.routed }, picker };
+      const instructions = state.start.phase === 'instructing' ? '' : state.start.instructions;
+      return { ...state, start: { taskId: event.taskId, phase: 'answered', instructions, outcome, routed: event.routed }, picker };
     }
 
     case 'tasksStartDismissed':
-      return state.start?.phase === 'answered' ? { ...state, start: null, picker: state.picker?.purpose === 'start' ? null : state.picker } : state;
+      return state.start && state.start.phase !== 'starting' ? { ...state, start: null, picker: state.picker?.purpose === 'start' ? null : state.picker } : state;
 
     case 'tasksPickerOpened':
       return { ...state, picker: { taskId: event.taskId, purpose: event.purpose } };
