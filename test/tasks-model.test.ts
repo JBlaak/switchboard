@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { addToClaudeCommand } from '../src/domain/tasks/model';
+import { addToClaudeCommand, blaakTasksEndpoint } from '../src/domain/tasks/model';
 import { parseTaskDetail, parseTaskRow, parseTaskRows, readToolResult } from '../src/domain/tasks/parse';
 import { resolveBlaakTasksUrl } from '../src/domain/settings/settings';
 import { captureTargets, mcpServerHeaders, missingServersLine } from '../src/domain/ask/capture';
@@ -157,6 +157,34 @@ test('tasks: the add command names the URL, quoted only when a shell would read 
     'claude mcp add --transport http --scope user blaaktasks https://tasks.example.com/mcp',
     "claude mcp add --transport http --scope user blaaktasks 'https://tasks.example.com/mcp?a=1&b=2'",
   ]);
+});
+
+test('tasks: a URL naming only the site means its /mcp; any other URL is kept as typed', () => {
+  /* Given */
+  const urls = [
+    'https://tasks.example.com/', ' https://tasks.example.com ', 'https://tasks.example.com/mcp',
+    'https://tasks.example.com/other/', 'https://tasks.example.com/?a=1', 'not a url', '',
+  ];
+
+  /* When */
+  const endpoints = urls.map(blaakTasksEndpoint);
+
+  /* Then */
+  assert.deepEqual(endpoints, [
+    'https://tasks.example.com/mcp', 'https://tasks.example.com/mcp', 'https://tasks.example.com/mcp',
+    'https://tasks.example.com/other/', 'https://tasks.example.com/?a=1', 'not a url', '',
+  ]);
+});
+
+test('tasks: the add command for a site address adds its /mcp', () => {
+  /* Given */
+  const site = 'https://tasks.example.com/';
+
+  /* When */
+  const command = addToClaudeCommand(site);
+
+  /* Then */
+  assert.equal(command, 'claude mcp add --transport http --scope user blaaktasks https://tasks.example.com/mcp');
 });
 
 // ── The token ──

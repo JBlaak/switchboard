@@ -13,6 +13,7 @@
  * body or the URL.
  */
 import { readToolResult, parseTaskDetail, parseTaskRow, parseTaskRows } from '../../domain/tasks/parse';
+import { blaakTasksEndpoint } from '../../domain/tasks/model';
 import type {
   BlaakTasksResult, TaskDetail, TaskListOptions, TaskPatch, TaskRow, TaskView,
 } from '../../domain/tasks/model';
@@ -63,7 +64,7 @@ export class McpBlaakTasks implements BlaakTasks {
     tool: string, args: Record<string, unknown>, parse: (value: unknown) => T | null,
   ): Promise<BlaakTasksResult<T>> {
     const { log } = this.deps;
-    const url = this.deps.url().trim();
+    const url = blaakTasksEndpoint(this.deps.url());
     if (!url) return { kind: 'off' };
     const headers = this.deps.mcpServers.headersFor(url);
     if (!headers) return { kind: 'notSetUp' };

@@ -4,6 +4,7 @@
 import { INVOKE } from '../../ipc/channels';
 import { normaliseAppearance } from '../../domain/settings/appearance';
 import { GLOBAL_SETTINGS_KEY } from '../../domain/settings/settings';
+import { blaakTasksEndpoint } from '../../domain/tasks/model';
 import { captureServer, offeredTargets } from '../../application/services/quick-ask-service';
 import type { Container } from '../composition-root';
 import type { IpcRegistrar } from './registrar';
@@ -35,7 +36,7 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
    * the Settings field's "add it" line. A yes or no only: the headers stay here.
    */
   ipc.handle(INVOKE.blaakTasksSetUp, (url: unknown) =>
-    typeof url === 'string' && url.trim() !== '' && app.mcpServers.headersFor(url) !== null);
+    typeof url === 'string' && url.trim() !== '' && app.mcpServers.headersFor(blaakTasksEndpoint(url)) !== null);
 
   ipc.handle(INVOKE.getEffectiveSettings, (projectPath: string | null) =>
     app.settings.effective(projectPath));

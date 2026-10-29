@@ -42,6 +42,7 @@ import type { CaptureTarget, QuickRouteResult, RouteRequest } from '../../domain
 import type { ClaudeRun } from '../../domain/ask/route';
 import type { Project } from '../../domain/project/project';
 import { resolveBlaakTasksUrl } from '../../domain/settings/settings';
+import { blaakTasksEndpoint } from '../../domain/tasks/model';
 import type { GlobalSettings } from '../../domain/settings/settings';
 import type { ClaudeCaller } from '../ports/claude-cli';
 import type { TimerHandle, Timers } from '../ports/clock';
@@ -83,7 +84,7 @@ export function captureServer(
 ): string | null {
   if (target === 'tasks') {
     const url = resolveBlaakTasksUrl(global);
-    return url ? mcpServers.nameFor(url) : null;
+    return url ? mcpServers.nameFor(blaakTasksEndpoint(url)) : null;
   }
   return mcpServers.has(CAPTURE_SERVERS[target]) ? CAPTURE_SERVERS[target] : null;
 }
