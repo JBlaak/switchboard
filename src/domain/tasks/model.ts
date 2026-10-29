@@ -108,9 +108,25 @@ export const BLAAKTASKS_SERVER = 'blaaktasks';
 /** The Settings line shown when the URL is set but no server in `~/.claude.json` has it. */
 export const ADD_TO_CLAUDE_LINE = 'Add BlaakTasks to Claude Code with this URL';
 
+/**
+ * The MCP address for the URL in Settings: the URL itself, or `/mcp` on it
+ * when it names only the site (`https://tasks.example.com/`), which is where
+ * BlaakTasks serves its tools. '' stays ''.
+ */
+export function blaakTasksEndpoint(url: string): string {
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.pathname === '/' && !parsed.search && !parsed.hash) return `${parsed.origin}/mcp`;
+  } catch {
+    // Not a URL: matched and called as typed, which tells the user it is wrong.
+  }
+  return trimmed;
+}
+
 /** The command that adds BlaakTasks to Claude Code at `url`, for the user to copy. */
 export function addToClaudeCommand(url: string): string {
-  const trimmed = url.trim();
+  const trimmed = blaakTasksEndpoint(url);
   // A URL with nothing a shell reads specially stays readable; anything else is quoted.
   const arg = /^[\w:/.\-@%+=~,]+$/.test(trimmed) ? trimmed : posixQuote(trimmed);
   return `claude mcp add --transport http --scope user ${BLAAKTASKS_SERVER} ${arg}`;
