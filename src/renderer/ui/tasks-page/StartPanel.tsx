@@ -1,6 +1,8 @@
 /**
  * How a start from the Tasks page went (#249), under the task's row:
  *
+ * - asked: any extra instructions first (`StartInstructions`), unless the
+ *   task's detail is open, which asks instead;
  * - started, after Ask Patch picked the repo: Patch's line, "Starting in …";
  * - Patch unsure: up to three projects to start in, and "Other project…";
  * - no match: Patch's reason, and the project list;
@@ -16,9 +18,12 @@ import type { TasksStart } from '../../state/tasks-slice';
 import { useStore } from '../use-store';
 import { openProjectList, openTaskSession, startFromTask } from './actions';
 import { ProjectList } from './ProjectList';
+import { StartInstructions } from './StartInstructions';
 
 export function StartPanel({ task, start }: { task: TaskRow; start: TasksStart }): JSX.Element | null {
   const picking = useStore(state => state.tasks.picker?.taskId === task.id && state.tasks.picker.purpose === 'start');
+  const inDetail = useStore(state => state.tasks.detail?.taskId === task.id);
+  if (start.phase === 'instructing') return inDetail ? null : <StartInstructions task={task} />;
   if (start.phase !== 'answered') return null;
   const { outcome } = start;
   switch (outcome.kind) {

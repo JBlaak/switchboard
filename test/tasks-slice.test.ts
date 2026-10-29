@@ -149,7 +149,7 @@ test('a changed row takes its place in the list', () => {
 
 test('no match from Patch opens the project list for the task; dismissing puts both away', () => {
   /* Given */
-  const state = run(on(), { type: 'tasksStartAsked', taskId: 'a' });
+  const state = run(on(), { type: 'tasksStartAsked', taskId: 'a', instructions: '' });
 
   /* When */
   const answered = run(state, { type: 'tasksStartAnswered', taskId: 'a', outcome: { kind: 'noMatch', reason: 'Nothing fits' }, routed: true });
@@ -160,6 +160,34 @@ test('no match from Patch opens the project list for the task; dismissing puts b
   assert.deepEqual(answered.tasks.picker, { taskId: 'a', purpose: 'start' });
   assert.equal(dismissed.tasks.start, null);
   assert.equal(dismissed.tasks.picker, null);
+});
+
+test('Start session asks for instructions first; Esc puts the question away, and a start in flight is not asked over', () => {
+  /* Given */
+  const state = on();
+
+  /* When */
+  const asking = run(state, { type: 'tasksStartInstructing', taskId: 'a' });
+  const dismissed = run(asking, { type: 'tasksStartDismissed' });
+  const starting = run(state, { type: 'tasksStartAsked', taskId: 'a', instructions: 'Only the API' });
+  const askedAgain = run(starting, { type: 'tasksStartInstructing', taskId: 'b' });
+
+  /* Then */
+  assert.deepEqual(asking.tasks.start, { taskId: 'a', phase: 'instructing' });
+  assert.equal(dismissed.tasks.start, null);
+  assert.deepEqual(askedAgain.tasks.start, { taskId: 'a', phase: 'starting', instructions: 'Only the API' });
+});
+
+test('a start\'s answer keeps the instructions it was started with', () => {
+  /* Given */
+  const state = run(on(), { type: 'tasksStartAsked', taskId: 'a', instructions: 'Only the API' });
+
+  /* When */
+  const answered = run(state, { type: 'tasksStartAnswered', taskId: 'a', outcome: { kind: 'unsure', candidates: ['/dev/app'] }, routed: true });
+
+  /* Then */
+  assert.ok(answered.tasks.start?.phase === 'answered');
+  assert.equal(answered.tasks.start.instructions, 'Only the API');
 });
 
 test('opening the page again starts with nothing left open from last time', () => {

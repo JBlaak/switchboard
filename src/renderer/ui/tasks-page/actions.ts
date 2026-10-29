@@ -208,10 +208,17 @@ export function openTaskSession(sessionId: string): void {
 
 // ── Starting ──
 
-/** How S starts: in a project picked from the list, or again on its existing branch. */
+/** How S starts: in a project picked from the list, or again on its existing branch, and with what extra instructions. */
 export interface StartChoice {
   projectPath?: string;
   existing?: ExistingBranchChoice;
+  /** Without them, the ones the task's start was given, if any. */
+  instructions?: string;
+}
+
+/** S, or Start session: ask for any extra instructions first; `startFromTask` with them starts. */
+export function askStartInstructions(task: TaskRow): void {
+  dispatch({ type: 'tasksStartInstructing', taskId: task.id });
 }
 
 /**
@@ -224,7 +231,9 @@ export interface StartChoice {
 export async function startFromTask(task: TaskRow, choice: StartChoice = {}): Promise<void> {
   const tasks = getState().tasks;
   if (tasks.start?.phase === 'starting') return;
-  dispatch({ type: 'tasksStartAsked', taskId: task.id });
+  const earlier = tasks.start?.taskId === task.id && tasks.start.phase === 'answered' ? tasks.start.instructions : '';
+  const instructions = (choice.instructions ?? earlier).trim();
+  dispatch({ type: 'tasksStartAsked', taskId: task.id, instructions });
 
   // Whether Ask Patch picks the repo: none asked for, and none linked, as main has it now.
   if (!choice.projectPath && !tasks.links.repos[task.id]) await loadTaskLinks();
@@ -233,7 +242,7 @@ export async function startFromTask(task: TaskRow, choice: StartChoice = {}): Pr
   let outcome: TaskSessionStart;
   try {
     outcome = await effects.startSession({
-      task: { id: task.id, title: task.title, ...(brief ? { brief } : {}) },
+      task: { id: task.id, title: task.title, ...(brief ? { brief } : {}), ...(instructions ? { instructions } : {}) },
       ...(choice.projectPath ? { projectPath: choice.projectPath } : {}),
       ...(choice.existing ? { existing: choice.existing } : {}),
       show: false,

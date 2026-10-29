@@ -16,6 +16,8 @@ export interface TaskStartInput {
   title: string;
   /** The task's description, when it has one: routing reads it with the title. */
   brief?: string;
+  /** What you asked for on top of the task as you started it: added to the first prompt. */
+  instructions?: string;
 }
 
 /** The branch of a task with no letters or digits in its title. */
@@ -32,10 +34,16 @@ export function taskBranchName(title: string): string {
   return /^[0-9]/.test(slug) ? UNTITLED_BRANCH + '-' + slug : slug;
 }
 
+/** The extra instructions, after the prompt; nothing without them. */
+function withInstructions(prompt: string, task: TaskStartInput): string {
+  const instructions = task.instructions?.trim();
+  return instructions ? `${prompt}\n\nExtra instructions: ${instructions}` : prompt;
+}
+
 /** The first prompt of a new session on a task. */
 export function taskSessionPrompt(task: TaskStartInput): string {
-  return `Work on my task “${task.title}” (blaaktasks ${task.id}): read it with get, log progress at every checkpoint and link the PR. ` +
-    'It is already marked In progress; don\'t change its status.';
+  return withInstructions(`Work on my task “${task.title}” (blaaktasks ${task.id}): read it with get, log progress at every checkpoint and link the PR. ` +
+    'It is already marked In progress; don\'t change its status.', task);
 }
 
 /**
@@ -43,10 +51,10 @@ export function taskSessionPrompt(task: TaskStartInput): string {
  * so far is on it, so it is read before anything new is done.
  */
 export function taskContinuePrompt(task: TaskStartInput): string {
-  return `Continue work on my task “${task.title}” (blaaktasks ${task.id}): this branch already has earlier work on it. ` +
+  return withInstructions(`Continue work on my task “${task.title}” (blaaktasks ${task.id}): this branch already has earlier work on it. ` +
     'Read the task with get, then what the branch has so far (its commits, and any uncommitted changes) before going on. ' +
     'Log progress at every checkpoint and link the PR, unless it is linked already. ' +
-    'It is already marked In progress; don\'t change its status.';
+    'It is already marked In progress; don\'t change its status.', task);
 }
 
 /** What Ask Patch is asked to route: the title, then the brief when there is one. */

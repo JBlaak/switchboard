@@ -73,7 +73,7 @@ async function fakeBlaakTasks(task: Record<string, unknown> = {}): Promise<{ url
 /** BlaakTasks switched on the way a user does it: its URL saved in Settings. */
 async function switchBlaakTasksOn(page: Page, url: string): Promise<void> {
   await page.getByRole('button', { name: 'Global settings', exact: true }).click();
-  await page.getByText('BlaakTasks URL', { exact: true }).locator('xpath=ancestor::*[.//input][1]').getByRole('textbox').fill(url);
+  await page.getByText('Tasks URL', { exact: true }).locator('xpath=ancestor::*[.//input][1]').getByRole('textbox').fill(url);
   await page.getByRole('button', { name: 'Save Settings' }).click();
   await expect(page.getByText('Global Settings', { exact: true })).toBeHidden();
 }
@@ -180,20 +180,31 @@ test('the Tasks page opens with ⌘T once BlaakTasks is on, and S starts a sessi
     await expect(row).toContainText('In progress');
     await expect(row).toHaveAttribute('aria-selected', 'true');
 
-    /* When: S on the row under the cursor */
-    await page.keyboard.press('s');
+    /* When: one click on the row */
+    await row.click();
 
-    /* Then: Claude started in the task's worktree, the page kept the main area, and the session has a sidebar row */
+    /* Then: its detail opens */
+    await expect(tasksPage.getByRole('complementary', { name: 'Task detail' })).toContainText(TITLE);
+
+    /* When: S on the row under the cursor, and extra instructions for it */
+    await page.keyboard.press('s');
+    await expect(tasksPage.getByRole('textbox', { name: 'Extra instructions' })).toBeFocused();
+    await page.keyboard.type('Only the upload test.');
+    await page.keyboard.press('Enter');
+
+    /* Then: Claude started in the task's worktree with them, the page kept the main area, and the session has a sidebar row */
     await expect(row.getByRole('status')).toContainText('Started in');
     let owner: string | null = null;
     await expect.poll(async () => (owner = (await page.evaluate((task) => window.api.taskSessions(task), TASK)).owner)).not.toBeNull();
     const launch = await new FakeCli(home.controlDir, owner!).launched();
     expect(fs.realpathSync(launch.cwd)).toBe(fs.realpathSync(path.join(projectPath, '.claude/worktrees/fix-the-flaky-upload-test')));
+    expect(launch.argv.at(-1)).toMatch(/\n\nExtra instructions: Only the upload test\.$/);
     await expect(sidebar(page).locator(`[data-session-id="${owner}"]`)).toBeVisible();
     await expect(tasksPage).toBeVisible();
     await expect.poll(() => blaakTasks.calls.some((call) => call.tool === 'update' && call.args.id === TASK)).toBe(true);
 
-    /* When: Esc */
+    /* When: Esc, for the start's answer, the detail and the page */
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
 

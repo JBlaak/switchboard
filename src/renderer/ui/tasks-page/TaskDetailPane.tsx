@@ -12,7 +12,7 @@ import type { TaskRow } from '../../../domain/tasks/model';
 import { TaskStatusPill } from '../tasks/TaskRow';
 import { taskTitle } from '../tasks/task-row';
 import {
-  closeTaskDetail, openProjectList, openTaskInNotion, openTaskPullRequest, openTaskSession, startFromTask,
+  askStartInstructions, closeTaskDetail, openProjectList, openTaskInNotion, openTaskPullRequest, openTaskSession,
 } from './actions';
 
 /** `#412` for a GitHub PR's URL; the URL itself for anything else. */
@@ -21,6 +21,7 @@ function pullRequestLabel(url: string): string {
   return number ? '#' + number : url;
 }
 import { ProjectList } from './ProjectList';
+import { StartInstructions } from './StartInstructions';
 
 function sessionName(sessionId: string): string {
   const session = sessionMap.get(sessionId);
@@ -31,6 +32,7 @@ export function TaskDetailPane({ task }: { task: TaskRow }): JSX.Element {
   const view = useStore(state => state.tasks.detail);
   const repo = useStore(state => state.tasks.links.repos[task.id] ?? null);
   const changing = useStore(state => state.tasks.picker?.taskId === task.id && state.tasks.picker.purpose === 'repo');
+  const instructing = useStore(state => state.tasks.start?.taskId === task.id && state.tasks.start.phase === 'instructing');
   const detail = view?.taskId === task.id ? view.detail : null;
   const sessions = view?.taskId === task.id ? view.sessions : null;
   const error = view?.taskId === task.id ? view.error : null;
@@ -108,14 +110,16 @@ export function TaskDetailPane({ task }: { task: TaskRow }): JSX.Element {
         {changing && <ProjectList task={task} />}
       </section>
 
-      <div className="tk-choices tk-detail-actions">
-        <button type="button" className="sw-btn is-primary" onClick={() => void startFromTask(task)}>
-          Start session <kbd className="sw-kbd">S</kbd>
-        </button>
-        <button type="button" className="sw-btn" onClick={() => void openTaskInNotion(task.id)}>
-          Open in Notion <kbd className="sw-kbd">O</kbd>
-        </button>
-      </div>
+      {instructing ? <div className="tk-detail-actions"><StartInstructions task={task} /></div> : (
+        <div className="tk-choices tk-detail-actions">
+          <button type="button" className="sw-btn is-primary" onClick={() => askStartInstructions(task)}>
+            Start session <kbd className="sw-kbd">S</kbd>
+          </button>
+          <button type="button" className="sw-btn" onClick={() => void openTaskInNotion(task.id)}>
+            Open in Notion <kbd className="sw-kbd">O</kbd>
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

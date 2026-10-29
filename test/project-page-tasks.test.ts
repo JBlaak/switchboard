@@ -198,7 +198,7 @@ test('a page opening on a project starts with no task start, detail or notice le
   const state = run(
     initialRendererState(),
     { type: 'blaakTasksSwitched', on: true },
-    { type: 'tasksStartAsked', taskId: 'a' },
+    { type: 'tasksStartAsked', taskId: 'a', instructions: '' },
     { type: 'tasksNoticed', notice: { text: 'Done', tone: 'info' } },
     { type: 'tasksDetailOpened', taskId: 'a' },
   );

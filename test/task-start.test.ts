@@ -71,6 +71,21 @@ test('a new session on a task starts with BlaakTasks\' handoff, saying it is alr
     'It is already marked In progress; don\'t change its status.');
 });
 
+test('extra instructions go after the prompt; blank ones add nothing', () => {
+  /* Given */
+  const asked = { ...task, instructions: '  Only touch the API, not the UI.\n' };
+  const blank = { ...task, instructions: '   ' };
+
+  /* When */
+  const prompts = [taskSessionPrompt(asked), taskContinuePrompt(asked), taskSessionPrompt(blank)];
+
+  /* Then */
+  assert.ok(prompts[0].startsWith(taskSessionPrompt(task)));
+  assert.ok(prompts[0].endsWith('don\'t change its status.\n\nExtra instructions: Only touch the API, not the UI.'));
+  assert.ok(prompts[1].endsWith('\n\nExtra instructions: Only touch the API, not the UI.'));
+  assert.equal(prompts[2], taskSessionPrompt(task));
+});
+
 test('continuing a task reads the branch\'s earlier work first and still leaves the status alone', () => {
   /* Given */
   const input = task;

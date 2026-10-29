@@ -9,7 +9,7 @@ import { dispatch, getState } from '../src/renderer/state/app-store';
 import { TASKS_PAGE_WATCH, visibleRows } from '../src/renderer/state/tasks-slice';
 import {
   followBlaakTasksSwitch, loadTaskLinks, markTaskDone, openTaskDetail, openTaskInNotion, openTasksPage, pickProject,
-  setTasksPageEffects, snoozeTask, starTask, startFromTask, taskProjects, toggleTasksPage, type TasksPageEffects,
+  askStartInstructions, setTasksPageEffects, snoozeTask, starTask, startFromTask, taskProjects, toggleTasksPage, type TasksPageEffects,
 } from '../src/renderer/ui/tasks-page/actions';
 import { tasksKeyAction } from '../src/renderer/ui/tasks-page/page-keys';
 import { statusTone, taskMeta } from '../src/renderer/ui/tasks/task-row';
@@ -225,6 +225,39 @@ test('S on a task with no repo hands Patch its brief, and a confident start says
   assert.deepEqual(seen.starts[0].task, { id: 'a', title: 'Task a', brief: 'Crashes on export' });
   const start = getState().tasks.start;
   assert.ok(start?.phase === 'answered' && start.routed && start.outcome.kind === 'started');
+});
+
+test('S asks for instructions first, and the start hands them on to the session', async () => {
+  /* Given */
+  showing([task('a')]);
+  dispatch({ type: 'tasksLinksLoaded', links: { repos: { a: '/dev/app' }, sessions: {} } });
+  installMain({ projectTasks: () => [], sessionTasks: () => ({}) });
+  const seen = installEffects(() => ({ kind: 'started', sessionId: 's9', projectPath: '/dev/app' }));
+
+  /* When */
+  askStartInstructions(task('a'));
+  const asked = getState().tasks.start;
+  await startFromTask(task('a'), { instructions: ' Only the API ' });
+
+  /* Then */
+  assert.deepEqual(asked, { taskId: 'a', phase: 'instructing' });
+  assert.deepEqual(seen.starts, [{ task: { id: 'a', title: 'Task a', instructions: 'Only the API' }, show: false }]);
+});
+
+test('a choice from a start\'s answer starts with the instructions the start had', async () => {
+  /* Given */
+  showing([task('a')]);
+  installMain({ getTask: () => ({ kind: 'ok', value: detail(task('a'), '') }), projectTasks: () => [], sessionTasks: () => ({}) });
+  const seen = installEffects(request => request.projectPath
+    ? { kind: 'started', sessionId: 's9', projectPath: request.projectPath }
+    : { kind: 'unsure', candidates: ['/dev/app', '/dev/api'] });
+  await startFromTask(task('a'), { instructions: 'Only the API' });
+
+  /* When */
+  await startFromTask(task('a'), { projectPath: '/dev/api' });
+
+  /* Then */
+  assert.deepEqual(seen.starts.map(start => start.task.instructions), ['Only the API', 'Only the API']);
 });
 
 test('Patch unsure offers its candidates; picking one starts there', async () => {

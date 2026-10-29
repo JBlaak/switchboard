@@ -101,6 +101,7 @@ function startRequest(value: unknown): TaskStartRequest {
       id: text(task.id, 'task id'),
       title: text(task.title, 'task title'),
       ...(typeof task.brief === 'string' ? { brief: task.brief } : {}),
+      ...(typeof task.instructions === 'string' ? { instructions: task.instructions } : {}),
     },
     ...(projectPath ? { projectPath } : {}),
     ...(existing ? { existing: existing as ExistingBranchChoice } : {}),
