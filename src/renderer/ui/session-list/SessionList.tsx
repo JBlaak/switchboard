@@ -11,7 +11,7 @@
  * render.
  */
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { TIER_LABELS } from '../../../domain/session/tiers';
+import { TIER_LABELS, TIER_PINNED_PLAN } from '../../../domain/session/tiers';
 import { sidebarContent } from '../../lib/dom';
 import { useStore } from '../use-store';
 import { clearScreenFromList, toggleOlder } from './actions';
@@ -113,6 +113,6 @@ function FirstRunHint(): JSX.Element {
 
 function Entry({ laid }: { laid: LaidEntry }): JSX.Element {
   return laid.entry.kind === 'group'
-    ? <SlugGroup group={laid.entry} />
+    ? <SlugGroup group={laid.entry} pinned={laid.tier === TIER_PINNED_PLAN} />
     : <SessionItem row={laid.entry} />;
 }

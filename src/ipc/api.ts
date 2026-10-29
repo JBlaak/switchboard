@@ -68,6 +68,8 @@ export interface SwitchboardApi {
   stopSession(id: string): Promise<IpcResult>;
   reconnectRemote(id: string): Promise<IpcResult>;
   toggleStar(id: string): Promise<{ starred: number }>;
+  /** Pin a plan (the sessions sharing `slug` in one project) to the top of the list, or unpin it. */
+  togglePlanPin(projectPath: string, slug: string): Promise<{ pinned: boolean }>;
   /** `null` clears the rename, falling back to the AI/first-prompt title. */
   renameSession(id: string, name: string | null): Promise<IpcResult>;
   /**

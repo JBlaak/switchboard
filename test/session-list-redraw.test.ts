@@ -32,7 +32,7 @@ function row(id: string, msAgo = HOUR): SessionListRow {
 }
 
 function item(entry: SessionListRow | SessionListGroup, msAgo = HOUR): ListItem {
-  return { entry, sortTime: NOW - msAgo, startTime: NOW - msAgo, pinned: false, tier: TIER_REST, remote: false };
+  return { entry, sortTime: NOW - msAgo, startTime: NOW - msAgo, pinned: false, pinnedPlan: false, tier: TIER_REST, remote: false };
 }
 
 const group: SessionListGroup = { kind: 'group', id: 'slug-g', slug: 'g', projectPath: '/p', sessions: [row('b'), row('c')] };

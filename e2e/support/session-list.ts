@@ -78,7 +78,7 @@ export async function expectInOrder(page: Page, texts: readonly string[]): Promi
 
 /** Whether `text` sits below the section label `section` and above the next label. */
 export async function sectionOf(page: Page, text: string): Promise<string | null> {
-  const labels = ['Needs input', 'Ready', 'Working', 'Pinned', 'Recent'];
+  const labels = ['Pinned plans', 'Needs input', 'Ready', 'Working', 'Pinned', 'Recent'];
   const rowBox = await sidebar(page).getByText(text, { exact: true }).first().boundingBox();
   if (!rowBox) return null;
   let best: { label: string; y: number } | null = null;

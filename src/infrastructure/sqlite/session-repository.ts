@@ -9,6 +9,7 @@
 import type Database from 'better-sqlite3';
 import { decodePullRequests } from '../../domain/session/pull-requests';
 import type { CachedSession, FolderMeta, SessionMeta } from '../../domain/session/session';
+import type { PlanPin } from '../../domain/project/project-list';
 import type { SessionRepository } from '../../application/ports/session-repository';
 
 /** A `session_cache` row as SQLite hands it back: the PR list is still JSON text. */
@@ -26,6 +27,10 @@ export class SqliteSessionRepository implements SessionRepository {
   readonly #metaToggleStar;
   readonly #metaUpsertArchived;
   readonly #metaUpsertSnoozed;
+
+  readonly #planPinsGetAll;
+  readonly #planPinInsert;
+  readonly #planPinDelete;
 
   readonly #cacheCount;
   readonly #cacheGetAll;
@@ -62,6 +67,13 @@ export class SqliteSessionRepository implements SessionRepository {
       INSERT INTO session_meta (sessionId, snoozedUntil) VALUES (?, ?)
       ON CONFLICT(sessionId) DO UPDATE SET snoozedUntil = excluded.snoozedUntil
     `);
+
+    this.#planPinsGetAll = db.prepare<[], { project_path: string; slug: string }>(
+      'SELECT project_path, slug FROM pinned_plans');
+    this.#planPinInsert = db.prepare<[string, string]>(
+      'INSERT OR IGNORE INTO pinned_plans (project_path, slug) VALUES (?, ?)');
+    this.#planPinDelete = db.prepare<[string, string]>(
+      'DELETE FROM pinned_plans WHERE project_path = ? AND slug = ?');
 
     this.#cacheCount = db.prepare<[], { cnt: number }>('SELECT COUNT(*) as cnt FROM session_cache');
     this.#cacheGetAll = db.prepare<[], CachedSessionRow>('SELECT * FROM session_cache');
@@ -136,6 +148,16 @@ export class SqliteSessionRepository implements SessionRepository {
 
   setSnoozedUntil(sessionId: string, until: string | null): void {
     this.#metaUpsertSnoozed.run(sessionId, until);
+  }
+
+  getPinnedPlans(): PlanPin[] {
+    return this.#planPinsGetAll.all().map(row => ({ projectPath: row.project_path, slug: row.slug }));
+  }
+
+  togglePlanPin(projectPath: string, slug: string): boolean {
+    if (this.#planPinDelete.run(projectPath, slug).changes > 0) return false;
+    this.#planPinInsert.run(projectPath, slug);
+    return true;
   }
 
   // ── Cache ──

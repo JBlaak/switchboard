@@ -111,6 +111,14 @@ const TABLES = [
     source TEXT NOT NULL,
     linked_at INTEGER NOT NULL
   )`,
+  // The plans pinned to the top of the session list: a plan is the sessions
+  // sharing a slug within one project, so the pin is keyed on both and holds
+  // for sessions started from the plan later.
+  `CREATE TABLE IF NOT EXISTS pinned_plans (
+    project_path TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    PRIMARY KEY (project_path, slug)
+  )`,
   // When a session was unlinked from its task by hand, so detection does not
   // relink it from a tool call made before (#245). Epoch ms.
   `CREATE TABLE IF NOT EXISTS task_unlinks (

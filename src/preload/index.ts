@@ -42,6 +42,7 @@ const api: SwitchboardApi = {
   stopSession: (id) => ipcRenderer.invoke(INVOKE.stopSession, id),
   reconnectRemote: (id) => ipcRenderer.invoke(INVOKE.reconnectRemote, id),
   toggleStar: (id) => ipcRenderer.invoke(INVOKE.toggleStar, id),
+  togglePlanPin: (projectPath, slug) => ipcRenderer.invoke(INVOKE.togglePlanPin, projectPath, slug),
   renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
   archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
   snoozeSession: (id, until) => ipcRenderer.invoke(INVOKE.snoozeSession, id, until),

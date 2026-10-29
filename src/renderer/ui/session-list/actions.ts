@@ -10,7 +10,7 @@
 import { loadProjects } from '../../features/sessions/session-list';
 import { relayoutSessionList } from './relayout';
 import { dispatch, getState } from '../../state/app-store';
-import { sessionMap } from '../../state/session-store';
+import { sessionMap, view } from '../../state/session-store';
 import { renamedName } from '../../state/session-list-layout';
 import { bump } from '../../lib/motion/reflow';
 import { openResumeDialog } from '../dialogs/actions';
@@ -57,6 +57,22 @@ export async function togglePin(sessionId: string, pin: HTMLElement): Promise<vo
   session.starred = starred;
   // A pin going in pops, one coming out dips.
   bump(pin, starred ? 10 : -4);
+  relayoutSessionList({ resort: true });
+}
+
+/**
+ * Pin a plan to the top of the list or unpin it, once main has stored it, like
+ * a session's pin. Its sessions keep their own stars.
+ */
+export async function togglePlanPin(projectPath: string, slug: string, pin: HTMLElement): Promise<void> {
+  const { pinned } = await window.api.togglePlanPin(projectPath, slug);
+  // The same project can be in both cached lists as separate objects.
+  for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
+    if (project.projectPath !== projectPath) continue;
+    const others = (project.pinnedPlans ?? []).filter(s => s !== slug);
+    project.pinnedPlans = pinned ? [...others, slug] : others;
+  }
+  bump(pin, pinned ? 10 : -4);
   relayoutSessionList({ resort: true });
 }
 
