@@ -37,6 +37,9 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
   ipc.handle(INVOKE.togglePlanPin, (projectPath: string, slug: string) => ({
     pinned: app.repository.togglePlanPin(projectPath, slug),
   }));
+  ipc.handle(INVOKE.toggleIssuePlanPin, (projectPath: string, repository: string, number: number, title: string) => ({
+    pinned: app.repository.toggleIssuePlanPin(projectPath, repository, number, title),
+  }));
 
   /**
    * Rename a session.

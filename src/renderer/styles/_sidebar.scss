@@ -519,6 +519,10 @@
   color: var(--sb-yellow);
 }
 
+.session-status-dot.is-spacer {
+  visibility: hidden;
+}
+
 /* ---- Running dot ---- */
 .session-status-dot {
   width: 6px;

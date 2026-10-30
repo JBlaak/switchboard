@@ -5,7 +5,9 @@
  * page's Plan tab, with its diagram, detail, actions and polling.
  *
  * Starting a session here keeps the page where it is: the new row appears in
- * the sidebar and pulses once instead of taking the main area.
+ * the sidebar and pulses once instead of taking the main area. The pin before
+ * the title puts the plan under Pinned plans at the top of the sidebar, as a
+ * row that opens this page.
  *
  * Rendered by `ui/project-page/ProjectPage`. Esc closes an open issue detail
  * first, then the page, which goes back to the session it covered; ↑/↓ step
@@ -20,6 +22,7 @@ import { PlanView } from '../session-work/plan/PlanView';
 import { planKey } from '../session-work/plan/load';
 import { useIssueActions } from '../session-work/plan/issue-actions';
 import { backToProject, closeProject } from '../project-page/actions';
+import { isIssuePlanPinned, toggleIssuePlanPin } from '../session-list/actions';
 import type { PlanPage as Plan } from './actions';
 
 export function PlanPage(): JSX.Element | null {
@@ -28,6 +31,9 @@ export function PlanPage(): JSX.Element | null {
   const root = useRef<HTMLDivElement>(null);
   const issueActions = useIssueActions(page?.projectPath ?? null, { show: false });
   const owner = page ? projectPlanOwner(page) : null;
+  // The pins live on the cached projects, outside the store; every pin or
+  // unpin lays the list out again, which is the signal to read them anew.
+  useStore(state => state.sessionList.revision);
 
   // Into the page as it opens, so Esc and ↑/↓ reach it without a click.
   useLayoutEffect(() => {
@@ -81,7 +87,16 @@ export function PlanPage(): JSX.Element | null {
         </nav>
       </header>
       {plan
-        ? <PlanView plan={plan} issueActions={issueActions} />
+        ? (
+          <PlanView
+            plan={plan}
+            issueActions={issueActions}
+            pin={{
+              pinned: isIssuePlanPinned(page.projectPath, page.repository, page.number),
+              toggle: () => void toggleIssuePlanPin(page.projectPath, { ...page, title: plan.title }),
+            }}
+          />
+        )
         : (
           <div className="pv pv-status" role="status">
             {mine?.phase === 'failed'

@@ -70,6 +70,8 @@ export interface SwitchboardApi {
   toggleStar(id: string): Promise<{ starred: number }>;
   /** Pin a plan (the sessions sharing `slug` in one project) to the top of the list, or unpin it. */
   togglePlanPin(projectPath: string, slug: string): Promise<{ pinned: boolean }>;
+  /** Pin a GitHub plan, from its page in a project, to the top of the list, or unpin it. */
+  toggleIssuePlanPin(projectPath: string, repository: string, number: number, title: string): Promise<{ pinned: boolean }>;
   /** `null` clears the rename, falling back to the AI/first-prompt title. */
   renameSession(id: string, name: string | null): Promise<IpcResult>;
   /**

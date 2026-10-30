@@ -77,6 +77,32 @@ export async function togglePlanPin(projectPath: string, slug: string, pin: HTML
   relayoutSessionList({ resort: true });
 }
 
+/**
+ * Pin a GitHub plan to the top of the list from its page, or unpin it from
+ * there or from its row, once main has stored it. The title is kept as it is
+ * now, so the row needs no GitHub call to draw.
+ */
+export async function toggleIssuePlanPin(
+  projectPath: string, plan: { repository: string; number: number; title: string }, pin?: HTMLElement,
+): Promise<void> {
+  const { repository, number, title } = plan;
+  const { pinned } = await window.api.toggleIssuePlanPin(projectPath, repository, number, title);
+  // The same project can be in both cached lists as separate objects.
+  for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
+    if (project.projectPath !== projectPath) continue;
+    const others = (project.pinnedIssuePlans ?? []).filter(p => p.repository !== repository || p.number !== number);
+    project.pinnedIssuePlans = pinned ? [...others, { repository, number, title, pinnedAt: Date.now() }] : others;
+  }
+  if (pin) bump(pin, pinned ? 10 : -4);
+  relayoutSessionList({ resort: true });
+}
+
+/** Whether a GitHub plan is pinned to the top of the list in `projectPath`. */
+export function isIssuePlanPinned(projectPath: string, repository: string, number: number): boolean {
+  return [...view.cachedProjects, ...view.cachedAllProjects].some(project => project.projectPath === projectPath
+    && !!project.pinnedIssuePlans?.some(p => p.repository === repository && p.number === number));
+}
+
 export function stopRow(sessionId: string): void {
   void confirmAndStopSession(sessionId);
 }

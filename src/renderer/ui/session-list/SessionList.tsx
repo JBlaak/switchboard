@@ -17,6 +17,7 @@ import { useStore } from '../use-store';
 import { clearScreenFromList, toggleOlder } from './actions';
 import { installDragSpace } from './drag-space';
 import { restoreTerminalFocus } from './focus';
+import { PinnedPlanItem } from './PinnedPlanItem';
 import { SessionItem } from './SessionItem';
 import { SlugGroup } from './SlugGroup';
 import { useReflow } from './use-reflow';
@@ -112,7 +113,9 @@ function FirstRunHint(): JSX.Element {
 }
 
 function Entry({ laid }: { laid: LaidEntry }): JSX.Element {
-  return laid.entry.kind === 'group'
-    ? <SlugGroup group={laid.entry} pinned={laid.tier === TIER_PINNED_PLAN} />
-    : <SessionItem row={laid.entry} />;
+  switch (laid.entry.kind) {
+    case 'group': return <SlugGroup group={laid.entry} pinned={laid.tier === TIER_PINNED_PLAN} />;
+    case 'plan': return <PinnedPlanItem plan={laid.entry} />;
+    default: return <SessionItem row={laid.entry} />;
+  }
 }

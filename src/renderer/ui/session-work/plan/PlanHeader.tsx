@@ -1,15 +1,19 @@
 /**
  * The plan's header (D2): where it lives, its title and the parent above it,
  * the level you are on, how much is closed, the linked PRs, and one progress
- * bullet per level.
+ * bullet per level. Where the page can pin the plan to the sidebar, a pin
+ * before the title.
  */
 import type { JSX } from 'react';
 import type { Plan, PlanLayout } from '../../../../domain/plan/model';
 import { closedCount, hereLabel, issueUrl, linkedPrCount, planLevelBullets, shortRef } from './describe';
 import { LevelBullets } from './LevelBullets';
-import type { PlanHandlers } from './types';
+import { HTML } from '../../session-list/markup';
+import type { PlanHandlers, PlanPinControl } from './types';
 
-export function PlanHeader({ plan, layout, on }: { plan: Plan; layout: PlanLayout; on: PlanHandlers }): JSX.Element {
+export function PlanHeader(
+  { plan, layout, on, pin }: { plan: Plan; layout: PlanLayout; on: PlanHandlers; pin?: PlanPinControl },
+): JSX.Element {
   const bullets = planLevelBullets(layout);
   return (
     <div className="pv-header">
@@ -38,7 +42,20 @@ export function PlanHeader({ plan, layout, on }: { plan: Plan; layout: PlanLayou
             </>
           )}
         </div>
-        <h2 className="pv-title">{plan.title}</h2>
+        <div className="pv-title-row">
+          {pin && (
+            <button
+              type="button"
+              className={'pv-pin' + (pin.pinned ? ' pinned' : '')}
+              data-testid="plan-page-pin"
+              title={pin.pinned ? 'Unpin plan' : 'Pin plan to the top of the sidebar'}
+              aria-pressed={pin.pinned}
+              dangerouslySetInnerHTML={pin.pinned ? HTML.pinFilled : HTML.pinOutline}
+              onClick={pin.toggle}
+            />
+          )}
+          <h2 className="pv-title">{plan.title}</h2>
+        </div>
       </div>
       <div className="pv-stats">
         <div className="pv-counts">

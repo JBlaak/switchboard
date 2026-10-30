@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  layoutSessionList, listItems, orderEntries, rowId, slugId, truncateEntries,
+  layoutSessionList, listItems, layoutRows, orderEntries, planPinId, rowId, slugId, truncateEntries,
 } from '../src/renderer/state/session-list-layout';
 import {
   TIER_ATTENTION, TIER_PINNED, TIER_PINNED_PLAN, TIER_READY, TIER_REST, TIER_RUNNING, sessionTier,
@@ -385,6 +385,59 @@ test('pinning a plan pins only that plan in that project', () => {
   /* Then */
   assert.deepEqual(laid.visible.map(l => [l.entry.id, l.tier]),
     [[slugId('plan', '/one'), TIER_PINNED_PLAN], [slugId('plan', '/two'), TIER_REST]]);
+});
+
+const issuePlan = (number: number, pinnedAt: number) => ({ repository: 'acme/app', number, title: 'Plan ' + number, pinnedAt });
+
+test('a GitHub plan pinned from its page sits under Pinned plans, as a row that opens it', () => {
+  /* Given */
+  const projects = [project('/p', [session('asking', { modified: at(0) })], { pinnedIssuePlans: [issuePlan(12, NOW - 30 * DAY)] })];
+
+  /* When */
+  const { layout: laid } = layout(projects, { tierOf: () => TIER_ATTENTION });
+
+  /* Then */
+  assert.deepEqual(laid.visible.map(l => [l.entry.id, l.tier]),
+    [[planPinId('/p', 'acme/app', 12), TIER_PINNED_PLAN], [r('asking'), TIER_ATTENTION]]);
+  assert.deepEqual(laid.visible[0].entry, {
+    kind: 'plan', id: planPinId('/p', 'acme/app', 12), projectPath: '/p', repository: 'acme/app', number: 12, title: 'Plan 12',
+  });
+});
+
+test('a pinned GitHub plan shows in a project with no sessions, and holds no rows', () => {
+  /* Given */
+  const projects = [project('/empty', [], { pinnedIssuePlans: [issuePlan(12, NOW)] })];
+
+  /* When */
+  const { layout: laid } = layout(projects);
+
+  /* Then */
+  assert.deepEqual(ids(laid.visible), [planPinId('/empty', 'acme/app', 12)]);
+  assert.deepEqual(layoutRows(laid), []);
+});
+
+test('pinned GitHub plans list the latest pin first', () => {
+  /* Given */
+  const projects = [project('/p', [], { pinnedIssuePlans: [issuePlan(1, NOW - DAY), issuePlan(2, NOW)] })];
+
+  /* When */
+  const { layout: laid } = layout(projects);
+
+  /* Then */
+  assert.deepEqual(ids(laid.visible), [planPinId('/p', 'acme/app', 2), planPinId('/p', 'acme/app', 1)]);
+});
+
+test('a filter or a search leaves pinned GitHub plans out', () => {
+  /* Given */
+  const projects = [project('/p', [session('a', { starred: 1 })], { pinnedIssuePlans: [issuePlan(12, NOW)] })];
+
+  /* When */
+  const starred = layout(projects, { filters: { ...inputs().filters, showStarredOnly: true } }, { filtering: true });
+  const search = layout(projects, { filters: { ...inputs().filters, searchMatchIds: new Set(['a']) } }, { filtering: true });
+
+  /* Then */
+  assert.deepEqual(ids(starred.layout.visible), [r('a')]);
+  assert.deepEqual(ids(search.layout.visible), [r('a')]);
 });
 
 test('a pinned plan never folds away, however old', () => {

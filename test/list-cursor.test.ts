@@ -6,7 +6,7 @@ import {
 import { initialSessionListState } from '../src/renderer/state/session-list-slice';
 import { TIER_REST } from '../src/domain/session/tiers';
 import type { SessionListState } from '../src/renderer/state/session-list-slice';
-import type { LaidEntry, SessionListGroup, SessionListRow } from '../src/renderer/state/session-list-layout';
+import type { LaidEntry, SessionListGroup, SessionListPlan, SessionListRow } from '../src/renderer/state/session-list-layout';
 import type { SessionRow } from '../src/domain/session/session';
 
 function session(id: string): SessionRow {
@@ -25,11 +25,17 @@ function group(id: string, ...ids: string[]): SessionListGroup {
   return { kind: 'group', id, slug: id, projectPath: '/p', sessions: ids.map(row) };
 }
 
-const laid = (entry: SessionListRow | SessionListGroup): LaidEntry => ({ entry, tier: TIER_REST });
+function plan(id: string): SessionListPlan {
+  return { kind: 'plan', id, projectPath: '/p', repository: 'acme/app', number: 12, title: 'Plan' };
+}
+
+type Entry = SessionListRow | SessionListGroup | SessionListPlan;
+
+const laid = (entry: Entry): LaidEntry => ({ entry, tier: TIER_REST });
 
 function list(
-  visible: (SessionListRow | SessionListGroup)[],
-  older: (SessionListRow | SessionListGroup)[] = [],
+  visible: Entry[],
+  older: Entry[] = [],
   extra: Partial<SessionListState> = {},
 ): SessionListState {
   return {
@@ -61,6 +67,20 @@ test('the targets run in render order', () => {
 
   /* Then */
   assert.deepEqual(targets.map(t => t.name), ['si-a', 'header:slug-g', 'si-b', 'si-c', 'si-d', 'older-all', 'si-e']);
+});
+
+test('a pinned GitHub plan is one target that opens its page, and no session', () => {
+  /* Given */
+  const state = list([plan('plan-x'), row('a')]);
+
+  /* When */
+  const targets = cursorTargets(state, NONE);
+
+  /* Then */
+  assert.deepEqual(targets[0], {
+    kind: 'plan', name: 'plan-x', shown: true, projectPath: '/p', repository: 'acme/app', number: 12,
+  });
+  assert.deepEqual(rowOrder(targets), ['a']);
 });
 
 test('a folded group and a closed older list hide their rows', () => {
