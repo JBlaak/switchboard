@@ -1,6 +1,6 @@
 {
   "name": "switchboard",
-  "version": "2.11.4",
+  "version": "2.11.5",
   "private": true,
   "description": "A desktop app for browsing, searching, and managing CLI coding sessions",
   "author": "Joris Blaak <joris@movelab.studio>",
