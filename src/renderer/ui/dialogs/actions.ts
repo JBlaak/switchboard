@@ -9,6 +9,7 @@ import { dispatch } from '../../state/app-store';
 import { loadProjects } from '../../features/sessions/session-list';
 import { archiveSessionRow, launchClaudeSession } from '../../features/sessions/session-actions';
 import { pollActiveSessions } from '../../features/sessions/session-poller';
+import { offerArchiveUndo, sessionOnScreen } from '../archive-undo/actions';
 import { projectLabel } from '../../features/sessions/project-label';
 import { localProjectRequest, remoteProjectRequest } from './add-project-request';
 import type { RemoteFields } from './add-project-request';
@@ -135,11 +136,15 @@ export async function archiveAllSessions(project: Project): Promise<boolean> {
   const plural = sessions.length > 1 ? 's' : '';
   if (!confirm(`Archive all ${sessions.length} session${plural} in ${projectLabel(project.projectPath)}?`)) return false;
 
+  const onScreen = sessionOnScreen();
+  const archived: SessionRow[] = [];
   for (const session of sessions) {
     // One failure stops the sweep rather than silently skipping a session whose
     // PTY is still running.
     if (!await archiveSessionRow(session, 1)) break;
+    archived.push(session);
   }
+  offerArchiveUndo(archived, [], onScreen);
 
   void pollActiveSessions();
   await loadProjects();

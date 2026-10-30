@@ -14,7 +14,8 @@ import { openDialog } from '../ui/dialogs/actions';
 import { handleSessionNavKey } from '../features/terminal/session-nav';
 import { isSessionWorkKey, toggleSessionWork } from '../ui/session-work/actions';
 import { isSidebarToggleKey, toggleSidebar } from '../ui/toolbar/actions';
-import { isTasksPageKey } from '../lib/shortcut-keys';
+import { isTasksPageKey, isUndoArchiveKey } from '../lib/shortcut-keys';
+import { undoArchive } from '../ui/archive-undo/actions';
 import { toggleTasksPage } from '../ui/tasks-page/actions';
 import { getState } from '../state/app-store';
 import {
@@ -53,6 +54,12 @@ export function installShortcuts(): void {
     if (isArchiveSessionKey(e)) {
       e.preventDefault();
       archiveActiveSession();
+    }
+
+    // Cmd+Z, while the Undo toast is up, takes the archive back.
+    if (isUndoArchiveKey(e) && getState().archiveUndo.undo) {
+      e.preventDefault();
+      void undoArchive();
     }
 
     // Cmd+G opens or closes the Session work page of the session on screen.

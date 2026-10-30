@@ -34,6 +34,7 @@ import type { ProjectPageEvent } from './project-page-slice';
 import type { TasksPageEvent } from './tasks-slice';
 import type { PhoneAccessEvent } from './phone-access-slice';
 import type { SessionTaskEvent } from './session-task-slice';
+import type { ArchiveUndoEvent } from './archive-undo-slice';
 import type { ViewState } from './view-slice';
 import type { DraftAction } from '../../domain/questions/answer-draft';
 import type { QuestionView } from './answers-slice';
@@ -316,7 +317,7 @@ export type LocalEvent =
 
 export type RendererEvent =
   | PushEvent | LocalEvent | ToolbarEvent | SessionListEvent | ProjectPageEvent | PhoneAccessEvent | SessionTaskEvent
-  | TasksPageEvent;
+  | TasksPageEvent | ArchiveUndoEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

@@ -20,6 +20,7 @@ import {
 import { doze, wakeUp } from '../../lib/motion/sleep';
 import { pollActiveSessions } from '../../features/sessions/session-poller';
 import { celebrateFrom, isLeaving, leave } from './leave';
+import { offerArchiveUndo, sessionOnScreen } from '../archive-undo/actions';
 import type { SessionRow } from '../../../domain/session/session';
 
 // ── Opening and the empty space ──
@@ -102,8 +103,10 @@ export function toggleArchive(el: HTMLElement, rowId: string, sessionId: string,
     return;
   }
   celebrateFrom(button);
+  const onScreen = sessionOnScreen();
   leave(el, rowId, async () => {
     if (!await archiveSessionRow(session, 1)) return false;
+    offerArchiveUndo([session], [rowId], onScreen);
     void pollActiveSessions();
     void loadProjects();
     return true;
@@ -147,8 +150,10 @@ export function archiveGroup(el: HTMLElement, groupId: string, sessionIds: reado
   if (!sessions.length) return;
 
   celebrateFrom(button);
+  const onScreen = sessionOnScreen();
   leave(el, groupId, async () => {
     let ok = true;
+    const archived: SessionRow[] = [];
     for (const session of sessions) {
       // One failure stops the sweep rather than silently skipping a session
       // whose PTY is still running.
@@ -156,7 +161,10 @@ export function archiveGroup(el: HTMLElement, groupId: string, sessionIds: reado
         ok = false;
         break;
       }
+      archived.push(session);
     }
+    // A failed sweep brings the group back, so only the archived rows are undone.
+    offerArchiveUndo(archived, ok ? [groupId] : [], onScreen);
     void pollActiveSessions();
     void loadProjects();
     return ok;
