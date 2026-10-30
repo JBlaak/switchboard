@@ -9,6 +9,7 @@
  * follow at once (see `rekeyState`).
  */
 import { activityReducer, initialActivityState, rekeyActivity } from './activity-slice';
+import { archiveUndoReducer, initialArchiveUndoState, rekeyArchiveUndo } from './archive-undo-slice';
 import { askReducer, initialAskState } from './ask-slice';
 import { answersReducer, followPending, initialAnswersState } from './answers-slice';
 import { ciStatusReducer, initialCiStatusState, rekeyCiStatus } from './ci-status-slice';
@@ -33,6 +34,7 @@ import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, rekeyView, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
 import type { AnswersState } from './answers-slice';
+import type { ArchiveUndoState } from './archive-undo-slice';
 import type { AskState } from './ask-slice';
 import type { CiStatusState } from './ci-status-slice';
 import type { DialogState } from './dialog-slice';
@@ -80,6 +82,7 @@ export interface RendererState {
   readonly ask: AskState;
   readonly phoneAccess: PhoneAccessSliceState;
   readonly sessionTask: SessionTaskState;
+  readonly archiveUndo: ArchiveUndoState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -107,6 +110,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     ask: initialAskState,
     phoneAccess: initialPhoneAccessState,
     sessionTask: initialSessionTaskState,
+    archiveUndo: initialArchiveUndoState,
   };
 }
 
@@ -142,10 +146,11 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   const phoneAccess = phoneAccessReducer(state.phoneAccess, event);
   // Link task… follows the BlaakTasks switch as this event left it.
   const sessionTask = sessionTaskReducer(state.sessionTask, event, tasks.enabled);
+  const archiveUndo = archiveUndoReducer(state.archiveUndo, event);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList, sessionWork, plan, mainArea, projectPage, tasks, ciStatus, ask, phoneAccess, sessionTask,
+    terminal, sessionList, sessionWork, plan, mainArea, projectPage, tasks, ciStatus, ask, phoneAccess, sessionTask, archiveUndo,
   });
 }
 
@@ -196,6 +201,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     phoneAccess: rekeyPhoneAccess(state.phoneAccess, oldId, newId),
     // A re-keyed session keeps its task.
     sessionTask: rekeySessionTask(state.sessionTask, oldId, newId),
+    // An archive taken back brings the session back under its new id.
+    archiveUndo: rekeyArchiveUndo(state.archiveUndo, oldId, newId),
   });
 }
 

@@ -359,12 +359,9 @@
 }
 
 /* ---- The archive's offer ---- */
+/* Placed by `.main-floats` (_archive-undo.scss), under the Undo toast. */
 .st-offer {
-  position: absolute;
-  right: 20px;
-  bottom: 20px;
-  z-index: 40;
-  max-width: min(480px, calc(100% - 40px));
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;

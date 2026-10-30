@@ -33,6 +33,14 @@ export function isArchiveSessionKey(e: KeyboardEvent): boolean {
 }
 
 /**
+ * Cmd+Z takes the last archive back while its Undo toast is up (the caller
+ * checks that), with the same text-field exception: there it undoes typing.
+ */
+export function isUndoArchiveKey(e: KeyboardEvent): boolean {
+  return isCommandKey(e, 'KeyZ');
+}
+
+/**
  * Cmd+, opens the project's settings while its page has the keyboard (#176).
  * Free everywhere else: the app menu has no Settings item to claim it.
  */

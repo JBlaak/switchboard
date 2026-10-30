@@ -80,6 +80,24 @@ test('lists, folds, searches, archives and filters what the index found', async 
   await expect(sessionRow(page, LABEL.releaseNotes)).toHaveCount(0);
 });
 
+test('Undo on the toast brings an archived row back', async ({ page }) => {
+  /* Given */
+  const charts = sessionRow(page, LABEL.chartsDarkMode);
+  await charts.hover();
+  await rowButton(charts, 'Archive').click();
+  await expect(charts).toHaveCount(0);
+  const toast = page.getByTestId('archive-undo');
+  await expect(toast).toContainText(`Archived “${LABEL.chartsDarkMode}”`);
+
+  /* When */
+  await toast.getByRole('button', { name: /Undo/ }).click();
+
+  /* Then */
+  await expect(toast).toHaveCount(0);
+  await expect(charts).toBeVisible();
+  await expect(charts).not.toHaveAttribute('data-leaving');
+});
+
 forEachAppearance(() => {
   test('sidebar screens', async ({ page, home }) => {
     /* Then */
