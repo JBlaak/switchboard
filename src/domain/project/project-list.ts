@@ -10,7 +10,7 @@
 import { encodeProjectPath } from './project-path';
 import { remoteProjectPath } from './remote-target';
 import { byMostRecentlyModified, toSessionRow } from '../session/session';
-import type { Project } from './project';
+import type { PinnedIssuePlan, Project } from './project';
 import type { CachedSession, SessionMeta, SessionRow } from '../session/session';
 import type { RemoteProjectSetting } from '../settings/settings';
 
@@ -18,6 +18,11 @@ import type { RemoteProjectSetting } from '../settings/settings';
 export interface PlanPin {
   projectPath: string;
   slug: string;
+}
+
+/** A GitHub plan pinned to the top of the session list from its page, in one project. */
+export interface IssuePlanPin extends PinnedIssuePlan {
+  projectPath: string;
 }
 
 /** A plain terminal, which has no transcript and lives only while it runs. */
@@ -43,6 +48,7 @@ export interface ProjectListInputs {
   activeTerminals: Iterable<ActiveTerminalRow>;
   remoteProjects: Iterable<RemoteProjectSetting>;
   pinnedPlans: Iterable<PlanPin>;
+  pinnedIssuePlans: Iterable<IssuePlanPin>;
   showArchived: boolean;
 }
 
@@ -146,6 +152,10 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
   for (const pin of inputs.pinnedPlans) {
     const project = projects.get(pin.projectPath);
     if (project) (project.pinnedPlans ??= []).push(pin.slug);
+  }
+  for (const { projectPath, ...pin } of inputs.pinnedIssuePlans) {
+    const project = projects.get(projectPath);
+    if (project) (project.pinnedIssuePlans ??= []).push(pin);
   }
 
   const list = [...projects.values()];

@@ -170,6 +170,40 @@ test.describe('plans and issues', () => {
     await expect(plansSection(page).getByRole('button', { name: 'Collapse plan Login rework' })).toBeVisible();
   });
 
+  test('the pin on a plan’s page puts it under Pinned plans, as a row that opens the page and unpins it', async ({ page }) => {
+    /* Given */
+    const planPage = page.getByRole('region', { name: /^Plan in / });
+    const pinnedRow = sidebar(page).locator('.pinned-plan-item').filter({ hasText: 'Login rework' });
+    await rowProjectLink(page, S.loginFix).click();
+    await expect(plansSection(page).getByText('Login rework', { exact: true })).toBeVisible();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await expect(planPage.getByRole('heading', { name: 'Login rework' })).toBeVisible();
+
+    /* When */
+    await planPage.getByTestId('plan-page-pin').click();
+
+    /* Then */
+    await expect(planPage.getByTestId('plan-page-pin')).toHaveAttribute('aria-pressed', 'true');
+    await expect(sidebar(page).getByText('Pinned plans', { exact: true })).toBeVisible();
+    await expect(pinnedRow).toHaveClass(/\bactive\b/);
+
+    /* When */
+    await page.keyboard.press('Meta+BracketLeft');
+    await pinnedRow.click();
+
+    /* Then */
+    await expect(planPage.getByRole('heading', { name: 'Login rework' })).toBeVisible();
+
+    /* When */
+    await pinnedRow.getByTestId('issue-plan-pin').click();
+
+    /* Then */
+    await expect(pinnedRow).toHaveCount(0);
+    await expect(sidebar(page).getByText('Pinned plans', { exact: true })).toHaveCount(0);
+    await expect(planPage.getByTestId('plan-page-pin')).toHaveAttribute('aria-pressed', 'false');
+  });
+
   test('/ filters the rows by text, and Esc clears the filter before it closes the page', async ({ page }) => {
     /* Given */
     await rowProjectLink(page, S.loginFix).click();

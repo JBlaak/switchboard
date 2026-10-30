@@ -119,6 +119,18 @@ const TABLES = [
     slug TEXT NOT NULL,
     PRIMARY KEY (project_path, slug)
   )`,
+  // The GitHub plans pinned to the top of the session list, from the plan's
+  // own page. Keyed on the project the page was in and the plan's issue; the
+  // title is kept as it was when pinned, so the row needs no GitHub call.
+  // Epoch ms for pinned_at.
+  `CREATE TABLE IF NOT EXISTS pinned_issue_plans (
+    project_path TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    pinned_at INTEGER NOT NULL,
+    PRIMARY KEY (project_path, repository, number)
+  )`,
   // When a session was unlinked from its task by hand, so detection does not
   // relink it from a tool call made before (#245). Epoch ms.
   `CREATE TABLE IF NOT EXISTS task_unlinks (

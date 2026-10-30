@@ -53,6 +53,8 @@ function fakeRepository(meta: Map<string, FolderMeta>) {
     setSnoozedUntil() {},
     getPinnedPlans: () => [],
     togglePlanPin: () => false,
+    getPinnedIssuePlans: () => [],
+    toggleIssuePlanPin: () => false,
 
     isCachePopulated: () => cached.size > 0,
     getAllCached: () => [...cached.values()],

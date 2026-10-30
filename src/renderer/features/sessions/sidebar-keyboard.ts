@@ -25,6 +25,7 @@ import {
 } from '../../state/list-cursor';
 import { openSessions } from '../../state/session-store';
 import { openDialog } from '../../ui/dialogs/actions';
+import { openPlanPage } from '../../ui/plan-page/actions';
 import {
   expandSlugGroup, openRow, startRename, toggleOlder, toggleSlugGroup,
 } from '../../ui/session-list/actions';
@@ -125,6 +126,9 @@ function activateCursor(): void {
   switch (cursor.kind) {
     case 'row':
       openRow(cursor.name, cursor.sessionId, cursor.groupId);
+      return;
+    case 'plan':
+      openPlanPage(cursor);
       return;
     case 'header':
       toggleSlugGroup(cursor.groupId);

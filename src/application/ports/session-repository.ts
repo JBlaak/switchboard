@@ -8,7 +8,7 @@
  * transaction boundary in the adapter, but nothing above it may confuse them.
  */
 import type { CachedSession, FolderMeta, SessionMeta } from '../../domain/session/session';
-import type { PlanPin } from '../../domain/project/project-list';
+import type { IssuePlanPin, PlanPin } from '../../domain/project/project-list';
 
 export interface SessionRepository {
   // ── Metadata: the user's own state, which no re-index may touch ──
@@ -24,6 +24,10 @@ export interface SessionRepository {
   getPinnedPlans(): PlanPin[];
   /** Pins or unpins a plan and answers whether it is pinned now. */
   togglePlanPin(projectPath: string, slug: string): boolean;
+  /** Every GitHub plan pinned from its page, oldest pin first. */
+  getPinnedIssuePlans(): IssuePlanPin[];
+  /** Pins or unpins a GitHub plan in a project and answers whether it is pinned now. */
+  toggleIssuePlanPin(projectPath: string, repository: string, number: number, title: string): boolean;
 
   // ── Cache: a rebuildable copy of what the transcripts say ──
   isCachePopulated(): boolean;

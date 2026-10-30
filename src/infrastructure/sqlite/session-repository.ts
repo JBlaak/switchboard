@@ -9,7 +9,7 @@
 import type Database from 'better-sqlite3';
 import { decodePullRequests } from '../../domain/session/pull-requests';
 import type { CachedSession, FolderMeta, SessionMeta } from '../../domain/session/session';
-import type { PlanPin } from '../../domain/project/project-list';
+import type { IssuePlanPin, PlanPin } from '../../domain/project/project-list';
 import type { SessionRepository } from '../../application/ports/session-repository';
 
 /** A `session_cache` row as SQLite hands it back: the PR list is still JSON text. */
@@ -31,6 +31,9 @@ export class SqliteSessionRepository implements SessionRepository {
   readonly #planPinsGetAll;
   readonly #planPinInsert;
   readonly #planPinDelete;
+  readonly #issuePlanPinsGetAll;
+  readonly #issuePlanPinInsert;
+  readonly #issuePlanPinDelete;
 
   readonly #cacheCount;
   readonly #cacheGetAll;
@@ -74,6 +77,12 @@ export class SqliteSessionRepository implements SessionRepository {
       'INSERT OR IGNORE INTO pinned_plans (project_path, slug) VALUES (?, ?)');
     this.#planPinDelete = db.prepare<[string, string]>(
       'DELETE FROM pinned_plans WHERE project_path = ? AND slug = ?');
+    this.#issuePlanPinsGetAll = db.prepare<[], { project_path: string; repository: string; number: number; title: string; pinned_at: number }>(
+      'SELECT project_path, repository, number, title, pinned_at FROM pinned_issue_plans ORDER BY pinned_at');
+    this.#issuePlanPinInsert = db.prepare<[string, string, number, string, number]>(
+      'INSERT OR IGNORE INTO pinned_issue_plans (project_path, repository, number, title, pinned_at) VALUES (?, ?, ?, ?, ?)');
+    this.#issuePlanPinDelete = db.prepare<[string, string, number]>(
+      'DELETE FROM pinned_issue_plans WHERE project_path = ? AND repository = ? AND number = ?');
 
     this.#cacheCount = db.prepare<[], { cnt: number }>('SELECT COUNT(*) as cnt FROM session_cache');
     this.#cacheGetAll = db.prepare<[], CachedSessionRow>('SELECT * FROM session_cache');
@@ -157,6 +166,22 @@ export class SqliteSessionRepository implements SessionRepository {
   togglePlanPin(projectPath: string, slug: string): boolean {
     if (this.#planPinDelete.run(projectPath, slug).changes > 0) return false;
     this.#planPinInsert.run(projectPath, slug);
+    return true;
+  }
+
+  getPinnedIssuePlans(): IssuePlanPin[] {
+    return this.#issuePlanPinsGetAll.all().map(row => ({
+      projectPath: row.project_path,
+      repository: row.repository,
+      number: row.number,
+      title: row.title,
+      pinnedAt: row.pinned_at,
+    }));
+  }
+
+  toggleIssuePlanPin(projectPath: string, repository: string, number: number, title: string): boolean {
+    if (this.#issuePlanPinDelete.run(projectPath, repository, number).changes > 0) return false;
+    this.#issuePlanPinInsert.run(projectPath, repository, number, title, Date.now());
     return true;
   }
 

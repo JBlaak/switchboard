@@ -35,6 +35,7 @@ export class ProjectListService {
       activeTerminals: this.#activeTerminals(registry),
       remoteProjects: settings.remoteProjects(),
       pinnedPlans: repository.getPinnedPlans(),
+      pinnedIssuePlans: repository.getPinnedIssuePlans(),
       showArchived,
     });
   }
