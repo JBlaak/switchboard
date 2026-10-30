@@ -166,6 +166,14 @@ const MIGRATIONS: Migration[] = [
   // v4: superseded — fileMtime is added by the reconciliation below, keyed on
   // column presence rather than a version number.
   () => {},
+  // v5: clear the cache so sessions a tool ran with `claude -p` drop out of it.
+  // They are no longer listed, but a cached one whose transcript never changes
+  // again would otherwise stay. Only a cache: a database a parallel branch
+  // already took past v5 keeps a few stale rows, nothing worse.
+  (db) => {
+    try { db.exec('DELETE FROM session_cache'); } catch {}
+    try { db.exec('DELETE FROM cache_meta'); } catch {}
+  },
 ];
 
 function readVersion(db: Database.Database): number {

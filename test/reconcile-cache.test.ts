@@ -30,6 +30,15 @@ function writeSession(folderPath: string, cwd: string): void {
   fs.writeFileSync(path.join(folderPath, 'session.jsonl'), line + '\n', 'utf8');
 }
 
+/** A transcript a tool ran with `claude -p`, as the CLI writes it. */
+function writeHeadlessSession(folderPath: string, cwd: string, name = 'headless.jsonl'): void {
+  fs.mkdirSync(folderPath, { recursive: true });
+  const line = JSON.stringify({
+    type: 'user', cwd, entrypoint: 'sdk-cli', message: { role: 'user', content: 'Answer this question' },
+  });
+  fs.writeFileSync(path.join(folderPath, name), line + '\n', 'utf8');
+}
+
 /** An in-memory repository that records which folders actually got re-indexed. */
 function fakeRepository(meta: Map<string, FolderMeta>) {
   const indexedFolders = new Set<string>();
@@ -202,6 +211,66 @@ test('a folder that disappears is forgotten entirely', () => {
 
     /* When */
     fs.rmSync(folderPath, { recursive: true });
+    index.refreshFolder('proj');
+
+    /* Then */
+    assert.equal(cached.size, 0);
+  } finally {
+    fs.rmSync(projectsDir, { recursive: true, force: true });
+  }
+});
+
+test('a folder holding only headless runs is not recorded as a project', () => {
+  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-headless-'));
+  try {
+    /* Given */
+    writeHeadlessSession(path.join(projectsDir, 'yab-agent'), '/tmp/yab-agent');
+    const meta = new Map<string, FolderMeta>();
+    const { index, cached } = build(projectsDir, meta);
+
+    /* When */
+    index.reconcile();
+
+    /* Then */
+    assert.equal(cached.size, 0);
+    assert.equal(meta.get('yab-agent')?.projectPath, null);
+  } finally {
+    fs.rmSync(projectsDir, { recursive: true, force: true });
+  }
+});
+
+test('a headless run beside a coding session leaves the project listed, without the run', () => {
+  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-headless-mixed-'));
+  try {
+    /* Given */
+    writeSession(path.join(projectsDir, 'proj'), '/tmp/proj');
+    writeHeadlessSession(path.join(projectsDir, 'proj'), '/tmp/proj');
+    const meta = new Map<string, FolderMeta>();
+    const { index, cached } = build(projectsDir, meta);
+
+    /* When */
+    index.reconcile();
+
+    /* Then */
+    assert.deepEqual([...cached.keys()], ['session']);
+    assert.equal(meta.get('proj')?.projectPath, '/tmp/proj');
+  } finally {
+    fs.rmSync(projectsDir, { recursive: true, force: true });
+  }
+});
+
+test('a cached session whose transcript turns out headless leaves the cache', () => {
+  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-headless-cached-'));
+  try {
+    /* Given */
+    writeSession(path.join(projectsDir, 'proj'), '/tmp/proj');
+    const { index, cached } = build(projectsDir, new Map());
+    index.refreshFolder('proj');
+    writeHeadlessSession(path.join(projectsDir, 'proj'), '/tmp/proj', 'session.jsonl');
+    const later = new Date(Date.now() + 5000);
+    fs.utimesSync(path.join(projectsDir, 'proj', 'session.jsonl'), later, later);
+
+    /* When */
     index.refreshFolder('proj');
 
     /* Then */

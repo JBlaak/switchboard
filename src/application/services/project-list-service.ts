@@ -53,7 +53,10 @@ export class ProjectListService {
     try {
       const meta = repository.getAllFolderMeta();
       for (const folder of transcripts.listFolders()) {
-        let projectPath = meta.get(folder)?.projectPath ?? null;
+        const known = meta.get(folder);
+        // Indexed and found not to be a project (see `SessionIndex`): leave it be.
+        if (known && known.projectPath === null && known.indexMtimeMs > 0) continue;
+        let projectPath = known?.projectPath ?? null;
         if (!projectPath) {
           projectPath = transcripts.resolveProjectPath(folder);
           if (projectPath) repository.setFolderMeta(folder, projectPath, 0);
