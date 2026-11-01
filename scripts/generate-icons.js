@@ -53,21 +53,25 @@ if (!fs.existsSync(pngPath)) {
 
 // Create a padded icon (macOS expects ~80% inset with transparent border)
 // then use iconutil for perfect transparency support
-const paddedPath = path.join(OUTPUT_DIR, 'icon-padded.png');
-// Create a 1024x1024 transparent canvas with the icon at 80% centered
 const PADDED_SIZE = 1024;
 const INSET = Math.round(PADDED_SIZE * 0.1); // 10% padding on each side = 80% content
 const INNER = PADDED_SIZE - INSET * 2;
-execSync(`sips -z ${INNER} ${INNER} "${pngPath}" --out "${paddedPath}"`, { stdio: 'ignore' });
-// Use sips to pad: create blank canvas then composite
-// sips can't composite easily, so use a Python one-liner with CoreImage
-execSync(`python3 -c "
+
+/** Write `src` onto a 1024x1024 transparent canvas at 80%, centered, as `dest`. */
+function pad(src, dest) {
+  execSync(`sips -z ${INNER} ${INNER} "${src}" --out "${dest}"`, { stdio: 'ignore' });
+  // sips can't composite easily, so use a Python one-liner with PIL
+  execSync(`python3 -c "
 from PIL import Image
 bg = Image.new('RGBA', (${PADDED_SIZE}, ${PADDED_SIZE}), (0, 0, 0, 0))
-fg = Image.open('${paddedPath}').convert('RGBA')
+fg = Image.open('${dest}').convert('RGBA')
 bg.paste(fg, (${INSET}, ${INSET}), fg)
-bg.save('${paddedPath}')
+bg.save('${dest}')
 "`, { stdio: 'inherit' });
+}
+
+const paddedPath = path.join(OUTPUT_DIR, 'icon-padded.png');
+pad(pngPath, paddedPath);
 
 const iconsetDir = path.join(OUTPUT_DIR, 'icon.iconset');
 fs.mkdirSync(iconsetDir, { recursive: true });
@@ -91,5 +95,13 @@ execSync(`iconutil -c icns "${iconsetDir}" -o "${icnsPath}"`, { stdio: 'ignore' 
 fs.rmSync(iconsetDir, { recursive: true });
 fs.unlinkSync(paddedPath);
 console.log(`Created ${icnsPath} (with macOS padding)`);
+
+// The Dock icons the App Icon setting switches between at runtime. They get the
+// same inset as the .icns, so a swapped icon sits in the Dock at the same size.
+const dockDir = path.join(OUTPUT_DIR, 'dock');
+fs.mkdirSync(dockDir, { recursive: true });
+pad(pngPath, path.join(dockDir, 'switchboard.png'));
+pad(path.join(OUTPUT_DIR, 'icon-patch.png'), path.join(dockDir, 'patch.png'));
+console.log(`Created Dock icons in ${dockDir}`);
 
 console.log('Icon generation complete.');
