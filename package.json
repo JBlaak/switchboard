@@ -25,7 +25,9 @@
         "release": "npm run build && electron-builder --publish always",
         "postinstall": "node scripts/postinstall.js",
         "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,scss,md,html,yml}\"",
-        "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,scss,md,html,yml}\""
+        "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,scss,md,html,yml}\"",
+        "lint": "eslint -c ./eslint.json \"./{src,test,e2e}/**/*.{ts,tsx,js,mjs}\"",
+        "lint:fix": "eslint -c ./eslint.json \"./{src,test,e2e}/**/*.{ts,tsx,js,mjs}\" --fix"
     },
     "dependencies": {
         "@fontsource-variable/mulish": "^5.3.0",
@@ -54,10 +56,14 @@
         "@types/react": "^19.3.0",
         "@types/react-dom": "^19.3.0",
         "@types/ws": "^8.18.2",
+        "@typescript-eslint/eslint-plugin": "^6.21.0",
+        "@typescript-eslint/parser": "^6.21.0",
         "electron": "^41.0.0",
         "electron-builder": "^26.0.0",
         "electron-reloader": "^1.2.3",
         "esbuild": "^0.27.3",
+        "eslint": "^8.57.1",
+        "eslint-plugin-react": "^7.37.5",
         "prettier": "^3.9.10",
         "sass": "^1.104.0",
         "tsx": "^4.23.13",
@@ -124,6 +130,20 @@
                     "path": "/Applications"
                 }
             ]
+        }
+    },
+    "overrides": {
+        "@typescript-eslint/typescript-estree": {
+            "typescript": "5.3.3"
+        },
+        "@typescript-eslint/type-utils": {
+            "typescript": "5.3.3"
+        },
+        "@typescript-eslint/utils": {
+            "typescript": "5.3.3"
+        },
+        "ts-api-utils": {
+            "typescript": "5.3.3"
         }
     }
 }
