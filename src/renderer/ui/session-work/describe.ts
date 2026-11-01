@@ -18,6 +18,7 @@ import {shipSteps, type ShipStepState} from '../../../domain/session-work/ship';
 import {MAX_AUTO_FIX_ATTEMPTS} from '../../../domain/session-work/auto-fix';
 import {IMAGE_AUTO_LOAD_BYTES} from '../../../domain/session-work/image';
 import type {FileImage} from '../../../domain/session-work/model';
+import type {RefinementSummary} from '../../../domain/session-work/refinement';
 import {formatBytes} from './image-compare/image-meta';
 import type {ImageMode} from './image-compare/modes/types';
 import type {Background} from './image-compare/types';
@@ -439,6 +440,24 @@ export function fileStatusPill(file: FileDiff, untracked: boolean): Pill | null 
         case 'copied':
             return {label: 'Copied', tone: 'lavender'};
         case 'modified':
+            return null;
+    }
+}
+
+/**
+ * The pill for what OmniDiff says a file's change amounts to, beside its
+ * status pill: only when that is less than it looks (whitespace, comments, a
+ * move). Null for every other summary and when there is none.
+ */
+export function refinementPill(summary: RefinementSummary | null | undefined): Pill | null {
+    switch (summary) {
+        case 'whitespace_only':
+            return {label: 'Whitespace only', tone: 'grey'};
+        case 'comment_only':
+            return {label: 'Comments only', tone: 'grey'};
+        case 'refactor_moved_only':
+            return {label: 'Moved only', tone: 'grey'};
+        default:
             return null;
     }
 }

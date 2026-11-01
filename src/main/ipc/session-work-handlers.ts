@@ -1,6 +1,6 @@
 /**
  * The Session work page: opening and closing it, whether it can open, an
- * item's diff and the images in it, and handing an item to Claude. Its snapshots are pushed, not
+ * item's diff, the images in it and OmniDiff's refinement of its files, and handing an item to Claude. Its snapshots are pushed, not
  * asked for.
  */
 import {INVOKE, SEND} from '../../ipc/channels';
@@ -24,6 +24,9 @@ export function registerSessionWorkHandlers(ipc: IpcRegistrar, app: Container): 
             request.side,
         );
     });
+    ipc.handle(INVOKE.sessionWorkRefinement, (request: {sessionId: string; itemId: string; path: string}) =>
+        app.sessionWork.refinement(String(request?.sessionId), String(request?.itemId), String(request?.path)),
+    );
     ipc.handle(INVOKE.sessionWorkAction, (request: ActionRequest) =>
         app.sessionActions.request(request.sessionId, request.itemId, request.action, 'manual', {
             threadIds: threadIdsOf(request),

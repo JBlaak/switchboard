@@ -22,6 +22,7 @@
 import type {ElectronApplication} from '@playwright/test';
 import {EVENT, INVOKE, SEND} from '../../src/ipc/channels';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../../src/domain/session-work/model';
+import type {FileRefinement} from '../../src/domain/session-work/refinement';
 import type {ActionRequest} from '../../src/domain/session-work/actions';
 import type {CommentRequest, ReviewRequest} from '../../src/domain/session-work/review';
 import type {RemoteStatusPayload} from '../../src/domain/remote/remote-status';
@@ -159,11 +160,21 @@ export interface SessionWorkStub {
      * the real service would read for that side. A side not here has none.
      */
     images?: Record<string, string>;
+    /**
+     * What `sessionWorkRefinement` answers, by `refinementStubKey`: OmniDiff's
+     * marks for that file. A file not here has none.
+     */
+    refinements?: Record<string, FileRefinement>;
 }
 
 /** Where `SessionWorkStub.images` files one side of an image in an item's diff. */
 export function imageStubKey(itemId: string, path: string, side: 'before' | 'after'): string {
     return [itemId, path, side].join('\n');
+}
+
+/** Where `SessionWorkStub.refinements` files one file of an item's diff. */
+export function refinementStubKey(itemId: string, path: string): string {
+    return [itemId, path].join('\n');
 }
 
 export type GeocodeStub = {location: WeatherLocation | null; delayMs?: number} | 'fail';
@@ -295,6 +306,13 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                         const bytes = work.images?.[[request?.itemId, request?.path, request?.side].join('\n')];
                         return bytes ? new Uint8Array(Buffer.from(bytes, 'base64')) : null;
                     },
+                );
+                // The real one reads both sides at the diff's commits and runs OmniDiff on them.
+                ipcMain.removeHandler(channels.sessionWorkRefinement);
+                ipcMain.handle(
+                    channels.sessionWorkRefinement,
+                    (_event, request: {itemId: string; path: string}) =>
+                        work.refinements?.[[request?.itemId, request?.path].join('\n')] ?? null,
                 );
             }
 
