@@ -10,16 +10,21 @@ import type { UsageLimit } from '../../../domain/usage/usage';
 import type { UpdateNotice } from '../../../domain/update/release';
 import type { UpdateState } from '../../state/update-slice';
 
-/** Where a bar changes colour. */
-const HIGH_PERCENT = 80;
-const MID_PERCENT = 60;
+/**
+ * Where a bar changes colour. The weekly window turns later: it fills over
+ * days, so 60% of it is no cause for alarm the way 60% of five hours is.
+ */
+const THRESHOLDS = {
+  session: { mid: 60, high: 80 },
+  weekly: { mid: 80, high: 90 },
+} as const;
 
 export interface QuotaGaugeView {
   /** The short label on the gauge ("5h", "Week"). */
   readonly label: string;
   /** The full label, the percentage and the reset. */
   readonly tooltip: string;
-  /** The fill's classes, coloured from 60% and again from 80%. */
+  /** The fill's classes, coloured from mid and again from high (see THRESHOLDS). */
   readonly fillClass: string;
   /** The fill's CSS width. */
   readonly width: string;
@@ -28,7 +33,8 @@ export interface QuotaGaugeView {
 
 export function quotaGaugeView(row: UsageLimit): QuotaGaugeView {
   const { percent } = row;
-  const level = percent >= HIGH_PERCENT ? ' quota-high' : percent >= MID_PERCENT ? ' quota-mid' : '';
+  const { mid, high } = row.kind === 'weekly_all' ? THRESHOLDS.weekly : THRESHOLDS.session;
+  const level = percent >= high ? ' quota-high' : percent >= mid ? ' quota-mid' : '';
   return {
     label: shortUsageLabel(row),
     // The full label ("Week (all models)") is too long for a gauge row; the

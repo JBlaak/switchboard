@@ -36,6 +36,19 @@ export interface SessionIndexDeps {
 /** How long a finished status message stays in the status bar. */
 const STATUS_LINGER_MS = 5000;
 
+/**
+ * The project a folder is recorded under, or null when it is not one.
+ *
+ * A folder whose transcripts hold nothing to list — every one of them a run a
+ * tool made with `claude -p`, such as each of Yab's agent folders — is not a
+ * project, and recording it as one would put an empty project in the picker.
+ * A folder with no transcripts at all is still one: a project just added, or
+ * one whose only history is a subagent run.
+ */
+function folderProject(projectPath: string, listable: boolean, transcriptCount: number): string | null {
+  return listable || transcriptCount === 0 ? projectPath : null;
+}
+
 export class SessionIndex {
   #rebuilding = false;
 
@@ -88,7 +101,11 @@ export class SessionIndex {
       if (cachedMtimes.get(sessionId) === fingerprint) continue;
 
       const session = transcripts.readSession(folder, sessionId, projectPath);
-      if (!session) continue;
+      if (!session) {
+        // No longer one to list — a headless run, say — so it leaves the cache.
+        if (cachedMtimes.has(sessionId)) currentIds.delete(sessionId);
+        continue;
+      }
 
       sessionsToUpsert.push(session);
       const sources = titleSourcesFor(session, repository.getMeta(session.sessionId));
@@ -114,7 +131,10 @@ export class SessionIndex {
       searchIndex.deleteSession(sessionId);
     }
 
-    repository.setFolderMeta(folder, projectPath, transcripts.folderIndexMtimeMs(folder));
+    const listable = repository.getCachedFingerprints(folder).length > 0;
+    repository.setFolderMeta(
+      folder, folderProject(projectPath, listable, transcripts.listSessionIds(folder).length),
+      transcripts.folderIndexMtimeMs(folder));
   }
 
   /**
@@ -195,7 +215,9 @@ export class SessionIndex {
           body: session.textContent,
         })));
       }
-      repository.setFolderMeta(folder, projectPath, indexMtimeMs);
+      repository.setFolderMeta(
+        folder, folderProject(projectPath, sessions.length > 0, this.deps.transcripts.listSessionIds(folder).length),
+        indexMtimeMs);
     }
 
     this.#status(`Indexed ${sessionCount} sessions across ${results.length} projects`, 'done');

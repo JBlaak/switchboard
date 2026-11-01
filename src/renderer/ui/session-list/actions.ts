@@ -10,7 +10,7 @@
 import { loadProjects } from '../../features/sessions/session-list';
 import { relayoutSessionList } from './relayout';
 import { dispatch, getState } from '../../state/app-store';
-import { sessionMap } from '../../state/session-store';
+import { sessionMap, view } from '../../state/session-store';
 import { renamedName } from '../../state/session-list-layout';
 import { bump } from '../../lib/motion/reflow';
 import { openResumeDialog } from '../dialogs/actions';
@@ -20,6 +20,7 @@ import {
 import { doze, wakeUp } from '../../lib/motion/sleep';
 import { pollActiveSessions } from '../../features/sessions/session-poller';
 import { celebrateFrom, isLeaving, leave } from './leave';
+import { offerArchiveUndo, sessionOnScreen } from '../archive-undo/actions';
 import type { SessionRow } from '../../../domain/session/session';
 
 // ── Opening and the empty space ──
@@ -60,6 +61,48 @@ export async function togglePin(sessionId: string, pin: HTMLElement): Promise<vo
   relayoutSessionList({ resort: true });
 }
 
+/**
+ * Pin a plan to the top of the list or unpin it, once main has stored it, like
+ * a session's pin. Its sessions keep their own stars.
+ */
+export async function togglePlanPin(projectPath: string, slug: string, pin: HTMLElement): Promise<void> {
+  const { pinned } = await window.api.togglePlanPin(projectPath, slug);
+  // The same project can be in both cached lists as separate objects.
+  for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
+    if (project.projectPath !== projectPath) continue;
+    const others = (project.pinnedPlans ?? []).filter(s => s !== slug);
+    project.pinnedPlans = pinned ? [...others, slug] : others;
+  }
+  bump(pin, pinned ? 10 : -4);
+  relayoutSessionList({ resort: true });
+}
+
+/**
+ * Pin a GitHub plan to the top of the list from its page, or unpin it from
+ * there or from its row, once main has stored it. The title is kept as it is
+ * now, so the row needs no GitHub call to draw.
+ */
+export async function toggleIssuePlanPin(
+  projectPath: string, plan: { repository: string; number: number; title: string }, pin?: HTMLElement,
+): Promise<void> {
+  const { repository, number, title } = plan;
+  const { pinned } = await window.api.toggleIssuePlanPin(projectPath, repository, number, title);
+  // The same project can be in both cached lists as separate objects.
+  for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
+    if (project.projectPath !== projectPath) continue;
+    const others = (project.pinnedIssuePlans ?? []).filter(p => p.repository !== repository || p.number !== number);
+    project.pinnedIssuePlans = pinned ? [...others, { repository, number, title, pinnedAt: Date.now() }] : others;
+  }
+  if (pin) bump(pin, pinned ? 10 : -4);
+  relayoutSessionList({ resort: true });
+}
+
+/** Whether a GitHub plan is pinned to the top of the list in `projectPath`. */
+export function isIssuePlanPinned(projectPath: string, repository: string, number: number): boolean {
+  return [...view.cachedProjects, ...view.cachedAllProjects].some(project => project.projectPath === projectPath
+    && !!project.pinnedIssuePlans?.some(p => p.repository === repository && p.number === number));
+}
+
 export function stopRow(sessionId: string): void {
   void confirmAndStopSession(sessionId);
 }
@@ -86,8 +129,10 @@ export function toggleArchive(el: HTMLElement, rowId: string, sessionId: string,
     return;
   }
   celebrateFrom(button);
+  const onScreen = sessionOnScreen();
   leave(el, rowId, async () => {
     if (!await archiveSessionRow(session, 1)) return false;
+    offerArchiveUndo([session], [rowId], onScreen);
     void pollActiveSessions();
     void loadProjects();
     return true;
@@ -131,8 +176,10 @@ export function archiveGroup(el: HTMLElement, groupId: string, sessionIds: reado
   if (!sessions.length) return;
 
   celebrateFrom(button);
+  const onScreen = sessionOnScreen();
   leave(el, groupId, async () => {
     let ok = true;
+    const archived: SessionRow[] = [];
     for (const session of sessions) {
       // One failure stops the sweep rather than silently skipping a session
       // whose PTY is still running.
@@ -140,7 +187,10 @@ export function archiveGroup(el: HTMLElement, groupId: string, sessionIds: reado
         ok = false;
         break;
       }
+      archived.push(session);
     }
+    // A failed sweep brings the group back, so only the archived rows are undone.
+    offerArchiveUndo(archived, ok ? [groupId] : [], onScreen);
     void pollActiveSessions();
     void loadProjects();
     return ok;

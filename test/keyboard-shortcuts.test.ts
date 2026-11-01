@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isArchiveSessionKey, isBareQuickSessionKey, isQuickSessionKey, isSessionNavKey, isSessionPickerKey,
-  isProjectSettingsKey, isSidebarFocusKey, isSidebarToggleKey, listCursorKey, sessionNavDirection,
+  isProjectSettingsKey, isSidebarFocusKey, isSidebarToggleKey, isUndoArchiveKey, listCursorKey, sessionNavDirection,
 } from '../src/renderer/lib/shortcut-keys';
 
 /** Where a key lands: nowhere in particular, a text field, or xterm's own textarea. */
@@ -136,6 +136,17 @@ test('Cmd+E archives from the page and the terminal, and is left alone in a text
 
   /* Then */
   assert.deepEqual(landings, [true, true, false]);
+});
+
+test('Cmd+Z undoes an archive from the page and the terminal, and stays text undo in a text field', () => {
+  /* When */
+  const landings = (['page', 'terminal', 'textField'] as const)
+    .map(landing => isUndoArchiveKey(keydown({ code: 'KeyZ', metaKey: true }, landing)));
+  const redo = isUndoArchiveKey(keydown({ code: 'KeyZ', metaKey: true, shiftKey: true }));
+
+  /* Then */
+  assert.deepEqual(landings, [true, true, false]);
+  assert.equal(redo, false);
 });
 
 // ── Quick session ──

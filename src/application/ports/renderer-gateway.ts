@@ -14,6 +14,7 @@ import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/
 import type { SessionWorkSnapshot } from '../../domain/session-work/model';
 import type { PullRequestStatusChange } from '../../domain/session-work/status';
 import type { PhoneAccessState, TerminalOwner } from '../../domain/phone/state';
+import type { TasksUpdate } from '../../domain/tasks/surface';
 
 export interface RendererGateway {
   /** True while there is a window listening; every send is a no-op without one. */
@@ -77,4 +78,10 @@ export interface RendererGateway {
   sessionStarted(sessionId: string, projectPath: string): void
   /** A phone archived a session: it was stopped and its row archived, so its view closes as ⌘E closes it. */
   sessionArchived(sessionId: string): void
+
+  // ── Tasks (#248) ──
+  /** A watched task list after a poll, or after a change made from here. */
+  tasksChanged(update: TasksUpdate): void
+  /** A session's task changed: linked at a start, by detection or by hand (a task id), or unlinked (null). */
+  sessionTaskChanged(sessionId: string, taskId: string | null): void
 }

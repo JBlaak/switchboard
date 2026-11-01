@@ -24,6 +24,8 @@ export interface TranscriptEntry {
   customTitle?: string;
   aiTitle?: string;
   cwd?: string;
+  /** How the CLI was started: `cli` at a terminal, `sdk-cli` for `claude -p`. */
+  entrypoint?: string;
   message?: string | TranscriptMessage;
   /** `pr-link` lines only. */
   prNumber?: unknown;
@@ -45,6 +47,11 @@ export interface TranscriptIdentity {
   folder: string;
   projectPath: string;
 }
+
+/** The `entrypoint` the CLI writes when it runs headless, as `claude -p`. */
+const HEADLESS_ENTRYPOINT = 'sdk-cli';
+/** The one it writes when someone runs it at a terminal. */
+const INTERACTIVE_ENTRYPOINT = 'cli';
 
 /** How much concatenated message text is kept for the search index. */
 const SEARCH_BODY_LIMIT = 8000;
@@ -111,7 +118,7 @@ export function summaryFromUserMessage(text: string): string {
 
 /**
  * Turn a transcript's lines into a session, or null when it holds no
- * conversation worth listing.
+ * conversation worth listing: none at all, or one a tool ran headless.
  */
 export function parseTranscript(
   lines: string[],
@@ -132,6 +139,10 @@ export function parseTranscript(
   // mtime without any actual activity, so mtime can't be the displayed time.
   let firstTimestamp: string | null = null;
   let lastTimestamp: string | null = null;
+  // See `isHeadless`.
+  let firstUserEntrypoint: string | undefined;
+  let seenFirstUserTurn = false;
+  let resumedInteractively = false;
 
   for (const line of lines) {
     const entry = parseTranscriptLine(line);
@@ -150,6 +161,11 @@ export function parseTranscript(
       if (pr && !pullRequests.has(pr.url)) pullRequests.set(pr.url, pr);
     }
     if (isConversationEntry(entry)) messageCount++;
+    if (!seenFirstUserTurn && isUserTurn(entry)) {
+      seenFirstUserTurn = true;
+      firstUserEntrypoint = entry.entrypoint;
+    }
+    if (entry.entrypoint === INTERACTIVE_ENTRYPOINT) resumedInteractively = true;
 
     const text = entryText(entry.message);
     if (!summary && isUserTurn(entry)) summary = summaryFromUserMessage(text);
@@ -159,6 +175,7 @@ export function parseTranscript(
   }
 
   if (!summary || messageCount < 1) return null;
+  if (isHeadless(firstUserEntrypoint, resumedInteractively)) return null;
 
   return {
     ...identity,
@@ -176,6 +193,21 @@ export function parseTranscript(
     aiTitle,
     pullRequests: [...pullRequests.values()],
   };
+}
+
+/**
+ * Was this session run by a tool rather than by someone at a terminal?
+ *
+ * A tool that asks a question (Yab's address bar) or runs an evaluation (the
+ * release tool) starts the CLI with `claude -p`, which writes `sdk-cli` on
+ * every line, the first user turn included. Such a run is not work to come back
+ * to, so it is not listed at all. A scheduled run also goes through `-p`, but
+ * it resumes a session Switchboard seeded without an entrypoint, so it stays.
+ * Anyone resuming a headless session at a terminal makes it a conversation
+ * after all.
+ */
+function isHeadless(firstUserEntrypoint: string | undefined, resumedInteractively: boolean): boolean {
+  return firstUserEntrypoint === HEADLESS_ENTRYPOINT && !resumedInteractively;
 }
 
 /** The first `cwd` any line carries — how a folder resolves to a project path. */

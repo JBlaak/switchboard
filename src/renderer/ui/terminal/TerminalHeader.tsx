@@ -21,10 +21,11 @@ import { stopSessionOnScreen } from './actions';
 import { sessionMap } from '../../state/session-store';
 import { projectLabel } from '../../features/sessions/project-label';
 import { ProjectLink } from '../project-page/ProjectLink';
+import { TaskChip } from '../session-task/TaskChip';
 
 /**
- * The session's name, its project (a way into the project page, #173), the
- * process title (or a CLI notice), its id and its shell.
+ * The session's name, its project (a way into the project page, #173), its
+ * BlaakTasks task (#250), the process title (or a CLI notice), its id and its shell.
  */
 export function TerminalHeaderInfo(): JSX.Element {
   const { onScreen, name, title, shell } = useStore(state => ({
@@ -50,6 +51,7 @@ export function TerminalHeaderInfo(): JSX.Element {
           {projectLabel(projectPath)}
         </ProjectLink>
       )}
+      <TaskChip sessionId={onScreen} />
       <span id="terminal-header-pty-title" style={title ? undefined : { display: 'none' }}>{title}</span>
       <span id="terminal-header-id">{onScreen ?? ''}</span>
       <span id="terminal-header-shell" style={shell ? undefined : { display: 'none' }}>{shell ?? ''}</span>

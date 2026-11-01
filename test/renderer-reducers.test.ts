@@ -66,6 +66,8 @@ const SAMPLES: { [K in PushEvent['type']]: Extract<PushEvent, { type: K }> } = {
   terminalOwnerChanged: { type: 'terminalOwnerChanged', sessionId: 's1', owner: { kind: 'device', deviceId: 'd1', name: 'Pixel 9 Pro' } },
   sessionStarted: { type: 'sessionStarted', sessionId: 's9', projectPath: '/code/app' },
   sessionArchived: { type: 'sessionArchived', sessionId: 's9' },
+  tasksChanged: { type: 'tasksChanged', update: { watchId: 'w1', query: { view: 'today' }, state: 'ok', rows: [], fetchedAt: 5 } },
+  sessionTaskChanged: { type: 'sessionTaskChanged', sessionId: 's9', taskId: null },
 };
 
 test('every push event reduces without mutating the state it was given', () => {

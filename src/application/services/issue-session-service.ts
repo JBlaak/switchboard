@@ -11,7 +11,7 @@ import { isRemoteProjectPath } from '../../domain/project/remote-target';
 import { gitHubRepository } from '../../domain/project/repo-url';
 import {
   issueLabel, issueOwners, startBase,
-  type ExistingIssueBranch, type IssueOwnerCandidate, type IssueWorktreeRequest, type IssueWorktreeResult,
+  type IssueOwnerCandidate, type IssueWorktreeRequest, type IssueWorktreeResult,
 } from '../../domain/plan/issue-session';
 import { sameIssue, type IssueKey } from '../../domain/plan/model';
 import { issueBranchName, issueContinuePrompt, issueSessionPrompt } from '../../domain/plan/start';
@@ -22,12 +22,10 @@ import type { GitHubCli } from '../ports/github-cli';
 import type { GitRemotes } from '../ports/git-remotes';
 import type { Logger } from '../ports/logger';
 import type { TranscriptStore } from '../ports/transcript-store';
+import { BranchWorktrees, WORKTREES_DIR, type ChosenBase } from './branch-worktrees';
 
 /** How long a PR's closing references are trusted before `gh` is asked again. */
 export const CLOSING_REFS_TTL_MS = 5 * 60_000;
-
-/** Where an issue's worktree goes, under the repository's main checkout. */
-const WORKTREES_DIR = '/.claude/worktrees/';
 
 /** A session that could own an issue: every listed one, and every running one. */
 export interface IssueSessionCandidate {
@@ -55,12 +53,14 @@ export interface IssueSessionServiceDeps {
 export class IssueSessionService {
   /** `owner/repo` by project path; only answers that found one are kept. */
   readonly #repositories = new Map<string, string>();
-  /** A session's transcript branches, as of its last activity. */
-  readonly #branches = new Map<string, { activeAt: number; branches: string[] }>();
+  /** The worktree mechanics, and the branches each session worked on. */
+  readonly #worktrees: BranchWorktrees<IssueSessionCandidate>;
   /** The issues each PR (`owner/repo#n`) closes, and when `gh` said so. */
   readonly #closes = new Map<string, { at: number; closes: IssueKey[] }>();
 
-  constructor(private readonly deps: IssueSessionServiceDeps) {}
+  constructor(private readonly deps: IssueSessionServiceDeps) {
+    this.#worktrees = new BranchWorktrees(deps);
+  }
 
   // ── Ownership (S1) ──
 
@@ -70,7 +70,7 @@ export class IssueSessionService {
     for (const session of this.deps.sessions()) {
       if (session.archived || isRemoteProjectPath(session.projectPath)) continue;
       if ((await this.#repositoryOf(session.projectPath)) !== repository) continue;
-      candidates.push({ session, branches: await this.#branchesOf(session) });
+      candidates.push({ session, branches: await this.#worktrees.branchesOf(session) });
     }
 
     const closes = await this.#closingRefs(candidates.flatMap(({ session }) => session.pullRequests), repository);
@@ -81,23 +81,6 @@ export class IssueSessionService {
       closes: session.pullRequests.flatMap((pr) => closes.get(prKey(pr, repository)) ?? []),
     }));
     return issueOwners(owners, repository);
-  }
-
-  /**
-   * The branches its transcripts were written on; a session with none yet
-   * (just started) is on the branch its directory has checked out.
-   */
-  async #branchesOf(session: IssueSessionCandidate): Promise<string[]> {
-    const known = this.#branches.get(session.sessionId);
-    if (known && known.activeAt === session.activeAt && known.branches.length > 0) return known.branches;
-    const written = session.folder ? this.deps.transcripts.locations(session.folder, session.sessionId) : [];
-    let branches = [...new Set(written.map((location) => location.branch).filter(Boolean))];
-    if (branches.length === 0) {
-      const current = await this.deps.git.currentBranch(session.projectPath);
-      branches = current ? [current] : [];
-    }
-    this.#branches.set(session.sessionId, { activeAt: session.activeAt, branches });
-    return branches;
   }
 
   /** What each of these PRs closes, asked of `gh` once per few minutes per PR. */
@@ -173,109 +156,45 @@ export class IssueSessionService {
     const planIssue = plan.issues.find((candidate) => sameIssue(candidate, issue));
     if (!planIssue) return fail(`#${issue.number} is not part of plan #${plan.number}`);
 
-    const branch = issueBranchName(planIssue);
-    const worktreePath = root.replace(/\/+$/, '') + WORKTREES_DIR + branch;
-    if (await git.branchExists(root, branch)) {
-      const found = await this.#existingBranch(root, branch);
-      if (existing === 'reuse') {
-        if (!found.worktreePath) {
-          // A worktree whose directory has gone still holds its branch until it is pruned.
-          await git.pruneWorktrees(root);
-          const added = await git.checkoutWorktree(root, worktreePath, branch);
-          if (!added.ok) return fail('Could not create the worktree: ' + added.reason);
-        }
-        return { ok: true, worktreePath: found.worktreePath ?? worktreePath, branch, prompt: issueContinuePrompt(issue, plan) };
-      }
-      if (existing !== 'replace') return { ok: false, reason: `Branch ${branch} already exists`, existing: found };
-      if (found.main) return fail(`Branch ${branch} is checked out in the main checkout, which is never deleted`);
-      if (found.worktreePath) {
-        const removed = await git.removeWorktree(root, found.worktreePath, { force: true });
-        if (!removed.ok) return fail('Could not delete the worktree: ' + removed.reason);
-      }
-      await git.pruneWorktrees(root);
-      const deleted = await git.deleteBranch(root, branch);
-      if (!deleted.ok) return fail(`Could not delete branch ${branch}: ` + deleted.reason);
-    }
-
-    const warnings: string[] = [];
-    const defaultBranch = await git.defaultBranch(root);
-    let base: string | null = null;
     let stackedOn: number | undefined;
-
-    const chosen = startBase(plan, issue);
-    if (chosen.kind === 'stacked') {
-      const head = chosen.pullRequest.headRef;
-      const fetched = await git.fetchBranch(root, head);
-      if (fetched.ok && (await git.commitSha(root, 'origin/' + head))) {
-        base = 'origin/' + head;
-        stackedOn = chosen.pullRequest.number;
-      } else {
-        warnings.push(`Could not fetch #${chosen.pullRequest.number}'s branch ${head}` +
-          (fetched.ok ? '' : ` (${fetched.reason})`) + `; started from ${defaultBranch} instead.`);
+    const base = async (defaultBranch: string): Promise<ChosenBase> => {
+      const chosen = startBase(plan, issue);
+      if (chosen.kind === 'stacked') {
+        const head = chosen.pullRequest.headRef;
+        const fetched = await git.fetchBranch(root, head);
+        if (fetched.ok && (await git.commitSha(root, 'origin/' + head))) {
+          stackedOn = chosen.pullRequest.number;
+          return { base: 'origin/' + head, warnings: [] };
+        }
+        return {
+          base: null,
+          warnings: [`Could not fetch #${chosen.pullRequest.number}'s branch ${head}` +
+            (fetched.ok ? '' : ` (${fetched.reason})`) + `; started from ${defaultBranch} instead.`],
+        };
       }
-    } else if (chosen.openBlockers.length > 0) {
-      const names = chosen.openBlockers.map((blocker) => issueLabel(blocker, repository)).join(', ');
-      warnings.push(`No open PR to stack on: ${names} ${chosen.openBlockers.length === 1 ? 'has' : 'have'} none yet; started from ${defaultBranch}.`);
-    }
+      if (chosen.openBlockers.length > 0) {
+        const names = chosen.openBlockers.map((blocker) => issueLabel(blocker, repository)).join(', ');
+        return {
+          base: null,
+          warnings: [`No open PR to stack on: ${names} ${chosen.openBlockers.length === 1 ? 'has' : 'have'} none yet; started from ${defaultBranch}.`],
+        };
+      }
+      return { base: null, warnings: [] };
+    };
 
-    if (!base) {
-      const fetched = await git.fetchBranch(root, defaultBranch);
-      if (await git.commitSha(root, 'origin/' + defaultBranch)) base = 'origin/' + defaultBranch;
-      else if (await git.commitSha(root, defaultBranch)) base = defaultBranch;
-      else return fail(`Could not find the default branch ${defaultBranch}` + (fetched.ok ? '' : `: ${fetched.reason}`));
-      if (!fetched.ok) warnings.push(`Could not fetch ${defaultBranch} (${fetched.reason}); started from the last one fetched.`);
-    }
-
-    const added = await git.addWorktree(root, worktreePath, branch, base);
-    if (!added.ok) return fail('Could not create the worktree: ' + added.reason);
-
+    const made = await this.#worktrees.prepare({ root, branch: issueBranchName(planIssue), existing, base });
+    if (!made.ok) return made;
+    const { worktreePath, branch } = made;
+    if (made.reused) return { ok: true, worktreePath, branch, prompt: issueContinuePrompt(issue, plan) };
     return {
       ok: true,
       worktreePath,
       branch,
       prompt: issueSessionPrompt(issue, plan, stackedOn),
       ...(stackedOn !== undefined ? { stackedOn } : {}),
-      ...(warnings.length ? { warning: warnings.join(' ') } : {}),
+      ...(made.warnings.length ? { warning: made.warnings.join(' ') } : {}),
     };
   }
-
-  /**
-   * Where an existing branch is checked out, what is on it, and the session
-   * that worked there last: one in its worktree, else one whose transcripts
-   * were written on the branch.
-   */
-  async #existingBranch(root: string, branch: string): Promise<ExistingIssueBranch> {
-    const checkout = (await this.deps.git.worktrees(root)).find((worktree) => worktree.branch === branch) ?? null;
-    const local = this.deps.sessions().filter((session) => !isRemoteProjectPath(session.projectPath));
-    const newest = (sessions: IssueSessionCandidate[]) =>
-      sessions.reduce<IssueSessionCandidate | null>((best, session) => (!best || session.activeAt > best.activeAt ? session : best), null);
-
-    let session = checkout && !checkout.main
-      ? newest(local.filter((candidate) => isUnder(candidate.projectPath, checkout.path)))
-      : null;
-    if (!session) {
-      const onBranch: IssueSessionCandidate[] = [];
-      for (const candidate of local) {
-        if (!isUnder(candidate.projectPath, root)) continue;
-        if ((await this.#branchesOf(candidate)).includes(branch)) onBranch.push(candidate);
-      }
-      session = newest(onBranch);
-    }
-    return {
-      branch,
-      worktreePath: checkout?.path ?? null,
-      main: checkout?.main ?? false,
-      changedFiles: checkout?.changedFiles ?? 0,
-      ahead: checkout?.ahead ?? 0,
-      sessionId: session?.sessionId ?? null,
-    };
-  }
-}
-
-/** `path` is `dir` or a directory under it. */
-function isUnder(path: string, dir: string): boolean {
-  const base = dir.replace(/\/+$/, '');
-  return path === base || path.startsWith(base + '/');
 }
 
 function fail(reason: string): IssueWorktreeResult {

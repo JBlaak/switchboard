@@ -68,8 +68,11 @@ export type ReviewKind = 'comment' | ReviewMode;
 
 export type DiffMode = 'unified' | 'split';
 
-/** The page's two tabs (W1): what the session did, and the plan it works on. */
-export type WorkTab = 'work' | 'plan';
+/**
+ * The page's tabs (W1): what the session did, the plan it works on, and
+ * (#250) its BlaakTasks task, which shows only while it has one.
+ */
+export type WorkTab = 'work' | 'plan' | 'task';
 
 /** One item's diff on the page, and what the reader did to it. */
 export interface ItemDiff {
@@ -148,9 +151,24 @@ export const initialSessionWorkState: SessionWorkState = {
   page: null, canOpen: {}, now: 0, imageDefaults: DEFAULT_IMAGE_DEFAULTS, tabs: {},
 };
 
-/** The tab a session's page shows (W1). */
-export function workTabOf(state: SessionWorkState, sessionId: string): WorkTab {
-  return state.tabs[sessionId] ?? 'work';
+/**
+ * The tab a session's page shows (W1). Task only while the session works on
+ * a task (`hasTask`, #250): unlinked, its page is back on Work.
+ */
+export function workTabOf(state: SessionWorkState, sessionId: string, hasTask = false): WorkTab {
+  const tab = state.tabs[sessionId] ?? 'work';
+  return tab === 'task' && !hasTask ? 'work' : tab;
+}
+
+/** The tabs a session's page has, in order: Work, Plan, and Task while it works on a task. */
+export function workTabsFor(hasTask: boolean): readonly WorkTab[] {
+  return hasTask ? ['work', 'plan', 'task'] : ['work', 'plan'];
+}
+
+/** `t`: the tab after `tab`, round to the first. */
+export function nextWorkTab(tab: WorkTab, tabs: readonly WorkTab[]): WorkTab {
+  const at = tabs.indexOf(tab);
+  return tabs[(at + 1) % tabs.length] ?? 'work';
 }
 
 export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent): SessionWorkState {

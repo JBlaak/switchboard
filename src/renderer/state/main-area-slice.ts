@@ -1,6 +1,7 @@
 /**
  * What the main area shows (#168): exactly one of a session's terminal, a
- * session's work page, a project, the app settings, or the empty screen.
+ * session's work page, a project, the app settings, the Tasks page (#249), or
+ * the empty screen.
  *
  * It is the one answer to "what is on screen", which is what the sidebar
  * highlight is derived from (`highlightedSession`). The active session id
@@ -25,6 +26,8 @@ export type MainAreaRoute =
   | { readonly kind: 'sessionWork'; readonly sessionId: string }
   | { readonly kind: 'project'; readonly projectPath: string; readonly view: ProjectView }
   | { readonly kind: 'settings' }
+  /** The Tasks page (#249), only while BlaakTasks is on. */
+  | { readonly kind: 'tasks' }
   | { readonly kind: 'empty' };
 
 export interface MainAreaState {
@@ -69,6 +72,16 @@ export function mainAreaReducer(state: MainAreaState, event: RendererEvent, retu
     // Esc or Close on a project.
     case 'projectClosed':
       return state.route.kind === 'project' ? routed(state, back(returnTo)) : state;
+
+    case 'tasksOpened':
+      return routed(state, { kind: 'tasks' });
+
+    // Esc or Close on the Tasks page, or BlaakTasks switched off under it.
+    case 'tasksClosed':
+      return state.route.kind === 'tasks' ? routed(state, back(returnTo)) : state;
+
+    case 'blaakTasksSwitched':
+      return !event.on && state.route.kind === 'tasks' ? routed(state, back(returnTo)) : state;
 
     // The session went away (stopped, archived, cleared): its own pages go
     // with it, but a project or the settings covering it stay where they are,

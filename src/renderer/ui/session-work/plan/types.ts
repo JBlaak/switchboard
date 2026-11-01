@@ -6,6 +6,12 @@
 import type { IssueKey, Plan, PlanSummary } from '../../../../domain/plan/model';
 import type { PlanLevelStart, PlanStart, SessionPlansAnswer } from '../../../state/plan-slice';
 
+/** The plan page's pin, which puts the plan at the top of the sidebar; the Plan tab has none. */
+export interface PlanPinControl {
+  readonly pinned: boolean;
+  toggle(): void;
+}
+
 /** A session's plans (W2), or one plan given directly (F2). */
 export type PlanData = { readonly sessionPlans: SessionPlansAnswer } | { readonly plan: Plan };
 

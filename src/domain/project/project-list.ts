@@ -10,9 +10,20 @@
 import { encodeProjectPath } from './project-path';
 import { remoteProjectPath } from './remote-target';
 import { byMostRecentlyModified, toSessionRow } from '../session/session';
-import type { Project } from './project';
+import type { PinnedIssuePlan, Project } from './project';
 import type { CachedSession, SessionMeta, SessionRow } from '../session/session';
 import type { RemoteProjectSetting } from '../settings/settings';
+
+/** A plan pinned to the top of the session list: the slug its sessions share, in one project. */
+export interface PlanPin {
+  projectPath: string;
+  slug: string;
+}
+
+/** A GitHub plan pinned to the top of the session list from its page, in one project. */
+export interface IssuePlanPin extends PinnedIssuePlan {
+  projectPath: string;
+}
 
 /** A plain terminal, which has no transcript and lives only while it runs. */
 export interface ActiveTerminalRow {
@@ -36,6 +47,8 @@ export interface ProjectListInputs {
   knownProjectPaths: Iterable<string>;
   activeTerminals: Iterable<ActiveTerminalRow>;
   remoteProjects: Iterable<RemoteProjectSetting>;
+  pinnedPlans: Iterable<PlanPin>;
+  pinnedIssuePlans: Iterable<IssuePlanPin>;
   showArchived: boolean;
 }
 
@@ -132,6 +145,17 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
         remoteKind: record.kind,
       }));
     }
+  }
+
+  // A pin on a project that has no row (hidden, or nothing left in it) has
+  // nowhere to show, and stays stored for when it does.
+  for (const pin of inputs.pinnedPlans) {
+    const project = projects.get(pin.projectPath);
+    if (project) (project.pinnedPlans ??= []).push(pin.slug);
+  }
+  for (const { projectPath, ...pin } of inputs.pinnedIssuePlans) {
+    const project = projects.get(projectPath);
+    if (project) (project.pinnedIssuePlans ??= []).push(pin);
   }
 
   const list = [...projects.values()];

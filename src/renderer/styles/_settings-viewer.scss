@@ -315,3 +315,12 @@
 .settings-warning:empty {
   display: none;
 }
+
+/* A command to copy out of a description: one click selects all of it. */
+.settings-copyable {
+  user-select: all;
+  -webkit-user-select: all;
+  cursor: text;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}

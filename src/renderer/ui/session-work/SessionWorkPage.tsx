@@ -16,15 +16,19 @@
  * text field, and an open comment composer takes Esc first.
  *
  * Two tabs (W1): Work, all of the above, and Plan, the session's plan as a
- * flow diagram (`plan/`). `t` switches between them. On the Plan tab the
- * Work keys rest; Esc closes an open issue detail before it closes the page,
- * and ↑/↓ step through the issues while the detail is open (D4).
+ * flow diagram (`plan/`); and a third, Task, while the session works on a
+ * BlaakTasks task (#250, `session-task/`). `t` steps through them. On the
+ * Plan and Task tabs the Work keys rest; on Plan, Esc closes an open issue
+ * detail before it closes the page, and ↑/↓ step through the issues while
+ * the detail is open (D4).
  */
 import { useLayoutEffect, useRef } from 'react';
 import type { JSX, KeyboardEvent } from 'react';
 import { useStore } from '../use-store';
 import { closeSessionWork, imageKey, stepFile, stepWorkItem, toggleDiffMode, toggleWorkTab } from './actions';
-import { workTabOf } from '../../state/session-work-slice';
+import { workTabOf, workTabsFor } from '../../state/session-work-slice';
+import { taskIdOf } from '../../state/session-task-slice';
+import { TaskTab } from '../session-task/TaskTab';
 import type { SessionWorkPage as SessionWorkPageState } from '../../state/session-work-slice';
 import { PlanTab } from './plan/PlanTab';
 import { planKey } from './plan/load';
@@ -57,7 +61,8 @@ export function SessionWorkPage(): JSX.Element | null {
   const page = useStore(state => state.sessionWork.page);
   const root = useRef<HTMLDivElement>(null);
   const sessionId = page?.sessionId ?? null;
-  const tab = useStore(state => (sessionId ? workTabOf(state.sessionWork, sessionId) : 'work'));
+  const hasTask = useStore(state => taskIdOf(state.sessionTask, sessionId) !== null);
+  const tab = useStore(state => (sessionId ? workTabOf(state.sessionWork, sessionId, hasTask) : 'work'));
 
   // Into the page as it opens, so Esc and j/k reach it without a click.
   useLayoutEffect(() => {
@@ -85,7 +90,7 @@ export function SessionWorkPage(): JSX.Element | null {
       toggleWorkTab();
       return;
     }
-    if (tab === 'plan') return;
+    if (tab !== 'work') return;
     if (IMAGE_KEYS.has(e.key)) {
       if (!imageKey(e.key)) return;
       e.preventDefault();
@@ -125,8 +130,10 @@ export function SessionWorkPage(): JSX.Element | null {
       aria-label={'Session work for ' + page.name}
       onKeyDown={onKeyDown}
     >
-      <WorkHeader page={page} tab={tab} />
-      {tab === 'plan' ? <PlanTab sessionId={page.sessionId} /> : <WorkTab page={page} />}
+      <WorkHeader page={page} tab={tab} tabs={workTabsFor(hasTask)} />
+      {tab === 'plan' ? <PlanTab sessionId={page.sessionId} />
+        : tab === 'task' ? <TaskTab page={page} />
+        : <WorkTab page={page} />}
     </div>
   );
 }

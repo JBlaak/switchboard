@@ -109,3 +109,58 @@ test('mcp servers: an unreadable ~/.claude.json counts as no server, and the log
   assert.equal(h.logged.length, 1);
   assert.ok(!h.logged.join('\n').includes(TOKEN));
 });
+
+// ── Lookup by URL (#252) ──
+
+test('mcp servers: the headers of the server with that URL, bearer and all', (t) => {
+  /* Given */
+  const h = harness();
+  t.after(h.cleanup);
+
+  /* When */
+  const headers = h.servers.headersFor('https://tasks.example.com/mcp');
+
+  /* Then */
+  assert.deepEqual(headers, { Authorization: `Bearer ${TOKEN}` });
+  assert.deepEqual(h.left(), []);
+  assert.deepEqual(h.logged, []);
+});
+
+test('mcp servers: the name of the server with that URL, whatever it is called', (t) => {
+  /* Given */
+  const h = harness(JSON.stringify({ mcpServers: { 'my-tasks': ENTRY, james: { type: 'http', url: 'https://james' } } }));
+  t.after(h.cleanup);
+
+  /* When */
+  const names = [h.servers.nameFor('https://tasks.example.com/mcp'), h.servers.nameFor('https://other.example.com/mcp')];
+
+  /* Then */
+  assert.deepEqual(names, ['my-tasks', null]);
+});
+
+test('mcp servers: a URL no server has, or no ~/.claude.json, has no headers', (t) => {
+  /* Given */
+  const h = harness();
+  const none = harness(null);
+  t.after(h.cleanup);
+  t.after(none.cleanup);
+
+  /* When */
+  const results = [h.servers.headersFor('https://other.example.com/mcp'), none.servers.headersFor('https://tasks.example.com/mcp')];
+
+  /* Then */
+  assert.deepEqual(results, [null, null]);
+});
+
+test('mcp servers: an unreadable ~/.claude.json has no headers, and the log says nothing of what is in it', (t) => {
+  /* Given */
+  const h = harness(`{"mcpServers": {"blaaktasks": {"url": "https://tasks.example.com/mcp", "headers": {"Authorization": "Bearer ${TOKEN}"`);
+  t.after(h.cleanup);
+
+  /* When */
+  const headers = h.servers.headersFor('https://tasks.example.com/mcp');
+
+  /* Then */
+  assert.equal(headers, null);
+  assert.ok(!h.logged.join('\n').includes(TOKEN));
+});

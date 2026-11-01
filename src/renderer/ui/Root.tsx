@@ -15,6 +15,7 @@ import { Footer } from './footer/Footer';
 import { SettingsViewer } from './settings/SettingsViewer';
 import { SessionWorkPage } from './session-work/SessionWorkPage';
 import { ProjectPage } from './project-page/ProjectPage';
+import { TasksPage } from './tasks-page/TasksPage';
 import { EmptyScreenPatch } from './patch/EmptyScreenPatch';
 import { AskBox } from './ask/AskBox';
 import { Questions } from './questions/Questions';
@@ -23,6 +24,8 @@ import { SessionList } from './session-list/SessionList';
 import { TerminalHost } from './terminal/TerminalHost';
 import { TerminalHeaderControls, TerminalHeaderInfo } from './terminal/TerminalHeader';
 import { PairConfirmDialog } from './phone-access/PairConfirmDialog';
+import { MarkDoneOffer } from './session-task/MarkDoneOffer';
+import { ArchiveUndoToast } from './archive-undo/ArchiveUndoToast';
 import type { JSX } from 'react';
 import type { Root as ReactRoot } from 'react-dom/client';
 
@@ -36,6 +39,7 @@ export function Root(): JSX.Element | null {
       <Portal target="settings-viewer"><SettingsViewer /></Portal>
       <Portal target="session-work"><SessionWorkPage /></Portal>
       <Portal target="project-page"><ProjectPage /></Portal>
+      <Portal target="tasks-page"><TasksPage /></Portal>
       <Portal target="sidebar-footer"><Footer /></Portal>
       <Portal target="terminals"><TerminalHost /></Portal>
       <Portal target="terminal-header-info"><TerminalHeaderInfo /></Portal>
@@ -44,6 +48,8 @@ export function Root(): JSX.Element | null {
       <Portal target="terminal-header-questions"><QuestionsHeaderButton /></Portal>
       <Portal target="placeholder"><EmptyScreenPatch /><AskBox /></Portal>
       <Portal target="sidebar-content"><SessionList /></Portal>
+      {/* What an archive brings, stacked at the foot of the main area: Undo above the Mark done offer. */}
+      <Portal target="main"><div className="main-floats"><ArchiveUndoToast /><MarkDoneOffer /></div></Portal>
     </>
   );
 }

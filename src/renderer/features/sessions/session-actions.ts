@@ -23,6 +23,7 @@ import { createTerminalEntry, destroySession, showSession } from '../terminal/te
 import type { Project } from '../../../domain/project/project';
 import type { SessionRow } from '../../../domain/session/session';
 import type { SessionOptions } from '../../../domain/launch/session-options';
+import { archiveAnswerEvents } from '../../ui/session-task/offer';
 
 /** A row for a session that has not been written to disk yet. */
 export function newSessionRow(projectPath: string, fields: Partial<SessionRow> = {}): SessionRow {
@@ -240,9 +241,11 @@ export async function archiveSessionRow(session: SessionRow, archived: number): 
     dispatch({ type: 'ptyStopped', sessionId });
   }
 
-  await window.api.archiveSession(sessionId, Boolean(archived));
+  const answer = await window.api.archiveSession(sessionId, Boolean(archived));
   session.archived = archived;
   if (archived) closeArchivedSession(sessionId);
+  // Its task's PRs are all merged: Mark task done? (#248, #250)
+  for (const event of archiveAnswerEvents(sessionId, answer)) dispatch(event);
   return true;
 }
 

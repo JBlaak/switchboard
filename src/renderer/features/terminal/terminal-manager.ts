@@ -35,6 +35,8 @@ import {
 import { openDialog } from '../../ui/dialogs/actions';
 import { isQuickSessionKey, launchQuickSession } from '../sessions/quick-session';
 import { isSessionWorkKey, toggleSessionWork } from '../../ui/session-work/actions';
+import { toggleTasksPage } from '../../ui/tasks-page/actions';
+import { isTasksPageKey } from '../../lib/shortcut-keys';
 import { openSessions, sessionMap } from '../../state/session-store';
 import { remoteStatus } from '../../state/remote-status-store';
 import { TERMINAL_THEME } from '../terminal/terminal-themes';
@@ -184,6 +186,12 @@ function setupTerminalKeyBindings(
     // Cmd+G: the Session work page, in this terminal's place
     if (isSessionWorkKey(e)) {
       if (e.type === 'keydown') { e._handled = true; e.preventDefault(); void toggleSessionWork(); }
+      return false;
+    }
+
+    // Cmd+T: the Tasks page, while BlaakTasks is on
+    if (isTasksPageKey(e) && getState().tasks.enabled) {
+      if (e.type === 'keydown') { e._handled = true; e.preventDefault(); toggleTasksPage(); }
       return false;
     }
 

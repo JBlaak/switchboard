@@ -150,6 +150,11 @@ export class PrWatchService {
     return this.#polling;
   }
 
+  /** A PR's state as `gh` last answered it, by URL; null when it never did. */
+  stateOf(url: string): PullRequestStatus['state'] | null {
+    return this.#latest.get(url)?.state ?? null;
+  }
+
   /** The end of a check run's log, for the page's Checks panel. */
   async checkLog(repository: string, checkRunUrl: string): Promise<string | null> {
     if (this.#logs.has(checkRunUrl)) return this.#logs.get(checkRunUrl) ?? null;

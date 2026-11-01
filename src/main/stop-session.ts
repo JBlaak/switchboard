@@ -5,6 +5,7 @@
 import type { RendererGateway } from '../application/ports/renderer-gateway';
 import type { SessionRepository } from '../application/ports/session-repository';
 import type { WorktreeCleanupService } from '../application/services/worktree-cleanup-service';
+import type { TasksService } from '../application/services/tasks-service';
 import type { Container } from './composition-root';
 
 export type SessionStopper = Pick<Container, 'registry' | 'remote' | 'lifecycle' | 'terminals'>;
@@ -55,12 +56,16 @@ export function stopSession(app: SessionStopper, sessionId: string): StopResult 
 /**
  * A phone's archive, as the renderer's (`archiveSessionRow`): stopped first,
  * then the row archived, then the window told, so it closes the session as
- * archiving it there would. Its worktrees are cleaned up after, on their own.
+ * archiving it there would. Its worktrees are cleaned up after, on their own,
+ * and its task (#248) gets its "Session archived" line. Neither a phone's
+ * archive nor a session's own (`archive_session`) offers Mark done: that is
+ * asked only of an archive made at the Mac.
  */
 export function sessionArchiver(app: SessionStopper & {
   repository: Pick<SessionRepository, 'setArchived'>;
   renderer: Pick<RendererGateway, 'sessionArchived'>;
   worktreeCleanup: Pick<WorktreeCleanupService, 'afterArchive'>;
+  tasks?: Pick<TasksService, 'archived'>;
 }): { archive(sessionId: string): { ok: boolean } } {
   return {
     archive(sessionId) {
@@ -69,6 +74,7 @@ export function sessionArchiver(app: SessionStopper & {
       app.repository.setArchived(sessionId, true);
       app.renderer.sessionArchived(sessionId);
       void app.worktreeCleanup.afterArchive(sessionId);
+      void app.tasks?.archived(sessionId, { byUser: false });
       return { ok: true };
     },
   };

@@ -110,3 +110,23 @@ test('each other push becomes its event', () => {
     { type: 'sessionWorkSnapshot', snapshot: { sessionId: 's1', repository: '', items: [], footprint: { worktrees: 0, branches: 0 }, queued: 0, gh: 'ok', updatedAt: 'now' } },
   ]);
 });
+
+test('a task list update and a session\'s task change become their events (#248)', () => {
+  /* Given */
+  const fake = fakeApi();
+  const sent: RendererEvent[] = [];
+  installIpcBridge(fake.api, e => sent.push(e), () => {});
+  const update = { watchId: 'w1', query: { view: 'today' }, state: 'unreachable', rows: [], reason: 'timed out', fetchedAt: null };
+
+  /* When */
+  fake.push('tasksChanged', update);
+  fake.push('sessionTaskChanged', 's1', '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9');
+  fake.push('sessionTaskChanged', 's2', null);
+
+  /* Then */
+  assert.deepStrictEqual(sent, [
+    { type: 'tasksChanged', update },
+    { type: 'sessionTaskChanged', sessionId: 's1', taskId: '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9' },
+    { type: 'sessionTaskChanged', sessionId: 's2', taskId: null },
+  ]);
+});

@@ -270,6 +270,39 @@ a.pv-num:hover { color: var(--sb-accent); }
   &:hover { color: var(--sb-accent); text-decoration: underline; }
 }
 
+.pv-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Like a sidebar row's pin, a size up to sit with the title. */
+.pv-pin {
+  flex-shrink: 0;
+  display: flex;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--sb-text-faint);
+  cursor: pointer;
+  transition: all 0.15s;
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover {
+    color: var(--sb-yellow);
+    transform: scale(1.15);
+  }
+
+  &.pinned {
+    color: var(--sb-yellow);
+  }
+}
+
 .pv-title {
   margin: 0;
   font: 800 24px var(--sb-font-head);

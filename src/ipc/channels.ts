@@ -25,6 +25,8 @@ export const INVOKE = {
   stopSession: 'stop-session',
   reconnectRemote: 'reconnect-remote',
   toggleStar: 'toggle-star',
+  togglePlanPin: 'toggle-plan-pin',
+  toggleIssuePlanPin: 'toggle-issue-plan-pin',
   renameSession: 'rename-session',
   archiveSession: 'archive-session',
   snoozeSession: 'snooze-session',
@@ -63,6 +65,7 @@ export const INVOKE = {
   getShellProfiles: 'get-shell-profiles',
   setAppearance: 'set-appearance',
   quickAskHotkeyStatus: 'quick-ask:hotkey-status',
+  blaakTasksSetUp: 'blaak-tasks:set-up',
 
   // Quick Ask: the pop-up's own (#148)
   quickAskRoute: 'quick-ask:route',
@@ -99,6 +102,22 @@ export const INVOKE = {
   planProjectPlans: 'plan:project-plans',
   // The project page (#172)
   projectOverview: 'project:overview',
+
+  // Tasks: BlaakTasks in Switchboard (#248)
+  tasksList: 'tasks:list',
+  tasksGet: 'tasks:get',
+  tasksUpdate: 'tasks:update',
+  tasksSetRepo: 'tasks:set-repo',
+  tasksPrepareStart: 'tasks:prepare-start',
+  tasksSessionStarted: 'tasks:session-started',
+  tasksLinkSession: 'tasks:link-session',
+  tasksUnlinkSession: 'tasks:unlink-session',
+  tasksSessionTask: 'tasks:session-task',
+  tasksSessionTasks: 'tasks:session-tasks',
+  tasksTaskSessions: 'tasks:task-sessions',
+  tasksProjectTasks: 'tasks:project-tasks',
+  tasksWatch: 'tasks:watch',
+  tasksUnwatch: 'tasks:unwatch',
 
   // Phone access (#194)
   phoneAccessGet: 'phone-access:get',
@@ -151,6 +170,8 @@ export const EVENT = {
   terminalOwnerChanged: 'terminal-owner:changed',
   sessionStarted: 'session:started',
   sessionArchived: 'session:archived',
+  tasksChanged: 'tasks:changed',
+  sessionTaskChanged: 'tasks:session-task-changed',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */

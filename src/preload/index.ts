@@ -42,6 +42,9 @@ const api: SwitchboardApi = {
   stopSession: (id) => ipcRenderer.invoke(INVOKE.stopSession, id),
   reconnectRemote: (id) => ipcRenderer.invoke(INVOKE.reconnectRemote, id),
   toggleStar: (id) => ipcRenderer.invoke(INVOKE.toggleStar, id),
+  togglePlanPin: (projectPath, slug) => ipcRenderer.invoke(INVOKE.togglePlanPin, projectPath, slug),
+  toggleIssuePlanPin: (projectPath, repository, number, title) =>
+    ipcRenderer.invoke(INVOKE.toggleIssuePlanPin, projectPath, repository, number, title),
   renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
   archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
   snoozeSession: (id, until) => ipcRenderer.invoke(INVOKE.snoozeSession, id, until),
@@ -92,6 +95,7 @@ const api: SwitchboardApi = {
   getShellProfiles: () => ipcRenderer.invoke(INVOKE.getShellProfiles),
   setAppearance: (mode) => ipcRenderer.invoke(INVOKE.setAppearance, mode),
   quickAskHotkeyStatus: () => ipcRenderer.invoke(INVOKE.quickAskHotkeyStatus),
+  blaakTasksSetUp: (url) => ipcRenderer.invoke(INVOKE.blaakTasksSetUp, url),
 
   // ── Host ──
   openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
@@ -120,6 +124,23 @@ const api: SwitchboardApi = {
   projectPlans: (projectPath, options) => ipcRenderer.invoke(INVOKE.planProjectPlans, projectPath, options),
   // ── The project page (#172) ──
   projectOverview: (projectPath, options) => ipcRenderer.invoke(INVOKE.projectOverview, projectPath, options),
+
+  // ── Tasks (#248) ──
+  listTasks: (query) => ipcRenderer.invoke(INVOKE.tasksList, query),
+  getTask: (taskId) => ipcRenderer.invoke(INVOKE.tasksGet, taskId),
+  updateTask: (taskId, change) => ipcRenderer.invoke(INVOKE.tasksUpdate, taskId, change),
+  setTaskRepo: (taskId, projectPath) => ipcRenderer.invoke(INVOKE.tasksSetRepo, taskId, projectPath),
+  prepareTaskStart: (request) => ipcRenderer.invoke(INVOKE.tasksPrepareStart, request),
+  taskSessionStarted: (taskId, sessionId, projectPath) =>
+    ipcRenderer.invoke(INVOKE.tasksSessionStarted, taskId, sessionId, projectPath),
+  linkSessionTask: (sessionId, taskId) => ipcRenderer.invoke(INVOKE.tasksLinkSession, sessionId, taskId),
+  unlinkSessionTask: (sessionId) => ipcRenderer.invoke(INVOKE.tasksUnlinkSession, sessionId),
+  sessionTask: (sessionId) => ipcRenderer.invoke(INVOKE.tasksSessionTask, sessionId),
+  sessionTasks: () => ipcRenderer.invoke(INVOKE.tasksSessionTasks),
+  taskSessions: (taskId) => ipcRenderer.invoke(INVOKE.tasksTaskSessions, taskId),
+  projectTasks: (projectPath) => ipcRenderer.invoke(INVOKE.tasksProjectTasks, projectPath),
+  watchTasks: (watchId, query) => ipcRenderer.invoke(INVOKE.tasksWatch, watchId, query),
+  unwatchTasks: (watchId) => ipcRenderer.invoke(INVOKE.tasksUnwatch, watchId),
 
   // ── Fire-and-forget ──
   sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),
@@ -155,6 +176,8 @@ const api: SwitchboardApi = {
   onTerminalOwnerChanged: (cb) => subscribe(EVENT.terminalOwnerChanged, (_e, sessionId, owner) => cb(sessionId, owner)),
   onSessionStarted: (cb) => subscribe(EVENT.sessionStarted, (_e, sessionId, projectPath) => cb(sessionId, projectPath)),
   onSessionArchived: (cb) => subscribe(EVENT.sessionArchived, (_e, sessionId) => cb(sessionId)),
+  onTasksChanged: (cb) => subscribe(EVENT.tasksChanged, (_e, update) => cb(update)),
+  onSessionTaskChanged: (cb) => subscribe(EVENT.sessionTaskChanged, (_e, sessionId, taskId) => cb(sessionId, taskId)),
 
   // ── Host facts ──
   getPathForFile: (file) => webUtils.getPathForFile(file),

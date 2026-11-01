@@ -9,6 +9,7 @@
  * follow at once (see `rekeyState`).
  */
 import { activityReducer, initialActivityState, rekeyActivity } from './activity-slice';
+import { archiveUndoReducer, initialArchiveUndoState, rekeyArchiveUndo } from './archive-undo-slice';
 import { askReducer, initialAskState } from './ask-slice';
 import { answersReducer, followPending, initialAnswersState } from './answers-slice';
 import { ciStatusReducer, initialCiStatusState, rekeyCiStatus } from './ci-status-slice';
@@ -21,8 +22,10 @@ import { initialSessionWorkState, rekeySessionWork, sessionWorkReducer } from '.
 import { initialPlanState, planReducer, rekeyPlan } from './plan-slice';
 import { highlightedSession, initialMainAreaState, mainAreaReducer, rekeyMainArea } from './main-area-slice';
 import { initialProjectPageState, projectPageReducer } from './project-page-slice';
+import { initialTasksState, tasksReducer } from './tasks-slice';
 import { initialPhoneAccessState, phoneAccessReducer, rekeyPhoneAccess } from './phone-access-slice';
 import { initialSettingsState, settingsReducer } from './settings-slice';
+import { initialSessionTaskState, rekeySessionTask, sessionTaskReducer } from './session-task-slice';
 import { initialStatusState, statusReducer } from './status-slice';
 import { initialToolbarState, toolbarReducer } from './toolbar-slice';
 import { initialUpdateState, updateReducer } from './update-slice';
@@ -31,6 +34,7 @@ import { initialUsageState, usageReducer } from './usage-slice';
 import { initialViewState, rekeyView, viewReducer } from './view-slice';
 import type { ActivityState } from './activity-slice';
 import type { AnswersState } from './answers-slice';
+import type { ArchiveUndoState } from './archive-undo-slice';
 import type { AskState } from './ask-slice';
 import type { CiStatusState } from './ci-status-slice';
 import type { DialogState } from './dialog-slice';
@@ -43,8 +47,10 @@ import type { SessionWorkState } from './session-work-slice';
 import type { PlanState } from './plan-slice';
 import type { MainAreaState } from './main-area-slice';
 import type { ProjectPageState } from './project-page-slice';
+import type { TasksState } from './tasks-slice';
 import type { PhoneAccessSliceState } from './phone-access-slice';
 import type { SettingsState } from './settings-slice';
+import type { SessionTaskState } from './session-task-slice';
 import type { StatusState } from './status-slice';
 import type { ToolbarState } from './toolbar-slice';
 import type { UpdateState } from './update-slice';
@@ -71,9 +77,12 @@ export interface RendererState {
   readonly plan: PlanState;
   readonly mainArea: MainAreaState;
   readonly projectPage: ProjectPageState;
+  readonly tasks: TasksState;
   readonly ciStatus: CiStatusState;
   readonly ask: AskState;
   readonly phoneAccess: PhoneAccessSliceState;
+  readonly sessionTask: SessionTaskState;
+  readonly archiveUndo: ArchiveUndoState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -96,9 +105,12 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
     plan: initialPlanState,
     mainArea: initialMainAreaState,
     projectPage: initialProjectPageState,
+    tasks: initialTasksState,
     ciStatus: initialCiStatusState,
     ask: initialAskState,
     phoneAccess: initialPhoneAccessState,
+    sessionTask: initialSessionTaskState,
+    archiveUndo: initialArchiveUndoState,
   };
 }
 
@@ -128,13 +140,17 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
   // Closing a page goes back to the active session as this event left it.
   const mainArea = mainAreaReducer(state.mainArea, event, view.activeSessionId);
   const projectPage = projectPageReducer(state.projectPage, event);
+  const tasks = tasksReducer(state.tasks, event);
   const ciStatus = ciStatusReducer(state.ciStatus, event);
   const ask = askReducer(state.ask, event);
   const phoneAccess = phoneAccessReducer(state.phoneAccess, event);
+  // Link task… follows the BlaakTasks switch as this event left it.
+  const sessionTask = sessionTaskReducer(state.sessionTask, event, tasks.enabled);
+  const archiveUndo = archiveUndoReducer(state.archiveUndo, event);
 
   return settle(state, {
     view, activity, questions, answers, remote, usage, keys, status, update, settings, dialog, toolbar,
-    terminal, sessionList, sessionWork, plan, mainArea, projectPage, ciStatus, ask, phoneAccess,
+    terminal, sessionList, sessionWork, plan, mainArea, projectPage, tasks, ciStatus, ask, phoneAccess, sessionTask, archiveUndo,
   });
 }
 
@@ -176,11 +192,17 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
     mainArea: rekeyMainArea(state.mainArea, oldId, newId),
     // Keyed by project path and row ids, which a re-key leaves alone.
     projectPage: state.projectPage,
+    // Keyed by task id; a detail's sessions are asked again as it opens.
+    tasks: state.tasks,
     ciStatus: rekeyCiStatus(state.ciStatus, oldId, newId),
     // The box on the empty screen belongs to no session.
     ask: state.ask,
     // A re-keyed session stays on the phone it was on.
     phoneAccess: rekeyPhoneAccess(state.phoneAccess, oldId, newId),
+    // A re-keyed session keeps its task.
+    sessionTask: rekeySessionTask(state.sessionTask, oldId, newId),
+    // An archive taken back brings the session back under its new id.
+    archiveUndo: rekeyArchiveUndo(state.archiveUndo, oldId, newId),
   });
 }
 

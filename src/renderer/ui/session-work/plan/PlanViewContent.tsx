@@ -14,9 +14,9 @@ import { PlanDiagram, PlanLegend } from './PlanDiagram';
 import { IssueDetail } from './IssueDetail';
 import { LevelStart } from './LevelStart';
 import { NO_HANDLERS, NO_PLAN_UI } from './types';
-import type { IssueActions, PlanData, PlanHandlers, PlanUi } from './types';
+import type { IssueActions, PlanData, PlanHandlers, PlanPinControl, PlanUi } from './types';
 
-export type PlanViewProps = PlanData & { readonly issueActions?: IssueActions };
+export type PlanViewProps = PlanData & { readonly issueActions?: IssueActions; readonly pin?: PlanPinControl };
 
 export function PlanViewContent(
   props: PlanViewProps & {
@@ -55,7 +55,7 @@ export function PlanViewContent(
       )}
       <div className="pv-body">
         <div className="pv-scroll" data-testid="plan-scroll">
-          <PlanHeader plan={plan} layout={layout} on={on} />
+          <PlanHeader plan={plan} layout={layout} on={on} pin={props.pin} />
           <PlanWarnings plan={plan} layout={layout} />
           <LevelStart plan={plan} issueActions={props.issueActions} />
           {plan.issues.length

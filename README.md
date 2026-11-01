@@ -100,6 +100,7 @@ Paired phones are listed in the same place, where you can revoke one at any time
 | `⌘E` | Archive the session on screen 🎉 |
 | `⌘S` | Hide or show the sidebar |
 | `⌘F` | Find in Claude's output |
+| `⌘T` | Open or close the Tasks page (only while a BlaakTasks URL is set) |
 
 **In the session list** (after `⌘L`)
 

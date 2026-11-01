@@ -1,0 +1,75 @@
+/* ========== WHAT AN ARCHIVE BRINGS ========== */
+
+/* The foot of the main area: the Undo toast, then the Mark done offer under it. */
+.main-floats {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  max-width: min(480px, calc(100% - 40px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  /* Empty most of the time; only the cards take clicks. */
+  pointer-events: none;
+
+  > * { pointer-events: auto; }
+}
+
+.archive-undo {
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--sb-r-card);
+  background: var(--sb-bg-raised);
+  box-shadow: var(--sb-edge), var(--sb-lift);
+  font-size: 13px;
+  color: var(--sb-text-muted);
+  animation: st-offer-in 0.22s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archive-undo { animation: none; }
+}
+
+/* The name gives way, never "Archived" or the buttons. */
+.archive-undo-text {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+  gap: 0.3em;
+}
+
+.archive-undo-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--sb-text-strong);
+}
+
+.archive-undo-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  &:focus-visible { outline: 2px solid var(--sb-accent); outline-offset: 1px; }
+}
+
+.archive-undo-close {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--sb-r-control);
+  background: none;
+  color: var(--sb-text-faint);
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover { color: var(--sb-text-strong); }
+  &:focus-visible { outline: 2px solid var(--sb-accent); outline-offset: 1px; }
+}

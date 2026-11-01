@@ -53,6 +53,8 @@ export function installIpcBridge(
     api.onTerminalOwnerChanged((sessionId, owner) => send({ type: 'terminalOwnerChanged', sessionId, owner })),
     api.onSessionStarted((sessionId, projectPath) => send({ type: 'sessionStarted', sessionId, projectPath })),
     api.onSessionArchived((sessionId) => send({ type: 'sessionArchived', sessionId })),
+    api.onTasksChanged((update) => send({ type: 'tasksChanged', update })),
+    api.onSessionTaskChanged((sessionId, taskId) => send({ type: 'sessionTaskChanged', sessionId, taskId })),
   ];
   return () => unsubscribes.forEach(unsubscribe => unsubscribe());
 }

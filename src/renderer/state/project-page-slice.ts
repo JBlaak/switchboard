@@ -14,6 +14,11 @@
  * the page opens and every minute while it stays on screen (#174). Which of
  * its rows are on screen is `ui/project-page/page-rows`.
  *
+ * So are the project's open BlaakTasks tasks (#251), the ones linked to it,
+ * asked alongside the overview while BlaakTasks is on. A row key on the
+ * Tasks page's actions (★, Done, snooze) changes them here too, through
+ * `tasksRowChanged`; switching BlaakTasks off forgets them.
+ *
  * What else the page shows is not here: the route says which project and
  * which of its views (`main-area-slice`), and the sessions come from the
  * cached projects.
@@ -26,6 +31,7 @@ import type { RendererState } from './root';
 import { projectRoute } from './main-area-slice';
 import type { ProjectOverview } from '../../domain/project/overview';
 import type { IssueSessionStart } from '../../domain/plan/issue-session';
+import type { TaskRow } from '../../domain/tasks/model';
 
 export type ProjectPageEvent =
   /** The page opened on `projectPath`, with what it remembered of it. */
@@ -51,7 +57,18 @@ export type ProjectPageEvent =
   /** The keyboard cursor moved to a row (null: it is gone). */
   | { type: 'projectCursorMoved'; target: string | null }
   /** The text the page's rows are filtered by (`/`). */
-  | { type: 'projectFilterChanged'; filter: string };
+  | { type: 'projectFilterChanged'; filter: string }
+  /** The open tasks linked to `projectPath` (#251), newest link first, and how many sessions worked on each. */
+  | { type: 'projectTasksAnswered'; projectPath: string; rows: readonly TaskRow[]; sessions: Readonly<Record<string, number>> };
+
+/** The project's open tasks (#251), as last read for it. */
+export interface ProjectTasks {
+  readonly projectPath: string;
+  /** Not Done or Dropped, newest link first. */
+  readonly rows: readonly TaskRow[];
+  /** How many sessions worked on each, by task id. */
+  readonly sessions: Readonly<Record<string, number>>;
+}
 
 /** What a project's page remembers between visits. */
 export interface ProjectPageMemory {
@@ -76,6 +93,8 @@ export interface ProjectPageState extends ProjectPageMemory {
   readonly showMerged: boolean;
   /** A session starting in one of the project's worktrees, or why the last one did not (#175). */
   readonly worktreeStart: ProjectWorktreeStart | null;
+  /** The project's open tasks (#251); null until read, and while BlaakTasks is off. */
+  readonly tasks: ProjectTasks | null;
 }
 
 export type ProjectIssueStart =
@@ -90,7 +109,7 @@ export const NO_MEMORY: ProjectPageMemory = { expandedPlans: [], showClosed: fal
 
 export const initialProjectPageState: ProjectPageState = {
   projectPath: null, ...NO_MEMORY, cursor: null, filter: '', overview: null, looseExpanded: false, start: null,
-  showMerged: false, worktreeStart: null,
+  showMerged: false, worktreeStart: null, tasks: null,
 };
 
 export function projectPageReducer(state: ProjectPageState, event: RendererEvent): ProjectPageState {
@@ -108,6 +127,7 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
         start: null,
         showMerged: false,
         worktreeStart: null,
+        tasks: state.tasks?.projectPath === event.projectPath ? state.tasks : null,
       };
 
     case 'projectPlanToggled': {
@@ -166,6 +186,30 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
 
     case 'projectFilterChanged':
       return state.filter === event.filter ? state : { ...state, filter: event.filter };
+
+    case 'projectTasksAnswered':
+      if (event.projectPath !== state.projectPath) return state;
+      return { ...state, tasks: { projectPath: event.projectPath, rows: event.rows, sessions: event.sessions } };
+
+    // A row key from the Tasks page's actions: the row as it is now, or gone (Done, snoozed).
+    case 'tasksRowChanged': {
+      const tasks = state.tasks;
+      if (!tasks || !tasks.rows.some(row => row.id === event.taskId)) return state;
+      const rows = event.row
+        ? tasks.rows.map(row => (row.id === event.taskId ? event.row! : row))
+        : tasks.rows.filter(row => row.id !== event.taskId);
+      // The cursor stays on the same spot when its row leaves.
+      let cursor = state.cursor;
+      if (!event.row && cursor === 'task:' + event.taskId) {
+        const at = tasks.rows.findIndex(row => row.id === event.taskId);
+        const next = rows[Math.min(at, rows.length - 1)];
+        cursor = next ? 'task:' + next.id : null;
+      }
+      return { ...state, cursor, tasks: { ...tasks, rows } };
+    }
+
+    case 'blaakTasksSwitched':
+      return !event.on && state.tasks ? { ...state, tasks: null } : state;
 
     default:
       return state;

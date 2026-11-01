@@ -7,6 +7,8 @@
  * the ones still working, then pinned, then the rest — each block most recent
  * first, except Working, which is newest *started* first (see `sortKey`).
  * Sessions sharing a slug fold into a group, but only within their own project.
+ * A plan the user pinned (such a group, or a GitHub plan pinned from its
+ * page) sits above all of them.
  *
  * The list is *anchored*: the session the user is working in keeps the slot it
  * already had, so the list cannot slide out from under the cursor while the
@@ -20,7 +22,7 @@
 import { byMostRecentlyModified } from '../../domain/session/session';
 import { isSnoozed } from '../../domain/session/snooze';
 import { cleanDisplayName } from '../../domain/session/title';
-import { TIER_ORDER, TIER_RUNNING, itemTier, rowSurvivesTruncation } from '../../domain/session/tiers';
+import { TIER_ORDER, TIER_REST, TIER_RUNNING, itemTier, rowSurvivesTruncation } from '../../domain/session/tiers';
 import { formatDate, localDateKey } from '../lib/format';
 import type { Project } from '../../domain/project/project';
 import type { SessionRow } from '../../domain/session/session';
@@ -46,7 +48,18 @@ export interface SessionListGroup {
   readonly sessions: readonly SessionListRow[];
 }
 
-export type SessionListEntry = SessionListRow | SessionListGroup;
+/** A GitHub plan pinned from its page: a row that opens the page, with no sessions of its own. */
+export interface SessionListPlan {
+  readonly kind: 'plan';
+  /** See `planPinId`. */
+  readonly id: string;
+  readonly projectPath: string;
+  readonly repository: string;
+  readonly number: number;
+  readonly title: string;
+}
+
+export type SessionListEntry = SessionListRow | SessionListGroup | SessionListPlan;
 
 /** A top-level entry, with what the ordering rules need from it. */
 export interface ListItem {
@@ -56,6 +69,8 @@ export interface ListItem {
   /** Epoch ms the newest-started session behind this entry was started. */
   readonly startTime: number;
   readonly pinned: boolean;
+  /** A plan pinned to the top of the list. */
+  readonly pinnedPlan: boolean;
   /** The highest tier of its sessions, before pinning is taken into account. */
   readonly tier: number;
   readonly remote: boolean;
@@ -91,6 +106,11 @@ export interface SessionListLayout {
  */
 export function slugId(slug: string, projectPath: string): string {
   return 'slug-' + (projectPath + '--' + slug).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+/** The element id for a pinned GitHub plan's row; the same plan can be pinned in two projects. */
+export function planPinId(projectPath: string, repository: string, number: number): string {
+  return 'plan-' + (projectPath + '--' + repository + '--' + number).replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
 /** The element id of a session's row. */
@@ -262,7 +282,34 @@ export function listItems(
     projectPath,
   });
 
+  // A pinned GitHub plan is a section of the unfiltered list only: a filter
+  // or a search asks about sessions, and it has none.
+  const { filters } = inputs;
+  const filtering = filters.showArchived || filters.showStarredOnly || filters.showRunningOnly
+    || filters.showSnoozedOnly || filters.showTodayOnly || filters.searchMatchIds !== null;
+
   for (const project of projects) {
+    if (!filtering) {
+      for (const pin of project.pinnedIssuePlans ?? []) {
+        items.push({
+          entry: {
+            kind: 'plan',
+            id: planPinId(project.projectPath, pin.repository, pin.number),
+            projectPath: project.projectPath,
+            repository: pin.repository,
+            number: pin.number,
+            title: pin.title,
+          },
+          sortTime: pin.pinnedAt,
+          startTime: pin.pinnedAt,
+          pinned: false,
+          pinnedPlan: true,
+          tier: TIER_REST,
+          remote: false,
+        });
+      }
+    }
+
     const filtered = passesFilters(project.sessions, inputs);
     if (filtered.length === 0) continue;
 
@@ -286,6 +333,7 @@ export function listItems(
         sortTime: new Date(session.modified).getTime(),
         startTime: new Date(session.created).getTime(),
         pinned: !!session.starred,
+        pinnedPlan: false,
         tier: inputs.tierOf(session.sessionId),
         remote: session.type === 'remote',
       });
@@ -293,7 +341,10 @@ export function listItems(
 
     for (const [slug, sessions] of bySlug) {
       const sorted = [...sessions].sort(byMostRecentlyModified);
-      const entry: SessionListEntry = sorted.length === 1
+      // A pinned plan keeps its group header even with one session left, as
+      // that is where the pin is.
+      const pinnedPlan = !!project.pinnedPlans?.includes(slug);
+      const entry: SessionListEntry = sorted.length === 1 && !pinnedPlan
         ? row(sorted[0], project.projectPath)
         : {
           kind: 'group',
@@ -308,6 +359,7 @@ export function listItems(
         sortTime: Math.max(...sorted.map(s => new Date(s.modified).getTime())),
         startTime: Math.max(...sorted.map(s => new Date(s.created).getTime())),
         pinned: sorted.some(s => !!s.starred),
+        pinnedPlan,
         tier: Math.max(...sorted.map(s => inputs.tierOf(s.sessionId))),
         remote: sorted.some(s => s.type === 'remote'),
       });
@@ -456,7 +508,7 @@ export function layoutRows(layout: SessionListLayout): SessionListRow[] {
   const rows: SessionListRow[] = [];
   for (const { entry } of [...layout.visible, ...layout.older]) {
     if (entry.kind === 'row') rows.push(entry);
-    else rows.push(...entry.sessions);
+    else if (entry.kind === 'group') rows.push(...entry.sessions);
   }
   return rows;
 }

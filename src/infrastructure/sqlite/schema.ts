@@ -101,6 +101,42 @@ const TABLES = [
     paired_at INTEGER NOT NULL,
     last_seen_at INTEGER
   )`,
+  // Which session works on which BlaakTasks task, and in which repo (#245). A
+  // row without a session is a task's repo set by hand. Times are epoch ms.
+  `CREATE TABLE IF NOT EXISTS task_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL,
+    project_path TEXT NOT NULL,
+    session_id TEXT,
+    source TEXT NOT NULL,
+    linked_at INTEGER NOT NULL
+  )`,
+  // The plans pinned to the top of the session list: a plan is the sessions
+  // sharing a slug within one project, so the pin is keyed on both and holds
+  // for sessions started from the plan later.
+  `CREATE TABLE IF NOT EXISTS pinned_plans (
+    project_path TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    PRIMARY KEY (project_path, slug)
+  )`,
+  // The GitHub plans pinned to the top of the session list, from the plan's
+  // own page. Keyed on the project the page was in and the plan's issue; the
+  // title is kept as it was when pinned, so the row needs no GitHub call.
+  // Epoch ms for pinned_at.
+  `CREATE TABLE IF NOT EXISTS pinned_issue_plans (
+    project_path TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    pinned_at INTEGER NOT NULL,
+    PRIMARY KEY (project_path, repository, number)
+  )`,
+  // When a session was unlinked from its task by hand, so detection does not
+  // relink it from a tool call made before (#245). Epoch ms.
+  `CREATE TABLE IF NOT EXISTS task_unlinks (
+    session_id TEXT PRIMARY KEY,
+    unlinked_at INTEGER NOT NULL
+  )`,
 ];
 
 const INDEXES = [
@@ -109,6 +145,9 @@ const INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_search_map_type_id ON search_map(type, id)',
   'CREATE INDEX IF NOT EXISTS idx_session_actions_phase ON session_actions(phase)',
   'CREATE INDEX IF NOT EXISTS idx_auto_fix_attempts_pr ON auto_fix_attempts(repository, number)',
+  'CREATE INDEX IF NOT EXISTS idx_task_links_task ON task_links(task_id)',
+  // A session works on at most one task.
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_task_links_session ON task_links(session_id) WHERE session_id IS NOT NULL',
 ];
 
 type Migration = (db: Database.Database, result: SchemaResult) => void;
@@ -139,6 +178,14 @@ const MIGRATIONS: Migration[] = [
   // v4: superseded — fileMtime is added by the reconciliation below, keyed on
   // column presence rather than a version number.
   () => {},
+  // v5: clear the cache so sessions a tool ran with `claude -p` drop out of it.
+  // They are no longer listed, but a cached one whose transcript never changes
+  // again would otherwise stay. Only a cache: a database a parallel branch
+  // already took past v5 keeps a few stale rows, nothing worse.
+  (db) => {
+    try { db.exec('DELETE FROM session_cache'); } catch {}
+    try { db.exec('DELETE FROM cache_meta'); } catch {}
+  },
 ];
 
 function readVersion(db: Database.Database): number {

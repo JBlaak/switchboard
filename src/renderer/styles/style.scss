@@ -29,7 +29,10 @@
 @use 'questions';
 @use 'session-work';
 @use 'plan';
+@use 'session-task';
+@use 'archive-undo';
 @use 'project-page';
+@use 'tasks-page';
 @use 'phone-access';
 @use 'motion';
 @use 'glass';

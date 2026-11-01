@@ -16,6 +16,7 @@ import { dispatch, getState } from '../../state/app-store';
 import { celebrate } from '../../lib/motion/celebrate';
 import { collapse, uncollapse } from '../../lib/motion/reflow';
 import { motion, reducedMotion } from '../../lib/motion/spring';
+import { sidebarContent } from '../../lib/dom';
 
 /** The slide starts after the confetti has had a beat of its own. */
 const SLIDE_AT_MS = 260;
@@ -34,6 +35,19 @@ export function isLeaving(id: string, groupId?: string): boolean {
 export function celebrateFrom(el: Element): void {
   const r = el.getBoundingClientRect();
   celebrate(r.left + r.width / 2, r.top + r.height / 2);
+}
+
+/**
+ * Confetti for a session archived from elsewhere — by itself, through its
+ * `archive_session` tool, or from a phone — as a click on its archive button
+ * would throw it: from the button, or from the row while the button is
+ * hidden. Nothing when the row isn't in the list.
+ */
+export function celebrateArchivedRow(sessionId: string): void {
+  const row = sidebarContent.querySelector<HTMLElement>(`.session-item[data-session-id="${CSS.escape(sessionId)}"]`);
+  if (!row || row.dataset.leaving !== undefined) return;
+  const button = row.querySelector<HTMLElement>('.session-archive-btn');
+  celebrateFrom(button && button.getBoundingClientRect().width > 0 ? button : row);
 }
 
 /**

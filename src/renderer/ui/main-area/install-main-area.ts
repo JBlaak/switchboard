@@ -12,7 +12,9 @@
 import { dispatch, getState, store } from '../../state/app-store';
 import { openSessions } from '../../state/session-store';
 import { clearNotifications } from '../../state/activity-store';
-import { placeholder, projectPagePanel, sessionWorkPanel, settingsViewer, terminalArea } from '../../lib/dom';
+import {
+  placeholder, projectPagePanel, sessionWorkPanel, settingsViewer, tasksPagePanel, terminalArea,
+} from '../../lib/dom';
 import { showEmptyScreen } from '../../features/patch/patch';
 import { fitAndScroll } from '../../features/terminal/terminal-manager';
 import type { MainAreaRoute } from '../../state/main-area-slice';
@@ -38,6 +40,7 @@ function swapTo(route: MainAreaRoute): void {
   settingsViewer.style.display = route.kind === 'settings' ? 'flex' : 'none';
   sessionWorkPanel.style.display = route.kind === 'sessionWork' ? '' : 'none';
   projectPagePanel.style.display = route.kind === 'project' ? '' : 'none';
+  tasksPagePanel.style.display = route.kind === 'tasks' ? '' : 'none';
   if (route.kind === 'empty') showEmptyScreen();
   else placeholder.style.display = 'none';
 }

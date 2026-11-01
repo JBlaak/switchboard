@@ -2,14 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  CLOSING_REFS_TTL_MS, IssueSessionService, type IssueSessionCandidate, type IssueSessionServiceDeps,
+  CLOSING_REFS_TTL_MS, IssueSessionService, type IssueSessionCandidate,
 } from '../src/application/services/issue-session-service';
-import type { GitWrite } from '../src/application/ports/git-workspace';
 import type { WorktreeSummary } from '../src/domain/project/overview';
 import type { IssueKey, Plan, PlanIssue, PlanPullRequest } from '../src/domain/plan/model';
 import type { PullRequestCloses } from '../src/application/ports/github-cli';
 import type { TranscriptLocation } from '../src/application/ports/transcript-store';
-import { silentLog } from './support/fakes';
+import { FakeStartGit, silentLog } from './support/fakes';
 
 const REPO = 'JBlaak/switchboard';
 const ROOT = '/dev/switchboard';
@@ -34,64 +33,13 @@ function plan(issues: PlanIssue[]): Plan {
   return { repository: REPO, number: 112, title: 'Image compare', parent: null, issues, outside: [] };
 }
 
-/** A repository with `main` on origin, recording every write. */
-class FakeGit {
-  readonly writes: string[] = [];
-  readonly branches = new Set<string>(['main']);
-  readonly remoteBranches = new Set<string>(['main']);
-  /** Branches whose fetch fails, with git's reason. */
-  readonly unfetchable = new Map<string, string>();
-  checkout: string | null = ROOT;
-  current = new Map<string, string>();
-  /** The checkouts `worktrees` lists, the main one first. */
-  checkouts: WorktreeSummary[] = [];
-  /** A write that fails, by its first word (`remove`, `delete`, `checkout`), with git's reason. */
-  readonly failing = new Map<string, string>();
-
-  readonly port: IssueSessionServiceDeps['git'] = {
-    mainCheckout: async () => this.checkout,
-    defaultBranch: async () => 'main',
-    currentBranch: async (worktree) => this.current.get(worktree) ?? null,
-    branchExists: async (_repo, branch) => this.branches.has(branch),
-    commitSha: async (_repo, ref) => {
-      if (ref.startsWith('origin/')) return this.remoteBranches.has(ref.slice('origin/'.length)) ? 'sha' : null;
-      return this.branches.has(ref) ? 'sha' : null;
-    },
-    fetchBranch: async (_repo, branch): Promise<GitWrite> => {
-      this.writes.push('fetch ' + branch);
-      const reason = this.unfetchable.get(branch);
-      return reason ? { ok: false, reason } : { ok: true };
-    },
-    addWorktree: async (_repo, path, branch, base): Promise<GitWrite> => {
-      this.writes.push(`worktree add -b ${branch} ${path} ${base}`);
-      this.branches.add(branch);
-      return { ok: true };
-    },
-    worktrees: async () => this.checkouts,
-    checkoutWorktree: async (_repo, path, branch) => this.write('checkout', `worktree add ${path} ${branch}`),
-    removeWorktree: async (_repo, path, options) => this.write('remove', `worktree remove ${options?.force ? '--force ' : ''}${path}`),
-    pruneWorktrees: async () => this.write('prune', 'worktree prune'),
-    deleteBranch: async (_repo, branch) => {
-      const result = this.write('delete', 'branch -D ' + branch);
-      if (result.ok) this.branches.delete(branch);
-      return result;
-    },
-  };
-
-  private write(kind: string, command: string): GitWrite {
-    this.writes.push(command);
-    const reason = this.failing.get(kind);
-    return reason ? { ok: false, reason } : { ok: true };
-  }
-}
-
 function checkout(path: string, branch: string, fields: Partial<WorktreeSummary> = {}): WorktreeSummary {
   return { path, branch, main: false, locked: false, changedFiles: 0, ahead: 0, merged: false, lastCommitAt: null, ...fields };
 }
 
 interface Harness {
   service: IssueSessionService;
-  git: FakeGit;
+  git: FakeStartGit;
   ghCalls: string[];
   now: { value: number };
 }
@@ -104,7 +52,7 @@ function harness({
   statuses?: PullRequestCloses[];
   locations?: Record<string, TranscriptLocation[]>;
 } = {}): Harness {
-  const git = new FakeGit();
+  const git = new FakeStartGit(ROOT);
   const ghCalls: string[] = [];
   const now = { value: 1_000_000 };
   const service = new IssueSessionService({

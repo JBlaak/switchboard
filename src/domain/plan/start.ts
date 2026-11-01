@@ -2,23 +2,16 @@
  * Starting a session on a plan's issue (A2, A3): the branch it works on and
  * the prompt Claude starts with.
  */
+import { titleSlug } from '../project/branch-worktree';
 import type { IssueKey } from './model';
-
-const SLUG_WORDS = 5;
 
 /**
  * `<number>-<slug>`: the slug is the title's first few words, lower case, so
  * `issueFromBranch` reads the number back and the session owns the issue (S1).
  */
 export function issueBranchName(issue: IssueKey & { title: string }): string {
-  const words = issue.title
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length > 0)
-    .slice(0, SLUG_WORDS);
-  return words.length ? issue.number + '-' + words.join('-') : String(issue.number);
+  const slug = titleSlug(issue.title);
+  return slug ? issue.number + '-' + slug : String(issue.number);
 }
 
 /**

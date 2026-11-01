@@ -40,9 +40,19 @@ test('a gauge without a reset leaves it out of the tooltip', () => {
   assert.equal(gauge.tooltip, 'Current session: 42%');
 });
 
-test('a gauge is coloured from 60% and again from 80%', () => {
+test('the 5-hour gauge is coloured from 60% and again from 80%', () => {
   /* When */
   const classes = [0, 59, 60, 79, 80, 100].map(p => quotaGaugeView(sessionAt(p)).fillClass);
+
+  /* Then */
+  assert.deepEqual(classes, [
+    'quota-fill', 'quota-fill', 'quota-fill quota-mid', 'quota-fill quota-mid', 'quota-fill quota-high', 'quota-fill quota-high',
+  ]);
+});
+
+test('the weekly gauge is coloured from 80% and again from 90%', () => {
+  /* When */
+  const classes = [0, 79, 80, 89, 90, 100].map(p => quotaGaugeView(weekAt(p)).fillClass);
 
   /* Then */
   assert.deepEqual(classes, [

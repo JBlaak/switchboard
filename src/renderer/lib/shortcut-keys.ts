@@ -33,11 +33,27 @@ export function isArchiveSessionKey(e: KeyboardEvent): boolean {
 }
 
 /**
+ * Cmd+Z takes the last archive back while its Undo toast is up (the caller
+ * checks that), with the same text-field exception: there it undoes typing.
+ */
+export function isUndoArchiveKey(e: KeyboardEvent): boolean {
+  return isCommandKey(e, 'KeyZ');
+}
+
+/**
  * Cmd+, opens the project's settings while its page has the keyboard (#176).
  * Free everywhere else: the app menu has no Settings item to claim it.
  */
 export function isProjectSettingsKey(e: KeyboardEvent): boolean {
   return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'Comma';
+}
+
+/**
+ * Cmd+T opens or closes the Tasks page (#249), wherever the focus is. Only
+ * while BlaakTasks is on; the caller checks that.
+ */
+export function isTasksPageKey(e: KeyboardEvent): boolean {
+  return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyT';
 }
 
 /** Cmd plus `code`, unless the key is going into a text field. */

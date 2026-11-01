@@ -13,6 +13,7 @@ import { relayoutSessionList } from '../session-list/relayout';
 import { dispatch } from '../../state/app-store';
 import { view } from '../../state/session-store';
 import { syncQuickSessionButton } from '../../features/sessions/quick-session';
+import { followBlaakTasksSwitch } from '../tasks-page/actions';
 import { applyTerminalFont, refitOpenTerminals } from '../../features/terminal/terminal-manager';
 import { applyTerminalTheme } from '../../features/terminal/terminal-themes';
 import type { SettingsRecord } from '../../state/settings-slice';
@@ -77,6 +78,7 @@ export async function saveSettings(form: Record<string, unknown>): Promise<void>
   });
   relayoutSessionList();
   void syncQuickSessionButton();
+  followBlaakTasksSwitch(settings);
 
   dispatch({ type: 'settingsSaved' });
   setTimeout(() => closeSettings(), 600);
@@ -85,4 +87,12 @@ export async function saveSettings(form: Record<string, unknown>): Promise<void>
 /** Look a weather city up. Null when there is no such place. */
 export function geocodeCity(name: string): Promise<WeatherLocation | null> {
   return window.api.geocodeWeatherLocation(name);
+}
+
+/**
+ * Whether a server in `~/.claude.json` has this BlaakTasks URL (#252).
+ * Unknown counts as yes: the "add it" line only shows on a no main gave.
+ */
+export function blaakTasksSetUp(url: string): Promise<boolean> {
+  return window.api.blaakTasksSetUp(url).catch(() => true);
 }

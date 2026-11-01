@@ -2,8 +2,8 @@
  * Where the keyboard can go in the session list, read from the layout rather
  * than from the DOM.
  *
- * The list renders, top to bottom: each visible entry (a row, or a slug
- * group's header followed by its rows), then the "+ N older" toggle and the
+ * The list renders, top to bottom: each visible entry (a row, a pinned
+ * GitHub plan, or a slug group's header followed by its rows), then the "+ N older" toggle and the
  * entries behind it. `cursorTargets` walks that same order and says, for each
  * thing a click would act on, whether it is on screen. The keyboard cursor
  * only lands on what is on screen; session navigation (Cmd+Shift+[ / ])
@@ -22,6 +22,7 @@ import type { LaidEntry, SessionListRow } from './session-list-layout';
 
 export type CursorTarget =
   | { readonly kind: 'row'; readonly name: string; readonly shown: boolean; readonly sessionId: string; readonly groupId?: string }
+  | { readonly kind: 'plan'; readonly name: string; readonly shown: boolean; readonly projectPath: string; readonly repository: string; readonly number: number }
   | { readonly kind: 'header'; readonly name: string; readonly shown: boolean; readonly groupId: string }
   | { readonly kind: 'more'; readonly name: string; readonly shown: boolean; readonly groupId: string }
   | { readonly kind: 'older'; readonly name: string; readonly shown: boolean };
@@ -53,6 +54,11 @@ export function cursorTargets(list: SessionListState, running: ReadonlySet<strin
   const entry = ({ entry }: LaidEntry, shown: boolean): void => {
     if (entry.kind === 'row') {
       targets.push(rowTarget(entry, shown && !list.leaving[entry.id]));
+      return;
+    }
+    if (entry.kind === 'plan') {
+      const { id, projectPath, repository, number } = entry;
+      targets.push({ kind: 'plan', name: id, shown, projectPath, repository, number });
       return;
     }
     const groupId = entry.id;
