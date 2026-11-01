@@ -13,7 +13,7 @@ the keyboard, and a small jelly friend named Patch keeps you company.
 ## What it's about
 
 **Focus.** Switchboard shows you what needs you and keeps everything else out of the way. Sessions
-sort themselves into *Needs input*, *Working*, *Pinned* and *Recent*, with live dots so you can
+sort themselves into _Needs input_, _Working_, _Pinned_ and _Recent_, with live dots so you can
 tell a busy Claude from a waiting one at a glance. Old sessions fold away behind "+3 older".
 
 **Minimalism.** One list, one Claude on screen, no tabs. Archiving a session also stops it. Picking a
@@ -42,8 +42,8 @@ own answer. Patch keeps count. Press `Esc` to answer in Claude instead.
 
 `⌘G` opens **Session work** for the session on screen: its pull requests, branches, uncommitted
 worktrees and the issues it touched, each with its CI status. Read the diff unified or split, leave
-review comments on lines, and hand them back to Claude. Buttons like *Ship it*, *Rebase* and
-*Fix CI* type the prompt into the session for you. While a session runs, failing CI on its PRs is
+review comments on lines, and hand them back to Claude. Buttons like _Ship it_, _Rebase_ and
+_Fix CI_ type the prompt into the session for you. While a session runs, failing CI on its PRs is
 handed to Claude automatically, at most twice per check.
 
 ![Session work](build/screenshot-work.png)
@@ -90,48 +90,48 @@ Paired phones are listed in the same place, where you can revoke one at any time
 
 **Anywhere**
 
-| Keys | Does |
-|---|---|
-| `⌘A` | New session: open the project picker |
-| `⌘N` | Quick session in your quick-session folder |
-| `⌘⇧[` / `⌘⇧]` | Previous / next session (`⌘←` `⌘→` and `⌘↑` `⌘↓` work too) |
-| `⌘L` | Move to the session list |
-| `⌘G` | Open or close Session work |
-| `⌘E` | Archive the session on screen 🎉 |
-| `⌘S` | Hide or show the sidebar |
-| `⌘F` | Find in Claude's output |
-| `⌘T` | Open or close the Tasks page (only while a BlaakTasks URL is set) |
+| Keys          | Does                                                              |
+| ------------- | ----------------------------------------------------------------- |
+| `⌘A`          | New session: open the project picker                              |
+| `⌘N`          | Quick session in your quick-session folder                        |
+| `⌘⇧[` / `⌘⇧]` | Previous / next session (`⌘←` `⌘→` and `⌘↑` `⌘↓` work too)        |
+| `⌘L`          | Move to the session list                                          |
+| `⌘G`          | Open or close Session work                                        |
+| `⌘E`          | Archive the session on screen 🎉                                  |
+| `⌘S`          | Hide or show the sidebar                                          |
+| `⌘F`          | Find in Claude's output                                           |
+| `⌘T`          | Open or close the Tasks page (only while a BlaakTasks URL is set) |
 
 **In the session list** (after `⌘L`)
 
-| Keys | Does |
-|---|---|
-| `↑` `↓` or `J` `K` | Move |
-| `Enter` | Open the session, fold a group, or show older ones |
-| `R` or `F2` | Rename |
-| `E` | Archive (a whole group, on a group header) |
-| `A` | New session |
-| `Esc` | Back to Claude |
+| Keys               | Does                                               |
+| ------------------ | -------------------------------------------------- |
+| `↑` `↓` or `J` `K` | Move                                               |
+| `Enter`            | Open the session, fold a group, or show older ones |
+| `R` or `F2`        | Rename                                             |
+| `E`                | Archive (a whole group, on a group header)         |
+| `A`                | New session                                        |
+| `Esc`              | Back to Claude                                     |
 
 **In Session work**
 
-| Keys | Does |
-|---|---|
-| `J` `K` | Next / previous item |
-| `N` `P` | Next / previous file |
-| `U` | Unified or split diff |
-| `C` | Comment on the focused line |
-| `Esc` | Back to Claude |
+| Keys    | Does                        |
+| ------- | --------------------------- |
+| `J` `K` | Next / previous item        |
+| `N` `P` | Next / previous file        |
+| `U`     | Unified or split diff       |
+| `C`     | Comment on the focused line |
+| `Esc`   | Back to Claude              |
 
 **In Claude's questions**
 
-| Keys | Does |
-|---|---|
-| `1`–`9` | Pick an option |
-| `↑` `↓` | Move between options |
-| `←` `→` or `Enter` | Previous / next question |
-| `Space` | Toggle an option, when you can pick several |
-| `Esc` | Answer in Claude instead |
+| Keys               | Does                                        |
+| ------------------ | ------------------------------------------- |
+| `1`–`9`            | Pick an option                              |
+| `↑` `↓`            | Move between options                        |
+| `←` `→` or `Enter` | Previous / next question                    |
+| `Space`            | Toggle an option, when you can pick several |
+| `Esc`              | Answer in Claude instead                    |
 
 ## Run it
 

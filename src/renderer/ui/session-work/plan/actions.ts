@@ -4,11 +4,11 @@
  *
  * The Plan tab's components (#124) call these and nothing else.
  */
-import { openSession, startClaudeSessionIn } from '../../../features/sessions/session-actions';
-import { resolveDefaultSessionOptions } from '../../../features/dialogs/launch-options';
-import { sessionMap } from '../../../state/session-store';
-import { startIssueSessionWith, type StartIssueSessionRequest, type StartIssueSessionSteps } from './start-issue-session';
-import type { IssueSessionStart } from '../../../../domain/plan/issue-session';
+import {openSession, startClaudeSessionIn} from '../../../features/sessions/session-actions';
+import {resolveDefaultSessionOptions} from '../../../features/dialogs/launch-options';
+import {sessionMap} from '../../../state/session-store';
+import {startIssueSessionWith, type StartIssueSessionRequest, type StartIssueSessionSteps} from './start-issue-session';
+import type {IssueSessionStart} from '../../../../domain/plan/issue-session';
 
 /**
  * Start a session on a plan's issue: a worktree on a branch named after it,
@@ -21,29 +21,29 @@ import type { IssueSessionStart } from '../../../../domain/plan/issue-session';
  * did not start.
  */
 export function startIssueSession(request: StartIssueSessionRequest): Promise<IssueSessionStart> {
-  return startIssueSessionWith(issueSessionSteps, request);
+    return startIssueSessionWith(issueSessionSteps, request);
 }
 
 /** The real steps: main prepares the worktree, the renderer starts the session. Start level uses them too. */
 export const issueSessionSteps: StartIssueSessionSteps = {
-  prepare: (prepare) => window.api.prepareIssueWorktree(prepare),
-  defaultOptions: resolveDefaultSessionOptions,
-  launch: (projectPath, options, how) => startClaudeSessionIn(projectPath, options, how),
+    prepare: (prepare) => window.api.prepareIssueWorktree(prepare),
+    defaultOptions: resolveDefaultSessionOptions,
+    launch: (projectPath, options, how) => startClaudeSessionIn(projectPath, options, how),
 };
 
 /** Put a session on screen, the way a click on its row does. False when no row goes by that id. */
 export async function jumpToSession(sessionId: string): Promise<boolean> {
-  const session = sessionMap.get(sessionId);
-  if (!session) return false;
-  await openSession(session);
-  return true;
+    const session = sessionMap.get(sessionId);
+    if (!session) return false;
+    await openSession(session);
+    return true;
 }
 
 /** `owner/repo#n` → the id of the session that owns it (S1); empty when main could not say. */
 export async function loadIssueSessions(repository: string): Promise<Record<string, string>> {
-  try {
-    return await window.api.issueSessions(repository);
-  } catch {
-    return {};
-  }
+    try {
+        return await window.api.issueSessions(repository);
+    } catch {
+        return {};
+    }
 }

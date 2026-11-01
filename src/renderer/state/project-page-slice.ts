@@ -26,194 +26,228 @@
  * The events are declared here rather than in `events.ts`, like the session
  * list's, so the page's vocabulary stays in one file.
  */
-import type { RendererEvent } from './events';
-import type { RendererState } from './root';
-import { projectRoute } from './main-area-slice';
-import type { ProjectOverview } from '../../domain/project/overview';
-import type { IssueSessionStart } from '../../domain/plan/issue-session';
-import type { TaskRow } from '../../domain/tasks/model';
+import type {RendererEvent} from './events';
+import type {RendererState} from './root';
+import {projectRoute} from './main-area-slice';
+import type {ProjectOverview} from '../../domain/project/overview';
+import type {IssueSessionStart} from '../../domain/plan/issue-session';
+import type {TaskRow} from '../../domain/tasks/model';
 
 export type ProjectPageEvent =
-  /** The page opened on `projectPath`, with what it remembered of it. */
-  | { type: 'projectPageRestored'; projectPath: string; memory: ProjectPageMemory }
-  /** A plan (`owner/repo#n`) expanded or collapsed in place. */
-  | { type: 'projectPlanToggled'; plan: string }
-  /** A plan expanded (→), or collapsed (←); nothing when it already is. */
-  | { type: 'projectPlanExpanded'; plan: string }
-  | { type: 'projectPlanCollapsed'; plan: string }
-  /** Main answered the overview of `projectPath`, asked with closed plans and merged PRs or without. */
-  | { type: 'projectOverviewAnswered'; projectPath: string; closed: boolean; merged: boolean; overview: ProjectOverview }
-  /** Show N more: every issue that is not in a plan, not only the first few. */
-  | { type: 'projectLooseExpanded' }
-  /** Start session on an issue (`owner/repo#n`) under the page, and how it went. */
-  | { type: 'projectIssueStartAsked'; issue: string }
-  | { type: 'projectIssueStartAnswered'; issue: string; result: IssueSessionStart }
-  | { type: 'projectShowClosedToggled' }
-  /** Show merged in the Pull requests section (#175). */
-  | { type: 'projectShowMergedToggled' }
-  /** Start session on one of the project's worktrees (#175), by its path, and how it went. */
-  | { type: 'projectWorktreeStartAsked'; path: string }
-  | { type: 'projectWorktreeStartAnswered'; path: string; result: { ok: true; sessionId: string } | { ok: false; reason: string } }
-  /** The keyboard cursor moved to a row (null: it is gone). */
-  | { type: 'projectCursorMoved'; target: string | null }
-  /** The text the page's rows are filtered by (`/`). */
-  | { type: 'projectFilterChanged'; filter: string }
-  /** The open tasks linked to `projectPath` (#251), newest link first, and how many sessions worked on each. */
-  | { type: 'projectTasksAnswered'; projectPath: string; rows: readonly TaskRow[]; sessions: Readonly<Record<string, number>> };
+    /** The page opened on `projectPath`, with what it remembered of it. */
+    | {type: 'projectPageRestored'; projectPath: string; memory: ProjectPageMemory}
+    /** A plan (`owner/repo#n`) expanded or collapsed in place. */
+    | {type: 'projectPlanToggled'; plan: string}
+    /** A plan expanded (→), or collapsed (←); nothing when it already is. */
+    | {type: 'projectPlanExpanded'; plan: string}
+    | {type: 'projectPlanCollapsed'; plan: string}
+    /** Main answered the overview of `projectPath`, asked with closed plans and merged PRs or without. */
+    | {
+          type: 'projectOverviewAnswered';
+          projectPath: string;
+          closed: boolean;
+          merged: boolean;
+          overview: ProjectOverview;
+      }
+    /** Show N more: every issue that is not in a plan, not only the first few. */
+    | {type: 'projectLooseExpanded'}
+    /** Start session on an issue (`owner/repo#n`) under the page, and how it went. */
+    | {type: 'projectIssueStartAsked'; issue: string}
+    | {type: 'projectIssueStartAnswered'; issue: string; result: IssueSessionStart}
+    | {type: 'projectShowClosedToggled'}
+    /** Show merged in the Pull requests section (#175). */
+    | {type: 'projectShowMergedToggled'}
+    /** Start session on one of the project's worktrees (#175), by its path, and how it went. */
+    | {type: 'projectWorktreeStartAsked'; path: string}
+    | {
+          type: 'projectWorktreeStartAnswered';
+          path: string;
+          result: {ok: true; sessionId: string} | {ok: false; reason: string};
+      }
+    /** The keyboard cursor moved to a row (null: it is gone). */
+    | {type: 'projectCursorMoved'; target: string | null}
+    /** The text the page's rows are filtered by (`/`). */
+    | {type: 'projectFilterChanged'; filter: string}
+    /** The open tasks linked to `projectPath` (#251), newest link first, and how many sessions worked on each. */
+    | {
+          type: 'projectTasksAnswered';
+          projectPath: string;
+          rows: readonly TaskRow[];
+          sessions: Readonly<Record<string, number>>;
+      };
 
 /** The project's open tasks (#251), as last read for it. */
 export interface ProjectTasks {
-  readonly projectPath: string;
-  /** Not Done or Dropped, newest link first. */
-  readonly rows: readonly TaskRow[];
-  /** How many sessions worked on each, by task id. */
-  readonly sessions: Readonly<Record<string, number>>;
+    readonly projectPath: string;
+    /** Not Done or Dropped, newest link first. */
+    readonly rows: readonly TaskRow[];
+    /** How many sessions worked on each, by task id. */
+    readonly sessions: Readonly<Record<string, number>>;
 }
 
 /** What a project's page remembers between visits. */
 export interface ProjectPageMemory {
-  /** Plans expanded in place, as `owner/repo#n`. */
-  readonly expandedPlans: readonly string[];
-  readonly showClosed: boolean;
+    /** Plans expanded in place, as `owner/repo#n`. */
+    readonly expandedPlans: readonly string[];
+    readonly showClosed: boolean;
 }
 
 export interface ProjectPageState extends ProjectPageMemory {
-  /** The project the rest belongs to; null until a page has opened. */
-  readonly projectPath: string | null;
-  /** The row the keyboard cursor is on, by the id its section gives it. */
-  readonly cursor: string | null;
-  readonly filter: string;
-  /** Main's last answer for the project; null until the first one comes. */
-  readonly overview: ProjectOverview | null;
-  /** Show N more was clicked: the issues not in a plan are listed in full. */
-  readonly looseExpanded: boolean;
-  /** A session starting on one of the page's issues, or why the last one did not. */
-  readonly start: ProjectIssueStart | null;
-  /** Show merged: merged pull requests are listed after the open ones (#175). Not remembered. */
-  readonly showMerged: boolean;
-  /** A session starting in one of the project's worktrees, or why the last one did not (#175). */
-  readonly worktreeStart: ProjectWorktreeStart | null;
-  /** The project's open tasks (#251); null until read, and while BlaakTasks is off. */
-  readonly tasks: ProjectTasks | null;
+    /** The project the rest belongs to; null until a page has opened. */
+    readonly projectPath: string | null;
+    /** The row the keyboard cursor is on, by the id its section gives it. */
+    readonly cursor: string | null;
+    readonly filter: string;
+    /** Main's last answer for the project; null until the first one comes. */
+    readonly overview: ProjectOverview | null;
+    /** Show N more was clicked: the issues not in a plan are listed in full. */
+    readonly looseExpanded: boolean;
+    /** A session starting on one of the page's issues, or why the last one did not. */
+    readonly start: ProjectIssueStart | null;
+    /** Show merged: merged pull requests are listed after the open ones (#175). Not remembered. */
+    readonly showMerged: boolean;
+    /** A session starting in one of the project's worktrees, or why the last one did not (#175). */
+    readonly worktreeStart: ProjectWorktreeStart | null;
+    /** The project's open tasks (#251); null until read, and while BlaakTasks is off. */
+    readonly tasks: ProjectTasks | null;
 }
 
 export type ProjectIssueStart =
-  | { readonly issue: string; readonly phase: 'starting' }
-  | { readonly issue: string; readonly phase: 'failed'; readonly reason: string };
+    | {readonly issue: string; readonly phase: 'starting'}
+    | {readonly issue: string; readonly phase: 'failed'; readonly reason: string};
 
 export type ProjectWorktreeStart =
-  | { readonly path: string; readonly phase: 'starting' }
-  | { readonly path: string; readonly phase: 'failed'; readonly reason: string };
+    | {readonly path: string; readonly phase: 'starting'}
+    | {readonly path: string; readonly phase: 'failed'; readonly reason: string};
 
-export const NO_MEMORY: ProjectPageMemory = { expandedPlans: [], showClosed: false };
+export const NO_MEMORY: ProjectPageMemory = {expandedPlans: [], showClosed: false};
 
 export const initialProjectPageState: ProjectPageState = {
-  projectPath: null, ...NO_MEMORY, cursor: null, filter: '', overview: null, looseExpanded: false, start: null,
-  showMerged: false, worktreeStart: null, tasks: null,
+    projectPath: null,
+    ...NO_MEMORY,
+    cursor: null,
+    filter: '',
+    overview: null,
+    looseExpanded: false,
+    start: null,
+    showMerged: false,
+    worktreeStart: null,
+    tasks: null,
 };
 
 export function projectPageReducer(state: ProjectPageState, event: RendererEvent): ProjectPageState {
-  switch (event.type) {
-    case 'projectPageRestored':
-      return {
-        projectPath: event.projectPath,
-        expandedPlans: event.memory.expandedPlans,
-        showClosed: event.memory.showClosed,
-        cursor: null,
-        filter: '',
-        // The same project again keeps its last answer on screen until the next.
-        overview: state.projectPath === event.projectPath ? state.overview : null,
-        looseExpanded: false,
-        start: null,
-        showMerged: false,
-        worktreeStart: null,
-        tasks: state.tasks?.projectPath === event.projectPath ? state.tasks : null,
-      };
+    switch (event.type) {
+        case 'projectPageRestored':
+            return {
+                projectPath: event.projectPath,
+                expandedPlans: event.memory.expandedPlans,
+                showClosed: event.memory.showClosed,
+                cursor: null,
+                filter: '',
+                // The same project again keeps its last answer on screen until the next.
+                overview: state.projectPath === event.projectPath ? state.overview : null,
+                looseExpanded: false,
+                start: null,
+                showMerged: false,
+                worktreeStart: null,
+                tasks: state.tasks?.projectPath === event.projectPath ? state.tasks : null,
+            };
 
-    case 'projectPlanToggled': {
-      if (state.projectPath === null) return state;
-      const open = state.expandedPlans.includes(event.plan);
-      return {
-        ...state,
-        expandedPlans: open ? state.expandedPlans.filter(p => p !== event.plan) : [...state.expandedPlans, event.plan],
-      };
+        case 'projectPlanToggled': {
+            if (state.projectPath === null) return state;
+            const open = state.expandedPlans.includes(event.plan);
+            return {
+                ...state,
+                expandedPlans: open
+                    ? state.expandedPlans.filter((p) => p !== event.plan)
+                    : [...state.expandedPlans, event.plan],
+            };
+        }
+
+        case 'projectPlanExpanded':
+            if (state.projectPath === null || state.expandedPlans.includes(event.plan)) return state;
+            return {...state, expandedPlans: [...state.expandedPlans, event.plan]};
+
+        case 'projectPlanCollapsed':
+            if (!state.expandedPlans.includes(event.plan)) return state;
+            return {...state, expandedPlans: state.expandedPlans.filter((p) => p !== event.plan)};
+
+        case 'projectOverviewAnswered':
+            // An answer for another project, or one asked before Show closed or Show merged flipped, is old news.
+            if (
+                event.projectPath !== state.projectPath ||
+                event.closed !== state.showClosed ||
+                event.merged !== state.showMerged
+            )
+                return state;
+            return {...state, overview: event.overview};
+
+        case 'projectLooseExpanded':
+            return state.looseExpanded ? state : {...state, looseExpanded: true};
+
+        case 'projectIssueStartAsked':
+            return state.projectPath === null ? state : {...state, start: {issue: event.issue, phase: 'starting'}};
+
+        case 'projectIssueStartAnswered':
+            if (state.start?.issue !== event.issue) return state;
+            return {
+                ...state,
+                start: event.result.ok ? null : {issue: event.issue, phase: 'failed', reason: event.result.reason},
+            };
+
+        case 'projectShowClosedToggled':
+            return state.projectPath === null ? state : {...state, showClosed: !state.showClosed};
+
+        case 'projectShowMergedToggled':
+            return state.projectPath === null ? state : {...state, showMerged: !state.showMerged};
+
+        case 'projectWorktreeStartAsked':
+            return state.projectPath === null
+                ? state
+                : {...state, worktreeStart: {path: event.path, phase: 'starting'}};
+
+        case 'projectWorktreeStartAnswered':
+            if (state.worktreeStart?.path !== event.path) return state;
+            return {
+                ...state,
+                worktreeStart: event.result.ok
+                    ? null
+                    : {path: event.path, phase: 'failed', reason: event.result.reason},
+            };
+
+        case 'projectCursorMoved':
+            return state.cursor === event.target ? state : {...state, cursor: event.target};
+
+        case 'projectFilterChanged':
+            return state.filter === event.filter ? state : {...state, filter: event.filter};
+
+        case 'projectTasksAnswered':
+            if (event.projectPath !== state.projectPath) return state;
+            return {...state, tasks: {projectPath: event.projectPath, rows: event.rows, sessions: event.sessions}};
+
+        // A row key from the Tasks page's actions: the row as it is now, or gone (Done, snoozed).
+        case 'tasksRowChanged': {
+            const tasks = state.tasks;
+            if (!tasks || !tasks.rows.some((row) => row.id === event.taskId)) return state;
+            const rows = event.row
+                ? tasks.rows.map((row) => (row.id === event.taskId ? event.row! : row))
+                : tasks.rows.filter((row) => row.id !== event.taskId);
+            // The cursor stays on the same spot when its row leaves.
+            let cursor = state.cursor;
+            if (!event.row && cursor === 'task:' + event.taskId) {
+                const at = tasks.rows.findIndex((row) => row.id === event.taskId);
+                const next = rows[Math.min(at, rows.length - 1)];
+                cursor = next ? 'task:' + next.id : null;
+            }
+            return {...state, cursor, tasks: {...tasks, rows}};
+        }
+
+        case 'blaakTasksSwitched':
+            return !event.on && state.tasks ? {...state, tasks: null} : state;
+
+        default:
+            return state;
     }
-
-    case 'projectPlanExpanded':
-      if (state.projectPath === null || state.expandedPlans.includes(event.plan)) return state;
-      return { ...state, expandedPlans: [...state.expandedPlans, event.plan] };
-
-    case 'projectPlanCollapsed':
-      if (!state.expandedPlans.includes(event.plan)) return state;
-      return { ...state, expandedPlans: state.expandedPlans.filter(p => p !== event.plan) };
-
-    case 'projectOverviewAnswered':
-      // An answer for another project, or one asked before Show closed or Show merged flipped, is old news.
-      if (event.projectPath !== state.projectPath || event.closed !== state.showClosed || event.merged !== state.showMerged) return state;
-      return { ...state, overview: event.overview };
-
-    case 'projectLooseExpanded':
-      return state.looseExpanded ? state : { ...state, looseExpanded: true };
-
-    case 'projectIssueStartAsked':
-      return state.projectPath === null ? state : { ...state, start: { issue: event.issue, phase: 'starting' } };
-
-    case 'projectIssueStartAnswered':
-      if (state.start?.issue !== event.issue) return state;
-      return {
-        ...state,
-        start: event.result.ok ? null : { issue: event.issue, phase: 'failed', reason: event.result.reason },
-      };
-
-    case 'projectShowClosedToggled':
-      return state.projectPath === null ? state : { ...state, showClosed: !state.showClosed };
-
-    case 'projectShowMergedToggled':
-      return state.projectPath === null ? state : { ...state, showMerged: !state.showMerged };
-
-    case 'projectWorktreeStartAsked':
-      return state.projectPath === null ? state : { ...state, worktreeStart: { path: event.path, phase: 'starting' } };
-
-    case 'projectWorktreeStartAnswered':
-      if (state.worktreeStart?.path !== event.path) return state;
-      return {
-        ...state,
-        worktreeStart: event.result.ok ? null : { path: event.path, phase: 'failed', reason: event.result.reason },
-      };
-
-    case 'projectCursorMoved':
-      return state.cursor === event.target ? state : { ...state, cursor: event.target };
-
-    case 'projectFilterChanged':
-      return state.filter === event.filter ? state : { ...state, filter: event.filter };
-
-    case 'projectTasksAnswered':
-      if (event.projectPath !== state.projectPath) return state;
-      return { ...state, tasks: { projectPath: event.projectPath, rows: event.rows, sessions: event.sessions } };
-
-    // A row key from the Tasks page's actions: the row as it is now, or gone (Done, snoozed).
-    case 'tasksRowChanged': {
-      const tasks = state.tasks;
-      if (!tasks || !tasks.rows.some(row => row.id === event.taskId)) return state;
-      const rows = event.row
-        ? tasks.rows.map(row => (row.id === event.taskId ? event.row! : row))
-        : tasks.rows.filter(row => row.id !== event.taskId);
-      // The cursor stays on the same spot when its row leaves.
-      let cursor = state.cursor;
-      if (!event.row && cursor === 'task:' + event.taskId) {
-        const at = tasks.rows.findIndex(row => row.id === event.taskId);
-        const next = rows[Math.min(at, rows.length - 1)];
-        cursor = next ? 'task:' + next.id : null;
-      }
-      return { ...state, cursor, tasks: { ...tasks, rows } };
-    }
-
-    case 'blaakTasksSwitched':
-      return !event.on && state.tasks ? { ...state, tasks: null } : state;
-
-    default:
-      return state;
-  }
 }
 
 /**
@@ -223,15 +257,15 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
  * between the route opening a project and its memory (Show closed among it)
  * being read back.
  */
-export function overviewRequest(state: RendererState): { projectPath: string; closed: boolean; merged: boolean } | null {
-  const route = projectRoute(state.mainArea);
-  if (!route || route.view.kind !== 'overview' || state.projectPage.projectPath !== route.projectPath) return null;
-  return { projectPath: route.projectPath, closed: state.projectPage.showClosed, merged: state.projectPage.showMerged };
+export function overviewRequest(state: RendererState): {projectPath: string; closed: boolean; merged: boolean} | null {
+    const route = projectRoute(state.mainArea);
+    if (!route || route.view.kind !== 'overview' || state.projectPage.projectPath !== route.projectPath) return null;
+    return {projectPath: route.projectPath, closed: state.projectPage.showClosed, merged: state.projectPage.showMerged};
 }
 
 /** What the page remembers of its project, to persist. */
 export function projectPageMemory(state: ProjectPageState): ProjectPageMemory {
-  return { expandedPlans: state.expandedPlans, showClosed: state.showClosed };
+    return {expandedPlans: state.expandedPlans, showClosed: state.showClosed};
 }
 
 /**
@@ -241,10 +275,10 @@ export function projectPageMemory(state: ProjectPageState): ProjectPageMemory {
  * ends hold.
  */
 export function steppedCursor(rows: readonly string[], cursor: string | null, step: 1 | -1): string | null {
-  if (!rows.length) return null;
-  const at = cursor === null ? -1 : rows.indexOf(cursor);
-  if (at === -1) return step === 1 ? rows[0] : rows[rows.length - 1];
-  return rows[Math.min(rows.length - 1, Math.max(0, at + step))];
+    if (!rows.length) return null;
+    const at = cursor === null ? -1 : rows.indexOf(cursor);
+    if (at === -1) return step === 1 ? rows[0] : rows[rows.length - 1];
+    return rows[Math.min(rows.length - 1, Math.max(0, at + step))];
 }
 
 // ── Persistence ──
@@ -257,34 +291,40 @@ export type ProjectPageMemories = Readonly<Record<string, ProjectPageMemory>>;
 
 /** The stored record, or an empty one when there is none or it is not ours. */
 export function parseProjectPageMemories(stored: string | null): ProjectPageMemories {
-  if (!stored) return {};
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stored);
-  } catch {
-    return {};
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-  const memories: Record<string, ProjectPageMemory> = {};
-  for (const [path, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (!value || typeof value !== 'object') continue;
-    const { expandedPlans, showClosed } = value as Record<string, unknown>;
-    memories[path] = {
-      expandedPlans: Array.isArray(expandedPlans) ? expandedPlans.filter((p): p is string => typeof p === 'string') : [],
-      showClosed: showClosed === true,
-    };
-  }
-  return memories;
+    if (!stored) return {};
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(stored);
+    } catch {
+        return {};
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const memories: Record<string, ProjectPageMemory> = {};
+    for (const [path, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (!value || typeof value !== 'object') continue;
+        const {expandedPlans, showClosed} = value as Record<string, unknown>;
+        memories[path] = {
+            expandedPlans: Array.isArray(expandedPlans)
+                ? expandedPlans.filter((p): p is string => typeof p === 'string')
+                : [],
+            showClosed: showClosed === true,
+        };
+    }
+    return memories;
 }
 
 /** `projectPath`'s memory, or the page as it first opens. */
 export function memoryOf(memories: ProjectPageMemories, projectPath: string): ProjectPageMemory {
-  return memories[projectPath] ?? NO_MEMORY;
+    return memories[projectPath] ?? NO_MEMORY;
 }
 
 /** `memories` with `projectPath`'s replaced by `memory`. */
-export function remembered(memories: ProjectPageMemories, projectPath: string, memory: ProjectPageMemory): ProjectPageMemories {
-  const { [projectPath]: _old, ...others } = memories;
-  if (!memory.expandedPlans.length && !memory.showClosed) return others;
-  return { ...others, [projectPath]: { expandedPlans: memory.expandedPlans, showClosed: memory.showClosed } };
+export function remembered(
+    memories: ProjectPageMemories,
+    projectPath: string,
+    memory: ProjectPageMemory,
+): ProjectPageMemories {
+    const {[projectPath]: _old, ...others} = memories;
+    if (!memory.expandedPlans.length && !memory.showClosed) return others;
+    return {...others, [projectPath]: {expandedPlans: memory.expandedPlans, showClosed: memory.showClosed}};
 }

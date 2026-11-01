@@ -6,16 +6,16 @@
  * decision this used to make is now behind a service — what is left is the
  * order things happen in, which is the one thing an entry point should own.
  */
-import { app, globalShortcut } from 'electron';
+import {app, globalShortcut} from 'electron';
 import log from 'electron-log';
-import { buildContainer, isolateUserDataIfRequested } from './composition-root';
-import { registerIpcHandlers } from './ipc';
-import { buildApplicationMenu } from '../infrastructure/electron/app-menu';
-import { createMainWindow, hiddenForE2e } from '../infrastructure/electron/main-window';
-import { systemTimers } from '../infrastructure/system/timers';
-import { normaliseAppIcon } from '../domain/settings/app-icon';
-import { normaliseAppearance } from '../domain/settings/appearance';
-import type { Container } from './composition-root';
+import {buildContainer, isolateUserDataIfRequested} from './composition-root';
+import {registerIpcHandlers} from './ipc';
+import {buildApplicationMenu} from '../infrastructure/electron/app-menu';
+import {createMainWindow, hiddenForE2e} from '../infrastructure/electron/main-window';
+import {systemTimers} from '../infrastructure/system/timers';
+import {normaliseAppIcon} from '../domain/settings/app-icon';
+import {normaliseAppearance} from '../domain/settings/appearance';
+import type {Container} from './composition-root';
 
 // Must happen before anything reads a path off `app`.
 isolateUserDataIfRequested();
@@ -26,9 +26,9 @@ log.transports.console.level = app.isPackaged ? 'info' : 'debug';
 // Dev-only live reload. A bare require so the dependency stays out of the
 // packaged bundle's import graph; esbuild keeps it external.
 try {
-  require('electron-reloader')(module, { watchRenderer: true });
+    require('electron-reloader')(module, {watchRenderer: true});
 } catch {
-  // Not installed, or a packaged build.
+    // Not installed, or a packaged build.
 }
 
 /**
@@ -40,124 +40,125 @@ try {
  * the first brings its window to the front.
  */
 if (!app.requestSingleInstanceLock()) {
-  app.quit();
+    app.quit();
 } else {
-  main();
+    main();
 }
 
 function main(): void {
-  const container = buildContainer();
+    const container = buildContainer();
 
-  // An accessory app gets no Dock icon and is never made active, so an e2e
-  // run's apps do not take focus from whatever the user is typing in.
-  if (hiddenForE2e() && process.platform === 'darwin') app.setActivationPolicy('accessory');
+    // An accessory app gets no Dock icon and is never made active, so an e2e
+    // run's apps do not take focus from whatever the user is typing in.
+    if (hiddenForE2e() && process.platform === 'darwin') app.setActivationPolicy('accessory');
 
-  app.on('second-instance', () => {
-    const window = container.getWindow();
-    if (!window) return;
-    if (window.isMinimized()) window.restore();
-    window.focus();
-  });
+    app.on('second-instance', () => {
+        const window = container.getWindow();
+        if (!window) return;
+        if (window.isMinimized()) window.restore();
+        window.focus();
+    });
 
-  // Listening at all is the point: without a listener Electron quits when the
-  // last window closes, and a Mac app stays running in the Dock instead.
-  app.on('window-all-closed', () => {});
+    // Listening at all is the point: without a listener Electron quits when the
+    // last window closes, and a Mac app stays running in the Dock instead.
+    app.on('window-all-closed', () => {});
 
-  app.on('before-quit', () => {
-    // Phone access first. The advertisement goes synchronously, so no
-    // `dns-sd` outlives the app; the phones are told "going away" while the
-    // windows close, and a connection still closing when the process ends
-    // goes with it. Not awaited: holding the quit back with preventDefault
-    // leaves a SIGTERM'd app running with no window.
-    container.lanWatcher.stop();
-    container.phoneAdvertiser.withdraw();
-    container.phoneAccess.shutdown().catch((err: Error) =>
-      container.log.warn('[phone] shutdown failed:', err.message));
-    container.projectsWatcher.stop();
-    container.questionHook.stop();
-    container.lifecycle.terminateAll();
-  });
+    app.on('before-quit', () => {
+        // Phone access first. The advertisement goes synchronously, so no
+        // `dns-sd` outlives the app; the phones are told "going away" while the
+        // windows close, and a connection still closing when the process ends
+        // goes with it. Not awaited: holding the quit back with preventDefault
+        // leaves a SIGTERM'd app running with no window.
+        container.lanWatcher.stop();
+        container.phoneAdvertiser.withdraw();
+        container.phoneAccess
+            .shutdown()
+            .catch((err: Error) => container.log.warn('[phone] shutdown failed:', err.message));
+        container.projectsWatcher.stop();
+        container.questionHook.stop();
+        container.lifecycle.terminateAll();
+    });
 
-  // After the windows are gone, so nothing is mid-query when the handle closes.
-  app.on('will-quit', () => {
-    globalShortcut.unregisterAll();
-    container.close();
-  });
+    // After the windows are gone, so nothing is mid-query when the handle closes.
+    app.on('will-quit', () => {
+        globalShortcut.unregisterAll();
+        container.close();
+    });
 
-  void app.whenReady().then(() => start(container));
+    void app.whenReady().then(() => start(container));
 }
 
 async function start(container: Container): Promise<void> {
-  // Before the window, so the first session the renderer restores already gets
-  // the question hook. A server that fails to start costs only the hook:
-  // sessions launch without it and ask in their own terminal.
-  try {
-    await container.questionHook.start();
-  } catch (err) {
-    container.log.error('[questions] hook server failed to start:', (err as Error).message);
-  }
+    // Before the window, so the first session the renderer restores already gets
+    // the question hook. A server that fails to start costs only the hook:
+    // sessions launch without it and ask in their own terminal.
+    try {
+        await container.questionHook.start();
+    } catch (err) {
+        container.log.error('[questions] hook server failed to start:', (err as Error).message);
+    }
 
-  registerIpcHandlers(container);
-  buildApplicationMenu();
+    registerIpcHandlers(container);
+    buildApplicationMenu();
 
-  // Before the window: the chrome's overlay colours are picked at creation, and
-  // a renderer that first paints in the wrong scheme flashes on every launch.
-  container.appearance.apply(normaliseAppearance(container.settings.global().appearance));
-  container.appIcon.apply(normaliseAppIcon(container.settings.global().appIcon));
-  container.setWindowOpener((options) => openWindow(container, options));
-  openWindow(container);
-  // After the main window, which stays the app's first.
-  if (container.settings.quickAskEnabled()) container.prepareQuickAsk();
-  container.quickAskHotkey.apply();
+    // Before the window: the chrome's overlay colours are picked at creation, and
+    // a renderer that first paints in the wrong scheme flashes on every launch.
+    container.appearance.apply(normaliseAppearance(container.settings.global().appearance));
+    container.appIcon.apply(normaliseAppIcon(container.settings.global().appIcon));
+    container.setWindowOpener((options) => openWindow(container, options));
+    openWindow(container);
+    // After the main window, which stays the app's first.
+    if (container.settings.quickAskEnabled()) container.prepareQuickAsk();
+    container.quickAskHotkey.apply();
 
-  container.projectsWatcher.start();
-  container.schedules.ensureCreatorCommand();
-  container.schedules.start();
-  // Only an installed build has a version worth comparing; a dev run would
-  // always be "behind" whatever is released.
-  if (app.isPackaged) container.updates.start();
-  // The CI watch asks the user's own `gh` about real PRs; the end-to-end suite
-  // must never reach GitHub, and drives the dots and cards by pushing instead.
-  if (process.env.SWITCHBOARD_E2E !== '1') container.prWatch.start();
+    container.projectsWatcher.start();
+    container.schedules.ensureCreatorCommand();
+    container.schedules.start();
+    // Only an installed build has a version worth comparing; a dev run would
+    // always be "behind" whatever is released.
+    if (app.isPackaged) container.updates.start();
+    // The CI watch asks the user's own `gh` about real PRs; the end-to-end suite
+    // must never reach GitHub, and drives the dots and cards by pushing instead.
+    if (process.env.SWITCHBOARD_E2E !== '1') container.prWatch.start();
 
-  // Phone access, if it was left on (#194). Its failures land in its own
-  // state, which Settings shows; only a bug gets as far as this catch.
-  container.phoneAccess.start().catch((err: Error) =>
-    container.log.error('[phone] failed to start:', err.message));
-  container.lanWatcher.start();
-  // BlaakTasks, when a URL is set: the linked sessions' PRs catch up (#248).
-  container.tasks.start();
+    // Phone access, if it was left on (#194). Its failures land in its own
+    // state, which Settings shows; only a bug gets as far as this catch.
+    container.phoneAccess.start().catch((err: Error) => container.log.error('[phone] failed to start:', err.message));
+    container.lanWatcher.start();
+    // BlaakTasks, when a URL is set: the linked sessions' PRs catch up (#248).
+    container.tasks.start();
 
-  // A migration that recreated the search index leaves it empty even though the
-  // session cache is intact, so the index alone has to be refilled.
-  if (container.searchIndex.wasRecreated()) container.sessionIndex.rebuild();
+    // A migration that recreated the search index leaves it empty even though the
+    // session cache is intact, so the index alone has to be refilled.
+    if (container.searchIndex.wasRecreated()) container.sessionIndex.rebuild();
 
-  // macOS keeps the app alive after its last window closes. The Quick Ask
-  // pop-up is a window too, but not one to come back to.
-  app.on('activate', () => {
-    if (!container.getWindow()) openWindow(container);
-  });
+    // macOS keeps the app alive after its last window closes. The Quick Ask
+    // pop-up is a window too, but not one to come back to.
+    app.on('activate', () => {
+        if (!container.getWindow()) openWindow(container);
+    });
 }
 
-function openWindow(container: Container, { inactive = false } = {}): void {
-  const window = createMainWindow({
-    timers: systemTimers,
-    appDir: __dirname,
-    inactive,
-    savedBounds: () => container.settings.global().windowBounds,
-    saveBounds: (bounds) => container.settings.updateGlobal((settings) => {
-      settings.windowBounds = bounds;
-    }),
-    onFullscreenChanged: (isFullscreen) => container.renderer.fullscreenChanged(isFullscreen),
-    // Back at the window: what CI did meanwhile shows now, not within the minute (W1).
-    onFocus: () => container.prWatch.focused(),
-    onClosed: () => {
-      // On macOS the app stays in the dock after its last window closes. Kill
-      // the sessions anyway: orphaned `claude` processes would otherwise
-      // accumulate in the background with no way for the user to reach them.
-      container.lifecycle.terminateAll();
-      container.setWindow(null);
-    },
-  });
-  container.setWindow(window);
+function openWindow(container: Container, {inactive = false} = {}): void {
+    const window = createMainWindow({
+        timers: systemTimers,
+        appDir: __dirname,
+        inactive,
+        savedBounds: () => container.settings.global().windowBounds,
+        saveBounds: (bounds) =>
+            container.settings.updateGlobal((settings) => {
+                settings.windowBounds = bounds;
+            }),
+        onFullscreenChanged: (isFullscreen) => container.renderer.fullscreenChanged(isFullscreen),
+        // Back at the window: what CI did meanwhile shows now, not within the minute (W1).
+        onFocus: () => container.prWatch.focused(),
+        onClosed: () => {
+            // On macOS the app stays in the dock after its last window closes. Kill
+            // the sessions anyway: orphaned `claude` processes would otherwise
+            // accumulate in the background with no way for the user to reach them.
+            container.lifecycle.terminateAll();
+            container.setWindow(null);
+        },
+    });
+    container.setWindow(window);
 }

@@ -7,9 +7,9 @@
  */
 
 export interface IdGenerator {
-  newId(): string;
+    newId(): string;
 }
 
 export const uuidGenerator: IdGenerator = {
-  newId: () => crypto.randomUUID(),
+    newId: () => crypto.randomUUID(),
 };

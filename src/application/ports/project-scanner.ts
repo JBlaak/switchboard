@@ -7,8 +7,8 @@
  * painted. The adapter runs it on a worker; the port only promises progress and
  * a result.
  */
-import type { FolderScan } from '../../domain/session/session';
+import type {FolderScan} from '../../domain/session/session';
 
 export interface ProjectScanner {
-  scan(onProgress: (text: string) => void): Promise<FolderScan[]>;
+    scan(onProgress: (text: string) => void): Promise<FolderScan[]>;
 }

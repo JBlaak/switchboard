@@ -18,17 +18,17 @@ export type RemotePhase = 'connecting' | 'connected' | 'retrying' | 'disconnecte
  * narrow at every use.
  */
 export interface RemoteStatusPayload {
-  phase: RemotePhase;
-  /** "user@host" — what the card shows you are connecting to. */
-  target?: string;
-  reason?: string;
-  attempt?: number;
-  maxAttempts?: number;
-  /** Total attempts spent, sent with `failed`. */
-  attempts?: number;
-  /** How long until the next dial; the renderer turns this into `retryAt`. */
-  delayMs?: number;
-  everConnected?: boolean;
+    phase: RemotePhase;
+    /** "user@host" — what the card shows you are connecting to. */
+    target?: string;
+    reason?: string;
+    attempt?: number;
+    maxAttempts?: number;
+    /** Total attempts spent, sent with `failed`. */
+    attempts?: number;
+    /** How long until the next dial; the renderer turns this into `retryAt`. */
+    delayMs?: number;
+    everConnected?: boolean;
 }
 
 /**
@@ -39,9 +39,9 @@ export interface RemoteStatusPayload {
  * the local clock into `retryAt`.
  */
 export interface RemoteStatusView extends RemoteStatusPayload {
-  retryAt?: number;
-  /** When this connect attempt began locally, for the card's elapsed counter. */
-  startedAt?: number;
+    retryAt?: number;
+    /** When this connect attempt began locally, for the card's elapsed counter. */
+    startedAt?: number;
 }
 
 /**
@@ -51,20 +51,17 @@ export interface RemoteStatusView extends RemoteStatusPayload {
  * label applies — while connecting or waiting out a reconnect a session is
  * neither, and saying either is misleading.
  */
-export function remoteStatusLabel(
-  status: RemoteStatusView | null | undefined,
-  now = Date.now(),
-): string | null {
-  if (!status) return null;
-  if (status.phase === 'connecting') return status.attempt ? 'Reconnecting…' : 'Connecting…';
-  if (status.phase === 'retrying') {
-    const secs = Math.max(0, Math.ceil(((status.retryAt ?? 0) - now) / 1000));
-    return secs > 0 ? `Reconnecting in ${secs}s` : 'Reconnecting…';
-  }
-  return null;
+export function remoteStatusLabel(status: RemoteStatusView | null | undefined, now = Date.now()): string | null {
+    if (!status) return null;
+    if (status.phase === 'connecting') return status.attempt ? 'Reconnecting…' : 'Connecting…';
+    if (status.phase === 'retrying') {
+        const secs = Math.max(0, Math.ceil(((status.retryAt ?? 0) - now) / 1000));
+        return secs > 0 ? `Reconnecting in ${secs}s` : 'Reconnecting…';
+    }
+    return null;
 }
 
 /** True while the connection is between attempts rather than settled. */
 export function isConnectionInFlight(status: RemoteStatusView | null | undefined): boolean {
-  return status?.phase === 'connecting' || status?.phase === 'retrying';
+    return status?.phase === 'connecting' || status?.phase === 'retrying';
 }

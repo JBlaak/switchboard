@@ -21,7 +21,7 @@
  * what?", which asks for a re-pitch through the `/wait-what` skill. The
  * panel's Other row is the open answer.
  */
-import type { Answers, Question, QuestionOption } from './question';
+import type {Answers, Question, QuestionOption} from './question';
 
 /** The row that accepts the recommendation; sent back as "yes". */
 export const GRILL_YES_LABEL = 'Yes (Recommended)';
@@ -54,13 +54,14 @@ const RULE = /^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/;
  * `**Q1 - Title**:`, then `Q1 - Title:`. Each captures the number and title.
  */
 const OPENINGS = [
-  /^\*\*Q(\d+)\*\*[ \t]*[-–—:.]?[ \t]*\*\*([^\n]+?)\*\*[ \t]*:?[ \t]*/,
-  /^\*\*Q(\d+)[ \t]*[-–—:.][ \t]*([^\n]+?)\*\*[ \t]*:?[ \t]*/,
-  /^Q(\d+)[ \t]*[-–—.][ \t]*([^\n:]+):[ \t]*/,
+    /^\*\*Q(\d+)\*\*[ \t]*[-–—:.]?[ \t]*\*\*([^\n]+?)\*\*[ \t]*:?[ \t]*/,
+    /^\*\*Q(\d+)[ \t]*[-–—:.][ \t]*([^\n]+?)\*\*[ \t]*:?[ \t]*/,
+    /^Q(\d+)[ \t]*[-–—.][ \t]*([^\n:]+):[ \t]*/,
 ];
 
 /** A list item: a bullet, `1.`/`1)`, `a.`/`A)`, `(a)` or a bold `**A**`, then its text. */
-const LIST_ITEM = /^[ \t]*(?:[-*•][ \t]+|(?=\d{1,2}[.)][ \t])|(?=[A-Za-z][.)][ \t])|(?=\([A-Za-z0-9]{1,2}\)[ \t])|(?=\*\*[A-Za-z0-9][.):]?\*\*[.):]?[ \t]))(.+)$/;
+const LIST_ITEM =
+    /^[ \t]*(?:[-*•][ \t]+|(?=\d{1,2}[.)][ \t])|(?=[A-Za-z][.)][ \t])|(?=\([A-Za-z0-9]{1,2}\)[ \t])|(?=\*\*[A-Za-z0-9][.):]?\*\*[.):]?[ \t]))(.+)$/;
 /** Between a choice's label and its explanation. */
 const CHOICE_SEPARATOR = /[ \t]+[—–-][ \t]+|:[ \t]+/;
 
@@ -73,48 +74,48 @@ const CHOICE_SEPARATOR = /[ \t]+[—–-][ \t]+|:[ \t]+/;
  * round, usually) is not a question and is left to the terminal.
  */
 export function parseGrillRound(text: string): Question[] | null {
-  const questions: Question[] = [];
-  for (const block of text.split(BLOCK_START)) {
-    if (!QUESTION_MARK.test(block)) continue;
-    const question = parseBlock(block.replace(QUESTION_MARK, ''));
-    if (question) questions.push(question);
-  }
-  return questions.length > 0 ? questions : null;
+    const questions: Question[] = [];
+    for (const block of text.split(BLOCK_START)) {
+        if (!QUESTION_MARK.test(block)) continue;
+        const question = parseBlock(block.replace(QUESTION_MARK, ''));
+        if (question) questions.push(question);
+    }
+    return questions.length > 0 ? questions : null;
 }
 
 function parseBlock(block: string): Question | null {
-  let number = '';
-  let title = '';
-  let rest = '';
-  for (const opening of OPENINGS) {
-    const match = opening.exec(block);
-    if (!match) continue;
-    number = match[1];
-    title = plain(match[2]).replace(/:$/, '').trim();
-    rest = block.slice(match[0].length);
-    break;
-  }
-  if (!number || !title) return null;
+    let number = '';
+    let title = '';
+    let rest = '';
+    for (const opening of OPENINGS) {
+        const match = opening.exec(block);
+        if (!match) continue;
+        number = match[1];
+        title = plain(match[2]).replace(/:$/, '').trim();
+        rest = block.slice(match[0].length);
+        break;
+    }
+    if (!number || !title) return null;
 
-  const arrow = RECOMMENDATION.exec(rest);
-  if (!arrow) return null;
-  const body = withoutRules(rest.slice(0, arrow.index));
-  const recommendation = plain(withoutRules(rest.slice(arrow.index + arrow[0].length)));
-  if (!recommendation) return null;
+    const arrow = RECOMMENDATION.exec(rest);
+    if (!arrow) return null;
+    const body = withoutRules(rest.slice(0, arrow.index));
+    const recommendation = plain(withoutRules(rest.slice(arrow.index + arrow[0].length)));
+    if (!recommendation) return null;
 
-  const { choices, detail } = splitChoices(body);
-  const options: QuestionOption[] = [
-    { label: GRILL_YES_LABEL, description: recommendation },
-    ...choices,
-    { label: WAIT_WHAT_LABEL, description: WAIT_WHAT_DESCRIPTION },
-  ];
-  return {
-    question: title,
-    header: `Q${number}`,
-    options,
-    multiSelect: false,
-    ...(detail ? { detail } : {}),
-  };
+    const {choices, detail} = splitChoices(body);
+    const options: QuestionOption[] = [
+        {label: GRILL_YES_LABEL, description: recommendation},
+        ...choices,
+        {label: WAIT_WHAT_LABEL, description: WAIT_WHAT_DESCRIPTION},
+    ];
+    return {
+        question: title,
+        header: `Q${number}`,
+        options,
+        multiSelect: false,
+        ...(detail ? {detail} : {}),
+    };
 }
 
 /**
@@ -122,43 +123,47 @@ function parseBlock(block: string): Question | null {
  * under the title. Fewer than two items, or more than MAX_CHOICES, is not a
  * set of choices: the body stays whole.
  */
-function splitChoices(body: string): { choices: QuestionOption[]; detail: string } {
-  const lines = body.split('\n');
-  const items = lines.flatMap((line, index) => {
-    const match = LIST_ITEM.exec(line);
-    return match ? [{ index, text: plain(match[1]) }] : [];
-  });
-  if (items.length < 2 || items.length > MAX_CHOICES) return { choices: [], detail: tidy(body) };
+function splitChoices(body: string): {choices: QuestionOption[]; detail: string} {
+    const lines = body.split('\n');
+    const items = lines.flatMap((line, index) => {
+        const match = LIST_ITEM.exec(line);
+        return match ? [{index, text: plain(match[1])}] : [];
+    });
+    if (items.length < 2 || items.length > MAX_CHOICES) return {choices: [], detail: tidy(body)};
 
-  const taken = new Set(items.map(item => item.index));
-  const choices = items.map(({ text }) => choiceOf(text));
-  // Two choices that read the same would be one row picked twice.
-  if (new Set(choices.map(c => c.label)).size !== choices.length) return { choices: [], detail: tidy(body) };
-  return { choices, detail: tidy(lines.filter((_, index) => !taken.has(index)).join('\n')) };
+    const taken = new Set(items.map((item) => item.index));
+    const choices = items.map(({text}) => choiceOf(text));
+    // Two choices that read the same would be one row picked twice.
+    if (new Set(choices.map((c) => c.label)).size !== choices.length) return {choices: [], detail: tidy(body)};
+    return {choices, detail: tidy(lines.filter((_, index) => !taken.has(index)).join('\n'))};
 }
 
 /** "A) SQLite — one file, no server" → label "A) SQLite", the rest its description. */
 function choiceOf(text: string): QuestionOption {
-  const separator = CHOICE_SEPARATOR.exec(text);
-  if (!separator || separator.index === 0 || separator.index > MAX_LABEL_CHARS) return { label: text, description: '' };
-  return {
-    label: text.slice(0, separator.index).trim(),
-    description: text.slice(separator.index + separator[0].length).trim(),
-  };
+    const separator = CHOICE_SEPARATOR.exec(text);
+    if (!separator || separator.index === 0 || separator.index > MAX_LABEL_CHARS) return {label: text, description: ''};
+    return {
+        label: text.slice(0, separator.index).trim(),
+        description: text.slice(separator.index + separator[0].length).trim(),
+    };
 }
 
 /** Bold markers go: the panel draws plain text. Code ticks stay, they still read as code. */
 function plain(text: string): string {
-  return text.replace(/\*\*/g, '').trim();
+    return text.replace(/\*\*/g, '').trim();
 }
 
 function withoutRules(text: string): string {
-  return text.split('\n').filter(line => !RULE.test(line)).join('\n').trim();
+    return text
+        .split('\n')
+        .filter((line) => !RULE.test(line))
+        .join('\n')
+        .trim();
 }
 
 /** Plain text, with runs of blank lines down to one and no blank edges. */
 function tidy(text: string): string {
-  return plain(text.replace(/\n[ \t]*(?:\n[ \t]*)+/g, '\n\n'));
+    return plain(text.replace(/\n[ \t]*(?:\n[ \t]*)+/g, '\n\n'));
 }
 
 /**
@@ -172,21 +177,23 @@ function tidy(text: string): string {
  * nothing already answered is lost while Claude re-pitches.
  */
 export function grillReply(questions: Question[], answers: Answers): string {
-  const unclear: string[] = [];
-  const lines: string[] = [];
-  for (const question of questions) {
-    const answer = (answers[question.question] ?? '').trim();
-    if (!answer) continue;
-    if (answer === WAIT_WHAT_LABEL) {
-      unclear.push(question.header);
-    } else if (answer === GRILL_YES_LABEL) {
-      lines.push(`${question.header}: yes`);
-    } else {
-      const choice = question.options.find(option => option.label === answer);
-      lines.push(`${question.header}: ${choice?.description ? `${choice.label} — ${choice.description}` : answer}`);
+    const unclear: string[] = [];
+    const lines: string[] = [];
+    for (const question of questions) {
+        const answer = (answers[question.question] ?? '').trim();
+        if (!answer) continue;
+        if (answer === WAIT_WHAT_LABEL) {
+            unclear.push(question.header);
+        } else if (answer === GRILL_YES_LABEL) {
+            lines.push(`${question.header}: yes`);
+        } else {
+            const choice = question.options.find((option) => option.label === answer);
+            lines.push(
+                `${question.header}: ${choice?.description ? `${choice.label} — ${choice.description}` : answer}`,
+            );
+        }
     }
-  }
-  if (unclear.length === 0) return lines.join('\n');
-  const rePitch = `/wait-what ${unclear.join(' ')}`;
-  return lines.length === 0 ? rePitch : `${rePitch}\n\nMy answers to the rest:\n${lines.join('\n')}`;
+    if (unclear.length === 0) return lines.join('\n');
+    const rePitch = `/wait-what ${unclear.join(' ')}`;
+    return lines.length === 0 ? rePitch : `${rePitch}\n\nMy answers to the rest:\n${lines.join('\n')}`;
 }

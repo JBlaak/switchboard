@@ -8,27 +8,26 @@
  * page, and answers null.
  */
 export function repoWebUrl(remote: string): string | null {
-  const trimmed = remote.trim();
+    const trimmed = remote.trim();
 
-  const scp = trimmed.match(/^[^@/\s]+@([^:/\s]+):(?!\/)(.+)$/);
-  if (scp) return build(scp[1], scp[2]);
+    const scp = trimmed.match(/^[^@/\s]+@([^:/\s]+):(?!\/)(.+)$/);
+    if (scp) return build(scp[1], scp[2]);
 
-  const url = trimmed.match(/^(?:ssh|git|https?):\/\/(?:[^@/\s]+@)?([^:/\s]+)(?::\d+)?\/(.+)$/i);
-  if (url) return build(url[1], url[2]);
+    const url = trimmed.match(/^(?:ssh|git|https?):\/\/(?:[^@/\s]+@)?([^:/\s]+)(?::\d+)?\/(.+)$/i);
+    if (url) return build(url[1], url[2]);
 
-  return null;
+    return null;
 }
 
 /** `owner/repo` of a remote on github.com; '' for any other remote. */
 export function gitHubRepository(remote: string): string {
-  const web = repoWebUrl(remote);
-  const match = web ? /^https:\/\/github\.com\/([^/]+\/[^/]+)$/i.exec(web) : null;
-  return match ? match[1] : '';
+    const web = repoWebUrl(remote);
+    const match = web ? /^https:\/\/github\.com\/([^/]+\/[^/]+)$/i.exec(web) : null;
+    return match ? match[1] : '';
 }
 
 function build(host: string, repoPath: string): string | null {
-  const clean = repoPath.replace(/\/+$/, '').replace(/\.git$/i, '');
-  if (!clean || clean.split('/').some(part => !part)) return null;
-  return `https://${host}/${clean}`;
+    const clean = repoPath.replace(/\/+$/, '').replace(/\.git$/i, '');
+    if (!clean || clean.split('/').some((part) => !part)) return null;
+    return `https://${host}/${clean}`;
 }
-

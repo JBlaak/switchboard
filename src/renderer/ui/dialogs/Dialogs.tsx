@@ -6,21 +6,21 @@
  * fields. Each dialog closes by its own `seq`, so a late close from one that
  * has since been replaced cannot close its successor.
  */
-import { useStore } from '../use-store';
-import { closeDialog } from './actions';
-import { ProjectsModal } from './ProjectsModal';
-import { ResumeSessionDialog } from './ResumeSessionDialog';
-import type { JSX } from 'react';
+import {useStore} from '../use-store';
+import {closeDialog} from './actions';
+import {ProjectsModal} from './ProjectsModal';
+import {ResumeSessionDialog} from './ResumeSessionDialog';
+import type {JSX} from 'react';
 
 export function Dialogs(): JSX.Element | null {
-  const { open, seq } = useStore(state => state.dialog);
-  if (!open) return null;
+    const {open, seq} = useStore((state) => state.dialog);
+    if (!open) return null;
 
-  const onClose = (): void => closeDialog(seq);
-  switch (open.kind) {
-    case 'projectPicker':
-      return <ProjectsModal key={seq} onClose={onClose} initialPrompt={open.initialPrompt} />;
-    case 'resumeSession':
-      return <ResumeSessionDialog key={seq} session={open.session} settings={open.settings} onClose={onClose} />;
-  }
+    const onClose = (): void => closeDialog(seq);
+    switch (open.kind) {
+        case 'projectPicker':
+            return <ProjectsModal key={seq} onClose={onClose} initialPrompt={open.initialPrompt} />;
+        case 'resumeSession':
+            return <ResumeSessionDialog key={seq} session={open.session} settings={open.settings} onClose={onClose} />;
+    }
 }

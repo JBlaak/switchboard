@@ -28,27 +28,27 @@ const MIN_SPEECH_WINDOWS = 5;
 
 /** `pcm` is 16-bit little-endian mono, as the phone sends it. */
 export function hasSpeech(pcm: Uint8Array): boolean {
-  const levels = windowLevels(pcm);
-  // Digital silence, as some mics hand over while they start, is not the room.
-  const sounding = levels.filter(level => level >= 1).sort((a, b) => a - b);
-  if (sounding.length === 0) return false;
-  const background = sounding[Math.floor(sounding.length * BACKGROUND_PERCENTILE)];
-  const speaking = Math.min(LOUD_RMS, Math.max(MIN_SPEECH_RMS, background * ABOVE_BACKGROUND));
-  return levels.filter(level => level >= speaking).length >= MIN_SPEECH_WINDOWS;
+    const levels = windowLevels(pcm);
+    // Digital silence, as some mics hand over while they start, is not the room.
+    const sounding = levels.filter((level) => level >= 1).sort((a, b) => a - b);
+    if (sounding.length === 0) return false;
+    const background = sounding[Math.floor(sounding.length * BACKGROUND_PERCENTILE)];
+    const speaking = Math.min(LOUD_RMS, Math.max(MIN_SPEECH_RMS, background * ABOVE_BACKGROUND));
+    return levels.filter((level) => level >= speaking).length >= MIN_SPEECH_WINDOWS;
 }
 
 /** The RMS of each whole window. */
 function windowLevels(pcm: Uint8Array): number[] {
-  const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-  const samples = Math.floor(pcm.byteLength / 2);
-  const levels: number[] = [];
-  for (let start = 0; start + WINDOW_SAMPLES <= samples; start += WINDOW_SAMPLES) {
-    let sum = 0;
-    for (let i = start; i < start + WINDOW_SAMPLES; i++) {
-      const sample = view.getInt16(i * 2, true);
-      sum += sample * sample;
+    const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+    const samples = Math.floor(pcm.byteLength / 2);
+    const levels: number[] = [];
+    for (let start = 0; start + WINDOW_SAMPLES <= samples; start += WINDOW_SAMPLES) {
+        let sum = 0;
+        for (let i = start; i < start + WINDOW_SAMPLES; i++) {
+            const sample = view.getInt16(i * 2, true);
+            sum += sample * sample;
+        }
+        levels.push(Math.sqrt(sum / WINDOW_SAMPLES));
     }
-    levels.push(Math.sqrt(sum / WINDOW_SAMPLES));
-  }
-  return levels;
+    return levels;
 }

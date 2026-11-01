@@ -17,15 +17,15 @@ export const MAX_VOCABULARY = 40;
 
 /** The fixed words, the session's project, then the other projects; without repeats, ignoring case. */
 export function voiceVocabulary(sessionProject: string | null, projects: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const words: string[] = [];
-  for (const word of [...FIXED_VOCABULARY, ...(sessionProject ? [sessionProject] : []), ...projects]) {
-    const trimmed = word.trim();
-    const key = trimmed.toLowerCase();
-    if (trimmed === '' || seen.has(key)) continue;
-    seen.add(key);
-    words.push(trimmed);
-    if (words.length === MAX_VOCABULARY) break;
-  }
-  return words;
+    const seen = new Set<string>();
+    const words: string[] = [];
+    for (const word of [...FIXED_VOCABULARY, ...(sessionProject ? [sessionProject] : []), ...projects]) {
+        const trimmed = word.trim();
+        const key = trimmed.toLowerCase();
+        if (trimmed === '' || seen.has(key)) continue;
+        seen.add(key);
+        words.push(trimmed);
+        if (words.length === MAX_VOCABULARY) break;
+    }
+    return words;
 }

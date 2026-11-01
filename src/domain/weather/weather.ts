@@ -14,26 +14,26 @@ export type Sky = 'clear' | 'cloudy' | 'rain' | 'snow';
 
 /** A place to fetch the weather for. */
 export interface WeatherLocation {
-  name: string;
-  latitude: number;
-  longitude: number;
+    name: string;
+    latitude: number;
+    longitude: number;
 }
 
 /** Used until the user picks a city of their own. */
 export const DEFAULT_WEATHER_LOCATION: WeatherLocation = {
-  name: 'Amsterdam',
-  latitude: 52.3676,
-  longitude: 4.9041,
+    name: 'Amsterdam',
+    latitude: 52.3676,
+    longitude: 4.9041,
 };
 
 /** The current weather, as handed to the renderer. */
 export interface Weather {
-  sky: Sky;
-  isDay: boolean;
-  /** The location's display name. */
-  location: string;
-  /** Epoch milliseconds the forecast was fetched at. */
-  fetchedAt: number;
+    sky: Sky;
+    isDay: boolean;
+    /** The location's display name. */
+    location: string;
+    /** Epoch milliseconds the forecast was fetched at. */
+    fetchedAt: number;
 }
 
 /**
@@ -43,21 +43,21 @@ export interface Weather {
  * cloudy too — the most neutral outfit, and the least wrong guess.
  */
 export function skyFromWmoCode(code: number): Sky {
-  if (code === 0 || code === 1) return 'clear';
-  if (code === 2 || code === 3 || code === 45 || code === 48) return 'cloudy';
-  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || (code >= 95 && code <= 99)) {
-    return 'rain';
-  }
-  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
-  return 'cloudy';
+    if (code === 0 || code === 1) return 'clear';
+    if (code === 2 || code === 3 || code === 45 || code === 48) return 'cloudy';
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || (code >= 95 && code <= 99)) {
+        return 'rain';
+    }
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
+    return 'cloudy';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+    return typeof value === 'number' && Number.isFinite(value);
 }
 
 /**
@@ -65,21 +65,17 @@ function isFiniteNumber(value: unknown): value is number {
  *
  * `is_day` is 1 or 0 on the wire; a boolean is accepted too.
  */
-export function parseForecastResponse(
-  body: unknown,
-  location: WeatherLocation,
-  fetchedAt: number,
-): Weather | null {
-  if (!isRecord(body) || !isRecord(body.current)) return null;
-  const { weather_code: code, is_day: isDay } = body.current;
-  if (!isFiniteNumber(code)) return null;
-  if (isDay !== 0 && isDay !== 1 && typeof isDay !== 'boolean') return null;
-  return {
-    sky: skyFromWmoCode(code),
-    isDay: isDay === 1 || isDay === true,
-    location: location.name,
-    fetchedAt,
-  };
+export function parseForecastResponse(body: unknown, location: WeatherLocation, fetchedAt: number): Weather | null {
+    if (!isRecord(body) || !isRecord(body.current)) return null;
+    const {weather_code: code, is_day: isDay} = body.current;
+    if (!isFiniteNumber(code)) return null;
+    if (isDay !== 0 && isDay !== 1 && typeof isDay !== 'boolean') return null;
+    return {
+        sky: skyFromWmoCode(code),
+        isDay: isDay === 1 || isDay === true,
+        location: location.name,
+        fetchedAt,
+    };
 }
 
 /**
@@ -89,8 +85,8 @@ export function parseForecastResponse(
  * empty array, so both read as "not found".
  */
 export function parseGeocodingResponse(body: unknown): WeatherLocation | null {
-  if (!isRecord(body) || !Array.isArray(body.results)) return null;
-  return parseWeatherLocation(body.results[0]);
+    if (!isRecord(body) || !Array.isArray(body.results)) return null;
+    return parseWeatherLocation(body.results[0]);
 }
 
 /**
@@ -100,9 +96,9 @@ export function parseGeocodingResponse(body: unknown): WeatherLocation | null {
  * blob, so what was saved is checked before it is used.
  */
 export function parseWeatherLocation(value: unknown): WeatherLocation | null {
-  if (!isRecord(value)) return null;
-  const { name, latitude, longitude } = value;
-  if (typeof name !== 'string' || !name.trim()) return null;
-  if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return null;
-  return { name, latitude, longitude };
+    if (!isRecord(value)) return null;
+    const {name, latitude, longitude} = value;
+    if (typeof name !== 'string' || !name.trim()) return null;
+    if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) return null;
+    return {name, latitude, longitude};
 }

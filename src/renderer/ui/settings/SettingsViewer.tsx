@@ -7,20 +7,18 @@
  * `actions`). The form is
  * keyed on the open, so each open starts from what is stored.
  */
-import { useStore } from '../use-store';
-import { SettingsForm } from './SettingsForm';
-import type { JSX } from 'react';
+import {useStore} from '../use-store';
+import {SettingsForm} from './SettingsForm';
+import type {JSX} from 'react';
 
 export function SettingsViewer(): JSX.Element {
-  const panel = useStore(state => state.settings.panel);
-  return (
-    <>
-      <div id="settings-viewer-header">
-        <span id="settings-viewer-title">{panel ? 'Global Settings' : 'Settings'}</span>
-      </div>
-      <div id="settings-viewer-body">
-        {panel && <SettingsForm key={panel.openId} panel={panel} />}
-      </div>
-    </>
-  );
+    const panel = useStore((state) => state.settings.panel);
+    return (
+        <>
+            <div id="settings-viewer-header">
+                <span id="settings-viewer-title">{panel ? 'Global Settings' : 'Settings'}</span>
+            </div>
+            <div id="settings-viewer-body">{panel && <SettingsForm key={panel.openId} panel={panel} />}</div>
+        </>
+    );
 }

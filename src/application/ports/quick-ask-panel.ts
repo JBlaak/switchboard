@@ -8,18 +8,18 @@
 
 /** The Quick Ask pop-up. */
 export interface QuickAskPanel {
-  show(): void;
-  hide(): void;
-  /** Show it, or hide it when it is already showing (H1). */
-  toggle(): void;
-  readonly visible: boolean;
-  /** Call `listener` each time it comes on screen. */
-  onShown(listener: () => void): void;
+    show(): void;
+    hide(): void;
+    /** Show it, or hide it when it is already showing (H1). */
+    toggle(): void;
+    readonly visible: boolean;
+    /** Call `listener` each time it comes on screen. */
+    onShown(listener: () => void): void;
 }
 
 /** A shortcut that reaches the app from anywhere on the Mac. */
 export interface GlobalHotkey {
-  /** False when the OS refused it, most often because another app holds it. */
-  register(accelerator: string, onPress: () => void): boolean;
-  unregister(accelerator: string): void;
+    /** False when the OS refused it, most often because another app holds it. */
+    register(accelerator: string, onPress: () => void): boolean;
+    unregister(accelerator: string): void;
 }

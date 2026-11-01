@@ -8,14 +8,11 @@
  * new object each call is safe as long as it passes an `isEqual` that sees
  * through it (`shallowEqual` for a flat object or array).
  */
-import { store } from '../state/app-store';
-import { useStoreOf } from './use-store-of';
-import type { RendererState } from '../state/root';
+import {store} from '../state/app-store';
+import {useStoreOf} from './use-store-of';
+import type {RendererState} from '../state/root';
 
 /** Select from the renderer's store, re-rendering only when the selection changes. */
-export function useStore<T>(
-  selector: (state: RendererState) => T,
-  isEqual?: (a: T, b: T) => boolean,
-): T {
-  return useStoreOf(store, selector, isEqual);
+export function useStore<T>(selector: (state: RendererState) => T, isEqual?: (a: T, b: T) => boolean): T {
+    return useStoreOf(store, selector, isEqual);
 }

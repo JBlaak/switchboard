@@ -3,189 +3,197 @@
    shell: the BlaakTasks modal look, a borderless raised panel lifted by
    shadow. The forms below are the Projects modal's add step (#171). */
 .add-project-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(var(--sb-shadow-rgb),calc(0.6 * var(--sb-shadow-k)));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  animation: fade-in 0.16s ease-out;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(var(--sb-shadow-rgb), calc(0.6 * var(--sb-shadow-k)));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    animation: fade-in 0.16s ease-out;
 }
 
 .add-project-dialog {
-  background: var(--sb-bg-raised);
-  border-radius: var(--sb-r-panel);
-  padding: 22px;
-  width: 440px;
-  max-width: 90vw;
-  box-shadow: var(--sb-edge), var(--sb-lift);
-  /* BlaakTasks' modal entrance; the shell is built fresh on every open, so it replays. */
-  animation: modal-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+    background: var(--sb-bg-raised);
+    border-radius: var(--sb-r-panel);
+    padding: 22px;
+    width: 440px;
+    max-width: 90vw;
+    box-shadow: var(--sb-edge), var(--sb-lift);
+    /* BlaakTasks' modal entrance; the shell is built fresh on every open, so it replays. */
+    animation: modal-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
 
 .add-project-dialog h3 {
-  margin: 0 0 16px 0;
-  font-family: var(--sb-font-head);
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  color: var(--sb-text-strong);
+    margin: 0 0 16px 0;
+    font-family: var(--sb-font-head);
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    color: var(--sb-text-strong);
 }
 
 .add-project-hint {
-  color: var(--sb-text-muted);
-  font-size: 12.5px;
-  margin-bottom: 12px;
-  line-height: 1.45;
+    color: var(--sb-text-muted);
+    font-size: 12.5px;
+    margin-bottom: 12px;
+    line-height: 1.45;
 }
 
 .add-project-dialog .folder-input-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
 .add-project-dialog .folder-input-row input {
-  flex: 1;
-  /* Flex items refuse to shrink below their intrinsic width by default, which
+    flex: 1;
+    /* Flex items refuse to shrink below their intrinsic width by default, which
      pushed the multi-input remote row outside the dialog. */
-  min-width: 0;
-  background: var(--sb-bg-base);
-  border: none;
-  box-shadow: inset 0 0 0 1px var(--sb-line);
-  border-radius: var(--sb-r-control);
-  padding: 9px 12px;
-  color: var(--sb-text-strong);
-  font-size: 13px;
-  font-family: var(--sb-font-mono);
-  outline: none;
-  transition: box-shadow 0.15s;
+    min-width: 0;
+    background: var(--sb-bg-base);
+    border: none;
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    border-radius: var(--sb-r-control);
+    padding: 9px 12px;
+    color: var(--sb-text-strong);
+    font-size: 13px;
+    font-family: var(--sb-font-mono);
+    outline: none;
+    transition: box-shadow 0.15s;
 }
 
 .add-project-dialog .folder-input-row input:focus {
-  box-shadow:
-    inset 0 0 0 1px var(--sb-accent),
-    0 0 0 3px rgba(var(--sb-accent-rgb),0.18);
+    box-shadow:
+        inset 0 0 0 1px var(--sb-accent),
+        0 0 0 3px rgba(var(--sb-accent-rgb), 0.18);
 }
 
 .add-project-dialog .folder-input-row input::placeholder {
-  color: var(--sb-text-placeholder);
+    color: var(--sb-text-placeholder);
 }
 
 /* Shared shape for every button in the dialog: Browse, Cancel, Add. */
 .add-project-browse-btn,
 .add-project-dialog .add-project-actions button {
-  border: none;
-  border-radius: var(--sb-r-control);
-  padding: 9px 16px;
-  font-family: var(--sb-font-head);
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s, opacity 0.15s, box-shadow 0.15s;
+    border: none;
+    border-radius: var(--sb-r-control);
+    padding: 9px 16px;
+    font-family: var(--sb-font-head);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+        background 0.15s,
+        opacity 0.15s,
+        box-shadow 0.15s;
 }
 
 .add-project-browse-btn:focus-visible,
 .add-project-dialog .add-project-actions button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb),0.3);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb), 0.3);
 }
 
 /* Browse and Cancel are ghosts: the dialog's surface, outlined by a hairline. */
 .add-project-browse-btn,
 .add-project-cancel-btn {
-  background: var(--sb-bg-raised);
-  box-shadow: inset 0 0 0 1px var(--sb-line);
-  color: var(--sb-text-strong);
+    background: var(--sb-bg-raised);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    color: var(--sb-text-strong);
 }
 
 .add-project-browse-btn:hover,
 .add-project-cancel-btn:hover {
-  background: rgba(var(--sb-overlay-rgb),0.05);
+    background: rgba(var(--sb-overlay-rgb), 0.05);
 }
 
 .add-project-dialog .add-project-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
 }
 
 /* Add is the primary action, filled with the action colour. */
 .add-project-add-btn {
-  background: var(--sb-action);
-  color: var(--sb-action-text);
+    background: var(--sb-action);
+    color: var(--sb-action-text);
 }
 
 .add-project-add-btn:hover {
-  opacity: 0.88;
+    opacity: 0.88;
 }
 
 .add-project-error {
-  color: var(--sb-danger);
-  font-size: 12px;
-  margin-top: 8px;
+    color: var(--sb-danger);
+    font-size: 12px;
+    margin-top: 8px;
 }
 
 /* Local / Remote (SSH) mode toggle in the add-project dialog, drawn as a
    BlaakTasks segmented control: a soft track with the picked option filled. */
 .add-project-tabs {
-  display: flex;
-  width: fit-content;
-  gap: 4px;
-  padding: 4px;
-  margin-bottom: 14px;
-  border-radius: 14px;
-  background: var(--sb-bg-panel);
-  box-shadow: var(--sb-edge);
+    display: flex;
+    width: fit-content;
+    gap: 4px;
+    padding: 4px;
+    margin-bottom: 14px;
+    border-radius: 14px;
+    background: var(--sb-bg-panel);
+    box-shadow: var(--sb-edge);
 }
 
 .add-project-tab {
-  background: transparent;
-  border: none;
-  border-radius: var(--sb-r-control);
-  padding: 7px 14px;
-  font-family: var(--sb-font-head);
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--sb-text);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+    background: transparent;
+    border: none;
+    border-radius: var(--sb-r-control);
+    padding: 7px 14px;
+    font-family: var(--sb-font-head);
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--sb-text);
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s;
 }
 
 .add-project-tab:hover {
-  background: rgba(var(--sb-overlay-rgb),0.06);
+    background: rgba(var(--sb-overlay-rgb), 0.06);
 }
 
 .add-project-tab:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb),0.3);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(var(--sb-accent-rgb), 0.3);
 }
 
 .add-project-tab.active {
-  background: var(--sb-action);
-  color: var(--sb-action-text);
+    background: var(--sb-action);
+    color: var(--sb-action-text);
 }
 
 .add-remote-sep {
-  color: var(--sb-text-muted);
-  font-family: var(--sb-font-mono);
+    color: var(--sb-text-muted);
+    font-family: var(--sb-font-mono);
 }
 
 .add-project-dialog .remote-input-row + .remote-input-row {
-  margin-top: 8px;
+    margin-top: 8px;
 }
 
 .add-project-dialog #add-remote-user {
-  flex: 0 1 90px;
+    flex: 0 1 90px;
 }
 
 .add-project-dialog #add-remote-port {
-  flex: 0 1 52px;
+    flex: 0 1 52px;
 }

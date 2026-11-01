@@ -19,18 +19,18 @@
  * The channel names come from the app's own table, so a renamed channel breaks
  * the harness at compile time rather than leaving a stub silently unused.
  */
-import type { ElectronApplication } from '@playwright/test';
-import { EVENT, INVOKE, SEND } from '../../src/ipc/channels';
-import type { SessionWorkDiff, SessionWorkSnapshot } from '../../src/domain/session-work/model';
-import type { ActionRequest } from '../../src/domain/session-work/actions';
-import type { CommentRequest, ReviewRequest } from '../../src/domain/session-work/review';
-import type { RemoteStatusPayload } from '../../src/domain/remote/remote-status';
-import type { UpdateNotice } from '../../src/domain/update/release';
-import type { Usage } from '../../src/domain/usage/usage';
-import type { Weather, WeatherLocation } from '../../src/domain/weather/weather';
-import type { Plan, PlanSummary } from '../../src/domain/plan/model';
-import type { SessionPlans } from '../../src/application/services/plan-service';
-import type { ProjectOverview } from '../../src/domain/project/overview';
+import type {ElectronApplication} from '@playwright/test';
+import {EVENT, INVOKE, SEND} from '../../src/ipc/channels';
+import type {SessionWorkDiff, SessionWorkSnapshot} from '../../src/domain/session-work/model';
+import type {ActionRequest} from '../../src/domain/session-work/actions';
+import type {CommentRequest, ReviewRequest} from '../../src/domain/session-work/review';
+import type {RemoteStatusPayload} from '../../src/domain/remote/remote-status';
+import type {UpdateNotice} from '../../src/domain/update/release';
+import type {Usage} from '../../src/domain/usage/usage';
+import type {Weather, WeatherLocation} from '../../src/domain/weather/weather';
+import type {Plan, PlanSummary} from '../../src/domain/plan/model';
+import type {SessionPlans} from '../../src/application/services/plan-service';
+import type {ProjectOverview} from '../../src/domain/project/overview';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -38,95 +38,102 @@ import type { ProjectOverview } from '../../src/domain/project/overview';
  * without any credentials or network.
  */
 export const STUB_USAGE: Usage = {
-  limits: [
-    { kind: 'session', label: 'Current session', model: null, percent: 42, reset: '6pm (UTC)', severity: 'normal' },
-    { kind: 'weekly_all', label: 'Week (all models)', model: null, percent: 67, reset: 'Jun 12 at 9am (UTC)', severity: 'normal' },
-  ],
+    limits: [
+        {kind: 'session', label: 'Current session', model: null, percent: 42, reset: '6pm (UTC)', severity: 'normal'},
+        {
+            kind: 'weekly_all',
+            label: 'Week (all models)',
+            model: null,
+            percent: 67,
+            reset: 'Jun 12 at 9am (UTC)',
+            severity: 'normal',
+        },
+    ],
 };
 
 export interface HostStubs {
-  /** What `getUsage` answers; null hides the gauges. */
-  usage: Usage | null;
-  /** Make `getUsage` fail, as it does offline or without credentials. */
-  usageFails: boolean;
-  /** What `getUpdate` answers: the release main has found, or null for none. */
-  update: UpdateNotice | null;
-  /**
-   * What `installUpdate` answers. 'pending' never answers, which is what the
-   * renderer sees when an install works: the app quits from under it.
-   */
-  installUpdate: boolean | 'pending';
-  /** Whether `pmset` would report sleep as disabled; null is a host that cannot say. */
-  sleepDisabled: boolean | null;
-  /**
-   * How long the sleep switch takes to answer, standing in for the password
-   * prompt the real one may show.
-   */
-  sleepPromptDelayMs: number;
-  /** True when that prompt is cancelled: the switch answers with the state unchanged. */
-  sleepPromptCancelled: boolean;
-  /** What the folder picker "chooses"; null is a cancelled dialog. */
-  browseFolder: string | null;
-  /**
-   * What `getWeather` answers: null is no sky (weather switched off, or not
-   * fetched), and `'never'` a fetch that never comes back, for the timeouts
-   * that guard it.
-   */
-  weather: Weather | null | 'never';
-  /**
-   * What looking up a weather city answers, by the name typed: a location
-   * (after `delayMs`, to hold a lookup in flight), null for "no such place",
-   * or 'fail' for a lookup that throws. A name not listed finds nothing.
-   */
-  geocode: Record<string, GeocodeStub>;
-  /**
-   * The Session work page's back end, standing in for git and `gh`; null
-   * leaves the real service, which finds no repository in the fixture home.
-   */
-  sessionWork: SessionWorkStub | null;
-  /**
-   * The Plan tab's back end, standing in for `gh`; null leaves the real
-   * service, which finds no repository in the fixture home.
-   */
-  plans: PlansStub | null;
-  /**
-   * What `projectOverview` answers, standing in for git and `gh`, by the end of
-   * the project's path (`Development/acme-api`); null leaves the real service,
-   * which finds no repository in the fixture home. A project not listed has no
-   * GitHub remote. Closed plans and merged PRs are left out unless asked for, and an answered
-   * GitHub part is dated the moment it is asked.
-   */
-  projectOverview: Record<string, ProjectOverview> | null;
+    /** What `getUsage` answers; null hides the gauges. */
+    usage: Usage | null;
+    /** Make `getUsage` fail, as it does offline or without credentials. */
+    usageFails: boolean;
+    /** What `getUpdate` answers: the release main has found, or null for none. */
+    update: UpdateNotice | null;
+    /**
+     * What `installUpdate` answers. 'pending' never answers, which is what the
+     * renderer sees when an install works: the app quits from under it.
+     */
+    installUpdate: boolean | 'pending';
+    /** Whether `pmset` would report sleep as disabled; null is a host that cannot say. */
+    sleepDisabled: boolean | null;
+    /**
+     * How long the sleep switch takes to answer, standing in for the password
+     * prompt the real one may show.
+     */
+    sleepPromptDelayMs: number;
+    /** True when that prompt is cancelled: the switch answers with the state unchanged. */
+    sleepPromptCancelled: boolean;
+    /** What the folder picker "chooses"; null is a cancelled dialog. */
+    browseFolder: string | null;
+    /**
+     * What `getWeather` answers: null is no sky (weather switched off, or not
+     * fetched), and `'never'` a fetch that never comes back, for the timeouts
+     * that guard it.
+     */
+    weather: Weather | null | 'never';
+    /**
+     * What looking up a weather city answers, by the name typed: a location
+     * (after `delayMs`, to hold a lookup in flight), null for "no such place",
+     * or 'fail' for a lookup that throws. A name not listed finds nothing.
+     */
+    geocode: Record<string, GeocodeStub>;
+    /**
+     * The Session work page's back end, standing in for git and `gh`; null
+     * leaves the real service, which finds no repository in the fixture home.
+     */
+    sessionWork: SessionWorkStub | null;
+    /**
+     * The Plan tab's back end, standing in for `gh`; null leaves the real
+     * service, which finds no repository in the fixture home.
+     */
+    plans: PlansStub | null;
+    /**
+     * What `projectOverview` answers, standing in for git and `gh`, by the end of
+     * the project's path (`Development/acme-api`); null leaves the real service,
+     * which finds no repository in the fixture home. A project not listed has no
+     * GitHub remote. Closed plans and merged PRs are left out unless asked for, and an answered
+     * GitHub part is dated the moment it is asked.
+     */
+    projectOverview: Record<string, ProjectOverview> | null;
 }
 
 /** What the plan channels answer: a session's plans, one plan by its issue, and the sessions that own issues. */
 export interface PlansStub {
-  /** By session id; a session not here answers null, as one outside a repository does. */
-  sessionPlans: Record<string, SessionPlans>;
-  /** By `owner/repo#n`. */
-  plans?: Record<string, Plan>;
-  /** By repository: `owner/repo#n` → the session that owns it. */
-  issueSessions?: Record<string, Record<string, string>>;
-  /**
-   * A project's plans for the picker, by the end of its path (`Development/acme-api`):
-   * open and closed together, as `projectPlans` with `closed` answers them. A project
-   * not here has none; null answers as a project with no GitHub remote does.
-   */
-  projectPlans?: Record<string, PlanSummary[] | null>;
-  /**
-   * Answer Start session's worktree request without git: a worktree named
-   * after the issue under the project's `.claude/worktrees/`, never made on
-   * disk. Unset, the real service answers (and needs a GitHub repository).
-   */
-  prepareWorktrees?: boolean;
-  /**
-   * With `prepareWorktrees`: the issues whose branch exists already. Asked
-   * without `existing`, one answers the refusal, naming `session` as the one
-   * that worked on it; with `reuse` it answers the continue prompt, and with
-   * `replace` a fresh start. Every request's `existing` is kept, in order, on
-   * `globalThis.__existingAsked` in main.
-   */
-  existingBranches?: { issues: number[]; session: string | null };
+    /** By session id; a session not here answers null, as one outside a repository does. */
+    sessionPlans: Record<string, SessionPlans>;
+    /** By `owner/repo#n`. */
+    plans?: Record<string, Plan>;
+    /** By repository: `owner/repo#n` → the session that owns it. */
+    issueSessions?: Record<string, Record<string, string>>;
+    /**
+     * A project's plans for the picker, by the end of its path (`Development/acme-api`):
+     * open and closed together, as `projectPlans` with `closed` answers them. A project
+     * not here has none; null answers as a project with no GitHub remote does.
+     */
+    projectPlans?: Record<string, PlanSummary[] | null>;
+    /**
+     * Answer Start session's worktree request without git: a worktree named
+     * after the issue under the project's `.claude/worktrees/`, never made on
+     * disk. Unset, the real service answers (and needs a GitHub repository).
+     */
+    prepareWorktrees?: boolean;
+    /**
+     * With `prepareWorktrees`: the issues whose branch exists already. Asked
+     * without `existing`, one answers the refusal, naming `session` as the one
+     * that worked on it; with `reuse` it answers the continue prompt, and with
+     * `replace` a fresh start. Every request's `existing` is kept, in order, on
+     * `globalThis.__existingAsked` in main.
+     */
+    existingBranches?: {issues: number[]; session: string | null};
 }
 
 /**
@@ -134,32 +141,32 @@ export interface PlansStub {
  * session with no snapshot opens on the skeleton and stays there.
  */
 export interface SessionWorkStub {
-  canOpen: string[];
-  snapshots: Record<string, SessionWorkSnapshot>;
-  /** What `getSessionWorkDiff` answers, by item id: an item not here has no changes, and 'never' never answers. */
-  diffs?: Record<string, SessionWorkDiff | 'never'>;
-  /**
-   * Why every action is refused; unset queues each one, answering `act-<n>`.
-   * Either way the request is recorded (see `sessionWorkActions`).
-   */
-  refuseActions?: string;
-  /** Why every review write (a comment, submit, discard) is refused; unset, each one goes through. */
-  refuseReview?: string
-  /** What the Checks panel's log request answers, by check run URL; a URL not here has no log. */
-  checkLogs?: Record<string, string>;
-  /**
-   * What `sessionWorkImage` answers, by `imageStubKey`, as base64: the bytes
-   * the real service would read for that side. A side not here has none.
-   */
-  images?: Record<string, string>;
+    canOpen: string[];
+    snapshots: Record<string, SessionWorkSnapshot>;
+    /** What `getSessionWorkDiff` answers, by item id: an item not here has no changes, and 'never' never answers. */
+    diffs?: Record<string, SessionWorkDiff | 'never'>;
+    /**
+     * Why every action is refused; unset queues each one, answering `act-<n>`.
+     * Either way the request is recorded (see `sessionWorkActions`).
+     */
+    refuseActions?: string;
+    /** Why every review write (a comment, submit, discard) is refused; unset, each one goes through. */
+    refuseReview?: string;
+    /** What the Checks panel's log request answers, by check run URL; a URL not here has no log. */
+    checkLogs?: Record<string, string>;
+    /**
+     * What `sessionWorkImage` answers, by `imageStubKey`, as base64: the bytes
+     * the real service would read for that side. A side not here has none.
+     */
+    images?: Record<string, string>;
 }
 
 /** Where `SessionWorkStub.images` files one side of an image in an item's diff. */
 export function imageStubKey(itemId: string, path: string, side: 'before' | 'after'): string {
-  return [itemId, path, side].join('\n');
+    return [itemId, path, side].join('\n');
 }
 
-export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number } | 'fail';
+export type GeocodeStub = {location: WeatherLocation | null; delayMs?: number} | 'fail';
 
 /**
  * What the stubs keep in the main process, on `globalThis.__switchboardE2E`.
@@ -167,272 +174,341 @@ export type GeocodeStub = { location: WeatherLocation | null; delayMs?: number }
  * global rather than through a closure.
  */
 interface StubState extends HostStubs {
-  opened: string[];
-  calls: HostStubCalls;
-  clipboard: string[];
-  /** Every image written to the clipboard, as base64 PNG. */
-  clipboardImages: string[];
-  /** Every session the renderer told main its Session work page closed for, in order. */
-  sessionWorkClosed: string[];
-  /** Every action the page asked main for, in order. */
-  sessionWorkActions: ActionRequest[];
-  /** Every queued action the page asked main to cancel, by id. */
-  sessionWorkCancels: string[];
-  /** Every write to your review the page asked main for, in order. */
-  sessionWorkReviews: ReviewWrite[];
+    opened: string[];
+    calls: HostStubCalls;
+    clipboard: string[];
+    /** Every image written to the clipboard, as base64 PNG. */
+    clipboardImages: string[];
+    /** Every session the renderer told main its Session work page closed for, in order. */
+    sessionWorkClosed: string[];
+    /** Every action the page asked main for, in order. */
+    sessionWorkActions: ActionRequest[];
+    /** Every queued action the page asked main to cancel, by id. */
+    sessionWorkCancels: string[];
+    /** Every write to your review the page asked main for, in order. */
+    sessionWorkReviews: ReviewWrite[];
 }
 
 /** A comment added to the pending review, or the review finished. */
-export type ReviewWrite = { comment: CommentRequest } | { review: ReviewRequest };
+export type ReviewWrite = {comment: CommentRequest} | {review: ReviewRequest};
 
 /** How often the renderer asked the stubs for something, by channel. */
 export interface HostStubCalls {
-  getUsage: number;
-  installUpdate: number;
-  getWeather: number;
+    getUsage: number;
+    installUpdate: number;
+    getWeather: number;
 }
 
-type WithStubs = typeof globalThis & { __switchboardE2E: StubState };
+type WithStubs = typeof globalThis & {__switchboardE2E: StubState};
 
 export const DEFAULT_STUBS: HostStubs = {
-  usage: STUB_USAGE,
-  usageFails: false,
-  update: null,
-  installUpdate: 'pending',
-  sleepDisabled: false,
-  sleepPromptDelayMs: 0,
-  sleepPromptCancelled: false,
-  browseFolder: null,
-  weather: null,
-  geocode: {},
-  sessionWork: null,
-  plans: null,
-  projectOverview: null,
+    usage: STUB_USAGE,
+    usageFails: false,
+    update: null,
+    installUpdate: 'pending',
+    sleepDisabled: false,
+    sleepPromptDelayMs: 0,
+    sleepPromptCancelled: false,
+    browseFolder: null,
+    weather: null,
+    geocode: {},
+    sessionWork: null,
+    plans: null,
+    projectOverview: null,
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
-  await app.evaluate(({ ipcMain }, { stubs, channels, send }) => {
-    const state: StubState = {
-      ...stubs, opened: [], calls: { getUsage: 0, installUpdate: 0, getWeather: 0 }, clipboard: [], clipboardImages: [], sessionWorkClosed: [],
-      sessionWorkActions: [], sessionWorkCancels: [], sessionWorkReviews: [],
-    };
-    (globalThis as WithStubs).__switchboardE2E = state;
-
-    // Heard beside the real handler, which ignores a close for a page it never opened.
-    ipcMain.on(send.sessionWorkClose, (_event, sessionId) => {
-      state.sessionWorkClosed.push(String(sessionId));
-    });
-    if (state.sessionWork) {
-      const work = state.sessionWork;
-      ipcMain.removeHandler(channels.sessionWorkCanOpen);
-      ipcMain.handle(channels.sessionWorkCanOpen, (_event, sessionId) => work.canOpen.includes(String(sessionId)));
-      ipcMain.removeHandler(channels.sessionWorkOpen);
-      ipcMain.handle(channels.sessionWorkOpen, (_event, sessionId) => {
-        const snapshot = work.snapshots[String(sessionId)];
-        // No snapshot: main is still reading git, and the page stays a skeleton.
-        return snapshot ?? new Promise(() => {});
-      });
-      ipcMain.removeHandler(channels.sessionWorkDiff);
-      ipcMain.handle(channels.sessionWorkDiff, (_event, request: { itemId: string }) => {
-        const diff = work.diffs?.[String(request?.itemId)];
-        if (diff === 'never') return new Promise(() => {});
-        return diff ?? { files: [], source: null };
-      });
-      // The page's actions would type into the session through the real queue,
-      // which needs the real page; recorded here instead, and the test pushes
-      // the snapshot that shows what the queue would have done.
-      ipcMain.removeHandler(channels.sessionWorkAction);
-      ipcMain.handle(channels.sessionWorkAction, (_event, request: ActionRequest) => {
-        state.sessionWorkActions.push(request);
-        if (work.refuseActions) return { ok: false, reason: work.refuseActions };
-        return { ok: true, activityId: 'act-' + state.sessionWorkActions.length };
-      });
-      ipcMain.removeHandler(channels.sessionWorkCancel);
-      ipcMain.handle(channels.sessionWorkCancel, (_event, activityId) => {
-        state.sessionWorkCancels.push(String(activityId));
-        return { ok: true };
-      });
-      // Your review would be written to GitHub; recorded here instead.
-      ipcMain.removeHandler(channels.sessionWorkComment);
-      ipcMain.handle(channels.sessionWorkComment, (_event, request: CommentRequest) => {
-        state.sessionWorkReviews.push({ comment: request });
-        return work.refuseReview ? { ok: false, reason: work.refuseReview } : { ok: true };
-      });
-      ipcMain.removeHandler(channels.sessionWorkReview);
-      ipcMain.handle(channels.sessionWorkReview, (_event, request: ReviewRequest) => {
-        state.sessionWorkReviews.push({ review: request });
-        return work.refuseReview ? { ok: false, reason: work.refuseReview } : { ok: true };
-      })
-      // The real one would ask `gh` for the log.
-      ipcMain.removeHandler(channels.sessionWorkCheckLog);
-      ipcMain.handle(channels.sessionWorkCheckLog, (_event, request: { checkRunUrl: string }) =>
-        work.checkLogs?.[String(request?.checkRunUrl)] ?? null);
-      // The real one reads the bytes at the commits the diff was made from.
-      ipcMain.removeHandler(channels.sessionWorkImage);
-      ipcMain.handle(channels.sessionWorkImage, (_event, request: { itemId: string; path: string; side: string }) => {
-        const bytes = work.images?.[[request?.itemId, request?.path, request?.side].join('\n')];
-        return bytes ? new Uint8Array(Buffer.from(bytes, 'base64')) : null;
-      });
-    }
-
-    if (state.plans) {
-      const plans = state.plans;
-      // Read at each call, so `setHostStub(app, 'plans', …)` changes what the next poll answers.
-      const now = (): PlansStub => state.plans ?? plans;
-      ipcMain.removeHandler(channels.planSessionPlans);
-      ipcMain.handle(channels.planSessionPlans, (_event, sessionId) => now().sessionPlans[String(sessionId)] ?? null);
-      ipcMain.removeHandler(channels.planGet);
-      ipcMain.handle(channels.planGet, (_event, repo, number) => now().plans?.[String(repo) + '#' + String(number)] ?? null);
-      ipcMain.removeHandler(channels.planProjectPlans);
-      ipcMain.handle(channels.planProjectPlans, (_event, projectPath, options: { closed?: boolean } | undefined) => {
-        const found = Object.entries(plans.projectPlans ?? {}).find(([end]) => String(projectPath).endsWith('/' + end));
-        if (!found) return [];
-        if (!found[1]) return null;
-        return options?.closed ? found[1] : found[1].filter(plan => plan.state === 'open');
-      });
-      ipcMain.removeHandler(channels.planIssueSessions);
-      ipcMain.handle(channels.planIssueSessions, (_event, repo) => plans.issueSessions?.[String(repo)] ?? {});
-      if (plans.prepareWorktrees) {
-        ipcMain.removeHandler(channels.planPrepareIssueWorktree);
-        ipcMain.handle(channels.planPrepareIssueWorktree, (_event, request: {
-          projectPath: string; issue: { number: number }; existing?: 'replace' | 'reuse';
-        }) => {
-          const branch = request.issue.number + '-issue';
-          const worktreePath = request.projectPath + '/.claude/worktrees/' + branch;
-          const exists = plans.existingBranches?.issues.includes(request.issue.number);
-          if (exists) {
-            const asked = ((globalThis as { __existingAsked?: (string | null)[] }).__existingAsked ??= []);
-            asked.push(request.existing ?? null);
-          }
-          if (exists && !request.existing) {
-            return {
-              ok: false,
-              reason: `Branch ${branch} already exists`,
-              existing: { branch, worktreePath, main: false, changedFiles: 2, ahead: 1, sessionId: plans.existingBranches!.session },
+    await app.evaluate(
+        ({ipcMain}, {stubs, channels, send}) => {
+            const state: StubState = {
+                ...stubs,
+                opened: [],
+                calls: {getUsage: 0, installUpdate: 0, getWeather: 0},
+                clipboard: [],
+                clipboardImages: [],
+                sessionWorkClosed: [],
+                sessionWorkActions: [],
+                sessionWorkCancels: [],
+                sessionWorkReviews: [],
             };
-          }
-          const prompt = (request.existing === 'reuse' ? 'Continue work on #' : 'Work on #') + request.issue.number + '.';
-          return { ok: true, worktreePath, branch, prompt };
-        });
-      }
-    }
+            (globalThis as WithStubs).__switchboardE2E = state;
 
-    if (state.projectOverview) {
-      // Read at each call, so `setHostStub(app, 'projectOverview', …)` changes what the next poll answers.
-      ipcMain.removeHandler(channels.projectOverview);
-      ipcMain.handle(channels.projectOverview, (_event, projectPath, options: { closed?: boolean; merged?: boolean } | undefined) => {
-        const path = String(projectPath);
-        const found = Object.entries(state.projectOverview ?? {}).find(([end]) => path.endsWith('/' + end));
-        if (!found) return { projectPath: path, remote: false, repository: null, github: null, worktrees: [], running: [] };
-        const overview = found[1];
-        const github = overview.github?.ok
-          ? {
-              ...overview.github,
-              fetchedAt: Date.now(),
-              plans: options?.closed ? overview.github.plans : overview.github.plans.filter(plan => plan.state === 'open'),
-              pullRequests: options?.merged
-                ? overview.github.pullRequests
-                : overview.github.pullRequests.filter(row => row.pullRequest.state !== 'merged'),
+            // Heard beside the real handler, which ignores a close for a page it never opened.
+            ipcMain.on(send.sessionWorkClose, (_event, sessionId) => {
+                state.sessionWorkClosed.push(String(sessionId));
+            });
+            if (state.sessionWork) {
+                const work = state.sessionWork;
+                ipcMain.removeHandler(channels.sessionWorkCanOpen);
+                ipcMain.handle(channels.sessionWorkCanOpen, (_event, sessionId) =>
+                    work.canOpen.includes(String(sessionId)),
+                );
+                ipcMain.removeHandler(channels.sessionWorkOpen);
+                ipcMain.handle(channels.sessionWorkOpen, (_event, sessionId) => {
+                    const snapshot = work.snapshots[String(sessionId)];
+                    // No snapshot: main is still reading git, and the page stays a skeleton.
+                    return snapshot ?? new Promise(() => {});
+                });
+                ipcMain.removeHandler(channels.sessionWorkDiff);
+                ipcMain.handle(channels.sessionWorkDiff, (_event, request: {itemId: string}) => {
+                    const diff = work.diffs?.[String(request?.itemId)];
+                    if (diff === 'never') return new Promise(() => {});
+                    return diff ?? {files: [], source: null};
+                });
+                // The page's actions would type into the session through the real queue,
+                // which needs the real page; recorded here instead, and the test pushes
+                // the snapshot that shows what the queue would have done.
+                ipcMain.removeHandler(channels.sessionWorkAction);
+                ipcMain.handle(channels.sessionWorkAction, (_event, request: ActionRequest) => {
+                    state.sessionWorkActions.push(request);
+                    if (work.refuseActions) return {ok: false, reason: work.refuseActions};
+                    return {ok: true, activityId: 'act-' + state.sessionWorkActions.length};
+                });
+                ipcMain.removeHandler(channels.sessionWorkCancel);
+                ipcMain.handle(channels.sessionWorkCancel, (_event, activityId) => {
+                    state.sessionWorkCancels.push(String(activityId));
+                    return {ok: true};
+                });
+                // Your review would be written to GitHub; recorded here instead.
+                ipcMain.removeHandler(channels.sessionWorkComment);
+                ipcMain.handle(channels.sessionWorkComment, (_event, request: CommentRequest) => {
+                    state.sessionWorkReviews.push({comment: request});
+                    return work.refuseReview ? {ok: false, reason: work.refuseReview} : {ok: true};
+                });
+                ipcMain.removeHandler(channels.sessionWorkReview);
+                ipcMain.handle(channels.sessionWorkReview, (_event, request: ReviewRequest) => {
+                    state.sessionWorkReviews.push({review: request});
+                    return work.refuseReview ? {ok: false, reason: work.refuseReview} : {ok: true};
+                });
+                // The real one would ask `gh` for the log.
+                ipcMain.removeHandler(channels.sessionWorkCheckLog);
+                ipcMain.handle(
+                    channels.sessionWorkCheckLog,
+                    (_event, request: {checkRunUrl: string}) => work.checkLogs?.[String(request?.checkRunUrl)] ?? null,
+                );
+                // The real one reads the bytes at the commits the diff was made from.
+                ipcMain.removeHandler(channels.sessionWorkImage);
+                ipcMain.handle(
+                    channels.sessionWorkImage,
+                    (_event, request: {itemId: string; path: string; side: string}) => {
+                        const bytes = work.images?.[[request?.itemId, request?.path, request?.side].join('\n')];
+                        return bytes ? new Uint8Array(Buffer.from(bytes, 'base64')) : null;
+                    },
+                );
             }
-          : overview.github;
-        return { ...overview, projectPath: path, github };
-      });
-    }
 
-    const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {
-      ipcMain.removeHandler(channel);
-      ipcMain.handle(channel, (_event, ...args) => handler(...args));
-    };
+            if (state.plans) {
+                const plans = state.plans;
+                // Read at each call, so `setHostStub(app, 'plans', …)` changes what the next poll answers.
+                const now = (): PlansStub => state.plans ?? plans;
+                ipcMain.removeHandler(channels.planSessionPlans);
+                ipcMain.handle(
+                    channels.planSessionPlans,
+                    (_event, sessionId) => now().sessionPlans[String(sessionId)] ?? null,
+                );
+                ipcMain.removeHandler(channels.planGet);
+                ipcMain.handle(
+                    channels.planGet,
+                    (_event, repo, number) => now().plans?.[String(repo) + '#' + String(number)] ?? null,
+                );
+                ipcMain.removeHandler(channels.planProjectPlans);
+                ipcMain.handle(
+                    channels.planProjectPlans,
+                    (_event, projectPath, options: {closed?: boolean} | undefined) => {
+                        const found = Object.entries(plans.projectPlans ?? {}).find(([end]) =>
+                            String(projectPath).endsWith('/' + end),
+                        );
+                        if (!found) return [];
+                        if (!found[1]) return null;
+                        return options?.closed ? found[1] : found[1].filter((plan) => plan.state === 'open');
+                    },
+                );
+                ipcMain.removeHandler(channels.planIssueSessions);
+                ipcMain.handle(channels.planIssueSessions, (_event, repo) => plans.issueSessions?.[String(repo)] ?? {});
+                if (plans.prepareWorktrees) {
+                    ipcMain.removeHandler(channels.planPrepareIssueWorktree);
+                    ipcMain.handle(
+                        channels.planPrepareIssueWorktree,
+                        (
+                            _event,
+                            request: {
+                                projectPath: string;
+                                issue: {number: number};
+                                existing?: 'replace' | 'reuse';
+                            },
+                        ) => {
+                            const branch = request.issue.number + '-issue';
+                            const worktreePath = request.projectPath + '/.claude/worktrees/' + branch;
+                            const exists = plans.existingBranches?.issues.includes(request.issue.number);
+                            if (exists) {
+                                const asked = ((globalThis as {__existingAsked?: (string | null)[]}).__existingAsked ??=
+                                    []);
+                                asked.push(request.existing ?? null);
+                            }
+                            if (exists && !request.existing) {
+                                return {
+                                    ok: false,
+                                    reason: `Branch ${branch} already exists`,
+                                    existing: {
+                                        branch,
+                                        worktreePath,
+                                        main: false,
+                                        changedFiles: 2,
+                                        ahead: 1,
+                                        sessionId: plans.existingBranches!.session,
+                                    },
+                                };
+                            }
+                            const prompt =
+                                (request.existing === 'reuse' ? 'Continue work on #' : 'Work on #') +
+                                request.issue.number +
+                                '.';
+                            return {ok: true, worktreePath, branch, prompt};
+                        },
+                    );
+                }
+            }
 
-    replace(channels.getUsage, () => {
-      state.calls.getUsage++;
-      if (state.usageFails) throw new Error('usage unavailable');
-      return state.usage;
-    });
-    replace(channels.getUpdate, () => state.update);
-    replace(channels.installUpdate, () => {
-      state.calls.installUpdate++;
-      return state.installUpdate === 'pending' ? new Promise(() => {}) : state.installUpdate;
-    });
-    replace(channels.getSleepDisabled, () => state.sleepDisabled);
-    replace(channels.setSleepDisabled, async (disabled) => {
-      await new Promise(resolve => setTimeout(resolve, state.sleepPromptDelayMs));
-      if (!state.sleepPromptCancelled) state.sleepDisabled = !!disabled;
-      return state.sleepDisabled;
-    });
-    replace(channels.browseFolder, () => state.browseFolder);
-    // Both weather channels would reach Open-Meteo. The forecast answers
-    // the `weather` stub (none, unless a test dresses Patch for one), and
-    // the lookup answers from the table above.
-    replace(channels.getWeather, () => {
-      state.calls.getWeather++;
-      return state.weather === 'never' ? new Promise(() => {}) : state.weather;
-    });
-    replace(channels.geocodeWeatherLocation, async (name) => {
-      const stub = state.geocode[String(name)];
-      if (stub === 'fail') throw new Error('geocoding is offline');
-      if (!stub) return null;
-      if (stub.delayMs) await new Promise(resolve => setTimeout(resolve, stub.delayMs));
-      return stub.location;
-    });
-    replace(channels.openExternal, (url) => {
-      state.opened.push(String(url));
-    });
-    // The real clipboard is the user's: a test that copies must not overwrite it.
-    replace(channels.writeClipboard, (text) => {
-      state.clipboard.push(String(text));
-    });
-    replace(channels.writeClipboardImage, (png) => {
-      state.clipboardImages.push(Buffer.from(png as Uint8Array).toString('base64'));
-    });
-    replace(channels.openRepository, (projectPath) => {
-      state.opened.push('repository:' + String(projectPath));
-      return true;
-    });
-  }, { stubs, channels: INVOKE, send: SEND });
+            if (state.projectOverview) {
+                // Read at each call, so `setHostStub(app, 'projectOverview', …)` changes what the next poll answers.
+                ipcMain.removeHandler(channels.projectOverview);
+                ipcMain.handle(
+                    channels.projectOverview,
+                    (_event, projectPath, options: {closed?: boolean; merged?: boolean} | undefined) => {
+                        const path = String(projectPath);
+                        const found = Object.entries(state.projectOverview ?? {}).find(([end]) =>
+                            path.endsWith('/' + end),
+                        );
+                        if (!found)
+                            return {
+                                projectPath: path,
+                                remote: false,
+                                repository: null,
+                                github: null,
+                                worktrees: [],
+                                running: [],
+                            };
+                        const overview = found[1];
+                        const github = overview.github?.ok
+                            ? {
+                                  ...overview.github,
+                                  fetchedAt: Date.now(),
+                                  plans: options?.closed
+                                      ? overview.github.plans
+                                      : overview.github.plans.filter((plan) => plan.state === 'open'),
+                                  pullRequests: options?.merged
+                                      ? overview.github.pullRequests
+                                      : overview.github.pullRequests.filter(
+                                            (row) => row.pullRequest.state !== 'merged',
+                                        ),
+                              }
+                            : overview.github;
+                        return {...overview, projectPath: path, github};
+                    },
+                );
+            }
+
+            const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {
+                ipcMain.removeHandler(channel);
+                ipcMain.handle(channel, (_event, ...args) => handler(...args));
+            };
+
+            replace(channels.getUsage, () => {
+                state.calls.getUsage++;
+                if (state.usageFails) throw new Error('usage unavailable');
+                return state.usage;
+            });
+            replace(channels.getUpdate, () => state.update);
+            replace(channels.installUpdate, () => {
+                state.calls.installUpdate++;
+                return state.installUpdate === 'pending' ? new Promise(() => {}) : state.installUpdate;
+            });
+            replace(channels.getSleepDisabled, () => state.sleepDisabled);
+            replace(channels.setSleepDisabled, async (disabled) => {
+                await new Promise((resolve) => setTimeout(resolve, state.sleepPromptDelayMs));
+                if (!state.sleepPromptCancelled) state.sleepDisabled = !!disabled;
+                return state.sleepDisabled;
+            });
+            replace(channels.browseFolder, () => state.browseFolder);
+            // Both weather channels would reach Open-Meteo. The forecast answers
+            // the `weather` stub (none, unless a test dresses Patch for one), and
+            // the lookup answers from the table above.
+            replace(channels.getWeather, () => {
+                state.calls.getWeather++;
+                return state.weather === 'never' ? new Promise(() => {}) : state.weather;
+            });
+            replace(channels.geocodeWeatherLocation, async (name) => {
+                const stub = state.geocode[String(name)];
+                if (stub === 'fail') throw new Error('geocoding is offline');
+                if (!stub) return null;
+                if (stub.delayMs) await new Promise((resolve) => setTimeout(resolve, stub.delayMs));
+                return stub.location;
+            });
+            replace(channels.openExternal, (url) => {
+                state.opened.push(String(url));
+            });
+            // The real clipboard is the user's: a test that copies must not overwrite it.
+            replace(channels.writeClipboard, (text) => {
+                state.clipboard.push(String(text));
+            });
+            replace(channels.writeClipboardImage, (png) => {
+                state.clipboardImages.push(Buffer.from(png as Uint8Array).toString('base64'));
+            });
+            replace(channels.openRepository, (projectPath) => {
+                state.opened.push('repository:' + String(projectPath));
+                return true;
+            });
+        },
+        {stubs, channels: INVOKE, send: SEND},
+    );
 }
 
 /** The sessions whose Session work page the renderer told main it closed, in order. */
 export async function sessionWorkClosed(app: ElectronApplication): Promise<string[]> {
-  return await app.evaluate(() => {
-    return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkClosed];
-  });
+    return await app.evaluate(() => {
+        return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkClosed];
+    });
 }
 
 /** What each Start session on an issue with an existing branch asked to do with it (null: nothing yet), in order. */
 export async function existingBranchAsks(app: ElectronApplication): Promise<(string | null)[]> {
-  return await app.evaluate(() => [...((globalThis as { __existingAsked?: (string | null)[] }).__existingAsked ?? [])]);
+    return await app.evaluate(() => [...((globalThis as {__existingAsked?: (string | null)[]}).__existingAsked ?? [])]);
 }
 
 /** The actions the page asked main for, in order. */
 export async function sessionWorkActions(app: ElectronApplication): Promise<ActionRequest[]> {
-  return await app.evaluate(() => {
-    return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkActions];
-  });
+    return await app.evaluate(() => {
+        return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkActions];
+    });
 }
 
 /** The queued actions the page asked main to cancel, by id. */
 export async function sessionWorkCancels(app: ElectronApplication): Promise<string[]> {
-  return await app.evaluate(() => {
-    return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkCancels];
-  });
+    return await app.evaluate(() => {
+        return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkCancels];
+    });
 }
 
 /** Every write to your review the Session work page asked main for, in order. */
 export async function sessionWorkReviews(app: ElectronApplication): Promise<ReviewWrite[]> {
-  return await app.evaluate(() => {
-    return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkReviews];
-  });
+    return await app.evaluate(() => {
+        return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkReviews];
+    });
 }
 
 /** Change a stub mid-test (takes effect on the renderer's next request). */
 export async function setHostStub<K extends keyof HostStubs>(
-  app: ElectronApplication, key: K, value: HostStubs[K],
+    app: ElectronApplication,
+    key: K,
+    value: HostStubs[K],
 ): Promise<void> {
-  await app.evaluate((_electron, { key, value }) => {
-    ((globalThis as WithStubs).__switchboardE2E as unknown as Record<string, unknown>)[key] = value;
-  }, { key, value });
+    await app.evaluate(
+        (_electron, {key, value}) => {
+            ((globalThis as WithStubs).__switchboardE2E as unknown as Record<string, unknown>)[key] = value;
+        },
+        {key, value},
+    );
 }
 
 /**
@@ -440,9 +516,9 @@ export async function setHostStub<K extends keyof HostStubs>(
  * `repository:<path>` for each "open repository" request.
  */
 export async function openedExternally(app: ElectronApplication): Promise<string[]> {
-  return await app.evaluate(() => {
-    return [...(globalThis as WithStubs).__switchboardE2E.opened];
-  });
+    return await app.evaluate(() => {
+        return [...(globalThis as WithStubs).__switchboardE2E.opened];
+    });
 }
 
 /**
@@ -450,38 +526,45 @@ export async function openedExternally(app: ElectronApplication): Promise<string
  * query would if main did not already answer it with no results.
  */
 export async function breakSearch(app: ElectronApplication): Promise<void> {
-  await app.evaluate(({ ipcMain }, channel) => {
-    ipcMain.removeHandler(channel);
-    ipcMain.handle(channel, () => { throw new Error('fts5: syntax error'); });
-  }, INVOKE.search);
+    await app.evaluate(({ipcMain}, channel) => {
+        ipcMain.removeHandler(channel);
+        ipcMain.handle(channel, () => {
+            throw new Error('fts5: syntax error');
+        });
+    }, INVOKE.search);
 }
 
 /** How often each counted stub has been called since the app launched. */
 export async function hostStubCalls(app: ElectronApplication): Promise<HostStubCalls> {
-  return await app.evaluate(() => {
-    return { ...(globalThis as WithStubs).__switchboardE2E.calls };
-  });
+    return await app.evaluate(() => {
+        return {...(globalThis as WithStubs).__switchboardE2E.calls};
+    });
 }
 
 /** Everything the app wrote to the clipboard (stubbed; the host's is never touched). */
 export async function clipboardWrites(app: ElectronApplication): Promise<string[]> {
-  return await app.evaluate(() => {
-    return [...(globalThis as WithStubs).__switchboardE2E.clipboard];
-  });
+    return await app.evaluate(() => {
+        return [...(globalThis as WithStubs).__switchboardE2E.clipboard];
+    });
 }
 
 /** Every image the app wrote to the clipboard, as base64 PNG (stubbed, like `clipboardWrites`). */
 export async function clipboardImages(app: ElectronApplication): Promise<string[]> {
-  return await app.evaluate(() => {
-    return [...(globalThis as WithStubs).__switchboardE2E.clipboardImages];
-  });
+    return await app.evaluate(() => {
+        return [...(globalThis as WithStubs).__switchboardE2E.clipboardImages];
+    });
 }
 
 /** Send the renderer an event, as main would. */
 export async function pushEvent(app: ElectronApplication, channel: string, ...args: unknown[]): Promise<void> {
-  await app.evaluate(({ BrowserWindow }, { channel, args }) => {
-    BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))?.webContents.send(channel, ...args);
-  }, { channel, args });
+    await app.evaluate(
+        ({BrowserWindow}, {channel, args}) => {
+            BrowserWindow.getAllWindows()
+                .find((w) => !w.webContents.getURL().includes('/quick-ask/'))
+                ?.webContents.send(channel, ...args);
+        },
+        {channel, args},
+    );
 }
 
 /**
@@ -494,9 +577,11 @@ export async function pushEvent(app: ElectronApplication, channel: string, ...ar
  * backoff delay.
  */
 export async function pushRemoteStatus(
-  app: ElectronApplication, sessionId: string, status: RemoteStatusPayload,
+    app: ElectronApplication,
+    sessionId: string,
+    status: RemoteStatusPayload,
 ): Promise<void> {
-  await pushEvent(app, EVENT.remoteStatus, sessionId, status);
+    await pushEvent(app, EVENT.remoteStatus, sessionId, status);
 }
 
 /**
@@ -505,10 +590,13 @@ export async function pushRemoteStatus(
  * a whole project stops at the first session it cannot stop.
  */
 export async function failStopSession(app: ElectronApplication, error: string): Promise<void> {
-  await app.evaluate(({ ipcMain }, { channel, error }) => {
-    ipcMain.removeHandler(channel);
-    ipcMain.handle(channel, () => ({ ok: false, error }));
-  }, { channel: INVOKE.stopSession, error });
+    await app.evaluate(
+        ({ipcMain}, {channel, error}) => {
+            ipcMain.removeHandler(channel);
+            ipcMain.handle(channel, () => ({ok: false, error}));
+        },
+        {channel: INVOKE.stopSession, error},
+    );
 }
 
 /**
@@ -517,30 +605,37 @@ export async function failStopSession(app: ElectronApplication, error: string): 
  * click asks main for is the thing under test, and a real early redial would
  * race the backoff it short-circuits.
  */
-export async function stubReconnectRemote(app: ElectronApplication, result: { ok: boolean }): Promise<void> {
-  await app.evaluate(({ ipcMain }, { channel, result }) => {
-    const state = (globalThis as typeof globalThis & { __switchboardE2E: { reconnects?: string[] } }).__switchboardE2E;
-    state.reconnects = [];
-    ipcMain.removeHandler(channel);
-    ipcMain.handle(channel, (_event, sessionId) => {
-      state.reconnects!.push(String(sessionId));
-      return result;
-    });
-  }, { channel: INVOKE.reconnectRemote, result });
+export async function stubReconnectRemote(app: ElectronApplication, result: {ok: boolean}): Promise<void> {
+    await app.evaluate(
+        ({ipcMain}, {channel, result}) => {
+            const state = (globalThis as typeof globalThis & {__switchboardE2E: {reconnects?: string[]}})
+                .__switchboardE2E;
+            state.reconnects = [];
+            ipcMain.removeHandler(channel);
+            ipcMain.handle(channel, (_event, sessionId) => {
+                state.reconnects!.push(String(sessionId));
+                return result;
+            });
+        },
+        {channel: INVOKE.reconnectRemote, result},
+    );
 }
 
 /** The sessions the renderer asked to reconnect since `stubReconnectRemote`. */
 export async function reconnectRequests(app: ElectronApplication): Promise<string[]> {
-  return await app.evaluate(() => {
-    const state = (globalThis as typeof globalThis & { __switchboardE2E: { reconnects?: string[] } }).__switchboardE2E;
-    return [...(state.reconnects ?? [])];
-  });
+    return await app.evaluate(() => {
+        const state = (globalThis as typeof globalThis & {__switchboardE2E: {reconnects?: string[]}}).__switchboardE2E;
+        return [...(state.reconnects ?? [])];
+    });
 }
 
 /** Where the main window sits on screen, [x, y]. */
 export async function windowPosition(app: ElectronApplication): Promise<number[]> {
-  return await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))!.getPosition());
+    return await app.evaluate(({BrowserWindow}) =>
+        BrowserWindow.getAllWindows()
+            .find((w) => !w.webContents.getURL().includes('/quick-ask/'))!
+            .getPosition(),
+    );
 }
 
 /**
@@ -548,34 +643,34 @@ export async function windowPosition(app: ElectronApplication): Promise<number[]
  * holds a stand-in instead of the real global shortcut, and exposes it here.
  */
 interface QuickAskHooks {
-  press(): boolean;
-  refuse(refusing: boolean): void;
-  visible(): boolean;
-  passingThrough(): boolean;
+    press(): boolean;
+    refuse(refusing: boolean): void;
+    visible(): boolean;
+    passingThrough(): boolean;
 }
 
-type WithTestHooks = typeof globalThis & { __switchboardTestHooks: { quickAsk: QuickAskHooks } };
+type WithTestHooks = typeof globalThis & {__switchboardTestHooks: {quickAsk: QuickAskHooks}};
 
 /** Do what pressing ⌥Space does. False when main does not hold the key. */
 export async function pressQuickAsk(app: ElectronApplication): Promise<boolean> {
-  return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.press());
+    return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.press());
 }
 
 /** Make every registration of ⌥Space fail from now on, as when another app holds it. */
 export async function refuseQuickAskHotkey(app: ElectronApplication, refusing: boolean): Promise<void> {
-  await app.evaluate((_electron, refusing) => {
-    (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.refuse(refusing);
-  }, refusing);
+    await app.evaluate((_electron, refusing) => {
+        (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.refuse(refusing);
+    }, refusing);
 }
 
 /** Whether the Quick Ask pop-up is showing. Under the harness it never comes on screen; this is main's word. */
 export async function quickAskShowing(app: ElectronApplication): Promise<boolean> {
-  return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.visible());
+    return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.visible());
 }
 
 /** Whether a click on the pop-up's window would go to the window underneath. */
 export async function quickAskPassingThrough(app: ElectronApplication): Promise<boolean> {
-  return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.passingThrough());
+    return await app.evaluate(() => (globalThis as WithTestHooks).__switchboardTestHooks.quickAsk.passingThrough());
 }
 
 /**
@@ -585,35 +680,45 @@ export async function quickAskPassingThrough(app: ElectronApplication): Promise<
  * unfocused proves little; that none of these ran proves more.
  */
 export async function watchMainWindowFocus(app: ElectronApplication): Promise<void> {
-  await app.evaluate(({ app: electronApp, BrowserWindow }) => {
-    const calls: string[] = [];
-    const spy = (target: Record<string, unknown>, method: string, name: string) => {
-      const original = (target[method] as (...args: unknown[]) => unknown).bind(target);
-      target[method] = (...args: unknown[]) => { calls.push(name); return original(...args); };
-    };
-    const window = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))!;
-    for (const method of ['show', 'focus', 'moveTop']) spy(window as never, method, `window.${method}`);
-    spy(window.webContents as never, 'focus', 'webContents.focus');
-    spy(electronApp as never, 'focus', 'app.focus');
-    (globalThis as typeof globalThis & { __mainWindowFocusCalls?: string[] }).__mainWindowFocusCalls = calls;
-  });
+    await app.evaluate(({app: electronApp, BrowserWindow}) => {
+        const calls: string[] = [];
+        const spy = (target: Record<string, unknown>, method: string, name: string) => {
+            const original = (target[method] as (...args: unknown[]) => unknown).bind(target);
+            target[method] = (...args: unknown[]) => {
+                calls.push(name);
+                return original(...args);
+            };
+        };
+        const window = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().includes('/quick-ask/'))!;
+        for (const method of ['show', 'focus', 'moveTop']) spy(window as never, method, `window.${method}`);
+        spy(window.webContents as never, 'focus', 'webContents.focus');
+        spy(electronApp as never, 'focus', 'app.focus');
+        (globalThis as typeof globalThis & {__mainWindowFocusCalls?: string[]}).__mainWindowFocusCalls = calls;
+    });
 }
 
 /** What `watchMainWindowFocus` has seen since it started. */
 export async function mainWindowFocusCalls(app: ElectronApplication): Promise<string[]> {
-  return await app.evaluate(() =>
-    [...(globalThis as typeof globalThis & { __mainWindowFocusCalls?: string[] }).__mainWindowFocusCalls ?? []]);
+    return await app.evaluate(() => [
+        ...((globalThis as typeof globalThis & {__mainWindowFocusCalls?: string[]}).__mainWindowFocusCalls ?? []),
+    ]);
 }
 
 /** Whether the main window has the focus, by main's word. */
 export async function mainWindowFocused(app: ElectronApplication): Promise<boolean> {
-  return await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))?.isFocused() ?? false);
+    return await app.evaluate(
+        ({BrowserWindow}) =>
+            BrowserWindow.getAllWindows()
+                .find((w) => !w.webContents.getURL().includes('/quick-ask/'))
+                ?.isFocused() ?? false,
+    );
 }
 
 /** Close the main window, leaving the app running in the Dock, as ⌘W does. */
 export async function closeMainWindow(app: ElectronApplication): Promise<void> {
-  await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))!.close();
-  });
+    await app.evaluate(({BrowserWindow}) => {
+        BrowserWindow.getAllWindows()
+            .find((w) => !w.webContents.getURL().includes('/quick-ask/'))!
+            .close();
+    });
 }

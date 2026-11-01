@@ -7,43 +7,43 @@
  * OS refused is only remembered, never retried on a timer, so the settings
  * switch can say the key is taken and switching it off and on tries again.
  */
-import type { Logger } from '../ports/logger';
-import type { GlobalHotkey, QuickAskPanel } from '../ports/quick-ask-panel';
+import type {Logger} from '../ports/logger';
+import type {GlobalHotkey, QuickAskPanel} from '../ports/quick-ask-panel';
 
 /** ⌥Space, fixed (H2). */
 export const QUICK_ASK_ACCELERATOR = 'Alt+Space';
 
 /** The one setting this reads, rather than the whole SettingsService. */
 export interface QuickAskSettings {
-  quickAskEnabled(): boolean;
+    quickAskEnabled(): boolean;
 }
 
 export interface QuickAskHotkeyDeps {
-  hotkey: GlobalHotkey;
-  panel: QuickAskPanel;
-  settings: QuickAskSettings;
-  log: Logger;
+    hotkey: GlobalHotkey;
+    panel: QuickAskPanel;
+    settings: QuickAskSettings;
+    log: Logger;
 }
 
 export class QuickAskHotkey {
-  #registered = false;
+    #registered = false;
 
-  constructor(private readonly deps: QuickAskHotkeyDeps) {}
+    constructor(private readonly deps: QuickAskHotkeyDeps) {}
 
-  /** Whether the shortcut is held right now. */
-  get registered(): boolean {
-    return this.#registered;
-  }
-
-  apply(): void {
-    const { hotkey, panel, settings, log } = this.deps;
-    if (!settings.quickAskEnabled()) {
-      if (this.#registered) hotkey.unregister(QUICK_ASK_ACCELERATOR);
-      this.#registered = false;
-      return;
+    /** Whether the shortcut is held right now. */
+    get registered(): boolean {
+        return this.#registered;
     }
-    if (this.#registered) return;
-    this.#registered = hotkey.register(QUICK_ASK_ACCELERATOR, () => panel.toggle());
-    if (!this.#registered) log.warn(`[quick-ask] ${QUICK_ASK_ACCELERATOR} is in use by another app`);
-  }
+
+    apply(): void {
+        const {hotkey, panel, settings, log} = this.deps;
+        if (!settings.quickAskEnabled()) {
+            if (this.#registered) hotkey.unregister(QUICK_ASK_ACCELERATOR);
+            this.#registered = false;
+            return;
+        }
+        if (this.#registered) return;
+        this.#registered = hotkey.register(QUICK_ASK_ACCELERATOR, () => panel.toggle());
+        if (!this.#registered) log.warn(`[quick-ask] ${QUICK_ASK_ACCELERATOR} is in use by another app`);
+    }
 }

@@ -5,13 +5,13 @@
  * store. These name the events the poller, the connection log and the IPC
  * follow-ups send it, and the name it gives a session.
  */
-import { cleanDisplayName } from '../../../domain/session/title';
-import { dispatch } from '../../state/app-store';
-import type { SessionRow } from '../../../domain/session/session';
+import {cleanDisplayName} from '../../../domain/session/title';
+import {dispatch} from '../../state/app-store';
+import type {SessionRow} from '../../../domain/session/session';
 
 /** What the header calls a session. */
 export function headerNameFor(session: SessionRow): string {
-  return cleanDisplayName(session.name || session.aiTitle || session.summary) ?? '';
+    return cleanDisplayName(session.name || session.aiTitle || session.summary) ?? '';
 }
 
 /**
@@ -22,7 +22,7 @@ export function headerNameFor(session: SessionRow): string {
  * which is why the poller and the connection card keep calling this.
  */
 export function updateTerminalHeader(): void {
-  dispatch({ type: 'headerRefreshed' });
+    dispatch({type: 'headerRefreshed'});
 }
 
 /**
@@ -32,5 +32,5 @@ export function updateTerminalHeader(): void {
  * header before (and whether or not) the row has been redrawn.
  */
 export function setHeaderIdentity(session: SessionRow): void {
-  dispatch({ type: 'headerRenamed', sessionId: session.sessionId, name: headerNameFor(session) });
+    dispatch({type: 'headerRenamed', sessionId: session.sessionId, name: headerNameFor(session)});
 }

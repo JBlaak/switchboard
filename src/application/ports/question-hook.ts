@@ -9,8 +9,8 @@
  */
 
 export interface QuestionHookEndpoint {
-  /** The server's base URL, e.g. `http://127.0.0.1:53124`; null while not listening. */
-  readonly url: string | null;
-  /** The per-run secret the hook must send in QUESTION_HOOK_TOKEN_HEADER. */
-  readonly token: string;
+    /** The server's base URL, e.g. `http://127.0.0.1:53124`; null while not listening. */
+    readonly url: string | null;
+    /** The per-run secret the hook must send in QUESTION_HOOK_TOKEN_HEADER. */
+    readonly token: string;
 }

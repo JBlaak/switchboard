@@ -6,9 +6,9 @@
  * skill keeps its name. The files are the CLI's and change under us, so they
  * are read afresh for each request.
  */
-import type { RouteSkills } from '../../domain/ask/skills';
+import type {RouteSkills} from '../../domain/ask/skills';
 
 export interface SkillCatalog {
-  /** Everyone's skills, and each of these projects' own; empty where nothing can be read. */
-  list(projectPaths: string[]): RouteSkills;
+    /** Everyone's skills, and each of these projects' own; empty where nothing can be read. */
+    list(projectPaths: string[]): RouteSkills;
 }

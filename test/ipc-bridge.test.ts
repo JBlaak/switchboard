@@ -1,9 +1,9 @@
-import { test } from 'node:test';
+import {test} from 'node:test';
 import assert from 'node:assert';
-import { EVENT } from '../src/ipc/channels';
-import { installIpcBridge } from '../src/renderer/app/ipc-bridge';
-import type { SwitchboardApi } from '../src/ipc/api';
-import type { RendererEvent } from '../src/renderer/state/events';
+import {EVENT} from '../src/ipc/channels';
+import {installIpcBridge} from '../src/renderer/app/ipc-bridge';
+import type {SwitchboardApi} from '../src/ipc/api';
+import type {RendererEvent} from '../src/renderer/state/events';
 
 /** `onX` for each `EVENT.x`, the naming the api follows. */
 const subscriberFor = (key: string) => 'on' + key[0].toUpperCase() + key.slice(1);
@@ -13,120 +13,172 @@ const subscriberFor = (key: string) => 'on' + key[0].toUpperCase() + key.slice(1
  * `push(key, ...args)` plays main sending on that channel.
  */
 function fakeApi() {
-  const callbacks = new Map<string, (...args: unknown[]) => void>();
-  let unsubscribed = 0;
-  const api: Record<string, unknown> = {};
-  for (const key of Object.keys(EVENT)) {
-    api[subscriberFor(key)] = (cb: (...args: unknown[]) => void) => {
-      callbacks.set(key, cb);
-      return () => { unsubscribed++; callbacks.delete(key); };
+    const callbacks = new Map<string, (...args: unknown[]) => void>();
+    let unsubscribed = 0;
+    const api: Record<string, unknown> = {};
+    for (const key of Object.keys(EVENT)) {
+        api[subscriberFor(key)] = (cb: (...args: unknown[]) => void) => {
+            callbacks.set(key, cb);
+            return () => {
+                unsubscribed++;
+                callbacks.delete(key);
+            };
+        };
+    }
+    return {
+        api: api as unknown as SwitchboardApi,
+        push: (key: keyof typeof EVENT, ...args: unknown[]) => callbacks.get(key)!(...args),
+        subscribed: () => [...callbacks.keys()].sort(),
+        unsubscribed: () => unsubscribed,
     };
-  }
-  return {
-    api: api as unknown as SwitchboardApi,
-    push: (key: keyof typeof EVENT, ...args: unknown[]) => callbacks.get(key)!(...args),
-    subscribed: () => [...callbacks.keys()].sort(),
-    unsubscribed: () => unsubscribed,
-  };
 }
 
 test('the bridge subscribes to every push channel', () => {
-  /* Given */
-  const fake = fakeApi();
+    /* Given */
+    const fake = fakeApi();
 
-  /* When */
-  installIpcBridge(fake.api, () => {}, () => {});
+    /* When */
+    installIpcBridge(
+        fake.api,
+        () => {},
+        () => {},
+    );
 
-  /* Then */
-  assert.deepStrictEqual(fake.subscribed(), Object.keys(EVENT).sort());
+    /* Then */
+    assert.deepStrictEqual(fake.subscribed(), Object.keys(EVENT).sort());
 });
 
 test('the bridge unsubscribes from every push channel', () => {
-  /* Given */
-  const fake = fakeApi();
-  const off = installIpcBridge(fake.api, () => {}, () => {});
+    /* Given */
+    const fake = fakeApi();
+    const off = installIpcBridge(
+        fake.api,
+        () => {},
+        () => {},
+    );
 
-  /* When */
-  off();
+    /* When */
+    off();
 
-  /* Then */
-  assert.strictEqual(fake.unsubscribed(), Object.keys(EVENT).length);
+    /* Then */
+    assert.strictEqual(fake.unsubscribed(), Object.keys(EVENT).length);
 });
 
 test('terminal data goes to the terminal, never to the store', () => {
-  /* Given */
-  const fake = fakeApi();
-  const sent: RendererEvent[] = [];
-  const data: [string, string][] = [];
-  installIpcBridge(fake.api, e => sent.push(e), (id, chunk) => data.push([id, chunk]));
+    /* Given */
+    const fake = fakeApi();
+    const sent: RendererEvent[] = [];
+    const data: [string, string][] = [];
+    installIpcBridge(
+        fake.api,
+        (e) => sent.push(e),
+        (id, chunk) => data.push([id, chunk]),
+    );
 
-  /* When */
-  fake.push('terminalData', 's1', 'hello');
+    /* When */
+    fake.push('terminalData', 's1', 'hello');
 
-  /* Then */
-  assert.deepStrictEqual(data, [['s1', 'hello']]);
-  assert.deepStrictEqual(sent, []);
+    /* Then */
+    assert.deepStrictEqual(data, [['s1', 'hello']]);
+    assert.deepStrictEqual(sent, []);
 });
 
 test('each other push becomes its event', () => {
-  /* Given */
-  const fake = fakeApi();
-  const sent: RendererEvent[] = [];
-  installIpcBridge(fake.api, e => sent.push(e), () => {});
+    /* Given */
+    const fake = fakeApi();
+    const sent: RendererEvent[] = [];
+    installIpcBridge(
+        fake.api,
+        (e) => sent.push(e),
+        () => {},
+    );
 
-  /* When */
-  fake.push('processExited', 's1', 1);
-  fake.push('sessionForked', 'a', 'b');
-  fake.push('cliBusyState', 's1', true);
-  fake.push('terminalNotification', 's1', 'hi');
-  fake.push('sessionNeedsAttention', 's1');
-  fake.push('sessionAgents', 's1', []);
-  fake.push('remoteStatus', 's1', { phase: 'connected' });
-  fake.push('questionsAsked', { toolUseId: 't' });
-  fake.push('questionsSettled', { toolUseId: 't' });
-  fake.push('projectsChanged');
-  fake.push('statusUpdate', 'Scanning', 'active');
-  fake.push('fullscreenChanged', true);
-  fake.push('updateAvailable', { version: '1' });
-  fake.push('sessionWorkSnapshot', { sessionId: 's1', repository: '', items: [], footprint: { worktrees: 0, branches: 0 }, queued: 0, gh: 'ok', updatedAt: 'now' });
+    /* When */
+    fake.push('processExited', 's1', 1);
+    fake.push('sessionForked', 'a', 'b');
+    fake.push('cliBusyState', 's1', true);
+    fake.push('terminalNotification', 's1', 'hi');
+    fake.push('sessionNeedsAttention', 's1');
+    fake.push('sessionAgents', 's1', []);
+    fake.push('remoteStatus', 's1', {phase: 'connected'});
+    fake.push('questionsAsked', {toolUseId: 't'});
+    fake.push('questionsSettled', {toolUseId: 't'});
+    fake.push('projectsChanged');
+    fake.push('statusUpdate', 'Scanning', 'active');
+    fake.push('fullscreenChanged', true);
+    fake.push('updateAvailable', {version: '1'});
+    fake.push('sessionWorkSnapshot', {
+        sessionId: 's1',
+        repository: '',
+        items: [],
+        footprint: {worktrees: 0, branches: 0},
+        queued: 0,
+        gh: 'ok',
+        updatedAt: 'now',
+    });
 
-  /* Then */
-  const remote = sent.find(e => e.type === 'remoteStatus');
-  assert.ok(remote && typeof remote.receivedAt === 'number', 'stamped on arrival');
-  assert.deepStrictEqual(sent.map(e => (e.type === 'remoteStatus' ? { ...e, receivedAt: 0 } : e)), [
-    { type: 'processExited', sessionId: 's1', exitCode: 1 },
-    { type: 'sessionForked', oldId: 'a', newId: 'b' },
-    { type: 'cliBusyState', sessionId: 's1', busy: true },
-    { type: 'terminalNotification', sessionId: 's1', message: 'hi' },
-    { type: 'sessionNeedsAttention', sessionId: 's1' },
-    { type: 'sessionAgents', sessionId: 's1', agents: [] },
-    { type: 'remoteStatus', sessionId: 's1', status: { phase: 'connected' }, receivedAt: 0 },
-    { type: 'questionsAsked', pending: { toolUseId: 't' } },
-    { type: 'questionsSettled', settled: { toolUseId: 't' } },
-    { type: 'projectsChanged' },
-    { type: 'statusUpdate', text: 'Scanning', kind: 'active' },
-    { type: 'fullscreenChanged', isFullscreen: true },
-    { type: 'updateAvailable', update: { version: '1' } },
-    { type: 'sessionWorkSnapshot', snapshot: { sessionId: 's1', repository: '', items: [], footprint: { worktrees: 0, branches: 0 }, queued: 0, gh: 'ok', updatedAt: 'now' } },
-  ]);
+    /* Then */
+    const remote = sent.find((e) => e.type === 'remoteStatus');
+    assert.ok(remote && typeof remote.receivedAt === 'number', 'stamped on arrival');
+    assert.deepStrictEqual(
+        sent.map((e) => (e.type === 'remoteStatus' ? {...e, receivedAt: 0} : e)),
+        [
+            {type: 'processExited', sessionId: 's1', exitCode: 1},
+            {type: 'sessionForked', oldId: 'a', newId: 'b'},
+            {type: 'cliBusyState', sessionId: 's1', busy: true},
+            {type: 'terminalNotification', sessionId: 's1', message: 'hi'},
+            {type: 'sessionNeedsAttention', sessionId: 's1'},
+            {type: 'sessionAgents', sessionId: 's1', agents: []},
+            {type: 'remoteStatus', sessionId: 's1', status: {phase: 'connected'}, receivedAt: 0},
+            {type: 'questionsAsked', pending: {toolUseId: 't'}},
+            {type: 'questionsSettled', settled: {toolUseId: 't'}},
+            {type: 'projectsChanged'},
+            {type: 'statusUpdate', text: 'Scanning', kind: 'active'},
+            {type: 'fullscreenChanged', isFullscreen: true},
+            {type: 'updateAvailable', update: {version: '1'}},
+            {
+                type: 'sessionWorkSnapshot',
+                snapshot: {
+                    sessionId: 's1',
+                    repository: '',
+                    items: [],
+                    footprint: {worktrees: 0, branches: 0},
+                    queued: 0,
+                    gh: 'ok',
+                    updatedAt: 'now',
+                },
+            },
+        ],
+    );
 });
 
-test('a task list update and a session\'s task change become their events (#248)', () => {
-  /* Given */
-  const fake = fakeApi();
-  const sent: RendererEvent[] = [];
-  installIpcBridge(fake.api, e => sent.push(e), () => {});
-  const update = { watchId: 'w1', query: { view: 'today' }, state: 'unreachable', rows: [], reason: 'timed out', fetchedAt: null };
+test("a task list update and a session's task change become their events (#248)", () => {
+    /* Given */
+    const fake = fakeApi();
+    const sent: RendererEvent[] = [];
+    installIpcBridge(
+        fake.api,
+        (e) => sent.push(e),
+        () => {},
+    );
+    const update = {
+        watchId: 'w1',
+        query: {view: 'today'},
+        state: 'unreachable',
+        rows: [],
+        reason: 'timed out',
+        fetchedAt: null,
+    };
 
-  /* When */
-  fake.push('tasksChanged', update);
-  fake.push('sessionTaskChanged', 's1', '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9');
-  fake.push('sessionTaskChanged', 's2', null);
+    /* When */
+    fake.push('tasksChanged', update);
+    fake.push('sessionTaskChanged', 's1', '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9');
+    fake.push('sessionTaskChanged', 's2', null);
 
-  /* Then */
-  assert.deepStrictEqual(sent, [
-    { type: 'tasksChanged', update },
-    { type: 'sessionTaskChanged', sessionId: 's1', taskId: '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9' },
-    { type: 'sessionTaskChanged', sessionId: 's2', taskId: null },
-  ]);
+    /* Then */
+    assert.deepStrictEqual(sent, [
+        {type: 'tasksChanged', update},
+        {type: 'sessionTaskChanged', sessionId: 's1', taskId: '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9'},
+        {type: 'sessionTaskChanged', sessionId: 's2', taskId: null},
+    ]);
 });

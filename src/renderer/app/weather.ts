@@ -7,14 +7,17 @@
  * settled asks again, because main keeps its own cache and decides when the
  * weather is stale.
  */
-import type { Weather } from '../../domain/weather/weather';
+import type {Weather} from '../../domain/weather/weather';
 
 let inFlight: Promise<Weather | null> | null = null;
 
 /** Null when weather is switched off or could not be fetched; never rejects. */
 export function fetchWeather(): Promise<Weather | null> {
-  inFlight ??= window.api.getWeather()
-    .catch(() => null)
-    .finally(() => { inFlight = null; });
-  return inFlight;
+    inFlight ??= window.api
+        .getWeather()
+        .catch(() => null)
+        .finally(() => {
+            inFlight = null;
+        });
+    return inFlight;
 }

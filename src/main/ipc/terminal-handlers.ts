@@ -9,10 +9,10 @@
  * phone active, the keys are dropped and the size is only remembered for
  * when the Mac takes it back.
  */
-import { INVOKE, SEND } from '../../ipc/channels';
-import type { SessionOptions } from '../../domain/launch/session-options';
-import type { Container } from '../composition-root';
-import type { IpcRegistrar } from './registrar';
+import {INVOKE, SEND} from '../../ipc/channels';
+import type {SessionOptions} from '../../domain/launch/session-options';
+import type {Container} from '../composition-root';
+import type {IpcRegistrar} from './registrar';
 
 /**
  * How long buffering stays suppressed after a plain terminal's resize.
@@ -26,78 +26,80 @@ const RESIZE_SETTLE_MS = 200;
 const NUDGE_DELAY_MS = 50;
 
 export function registerTerminalHandlers(ipc: IpcRegistrar, app: Container): void {
-  ipc.handle(INVOKE.openTerminal, async (
-    sessionId: string,
-    projectPath: string,
-    isNew: boolean,
-    options?: SessionOptions,
-  ) => {
-    if (!app.renderer.attached) return { ok: false, error: 'no window' };
-    const opened = await app.launcher.open({ sessionId, projectPath, isNew, options });
-    // A new session is in the phones' list before it has a transcript.
-    if (opened.ok && !opened.reattached) app.phoneSessions.sessionsChanged();
-    return opened;
-  });
+    ipc.handle(
+        INVOKE.openTerminal,
+        async (sessionId: string, projectPath: string, isNew: boolean, options?: SessionOptions) => {
+            if (!app.renderer.attached) return {ok: false, error: 'no window'};
+            const opened = await app.launcher.open({sessionId, projectPath, isNew, options});
+            // A new session is in the phones' list before it has a transcript.
+            if (opened.ok && !opened.reattached) app.phoneSessions.sessionsChanged();
+            return opened;
+        },
+    );
 
-  ipc.on(SEND.terminalInput, (sessionId: string, data: string) => {
-    const session = app.registry.get(sessionId);
-    if (!session || session.exited) return;
-    if (!app.phoneSessions.macInputAllowed(sessionId)) return;
-    session.pty.write(data);
-  });
+    ipc.on(SEND.terminalInput, (sessionId: string, data: string) => {
+        const session = app.registry.get(sessionId);
+        if (!session || session.exited) return;
+        if (!app.phoneSessions.macInputAllowed(sessionId)) return;
+        session.pty.write(data);
+    });
 
-  ipc.on(SEND.terminalResize, (sessionId: string, cols: number, rows: number) => {
-    const session = app.registry.get(sessionId);
-    if (!session) return;
-    if (!app.phoneSessions.macResized(sessionId, cols, rows)) return;
+    ipc.on(SEND.terminalResize, (sessionId: string, cols: number, rows: number) => {
+        const session = app.registry.get(sessionId);
+        if (!session) return;
+        if (!app.phoneSessions.macResized(sessionId, cols, rows)) return;
 
-    // Remembered even while a remote connection is down: the next ssh spawns at
-    // this size so tmux repaints to fit instead of reflowing after the fact.
-    if (session.remote) {
-      session.remote.cols = cols;
-      session.remote.rows = rows;
-    }
-    if (session.exited) return;
+        // Remembered even while a remote connection is down: the next ssh spawns at
+        // this size so tmux repaints to fit instead of reflowing after the fact.
+        if (session.remote) {
+            session.remote.cols = cols;
+            session.remote.rows = rows;
+        }
+        if (session.exited) return;
 
-    // A plain terminal repaints its prompt on resize; keeping those redraws out
-    // of the buffer is what stops a reattach replaying a stack of prompts.
-    if (session.isPlainTerminal) session.output.suppress();
+        // A plain terminal repaints its prompt on resize; keeping those redraws out
+        // of the buffer is what stops a reattach replaying a stack of prompts.
+        if (session.isPlainTerminal) session.output.suppress();
 
-    session.pty.resize(cols, rows);
+        session.pty.resize(cols, rows);
 
-    if (session.isPlainTerminal) {
-      setTimeout(() => session.output.resume(), RESIZE_SETTLE_MS);
-      return;
-    }
+        if (session.isPlainTerminal) {
+            setTimeout(() => session.output.resume(), RESIZE_SETTLE_MS);
+            return;
+        }
 
-    // First resize after attaching: nudge the size by a column and back, which
-    // is what makes a full-screen TUI repaint into the terminal it now has.
-    // Skipped for plain terminals, where it produces a duplicate prompt.
-    if (!session.firstResize) return;
-    session.firstResize = false;
-    setTimeout(() => {
-      try {
-        session.pty.resize(cols + 1, rows);
+        // First resize after attaching: nudge the size by a column and back, which
+        // is what makes a full-screen TUI repaint into the terminal it now has.
+        // Skipped for plain terminals, where it produces a duplicate prompt.
+        if (!session.firstResize) return;
+        session.firstResize = false;
         setTimeout(() => {
-          try { session.pty.resize(cols, rows); } catch { /* gone */ }
+            try {
+                session.pty.resize(cols + 1, rows);
+                setTimeout(() => {
+                    try {
+                        session.pty.resize(cols, rows);
+                    } catch {
+                        /* gone */
+                    }
+                }, NUDGE_DELAY_MS);
+            } catch {
+                // The session exited between the nudge being scheduled and running.
+            }
         }, NUDGE_DELAY_MS);
-      } catch {
-        // The session exited between the nudge being scheduled and running.
-      }
-    }, NUDGE_DELAY_MS);
-  });
+    });
 
-  /**
-   * The renderer let go of a terminal.
-   *
-   * The session is kept: it may be reattached, and its output keeps buffering
-   * so the next attach has something to replay. Only a session that has already
-   * exited is dropped, because nothing is coming.
-   */
-  ipc.on(SEND.closeTerminal, (sessionId: string) => {
-    const session = app.registry.get(sessionId);
-    if (!session) return;
-    session.rendererAttached = false;
-    if (session.exited) app.registry.delete(sessionId);
-  });
+    /**
+     * The renderer let go of a terminal.
+     *
+     * The session is kept: it may be reattached, and its output keeps buffering
+     * so the next attach has something to replay. Only a session that has already
+     * exited is dropped, because nothing is coming.
+     */
+    ipc.on(SEND.closeTerminal, (sessionId: string) => {
+        const session = app.registry.get(sessionId);
+        if (!session) return;
+        session.rendererAttached = false;
+        if (session.exited) app.registry.delete(sessionId);
+    });
 }

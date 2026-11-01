@@ -9,36 +9,36 @@
 
 /** Something that moves the highlight. */
 export type SelectionEvent =
-  /** An arrow key: one row down (1) or up (-1), wrapping at both ends. */
-  | { type: 'stepped'; step: 1 | -1 }
-  /** A new query reorders everything, so the highlight starts from the best match again. */
-  | { type: 'queried' }
-  /** The pointer is over a row: Enter opens what the mouse is on. */
-  | { type: 'hovered'; index: number };
+    /** An arrow key: one row down (1) or up (-1), wrapping at both ends. */
+    | {type: 'stepped'; step: 1 | -1}
+    /** A new query reorders everything, so the highlight starts from the best match again. */
+    | {type: 'queried'}
+    /** The pointer is over a row: Enter opens what the mouse is on. */
+    | {type: 'hovered'; index: number};
 
 /** The highlighted row, kept within a list that may have shrunk under it. */
 export function clampSelection(selected: number, count: number): number {
-  return count === 0 ? 0 : Math.min(selected, count - 1);
+    return count === 0 ? 0 : Math.min(selected, count - 1);
 }
 
 /** The highlight after `event`, over a list of `count` rows. */
 export function nextSelection(selected: number, count: number, event: SelectionEvent): number {
-  switch (event.type) {
-    case 'stepped': {
-      if (count === 0) return 0;
-      const current = clampSelection(selected, count);
-      return (current + event.step + count) % count;
+    switch (event.type) {
+        case 'stepped': {
+            if (count === 0) return 0;
+            const current = clampSelection(selected, count);
+            return (current + event.step + count) % count;
+        }
+        case 'queried':
+            return 0;
+        case 'hovered':
+            return event.index;
     }
-    case 'queried':
-      return 0;
-    case 'hovered':
-      return event.index;
-  }
 }
 
 /** A row's count: how many of its sessions run, or else how many it has. */
 export function sessionCountLabel(total: number, running: number): string {
-  return running > 0 ? `${running} running` : `${total} session${total === 1 ? '' : 's'}`;
+    return running > 0 ? `${running} running` : `${total} session${total === 1 ? '' : 's'}`;
 }
 
 // ── The keys (#171, #177) ──
@@ -51,19 +51,26 @@ export type PickerMode = 'projects' | 'add';
  * nowhere to go must not move focus out of the filter).
  */
 export type PickerKeyAction =
-  | 'up' | 'down' | 'open' | 'open-project' | 'back-to-projects'
-  | 'add-project' | 'row-menu' | 'complete-path' | 'swallow';
+    | 'up'
+    | 'down'
+    | 'open'
+    | 'open-project'
+    | 'back-to-projects'
+    | 'add-project'
+    | 'row-menu'
+    | 'complete-path'
+    | 'swallow';
 
 /** The key, and where the caret sits in the field, so ← and → still move it through typed text. */
 export interface PickerKey {
-  key: string;
-  shiftKey: boolean;
-  /** ⌘ is held. */
-  metaKey?: boolean;
-  /** The caret is at the start of the field with nothing selected (true when it is empty). */
-  caretAtStart: boolean;
-  /** The caret is at the end of the field with nothing selected (true when it is empty). */
-  caretAtEnd: boolean;
+    key: string;
+    shiftKey: boolean;
+    /** ⌘ is held. */
+    metaKey?: boolean;
+    /** The caret is at the start of the field with nothing selected (true when it is empty). */
+    caretAtStart: boolean;
+    /** The caret is at the end of the field with nothing selected (true when it is empty). */
+    caretAtEnd: boolean;
 }
 
 /**
@@ -77,28 +84,34 @@ export interface PickerKey {
  * add step: ↵ adds, and ⌘[ or ← with the caret at the start goes back.
  */
 export function pickerKeyAction(
-  mode: PickerMode, key: PickerKey, canOpenProject: boolean, pathQuery = false,
+    mode: PickerMode,
+    key: PickerKey,
+    canOpenProject: boolean,
+    pathQuery = false,
 ): PickerKeyAction | null {
-  const meta = !!key.metaKey;
-  if (mode === 'add') {
-    if (meta && key.key === '[') return 'back-to-projects';
-    if (key.key === 'Enter' && !meta) return 'open';
-    if (key.key === 'ArrowLeft' && !meta && key.caretAtStart) return 'back-to-projects';
-    return null;
-  }
-  if (meta && key.key === 'Enter') return 'add-project';
-  if (meta && key.key === '.') return 'row-menu';
-  switch (key.key) {
-    case 'ArrowDown': return 'down';
-    case 'ArrowUp': return 'up';
-    case 'Enter': return 'open';
-    case 'Tab':
-      return !key.shiftKey && pathQuery ? 'complete-path' : 'swallow';
-    case 'ArrowRight':
-      return canOpenProject && !pathQuery && key.caretAtEnd ? 'open-project' : null;
-    default:
-      return null;
-  }
+    const meta = !!key.metaKey;
+    if (mode === 'add') {
+        if (meta && key.key === '[') return 'back-to-projects';
+        if (key.key === 'Enter' && !meta) return 'open';
+        if (key.key === 'ArrowLeft' && !meta && key.caretAtStart) return 'back-to-projects';
+        return null;
+    }
+    if (meta && key.key === 'Enter') return 'add-project';
+    if (meta && key.key === '.') return 'row-menu';
+    switch (key.key) {
+        case 'ArrowDown':
+            return 'down';
+        case 'ArrowUp':
+            return 'up';
+        case 'Enter':
+            return 'open';
+        case 'Tab':
+            return !key.shiftKey && pathQuery ? 'complete-path' : 'swallow';
+        case 'ArrowRight':
+            return canOpenProject && !pathQuery && key.caretAtEnd ? 'open-project' : null;
+        default:
+            return null;
+    }
 }
 
 /** What a key does while a row's ⋯ menu is open. */
@@ -109,13 +122,19 @@ export type RowMenuKeyAction = 'up' | 'down' | 'choose' | 'close' | 'swallow';
  * is swallowed so focus stays put. Anything else is the filter's.
  */
 export function rowMenuKeyAction(key: PickerKey): RowMenuKeyAction | null {
-  if (key.metaKey) return key.key === '.' ? 'close' : null;
-  switch (key.key) {
-    case 'ArrowDown': return 'down';
-    case 'ArrowUp': return 'up';
-    case 'Enter': return 'choose';
-    case 'Escape': return 'close';
-    case 'Tab': return 'swallow';
-    default: return null;
-  }
+    if (key.metaKey) return key.key === '.' ? 'close' : null;
+    switch (key.key) {
+        case 'ArrowDown':
+            return 'down';
+        case 'ArrowUp':
+            return 'up';
+        case 'Enter':
+            return 'choose';
+        case 'Escape':
+            return 'close';
+        case 'Tab':
+            return 'swallow';
+        default:
+            return null;
+    }
 }

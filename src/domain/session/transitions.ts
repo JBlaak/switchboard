@@ -13,31 +13,31 @@
 
 /** The fork/plan signals read out of the head of a freshly appeared transcript. */
 export interface NewSessionSignals {
-  forkedFrom: string | null;
-  planContent: boolean;
-  slug: string | null;
-  parentSessionId: string | null;
+    forkedFrom: string | null;
+    planContent: boolean;
+    slug: string | null;
+    parentSessionId: string | null;
 }
 
 /** What the tail of the old transcript says about a plan handover. */
 export interface OldSessionTail {
-  hasExitPlanMode: boolean;
-  slug: string | null;
+    hasExitPlanMode: boolean;
+    slug: string | null;
 }
 
 /** One transcript line, as far as transition detection cares about it. */
 interface TransitionEntry {
-  type?: string;
-  slug?: string;
-  sessionId?: string;
-  planContent?: unknown;
-  forkedFrom?: { sessionId?: string };
+    type?: string;
+    slug?: string;
+    sessionId?: string;
+    planContent?: unknown;
+    forkedFrom?: {sessionId?: string};
 }
 
 /** The session being tracked, as far as matching cares. */
 export interface TrackedSession {
-  /** The id the map currently holds it under. */
-  sessionId: string;
+    /** The id the map currently holds it under. */
+    sessionId: string;
 }
 
 /** How a new transcript relates to the session we are tracking. */
@@ -52,37 +52,43 @@ export const STALE_EMPTY_FILE_MS = 3600000;
 
 /** Read the fork/plan signals out of a new transcript's leading lines. */
 export function extractNewSessionSignals(lines: string[]): NewSessionSignals {
-  const signals: NewSessionSignals = {
-    forkedFrom: null, planContent: false, slug: null,
-    parentSessionId: null,
-  };
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    let entry: TransitionEntry;
-    try { entry = JSON.parse(line) as TransitionEntry; } catch { continue; }
-    // Snapshot lines carry no fork/session signals, and can be tens of KB each.
-    if (entry.type === 'file-history-snapshot') continue;
-    if (entry.forkedFrom) signals.forkedFrom = entry.forkedFrom.sessionId ?? null;
-    if (entry.planContent) signals.planContent = true;
-    if (entry.slug && !signals.slug) signals.slug = entry.slug;
-    // --fork-session copies messages carrying the original sessionId
-    if (entry.sessionId && !signals.parentSessionId) signals.parentSessionId = entry.sessionId;
-    // Everything worth reading appears before the first real turn.
-    if (entry.type === 'user' || entry.type === 'assistant') break;
-  }
-  return signals;
+    const signals: NewSessionSignals = {
+        forkedFrom: null,
+        planContent: false,
+        slug: null,
+        parentSessionId: null,
+    };
+    for (const line of lines) {
+        if (!line.trim()) continue;
+        let entry: TransitionEntry;
+        try {
+            entry = JSON.parse(line) as TransitionEntry;
+        } catch {
+            continue;
+        }
+        // Snapshot lines carry no fork/session signals, and can be tens of KB each.
+        if (entry.type === 'file-history-snapshot') continue;
+        if (entry.forkedFrom) signals.forkedFrom = entry.forkedFrom.sessionId ?? null;
+        if (entry.planContent) signals.planContent = true;
+        if (entry.slug && !signals.slug) signals.slug = entry.slug;
+        // --fork-session copies messages carrying the original sessionId
+        if (entry.sessionId && !signals.parentSessionId) signals.parentSessionId = entry.sessionId;
+        // Everything worth reading appears before the first real turn.
+        if (entry.type === 'user' || entry.type === 'assistant') break;
+    }
+    return signals;
 }
 
 /** Read the plan-handover signals out of the tail of the old transcript. */
 export function extractOldSessionTail(tail: string): OldSessionTail {
-  const slugMatches = tail.match(/"slug"\s*:\s*"([^"]+)"/g);
-  const last = slugMatches?.[slugMatches.length - 1]?.match(/"slug"\s*:\s*"([^"]+)"/);
-  return { hasExitPlanMode: tail.includes('ExitPlanMode'), slug: last ? last[1] : null };
+    const slugMatches = tail.match(/"slug"\s*:\s*"([^"]+)"/g);
+    const last = slugMatches?.[slugMatches.length - 1]?.match(/"slug"\s*:\s*"([^"]+)"/);
+    return {hasExitPlanMode: tail.includes('ExitPlanMode'), slug: last ? last[1] : null};
 }
 
 /** True when a transcript has said nothing useful yet — still being written. */
 export function hasNoSignals(signals: NewSessionSignals): boolean {
-  return !signals.forkedFrom && !signals.parentSessionId && !signals.slug && !signals.planContent;
+    return !signals.forkedFrom && !signals.parentSessionId && !signals.slug && !signals.planContent;
 }
 
 /**
@@ -91,7 +97,7 @@ export function hasNoSignals(signals: NewSessionSignals): boolean {
  * It does when the file names our id as its origin.
  */
 export function matchesFork(signals: NewSessionSignals, session: TrackedSession): boolean {
-  return signals.forkedFrom === session.sessionId;
+    return signals.forkedFrom === session.sessionId;
 }
 
 /**
@@ -103,16 +109,16 @@ export function matchesFork(signals: NewSessionSignals, session: TrackedSession)
  * happened to reuse the slug.
  */
 export function matchesPlanAccept(
-  signals: NewSessionSignals,
-  oldTail: OldSessionTail,
-  { oldMtimeMs, newMtimeMs }: { oldMtimeMs: number; newMtimeMs: number },
+    signals: NewSessionSignals,
+    oldTail: OldSessionTail,
+    {oldMtimeMs, newMtimeMs}: {oldMtimeMs: number; newMtimeMs: number},
 ): boolean {
-  if (!signals.planContent || !signals.slug) return false;
-  if (!oldTail.hasExitPlanMode || oldTail.slug !== signals.slug) return false;
-  return Math.abs(newMtimeMs - oldMtimeMs) < PLAN_HANDOVER_WINDOW_MS;
+    if (!signals.planContent || !signals.slug) return false;
+    if (!oldTail.hasExitPlanMode || oldTail.slug !== signals.slug) return false;
+    return Math.abs(newMtimeMs - oldMtimeMs) < PLAN_HANDOVER_WINDOW_MS;
 }
 
 /** Which kind of transition a match represents, for the log line. */
 export function transitionKind(signals: NewSessionSignals): TransitionKind {
-  return signals.forkedFrom ? 'fork' : 'plan-accept';
+    return signals.forkedFrom ? 'fork' : 'plan-accept';
 }

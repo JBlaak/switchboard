@@ -4,37 +4,37 @@
    still override it and the slide between the two can be a transition. The
    handle clamps it to 200–600px. */
 #sidebar {
-  width: var(--sidebar-width, 340px);
-  background: var(--sb-bg-panel);
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  border-right: none;
-  flex-shrink: 0;
+    width: var(--sidebar-width, 340px);
+    background: var(--sb-bg-panel);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    border-right: none;
+    flex-shrink: 0;
 }
 
 #sidebar-resize-handle {
-  width: 4px;
-  cursor: col-resize;
-  background: transparent;
-  height: 100vh;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 10;
-  border-right: 1px solid var(--sb-line);
-  transition: background 0.15s;
+    width: 4px;
+    cursor: col-resize;
+    background: transparent;
+    height: 100vh;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+    border-right: 1px solid var(--sb-line);
+    transition: background 0.15s;
 }
 
 #sidebar-resize-handle:hover,
 #sidebar-resize-handle.dragging {
-  background: rgba(var(--sb-accent-rgb),0.3);
+    background: rgba(var(--sb-accent-rgb), 0.3);
 }
 
 #sidebar-header {
-  padding: 7px var(--sb-sidebar-gutter) 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+    padding: 7px var(--sb-sidebar-gutter) 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 /* ---- Toolbar: appearance, global settings and collapse, right-aligned ----
@@ -42,405 +42,429 @@
    is centred on the macOS traffic lights (y:15) and on the terminal header
    beside it. Spaced like the filter row below, so the icons line up. */
 #sidebar-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--sb-icon-gap);
-  min-height: var(--sb-icon-button);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--sb-icon-gap);
+    min-height: var(--sb-icon-button);
 }
 
 #session-filters {
-  display: flex;
-  gap: var(--sb-icon-gap);
-  align-items: center;
+    display: flex;
+    gap: var(--sb-icon-gap);
+    align-items: center;
 }
 
 #loading-status {
-  font-family: var(--sb-font-head);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--sb-text-muted);
-  margin-left: auto;
-  white-space: nowrap;
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--sb-text-muted);
+    margin-left: auto;
+    white-space: nowrap;
 }
 
 @keyframes loading-pulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
+    0%,
+    100% {
+        opacity: 0.5;
+    }
+    50% {
+        opacity: 1;
+    }
 }
 
 #loading-status.active {
-  animation: loading-pulse 1.2s ease-in-out infinite;
+    animation: loading-pulse 1.2s ease-in-out infinite;
 }
 
 /* Filter toggles: borderless, a soft wash on hover, and when switched on the
    pastel fill of whatever they filter for with its ink on top. */
-#star-toggle, #running-toggle, #snoozed-toggle {
-  background: transparent;
-  border: none;
-  color: var(--sb-text-faint);
-  font-size: 11px;
-  padding: 0;
-  border-radius: var(--sb-r-control);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  font-family: var(--sb-font-head);
-  font-weight: 800;
-  line-height: 1;
-  width: var(--sb-icon-button);
-  height: var(--sb-icon-button);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+#star-toggle,
+#running-toggle,
+#snoozed-toggle {
+    background: transparent;
+    border: none;
+    color: var(--sb-text-faint);
+    font-size: 11px;
+    padding: 0;
+    border-radius: var(--sb-r-control);
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s;
+    font-family: var(--sb-font-head);
+    font-weight: 800;
+    line-height: 1;
+    width: var(--sb-icon-button);
+    height: var(--sb-icon-button);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
-#star-toggle:hover, #running-toggle:hover, #snoozed-toggle:hover {
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  color: var(--sb-text-hover);
+#star-toggle:hover,
+#running-toggle:hover,
+#snoozed-toggle:hover {
+    background: rgba(var(--sb-overlay-rgb), 0.06);
+    color: var(--sb-text-hover);
 }
 
 #running-toggle.active {
-  background: var(--sb-mint);
-  color: var(--sb-green);
+    background: var(--sb-mint);
+    color: var(--sb-green);
 }
 
 #star-toggle.active {
-  background: var(--sb-sun);
-  color: var(--sb-yellow);
+    background: var(--sb-sun);
+    color: var(--sb-yellow);
 }
 
 #snoozed-toggle.active {
-  background: var(--sb-lav);
-  color: var(--sb-lav-ink);
+    background: var(--sb-lav);
+    color: var(--sb-lav-ink);
 }
 
 /* ---- Search ---- */
 #search-bar {
-  padding: 0 var(--sb-sidebar-gutter) 14px;
-  position: relative;
+    padding: 0 var(--sb-sidebar-gutter) 14px;
+    position: relative;
 }
 
 /* A raised field drawn with an inset hairline rather than a border, so the
    focus ring can replace it without shifting the text. */
 #search-input {
-  width: 100%;
-  height: 38px;
-  background: var(--sb-bg-raised);
-  border: none;
-  box-shadow: inset 0 0 0 1px var(--sb-line);
-  border-radius: var(--sb-r-row);
-  padding: 0 44px 0 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sb-text);
-  outline: none;
-  font-family: var(--sb-font-body);
-  transition: box-shadow 0.15s;
+    width: 100%;
+    height: 38px;
+    background: var(--sb-bg-raised);
+    border: none;
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    border-radius: var(--sb-r-row);
+    padding: 0 44px 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sb-text);
+    outline: none;
+    font-family: var(--sb-font-body);
+    transition: box-shadow 0.15s;
 }
 
 #search-clear {
-  position: absolute;
-  right: 40px;
-  top: 0;
-  height: calc(100% - 14px);
-  display: none;
-  align-items: center;
-  background: none;
-  border: none;
-  color: var(--sb-text-faint);
-  font-size: 16px;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-  transition: color 0.15s;
+    position: absolute;
+    right: 40px;
+    top: 0;
+    height: calc(100% - 14px);
+    display: none;
+    align-items: center;
+    background: none;
+    border: none;
+    color: var(--sb-text-faint);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.15s;
 }
 
 #search-clear:hover {
-  color: var(--sb-text-dim);
+    color: var(--sb-text-dim);
 }
 
 #search-bar.has-query #search-clear {
-  display: flex;
+    display: flex;
 }
 
 #search-input:focus {
-  box-shadow:
-    inset 0 0 0 1px var(--sb-accent),
-    0 0 0 3px rgba(var(--sb-accent-rgb),0.14);
+    box-shadow:
+        inset 0 0 0 1px var(--sb-accent),
+        0 0 0 3px rgba(var(--sb-accent-rgb), 0.14);
 }
 
 #search-input::placeholder {
-  color: var(--sb-text-ghost);
+    color: var(--sb-text-ghost);
 }
 
 #search-titles-toggle {
-  position: absolute;
-  right: 22px;
-  top: 0;
-  height: calc(100% - 14px);
-  display: flex;
-  align-items: center;
-  background: none;
-  border: none;
-  color: var(--sb-text-ghost);
-  font-family: var(--sb-font-head);
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
-  transition: color 0.15s;
-  letter-spacing: -0.02em;
+    position: absolute;
+    right: 22px;
+    top: 0;
+    height: calc(100% - 14px);
+    display: flex;
+    align-items: center;
+    background: none;
+    border: none;
+    color: var(--sb-text-ghost);
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.15s;
+    letter-spacing: -0.02em;
 }
 
 #search-titles-toggle:hover {
-  color: var(--sb-text-dim);
+    color: var(--sb-text-dim);
 }
 
 #search-titles-toggle.active {
-  color: var(--sb-accent);
+    color: var(--sb-accent);
 }
-
 
 /* ---- Scrollable content ---- */
 /* The scrollbar's width is always reserved and taken out of the list's right
    gutter, so row pills end where the search field does, scrolling or not. */
 #sidebar-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  padding: 0 0 12px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding: 0 0 12px;
 }
 
 /* The list keeps its natural height; the drag space below it takes the rest. */
 #session-list {
-  flex-shrink: 0;
+    flex-shrink: 0;
 }
 
 #sidebar-drag-space {
-  flex: 1 0 0;
+    flex: 1 0 0;
 }
 
 /* ---- Flat session list ---- */
 /* Sessions are top-level rows now, so the list carries the gutter the project
    cards used to: the row pill's own inset still lands on --sb-row-inset. */
 .session-list {
-  padding: 4px calc(var(--sb-sidebar-gutter) - var(--sb-scrollbar-width)) 10px var(--sb-sidebar-gutter);
+    padding: 4px calc(var(--sb-sidebar-gutter) - var(--sb-scrollbar-width)) 10px var(--sb-sidebar-gutter);
 }
 
 /* Section headings for the flat list: Needs input / Ready / Working / Pinned /
    Recent. The label sits on the shared text column, where the project name used
    to be, so the list keeps one left rail. */
 .session-section-label {
-  padding: 12px 6px 4px var(--sb-row-text);
-  font-family: var(--sb-font-head);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--sb-text-muted);
-  user-select: none;
+    padding: 12px 6px 4px var(--sb-row-text);
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sb-text-muted);
+    user-select: none;
 }
 
-.session-section-label#section-4 { color: var(--sb-orange); }
-.session-section-label#section-3 { color: var(--sb-blue); }
-.session-section-label#section-2 { color: var(--sb-green); }
-.session-section-label#section-1 { color: var(--sb-yellow); }
+.session-section-label#section-4 {
+    color: var(--sb-orange);
+}
+.session-section-label#section-3 {
+    color: var(--sb-blue);
+}
+.session-section-label#section-2 {
+    color: var(--sb-green);
+}
+.session-section-label#section-1 {
+    color: var(--sb-yellow);
+}
 
 /* Wraps instead of truncating: the project name is the one part of the row that
    can be arbitrarily long, and an elided path tells you nothing. */
 .session-meta-left {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 6px;
-  min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 6px;
+    min-width: 0;
 }
 
 /* Project (and worktree branch) each row belongs to — replaces the directory
    header the flat list no longer has. */
 .session-project {
-  color: var(--sb-accent);
-  font-weight: 700;
-  overflow-wrap: anywhere;
+    color: var(--sb-accent);
+    font-weight: 700;
+    overflow-wrap: anywhere;
 }
 
 .session-project.is-remote {
-  color: var(--sb-blue);
+    color: var(--sb-blue);
 }
 
-
 .slug-group-meta .session-project {
-  margin-right: 6px;
+    margin-right: 6px;
 }
 
 /* A mint pill, like the count badge. Offset by the pill's own left padding so
    its label, not its edge, lands on the text column shared by the session
    titles above it. */
 .sessions-more-toggle {
-  padding: 4px 10px;
-  margin: 4px 12px 10px 0;
-  font-family: var(--sb-font-head);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--sb-accent);
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s;
-  border-radius: 99px;
-  display: inline-block;
-  background: var(--sb-mint);
+    padding: 4px 10px;
+    margin: 4px 12px 10px 0;
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--sb-accent);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+    border-radius: 99px;
+    display: inline-block;
+    background: var(--sb-mint);
 }
 
 .sessions-more-toggle:hover {
-  background: rgba(var(--sb-accent-rgb),0.2);
+    background: rgba(var(--sb-accent-rgb), 0.2);
 }
 
 /* ---- Slug groups ---- */
-.slug-group { }
+.slug-group {
+}
 .slug-group-header {
-  padding: 0;
-  cursor: pointer;
-  user-select: none;
+    padding: 0;
+    cursor: pointer;
+    user-select: none;
 }
 .slug-group-header .slug-group-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sb-row-gap);
-  padding: 10px 14px;
-  border-radius: var(--sb-r-row);
-  transition: background 0.12s;
-  border-left: none;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sb-row-gap);
+    padding: 10px 14px;
+    border-radius: var(--sb-r-row);
+    transition: background 0.12s;
+    border-left: none;
 }
 .slug-group-header:hover .slug-group-row {
-  background: rgba(var(--sb-overlay-rgb),0.05);
+    background: rgba(var(--sb-overlay-rgb), 0.05);
 }
 .slug-group:not(.collapsed) .slug-group-row {
 }
 .slug-group-expand {
-  flex-shrink: 0;
-  width: var(--sb-row-gutter);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 5px;
+    flex-shrink: 0;
+    width: var(--sb-row-gutter);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 5px;
 }
 /* The plan's pin lines up with the sessions' pins, its arrow with their dots. */
 .slug-group-expand .slug-group-pin {
-  margin-top: 0;
+    margin-top: 0;
 }
 .slug-group-arrow {
-  width: 6px;
-  display: flex;
-  justify-content: center;
+    width: 6px;
+    display: flex;
+    justify-content: center;
 }
 .slug-group-expand .arrow {
-  font-size: 8px;
-  color: var(--sb-accent);
-  transition: transform 0.2s;
-  display: inline-block;
+    font-size: 8px;
+    color: var(--sb-accent);
+    transition: transform 0.2s;
+    display: inline-block;
 }
-.slug-group:not(.collapsed) .arrow { transform: rotate(90deg); }
+.slug-group:not(.collapsed) .arrow {
+    transform: rotate(90deg);
+}
 .slug-group-info {
-  flex: 1;
-  min-width: 0;
+    flex: 1;
+    min-width: 0;
 }
 .slug-group-name {
-  font-size: 13.5px;
-  color: var(--sb-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.45;
-  font-weight: 600;
+    font-size: 13.5px;
+    color: var(--sb-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.45;
+    font-weight: 600;
 }
 .slug-group-meta {
-  font-size: 11px;
-  color: var(--sb-text-dimmest);
-  margin-top: 3px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 6px;
+    font-size: 11px;
+    color: var(--sb-text-dimmest);
+    margin-top: 3px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
 }
 .slug-group-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  display: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: none;
 }
 .slug-group-dot.running {
-  display: inline-block;
-  background: var(--sb-green);
-  box-shadow: 0 0 6px rgba(var(--sb-green-rgb),0.5);
-  animation: pulse-dot 2s ease-in-out infinite;
+    display: inline-block;
+    background: var(--sb-green);
+    box-shadow: 0 0 6px rgba(var(--sb-green-rgb), 0.5);
+    animation: pulse-dot 2s ease-in-out infinite;
 }
 .slug-group-count {
-  font-family: var(--sb-font-head);
-  font-size: 11px;
-  font-weight: 800;
-  background: var(--sb-mint);
-  color: var(--sb-accent);
-  padding: 2px 8px;
-  border-radius: 99px;
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 800;
+    background: var(--sb-mint);
+    color: var(--sb-accent);
+    padding: 2px 8px;
+    border-radius: 99px;
 }
 .slug-group-archive-btn {
-  background: transparent;
-  border: none;
-  color: var(--sb-text-faint);
-  width: 22px;
-  height: 22px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  flex-shrink: 0;
-  transition: all 0.15s;
-  opacity: 0;
-  margin-top: 3px;
+    background: transparent;
+    border: none;
+    color: var(--sb-text-faint);
+    width: 22px;
+    height: 22px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    opacity: 0;
+    margin-top: 3px;
 }
 
 .slug-group-header:hover .slug-group-archive-btn {
-  opacity: 1;
+    opacity: 1;
 }
 
 .slug-group-archive-btn:hover {
-  background: var(--sb-mint);
-  color: var(--sb-accent);
+    background: var(--sb-mint);
+    color: var(--sb-accent);
 }
 
-.slug-group.collapsed .slug-group-sessions { display: none; }
-.slug-group.collapsed .slug-group-older { display: none; }
+.slug-group.collapsed .slug-group-sessions {
+    display: none;
+}
+.slug-group.collapsed .slug-group-older {
+    display: none;
+}
 .slug-group-more {
-  padding: 4px 10px;
-  margin: 4px 12px 10px calc(var(--sb-row-text) - 10px);
-  font-family: var(--sb-font-head);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--sb-accent);
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s;
-  border-radius: 99px;
-  display: none;
-  background: var(--sb-mint);
+    padding: 4px 10px;
+    margin: 4px 12px 10px calc(var(--sb-row-text) - 10px);
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--sb-accent);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+    border-radius: 99px;
+    display: none;
+    background: var(--sb-mint);
 }
 .slug-group.collapsed .slug-group-more {
-  display: inline-block;
+    display: inline-block;
 }
 .slug-group-more:hover {
-  background: rgba(var(--sb-accent-rgb),0.2);
+    background: rgba(var(--sb-accent-rgb), 0.2);
 }
 .slug-group-sessions {
-  border-left: 2px solid var(--sb-line);
-  margin-left: 28px;
-  padding-left: 0;
+    border-left: 2px solid var(--sb-line);
+    margin-left: 28px;
+    padding-left: 0;
 }
 
 /* ---- Session items ---- */
@@ -452,175 +476,195 @@
    fade in from exactly the colour behind it. A selected row is tinted with the
    accent, mixed in the same way. */
 .session-item {
-  --row-fill: var(--sb-bg-panel);
-  padding: 0;
-  cursor: pointer;
-  transition: all 0.12s;
+    --row-fill: var(--sb-bg-panel);
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.12s;
 }
 
 .session-item:hover {
-  --row-fill: color-mix(in srgb, rgb(var(--sb-overlay-rgb)) 5%, var(--sb-bg-panel));
+    --row-fill: color-mix(in srgb, rgb(var(--sb-overlay-rgb)) 5%, var(--sb-bg-panel));
 }
 
 .session-item.active {
-  --row-fill: color-mix(in srgb, var(--sb-accent) 14%, var(--sb-bg-panel));
+    --row-fill: color-mix(in srgb, var(--sb-accent) 14%, var(--sb-bg-panel));
 }
 
 .session-item .session-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sb-row-gap);
-  padding: 10px 14px;
-  border-radius: var(--sb-r-row);
-  transition: background 0.12s;
-  position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sb-row-gap);
+    padding: 10px 14px;
+    border-radius: var(--sb-r-row);
+    transition: background 0.12s;
+    position: relative;
 }
 
 .session-item:hover .session-row,
 .session-item.active .session-row {
-  background: var(--row-fill);
+    background: var(--row-fill);
 }
 
 /* The keyboard cursor (Cmd+L): a ring on top of whatever fill the row has, so
    it reads on the active row as well as on a plain one. */
-#sidebar-content:focus { outline: none; }
+#sidebar-content:focus {
+    outline: none;
+}
 
 .session-item.kbd-cursor .session-row,
 .slug-group-header.kbd-cursor .slug-group-row {
-  background: var(--row-fill, rgba(var(--sb-overlay-rgb),0.05));
-  box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+    background: var(--row-fill, rgba(var(--sb-overlay-rgb), 0.05));
+    box-shadow: inset 0 0 0 1.5px var(--sb-accent);
 }
 
 .slug-group-more.kbd-cursor,
 .sessions-more-toggle.kbd-cursor {
-  box-shadow: 0 0 0 1.5px var(--sb-accent);
+    box-shadow: 0 0 0 1.5px var(--sb-accent);
 }
 
 /* ---- Pin ---- */
 .session-pin {
-  flex-shrink: 0;
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--sb-text-faint);
-  transition: all 0.15s;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  margin-top: 5px;
+    flex-shrink: 0;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--sb-text-faint);
+    transition: all 0.15s;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    margin-top: 5px;
 }
 
 .session-pin:hover {
-  color: var(--sb-yellow);
-  transform: scale(1.15);
+    color: var(--sb-yellow);
+    transform: scale(1.15);
 }
 
 .session-pin.pinned {
-  color: var(--sb-yellow);
+    color: var(--sb-yellow);
 }
 
 .session-status-dot.is-spacer {
-  visibility: hidden;
+    visibility: hidden;
 }
 
 /* ---- Running dot ---- */
 .session-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 7px;
-  background: rgba(var(--sb-overlay-rgb),0.18);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 7px;
+    background: rgba(var(--sb-overlay-rgb), 0.18);
 }
 
 .session-status-dot.running {
-  background: var(--sb-green);
+    background: var(--sb-green);
 }
 
 @keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
 }
 
 /* ---- CLI busy spinner (braille spinner detected) ---- */
 /* needs-attention takes precedence — when both are set, attention ripple shows */
 .session-item.cli-busy:not(.needs-attention) .session-status-dot,
 .session-item.cli-busy:not(.needs-attention) .session-status-dot.running {
-  background: transparent !important;
-  border: 1.5px solid var(--sb-blue);
-  border-top-color: transparent;
-  animation: spin-dot 0.8s linear infinite !important;
-  box-shadow: none !important;
+    background: transparent !important;
+    border: 1.5px solid var(--sb-blue);
+    border-top-color: transparent;
+    animation: spin-dot 0.8s linear infinite !important;
+    box-shadow: none !important;
 }
 
 @keyframes spin-dot {
-  to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .session-item.cli-busy:not(.needs-attention) .session-summary {
-  background: linear-gradient(110deg, var(--sb-text-strong) 44%, var(--sb-blue) 48%, var(--sb-text-max) 50%, var(--sb-blue) 52%, var(--sb-text-strong) 56%);
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shimmer-text 3s linear infinite;
+    background: linear-gradient(
+        110deg,
+        var(--sb-text-strong) 44%,
+        var(--sb-blue) 48%,
+        var(--sb-text-max) 50%,
+        var(--sb-blue) 52%,
+        var(--sb-text-strong) 56%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer-text 3s linear infinite;
 }
 
 @keyframes shimmer-text {
-  0% { background-position: 200% 0; }
-  100% { background-position: -100% 0; }
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -100% 0;
+    }
 }
 
 /* ---- Session info ---- */
 .session-info {
-  flex: 1;
-  min-width: 0;
+    flex: 1;
+    min-width: 0;
 }
 
 .session-summary {
-  font-size: 13.5px;
-  color: var(--sb-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.45;
-  font-weight: 600;
+    font-size: 13.5px;
+    color: var(--sb-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.45;
+    font-weight: 600;
 }
 
 .session-item.active .session-summary {
-  color: var(--sb-text-strong);
+    color: var(--sb-text-strong);
 }
 
 .session-rename-input {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--sb-text);
-  background: var(--sb-bg-raised);
-  border: none;
-  border-radius: 6px;
-  padding: 2px 6px;
-  width: 100%;
-  outline: none;
-  font-family: inherit;
-  line-height: 1.45;
-  box-shadow:
-    inset 0 0 0 1px var(--sb-accent),
-    0 0 0 3px rgba(var(--sb-accent-rgb),0.14);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--sb-text);
+    background: var(--sb-bg-raised);
+    border: none;
+    border-radius: 6px;
+    padding: 2px 6px;
+    width: 100%;
+    outline: none;
+    font-family: inherit;
+    line-height: 1.45;
+    box-shadow:
+        inset 0 0 0 1px var(--sb-accent),
+        0 0 0 3px rgba(var(--sb-accent-rgb), 0.14);
 }
 
 .session-meta {
-  font-size: 10px;
-  color: var(--sb-text-dimmest);
-  margin-top: 3px;
+    font-size: 10px;
+    color: var(--sb-text-dimmest);
+    margin-top: 3px;
 }
 
 /* Sidebar session items: project, time and the rest of the line, wrapping onto
    further lines rather than clipping anything. */
 .session-item .session-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
 }
 
 /* ---- Working agents badge ----
@@ -629,84 +673,90 @@
    lavender because no session state uses it, so it never reads as one. Drawn
    by the row's `AgentsBadge` (ui/session-list/RowMeta); the tooltip lists the agents. */
 .session-agents {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  align-self: center;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--sb-lav);
-  color: var(--sb-lav-ink);
-  font-family: var(--sb-font-head);
-  font-weight: 700;
-  line-height: 15px;
-  font-variant-numeric: tabular-nums;
-  cursor: default;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    align-self: center;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--sb-lav);
+    color: var(--sb-lav-ink);
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    line-height: 15px;
+    font-variant-numeric: tabular-nums;
+    cursor: default;
 
-  svg {
-    flex-shrink: 0;
-  }
+    svg {
+        flex-shrink: 0;
+    }
 }
 
 /* The PRs a session opened. Quiet — one step brighter than the time beside
    them, on the faintest overlay tint (white on dark, black on light). Display
    only: the meta line around them is what opens the PRs (Session work). */
 .session-prs {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 3px;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 3px;
 }
 
 .session-pr,
 .session-pr-more {
-  padding: 0 4px;
-  border-radius: 4px;
-  font-family: var(--sb-font-mono);
-  color: var(--sb-text-faint);
-  background: rgba(var(--sb-overlay-rgb), 0.06);
+    padding: 0 4px;
+    border-radius: 4px;
+    font-family: var(--sb-font-mono);
+    color: var(--sb-text-faint);
+    background: rgba(var(--sb-overlay-rgb), 0.06);
 }
 
 /* How the PR is doing (W4): a glance, not a read. */
 .session-pr-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 3px;
-  border-radius: 50%;
-  vertical-align: 1px;
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 3px;
+    border-radius: 50%;
+    vertical-align: 1px;
 
-  &.is-green { background: var(--sb-green); }
-  &.is-amber { background: var(--sb-amber); }
-  &.is-red { background: var(--sb-red); }
+    &.is-green {
+        background: var(--sb-green);
+    }
+    &.is-amber {
+        background: var(--sb-amber);
+    }
+    &.is-red {
+        background: var(--sb-red);
+    }
 }
 
 /* A merged PR is done: a purple check where the dot was, the colour GitHub
    gives merged. */
 .session-pr-merged {
-  display: inline-flex;
-  margin-right: 3px;
-  color: var(--sb-purple);
+    display: inline-flex;
+    margin-right: 3px;
+    color: var(--sb-purple);
 }
 
 /* ---- Session action buttons ---- */
 .session-actions {
-  flex-shrink: 0;
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.12s;
-  position: absolute;
-  right: 14px;
-  top: 8px;
-  background: linear-gradient(90deg, transparent, var(--row-fill) 10%);
-  padding-left: 8px;
-  padding-right: 4px;
-  z-index: 1;
+    flex-shrink: 0;
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.12s;
+    position: absolute;
+    right: 14px;
+    top: 8px;
+    background: linear-gradient(90deg, transparent, var(--row-fill) 10%);
+    padding-left: 8px;
+    padding-right: 4px;
+    z-index: 1;
 }
 
 .session-item:hover .session-actions,
 .session-actions.menu-open {
-  opacity: 1;
+    opacity: 1;
 }
 
 .session-work-btn,
@@ -714,176 +764,184 @@
 .session-launch-config-btn,
 .session-snooze-btn,
 .session-archive-btn {
-  cursor: pointer;
-  background: none;
-  border: none;
-  padding: 4px;
-  line-height: 1;
-  transition: all 0.15s;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 4px;
+    line-height: 1;
+    transition: all 0.15s;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .session-stop-btn {
-  color: var(--sb-red-deep);
+    color: var(--sb-red-deep);
 }
 
 .session-launch-config-btn {
-  color: var(--sb-green-muted);
-  outline: none;
+    color: var(--sb-green-muted);
+    outline: none;
 }
 
 .session-archive-btn,
 .session-work-btn {
-  color: var(--sb-accent-dim);
+    color: var(--sb-accent-dim);
 }
 
 .session-snooze-btn {
-  color: var(--sb-text-faint);
+    color: var(--sb-text-faint);
 }
 
 .session-snooze-btn:hover,
 .session-snooze-btn[aria-expanded='true'] {
-  color: var(--sb-lav-ink);
-  background: var(--sb-lav);
+    color: var(--sb-lav-ink);
+    background: var(--sb-lav);
 }
 
 /* Snoozed (only listed under a search or the archive): a filled moon. */
 .session-snooze-btn.snoozed {
-  color: var(--sb-lav-ink);
+    color: var(--sb-lav-ink);
 }
 
 .session-snooze-btn.snoozed svg {
-  fill: currentColor;
+    fill: currentColor;
 }
 
 .snooze-moon {
-  display: flex;
+    display: flex;
 }
 
 .snooze-menu {
-  position: fixed;
-  z-index: 50;
-  width: 200px;
-  padding: 5px;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--sb-r-row);
-  background: var(--sb-bg-raised);
-  box-shadow:
-    inset 0 0 0 1px var(--sb-line),
-    0 16px 32px -10px rgba(var(--sb-shadow-rgb),calc(0.75 * var(--sb-shadow-k)));
+    position: fixed;
+    z-index: 50;
+    width: 200px;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-raised);
+    box-shadow:
+        inset 0 0 0 1px var(--sb-line),
+        0 16px 32px -10px rgba(var(--sb-shadow-rgb), calc(0.75 * var(--sb-shadow-k)));
 }
 
 .snooze-menu-item {
-  appearance: none;
-  width: 100%;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 10px;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  color: var(--sb-text);
-  font: 12.5px var(--sb-font-body);
-  text-align: left;
-  cursor: pointer;
-  outline: none;
+    appearance: none;
+    width: 100%;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--sb-text);
+    font: 12.5px var(--sb-font-body);
+    text-align: left;
+    cursor: pointer;
+    outline: none;
 
-  small {
-    color: var(--sb-text-faint);
-    font-size: 11.5px;
-    font-variant-numeric: tabular-nums;
-  }
+    small {
+        color: var(--sb-text-faint);
+        font-size: 11.5px;
+        font-variant-numeric: tabular-nums;
+    }
 
-  &:hover,
-  &:focus-visible { background: rgba(var(--sb-overlay-rgb),0.07); }
+    &:hover,
+    &:focus-visible {
+        background: rgba(var(--sb-overlay-rgb), 0.07);
+    }
 }
 
 .session-stop-btn:hover {
-  color: var(--sb-red);
-  background: rgba(var(--sb-red-rgb),0.1);
+    color: var(--sb-red);
+    background: rgba(var(--sb-red-rgb), 0.1);
 }
 
 .session-launch-config-btn:hover {
-  color: var(--sb-green);
-  background: rgba(var(--sb-green-rgb),0.1);
+    color: var(--sb-green);
+    background: rgba(var(--sb-green-rgb), 0.1);
 }
 
 .session-archive-btn:hover,
 .session-work-btn:hover {
-  color: var(--sb-accent);
-  background: rgba(var(--sb-accent-rgb),0.1);
+    color: var(--sb-accent);
+    background: rgba(var(--sb-accent-rgb), 0.1);
 }
 
 .session-stop-btn {
-  display: none;
+    display: none;
 }
 
 .session-item.has-running-pty .session-stop-btn {
-  display: flex;
+    display: flex;
 }
 
 .session-item.has-running-pty .session-launch-config-btn {
-  display: none;
+    display: none;
 }
 
 .session-item.archived-item {
-  opacity: 0.55;
+    opacity: 0.55;
 }
 
 /* ---- Response ready indicator (Claude finished, unread output) ---- */
 .session-item.response-ready .session-status-dot {
-  background: var(--sb-blue);
-  box-shadow: 0 0 8px rgba(var(--sb-blue-rgb),0.7);
-  animation: none;
+    background: var(--sb-blue);
+    box-shadow: 0 0 8px rgba(var(--sb-blue-rgb), 0.7);
+    animation: none;
 }
 
 .session-item.response-ready .session-summary {
-  color: var(--sb-blue);
+    color: var(--sb-blue);
 }
 
 .session-item.response-ready .session-time {
-  color: rgba(var(--sb-blue-rgb),0.6);
+    color: rgba(var(--sb-blue-rgb), 0.6);
 }
 
 /* ---- Needs attention indicator (ripple) ---- */
 .session-item.needs-attention .session-status-dot,
 .session-item.needs-attention .session-status-dot.running {
-  background: var(--sb-orange);
-  box-shadow: none;
-  animation: none;
-  position: relative;
+    background: var(--sb-orange);
+    box-shadow: none;
+    animation: none;
+    position: relative;
 }
 
 .session-item.needs-attention .session-status-dot::before,
 .session-item.needs-attention .session-status-dot::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(var(--sb-orange-rgb),0.7);
-  animation: ripple-out 2s ease-out infinite;
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(var(--sb-orange-rgb), 0.7);
+    animation: ripple-out 2s ease-out infinite;
 }
 
 .session-item.needs-attention .session-status-dot::after {
-  animation-delay: 1s;
+    animation-delay: 1s;
 }
 
 @keyframes ripple-out {
-  0%   { transform: scale(1); opacity: 0.7; }
-  100% { transform: scale(3.5); opacity: 0; }
+    0% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+    100% {
+        transform: scale(3.5);
+        opacity: 0;
+    }
 }
 
 .session-item.needs-attention .session-summary {
-  color: var(--sb-orange);
+    color: var(--sb-orange);
 }
 
 .session-item.needs-attention .session-summary::before {
-  display: none;
+    display: none;
 }

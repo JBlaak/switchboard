@@ -19,73 +19,73 @@
  * The app is launched and the sidebar has finished its first index by the time
  * the test body runs, so a test starts from a settled screen.
  */
-import { test as base, expect } from '@playwright/test';
-import type { ElectronApplication, Page } from '@playwright/test';
-import { fixtureHome } from './fixture-home';
-import { launchApp, mainWindow } from './launch';
-import { waitForIndex } from './app';
-import { standardFixture } from '../fixtures/standard';
-import type { FixtureHome, FixtureSpec } from './fixture-home';
-import type { HostStubs } from './main-process';
+import {test as base, expect} from '@playwright/test';
+import type {ElectronApplication, Page} from '@playwright/test';
+import {fixtureHome} from './fixture-home';
+import {launchApp, mainWindow} from './launch';
+import {waitForIndex} from './app';
+import {standardFixture} from '../fixtures/standard';
+import type {FixtureHome, FixtureSpec} from './fixture-home';
+import type {HostStubs} from './main-process';
 
 export interface HarnessOptions {
-  /** What the fixture home holds. Defaults to the standard fixture. */
-  fixture: FixtureSpec;
-  /** The app's own appearance setting, so both schemes are the app's real ones. */
-  appearance: 'light' | 'dark';
-  /** Overrides for the host stubs (usage, updates, sleep, folder picker). */
-  stubs: Partial<HostStubs>;
-  /**
-   * Put the renderer's timers on Playwright's fake clock, so a test can
-   * `page.clock.fastForward` past a poll interval or a linger instead of
-   * waiting for it. Time still flows on its own; see `launchApp`.
-   */
-  fakeTimers: boolean;
+    /** What the fixture home holds. Defaults to the standard fixture. */
+    fixture: FixtureSpec;
+    /** The app's own appearance setting, so both schemes are the app's real ones. */
+    appearance: 'light' | 'dark';
+    /** Overrides for the host stubs (usage, updates, sleep, folder picker). */
+    stubs: Partial<HostStubs>;
+    /**
+     * Put the renderer's timers on Playwright's fake clock, so a test can
+     * `page.clock.fastForward` past a poll interval or a linger instead of
+     * waiting for it. Time still flows on its own; see `launchApp`.
+     */
+    fakeTimers: boolean;
 }
 
 export interface HarnessFixtures {
-  home: FixtureHome;
-  app: ElectronApplication;
-  page: Page;
+    home: FixtureHome;
+    app: ElectronApplication;
+    page: Page;
 }
 
 export const test = base.extend<HarnessOptions & HarnessFixtures>({
-  fixture: [standardFixture(), { option: true }],
-  appearance: ['light', { option: true }],
-  stubs: [{}, { option: true }],
-  fakeTimers: [false, { option: true }],
+    fixture: [standardFixture(), {option: true}],
+    appearance: ['light', {option: true}],
+    stubs: [{}, {option: true}],
+    fakeTimers: [false, {option: true}],
 
-  home: async ({ fixture, appearance }, use) => {
-    const home = fixtureHome({ ...fixture, settings: { ...fixture.settings, appearance } });
-    await use(home);
-    home.dispose();
-  },
+    home: async ({fixture, appearance}, use) => {
+        const home = fixtureHome({...fixture, settings: {...fixture.settings, appearance}});
+        await use(home);
+        home.dispose();
+    },
 
-  // One launch backs both `app` and `page`; `page` asks for `app` so the two
-  // always belong to the same process.
-  app: async ({ home, stubs, fakeTimers }, use) => {
-    const launched = await launchApp(home, stubs, { fakeTimers });
-    try {
-      await waitForIndex(launched.page, launched.app, home);
-      await use(launched.app);
-    } finally {
-      await launched.close();
-    }
-  },
+    // One launch backs both `app` and `page`; `page` asks for `app` so the two
+    // always belong to the same process.
+    app: async ({home, stubs, fakeTimers}, use) => {
+        const launched = await launchApp(home, stubs, {fakeTimers});
+        try {
+            await waitForIndex(launched.page, launched.app, home);
+            await use(launched.app);
+        } finally {
+            await launched.close();
+        }
+    },
 
-  page: async ({ app }, use) => {
-    await use(await mainWindow(app));
-  },
+    page: async ({app}, use) => {
+        await use(await mainWindow(app));
+    },
 });
 
-export { expect };
+export {expect};
 
 /** Run the enclosed tests once per colour scheme, named "… (light)" / "… (dark)". */
 export function forEachAppearance(define: (appearance: 'light' | 'dark') => void): void {
-  for (const appearance of ['light', 'dark'] as const) {
-    test.describe(appearance, () => {
-      test.use({ appearance });
-      define(appearance);
-    });
-  }
+    for (const appearance of ['light', 'dark'] as const) {
+        test.describe(appearance, () => {
+            test.use({appearance});
+            define(appearance);
+        });
+    }
 }

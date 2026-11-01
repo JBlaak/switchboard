@@ -14,18 +14,18 @@
  * being restored after a reload.
  */
 export const STORAGE_KEYS = {
-  activeSessionId: 'activeSessionId',
-  expandedSlugs: 'expandedSlugs',
-  /** The image compare mode a new card opens in (localStorage, so it outlives a restart). */
-  imageCompareMode: 'imageCompareMode',
-  /** What sits behind an image card's images (localStorage). */
-  imageCompareBackground: 'imageCompareBackground',
-  /** `owner/repo#n` → the plan's level last seen, as JSON (localStorage), so a level-up outlives a restart (A4). */
-  planLevelsSeen: 'planLevelsSeen',
-  /** The plans opened recently, per project (localStorage; see `ui/project-page/recent-plans`). */
-  recentPlans: 'recentPlans',
-  /** Each project page's expanded plans and Show closed, per project (localStorage; see `project-page-slice`). */
-  projectPages: 'projectPages',
+    activeSessionId: 'activeSessionId',
+    expandedSlugs: 'expandedSlugs',
+    /** The image compare mode a new card opens in (localStorage, so it outlives a restart). */
+    imageCompareMode: 'imageCompareMode',
+    /** What sits behind an image card's images (localStorage). */
+    imageCompareBackground: 'imageCompareBackground',
+    /** `owner/repo#n` → the plan's level last seen, as JSON (localStorage), so a level-up outlives a restart (A4). */
+    planLevelsSeen: 'planLevelsSeen',
+    /** The plans opened recently, per project (localStorage; see `ui/project-page/recent-plans`). */
+    recentPlans: 'recentPlans',
+    /** Each project page's expanded plans and Show closed, per project (localStorage; see `project-page-slice`). */
+    projectPages: 'projectPages',
 } as const;
 
 /**
@@ -36,23 +36,19 @@ export const STORAGE_KEYS = {
  * on the call. Both are handled here so no caller has to.
  */
 export function readStored(store: 'sessionStorage' | 'localStorage', key: string): string | null {
-  try {
-    return globalThis[store]?.getItem(key) ?? null;
-  } catch {
-    return null;
-  }
+    try {
+        return globalThis[store]?.getItem(key) ?? null;
+    } catch {
+        return null;
+    }
 }
 
 /** Write, or forget, a persisted value. Silent when there is no storage. */
-export function writeStored(
-  store: 'sessionStorage' | 'localStorage',
-  key: string,
-  value: string | null,
-): void {
-  try {
-    if (value === null) globalThis[store]?.removeItem(key);
-    else globalThis[store]?.setItem(key, value);
-  } catch {
-    // Site data blocked; the preference simply does not persist.
-  }
+export function writeStored(store: 'sessionStorage' | 'localStorage', key: string, value: string | null): void {
+    try {
+        if (value === null) globalThis[store]?.removeItem(key);
+        else globalThis[store]?.setItem(key, value);
+    } catch {
+        // Site data blocked; the preference simply does not persist.
+    }
 }

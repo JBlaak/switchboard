@@ -8,7 +8,7 @@
  * fields `--output-format json` prints. Handing that event on as the run's
  * stdout is what keeps the readers (`readRouteRun`) the same for both paths.
  */
-import type { ClaudeRun } from '../../domain/ask/route';
+import type {ClaudeRun} from '../../domain/ask/route';
 
 /** Flags whose value the stream-json ones replace. */
 const REPLACED = new Set(['--input-format', '--output-format']);
@@ -18,13 +18,13 @@ const REPLACED = new Set(['--input-format', '--output-format']);
  * `--output-format json` is dropped for the stream-json flags.
  */
 export function streamJsonArgs(bootArgs: readonly string[]): string[] {
-  const kept = bootArgs.filter((arg, i) => !REPLACED.has(arg) && !REPLACED.has(bootArgs[i - 1]));
-  return [...kept, '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'];
+    const kept = bootArgs.filter((arg, i) => !REPLACED.has(arg) && !REPLACED.has(bootArgs[i - 1]));
+    return [...kept, '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'];
 }
 
 /** The one stdin line that hands the process its prompt. */
 export function userMessageLine(prompt: string): string {
-  return JSON.stringify({ type: 'user', message: { role: 'user', content: prompt } }) + '\n';
+    return JSON.stringify({type: 'user', message: {role: 'user', content: prompt}}) + '\n';
 }
 
 /**
@@ -35,9 +35,9 @@ export function userMessageLine(prompt: string): string {
  * with, 1 for an error result and 0 otherwise.
  */
 export function finishedRun(stdout: string, stderr: string): ClaudeRun | null {
-  const result = resultEvent(stdout);
-  if (!result) return null;
-  return { exitCode: result.is_error === true ? 1 : 0, stdout: JSON.stringify(result) + '\n', stderr };
+    const result = resultEvent(stdout);
+    if (!result) return null;
+    return {exitCode: result.is_error === true ? 1 : 0, stdout: JSON.stringify(result) + '\n', stderr};
 }
 
 /**
@@ -46,25 +46,28 @@ export function finishedRun(stdout: string, stderr: string): ClaudeRun | null {
  * reads what the CLI said rather than its `init` event.
  */
 export function endedRun(stdout: string, exitCode: number | null, stderr: string): ClaudeRun {
-  const said = stdout.split('\n').filter(line => line.trim() !== '' && !line.trim().startsWith('{')).join('\n');
-  return { exitCode, stdout: said, stderr };
+    const said = stdout
+        .split('\n')
+        .filter((line) => line.trim() !== '' && !line.trim().startsWith('{'))
+        .join('\n');
+    return {exitCode, stdout: said, stderr};
 }
 
 /** The first complete line that is a `result` event. */
 function resultEvent(stdout: string): Record<string, unknown> | null {
-  const lines = stdout.split('\n');
-  // The last piece has no newline after it yet, so it may still be arriving.
-  for (const line of lines.slice(0, -1)) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('{')) continue;
-    try {
-      const parsed: unknown = JSON.parse(trimmed);
-      if (typeof parsed === 'object' && parsed !== null && (parsed as { type?: unknown }).type === 'result') {
-        return parsed as Record<string, unknown>;
-      }
-    } catch {
-      // Not an event: skipped, like any other stray line.
+    const lines = stdout.split('\n');
+    // The last piece has no newline after it yet, so it may still be arriving.
+    for (const line of lines.slice(0, -1)) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('{')) continue;
+        try {
+            const parsed: unknown = JSON.parse(trimmed);
+            if (typeof parsed === 'object' && parsed !== null && (parsed as {type?: unknown}).type === 'result') {
+                return parsed as Record<string, unknown>;
+            }
+        } catch {
+            // Not an event: skipped, like any other stray line.
+        }
     }
-  }
-  return null;
+    return null;
 }

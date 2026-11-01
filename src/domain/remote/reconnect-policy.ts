@@ -29,8 +29,8 @@ export const MAX_RETRIES = RETRY_DELAYS_MS.length;
 export const REMOTE_STABLE_MS = 20000;
 
 export function remoteRetryDelay(attempt: number): number {
-  const i = Math.max(1, Math.min(attempt, RETRY_DELAYS_MS.length)) - 1;
-  return RETRY_DELAYS_MS[i];
+    const i = Math.max(1, Math.min(attempt, RETRY_DELAYS_MS.length)) - 1;
+    return RETRY_DELAYS_MS[i];
 }
 
 /**
@@ -49,8 +49,8 @@ export function remoteRetryDelay(attempt: number): number {
  * died in a way ssh never got to report.
  */
 export function isRetryableSshExit(exitCode: number, signal?: number | string | null): boolean {
-  if (signal) return true;
-  return exitCode === 255;
+    if (signal) return true;
+    return exitCode === 255;
 }
 
 /**
@@ -61,10 +61,11 @@ export function isRetryableSshExit(exitCode: number, signal?: number | string | 
  * unavailable for a few seconds after a wake, which is precisely when
  * reconnecting should work.
  */
-const FATAL_SSH_OUTPUT = /Permission denied|Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED|tmux is not installed/i;
+const FATAL_SSH_OUTPUT =
+    /Permission denied|Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED|tmux is not installed/i;
 
 export function isFatalSshOutput(text: unknown): boolean {
-  return FATAL_SSH_OUTPUT.test(String(text || ''));
+    return FATAL_SSH_OUTPUT.test(String(text || ''));
 }
 
 /**
@@ -78,24 +79,27 @@ export function isFatalSshOutput(text: unknown): boolean {
  * treats the error as a successful connect, disappears, and then reappears
  * seconds later as "reconnecting", which is the flicker this avoids.
  */
-const SSH_DIAGNOSTIC_OUTPUT = new RegExp([
-  'Connection (?:to|closed|reset|refused)',
-  'Connection timed out',
-  'No route to host',
-  'Host is down',
-  'Operation timed out',
-  'Could not resolve hostname',
-  'banner exchange',
-  'kex_exchange_identification',
-  'Permission denied',
-  'Host key verification failed',
-  'REMOTE HOST IDENTIFICATION HAS CHANGED',
-  '^ssh: ',
-  '^ssh_exchange_identification',
-].join('|'), 'im');
+const SSH_DIAGNOSTIC_OUTPUT = new RegExp(
+    [
+        'Connection (?:to|closed|reset|refused)',
+        'Connection timed out',
+        'No route to host',
+        'Host is down',
+        'Operation timed out',
+        'Could not resolve hostname',
+        'banner exchange',
+        'kex_exchange_identification',
+        'Permission denied',
+        'Host key verification failed',
+        'REMOTE HOST IDENTIFICATION HAS CHANGED',
+        '^ssh: ',
+        '^ssh_exchange_identification',
+    ].join('|'),
+    'im',
+);
 
 export function isSshDiagnosticOutput(text: unknown): boolean {
-  return SSH_DIAGNOSTIC_OUTPUT.test(String(text || ''));
+    return SSH_DIAGNOSTIC_OUTPUT.test(String(text || ''));
 }
 
 /**
@@ -108,16 +112,16 @@ export function isSshDiagnosticOutput(text: unknown): boolean {
  * through and the terminal needs to be usable.
  */
 export function outputProvesRemoteIsLive(data: unknown): boolean {
-  const t = String(data || '');
-  if (!t.trim()) return false;
-  return !isSshDiagnosticOutput(t);
+    const t = String(data || '');
+    if (!t.trim()) return false;
+    return !isSshDiagnosticOutput(t);
 }
 
 /** Human-readable reason for a dead ssh, for the status line in the terminal. */
 export function describeSshExit(exitCode: number, signal?: number | string | null): string {
-  if (signal) return `ssh was terminated (signal ${signal})`;
-  if (exitCode === 0) return 'disconnected';
-  if (exitCode === 255) return 'ssh connection failed or dropped';
-  if (exitCode === 127) return 'tmux or ssh not found';
-  return `exited with code ${exitCode}`;
+    if (signal) return `ssh was terminated (signal ${signal})`;
+    if (exitCode === 0) return 'disconnected';
+    if (exitCode === 255) return 'ssh connection failed or dropped';
+    if (exitCode === 127) return 'tmux or ssh not found';
+    return `exited with code ${exitCode}`;
 }

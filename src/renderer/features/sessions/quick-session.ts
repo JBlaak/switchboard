@@ -5,19 +5,19 @@
  * is nowhere to launch: the lightning bolt is hidden, and the shortcuts open
  * global settings instead of doing nothing silently.
  */
-import { dispatch } from '../../state/app-store';
-import { openSettings } from '../../ui/settings/actions';
-import { launchClaudeSession, projectStub } from './session-actions';
+import {dispatch} from '../../state/app-store';
+import {openSettings} from '../../ui/settings/actions';
+import {launchClaudeSession, projectStub} from './session-actions';
 
-export { isBareQuickSessionKey, isQuickSessionKey } from '../../lib/shortcut-keys';
+export {isBareQuickSessionKey, isQuickSessionKey} from '../../lib/shortcut-keys';
 
 export async function launchQuickSession(): Promise<void> {
-  const path = await quickSessionPath();
-  if (!path) {
-    await openSettings();
-    return;
-  }
-  await launchClaudeSession(projectStub(path));
+    const path = await quickSessionPath();
+    if (!path) {
+        await openSettings();
+        return;
+    }
+    await launchClaudeSession(projectStub(path));
 }
 
 /**
@@ -26,10 +26,10 @@ export async function launchQuickSession(): Promise<void> {
  * Re-read after a settings save, which is how the folder changes.
  */
 export async function syncQuickSessionButton(): Promise<void> {
-  dispatch({ type: 'quickSessionPathRead', path: await quickSessionPath() });
+    dispatch({type: 'quickSessionPathRead', path: await quickSessionPath()});
 }
 
 async function quickSessionPath(): Promise<string> {
-  const global = await window.api.getSetting<Record<string, unknown>>('global');
-  return typeof global?.quickSessionPath === 'string' ? global.quickSessionPath.trim() : '';
+    const global = await window.api.getSetting<Record<string, unknown>>('global');
+    return typeof global?.quickSessionPath === 'string' ? global.quickSessionPath.trim() : '';
 }

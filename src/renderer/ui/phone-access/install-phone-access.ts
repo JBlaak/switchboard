@@ -8,23 +8,23 @@
  * sized for the phone meanwhile and an unchanged grid would not say so by
  * itself.
  */
-import { onEvent, store } from '../../state/app-store';
-import { hasEntry } from '../../state/records';
-import { reclaimTerminal, releaseTerminal } from '../../features/terminal/terminal-manager';
-import { loadPhoneAccess, loadTerminalOwners } from './actions';
+import {onEvent, store} from '../../state/app-store';
+import {hasEntry} from '../../state/records';
+import {reclaimTerminal, releaseTerminal} from '../../features/terminal/terminal-manager';
+import {loadPhoneAccess, loadTerminalOwners} from './actions';
 
 export function installPhoneAccess(): void {
-  store.subscribe((state, previous, event) => {
-    const now = state.phoneAccess.owners;
-    const before = previous.phoneAccess.owners;
-    // A re-key moves an owner to the new id; the terminal itself moved with it.
-    if (now === before || event.type === 'sessionForked') return;
-    for (const sessionId of Object.keys(now)) if (!hasEntry(before, sessionId)) releaseTerminal(sessionId);
-    for (const sessionId of Object.keys(before)) if (!hasEntry(now, sessionId)) reclaimTerminal(sessionId);
-  });
-  // The snapshot can have moved on while nobody looked; a missed push would show here.
-  onEvent('settingsOpened', () => void loadPhoneAccess());
+    store.subscribe((state, previous, event) => {
+        const now = state.phoneAccess.owners;
+        const before = previous.phoneAccess.owners;
+        // A re-key moves an owner to the new id; the terminal itself moved with it.
+        if (now === before || event.type === 'sessionForked') return;
+        for (const sessionId of Object.keys(now)) if (!hasEntry(before, sessionId)) releaseTerminal(sessionId);
+        for (const sessionId of Object.keys(before)) if (!hasEntry(now, sessionId)) reclaimTerminal(sessionId);
+    });
+    // The snapshot can have moved on while nobody looked; a missed push would show here.
+    onEvent('settingsOpened', () => void loadPhoneAccess());
 
-  void loadPhoneAccess();
-  void loadTerminalOwners();
+    void loadPhoneAccess();
+    void loadTerminalOwners();
 }

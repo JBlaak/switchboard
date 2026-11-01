@@ -1,3 +1,7 @@
 // Global reset. First in the cascade, so everything after it can assume
 // border-box sizing and no default margins.
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}

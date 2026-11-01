@@ -11,10 +11,10 @@
  * Never rejects. The mascot is decoration; a weather problem must not become
  * an error on the empty screen.
  */
-import type { Weather, WeatherLocation } from '../../domain/weather/weather';
-import type { Clock } from '../ports/clock';
-import type { Logger } from '../ports/logger';
-import type { WeatherSource } from '../ports/weather-source';
+import type {Weather, WeatherLocation} from '../../domain/weather/weather';
+import type {Clock} from '../ports/clock';
+import type {Logger} from '../ports/logger';
+import type {WeatherSource} from '../ports/weather-source';
 
 /** How long a fetched result is served without asking again. */
 export const WEATHER_CACHE_MS = 30 * 60 * 1000;
@@ -23,68 +23,70 @@ export const WEATHER_STALE_MS = 3 * 60 * 60 * 1000;
 
 /** The two settings this reads, rather than the whole SettingsService. */
 export interface WeatherSettings {
-  weatherEnabled(): boolean;
-  weatherLocation(): WeatherLocation;
+    weatherEnabled(): boolean;
+    weatherLocation(): WeatherLocation;
 }
 
 interface CachedWeather {
-  key: string;
-  weather: Weather;
+    key: string;
+    weather: Weather;
 }
 
 function locationKey(loc: WeatherLocation): string {
-  return `${loc.latitude},${loc.longitude}`;
+    return `${loc.latitude},${loc.longitude}`;
 }
 
 export class WeatherService {
-  #cached: CachedWeather | null = null;
+    #cached: CachedWeather | null = null;
 
-  constructor(private readonly deps: {
-    source: WeatherSource;
-    settings: WeatherSettings;
-    clock: Clock;
-    log: Logger;
-  }) {}
+    constructor(
+        private readonly deps: {
+            source: WeatherSource;
+            settings: WeatherSettings;
+            clock: Clock;
+            log: Logger;
+        },
+    ) {}
 
-  /** The weather at the configured location, or null when off or unknown. */
-  async current(): Promise<Weather | null> {
-    const { source, settings, clock, log } = this.deps;
-    try {
-      if (!settings.weatherEnabled()) return null;
-      const location = settings.weatherLocation();
-      const key = locationKey(location);
-      const now = clock.now();
+    /** The weather at the configured location, or null when off or unknown. */
+    async current(): Promise<Weather | null> {
+        const {source, settings, clock, log} = this.deps;
+        try {
+            if (!settings.weatherEnabled()) return null;
+            const location = settings.weatherLocation();
+            const key = locationKey(location);
+            const now = clock.now();
 
-      const cached = this.#cached?.key === key ? this.#cached.weather : null;
-      if (cached && now - cached.fetchedAt < WEATHER_CACHE_MS) return cached;
+            const cached = this.#cached?.key === key ? this.#cached.weather : null;
+            if (cached && now - cached.fetchedAt < WEATHER_CACHE_MS) return cached;
 
-      let fresh: Weather | null = null;
-      try {
-        fresh = await source.current(location);
-      } catch (err) {
-        log.warn('[weather] fetch failed:', (err as Error).message);
-      }
-      if (fresh) {
-        this.#cached = { key, weather: fresh };
-        return fresh;
-      }
-      if (cached && now - cached.fetchedAt < WEATHER_STALE_MS) return cached;
-      return null;
-    } catch (err) {
-      log.warn('[weather] failed:', (err as Error).message);
-      return null;
+            let fresh: Weather | null = null;
+            try {
+                fresh = await source.current(location);
+            } catch (err) {
+                log.warn('[weather] fetch failed:', (err as Error).message);
+            }
+            if (fresh) {
+                this.#cached = {key, weather: fresh};
+                return fresh;
+            }
+            if (cached && now - cached.fetchedAt < WEATHER_STALE_MS) return cached;
+            return null;
+        } catch (err) {
+            log.warn('[weather] failed:', (err as Error).message);
+            return null;
+        }
     }
-  }
 
-  /** Resolve a place name the user typed, or null when there is no match. */
-  async geocode(name: string): Promise<WeatherLocation | null> {
-    const query = typeof name === 'string' ? name.trim() : '';
-    if (!query) return null;
-    try {
-      return await this.deps.source.geocode(query);
-    } catch (err) {
-      this.deps.log.warn('[weather] geocode failed:', (err as Error).message);
-      return null;
+    /** Resolve a place name the user typed, or null when there is no match. */
+    async geocode(name: string): Promise<WeatherLocation | null> {
+        const query = typeof name === 'string' ? name.trim() : '';
+        if (!query) return null;
+        try {
+            return await this.deps.source.geocode(query);
+        } catch (err) {
+            this.deps.log.warn('[weather] geocode failed:', (err as Error).message);
+            return null;
+        }
     }
-  }
 }

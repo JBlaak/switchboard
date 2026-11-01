@@ -7,16 +7,16 @@
  * places — the incremental indexer, the cold-start indexer, and the sidebar —
  * and drifting copies are how an AI title ends up overwriting a user's rename.
  */
-import type { Session, SessionMeta } from './session';
+import type {Session, SessionMeta} from './session';
 
 /** The name inputs a title decision is made from. */
 export interface TitleSources {
-  /** The rename the user typed in Switchboard. */
-  storedName?: string | null;
-  /** `/title` in the CLI — a genuine user title, written into the transcript. */
-  customTitle?: string | null;
-  /** The CLI's own generated title. */
-  aiTitle?: string | null;
+    /** The rename the user typed in Switchboard. */
+    storedName?: string | null;
+    /** `/title` in the CLI — a genuine user title, written into the transcript. */
+    customTitle?: string | null;
+    /** The CLI's own generated title. */
+    aiTitle?: string | null;
 }
 
 /**
@@ -27,7 +27,7 @@ export interface TitleSources {
  * search index needs the two parts separately.
  */
 export function resolveSessionName(sources: TitleSources): string {
-  return sources.storedName || sources.customTitle || sources.aiTitle || '';
+    return sources.storedName || sources.customTitle || sources.aiTitle || '';
 }
 
 /**
@@ -37,8 +37,8 @@ export function resolveSessionName(sources: TitleSources): string {
  * what they actually asked it.
  */
 export function searchTitleFor(sources: TitleSources, summary: string): string {
-  const name = resolveSessionName(sources);
-  return (name ? name + ' ' : '') + summary;
+    const name = resolveSessionName(sources);
+    return (name ? name + ' ' : '') + summary;
 }
 
 /**
@@ -49,19 +49,19 @@ export function searchTitleFor(sources: TitleSources, summary: string): string {
  * typed here. Returns null when nothing should be written.
  */
 export function nameToPersist(session: Pick<Session, 'customTitle'>): string | null {
-  return session.customTitle || null;
+    return session.customTitle || null;
 }
 
 /** The title sources for a transcript, given whatever metadata is stored for it. */
 export function titleSourcesFor(
-  session: Pick<Session, 'customTitle' | 'aiTitle'>,
-  meta: Pick<SessionMeta, 'name'> | null | undefined,
+    session: Pick<Session, 'customTitle' | 'aiTitle'>,
+    meta: Pick<SessionMeta, 'name'> | null | undefined,
 ): TitleSources {
-  return {
-    storedName: meta?.name ?? null,
-    customTitle: session.customTitle,
-    aiTitle: session.aiTitle,
-  };
+    return {
+        storedName: meta?.name ?? null,
+        customTitle: session.customTitle,
+        aiTitle: session.aiTitle,
+    };
 }
 
 /**
@@ -69,10 +69,10 @@ export function titleSourcesFor(
  * markup that leaked in from a transcript.
  */
 export function cleanDisplayName(name: string | null | undefined): string | null | undefined {
-  if (!name) return name;
-  const prefix = 'Implement the following plan:';
-  let cleaned = name.startsWith(prefix) ? name.slice(prefix.length).trim() : name;
-  // Strip XML/HTML-like tags (e.g. <command>, </message>, <system-reminder>)
-  cleaned = cleaned.replace(/<\/?[a-zA-Z][a-zA-Z0-9_-]*(?:\s[^>]*)?\/?>/g, ' ');
-  return cleaned.replace(/\s+/g, ' ').trim();
+    if (!name) return name;
+    const prefix = 'Implement the following plan:';
+    let cleaned = name.startsWith(prefix) ? name.slice(prefix.length).trim() : name;
+    // Strip XML/HTML-like tags (e.g. <command>, </message>, <system-reminder>)
+    cleaned = cleaned.replace(/<\/?[a-zA-Z][a-zA-Z0-9_-]*(?:\s[^>]*)?\/?>/g, ' ');
+    return cleaned.replace(/\s+/g, ' ').trim();
 }

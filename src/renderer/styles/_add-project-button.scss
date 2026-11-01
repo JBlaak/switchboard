@@ -3,57 +3,63 @@
    toggles beside them: borderless, a soft wash on hover. */
 #quick-session-btn,
 #projects-btn {
-  background: transparent;
-  border: none;
-  color: var(--sb-text-faint);
-  font-size: 11px;
-  padding: 0;
-  border-radius: var(--sb-r-control);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  font-family: var(--sb-font-head);
-  font-weight: 800;
-  line-height: 1;
-  width: var(--sb-icon-button);
-  height: var(--sb-icon-button);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--sb-text-faint);
+    font-size: 11px;
+    padding: 0;
+    border-radius: var(--sb-r-control);
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s;
+    font-family: var(--sb-font-head);
+    font-weight: 800;
+    line-height: 1;
+    width: var(--sb-icon-button);
+    height: var(--sb-icon-button);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* The first of the create buttons pushes the group right; the lightning bolt
    is hidden until a quick session folder is set. */
 #quick-session-btn,
-#quick-session-btn[hidden] + #projects-btn { margin-left: auto; }
-#quick-session-btn[hidden] { display: none; }
+#quick-session-btn[hidden] + #projects-btn {
+    margin-left: auto;
+}
+#quick-session-btn[hidden] {
+    display: none;
+}
 
 /* They take the mint fill on hover, so they read as the primary actions next
    to the view toggles. */
 #quick-session-btn:hover,
 #projects-btn:hover {
-  background: var(--sb-mint);
-  color: var(--sb-accent);
+    background: var(--sb-mint);
+    color: var(--sb-accent);
 }
 
 /* With no project yet, a mint dot says where to start. */
 #projects-btn {
-  position: relative;
+    position: relative;
 }
 
 .projects-btn-dot {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--sb-accent);
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--sb-accent);
 }
 
 /* The empty list's pointer at it. */
 .session-list-first-run {
-  margin: 14px var(--sb-sidebar-gutter) 0;
-  color: var(--sb-text-faint);
-  font-size: 12px;
-  line-height: 17px;
+    margin: 14px var(--sb-sidebar-gutter) 0;
+    color: var(--sb-text-faint);
+    font-size: 12px;
+    line-height: 17px;
 }

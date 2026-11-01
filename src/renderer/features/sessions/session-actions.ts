@@ -7,40 +7,45 @@
  * so they live together rather than being inlined at each of the several places
  * that trigger them.
  */
-import { encodeProjectPath } from '../../../domain/project/project-path';
-import { sessionExitedBanner } from '../../../domain/terminal/ansi';
-import { relayoutSessionList } from '../../ui/session-list/relayout';
-import { resolveDefaultSessionOptions } from '../dialogs/launch-options';
-import { setActiveSession } from './active-session';
-import { pollActiveSessions } from './session-poller';
+import {encodeProjectPath} from '../../../domain/project/project-path';
+import {sessionExitedBanner} from '../../../domain/terminal/ansi';
+import {relayoutSessionList} from '../../ui/session-list/relayout';
+import {resolveDefaultSessionOptions} from '../dialogs/launch-options';
+import {setActiveSession} from './active-session';
+import {pollActiveSessions} from './session-poller';
 import {
-  injectIntoCaches, openSessions, pendingSessions, removeFromCaches, sessionMap, view,
+    injectIntoCaches,
+    openSessions,
+    pendingSessions,
+    removeFromCaches,
+    sessionMap,
+    view,
 } from '../../state/session-store';
-import { dispatch } from '../../state/app-store';
-import { sidebarContent } from '../../lib/dom';
-import { bump } from '../../lib/motion/reflow';
-import { createTerminalEntry, destroySession, showSession } from '../terminal/terminal-manager';
-import type { Project } from '../../../domain/project/project';
-import type { SessionRow } from '../../../domain/session/session';
-import type { SessionOptions } from '../../../domain/launch/session-options';
-import { archiveAnswerEvents } from '../../ui/session-task/offer';
+import {dispatch} from '../../state/app-store';
+import {sidebarContent} from '../../lib/dom';
+import {bump} from '../../lib/motion/reflow';
+import {createTerminalEntry, destroySession, showSession} from '../terminal/terminal-manager';
+import type {Project} from '../../../domain/project/project';
+import type {SessionRow} from '../../../domain/session/session';
+import type {SessionOptions} from '../../../domain/launch/session-options';
+import {archiveAnswerEvents} from '../../ui/session-task/offer';
 
 /** A row for a session that has not been written to disk yet. */
 export function newSessionRow(projectPath: string, fields: Partial<SessionRow> = {}): SessionRow {
-  const now = new Date().toISOString();
-  return {
-    sessionId: crypto.randomUUID(),
-    summary: 'New session',
-    firstPrompt: '',
-    projectPath,
-    name: null,
-    starred: 0,
-    archived: 0,
-    messageCount: 0,
-    modified: now,
-    created: now,
-    ...fields,
-  };
+    const now = new Date().toISOString();
+    return {
+        sessionId: crypto.randomUUID(),
+        summary: 'New session',
+        firstPrompt: '',
+        projectPath,
+        name: null,
+        starred: 0,
+        archived: 0,
+        messageCount: 0,
+        modified: now,
+        created: now,
+        ...fields,
+    };
 }
 
 /**
@@ -50,10 +55,10 @@ export function newSessionRow(projectPath: string, fields: Partial<SessionRow> =
  * `isPendingAbandoned` for what happens when it never does.
  */
 function trackPending(session: SessionRow, remote = false): void {
-  const folder = encodeProjectPath(session.projectPath);
-  pendingSessions.set(session.sessionId, { session, projectPath: session.projectPath, folder });
-  injectIntoCaches(session, folder, remote);
-  relayoutSessionList();
+    const folder = encodeProjectPath(session.projectPath);
+    pendingSessions.set(session.sessionId, {session, projectPath: session.projectPath, folder});
+    injectIntoCaches(session, folder, remote);
+    relayoutSessionList();
 }
 
 /**
@@ -62,9 +67,9 @@ function trackPending(session: SessionRow, remote = false): void {
  * before its transcript is. Nothing is spawned; opening the row reattaches.
  */
 export function trackStartedElsewhere(sessionId: string, projectPath: string): void {
-  if (sessionMap.has(sessionId) || pendingSessions.has(sessionId)) return;
-  trackPending(newSessionRow(projectPath, { sessionId }));
-  void pollActiveSessions();
+    if (sessionMap.has(sessionId) || pendingSessions.has(sessionId)) return;
+    trackPending(newSessionRow(projectPath, {sessionId}));
+    void pollActiveSessions();
 }
 
 /**
@@ -75,14 +80,15 @@ export function trackStartedElsewhere(sessionId: string, projectPath: string): v
  * take one yet.
  */
 export async function launchClaudeSession(
-  project: Project, { initialPrompt }: { initialPrompt?: string } = {},
+    project: Project,
+    {initialPrompt}: {initialPrompt?: string} = {},
 ): Promise<void> {
-  if (project.remote) {
-    await launchRemoteSession(project);
-    return;
-  }
-  const options = await resolveDefaultSessionOptions(project.projectPath);
-  await launchNewSession(project, initialPrompt ? { ...options, initialPrompt } : options);
+    if (project.remote) {
+        await launchRemoteSession(project);
+        return;
+    }
+    const options = await resolveDefaultSessionOptions(project.projectPath);
+    await launchNewSession(project, initialPrompt ? {...options, initialPrompt} : options);
 }
 
 /**
@@ -93,9 +99,9 @@ export async function launchClaudeSession(
  * is visible.
  */
 async function launchNewSession(project: Project, options?: SessionOptions): Promise<void> {
-  const session = newSessionRow(project.projectPath);
-  trackPending(session);
-  await spawn(session, { isNew: true, options });
+    const session = newSessionRow(project.projectPath);
+    trackPending(session);
+    await spawn(session, {isNew: true, options});
 }
 
 /**
@@ -105,9 +111,9 @@ async function launchNewSession(project: Project, options?: SessionOptions): Pro
  * torn down when its shell exits rather than kept around to read.
  */
 async function launchTerminalSession(project: Project): Promise<void> {
-  const session = newSessionRow(project.projectPath, { summary: 'Terminal', type: 'terminal' });
-  trackPending(session);
-  await spawn(session, { isNew: true, options: { type: 'terminal' } });
+    const session = newSessionRow(project.projectPath, {summary: 'Terminal', type: 'terminal'});
+    trackPending(session);
+    await spawn(session, {isNew: true, options: {type: 'terminal'}});
 }
 
 /**
@@ -119,39 +125,40 @@ async function launchTerminalSession(project: Project): Promise<void> {
  * running on the far end.
  */
 async function launchRemoteSession(project: Project): Promise<void> {
-  const session = newSessionRow(project.projectPath, {
-    summary: 'Remote Claude',
-    type: 'remote',
-    remoteKind: 'claude',
-  });
-  trackPending(session, true);
-  await spawn(session, { isNew: true, options: { type: 'remote', remoteKind: 'claude' } });
+    const session = newSessionRow(project.projectPath, {
+        summary: 'Remote Claude',
+        type: 'remote',
+        remoteKind: 'claude',
+    });
+    trackPending(session, true);
+    await spawn(session, {isNew: true, options: {type: 'remote', remoteKind: 'claude'}});
 }
 
 /** Open an existing session, or bring it forward if it is already open. */
 export async function openSession(session: SessionRow, options?: SessionOptions): Promise<void> {
-  const existing = openSessions.get(session.sessionId);
-  if (existing) {
-    if (!existing.closed) {
-      showSession(session.sessionId);
-      return;
+    const existing = openSessions.get(session.sessionId);
+    if (existing) {
+        if (!existing.closed) {
+            showSession(session.sessionId);
+            return;
+        }
+        // A closed terminal is a corpse with an exit banner in it; relaunching
+        // means starting over, so it goes first.
+        destroySession(session.sessionId);
+        if (session.type === 'terminal') {
+            await launchTerminalSession(projectStub(session.projectPath));
+            return;
+        }
     }
-    // A closed terminal is a corpse with an exit banner in it; relaunching
-    // means starting over, so it goes first.
-    destroySession(session.sessionId);
-    if (session.type === 'terminal') {
-      await launchTerminalSession(projectStub(session.projectPath));
-      return;
-    }
-  }
 
-  // Remote sessions ignore local launch options — the main process reconnects
-  // from its stored session record.
-  const resumeOptions: SessionOptions = session.type === 'remote'
-    ? { type: 'remote', remoteKind: session.remoteKind }
-    : options ?? await resolveDefaultSessionOptions(session.projectPath);
+    // Remote sessions ignore local launch options — the main process reconnects
+    // from its stored session record.
+    const resumeOptions: SessionOptions =
+        session.type === 'remote'
+            ? {type: 'remote', remoteKind: session.remoteKind}
+            : (options ?? (await resolveDefaultSessionOptions(session.projectPath)));
 
-  await spawn(session, { isNew: false, options: resumeOptions });
+    await spawn(session, {isNew: false, options: resumeOptions});
 }
 
 /**
@@ -161,12 +168,14 @@ export async function openSession(session: SessionRow, options?: SessionOptions)
  * printed in its terminal, as for any launch).
  */
 export async function startClaudeSessionIn(
-  projectPath: string, options: SessionOptions, { show = true }: { show?: boolean } = {},
-): Promise<{ ok: true; sessionId: string } | { ok: false; reason: string }> {
-  const session = newSessionRow(projectPath);
-  trackPending(session);
-  const error = await spawn(session, { isNew: true, options, show });
-  return error === null ? { ok: true, sessionId: session.sessionId } : { ok: false, reason: error };
+    projectPath: string,
+    options: SessionOptions,
+    {show = true}: {show?: boolean} = {},
+): Promise<{ok: true; sessionId: string} | {ok: false; reason: string}> {
+    const session = newSessionRow(projectPath);
+    trackPending(session);
+    const error = await spawn(session, {isNew: true, options, show});
+    return error === null ? {ok: true, sessionId: session.sessionId} : {ok: false, reason: error};
 }
 
 /**
@@ -174,46 +183,43 @@ export async function startClaudeSessionIn(
  * (unless `show` is false). Answers why it could not start, or null when it did.
  */
 async function spawn(
-  session: SessionRow,
-  { isNew, options, show = true }: { isNew: boolean; options?: SessionOptions; show?: boolean },
+    session: SessionRow,
+    {isNew, options, show = true}: {isNew: boolean; options?: SessionOptions; show?: boolean},
 ): Promise<string | null> {
-  const entry = createTerminalEntry(session);
+    const entry = createTerminalEntry(session);
 
-  const result = await window.api.openTerminal(
-    session.sessionId, session.projectPath, isNew, options ?? undefined);
+    const result = await window.api.openTerminal(session.sessionId, session.projectPath, isNew, options ?? undefined);
 
-  if (!result.ok) {
-    entry.terminal.write(`\r\nError: ${result.error}\r\n`);
-    entry.closed = true;
-    return String(result.error ?? 'The session could not start');
-  }
+    if (!result.ok) {
+        entry.terminal.write(`\r\nError: ${result.error}\r\n`);
+        entry.closed = true;
+        return String(result.error ?? 'The session could not start');
+    }
 
-  if (show) showSession(session.sessionId);
-  void pollActiveSessions();
-  return null;
+    if (show) showSession(session.sessionId);
+    void pollActiveSessions();
+    return null;
 }
 
 /** Stop a session, after asking — it is destructive and cannot be undone. */
 export async function confirmAndStopSession(sessionId: string): Promise<void> {
-  const isRemote = sessionMap.get(sessionId)?.type === 'remote';
-  const prompt = isRemote
-    ? 'Disconnect? The session keeps running on the remote machine.'
-    : 'Stop this session?';
-  if (!confirm(prompt)) return;
+    const isRemote = sessionMap.get(sessionId)?.type === 'remote';
+    const prompt = isRemote ? 'Disconnect? The session keeps running on the remote machine.' : 'Stop this session?';
+    if (!confirm(prompt)) return;
 
-  await window.api.stopSession(sessionId);
-  dispatch({ type: 'ptyStopped', sessionId });
-  if (view.activeSessionId === sessionId) forgetActiveSession();
-  relayoutSessionList();
-  settleStoppedRow(sessionId);
+    await window.api.stopSession(sessionId);
+    dispatch({type: 'ptyStopped', sessionId});
+    if (view.activeSessionId === sessionId) forgetActiveSession();
+    relayoutSessionList();
+    settleStoppedRow(sessionId);
 }
 
 /** A small squash on the stopped row, and its status dot dipping, so the stop lands. */
 function settleStoppedRow(sessionId: string): void {
-  const row = sidebarContent.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
-  if (!row) return;
-  bump(row, -1.2);
-  bump(row.querySelector('.session-status-dot'), -6);
+    const row = sidebarContent.querySelector<HTMLElement>(`[data-session-id="${sessionId}"]`);
+    if (!row) return;
+    bump(row, -1.2);
+    bump(row.querySelector('.session-status-dot'), -6);
 }
 
 /**
@@ -228,25 +234,25 @@ function settleStoppedRow(sessionId: string): void {
  * through here, so none of them can drift back into hiding a live session.
  */
 export async function archiveSessionRow(session: SessionRow, archived: number): Promise<boolean> {
-  const { sessionId } = session;
+    const {sessionId} = session;
 
-  if (archived) {
-    // Stop unconditionally: `activePtyIds` can lag the real state by up to the
-    // idle poll interval, and stopping a dead session is a no-op.
-    const result = await window.api.stopSession(sessionId);
-    if (result && result.ok === false) {
-      alert(`Could not stop this session: ${result.error || 'unknown error'}`);
-      return false;
+    if (archived) {
+        // Stop unconditionally: `activePtyIds` can lag the real state by up to the
+        // idle poll interval, and stopping a dead session is a no-op.
+        const result = await window.api.stopSession(sessionId);
+        if (result && result.ok === false) {
+            alert(`Could not stop this session: ${result.error || 'unknown error'}`);
+            return false;
+        }
+        dispatch({type: 'ptyStopped', sessionId});
     }
-    dispatch({ type: 'ptyStopped', sessionId });
-  }
 
-  const answer = await window.api.archiveSession(sessionId, Boolean(archived));
-  session.archived = archived;
-  if (archived) closeArchivedSession(sessionId);
-  // Its task's PRs are all merged: Mark task done? (#248, #250)
-  for (const event of archiveAnswerEvents(sessionId, answer)) dispatch(event);
-  return true;
+    const answer = await window.api.archiveSession(sessionId, Boolean(archived));
+    session.archived = archived;
+    if (archived) closeArchivedSession(sessionId);
+    // Its task's PRs are all merged: Mark task done? (#248, #250)
+    for (const event of archiveAnswerEvents(sessionId, answer)) dispatch(event);
+    return true;
 }
 
 /**
@@ -254,15 +260,15 @@ export async function archiveSessionRow(session: SessionRow, archived: number): 
  * stopped the session and archived the row.
  */
 export function closeArchivedSession(sessionId: string): void {
-  const row = sessionMap.get(sessionId);
-  if (row) row.archived = 1;
-  // A pending row has no transcript to resume from, so archiving it means
-  // forgetting it — and leaving the pending entry behind would re-inject the
-  // row on the next refresh with its own `archived: 0`.
-  if (pendingSessions.has(sessionId)) dropPendingSession(sessionId);
-  // Its terminal goes too, rather than staying on screen with an exit banner
-  // in it for a session that is no longer in the list.
-  else closeSessionView(sessionId);
+    const row = sessionMap.get(sessionId);
+    if (row) row.archived = 1;
+    // A pending row has no transcript to resume from, so archiving it means
+    // forgetting it — and leaving the pending entry behind would re-inject the
+    // row on the next refresh with its own `archived: 0`.
+    if (pendingSessions.has(sessionId)) dropPendingSession(sessionId);
+    // Its terminal goes too, rather than staying on screen with an exit banner
+    // in it for a session that is no longer in the list.
+    else closeSessionView(sessionId);
 }
 
 /**
@@ -272,8 +278,8 @@ export function closeArchivedSession(sessionId: string): void {
  * list, and anything running under it keeps running.
  */
 export async function snoozeSessionRow(session: SessionRow, until: string | null): Promise<void> {
-  await window.api.snoozeSession(session.sessionId, until);
-  session.snoozedUntil = until;
+    await window.api.snoozeSession(session.sessionId, until);
+    session.snoozedUntil = until;
 }
 
 /**
@@ -283,16 +289,16 @@ export async function snoozeSessionRow(session: SessionRow, until: string | null
  * pointing at nothing.
  */
 export function dropPendingSession(sessionId: string): void {
-  pendingSessions.delete(sessionId);
-  sessionMap.delete(sessionId);
-  removeFromCaches(sessionId);
-  closeSessionView(sessionId);
+    pendingSessions.delete(sessionId);
+    sessionMap.delete(sessionId);
+    removeFromCaches(sessionId);
+    closeSessionView(sessionId);
 }
 
 /** Tear down a session's terminal, and forget it as the session to return to. */
 function closeSessionView(sessionId: string): void {
-  if (openSessions.has(sessionId)) destroySession(sessionId);
-  if (view.activeSessionId === sessionId) forgetActiveSession();
+    if (openSessions.has(sessionId)) destroySession(sessionId);
+    if (view.activeSessionId === sessionId) forgetActiveSession();
 }
 
 /**
@@ -301,7 +307,7 @@ function closeSessionView(sessionId: string): void {
  * back to (see `main-area-slice`).
  */
 function forgetActiveSession(): void {
-  setActiveSession(null);
+    setActiveSession(null);
 }
 
 /**
@@ -313,20 +319,20 @@ function forgetActiveSession(): void {
  * `terminal-slice`).
  */
 export function clearScreen(): void {
-  setActiveSession(null);
-  dispatch({ type: 'screenCleared' });
+    setActiveSession(null);
+    dispatch({type: 'screenCleared'});
 }
 
 /** Write the exit banner into a terminal whose process has ended. */
 export function writeExitBanner(sessionId: string, exitCode: number): void {
-  const entry = openSessions.get(sessionId);
-  if (!entry) return;
-  entry.closed = true;
-  try {
-    entry.terminal.write(sessionExitedBanner(exitCode));
-  } catch {
-    // The terminal was disposed between the exit event and this write.
-  }
+    const entry = openSessions.get(sessionId);
+    if (!entry) return;
+    entry.closed = true;
+    try {
+        entry.terminal.write(sessionExitedBanner(exitCode));
+    } catch {
+        // The terminal was disposed between the exit event and this write.
+    }
 }
 
 /**
@@ -336,5 +342,5 @@ export function writeExitBanner(sessionId: string, exitCode: number): void {
  * inventing data.
  */
 export function projectStub(projectPath: string): Project {
-  return { projectPath, folder: encodeProjectPath(projectPath), sessions: [] };
+    return {projectPath, folder: encodeProjectPath(projectPath), sessions: []};
 }

@@ -4,14 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { SessionIndex } from '../src/application/services/session-index';
-import { NodeFileSystem } from '../src/infrastructure/fs/node-file-system';
-import { FileTranscriptStore } from '../src/infrastructure/fs/transcript-store';
-import { fakeRenderer, fakeTimers, silentLog } from './support/fakes';
-import type { CachedSession, FolderMeta, SessionMeta } from '../src/domain/session/session';
-import type { ProjectScanner } from '../src/application/ports/project-scanner';
-import type { SearchIndex } from '../src/application/ports/search-index';
-import type { SessionRepository } from '../src/application/ports/session-repository';
+import {SessionIndex} from '../src/application/services/session-index';
+import {NodeFileSystem} from '../src/infrastructure/fs/node-file-system';
+import {FileTranscriptStore} from '../src/infrastructure/fs/transcript-store';
+import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
+import type {CachedSession, FolderMeta, SessionMeta} from '../src/domain/session/session';
+import type {ProjectScanner} from '../src/application/ports/project-scanner';
+import type {SearchIndex} from '../src/application/ports/search-index';
+import type {SessionRepository} from '../src/application/ports/session-repository';
 
 /**
  * The incremental re-index is what keeps sessions from silently going missing:
@@ -25,259 +25,267 @@ import type { SessionRepository } from '../src/application/ports/session-reposit
 
 /** A minimal valid transcript: a `cwd` to resolve the project, and one turn. */
 function writeSession(folderPath: string, cwd: string): void {
-  fs.mkdirSync(folderPath, { recursive: true });
-  const line = JSON.stringify({ type: 'user', cwd, message: { role: 'user', content: 'hello' } });
-  fs.writeFileSync(path.join(folderPath, 'session.jsonl'), line + '\n', 'utf8');
+    fs.mkdirSync(folderPath, {recursive: true});
+    const line = JSON.stringify({type: 'user', cwd, message: {role: 'user', content: 'hello'}});
+    fs.writeFileSync(path.join(folderPath, 'session.jsonl'), line + '\n', 'utf8');
 }
 
 /** A transcript a tool ran with `claude -p`, as the CLI writes it. */
 function writeHeadlessSession(folderPath: string, cwd: string, name = 'headless.jsonl'): void {
-  fs.mkdirSync(folderPath, { recursive: true });
-  const line = JSON.stringify({
-    type: 'user', cwd, entrypoint: 'sdk-cli', message: { role: 'user', content: 'Answer this question' },
-  });
-  fs.writeFileSync(path.join(folderPath, name), line + '\n', 'utf8');
+    fs.mkdirSync(folderPath, {recursive: true});
+    const line = JSON.stringify({
+        type: 'user',
+        cwd,
+        entrypoint: 'sdk-cli',
+        message: {role: 'user', content: 'Answer this question'},
+    });
+    fs.writeFileSync(path.join(folderPath, name), line + '\n', 'utf8');
 }
 
 /** An in-memory repository that records which folders actually got re-indexed. */
 function fakeRepository(meta: Map<string, FolderMeta>) {
-  const indexedFolders = new Set<string>();
-  const cached = new Map<string, CachedSession>();
+    const indexedFolders = new Set<string>();
+    const cached = new Map<string, CachedSession>();
 
-  const repository: SessionRepository = {
-    getMeta: () => null,
-    getAllMeta: () => new Map<string, SessionMeta>(),
-    setName() {},
-    toggleStar: () => 0,
-    setArchived() {},
-    setSnoozedUntil() {},
-    getPinnedPlans: () => [],
-    togglePlanPin: () => false,
-    getPinnedIssuePlans: () => [],
-    toggleIssuePlanPin: () => false,
+    const repository: SessionRepository = {
+        getMeta: () => null,
+        getAllMeta: () => new Map<string, SessionMeta>(),
+        setName() {},
+        toggleStar: () => 0,
+        setArchived() {},
+        setSnoozedUntil() {},
+        getPinnedPlans: () => [],
+        togglePlanPin: () => false,
+        getPinnedIssuePlans: () => [],
+        toggleIssuePlanPin: () => false,
 
-    isCachePopulated: () => cached.size > 0,
-    getAllCached: () => [...cached.values()],
-    getCachedSession: (id) => cached.get(id) ?? null,
-    getCachedFolder: (id) => cached.get(id)?.folder ?? null,
-    getCachedFingerprints: (folder) =>
-      [...cached.values()].filter(s => s.folder === folder)
-        .map(({ sessionId, fileMtime }) => ({ sessionId, fileMtime })),
-    upsertCachedSessions(sessions) {
-      for (const session of sessions) {
-        indexedFolders.add(session.folder);
-        cached.set(session.sessionId, session);
-      }
-    },
-    deleteCachedSession(id) { cached.delete(id); },
-    deleteCachedFolder(folder) {
-      for (const [id, session] of cached) if (session.folder === folder) cached.delete(id);
-      meta.delete(folder);
-    },
+        isCachePopulated: () => cached.size > 0,
+        getAllCached: () => [...cached.values()],
+        getCachedSession: (id) => cached.get(id) ?? null,
+        getCachedFolder: (id) => cached.get(id)?.folder ?? null,
+        getCachedFingerprints: (folder) =>
+            [...cached.values()]
+                .filter((s) => s.folder === folder)
+                .map(({sessionId, fileMtime}) => ({sessionId, fileMtime})),
+        upsertCachedSessions(sessions) {
+            for (const session of sessions) {
+                indexedFolders.add(session.folder);
+                cached.set(session.sessionId, session);
+            }
+        },
+        deleteCachedSession(id) {
+            cached.delete(id);
+        },
+        deleteCachedFolder(folder) {
+            for (const [id, session] of cached) if (session.folder === folder) cached.delete(id);
+            meta.delete(folder);
+        },
 
-    getAllFolderMeta: () => meta,
-    setFolderMeta(folder, projectPath, indexMtimeMs) {
-      meta.set(folder, { folder, projectPath, indexMtimeMs });
-    },
-  };
+        getAllFolderMeta: () => meta,
+        setFolderMeta(folder, projectPath, indexMtimeMs) {
+            meta.set(folder, {folder, projectPath, indexMtimeMs});
+        },
+    };
 
-  return { repository, indexedFolders, cached };
+    return {repository, indexedFolders, cached};
 }
 
 const noSearchIndex: SearchIndex = {
-  isPopulated: () => true,
-  wasRecreated: () => false,
-  upsert() {},
-  deleteSession() {},
-  deleteFolder() {},
-  updateTitle() {},
-  query: () => [],
+    isPopulated: () => true,
+    wasRecreated: () => false,
+    upsert() {},
+    deleteSession() {},
+    deleteFolder() {},
+    updateTitle() {},
+    query: () => [],
 };
 
-const noScanner: ProjectScanner = { scan: async () => [] };
+const noScanner: ProjectScanner = {scan: async () => []};
 
 function build(projectsDir: string, meta: Map<string, FolderMeta>) {
-  const { repository, indexedFolders, cached } = fakeRepository(meta);
-  const transcripts = new FileTranscriptStore(new NodeFileSystem(), projectsDir);
-  const index = new SessionIndex({
-    repository,
-    searchIndex: noSearchIndex,
-    transcripts,
-    scanner: noScanner,
-    renderer: fakeRenderer(),
-    timers: fakeTimers(),
-    log: silentLog,
-  });
-  return { index, indexedFolders, cached, transcripts };
+    const {repository, indexedFolders, cached} = fakeRepository(meta);
+    const transcripts = new FileTranscriptStore(new NodeFileSystem(), projectsDir);
+    const index = new SessionIndex({
+        repository,
+        searchIndex: noSearchIndex,
+        transcripts,
+        scanner: noScanner,
+        renderer: fakeRenderer(),
+        timers: fakeTimers(),
+        log: silentLog,
+    });
+    return {index, indexedFolders, cached, transcripts};
 }
 
 test('reconcile indexes new and stale folders but skips up-to-date ones', () => {
-  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-reconcile-'));
-  try {
-    /* Given */
-    // Never indexed (no meta), stale (meta older than disk), and up-to-date.
-    writeSession(path.join(projectsDir, 'proj-new'), '/tmp/proj-new');
-    writeSession(path.join(projectsDir, 'proj-stale'), '/tmp/proj-stale');
-    writeSession(path.join(projectsDir, 'proj-current'), '/tmp/proj-current');
+    const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-reconcile-'));
+    try {
+        /* Given */
+        // Never indexed (no meta), stale (meta older than disk), and up-to-date.
+        writeSession(path.join(projectsDir, 'proj-new'), '/tmp/proj-new');
+        writeSession(path.join(projectsDir, 'proj-stale'), '/tmp/proj-stale');
+        writeSession(path.join(projectsDir, 'proj-current'), '/tmp/proj-current');
 
-    const meta = new Map<string, FolderMeta>([
-      ['proj-stale', { folder: 'proj-stale', projectPath: '/tmp/proj-stale', indexMtimeMs: 0 }],
-    ]);
-    const { index, indexedFolders, transcripts } = build(projectsDir, meta);
-    meta.set('proj-current', {
-      folder: 'proj-current',
-      projectPath: '/tmp/proj-current',
-      indexMtimeMs: transcripts.folderIndexMtimeMs('proj-current'),
-    });
+        const meta = new Map<string, FolderMeta>([
+            ['proj-stale', {folder: 'proj-stale', projectPath: '/tmp/proj-stale', indexMtimeMs: 0}],
+        ]);
+        const {index, indexedFolders, transcripts} = build(projectsDir, meta);
+        meta.set('proj-current', {
+            folder: 'proj-current',
+            projectPath: '/tmp/proj-current',
+            indexMtimeMs: transcripts.folderIndexMtimeMs('proj-current'),
+        });
 
-    /* When */
-    index.reconcile();
+        /* When */
+        index.reconcile();
 
-    /* Then */
-    assert.ok(indexedFolders.has('proj-new'), 'a folder with no meta should be indexed');
-    assert.ok(indexedFolders.has('proj-stale'), 'a folder newer than its gate should be re-indexed');
-    assert.ok(!indexedFolders.has('proj-current'), 'an up-to-date folder should be skipped');
-  } finally {
-    fs.rmSync(projectsDir, { recursive: true, force: true });
-  }
+        /* Then */
+        assert.ok(indexedFolders.has('proj-new'), 'a folder with no meta should be indexed');
+        assert.ok(indexedFolders.has('proj-stale'), 'a folder newer than its gate should be re-indexed');
+        assert.ok(!indexedFolders.has('proj-current'), 'an up-to-date folder should be skipped');
+    } finally {
+        fs.rmSync(projectsDir, {recursive: true, force: true});
+    }
 });
 
 test('a folder is re-read only for the transcripts whose mtime moved', () => {
-  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-refresh-'));
-  try {
-    /* Given */
-    writeSession(path.join(projectsDir, 'proj'), '/tmp/proj');
-    const { index, indexedFolders, cached } = build(projectsDir, new Map());
+    const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-refresh-'));
+    try {
+        /* Given */
+        writeSession(path.join(projectsDir, 'proj'), '/tmp/proj');
+        const {index, indexedFolders, cached} = build(projectsDir, new Map());
 
-    /* When */
-    index.refreshFolder('proj');
+        /* When */
+        index.refreshFolder('proj');
 
-    /* Then */
-    assert.equal(cached.size, 1, 'the transcript is read the first time');
+        /* Then */
+        assert.equal(cached.size, 1, 'the transcript is read the first time');
 
-    // Nothing changed on disk, so the fingerprint match short-circuits the read.
-    /* When */
-    indexedFolders.clear();
-    index.refreshFolder('proj');
+        // Nothing changed on disk, so the fingerprint match short-circuits the read.
+        /* When */
+        indexedFolders.clear();
+        index.refreshFolder('proj');
 
-    /* Then */
-    assert.ok(!indexedFolders.has('proj'), 'an unchanged transcript is not re-read');
-  } finally {
-    fs.rmSync(projectsDir, { recursive: true, force: true });
-  }
+        /* Then */
+        assert.ok(!indexedFolders.has('proj'), 'an unchanged transcript is not re-read');
+    } finally {
+        fs.rmSync(projectsDir, {recursive: true, force: true});
+    }
 });
 
 test('one deleted transcript among several is dropped from the cache', () => {
-  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-drop-'));
-  try {
-    /* Given */
-    const folderPath = path.join(projectsDir, 'proj');
-    writeSession(folderPath, '/tmp/proj');
-    const second = JSON.stringify({
-      type: 'user', cwd: '/tmp/proj', message: { role: 'user', content: 'second' },
-    });
-    fs.writeFileSync(path.join(folderPath, 'other.jsonl'), second + '\n', 'utf8');
+    const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-drop-'));
+    try {
+        /* Given */
+        const folderPath = path.join(projectsDir, 'proj');
+        writeSession(folderPath, '/tmp/proj');
+        const second = JSON.stringify({
+            type: 'user',
+            cwd: '/tmp/proj',
+            message: {role: 'user', content: 'second'},
+        });
+        fs.writeFileSync(path.join(folderPath, 'other.jsonl'), second + '\n', 'utf8');
 
-    const { index, cached } = build(projectsDir, new Map());
+        const {index, cached} = build(projectsDir, new Map());
 
-    /* When */
-    index.refreshFolder('proj');
+        /* When */
+        index.refreshFolder('proj');
 
-    /* Then */
-    assert.equal(cached.size, 2);
+        /* Then */
+        assert.equal(cached.size, 2);
 
-    /* When */
-    fs.rmSync(path.join(folderPath, 'other.jsonl'));
-    index.refreshFolder('proj');
+        /* When */
+        fs.rmSync(path.join(folderPath, 'other.jsonl'));
+        index.refreshFolder('proj');
 
-    /* Then */
-    assert.deepEqual([...cached.keys()], ['session'], 'the deleted transcript leaves no row behind');
-  } finally {
-    fs.rmSync(projectsDir, { recursive: true, force: true });
-  }
+        /* Then */
+        assert.deepEqual([...cached.keys()], ['session'], 'the deleted transcript leaves no row behind');
+    } finally {
+        fs.rmSync(projectsDir, {recursive: true, force: true});
+    }
 });
 
 test('a folder that disappears is forgotten entirely', () => {
-  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-gone-'));
-  try {
-    /* Given */
-    const folderPath = path.join(projectsDir, 'proj');
-    writeSession(folderPath, '/tmp/proj');
-    const { index, cached } = build(projectsDir, new Map());
+    const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-gone-'));
+    try {
+        /* Given */
+        const folderPath = path.join(projectsDir, 'proj');
+        writeSession(folderPath, '/tmp/proj');
+        const {index, cached} = build(projectsDir, new Map());
 
-    /* When */
-    index.refreshFolder('proj');
+        /* When */
+        index.refreshFolder('proj');
 
-    /* Then */
-    assert.equal(cached.size, 1);
+        /* Then */
+        assert.equal(cached.size, 1);
 
-    /* When */
-    fs.rmSync(folderPath, { recursive: true });
-    index.refreshFolder('proj');
+        /* When */
+        fs.rmSync(folderPath, {recursive: true});
+        index.refreshFolder('proj');
 
-    /* Then */
-    assert.equal(cached.size, 0);
-  } finally {
-    fs.rmSync(projectsDir, { recursive: true, force: true });
-  }
+        /* Then */
+        assert.equal(cached.size, 0);
+    } finally {
+        fs.rmSync(projectsDir, {recursive: true, force: true});
+    }
 });
 
 test('a folder holding only headless runs is not recorded as a project', () => {
-  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-headless-'));
-  try {
-    /* Given */
-    writeHeadlessSession(path.join(projectsDir, 'yab-agent'), '/tmp/yab-agent');
-    const meta = new Map<string, FolderMeta>();
-    const { index, cached } = build(projectsDir, meta);
+    const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-headless-'));
+    try {
+        /* Given */
+        writeHeadlessSession(path.join(projectsDir, 'yab-agent'), '/tmp/yab-agent');
+        const meta = new Map<string, FolderMeta>();
+        const {index, cached} = build(projectsDir, meta);
 
-    /* When */
-    index.reconcile();
+        /* When */
+        index.reconcile();
 
-    /* Then */
-    assert.equal(cached.size, 0);
-    assert.equal(meta.get('yab-agent')?.projectPath, null);
-  } finally {
-    fs.rmSync(projectsDir, { recursive: true, force: true });
-  }
+        /* Then */
+        assert.equal(cached.size, 0);
+        assert.equal(meta.get('yab-agent')?.projectPath, null);
+    } finally {
+        fs.rmSync(projectsDir, {recursive: true, force: true});
+    }
 });
 
 test('a headless run beside a coding session leaves the project listed, without the run', () => {
-  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-headless-mixed-'));
-  try {
-    /* Given */
-    writeSession(path.join(projectsDir, 'proj'), '/tmp/proj');
-    writeHeadlessSession(path.join(projectsDir, 'proj'), '/tmp/proj');
-    const meta = new Map<string, FolderMeta>();
-    const { index, cached } = build(projectsDir, meta);
+    const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-headless-mixed-'));
+    try {
+        /* Given */
+        writeSession(path.join(projectsDir, 'proj'), '/tmp/proj');
+        writeHeadlessSession(path.join(projectsDir, 'proj'), '/tmp/proj');
+        const meta = new Map<string, FolderMeta>();
+        const {index, cached} = build(projectsDir, meta);
 
-    /* When */
-    index.reconcile();
+        /* When */
+        index.reconcile();
 
-    /* Then */
-    assert.deepEqual([...cached.keys()], ['session']);
-    assert.equal(meta.get('proj')?.projectPath, '/tmp/proj');
-  } finally {
-    fs.rmSync(projectsDir, { recursive: true, force: true });
-  }
+        /* Then */
+        assert.deepEqual([...cached.keys()], ['session']);
+        assert.equal(meta.get('proj')?.projectPath, '/tmp/proj');
+    } finally {
+        fs.rmSync(projectsDir, {recursive: true, force: true});
+    }
 });
 
 test('a cached session whose transcript turns out headless leaves the cache', () => {
-  const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-headless-cached-'));
-  try {
-    /* Given */
-    writeSession(path.join(projectsDir, 'proj'), '/tmp/proj');
-    const { index, cached } = build(projectsDir, new Map());
-    index.refreshFolder('proj');
-    writeHeadlessSession(path.join(projectsDir, 'proj'), '/tmp/proj', 'session.jsonl');
-    const later = new Date(Date.now() + 5000);
-    fs.utimesSync(path.join(projectsDir, 'proj', 'session.jsonl'), later, later);
+    const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-headless-cached-'));
+    try {
+        /* Given */
+        writeSession(path.join(projectsDir, 'proj'), '/tmp/proj');
+        const {index, cached} = build(projectsDir, new Map());
+        index.refreshFolder('proj');
+        writeHeadlessSession(path.join(projectsDir, 'proj'), '/tmp/proj', 'session.jsonl');
+        const later = new Date(Date.now() + 5000);
+        fs.utimesSync(path.join(projectsDir, 'proj', 'session.jsonl'), later, later);
 
-    /* When */
-    index.refreshFolder('proj');
+        /* When */
+        index.refreshFolder('proj');
 
-    /* Then */
-    assert.equal(cached.size, 0);
-  } finally {
-    fs.rmSync(projectsDir, { recursive: true, force: true });
-  }
+        /* Then */
+        assert.equal(cached.size, 0);
+    } finally {
+        fs.rmSync(projectsDir, {recursive: true, force: true});
+    }
 });

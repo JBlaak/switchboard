@@ -11,192 +11,197 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { FixtureHome } from './fixture-home';
+import type {FixtureHome} from './fixture-home';
 
 /** What the fake recorded about one launch. */
 export interface FakeLaunch {
-  role: 'claude' | 'ssh';
-  key: string;
-  argv: string[];
-  cwd: string;
-  pid: number;
-  home: string;
-  startedAt: number;
-  /** claude only: the id from `--session-id` or `--resume`. */
-  sessionId?: string;
-  /** claude only: true for `--resume`. */
-  resume?: boolean;
-  /** claude only: the parsed `--settings` JSON — the question hook. */
-  settings?: QuestionHookSettings | null;
+    role: 'claude' | 'ssh';
+    key: string;
+    argv: string[];
+    cwd: string;
+    pid: number;
+    home: string;
+    startedAt: number;
+    /** claude only: the id from `--session-id` or `--resume`. */
+    sessionId?: string;
+    /** claude only: true for `--resume`. */
+    resume?: boolean;
+    /** claude only: the parsed `--settings` JSON — the question hook. */
+    settings?: QuestionHookSettings | null;
 }
 
 /** One `http` hook as `--settings` carries it. */
 export interface HttpHook {
-  type: string;
-  url: string;
-  headers: Record<string, string>;
+    type: string;
+    url: string;
+    headers: Record<string, string>;
 }
 
 /** The part of `--settings` the question hooks live in. */
 export interface QuestionHookSettings {
-  hooks?: {
-    PreToolUse?: { matcher: string; hooks: HttpHook[] }[];
-    Stop?: { hooks: HttpHook[] }[];
-    UserPromptSubmit?: { hooks: HttpHook[] }[];
-  };
+    hooks?: {
+        PreToolUse?: {matcher: string; hooks: HttpHook[]}[];
+        Stop?: {hooks: HttpHook[]}[];
+        UserPromptSubmit?: {hooks: HttpHook[]}[];
+    };
 }
 
 /** One OSC 7501 report, before encoding. */
 export interface ProgramStatus {
-  state: 'idle' | 'working' | 'done' | 'blocked' | 'error' | 'clear';
-  /** What a `blocked` state is blocked on. */
-  kind?: 'permission' | 'question' | 'auth';
-  /** A child record (subagent) path; omit for the session itself. */
-  id?: string;
-  progress?: number;
-  title?: string;
-  msg?: string;
+    state: 'idle' | 'working' | 'done' | 'blocked' | 'error' | 'clear';
+    /** What a `blocked` state is blocked on. */
+    kind?: 'permission' | 'question' | 'auth';
+    /** A child record (subagent) path; omit for the session itself. */
+    id?: string;
+    progress?: number;
+    title?: string;
+    msg?: string;
 }
 
 const POLL_MS = 25;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 export class FakeCli {
-  readonly dir: string;
+    readonly dir: string;
 
-  constructor(controlDir: string, readonly key: string) {
-    this.dir = path.join(controlDir, key);
-  }
-
-  /** The current launch, once the process has started. */
-  async launched(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<FakeLaunch> {
-    const file = path.join(this.dir, 'launch.json');
-    await waitFor(() => fs.existsSync(file), timeoutMs, `${this.key} to launch`);
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as FakeLaunch;
-  }
-
-  /** Every launch so far, oldest first: a resume or a reconnect adds one. */
-  launches(): FakeLaunch[] {
-    return readJsonLines<FakeLaunch>(path.join(this.dir, 'launches.jsonl'));
-  }
-
-  /** Wait until the process has been started `count` times in all. */
-  async waitForLaunchCount(count: number, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<FakeLaunch> {
-    await waitFor(() => this.launches().length >= count, timeoutMs, `${this.key} to launch ${count} times`);
-    return this.launches()[count - 1];
-  }
-
-  /** Everything typed into the session's terminal so far. */
-  input(): string {
-    try {
-      return fs.readFileSync(path.join(this.dir, 'input.log'), 'utf8');
-    } catch {
-      return '';
+    constructor(
+        controlDir: string,
+        readonly key: string,
+    ) {
+        this.dir = path.join(controlDir, key);
     }
-  }
 
-  /** The PTY's current size, as the process last saw it. */
-  size(): { cols: number; rows: number } | null {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(this.dir, 'size.json'), 'utf8'));
-    } catch {
-      return null;
+    /** The current launch, once the process has started. */
+    async launched(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<FakeLaunch> {
+        const file = path.join(this.dir, 'launch.json');
+        await waitFor(() => fs.existsSync(file), timeoutMs, `${this.key} to launch`);
+        return JSON.parse(fs.readFileSync(file, 'utf8')) as FakeLaunch;
     }
-  }
 
-  async waitForInput(text: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
-    await waitFor(() => this.input().includes(text), timeoutMs, `${JSON.stringify(text)} to reach ${this.key}`);
-  }
+    /** Every launch so far, oldest first: a resume or a reconnect adds one. */
+    launches(): FakeLaunch[] {
+        return readJsonLines<FakeLaunch>(path.join(this.dir, 'launches.jsonl'));
+    }
 
-  /** Append a raw command and wait for the fake to carry it out. */
-  async send(command: { op: string; [key: string]: unknown }, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
-    await this.launched(timeoutMs);
-    const seq = crypto.randomUUID();
-    fs.appendFileSync(path.join(this.dir, 'commands.jsonl'), JSON.stringify({ ...command, seq }) + '\n');
-    const acks = path.join(this.dir, 'acks.jsonl');
-    await waitFor(
-      () => readJsonLines<{ seq: string }>(acks).some(a => a.seq === seq),
-      timeoutMs, `${this.key} to run ${command.op}`);
-  }
+    /** Wait until the process has been started `count` times in all. */
+    async waitForLaunchCount(count: number, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<FakeLaunch> {
+        await waitFor(() => this.launches().length >= count, timeoutMs, `${this.key} to launch ${count} times`);
+        return this.launches()[count - 1];
+    }
 
-  /** Raw output. Lines end in `\r\n` on a terminal. */
-  print(text: string): Promise<void> {
-    return this.send({ op: 'print', text });
-  }
+    /** Everything typed into the session's terminal so far. */
+    input(): string {
+        try {
+            return fs.readFileSync(path.join(this.dir, 'input.log'), 'utf8');
+        } catch {
+            return '';
+        }
+    }
 
-  /** Print lines, each terminated with `\r\n`. */
-  println(...lines: string[]): Promise<void> {
-    return this.print(lines.map(line => line + '\r\n').join(''));
-  }
+    /** The PTY's current size, as the process last saw it. */
+    size(): {cols: number; rows: number} | null {
+        try {
+            return JSON.parse(fs.readFileSync(path.join(this.dir, 'size.json'), 'utf8'));
+        } catch {
+            return null;
+        }
+    }
 
-  /** OSC 0: the window title. */
-  title(text: string): Promise<void> {
-    return this.send({ op: 'title', text });
-  }
+    async waitForInput(text: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
+        await waitFor(() => this.input().includes(text), timeoutMs, `${JSON.stringify(text)} to reach ${this.key}`);
+    }
 
-  /** OSC 0 with a spinner frame: the legacy "turn in flight" signal. */
-  busy(text?: string): Promise<void> {
-    return this.send({ op: 'busy', text });
-  }
+    /** Append a raw command and wait for the fake to carry it out. */
+    async send(command: {op: string; [key: string]: unknown}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
+        await this.launched(timeoutMs);
+        const seq = crypto.randomUUID();
+        fs.appendFileSync(path.join(this.dir, 'commands.jsonl'), JSON.stringify({...command, seq}) + '\n');
+        const acks = path.join(this.dir, 'acks.jsonl');
+        await waitFor(
+            () => readJsonLines<{seq: string}>(acks).some((a) => a.seq === seq),
+            timeoutMs,
+            `${this.key} to run ${command.op}`,
+        );
+    }
 
-  /** OSC 0 with the `✳` glyph: the legacy "waiting for you" signal. */
-  idle(text?: string): Promise<void> {
-    return this.send({ op: 'idle', text });
-  }
+    /** Raw output. Lines end in `\r\n` on a terminal. */
+    print(text: string): Promise<void> {
+        return this.send({op: 'print', text});
+    }
 
-  /** OSC 7501: the Program Status Protocol, which overrides titles once spoken. */
-  status(report: ProgramStatus): Promise<void> {
-    return this.send({ op: 'status', ...report });
-  }
+    /** Print lines, each terminated with `\r\n`. */
+    println(...lines: string[]): Promise<void> {
+        return this.print(lines.map((line) => line + '\r\n').join(''));
+    }
 
-  /** OSC 9: an iTerm2-style notification, which marks the row as needing input. */
-  notify(message: string): Promise<void> {
-    return this.send({ op: 'notify', message });
-  }
+    /** OSC 0: the window title. */
+    title(text: string): Promise<void> {
+        return this.send({op: 'title', text});
+    }
 
-  /** OSC 777 `notify` — the rxvt/Ghostty form; Switchboard does not read it today. */
-  notify777(title: string, body: string): Promise<void> {
-    return this.send({ op: 'notify777', title, body });
-  }
+    /** OSC 0 with a spinner frame: the legacy "turn in flight" signal. */
+    busy(text?: string): Promise<void> {
+        return this.send({op: 'busy', text});
+    }
 
-  /** OSC 9;4 progress: level 0 clear, 1 running, 2 error, 3 indeterminate. */
-  progress(level: 0 | 1 | 2 | 3, percent?: number): Promise<void> {
-    return this.send({ op: 'progress', level, percent });
-  }
+    /** OSC 0 with the `✳` glyph: the legacy "waiting for you" signal. */
+    idle(text?: string): Promise<void> {
+        return this.send({op: 'idle', text});
+    }
 
-  bell(): Promise<void> {
-    return this.send({ op: 'bell' });
-  }
+    /** OSC 7501: the Program Status Protocol, which overrides titles once spoken. */
+    status(report: ProgramStatus): Promise<void> {
+        return this.send({op: 'status', ...report});
+    }
 
-  /**
-   * Append lines to this session's transcript, as the CLI does after each
-   * turn. Missing `sessionId`, `cwd`, `uuid` and `timestamp` are filled in
-   * (the timestamp with the real time, which the frozen renderer clock reads
-   * as "just now").
-   */
-  transcript(...entries: Record<string, unknown>[]): Promise<void> {
-    return this.send({ op: 'transcript', entries });
-  }
+    /** OSC 9: an iTerm2-style notification, which marks the row as needing input. */
+    notify(message: string): Promise<void> {
+        return this.send({op: 'notify', message});
+    }
 
-  /** A user turn in the transcript — what turns a pending row into a real one. */
-  userTurn(content: string): Promise<void> {
-    return this.transcript({ type: 'user', message: { role: 'user', content } });
-  }
+    /** OSC 777 `notify` — the rxvt/Ghostty form; Switchboard does not read it today. */
+    notify777(title: string, body: string): Promise<void> {
+        return this.send({op: 'notify777', title, body});
+    }
 
-  /** Start a new transcript that names this session as its origin: a fork. */
-  fork(newSessionId: string, prompt?: string): Promise<void> {
-    return this.send({ op: 'fork', newSessionId, prompt });
-  }
+    /** OSC 9;4 progress: level 0 clear, 1 running, 2 error, 3 indeterminate. */
+    progress(level: 0 | 1 | 2 | 3, percent?: number): Promise<void> {
+        return this.send({op: 'progress', level, percent});
+    }
 
-  /** Exit with this code once everything before it has been written. */
-  exit(code = 0): Promise<void> {
-    return this.send({ op: 'exit', code });
-  }
+    bell(): Promise<void> {
+        return this.send({op: 'bell'});
+    }
+
+    /**
+     * Append lines to this session's transcript, as the CLI does after each
+     * turn. Missing `sessionId`, `cwd`, `uuid` and `timestamp` are filled in
+     * (the timestamp with the real time, which the frozen renderer clock reads
+     * as "just now").
+     */
+    transcript(...entries: Record<string, unknown>[]): Promise<void> {
+        return this.send({op: 'transcript', entries});
+    }
+
+    /** A user turn in the transcript — what turns a pending row into a real one. */
+    userTurn(content: string): Promise<void> {
+        return this.transcript({type: 'user', message: {role: 'user', content}});
+    }
+
+    /** Start a new transcript that names this session as its origin: a fork. */
+    fork(newSessionId: string, prompt?: string): Promise<void> {
+        return this.send({op: 'fork', newSessionId, prompt});
+    }
+
+    /** Exit with this code once everything before it has been written. */
+    exit(code = 0): Promise<void> {
+        return this.send({op: 'exit', code});
+    }
 }
 
 /** The fake `claude` a session id launches. */
 export function fakeClaude(home: FixtureHome, sessionId: string): FakeCli {
-  return new FakeCli(home.controlDir, sessionId);
+    return new FakeCli(home.controlDir, sessionId);
 }
 
 /**
@@ -210,13 +215,14 @@ export function fakeClaude(home: FixtureHome, sessionId: string): FakeCli {
  * authentication failure and exit to make it give up.
  */
 export function fakeSsh(home: FixtureHome, sessionId: string): FakeCli {
-  return new FakeCli(home.controlDir, 'sb-' + sessionId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8));
+    return new FakeCli(home.controlDir, 'sb-' + sessionId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8));
 }
 
 /** The keys of every fake that has launched so far. */
 export function launchedKeys(home: FixtureHome): Set<string> {
-  return new Set(fs.readdirSync(home.controlDir)
-    .filter(key => fs.existsSync(path.join(home.controlDir, key, 'launch.json'))));
+    return new Set(
+        fs.readdirSync(home.controlDir).filter((key) => fs.existsSync(path.join(home.controlDir, key, 'launch.json'))),
+    );
 }
 
 /**
@@ -227,52 +233,66 @@ export function launchedKeys(home: FixtureHome): Set<string> {
  * click, then call this.
  */
 export async function waitForNewLaunch(
-  home: FixtureHome, role: 'claude' | 'ssh', before: Set<string>, timeoutMs = DEFAULT_TIMEOUT_MS,
+    home: FixtureHome,
+    role: 'claude' | 'ssh',
+    before: Set<string>,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<FakeCli> {
-  let found: string | undefined;
-  await waitFor(() => {
-    found = [...launchedKeys(home)].find(key => !before.has(key)
-      && (JSON.parse(fs.readFileSync(path.join(home.controlDir, key, 'launch.json'), 'utf8')) as FakeLaunch).role === role);
-    return !!found;
-  }, timeoutMs, `a new ${role} to launch`);
-  return new FakeCli(home.controlDir, found!);
+    let found: string | undefined;
+    await waitFor(
+        () => {
+            found = [...launchedKeys(home)].find(
+                (key) =>
+                    !before.has(key) &&
+                    (JSON.parse(fs.readFileSync(path.join(home.controlDir, key, 'launch.json'), 'utf8')) as FakeLaunch)
+                        .role === role,
+            );
+            return !!found;
+        },
+        timeoutMs,
+        `a new ${role} to launch`,
+    );
+    return new FakeCli(home.controlDir, found!);
 }
 
 export async function waitFor(check: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!check()) {
-    if (Date.now() > deadline) throw new Error(`Timed out after ${timeoutMs}ms waiting for ${what}`);
-    await new Promise(resolve => setTimeout(resolve, POLL_MS));
-  }
+    const deadline = Date.now() + timeoutMs;
+    while (!check()) {
+        if (Date.now() > deadline) throw new Error(`Timed out after ${timeoutMs}ms waiting for ${what}`);
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    }
 }
 
 function readJsonLines<T>(file: string): T[] {
-  let text: string;
-  try {
-    text = fs.readFileSync(file, 'utf8');
-  } catch {
-    return [];
-  }
-  return text.split('\n').filter(Boolean).map(line => JSON.parse(line) as T);
+    let text: string;
+    try {
+        text = fs.readFileSync(file, 'utf8');
+    } catch {
+        return [];
+    }
+    return text
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as T);
 }
 
 /** The `--mcp-config` a call was given, as the fake found it while the call ran. */
 export interface McpFacts {
-  path: string;
-  /** Its permission bits, e.g. 0o600; null when it couldn't be read. */
-  mode: number | null;
-  servers: string[];
+    path: string;
+    /** Its permission bits, e.g. 0o600; null when it couldn't be read. */
+    mode: number | null;
+    servers: string[];
 }
 
 /** What a routing answer says, before it is wrapped in the CLI's envelope. */
 export interface RouteAnswer {
-  projectPath: string | null;
-  confident: boolean;
-  candidates: string[];
-  prompt: string;
-  /** Quick Ask's routing call only (C1): a session, or a capture of `captureText`. */
-  kind?: 'session' | 'task' | 'save';
-  captureText?: string;
+    projectPath: string | null;
+    confident: boolean;
+    candidates: string[];
+    prompt: string;
+    /** Quick Ask's routing call only (C1): a session, or a capture of `captureText`. */
+    kind?: 'session' | 'task' | 'save';
+    captureText?: string;
 }
 
 /**
@@ -283,53 +303,61 @@ export interface RouteAnswer {
  * back so a test can see the wait, or cancel it.
  */
 export class FakeRoute {
-  private readonly dir: string;
+    private readonly dir: string;
 
-  constructor(controlDir: string) {
-    this.dir = path.join(controlDir, 'route');
-    fs.mkdirSync(this.dir, { recursive: true });
-  }
+    constructor(controlDir: string) {
+        this.dir = path.join(controlDir, 'route');
+        fs.mkdirSync(this.dir, {recursive: true});
+    }
 
-  answer(answer: RouteAnswer, delayMs = 0): void {
-    const envelope = {
-      type: 'result', subtype: 'success', is_error: false,
-      result: JSON.stringify(answer),
-    };
-    this.write({ stdout: JSON.stringify(envelope) + '\n', exitCode: 0, delayMs });
-  }
+    answer(answer: RouteAnswer, delayMs = 0): void {
+        const envelope = {
+            type: 'result',
+            subtype: 'success',
+            is_error: false,
+            result: JSON.stringify(answer),
+        };
+        this.write({stdout: JSON.stringify(envelope) + '\n', exitCode: 0, delayMs});
+    }
 
-  /**
-   * What a call allowed only `tool` answers (#151), Haiku's JSON wrapped the
-   * same way; every other call still answers `answer`'s.
-   */
-  answerTool(tool: string, answer: unknown, delayMs = 0): void {
-    const envelope = {
-      type: 'result', subtype: 'success', is_error: false, num_turns: 2, permission_denials: [],
-      result: JSON.stringify(answer),
-    };
-    fs.writeFileSync(path.join(this.dir, `answer-${tool}.json`),
-      JSON.stringify({ stdout: JSON.stringify(envelope) + '\n', exitCode: 0, delayMs }));
-  }
+    /**
+     * What a call allowed only `tool` answers (#151), Haiku's JSON wrapped the
+     * same way; every other call still answers `answer`'s.
+     */
+    answerTool(tool: string, answer: unknown, delayMs = 0): void {
+        const envelope = {
+            type: 'result',
+            subtype: 'success',
+            is_error: false,
+            num_turns: 2,
+            permission_denials: [],
+            result: JSON.stringify(answer),
+        };
+        fs.writeFileSync(
+            path.join(this.dir, `answer-${tool}.json`),
+            JSON.stringify({stdout: JSON.stringify(envelope) + '\n', exitCode: 0, delayMs}),
+        );
+    }
 
-  /** Fail the way the CLI does: the envelope with `is_error`, and exit 1. */
-  fail(message: string): void {
-    const envelope = { type: 'result', subtype: 'success', is_error: true, result: message };
-    this.write({ stdout: JSON.stringify(envelope) + '\n', exitCode: 1 });
-  }
+    /** Fail the way the CLI does: the envelope with `is_error`, and exit 1. */
+    fail(message: string): void {
+        const envelope = {type: 'result', subtype: 'success', is_error: true, result: message};
+        this.write({stdout: JSON.stringify(envelope) + '\n', exitCode: 1});
+    }
 
-  /**
-   * Every routing call so far, oldest first: its argv, and the prompt it was
-   * given, last on the argv or, for a warm one, as a message on stdin.
-   */
-  calls(): { argv: string[]; cwd: string; prompt: string; warm: boolean; mcp?: McpFacts }[] {
-    return readJsonLines(path.join(this.dir, 'calls.jsonl'));
-  }
+    /**
+     * Every routing call so far, oldest first: its argv, and the prompt it was
+     * given, last on the argv or, for a warm one, as a message on stdin.
+     */
+    calls(): {argv: string[]; cwd: string; prompt: string; warm: boolean; mcp?: McpFacts}[] {
+        return readJsonLines(path.join(this.dir, 'calls.jsonl'));
+    }
 
-  private write(answer: { stdout: string; exitCode: number; delayMs?: number }): void {
-    fs.writeFileSync(path.join(this.dir, 'answer.json'), JSON.stringify(answer));
-  }
+    private write(answer: {stdout: string; exitCode: number; delayMs?: number}): void {
+        fs.writeFileSync(path.join(this.dir, 'answer.json'), JSON.stringify(answer));
+    }
 }
 
 export function fakeRoute(home: FixtureHome): FakeRoute {
-  return new FakeRoute(home.controlDir);
+    return new FakeRoute(home.controlDir);
 }

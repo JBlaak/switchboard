@@ -5,7 +5,7 @@
  * Apart from the toolbar's other actions so it imports nothing but the store:
  * with `window.api` stood in for, it runs in node.
  */
-import { dispatch, getState } from '../../state/app-store';
+import {dispatch, getState} from '../../state/app-store';
 
 /**
  * The switch is also flipped from a terminal (`pmset disablesleep`), so the
@@ -15,15 +15,19 @@ import { dispatch, getState } from '../../state/app-store';
 const SLEEP_POLL_MS = 60_000;
 
 export function watchSleepState(): void {
-  window.addEventListener('focus', () => { void readSleepState(); });
-  setInterval(() => { void readSleepState(); }, SLEEP_POLL_MS);
-  void readSleepState();
+    window.addEventListener('focus', () => {
+        void readSleepState();
+    });
+    setInterval(() => {
+        void readSleepState();
+    }, SLEEP_POLL_MS);
+    void readSleepState();
 }
 
 async function readSleepState(): Promise<void> {
-  // A read mid-click would show the old state before the answer lands.
-  if (getState().toolbar.sleepPending) return;
-  dispatch({ type: 'sleepStateRead', disabled: await window.api.getSleepDisabled() });
+    // A read mid-click would show the old state before the answer lands.
+    if (getState().toolbar.sleepPending) return;
+    dispatch({type: 'sleepStateRead', disabled: await window.api.getSleepDisabled()});
 }
 
 /**
@@ -31,12 +35,12 @@ async function readSleepState(): Promise<void> {
  * a password prompt, and a cancelled one leaves the switch as it was.
  */
 export async function toggleSleep(): Promise<void> {
-  const { sleepDisabled, sleepPending } = getState().toolbar;
-  if (sleepDisabled === null || sleepPending) return;
-  dispatch({ type: 'sleepSwitchPending', pending: true });
-  try {
-    dispatch({ type: 'sleepStateRead', disabled: await window.api.setSleepDisabled(!sleepDisabled) });
-  } finally {
-    dispatch({ type: 'sleepSwitchPending', pending: false });
-  }
+    const {sleepDisabled, sleepPending} = getState().toolbar;
+    if (sleepDisabled === null || sleepPending) return;
+    dispatch({type: 'sleepSwitchPending', pending: true});
+    try {
+        dispatch({type: 'sleepStateRead', disabled: await window.api.setSleepDisabled(!sleepDisabled)});
+    } finally {
+        dispatch({type: 'sleepSwitchPending', pending: false});
+    }
 }

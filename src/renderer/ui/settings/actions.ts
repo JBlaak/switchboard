@@ -9,49 +9,49 @@
  * or close is dispatched, so the terminals have their layout box back before
  * `refitOpenTerminals` runs.
  */
-import { relayoutSessionList } from '../session-list/relayout';
-import { dispatch } from '../../state/app-store';
-import { view } from '../../state/session-store';
-import { syncQuickSessionButton } from '../../features/sessions/quick-session';
-import { followBlaakTasksSwitch } from '../tasks-page/actions';
-import { applyTerminalFont, refitOpenTerminals } from '../../features/terminal/terminal-manager';
-import { applyTerminalTheme } from '../../features/terminal/terminal-themes';
-import type { SettingsRecord } from '../../state/settings-slice';
-import type { ShellProfile } from '../../../domain/shell/shell-profile';
-import type { WeatherLocation } from '../../../domain/weather/weather';
+import {relayoutSessionList} from '../session-list/relayout';
+import {dispatch} from '../../state/app-store';
+import {view} from '../../state/session-store';
+import {syncQuickSessionButton} from '../../features/sessions/quick-session';
+import {followBlaakTasksSwitch} from '../tasks-page/actions';
+import {applyTerminalFont, refitOpenTerminals} from '../../features/terminal/terminal-manager';
+import {applyTerminalTheme} from '../../features/terminal/terminal-themes';
+import type {SettingsRecord} from '../../state/settings-slice';
+import type {ShellProfile} from '../../../domain/shell/shell-profile';
+import type {WeatherLocation} from '../../../domain/weather/weather';
 
 /** The last open asked for: a slower, earlier one that lands after it is dropped. */
 let latestOpen = 0;
 
 /** Read what is stored, then show the panel in place of the main area. */
 export async function openSettings(): Promise<void> {
-  const token = ++latestOpen;
-  const [current, shellProfiles, appVersion, quickAsk] = await Promise.all([
-    window.api.getSetting<SettingsRecord>('global').then(found => found || {}),
-    window.api.getShellProfiles().catch((): ShellProfile[] => []),
-    window.api.getAppVersion().catch(() => null),
-    // Unknown counts as held: the "in use" line only shows on a refusal main reported.
-    window.api.quickAskHotkeyStatus().catch(() => ({ registered: true, missing: [] })),
-  ]);
-  if (token !== latestOpen) return;
+    const token = ++latestOpen;
+    const [current, shellProfiles, appVersion, quickAsk] = await Promise.all([
+        window.api.getSetting<SettingsRecord>('global').then((found) => found || {}),
+        window.api.getShellProfiles().catch((): ShellProfile[] => []),
+        window.api.getAppVersion().catch(() => null),
+        // Unknown counts as held: the "in use" line only shows on a refusal main reported.
+        window.api.quickAskHotkeyStatus().catch(() => ({registered: true, missing: []})),
+    ]);
+    if (token !== latestOpen) return;
 
-  dispatch({
-    type: 'settingsOpened',
-    current,
-    shellProfiles,
-    appVersion,
-    quickAskRegistered: quickAsk.registered,
-    quickAskMissing: quickAsk.missing,
-  });
+    dispatch({
+        type: 'settingsOpened',
+        current,
+        shellProfiles,
+        appVersion,
+        quickAskRegistered: quickAsk.registered,
+        quickAskMissing: quickAsk.missing,
+    });
 }
 
 /** Close the panel and put back what it covered: the session to return to, or the empty screen. */
 export function closeSettings(): void {
-  dispatch({ type: 'settingsClosed' });
-  // Terminals had no layout box while the panel covered them, so anything that
-  // changed their metrics in the meantime (font size, line height) could not fit
-  // itself and would leave output running off the right edge until the next resize.
-  refitOpenTerminals();
+    dispatch({type: 'settingsClosed'});
+    // Terminals had no layout box while the panel covered them, so anything that
+    // changed their metrics in the meantime (font size, line height) could not fit
+    // itself and would leave output running off the right edge until the next resize.
+    refitOpenTerminals();
 }
 
 /**
@@ -61,32 +61,32 @@ export function closeSettings(): void {
  * bounds, remote projects, the appearance) survive.
  */
 export async function saveSettings(form: Record<string, unknown>): Promise<void> {
-  const settings: Record<string, any> = {
-    ...((await window.api.getSetting<SettingsRecord>('global')) || {}),
-    ...form,
-  };
+    const settings: Record<string, any> = {
+        ...((await window.api.getSetting<SettingsRecord>('global')) || {}),
+        ...form,
+    };
 
-  await window.api.setSetting('global', settings);
+    await window.api.setSetting('global', settings);
 
-  if (settings.visibleSessionCount) view.visibleSessionCount = settings.visibleSessionCount;
-  if (settings.sessionMaxAgeDays) view.sessionMaxAgeDays = settings.sessionMaxAgeDays;
-  if (settings.terminalTheme) applyTerminalTheme(settings.terminalTheme);
-  applyTerminalFont({
-    fontFamily: settings.terminalFontFamily,
-    fontSize: settings.terminalFontSize,
-    lineHeight: settings.terminalLineHeight,
-  });
-  relayoutSessionList();
-  void syncQuickSessionButton();
-  followBlaakTasksSwitch(settings);
+    if (settings.visibleSessionCount) view.visibleSessionCount = settings.visibleSessionCount;
+    if (settings.sessionMaxAgeDays) view.sessionMaxAgeDays = settings.sessionMaxAgeDays;
+    if (settings.terminalTheme) applyTerminalTheme(settings.terminalTheme);
+    applyTerminalFont({
+        fontFamily: settings.terminalFontFamily,
+        fontSize: settings.terminalFontSize,
+        lineHeight: settings.terminalLineHeight,
+    });
+    relayoutSessionList();
+    void syncQuickSessionButton();
+    followBlaakTasksSwitch(settings);
 
-  dispatch({ type: 'settingsSaved' });
-  setTimeout(() => closeSettings(), 600);
+    dispatch({type: 'settingsSaved'});
+    setTimeout(() => closeSettings(), 600);
 }
 
 /** Look a weather city up. Null when there is no such place. */
 export function geocodeCity(name: string): Promise<WeatherLocation | null> {
-  return window.api.geocodeWeatherLocation(name);
+    return window.api.geocodeWeatherLocation(name);
 }
 
 /**
@@ -94,5 +94,5 @@ export function geocodeCity(name: string): Promise<WeatherLocation | null> {
  * Unknown counts as yes: the "add it" line only shows on a no main gave.
  */
 export function blaakTasksSetUp(url: string): Promise<boolean> {
-  return window.api.blaakTasksSetUp(url).catch(() => true);
+    return window.api.blaakTasksSetUp(url).catch(() => true);
 }

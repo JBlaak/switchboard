@@ -11,169 +11,194 @@
  * row (L4). A right-click on the images copies one (see copy-image.ts), and
  * a toast over the card says so.
  */
-import { useEffect, useState } from 'react';
-import type { JSX, MouseEvent as ReactMouseEvent } from 'react';
-import type { FileDiff } from '../../../domain/session-work/model';
-import { comparesImages } from '../../state/session-work-slice';
-import type { ImageCardState } from '../../state/session-work-slice';
-import { blinkImage, frameImage, setImageBackground, setImageMode, viewImage } from './actions';
+import {useEffect, useState} from 'react';
+import type {JSX, MouseEvent as ReactMouseEvent} from 'react';
+import type {FileDiff} from '../../../domain/session-work/model';
+import {comparesImages} from '../../state/session-work-slice';
+import type {ImageCardState} from '../../state/session-work-slice';
+import {blinkImage, frameImage, setImageBackground, setImageMode, viewImage} from './actions';
 import {
-  IMAGE_BACKGROUND_LABEL, IMAGE_FIRST_FRAME, IMAGE_MODE_LABEL, IMAGE_UNREADABLE, imageCollapsedText,
+    IMAGE_BACKGROUND_LABEL,
+    IMAGE_FIRST_FRAME,
+    IMAGE_MODE_LABEL,
+    IMAGE_UNREADABLE,
+    imageCollapsedText,
 } from './describe';
-import { copiedSide, copyImage, pointedSide } from './image-compare/copy-image';
-import { describeImages } from './image-compare/image-meta';
-import { modeView } from './image-compare/modes';
-import { SideStage, contentSize } from './image-compare/modes/SideBySide';
-import { IMAGE_MODES } from './image-compare/modes/types';
-import type { ImageMode } from './image-compare/modes/types';
-import { fitView } from './image-compare/viewport';
-import type { Background, Size, View } from './image-compare/types';
-import { useImagePair } from './image-load';
+import {copiedSide, copyImage, pointedSide} from './image-compare/copy-image';
+import {describeImages} from './image-compare/image-meta';
+import {modeView} from './image-compare/modes';
+import {SideStage, contentSize} from './image-compare/modes/SideBySide';
+import {IMAGE_MODES} from './image-compare/modes/types';
+import type {ImageMode} from './image-compare/modes/types';
+import {fitView} from './image-compare/viewport';
+import type {Background, Size, View} from './image-compare/types';
+import {useImagePair} from './image-load';
 
 /** Drawn under until the stage first measures its frame; hidden meanwhile (see `is-fitting`). */
-const PLACEHOLDER_VIEW: View = { scale: 1, x: 0, y: 0 };
+const PLACEHOLDER_VIEW: View = {scale: 1, x: 0, y: 0};
 const SIDE_BY_SIDE_ONLY: readonly ImageMode[] = ['side-by-side'];
 const BACKGROUNDS: readonly Background[] = ['checkerboard', 'light', 'dark'];
 /** How long the copied toast stays up. */
 const COPIED_TOAST_MS = 1600;
 
 export function ImageCard({
-  sessionId, itemId, file, loadKey, expanded, card, background, defaultMode, onShowDiff,
+    sessionId,
+    itemId,
+    file,
+    loadKey,
+    expanded,
+    card,
+    background,
+    defaultMode,
+    onShowDiff,
 }: {
-  sessionId: string;
-  itemId: string;
-  /** A file with an `image`. */
-  file: FileDiff;
-  /** The item's diff as it was asked for: a new one loads the images again. */
-  loadKey: string;
-  /** Opened with Show diff. */
-  expanded: boolean;
-  /** Undefined until the card's stage first reports its frame. */
-  card: ImageCardState | undefined;
-  background: Background;
-  defaultMode: ImageMode;
-  onShowDiff(): void;
+    sessionId: string;
+    itemId: string;
+    /** A file with an `image`. */
+    file: FileDiff;
+    /** The item's diff as it was asked for: a new one loads the images again. */
+    loadKey: string;
+    /** Opened with Show diff. */
+    expanded: boolean;
+    /** Undefined until the card's stage first reports its frame. */
+    card: ImageCardState | undefined;
+    background: Background;
+    defaultMode: ImageMode;
+    onShowDiff(): void;
 }): JSX.Element {
-  const image = file.image!;
-  const reason = imageCollapsedText(image);
-  const collapsed = reason !== null && !expanded;
-  const pair = useImagePair(sessionId, itemId, file, loadKey, !collapsed);
-  // Counts copies, so a copy while the toast is up shows it afresh.
-  const [copied, setCopied] = useState(0);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(0), COPIED_TOAST_MS);
-    return () => clearTimeout(timer);
-  }, [copied]);
+    const image = file.image!;
+    const reason = imageCollapsedText(image);
+    const collapsed = reason !== null && !expanded;
+    const pair = useImagePair(sessionId, itemId, file, loadKey, !collapsed);
+    // Counts copies, so a copy while the toast is up shows it afresh.
+    const [copied, setCopied] = useState(0);
+    useEffect(() => {
+        if (!copied) return;
+        const timer = setTimeout(() => setCopied(0), COPIED_TOAST_MS);
+        return () => clearTimeout(timer);
+    }, [copied]);
 
-  if (collapsed) {
+    if (collapsed) {
+        return (
+            <div className="sw-file-row is-collapsed">
+                <span>{reason}</span>
+                <button type="button" className="sw-btn sw-btn-small" onClick={onShowDiff}>
+                    Show diff
+                </button>
+            </div>
+        );
+    }
+    if (pair.phase === 'failed') {
+        return (
+            <div className="sw-file-row">
+                {image.format !== 'svg' && <span>Binary file changed</span>}
+                <span className="sw-image-note">{IMAGE_UNREADABLE}</span>
+            </div>
+        );
+    }
+    if (pair.phase === 'loading')
+        return (
+            <div className="sw-image-loading">
+                <div className="sw-skeleton" />
+            </div>
+        );
+
+    const {before, after} = pair;
+    const {path} = file;
+    const compares = comparesImages(file) && !!before && !!after;
+    const mode = compares ? (card?.mode ?? defaultMode) : 'side-by-side';
+    const content = contentSize(before, after);
+    const meta = describeImages(
+        image.format,
+        before && image.before && {width: before.width, height: before.height, bytes: image.before.bytes},
+        after && image.after && {width: after.width, height: after.height, bytes: image.after.bytes},
+    );
+    const firstFrame = mode !== 'side-by-side' && (!!before?.animated || !!after?.animated);
+
+    const view = card?.view ?? PLACEHOLDER_VIEW;
+    const onView = (next: View): void => viewImage(itemId, path, next);
+    const onFrameSize = (frame: Size): void => frameImage(itemId, path, fitView(frame, content));
+    const onContextMenu = (event: ReactMouseEvent<HTMLDivElement>): void => {
+        const target = event.target as Element;
+        if (!target.closest('.sw-stage')) return;
+        event.preventDefault();
+        const side = copiedSide(mode, card?.blink ?? 'before', pointedSide(target, event.clientX));
+        const image = (side === 'before' ? before : after) ?? before ?? after;
+        if (image)
+            copyImage(image).then(
+                () => setCopied((n) => n + 1),
+                () => {},
+            );
+    };
+
+    let stage: JSX.Element;
+    if (compares) {
+        const Mode = modeView(mode);
+        stage = (
+            <Mode
+                before={before}
+                after={after}
+                view={view}
+                onView={onView}
+                onFrameSize={onFrameSize}
+                background={background}
+                blink={card?.blink ?? 'before'}
+                onBlink={() => blinkImage(itemId, path)}
+            />
+        );
+    } else {
+        stage = (
+            <SideStage
+                side={before ? 'before' : 'after'}
+                image={(before ?? after)!}
+                content={content}
+                view={view}
+                onView={onView}
+                onFrameSize={onFrameSize}
+                background={background}
+            />
+        );
+    }
+
     return (
-      <div className="sw-file-row is-collapsed">
-        <span>{reason}</span>
-        <button type="button" className="sw-btn sw-btn-small" onClick={onShowDiff}>
-          Show diff
-        </button>
-      </div>
-    );
-  }
-  if (pair.phase === 'failed') {
-    return (
-      <div className="sw-file-row">
-        {image.format !== 'svg' && <span>Binary file changed</span>}
-        <span className="sw-image-note">{IMAGE_UNREADABLE}</span>
-      </div>
-    );
-  }
-  if (pair.phase === 'loading') return <div className="sw-image-loading"><div className="sw-skeleton" /></div>;
-
-  const { before, after } = pair;
-  const { path } = file;
-  const compares = comparesImages(file) && !!before && !!after;
-  const mode = compares ? card?.mode ?? defaultMode : 'side-by-side';
-  const content = contentSize(before, after);
-  const meta = describeImages(
-    image.format,
-    before && image.before && { width: before.width, height: before.height, bytes: image.before.bytes },
-    after && image.after && { width: after.width, height: after.height, bytes: image.after.bytes },
-  );
-  const firstFrame = mode !== 'side-by-side' && (!!before?.animated || !!after?.animated);
-
-  const view = card?.view ?? PLACEHOLDER_VIEW;
-  const onView = (next: View): void => viewImage(itemId, path, next);
-  const onFrameSize = (frame: Size): void => frameImage(itemId, path, fitView(frame, content));
-  const onContextMenu = (event: ReactMouseEvent<HTMLDivElement>): void => {
-    const target = event.target as Element;
-    if (!target.closest('.sw-stage')) return;
-    event.preventDefault();
-    const side = copiedSide(mode, card?.blink ?? 'before', pointedSide(target, event.clientX));
-    const image = (side === 'before' ? before : after) ?? before ?? after;
-    if (image) copyImage(image).then(() => setCopied(n => n + 1), () => {});
-  };
-
-  let stage: JSX.Element;
-  if (compares) {
-    const Mode = modeView(mode);
-    stage = (
-      <Mode
-        before={before}
-        after={after}
-        view={view}
-        onView={onView}
-        onFrameSize={onFrameSize}
-        background={background}
-        blink={card?.blink ?? 'before'}
-        onBlink={() => blinkImage(itemId, path)}
-      />
-    );
-  } else {
-    stage = (
-      <SideStage
-        side={before ? 'before' : 'after'}
-        image={(before ?? after)!}
-        content={content}
-        view={view}
-        onView={onView}
-        onFrameSize={onFrameSize}
-        background={background}
-      />
-    );
-  }
-
-  return (
-    <div className={'sw-image' + (card ? '' : ' is-fitting')} data-mode={mode} onContextMenu={onContextMenu}>
-      <div className="sw-image-bar">
-        <div className="sw-seg" role="group" aria-label="Compare mode (1–5)">
-          {(compares ? IMAGE_MODES : SIDE_BY_SIDE_ONLY).map((option, i) => (
-            <button
-              key={option}
-              type="button"
-              className="sw-seg-btn"
-              aria-pressed={mode === option}
-              title={`${IMAGE_MODE_LABEL[option]} (${i + 1})`}
-              onClick={() => setImageMode(itemId, path, option)}
-            >
-              {IMAGE_MODE_LABEL[option]}
-            </button>
-          ))}
+        <div className={'sw-image' + (card ? '' : ' is-fitting')} data-mode={mode} onContextMenu={onContextMenu}>
+            <div className="sw-image-bar">
+                <div className="sw-seg" role="group" aria-label="Compare mode (1–5)">
+                    {(compares ? IMAGE_MODES : SIDE_BY_SIDE_ONLY).map((option, i) => (
+                        <button
+                            key={option}
+                            type="button"
+                            className="sw-seg-btn"
+                            aria-pressed={mode === option}
+                            title={`${IMAGE_MODE_LABEL[option]} (${i + 1})`}
+                            onClick={() => setImageMode(itemId, path, option)}>
+                            {IMAGE_MODE_LABEL[option]}
+                        </button>
+                    ))}
+                </div>
+                <div className="sw-seg" role="group" aria-label="Background">
+                    {BACKGROUNDS.map((option) => (
+                        <button
+                            key={option}
+                            type="button"
+                            className="sw-seg-btn"
+                            aria-pressed={background === option}
+                            onClick={() => setImageBackground(option)}>
+                            {IMAGE_BACKGROUND_LABEL[option]}
+                        </button>
+                    ))}
+                </div>
+                <span className="sw-image-meta" data-testid="image-meta">
+                    {meta}
+                </span>
+                {firstFrame && <span className="sw-image-note">{IMAGE_FIRST_FRAME}</span>}
+            </div>
+            {stage}
+            {copied > 0 && (
+                <div key={copied} className="sw-image-toast" role="status">
+                    Copied to clipboard
+                </div>
+            )}
         </div>
-        <div className="sw-seg" role="group" aria-label="Background">
-          {BACKGROUNDS.map(option => (
-            <button
-              key={option}
-              type="button"
-              className="sw-seg-btn"
-              aria-pressed={background === option}
-              onClick={() => setImageBackground(option)}
-            >
-              {IMAGE_BACKGROUND_LABEL[option]}
-            </button>
-          ))}
-        </div>
-        <span className="sw-image-meta" data-testid="image-meta">{meta}</span>
-        {firstFrame && <span className="sw-image-note">{IMAGE_FIRST_FRAME}</span>}
-      </div>
-      {stage}
-      {copied > 0 && <div key={copied} className="sw-image-toast" role="status">Copied to clipboard</div>}
-    </div>
-  );
+    );
 }

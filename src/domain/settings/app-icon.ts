@@ -17,12 +17,12 @@ export const DEFAULT_APP_ICON: AppIcon = 'switchboard';
 
 /** How each icon is named in the UI. */
 export const APP_ICON_LABELS: Record<AppIcon, string> = {
-  switchboard: 'Switchboard',
-  patch: 'Patch',
+    switchboard: 'Switchboard',
+    patch: 'Patch',
 };
 
 export function isAppIcon(value: unknown): value is AppIcon {
-  return typeof value === 'string' && (APP_ICONS as readonly string[]).includes(value);
+    return typeof value === 'string' && (APP_ICONS as readonly string[]).includes(value);
 }
 
 /**
@@ -32,5 +32,5 @@ export function isAppIcon(value: unknown): value is AppIcon {
  * back to the default rather than naming a file that does not exist.
  */
 export function normaliseAppIcon(value: unknown): AppIcon {
-  return isAppIcon(value) ? value : DEFAULT_APP_ICON;
+    return isAppIcon(value) ? value : DEFAULT_APP_ICON;
 }

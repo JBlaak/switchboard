@@ -10,61 +10,57 @@
  * `exit` the promise would never settle and the session list would stay empty
  * for the life of the process.
  */
-import { Worker } from 'node:worker_threads';
-import type { FolderScan } from '../../domain/session/session';
-import type { ProjectScanner } from '../../application/ports/project-scanner';
-import type { Logger } from '../../application/ports/logger';
+import {Worker} from 'node:worker_threads';
+import type {FolderScan} from '../../domain/session/session';
+import type {ProjectScanner} from '../../application/ports/project-scanner';
+import type {Logger} from '../../application/ports/logger';
 
 /** What the worker posts back: progress ticks, then one terminal result. */
-export type ScanProgress = { type: 'progress'; text: string };
-export type ScanResult =
-  | { ok: true; results: FolderScan[] }
-  | { ok: false; error: string };
+export type ScanProgress = {type: 'progress'; text: string};
+export type ScanResult = {ok: true; results: FolderScan[]} | {ok: false; error: string};
 export type ScanMessage = ScanProgress | ScanResult;
 
 export interface WorkerProjectScannerDeps {
-  /** Absolute path to the built worker bundle. */
-  workerPath: string;
-  projectsDir: string;
-  log: Logger;
+    /** Absolute path to the built worker bundle. */
+    workerPath: string;
+    projectsDir: string;
+    log: Logger;
 }
 
 export class WorkerProjectScanner implements ProjectScanner {
-  constructor(private readonly deps: WorkerProjectScannerDeps) {}
+    constructor(private readonly deps: WorkerProjectScannerDeps) {}
 
-  scan(onProgress: (text: string) => void): Promise<FolderScan[]> {
-    const { workerPath, projectsDir, log } = this.deps;
+    scan(onProgress: (text: string) => void): Promise<FolderScan[]> {
+        const {workerPath, projectsDir, log} = this.deps;
 
-    return new Promise<FolderScan[]>((resolve, reject) => {
-      const worker = new Worker(workerPath, { workerData: { projectsDir } });
-      let settled = false;
+        return new Promise<FolderScan[]>((resolve, reject) => {
+            const worker = new Worker(workerPath, {workerData: {projectsDir}});
+            let settled = false;
 
-      const settle = (fn: () => void): void => {
-        if (settled) return;
-        settled = true;
-        fn();
-      };
+            const settle = (fn: () => void): void => {
+                if (settled) return;
+                settled = true;
+                fn();
+            };
 
-      worker.on('message', (message: ScanMessage) => {
-        if ('type' in message) {
-          onProgress(message.text);
-          return;
-        }
-        settle(() => message.ok
-          ? resolve(message.results)
-          : reject(new Error(message.error)));
-      });
+            worker.on('message', (message: ScanMessage) => {
+                if ('type' in message) {
+                    onProgress(message.text);
+                    return;
+                }
+                settle(() => (message.ok ? resolve(message.results) : reject(new Error(message.error))));
+            });
 
-      worker.on('error', (err: Error) => {
-        settle(() => reject(err));
-      });
+            worker.on('error', (err: Error) => {
+                settle(() => reject(err));
+            });
 
-      worker.on('exit', (code: number) => {
-        settle(() => {
-          log.error(`[scanner] worker exited unexpectedly (code ${code})`);
-          reject(new Error('the scan worker exited unexpectedly'));
+            worker.on('exit', (code: number) => {
+                settle(() => {
+                    log.error(`[scanner] worker exited unexpectedly (code ${code})`);
+                    reject(new Error('the scan worker exited unexpectedly'));
+                });
+            });
         });
-      });
-    });
-  }
+    }
 }

@@ -12,49 +12,49 @@ export type SessionKind = 'claude' | 'terminal' | 'remote';
 
 /** A session parsed out of a Claude CLI `.jsonl` transcript. */
 export interface Session {
-  sessionId: string;
-  folder: string;
-  projectPath: string;
-  /** First real user message, truncated — the row label before any rename. */
-  summary: string;
-  firstPrompt: string;
-  /** ISO-8601. First message timestamp, falling back to the file's birthtime. */
-  created: string;
-  /** ISO-8601. Last message timestamp, falling back to the file's mtime. */
-  modified: string;
-  /**
-   * ISO-8601 file mtime. Cache-invalidation key only — never a display value.
-   * Resuming a session appends untimestamped bookkeeping records, which move
-   * the mtime without any real activity, which is why `modified` is separate.
-   */
-  fileMtime: string;
-  messageCount: number;
-  /** Concatenated message text, capped at 8000 chars, for the search index. */
-  textContent?: string;
-  slug: string | null;
-  customTitle: string | null;
-  aiTitle: string | null;
-  /** PRs the conversation created or linked, chronological, one per URL. */
-  pullRequests: SessionPullRequest[];
+    sessionId: string;
+    folder: string;
+    projectPath: string;
+    /** First real user message, truncated — the row label before any rename. */
+    summary: string;
+    firstPrompt: string;
+    /** ISO-8601. First message timestamp, falling back to the file's birthtime. */
+    created: string;
+    /** ISO-8601. Last message timestamp, falling back to the file's mtime. */
+    modified: string;
+    /**
+     * ISO-8601 file mtime. Cache-invalidation key only — never a display value.
+     * Resuming a session appends untimestamped bookkeeping records, which move
+     * the mtime without any real activity, which is why `modified` is separate.
+     */
+    fileMtime: string;
+    messageCount: number;
+    /** Concatenated message text, capped at 8000 chars, for the search index. */
+    textContent?: string;
+    slug: string | null;
+    customTitle: string | null;
+    aiTitle: string | null;
+    /** PRs the conversation created or linked, chronological, one per URL. */
+    pullRequests: SessionPullRequest[];
 }
 
 /** A pull request a session created or linked, from its transcript's `pr-link` lines. */
 export interface SessionPullRequest {
-  number: number;
-  /** Always https — it is what a click on the row's chip opens. */
-  url: string;
-  /** `owner/repo`; '' when the transcript did not say. */
-  repository: string;
+    number: number;
+    /** Always https — it is what a click on the row's chip opens. */
+    url: string;
+    /** `owner/repo`; '' when the transcript did not say. */
+    repository: string;
 }
 
 /** User-controlled per-session state, stored outside the transcript. */
 export interface SessionMeta {
-  sessionId: string;
-  name: string | null;
-  starred: 0 | 1;
-  archived: 0 | 1;
-  /** An ISO time; null when the session is not snoozed. */
-  snoozedUntil: string | null;
+    sessionId: string;
+    name: string | null;
+    starred: 0 | 1;
+    archived: 0 | 1;
+    /** An ISO time; null when the session is not snoozed. */
+    snoozedUntil: string | null;
 }
 
 /** A cached session: `Session` minus the fields too large to keep in the cache. */
@@ -62,18 +62,18 @@ export type CachedSession = Omit<Session, 'textContent' | 'customTitle'>;
 
 /** The per-folder gate that decides whether a rescan is needed. */
 export interface FolderMeta {
-  folder: string;
-  /** NULL for a folder that has been scanned but holds no resolvable project. */
-  projectPath: string | null;
-  indexMtimeMs: number;
+    folder: string;
+    /** NULL for a folder that has been scanned but holds no resolvable project. */
+    projectPath: string | null;
+    indexMtimeMs: number;
 }
 
 /** The result of scanning one project folder off the filesystem. */
 export interface FolderScan {
-  folder: string;
-  projectPath: string;
-  sessions: Session[];
-  indexMtimeMs: number;
+    folder: string;
+    projectPath: string;
+    sessions: Session[];
+    indexMtimeMs: number;
 }
 
 /**
@@ -83,59 +83,56 @@ export interface FolderScan {
  * straight out of the store as integers, and every reader treats them as truthy.
  */
 export interface SessionRow {
-  sessionId: string;
-  summary: string;
-  firstPrompt: string;
-  projectPath: string;
-  created: string;
-  modified: string;
-  messageCount: number;
-  slug?: string | null;
-  aiTitle?: string | null;
-  /** Absent on rows that never came from a transcript (terminals, pending rows). */
-  pullRequests?: SessionPullRequest[];
-  name: string | null;
-  starred: number;
-  archived: number;
-  /** An ISO time the row stays out of the list until; absent or null when awake. */
-  snoozedUntil?: string | null;
-  /** Absent for ordinary Claude sessions read off disk. */
-  type?: SessionKind;
-  remoteKind?: string;
+    sessionId: string;
+    summary: string;
+    firstPrompt: string;
+    projectPath: string;
+    created: string;
+    modified: string;
+    messageCount: number;
+    slug?: string | null;
+    aiTitle?: string | null;
+    /** Absent on rows that never came from a transcript (terminals, pending rows). */
+    pullRequests?: SessionPullRequest[];
+    name: string | null;
+    starred: number;
+    archived: number;
+    /** An ISO time the row stays out of the list until; absent or null when awake. */
+    snoozedUntil?: string | null;
+    /** Absent for ordinary Claude sessions read off disk. */
+    type?: SessionKind;
+    remoteKind?: string;
 }
 
 /** One tmux session Switchboard opened on a remote host. */
 export interface RemoteSessionRecord {
-  sessionId: string;
-  kind: string;
-  created: string;
-  lastOpened?: string;
+    sessionId: string;
+    kind: string;
+    created: string;
+    lastOpened?: string;
 }
 
 /** Assemble the row the sidebar renders from a cache row and its metadata. */
 export function toSessionRow(cached: CachedSession, meta: SessionMeta | null | undefined): SessionRow {
-  return {
-    sessionId: cached.sessionId,
-    summary: cached.summary,
-    firstPrompt: cached.firstPrompt,
-    created: cached.created,
-    modified: cached.modified,
-    messageCount: cached.messageCount,
-    projectPath: cached.projectPath,
-    slug: cached.slug || null,
-    aiTitle: cached.aiTitle || null,
-    pullRequests: cached.pullRequests ?? [],
-    name: meta?.name || null,
-    starred: meta?.starred || 0,
-    archived: meta?.archived || 0,
-    snoozedUntil: meta?.snoozedUntil || null,
-  };
+    return {
+        sessionId: cached.sessionId,
+        summary: cached.summary,
+        firstPrompt: cached.firstPrompt,
+        created: cached.created,
+        modified: cached.modified,
+        messageCount: cached.messageCount,
+        projectPath: cached.projectPath,
+        slug: cached.slug || null,
+        aiTitle: cached.aiTitle || null,
+        pullRequests: cached.pullRequests ?? [],
+        name: meta?.name || null,
+        starred: meta?.starred || 0,
+        archived: meta?.archived || 0,
+        snoozedUntil: meta?.snoozedUntil || null,
+    };
 }
 
 /** Most recently modified first — the order every session list is built in. */
-export function byMostRecentlyModified(
-  a: { modified: string },
-  b: { modified: string },
-): number {
-  return new Date(b.modified).getTime() - new Date(a.modified).getTime();
+export function byMostRecentlyModified(a: {modified: string}, b: {modified: string}): number {
+    return new Date(b.modified).getTime() - new Date(a.modified).getTime();
 }

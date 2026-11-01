@@ -14,7 +14,7 @@
  * field for field, so change them together and bump PROTOCOL_VERSION when an
  * old app could misread a new message.
  */
-import type { Answers, PendingQuestions, QuestionsOutcome } from '../questions/question';
+import type {Answers, PendingQuestions, QuestionsOutcome} from '../questions/question';
 
 /**
  * Bumped whenever a message changes shape in a way an older peer would misread.
@@ -28,16 +28,16 @@ export const BONJOUR_SERVICE_TYPE = '_switchboard._tcp';
 
 /** WebSocket close codes the app turns into a screen of its own. */
 export const CLOSE = {
-  /** A malformed or unexpected message. */
-  protocolError: 4000,
-  /** The versions differ; the app shows "Update the app". */
-  updateRequired: 4001,
-  /** The device is not (or no longer) enrolled; the app shows "No longer paired". */
-  notPaired: 4003,
-  /** Phone access was turned off on the Mac. */
-  turnedOff: 4004,
-  /** A pairing attempt ended (accepted, declined, expired); the app reconnects as paired or not. */
-  pairingOver: 4005,
+    /** A malformed or unexpected message. */
+    protocolError: 4000,
+    /** The versions differ; the app shows "Update the app". */
+    updateRequired: 4001,
+    /** The device is not (or no longer) enrolled; the app shows "No longer paired". */
+    notPaired: 4003,
+    /** Phone access was turned off on the Mac. */
+    turnedOff: 4004,
+    /** A pairing attempt ended (accepted, declined, expired); the app reconnects as paired or not. */
+    pairingOver: 4005,
 } as const;
 
 // ── Shared shapes ──
@@ -46,48 +46,46 @@ export const CLOSE = {
  * Who a session's terminal is sized for (#194: one active device per session).
  * The phone compares `deviceId` with its own to tell "here" from "another phone".
  */
-export type TerminalOwner =
-  | { kind: 'mac' }
-  | { kind: 'device'; deviceId: string; name: string };
+export type TerminalOwner = {kind: 'mac'} | {kind: 'device'; deviceId: string; name: string};
 
 /** A running session as the phone lists it, in the sidebar's order. */
 export interface PhoneSession {
-  /** The session's current id; follows re-keys (see `session-rekeyed`). */
-  id: string;
-  /** The name the sidebar shows. */
-  name: string;
-  /** The project's folder name, e.g. "switchboard". */
-  project: string;
-  projectPath: string;
-  /** "user@host" for an SSH session, else null. */
-  remote: string | null;
-  /** busy: a turn is running; needs-you: blocked on the user; idle: waiting for a prompt. */
-  state: 'busy' | 'idle' | 'needs-you';
-  /** Why it needs you, when it does: questions the app can answer, or something in the terminal. */
-  waiting: 'questions' | 'terminal' | null;
-  owner: TerminalOwner;
-  /** Epoch ms of the last state change, for the row's "2m". */
-  changedAt: number;
+    /** The session's current id; follows re-keys (see `session-rekeyed`). */
+    id: string;
+    /** The name the sidebar shows. */
+    name: string;
+    /** The project's folder name, e.g. "switchboard". */
+    project: string;
+    projectPath: string;
+    /** "user@host" for an SSH session, else null. */
+    remote: string | null;
+    /** busy: a turn is running; needs-you: blocked on the user; idle: waiting for a prompt. */
+    state: 'busy' | 'idle' | 'needs-you';
+    /** Why it needs you, when it does: questions the app can answer, or something in the terminal. */
+    waiting: 'questions' | 'terminal' | null;
+    owner: TerminalOwner;
+    /** Epoch ms of the last state change, for the row's "2m". */
+    changedAt: number;
 }
 
 /** A local project Ask Patch may start a session in. */
 export interface PhoneProject {
-  path: string;
-  /** The folder name it is listed under. */
-  folder: string;
-  /** Sessions running in it right now. */
-  running: number;
+    path: string;
+    /** The folder name it is listed under. */
+    folder: string;
+    /** Sessions running in it right now. */
+    running: number;
 }
 
 /** What came of an Ask Patch request, as the phone needs it. */
 export type PhoneAskResult =
-  | { kind: 'confident'; sessionId: string; project: string }
-  /** Up to three, best first, each with its most recent session title. */
-  | { kind: 'unsure'; candidates: { path: string; folder: string; recentTitle: string | null }[]; prompt: string }
-  /** Patch's one line; the phone shows the project list next. */
-  | { kind: 'noMatch'; reason: string }
-  | { kind: 'failed'; reason: string }
-  | { kind: 'cancelled' };
+    | {kind: 'confident'; sessionId: string; project: string}
+    /** Up to three, best first, each with its most recent session title. */
+    | {kind: 'unsure'; candidates: {path: string; folder: string; recentTitle: string | null}[]; prompt: string}
+    /** Patch's one line; the phone shows the project list next. */
+    | {kind: 'noMatch'; reason: string}
+    | {kind: 'failed'; reason: string}
+    | {kind: 'cancelled'};
 
 /**
  * Whether the Mac can turn speech into text right now. Whisper (whisper.cpp's
@@ -95,23 +93,23 @@ export type PhoneAskResult =
  * first use.
  */
 export type VoiceStatus =
-  | { kind: 'ready' }
-  /** `whisper-cli` isn't installed; the phone says `brew install whisper-cpp`. */
-  | { kind: 'no-whisper' }
-  /** The model is downloading; `progress` is 0–1, null while the size is unknown. */
-  | { kind: 'preparing'; progress: number | null }
-  /** The download failed; the next `voice-start` tries again. */
-  | { kind: 'prepare-failed'; reason: string };
+    | {kind: 'ready'}
+    /** `whisper-cli` isn't installed; the phone says `brew install whisper-cpp`. */
+    | {kind: 'no-whisper'}
+    /** The model is downloading; `progress` is 0–1, null while the size is unknown. */
+    | {kind: 'preparing'; progress: number | null}
+    /** The download failed; the next `voice-start` tries again. */
+    | {kind: 'prepare-failed'; reason: string};
 
 /** What came of one recording. */
 export type VoiceResult =
-  /** Whisper's transcript after Haiku's cleanup, or the raw transcript if the cleanup failed. */
-  | { kind: 'text'; text: string }
-  /** Nothing was heard. */
-  | { kind: 'empty' }
-  /** Sent straight after `voice-start` when the Mac can't transcribe; the phone stops recording. */
-  | { kind: 'unavailable'; status: Exclude<VoiceStatus, { kind: 'ready' }> }
-  | { kind: 'failed'; reason: string };
+    /** Whisper's transcript after Haiku's cleanup, or the raw transcript if the cleanup failed. */
+    | {kind: 'text'; text: string}
+    /** Nothing was heard. */
+    | {kind: 'empty'}
+    /** Sent straight after `voice-start` when the Mac can't transcribe; the phone stops recording. */
+    | {kind: 'unavailable'; status: Exclude<VoiceStatus, {kind: 'ready'}>}
+    | {kind: 'failed'; reason: string};
 
 /** Why a pairing attempt was turned away. */
 export type PairRejection = 'expired' | 'wrong-code' | 'locked-out' | 'declined' | 'not-pairing';
@@ -119,96 +117,107 @@ export type PairRejection = 'expired' | 'wrong-code' | 'locked-out' | 'declined'
 // ── Phone → Mac ──
 
 export type ClientMessage =
-  /** First message on every connection. */
-  | { type: 'hello'; protocol: number; appVersion: string }
-  /** Only on a pairing connection (an unenrolled certificate while a code is live). */
-  | { type: 'pair'; code: string; deviceName: string }
-  /** Start streaming a session: replay, then live output. Reports this device's size for it. */
-  | { type: 'attach'; sessionId: string; cols: number; rows: number }
-  | { type: 'detach'; sessionId: string }
-  /** This device's terminal size for a session changed. Applied only while this device owns it. */
-  | { type: 'size'; sessionId: string; cols: number; rows: number }
-  /** Make this device the active one for the session (Use here). */
-  | { type: 'use-here'; sessionId: string }
-  /** Bytes for the PTY: prompt-box text or a key bar key. Dropped unless this device owns the session. */
-  | { type: 'input'; sessionId: string; data: string }
-  /** Answering also makes this device the active one. */
-  | { type: 'answer'; sessionId: string; toolUseId: string; answers: Answers }
-  /** Ask Patch: route `text` to a project. One request per device at a time. */
-  | {
-    type: 'ask'; requestId: string; text: string;
-    /** The phone's terminal size, so a session it starts opens at its size. Both or neither. */
-    cols?: number;
-    rows?: number;
-  }
-  | { type: 'ask-cancel'; requestId: string }
-  /** Start the session in a project the user picked; `prompt` is Patch's (unsure) or the typed text (no match). */
-  | {
-    type: 'ask-start'; requestId: string; projectPath: string; prompt: string;
-    /** The phone's terminal size, so a session it starts opens at its size. Both or neither. */
-    cols?: number;
-    rows?: number;
-  }
-  | { type: 'list-projects' }
-  /** Archive the session, as ⌘E does on the Mac: it is stopped first, and stays listed if that fails. */
-  | { type: 'archive'; sessionId: string }
-  /**
-   * Voice input: a recording starts. `sessionId`, when the phone is in a
-   * session, primes Whisper and the cleanup with that session's project. A
-   * device has one recording at a time; a new start drops the previous one.
-   */
-  | { type: 'voice-start'; voiceId: string; sessionId?: string }
-  /**
-   * The next piece of audio: base64 of 16 kHz mono signed 16-bit
-   * little-endian PCM. `seq` counts from 0 per recording, without gaps.
-   */
-  | { type: 'voice-chunk'; voiceId: string; seq: number; audio: string }
-  /** The user let go: transcribe what arrived. One `voice-result` follows. */
-  | { type: 'voice-end'; voiceId: string }
-  /** The user slid off the mic: drop the recording. Nothing follows. */
-  | { type: 'voice-cancel'; voiceId: string };
+    /** First message on every connection. */
+    | {type: 'hello'; protocol: number; appVersion: string}
+    /** Only on a pairing connection (an unenrolled certificate while a code is live). */
+    | {type: 'pair'; code: string; deviceName: string}
+    /** Start streaming a session: replay, then live output. Reports this device's size for it. */
+    | {type: 'attach'; sessionId: string; cols: number; rows: number}
+    | {type: 'detach'; sessionId: string}
+    /** This device's terminal size for a session changed. Applied only while this device owns it. */
+    | {type: 'size'; sessionId: string; cols: number; rows: number}
+    /** Make this device the active one for the session (Use here). */
+    | {type: 'use-here'; sessionId: string}
+    /** Bytes for the PTY: prompt-box text or a key bar key. Dropped unless this device owns the session. */
+    | {type: 'input'; sessionId: string; data: string}
+    /** Answering also makes this device the active one. */
+    | {type: 'answer'; sessionId: string; toolUseId: string; answers: Answers}
+    /** Ask Patch: route `text` to a project. One request per device at a time. */
+    | {
+          type: 'ask';
+          requestId: string;
+          text: string;
+          /** The phone's terminal size, so a session it starts opens at its size. Both or neither. */
+          cols?: number;
+          rows?: number;
+      }
+    | {type: 'ask-cancel'; requestId: string}
+    /** Start the session in a project the user picked; `prompt` is Patch's (unsure) or the typed text (no match). */
+    | {
+          type: 'ask-start';
+          requestId: string;
+          projectPath: string;
+          prompt: string;
+          /** The phone's terminal size, so a session it starts opens at its size. Both or neither. */
+          cols?: number;
+          rows?: number;
+      }
+    | {type: 'list-projects'}
+    /** Archive the session, as ⌘E does on the Mac: it is stopped first, and stays listed if that fails. */
+    | {type: 'archive'; sessionId: string}
+    /**
+     * Voice input: a recording starts. `sessionId`, when the phone is in a
+     * session, primes Whisper and the cleanup with that session's project. A
+     * device has one recording at a time; a new start drops the previous one.
+     */
+    | {type: 'voice-start'; voiceId: string; sessionId?: string}
+    /**
+     * The next piece of audio: base64 of 16 kHz mono signed 16-bit
+     * little-endian PCM. `seq` counts from 0 per recording, without gaps.
+     */
+    | {type: 'voice-chunk'; voiceId: string; seq: number; audio: string}
+    /** The user let go: transcribe what arrived. One `voice-result` follows. */
+    | {type: 'voice-end'; voiceId: string}
+    /** The user slid off the mic: drop the recording. Nothing follows. */
+    | {type: 'voice-cancel'; voiceId: string};
 
 // ── Mac → Phone ──
 
 export type ServerMessage =
-  /** The answer to `hello` on an enrolled connection; the full state follows. */
-  | { type: 'welcome'; protocol: number; macName: string; deviceId: string }
-  /** The answer to `hello` on a pairing connection. */
-  | { type: 'pairing'; protocol: number; macName: string }
-  /** The code was right; the Mac is showing the confirm dialog. */
-  | { type: 'pair-pending' }
-  /** Confirmed on the Mac; reconnect, and this certificate is now enrolled. Followed by close(pairingOver). */
-  | { type: 'pair-accepted'; deviceId: string }
-  | { type: 'pair-rejected'; reason: PairRejection }
-  /** Sent instead of `welcome` before close(updateRequired). */
-  | { type: 'update-required'; protocol: number; macVersion: string }
-  /** The whole running list, sent on welcome and on every change. */
-  | { type: 'sessions'; sessions: PhoneSession[] }
-  /** A fork or plan-accept gave a session a new id; move the row and any open view. */
-  | { type: 'session-rekeyed'; from: string; to: string }
-  /** Sent before the replay frames of an attach. */
-  | { type: 'attached'; sessionId: string; owner: TerminalOwner }
-  | { type: 'owner'; sessionId: string; owner: TerminalOwner }
-  /** The session's process ended. */
-  | { type: 'exited'; sessionId: string; exitCode: number }
-  /** Every pending question set, on welcome and on every change. */
-  | { type: 'questions'; pending: PendingQuestions[] }
-  | { type: 'questions-settled'; sessionId: string; toolUseId: string; outcome: QuestionsOutcome; answeredOn: 'mac' | 'phone' | null }
-  | { type: 'answer-result'; sessionId: string; toolUseId: string; ok: boolean; error?: string }
-  /** `error` is only there when `ok` is false. */
-  | { type: 'archive-result'; sessionId: string; ok: boolean; error?: string }
-  /** Archived on the Mac or from another phone: an open screen of it closes, as the Mac's view does. */
-  | { type: 'archived'; sessionId: string }
-  | { type: 'ask-result'; requestId: string; result: PhoneAskResult }
-  | { type: 'ask-started'; requestId: string; sessionId: string }
-  | { type: 'ask-error'; requestId: string; error: string }
-  | { type: 'projects'; projects: PhoneProject[] }
-  /** Sent on welcome and to every phone whenever it changes (download progress in whole percents). */
-  | { type: 'voice-status'; status: VoiceStatus }
-  /** Exactly one per `voice-start` that wasn't cancelled. */
-  | { type: 'voice-result'; voiceId: string; result: VoiceResult }
-  /** Sent before close(notPaired) when the device is revoked or the Mac's identity is reset. */
-  | { type: 'revoked' };
+    /** The answer to `hello` on an enrolled connection; the full state follows. */
+    | {type: 'welcome'; protocol: number; macName: string; deviceId: string}
+    /** The answer to `hello` on a pairing connection. */
+    | {type: 'pairing'; protocol: number; macName: string}
+    /** The code was right; the Mac is showing the confirm dialog. */
+    | {type: 'pair-pending'}
+    /** Confirmed on the Mac; reconnect, and this certificate is now enrolled. Followed by close(pairingOver). */
+    | {type: 'pair-accepted'; deviceId: string}
+    | {type: 'pair-rejected'; reason: PairRejection}
+    /** Sent instead of `welcome` before close(updateRequired). */
+    | {type: 'update-required'; protocol: number; macVersion: string}
+    /** The whole running list, sent on welcome and on every change. */
+    | {type: 'sessions'; sessions: PhoneSession[]}
+    /** A fork or plan-accept gave a session a new id; move the row and any open view. */
+    | {type: 'session-rekeyed'; from: string; to: string}
+    /** Sent before the replay frames of an attach. */
+    | {type: 'attached'; sessionId: string; owner: TerminalOwner}
+    | {type: 'owner'; sessionId: string; owner: TerminalOwner}
+    /** The session's process ended. */
+    | {type: 'exited'; sessionId: string; exitCode: number}
+    /** Every pending question set, on welcome and on every change. */
+    | {type: 'questions'; pending: PendingQuestions[]}
+    | {
+          type: 'questions-settled';
+          sessionId: string;
+          toolUseId: string;
+          outcome: QuestionsOutcome;
+          answeredOn: 'mac' | 'phone' | null;
+      }
+    | {type: 'answer-result'; sessionId: string; toolUseId: string; ok: boolean; error?: string}
+    /** `error` is only there when `ok` is false. */
+    | {type: 'archive-result'; sessionId: string; ok: boolean; error?: string}
+    /** Archived on the Mac or from another phone: an open screen of it closes, as the Mac's view does. */
+    | {type: 'archived'; sessionId: string}
+    | {type: 'ask-result'; requestId: string; result: PhoneAskResult}
+    | {type: 'ask-started'; requestId: string; sessionId: string}
+    | {type: 'ask-error'; requestId: string; error: string}
+    | {type: 'projects'; projects: PhoneProject[]}
+    /** Sent on welcome and to every phone whenever it changes (download progress in whole percents). */
+    | {type: 'voice-status'; status: VoiceStatus}
+    /** Exactly one per `voice-start` that wasn't cancelled. */
+    | {type: 'voice-result'; voiceId: string; result: VoiceResult}
+    /** Sent before close(notPaired) when the device is revoked or the Mac's identity is reset. */
+    | {type: 'revoked'};
 
 // ── Terminal frames ──
 //
@@ -226,12 +235,12 @@ export type ServerMessage =
 
 /** What the QR code on the Mac holds. */
 export interface PairingInvite {
-  protocol: number;
-  /** The Mac's certificate fingerprint, lowercase hex SHA-256 without separators. */
-  fingerprint: string;
-  /** The one-time pairing code. */
-  code: string;
-  /** The Bonjour host name, e.g. "joris-mbp.local"; a hint, the fingerprint is what counts. */
-  host: string;
-  port: number;
+    protocol: number;
+    /** The Mac's certificate fingerprint, lowercase hex SHA-256 without separators. */
+    fingerprint: string;
+    /** The one-time pairing code. */
+    code: string;
+    /** The Bonjour host name, e.g. "joris-mbp.local"; a hint, the fingerprint is what counts. */
+    host: string;
+    port: number;
 }

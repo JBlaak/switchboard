@@ -11,49 +11,56 @@
  * Starting needs a project to make the worktree in; without one the view
  * offers no Start session.
  */
-import { useMemo } from 'react';
-import { dispatch, getState } from '../../../state/app-store';
-import { sessionMap } from '../../../state/session-store';
-import { useStore } from '../../use-store';
-import { headerNameFor } from '../../../features/sessions/terminal-header';
-import { layOutPlan } from '../../../../domain/plan/layout';
-import { issueKeyString, sameIssue } from '../../../../domain/plan/model';
-import type { IssueKey, Plan } from '../../../../domain/plan/model';
-import type { IdRecord } from '../../../state/records';
-import { issueSessionSteps, jumpToSession, startIssueSession } from './actions';
-import type { IssueActions, IssueSession } from './types';
-import { startLevelWith } from './start-level';
-import { reloadOwners } from './load';
-import { pulseSessionRow } from '../../session-list/pulse';
+import {useMemo} from 'react';
+import {dispatch, getState} from '../../../state/app-store';
+import {sessionMap} from '../../../state/session-store';
+import {useStore} from '../../use-store';
+import {headerNameFor} from '../../../features/sessions/terminal-header';
+import {layOutPlan} from '../../../../domain/plan/layout';
+import {issueKeyString, sameIssue} from '../../../../domain/plan/model';
+import type {IssueKey, Plan} from '../../../../domain/plan/model';
+import type {IdRecord} from '../../../state/records';
+import {issueSessionSteps, jumpToSession, startIssueSession} from './actions';
+import type {IssueActions, IssueSession} from './types';
+import {startLevelWith} from './start-level';
+import {reloadOwners} from './load';
+import {pulseSessionRow} from '../../session-list/pulse';
 
 const NO_OWNERS: IdRecord<string> = {};
 const NO_BUSY: IdRecord<boolean> = {};
 
 /** The owner of an issue, named the way the terminal header names it. */
 export function issueSession(
-  owners: IdRecord<string>, busy: IdRecord<boolean>, issue: IssueKey,
-  nameOf: (sessionId: string) => string | null,
+    owners: IdRecord<string>,
+    busy: IdRecord<boolean>,
+    issue: IssueKey,
+    nameOf: (sessionId: string) => string | null,
 ): IssueSession | null {
-  const id = owners[issueKeyString(issue)];
-  if (!id) return null;
-  return { id, name: nameOf(id) || 'Untitled session', working: busy[id] === true };
+    const id = owners[issueKeyString(issue)];
+    if (!id) return null;
+    return {id, name: nameOf(id) || 'Untitled session', working: busy[id] === true};
 }
 
 function nameOf(sessionId: string): string | null {
-  const session = sessionMap.get(sessionId);
-  return session ? headerNameFor(session) : null;
+    const session = sessionMap.get(sessionId);
+    return session ? headerNameFor(session) : null;
 }
 
 async function start(
-  projectPath: string, issue: IssueKey, plan: Plan, show: boolean, existing?: 'replace' | 'reuse',
+    projectPath: string,
+    issue: IssueKey,
+    plan: Plan,
+    show: boolean,
+    existing?: 'replace' | 'reuse',
 ): Promise<void> {
-  dispatch({ type: 'planStartAsked', issue, confirm: false });
-  const result = await startIssueSession({ projectPath, issue, plan, show, existing }).catch((err: Error) => ({
-    ok: false as const, reason: err.message || 'Could not start the session',
-  }));
-  // Started without taking the screen: its new row says so instead.
-  if (result.ok && !show) pulseSessionRow(result.sessionId);
-  dispatch({ type: 'planStartAnswered', issue, result });
+    dispatch({type: 'planStartAsked', issue, confirm: false});
+    const result = await startIssueSession({projectPath, issue, plan, show, existing}).catch((err: Error) => ({
+        ok: false as const,
+        reason: err.message || 'Could not start the session',
+    }));
+    // Started without taking the screen: its new row says so instead.
+    if (result.ok && !show) pulseSessionRow(result.sessionId);
+    dispatch({type: 'planStartAnswered', issue, result});
 }
 
 /**
@@ -62,13 +69,18 @@ async function start(
  * owners asked again.
  */
 async function startLevel(projectPath: string, plan: Plan, pulse: boolean): Promise<void> {
-  const asking = getState().plan.levelStart;
-  if (asking?.phase !== 'confirm' || !sameIssue(asking.plan, plan)) return;
-  dispatch({ type: 'planLevelStartConfirmed' });
-  const { sessionId, ...report } = await startLevelWith(issueSessionSteps, { projectPath, plan, level: asking.level, issues: asking.issues });
-  if (sessionId && pulse) pulseSessionRow(sessionId);
-  dispatch({ type: 'planLevelStartAnswered', ...report });
-  await reloadOwners();
+    const asking = getState().plan.levelStart;
+    if (asking?.phase !== 'confirm' || !sameIssue(asking.plan, plan)) return;
+    dispatch({type: 'planLevelStartConfirmed'});
+    const {sessionId, ...report} = await startLevelWith(issueSessionSteps, {
+        projectPath,
+        plan,
+        level: asking.level,
+        issues: asking.issues,
+    });
+    if (sessionId && pulse) pulseSessionRow(sessionId);
+    dispatch({type: 'planLevelStartAnswered', ...report});
+    await reloadOwners();
 }
 
 /**
@@ -77,37 +89,43 @@ async function startLevel(projectPath: string, plan: Plan, pulse: boolean): Prom
  * is false: the project page keeps the main area (#173), and every row it
  * starts, one issue's or a level's, pulses once in the sidebar instead.
  */
-export function useIssueActions(projectPath: string | null, { show = true }: { show?: boolean } = {}): IssueActions {
-  const owners = useStore(state => state.plan.view?.owners ?? NO_OWNERS);
-  const busy = useStore(state => state.activity.busy ?? NO_BUSY);
-  const pending = useStore(state => state.plan.view?.start ?? null);
-  const levelStart = useStore(state => state.plan.levelStart);
+export function useIssueActions(projectPath: string | null, {show = true}: {show?: boolean} = {}): IssueActions {
+    const owners = useStore((state) => state.plan.view?.owners ?? NO_OWNERS);
+    const busy = useStore((state) => state.activity.busy ?? NO_BUSY);
+    const pending = useStore((state) => state.plan.view?.start ?? null);
+    const levelStart = useStore((state) => state.plan.levelStart);
 
-  return useMemo<IssueActions>(() => {
-    const actions: IssueActions = {
-      sessionFor: issue => issueSession(owners, busy, issue, nameOf),
-      jumpToSession: (sessionId) => { void jumpToSession(sessionId); },
-      start: pending,
-      levelStart,
-    };
-    if (!projectPath) return actions;
-    return {
-      ...actions,
-      startSession: (issue, plan) => {
-        if (layOutPlan(plan).stateOf(issue) === 'locked') dispatch({ type: 'planStartAsked', issue, confirm: true });
-        else void start(projectPath, issue, plan, show);
-      },
-      confirmStart: (plan) => {
-        const asking = getState().plan.view?.start;
-        if (asking?.phase === 'confirm') void start(projectPath, asking.issue, plan, show);
-      },
-      cancelStart: () => dispatch({ type: 'planStartCancelled' }),
-      startAgain: (issue, plan, existing) => {
-        if (getState().plan.view?.start?.phase !== 'starting') void start(projectPath, issue, plan, show, existing);
-      },
-      startLevel: (plan, level, issues) => dispatch({ type: 'planLevelStartAsked', plan, level, issues }),
-      confirmLevelStart: (plan) => { void startLevel(projectPath, plan, !show); },
-      cancelLevelStart: () => dispatch({ type: 'planLevelStartCancelled' }),
-    };
-  }, [owners, busy, pending, levelStart, projectPath, show]);
+    return useMemo<IssueActions>(() => {
+        const actions: IssueActions = {
+            sessionFor: (issue) => issueSession(owners, busy, issue, nameOf),
+            jumpToSession: (sessionId) => {
+                void jumpToSession(sessionId);
+            },
+            start: pending,
+            levelStart,
+        };
+        if (!projectPath) return actions;
+        return {
+            ...actions,
+            startSession: (issue, plan) => {
+                if (layOutPlan(plan).stateOf(issue) === 'locked')
+                    dispatch({type: 'planStartAsked', issue, confirm: true});
+                else void start(projectPath, issue, plan, show);
+            },
+            confirmStart: (plan) => {
+                const asking = getState().plan.view?.start;
+                if (asking?.phase === 'confirm') void start(projectPath, asking.issue, plan, show);
+            },
+            cancelStart: () => dispatch({type: 'planStartCancelled'}),
+            startAgain: (issue, plan, existing) => {
+                if (getState().plan.view?.start?.phase !== 'starting')
+                    void start(projectPath, issue, plan, show, existing);
+            },
+            startLevel: (plan, level, issues) => dispatch({type: 'planLevelStartAsked', plan, level, issues}),
+            confirmLevelStart: (plan) => {
+                void startLevel(projectPath, plan, !show);
+            },
+            cancelLevelStart: () => dispatch({type: 'planLevelStartCancelled'}),
+        };
+    }, [owners, busy, pending, levelStart, projectPath, show]);
 }

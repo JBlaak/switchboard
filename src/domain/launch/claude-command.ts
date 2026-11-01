@@ -7,21 +7,21 @@
  * design ("aws-vault exec profile --") and is only checked for the newline that
  * would let it smuggle in a second command.
  */
-import { quoteArgvForShell } from '../shell/quoting';
-import type { SessionOptions } from './session-options';
+import {quoteArgvForShell} from '../shell/quoting';
+import type {SessionOptions} from './session-options';
 
 /** Which session the CLI should attach to, and how. */
 export interface SessionTarget {
-  sessionId: string;
-  /** A session being started rather than resumed. */
-  isNew: boolean;
+    sessionId: string;
+    /** A session being started rather than resumed. */
+    isNew: boolean;
 }
 
 /** Switchboard's own MCP server for a session, and the tools on it the session may call unasked. */
 export interface SessionTools {
-  /** Inline JSON for `--mcp-config`; added to the user's own servers, not in place of them. */
-  mcpConfig: string;
-  allowedTools: string[];
+    /** Inline JSON for `--mcp-config`; added to the user's own servers, not in place of them. */
+    mcpConfig: string;
+    allowedTools: string[];
 }
 
 /** Raised when a launch option cannot be made safe. */
@@ -37,68 +37,74 @@ export class UnsafeLaunchOptionError extends Error {}
  * tries to spin up a new worktree and fails to attach.
  */
 export function buildClaudeArgs(
-  target: SessionTarget, options?: SessionOptions, settings?: string, tools?: SessionTools,
+    target: SessionTarget,
+    options?: SessionOptions,
+    settings?: string,
+    tools?: SessionTools,
 ): string[] {
-  const args: string[] = [];
+    const args: string[] = [];
 
-  // Switchboard's own per-session settings (the question hook) and tools (the
-  // archive tool). Ahead of the early return: a session launched with no
-  // options still gets them. Both flags take any number of values, so each is
-  // followed by another flag, never by a bare value.
-  if (settings) args.push('--settings', settings);
-  if (tools) {
-    args.push('--mcp-config', tools.mcpConfig);
-    if (tools.allowedTools.length) args.push('--allowedTools', tools.allowedTools.join(','));
-  }
-
-  if (target.isNew) {
-    args.push('--session-id', String(target.sessionId));
-  } else {
-    args.push('--resume', String(target.sessionId));
-  }
-
-  if (!options) return args;
-
-  if (options.dangerouslySkipPermissions) {
-    args.push('--dangerously-skip-permissions');
-  } else if (options.permissionMode) {
-    args.push('--permission-mode', String(options.permissionMode));
-  }
-
-  if (target.isNew && options.worktree) {
-    args.push('--worktree');
-    if (options.worktreeName) args.push(String(options.worktreeName));
-  }
-
-  if (options.chrome) args.push('--chrome');
-
-  if (options.addDirs) {
-    for (const dir of String(options.addDirs).split(',').map(d => d.trim()).filter(Boolean)) {
-      args.push('--add-dir', dir);
+    // Switchboard's own per-session settings (the question hook) and tools (the
+    // archive tool). Ahead of the early return: a session launched with no
+    // options still gets them. Both flags take any number of values, so each is
+    // followed by another flag, never by a bare value.
+    if (settings) args.push('--settings', settings);
+    if (tools) {
+        args.push('--mcp-config', tools.mcpConfig);
+        if (tools.allowedTools.length) args.push('--allowedTools', tools.allowedTools.join(','));
     }
-  }
 
-  if (options.appendSystemPrompt) {
-    args.push('--append-system-prompt', String(options.appendSystemPrompt));
-  }
+    if (target.isNew) {
+        args.push('--session-id', String(target.sessionId));
+    } else {
+        args.push('--resume', String(target.sessionId));
+    }
 
-  // Last, behind `--`: `--add-dir` takes any number of values and would
-  // otherwise swallow the prompt as one more directory, and a prompt that
-  // starts with `-` must not read as a flag.
-  if (target.isNew && options.initialPrompt) {
-    args.push('--', String(options.initialPrompt));
-  }
+    if (!options) return args;
 
-  return args;
+    if (options.dangerouslySkipPermissions) {
+        args.push('--dangerously-skip-permissions');
+    } else if (options.permissionMode) {
+        args.push('--permission-mode', String(options.permissionMode));
+    }
+
+    if (target.isNew && options.worktree) {
+        args.push('--worktree');
+        if (options.worktreeName) args.push(String(options.worktreeName));
+    }
+
+    if (options.chrome) args.push('--chrome');
+
+    if (options.addDirs) {
+        for (const dir of String(options.addDirs)
+            .split(',')
+            .map((d) => d.trim())
+            .filter(Boolean)) {
+            args.push('--add-dir', dir);
+        }
+    }
+
+    if (options.appendSystemPrompt) {
+        args.push('--append-system-prompt', String(options.appendSystemPrompt));
+    }
+
+    // Last, behind `--`: `--add-dir` takes any number of values and would
+    // otherwise swallow the prompt as one more directory, and a prompt that
+    // starts with `-` must not read as a flag.
+    if (target.isNew && options.initialPrompt) {
+        args.push('--', String(options.initialPrompt));
+    }
+
+    return args;
 }
 
 /** Everything that shapes the final command string. */
 export interface ClaudeCommandSpec {
-  target: SessionTarget;
-  options?: SessionOptions;
-  /** Inline JSON for `--settings`; merged by the CLI with the user's own settings files. */
-  settings?: string;
-  tools?: SessionTools;
+    target: SessionTarget;
+    options?: SessionOptions;
+    /** Inline JSON for `--settings`; merged by the CLI with the user's own settings files. */
+    settings?: string;
+    tools?: SessionTools;
 }
 
 /**
@@ -106,18 +112,18 @@ export interface ClaudeCommandSpec {
  *
  * @throws UnsafeLaunchOptionError when `preLaunchCmd` spans more than one line.
  */
-export function buildClaudeCommand({ target, options, settings, tools }: ClaudeCommandSpec): string {
-  let command = 'claude ' + quoteArgvForShell(buildClaudeArgs(target, options, settings, tools));
+export function buildClaudeCommand({target, options, settings, tools}: ClaudeCommandSpec): string {
+    let command = 'claude ' + quoteArgvForShell(buildClaudeArgs(target, options, settings, tools));
 
-  if (options?.preLaunchCmd) {
-    const pre = String(options.preLaunchCmd);
-    if (/[\r\n]/.test(pre)) {
-      throw new UnsafeLaunchOptionError('preLaunchCmd must not contain newlines');
+    if (options?.preLaunchCmd) {
+        const pre = String(options.preLaunchCmd);
+        if (/[\r\n]/.test(pre)) {
+            throw new UnsafeLaunchOptionError('preLaunchCmd must not contain newlines');
+        }
+        command = pre + ' ' + command;
     }
-    command = pre + ' ' + command;
-  }
 
-  return command;
+    return command;
 }
 
 /**
@@ -128,4 +134,4 @@ export function buildClaudeCommand({ target, options, settings, tools }: ClaudeC
  * so the name is shadowed with an explanation instead of failing obscurely.
  */
 export const PLAIN_TERMINAL_CLAUDE_SHIM =
-  'claude() { echo "\\033[33mTo start a Claude session, use the + button in the sidebar.\\033[0m"; return 1; }; export -f claude 2>/dev/null;';
+    'claude() { echo "\\033[33mTo start a Claude session, use the + button in the sidebar.\\033[0m"; return 1; }; export -f claude 2>/dev/null;';

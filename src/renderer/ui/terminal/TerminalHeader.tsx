@@ -11,52 +11,62 @@
  * The header is a window drag region; the stylesheet opts its spans and
  * buttons out (`_chrome.scss`), which is why the markup keeps its ids.
  */
-import { useLayoutEffect } from 'react';
-import type { JSX } from 'react';
-import { remoteStatusLabel } from '../../../domain/remote/remote-status';
-import { shallowEqual } from '../../state/store';
-import { headerShellIn, headerTitleIn } from '../../state/terminal-slice';
-import { useStore } from '../use-store';
-import { stopSessionOnScreen } from './actions';
-import { sessionMap } from '../../state/session-store';
-import { projectLabel } from '../../features/sessions/project-label';
-import { ProjectLink } from '../project-page/ProjectLink';
-import { TaskChip } from '../session-task/TaskChip';
+import {useLayoutEffect} from 'react';
+import type {JSX} from 'react';
+import {remoteStatusLabel} from '../../../domain/remote/remote-status';
+import {shallowEqual} from '../../state/store';
+import {headerShellIn, headerTitleIn} from '../../state/terminal-slice';
+import {useStore} from '../use-store';
+import {stopSessionOnScreen} from './actions';
+import {sessionMap} from '../../state/session-store';
+import {projectLabel} from '../../features/sessions/project-label';
+import {ProjectLink} from '../project-page/ProjectLink';
+import {TaskChip} from '../session-task/TaskChip';
 
 /**
  * The session's name, its project (a way into the project page, #173), its
  * BlaakTasks task (#250), the process title (or a CLI notice), its id and its shell.
  */
 export function TerminalHeaderInfo(): JSX.Element {
-  const { onScreen, name, title, shell } = useStore(state => ({
-    onScreen: state.terminal.onScreen,
-    name: state.terminal.headerName,
-    title: headerTitleIn(state.terminal),
-    shell: headerShellIn(state.terminal),
-  }), shallowEqual);
+    const {onScreen, name, title, shell} = useStore(
+        (state) => ({
+            onScreen: state.terminal.onScreen,
+            name: state.terminal.headerName,
+            title: headerTitleIn(state.terminal),
+            shell: headerShellIn(state.terminal),
+        }),
+        shallowEqual,
+    );
 
-  useLayoutEffect(() => {
-    const header = document.getElementById('terminal-header');
-    if (header) header.style.display = onScreen ? '' : 'none';
-  }, [onScreen]);
+    useLayoutEffect(() => {
+        const header = document.getElementById('terminal-header');
+        if (header) header.style.display = onScreen ? '' : 'none';
+    }, [onScreen]);
 
-  // The row is shared and its project never changes, so it is read as rendered.
-  const projectPath = onScreen ? sessionMap.get(onScreen)?.projectPath ?? null : null;
+    // The row is shared and its project never changes, so it is read as rendered.
+    const projectPath = onScreen ? (sessionMap.get(onScreen)?.projectPath ?? null) : null;
 
-  return (
-    <>
-      <span id="terminal-header-name">{name}</span>
-      {projectPath && (
-        <ProjectLink id="terminal-header-project" className={projectPath.startsWith('ssh://') ? 'is-remote' : undefined} path={projectPath}>
-          {projectLabel(projectPath)}
-        </ProjectLink>
-      )}
-      <TaskChip sessionId={onScreen} />
-      <span id="terminal-header-pty-title" style={title ? undefined : { display: 'none' }}>{title}</span>
-      <span id="terminal-header-id">{onScreen ?? ''}</span>
-      <span id="terminal-header-shell" style={shell ? undefined : { display: 'none' }}>{shell ?? ''}</span>
-    </>
-  );
+    return (
+        <>
+            <span id="terminal-header-name">{name}</span>
+            {projectPath && (
+                <ProjectLink
+                    id="terminal-header-project"
+                    className={projectPath.startsWith('ssh://') ? 'is-remote' : undefined}
+                    path={projectPath}>
+                    {projectLabel(projectPath)}
+                </ProjectLink>
+            )}
+            <TaskChip sessionId={onScreen} />
+            <span id="terminal-header-pty-title" style={title ? undefined : {display: 'none'}}>
+                {title}
+            </span>
+            <span id="terminal-header-id">{onScreen ?? ''}</span>
+            <span id="terminal-header-shell" style={shell ? undefined : {display: 'none'}}>
+                {shell ?? ''}
+            </span>
+        </>
+    );
 }
 
 /**
@@ -67,29 +77,34 @@ export function TerminalHeaderInfo(): JSX.Element {
  * one. Its countdown re-renders off the shared remote tick.
  */
 export function TerminalHeaderControls(): JSX.Element {
-  const { running, remote } = useStore(state => {
-    const id = state.terminal.onScreen;
-    return {
-      running: !!id && state.view.activePtyIds.has(id),
-      remote: id ? state.remote.statuses[id] : undefined,
-      // Selected only so each tick re-renders the countdown.
-      tickAt: state.remote.tickAt,
-    };
-  }, shallowEqual);
+    const {running, remote} = useStore((state) => {
+        const id = state.terminal.onScreen;
+        return {
+            running: !!id && state.view.activePtyIds.has(id),
+            remote: id ? state.remote.statuses[id] : undefined,
+            // Selected only so each tick re-renders the countdown.
+            tickAt: state.remote.tickAt,
+        };
+    }, shallowEqual);
 
-  const connecting = remoteStatusLabel(remote);
-  const status = connecting ? 'connecting' : running ? 'running' : 'stopped';
-  const label = connecting ?? (running ? 'Running' : 'Stopped');
+    const connecting = remoteStatusLabel(remote);
+    const status = connecting ? 'connecting' : running ? 'running' : 'stopped';
+    const label = connecting ?? (running ? 'Running' : 'Stopped');
 
-  return (
-    <>
-      <span id="terminal-header-status" className={status}>{label}</span>
-      <button
-        id="terminal-stop-btn" title="Stop process" onClick={stopSessionOnScreen}
-        style={running ? undefined : { display: 'none' }}
-      >
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><rect x="2" y="2" width="8" height="8" rx="1" /></svg>
-      </button>
-    </>
-  );
+    return (
+        <>
+            <span id="terminal-header-status" className={status}>
+                {label}
+            </span>
+            <button
+                id="terminal-stop-btn"
+                title="Stop process"
+                onClick={stopSessionOnScreen}
+                style={running ? undefined : {display: 'none'}}>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                    <rect x="2" y="2" width="8" height="8" rx="1" />
+                </svg>
+            </button>
+        </>
+    );
 }

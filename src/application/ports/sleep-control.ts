@@ -6,8 +6,8 @@
  * show what is true instead of an error.
  */
 export interface SleepControl {
-  /** True when sleep is disabled, null when it cannot be read. */
-  isSleepDisabled(): Promise<boolean | null>;
-  /** Flip the switch, then answer with the state actually read back. */
-  setSleepDisabled(disabled: boolean): Promise<boolean | null>;
+    /** True when sleep is disabled, null when it cannot be read. */
+    isSleepDisabled(): Promise<boolean | null>;
+    /** Flip the switch, then answer with the state actually read back. */
+    setSleepDisabled(disabled: boolean): Promise<boolean | null>;
 }

@@ -11,29 +11,29 @@
  * One per card, shared by both sides and every mode.
  */
 export interface View {
-  readonly scale: number;
-  readonly x: number;
-  readonly y: number;
+    readonly scale: number;
+    readonly x: number;
+    readonly y: number;
 }
 
 /** What sits behind the image: a checkerboard shows transparency; light and dark are flat. */
 export type Background = 'checkerboard' | 'light' | 'dark';
 
 export interface Size {
-  readonly width: number;
-  readonly height: number;
+    readonly width: number;
+    readonly height: number;
 }
 
 export interface Point {
-  readonly x: number;
-  readonly y: number;
+    readonly x: number;
+    readonly y: number;
 }
 
 /** Raw RGBA pixels, four bytes a pixel, row by row; the shape of an `ImageData`. */
 export interface Pixels {
-  readonly width: number;
-  readonly height: number;
-  readonly data: Uint8ClampedArray;
+    readonly width: number;
+    readonly height: number;
+    readonly data: Uint8ClampedArray;
 }
 
 /** A colour as 0–255 channels. */

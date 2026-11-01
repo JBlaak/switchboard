@@ -16,30 +16,34 @@
  * collision guard for paths long enough to be truncated.
  */
 export function encodeProjectPath(projectPath: string): string {
-  const sanitized = projectPath.replace(/[^a-zA-Z0-9]/g, '-');
-  if (sanitized.length <= 200) return sanitized;
-  let h = 0;
-  for (let i = 0; i < projectPath.length; i++) {
-    h = (h << 5) - h + projectPath.charCodeAt(i) | 0;
-  }
-  return sanitized.slice(0, 200) + '-' + Math.abs(h).toString(36);
+    const sanitized = projectPath.replace(/[^a-zA-Z0-9]/g, '-');
+    if (sanitized.length <= 200) return sanitized;
+    let h = 0;
+    for (let i = 0; i < projectPath.length; i++) {
+        h = ((h << 5) - h + projectPath.charCodeAt(i)) | 0;
+    }
+    return sanitized.slice(0, 200) + '-' + Math.abs(h).toString(36);
 }
 
 /**
  * Shorten a project path for display: its last two segments.
  */
 export function shortProjectPath(projectPath: string | null | undefined): string {
-  if (!projectPath) return '';
-  // Remote projects render as their connection string ("user@host[:port]"),
-  // plus the last segment of the working directory when one is set.
-  if (projectPath.startsWith('ssh://')) {
-    const rest = projectPath.slice('ssh://'.length);
-    const slash = rest.indexOf('/');
-    if (slash === -1) return rest;
-    const lastSeg = rest.slice(slash + 1).split('/').filter(s => s && s !== '~').pop();
-    return lastSeg ? rest.slice(0, slash) + '/' + lastSeg : rest.slice(0, slash);
-  }
-  return projectPath.split('/').filter(Boolean).slice(-2).join('/');
+    if (!projectPath) return '';
+    // Remote projects render as their connection string ("user@host[:port]"),
+    // plus the last segment of the working directory when one is set.
+    if (projectPath.startsWith('ssh://')) {
+        const rest = projectPath.slice('ssh://'.length);
+        const slash = rest.indexOf('/');
+        if (slash === -1) return rest;
+        const lastSeg = rest
+            .slice(slash + 1)
+            .split('/')
+            .filter((s) => s && s !== '~')
+            .pop();
+        return lastSeg ? rest.slice(0, slash) + '/' + lastSeg : rest.slice(0, slash);
+    }
+    return projectPath.split('/').filter(Boolean).slice(-2).join('/');
 }
 
 /**
@@ -52,7 +56,7 @@ export function shortProjectPath(projectPath: string | null | undefined): string
  * parent still exists, since only it can touch the filesystem.
  */
 export function worktreeParentPath(cwd: string | null | undefined): string | null {
-  if (!cwd) return null;
-  const match = cwd.match(/^(.+?)\/\.(?:claude\/worktrees|claude-worktrees|worktrees)\/[^/]+\/?$/);
-  return match ? match[1] : null;
+    if (!cwd) return null;
+    const match = cwd.match(/^(.+?)\/\.(?:claude\/worktrees|claude-worktrees|worktrees)\/[^/]+\/?$/);
+    return match ? match[1] : null;
 }

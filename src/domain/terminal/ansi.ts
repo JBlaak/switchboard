@@ -25,10 +25,10 @@ export const HIDE_CURSOR = '\x1b[?25l';
  * last printed, and closes it so the next output starts clean.
  */
 export function statusBanner(text: string, colour: string = COLOUR_DIM): string {
-  return `\r\n${colour}── ${text} ──${RESET}\r\n`;
+    return `\r\n${colour}── ${text} ──${RESET}\r\n`;
 }
 
 /** The banner shown when a session's process ends. */
 export function sessionExitedBanner(exitCode: number): string {
-  return statusBanner(`session exited (code ${exitCode})`, exitCode === 0 ? COLOUR_DIM : COLOUR_WARN);
+    return statusBanner(`session exited (code ${exitCode})`, exitCode === 0 ? COLOUR_DIM : COLOUR_WARN);
 }

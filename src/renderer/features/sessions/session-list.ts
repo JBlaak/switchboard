@@ -10,44 +10,42 @@
  * had not written yet have to be dropped once a real one arrives, re-injected
  * while one might still be coming, and evicted when it is clear none ever will.
  */
-import { isPendingAbandoned } from '../../../domain/session/pending';
-import { encodeProjectPath } from '../../../domain/project/project-path';
-import { relayoutSessionList } from '../../ui/session-list/relayout';
-import { dropPendingSession } from './session-actions';
-import { pollActiveSessions } from './session-poller';
-import {
-  adoptSessions, injectIntoCaches, pendingSessions, sessionMap, view,
-} from '../../state/session-store';
-import { dispatch } from '../../state/app-store';
-import type { Project } from '../../../domain/project/project';
+import {isPendingAbandoned} from '../../../domain/session/pending';
+import {encodeProjectPath} from '../../../domain/project/project-path';
+import {relayoutSessionList} from '../../ui/session-list/relayout';
+import {dropPendingSession} from './session-actions';
+import {pollActiveSessions} from './session-poller';
+import {adoptSessions, injectIntoCaches, pendingSessions, sessionMap, view} from '../../state/session-store';
+import {dispatch} from '../../state/app-store';
+import type {Project} from '../../../domain/project/project';
 
 export interface LoadOptions {
-  resort?: boolean;
+    resort?: boolean;
 }
 
 /** Re-fetch the projects, reconcile the pending rows, and redraw. */
-export async function loadProjects({ resort = false }: LoadOptions = {}): Promise<void> {
-  // Only the first load says so: later ones redraw over a list already shown.
-  if (view.cachedProjects.length === 0) dispatch({ type: 'projectsLoading', loading: true });
+export async function loadProjects({resort = false}: LoadOptions = {}): Promise<void> {
+    // Only the first load says so: later ones redraw over a list already shown.
+    if (view.cachedProjects.length === 0) dispatch({type: 'projectsLoading', loading: true});
 
-  const [defaultProjects, allProjects] = await Promise.all([
-    window.api.getProjects(false),
-    window.api.getProjects(true),
-  ]);
+    const [defaultProjects, allProjects] = await Promise.all([
+        window.api.getProjects(false),
+        window.api.getProjects(true),
+    ]);
 
-  view.cachedProjects = defaultProjects;
-  view.cachedAllProjects = allProjects;
-  dispatch({ type: 'projectsLoading', loading: false });
-  dispatch({ type: 'projectsCounted', any: allProjects.length > 0 });
+    view.cachedProjects = defaultProjects;
+    view.cachedAllProjects = allProjects;
+    dispatch({type: 'projectsLoading', loading: false});
+    dispatch({type: 'projectsCounted', any: allProjects.length > 0});
 
-  adoptSessions(view.cachedProjects);
-  adoptSessions(view.cachedAllProjects);
+    adoptSessions(view.cachedProjects);
+    adoptSessions(view.cachedAllProjects);
 
-  reconcilePending(allProjects);
-  await adoptActiveTerminals();
+    reconcilePending(allProjects);
+    await adoptActiveTerminals();
 
-  await pollActiveSessions();
-  relayoutSessionList({ resort });
+    await pollActiveSessions();
+    relayoutSessionList({resort});
 }
 
 /**
@@ -58,24 +56,24 @@ export async function loadProjects({ resort = false }: LoadOptions = {}): Promis
  * freshly fetched lists do not contain it).
  */
 function reconcilePending(allProjects: readonly Project[]): void {
-  for (const [sessionId, pending] of [...pendingSessions]) {
-    const realExists = allProjects.some(p => p.sessions.some(s => s.sessionId === sessionId));
-    if (realExists) {
-      pendingSessions.delete(sessionId);
-      continue;
-    }
+    for (const [sessionId, pending] of [...pendingSessions]) {
+        const realExists = allProjects.some((p) => p.sessions.some((s) => s.sessionId === sessionId));
+        if (realExists) {
+            pendingSessions.delete(sessionId);
+            continue;
+        }
 
-    const abandoned = isPendingAbandoned(pending, {
-      running: view.activePtyIds.has(sessionId),
-      onScreen: view.activeSessionId === sessionId,
-    });
-    if (abandoned) {
-      dropPendingSession(sessionId);
-      continue;
-    }
+        const abandoned = isPendingAbandoned(pending, {
+            running: view.activePtyIds.has(sessionId),
+            onScreen: view.activeSessionId === sessionId,
+        });
+        if (abandoned) {
+            dropPendingSession(sessionId);
+            continue;
+        }
 
-    injectIntoCaches(pending.session, pending.folder, pending.session.type === 'remote');
-  }
+        injectIntoCaches(pending.session, pending.folder, pending.session.type === 'remote');
+    }
 }
 
 /**
@@ -86,28 +84,30 @@ function reconcilePending(allProjects: readonly Project[]): void {
  * the project list, which the main process injects them into.
  */
 async function adoptActiveTerminals(): Promise<void> {
-  let terminals: { sessionId: string; projectPath: string }[];
-  try {
-    terminals = await window.api.getActiveTerminals();
-  } catch {
-    return;
-  }
+    let terminals: {sessionId: string; projectPath: string}[];
+    try {
+        terminals = await window.api.getActiveTerminals();
+    } catch {
+        return;
+    }
 
-  for (const { sessionId, projectPath } of terminals) {
-    if (pendingSessions.has(sessionId)) continue;
-    const session = findInCaches(sessionId);
-    if (!session) continue;
-    pendingSessions.set(sessionId, {
-      session, projectPath, folder: encodeProjectPath(projectPath),
-    });
-    sessionMap.set(sessionId, session);
-  }
+    for (const {sessionId, projectPath} of terminals) {
+        if (pendingSessions.has(sessionId)) continue;
+        const session = findInCaches(sessionId);
+        if (!session) continue;
+        pendingSessions.set(sessionId, {
+            session,
+            projectPath,
+            folder: encodeProjectPath(projectPath),
+        });
+        sessionMap.set(sessionId, session);
+    }
 }
 
 function findInCaches(sessionId: string) {
-  for (const project of view.cachedAllProjects) {
-    const found = project.sessions.find(s => s.sessionId === sessionId);
-    if (found) return found;
-  }
-  return undefined;
+    for (const project of view.cachedAllProjects) {
+        const found = project.sessions.find((s) => s.sessionId === sessionId);
+        if (found) return found;
+    }
+    return undefined;
 }

@@ -11,8 +11,8 @@
  * rather than refused, since protocol.ts allows adding optional fields
  * without a version bump.
  */
-import type { Answers } from '../questions/question';
-import type { ClientMessage, PairingInvite } from './protocol';
+import type {Answers} from '../questions/question';
+import type {ClientMessage, PairingInvite} from './protocol';
 
 /** A whole text frame; larger than any legitimate message, by a wide margin. */
 export const MAX_MESSAGE_CHARS = 512 * 1024;
@@ -36,82 +36,91 @@ export const MAX_VOICE_CHUNK_CHARS = 64 * 1024;
 const MAX_FRAME_SESSION_ID_BYTES = 0xffff;
 
 export function parseClientMessage(text: string): ClientMessage | null {
-  if (typeof text !== 'string' || text.length > MAX_MESSAGE_CHARS) return null;
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  if (!isRecord(raw)) return null;
+    if (typeof text !== 'string' || text.length > MAX_MESSAGE_CHARS) return null;
+    let raw: unknown;
+    try {
+        raw = JSON.parse(text);
+    } catch {
+        return null;
+    }
+    if (!isRecord(raw)) return null;
 
-  switch (raw.type) {
-    case 'hello': {
-      if (!isProtocolNumber(raw.protocol) || !isText(raw.appVersion, MAX_APP_VERSION)) return null;
-      return { type: 'hello', protocol: raw.protocol, appVersion: raw.appVersion };
+    switch (raw.type) {
+        case 'hello': {
+            if (!isProtocolNumber(raw.protocol) || !isText(raw.appVersion, MAX_APP_VERSION)) return null;
+            return {type: 'hello', protocol: raw.protocol, appVersion: raw.appVersion};
+        }
+        case 'pair': {
+            if (!isText(raw.code, MAX_CODE) || !isText(raw.deviceName, MAX_DEVICE_NAME) || !raw.deviceName.trim())
+                return null;
+            return {type: 'pair', code: raw.code, deviceName: raw.deviceName};
+        }
+        case 'attach':
+        case 'size': {
+            if (!isText(raw.sessionId, MAX_ID) || !isCells(raw.cols) || !isCells(raw.rows)) return null;
+            return {type: raw.type, sessionId: raw.sessionId, cols: raw.cols, rows: raw.rows};
+        }
+        case 'detach':
+        case 'use-here':
+        case 'archive': {
+            if (!isText(raw.sessionId, MAX_ID)) return null;
+            return {type: raw.type, sessionId: raw.sessionId};
+        }
+        case 'input': {
+            if (!isText(raw.sessionId, MAX_ID) || !isText(raw.data, MAX_TEXT)) return null;
+            return {type: 'input', sessionId: raw.sessionId, data: raw.data};
+        }
+        case 'answer': {
+            if (!isText(raw.sessionId, MAX_ID) || !isText(raw.toolUseId, MAX_ID)) return null;
+            const answers = parseAnswers(raw.answers);
+            if (!answers) return null;
+            return {type: 'answer', sessionId: raw.sessionId, toolUseId: raw.toolUseId, answers};
+        }
+        case 'ask': {
+            if (!isText(raw.requestId, MAX_ID) || !isText(raw.text, MAX_TEXT) || !raw.text.trim()) return null;
+            const size = parseOptionalSize(raw);
+            if (!size) return null;
+            return {type: 'ask', requestId: raw.requestId, text: raw.text, ...size.value};
+        }
+        case 'ask-cancel': {
+            if (!isText(raw.requestId, MAX_ID)) return null;
+            return {type: 'ask-cancel', requestId: raw.requestId};
+        }
+        case 'ask-start': {
+            if (!isText(raw.requestId, MAX_ID) || !isText(raw.projectPath, MAX_PATH) || !isText(raw.prompt, MAX_TEXT))
+                return null;
+            const size = parseOptionalSize(raw);
+            if (!size) return null;
+            return {
+                type: 'ask-start',
+                requestId: raw.requestId,
+                projectPath: raw.projectPath,
+                prompt: raw.prompt,
+                ...size.value,
+            };
+        }
+        case 'list-projects':
+            return {type: 'list-projects'};
+        case 'voice-start': {
+            if (!isText(raw.voiceId, MAX_ID)) return null;
+            if (raw.sessionId === undefined) return {type: 'voice-start', voiceId: raw.voiceId};
+            if (!isText(raw.sessionId, MAX_ID)) return null;
+            return {type: 'voice-start', voiceId: raw.voiceId, sessionId: raw.sessionId};
+        }
+        case 'voice-chunk': {
+            if (!isText(raw.voiceId, MAX_ID) || !isSeq(raw.seq) || !isText(raw.audio, MAX_VOICE_CHUNK_CHARS))
+                return null;
+            if (!BASE64.test(raw.audio)) return null;
+            return {type: 'voice-chunk', voiceId: raw.voiceId, seq: raw.seq, audio: raw.audio};
+        }
+        case 'voice-end':
+        case 'voice-cancel': {
+            if (!isText(raw.voiceId, MAX_ID)) return null;
+            return {type: raw.type, voiceId: raw.voiceId};
+        }
+        default:
+            return null;
     }
-    case 'pair': {
-      if (!isText(raw.code, MAX_CODE) || !isText(raw.deviceName, MAX_DEVICE_NAME) || !raw.deviceName.trim()) return null;
-      return { type: 'pair', code: raw.code, deviceName: raw.deviceName };
-    }
-    case 'attach':
-    case 'size': {
-      if (!isText(raw.sessionId, MAX_ID) || !isCells(raw.cols) || !isCells(raw.rows)) return null;
-      return { type: raw.type, sessionId: raw.sessionId, cols: raw.cols, rows: raw.rows };
-    }
-    case 'detach':
-    case 'use-here':
-    case 'archive': {
-      if (!isText(raw.sessionId, MAX_ID)) return null;
-      return { type: raw.type, sessionId: raw.sessionId };
-    }
-    case 'input': {
-      if (!isText(raw.sessionId, MAX_ID) || !isText(raw.data, MAX_TEXT)) return null;
-      return { type: 'input', sessionId: raw.sessionId, data: raw.data };
-    }
-    case 'answer': {
-      if (!isText(raw.sessionId, MAX_ID) || !isText(raw.toolUseId, MAX_ID)) return null;
-      const answers = parseAnswers(raw.answers);
-      if (!answers) return null;
-      return { type: 'answer', sessionId: raw.sessionId, toolUseId: raw.toolUseId, answers };
-    }
-    case 'ask': {
-      if (!isText(raw.requestId, MAX_ID) || !isText(raw.text, MAX_TEXT) || !raw.text.trim()) return null;
-      const size = parseOptionalSize(raw);
-      if (!size) return null;
-      return { type: 'ask', requestId: raw.requestId, text: raw.text, ...size.value };
-    }
-    case 'ask-cancel': {
-      if (!isText(raw.requestId, MAX_ID)) return null;
-      return { type: 'ask-cancel', requestId: raw.requestId };
-    }
-    case 'ask-start': {
-      if (!isText(raw.requestId, MAX_ID) || !isText(raw.projectPath, MAX_PATH) || !isText(raw.prompt, MAX_TEXT)) return null;
-      const size = parseOptionalSize(raw);
-      if (!size) return null;
-      return { type: 'ask-start', requestId: raw.requestId, projectPath: raw.projectPath, prompt: raw.prompt, ...size.value };
-    }
-    case 'list-projects':
-      return { type: 'list-projects' };
-    case 'voice-start': {
-      if (!isText(raw.voiceId, MAX_ID)) return null;
-      if (raw.sessionId === undefined) return { type: 'voice-start', voiceId: raw.voiceId };
-      if (!isText(raw.sessionId, MAX_ID)) return null;
-      return { type: 'voice-start', voiceId: raw.voiceId, sessionId: raw.sessionId };
-    }
-    case 'voice-chunk': {
-      if (!isText(raw.voiceId, MAX_ID) || !isSeq(raw.seq) || !isText(raw.audio, MAX_VOICE_CHUNK_CHARS)) return null;
-      if (!BASE64.test(raw.audio)) return null;
-      return { type: 'voice-chunk', voiceId: raw.voiceId, seq: raw.seq, audio: raw.audio };
-    }
-    case 'voice-end':
-    case 'voice-cancel': {
-      if (!isText(raw.voiceId, MAX_ID)) return null;
-      return { type: raw.type, voiceId: raw.voiceId };
-    }
-    default:
-      return null;
-  }
 }
 
 /**
@@ -120,61 +129,61 @@ export function parseClientMessage(text: string): ClientMessage | null {
  * value is not. At least one answer, or there is nothing to send to Claude.
  */
 function parseAnswers(value: unknown): Answers | null {
-  if (!isRecord(value)) return null;
-  const entries = Object.entries(value);
-  if (entries.length === 0 || entries.length > MAX_ANSWERS) return null;
-  const answers: Answers = {};
-  for (const [question, answer] of entries) {
-    // `answers['__proto__'] = …` would set the prototype, not an answer.
-    if (!question || question.length > MAX_TEXT || question === '__proto__') return null;
-    if (typeof answer !== 'string' || answer.length > MAX_TEXT) return null;
-    answers[question] = answer;
-  }
-  return answers;
+    if (!isRecord(value)) return null;
+    const entries = Object.entries(value);
+    if (entries.length === 0 || entries.length > MAX_ANSWERS) return null;
+    const answers: Answers = {};
+    for (const [question, answer] of entries) {
+        // `answers['__proto__'] = …` would set the prototype, not an answer.
+        if (!question || question.length > MAX_TEXT || question === '__proto__') return null;
+        if (typeof answer !== 'string' || answer.length > MAX_TEXT) return null;
+        answers[question] = answer;
+    }
+    return answers;
 }
 
 /**
  * The optional size on `ask` and `ask-start`: both or neither, since half a
  * size can't size a PTY. Null when malformed; `value` is empty when absent.
  */
-function parseOptionalSize(raw: Record<string, unknown>): { value: { cols?: number; rows?: number } } | null {
-  if (raw.cols === undefined && raw.rows === undefined) return { value: {} };
-  if (!isCells(raw.cols) || !isCells(raw.rows)) return null;
-  return { value: { cols: raw.cols, rows: raw.rows } };
+function parseOptionalSize(raw: Record<string, unknown>): {value: {cols?: number; rows?: number}} | null {
+    if (raw.cols === undefined && raw.rows === undefined) return {value: {}};
+    if (!isCells(raw.cols) || !isCells(raw.rows)) return null;
+    return {value: {cols: raw.cols, rows: raw.rows}};
 }
 
 // ── Terminal frames ──
 
 const encoder = new TextEncoder();
 /** Fatal, so a frame with broken UTF-8 is refused rather than shown as replacement characters. */
-const decoder = new TextDecoder('utf-8', { fatal: true });
+const decoder = new TextDecoder('utf-8', {fatal: true});
 
 /** `[u16 BE id length][id, UTF-8][output, UTF-8]`, as protocol.ts lays it out. */
 export function encodeTerminalFrame(sessionId: string, data: string): Uint8Array {
-  const id = encoder.encode(sessionId);
-  if (id.length > MAX_FRAME_SESSION_ID_BYTES) throw new Error('session id too long for a terminal frame');
-  const out = encoder.encode(data);
-  const frame = new Uint8Array(2 + id.length + out.length);
-  frame[0] = id.length >> 8;
-  frame[1] = id.length & 0xff;
-  frame.set(id, 2);
-  frame.set(out, 2 + id.length);
-  return frame;
+    const id = encoder.encode(sessionId);
+    if (id.length > MAX_FRAME_SESSION_ID_BYTES) throw new Error('session id too long for a terminal frame');
+    const out = encoder.encode(data);
+    const frame = new Uint8Array(2 + id.length + out.length);
+    frame[0] = id.length >> 8;
+    frame[1] = id.length & 0xff;
+    frame.set(id, 2);
+    frame.set(out, 2 + id.length);
+    return frame;
 }
 
 /** Null for a frame too short for its header, an empty session id, or invalid UTF-8. */
-export function decodeTerminalFrame(bytes: Uint8Array): { sessionId: string; data: string } | null {
-  if (bytes.length < 2) return null;
-  const idLength = (bytes[0] << 8) | bytes[1];
-  if (idLength === 0 || bytes.length < 2 + idLength) return null;
-  try {
-    return {
-      sessionId: decoder.decode(bytes.subarray(2, 2 + idLength)),
-      data: decoder.decode(bytes.subarray(2 + idLength)),
-    };
-  } catch {
-    return null;
-  }
+export function decodeTerminalFrame(bytes: Uint8Array): {sessionId: string; data: string} | null {
+    if (bytes.length < 2) return null;
+    const idLength = (bytes[0] << 8) | bytes[1];
+    if (idLength === 0 || bytes.length < 2 + idLength) return null;
+    try {
+        return {
+            sessionId: decoder.decode(bytes.subarray(2, 2 + idLength)),
+            data: decoder.decode(bytes.subarray(2 + idLength)),
+        };
+    } catch {
+        return null;
+    }
 }
 
 // ── The pairing QR code ──
@@ -185,14 +194,14 @@ const FINGERPRINT = /^[0-9a-f]{64}$/;
 const HOST = /^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/;
 
 export function encodeInvite(invite: PairingInvite): string {
-  const query = new URLSearchParams({
-    v: String(invite.protocol),
-    fp: invite.fingerprint,
-    code: invite.code,
-    host: invite.host,
-    port: String(invite.port),
-  });
-  return INVITE_PREFIX + query.toString();
+    const query = new URLSearchParams({
+        v: String(invite.protocol),
+        fp: invite.fingerprint,
+        code: invite.code,
+        host: invite.host,
+        port: String(invite.port),
+    });
+    return INVITE_PREFIX + query.toString();
 }
 
 /**
@@ -201,49 +210,49 @@ export function encodeInvite(invite: PairingInvite): string {
  * fail now rather than produce a pin nothing can match.
  */
 export function parseInvite(text: string): PairingInvite | null {
-  if (typeof text !== 'string' || !text.startsWith(INVITE_PREFIX) || text.length > 2048) return null;
-  const query = new URLSearchParams(text.slice(INVITE_PREFIX.length));
-  for (const key of ['v', 'fp', 'code', 'host', 'port']) {
-    if (query.getAll(key).length !== 1) return null;
-  }
-  const protocol = parseDecimal(query.get('v')!);
-  const port = parseDecimal(query.get('port')!);
-  const fingerprint = query.get('fp')!;
-  const code = query.get('code')!;
-  const host = query.get('host')!;
-  if (protocol === null || !isProtocolNumber(protocol)) return null;
-  if (port === null || port < 1 || port > 65535) return null;
-  if (!FINGERPRINT.test(fingerprint)) return null;
-  if (!code || code.length > MAX_CODE) return null;
-  if (!HOST.test(host)) return null;
-  return { protocol, fingerprint, code, host, port };
+    if (typeof text !== 'string' || !text.startsWith(INVITE_PREFIX) || text.length > 2048) return null;
+    const query = new URLSearchParams(text.slice(INVITE_PREFIX.length));
+    for (const key of ['v', 'fp', 'code', 'host', 'port']) {
+        if (query.getAll(key).length !== 1) return null;
+    }
+    const protocol = parseDecimal(query.get('v')!);
+    const port = parseDecimal(query.get('port')!);
+    const fingerprint = query.get('fp')!;
+    const code = query.get('code')!;
+    const host = query.get('host')!;
+    if (protocol === null || !isProtocolNumber(protocol)) return null;
+    if (port === null || port < 1 || port > 65535) return null;
+    if (!FINGERPRINT.test(fingerprint)) return null;
+    if (!code || code.length > MAX_CODE) return null;
+    if (!HOST.test(host)) return null;
+    return {protocol, fingerprint, code, host, port};
 }
 
 // ── Field checks ──
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** A non-empty string of at most `max` characters. */
 function isText(value: unknown, max: number): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= max;
+    return typeof value === 'string' && value.length > 0 && value.length <= max;
 }
 
 function isProtocolNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 0xffff;
+    return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 0xffff;
 }
 
 function isCells(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_TERMINAL_CELLS;
+    return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_TERMINAL_CELLS;
 }
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 
 function isSeq(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 1_000_000;
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 1_000_000;
 }
 
 function parseDecimal(text: string): number | null {
-  return /^[0-9]{1,5}$/.test(text) ? Number(text) : null;
+    return /^[0-9]{1,5}$/.test(text) ? Number(text) : null;
 }

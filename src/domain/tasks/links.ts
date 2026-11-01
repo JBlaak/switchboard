@@ -14,15 +14,15 @@
 export type TaskLinkSource = 'start' | 'detected' | 'manual';
 
 export interface TaskLink {
-  /** The task's Notion page id, as `taskIdFrom` gives it. */
-  taskId: string;
-  /** The project the session runs in, or the repo set by hand. */
-  projectPath: string;
-  /** Null for a repo set by hand, which links no session. */
-  sessionId: string | null;
-  source: TaskLinkSource;
-  /** Epoch ms. */
-  linkedAt: number;
+    /** The task's Notion page id, as `taskIdFrom` gives it. */
+    taskId: string;
+    /** The project the session runs in, or the repo set by hand. */
+    projectPath: string;
+    /** Null for a repo set by hand, which links no session. */
+    sessionId: string | null;
+    source: TaskLinkSource;
+    /** Epoch ms. */
+    linkedAt: number;
 }
 
 /** A Notion page id: 32 hex digits, dashed or not. */
@@ -34,23 +34,23 @@ const PAGE_ID = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{1
  * either way, and the same task must not end up under two keys.
  */
 export function taskIdFrom(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!PAGE_ID.test(trimmed)) return null;
-  const hex = trimmed.replace(/-/g, '').toLowerCase();
-  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    if (!PAGE_ID.test(trimmed)) return null;
+    const hex = trimmed.replace(/-/g, '').toLowerCase();
+    return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
 }
 
 /** The newest of these links; of two made at the same moment, the later one in the list. */
 function latest(links: readonly TaskLink[]): TaskLink | null {
-  let best: TaskLink | null = null;
-  for (const link of links) if (!best || link.linkedAt >= best.linkedAt) best = link;
-  return best;
+    let best: TaskLink | null = null;
+    for (const link of links) if (!best || link.linkedAt >= best.linkedAt) best = link;
+    return best;
 }
 
 /** The task a session works on: its newest link, or null when it has none. */
 export function sessionTask(links: readonly TaskLink[], sessionId: string): TaskLink | null {
-  return latest(links.filter((link) => link.sessionId === sessionId));
+    return latest(links.filter((link) => link.sessionId === sessionId));
 }
 
 /**
@@ -58,14 +58,14 @@ export function sessionTask(links: readonly TaskLink[], sessionId: string): Task
  * replaced the rest, plus a task's newest repo set by hand.
  */
 function current(links: readonly TaskLink[]): TaskLink[] {
-  const bySession = new Map<string, TaskLink>();
-  const byHand = new Map<string, TaskLink>();
-  for (const link of links) {
-    const [into, key] = link.sessionId === null ? [byHand, link.taskId] : [bySession, link.sessionId];
-    const known = into.get(key);
-    if (!known || link.linkedAt >= known.linkedAt) into.set(key, link);
-  }
-  return [...bySession.values(), ...byHand.values()];
+    const bySession = new Map<string, TaskLink>();
+    const byHand = new Map<string, TaskLink>();
+    for (const link of links) {
+        const [into, key] = link.sessionId === null ? [byHand, link.taskId] : [bySession, link.sessionId];
+        const known = into.get(key);
+        if (!known || link.linkedAt >= known.linkedAt) into.set(key, link);
+    }
+    return [...bySession.values(), ...byHand.values()];
 }
 
 /**
@@ -74,15 +74,15 @@ function current(links: readonly TaskLink[]): TaskLink[] {
  * another task no longer says anything about this one's repo.
  */
 export function taskRepo(links: readonly TaskLink[], taskId: string): string | null {
-  return latest(current(links).filter((link) => link.taskId === taskId))?.projectPath ?? null;
+    return latest(current(links).filter((link) => link.taskId === taskId))?.projectPath ?? null;
 }
 
 /** The sessions that work on a task, the most recently linked first. */
 export function taskSessions(links: readonly TaskLink[], taskId: string): string[] {
-  return current(links)
-    .filter((link) => link.taskId === taskId && link.sessionId !== null)
-    .sort((a, b) => b.linkedAt - a.linkedAt)
-    .map((link) => link.sessionId as string);
+    return current(links)
+        .filter((link) => link.taskId === taskId && link.sessionId !== null)
+        .sort((a, b) => b.linkedAt - a.linkedAt)
+        .map((link) => link.sessionId as string);
 }
 
 /**
@@ -92,28 +92,28 @@ export function taskSessions(links: readonly TaskLink[], taskId: string): string
  * Of two equally active, the more recently linked wins.
  */
 export function taskOwner(
-  links: readonly TaskLink[],
-  taskId: string,
-  activeAt: (sessionId: string) => number | null,
+    links: readonly TaskLink[],
+    taskId: string,
+    activeAt: (sessionId: string) => number | null,
 ): string | null {
-  let owner: { sessionId: string; at: number } | null = null;
-  for (const sessionId of taskSessions(links, taskId)) {
-    const at = activeAt(sessionId);
-    if (at === null) continue;
-    if (!owner || at > owner.at) owner = { sessionId, at };
-  }
-  return owner?.sessionId ?? null;
+    let owner: {sessionId: string; at: number} | null = null;
+    for (const sessionId of taskSessions(links, taskId)) {
+        const at = activeAt(sessionId);
+        if (at === null) continue;
+        if (!owner || at > owner.at) owner = {sessionId, at};
+    }
+    return owner?.sessionId ?? null;
 }
 
 /** The tasks whose repo is this project, the most recently linked first. */
 export function repoTasks(links: readonly TaskLink[], projectPath: string): string[] {
-  const linkedAt = new Map<string, number>();
-  for (const link of current(links)) {
-    linkedAt.set(link.taskId, Math.max(linkedAt.get(link.taskId) ?? -Infinity, link.linkedAt));
-  }
-  return [...linkedAt.keys()]
-    .filter((taskId) => taskRepo(links, taskId) === projectPath)
-    .sort((a, b) => (linkedAt.get(b) ?? 0) - (linkedAt.get(a) ?? 0));
+    const linkedAt = new Map<string, number>();
+    for (const link of current(links)) {
+        linkedAt.set(link.taskId, Math.max(linkedAt.get(link.taskId) ?? -Infinity, link.linkedAt));
+    }
+    return [...linkedAt.keys()]
+        .filter((taskId) => taskRepo(links, taskId) === projectPath)
+        .sort((a, b) => (linkedAt.get(b) ?? 0) - (linkedAt.get(a) ?? 0));
 }
 
 /**
@@ -125,11 +125,11 @@ export function repoTasks(links: readonly TaskLink[], projectPath: string): stri
  * session that was never linked.
  */
 export function detectedLinkWins(
-  current: TaskLink | null,
-  detected: { taskId: string; at: number | null },
-  unlinkedAt: number | null = null,
+    current: TaskLink | null,
+    detected: {taskId: string; at: number | null},
+    unlinkedAt: number | null = null,
 ): boolean {
-  if (!current) return unlinkedAt === null || (detected.at !== null && detected.at > unlinkedAt);
-  if (current.taskId === detected.taskId) return false;
-  return detected.at !== null && detected.at > current.linkedAt;
+    if (!current) return unlinkedAt === null || (detected.at !== null && detected.at > unlinkedAt);
+    if (current.taskId === detected.taskId) return false;
+    return detected.at !== null && detected.at > current.linkedAt;
 }

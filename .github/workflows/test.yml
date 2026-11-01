@@ -1,51 +1,51 @@
 name: Test
 
 on:
-  # Only main on push: a branch with a PR open would otherwise run the suite
-  # twice for one commit, and the concurrency group below cannot dedupe
-  # them because push and pull_request events carry different refs.
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    # Only main on push: a branch with a PR open would otherwise run the suite
+    # twice for one commit, and the concurrency group below cannot dedupe
+    # them because push and pull_request events carry different refs.
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
 
 # A newer push to the same branch makes the in-flight run pointless.
 concurrency:
-  group: test-${{ github.ref }}
-  cancel-in-progress: true
+    group: test-${{ github.ref }}
+    cancel-in-progress: true
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+    test:
+        runs-on: ubuntu-latest
 
-    steps:
-      - uses: actions/checkout@v4
+        steps:
+            - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  cache: npm
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+            - uses: actions/setup-python@v5
+              with:
+                  python-version: '3.12'
 
-      - name: Install setuptools (node-gyp distutils fix)
-        run: python -m pip install setuptools
+            - name: Install setuptools (node-gyp distutils fix)
+              run: python -m pip install setuptools
 
-      # postinstall runs `electron-builder install-app-deps`, which rebuilds
-      # better-sqlite3 against Electron's ABI — db-schema-reconcile.test.ts
-      # loads the built DB module under Electron-as-Node and needs that.
-      - name: Install dependencies
-        run: npm ci
+            # postinstall runs `electron-builder install-app-deps`, which rebuilds
+            # better-sqlite3 against Electron's ABI — db-schema-reconcile.test.ts
+            # loads the built DB module under Electron-as-Node and needs that.
+            - name: Install dependencies
+              run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
+            - name: Typecheck
+              run: npm run typecheck
 
-      - name: Build
-        run: npm run build
+            - name: Build
+              run: npm run build
 
-      # `npm test` would rebuild via pretest; the build above already did, and
-      # keeping the steps separate says which one broke.
-      - name: Test
-        run: npx tsx --test test/*.test.ts
+            # `npm test` would rebuild via pretest; the build above already did, and
+            # keeping the steps separate says which one broke.
+            - name: Test
+              run: npx tsx --test test/*.test.ts

@@ -22,46 +22,46 @@ export const TIER_REST = 0;
 export const TIER_ORDER = [TIER_PINNED_PLAN, TIER_ATTENTION, TIER_READY, TIER_RUNNING, TIER_PINNED, TIER_REST];
 
 export const TIER_LABELS: Record<number, string> = {
-  [TIER_PINNED_PLAN]: 'Pinned plans',
-  [TIER_ATTENTION]: 'Needs input',
-  [TIER_READY]: 'Ready',
-  [TIER_RUNNING]: 'Working',
-  [TIER_PINNED]: 'Pinned',
-  [TIER_REST]: 'Recent',
+    [TIER_PINNED_PLAN]: 'Pinned plans',
+    [TIER_ATTENTION]: 'Needs input',
+    [TIER_READY]: 'Ready',
+    [TIER_RUNNING]: 'Working',
+    [TIER_PINNED]: 'Pinned',
+    [TIER_REST]: 'Recent',
 };
 
 /** What is currently true of one session, as far as ranking cares. */
 export interface SessionSignals {
-  /** The CLI asked for the user (OSC 9). */
-  needsAttention: boolean;
-  /** Claude finished a turn the user hasn't looked at. */
-  responseReady: boolean;
-  /** A CLI turn is in flight, per the OSC 0 spinner. */
-  busy: boolean;
-  /** A row invented before Claude wrote its transcript. */
-  pending: boolean;
-  /** A PTY is running under this id, as of the last poll. */
-  hasLivePty: boolean;
+    /** The CLI asked for the user (OSC 9). */
+    needsAttention: boolean;
+    /** Claude finished a turn the user hasn't looked at. */
+    responseReady: boolean;
+    /** A CLI turn is in flight, per the OSC 0 spinner. */
+    busy: boolean;
+    /** A row invented before Claude wrote its transcript. */
+    pending: boolean;
+    /** A PTY is running under this id, as of the last poll. */
+    hasLivePty: boolean;
 }
 
 /** A row as the truncation rules see it. */
 export interface TruncatableRow {
-  pinned?: boolean;
-  /** A plan (a slug group) the user pinned to the top of the list. */
-  pinnedPlan?: boolean;
-  remote?: boolean;
-  /** Epoch ms the row is ordered by. */
-  sortTime: number;
+    pinned?: boolean;
+    /** A plan (a slug group) the user pinned to the top of the list. */
+    pinnedPlan?: boolean;
+    remote?: boolean;
+    /** Epoch ms the row is ordered by. */
+    sortTime: number;
 }
 
 /** The caps one render pass applies. */
 export interface TruncationCaps {
-  /** How many rows have been kept so far. */
-  count: number;
-  visibleSessionCount: number;
-  /** Epoch ms; older rows are dropped unless exempt. */
-  ageCutoff: number;
-  isActive: boolean;
+    /** How many rows have been kept so far. */
+    count: number;
+    visibleSessionCount: number;
+    /** Epoch ms; older rows are dropped unless exempt. */
+    ageCutoff: number;
+    isActive: boolean;
 }
 
 /**
@@ -74,16 +74,16 @@ export interface TruncationCaps {
  * which is what it is.
  */
 export function sessionTier(signals: SessionSignals): number {
-  if (signals.needsAttention) return TIER_ATTENTION;
-  if (signals.responseReady) return TIER_READY;
-  if (signals.busy) return TIER_RUNNING;
-  // A pending row counts as working only while a PTY is actually running under
-  // it. Once that's gone it is a placeholder awaiting cleanup, and filing it
-  // under Working both misreports it and — via rowSurvivesTruncation — makes it
-  // impossible to age out of the list.
-  if (signals.pending && signals.hasLivePty) return TIER_RUNNING;
-  if (signals.hasLivePty) return TIER_READY;
-  return TIER_REST;
+    if (signals.needsAttention) return TIER_ATTENTION;
+    if (signals.responseReady) return TIER_READY;
+    if (signals.busy) return TIER_RUNNING;
+    // A pending row counts as working only while a PTY is actually running under
+    // it. Once that's gone it is a placeholder awaiting cleanup, and filing it
+    // under Working both misreports it and — via rowSurvivesTruncation — makes it
+    // impossible to age out of the list.
+    if (signals.pending && signals.hasLivePty) return TIER_RUNNING;
+    if (signals.hasLivePty) return TIER_READY;
+    return TIER_REST;
 }
 
 /**
@@ -101,21 +101,21 @@ export function sessionTier(signals: SessionSignals): number {
  * Archive (or removing the remote) is the only thing that should drop one.
  */
 export function rowSurvivesTruncation(
-  item: TruncatableRow,
-  tier: number,
-  { count, visibleSessionCount, ageCutoff, isActive }: TruncationCaps,
+    item: TruncatableRow,
+    tier: number,
+    {count, visibleSessionCount, ageCutoff, isActive}: TruncationCaps,
 ): boolean {
-  if (tier >= TIER_RUNNING || item.pinned || item.pinnedPlan || item.remote || isActive) return true;
-  return count < visibleSessionCount && item.sortTime >= ageCutoff;
+    if (tier >= TIER_RUNNING || item.pinned || item.pinnedPlan || item.remote || isActive) return true;
+    return count < visibleSessionCount && item.sortTime >= ageCutoff;
 }
 
 /**
  * A pinned plan stays on top whatever its sessions are doing; pinning a
  * session only decides where its row lands once it has nothing live to say.
  */
-export function itemTier(item: TruncatableRow & { tier: number }): number {
-  if (item.pinnedPlan) return TIER_PINNED_PLAN;
-  if (item.tier >= TIER_RUNNING) return item.tier;
-  if (item.pinned) return TIER_PINNED;
-  return TIER_REST;
+export function itemTier(item: TruncatableRow & {tier: number}): number {
+    if (item.pinnedPlan) return TIER_PINNED_PLAN;
+    if (item.tier >= TIER_RUNNING) return item.tier;
+    if (item.pinned) return TIER_PINNED;
+    return TIER_REST;
 }

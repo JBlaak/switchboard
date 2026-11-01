@@ -9,34 +9,34 @@
  * the main process refuses anything this does not allow, so the two cannot
  * drift apart.
  */
-import type { Activity, CheckRun, GitHubAvailability, PullRequestStatus, WorkAction, WorkItem } from './model';
+import type {Activity, CheckRun, GitHubAvailability, PullRequestStatus, WorkAction, WorkItem} from './model';
 
 /** Ask for an action on an item (`SessionWorkItem.id`) of a session's open page. */
 export interface ActionRequest {
-  sessionId: string;
-  itemId: string;
-  action: WorkAction;
-  /** For Fix comments: hand over only these review threads (Have Claude fix, Submit & have Claude fix). */
-  threadIds?: string[];
+    sessionId: string;
+    itemId: string;
+    action: WorkAction;
+    /** For Fix comments: hand over only these review threads (Have Claude fix, Submit & have Claude fix). */
+    threadIds?: string[];
 }
 
 /** Queued, with the id Cancel takes; or refused, with why. */
-export type ActionResult = { ok: true; activityId: string } | { ok: false; reason: string };
+export type ActionResult = {ok: true; activityId: string} | {ok: false; reason: string};
 
 /** Only a queued action can be cancelled; one typed in already cannot. */
-export type CancelResult = { ok: true } | { ok: false; reason: string };
+export type CancelResult = {ok: true} | {ok: false; reason: string};
 
 /** Why every action waits for the session: the prompt has nowhere to go. */
 export const NOT_RUNNING_REASON = 'Start the session to hand this to Claude';
 
 /** Review threads nobody has resolved yet: what Fix comments hands over. */
 export function openThreadCount(pr: PullRequestStatus): number {
-  return (pr.threads ?? []).filter((thread) => !thread.resolved).length;
+    return (pr.threads ?? []).filter((thread) => !thread.resolved).length;
 }
 
 /** The first failing check, as `gh` lists them: what Fix CI hands over. */
 export function failingCheck(pr: PullRequestStatus): CheckRun | null {
-  return (pr.checks ?? []).find((check) => check.state === 'failing') ?? null;
+    return (pr.checks ?? []).find((check) => check.state === 'failing') ?? null;
 }
 
 /**
@@ -51,24 +51,24 @@ export function failingCheck(pr: PullRequestStatus): CheckRun | null {
  * no-op.
  */
 export function availableActions(item: WorkItem, gh: GitHubAvailability): WorkAction[] {
-  if (gh !== 'ok') return [];
-  switch (item.kind) {
-    case 'pr': {
-      const { pr } = item;
-      if (pr.state === 'merged' || pr.state === 'closed' || item.otherRepository) return [];
-      const actions: WorkAction[] = ['ship'];
-      if ((pr.behindBy ?? 0) > 0) actions.push('rebase');
-      if (failingCheck(pr)) actions.push('fix-ci');
-      if (openThreadCount(pr) > 0) actions.push('fix-comments');
-      return actions;
+    if (gh !== 'ok') return [];
+    switch (item.kind) {
+        case 'pr': {
+            const {pr} = item;
+            if (pr.state === 'merged' || pr.state === 'closed' || item.otherRepository) return [];
+            const actions: WorkAction[] = ['ship'];
+            if ((pr.behindBy ?? 0) > 0) actions.push('rebase');
+            if (failingCheck(pr)) actions.push('fix-ci');
+            if (openThreadCount(pr) > 0) actions.push('fix-comments');
+            return actions;
+        }
+        case 'branch':
+            return ['open-pr'];
+        case 'dirty':
+            return ['create-pr'];
+        case 'issue':
+            return [];
     }
-    case 'branch':
-      return ['open-pr'];
-    case 'dirty':
-      return ['create-pr'];
-    case 'issue':
-      return [];
-  }
 }
 
 /**
@@ -78,8 +78,10 @@ export function availableActions(item: WorkItem, gh: GitHubAvailability): WorkAc
  * own status says how it went.
  */
 export function currentActivity(activities: readonly Activity[]): Activity | null {
-  return activities.find((activity) => activity.phase === 'sent')
-    ?? activities.find((activity) => activity.phase === 'queued')
-    ?? [...activities].reverse().find((activity) => activity.phase === 'gave-up')
-    ?? null;
+    return (
+        activities.find((activity) => activity.phase === 'sent') ??
+        activities.find((activity) => activity.phase === 'queued') ??
+        [...activities].reverse().find((activity) => activity.phase === 'gave-up') ??
+        null
+    );
 }

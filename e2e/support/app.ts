@@ -9,13 +9,13 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '@playwright/test';
-import type { ElectronApplication, Locator, Page } from '@playwright/test';
-import { EVENT } from '../../src/ipc/channels';
-import { fakeClaude, fakeSsh } from './fake-cli';
-import { pushEvent } from './main-process';
-import type { FakeCli } from './fake-cli';
-import type { FixtureHome, FixtureSpec } from './fixture-home';
+import {expect, test} from '@playwright/test';
+import type {ElectronApplication, Locator, Page} from '@playwright/test';
+import {EVENT} from '../../src/ipc/channels';
+import {fakeClaude, fakeSsh} from './fake-cli';
+import {pushEvent} from './main-process';
+import type {FakeCli} from './fake-cli';
+import type {FixtureHome, FixtureSpec} from './fixture-home';
 
 /**
  * Wait until the app has indexed every fixture session and drawn the list.
@@ -32,20 +32,29 @@ import type { FixtureHome, FixtureSpec } from './fixture-home';
  * finished and the footer quiet.
  */
 export async function waitForIndex(page: Page, app: ElectronApplication, home: FixtureHome): Promise<void> {
-  await expect.poll(() => /\[status\] \(done\) Indexed /.test(appLog(home)), {
-    message: 'the cold-start index to finish', timeout: 20_000,
-  }).toBe(true);
-  await pushEvent(app, EVENT.statusUpdate, '', '');
-  await expect(sidebar(page).getByText(/^Indexed \d+ sessions? across/)).toHaveCount(0);
+    await expect
+        .poll(() => /\[status\] \(done\) Indexed /.test(appLog(home)), {
+            message: 'the cold-start index to finish',
+            timeout: 20_000,
+        })
+        .toBe(true);
+    await pushEvent(app, EVENT.statusUpdate, '', '');
+    await expect(sidebar(page).getByText(/^Indexed \d+ sessions? across/)).toHaveCount(0);
 
-  const expected = countSessions(home.spec);
-  await expect.poll(async () => page.evaluate(async () => {
-    const projects = await window.api.getProjects(true);
-    return projects.reduce((sum, project) => sum + project.sessions.length, 0);
-  }), { message: 'the app to list every fixture session' }).toBe(expected);
+    const expected = countSessions(home.spec);
+    await expect
+        .poll(
+            async () =>
+                page.evaluate(async () => {
+                    const projects = await window.api.getProjects(true);
+                    return projects.reduce((sum, project) => sum + project.sessions.length, 0);
+                }),
+            {message: 'the app to list every fixture session'},
+        )
+        .toBe(expected);
 
-  const newest = newestVisibleLabel(home.spec);
-  if (newest) await expect(sessionRow(page, newest).first()).toBeVisible();
+    const newest = newestVisibleLabel(home.spec);
+    if (newest) await expect(sessionRow(page, newest).first()).toBeVisible();
 }
 
 /**
@@ -56,46 +65,47 @@ export async function waitForIndex(page: Page, app: ElectronApplication, home: F
  * named after the app — "Electron" for an unpackaged run.
  */
 export function appLog(home: FixtureHome): string {
-  const logs = path.join(home.home, 'Library', 'Logs');
-  try {
-    return fs.readdirSync(logs)
-      .map(dir => path.join(logs, dir, 'main.log'))
-      .filter(file => fs.existsSync(file))
-      .map(file => fs.readFileSync(file, 'utf8'))
-      .join('\n');
-  } catch {
-    return '';
-  }
+    const logs = path.join(home.home, 'Library', 'Logs');
+    try {
+        return fs
+            .readdirSync(logs)
+            .map((dir) => path.join(logs, dir, 'main.log'))
+            .filter((file) => fs.existsSync(file))
+            .map((file) => fs.readFileSync(file, 'utf8'))
+            .join('\n');
+    } catch {
+        return '';
+    }
 }
 
 function countSessions(spec: FixtureSpec): number {
-  const local = (spec.projects ?? []).reduce((sum, p) => sum + p.sessions.length, 0);
-  const remote = (spec.remotes ?? []).reduce((sum, r) => sum + (r.sessions?.length ?? 0), 0);
-  return local + remote;
+    const local = (spec.projects ?? []).reduce((sum, p) => sum + p.sessions.length, 0);
+    const remote = (spec.remotes ?? []).reduce((sum, r) => sum + (r.sessions?.length ?? 0), 0);
+    return local + remote;
 }
 
 /** The label of the newest unarchived local session — always in view at the top. */
 function newestVisibleLabel(spec: FixtureSpec): string | null {
-  const sessions = (spec.projects ?? []).flatMap(p => p.sessions).filter(s => !s.archived && !s.slug);
-  sessions.sort((a, b) => b.at - a.at);
-  const newest = sessions[0];
-  return newest ? newest.name ?? newest.aiTitle ?? newest.prompt : null;
+    const sessions = (spec.projects ?? []).flatMap((p) => p.sessions).filter((s) => !s.archived && !s.slug);
+    sessions.sort((a, b) => b.at - a.at);
+    const newest = sessions[0];
+    return newest ? (newest.name ?? newest.aiTitle ?? newest.prompt) : null;
 }
 
 // ── Sidebar ──
 
 /** A sidebar filter toggle, by its tooltip. */
 export function sidebarFilter(page: Page, filter: 'running' | 'pinned' | 'snoozed'): Locator {
-  const names = {
-    running: 'Show running only',
-    pinned: 'Show pinned only',
-    snoozed: 'Show snoozed only',
-  } as const;
-  return page.getByRole('button', { name: names[filter], exact: true });
+    const names = {
+        running: 'Show running only',
+        pinned: 'Show pinned only',
+        snoozed: 'Show snoozed only',
+    } as const;
+    return page.getByRole('button', {name: names[filter], exact: true});
 }
 
 export function searchBox(page: Page): Locator {
-  return page.getByPlaceholder('Search sessions...');
+    return page.getByPlaceholder('Search sessions...');
 }
 
 /**
@@ -103,7 +113,7 @@ export function searchBox(page: Page): Locator {
  * id (index.html); anything inside is then found by role or text.
  */
 export function sidebar(page: Page): Locator {
-  return page.getByTestId('sidebar');
+    return page.getByTestId('sidebar');
 }
 
 /**
@@ -111,17 +121,17 @@ export function sidebar(page: Page): Locator {
  * quota gauges and the update notice. A plain div, hence the test id.
  */
 export function sidebarFooter(page: Page): Locator {
-  return page.getByTestId('sidebar-footer');
+    return page.getByTestId('sidebar-footer');
 }
 
 /** The bar above the terminal: name, process title, id, status, stop. */
 export function terminalHeader(page: Page): Locator {
-  return page.getByTestId('terminal-header');
+    return page.getByTestId('terminal-header');
 }
 
 /** A session row's label in the sidebar. Click it to open the session. */
 export function sessionRow(page: Page, label: string): Locator {
-  return sidebar(page).getByText(label, { exact: true });
+    return sidebar(page).getByText(label, {exact: true});
 }
 
 /**
@@ -132,7 +142,7 @@ export function sessionRow(page: Page, label: string): Locator {
  * a class. Works for session rows, slug groups and project picker rows alike.
  */
 export function rowButton(row: Locator, name: string): Locator {
-  return row.locator('xpath=ancestor::*[.//button][1]').getByRole('button', { name, exact: true });
+    return row.locator('xpath=ancestor::*[.//button][1]').getByRole('button', {name, exact: true});
 }
 
 /**
@@ -142,10 +152,10 @@ export function rowButton(row: Locator, name: string): Locator {
  * first, which highlights it.
  */
 export async function chooseProjectAction(page: Page, label: string | RegExp, item: string | RegExp): Promise<void> {
-  const modal = dialog(page, 'Projects');
-  await modal.getByText(label, { exact: true }).hover();
-  await modal.getByRole('button', { name: /^More for / }).click();
-  await page.getByRole('menuitem', { name: item, exact: true }).click();
+    const modal = dialog(page, 'Projects');
+    await modal.getByText(label, {exact: true}).hover();
+    await modal.getByRole('button', {name: /^More for /}).click();
+    await page.getByRole('menuitem', {name: item, exact: true}).click();
 }
 
 /**
@@ -157,7 +167,7 @@ export async function chooseProjectAction(page: Page, label: string | RegExp, it
  * ever go through here.
  */
 export function dialog(page: Page, title: string | RegExp): Locator {
-  return page.getByRole('heading', { name: title }).locator('..');
+    return page.getByRole('heading', {name: title}).locator('..');
 }
 
 /**
@@ -170,11 +180,11 @@ export function dialog(page: Page, title: string | RegExp): Locator {
  * header, or with a screenshot.
  */
 export async function openSession(page: Page, home: FixtureHome, label: string, sessionId: string): Promise<FakeCli> {
-  await sessionRow(page, label).first().click();
-  const claude = fakeClaude(home, sessionId);
-  await claude.launched();
-  await expect(terminalStatus(page)).toHaveText('Running');
-  return claude;
+    await sessionRow(page, label).first().click();
+    const claude = fakeClaude(home, sessionId);
+    await claude.launched();
+    await expect(terminalStatus(page)).toHaveText('Running');
+    return claude;
 }
 
 /**
@@ -185,15 +195,20 @@ export async function openSession(page: Page, home: FixtureHome, label: string, 
  * switch this over.
  */
 export function terminalStatus(page: Page): Locator {
-  return terminalHeader(page).getByText(/^(Running|Stopped|Connecting…|Reconnecting…|Reconnecting in \d+s)$/);
+    return terminalHeader(page).getByText(/^(Running|Stopped|Connecting…|Reconnecting…|Reconnecting in \d+s)$/);
 }
 
 /** Open a remote session by its row label and wait for the fake `ssh` to dial. */
-export async function openRemoteSession(page: Page, home: FixtureHome, label: string, sessionId: string): Promise<FakeCli> {
-  await sessionRow(page, label).click();
-  const ssh = fakeSsh(home, sessionId);
-  await ssh.launched();
-  return ssh;
+export async function openRemoteSession(
+    page: Page,
+    home: FixtureHome,
+    label: string,
+    sessionId: string,
+): Promise<FakeCli> {
+    await sessionRow(page, label).click();
+    const ssh = fakeSsh(home, sessionId);
+    await ssh.launched();
+    return ssh;
 }
 
 // ── Screenshots ──
@@ -214,7 +229,7 @@ export const SCREENSHOTS_SKIPPED = !!process.env.SB_E2E_SKIP_SCREENSHOTS;
  * with every release.
  */
 export function volatileRegions(page: Page): Locator[] {
-  return [page.getByText(/^v\d+\.\d+\.\d+/)];
+    return [page.getByText(/^v\d+\.\d+\.\d+/)];
 }
 
 /**
@@ -231,17 +246,18 @@ export function volatileRegions(page: Page): Locator[] {
  * before the first that differs.
  */
 export async function expectScreen(
-  page: Page, name: string, { mask = [] as Locator[], soft = false } = {},
+    page: Page,
+    name: string,
+    {mask = [] as Locator[], soft = false} = {},
 ): Promise<void> {
-  const scheme = await page.evaluate(() =>
-    matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  const file = `${name}-${scheme}.png`;
-  if (SCREENSHOTS_SKIPPED) {
-    test.info().annotations.push({ type: 'screenshot skipped', description: file });
-    return;
-  }
-  await page.mouse.move(1279, 799);
-  await (soft ? expect.soft(page) : expect(page)).toHaveScreenshot(file, {
-    mask: [...volatileRegions(page), ...mask],
-  });
+    const scheme = await page.evaluate(() => (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+    const file = `${name}-${scheme}.png`;
+    if (SCREENSHOTS_SKIPPED) {
+        test.info().annotations.push({type: 'screenshot skipped', description: file});
+        return;
+    }
+    await page.mouse.move(1279, 799);
+    await (soft ? expect.soft(page) : expect(page)).toHaveScreenshot(file, {
+        mask: [...volatileRegions(page), ...mask],
+    });
 }

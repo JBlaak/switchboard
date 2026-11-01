@@ -9,33 +9,30 @@
  * selected, to `plan/load` for what it does, and plays a level-up the slice
  * queued (`PlanCheer`) in whichever home it is in.
  */
-import type { JSX } from 'react';
-import { useStore } from '../../use-store';
-import { shallowEqual } from '../../../state/store';
-import { planHandlers } from './load';
-import { NO_PLAN_UI } from './types';
-import { PlanViewContent } from './PlanViewContent';
-import type { PlanViewProps } from './PlanViewContent';
-import { PlanCheer, useCheer } from './PlanCheer';
+import type {JSX} from 'react';
+import {useStore} from '../../use-store';
+import {shallowEqual} from '../../../state/store';
+import {planHandlers} from './load';
+import {NO_PLAN_UI} from './types';
+import {PlanViewContent} from './PlanViewContent';
+import type {PlanViewProps} from './PlanViewContent';
+import {PlanCheer, useCheer} from './PlanCheer';
 
-export type { PlanViewProps };
+export type {PlanViewProps};
 
 /** The plan view, wired to the plan slice. */
 export function PlanView(props: PlanViewProps): JSX.Element {
-  const ui = useStore(
-    state => {
-      const view = state.plan.view;
-      return view ? { chosen: view.chosen, hovered: view.hovered, selected: view.selected } : NO_PLAN_UI;
-    },
-    shallowEqual,
-  );
-  const canGoBack = useStore(state => !!state.plan.view?.from);
-  const on = canGoBack ? planHandlers : { ...planHandlers, back: undefined };
-  const cheer = useCheer();
-  return (
-    <>
-      <PlanViewContent {...props} ui={ui} on={on} arriving={cheer?.arriving} />
-      {cheer && <PlanCheer cheer={cheer} />}
-    </>
-  );
+    const ui = useStore((state) => {
+        const view = state.plan.view;
+        return view ? {chosen: view.chosen, hovered: view.hovered, selected: view.selected} : NO_PLAN_UI;
+    }, shallowEqual);
+    const canGoBack = useStore((state) => !!state.plan.view?.from);
+    const on = canGoBack ? planHandlers : {...planHandlers, back: undefined};
+    const cheer = useCheer();
+    return (
+        <>
+            <PlanViewContent {...props} ui={ui} on={on} arriving={cheer?.arriving} />
+            {cheer && <PlanCheer cheer={cheer} />}
+        </>
+    );
 }

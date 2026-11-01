@@ -12,14 +12,14 @@
  * sidebar leaves it showing; the terminal and everything else stay opaque (see
  * _glass.scss). With Reduce Transparency on, macOS draws the material solid.
  */
-import type { BrowserWindowConstructorOptions } from 'electron';
+import type {BrowserWindowConstructorOptions} from 'electron';
 
 export function windowChromeOptions(): Partial<BrowserWindowConstructorOptions> {
-  return {
-    titleBarStyle: 'hidden',
-    // Vertically centred in the 44px strip the headers reserve for it.
-    trafficLightPosition: { x: 18, y: 15 },
-    vibrancy: 'sidebar',
-    backgroundColor: '#00000000',
-  };
+    return {
+        titleBarStyle: 'hidden',
+        // Vertically centred in the 44px strip the headers reserve for it.
+        trafficLightPosition: {x: 18, y: 15},
+        vibrancy: 'sidebar',
+        backgroundColor: '#00000000',
+    };
 }

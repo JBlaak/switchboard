@@ -10,27 +10,27 @@
  * It imports only state and lib modules, so anything in the renderer can call
  * it without an import cycle.
  */
-import { dispatch, getState } from '../../state/app-store';
-import { tierOf } from '../../state/activity-store';
-import { sessionKeyIn } from '../../state/keys-slice';
-import { listItems } from '../../state/session-list-layout';
-import { view } from '../../state/session-store';
-import { isFilteringView } from '../../state/view-slice';
-import { projectsToRender } from '../../state/search-narrowing';
-import { localDateKey } from '../../lib/format';
-import { nextWake } from '../../../domain/session/snooze';
-import { highlightedSession } from '../../state/main-area-slice';
-import type { Project } from '../../../domain/project/project';
+import {dispatch, getState} from '../../state/app-store';
+import {tierOf} from '../../state/activity-store';
+import {sessionKeyIn} from '../../state/keys-slice';
+import {listItems} from '../../state/session-list-layout';
+import {view} from '../../state/session-store';
+import {isFilteringView} from '../../state/view-slice';
+import {projectsToRender} from '../../state/search-narrowing';
+import {localDateKey} from '../../lib/format';
+import {nextWake} from '../../../domain/session/snooze';
+import {highlightedSession} from '../../state/main-area-slice';
+import type {Project} from '../../../domain/project/project';
 
 export interface RelayoutOptions {
-  /**
-   * Let the open session move to its true position too.
-   *
-   * The default keeps it parked where the user last saw it, so the list cannot
-   * slide out from under the cursor while it reorders. A user-initiated action
-   * (the re-sort button, a filter change) passes true.
-   */
-  resort?: boolean;
+    /**
+     * Let the open session move to its true position too.
+     *
+     * The default keeps it parked where the user last saw it, so the list cannot
+     * slide out from under the cursor while it reorders. A user-initiated action
+     * (the re-sort button, a filter change) passes true.
+     */
+    resort?: boolean;
 }
 
 /**
@@ -39,30 +39,35 @@ export interface RelayoutOptions {
  * The rows are copied into the event as they stand now; the slice orders and
  * folds them (`session-list-slice`), and the list renders what it decided.
  */
-export function relayoutSessionList({ resort = false }: RelayoutOptions = {}): void {
-  const state = getState();
-  const now = Date.now();
-  const { items, activeItemId } = listItems(projectsForLayout(), {
-    filters: state.view,
-    running: state.view.activePtyIds,
-    // The session on screen, whose folded group opens to show its lit row.
-    activeSessionId: highlightedSession(state.mainArea),
-    tierOf,
-    keyOf: (sessionId) => sessionKeyIn(getState().keys, sessionId),
-    today: localDateKey(new Date(now)),
-    now,
-  });
-  dispatch({
-    type: 'sessionListBuilt',
-    items,
-    activeItemId,
-    resort,
-    filtering: isFilteringView(state.view),
-    visibleSessionCount: state.view.visibleSessionCount,
-    sessionMaxAgeDays: state.view.sessionMaxAgeDays,
-    now,
-  });
-  wakeSnoozedAt(nextWake(view.cachedProjects.flatMap(p => p.sessions.map(s => s.snoozedUntil)), now));
+export function relayoutSessionList({resort = false}: RelayoutOptions = {}): void {
+    const state = getState();
+    const now = Date.now();
+    const {items, activeItemId} = listItems(projectsForLayout(), {
+        filters: state.view,
+        running: state.view.activePtyIds,
+        // The session on screen, whose folded group opens to show its lit row.
+        activeSessionId: highlightedSession(state.mainArea),
+        tierOf,
+        keyOf: (sessionId) => sessionKeyIn(getState().keys, sessionId),
+        today: localDateKey(new Date(now)),
+        now,
+    });
+    dispatch({
+        type: 'sessionListBuilt',
+        items,
+        activeItemId,
+        resort,
+        filtering: isFilteringView(state.view),
+        visibleSessionCount: state.view.visibleSessionCount,
+        sessionMaxAgeDays: state.view.sessionMaxAgeDays,
+        now,
+    });
+    wakeSnoozedAt(
+        nextWake(
+            view.cachedProjects.flatMap((p) => p.sessions.map((s) => s.snoozedUntil)),
+            now,
+        ),
+    );
 }
 
 /**
@@ -74,16 +79,16 @@ let wakeTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Lay the list out again once the next snoozed session wakes. */
 function wakeSnoozedAt(at: number | null): void {
-  clearTimeout(wakeTimer);
-  if (at === null) return;
-  const check = (): void => {
-    if (Date.now() >= at) relayoutSessionList();
-    else wakeTimer = setTimeout(check, Math.min(WAKE_CHECK_MS, at - Date.now()));
-  };
-  wakeTimer = setTimeout(check, Math.min(WAKE_CHECK_MS, at - Date.now()));
+    clearTimeout(wakeTimer);
+    if (at === null) return;
+    const check = (): void => {
+        if (Date.now() >= at) relayoutSessionList();
+        else wakeTimer = setTimeout(check, Math.min(WAKE_CHECK_MS, at - Date.now()));
+    };
+    wakeTimer = setTimeout(check, Math.min(WAKE_CHECK_MS, at - Date.now()));
 }
 
 /** Which projects this layout covers: see `projectsToRender`. */
 function projectsForLayout(): readonly Project[] {
-  return projectsToRender(view.cachedProjects, view.cachedAllProjects, view);
+    return projectsToRender(view.cachedProjects, view.cachedAllProjects, view);
 }

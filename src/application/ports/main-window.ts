@@ -6,8 +6,8 @@
  * only the New Session picker brings it forward.
  */
 export interface MainWindowHost {
-  /** Open it, without focus, if it is closed; nothing when it is open. */
-  ensureOpen(): void;
-  /** Open it if it is closed, and bring it and the app forward. */
-  bringForward(): void;
+    /** Open it, without focus, if it is closed; nothing when it is open. */
+    ensureOpen(): void;
+    /** Open it if it is closed, and bring it and the app forward. */
+    bringForward(): void;
 }

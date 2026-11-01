@@ -7,21 +7,21 @@
  * Rendered into `#project-page`, which `ui/main-area/install-main-area` shows
  * and hides with the route.
  */
-import type { JSX } from 'react';
-import { useStore } from '../use-store';
-import { PlanPage } from '../plan-page/PlanPage';
-import { ProjectOverview } from './ProjectOverview';
-import { ProjectSettings } from './ProjectSettings';
+import type {JSX} from 'react';
+import {useStore} from '../use-store';
+import {PlanPage} from '../plan-page/PlanPage';
+import {ProjectOverview} from './ProjectOverview';
+import {ProjectSettings} from './ProjectSettings';
 
 export function ProjectPage(): JSX.Element | null {
-  const project = useStore(state => (state.mainArea.route.kind === 'project' ? state.mainArea.route : null));
-  if (!project) return null;
-  switch (project.view.kind) {
-    case 'overview':
-      return <ProjectOverview projectPath={project.projectPath} />;
-    case 'plan':
-      return <PlanPage />;
-    case 'settings':
-      return <ProjectSettings projectPath={project.projectPath} />;
-  }
+    const project = useStore((state) => (state.mainArea.route.kind === 'project' ? state.mainArea.route : null));
+    if (!project) return null;
+    switch (project.view.kind) {
+        case 'overview':
+            return <ProjectOverview projectPath={project.projectPath} />;
+        case 'plan':
+            return <PlanPage />;
+        case 'settings':
+            return <ProjectSettings projectPath={project.projectPath} />;
+    }
 }

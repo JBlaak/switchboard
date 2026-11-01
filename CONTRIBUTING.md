@@ -78,14 +78,14 @@ Every test, unit or e2e, is split into `/* Given */`, `/* When */` and
 
 ```ts
 test('archiving a session hides it from the recent list', () => {
-  /* Given */
-  const state = run(initialRendererState(), built([item(row('a'))]));
+    /* Given */
+    const state = run(initialRendererState(), built([item(row('a'))]));
 
-  /* When */
-  const next = run(state, { type: 'sessionArchived', id: 'a' });
+    /* When */
+    const next = run(state, {type: 'sessionArchived', id: 'a'});
 
-  /* Then */
-  assert.deepEqual(visibleIds(next), []);
+    /* Then */
+    assert.deepEqual(visibleIds(next), []);
 });
 ```
 

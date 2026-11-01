@@ -4,18 +4,18 @@
  * the URL may have been set, changed or cleared), and the task fetched as a
  * link or an archive's offer names it.
  */
-import { onEvent } from '../../state/app-store';
-import { loadSessionTasks, loadTask } from './actions';
+import {onEvent} from '../../state/app-store';
+import {loadSessionTasks, loadTask} from './actions';
 
 /** Start following. Answers a teardown. */
 export function installSessionTask(): () => void {
-  const stops = [
-    onEvent('blaakTasksSwitched', () => void loadSessionTasks()),
-    onEvent('sessionTaskChanged', (event) => {
-      if (event.taskId) loadTask(event.taskId);
-    }),
-    // The offer names the task, as it is now.
-    onEvent('taskMarkDoneOffered', (event) => loadTask(event.taskId, { fresh: true })),
-  ];
-  return () => stops.forEach((stop) => stop());
+    const stops = [
+        onEvent('blaakTasksSwitched', () => void loadSessionTasks()),
+        onEvent('sessionTaskChanged', (event) => {
+            if (event.taskId) loadTask(event.taskId);
+        }),
+        // The offer names the task, as it is now.
+        onEvent('taskMarkDoneOffered', (event) => loadTask(event.taskId, {fresh: true})),
+    ];
+    return () => stops.forEach((stop) => stop());
 }
