@@ -16,3 +16,6 @@ dev-app-update.yml
 # End-to-end run output (see e2e/playwright.config.ts).
 /test-results/
 /playwright-report/
+
+# OmniDiff binaries, fetched by scripts/fetch-omnidiff.mjs on install.
+/vendor/
