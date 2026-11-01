@@ -16,6 +16,7 @@
 import {encodeTerminalFrame, parseClientMessage} from '../domain/phone/codec';
 import {PhoneAccessService} from '../application/services/phone-access-service';
 import {PhoneSessionsService} from '../application/services/phone-sessions-service';
+import {BatteryService} from '../application/services/battery-service';
 import {VoiceService} from '../application/services/voice-service';
 import {TlsDeviceLink} from '../infrastructure/phone/tls-device-link';
 import type {PhoneAccessState, TerminalOwner} from '../domain/phone/state';
@@ -26,6 +27,7 @@ import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
 import type {UpdateNotice} from '../domain/update/release';
 import type {TasksUpdate} from '../domain/tasks/surface';
+import type {BatteryGauge} from '../application/ports/battery';
 import type {Clock, Timers} from '../application/ports/clock';
 import type {ClaudeCaller} from '../application/ports/claude-cli';
 import type {IdGenerator} from '../application/ports/ids';
@@ -175,7 +177,7 @@ export class PhoneEventTee implements RendererGateway {
     }
 }
 
-export interface PhoneAccessDeps extends Omit<PhoneSessionsServiceDeps, 'settings' | 'renderer' | 'voice'> {
+export interface PhoneAccessDeps extends Omit<PhoneSessionsServiceDeps, 'settings' | 'renderer' | 'voice' | 'battery'> {
     identity: ServerIdentityStore;
     devices: DeviceRegistry;
     advertiser: ServiceAdvertiser;
@@ -187,6 +189,8 @@ export interface PhoneAccessDeps extends Omit<PhoneSessionsServiceDeps, 'setting
     renderer: RendererGateway;
     /** Hold-to-talk: Whisper, its model, and `claude` for the cleanup. */
     voice: {transcriber: Transcriber; model: VoiceModelStore; cli: ClaudeCaller};
+    /** The Mac's battery level, shown on the phone. */
+    battery: BatteryGauge;
     ids: IdGenerator;
     clock: Clock;
     timers: Timers;
@@ -217,10 +221,12 @@ export function buildPhoneAccess(deps: PhoneAccessDeps): PhoneAccess {
         timers: deps.timers,
         log,
     });
+    const battery = new BatteryService({gauge: deps.battery, timers: deps.timers});
     const sessions = new PhoneSessionsService({
         ...deps,
         renderer,
         voice,
+        battery,
         // A session a phone starts gets its row on the Mac at once (#194 story
         // 69), not only once its transcript has been written and indexed.
         launcher: {

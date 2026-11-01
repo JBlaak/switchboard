@@ -84,6 +84,7 @@ import {resolveClaudePaths} from '../infrastructure/fs/claude-paths';
 import {systemTimers} from '../infrastructure/system/timers';
 import {OpenMeteoWeatherSource} from '../infrastructure/weather/open-meteo';
 import {PmsetSleepControl} from '../infrastructure/system/pmset-sleep-control';
+import {PmsetBatteryGauge} from '../infrastructure/system/pmset-battery-gauge';
 import {BundleInstaller} from '../infrastructure/system/bundle-installer';
 import {GitHubReleaseFeed} from '../infrastructure/github/github-release-feed';
 import {GitCliRemotes} from '../infrastructure/git/git-cli-remotes';
@@ -727,6 +728,7 @@ export function buildContainer(): Container {
             model: new WhisperModelStore({directory: path.join(app.getPath('userData'), 'voice'), log}),
             cli: claudeCaller,
         },
+        battery: e2e ? {read: async () => null} : new PmsetBatteryGauge(),
         ids,
         clock,
         timers,

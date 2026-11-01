@@ -48,6 +48,7 @@ import type {Logger} from '../ports/logger';
 import type {DeviceConnection} from '../ports/phone-access';
 import type {RendererGateway} from '../ports/renderer-gateway';
 import type {QuestionService} from './question-service';
+import type {BatteryService} from './battery-service';
 import type {VoiceService} from './voice-service';
 import type {OpenSessionRequest, OpenSessionResult} from './session-launcher';
 
@@ -92,6 +93,8 @@ export interface PhoneSessionsServiceDeps {
     renderer: Pick<RendererGateway, 'terminalOwnerChanged' | 'projectsChanged'>;
     /** Hold-to-talk, which keeps its own state per connection. */
     voice: Pick<VoiceService, 'connected' | 'message' | 'disconnected'>;
+    /** The Mac's battery level, told to every phone. */
+    battery: Pick<BatteryService, 'connected' | 'disconnected'>;
     ids: IdGenerator;
     clock: Clock;
     timers: Timers;
@@ -129,7 +132,7 @@ export class PhoneSessionsService {
 
     // ── The phones ──
 
-    /** An enrolled phone said hello and was welcomed: it gets the list, the questions and the voice status. */
+    /** An enrolled phone said hello and was welcomed: it gets the list, the questions, the voice status and the battery. */
     public connected(connection: DeviceConnection, device: {id: string; name: string}): void {
         this.names.set(device.id, device.name);
         this.phones.set(connection.id, {
@@ -143,6 +146,7 @@ export class PhoneSessionsService {
         connection.send({type: 'sessions', sessions: this.sessionList()});
         connection.send({type: 'questions', pending: this.deps.questions.pending()});
         this.deps.voice.connected(connection);
+        this.deps.battery.connected(connection);
     }
 
     public message(connection: DeviceConnection, message: ClientMessage): void {
@@ -209,6 +213,7 @@ export class PhoneSessionsService {
         // Killed, not left to finish on the user's quota.
         phone.router?.cancel();
         this.deps.voice.disconnected(connection);
+        this.deps.battery.disconnected(connection);
         this.apply({type: 'device-left', device: phone.deviceId});
     }
 

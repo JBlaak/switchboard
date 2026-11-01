@@ -44,6 +44,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jblaak.switchboard.R
+import dev.jblaak.switchboard.protocol.MacBattery
 import dev.jblaak.switchboard.theme.StatusColors
 import dev.jblaak.switchboard.theme.SwitchboardTheme
 import dev.jblaak.switchboard.ui.connected.AddIcon
@@ -66,6 +67,7 @@ enum class LinkStatus { Connected, Reconnecting, Offline }
 fun SessionsScreen(
     list: SessionList,
     macName: String,
+    macBattery: MacBattery?,
     linkStatus: LinkStatus,
     onSessionClick: (row: SessionRow) -> Unit,
     onAskPatchClick: () -> Unit,
@@ -78,7 +80,7 @@ fun SessionsScreen(
                 contentPadding = PaddingValues(bottom = 104.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                item(key = "header") { SessionsHeader(macName, linkStatus, onMenuClick) }
+                item(key = "header") { SessionsHeader(macName, macBattery, linkStatus, onMenuClick) }
                 item(key = "counts") { StatusCounts(list) }
                 if (list.isEmpty) {
                     item(key = "empty") { EmptySessions() }
@@ -115,7 +117,7 @@ private fun rememberMinuteClock(): Long {
 }
 
 @Composable
-private fun SessionsHeader(macName: String, linkStatus: LinkStatus, onMenuClick: () -> Unit) {
+private fun SessionsHeader(macName: String, macBattery: MacBattery?, linkStatus: LinkStatus, onMenuClick: () -> Unit) {
     val colors = SwitchboardTheme.colors
     val mood = if (linkStatus == LinkStatus.Connected) PatchMood.Calm else PatchMood.Worried
     val scene = PatchScene(PatchMove.Wave, mood, line = "", PatchTime.Day, sky = null)
@@ -144,15 +146,25 @@ private fun SessionsHeader(macName: String, linkStatus: LinkStatus, onMenuClick:
                     },
                     size = 8,
                 )
+                val link = stringResource(
+                    when (linkStatus) {
+                        LinkStatus.Connected -> R.string.sessions_link_connected
+                        LinkStatus.Reconnecting -> R.string.sessions_link_reconnecting
+                        LinkStatus.Offline -> R.string.sessions_link_offline
+                    },
+                    macName,
+                )
                 Text(
-                    text = stringResource(
-                        when (linkStatus) {
-                            LinkStatus.Connected -> R.string.sessions_link_connected
-                            LinkStatus.Reconnecting -> R.string.sessions_link_reconnecting
-                            LinkStatus.Offline -> R.string.sessions_link_offline
-                        },
-                        macName,
-                    ),
+                    // Only while connected: a level heard before a drop may be stale.
+                    text = if (linkStatus == LinkStatus.Connected && macBattery != null) {
+                        stringResource(
+                            if (macBattery.charging) R.string.sessions_mac_battery_charging else R.string.sessions_mac_battery,
+                            link,
+                            macBattery.percent,
+                        )
+                    } else {
+                        link
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.textMuted,
                 )
@@ -456,6 +468,7 @@ internal fun SessionsScreenPreview() {
                 ),
             ),
             macName = "joris-mbp.local",
+            macBattery = MacBattery(percent = 37, charging = true),
             linkStatus = LinkStatus.Connected,
             onSessionClick = {},
             onAskPatchClick = {},
@@ -472,6 +485,7 @@ internal fun SessionsScreenEmptyPreview() {
         SessionsScreen(
             list = SessionList(emptyList(), emptyList(), emptyList()),
             macName = "joris-mbp.local",
+            macBattery = null,
             linkStatus = LinkStatus.Reconnecting,
             onSessionClick = {},
             onAskPatchClick = {},

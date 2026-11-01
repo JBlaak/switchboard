@@ -111,6 +111,14 @@ export type VoiceResult =
     | {kind: 'unavailable'; status: Exclude<VoiceStatus, {kind: 'ready'}>}
     | {kind: 'failed'; reason: string};
 
+/** The Mac's battery, as the phone shows it next to the Mac's name. */
+export interface MacBattery {
+    /** 0–100. */
+    percent: number;
+    /** Plugged in and filling up; false when full on the charger, or running on the battery. */
+    charging: boolean;
+}
+
 /** Why a pairing attempt was turned away. */
 export type PairRejection = 'expired' | 'wrong-code' | 'locked-out' | 'declined' | 'not-pairing';
 
@@ -216,6 +224,8 @@ export type ServerMessage =
     | {type: 'voice-status'; status: VoiceStatus}
     /** Exactly one per `voice-start` that wasn't cancelled. */
     | {type: 'voice-result'; voiceId: string; result: VoiceResult}
+    /** Sent on welcome and whenever the level or charging changes; null on a Mac without a battery. */
+    | {type: 'mac-battery'; battery: MacBattery | null}
     /** Sent before close(notPaired) when the device is revoked or the Mac's identity is reset. */
     | {type: 'revoked'};
 

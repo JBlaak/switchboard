@@ -255,6 +255,7 @@ async function mac() {
                 },
             },
         },
+        battery: {read: async () => ({percent: 37, charging: true})},
         ids: {newId: () => `id-${++ids}`},
         clock: {now: () => Date.now()},
         timers: systemTimers,
@@ -673,6 +674,20 @@ function speechLevelTone(): Buffer {
         audio.writeInt16LE(Math.round(6000 * Math.sin((2 * Math.PI * 200 * i) / 16_000)), i * 2);
     return audio;
 }
+
+test("a welcomed phone is told the Mac's battery level", async (t) => {
+    /* Given */
+    const m = await mac();
+    t.after(() => m.access.shutdown());
+
+    /* When */
+    const phone = await pairedPhone(m);
+    const battery = await phone.next('mac-battery');
+
+    /* Then */
+    assert.deepEqual(battery, {type: 'mac-battery', battery: {percent: 37, charging: true}});
+    phone.close();
+});
 
 test('a phone that holds the mic gets the voice status on welcome and the cleaned-up text when it lets go', async (t) => {
     /* Given */

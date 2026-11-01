@@ -101,6 +101,9 @@
     <string name="sessions_link_connected">%1$s · connected</string>
     <string name="sessions_link_offline">%1$s · offline</string>
     <string name="sessions_link_reconnecting">%1$s · reconnecting…</string>
+    <!-- After the link line while connected: the Mac's battery. -->
+    <string name="sessions_mac_battery">%1$s · %2$d%% battery</string>
+    <string name="sessions_mac_battery_charging">%1$s · %2$d%% charging</string>
     <string name="sessions_menu">Pairing and settings</string>
     <string name="sessions_place_mac">On Mac</string>
     <string name="sessions_place_other_phone">On %1$s</string>

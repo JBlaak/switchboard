@@ -167,6 +167,15 @@ data class AskCandidate(
     val recentTitle: String?,
 )
 
+/** The Mac's battery, shown next to the Mac's name. */
+@Serializable
+data class MacBattery(
+    /** 0–100. */
+    val percent: Int,
+    /** Plugged in and filling up; false when full on the charger, or running on the battery. */
+    val charging: Boolean,
+)
+
 /** Why a pairing attempt was turned away. */
 @Serializable
 enum class PairRejection {

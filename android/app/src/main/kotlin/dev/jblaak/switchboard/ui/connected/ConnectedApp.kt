@@ -109,10 +109,12 @@ private fun SessionsRoute(
 ) {
     val sessions by board.sessions.collectAsState()
     val pending by board.pending.collectAsState()
+    val macBattery by board.macBattery.collectAsState()
     val linkState by link.state.collectAsState()
     SessionsScreen(
         list = sessionListOf(sessions, pending, deviceId),
         macName = macName,
+        macBattery = macBattery,
         linkStatus = when (linkState) {
             is LinkState.Connected -> LinkStatus.Connected
             LinkState.Reconnecting, LinkState.Connecting, LinkState.Searching -> LinkStatus.Reconnecting
