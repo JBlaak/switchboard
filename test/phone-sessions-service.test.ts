@@ -166,6 +166,7 @@ function harness() {
                 voiceCalls.push(['disconnected', connection.id]);
             },
         },
+        battery: {connected() {}, disconnected() {}},
         ids: {newId: () => `new-${++ids}`},
         clock: {now: () => 9_000},
         timers,

@@ -3,6 +3,7 @@ package dev.jblaak.switchboard.ui.connected
 import dev.jblaak.switchboard.link.LinkState
 import dev.jblaak.switchboard.link.SendOutcome
 import dev.jblaak.switchboard.protocol.ClientMessage
+import dev.jblaak.switchboard.protocol.MacBattery
 import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.protocol.ServerMessage
 import dev.jblaak.switchboard.ui.session.TerminalSize
@@ -33,6 +34,31 @@ class SessionBoardTest {
 
         /* Then */
         assertEquals(listOf("b", "a"), board.sessions.value.map { it.id })
+    }
+
+    @Test
+    fun `the Mac's battery is what it last said`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        link.macSays(ServerMessage.MacBatteryChanged(MacBattery(percent = 64, charging = false)))
+
+        /* When */
+        link.macSays(ServerMessage.MacBatteryChanged(MacBattery(percent = 63, charging = true)))
+
+        /* Then */
+        assertEquals(MacBattery(percent = 63, charging = true), board.macBattery.value)
+    }
+
+    @Test
+    fun `a Mac without a battery has none`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+
+        /* When */
+        link.macSays(ServerMessage.MacBatteryChanged(battery = null))
+
+        /* Then */
+        assertEquals(null, board.macBattery.value)
     }
 
     @Test

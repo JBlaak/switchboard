@@ -173,6 +173,8 @@ internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
     "voice-status-no-whisper" to ServerMessage.VoiceStatusChanged(VoiceStatus.NoWhisper),
     "voice-status-preparing" to ServerMessage.VoiceStatusChanged(VoiceStatus.Preparing(progress = 0.43)),
     "voice-status-prepare-failed" to ServerMessage.VoiceStatusChanged(VoiceStatus.PrepareFailed(reason = "The download stopped.")),
+    "mac-battery" to ServerMessage.MacBatteryChanged(MacBattery(percent = 37, charging = true)),
+    "mac-battery-none" to ServerMessage.MacBatteryChanged(battery = null),
     "voice-result-text" to ServerMessage.VoiceTranscribed(voiceId = "v-1", result = VoiceResult.Text(text = "Fix the failing test in the codec.")),
     "voice-result-empty" to ServerMessage.VoiceTranscribed(voiceId = "v-1", result = VoiceResult.Empty),
     "voice-result-unavailable" to ServerMessage.VoiceTranscribed(voiceId = "v-1", result = VoiceResult.Unavailable(VoiceStatus.Preparing(progress = null))),

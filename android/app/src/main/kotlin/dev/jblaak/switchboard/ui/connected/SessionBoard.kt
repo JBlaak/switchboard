@@ -2,6 +2,7 @@ package dev.jblaak.switchboard.ui.connected
 
 import dev.jblaak.switchboard.link.SendOutcome
 import dev.jblaak.switchboard.protocol.ClientMessage
+import dev.jblaak.switchboard.protocol.MacBattery
 import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.protocol.PhoneSession
 import dev.jblaak.switchboard.protocol.ServerMessage
@@ -18,7 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * The Mac's running sessions and pending questions, as the phone last heard them. Both arrive right after
+ * The Mac's running sessions, pending questions and battery, as the phone last heard them. They arrive right after
  * `welcome` and then on every change, and [PhoneLink.messages] does not replay, so create the board before the
  * link starts and keep it as long as the link.
  */
@@ -45,6 +46,11 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
 
     private val mutablePending = MutableStateFlow<List<PendingQuestions>>(emptyList())
     val pending: StateFlow<List<PendingQuestions>> = mutablePending.asStateFlow()
+
+    private val mutableMacBattery = MutableStateFlow<MacBattery?>(null)
+
+    /** The Mac's battery as it last said; null before it says, and on a Mac without one. */
+    val macBattery: StateFlow<MacBattery?> = mutableMacBattery.asStateFlow()
 
     private val mutableTerminalSize = MutableStateFlow<TerminalSize?>(null)
 
@@ -80,6 +86,7 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
                 publish()
             }
             is ServerMessage.Questions -> mutablePending.value = message.pending
+            is ServerMessage.MacBatteryChanged -> mutableMacBattery.value = message.battery
             is ServerMessage.SessionRekeyed -> rekey(message.from, message.to)
             is ServerMessage.Owner -> {
                 received = received.map { session ->

@@ -124,6 +124,11 @@ sealed interface ServerMessage {
     @SerialName("voice-result")
     data class VoiceTranscribed(val voiceId: String, val result: VoiceResult) : ServerMessage
 
+    /** Sent on welcome and whenever the level or charging changes; null on a Mac without a battery. */
+    @Serializable
+    @SerialName("mac-battery")
+    data class MacBatteryChanged(val battery: MacBattery?) : ServerMessage
+
     /** Sent before [CloseReason.NotPaired] when the device is revoked or the Mac's identity is reset. */
     @Serializable
     @SerialName("revoked")
