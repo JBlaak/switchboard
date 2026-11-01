@@ -43,6 +43,22 @@
                 "varsIgnorePattern": "^_",
                 "caughtErrorsIgnorePattern": "^_"
             }
+        ],
+        "no-restricted-syntax": [
+            "error",
+            {
+                "selector": "PrivateIdentifier",
+                "message": "Mark the member `private` instead of using a # name."
+            }
+        ],
+        "@typescript-eslint/explicit-member-accessibility": [
+            "error",
+            {
+                "accessibility": "explicit",
+                "overrides": {
+                    "constructors": "no-public"
+                }
+            }
         ]
     },
     "settings": {
