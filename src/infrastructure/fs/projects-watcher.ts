@@ -59,12 +59,13 @@ export class ProjectsWatcher {
      * own scratch — would just cost a re-index.
      */
     private note(relativePath: string): void {
-        const parts = relativePath.split(this.deps.fs.separator);
-        const folder = parts[0];
-        if (!folder || folder === '.git') return;
+        const [folder, ...inside] = relativePath.split(this.deps.fs.separator);
+        // Each top-level folder is one project's transcripts; a .git there is
+        // someone keeping the directory under version control, not a project.
+        if (folder === '' || folder === '.git') return;
 
-        const isFolderItself = parts.length === 1;
-        const isTranscript = parts[parts.length - 1].endsWith('.jsonl');
+        const isFolderItself = inside.length === 0;
+        const isTranscript = (inside.at(-1) ?? folder).endsWith('.jsonl');
         if (!isFolderItself && !isTranscript) return;
 
         this.pending.add(folder);

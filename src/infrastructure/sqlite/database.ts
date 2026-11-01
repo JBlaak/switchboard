@@ -1,8 +1,8 @@
 /**
  * Opening the database.
  *
- * Where it lives, how a database from an older install is inherited, and the
- * pragmas that keep a single-writer desktop app from tripping over itself.
+ * Where it lives, and the pragmas that keep a single-writer desktop app from
+ * tripping over itself.
  *
  * Opened explicitly rather than on import: the schema work below writes to the
  * user's disk, and a module that does that as a side effect of being imported
@@ -30,56 +30,16 @@ export interface SwitchboardDatabase {
  * each instance its own single-instance lock.
  */
 export function resolveDataDir(): string {
-    return process.env.SWITCHBOARD_DATA_DIR
-        ? path.resolve(process.env.SWITCHBOARD_DATA_DIR)
-        : path.join(os.homedir(), '.switchboard');
-}
-
-/**
- * Places older builds kept the database.
- *
- * Never consulted when running against an override dir: a dev instance must
- * not relocate the real app's legacy database out from under it.
- */
-function legacyLocations(): string[] {
-    if (process.env.SWITCHBOARD_DATA_DIR) return [];
-    const home = os.homedir();
-    return [
-        path.join(home, '.claude', 'browser', 'switchboard.db'),
-        path.join(home, '.claude', 'browser', 'session-browser.db'),
-        path.join(home, '.claude', 'session-browser.db'),
-    ];
-}
-
-/** Move a database from an older install, with its write-ahead log. */
-function inheritLegacyDatabase(dbPath: string): void {
-    if (fs.existsSync(dbPath)) return;
-    for (const oldPath of legacyLocations()) {
-        if (!fs.existsSync(oldPath)) continue;
-        fs.renameSync(oldPath, dbPath);
-        // The -wal and -shm files are optional; a cleanly closed database has none.
-        try {
-            fs.renameSync(oldPath + '-wal', dbPath + '-wal');
-        } catch {
-            // None to move.
-        }
-        try {
-            fs.renameSync(oldPath + '-shm', dbPath + '-shm');
-        } catch {
-            // None to move.
-        }
-        return;
-    }
+    const override = process.env.SWITCHBOARD_DATA_DIR;
+    if (override) return path.resolve(override);
+    return path.join(os.homedir(), '.switchboard');
 }
 
 export function openDatabase(): SwitchboardDatabase {
     const dataDir = resolveDataDir();
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, {recursive: true});
 
-    const dbPath = path.join(dataDir, 'switchboard.db');
-    inheritLegacyDatabase(dbPath);
-
-    const db = new Database(dbPath);
+    const db = new Database(path.join(dataDir, 'switchboard.db'));
     // WAL so a read (the sidebar querying) never blocks on a write (the indexer),
     // and a busy timeout so the one case that does contend — two writes — waits
     // instead of throwing SQLITE_BUSY at the user.

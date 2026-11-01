@@ -8,9 +8,25 @@
  */
 import type Database from 'better-sqlite3';
 import {decodePullRequests} from '../../domain/session/pull-requests';
+import {upsertSql} from './support/upsert';
 import type {CachedSession, FolderMeta, SessionMeta} from '../../domain/session/session';
 import type {IssuePlanPin, PlanPin} from '../../domain/project/project-list';
 import type {SessionRepository} from '../../application/ports/session-repository';
+
+/** What a `session_cache` row holds besides its sessionId, in the order the upsert binds them. */
+const CACHED_COLUMNS = [
+    'folder',
+    'projectPath',
+    'summary',
+    'firstPrompt',
+    'created',
+    'modified',
+    'messageCount',
+    'slug',
+    'aiTitle',
+    'fileMtime',
+    'pullRequests',
+];
 
 /** A `session_cache` row as SQLite hands it back: the PR list is still JSON text. */
 type CachedSessionRow = Omit<CachedSession, 'pullRequests'> & {pullRequests: string | null};
@@ -53,22 +69,21 @@ export class SqliteSessionRepository implements SessionRepository {
     constructor(db: Database.Database) {
         this.metaGetStatement = db.prepare<[string], SessionMeta>('SELECT * FROM session_meta WHERE sessionId = ?');
         this.metaGetAllStatement = db.prepare<[], SessionMeta>('SELECT * FROM session_meta');
-        this.metaUpsertNameStatement = db.prepare<[string, string | null]>(`
-      INSERT INTO session_meta (sessionId, name) VALUES (?, ?)
-      ON CONFLICT(sessionId) DO UPDATE SET name = excluded.name
-    `);
-        this.metaToggleStarStatement = db.prepare<[string]>(`
-      INSERT INTO session_meta (sessionId, starred) VALUES (?, 1)
-      ON CONFLICT(sessionId) DO UPDATE SET starred = CASE WHEN starred = 1 THEN 0 ELSE 1 END
-    `);
-        this.metaUpsertArchivedStatement = db.prepare<[string, 0 | 1]>(`
-      INSERT INTO session_meta (sessionId, archived) VALUES (?, ?)
-      ON CONFLICT(sessionId) DO UPDATE SET archived = excluded.archived
-    `);
-        this.metaUpsertSnoozedStatement = db.prepare<[string, string | null]>(`
-      INSERT INTO session_meta (sessionId, snoozedUntil) VALUES (?, ?)
-      ON CONFLICT(sessionId) DO UPDATE SET snoozedUntil = excluded.snoozedUntil
-    `);
+        this.metaUpsertNameStatement = db.prepare<[string, string | null]>(
+            upsertSql('session_meta', 'sessionId', ['name']),
+        );
+        // A session with no row yet has never been starred, so its first toggle
+        // stars it. `IS NOT 1` reads a NULL as unstarred too.
+        this.metaToggleStarStatement = db.prepare<[string]>(
+            'INSERT INTO session_meta (sessionId, starred) VALUES (?, 1) ' +
+                'ON CONFLICT(sessionId) DO UPDATE SET starred = (starred IS NOT 1)',
+        );
+        this.metaUpsertArchivedStatement = db.prepare<[string, 0 | 1]>(
+            upsertSql('session_meta', 'sessionId', ['archived']),
+        );
+        this.metaUpsertSnoozedStatement = db.prepare<[string, string | null]>(
+            upsertSql('session_meta', 'sessionId', ['snoozedUntil']),
+        );
 
         this.planPinsGetAllStatement = db.prepare<[], {project_path: string; slug: string}>(
             'SELECT project_path, slug FROM pinned_plans',
@@ -116,28 +131,14 @@ export class SqliteSessionRepository implements SessionRepository {
                 string | null,
                 string,
             ]
-        >(`
-      INSERT INTO session_cache (
-        sessionId, folder, projectPath, summary, firstPrompt, created, modified,
-        messageCount, slug, aiTitle, fileMtime, pullRequests
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(sessionId) DO UPDATE SET
-        folder = excluded.folder, projectPath = excluded.projectPath,
-        summary = excluded.summary, firstPrompt = excluded.firstPrompt,
-        created = excluded.created, modified = excluded.modified,
-        messageCount = excluded.messageCount, slug = excluded.slug,
-        aiTitle = excluded.aiTitle, fileMtime = excluded.fileMtime,
-        pullRequests = excluded.pullRequests
-    `);
+        >(upsertSql('session_cache', 'sessionId', CACHED_COLUMNS));
         this.cacheDeleteOneStatement = db.prepare<[string]>('DELETE FROM session_cache WHERE sessionId = ?');
         this.cacheDeleteFolderStatement = db.prepare<[string]>('DELETE FROM session_cache WHERE folder = ?');
 
         this.folderGetAllStatement = db.prepare<[], FolderMeta>('SELECT * FROM cache_meta');
-        this.folderUpsertStatement = db.prepare<[string, string | null, number]>(`
-      INSERT INTO cache_meta (folder, projectPath, indexMtimeMs) VALUES (?, ?, ?)
-      ON CONFLICT(folder) DO UPDATE SET
-        projectPath = excluded.projectPath, indexMtimeMs = excluded.indexMtimeMs
-    `);
+        this.folderUpsertStatement = db.prepare<[string, string | null, number]>(
+            upsertSql('cache_meta', 'folder', ['projectPath', 'indexMtimeMs']),
+        );
         this.folderDeleteStatement = db.prepare<[string]>('DELETE FROM cache_meta WHERE folder = ?');
 
         this.upsertManyTransaction = db.transaction((sessions: readonly CachedSession[]) => {

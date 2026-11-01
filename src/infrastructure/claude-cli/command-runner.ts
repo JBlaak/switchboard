@@ -49,8 +49,9 @@ export class ClaudeCommandRunner implements CommandRunner {
         });
 
         child.on('exit', (code) => {
-            if (stderr.trim()) log.error(`[schedule] ${name} stderr:\n${stderr.trim()}`);
-            log.info(`[schedule] ${name} finished (exit ${code})`);
+            const complaints = stderr.trim();
+            if (complaints) log.error(`[schedule] ${name} wrote to stderr:\n${complaints}`);
+            log.info(`[schedule] ${name} exited with code ${code}`);
             onDone();
         });
 

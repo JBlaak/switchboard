@@ -20,8 +20,9 @@ export class ElectronDialogService implements DialogService {
             properties: ['openDirectory', 'createDirectory'],
             title,
         });
-        if (result.canceled || !result.filePaths.length) return null;
-        return result.filePaths[0];
+        // The dialog allows one choice, so the first path is the only one.
+        const [chosen] = result.filePaths;
+        return result.canceled ? null : (chosen ?? null);
     }
 }
 
@@ -42,7 +43,9 @@ export class ElectronSystemGateway implements SystemGateway {
     }
 
     public writeClipboard(text: string): void {
-        if (typeof text === 'string') clipboard.writeText(text);
+        // Typed as a string, but it arrives over IPC from the renderer.
+        if (typeof text !== 'string') return;
+        clipboard.writeText(text);
     }
 
     public writeClipboardImage(png: Uint8Array): void {

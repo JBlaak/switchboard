@@ -8,6 +8,7 @@
  */
 import {BrowserWindow, screen, shell} from 'electron';
 import path from 'node:path';
+import {isReloadShortcut} from './support/reload-shortcut';
 import {boundsToSave, MIN_BOUNDS, restorableBounds} from './support/window-bounds';
 import {windowChromeOptions} from './support/window-chrome';
 import type {WindowBounds} from '../../domain/settings/settings';
@@ -17,29 +18,30 @@ import type {Timers} from '../../application/ports/clock';
 const SAVE_DEBOUNCE_MS = 500;
 
 /**
- * Replace `window.open` in the renderer.
+ * The renderer's `window.open`, swapped for one that sends web links to the
+ * user's browser.
  *
- * xterm's link addon opens a link by calling `window.open()` and then setting
- * `location.href` on what it gets back. Both have to be intercepted, so it is
- * handed a proxy whose `location.href` setter routes through the app's own
- * "open externally" path. Injected as a script rather than handled natively
- * because the addon reads the return value.
+ * xterm's link addon opens a blank window first and only then points it at the
+ * link, by setting `location.href` on what `window.open()` returned. So the
+ * replacement hands back a stand-in whose `location.href` does the opening.
+ * It has to be a script in the page, not a window-open handler in this
+ * process: the addon uses the return value, which a handler cannot provide.
+ *
+ * Wrapped in a function called on the spot, so the script evaluates to
+ * undefined: `executeJavaScript` would otherwise try to send the new
+ * `window.open` back to this process.
  */
-const WINDOW_OPEN_SHIM = `
-  window.open = function(url) {
-    if (url && /^https?:\\/\\//i.test(url)) { window.api.openExternal(url); return null; }
-    const proxy = {};
-    Object.defineProperty(proxy, 'location', { get() {
-      const loc = {};
-      Object.defineProperty(loc, 'href', {
-        set(u) { if (/^https?:\\/\\//i.test(u)) window.api.openExternal(u); }
-      });
-      return loc;
-    }});
-    return proxy;
-  };
-  void 0;
-`;
+const WINDOW_OPEN_SHIM = `(() => {
+    const openIfWebLink = (url) => {
+        if (typeof url !== 'string' || !/^https?:[/][/]/i.test(url)) return false;
+        window.api.openExternal(url);
+        return true;
+    };
+    window.open = (url) => {
+        if (openIfWebLink(url)) return null;
+        return {location: {set href(target) { openIfWebLink(target); }}};
+    };
+})();`;
 
 /** The e2e harness asked for a window that never appears on screen. */
 export function hiddenForE2e(): boolean {
@@ -132,14 +134,8 @@ export function containNavigation(window: BrowserWindow): void {
         if (isExternalUrl(url)) void shell.openExternal(url).catch(() => {});
     });
 
-    // Chromium's built-in reload shortcuts would throw away every terminal on
-    // screen. Ctrl+R alone is deliberately left alone on macOS, where it is not
-    // a reload shortcut and belongs to the shell's reverse-i-search.
     window.webContents.on('before-input-event', (event, input) => {
-        if (input.type !== 'keyDown') return;
-        const key = input.key.toLowerCase();
-        if (key === 'r' && input.meta) event.preventDefault();
-        if (key === 'r' && input.control && input.shift) event.preventDefault();
+        if (isReloadShortcut(input)) event.preventDefault();
     });
 }
 

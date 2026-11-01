@@ -17,20 +17,32 @@ import type {Logger} from '../../application/ports/logger';
 const USAGE_ENDPOINT = 'https://api.anthropic.com/api/oauth/usage';
 const REQUEST_TIMEOUT_MS = 10000;
 
+/**
+ * The request goes out the way Claude Code's own does: the endpoint only
+ * accepts an OAuth token under the beta header, and it is the CLI's token.
+ */
+const CLI_HEADERS = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'claude-code/2.1.74',
+    'anthropic-beta': 'oauth-2025-04-20',
+};
+
+/** What the status bar gets for an answer, or for the lack of one. */
+function toUsage(raw: ApiUsage | null): Usage {
+    // No token, or a response the request already logged as an error.
+    if (!raw) return {_error: true, message: 'No usage: Claude Code is not signed in, or the API refused'};
+    if (raw._rateLimited) return {_rateLimited: true, retryAfterSeconds: raw.retryAfterSeconds};
+    return transformUsageResponse(raw);
+}
+
 export class OAuthUsageService implements UsageService {
     constructor(private readonly log: Logger) {}
 
     public async fetch(): Promise<Usage> {
         try {
-            const raw = await this.request();
-            if (raw === null) {
-                return {_error: true, message: 'Could not fetch usage (no token or API error)'};
-            }
-            if (raw._rateLimited) {
-                return {_rateLimited: true, retryAfterSeconds: raw.retryAfterSeconds};
-            }
-            return transformUsageResponse(raw);
+            return toUsage(await this.request());
         } catch (err) {
+            // Offline, timed out, or a response that is not JSON.
             return {_error: true, message: (err as Error).message};
         }
     }
@@ -40,12 +52,7 @@ export class OAuthUsageService implements UsageService {
         if (!oauth?.accessToken) return null;
 
         const res = await globalThis.fetch(USAGE_ENDPOINT, {
-            headers: {
-                Authorization: `Bearer ${oauth.accessToken}`,
-                'Content-Type': 'application/json',
-                'User-Agent': 'claude-code/2.1.74',
-                'anthropic-beta': 'oauth-2025-04-20',
-            },
+            headers: {Authorization: `Bearer ${oauth.accessToken}`, ...CLI_HEADERS},
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
 

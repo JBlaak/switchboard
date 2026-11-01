@@ -35,13 +35,18 @@ function keychainServiceName(): string {
     return `Claude Code${suffix}-${hash}`;
 }
 
+/** The account the CLI files its Keychain entry under: the login name, as the shell sees it. */
+function keychainAccount(): string {
+    // An empty USER is as good as none.
+    return process.env.USER || os.userInfo().username;
+}
+
 function readFromKeychain(): CredentialsFile | null {
     try {
-        const user = process.env.USER || os.userInfo().username;
         // execFileSync, not a shell: $USER must not be interpolated into a command.
         const json = execFileSync(
             'security',
-            ['find-generic-password', '-a', user, '-w', '-s', keychainServiceName()],
+            ['find-generic-password', '-a', keychainAccount(), '-w', '-s', keychainServiceName()],
             {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']},
         ).trim();
         return JSON.parse(json) as CredentialsFile;

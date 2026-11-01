@@ -16,10 +16,10 @@ export class SqliteSettingsStore implements SettingsStore {
 
     constructor(db: Database.Database) {
         this.getStatement = db.prepare<[string], {value: string}>('SELECT value FROM settings WHERE key = ?');
-        this.upsertStatement = db.prepare<[string, string]>(`
-      INSERT INTO settings (key, value) VALUES (?, ?)
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `);
+        // The key is the whole row's identity, so replacing the row is the update.
+        this.upsertStatement = db.prepare<[string, string]>(
+            'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+        );
         this.deleteStatement = db.prepare<[string]>('DELETE FROM settings WHERE key = ?');
     }
 

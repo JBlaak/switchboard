@@ -32,36 +32,35 @@ function firstExisting(candidates: readonly string[]): string | null {
     return null;
 }
 
-function discoverProfiles(): ShellProfile[] {
-    const profiles: ShellProfile[] = [];
-    const seen = new Set<string>();
+/** The shells a Mac always has, best first: the fallback when nothing better is known. */
+const SYSTEM_SHELLS = ['/bin/zsh', '/bin/bash', '/bin/sh'];
 
+/** The paths /etc/shells lists, without its comments and blank lines. */
+function listedShellPaths(): string[] {
+    return fs
+        .readFileSync('/etc/shells', 'utf8')
+        .split('\n')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== '' && !entry.startsWith('#'));
+}
+
+function discoverProfiles(): ShellProfile[] {
+    let candidates: string[];
     try {
-        const lines = fs
-            .readFileSync('/etc/shells', 'utf8')
-            .split('\n')
-            .map((l) => l.trim())
-            .filter((l) => l && !l.startsWith('#'));
-        for (const shellPath of lines) {
-            if (!fs.existsSync(shellPath)) continue;
-            // Deduplicate by basename: /bin/bash and /usr/bin/bash are one choice.
-            const base = path.basename(shellPath);
-            if (seen.has(base)) continue;
-            seen.add(base);
-            profiles.push({id: base, name: SHELL_NAMES[base] || base, path: shellPath});
-        }
+        candidates = listedShellPaths();
     } catch {
-        // /etc/shells unreadable — offer the three that are almost certainly there.
-        for (const [id, name, shellPath] of [
-            ['zsh', 'Zsh', '/bin/zsh'],
-            ['bash', 'Bash', '/bin/bash'],
-            ['sh', 'POSIX Shell', '/bin/sh'],
-        ] as const) {
-            if (fs.existsSync(shellPath)) profiles.push({id, name, path: shellPath});
-        }
+        candidates = SYSTEM_SHELLS;
     }
 
-    return profiles;
+    // One profile per shell name: /bin/bash and /usr/bin/bash are a single
+    // choice to the user, and the first installed one listed is the one used.
+    const profiles = new Map<string, ShellProfile>();
+    for (const shellPath of candidates) {
+        const id = path.basename(shellPath);
+        if (profiles.has(id) || !fs.existsSync(shellPath)) continue;
+        profiles.set(id, {id, name: SHELL_NAMES[id] || id, path: shellPath});
+    }
+    return [...profiles.values()];
 }
 
 export class SystemShellProfileProvider implements ShellProfileProvider {
@@ -93,6 +92,6 @@ export class SystemShellProfileProvider implements ShellProfileProvider {
         // SHELL is what the user's own terminal uses, so it outranks any guess.
         if (process.env.SHELL && fs.existsSync(process.env.SHELL)) return auto(process.env.SHELL);
 
-        return auto(firstExisting(['/bin/zsh', '/bin/bash', '/bin/sh']) ?? '/bin/sh');
+        return auto(firstExisting(SYSTEM_SHELLS) ?? '/bin/sh');
     }
 }

@@ -150,77 +150,66 @@ const INDEXES = [
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_task_links_session ON task_links(session_id) WHERE session_id IS NOT NULL',
 ];
 
+/**
+ * Run a statement a numbered migration can do without.
+ *
+ * The early migrations ran against databases of every age, some of which never
+ * had the table or already had the column; for those there is nothing to do,
+ * and the migration should still be recorded as done.
+ */
+function execTolerantly(db: Database.Database, sql: string): void {
+    try {
+        db.exec(sql);
+    } catch {
+        // Nothing there to change.
+    }
+}
+
+/**
+ * The statements that make the next start re-read every transcript: the cached
+ * sessions, and the per-folder stamps that would otherwise tell the indexer a
+ * folder is up to date.
+ */
+const FORGET_INDEXED_SESSIONS = ['DELETE FROM session_cache', 'DELETE FROM cache_meta'];
+
 type Migration = (db: Database.Database, result: SchemaResult) => void;
 
-/** Each migration runs once, in order. Add new ones to the end. */
+/**
+ * The numbered migrations; the database records how many it has run as
+ * `db_version`. Each runs once, in order, so only ever append: a position here
+ * is a version number some database out there already counts by.
+ */
 const MIGRATIONS: Migration[] = [
-    // v1: superseded by v2.
+    // v1: did nothing v2 does not redo.
     () => {},
-    // v2: clear the session cache to re-index with corrected worktree paths.
+    // v2: worktree sessions were cached under the wrong project path. Throw the
+    // index away, search included, and let the next start rebuild it.
     (db, result) => {
-        try {
-            db.exec('DELETE FROM session_cache');
-        } catch {
-            // Nothing to clear.
-        }
-        try {
-            db.exec('DELETE FROM cache_meta');
-        } catch {
-            // Nothing to clear.
-        }
-        try {
-            db.exec('DELETE FROM search_map');
-        } catch {
-            // Nothing to clear.
-        }
-        try {
-            db.exec('DROP TABLE IF EXISTS search_fts');
-        } catch {
-            // Nothing to clear.
-        }
+        for (const sql of FORGET_INDEXED_SESSIONS) execTolerantly(db, sql);
+        execTolerantly(db, 'DELETE FROM search_map');
+        execTolerantly(db, 'DROP TABLE IF EXISTS search_fts');
         result.searchFtsRecreated = true;
     },
-    // v3: add aiTitle, and clear the cache so a re-index populates it.
+    // v3: the AI-generated title got a column of its own, and only a re-index
+    // fills it in for sessions already cached.
     //
     // v0.0.29 wrote AI titles into the user-name column, clobbering manual
     // renames. There is no way to tell afterwards which names came from an AI
     // title and which the user typed, so that pollution is left alone rather
     // than guessed at: only future indexes are clean.
     (db) => {
-        try {
-            db.exec('ALTER TABLE session_cache ADD COLUMN aiTitle TEXT');
-        } catch {
-            // The column is already there.
-        }
-        try {
-            db.exec('DELETE FROM session_cache');
-        } catch {
-            // Nothing to clear.
-        }
-        try {
-            db.exec('DELETE FROM cache_meta');
-        } catch {
-            // Nothing to clear.
-        }
+        execTolerantly(db, 'ALTER TABLE session_cache ADD COLUMN aiTitle TEXT');
+        for (const sql of FORGET_INDEXED_SESSIONS) execTolerantly(db, sql);
     },
-    // v4: superseded — fileMtime is added by the reconciliation below, keyed on
-    // column presence rather than a version number.
+    // v4: once added fileMtime; that is now the reconciliation's job, which
+    // goes by the columns a database has rather than by its version.
     () => {},
-    // v5: clear the cache so sessions a tool ran with `claude -p` drop out of it.
+    // v5: re-index so sessions a tool ran with `claude -p` drop out of the cache.
     // They are no longer listed, but a cached one whose transcript never changes
     // again would otherwise stay. Only a cache: a database a parallel branch
     // already took past v5 keeps a few stale rows, nothing worse.
     (db) => {
-        try {
-            db.exec('DELETE FROM session_cache');
-        } catch {
-            // Nothing to clear.
-        }
-        try {
-            db.exec('DELETE FROM cache_meta');
-        } catch {
-            // Nothing to clear.
-        }
+        for (const sql of FORGET_INDEXED_SESSIONS) execTolerantly(db, sql);
     },
 ];
 
@@ -233,61 +222,54 @@ function readVersion(db: Database.Database): number {
     }
 }
 
-/**
- * Ensure the columns the queries below depend on exist.
- *
- * Errors here are deliberately NOT swallowed: a transient failure (SQLITE_BUSY,
- * say) must not be recorded as migrated — the next launch simply retries.
- */
-function reconcileColumns(db: Database.Database): void {
-    const columns = new Set(
-        db
-            .prepare<[], {name: string}>('PRAGMA table_info(session_cache)')
-            .all()
-            .map((c) => c.name),
-    );
+/** A column the queries depend on, and what its arrival means for what is cached. */
+interface RequiredColumn {
+    table: string;
+    column: string;
+    type: string;
+    /**
+     * Rows cached before the column existed are wrong without it, and stay
+     * wrong: the indexer only re-reads a transcript whose file changed. So its
+     * arrival throws the cache away and the next start rebuilds it.
+     */
+    staleCache?: boolean;
+}
 
-    if (!columns.has('aiTitle')) db.exec('ALTER TABLE session_cache ADD COLUMN aiTitle TEXT');
-
-    if (!columns.has('fileMtime')) {
-        db.exec('ALTER TABLE session_cache ADD COLUMN fileMtime TEXT');
-        // fileMtime's introduction changed what `modified` means (file mtime →
-        // last-message timestamp), so cached values written by pre-fileMtime code
-        // are stale. Clear the cache to force a full re-index; without this,
-        // dormant folders would keep mtime-based times indefinitely, because the
-        // folder-level index gate never re-reads them.
-        db.exec('DELETE FROM session_cache');
-        db.exec('DELETE FROM cache_meta');
-    }
-
-    if (!columns.has('pullRequests')) {
-        // A JSON array of { number, url, repository }. Rows cached before it
-        // existed would otherwise read as "no PRs" for as long as their transcript
-        // stays untouched — the per-file mtime gate never re-reads them — so clear
-        // the cache and let the cold-start rebuild fill it in for every session.
-        db.exec('ALTER TABLE session_cache ADD COLUMN pullRequests TEXT');
-        db.exec('DELETE FROM session_cache');
-        db.exec('DELETE FROM cache_meta');
-    }
-
+const REQUIRED_COLUMNS: RequiredColumn[] = [
+    {table: 'session_cache', column: 'aiTitle', type: 'TEXT'},
+    // The transcript's own mtime, the indexer's per-session gate. Before it,
+    // `modified` held that mtime; since, it holds the last message's time. A
+    // cached row from before says the former, and a folder nobody touches again
+    // would show it for good.
+    {table: 'session_cache', column: 'fileMtime', type: 'TEXT', staleCache: true},
+    // A JSON array of {number, url, repository}. A row cached before it would
+    // read as "no PRs" until its transcript next changes.
+    {table: 'session_cache', column: 'pullRequests', type: 'TEXT', staleCache: true},
     // When a snoozed session's row comes back, as an ISO time; NULL when awake.
-    const metaColumns = new Set(
-        db
-            .prepare<[], {name: string}>('PRAGMA table_info(session_meta)')
-            .all()
-            .map((c) => c.name),
-    );
-    if (!metaColumns.has('snoozedUntil')) db.exec('ALTER TABLE session_meta ADD COLUMN snoozedUntil TEXT');
-
+    {table: 'session_meta', column: 'snoozedUntil', type: 'TEXT'},
     // An action's card details (an auto-fix attempt, the attempts it gave up
     // after), as JSON. A queue table from before it has no rows that need any.
-    const actionColumns = new Set(
-        db
-            .prepare<[], {name: string}>('PRAGMA table_info(session_actions)')
-            .all()
-            .map((c) => c.name),
-    );
-    if (!actionColumns.has('details')) db.exec('ALTER TABLE session_actions ADD COLUMN details TEXT');
+    {table: 'session_actions', column: 'details', type: 'TEXT'},
+];
+
+function columnsOf(db: Database.Database, table: string): Set<string> {
+    const rows = db.prepare<[], {name: string}>(`PRAGMA table_info(${table})`).all();
+    return new Set(rows.map((row) => row.name));
+}
+
+/**
+ * Add whichever required column a database lacks.
+ *
+ * Errors here are deliberately NOT swallowed: a transient failure (SQLITE_BUSY,
+ * say) must not leave a database that looks reconciled — the next launch simply
+ * tries again.
+ */
+function reconcileColumns(db: Database.Database): void {
+    for (const {table, column, type, staleCache} of REQUIRED_COLUMNS) {
+        if (columnsOf(db, table).has(column)) continue;
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+        if (staleCache) for (const sql of FORGET_INDEXED_SESSIONS) db.exec(sql);
+    }
 }
 
 /** Create what is missing, migrate what is old, and reconcile what is odd. */

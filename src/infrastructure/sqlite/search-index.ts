@@ -13,6 +13,19 @@ import {ftsMatchExpression} from '../../domain/search/search';
 import type {SearchEntry, SearchResult, SearchType} from '../../domain/search/search';
 import type {SearchIndex} from '../../application/ports/search-index';
 
+/**
+ * One type's matches, best ranked first, each with an excerpt of its body
+ * (column 1): the hits wrapped in <mark> for the renderer to highlight, cut to
+ * about 40 tokens around them.
+ */
+const QUERY_SQL = `
+    SELECT entry.id AS id, snippet(search_fts, 1, '<mark>', '</mark>', '...', 40) AS snippet
+    FROM search_fts
+    INNER JOIN search_map AS entry ON entry.rowid = search_fts.rowid
+    WHERE entry.type = ? AND search_fts MATCH ?
+    ORDER BY rank
+    LIMIT ?`;
+
 export class SqliteSearchIndex implements SearchIndex {
     private readonly sessionCountStatement;
     private readonly lookupStatement;
@@ -62,14 +75,7 @@ export class SqliteSearchIndex implements SearchIndex {
         this.updateTitleStatement = db.prepare<[string, string, SearchType]>(
             'UPDATE search_fts SET title = ? WHERE rowid = (SELECT rowid FROM search_map WHERE id = ? AND type = ?)',
         );
-        this.queryStatement = db.prepare<[SearchType, string, number], SearchResult>(`
-      SELECT search_map.id, snippet(search_fts, 1, '<mark>', '</mark>', '...', 40) as snippet
-      FROM search_fts
-      JOIN search_map ON search_fts.rowid = search_map.rowid
-      WHERE search_map.type = ? AND search_fts MATCH ?
-      ORDER BY rank
-      LIMIT ?
-    `);
+        this.queryStatement = db.prepare<[SearchType, string, number], SearchResult>(QUERY_SQL);
 
         this.upsertManyTransaction = db.transaction((entries: readonly SearchEntry[]) => {
             for (const entry of entries) {
