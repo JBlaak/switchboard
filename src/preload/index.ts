@@ -6,9 +6,9 @@
  * nodeIntegration off, so this is the only surface it has — which is why it
  * stays a flat, auditable list rather than exposing `ipcRenderer` itself.
  */
-import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import { EVENT, INVOKE, SEND } from '../ipc/channels';
-import type { SwitchboardApi, Unsubscribe } from '../ipc/api';
+import {contextBridge, ipcRenderer, webUtils} from 'electron';
+import {EVENT, INVOKE, SEND} from '../ipc/channels';
+import type {SwitchboardApi, Unsubscribe} from '../ipc/api';
 
 type ChannelListener = Parameters<typeof ipcRenderer.on>[1];
 
@@ -20,167 +20,174 @@ type ChannelListener = Parameters<typeof ipcRenderer.on>[1];
  * to be removed again.
  */
 function subscribe(channel: string, listener: ChannelListener): Unsubscribe {
-  ipcRenderer.on(channel, listener);
-  return () => { ipcRenderer.removeListener(channel, listener); };
+    ipcRenderer.on(channel, listener);
+    return () => {
+        ipcRenderer.removeListener(channel, listener);
+    };
 }
 
 const api: SwitchboardApi = {
-  // ── Projects ──
-  getProjects: (showArchived) => ipcRenderer.invoke(INVOKE.getProjects, showArchived),
-  browseFolder: () => ipcRenderer.invoke(INVOKE.browseFolder),
-  addProject: (projectPath) => ipcRenderer.invoke(INVOKE.addProject, projectPath),
-  removeProject: (projectPath) => ipcRenderer.invoke(INVOKE.removeProject, projectPath),
-  addRemoteProject: (config) => ipcRenderer.invoke(INVOKE.addRemoteProject, config),
-  removeRemoteProject: (projectPath) => ipcRenderer.invoke(INVOKE.removeRemoteProject, projectPath),
-  checkProjectFolder: (typed) => ipcRenderer.invoke(INVOKE.checkProjectFolder, typed),
+    // ── Projects ──
+    getProjects: (showArchived) => ipcRenderer.invoke(INVOKE.getProjects, showArchived),
+    browseFolder: () => ipcRenderer.invoke(INVOKE.browseFolder),
+    addProject: (projectPath) => ipcRenderer.invoke(INVOKE.addProject, projectPath),
+    removeProject: (projectPath) => ipcRenderer.invoke(INVOKE.removeProject, projectPath),
+    addRemoteProject: (config) => ipcRenderer.invoke(INVOKE.addRemoteProject, config),
+    removeRemoteProject: (projectPath) => ipcRenderer.invoke(INVOKE.removeRemoteProject, projectPath),
+    checkProjectFolder: (typed) => ipcRenderer.invoke(INVOKE.checkProjectFolder, typed),
 
-  // ── Sessions ──
-  getActiveSessions: () => ipcRenderer.invoke(INVOKE.getActiveSessions),
-  getActiveTerminals: () => ipcRenderer.invoke(INVOKE.getActiveTerminals),
-  openTerminal: (id, projectPath, isNew, sessionOptions) =>
-    ipcRenderer.invoke(INVOKE.openTerminal, id, projectPath, isNew, sessionOptions),
-  stopSession: (id) => ipcRenderer.invoke(INVOKE.stopSession, id),
-  reconnectRemote: (id) => ipcRenderer.invoke(INVOKE.reconnectRemote, id),
-  toggleStar: (id) => ipcRenderer.invoke(INVOKE.toggleStar, id),
-  togglePlanPin: (projectPath, slug) => ipcRenderer.invoke(INVOKE.togglePlanPin, projectPath, slug),
-  toggleIssuePlanPin: (projectPath, repository, number, title) =>
-    ipcRenderer.invoke(INVOKE.toggleIssuePlanPin, projectPath, repository, number, title),
-  renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
-  archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
-  snoozeSession: (id, until) => ipcRenderer.invoke(INVOKE.snoozeSession, id, until),
+    // ── Sessions ──
+    getActiveSessions: () => ipcRenderer.invoke(INVOKE.getActiveSessions),
+    getActiveTerminals: () => ipcRenderer.invoke(INVOKE.getActiveTerminals),
+    openTerminal: (id, projectPath, isNew, sessionOptions) =>
+        ipcRenderer.invoke(INVOKE.openTerminal, id, projectPath, isNew, sessionOptions),
+    stopSession: (id) => ipcRenderer.invoke(INVOKE.stopSession, id),
+    reconnectRemote: (id) => ipcRenderer.invoke(INVOKE.reconnectRemote, id),
+    toggleStar: (id) => ipcRenderer.invoke(INVOKE.toggleStar, id),
+    togglePlanPin: (projectPath, slug) => ipcRenderer.invoke(INVOKE.togglePlanPin, projectPath, slug),
+    toggleIssuePlanPin: (projectPath, repository, number, title) =>
+        ipcRenderer.invoke(INVOKE.toggleIssuePlanPin, projectPath, repository, number, title),
+    renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
+    archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
+    snoozeSession: (id, until) => ipcRenderer.invoke(INVOKE.snoozeSession, id, until),
 
-  // ── Questions ──
-  getPendingQuestions: () => ipcRenderer.invoke(INVOKE.getPendingQuestions),
-  answerQuestions: (sessionId, toolUseId, answers) =>
-    ipcRenderer.invoke(INVOKE.answerQuestions, sessionId, toolUseId, answers),
+    // ── Questions ──
+    getPendingQuestions: () => ipcRenderer.invoke(INVOKE.getPendingQuestions),
+    answerQuestions: (sessionId, toolUseId, answers) =>
+        ipcRenderer.invoke(INVOKE.answerQuestions, sessionId, toolUseId, answers),
 
-  // ── Phone access (#194) ──
-  getPhoneAccess: () => ipcRenderer.invoke(INVOKE.phoneAccessGet),
-  setPhoneAccessEnabled: (enabled) => ipcRenderer.invoke(INVOKE.phoneAccessSetEnabled, enabled),
-  startPhonePairing: () => ipcRenderer.invoke(INVOKE.phoneAccessStartPairing),
-  stopPhonePairing: () => ipcRenderer.invoke(INVOKE.phoneAccessStopPairing),
-  confirmPhonePairing: (requestId, accept) => ipcRenderer.invoke(INVOKE.phoneAccessConfirmPairing, requestId, accept),
-  revokePhoneDevice: (deviceId) => ipcRenderer.invoke(INVOKE.phoneAccessRevoke, deviceId),
-  resetPhoneIdentity: () => ipcRenderer.invoke(INVOKE.phoneAccessReset),
-  getTerminalOwners: () => ipcRenderer.invoke(INVOKE.terminalOwners),
-  useTerminalHere: (sessionId) => ipcRenderer.invoke(INVOKE.useTerminalHere, sessionId),
+    // ── Phone access (#194) ──
+    getPhoneAccess: () => ipcRenderer.invoke(INVOKE.phoneAccessGet),
+    setPhoneAccessEnabled: (enabled) => ipcRenderer.invoke(INVOKE.phoneAccessSetEnabled, enabled),
+    startPhonePairing: () => ipcRenderer.invoke(INVOKE.phoneAccessStartPairing),
+    stopPhonePairing: () => ipcRenderer.invoke(INVOKE.phoneAccessStopPairing),
+    confirmPhonePairing: (requestId, accept) => ipcRenderer.invoke(INVOKE.phoneAccessConfirmPairing, requestId, accept),
+    revokePhoneDevice: (deviceId) => ipcRenderer.invoke(INVOKE.phoneAccessRevoke, deviceId),
+    resetPhoneIdentity: () => ipcRenderer.invoke(INVOKE.phoneAccessReset),
+    getTerminalOwners: () => ipcRenderer.invoke(INVOKE.terminalOwners),
+    useTerminalHere: (sessionId) => ipcRenderer.invoke(INVOKE.useTerminalHere, sessionId),
 
-  // ── Usage ──
-  getUsage: () => ipcRenderer.invoke(INVOKE.getUsage),
+    // ── Usage ──
+    getUsage: () => ipcRenderer.invoke(INVOKE.getUsage),
 
-  // ── Weather ──
-  getWeather: () => ipcRenderer.invoke(INVOKE.getWeather),
-  geocodeWeatherLocation: (name) => ipcRenderer.invoke(INVOKE.geocodeWeatherLocation, name),
+    // ── Weather ──
+    getWeather: () => ipcRenderer.invoke(INVOKE.getWeather),
+    geocodeWeatherLocation: (name) => ipcRenderer.invoke(INVOKE.geocodeWeatherLocation, name),
 
-  // ── Ask Patch ──
-  askRoute: (request) => ipcRenderer.invoke(INVOKE.askRoute, request),
-  cancelAskRoute: () => ipcRenderer.invoke(INVOKE.cancelAskRoute),
-  warmAskRoute: () => ipcRenderer.invoke(INVOKE.warmAskRoute),
+    // ── Ask Patch ──
+    askRoute: (request) => ipcRenderer.invoke(INVOKE.askRoute, request),
+    cancelAskRoute: () => ipcRenderer.invoke(INVOKE.cancelAskRoute),
+    warmAskRoute: () => ipcRenderer.invoke(INVOKE.warmAskRoute),
 
-  // ── Sleep ──
-  getSleepDisabled: () => ipcRenderer.invoke(INVOKE.getSleepDisabled),
-  setSleepDisabled: (disabled) => ipcRenderer.invoke(INVOKE.setSleepDisabled, disabled),
+    // ── Sleep ──
+    getSleepDisabled: () => ipcRenderer.invoke(INVOKE.getSleepDisabled),
+    setSleepDisabled: (disabled) => ipcRenderer.invoke(INVOKE.setSleepDisabled, disabled),
 
-  // ── Updates ──
-  getUpdate: () => ipcRenderer.invoke(INVOKE.getUpdate),
-  installUpdate: () => ipcRenderer.invoke(INVOKE.installUpdate),
+    // ── Updates ──
+    getUpdate: () => ipcRenderer.invoke(INVOKE.getUpdate),
+    installUpdate: () => ipcRenderer.invoke(INVOKE.installUpdate),
 
-  // ── Search ──
-  search: (type, query, titleOnly) => ipcRenderer.invoke(INVOKE.search, type, query, titleOnly),
+    // ── Search ──
+    search: (type, query, titleOnly) => ipcRenderer.invoke(INVOKE.search, type, query, titleOnly),
 
-  // ── Settings ──
-  getSetting: (key) => ipcRenderer.invoke(INVOKE.getSetting, key),
-  setSetting: (key, value) => ipcRenderer.invoke(INVOKE.setSetting, key, value),
-  getEffectiveSettings: (projectPath) => ipcRenderer.invoke(INVOKE.getEffectiveSettings, projectPath),
-  getShellProfiles: () => ipcRenderer.invoke(INVOKE.getShellProfiles),
-  setAppearance: (mode) => ipcRenderer.invoke(INVOKE.setAppearance, mode),
-  quickAskHotkeyStatus: () => ipcRenderer.invoke(INVOKE.quickAskHotkeyStatus),
-  blaakTasksSetUp: (url) => ipcRenderer.invoke(INVOKE.blaakTasksSetUp, url),
+    // ── Settings ──
+    getSetting: (key) => ipcRenderer.invoke(INVOKE.getSetting, key),
+    setSetting: (key, value) => ipcRenderer.invoke(INVOKE.setSetting, key, value),
+    getEffectiveSettings: (projectPath) => ipcRenderer.invoke(INVOKE.getEffectiveSettings, projectPath),
+    getShellProfiles: () => ipcRenderer.invoke(INVOKE.getShellProfiles),
+    setAppearance: (mode) => ipcRenderer.invoke(INVOKE.setAppearance, mode),
+    quickAskHotkeyStatus: () => ipcRenderer.invoke(INVOKE.quickAskHotkeyStatus),
+    blaakTasksSetUp: (url) => ipcRenderer.invoke(INVOKE.blaakTasksSetUp, url),
 
-  // ── Host ──
-  openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
-  openRepository: (projectPath) => ipcRenderer.invoke(INVOKE.openRepository, projectPath),
-  writeClipboard: (text) => ipcRenderer.invoke(INVOKE.writeClipboard, text),
-  writeClipboardImage: (png) => ipcRenderer.invoke(INVOKE.writeClipboardImage, png),
-  getAppVersion: () => ipcRenderer.invoke(INVOKE.getAppVersion),
+    // ── Host ──
+    openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
+    openRepository: (projectPath) => ipcRenderer.invoke(INVOKE.openRepository, projectPath),
+    writeClipboard: (text) => ipcRenderer.invoke(INVOKE.writeClipboard, text),
+    writeClipboardImage: (png) => ipcRenderer.invoke(INVOKE.writeClipboardImage, png),
+    getAppVersion: () => ipcRenderer.invoke(INVOKE.getAppVersion),
 
-  // ── Session work ──
-  openSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkOpen, sessionId),
-  canOpenSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkCanOpen, sessionId),
-  getSessionWorkDiff: (request) => ipcRenderer.invoke(INVOKE.sessionWorkDiff, request),
-  sessionWorkImage: (request) => ipcRenderer.invoke(INVOKE.sessionWorkImage, request),
-  sessionWorkAction: (request) => ipcRenderer.invoke(INVOKE.sessionWorkAction, request),
-  cancelSessionWorkAction: (activityId) => ipcRenderer.invoke(INVOKE.sessionWorkCancel, activityId),
-  sessionWorkComment: (request) => ipcRenderer.invoke(INVOKE.sessionWorkComment, request),
-  sessionWorkReview: (request) => ipcRenderer.invoke(INVOKE.sessionWorkReview, request),
-  getCheckLog: (request) => ipcRenderer.invoke(INVOKE.sessionWorkCheckLog, request),
+    // ── Session work ──
+    openSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkOpen, sessionId),
+    canOpenSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkCanOpen, sessionId),
+    getSessionWorkDiff: (request) => ipcRenderer.invoke(INVOKE.sessionWorkDiff, request),
+    sessionWorkImage: (request) => ipcRenderer.invoke(INVOKE.sessionWorkImage, request),
+    sessionWorkAction: (request) => ipcRenderer.invoke(INVOKE.sessionWorkAction, request),
+    cancelSessionWorkAction: (activityId) => ipcRenderer.invoke(INVOKE.sessionWorkCancel, activityId),
+    sessionWorkComment: (request) => ipcRenderer.invoke(INVOKE.sessionWorkComment, request),
+    sessionWorkReview: (request) => ipcRenderer.invoke(INVOKE.sessionWorkReview, request),
+    getCheckLog: (request) => ipcRenderer.invoke(INVOKE.sessionWorkCheckLog, request),
 
-  // ── Plan: sessions on a plan's issues (#125) ──
-  issueSessions: (repository) => ipcRenderer.invoke(INVOKE.planIssueSessions, repository),
-  prepareIssueWorktree: (request) => ipcRenderer.invoke(INVOKE.planPrepareIssueWorktree, request),
-  // ── Plans (#123) ──
-  sessionPlans: (sessionId) => ipcRenderer.invoke(INVOKE.planSessionPlans, sessionId),
-  plan: (repo, number) => ipcRenderer.invoke(INVOKE.planGet, repo, number),
-  projectPlans: (projectPath, options) => ipcRenderer.invoke(INVOKE.planProjectPlans, projectPath, options),
-  // ── The project page (#172) ──
-  projectOverview: (projectPath, options) => ipcRenderer.invoke(INVOKE.projectOverview, projectPath, options),
+    // ── Plan: sessions on a plan's issues (#125) ──
+    issueSessions: (repository) => ipcRenderer.invoke(INVOKE.planIssueSessions, repository),
+    prepareIssueWorktree: (request) => ipcRenderer.invoke(INVOKE.planPrepareIssueWorktree, request),
+    // ── Plans (#123) ──
+    sessionPlans: (sessionId) => ipcRenderer.invoke(INVOKE.planSessionPlans, sessionId),
+    plan: (repo, number) => ipcRenderer.invoke(INVOKE.planGet, repo, number),
+    projectPlans: (projectPath, options) => ipcRenderer.invoke(INVOKE.planProjectPlans, projectPath, options),
+    // ── The project page (#172) ──
+    projectOverview: (projectPath, options) => ipcRenderer.invoke(INVOKE.projectOverview, projectPath, options),
 
-  // ── Tasks (#248) ──
-  listTasks: (query) => ipcRenderer.invoke(INVOKE.tasksList, query),
-  getTask: (taskId) => ipcRenderer.invoke(INVOKE.tasksGet, taskId),
-  updateTask: (taskId, change) => ipcRenderer.invoke(INVOKE.tasksUpdate, taskId, change),
-  setTaskRepo: (taskId, projectPath) => ipcRenderer.invoke(INVOKE.tasksSetRepo, taskId, projectPath),
-  prepareTaskStart: (request) => ipcRenderer.invoke(INVOKE.tasksPrepareStart, request),
-  taskSessionStarted: (taskId, sessionId, projectPath) =>
-    ipcRenderer.invoke(INVOKE.tasksSessionStarted, taskId, sessionId, projectPath),
-  linkSessionTask: (sessionId, taskId) => ipcRenderer.invoke(INVOKE.tasksLinkSession, sessionId, taskId),
-  unlinkSessionTask: (sessionId) => ipcRenderer.invoke(INVOKE.tasksUnlinkSession, sessionId),
-  sessionTask: (sessionId) => ipcRenderer.invoke(INVOKE.tasksSessionTask, sessionId),
-  sessionTasks: () => ipcRenderer.invoke(INVOKE.tasksSessionTasks),
-  taskSessions: (taskId) => ipcRenderer.invoke(INVOKE.tasksTaskSessions, taskId),
-  projectTasks: (projectPath) => ipcRenderer.invoke(INVOKE.tasksProjectTasks, projectPath),
-  watchTasks: (watchId, query) => ipcRenderer.invoke(INVOKE.tasksWatch, watchId, query),
-  unwatchTasks: (watchId) => ipcRenderer.invoke(INVOKE.tasksUnwatch, watchId),
+    // ── Tasks (#248) ──
+    listTasks: (query) => ipcRenderer.invoke(INVOKE.tasksList, query),
+    getTask: (taskId) => ipcRenderer.invoke(INVOKE.tasksGet, taskId),
+    updateTask: (taskId, change) => ipcRenderer.invoke(INVOKE.tasksUpdate, taskId, change),
+    setTaskRepo: (taskId, projectPath) => ipcRenderer.invoke(INVOKE.tasksSetRepo, taskId, projectPath),
+    prepareTaskStart: (request) => ipcRenderer.invoke(INVOKE.tasksPrepareStart, request),
+    taskSessionStarted: (taskId, sessionId, projectPath) =>
+        ipcRenderer.invoke(INVOKE.tasksSessionStarted, taskId, sessionId, projectPath),
+    linkSessionTask: (sessionId, taskId) => ipcRenderer.invoke(INVOKE.tasksLinkSession, sessionId, taskId),
+    unlinkSessionTask: (sessionId) => ipcRenderer.invoke(INVOKE.tasksUnlinkSession, sessionId),
+    sessionTask: (sessionId) => ipcRenderer.invoke(INVOKE.tasksSessionTask, sessionId),
+    sessionTasks: () => ipcRenderer.invoke(INVOKE.tasksSessionTasks),
+    taskSessions: (taskId) => ipcRenderer.invoke(INVOKE.tasksTaskSessions, taskId),
+    projectTasks: (projectPath) => ipcRenderer.invoke(INVOKE.tasksProjectTasks, projectPath),
+    watchTasks: (watchId, query) => ipcRenderer.invoke(INVOKE.tasksWatch, watchId, query),
+    unwatchTasks: (watchId) => ipcRenderer.invoke(INVOKE.tasksUnwatch, watchId),
 
-  // ── Fire-and-forget ──
-  sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),
-  resizeTerminal: (id, cols, rows) => ipcRenderer.send(SEND.terminalResize, id, cols, rows),
-  closeTerminal: (id) => ipcRenderer.send(SEND.closeTerminal, id),
-  closeSessionWork: (sessionId) => ipcRenderer.send(SEND.sessionWorkClose, sessionId),
-  startWindowDrag: () => ipcRenderer.send(SEND.windowDragStart),
-  moveWindowDrag: (dx, dy) => ipcRenderer.send(SEND.windowDragMove, dx, dy),
-  endWindowDrag: () => ipcRenderer.send(SEND.windowDragEnd),
-  setNeedsInputCount: (count) => ipcRenderer.send(SEND.needsInputCount, count),
-  rendererReady: () => ipcRenderer.send(SEND.rendererReady),
+    // ── Fire-and-forget ──
+    sendInput: (id, data) => ipcRenderer.send(SEND.terminalInput, id, data),
+    resizeTerminal: (id, cols, rows) => ipcRenderer.send(SEND.terminalResize, id, cols, rows),
+    closeTerminal: (id) => ipcRenderer.send(SEND.closeTerminal, id),
+    closeSessionWork: (sessionId) => ipcRenderer.send(SEND.sessionWorkClose, sessionId),
+    startWindowDrag: () => ipcRenderer.send(SEND.windowDragStart),
+    moveWindowDrag: (dx, dy) => ipcRenderer.send(SEND.windowDragMove, dx, dy),
+    endWindowDrag: () => ipcRenderer.send(SEND.windowDragEnd),
+    setNeedsInputCount: (count) => ipcRenderer.send(SEND.needsInputCount, count),
+    rendererReady: () => ipcRenderer.send(SEND.rendererReady),
 
-  // ── Events from main ──
-  onTerminalData: (cb) => subscribe(EVENT.terminalData, (_e, sessionId, data) => cb(sessionId, data)),
-  onProcessExited: (cb) => subscribe(EVENT.processExited, (_e, sessionId, exitCode) => cb(sessionId, exitCode)),
-  onSessionForked: (cb) => subscribe(EVENT.sessionForked, (_e, oldId, newId) => cb(oldId, newId)),
-  onCliBusyState: (cb) => subscribe(EVENT.cliBusyState, (_e, sessionId, busy) => cb(sessionId, busy)),
-  onTerminalNotification: (cb) => subscribe(EVENT.terminalNotification, (_e, sessionId, message) => cb(sessionId, message)),
-  onSessionNeedsAttention: (cb) => subscribe(EVENT.sessionNeedsAttention, (_e, sessionId) => cb(sessionId)),
-  onSessionAgents: (cb) => subscribe(EVENT.sessionAgents, (_e, sessionId, agents) => cb(sessionId, agents)),
-  onRemoteStatus: (cb) => subscribe(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status)),
-  onQuestionsAsked: (cb) => subscribe(EVENT.questionsAsked, (_e, pending) => cb(pending)),
-  onQuestionsSettled: (cb) => subscribe(EVENT.questionsSettled, (_e, settled) => cb(settled)),
-  onProjectsChanged: (cb) => subscribe(EVENT.projectsChanged, () => cb()),
-  onStatusUpdate: (cb) => subscribe(EVENT.statusUpdate, (_e, text, type) => cb(text, type)),
-  onFullscreenChanged: (cb) => subscribe(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen)),
-  onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
-  onSessionWorkSnapshot: (cb) => subscribe(EVENT.sessionWorkSnapshot, (_e, snapshot) => cb(snapshot)),
-  onPrStatusChanged: (cb) => subscribe(EVENT.prStatusChanged, (_e, change) => cb(change)),
-  onLaunchRequested: (cb) => subscribe(EVENT.launchRequested, (_e, projectPath, initialPrompt) => cb(projectPath, initialPrompt)),
-  onPickerRequested: (cb) => subscribe(EVENT.pickerRequested, (_e, initialPrompt, reason) => cb(initialPrompt, reason)),
-  onPhoneAccessChanged: (cb) => subscribe(EVENT.phoneAccessChanged, (_e, state) => cb(state)),
-  onTerminalOwnerChanged: (cb) => subscribe(EVENT.terminalOwnerChanged, (_e, sessionId, owner) => cb(sessionId, owner)),
-  onSessionStarted: (cb) => subscribe(EVENT.sessionStarted, (_e, sessionId, projectPath) => cb(sessionId, projectPath)),
-  onSessionArchived: (cb) => subscribe(EVENT.sessionArchived, (_e, sessionId) => cb(sessionId)),
-  onTasksChanged: (cb) => subscribe(EVENT.tasksChanged, (_e, update) => cb(update)),
-  onSessionTaskChanged: (cb) => subscribe(EVENT.sessionTaskChanged, (_e, sessionId, taskId) => cb(sessionId, taskId)),
+    // ── Events from main ──
+    onTerminalData: (cb) => subscribe(EVENT.terminalData, (_e, sessionId, data) => cb(sessionId, data)),
+    onProcessExited: (cb) => subscribe(EVENT.processExited, (_e, sessionId, exitCode) => cb(sessionId, exitCode)),
+    onSessionForked: (cb) => subscribe(EVENT.sessionForked, (_e, oldId, newId) => cb(oldId, newId)),
+    onCliBusyState: (cb) => subscribe(EVENT.cliBusyState, (_e, sessionId, busy) => cb(sessionId, busy)),
+    onTerminalNotification: (cb) =>
+        subscribe(EVENT.terminalNotification, (_e, sessionId, message) => cb(sessionId, message)),
+    onSessionNeedsAttention: (cb) => subscribe(EVENT.sessionNeedsAttention, (_e, sessionId) => cb(sessionId)),
+    onSessionAgents: (cb) => subscribe(EVENT.sessionAgents, (_e, sessionId, agents) => cb(sessionId, agents)),
+    onRemoteStatus: (cb) => subscribe(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status)),
+    onQuestionsAsked: (cb) => subscribe(EVENT.questionsAsked, (_e, pending) => cb(pending)),
+    onQuestionsSettled: (cb) => subscribe(EVENT.questionsSettled, (_e, settled) => cb(settled)),
+    onProjectsChanged: (cb) => subscribe(EVENT.projectsChanged, () => cb()),
+    onStatusUpdate: (cb) => subscribe(EVENT.statusUpdate, (_e, text, type) => cb(text, type)),
+    onFullscreenChanged: (cb) => subscribe(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen)),
+    onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
+    onSessionWorkSnapshot: (cb) => subscribe(EVENT.sessionWorkSnapshot, (_e, snapshot) => cb(snapshot)),
+    onPrStatusChanged: (cb) => subscribe(EVENT.prStatusChanged, (_e, change) => cb(change)),
+    onLaunchRequested: (cb) =>
+        subscribe(EVENT.launchRequested, (_e, projectPath, initialPrompt) => cb(projectPath, initialPrompt)),
+    onPickerRequested: (cb) =>
+        subscribe(EVENT.pickerRequested, (_e, initialPrompt, reason) => cb(initialPrompt, reason)),
+    onPhoneAccessChanged: (cb) => subscribe(EVENT.phoneAccessChanged, (_e, state) => cb(state)),
+    onTerminalOwnerChanged: (cb) =>
+        subscribe(EVENT.terminalOwnerChanged, (_e, sessionId, owner) => cb(sessionId, owner)),
+    onSessionStarted: (cb) =>
+        subscribe(EVENT.sessionStarted, (_e, sessionId, projectPath) => cb(sessionId, projectPath)),
+    onSessionArchived: (cb) => subscribe(EVENT.sessionArchived, (_e, sessionId) => cb(sessionId)),
+    onTasksChanged: (cb) => subscribe(EVENT.tasksChanged, (_e, update) => cb(update)),
+    onSessionTaskChanged: (cb) => subscribe(EVENT.sessionTaskChanged, (_e, sessionId, taskId) => cb(sessionId, taskId)),
 
-  // ── Host facts ──
-  getPathForFile: (file) => webUtils.getPathForFile(file),
+    // ── Host facts ──
+    getPathForFile: (file) => webUtils.getPathForFile(file),
 };
 
 contextBridge.exposeInMainWorld('api', api);

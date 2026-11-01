@@ -4,17 +4,17 @@
  *
  * Portalled into `#sidebar-footer` (see `Root`), whose styles lay these out.
  */
-import { QuotaGauges } from './QuotaGauges';
-import { StatusLine } from './StatusLine';
-import { UpdateNotice } from './UpdateNotice';
-import type { JSX } from 'react';
+import {QuotaGauges} from './QuotaGauges';
+import {StatusLine} from './StatusLine';
+import {UpdateNotice} from './UpdateNotice';
+import type {JSX} from 'react';
 
 export function Footer(): JSX.Element {
-  return (
-    <>
-      <UpdateNotice />
-      <StatusLine />
-      <QuotaGauges />
-    </>
-  );
+    return (
+        <>
+            <UpdateNotice />
+            <StatusLine />
+            <QuotaGauges />
+        </>
+    );
 }

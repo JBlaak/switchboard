@@ -5,20 +5,20 @@
  * `ui/footer/actions`); these reads keep Patch's old entry points until it
  * moves to React too.
  */
-import { getState, store } from './app-store';
-import { tightestIn } from './usage-slice';
-import type { UsageLimit } from '../../domain/usage/usage';
+import {getState, store} from './app-store';
+import {tightestIn} from './usage-slice';
+import type {UsageLimit} from '../../domain/usage/usage';
 
 /** Resolves once the first fetch has finished. */
 export function whenUsageLoaded(): Promise<void> {
-  if (getState().usage.loaded) return Promise.resolve();
-  return new Promise(resolve => {
-    const unsubscribe = store.subscribe((state) => {
-      if (!state.usage.loaded) return;
-      unsubscribe();
-      resolve();
+    if (getState().usage.loaded) return Promise.resolve();
+    return new Promise((resolve) => {
+        const unsubscribe = store.subscribe((state) => {
+            if (!state.usage.loaded) return;
+            unsubscribe();
+            resolve();
+        });
     });
-  });
 }
 
 /**
@@ -27,5 +27,5 @@ export function whenUsageLoaded(): Promise<void> {
  * The closest one is the one that stops work first, whichever window it is.
  */
 export function tightestUsage(): UsageLimit | null {
-  return tightestIn(getState().usage);
+    return tightestIn(getState().usage);
 }

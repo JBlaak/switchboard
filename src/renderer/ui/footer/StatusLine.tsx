@@ -4,18 +4,18 @@
  *
  * Both are usually empty; the stylesheet hides the row until one has text.
  */
-import { useStore } from '../use-store';
-import type { JSX } from 'react';
+import {useStore} from '../use-store';
+import type {JSX} from 'react';
 
 export function StatusLine(): JSX.Element {
-  const running = useStore(state => state.status.running);
-  const activity = useStore(state => state.status.activity);
-  return (
-    <div id="sidebar-footer-status">
-      <span id="sidebar-footer-info">{running > 0 ? `${running} running` : ''}</span>
-      <span id="sidebar-footer-activity" className={activity.done ? 'status-done' : ''}>
-        {activity.text}
-      </span>
-    </div>
-  );
+    const running = useStore((state) => state.status.running);
+    const activity = useStore((state) => state.status.activity);
+    return (
+        <div id="sidebar-footer-status">
+            <span id="sidebar-footer-info">{running > 0 ? `${running} running` : ''}</span>
+            <span id="sidebar-footer-activity" className={activity.done ? 'status-done' : ''}>
+                {activity.text}
+            </span>
+        </div>
+    );
 }

@@ -5,21 +5,21 @@
  * registry of held-back output loads in node and its re-key can be tested
  * there.
  */
-import { openSessions, view } from '../../state/session-store';
-import type { Terminal } from '@xterm/xterm';
+import {openSessions, view} from '../../state/session-store';
+import type {Terminal} from '@xterm/xterm';
 
 /** Terminal output held back while a synchronised-update block is open. */
 export interface WriteBuffer {
-  chunks: string[];
-  syncDepth: number;
-  rafId: number;
-  timerId: ReturnType<typeof setTimeout>;
+    chunks: string[];
+    syncDepth: number;
+    rafId: number;
+    timerId: ReturnType<typeof setTimeout>;
 }
 
 // Check whether a terminal is scrolled to the bottom using xterm's buffer API.
 export function isAtBottom(terminal: Terminal): boolean {
-  const buf = terminal.buffer.active;
-  return buf.viewportY >= buf.baseY;
+    const buf = terminal.buffer.active;
+    return buf.viewportY >= buf.baseY;
 }
 
 export const ESC_SYNC_START = '\x1b[?2026h';
@@ -29,32 +29,32 @@ export const SYNC_BUFFER_TIMEOUT = 500; // max ms to hold data waiting for sync 
 export const terminalWriteBuffers = new Map<string, WriteBuffer>();
 
 export function flushTerminalBuffer(sessionId: string): void {
-  const buf = terminalWriteBuffers.get(sessionId);
-  if (!buf) return;
-  clearTimeout(buf.timerId);
-  cancelAnimationFrame(buf.rafId);
-  terminalWriteBuffers.delete(sessionId);
+    const buf = terminalWriteBuffers.get(sessionId);
+    if (!buf) return;
+    clearTimeout(buf.timerId);
+    cancelAnimationFrame(buf.rafId);
+    terminalWriteBuffers.delete(sessionId);
 
-  const entry = openSessions.get(sessionId);
-  if (!entry) return;
+    const entry = openSessions.get(sessionId);
+    if (!entry) return;
 
-  const data = buf.chunks.join('');
-  const wasAtBottom = isAtBottom(entry.terminal);
-  const savedViewportY = entry.terminal.buffer.active.viewportY;
-  entry.terminal.write(data, () => {
-    if (sessionId !== view.activeSessionId) return;
-    if (wasAtBottom) {
-      entry.terminal.scrollToBottom();
-    } else {
-      // Restore scroll position so redraws don't yank the user away
-      entry.terminal.scrollLines(savedViewportY - entry.terminal.buffer.active.viewportY);
-    }
-  });
+    const data = buf.chunks.join('');
+    const wasAtBottom = isAtBottom(entry.terminal);
+    const savedViewportY = entry.terminal.buffer.active.viewportY;
+    entry.terminal.write(data, () => {
+        if (sessionId !== view.activeSessionId) return;
+        if (wasAtBottom) {
+            entry.terminal.scrollToBottom();
+        } else {
+            // Restore scroll position so redraws don't yank the user away
+            entry.terminal.scrollLines(savedViewportY - entry.terminal.buffer.active.viewportY);
+        }
+    });
 }
 
 export function scheduleFlush(sessionId: string, buf: WriteBuffer): void {
-  cancelAnimationFrame(buf.rafId);
-  buf.rafId = requestAnimationFrame(() => flushTerminalBuffer(sessionId));
+    cancelAnimationFrame(buf.rafId);
+    buf.rafId = requestAnimationFrame(() => flushTerminalBuffer(sessionId));
 }
 
 /**
@@ -70,30 +70,30 @@ export function scheduleFlush(sessionId: string, buf: WriteBuffer): void {
  * arrives in far smaller pieces than a frame needs.
  */
 export function bufferTerminalData(sessionId: string, data: string): void {
-  if (!openSessions.has(sessionId)) return;
+    if (!openSessions.has(sessionId)) return;
 
-  let buffer = terminalWriteBuffers.get(sessionId);
-  if (!buffer) {
-    buffer = { chunks: [], syncDepth: 0, rafId: 0, timerId: 0 as unknown as ReturnType<typeof setTimeout> };
-    terminalWriteBuffers.set(sessionId, buffer);
-  }
-  buffer.chunks.push(data);
-
-  // Blocks nest, so the depth is tracked rather than a flag.
-  if (data.includes(ESC_SYNC_START)) buffer.syncDepth++;
-  if (data.includes(ESC_SYNC_END)) buffer.syncDepth = Math.max(0, buffer.syncDepth - 1);
-
-  if (buffer.syncDepth > 0) {
-    cancelAnimationFrame(buffer.rafId);
-    if (!buffer.timerId) {
-      buffer.timerId = setTimeout(() => flushTerminalBuffer(sessionId), SYNC_BUFFER_TIMEOUT);
+    let buffer = terminalWriteBuffers.get(sessionId);
+    if (!buffer) {
+        buffer = {chunks: [], syncDepth: 0, rafId: 0, timerId: 0 as unknown as ReturnType<typeof setTimeout>};
+        terminalWriteBuffers.set(sessionId, buffer);
     }
-    return;
-  }
+    buffer.chunks.push(data);
 
-  clearTimeout(buffer.timerId);
-  buffer.timerId = 0 as unknown as ReturnType<typeof setTimeout>;
-  scheduleFlush(sessionId, buffer);
+    // Blocks nest, so the depth is tracked rather than a flag.
+    if (data.includes(ESC_SYNC_START)) buffer.syncDepth++;
+    if (data.includes(ESC_SYNC_END)) buffer.syncDepth = Math.max(0, buffer.syncDepth - 1);
+
+    if (buffer.syncDepth > 0) {
+        cancelAnimationFrame(buffer.rafId);
+        if (!buffer.timerId) {
+            buffer.timerId = setTimeout(() => flushTerminalBuffer(sessionId), SYNC_BUFFER_TIMEOUT);
+        }
+        return;
+    }
+
+    clearTimeout(buffer.timerId);
+    buffer.timerId = 0 as unknown as ReturnType<typeof setTimeout>;
+    scheduleFlush(sessionId, buffer);
 }
 
 /**
@@ -106,18 +106,18 @@ export function bufferTerminalData(sessionId: string, data: string): void {
  * there.
  */
 export function rekeyWriteBuffer(oldId: string, newId: string): void {
-  const buffer = terminalWriteBuffers.get(oldId);
-  if (!buffer || oldId === newId) return;
-  terminalWriteBuffers.delete(oldId);
-  cancelAnimationFrame(buffer.rafId);
-  clearTimeout(buffer.timerId);
-  buffer.timerId = 0 as unknown as ReturnType<typeof setTimeout>;
+    const buffer = terminalWriteBuffers.get(oldId);
+    if (!buffer || oldId === newId) return;
+    terminalWriteBuffers.delete(oldId);
+    cancelAnimationFrame(buffer.rafId);
+    clearTimeout(buffer.timerId);
+    buffer.timerId = 0 as unknown as ReturnType<typeof setTimeout>;
 
-  terminalWriteBuffers.set(newId, buffer);
+    terminalWriteBuffers.set(newId, buffer);
 
-  if (buffer.syncDepth > 0) {
-    buffer.timerId = setTimeout(() => flushTerminalBuffer(newId), SYNC_BUFFER_TIMEOUT);
-  } else {
-    scheduleFlush(newId, buffer);
-  }
+    if (buffer.syncDepth > 0) {
+        buffer.timerId = setTimeout(() => flushTerminalBuffer(newId), SYNC_BUFFER_TIMEOUT);
+    } else {
+        scheduleFlush(newId, buffer);
+    }
 }

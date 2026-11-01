@@ -9,13 +9,13 @@ import os from 'node:os';
 import path from 'node:path';
 
 export interface ClaudePaths {
-  /** `~/.claude`. */
-  readonly claudeDir: string;
-  /** `~/.claude/projects` — one directory per project, holding transcripts. */
-  readonly projectsDir: string;
-  /** `~/.claude/commands` — the user's own slash commands. */
-  readonly commandsDir: string;
-  readonly homeDir: string;
+    /** `~/.claude`. */
+    readonly claudeDir: string;
+    /** `~/.claude/projects` — one directory per project, holding transcripts. */
+    readonly projectsDir: string;
+    /** `~/.claude/commands` — the user's own slash commands. */
+    readonly commandsDir: string;
+    readonly homeDir: string;
 }
 
 /**
@@ -28,14 +28,14 @@ export interface ClaudePaths {
  * stored credentials.
  */
 export function resolveClaudePaths(): ClaudePaths {
-  const homeDir = os.homedir();
-  const claudeDir = path.join(homeDir, '.claude');
-  return {
-    homeDir,
-    claudeDir,
-    projectsDir: path.join(claudeDir, 'projects'),
-    commandsDir: path.join(claudeDir, 'commands'),
-  };
+    const homeDir = os.homedir();
+    const claudeDir = path.join(homeDir, '.claude');
+    return {
+        homeDir,
+        claudeDir,
+        projectsDir: path.join(claudeDir, 'projects'),
+        commandsDir: path.join(claudeDir, 'commands'),
+    };
 }
 
 /**
@@ -45,5 +45,5 @@ export function resolveClaudePaths(): ClaudePaths {
  * control.
  */
 export function isProjectFolderName(name: string): boolean {
-  return name !== '.git';
+    return name !== '.git';
 }

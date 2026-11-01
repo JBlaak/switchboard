@@ -16,17 +16,17 @@
  * Its own module, free of the DOM, so it can be tested in node; the IPC
  * follow-up calls it before it does anything else.
  */
-import { rekeySessions } from '../state/session-store';
-import { STORAGE_KEYS, writeStored } from '../state/storage';
-import { rekeyWriteBuffer } from '../features/terminal/write-buffer';
-import type { RendererState } from '../state/root';
+import {rekeySessions} from '../state/session-store';
+import {STORAGE_KEYS, writeStored} from '../state/storage';
+import {rekeyWriteBuffer} from '../features/terminal/write-buffer';
+import type {RendererState} from '../state/root';
 
 /** `state` is the store's state after the re-key. */
 export function rekeyRegistries(oldId: string, newId: string, state: RendererState): void {
-  if (oldId === newId) return;
-  rekeySessions(oldId, newId);
-  rekeyWriteBuffer(oldId, newId);
-  if (state.view.activeSessionId === newId) {
-    writeStored('sessionStorage', STORAGE_KEYS.activeSessionId, newId);
-  }
+    if (oldId === newId) return;
+    rekeySessions(oldId, newId);
+    rekeyWriteBuffer(oldId, newId);
+    if (state.view.activeSessionId === newId) {
+        writeStored('sessionStorage', STORAGE_KEYS.activeSessionId, newId);
+    }
 }

@@ -8,32 +8,35 @@
  * The version check comes before pairing, so a mismatched app is never asked
  * for a code it might send in a shape the Mac misreads.
  */
-import { CLOSE, PROTOCOL_VERSION, type ServerMessage } from './protocol';
+import {CLOSE, PROTOCOL_VERSION, type ServerMessage} from './protocol';
 
 /** What the listener decided the connection may do; mirrors the port's ConnectionGrant. */
-export type HelloGrant = { kind: 'device'; deviceId: string } | { kind: 'pairing' };
+export type HelloGrant = {kind: 'device'; deviceId: string} | {kind: 'pairing'};
 
 export interface HelloReply {
-  message: ServerMessage;
-  /** Close with this code after sending `message`; null keeps the connection open. */
-  close: number | null;
+    message: ServerMessage;
+    /** Close with this code after sending `message`; null keeps the connection open. */
+    close: number | null;
 }
 
 export function isCompatibleProtocol(peer: number, ours: number = PROTOCOL_VERSION): boolean {
-  return peer === ours;
+    return peer === ours;
 }
 
 export function helloReply(
-  peerProtocol: number,
-  grant: HelloGrant,
-  mac: { name: string; version: string },
-  ours: number = PROTOCOL_VERSION,
+    peerProtocol: number,
+    grant: HelloGrant,
+    mac: {name: string; version: string},
+    ours: number = PROTOCOL_VERSION,
 ): HelloReply {
-  if (!isCompatibleProtocol(peerProtocol, ours)) {
-    return { message: { type: 'update-required', protocol: ours, macVersion: mac.version }, close: CLOSE.updateRequired };
-  }
-  if (grant.kind === 'pairing') {
-    return { message: { type: 'pairing', protocol: ours, macName: mac.name }, close: null };
-  }
-  return { message: { type: 'welcome', protocol: ours, macName: mac.name, deviceId: grant.deviceId }, close: null };
+    if (!isCompatibleProtocol(peerProtocol, ours)) {
+        return {
+            message: {type: 'update-required', protocol: ours, macVersion: mac.version},
+            close: CLOSE.updateRequired,
+        };
+    }
+    if (grant.kind === 'pairing') {
+        return {message: {type: 'pairing', protocol: ours, macName: mac.name}, close: null};
+    }
+    return {message: {type: 'welcome', protocol: ours, macName: mac.name, deviceId: grant.deviceId}, close: null};
 }

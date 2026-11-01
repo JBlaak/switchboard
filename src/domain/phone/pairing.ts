@@ -11,7 +11,7 @@
  * Time and randomness come in from the caller, so the service owns the clock
  * and the CSPRNG and this file owns only the decisions.
  */
-import type { PairRejection } from './protocol';
+import type {PairRejection} from './protocol';
 
 /**
  * 32 symbols, so one random byte maps to one symbol with `& 31` and no bias.
@@ -30,38 +30,38 @@ export const PAIRING_MAX_FAILURES = 5;
 export const PAIRING_LOCKOUT_MS = 60 * 1000;
 
 export type PairingState =
-  | { kind: 'idle'; lockedUntil: number | null }
-  | {
-    kind: 'live';
-    code: string;
-    /** Epoch ms the code stops working. */
-    expiresAt: number;
-    /** Wrong codes since the last lockout (or since the code was made). */
-    failures: number;
-    /** Epoch ms a lockout ends; null when not locked out. */
-    lockedUntil: number | null;
-  };
+    | {kind: 'idle'; lockedUntil: number | null}
+    | {
+          kind: 'live';
+          code: string;
+          /** Epoch ms the code stops working. */
+          expiresAt: number;
+          /** Wrong codes since the last lockout (or since the code was made). */
+          failures: number;
+          /** Epoch ms a lockout ends; null when not locked out. */
+          lockedUntil: number | null;
+      };
 
-export const PAIRING_IDLE: PairingState = { kind: 'idle', lockedUntil: null };
+export const PAIRING_IDLE: PairingState = {kind: 'idle', lockedUntil: null};
 
 /** What a `pair` message gets; everything but `ok` is a `pair-rejected` reason. */
 export type PairingVerdict = 'ok' | Exclude<PairRejection, 'declined'>;
 
 /** A code from `PAIRING_CODE_LENGTH` random bytes; throws on fewer, which is a wiring bug. */
 export function pairingCodeFromBytes(bytes: Uint8Array): string {
-  if (bytes.length < PAIRING_CODE_LENGTH) {
-    throw new Error(`a pairing code needs ${PAIRING_CODE_LENGTH} random bytes, got ${bytes.length}`);
-  }
-  let code = '';
-  for (let i = 0; i < PAIRING_CODE_LENGTH; i++) code += PAIRING_CODE_ALPHABET[bytes[i] & 31];
-  return code;
+    if (bytes.length < PAIRING_CODE_LENGTH) {
+        throw new Error(`a pairing code needs ${PAIRING_CODE_LENGTH} random bytes, got ${bytes.length}`);
+    }
+    let code = '';
+    for (let i = 0; i < PAIRING_CODE_LENGTH; i++) code += PAIRING_CODE_ALPHABET[bytes[i] & 31];
+    return code;
 }
 
 /** Whether `text` has the shape of a pairing code; for checking the QR code's text. */
 export function isPairingCodeShape(text: string): boolean {
-  if (text.length !== PAIRING_CODE_LENGTH) return false;
-  for (const ch of text) if (!PAIRING_CODE_ALPHABET.includes(ch)) return false;
-  return true;
+    if (text.length !== PAIRING_CODE_LENGTH) return false;
+    for (const ch of text) if (!PAIRING_CODE_ALPHABET.includes(ch)) return false;
+    return true;
 }
 
 /**
@@ -70,18 +70,18 @@ export function isPairingCodeShape(text: string): boolean {
  * for whoever is guessing.
  */
 export function startPairing(state: PairingState, randomBytes: Uint8Array, now: number): PairingState {
-  return {
-    kind: 'live',
-    code: pairingCodeFromBytes(randomBytes),
-    expiresAt: now + PAIRING_CODE_TTL_MS,
-    failures: 0,
-    lockedUntil: activeLockout(state, now),
-  };
+    return {
+        kind: 'live',
+        code: pairingCodeFromBytes(randomBytes),
+        expiresAt: now + PAIRING_CODE_TTL_MS,
+        failures: 0,
+        lockedUntil: activeLockout(state, now),
+    };
 }
 
 /** The user closed the pairing screen. A running lockout stays. */
 export function stopPairing(state: PairingState, now: number): PairingState {
-  return { kind: 'idle', lockedUntil: activeLockout(state, now) };
+    return {kind: 'idle', lockedUntil: activeLockout(state, now)};
 }
 
 /**
@@ -90,7 +90,7 @@ export function stopPairing(state: PairingState, now: number): PairingState {
  * being refused at the handshake with no reason.
  */
 export function isPairingOpen(state: PairingState, now: number): boolean {
-  return state.kind === 'live' && now < state.expiresAt;
+    return state.kind === 'live' && now < state.expiresAt;
 }
 
 /**
@@ -102,24 +102,28 @@ export function isPairingOpen(state: PairingState, now: number): boolean {
  * answers `locked-out`, since that is what the phone should tell its user next.
  * A right code consumes the pairing: the next attempt finds `not-pairing`.
  */
-export function attemptPairing(state: PairingState, code: string, now: number): { state: PairingState; verdict: PairingVerdict } {
-  if (state.kind !== 'live') return { state, verdict: 'not-pairing' };
-  if (now >= state.expiresAt) return { state, verdict: 'expired' };
-  if (activeLockout(state, now) !== null) return { state, verdict: 'locked-out' };
+export function attemptPairing(
+    state: PairingState,
+    code: string,
+    now: number,
+): {state: PairingState; verdict: PairingVerdict} {
+    if (state.kind !== 'live') return {state, verdict: 'not-pairing'};
+    if (now >= state.expiresAt) return {state, verdict: 'expired'};
+    if (activeLockout(state, now) !== null) return {state, verdict: 'locked-out'};
 
-  if (sameCode(code, state.code)) {
-    return { state: PAIRING_IDLE, verdict: 'ok' };
-  }
+    if (sameCode(code, state.code)) {
+        return {state: PAIRING_IDLE, verdict: 'ok'};
+    }
 
-  const failures = state.failures + 1;
-  if (failures >= PAIRING_MAX_FAILURES) {
-    return { state: { ...state, failures: 0, lockedUntil: now + PAIRING_LOCKOUT_MS }, verdict: 'locked-out' };
-  }
-  return { state: { ...state, failures, lockedUntil: null }, verdict: 'wrong-code' };
+    const failures = state.failures + 1;
+    if (failures >= PAIRING_MAX_FAILURES) {
+        return {state: {...state, failures: 0, lockedUntil: now + PAIRING_LOCKOUT_MS}, verdict: 'locked-out'};
+    }
+    return {state: {...state, failures, lockedUntil: null}, verdict: 'wrong-code'};
 }
 
 function activeLockout(state: PairingState, now: number): number | null {
-  return state.lockedUntil !== null && now < state.lockedUntil ? state.lockedUntil : null;
+    return state.lockedUntil !== null && now < state.lockedUntil ? state.lockedUntil : null;
 }
 
 /**
@@ -127,8 +131,8 @@ function activeLockout(state: PairingState, now: number): number | null {
  * code takes says nothing about how much of it was right.
  */
 function sameCode(given: string, expected: string): boolean {
-  if (given.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= given.charCodeAt(i) ^ expected.charCodeAt(i);
-  return diff === 0;
+    if (given.length !== expected.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) diff |= given.charCodeAt(i) ^ expected.charCodeAt(i);
+    return diff === 0;
 }

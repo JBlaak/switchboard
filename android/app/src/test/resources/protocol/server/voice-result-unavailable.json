@@ -1,1 +1,5 @@
-{"type":"voice-result","voiceId":"v-1","result":{"kind":"unavailable","status":{"kind":"preparing","progress":null}}}
+{
+    "type": "voice-result",
+    "voiceId": "v-1",
+    "result": {"kind": "unavailable", "status": {"kind": "preparing", "progress": null}}
+}

@@ -7,23 +7,23 @@
  * queued, so the CI watch can tell whether Claude still has it.
  */
 export type AutoFixRecord =
-  | {
-    kind: 'attempt';
-    repository: string;
-    number: number;
-    checkName: string;
-    headSha: string;
-    origin: 'manual' | 'auto';
-    /** The stored action (`StoredAction.id`) the attempt queued. */
-    activityId: string;
-    /** ISO-8601. */
-    at: string;
-  }
-  | { kind: 'passed' | 'gave-up'; repository: string; number: number; checkName: string; at: string };
+    | {
+          kind: 'attempt';
+          repository: string;
+          number: number;
+          checkName: string;
+          headSha: string;
+          origin: 'manual' | 'auto';
+          /** The stored action (`StoredAction.id`) the attempt queued. */
+          activityId: string;
+          /** ISO-8601. */
+          at: string;
+      }
+    | {kind: 'passed' | 'gave-up'; repository: string; number: number; checkName: string; at: string};
 
 export interface AutoFixHistory {
-  record(event: AutoFixRecord): void;
+    record(event: AutoFixRecord): void;
 
-  /** Everything recorded for one PR, oldest first. */
-  forPullRequest(repository: string, number: number): AutoFixRecord[];
+    /** Everything recorded for one PR, oldest first. */
+    forPullRequest(repository: string, number: number): AutoFixRecord[];
 }

@@ -12,28 +12,28 @@
  * follow-ups re-key `openSessions` before anything else looks for the
  * re-keyed session — `bootstrap` installs them in that order.
  */
-import { createStore } from './store';
-import { initialRendererState, rootReducer } from './root';
-import { STORAGE_KEYS, readStored } from './storage';
-import type { RendererEvent } from './events';
-import type { RendererState } from './root';
+import {createStore} from './store';
+import {initialRendererState, rootReducer} from './root';
+import {STORAGE_KEYS, readStored} from './storage';
+import type {RendererEvent} from './events';
+import type {RendererState} from './root';
 
 export const store = createStore<RendererState, RendererEvent>(
-  rootReducer,
-  initialRendererState(readStored('sessionStorage', STORAGE_KEYS.activeSessionId)),
+    rootReducer,
+    initialRendererState(readStored('sessionStorage', STORAGE_KEYS.activeSessionId)),
 );
 
 export const dispatch = store.dispatch;
 export const getState = store.getState;
 
-type EventOf<T extends RendererEvent['type']> = Extract<RendererEvent, { type: T }>;
+type EventOf<T extends RendererEvent['type']> = Extract<RendererEvent, {type: T}>;
 
 /** Run `handler` after every event of one type, with the state on both sides. */
 export function onEvent<T extends RendererEvent['type']>(
-  type: T,
-  handler: (event: EventOf<T>, state: RendererState, previous: RendererState) => void,
+    type: T,
+    handler: (event: EventOf<T>, state: RendererState, previous: RendererState) => void,
 ): () => void {
-  return store.subscribe((state, previous, event) => {
-    if (event.type === type) handler(event as EventOf<T>, state, previous);
-  });
+    return store.subscribe((state, previous, event) => {
+        if (event.type === type) handler(event as EventOf<T>, state, previous);
+    });
 }

@@ -6,19 +6,19 @@
  * window's own plumbing, hiding it and letting the mouse through beside the
  * slab, and the channels into the service.
  */
-import { INVOKE, SEND } from '../../ipc/channels';
-import type { Container } from '../composition-root';
-import type { IpcRegistrar } from './registrar';
+import {INVOKE, SEND} from '../../ipc/channels';
+import type {Container} from '../composition-root';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerQuickAskHandlers(ipc: IpcRegistrar, app: Container): void {
-  ipc.on(SEND.quickAskDismiss, () => app.quickAskPanel.hide());
-  ipc.on(SEND.quickAskPointerOverSlab, (over: boolean) => app.quickAskWindow()?.pointerOverSlab(!!over));
-  ipc.on(SEND.rendererReady, () => app.windowRenderer.rendererReady());
+    ipc.on(SEND.quickAskDismiss, () => app.quickAskPanel.hide());
+    ipc.on(SEND.quickAskPointerOverSlab, (over: boolean) => app.quickAskWindow()?.pointerOverSlab(!!over));
+    ipc.on(SEND.rendererReady, () => app.windowRenderer.rendererReady());
 
-  ipc.handle(INVOKE.quickAskRoute, (text: string) => app.quickAsk.route(String(text)));
-  ipc.handle(INVOKE.quickAskQuick, (text: string) => app.quickAsk.quick(String(text)));
-  ipc.handle(INVOKE.quickAskCancel, () => app.quickAsk.cancel());
-  ipc.handle(INVOKE.quickAskStart, (projectPath: string) => app.quickAsk.start(String(projectPath)));
-  ipc.handle(INVOKE.quickAskOpenPicker, () => app.quickAsk.openPicker());
-  ipc.handle(INVOKE.quickAskUndo, () => app.quickAsk.undo());
+    ipc.handle(INVOKE.quickAskRoute, (text: string) => app.quickAsk.route(String(text)));
+    ipc.handle(INVOKE.quickAskQuick, (text: string) => app.quickAsk.quick(String(text)));
+    ipc.handle(INVOKE.quickAskCancel, () => app.quickAsk.cancel());
+    ipc.handle(INVOKE.quickAskStart, (projectPath: string) => app.quickAsk.start(String(projectPath)));
+    ipc.handle(INVOKE.quickAskOpenPicker, () => app.quickAsk.openPicker());
+    ipc.handle(INVOKE.quickAskUndo, () => app.quickAsk.undo());
 }

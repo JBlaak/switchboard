@@ -4,395 +4,418 @@
    ⋯ menu and the add step. */
 /* Wide enough that the highlighted row's buttons leave a long name room. */
 .project-picker-dialog {
-  width: 760px;
-  max-width: 90vw;
+    width: 760px;
+    max-width: 90vw;
 }
 
 /* What the ⋯ menu and the esc chip are positioned against. */
 .projects-modal {
-  position: relative;
+    position: relative;
 }
 
 .projects-esc {
-  position: absolute;
-  top: 4px;
-  right: 0;
+    position: absolute;
+    top: 4px;
+    right: 0;
 }
 
 /* Add project, beside the title: always in sight, however long the list. */
 .projects-add-btn {
-  appearance: none;
-  position: absolute;
-  top: -1px;
-  right: 46px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px 0 9px;
-  border: none;
-  border-radius: 8px;
-  background: var(--sb-mint);
-  color: var(--sb-accent);
-  font: 700 12.5px var(--sb-font-body);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: box-shadow 0.12s;
+    appearance: none;
+    position: absolute;
+    top: -1px;
+    right: 46px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 12px 0 9px;
+    border: none;
+    border-radius: 8px;
+    background: var(--sb-mint);
+    color: var(--sb-accent);
+    font: 700 12.5px var(--sb-font-body);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: box-shadow 0.12s;
 
-  &:hover { box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb),0.35); }
+    &:hover {
+        box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.35);
+    }
 }
 
 /* The add step's title: a way back, then where you are. */
 .projects-crumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .projects-crumb-back {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--sb-text-muted);
-  font: 700 14px var(--sb-font-head);
-  cursor: pointer;
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--sb-text-muted);
+    font: 700 14px var(--sb-font-head);
+    cursor: pointer;
 
-  &:hover { color: var(--sb-text-strong); }
+    &:hover {
+        color: var(--sb-text-strong);
+    }
 }
 
 .projects-crumb-sep {
-  color: var(--sb-text-dimmest);
-  font-weight: 400;
+    color: var(--sb-text-dimmest);
+    font-weight: 400;
 }
 
 .project-picker-filter {
-  width: 100%;
-  background: var(--sb-bg-base);
-  border: none;
-  box-shadow: inset 0 0 0 1px var(--sb-line);
-  border-radius: var(--sb-r-control);
-  color: var(--sb-text-strong);
-  font-family: inherit;
-  font-size: 14px;
-  padding: 10px 14px;
-  outline: none;
-  margin-bottom: 10px;
-  transition: box-shadow 0.15s;
+    width: 100%;
+    background: var(--sb-bg-base);
+    border: none;
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    border-radius: var(--sb-r-control);
+    color: var(--sb-text-strong);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    margin-bottom: 10px;
+    transition: box-shadow 0.15s;
 }
 
 /* A path reads as one, in the monospace the add step's field uses. */
 .project-picker-filter.is-path {
-  font-family: var(--sb-font-mono);
-  font-size: 13px;
+    font-family: var(--sb-font-mono);
+    font-size: 13px;
 }
 
 .project-picker-filter:focus {
-  box-shadow:
-    inset 0 0 0 1px var(--sb-accent),
-    0 0 0 3px rgba(var(--sb-accent-rgb),0.18);
+    box-shadow:
+        inset 0 0 0 1px var(--sb-accent),
+        0 0 0 3px rgba(var(--sb-accent-rgb), 0.18);
 }
 
 .project-picker-filter::placeholder {
-  color: var(--sb-text-placeholder);
+    color: var(--sb-text-placeholder);
 }
 
 .project-picker-list {
-  max-height: 60vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+    max-height: 60vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .project-picker-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 6px 8px 6px 12px;
-  border-radius: var(--sb-r-row);
-  cursor: pointer;
-  transition: background 0.12s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 6px 8px 6px 12px;
+    border-radius: var(--sb-r-row);
+    cursor: pointer;
+    transition: background 0.12s;
 }
 
 .project-picker-row:hover {
-  background: rgba(var(--sb-overlay-rgb),0.05);
+    background: rgba(var(--sb-overlay-rgb), 0.05);
 }
 
 /* The keyboard-selected row. Focus stays in the filter input, so this mint fill
    is the only cue for which row Enter opens. */
 .project-picker-row.selected {
-  background: var(--sb-mint);
+    background: var(--sb-mint);
 }
 
 /* A worktree, under the repository it was cut from. */
 .project-picker-row.nested {
-  padding-left: 28px;
+    padding-left: 28px;
 
-  .project-picker-name {
-    font-weight: 400;
-    color: var(--sb-text-dim);
-  }
+    .project-picker-name {
+        font-weight: 400;
+        color: var(--sb-text-dim);
+    }
 }
 
 .project-picker-name {
-  flex: 0 1 auto;
-  min-width: 0;
-  font-family: var(--sb-font-head);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--sb-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    flex: 0 1 auto;
+    min-width: 0;
+    font-family: var(--sb-font-head);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--sb-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .project-picker-row.selected .project-picker-name {
-  color: var(--sb-text-strong);
+    color: var(--sb-text-strong);
 }
 
 /* Characters the fuzzy filter matched, picked out of the project name. */
 .project-picker-match {
-  color: var(--sb-accent);
-  font-weight: 800;
+    color: var(--sb-accent);
+    font-weight: 800;
 }
 
 .worktree-badge {
-  flex-shrink: 0;
-  font: 800 9px var(--sb-font-head);
-  letter-spacing: 0.06em;
-  color: var(--sb-lav-ink);
-  background: var(--sb-lav);
-  border-radius: 99px;
-  padding: 1px 6px;
+    flex-shrink: 0;
+    font: 800 9px var(--sb-font-head);
+    letter-spacing: 0.06em;
+    color: var(--sb-lav-ink);
+    background: var(--sb-lav);
+    border-radius: 99px;
+    padding: 1px 6px;
 }
 
 /* Session count as a pill chip: neutral at rest, mint while any are running.
    It starts the row's right-hand side. */
 .project-picker-count {
-  flex-shrink: 0;
-  margin-left: auto;
-  padding: 2px 8px;
-  border-radius: 99px;
-  font-family: var(--sb-font-head);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  color: var(--sb-text-muted);
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    background: rgba(var(--sb-overlay-rgb), 0.06);
+    color: var(--sb-text-muted);
 }
 
 .project-picker-count.running {
-  background: var(--sb-mint);
-  color: var(--sb-accent);
+    background: var(--sb-mint);
+    color: var(--sb-accent);
 }
 
 /* On the selected row's mint fill, the running chip needs its own ring to show. */
 .project-picker-row.selected .project-picker-count.running {
-  box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb),0.35);
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.35);
 }
 
 /* ---- The highlighted row's buttons ---- */
 .projects-go {
-  appearance: none;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 8px;
-  background: rgba(var(--sb-overlay-rgb),0.08);
-  color: var(--sb-text-strong);
-  font: 700 11.5px var(--sb-font-body);
-  white-space: nowrap;
-  cursor: pointer;
+    appearance: none;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 8px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+    color: var(--sb-text-strong);
+    font: 700 11.5px var(--sb-font-body);
+    white-space: nowrap;
+    cursor: pointer;
 }
 
 /* ---- The keys that work, under the list ---- */
 .projects-footer {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 10px;
-  padding: 8px 4px 0;
-  border-top: 1px solid var(--sb-line);
-  font-size: 12px;
-  color: var(--sb-text-faint);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 10px;
+    padding: 8px 4px 0;
+    border-top: 1px solid var(--sb-line);
+    font-size: 12px;
+    color: var(--sb-text-faint);
 
-  span { display: inline-flex; align-items: center; gap: 6px; }
+    span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
 
-  /* → with a prompt waiting: shown, but it would lose the prompt (#177). */
-  .is-off { opacity: 0.5; }
+    /* → with a prompt waiting: shown, but it would lose the prompt (#177). */
+    .is-off {
+        opacity: 0.5;
+    }
 }
 
 .projects-more {
-  appearance: none;
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--sb-text-muted);
-  cursor: pointer;
+    appearance: none;
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--sb-text-muted);
+    cursor: pointer;
 
-  &:hover,
-  &.open {
-    background: rgba(var(--sb-overlay-rgb),0.1);
-    color: var(--sb-text-strong);
-  }
+    &:hover,
+    &.open {
+        background: rgba(var(--sb-overlay-rgb), 0.1);
+        color: var(--sb-text-strong);
+    }
 }
 
 /* ---- The ⋯ menu ---- */
 .projects-menu {
-  position: absolute;
-  z-index: 3;
-  width: 236px;
-  padding: 5px;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--sb-r-row);
-  background: var(--sb-bg-raised);
-  box-shadow:
-    inset 0 0 0 1px var(--sb-line),
-    0 16px 32px -10px rgba(var(--sb-shadow-rgb),calc(0.75 * var(--sb-shadow-k)));
+    position: absolute;
+    z-index: 3;
+    width: 236px;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-raised);
+    box-shadow:
+        inset 0 0 0 1px var(--sb-line),
+        0 16px 32px -10px rgba(var(--sb-shadow-rgb), calc(0.75 * var(--sb-shadow-k)));
 }
 
 .projects-menu-item {
-  appearance: none;
-  width: 100%;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  color: var(--sb-text);
-  font: 12.5px var(--sb-font-body);
-  text-align: left;
-  cursor: pointer;
+    appearance: none;
+    width: 100%;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: var(--sb-text);
+    font: 12.5px var(--sb-font-body);
+    text-align: left;
+    cursor: pointer;
 
-  &.highlighted { background: rgba(var(--sb-overlay-rgb),0.07); }
-  &.danger { color: var(--sb-danger); }
-  &:disabled { color: var(--sb-text-dimmest); cursor: default; }
+    &.highlighted {
+        background: rgba(var(--sb-overlay-rgb), 0.07);
+    }
+    &.danger {
+        color: var(--sb-danger);
+    }
+    &:disabled {
+        color: var(--sb-text-dimmest);
+        cursor: default;
+    }
 }
 
 .projects-menu-sep {
-  height: 1px;
-  margin: 4px 6px;
-  background: var(--sb-line);
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--sb-line);
 }
 
 /* ---- The rows that add something ---- */
 .projects-sep {
-  height: 1px;
-  margin: 2px 4px 4px;
-  background: var(--sb-line);
+    height: 1px;
+    margin: 2px 4px 4px;
+    background: var(--sb-line);
 }
 
 .projects-add-icon {
-  flex-shrink: 0;
-  display: inline-flex;
-  color: var(--sb-text-muted);
+    flex-shrink: 0;
+    display: inline-flex;
+    color: var(--sb-text-muted);
 }
 
 .projects-add-folder .projects-add-icon,
 .projects-add-remote .projects-add-icon {
-  color: var(--sb-accent);
+    color: var(--sb-accent);
 }
 
 .projects-add-text {
-  flex: 1;
-  min-width: 0;
+    flex: 1;
+    min-width: 0;
 }
 
 .projects-add-project .project-picker-name {
-  color: var(--sb-text-muted);
-  font-weight: 600;
+    color: var(--sb-text-muted);
+    font-weight: 600;
 }
 
 .projects-path {
-  font-family: var(--sb-font-mono);
-  font-size: 12.5px;
-  font-weight: 400;
+    font-family: var(--sb-font-mono);
+    font-size: 12.5px;
+    font-weight: 400;
 }
 
 .projects-add-detail {
-  margin-top: 2px;
-  font-size: 11.5px;
-  color: var(--sb-text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    margin-top: 2px;
+    font-size: 11.5px;
+    color: var(--sb-text-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 
-  &.failed { color: var(--sb-danger); }
+    &.failed {
+        color: var(--sb-danger);
+    }
 }
 
 .projects-add-hint {
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--sb-text-dimmest);
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--sb-text-dimmest);
 }
 
 .project-picker-empty {
-  padding: 14px 12px;
-  font-size: 13px;
-  color: var(--sb-text-faint);
+    padding: 14px 12px;
+    font-size: 13px;
+    color: var(--sb-text-faint);
 }
 
 /* ---- The add step ---- */
 .projects-add-step .add-project-tabs {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .projects-add-check {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border-radius: var(--sb-r-control);
-  background: var(--sb-mint);
-  font-size: 12px;
-
-  li {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 10px 12px;
     display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--sb-text-dim);
-  }
+    flex-direction: column;
+    gap: 6px;
+    border-radius: var(--sb-r-control);
+    background: var(--sb-mint);
+    font-size: 12px;
 
-  li.ok svg { color: var(--sb-green); }
-  li.not svg { color: var(--sb-text-faint); }
+    li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--sb-text-dim);
+    }
+
+    li.ok svg {
+        color: var(--sb-green);
+    }
+    li.not svg {
+        color: var(--sb-text-faint);
+    }
 }
 
 .projects-add-step .add-project-hint {
-  margin: 10px 2px 0;
+    margin: 10px 2px 0;
 }
 
 .projects-add-step #add-project-remote .add-project-hint {
-  margin: 0 0 12px;
+    margin: 0 0 12px;
 }
 
 .add-project-add-btn .sw-kbd {
-  margin-left: 4px;
-  color: inherit;
-  border-color: currentColor;
-  opacity: 0.6;
+    margin-left: 4px;
+    color: inherit;
+    border-color: currentColor;
+    opacity: 0.6;
 }

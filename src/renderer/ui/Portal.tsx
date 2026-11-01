@@ -6,16 +6,16 @@
  * found by id. While the target is missing nothing renders, rather than
  * throwing.
  */
-import { createPortal } from 'react-dom';
-import type { JSX, ReactNode } from 'react';
+import {createPortal} from 'react-dom';
+import type {JSX, ReactNode} from 'react';
 
 export interface PortalProps {
-  /** The id of the element to render into. */
-  target: string;
-  children: ReactNode;
+    /** The id of the element to render into. */
+    target: string;
+    children: ReactNode;
 }
 
-export function Portal({ target, children }: PortalProps): JSX.Element | null {
-  const container = document.getElementById(target);
-  return container ? createPortal(children, container) : null;
+export function Portal({target, children}: PortalProps): JSX.Element | null {
+    const container = document.getElementById(target);
+    return container ? createPortal(children, container) : null;
 }

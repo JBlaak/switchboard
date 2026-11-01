@@ -11,7 +11,7 @@
  */
 
 export function quoteArgvForShell(argv: readonly unknown[]): string {
-  return argv.map(a => posixQuote(a == null ? '' : String(a))).join(' ');
+    return argv.map((a) => posixQuote(a == null ? '' : String(a))).join(' ');
 }
 
 /**
@@ -21,7 +21,7 @@ export function quoteArgvForShell(argv: readonly unknown[]): string {
  * path pasted into a terminal, a command shown in the UI.
  */
 export function posixQuote(value: string): string {
-  return "'" + value.replace(/'/g, "'\\''") + "'";
+    return "'" + value.replace(/'/g, "'\\''") + "'";
 }
 
 /**
@@ -33,16 +33,16 @@ export function posixQuote(value: string): string {
  * sees — a GUI app inherits none of that from the desktop session.
  */
 export function shellArgs(shellPath: string, cmd?: string | null): string[] {
-  const base = shellPath.split('/').pop()?.toLowerCase() ?? '';
-  const bashLike = base.includes('bash') || base.includes('zsh') || base === 'sh';
-  const isFish = base === 'fish';
-  const isNushell = base === 'nu';
+    const base = shellPath.split('/').pop()?.toLowerCase() ?? '';
+    const bashLike = base.includes('bash') || base.includes('zsh') || base === 'sh';
+    const isFish = base === 'fish';
+    const isNushell = base === 'nu';
 
-  if (cmd) {
-    if (bashLike) return ['-l', '-i', '-c', cmd];
-    if (isFish || isNushell) return ['-l', '-c', cmd];
-    return ['-c', cmd];
-  }
-  if (bashLike || isFish || isNushell) return ['-l', '-i'];
-  return [];
+    if (cmd) {
+        if (bashLike) return ['-l', '-i', '-c', cmd];
+        if (isFish || isNushell) return ['-l', '-c', cmd];
+        return ['-c', cmd];
+    }
+    if (bashLike || isFish || isNushell) return ['-l', '-i'];
+    return [];
 }

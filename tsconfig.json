@@ -1,42 +1,42 @@
 {
-  // One config covers main, preload, renderer and tests. Splitting it per target
-  // would let the main process stop seeing `document` and the renderer stop
-  // seeing `fs`, but the tests import from both sides, so a single program is
-  // what keeps `npm run typecheck` a single command. The DOM/node overlap is the
-  // price; esbuild, not tsc, decides what each bundle can actually reach.
-  //
-  // What does keep the layers apart is the dependency direction, not this file:
-  // src/domain imports nothing, src/application imports only domain and its own
-  // ports, and only src/main knows about src/infrastructure. See ARCHITECTURE.md.
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    // Bundler resolution, so imports are written without a file extension and
-    // esbuild (and tsx, for the tests) resolves them to the .ts on disk.
-    "moduleResolution": "bundler",
-    // The renderer's React surfaces are .tsx, compiled with the automatic
-    // runtime: no `import React` needed for JSX. esbuild is set the same way.
-    "jsx": "react-jsx",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // One config covers main, preload, renderer and tests. Splitting it per target
+    // would let the main process stop seeing `document` and the renderer stop
+    // seeing `fs`, but the tests import from both sides, so a single program is
+    // what keeps `npm run typecheck` a single command. The DOM/node overlap is the
+    // price; esbuild, not tsc, decides what each bundle can actually reach.
+    //
+    // What does keep the layers apart is the dependency direction, not this file:
+    // src/domain imports nothing, src/application imports only domain and its own
+    // ports, and only src/main knows about src/infrastructure. See ARCHITECTURE.md.
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        // Bundler resolution, so imports are written without a file extension and
+        // esbuild (and tsx, for the tests) resolves them to the .ts on disk.
+        "moduleResolution": "bundler",
+        // The renderer's React surfaces are .tsx, compiled with the automatic
+        // runtime: no `import React` needed for JSX. esbuild is set the same way.
+        "jsx": "react-jsx",
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
 
-    "strict": true,
-    "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true,
-    // Off deliberately: it would turn every arr[i] into T | undefined, which
-    // across this much index-heavy code buys noise rather than safety.
-    "noUncheckedIndexedAccess": false,
+        "strict": true,
+        "noImplicitOverride": true,
+        "noFallthroughCasesInSwitch": true,
+        // Off deliberately: it would turn every arr[i] into T | undefined, which
+        // across this much index-heavy code buys noise rather than safety.
+        "noUncheckedIndexedAccess": false,
 
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
-    "useDefineForClassFields": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "resolveJsonModule": true,
+        "forceConsistentCasingInFileNames": true,
+        "skipLibCheck": true,
+        "isolatedModules": true,
+        "useDefineForClassFields": true,
 
-    // tsc only ever typechecks here; esbuild emits.
-    "noEmit": true,
-    "types": ["node"]
-  },
-  "include": ["src/**/*", "test/**/*", "e2e/**/*.ts", "scripts/**/*.mjs"]
+        // tsc only ever typechecks here; esbuild emits.
+        "noEmit": true,
+        "types": ["node"]
+    },
+    "include": ["src/**/*", "test/**/*", "e2e/**/*.ts", "scripts/**/*.mjs"]
 }

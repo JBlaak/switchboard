@@ -7,31 +7,31 @@
  * the ones acted on need naming here.
  */
 
-import type { EffectiveSettings } from '../settings/settings';
+import type {EffectiveSettings} from '../settings/settings';
 
 export interface SessionOptions {
-  /** 'terminal' for a plain shell; absent or 'claude' for a CLI session. */
-  type?: string;
-  /** 'shell' or 'claude', for a session on a remote host. */
-  remoteKind?: string;
-  shell?: string;
-  dangerouslySkipPermissions?: boolean;
-  permissionMode?: string | null;
-  worktree?: boolean;
-  worktreeName?: string;
-  chrome?: boolean;
-  /** Raw shell prefix, e.g. "aws-vault exec profile --". */
-  preLaunchCmd?: string;
-  /** Comma-separated extra directories for `--add-dir`. */
-  addDirs?: string;
-  appendSystemPrompt?: string;
-  /**
-   * The first prompt a new session starts on, handed to the CLI as its
-   * positional prompt. Ignored on resume. Never a stored setting: the launch
-   * that asks for it is the only one it applies to.
-   */
-  initialPrompt?: string;
-  [key: string]: unknown;
+    /** 'terminal' for a plain shell; absent or 'claude' for a CLI session. */
+    type?: string;
+    /** 'shell' or 'claude', for a session on a remote host. */
+    remoteKind?: string;
+    shell?: string;
+    dangerouslySkipPermissions?: boolean;
+    permissionMode?: string | null;
+    worktree?: boolean;
+    worktreeName?: string;
+    chrome?: boolean;
+    /** Raw shell prefix, e.g. "aws-vault exec profile --". */
+    preLaunchCmd?: string;
+    /** Comma-separated extra directories for `--add-dir`. */
+    addDirs?: string;
+    appendSystemPrompt?: string;
+    /**
+     * The first prompt a new session starts on, handed to the CLI as its
+     * positional prompt. Ignored on resume. Never a stored setting: the launch
+     * that asks for it is the only one it applies to.
+     */
+    initialPrompt?: string;
+    [key: string]: unknown;
 }
 
 /**
@@ -47,12 +47,12 @@ export interface SessionOptions {
  * remembered to edit.
  */
 export const PERMISSION_MODES = [
-  { value: null, label: 'Default', desc: 'Whatever your own Claude settings say' },
-  { value: 'auto', label: 'Auto', desc: 'Classifier allows routine work, stops for risky actions' },
-  { value: 'acceptEdits', label: 'Accept Edits', desc: 'Auto-accept file edits, prompt for others' },
-  { value: 'plan', label: 'Plan Mode', desc: 'Read-only exploration, no writes' },
-  { value: 'dontAsk', label: "Don't Ask", desc: 'Auto-deny tools not explicitly allowed' },
-  { value: 'bypassPermissions', label: 'Bypass', desc: 'Auto-accept all tool calls' },
+    {value: null, label: 'Default', desc: 'Whatever your own Claude settings say'},
+    {value: 'auto', label: 'Auto', desc: 'Classifier allows routine work, stops for risky actions'},
+    {value: 'acceptEdits', label: 'Accept Edits', desc: 'Auto-accept file edits, prompt for others'},
+    {value: 'plan', label: 'Plan Mode', desc: 'Read-only exploration, no writes'},
+    {value: 'dontAsk', label: "Don't Ask", desc: 'Auto-deny tools not explicitly allowed'},
+    {value: 'bypassPermissions', label: 'Bypass', desc: 'Auto-accept all tool calls'},
 ];
 
 /**
@@ -66,20 +66,20 @@ export const PERMISSION_MODES = [
  * the flag with a falsy value.
  */
 export function defaultSessionOptions(effective: EffectiveSettings): SessionOptions {
-  const options: SessionOptions = {};
+    const options: SessionOptions = {};
 
-  if (effective.dangerouslySkipPermissions) {
-    options.dangerouslySkipPermissions = true;
-  } else if (effective.permissionMode) {
-    options.permissionMode = effective.permissionMode;
-  }
+    if (effective.dangerouslySkipPermissions) {
+        options.dangerouslySkipPermissions = true;
+    } else if (effective.permissionMode) {
+        options.permissionMode = effective.permissionMode;
+    }
 
-  // A stored `worktreeName` is ignored: one fixed name put every new session in
-  // the same worktree, so the CLI names each one instead.
-  if (effective.worktree) options.worktree = true;
-  if (effective.chrome) options.chrome = true;
-  if (effective.preLaunchCmd) options.preLaunchCmd = effective.preLaunchCmd;
-  if (effective.addDirs) options.addDirs = effective.addDirs;
+    // A stored `worktreeName` is ignored: one fixed name put every new session in
+    // the same worktree, so the CLI names each one instead.
+    if (effective.worktree) options.worktree = true;
+    if (effective.chrome) options.chrome = true;
+    if (effective.preLaunchCmd) options.preLaunchCmd = effective.preLaunchCmd;
+    if (effective.addDirs) options.addDirs = effective.addDirs;
 
-  return options;
+    return options;
 }

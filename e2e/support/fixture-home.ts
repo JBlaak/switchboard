@@ -14,13 +14,12 @@
  * frozen at `FIXTURE_NOW` by the launcher, so "20m ago" stays "20m ago"
  * whenever the suite runs.
  */
-import { spawnSync } from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import electronPath from 'electron';
-import { stableUuid, transcriptLines } from './transcript';
-import type { FixturePullRequest } from './transcript';
+import {stableUuid, transcriptLines} from './transcript';
+import type {FixturePullRequest} from './transcript';
 
 /**
  * The moment every fixture is built around, and what the renderer's clock reads.
@@ -39,88 +38,88 @@ export const daysAgo = (n: number): number => hoursAgo(n * 24);
 export const sessionId = (name: string): string => stableUuid('session', name);
 
 export interface FixtureSession {
-  /** Stable id; use `sessionId('some-name')`. */
-  id: string;
-  /** The first user message, which is the row's label. */
-  prompt: string;
-  /** Epoch ms of the last message: what the row's time label and sort use. */
-  at: number;
-  /** Epoch ms of the first message. Defaults to 10 minutes before `at`. */
-  startedAt?: number;
-  /** User and assistant entries; the row shows "· N msgs". Defaults to 4. */
-  messages?: number;
-  /** Sessions sharing a slug within one project fold into a slug group. */
-  slug?: string;
-  aiTitle?: string;
-  customTitle?: string;
-  /** A Switchboard rename (stored in the database, not the transcript). */
-  name?: string;
-  pinned?: boolean;
-  archived?: boolean;
-  pullRequests?: readonly FixturePullRequest[];
-  /**
-   * The directory the session ran in, relative to the home folder, when it is
-   * not the project's own — a worktree, say. The transcript lands in the
-   * folder this path encodes to, as the CLI would put it.
-   */
-  cwd?: string;
-  forkedFrom?: string;
+    /** Stable id; use `sessionId('some-name')`. */
+    id: string;
+    /** The first user message, which is the row's label. */
+    prompt: string;
+    /** Epoch ms of the last message: what the row's time label and sort use. */
+    at: number;
+    /** Epoch ms of the first message. Defaults to 10 minutes before `at`. */
+    startedAt?: number;
+    /** User and assistant entries; the row shows "· N msgs". Defaults to 4. */
+    messages?: number;
+    /** Sessions sharing a slug within one project fold into a slug group. */
+    slug?: string;
+    aiTitle?: string;
+    customTitle?: string;
+    /** A Switchboard rename (stored in the database, not the transcript). */
+    name?: string;
+    pinned?: boolean;
+    archived?: boolean;
+    pullRequests?: readonly FixturePullRequest[];
+    /**
+     * The directory the session ran in, relative to the home folder, when it is
+     * not the project's own — a worktree, say. The transcript lands in the
+     * folder this path encodes to, as the CLI would put it.
+     */
+    cwd?: string;
+    forkedFrom?: string;
 }
 
 export interface FixtureProject {
-  /** Relative to the home folder, e.g. `Development/acme-api`. */
-  path: string;
-  sessions: readonly FixtureSession[];
-  /**
-   * Create the directory on disk (default true). A project whose directory is
-   * gone still lists — its transcripts remain — but cannot launch.
-   */
-  exists?: boolean;
+    /** Relative to the home folder, e.g. `Development/acme-api`. */
+    path: string;
+    sessions: readonly FixtureSession[];
+    /**
+     * Create the directory on disk (default true). A project whose directory is
+     * gone still lists — its transcripts remain — but cannot launch.
+     */
+    exists?: boolean;
 }
 
 export interface FixtureRemoteSession {
-  id: string;
-  kind?: 'claude' | 'shell';
-  created: number;
-  lastOpened?: number;
-  name?: string;
-  pinned?: boolean;
-  archived?: boolean;
+    id: string;
+    kind?: 'claude' | 'shell';
+    created: number;
+    lastOpened?: number;
+    name?: string;
+    pinned?: boolean;
+    archived?: boolean;
 }
 
 export interface FixtureRemote {
-  user: string;
-  host: string;
-  port?: number;
-  dir?: string;
-  sessions?: readonly FixtureRemoteSession[];
+    user: string;
+    host: string;
+    port?: number;
+    dir?: string;
+    sessions?: readonly FixtureRemoteSession[];
 }
 
 export interface FixtureSpec {
-  projects?: readonly FixtureProject[];
-  remotes?: readonly FixtureRemote[];
-  /** Merged over the harness defaults into the `global` settings blob. */
-  settings?: Record<string, unknown>;
-  /** Per-project overrides, keyed by the project path relative to home. */
-  projectSettings?: Record<string, Record<string, unknown>>;
+    projects?: readonly FixtureProject[];
+    remotes?: readonly FixtureRemote[];
+    /** Merged over the harness defaults into the `global` settings blob. */
+    settings?: Record<string, unknown>;
+    /** Per-project overrides, keyed by the project path relative to home. */
+    projectSettings?: Record<string, Record<string, unknown>>;
 }
 
 /** What a built fixture tells the rest of the harness. */
 export interface FixtureHome {
-  /** The temporary directory everything lives in; removed by `dispose`. */
-  readonly root: string;
-  /** HOME for the app and every process it starts. */
-  readonly home: string;
-  /** SWITCHBOARD_DATA_DIR. */
-  readonly dataDir: string;
-  /** Where the fake CLIs keep their per-session control files. */
-  readonly controlDir: string;
-  /** The directory the shell profile puts first on PATH. */
-  readonly binDir: string;
-  readonly spec: FixtureSpec;
-  /** An absolute project path, from one relative to home. */
-  projectPath(relative: string): string;
-  dispose(): void;
+    /** The temporary directory everything lives in; removed by `dispose`. */
+    readonly root: string;
+    /** HOME for the app and every process it starts. */
+    readonly home: string;
+    /** SWITCHBOARD_DATA_DIR. */
+    readonly dataDir: string;
+    /** Where the fake CLIs keep their per-session control files. */
+    readonly controlDir: string;
+    /** The directory the shell profile puts first on PATH. */
+    readonly binDir: string;
+    readonly spec: FixtureSpec;
+    /** An absolute project path, from one relative to home. */
+    projectPath(relative: string): string;
+    dispose(): void;
 }
 
 /**
@@ -132,34 +131,40 @@ export interface FixtureHome {
  * - The appearance is pinned rather than following the host's system setting.
  */
 export const HARNESS_SETTINGS: Readonly<Record<string, unknown>> = {
-  appearance: 'light',
-  weatherEnabled: false,
-  windowBounds: { width: 1280, height: 800 },
+    appearance: 'light',
+    weatherEnabled: false,
+    windowBounds: {width: 1280, height: 800},
 };
 
 /** Build a fixture home. Synchronous, and fast enough to run per test. */
 export function fixtureHome(spec: FixtureSpec = {}): FixtureHome {
-  // realpath: on macOS the temp dir is reached through the /var → /private/var
-  // symlink, and a child's process.cwd() reports the resolved form. Every path
-  // the app compares (a session's cwd against its project folder) has to agree.
-  const root = fs.realpathSync(makeRoot());
-  const home = path.join(root, 'home');
-  const dataDir = path.join(root, 'data');
-  const controlDir = path.join(root, 'control');
-  const binDir = path.join(root, 'bin');
-  for (const dir of [home, dataDir, controlDir, binDir]) fs.mkdirSync(dir, { recursive: true });
+    // realpath: on macOS the temp dir is reached through the /var → /private/var
+    // symlink, and a child's process.cwd() reports the resolved form. Every path
+    // the app compares (a session's cwd against its project folder) has to agree.
+    const root = fs.realpathSync(makeRoot());
+    const home = path.join(root, 'home');
+    const dataDir = path.join(root, 'data');
+    const controlDir = path.join(root, 'control');
+    const binDir = path.join(root, 'bin');
+    for (const dir of [home, dataDir, controlDir, binDir]) fs.mkdirSync(dir, {recursive: true});
 
-  const projectPath = (relative: string): string => path.join(home, relative);
+    const projectPath = (relative: string): string => path.join(home, relative);
 
-  writeFakeBinaries(binDir, controlDir);
-  writeShellProfiles(home, binDir);
-  writeTranscripts(home, spec);
-  seedDatabase(dataDir, root, spec, projectPath);
+    writeFakeBinaries(binDir, controlDir);
+    writeShellProfiles(home, binDir);
+    writeTranscripts(home, spec);
+    seedDatabase(dataDir, root, spec, projectPath);
 
-  return {
-    root, home, dataDir, controlDir, binDir, spec, projectPath,
-    dispose: () => fs.rmSync(root, { recursive: true, force: true }),
-  };
+    return {
+        root,
+        home,
+        dataDir,
+        controlDir,
+        binDir,
+        spec,
+        projectPath,
+        dispose: () => fs.rmSync(root, {recursive: true, force: true}),
+    };
 }
 
 /**
@@ -176,16 +181,16 @@ export function fixtureHome(spec: FixtureSpec = {}): FixtureHome {
  * would fail every run. `/tmp` resolves to `/private/tmp`, the same everywhere.
  */
 function makeRoot(): string {
-  for (;;) {
-    const name = 'sb-e2e-' + process.pid + '-' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0');
-    const dir = path.join('/tmp', name);
-    try {
-      fs.mkdirSync(dir, { mode: 0o700 });
-      return dir;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+    for (;;) {
+        const name = 'sb-e2e-' + process.pid + '-' + String(Math.floor(Math.random() * 1e9)).padStart(9, '0');
+        const dir = path.join('/tmp', name);
+        try {
+            fs.mkdirSync(dir, {mode: 0o700});
+            return dir;
+        } catch (err) {
+            if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
+        }
     }
-  }
 }
 
 // ── Fake CLIs ──
@@ -200,15 +205,14 @@ const FAKE_CLI = path.join(__dirname, '..', 'fakes', 'fake-cli.mjs');
  * would break on a machine whose Node comes from a version manager.
  */
 function writeFakeBinaries(binDir: string, controlDir: string): void {
-  for (const role of ['claude', 'ssh']) {
-    const file = path.join(binDir, role);
-    fs.writeFileSync(file, [
-      '#!/bin/sh',
-      `exec ${sh(process.execPath)} ${sh(FAKE_CLI)} ${role} ${sh(controlDir)} "$@"`,
-      '',
-    ].join('\n'));
-    fs.chmodSync(file, 0o755);
-  }
+    for (const role of ['claude', 'ssh']) {
+        const file = path.join(binDir, role);
+        fs.writeFileSync(
+            file,
+            ['#!/bin/sh', `exec ${sh(process.execPath)} ${sh(FAKE_CLI)} ${role} ${sh(controlDir)} "$@"`, ''].join('\n'),
+        );
+        fs.chmodSync(file, 0o755);
+    }
 }
 
 /**
@@ -223,47 +227,48 @@ function writeFakeBinaries(binDir: string, controlDir: string): void {
  * before ssh starts would read as the far end answering.
  */
 function writeShellProfiles(home: string, binDir: string): void {
-  const prepend = `export PATH=${sh(binDir)}:"$PATH"\n`;
-  fs.writeFileSync(path.join(home, '.zshrc'), prepend);
-  fs.writeFileSync(path.join(home, '.bashrc'), prepend);
-  fs.writeFileSync(path.join(home, '.bash_profile'), '[ -f ~/.bashrc ] && . ~/.bashrc\n');
-  fs.writeFileSync(path.join(home, '.profile'), prepend);
+    const prepend = `export PATH=${sh(binDir)}:"$PATH"\n`;
+    fs.writeFileSync(path.join(home, '.zshrc'), prepend);
+    fs.writeFileSync(path.join(home, '.bashrc'), prepend);
+    fs.writeFileSync(path.join(home, '.bash_profile'), '[ -f ~/.bashrc ] && . ~/.bashrc\n');
+    fs.writeFileSync(path.join(home, '.profile'), prepend);
 }
 
 // ── Transcripts ──
 
 function writeTranscripts(home: string, spec: FixtureSpec): void {
-  const projectsDir = path.join(home, '.claude', 'projects');
-  fs.mkdirSync(projectsDir, { recursive: true });
+    const projectsDir = path.join(home, '.claude', 'projects');
+    fs.mkdirSync(projectsDir, {recursive: true});
 
-  for (const project of spec.projects ?? []) {
-    const projectDir = path.join(home, project.path);
-    if (project.exists !== false) fs.mkdirSync(projectDir, { recursive: true });
+    for (const project of spec.projects ?? []) {
+        const projectDir = path.join(home, project.path);
+        if (project.exists !== false) fs.mkdirSync(projectDir, {recursive: true});
 
-    for (const session of project.sessions) {
-      const cwd = session.cwd ? path.join(home, session.cwd) : projectDir;
-      if (session.cwd && project.exists !== false) fs.mkdirSync(cwd, { recursive: true });
+        for (const session of project.sessions) {
+            const cwd = session.cwd ? path.join(home, session.cwd) : projectDir;
+            if (session.cwd && project.exists !== false) fs.mkdirSync(cwd, {recursive: true});
 
-      const folder = path.join(projectsDir, encodeProjectPath(cwd));
-      fs.mkdirSync(folder, { recursive: true });
-      const lines = transcriptLines({
-        sessionId: session.id,
-        cwd,
-        prompt: session.prompt,
-        startedAt: session.startedAt ?? session.at - 10 * 60_000,
-        endedAt: session.at,
-        messages: session.messages ?? 4,
-        slug: session.slug,
-        aiTitle: session.aiTitle,
-        customTitle: session.customTitle,
-        pullRequests: session.pullRequests,
-        forkedFrom: session.forkedFrom,
-      });
-      fs.writeFileSync(
-        path.join(folder, session.id + '.jsonl'),
-        lines.map(line => JSON.stringify(line)).join('\n') + '\n');
+            const folder = path.join(projectsDir, encodeProjectPath(cwd));
+            fs.mkdirSync(folder, {recursive: true});
+            const lines = transcriptLines({
+                sessionId: session.id,
+                cwd,
+                prompt: session.prompt,
+                startedAt: session.startedAt ?? session.at - 10 * 60_000,
+                endedAt: session.at,
+                messages: session.messages ?? 4,
+                slug: session.slug,
+                aiTitle: session.aiTitle,
+                customTitle: session.customTitle,
+                pullRequests: session.pullRequests,
+                forkedFrom: session.forkedFrom,
+            });
+            fs.writeFileSync(
+                path.join(folder, session.id + '.jsonl'),
+                lines.map((line) => JSON.stringify(line)).join('\n') + '\n',
+            );
+        }
     }
-  }
 }
 
 /**
@@ -274,77 +279,77 @@ function writeTranscripts(home: string, spec: FixtureSpec): void {
  * here would tie the harness to its file layout.
  */
 export function encodeProjectPath(projectPath: string): string {
-  return projectPath.replace(/[^a-zA-Z0-9]/g, '-');
+    return projectPath.replace(/[^a-zA-Z0-9]/g, '-');
 }
 
 // ── Database ──
 
 interface SeedFile {
-  settings: Record<string, unknown>;
-  meta: { sessionId: string; name?: string; starred?: boolean; archived?: boolean }[];
+    settings: Record<string, unknown>;
+    meta: {sessionId: string; name?: string; starred?: boolean; archived?: boolean}[];
 }
 
 function seedDatabase(
-  dataDir: string,
-  root: string,
-  spec: FixtureSpec,
-  projectPath: (relative: string) => string,
+    dataDir: string,
+    root: string,
+    spec: FixtureSpec,
+    projectPath: (relative: string) => string,
 ): void {
-  const seed: SeedFile = { settings: {}, meta: [] };
+    const seed: SeedFile = {settings: {}, meta: []};
 
-  const remoteProjects = (spec.remotes ?? []).map(remote => ({
-    user: remote.user,
-    host: remote.host,
-    port: remote.port ?? 22,
-    dir: remote.dir ?? null,
-    sessions: (remote.sessions ?? []).map(session => ({
-      sessionId: session.id,
-      kind: session.kind ?? 'claude',
-      created: new Date(session.created).toISOString(),
-      lastOpened: new Date(session.lastOpened ?? session.created).toISOString(),
-    })),
-  }));
+    const remoteProjects = (spec.remotes ?? []).map((remote) => ({
+        user: remote.user,
+        host: remote.host,
+        port: remote.port ?? 22,
+        dir: remote.dir ?? null,
+        sessions: (remote.sessions ?? []).map((session) => ({
+            sessionId: session.id,
+            kind: session.kind ?? 'claude',
+            created: new Date(session.created).toISOString(),
+            lastOpened: new Date(session.lastOpened ?? session.created).toISOString(),
+        })),
+    }));
 
-  seed.settings.global = {
-    ...HARNESS_SETTINGS,
-    ...(remoteProjects.length ? { remoteProjects } : {}),
-    ...spec.settings,
-  };
-  for (const [relative, settings] of Object.entries(spec.projectSettings ?? {})) {
-    seed.settings['project:' + projectPath(relative)] = settings;
-  }
+    seed.settings.global = {
+        ...HARNESS_SETTINGS,
+        ...(remoteProjects.length ? {remoteProjects} : {}),
+        ...spec.settings,
+    };
+    for (const [relative, settings] of Object.entries(spec.projectSettings ?? {})) {
+        seed.settings['project:' + projectPath(relative)] = settings;
+    }
 
-  const sessions = [
-    ...(spec.projects ?? []).flatMap(project => project.sessions),
-    ...(spec.remotes ?? []).flatMap(remote => remote.sessions ?? []),
-  ];
-  for (const session of sessions) {
-    if (!session.name && !session.pinned && !session.archived) continue;
-    seed.meta.push({
-      sessionId: session.id,
-      name: session.name,
-      starred: session.pinned,
-      archived: session.archived,
+    const sessions = [
+        ...(spec.projects ?? []).flatMap((project) => project.sessions),
+        ...(spec.remotes ?? []).flatMap((remote) => remote.sessions ?? []),
+    ];
+    for (const session of sessions) {
+        if (!session.name && !session.pinned && !session.archived) continue;
+        seed.meta.push({
+            sessionId: session.id,
+            name: session.name,
+            starred: session.pinned,
+            archived: session.archived,
+        });
+    }
+
+    const seedPath = path.join(root, 'seed.json');
+    fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2));
+
+    const result = spawnSync(electronBinary(), [path.join(__dirname, 'seed-db.cjs'), seedPath], {
+        env: {...process.env, ELECTRON_RUN_AS_NODE: '1', SWITCHBOARD_DATA_DIR: dataDir},
+        encoding: 'utf8',
     });
-  }
-
-  const seedPath = path.join(root, 'seed.json');
-  fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2));
-
-  const result = spawnSync(electronBinary(), [path.join(__dirname, 'seed-db.cjs'), seedPath], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', SWITCHBOARD_DATA_DIR: dataDir },
-    encoding: 'utf8',
-  });
-  if (result.status !== 0) {
-    throw new Error(`seeding the fixture database failed (did you run \`npm run build\`?):\n${result.stderr}`);
-  }
+    if (result.status !== 0) {
+        throw new Error(`seeding the fixture database failed (did you run \`npm run build\`?):\n${result.stderr}`);
+    }
 }
 
 /** Under plain Node, `require('electron')` is the path to the binary. */
 export function electronBinary(): string {
-  return electronPath as unknown as string;
+    return electronPath as unknown as string;
 }
 
 function sh(value: string): string {
-  return "'" + value.replace(/'/g, "'\\''") + "'";
+    return "'" + value.replace(/'/g, "'\\''") + "'";
 }

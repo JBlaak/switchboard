@@ -7,15 +7,15 @@
  * it back to you). A merged PR is done, and says so with a purple check instead
  * of a dot.
  */
-import type { Activity, PullRequestStatus } from './model';
+import type {Activity, PullRequestStatus} from './model';
 
 export type StatusDot = 'merged' | 'green' | 'amber' | 'red';
 
-const SEVERITY: Record<StatusDot, number> = { merged: 0, green: 1, amber: 2, red: 3 };
+const SEVERITY: Record<StatusDot, number> = {merged: 0, green: 1, amber: 2, red: 3};
 
 /** Is an action on its way to Claude or with it right now? */
 export function isWorking(activity: Activity | null | undefined): boolean {
-  return activity?.phase === 'queued' || activity?.phase === 'sent';
+    return activity?.phase === 'queued' || activity?.phase === 'sent';
 }
 
 /**
@@ -25,8 +25,8 @@ export function isWorking(activity: Activity | null | undefined): boolean {
  * and left it open because it wants your call (C5).
  */
 export function needsYou(pr: PullRequestStatus, activity: Activity | null | undefined): boolean {
-  if (activity?.phase === 'gave-up') return true;
-  return (pr.threads ?? []).some((thread) => !thread.resolved && thread.needsYou === true);
+    if (activity?.phase === 'gave-up') return true;
+    return (pr.threads ?? []).some((thread) => !thread.resolved && thread.needsYou === true);
 }
 
 /**
@@ -40,20 +40,20 @@ export function needsYou(pr: PullRequestStatus, activity: Activity | null | unde
  * green.
  */
 export function statusDot(pr: PullRequestStatus, activity: Activity | null | undefined): StatusDot {
-  if (pr.state === 'merged') return 'merged';
-  if (pr.state === 'closed') return 'green';
-  if (needsYou(pr, activity)) return 'red';
-  if (isWorking(activity)) return 'amber';
-  const checks = pr.checks ?? [];
-  if (checks.some((check) => check.state === 'failing')) return 'red';
-  if (checks.some((check) => check.state === 'pending')) return 'amber';
-  return 'green';
+    if (pr.state === 'merged') return 'merged';
+    if (pr.state === 'closed') return 'green';
+    if (needsYou(pr, activity)) return 'red';
+    if (isWorking(activity)) return 'amber';
+    const checks = pr.checks ?? [];
+    if (checks.some((check) => check.state === 'failing')) return 'red';
+    if (checks.some((check) => check.state === 'pending')) return 'amber';
+    return 'green';
 }
 
 /** One PR chip's dot, as main pushes it to the sidebar. */
 export interface PullRequestDot {
-  number: number;
-  dot: StatusDot;
+    number: number;
+    dot: StatusDot;
 }
 
 /**
@@ -62,20 +62,24 @@ export interface PullRequestDot {
  * nothing is known (the session stopped, or `gh` never answered).
  */
 export interface PullRequestStatusChange {
-  sessionId: string;
-  prs: PullRequestDot[];
-  /** Any of them waits on you (auto-fix gave up, or a thread wants your call). */
-  needsYou: boolean;
+    sessionId: string;
+    prs: PullRequestDot[];
+    /** Any of them waits on you (auto-fix gave up, or a thread wants your call). */
+    needsYou: boolean;
 }
 
 /** A dot in words, for a chip's tooltip. */
 export function statusDotLabel(dot: StatusDot): string {
-  switch (dot) {
-    case 'merged': return 'merged';
-    case 'green': return 'passing';
-    case 'amber': return 'in progress';
-    case 'red': return 'failing';
-  }
+    switch (dot) {
+        case 'merged':
+            return 'merged';
+        case 'green':
+            return 'passing';
+        case 'amber':
+            return 'in progress';
+        case 'red':
+            return 'failing';
+    }
 }
 
 /**
@@ -86,9 +90,9 @@ export function statusDotLabel(dot: StatusDot): string {
  * when every PR it hides is merged.
  */
 export function worstStatusDot(dots: Iterable<StatusDot>): StatusDot | null {
-  let worst: StatusDot | null = null;
-  for (const dot of dots) {
-    if (worst === null || SEVERITY[dot] > SEVERITY[worst]) worst = dot;
-  }
-  return worst;
+    let worst: StatusDot | null = null;
+    for (const dot of dots) {
+        if (worst === null || SEVERITY[dot] > SEVERITY[worst]) worst = dot;
+    }
+    return worst;
 }

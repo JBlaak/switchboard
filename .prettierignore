@@ -1,0 +1,17 @@
+# Prettier also skips everything in .gitignore.
+.idea
+.claude/worktrees/
+package-lock.json
+
+# Vendored xterm.js build, shipped to the phone as-is.
+android/app/src/main/assets/terminal/xterm.js
+android/app/src/main/assets/terminal/xterm.css
+android/app/src/main/assets/terminal/addon-fit.js
+
+# Android build output (ignored in android/.gitignore, which Prettier does not read).
+android/**/build/
+android/.gradle/
+android/.kotlin/
+
+# Recorded gh/GitHub output; kept byte-for-byte as captured.
+test/fixtures/

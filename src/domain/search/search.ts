@@ -9,17 +9,17 @@ export type SearchType = 'session';
 
 /** A row queued for the index. */
 export interface SearchEntry {
-  id: string;
-  type: SearchType;
-  folder?: string | null;
-  title?: string;
-  body?: string;
+    id: string;
+    type: SearchType;
+    folder?: string | null;
+    title?: string;
+    body?: string;
 }
 
 export interface SearchResult {
-  id: string;
-  /** Highlighted excerpt — contains `<mark>` tags, so it is trusted HTML. */
-  snippet: string;
+    id: string;
+    /** Highlighted excerpt — contains `<mark>` tags, so it is trusted HTML. */
+    snippet: string;
 }
 
 /** How many results a query returns before the UI would be scrolling forever. */
@@ -34,6 +34,6 @@ export const SEARCH_RESULT_LIMIT = 50;
  * restricts the match to the title column.
  */
 export function ftsMatchExpression(query: string, titleOnly = false): string {
-  const escaped = '"' + query.replace(/"/g, '""') + '"';
-  return titleOnly ? 'title:' + escaped : escaped;
+    const escaped = '"' + query.replace(/"/g, '""') + '"';
+    return titleOnly ? 'title:' + escaped : escaped;
 }

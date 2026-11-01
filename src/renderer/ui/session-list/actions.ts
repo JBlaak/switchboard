@@ -7,29 +7,33 @@
  * that is what the rest of the renderer holds — the terminal, the dialogs, the
  * pending registry — and the layout's copy is only what the list showed.
  */
-import { loadProjects } from '../../features/sessions/session-list';
-import { relayoutSessionList } from './relayout';
-import { dispatch, getState } from '../../state/app-store';
-import { sessionMap, view } from '../../state/session-store';
-import { renamedName } from '../../state/session-list-layout';
-import { bump } from '../../lib/motion/reflow';
-import { openResumeDialog } from '../dialogs/actions';
+import {loadProjects} from '../../features/sessions/session-list';
+import {relayoutSessionList} from './relayout';
+import {dispatch, getState} from '../../state/app-store';
+import {sessionMap, view} from '../../state/session-store';
+import {renamedName} from '../../state/session-list-layout';
+import {bump} from '../../lib/motion/reflow';
+import {openResumeDialog} from '../dialogs/actions';
 import {
-  archiveSessionRow, clearScreen, confirmAndStopSession, openSession, snoozeSessionRow,
+    archiveSessionRow,
+    clearScreen,
+    confirmAndStopSession,
+    openSession,
+    snoozeSessionRow,
 } from '../../features/sessions/session-actions';
-import { doze, wakeUp } from '../../lib/motion/sleep';
-import { pollActiveSessions } from '../../features/sessions/session-poller';
-import { celebrateFrom, isLeaving, leave } from './leave';
-import { offerArchiveUndo, sessionOnScreen } from '../archive-undo/actions';
-import type { SessionRow } from '../../../domain/session/session';
+import {doze, wakeUp} from '../../lib/motion/sleep';
+import {pollActiveSessions} from '../../features/sessions/session-poller';
+import {celebrateFrom, isLeaving, leave} from './leave';
+import {offerArchiveUndo, sessionOnScreen} from '../archive-undo/actions';
+import type {SessionRow} from '../../../domain/session/session';
 
 // ── Opening and the empty space ──
 
 /** A click on a row: open its session, unless the row is on its way out. */
 export function openRow(rowId: string, sessionId: string, groupId?: string): void {
-  if (isLeaving(rowId, groupId)) return;
-  const session = sessionMap.get(sessionId);
-  if (session) void openSession(session);
+    if (isLeaving(rowId, groupId)) return;
+    const session = sessionMap.get(sessionId);
+    if (session) void openSession(session);
 }
 
 /**
@@ -37,9 +41,9 @@ export function openRow(rowId: string, sessionId: string, groupId?: string): voi
  * main area shows, a project included: the empty screen takes its place.
  */
 export function clearScreenFromList(target: Element): void {
-  if (target.closest(
-    '.session-item, .slug-group-header, .slug-group-more, .sessions-more-toggle, button, a, input')) return;
-  if (getState().mainArea.route.kind !== 'empty') clearScreen();
+    if (target.closest('.session-item, .slug-group-header, .slug-group-more, .sessions-more-toggle, button, a, input'))
+        return;
+    if (getState().mainArea.route.kind !== 'empty') clearScreen();
 }
 
 // ── Row buttons ──
@@ -52,13 +56,13 @@ export function clearScreenFromList(target: Element): void {
  * the element moves with it.
  */
 export async function togglePin(sessionId: string, pin: HTMLElement): Promise<void> {
-  const session = sessionMap.get(sessionId);
-  if (!session) return;
-  const { starred } = await window.api.toggleStar(sessionId);
-  session.starred = starred;
-  // A pin going in pops, one coming out dips.
-  bump(pin, starred ? 10 : -4);
-  relayoutSessionList({ resort: true });
+    const session = sessionMap.get(sessionId);
+    if (!session) return;
+    const {starred} = await window.api.toggleStar(sessionId);
+    session.starred = starred;
+    // A pin going in pops, one coming out dips.
+    bump(pin, starred ? 10 : -4);
+    relayoutSessionList({resort: true});
 }
 
 /**
@@ -66,15 +70,15 @@ export async function togglePin(sessionId: string, pin: HTMLElement): Promise<vo
  * a session's pin. Its sessions keep their own stars.
  */
 export async function togglePlanPin(projectPath: string, slug: string, pin: HTMLElement): Promise<void> {
-  const { pinned } = await window.api.togglePlanPin(projectPath, slug);
-  // The same project can be in both cached lists as separate objects.
-  for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
-    if (project.projectPath !== projectPath) continue;
-    const others = (project.pinnedPlans ?? []).filter(s => s !== slug);
-    project.pinnedPlans = pinned ? [...others, slug] : others;
-  }
-  bump(pin, pinned ? 10 : -4);
-  relayoutSessionList({ resort: true });
+    const {pinned} = await window.api.togglePlanPin(projectPath, slug);
+    // The same project can be in both cached lists as separate objects.
+    for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
+        if (project.projectPath !== projectPath) continue;
+        const others = (project.pinnedPlans ?? []).filter((s) => s !== slug);
+        project.pinnedPlans = pinned ? [...others, slug] : others;
+    }
+    bump(pin, pinned ? 10 : -4);
+    relayoutSessionList({resort: true});
 }
 
 /**
@@ -83,33 +87,40 @@ export async function togglePlanPin(projectPath: string, slug: string, pin: HTML
  * now, so the row needs no GitHub call to draw.
  */
 export async function toggleIssuePlanPin(
-  projectPath: string, plan: { repository: string; number: number; title: string }, pin?: HTMLElement,
+    projectPath: string,
+    plan: {repository: string; number: number; title: string},
+    pin?: HTMLElement,
 ): Promise<void> {
-  const { repository, number, title } = plan;
-  const { pinned } = await window.api.toggleIssuePlanPin(projectPath, repository, number, title);
-  // The same project can be in both cached lists as separate objects.
-  for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
-    if (project.projectPath !== projectPath) continue;
-    const others = (project.pinnedIssuePlans ?? []).filter(p => p.repository !== repository || p.number !== number);
-    project.pinnedIssuePlans = pinned ? [...others, { repository, number, title, pinnedAt: Date.now() }] : others;
-  }
-  if (pin) bump(pin, pinned ? 10 : -4);
-  relayoutSessionList({ resort: true });
+    const {repository, number, title} = plan;
+    const {pinned} = await window.api.toggleIssuePlanPin(projectPath, repository, number, title);
+    // The same project can be in both cached lists as separate objects.
+    for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
+        if (project.projectPath !== projectPath) continue;
+        const others = (project.pinnedIssuePlans ?? []).filter(
+            (p) => p.repository !== repository || p.number !== number,
+        );
+        project.pinnedIssuePlans = pinned ? [...others, {repository, number, title, pinnedAt: Date.now()}] : others;
+    }
+    if (pin) bump(pin, pinned ? 10 : -4);
+    relayoutSessionList({resort: true});
 }
 
 /** Whether a GitHub plan is pinned to the top of the list in `projectPath`. */
 export function isIssuePlanPinned(projectPath: string, repository: string, number: number): boolean {
-  return [...view.cachedProjects, ...view.cachedAllProjects].some(project => project.projectPath === projectPath
-    && !!project.pinnedIssuePlans?.some(p => p.repository === repository && p.number === number));
+    return [...view.cachedProjects, ...view.cachedAllProjects].some(
+        (project) =>
+            project.projectPath === projectPath &&
+            !!project.pinnedIssuePlans?.some((p) => p.repository === repository && p.number === number),
+    );
 }
 
 export function stopRow(sessionId: string): void {
-  void confirmAndStopSession(sessionId);
+    void confirmAndStopSession(sessionId);
 }
 
 export function resumeWithConfig(sessionId: string): void {
-  const session = sessionMap.get(sessionId);
-  if (session) void openResumeDialog(session);
+    const session = sessionMap.get(sessionId);
+    if (session) void openResumeDialog(session);
 }
 
 /**
@@ -122,21 +133,21 @@ export function resumeWithConfig(sessionId: string): void {
  * is cleared.
  */
 export function toggleArchive(el: HTMLElement, rowId: string, sessionId: string, button: HTMLElement): void {
-  const session = sessionMap.get(sessionId);
-  if (!session) return;
-  if (session.archived) {
-    void archiveSessionRow(session, 0).then(() => loadProjects());
-    return;
-  }
-  celebrateFrom(button);
-  const onScreen = sessionOnScreen();
-  leave(el, rowId, async () => {
-    if (!await archiveSessionRow(session, 1)) return false;
-    offerArchiveUndo([session], [rowId], onScreen);
-    void pollActiveSessions();
-    void loadProjects();
-    return true;
-  });
+    const session = sessionMap.get(sessionId);
+    if (!session) return;
+    if (session.archived) {
+        void archiveSessionRow(session, 0).then(() => loadProjects());
+        return;
+    }
+    celebrateFrom(button);
+    const onScreen = sessionOnScreen();
+    leave(el, rowId, async () => {
+        if (!(await archiveSessionRow(session, 1))) return false;
+        offerArchiveUndo([session], [rowId], onScreen);
+        void pollActiveSessions();
+        void loadProjects();
+        return true;
+    });
 }
 
 /**
@@ -146,93 +157,102 @@ export function toggleArchive(el: HTMLElement, rowId: string, sessionId: string,
  * archived one. While a search is on the row stays: a search lists snoozed
  * sessions, so a slide-out would leave it collapsed and marked as leaving.
  */
-export function snoozeRow(el: HTMLElement, rowId: string, sessionId: string, moon: HTMLElement, until: Date | null): void {
-  const session = sessionMap.get(sessionId);
-  if (!session) return;
-  if (!until) {
-    wakeUp(moon);
-    void snoozeSessionRow(session, null).then(() => relayoutSessionList());
-    return;
-  }
-  const wait = doze(moon, el);
-  const save = async (): Promise<boolean> => {
-    await snoozeSessionRow(session, until.toISOString());
-    relayoutSessionList();
-    return true;
-  };
-  if (getState().view.searchMatchIds !== null) {
-    setTimeout(() => void save(), wait);
-    return;
-  }
-  setTimeout(() => leave(el, rowId, save), wait);
+export function snoozeRow(
+    el: HTMLElement,
+    rowId: string,
+    sessionId: string,
+    moon: HTMLElement,
+    until: Date | null,
+): void {
+    const session = sessionMap.get(sessionId);
+    if (!session) return;
+    if (!until) {
+        wakeUp(moon);
+        void snoozeSessionRow(session, null).then(() => relayoutSessionList());
+        return;
+    }
+    const wait = doze(moon, el);
+    const save = async (): Promise<boolean> => {
+        await snoozeSessionRow(session, until.toISOString());
+        relayoutSessionList();
+        return true;
+    };
+    if (getState().view.searchMatchIds !== null) {
+        setTimeout(() => void save(), wait);
+        return;
+    }
+    setTimeout(() => leave(el, rowId, save), wait);
 }
 
 /** Archive every unarchived session in one slug group, sliding the group out first. */
-export function archiveGroup(el: HTMLElement, groupId: string, sessionIds: readonly string[], button: HTMLElement): void {
-  if (isLeaving(groupId)) return;
-  const sessions = sessionIds
-    .map(id => sessionMap.get(id))
-    .filter((s): s is SessionRow => !!s && !s.archived);
-  if (!sessions.length) return;
+export function archiveGroup(
+    el: HTMLElement,
+    groupId: string,
+    sessionIds: readonly string[],
+    button: HTMLElement,
+): void {
+    if (isLeaving(groupId)) return;
+    const sessions = sessionIds.map((id) => sessionMap.get(id)).filter((s): s is SessionRow => !!s && !s.archived);
+    if (!sessions.length) return;
 
-  celebrateFrom(button);
-  const onScreen = sessionOnScreen();
-  leave(el, groupId, async () => {
-    let ok = true;
-    const archived: SessionRow[] = [];
-    for (const session of sessions) {
-      // One failure stops the sweep rather than silently skipping a session
-      // whose PTY is still running.
-      if (!await archiveSessionRow(session, 1)) {
-        ok = false;
-        break;
-      }
-      archived.push(session);
-    }
-    // A failed sweep brings the group back, so only the archived rows are undone.
-    offerArchiveUndo(archived, ok ? [groupId] : [], onScreen);
-    void pollActiveSessions();
-    void loadProjects();
-    return ok;
-  });
+    celebrateFrom(button);
+    const onScreen = sessionOnScreen();
+    leave(el, groupId, async () => {
+        let ok = true;
+        const archived: SessionRow[] = [];
+        for (const session of sessions) {
+            // One failure stops the sweep rather than silently skipping a session
+            // whose PTY is still running.
+            if (!(await archiveSessionRow(session, 1))) {
+                ok = false;
+                break;
+            }
+            archived.push(session);
+        }
+        // A failed sweep brings the group back, so only the archived rows are undone.
+        offerArchiveUndo(archived, ok ? [groupId] : [], onScreen);
+        void pollActiveSessions();
+        void loadProjects();
+        return ok;
+    });
 }
 
 // ── Folding ──
 
 export function toggleSlugGroup(groupId: string): void {
-  if (isLeaving(groupId)) return;
-  dispatch({ type: 'slugGroupToggled', id: groupId });
+    if (isLeaving(groupId)) return;
+    dispatch({type: 'slugGroupToggled', id: groupId});
 }
 
 /** "+ N more" inside a group: expanding the group is what reveals them. */
 export function expandSlugGroup(groupId: string): void {
-  dispatch({ type: 'slugGroupExpanded', id: groupId });
+    dispatch({type: 'slugGroupExpanded', id: groupId});
 }
 
 export function toggleOlder(): void {
-  dispatch({ type: 'olderToggled' });
+    dispatch({type: 'olderToggled'});
 }
 
 // ── Rename ──
 
 export function startRename(rowId: string): void {
-  dispatch({ type: 'renameStarted', rowId });
+    dispatch({type: 'renameStarted', rowId});
 }
 
 export function cancelRename(rowId: string): void {
-  dispatch({ type: 'renameEnded', rowId });
+    dispatch({type: 'renameEnded', rowId});
 }
 
 /** Save what was typed, as the name `renamedName` makes of it. */
 export async function finishRename(rowId: string, sessionId: string, typed: string): Promise<void> {
-  const session = sessionMap.get(sessionId);
-  if (!session) {
-    dispatch({ type: 'renameEnded', rowId });
-    return;
-  }
-  const name = renamedName(typed, session);
-  await window.api.renameSession(sessionId, name);
-  session.name = name;
-  dispatch({ type: 'sessionRenamed', sessionId, name });
-  dispatch({ type: 'renameEnded', rowId });
+    const session = sessionMap.get(sessionId);
+    if (!session) {
+        dispatch({type: 'renameEnded', rowId});
+        return;
+    }
+    const name = renamedName(typed, session);
+    await window.api.renameSession(sessionId, name);
+    session.name = name;
+    dispatch({type: 'sessionRenamed', sessionId, name});
+    dispatch({type: 'renameEnded', rowId});
 }

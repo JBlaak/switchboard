@@ -1,126 +1,149 @@
 {
-  "name": "switchboard",
-  "version": "2.11.5",
-  "private": true,
-  "description": "A desktop app for browsing, searching, and managing CLI coding sessions",
-  "author": "Joris Blaak <joris@movelab.studio>",
-  "main": "app/main.js",
-  "engines": {
-    "node": ">=18.20"
-  },
-  "scripts": {
-    "start": "npm run build && electron .",
-    "dev": "node scripts/build.mjs --watch & electron .",
-    "build": "node scripts/build.mjs",
-    "typecheck": "tsc --noEmit",
-    "pretest": "npm run build",
-    "test": "tsx --test test/*.test.ts",
-    "test:e2e": "npm run build && playwright test --config e2e/playwright.config.ts",
-    "electron": "electron .",
-    "electron-dev": "SWITCHBOARD_DATA_DIR=\"$HOME/.switchboard-dev\" electron .",
-    "generate-icons": "node scripts/generate-icons.js && node scripts/generate-dmg-background.js",
-    "dist": "npm run build && electron-builder",
-    "build:mac": "npm run build && electron-builder --mac && node scripts/postinstall.js",
-    "build:mac:arm64": "npm run build && electron-builder --mac --arm64 && node scripts/postinstall.js",
-    "release": "npm run build && electron-builder --publish always",
-    "postinstall": "node scripts/postinstall.js"
-  },
-  "dependencies": {
-    "@fontsource-variable/mulish": "^5.3.0",
-    "@fontsource-variable/nunito-sans": "^5.3.0",
-    "@jblaak/patch": "github:JBlaak/Patch#v0.8.0",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/addon-search": "^0.16.0",
-    "@xterm/addon-unicode-graphemes": "^0.4.0",
-    "@xterm/addon-web-links": "^0.12.0",
-    "@xterm/addon-webgl": "^0.19.0",
-    "@xterm/xterm": "^6.0.0",
-    "better-sqlite3": "^12.0.0",
-    "electron-log": "^5.3.0",
-    "highlight.js": "^11.12.0",
-    "node-pty": "^1.0.0",
-    "pixelmatch": "^8.0.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "ws": "^8.22.0"
-  },
-  "devDependencies": {
-    "@napi-rs/canvas": "^0.1.62",
-    "@playwright/test": "^1.63.0",
-    "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^26.5.0",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@types/ws": "^8.18.2",
-    "electron": "^41.0.0",
-    "electron-builder": "^26.0.0",
-    "electron-reloader": "^1.2.3",
-    "esbuild": "^0.27.3",
-    "sass": "^1.104.0",
-    "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
-  },
-  "build": {
-    "appId": "ai.doctly.switchboard",
-    "productName": "Switchboard",
-    "files": [
-      "app/**/*",
-      "build/icon.png",
-      "build/dock/*.png",
-      "node_modules/**/*"
-    ],
-    "asarUnpack": [
-      "node_modules/better-sqlite3/**",
-      "node_modules/node-pty/**"
-    ],
-    "publish": {
-      "provider": "github",
-      "owner": "JBlaak",
-      "repo": "switchboard"
+    "name": "switchboard",
+    "version": "2.11.5",
+    "private": true,
+    "description": "A desktop app for browsing, searching, and managing CLI coding sessions",
+    "author": "Joris Blaak <joris@movelab.studio>",
+    "main": "app/main.js",
+    "engines": {
+        "node": ">=18.20"
     },
-    "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
-      ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "notarize": true
+    "scripts": {
+        "start": "npm run build && electron .",
+        "dev": "node scripts/build.mjs --watch & electron .",
+        "build": "node scripts/build.mjs",
+        "typecheck": "tsc --noEmit",
+        "pretest": "npm run build",
+        "test": "tsx --test test/*.test.ts",
+        "test:e2e": "npm run build && playwright test --config e2e/playwright.config.ts",
+        "electron": "electron .",
+        "electron-dev": "SWITCHBOARD_DATA_DIR=\"$HOME/.switchboard-dev\" electron .",
+        "generate-icons": "node scripts/generate-icons.js && node scripts/generate-dmg-background.js",
+        "dist": "npm run build && electron-builder",
+        "build:mac": "npm run build && electron-builder --mac && node scripts/postinstall.js",
+        "build:mac:arm64": "npm run build && electron-builder --mac --arm64 && node scripts/postinstall.js",
+        "release": "npm run build && electron-builder --publish always",
+        "postinstall": "node scripts/postinstall.js",
+        "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,scss,md,html,yml}\"",
+        "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,scss,md,html,yml}\"",
+        "lint": "eslint -c ./eslint.json \"./{src,test,e2e}/**/*.{ts,tsx,js,mjs}\"",
+        "lint:fix": "eslint -c ./eslint.json \"./{src,test,e2e}/**/*.{ts,tsx,js,mjs}\" --fix"
     },
-    "dmg": {
-      "background": "build/dmg-background.png",
-      "iconSize": 100,
-      "window": {
-        "width": 660,
-        "height": 400
-      },
-      "contents": [
-        {
-          "x": 170,
-          "y": 170
+    "dependencies": {
+        "@fontsource-variable/mulish": "^5.3.0",
+        "@fontsource-variable/nunito-sans": "^5.3.0",
+        "@jblaak/patch": "github:JBlaak/Patch#v0.8.0",
+        "@xterm/addon-fit": "^0.11.0",
+        "@xterm/addon-search": "^0.16.0",
+        "@xterm/addon-unicode-graphemes": "^0.4.0",
+        "@xterm/addon-web-links": "^0.12.0",
+        "@xterm/addon-webgl": "^0.19.0",
+        "@xterm/xterm": "^6.0.0",
+        "better-sqlite3": "^12.0.0",
+        "electron-log": "^5.3.0",
+        "highlight.js": "^11.12.0",
+        "node-pty": "^1.0.0",
+        "pixelmatch": "^8.0.0",
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1",
+        "ws": "^8.22.0"
+    },
+    "devDependencies": {
+        "@napi-rs/canvas": "^0.1.62",
+        "@playwright/test": "^1.63.0",
+        "@types/better-sqlite3": "^9.6.0",
+        "@types/node": "^26.5.0",
+        "@types/react": "^19.3.0",
+        "@types/react-dom": "^19.3.0",
+        "@types/ws": "^8.18.2",
+        "@typescript-eslint/eslint-plugin": "^6.21.0",
+        "@typescript-eslint/parser": "^6.21.0",
+        "electron": "^41.0.0",
+        "electron-builder": "^26.0.0",
+        "electron-reloader": "^1.2.3",
+        "esbuild": "^0.27.3",
+        "eslint": "^8.57.1",
+        "eslint-plugin-react": "^7.37.5",
+        "prettier": "^3.9.10",
+        "sass": "^1.104.0",
+        "tsx": "^4.23.13",
+        "typescript": "^7.0.2"
+    },
+    "build": {
+        "appId": "ai.doctly.switchboard",
+        "productName": "Switchboard",
+        "files": [
+            "app/**/*",
+            "build/icon.png",
+            "build/dock/*.png",
+            "node_modules/**/*"
+        ],
+        "asarUnpack": [
+            "node_modules/better-sqlite3/**",
+            "node_modules/node-pty/**"
+        ],
+        "publish": {
+            "provider": "github",
+            "owner": "JBlaak",
+            "repo": "switchboard"
         },
-        {
-          "x": 490,
-          "y": 170,
-          "type": "link",
-          "path": "/Applications"
+        "mac": {
+            "target": [
+                {
+                    "target": "dmg",
+                    "arch": [
+                        "arm64",
+                        "x64"
+                    ]
+                },
+                {
+                    "target": "zip",
+                    "arch": [
+                        "arm64",
+                        "x64"
+                    ]
+                }
+            ],
+            "artifactName": "${productName}-${version}-${arch}.${ext}",
+            "entitlements": "build/entitlements.mac.plist",
+            "entitlementsInherit": "build/entitlements.mac.plist",
+            "hardenedRuntime": true,
+            "gatekeeperAssess": false,
+            "notarize": true
+        },
+        "dmg": {
+            "background": "build/dmg-background.png",
+            "iconSize": 100,
+            "window": {
+                "width": 660,
+                "height": 400
+            },
+            "contents": [
+                {
+                    "x": 170,
+                    "y": 170
+                },
+                {
+                    "x": 490,
+                    "y": 170,
+                    "type": "link",
+                    "path": "/Applications"
+                }
+            ]
         }
-      ]
+    },
+    "overrides": {
+        "@typescript-eslint/typescript-estree": {
+            "typescript": "5.3.3"
+        },
+        "@typescript-eslint/type-utils": {
+            "typescript": "5.3.3"
+        },
+        "@typescript-eslint/utils": {
+            "typescript": "5.3.3"
+        },
+        "ts-api-utils": {
+            "typescript": "5.3.3"
+        }
     }
-  }
 }

@@ -4,8 +4,8 @@
  * Both take the session id as of the click, which the card reads off its
  * terminal slot: a re-key moves the slot, and the card with it, to the new id.
  */
-import { openSession } from '../../features/sessions/session-actions';
-import { openSessions, sessionMap } from '../../state/session-store';
+import {openSession} from '../../features/sessions/session-actions';
+import {openSessions, sessionMap} from '../../state/session-store';
 
 /**
  * "Retry now".
@@ -15,13 +15,13 @@ import { openSessions, sessionMap } from '../../state/session-store';
  * back to Stopped — the only way back is a fresh open.
  */
 export async function retryRemote(sessionId: string): Promise<void> {
-  const entry = openSessions.get(sessionId);
-  if (entry && !entry.closed) {
-    const result = await window.api.reconnectRemote(sessionId).catch(() => null);
-    if (result?.ok) return;
-  }
-  const session = sessionMap.get(sessionId) || entry?.session;
-  if (session) void openSession(session);
+    const entry = openSessions.get(sessionId);
+    if (entry && !entry.closed) {
+        const result = await window.api.reconnectRemote(sessionId).catch(() => null);
+        if (result?.ok) return;
+    }
+    const session = sessionMap.get(sessionId) || entry?.session;
+    if (session) void openSession(session);
 }
 
 /**
@@ -31,5 +31,5 @@ export async function retryRemote(sessionId: string): Promise<void> {
  * to confirm — it only stops Switchboard dialling.
  */
 export function stopTrying(sessionId: string): void {
-  void window.api.stopSession(sessionId);
+    void window.api.stopSession(sessionId);
 }

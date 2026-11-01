@@ -10,13 +10,13 @@ export const WHISPER_BINARY = 'whisper-cli';
 
 /** Apple silicon's Homebrew, Intel's, then wherever PATH says. */
 export function whisperCandidates(pathEnv: string | undefined): string[] {
-  const dirs = ['/opt/homebrew/bin', '/usr/local/bin', ...(pathEnv ?? '').split(':').filter(dir => dir !== '')];
-  return [...new Set(dirs)].map(dir => `${dir.replace(/\/+$/, '')}/${WHISPER_BINARY}`);
+    const dirs = ['/opt/homebrew/bin', '/usr/local/bin', ...(pathEnv ?? '').split(':').filter((dir) => dir !== '')];
+    return [...new Set(dirs)].map((dir) => `${dir.replace(/\/+$/, '')}/${WHISPER_BINARY}`);
 }
 
 /** Whisper's prompt: the vocabulary, as text it reads as having come before. */
 export function whisperPrompt(vocabulary: readonly string[]): string {
-  return vocabulary.join(', ');
+    return vocabulary.join(', ');
 }
 
 /**
@@ -24,15 +24,18 @@ export function whisperPrompt(vocabulary: readonly string[]): string {
  * defaults; `-nt` and `-np` leave only the transcript on stdout, and `-l auto`
  * lets Whisper tell Dutch from English per recording.
  */
-export function whisperArgs(request: { model: string; wav: string; prompt: string }): string[] {
-  return [
-    '-m', request.model,
-    '-f', request.wav,
-    '-l', 'auto',
-    '-nt',
-    '-np',
-    ...(request.prompt ? ['--prompt', request.prompt] : []),
-  ];
+export function whisperArgs(request: {model: string; wav: string; prompt: string}): string[] {
+    return [
+        '-m',
+        request.model,
+        '-f',
+        request.wav,
+        '-l',
+        'auto',
+        '-nt',
+        '-np',
+        ...(request.prompt ? ['--prompt', request.prompt] : []),
+    ];
 }
 
 /**
@@ -43,16 +46,18 @@ export function whisperArgs(request: { model: string; wav: string; prompt: strin
  * dictation, so they are taken out and what is left decides.
  */
 export function readTranscript(stdout: string): string {
-  return stdout
-    .split('\n')
-    .map(line => line
-      .replace(/\[[^\]]*\]/g, ' ')
-      .replace(/^\s*(\([^)]*\)|\*[^*]*\*)\s*$/, ' ')
-      .trim())
-    .filter(line => line !== '')
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+    return stdout
+        .split('\n')
+        .map((line) =>
+            line
+                .replace(/\[[^\]]*\]/g, ' ')
+                .replace(/^\s*(\([^)]*\)|\*[^*]*\*)\s*$/, ' ')
+                .trim(),
+        )
+        .filter((line) => line !== '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 /**
@@ -60,7 +65,10 @@ export function readTranscript(stdout: string): string {
  * its whole usage text, so the error line is looked for rather than the last.
  */
 export function whisperFailure(stderr: string, fallback: string): string {
-  const lines = stderr.split('\n').map(line => line.trim()).filter(line => line !== '');
-  const error = lines.find(line => /^error\b/i.test(line));
-  return (error ?? fallback).replace(/^error:\s*/i, '');
+    const lines = stderr
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line !== '');
+    const error = lines.find((line) => /^error\b/i.test(line));
+    return (error ?? fallback).replace(/^error:\s*/i, '');
 }

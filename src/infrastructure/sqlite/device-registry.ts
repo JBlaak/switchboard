@@ -6,74 +6,74 @@
  * handshake could match.
  */
 import type Database from 'better-sqlite3';
-import type { DeviceRegistry, EnrolledDevice } from '../../application/ports/phone-access';
+import type {DeviceRegistry, EnrolledDevice} from '../../application/ports/phone-access';
 
 interface Row {
-  id: string;
-  name: string;
-  fingerprint: string;
-  paired_at: number;
-  last_seen_at: number | null;
+    id: string;
+    name: string;
+    fingerprint: string;
+    paired_at: number;
+    last_seen_at: number | null;
 }
 
 function toDevice(row: Row): EnrolledDevice {
-  return {
-    id: row.id,
-    name: row.name,
-    fingerprint: row.fingerprint,
-    pairedAt: row.paired_at,
-    lastSeenAt: row.last_seen_at,
-  };
+    return {
+        id: row.id,
+        name: row.name,
+        fingerprint: row.fingerprint,
+        pairedAt: row.paired_at,
+        lastSeenAt: row.last_seen_at,
+    };
 }
 
 export class SqliteDeviceRegistry implements DeviceRegistry {
-  readonly #list;
-  readonly #byFingerprint;
-  readonly #insert;
-  readonly #remove;
-  readonly #touch;
-  readonly #clear;
+    private readonly listStatement;
+    private readonly byFingerprintStatement;
+    private readonly insertStatement;
+    private readonly removeStatement;
+    private readonly touchStatement;
+    private readonly clearStatement;
 
-  constructor(db: Database.Database) {
-    this.#list = db.prepare<[], Row>('SELECT * FROM phone_devices ORDER BY paired_at, id');
-    this.#byFingerprint = db.prepare<[string], Row>('SELECT * FROM phone_devices WHERE fingerprint = ?');
-    this.#insert = db.prepare<[Row]>(`
+    constructor(db: Database.Database) {
+        this.listStatement = db.prepare<[], Row>('SELECT * FROM phone_devices ORDER BY paired_at, id');
+        this.byFingerprintStatement = db.prepare<[string], Row>('SELECT * FROM phone_devices WHERE fingerprint = ?');
+        this.insertStatement = db.prepare<[Row]>(`
       INSERT INTO phone_devices (id, name, fingerprint, paired_at, last_seen_at)
       VALUES (@id, @name, @fingerprint, @paired_at, @last_seen_at)
     `);
-    this.#remove = db.prepare<[string]>('DELETE FROM phone_devices WHERE id = ?');
-    this.#touch = db.prepare<[number, string]>('UPDATE phone_devices SET last_seen_at = ? WHERE id = ?');
-    this.#clear = db.prepare('DELETE FROM phone_devices');
-  }
+        this.removeStatement = db.prepare<[string]>('DELETE FROM phone_devices WHERE id = ?');
+        this.touchStatement = db.prepare<[number, string]>('UPDATE phone_devices SET last_seen_at = ? WHERE id = ?');
+        this.clearStatement = db.prepare('DELETE FROM phone_devices');
+    }
 
-  list(): EnrolledDevice[] {
-    return this.#list.all().map(toDevice);
-  }
+    public list(): EnrolledDevice[] {
+        return this.listStatement.all().map(toDevice);
+    }
 
-  findByFingerprint(fingerprint: string): EnrolledDevice | null {
-    const row = this.#byFingerprint.get(fingerprint);
-    return row ? toDevice(row) : null;
-  }
+    public findByFingerprint(fingerprint: string): EnrolledDevice | null {
+        const row = this.byFingerprintStatement.get(fingerprint);
+        return row ? toDevice(row) : null;
+    }
 
-  add(device: EnrolledDevice): void {
-    this.#insert.run({
-      id: device.id,
-      name: device.name,
-      fingerprint: device.fingerprint,
-      paired_at: device.pairedAt,
-      last_seen_at: device.lastSeenAt,
-    });
-  }
+    public add(device: EnrolledDevice): void {
+        this.insertStatement.run({
+            id: device.id,
+            name: device.name,
+            fingerprint: device.fingerprint,
+            paired_at: device.pairedAt,
+            last_seen_at: device.lastSeenAt,
+        });
+    }
 
-  remove(id: string): void {
-    this.#remove.run(id);
-  }
+    public remove(id: string): void {
+        this.removeStatement.run(id);
+    }
 
-  touch(id: string, at: number): void {
-    this.#touch.run(at, id);
-  }
+    public touch(id: string, at: number): void {
+        this.touchStatement.run(at, id);
+    }
 
-  clear(): void {
-    this.#clear.run();
-  }
+    public clear(): void {
+        this.clearStatement.run();
+    }
 }

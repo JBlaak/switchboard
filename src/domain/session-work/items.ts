@@ -8,56 +8,56 @@
  * has these three things in flight", so this is where they are put together —
  * and where one piece of work that shows up in two sources becomes one item.
  */
-import type { SessionPullRequest } from '../session/session';
-import { issueFromBranch, standaloneIssues } from './issues';
-import { locationKey } from './locations';
-import type { Activity, DiffSource, FileChange, IssueRef, PullRequestStatus, WorkItem, WorkLocation } from './model';
-import { needsYou } from './status';
+import type {SessionPullRequest} from '../session/session';
+import {issueFromBranch, standaloneIssues} from './issues';
+import {locationKey} from './locations';
+import type {Activity, DiffSource, FileChange, IssueRef, PullRequestStatus, WorkItem, WorkLocation} from './model';
+import {needsYou} from './status';
 
 /** What git says about one branch the session worked on that still exists locally. */
 export interface BranchFacts {
-  worktree: string;
-  branch: string;
-  /** The repository's default branch: never an item of its own (D5). */
-  isDefault: boolean;
-  /** Commits on the branch that `base` does not have. */
-  ahead: number;
-  /** What the branch's diff is taken against, e.g. `origin/main`. */
-  base: string;
-  /** Lines the branch adds and removes since its merge-base with `base`. */
-  additions: number;
-  deletions: number;
-  /** Has an upstream, or exists on origin. */
-  pushed: boolean;
+    worktree: string;
+    branch: string;
+    /** The repository's default branch: never an item of its own (D5). */
+    isDefault: boolean;
+    /** Commits on the branch that `base` does not have. */
+    ahead: number;
+    /** What the branch's diff is taken against, e.g. `origin/main`. */
+    base: string;
+    /** Lines the branch adds and removes since its merge-base with `base`. */
+    additions: number;
+    deletions: number;
+    /** Has an upstream, or exists on origin. */
+    pushed: boolean;
 }
 
 /** What `git status` says about one worktree the session worked in. */
 export interface WorktreeChanges {
-  worktree: string;
-  /** The branch checked out there now. */
-  branch: string;
-  files: FileChange[];
-  /** Lines the uncommitted changes add and remove, untracked files included. */
-  additions: number;
-  deletions: number;
+    worktree: string;
+    /** The branch checked out there now. */
+    branch: string;
+    files: FileChange[];
+    /** Lines the uncommitted changes add and remove, untracked files included. */
+    additions: number;
+    deletions: number;
 }
 
 /** Everything {@link deriveWorkItems} works from. */
 export interface WorkFacts {
-  /** Where the transcripts were written from (see `workLocations`). */
-  locations: readonly WorkLocation[];
-  /** From the transcript's `pr-link` lines, chronological. */
-  pullRequests: readonly SessionPullRequest[];
-  branches: readonly BranchFacts[];
-  changes: readonly WorktreeChanges[];
-  /** What `gh` said about each PR, matched by URL; null when `gh` is missing or signed out (D9). */
-  github: readonly PullRequestStatus[] | null;
-  /** Issues the conversation mentions (see `issueMentionsInTranscript`). */
-  issueMentions: readonly IssueRef[];
-  /** `owner/repo` of the session's repository, for the issue a branch is named after; '' when unknown. */
-  repository: string;
-  /** Each item's current action, by {@link workItemKey}. */
-  activities?: ReadonlyMap<string, Activity>;
+    /** Where the transcripts were written from (see `workLocations`). */
+    locations: readonly WorkLocation[];
+    /** From the transcript's `pr-link` lines, chronological. */
+    pullRequests: readonly SessionPullRequest[];
+    branches: readonly BranchFacts[];
+    changes: readonly WorktreeChanges[];
+    /** What `gh` said about each PR, matched by URL; null when `gh` is missing or signed out (D9). */
+    github: readonly PullRequestStatus[] | null;
+    /** Issues the conversation mentions (see `issueMentionsInTranscript`). */
+    issueMentions: readonly IssueRef[];
+    /** `owner/repo` of the session's repository, for the issue a branch is named after; '' when unknown. */
+    repository: string;
+    /** Each item's current action, by {@link workItemKey}. */
+    activities?: ReadonlyMap<string, Activity>;
 }
 
 /**
@@ -67,17 +67,21 @@ export interface WorkFacts {
  * a branch or a dirty worktree is where it lives.
  */
 export function workItemKey(item: WorkItem): string {
-  switch (item.kind) {
-    case 'pr': return 'pr:' + item.pr.url;
-    case 'branch': return 'branch:' + locationKey(item.location.worktree, item.location.branch);
-    case 'dirty': return 'dirty:' + locationKey(item.location.worktree, item.location.branch);
-    case 'issue': return 'issue:' + item.issue.repository + '#' + item.issue.number;
-  }
+    switch (item.kind) {
+        case 'pr':
+            return 'pr:' + item.pr.url;
+        case 'branch':
+            return 'branch:' + locationKey(item.location.worktree, item.location.branch);
+        case 'dirty':
+            return 'dirty:' + locationKey(item.location.worktree, item.location.branch);
+        case 'issue':
+            return 'issue:' + item.issue.repository + '#' + item.issue.number;
+    }
 }
 
 /** Merged and closed PRs: collapsed under Done (D5). */
 export function isDone(item: WorkItem): boolean {
-  return item.kind === 'pr' && (item.pr.state === 'merged' || item.pr.state === 'closed');
+    return item.kind === 'pr' && (item.pr.state === 'merged' || item.pr.state === 'closed');
 }
 
 /**
@@ -99,141 +103,144 @@ export function isDone(item: WorkItem): boolean {
  */
 /** True when both repositories are known and differ; GitHub names are case-insensitive. */
 function isForeign(repository: string, sessionRepository: string): boolean {
-  return !!repository && !!sessionRepository && repository.toLowerCase() !== sessionRepository.toLowerCase();
+    return !!repository && !!sessionRepository && repository.toLowerCase() !== sessionRepository.toLowerCase();
 }
 
 export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
-  const activityOf = (key: string) => facts.activities?.get(key) ?? null;
-  const locations = new Map<string, WorkLocation>();
-  for (const location of facts.locations) {
-    const key = locationKey(location.worktree, location.branch);
-    if (!locations.has(key)) locations.set(key, location);
-  }
-
-  // PRs, one per URL, with whatever gh added. A link into another repository
-  // is kept only when gh knows the PR: a transcript can carry a `pr-link` for
-  // a PR some tool printed, even a placeholder like owner/repo#12.
-  const github = new Map((facts.github ?? []).map((status) => [status.url, status]));
-  const pullRequests = new Map<string, { pr: PullRequestStatus; order: number; otherRepository: boolean }>();
-  facts.pullRequests.forEach((link, order) => {
-    if (pullRequests.has(link.url)) return;
-    const known = github.get(link.url);
-    const otherRepository = isForeign(link.repository, facts.repository);
-    if (otherRepository && !known) return;
-    const pr: PullRequestStatus = known
-      ? { ...known, number: link.number, url: link.url, repository: known.repository || link.repository }
-      : { number: link.number, url: link.url, repository: link.repository, closes: [] };
-    pullRequests.set(link.url, { pr, order, otherRepository });
-  });
-
-  // Local branches the session touched, and which PR (if any) each one heads.
-  const branchFacts = new Map<string, BranchFacts>();
-  for (const branch of facts.branches) {
-    const key = locationKey(branch.worktree, branch.branch);
-    if (locations.has(key) && !branchFacts.has(key)) branchFacts.set(key, branch);
-  }
-  // A PR in another repository heads none of this repository's branches, whatever its name.
-  const prByHead = new Map<string, PullRequestStatus>();
-  for (const { pr, otherRepository } of pullRequests.values()) {
-    if (!otherRepository && pr.headRef && !prByHead.has(pr.headRef)) prByHead.set(pr.headRef, pr);
-  }
-
-  const prLocation = new Map<string, { location: WorkLocation; base: string }>();
-  const branchItems: WorkItem[] = [];
-  for (const [key, branch] of branchFacts) {
-    if (branch.isDefault) continue;
-    const location = locations.get(key)!;
-    const pr = prByHead.get(branch.branch);
-    if (pr) {
-      // The main conversation's checkout of a branch beats a subagent's copy.
-      const current = prLocation.get(pr.url);
-      if (!current || (current.location.fromSubagent && !location.fromSubagent)) {
-        prLocation.set(pr.url, { location, base: branch.base });
-      }
-      continue;
+    const activityOf = (key: string) => facts.activities?.get(key) ?? null;
+    const locations = new Map<string, WorkLocation>();
+    for (const location of facts.locations) {
+        const key = locationKey(location.worktree, location.branch);
+        if (!locations.has(key)) locations.set(key, location);
     }
-    if (branch.ahead <= 0) continue;
-    const item: WorkItem = {
-      kind: 'branch',
-      location,
-      ahead: branch.ahead,
-      diff: { kind: 'local', worktree: branch.worktree, base: branch.base, head: branch.branch },
-      activity: null,
-      additions: branch.additions,
-      deletions: branch.deletions,
-      pushed: branch.pushed,
-    };
-    item.activity = activityOf(workItemKey(item));
-    branchItems.push(item);
-  }
 
-  const openPrs: Array<{ item: WorkItem; order: number; needsYou: boolean }> = [];
-  const donePrs: Array<{ item: WorkItem; order: number }> = [];
-  for (const { pr, order, otherRepository } of pullRequests.values()) {
-    const local = prLocation.get(pr.url) ?? null;
-    const diff: DiffSource = local
-      ? {
-        kind: 'local',
-        worktree: local.location.worktree,
-        base: pr.baseRef ? 'origin/' + pr.baseRef : local.base,
-        head: local.location.branch,
-      }
-      : { kind: 'pull-request', repository: pr.repository, number: pr.number };
-    const item: WorkItem = {
-      kind: 'pr', pr, location: local?.location ?? null, diff, activity: null,
-      ...(otherRepository ? { otherRepository: true as const } : {}),
-    };
-    item.activity = activityOf(workItemKey(item));
-    if (isDone(item)) donePrs.push({ item, order });
-    else openPrs.push({ item, order, needsYou: needsYou(pr, item.activity) });
-  }
-  openPrs.sort((a, b) => Number(b.needsYou) - Number(a.needsYou) || b.order - a.order);
-  donePrs.sort((a, b) => b.order - a.order);
+    // PRs, one per URL, with whatever gh added. A link into another repository
+    // is kept only when gh knows the PR: a transcript can carry a `pr-link` for
+    // a PR some tool printed, even a placeholder like owner/repo#12.
+    const github = new Map((facts.github ?? []).map((status) => [status.url, status]));
+    const pullRequests = new Map<string, {pr: PullRequestStatus; order: number; otherRepository: boolean}>();
+    facts.pullRequests.forEach((link, order) => {
+        if (pullRequests.has(link.url)) return;
+        const known = github.get(link.url);
+        const otherRepository = isForeign(link.repository, facts.repository);
+        if (otherRepository && !known) return;
+        const pr: PullRequestStatus = known
+            ? {...known, number: link.number, url: link.url, repository: known.repository || link.repository}
+            : {number: link.number, url: link.url, repository: link.repository, closes: []};
+        pullRequests.set(link.url, {pr, order, otherRepository});
+    });
 
-  // Uncommitted changes, once per worktree the session was in.
-  const touchedWorktrees = new Map<string, boolean>();
-  for (const location of locations.values()) {
-    const onlySubagents = touchedWorktrees.get(location.worktree) ?? true;
-    touchedWorktrees.set(location.worktree, onlySubagents && location.fromSubagent);
-  }
-  const dirtyItems: WorkItem[] = [];
-  const seenWorktrees = new Set<string>();
-  for (const change of facts.changes) {
-    if (change.files.length === 0 || seenWorktrees.has(change.worktree)) continue;
-    const fromSubagent = touchedWorktrees.get(change.worktree);
-    if (fromSubagent === undefined) continue;
-    seenWorktrees.add(change.worktree);
-    const known = locations.get(locationKey(change.worktree, change.branch));
-    const item: WorkItem = {
-      kind: 'dirty',
-      location: known ?? { worktree: change.worktree, branch: change.branch, fromSubagent },
-      files: change.files,
-      activity: null,
-      additions: change.additions,
-      deletions: change.deletions,
-    };
-    item.activity = activityOf(workItemKey(item));
-    dirtyItems.push(item);
-  }
+    // Local branches the session touched, and which PR (if any) each one heads.
+    const branchFacts = new Map<string, BranchFacts>();
+    for (const branch of facts.branches) {
+        const key = locationKey(branch.worktree, branch.branch);
+        if (locations.has(key) && !branchFacts.has(key)) branchFacts.set(key, branch);
+    }
+    // A PR in another repository heads none of this repository's branches, whatever its name.
+    const prByHead = new Map<string, PullRequestStatus>();
+    for (const {pr, otherRepository} of pullRequests.values()) {
+        if (!otherRepository && pr.headRef && !prByHead.has(pr.headRef)) prByHead.set(pr.headRef, pr);
+    }
 
-  // Issues no PR closes, and that are not the session's own PRs by another name.
-  const claimed: IssueRef[] = [];
-  for (const { pr } of pullRequests.values()) {
-    claimed.push(...pr.closes, { repository: pr.repository, number: pr.number });
-  }
-  const mentioned = [...facts.issueMentions];
-  for (const location of locations.values()) {
-    const issue = issueFromBranch(location.branch, facts.repository);
-    if (issue) mentioned.push(issue);
-  }
-  const issueItems: WorkItem[] = standaloneIssues(mentioned, claimed)
-    .map((issue) => ({ kind: 'issue', issue }));
+    const prLocation = new Map<string, {location: WorkLocation; base: string}>();
+    const branchItems: WorkItem[] = [];
+    for (const [key, branch] of branchFacts) {
+        if (branch.isDefault) continue;
+        const location = locations.get(key)!;
+        const pr = prByHead.get(branch.branch);
+        if (pr) {
+            // The main conversation's checkout of a branch beats a subagent's copy.
+            const current = prLocation.get(pr.url);
+            if (!current || (current.location.fromSubagent && !location.fromSubagent)) {
+                prLocation.set(pr.url, {location, base: branch.base});
+            }
+            continue;
+        }
+        if (branch.ahead <= 0) continue;
+        const item: WorkItem = {
+            kind: 'branch',
+            location,
+            ahead: branch.ahead,
+            diff: {kind: 'local', worktree: branch.worktree, base: branch.base, head: branch.branch},
+            activity: null,
+            additions: branch.additions,
+            deletions: branch.deletions,
+            pushed: branch.pushed,
+        };
+        item.activity = activityOf(workItemKey(item));
+        branchItems.push(item);
+    }
 
-  return [
-    ...openPrs.map((entry) => entry.item),
-    ...branchItems,
-    ...dirtyItems,
-    ...issueItems,
-    ...donePrs.map((entry) => entry.item),
-  ];
+    const openPrs: Array<{item: WorkItem; order: number; needsYou: boolean}> = [];
+    const donePrs: Array<{item: WorkItem; order: number}> = [];
+    for (const {pr, order, otherRepository} of pullRequests.values()) {
+        const local = prLocation.get(pr.url) ?? null;
+        const diff: DiffSource = local
+            ? {
+                  kind: 'local',
+                  worktree: local.location.worktree,
+                  base: pr.baseRef ? 'origin/' + pr.baseRef : local.base,
+                  head: local.location.branch,
+              }
+            : {kind: 'pull-request', repository: pr.repository, number: pr.number};
+        const item: WorkItem = {
+            kind: 'pr',
+            pr,
+            location: local?.location ?? null,
+            diff,
+            activity: null,
+            ...(otherRepository ? {otherRepository: true as const} : {}),
+        };
+        item.activity = activityOf(workItemKey(item));
+        if (isDone(item)) donePrs.push({item, order});
+        else openPrs.push({item, order, needsYou: needsYou(pr, item.activity)});
+    }
+    openPrs.sort((a, b) => Number(b.needsYou) - Number(a.needsYou) || b.order - a.order);
+    donePrs.sort((a, b) => b.order - a.order);
+
+    // Uncommitted changes, once per worktree the session was in.
+    const touchedWorktrees = new Map<string, boolean>();
+    for (const location of locations.values()) {
+        const onlySubagents = touchedWorktrees.get(location.worktree) ?? true;
+        touchedWorktrees.set(location.worktree, onlySubagents && location.fromSubagent);
+    }
+    const dirtyItems: WorkItem[] = [];
+    const seenWorktrees = new Set<string>();
+    for (const change of facts.changes) {
+        if (change.files.length === 0 || seenWorktrees.has(change.worktree)) continue;
+        const fromSubagent = touchedWorktrees.get(change.worktree);
+        if (fromSubagent === undefined) continue;
+        seenWorktrees.add(change.worktree);
+        const known = locations.get(locationKey(change.worktree, change.branch));
+        const item: WorkItem = {
+            kind: 'dirty',
+            location: known ?? {worktree: change.worktree, branch: change.branch, fromSubagent},
+            files: change.files,
+            activity: null,
+            additions: change.additions,
+            deletions: change.deletions,
+        };
+        item.activity = activityOf(workItemKey(item));
+        dirtyItems.push(item);
+    }
+
+    // Issues no PR closes, and that are not the session's own PRs by another name.
+    const claimed: IssueRef[] = [];
+    for (const {pr} of pullRequests.values()) {
+        claimed.push(...pr.closes, {repository: pr.repository, number: pr.number});
+    }
+    const mentioned = [...facts.issueMentions];
+    for (const location of locations.values()) {
+        const issue = issueFromBranch(location.branch, facts.repository);
+        if (issue) mentioned.push(issue);
+    }
+    const issueItems: WorkItem[] = standaloneIssues(mentioned, claimed).map((issue) => ({kind: 'issue', issue}));
+
+    return [
+        ...openPrs.map((entry) => entry.item),
+        ...branchItems,
+        ...dirtyItems,
+        ...issueItems,
+        ...donePrs.map((entry) => entry.item),
+    ];
 }

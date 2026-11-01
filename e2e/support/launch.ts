@@ -25,93 +25,94 @@
  * - **The shell.** SHELL is pinned to zsh so the profile that puts the fakes
  *   on PATH is the one that runs, whatever the host's login shell is.
  */
-import { _electron as electron } from '@playwright/test';
+import {_electron as electron} from '@playwright/test';
 import path from 'node:path';
-import type { ElectronApplication, Page } from '@playwright/test';
-import { FIXTURE_NOW } from './fixture-home';
-import { DEFAULT_STUBS, installHostStubs } from './main-process';
-import { stubNativeDialogs } from './native-dialogs';
-import type { FixtureHome } from './fixture-home';
-import type { HostStubs } from './main-process';
+import type {ElectronApplication, Page} from '@playwright/test';
+import {FIXTURE_NOW} from './fixture-home';
+import {DEFAULT_STUBS, installHostStubs} from './main-process';
+import {stubNativeDialogs} from './native-dialogs';
+import type {FixtureHome} from './fixture-home';
+import type {HostStubs} from './main-process';
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
 
 /** The renderer's viewport. Matches HARNESS_SETTINGS.windowBounds. */
-export const WINDOW_SIZE = { width: 1280, height: 800 } as const;
+export const WINDOW_SIZE = {width: 1280, height: 800} as const;
 
 /** Variables from the runner's environment that must not reach the app. */
 const STRIPPED_ENV = [
-  // Electron-as-Node would start Node instead of the app.
-  'ELECTRON_RUN_AS_NODE',
-  // zsh reads its startup files from ZDOTDIR when set, bypassing the fixture's.
-  'ZDOTDIR',
-  // The suite's own shell might be bash or fish; the fakes' PATH is set up for zsh.
-  'BASH_ENV', 'ENV',
+    // Electron-as-Node would start Node instead of the app.
+    'ELECTRON_RUN_AS_NODE',
+    // zsh reads its startup files from ZDOTDIR when set, bypassing the fixture's.
+    'ZDOTDIR',
+    // The suite's own shell might be bash or fish; the fakes' PATH is set up for zsh.
+    'BASH_ENV',
+    'ENV',
 ];
 
 export interface LaunchedApp {
-  app: ElectronApplication;
-  page: Page;
-  close(): Promise<void>;
+    app: ElectronApplication;
+    page: Page;
+    close(): Promise<void>;
 }
 
 export interface LaunchOptions {
-  /** Fake timers on the renderer's clock instead of only a frozen `Date`. */
-  fakeTimers?: boolean;
+    /** Fake timers on the renderer's clock instead of only a frozen `Date`. */
+    fakeTimers?: boolean;
 }
 
 export async function launchApp(
-  home: FixtureHome,
-  stubs: Partial<HostStubs> = {},
-  { fakeTimers = false }: LaunchOptions = {},
+    home: FixtureHome,
+    stubs: Partial<HostStubs> = {},
+    {fakeTimers = false}: LaunchOptions = {},
 ): Promise<LaunchedApp> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && !STRIPPED_ENV.includes(key)) env[key] = value;
-  }
-  Object.assign(env, {
-    HOME: home.home,
-    SWITCHBOARD_DATA_DIR: home.dataDir,
-    CLAUDE_CONFIG_DIR: path.join(home.home, '.claude'),
-    SHELL: '/bin/zsh',
-    // Lets the window keep its fixed size on a display smaller than it.
-    SWITCHBOARD_E2E: '1',
-    ...(process.env.SB_E2E_HEADED === '1' ? {} : { SWITCHBOARD_E2E_HIDDEN: '1' }),
-    TZ: 'UTC',
-    LANG: 'en_US.UTF-8',
-    LC_ALL: 'en_US.UTF-8',
-  });
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+        if (value !== undefined && !STRIPPED_ENV.includes(key)) env[key] = value;
+    }
+    Object.assign(env, {
+        HOME: home.home,
+        SWITCHBOARD_DATA_DIR: home.dataDir,
+        CLAUDE_CONFIG_DIR: path.join(home.home, '.claude'),
+        SHELL: '/bin/zsh',
+        // Lets the window keep its fixed size on a display smaller than it.
+        SWITCHBOARD_E2E: '1',
+        ...(process.env.SB_E2E_HEADED === '1' ? {} : {SWITCHBOARD_E2E_HIDDEN: '1'}),
+        TZ: 'UTC',
+        LANG: 'en_US.UTF-8',
+        LC_ALL: 'en_US.UTF-8',
+    });
 
-  const app = await electron.launch({
-    args: [
-      '--force-device-scale-factor=1',
-      '--force-prefers-reduced-motion',
-      path.join(REPO_ROOT, 'app', 'main.js'),
-    ],
-    cwd: REPO_ROOT,
-    env,
-  });
+    const app = await electron.launch({
+        args: [
+            '--force-device-scale-factor=1',
+            '--force-prefers-reduced-motion',
+            path.join(REPO_ROOT, 'app', 'main.js'),
+        ],
+        cwd: REPO_ROOT,
+        env,
+    });
 
-  let page: Page;
-  try {
-    page = await mainWindow(app);
-    await installHostStubs(app, { ...DEFAULT_STUBS, ...stubs });
-    await settleWindow(app, page, fakeTimers);
-  } catch (err) {
-    await quit(app);
-    throw err;
-  }
+    let page: Page;
+    try {
+        page = await mainWindow(app);
+        await installHostStubs(app, {...DEFAULT_STUBS, ...stubs});
+        await settleWindow(app, page, fakeTimers);
+    } catch (err) {
+        await quit(app);
+        throw err;
+    }
 
-  return {
-    app,
-    page,
-    close: async () => {
-      // Quitting (not closing the window, which on macOS leaves the app in the
-      // Dock) runs the app's before-quit, which signals every session's
-      // process group — so the fake CLIs go with it.
-      await quit(app);
-    },
-  };
+    return {
+        app,
+        page,
+        close: async () => {
+            // Quitting (not closing the window, which on macOS leaves the app in the
+            // Dock) runs the app's before-quit, which signals every session's
+            // process group — so the fake CLIs go with it.
+            await quit(app);
+        },
+    };
 }
 
 /**
@@ -119,14 +120,14 @@ export async function launchApp(
  * is made at the same moment, and either can be reported first.
  */
 export async function mainWindow(app: ElectronApplication): Promise<Page> {
-  // A page is reported before it has navigated, so its URL is polled for.
-  const deadline = Date.now() + QUIT_TIMEOUT_MS * 3;
-  for (;;) {
-    const found = app.windows().find(page => page.url().endsWith('/renderer/index.html'));
-    if (found) return found;
-    if (Date.now() > deadline) throw new Error('the main window never loaded');
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
+    // A page is reported before it has navigated, so its URL is polled for.
+    const deadline = Date.now() + QUIT_TIMEOUT_MS * 3;
+    for (;;) {
+        const found = app.windows().find((page) => page.url().endsWith('/renderer/index.html'));
+        if (found) return found;
+        if (Date.now() > deadline) throw new Error('the main window never loaded');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+    }
 }
 
 /** How long a quit may take before the app is killed instead. */
@@ -141,25 +142,31 @@ const QUIT_TIMEOUT_MS = 10_000;
  * sessions still under them.
  */
 async function quit(app: ElectronApplication): Promise<void> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timedOut = new Promise<'timeout'>((resolve) => {
-    timer = setTimeout(() => resolve('timeout'), QUIT_TIMEOUT_MS);
-  });
-  const outcome = await Promise.race([app.close().catch(() => 'closed' as const), timedOut]);
-  clearTimeout(timer);
-  // The process can be gone already by the time the timeout fires.
-  if (outcome === 'timeout') {
-    try { app.process()?.kill('SIGKILL'); } catch { /* already exited */ }
-  }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<'timeout'>((resolve) => {
+        timer = setTimeout(() => resolve('timeout'), QUIT_TIMEOUT_MS);
+    });
+    const outcome = await Promise.race([app.close().catch(() => 'closed' as const), timedOut]);
+    clearTimeout(timer);
+    // The process can be gone already by the time the timeout fires.
+    if (outcome === 'timeout') {
+        try {
+            app.process()?.kill('SIGKILL');
+        } catch {
+            /* already exited */
+        }
+    }
 }
 
 /** Wait until no window's page is still loading. */
 async function waitForWindowsLoaded(app: ElectronApplication): Promise<void> {
-  const deadline = Date.now() + QUIT_TIMEOUT_MS;
-  while (await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(w => w.webContents.isLoading()))) {
-    if (Date.now() > deadline) throw new Error('a window never finished loading');
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
+    const deadline = Date.now() + QUIT_TIMEOUT_MS;
+    while (
+        await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows().some((w) => w.webContents.isLoading()))
+    ) {
+        if (Date.now() > deadline) throw new Error('a window never finished loading');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+    }
 }
 
 /**
@@ -179,23 +186,23 @@ async function waitForWindowsLoaded(app: ElectronApplication): Promise<void> {
  * clock lets relative times drift away from the screenshots'.
  */
 async function settleWindow(app: ElectronApplication, page: Page, fakeTimers: boolean): Promise<void> {
-  // The Quick Ask pop-up's window loads beside this one. The clock goes into
-  // every page at once, and a page still loading would miss it.
-  await waitForWindowsLoaded(app);
-  await app.evaluate(({ BrowserWindow }, size) => {
-    const window = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('/quick-ask/'))!;
-    window.setContentSize(size.width, size.height);
-    window.center();
-  }, WINDOW_SIZE);
+    // The Quick Ask pop-up's window loads beside this one. The clock goes into
+    // every page at once, and a page still loading would miss it.
+    await waitForWindowsLoaded(app);
+    await app.evaluate(({BrowserWindow}, size) => {
+        const window = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().includes('/quick-ask/'))!;
+        window.setContentSize(size.width, size.height);
+        window.center();
+    }, WINDOW_SIZE);
 
-  await page.context().addInitScript(stubNativeDialogs);
-  if (fakeTimers) await page.context().clock.install({ time: FIXTURE_NOW });
-  else await page.context().clock.setFixedTime(FIXTURE_NOW);
-  // colorScheme: null, explicitly. Playwright otherwise emulates `light` along
-  // with whatever is asked for, which would hide the app's own dark mode: the
-  // scheme has to come from the appearance setting, through nativeTheme, as it
-  // does for a user.
-  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: null });
-  await page.reload();
-  await page.waitForLoadState('domcontentloaded');
+    await page.context().addInitScript(stubNativeDialogs);
+    if (fakeTimers) await page.context().clock.install({time: FIXTURE_NOW});
+    else await page.context().clock.setFixedTime(FIXTURE_NOW);
+    // colorScheme: null, explicitly. Playwright otherwise emulates `light` along
+    // with whatever is asked for, which would hide the app's own dark mode: the
+    // scheme has to come from the appearance setting, through nativeTheme, as it
+    // does for a user.
+    await page.emulateMedia({reducedMotion: 'reduce', colorScheme: null});
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
 }

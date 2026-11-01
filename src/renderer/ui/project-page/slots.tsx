@@ -7,6 +7,6 @@
  */
 
 export interface SectionProps {
-  /** The repository the page is for (never a worktree). */
-  readonly projectPath: string;
+    /** The repository the page is for (never a worktree). */
+    readonly projectPath: string;
 }

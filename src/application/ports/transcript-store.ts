@@ -9,8 +9,8 @@
  * Everything is keyed by folder and session id rather than by path, so nothing
  * above this has to know the layout.
  */
-import type { Session } from '../../domain/session/session';
-import type { IssueRef } from '../../domain/session-work/model';
+import type {Session} from '../../domain/session/session';
+import type {IssueRef} from '../../domain/session-work/model';
 
 /**
  * A `cwd` + `gitBranch` a session's transcripts were written from.
@@ -19,92 +19,92 @@ import type { IssueRef } from '../../domain/session-work/model';
  * worktree root takes git, which the store does not have.
  */
 export interface TranscriptLocation {
-  cwd: string;
-  branch: string;
-  /** Only subagent transcripts were written from here. */
-  fromSubagent: boolean;
+    cwd: string;
+    branch: string;
+    /** Only subagent transcripts were written from here. */
+    fromSubagent: boolean;
 }
 
 /** The identifiers a seeded transcript is written with. */
 export interface TranscriptSeed {
-  sessionId: string;
-  messageId: string;
-  nowIso: string;
+    sessionId: string;
+    messageId: string;
+    nowIso: string;
 }
 
 export interface TranscriptStore {
-  /** Every project folder, excluding the ones that are not projects. */
-  listFolders(): string[];
-  folderExists(folder: string): boolean;
+    /** Every project folder, excluding the ones that are not projects. */
+    listFolders(): string[];
+    folderExists(folder: string): boolean;
 
-  /** The session ids with a transcript in this folder. */
-  listSessionIds(folder: string): string[];
+    /** The session ids with a transcript in this folder. */
+    listSessionIds(folder: string): string[];
 
-  /**
-   * The project path this folder's transcripts say they belong to.
-   *
-   * Read out of a transcript's `cwd` rather than decoded from the folder name,
-   * which is lossy. Null when the folder holds nothing readable.
-   */
-  resolveProjectPath(folder: string): string | null;
+    /**
+     * The project path this folder's transcripts say they belong to.
+     *
+     * Read out of a transcript's `cwd` rather than decoded from the folder name,
+     * which is lossy. Null when the folder holds nothing readable.
+     */
+    resolveProjectPath(folder: string): string | null;
 
-  /**
-   * The newest write anywhere in the folder, as epoch ms.
-   *
-   * The gate the incremental re-index turns on: cheap (stat only) and correct
-   * even though transcripts are appended in place, which often leaves the
-   * containing directory's own mtime untouched.
-   */
-  folderIndexMtimeMs(folder: string): number;
+    /**
+     * The newest write anywhere in the folder, as epoch ms.
+     *
+     * The gate the incremental re-index turns on: cheap (stat only) and correct
+     * even though transcripts are appended in place, which often leaves the
+     * containing directory's own mtime untouched.
+     */
+    folderIndexMtimeMs(folder: string): number;
 
-  /** The file mtime a cached row would be invalidated against. Null if gone. */
-  sessionFingerprint(folder: string, sessionId: string): string | null;
+    /** The file mtime a cached row would be invalidated against. Null if gone. */
+    sessionFingerprint(folder: string, sessionId: string): string | null;
 
-  /** Parse one transcript, or null when it holds no conversation. */
-  readSession(folder: string, sessionId: string, projectPath: string): Session | null;
+    /** Parse one transcript, or null when it holds no conversation. */
+    readSession(folder: string, sessionId: string, projectPath: string): Session | null;
 
-  /** The leading lines of a transcript, for the cheap signal reads. */
-  readHeadLines(folder: string, sessionId: string, byteLimit: number): string[];
+    /** The leading lines of a transcript, for the cheap signal reads. */
+    readHeadLines(folder: string, sessionId: string, byteLimit: number): string[];
 
-  /** The trailing bytes of a transcript, for the plan-handover check. */
-  readTail(folder: string, sessionId: string, byteLimit: number): string;
+    /** The trailing bytes of a transcript, for the plan-handover check. */
+    readTail(folder: string, sessionId: string, byteLimit: number): string;
 
-  /** A transcript's own mtime in epoch ms, for the handover timing check. */
-  sessionMtimeMs(folder: string, sessionId: string): number | null;
+    /** A transcript's own mtime in epoch ms, for the handover timing check. */
+    sessionMtimeMs(folder: string, sessionId: string): number | null;
 
-  /**
-   * Every `cwd` + `gitBranch` the session's main transcript and its
-   * `<session>/subagents/*.jsonl` were written from, once each, in the order
-   * they first appear (D6). Empty when the session has no transcript.
-   */
-  locations(folder: string, sessionId: string): TranscriptLocation[];
+    /**
+     * Every `cwd` + `gitBranch` the session's main transcript and its
+     * `<session>/subagents/*.jsonl` were written from, once each, in the order
+     * they first appear (D6). Empty when the session has no transcript.
+     */
+    locations(folder: string, sessionId: string): TranscriptLocation[];
 
-  /**
-   * The issues the session's conversation mentions, main transcript first and
-   * then its subagents', once each. A bare `#123` is taken to be in
-   * `repository` (`owner/repo`, or '' when unknown).
-   */
-  issueMentions(folder: string, sessionId: string, repository: string): IssueRef[];
+    /**
+     * The issues the session's conversation mentions, main transcript first and
+     * then its subagents', once each. A bare `#123` is taken to be in
+     * `repository` (`owner/repo`, or '' when unknown).
+     */
+    issueMentions(folder: string, sessionId: string, repository: string): IssueRef[];
 
-  /** The `slug` a session was started under, if it has one. */
-  readSlug(folder: string, sessionId: string): string | null;
+    /** The `slug` a session was started under, if it has one. */
+    readSlug(folder: string, sessionId: string): string | null;
 
-  /**
-   * Create the folder for a project, seeding a transcript when it has none.
-   *
-   * The seed is not decoration: `resolveProjectPath` reads a project path out
-   * of a transcript's `cwd`, so a folder with no transcripts cannot be resolved
-   * back to its project and the project would vanish from the sidebar again.
-   *
-   * Answers with the folder name.
-   */
-  ensureProjectFolder(projectPath: string, seed: TranscriptSeed): string;
+    /**
+     * Create the folder for a project, seeding a transcript when it has none.
+     *
+     * The seed is not decoration: `resolveProjectPath` reads a project path out
+     * of a transcript's `cwd`, so a folder with no transcripts cannot be resolved
+     * back to its project and the project would vanish from the sidebar again.
+     *
+     * Answers with the folder name.
+     */
+    ensureProjectFolder(projectPath: string, seed: TranscriptSeed): string;
 
-  /**
-   * Write a transcript for a session that has not run yet.
-   *
-   * Used by the scheduler and the schedule creator, which need a session to
-   * resume into and a slug to group the runs under.
-   */
-  seedSession(folder: string, sessionId: string, lines: readonly unknown[]): void;
+    /**
+     * Write a transcript for a session that has not run yet.
+     *
+     * Used by the scheduler and the schedule creator, which need a session to
+     * resume into and a slug to group the runs under.
+     */
+    seedSession(folder: string, sessionId: string, lines: readonly unknown[]): void;
 }

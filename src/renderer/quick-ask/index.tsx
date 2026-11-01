@@ -8,10 +8,10 @@
 import '@fontsource-variable/mulish';
 import '@fontsource-variable/nunito-sans';
 
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { QuickAsk } from './QuickAsk';
-import { close, saving, shown, toggle } from './actions';
+import {StrictMode} from 'react';
+import {createRoot} from 'react-dom/client';
+import {QuickAsk} from './QuickAsk';
+import {close, saving, shown, toggle} from './actions';
 
 window.quickAsk.onShown(shown);
 // The send is a capture, and main is writing it (C4).
@@ -23,5 +23,7 @@ window.quickAsk.onCloseRequested(toggle);
 window.addEventListener('blur', close);
 
 createRoot(document.getElementById('quick-ask')!).render(
-  <StrictMode><QuickAsk /></StrictMode>,
+    <StrictMode>
+        <QuickAsk />
+    </StrictMode>,
 );

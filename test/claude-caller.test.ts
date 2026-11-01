@@ -1,12 +1,12 @@
-import { test } from 'node:test';
+import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { ShellClaudeCaller } from '../src/infrastructure/claude-cli/claude-caller';
-import { fakeTimers, silentLog } from './support/fakes';
-import type { TerminalGateway } from '../src/application/ports/terminal-gateway';
+import {ShellClaudeCaller} from '../src/infrastructure/claude-cli/claude-caller';
+import {fakeTimers, silentLog} from './support/fakes';
+import type {TerminalGateway} from '../src/application/ports/terminal-gateway';
 
 /**
  * The real caller against a stand-in `claude`: a shell script that only the
@@ -38,132 +38,141 @@ esac
 const SHELL = fs.existsSync('/bin/zsh') ? '/bin/zsh' : '/bin/bash';
 
 function writeShellProfile(home: string, bin: string): void {
-  const prepend = `export PATH='${bin}':"$PATH"\n`;
-  if (SHELL.endsWith('zsh')) {
-    fs.writeFileSync(path.join(home, '.zshrc'), prepend);
-    return;
-  }
-  fs.writeFileSync(path.join(home, '.bashrc'), prepend);
-  fs.writeFileSync(path.join(home, '.bash_profile'), '[ -f ~/.bashrc ] && . ~/.bashrc\n');
+    const prepend = `export PATH='${bin}':"$PATH"\n`;
+    if (SHELL.endsWith('zsh')) {
+        fs.writeFileSync(path.join(home, '.zshrc'), prepend);
+        return;
+    }
+    fs.writeFileSync(path.join(home, '.bashrc'), prepend);
+    fs.writeFileSync(path.join(home, '.bash_profile'), '[ -f ~/.bashrc ] && . ~/.bashrc\n');
 }
 
 function harness() {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-claude-caller-'));
-  const bin = path.join(home, 'only-in-rc-file');
-  fs.mkdirSync(bin);
-  fs.writeFileSync(path.join(bin, 'claude'), FAKE_CLAUDE, { mode: 0o755 });
-  writeShellProfile(home, bin);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-claude-caller-'));
+    const bin = path.join(home, 'only-in-rc-file');
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, 'claude'), FAKE_CLAUDE, {mode: 0o755});
+    writeShellProfile(home, bin);
 
-  const timers = fakeTimers();
-  const terminals = { baseEnv: { HOME: home, PATH: '/usr/bin:/bin', USER: os.userInfo().username } } as unknown as TerminalGateway;
-  const shells = {
-    list: () => [],
-    resolve: () => ({ id: 'test', name: path.basename(SHELL), path: SHELL }),
-  };
-  const caller = new ShellClaudeCaller({
-    shells, terminals, timers, log: silentLog, homeDir: home, shellProfileId: () => 'test',
-  });
-  const launches = (): number[] => {
-    try {
-      return fs.readFileSync(path.join(home, 'launches'), 'utf8').split('\n').filter(Boolean).map(Number);
-    } catch {
-      return [];
-    }
-  };
-  return { home, caller, timers, launches };
+    const timers = fakeTimers();
+    const terminals = {
+        baseEnv: {HOME: home, PATH: '/usr/bin:/bin', USER: os.userInfo().username},
+    } as unknown as TerminalGateway;
+    const shells = {
+        list: () => [],
+        resolve: () => ({id: 'test', name: path.basename(SHELL), path: SHELL}),
+    };
+    const caller = new ShellClaudeCaller({
+        shells,
+        terminals,
+        timers,
+        log: silentLog,
+        homeDir: home,
+        shellProfileId: () => 'test',
+    });
+    const launches = (): number[] => {
+        try {
+            return fs.readFileSync(path.join(home, 'launches'), 'utf8').split('\n').filter(Boolean).map(Number);
+        } catch {
+            return [];
+        }
+    };
+    return {home, caller, timers, launches};
 }
 
 async function until(check: () => boolean, what: string): Promise<void> {
-  const deadline = Date.now() + 10_000;
-  while (!check()) {
-    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
-    await new Promise(resolve => setTimeout(resolve, 20));
-  }
+    const deadline = Date.now() + 10_000;
+    while (!check()) {
+        if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+    }
 }
 
 function running(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
-test('a cold call finds claude on a PATH only the login shell\'s rc file sets', async () => {
-  /* Given */
-  const { caller } = harness();
+test("a cold call finds claude on a PATH only the login shell's rc file sets", async () => {
+    /* Given */
+    const {caller} = harness();
 
-  /* When */
-  const run = await caller.call(['-p', 'hello'], new AbortController().signal);
+    /* When */
+    const run = await caller.call(['-p', 'hello'], new AbortController().signal);
 
-  /* Then */
-  assert.equal(run.exitCode, 0);
-  assert.equal(JSON.parse(run.stdout).result, 'cold');
+    /* Then */
+    assert.equal(run.exitCode, 0);
+    assert.equal(JSON.parse(run.stdout).result, 'cold');
 });
 
 test('a warm call hands its prompt over stdin and answers with the result envelope', async () => {
-  /* Given */
-  const { home, caller, launches } = harness();
-  const warm = caller.warm(['-p', '--model', 'haiku']);
-  await until(() => launches().length === 1, 'the warm process to start');
+    /* Given */
+    const {home, caller, launches} = harness();
+    const warm = caller.warm(['-p', '--model', 'haiku']);
+    await until(() => launches().length === 1, 'the warm process to start');
 
-  /* When */
-  const run = await warm.send('Which project?', new AbortController().signal);
+    /* When */
+    const run = await warm.send('Which project?', new AbortController().signal);
 
-  /* Then */
-  assert.deepEqual(run, {
-    exitCode: 0,
-    stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'warm' }) + '\n',
-    stderr: '',
-  });
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, 'sent'), 'utf8')),
-    { type: 'user', message: { role: 'user', content: 'Which project?' } });
-  await until(() => !running(launches()[0]), 'the process to exit once stdin closed');
+    /* Then */
+    assert.deepEqual(run, {
+        exitCode: 0,
+        stdout: JSON.stringify({type: 'result', subtype: 'success', is_error: false, result: 'warm'}) + '\n',
+        stderr: '',
+    });
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home, 'sent'), 'utf8')), {
+        type: 'user',
+        message: {role: 'user', content: 'Which project?'},
+    });
+    await until(() => !running(launches()[0]), 'the process to exit once stdin closed');
 });
 
 test('an unused warm process is killed when its idle time is up, and a send starts another', async () => {
-  /* Given */
-  const { caller, timers, launches } = harness();
-  const warm = caller.warm(['-p']);
-  await until(() => launches().length === 1, 'the warm process to start');
+    /* Given */
+    const {caller, timers, launches} = harness();
+    const warm = caller.warm(['-p']);
+    await until(() => launches().length === 1, 'the warm process to start');
 
-  /* When */
-  timers.tick();
-  await until(() => !running(launches()[0]), 'the idle process to be killed');
-  const run = await warm.send('Still there?', new AbortController().signal);
+    /* When */
+    timers.tick();
+    await until(() => !running(launches()[0]), 'the idle process to be killed');
+    const run = await warm.send('Still there?', new AbortController().signal);
 
-  /* Then */
-  assert.equal(JSON.parse(run.stdout).result, 'warm');
-  assert.equal(launches().length, 2);
+    /* Then */
+    assert.equal(JSON.parse(run.stdout).result, 'warm');
+    assert.equal(launches().length, 2);
 });
 
 test('aborting a warm send kills the process', async () => {
-  /* Given */
-  const { caller, launches } = harness();
-  const warm = caller.warm(['-p']);
-  await until(() => launches().length === 1, 'the warm process to start');
-  const controller = new AbortController();
+    /* Given */
+    const {caller, launches} = harness();
+    const warm = caller.warm(['-p']);
+    await until(() => launches().length === 1, 'the warm process to start');
+    const controller = new AbortController();
 
-  /* When */
-  controller.abort();
-  const run = await warm.send('Never mind', controller.signal);
+    /* When */
+    controller.abort();
+    const run = await warm.send('Never mind', controller.signal);
 
-  /* Then */
-  assert.equal(run.exitCode, null);
-  await until(() => !running(launches()[0]), 'the aborted process to be killed');
+    /* Then */
+    assert.equal(run.exitCode, null);
+    await until(() => !running(launches()[0]), 'the aborted process to be killed');
 });
 
 test('closing kills every warm process', async () => {
-  /* Given */
-  const { caller, launches } = harness();
-  caller.warm(['-p']);
-  caller.warm(['-p']);
-  await until(() => launches().length === 2, 'both warm processes to start');
+    /* Given */
+    const {caller, launches} = harness();
+    caller.warm(['-p']);
+    caller.warm(['-p']);
+    await until(() => launches().length === 2, 'both warm processes to start');
 
-  /* When */
-  caller.close();
+    /* When */
+    caller.close();
 
-  /* Then */
-  await until(() => launches().every(pid => !running(pid)), 'both processes to be killed');
+    /* Then */
+    await until(() => launches().every((pid) => !running(pid)), 'both processes to be killed');
 });

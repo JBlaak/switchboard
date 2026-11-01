@@ -11,47 +11,47 @@
  * One dialog at a time. Opening another replaces the one on screen, where the
  * vanilla shell would have stacked a second overlay over the first.
  */
-import type { EffectiveSettings } from '../../domain/settings/settings';
-import type { RendererEvent } from './events';
-import type { SessionRow } from '../../domain/session/session';
+import type {EffectiveSettings} from '../../domain/settings/settings';
+import type {RendererEvent} from './events';
+import type {SessionRow} from '../../domain/session/session';
 
 export type DialogRequest =
-  /**
-   * "Projects": pick a project to start a session in, or add one (#171).
-   *
-   * `initialPrompt` is what the session starts on, when the modal was opened
-   * from the box on the empty screen (#135, O3). Picking a plan ignores it.
-   */
-  | { readonly kind: 'projectPicker'; readonly initialPrompt?: string }
-  /**
-   * Resume a session with different options.
-   *
-   * The row is the shared, mutable `SessionRow` the caller holds, carried by
-   * reference rather than by id: a re-key or a refresh between opening and
-   * submitting must not strand the dialog on a row it can no longer find.
-   * The settings are fetched before opening, so the form is drawn filled in.
-   */
-  | { readonly kind: 'resumeSession'; readonly session: SessionRow; readonly settings: EffectiveSettings };
+    /**
+     * "Projects": pick a project to start a session in, or add one (#171).
+     *
+     * `initialPrompt` is what the session starts on, when the modal was opened
+     * from the box on the empty screen (#135, O3). Picking a plan ignores it.
+     */
+    | {readonly kind: 'projectPicker'; readonly initialPrompt?: string}
+    /**
+     * Resume a session with different options.
+     *
+     * The row is the shared, mutable `SessionRow` the caller holds, carried by
+     * reference rather than by id: a re-key or a refresh between opening and
+     * submitting must not strand the dialog on a row it can no longer find.
+     * The settings are fetched before opening, so the form is drawn filled in.
+     */
+    | {readonly kind: 'resumeSession'; readonly session: SessionRow; readonly settings: EffectiveSettings};
 
 export interface DialogState {
-  readonly open: DialogRequest | null;
-  /**
-   * Counts every opening. The dialog layer keys the dialog on it, so opening
-   * the same kind again starts a fresh one, and a close from a dialog that has
-   * already been replaced closes nothing.
-   */
-  readonly seq: number;
+    readonly open: DialogRequest | null;
+    /**
+     * Counts every opening. The dialog layer keys the dialog on it, so opening
+     * the same kind again starts a fresh one, and a close from a dialog that has
+     * already been replaced closes nothing.
+     */
+    readonly seq: number;
 }
 
-export const initialDialogState: DialogState = { open: null, seq: 0 };
+export const initialDialogState: DialogState = {open: null, seq: 0};
 
 export function dialogReducer(state: DialogState, event: RendererEvent): DialogState {
-  switch (event.type) {
-    case 'dialogOpened':
-      return { open: event.request, seq: state.seq + 1 };
-    case 'dialogClosed':
-      return state.open && event.seq === state.seq ? { ...state, open: null } : state;
-    default:
-      return state;
-  }
+    switch (event.type) {
+        case 'dialogOpened':
+            return {open: event.request, seq: state.seq + 1};
+        case 'dialogClosed':
+            return state.open && event.seq === state.seq ? {...state, open: null} : state;
+        default:
+            return state;
+    }
 }

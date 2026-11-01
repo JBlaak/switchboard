@@ -3,7 +3,7 @@
  *
  * Pure, so the rule can be tested in node; the FLIP itself needs the DOM.
  */
-import type { RendererState } from './root';
+import type {RendererState} from './root';
 
 /**
  * Whether the redraw from `previous` to `state` glides.
@@ -13,5 +13,5 @@ import type { RendererState } from './root';
  * work.
  */
 export function redrawGlides(previous: RendererState, state: RendererState): boolean {
-  return previous.sessionList.layout !== null && !state.toolbar.sidebarCollapsed;
+    return previous.sessionList.layout !== null && !state.toolbar.sidebarCollapsed;
 }

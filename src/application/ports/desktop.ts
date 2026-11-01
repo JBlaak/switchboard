@@ -6,40 +6,40 @@
  * small separate ports rather than one "electron" grab-bag so a use case
  * declares only what it actually reaches for.
  */
-import type { AppIcon } from '../../domain/settings/app-icon';
-import type { Appearance } from '../../domain/settings/appearance';
+import type {AppIcon} from '../../domain/settings/app-icon';
+import type {Appearance} from '../../domain/settings/appearance';
 
 export interface DialogService {
-  /** The folder the user chose, or null if they cancelled. */
-  chooseDirectory(title: string): Promise<string | null>;
+    /** The folder the user chose, or null if they cancelled. */
+    chooseDirectory(title: string): Promise<string | null>;
 }
 
 export interface SystemGateway {
-  /** Opens http(s) in the user's browser; anything else is ignored. */
-  openExternal(url: string): Promise<void>;
-  /**
-   * Copy text to the clipboard.
-   *
-   * Goes through the host rather than the renderer's `navigator.clipboard`,
-   * which is gated on focus and user activation.
-   */
-  writeClipboard(text: string): void;
-  /** Copy an image, PNG-encoded, to the clipboard; through the host for the same reason. */
-  writeClipboardImage(png: Uint8Array): void;
-  appVersion(): string;
+    /** Opens http(s) in the user's browser; anything else is ignored. */
+    openExternal(url: string): Promise<void>;
+    /**
+     * Copy text to the clipboard.
+     *
+     * Goes through the host rather than the renderer's `navigator.clipboard`,
+     * which is gated on focus and user activation.
+     */
+    writeClipboard(text: string): void;
+    /** Copy an image, PNG-encoded, to the clipboard; through the host for the same reason. */
+    writeClipboardImage(png: Uint8Array): void;
+    appVersion(): string;
 }
 
 export interface AppearanceGateway {
-  /**
-   * Make the host render in this colour scheme.
-   *
-   * The renderer's `prefers-color-scheme` follows it, so this is the one switch
-   * the stylesheet, the window chrome and the terminal all read from.
-   */
-  apply(mode: Appearance): void;
+    /**
+     * Make the host render in this colour scheme.
+     *
+     * The renderer's `prefers-color-scheme` follows it, so this is the one switch
+     * the stylesheet, the window chrome and the terminal all read from.
+     */
+    apply(mode: Appearance): void;
 }
 
 export interface AppIconGateway {
-  /** Show this icon on the running app's Dock tile. */
-  apply(icon: AppIcon): void;
+    /** Show this icon on the running app's Dock tile. */
+    apply(icon: AppIcon): void;
 }

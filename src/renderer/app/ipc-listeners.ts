@@ -13,23 +13,21 @@
  * subscribing for itself. Installed before every other subscriber, which a
  * re-key relies on (see `onSessionForked`).
  */
-import { loadProjects } from '../features/sessions/session-list';
-import { relayoutSessionList } from '../ui/session-list/relayout';
-import { celebrateArchivedRow } from '../ui/session-list/leave';
-import {
-  closeArchivedSession, dropPendingSession, writeExitBanner,
-} from '../features/sessions/session-actions';
-import { pollActiveSessions } from '../features/sessions/session-poller';
-import { launchClaudeSession, trackStartedElsewhere } from '../features/sessions/session-actions';
-import { projectAt } from '../ui/ask/actions';
-import { openDialog } from '../ui/dialogs/actions';
-import { setHeaderIdentity } from '../features/sessions/terminal-header';
-import { handleRemoteStatus } from '../features/remote/connection-log';
-import { busyChanged } from '../state/activity-slice';
-import { getState, onEvent } from '../state/app-store';
-import { pendingSessions, sessionMap } from '../state/session-store';
-import { rekeyRegistries } from './rekey-registries';
-import type { RendererState } from '../state/root';
+import {loadProjects} from '../features/sessions/session-list';
+import {relayoutSessionList} from '../ui/session-list/relayout';
+import {celebrateArchivedRow} from '../ui/session-list/leave';
+import {closeArchivedSession, dropPendingSession, writeExitBanner} from '../features/sessions/session-actions';
+import {pollActiveSessions} from '../features/sessions/session-poller';
+import {launchClaudeSession, trackStartedElsewhere} from '../features/sessions/session-actions';
+import {projectAt} from '../ui/ask/actions';
+import {openDialog} from '../ui/dialogs/actions';
+import {setHeaderIdentity} from '../features/sessions/terminal-header';
+import {handleRemoteStatus} from '../features/remote/connection-log';
+import {busyChanged} from '../state/activity-slice';
+import {getState, onEvent} from '../state/app-store';
+import {pendingSessions, sessionMap} from '../state/session-store';
+import {rekeyRegistries} from './rekey-registries';
+import type {RendererState} from '../state/root';
 
 /**
  * How long to wait before re-fetching after a filesystem change.
@@ -42,50 +40,50 @@ const PROJECTS_CHANGED_DEBOUNCE_MS = 300;
 let projectsChangedTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function installIpcListeners(): void {
-  onEvent('processExited', ({ sessionId, exitCode }) => onProcessExited(sessionId, exitCode));
-  onEvent('sessionForked', ({ oldId, newId }, state) => onSessionForked(oldId, newId, state));
+    onEvent('processExited', ({sessionId, exitCode}) => onProcessExited(sessionId, exitCode));
+    onEvent('sessionForked', ({oldId, newId}, state) => onSessionForked(oldId, newId, state));
 
-  // A working↔ready flip moves the row between sections, and a row's section
-  // is only recomputed by a render — the class alone would leave it stranded
-  // under its old heading. Not a re-sort: the open session keeps its slot.
-  onEvent('cliBusyState', ({ sessionId }, state, previous) => {
-    if (busyChanged(previous.activity, state.activity, sessionId)) relayoutSessionList();
-  });
-  // The header shows the notice itself; see `terminal-slice`.
-  onEvent('terminalNotification', ({ sessionId }, state, previous) => {
-    // "Waiting for your input" settles the session; see `activityReducer`.
-    if (busyChanged(previous.activity, state.activity, sessionId)) relayoutSessionList();
-  });
+    // A working↔ready flip moves the row between sections, and a row's section
+    // is only recomputed by a render — the class alone would leave it stranded
+    // under its old heading. Not a re-sort: the open session keeps its slot.
+    onEvent('cliBusyState', ({sessionId}, state, previous) => {
+        if (busyChanged(previous.activity, state.activity, sessionId)) relayoutSessionList();
+    });
+    // The header shows the notice itself; see `terminal-slice`.
+    onEvent('terminalNotification', ({sessionId}, state, previous) => {
+        // "Waiting for your input" settles the session; see `activityReducer`.
+        if (busyChanged(previous.activity, state.activity, sessionId)) relayoutSessionList();
+    });
 
-  onEvent('remoteStatus', ({ sessionId, status }, _state, previous) => {
-    handleRemoteStatus(sessionId, status, previous.remote.statuses[sessionId]);
-  });
-  onEvent('projectsChanged', onProjectsChanged);
+    onEvent('remoteStatus', ({sessionId, status}, _state, previous) => {
+        handleRemoteStatus(sessionId, status, previous.remote.statuses[sessionId]);
+    });
+    onEvent('projectsChanged', onProjectsChanged);
 
-  // Quick Ask (#142): the pop-up's text, routed in main. The launch only puts
-  // the session on screen here; the window stays behind the app the user is in
-  // (R3). Patch says its line from the empty screen (`EmptyScreenPatch`).
-  onEvent('launchRequested', ({ projectPath, initialPrompt }) => {
-    void launchClaudeSession(projectAt(projectPath), { initialPrompt });
-  });
-  onEvent('pickerRequested', ({ initialPrompt }) => {
-    openDialog({ kind: 'projectPicker', initialPrompt });
-  });
-  // Phone access (#194): a session a phone started is in the sidebar at once.
-  onEvent('sessionStarted', ({ sessionId, projectPath }) => trackStartedElsewhere(sessionId, projectPath));
-  // A phone archived a session, or the session archived itself: it leaves the
-  // window as ⌘E would take it, confetti and all, then the list refetches.
-  onEvent('sessionArchived', ({ sessionId }) => {
-    celebrateArchivedRow(sessionId);
-    closeArchivedSession(sessionId);
-    onProjectsChanged();
-  });
+    // Quick Ask (#142): the pop-up's text, routed in main. The launch only puts
+    // the session on screen here; the window stays behind the app the user is in
+    // (R3). Patch says its line from the empty screen (`EmptyScreenPatch`).
+    onEvent('launchRequested', ({projectPath, initialPrompt}) => {
+        void launchClaudeSession(projectAt(projectPath), {initialPrompt});
+    });
+    onEvent('pickerRequested', ({initialPrompt}) => {
+        openDialog({kind: 'projectPicker', initialPrompt});
+    });
+    // Phone access (#194): a session a phone started is in the sidebar at once.
+    onEvent('sessionStarted', ({sessionId, projectPath}) => trackStartedElsewhere(sessionId, projectPath));
+    // A phone archived a session, or the session archived itself: it leaves the
+    // window as ⌘E would take it, confetti and all, then the list refetches.
+    onEvent('sessionArchived', ({sessionId}) => {
+        celebrateArchivedRow(sessionId);
+        closeArchivedSession(sessionId);
+        onProjectsChanged();
+    });
 
-  // Fullscreen hides the macOS traffic lights, so the space the collapsed
-  // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.
-  onEvent('fullscreenChanged', ({ isFullscreen }) => {
-    document.documentElement.classList.toggle('fullscreen', isFullscreen);
-  });
+    // Fullscreen hides the macOS traffic lights, so the space the collapsed
+    // sidebar reserves for them is dead weight; the stylesheet reclaims it off this class.
+    onEvent('fullscreenChanged', ({isFullscreen}) => {
+        document.documentElement.classList.toggle('fullscreen', isFullscreen);
+    });
 }
 
 /**
@@ -103,18 +101,18 @@ export function installIpcListeners(): void {
  * once the fetch has brought the new transcript's title.
  */
 function onSessionForked(oldId: string, newId: string, state: RendererState): void {
-  rekeyRegistries(oldId, newId, state);
-  relayoutSessionList();
-  nameHeaderAfterRekey(newId);
-  void loadProjects().then(() => nameHeaderAfterRekey(newId));
-  void pollActiveSessions();
+    rekeyRegistries(oldId, newId, state);
+    relayoutSessionList();
+    nameHeaderAfterRekey(newId);
+    void loadProjects().then(() => nameHeaderAfterRekey(newId));
+    void pollActiveSessions();
 }
 
 /** Put the re-keyed session's id and name in the header, if it is the one on screen. */
 function nameHeaderAfterRekey(sessionId: string): void {
-  if (getState().view.activeSessionId !== sessionId) return;
-  const row = sessionMap.get(sessionId);
-  if (row) setHeaderIdentity(row);
+    if (getState().view.activeSessionId !== sessionId) return;
+    const row = sessionMap.get(sessionId);
+    if (row) setHeaderIdentity(row);
 }
 
 /**
@@ -125,29 +123,29 @@ function nameHeaderAfterRekey(sessionId: string): void {
  * the terminal is torn down when they click the row again.
  */
 function onProcessExited(sessionId: string, exitCode: number): void {
-  writeExitBanner(sessionId, exitCode);
+    writeExitBanner(sessionId, exitCode);
 
-  if (sessionMap.get(sessionId)?.type === 'terminal') {
-    dropPendingSession(sessionId);
-    sessionMap.delete(sessionId);
-    relayoutSessionList();
+    if (sessionMap.get(sessionId)?.type === 'terminal') {
+        dropPendingSession(sessionId);
+        sessionMap.delete(sessionId);
+        relayoutSessionList();
+        void pollActiveSessions();
+        return;
+    }
+
+    // Stamp the exit so the reconciliation pass can eventually tidy up a row no
+    // real session was ever written for — see `isPendingAbandoned`.
+    const pending = pendingSessions.get(sessionId);
+    if (pending && !pending.exitedAt) pending.exitedAt = Date.now();
+
     void pollActiveSessions();
-    return;
-  }
-
-  // Stamp the exit so the reconciliation pass can eventually tidy up a row no
-  // real session was ever written for — see `isPendingAbandoned`.
-  const pending = pendingSessions.get(sessionId);
-  if (pending && !pending.exitedAt) pending.exitedAt = Date.now();
-
-  void pollActiveSessions();
 }
 
 /** The transcripts on disk changed. */
 function onProjectsChanged(): void {
-  if (projectsChangedTimer) clearTimeout(projectsChangedTimer);
-  projectsChangedTimer = setTimeout(() => {
-    projectsChangedTimer = null;
-    void loadProjects();
-  }, PROJECTS_CHANGED_DEBOUNCE_MS);
+    if (projectsChangedTimer) clearTimeout(projectsChangedTimer);
+    projectsChangedTimer = setTimeout(() => {
+        projectsChangedTimer = null;
+        void loadProjects();
+    }, PROJECTS_CHANGED_DEBOUNCE_MS);
 }

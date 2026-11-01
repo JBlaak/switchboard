@@ -11,6 +11,6 @@ import '@xterm/xterm/css/xterm.css';
 import '@fontsource-variable/mulish';
 import '@fontsource-variable/nunito-sans';
 
-import { bootstrap } from './app/bootstrap';
+import {bootstrap} from './app/bootstrap';
 
 bootstrap();

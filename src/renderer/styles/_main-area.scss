@@ -1,78 +1,82 @@
 /* ========== MAIN AREA ========== */
 #main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  min-height: 0;
-  background: var(--sb-bg-base);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-height: 0;
+    background: var(--sb-bg-base);
 }
 
 #sidebar-collapse-btn {
-  background: none;
-  border: none;
-  color: var(--sb-text-faint);
-  cursor: pointer;
-  padding: 0;
-  width: var(--sb-icon-button);
-  height: var(--sb-icon-button);
-  border-radius: var(--sb-r-control);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s, background 0.15s;
+    background: none;
+    border: none;
+    color: var(--sb-text-faint);
+    cursor: pointer;
+    padding: 0;
+    width: var(--sb-icon-button);
+    height: var(--sb-icon-button);
+    border-radius: var(--sb-r-control);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        color 0.15s,
+        background 0.15s;
 }
 #sidebar-collapse-btn:hover {
-  color: var(--sb-text-hover);
-  background: rgba(var(--sb-overlay-rgb),0.04);
+    color: var(--sb-text-hover);
+    background: rgba(var(--sb-overlay-rgb), 0.04);
 }
 
 #sidebar-expand-btn {
-  background: none;
-  border: none;
-  color: var(--sb-text-faint);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: var(--sb-r-control);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s, background 0.15s;
-  flex-shrink: 0;
-  margin: 12px auto 0;
+    background: none;
+    border: none;
+    color: var(--sb-text-faint);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--sb-r-control);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition:
+        color 0.15s,
+        background 0.15s;
+    flex-shrink: 0;
+    margin: 12px auto 0;
 }
 #sidebar-expand-btn:hover {
-  color: var(--sb-text-hover);
-  background: rgba(var(--sb-overlay-rgb),0.04);
+    color: var(--sb-text-hover);
+    background: rgba(var(--sb-overlay-rgb), 0.04);
 }
 
 #sidebar.collapsed {
-  width: 42px;
+    width: 42px;
 }
 /* Only while it is a rail or on its way to or from one: open, the sidebar
    must not clip what overhangs it. */
 #sidebar.collapsed,
 #sidebar.animating {
-  position: relative;
-  overflow: hidden;
+    position: relative;
+    overflow: hidden;
 }
 
 /* Held at the open width, so the sidebar slides shut over its contents rather
    than squeezing them, and the list is not laid out again every frame. */
 #sidebar > *:not(#sidebar-expand-btn) {
-  width: var(--sidebar-width, 340px);
+    width: var(--sidebar-width, 340px);
 }
 #sidebar.collapsed > *:not(#sidebar-expand-btn) {
-  display: none;
-  opacity: 0;
+    display: none;
+    opacity: 0;
 }
 /* Anchored to the rail's centre, so it does not travel while the width does. */
 #sidebar.collapsed #sidebar-expand-btn {
-  display: flex;
-  position: absolute;
-  top: 0;
-  left: 21px;
-  translate: -50% 0;
+    display: flex;
+    position: absolute;
+    top: 0;
+    left: 21px;
+    translate: -50% 0;
 }
 
 /* Set only for the length of a collapse or expand (ui/toolbar/Toolbar.tsx),
@@ -80,219 +84,229 @@
    before they are dropped, and fade back in as the sidebar opens; the rail's
    button arrives once the slide is nearly done. */
 #sidebar.animating {
-  transition: width 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    transition: width 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 #sidebar.animating > *:not(#sidebar-expand-btn) {
-  transition: opacity 160ms ease, display 240ms allow-discrete;
-  @starting-style { opacity: 0; }
+    transition:
+        opacity 160ms ease,
+        display 240ms allow-discrete;
+    @starting-style {
+        opacity: 0;
+    }
 }
 #sidebar.animating.collapsed #sidebar-expand-btn {
-  transition: opacity 120ms ease 120ms;
-  @starting-style { opacity: 0; }
+    transition: opacity 120ms ease 120ms;
+    @starting-style {
+        opacity: 0;
+    }
 }
 #sidebar.collapsed + #sidebar-resize-handle {
-  display: none;
+    display: none;
 }
 
 /* Above #terminal-area, which covers the whole pane even with no terminal in
    it and would otherwise swallow every click meant for Patch. The placeholder
    is hidden whenever a terminal or the settings show, so it never covers them. */
 #placeholder {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--sb-text-muted);
-  font-family: var(--sb-font-body);
-  font-size: 14px;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--sb-text-muted);
+    font-family: var(--sb-font-body);
+    font-size: 14px;
 }
 
 #terminal-area {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 #terminal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  background: var(--sb-bg-panel);
-  border-bottom: 1px solid var(--sb-line);
-  flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--sb-bg-panel);
+    border-bottom: 1px solid var(--sb-line);
+    flex-shrink: 0;
 }
 
 #terminal-header-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
 }
 
 #terminal-header-name {
-  font-family: var(--sb-font-head);
-  font-size: 14px;
-  color: var(--sb-text-strong);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 1;
-  min-width: 60px;
-  max-width: 30%;
+    font-family: var(--sb-font-head);
+    font-size: 14px;
+    color: var(--sb-text-strong);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+    min-width: 60px;
+    max-width: 30%;
 }
 
 #terminal-header-pty-title {
-  font-size: 11px;
-  color: var(--sb-text-muted);
-  font-weight: 400;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-left: 8px;
-  border-left: 1px solid var(--sb-line);
+    font-size: 11px;
+    color: var(--sb-text-muted);
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-left: 8px;
+    border-left: 1px solid var(--sb-line);
 }
 
 #terminal-header-id {
-  font-size: 10px;
-  color: var(--sb-text-dimmest);
-  font-family: var(--sb-font-mono);
-  white-space: nowrap;
-  flex-shrink: 0;
+    font-size: 10px;
+    color: var(--sb-text-dimmest);
+    font-family: var(--sb-font-mono);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 /* The shell profile, as a soft grey chip. */
 #terminal-header-shell {
-  display: inline-flex;
-  align-items: center;
-  font-family: var(--sb-font-head);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--sb-text-muted);
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  padding: 2px 8px;
-  border-radius: 99px;
-  white-space: nowrap;
-  flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--sb-font-head);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--sb-text-muted);
+    background: rgba(var(--sb-overlay-rgb), 0.06);
+    padding: 2px 8px;
+    border-radius: 99px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 #terminal-header-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
 }
 
 /* Session state as a pill chip: a pastel fill with its matching ink. */
 #terminal-header-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: 99px;
-  font-family: var(--sb-font-head);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 99px;
+    font-family: var(--sb-font-head);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
 }
 
 #terminal-header-status::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  display: inline-block;
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
 }
 
 #terminal-header-status.running {
-  background: var(--sb-mint);
-  color: var(--sb-green);
+    background: var(--sb-mint);
+    color: var(--sb-green);
 }
 
 #terminal-header-status.running::before {
-  background: var(--sb-green);
+    background: var(--sb-green);
 }
 
 /* Remote sessions sit between running and stopped while ssh connects or the
    reconnect backoff runs; sun-filled with a pulsing dot so it reads as "in
    progress". */
 #terminal-header-status.connecting {
-  background: var(--sb-sun);
-  color: var(--sb-yellow);
+    background: var(--sb-sun);
+    color: var(--sb-yellow);
 }
 
 #terminal-header-status.connecting::before {
-  background: var(--sb-yellow);
-  animation: sb-connecting-pulse 1.2s ease-in-out infinite;
+    background: var(--sb-yellow);
+    animation: sb-connecting-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes sb-connecting-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.25;
+    }
 }
 
 #terminal-header-status.stopped {
-  background: rgba(var(--sb-overlay-rgb),0.06);
-  color: var(--sb-text-muted);
+    background: rgba(var(--sb-overlay-rgb), 0.06);
+    color: var(--sb-text-muted);
 }
 
 #terminal-header-status.stopped::before {
-  background: var(--sb-text-dimmest);
+    background: var(--sb-text-dimmest);
 }
 
 #terminal-stop-btn {
-  cursor: pointer;
-  background: none;
-  border: none;
-  padding: 4px;
-  line-height: 1;
-  color: var(--sb-red-deep);
-  border-radius: var(--sb-r-control);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 4px;
+    line-height: 1;
+    color: var(--sb-red-deep);
+    border-radius: var(--sb-r-control);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
 }
 
 #terminal-stop-btn:hover {
-  color: var(--sb-orange);
-  background: var(--sb-peach);
+    color: var(--sb-orange);
+    background: var(--sb-peach);
 }
 
 #terminals {
-  flex: 1;
-  position: relative;
-  margin-right: -20px;
+    flex: 1;
+    position: relative;
+    margin-right: -20px;
 }
 
 .terminal-container {
-  position: absolute;
-  inset: -5px 20px 0 0;
-  display: none;
-  padding: 8px 0 8px 8px;
-  /* FitAddon sizes the terminal from this element's computed height, which under
+    position: absolute;
+    inset: -5px 20px 0 0;
+    display: none;
+    padding: 8px 0 8px 8px;
+    /* FitAddon sizes the terminal from this element's computed height, which under
      border-box includes the padding, so the last row would be clipped at the window's edge. */
-  box-sizing: content-box;
-  overflow: hidden;
+    box-sizing: content-box;
+    overflow: hidden;
 }
 
-
 .terminal-container.visible {
-  display: block;
+    display: block;
 }
 
 .terminal-container.drag-over {
-  outline: 2px solid rgba(var(--sb-accent-rgb), 0.6);
-  outline-offset: -2px;
+    outline: 2px solid rgba(var(--sb-accent-rgb), 0.6);
+    outline-offset: -2px;
 }
 
 /* --- Remote (SSH) connecting card --- */
@@ -300,165 +314,196 @@
    an opaque panel: on a reconnect the last screen tmux painted stays readable
    behind it, so the session still feels like the same session. */
 .rc {
-  position: absolute;
-  inset: 0;
-  /* Above the terminal's find bar (z-index 10): while the link is down the card
+    position: absolute;
+    inset: 0;
+    /* Above the terminal's find bar (z-index 10): while the link is down the card
      is the thing that matters, and search can be reopened afterwards. */
-  z-index: 11;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(var(--sb-bg-base-rgb), 0.78);
-  backdrop-filter: blur(3px);
-  animation: rc-appear 160ms ease-out;
+    z-index: 11;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(var(--sb-bg-base-rgb), 0.78);
+    backdrop-filter: blur(3px);
+    animation: rc-appear 160ms ease-out;
 }
 
 /* A class selector outranks the UA stylesheet's `[hidden] { display: none }`,
    so display:flex above would keep the card visible with el.hidden set. */
-.rc[hidden] { display: none; }
+.rc[hidden] {
+    display: none;
+}
 
 @keyframes rc-appear {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 .rc-card {
-  --rc-accent: var(--sb-yellow);
-  /* Percentages so the card still fits inside a grid card, which is far
+    --rc-accent: var(--sb-yellow);
+    /* Percentages so the card still fits inside a grid card, which is far
      narrower than the single-terminal view. */
-  width: min(400px, 86%);
-  box-sizing: border-box;
-  padding: 22px 26px 18px;
-  border-radius: var(--sb-r-card);
-  background: var(--sb-bg-raised);
-  box-shadow: var(--sb-edge), var(--sb-lift);
-  text-align: center;
+    width: min(400px, 86%);
+    box-sizing: border-box;
+    padding: 22px 26px 18px;
+    border-radius: var(--sb-r-card);
+    background: var(--sb-bg-raised);
+    box-shadow: var(--sb-edge), var(--sb-lift);
+    text-align: center;
 }
 
-.rc.is-failed    .rc-card { --rc-accent: var(--sb-red); }
-.rc.is-connected .rc-card { --rc-accent: var(--sb-green); }
+.rc.is-failed .rc-card {
+    --rc-accent: var(--sb-red);
+}
+.rc.is-connected .rc-card {
+    --rc-accent: var(--sb-green);
+}
 
 /* --- The link diagram: this machine ──── the host --- */
 .rc-link {
-  display: block;
-  width: 190px;
-  max-width: 100%;
-  height: 50px;
-  margin: 0 auto 14px;
-  overflow: visible;
+    display: block;
+    width: 190px;
+    max-width: 100%;
+    height: 50px;
+    margin: 0 auto 14px;
+    overflow: visible;
 }
 
 .rc-node,
 .rc-node-mark {
-  fill: none;
-  stroke: var(--sb-text-dimmest);
-  stroke-width: 1.6;
-  stroke-linecap: round;
+    fill: none;
+    stroke: var(--sb-text-dimmest);
+    stroke-width: 1.6;
+    stroke-linecap: round;
 }
 
-.rc-node-mark { transition: stroke 200ms ease; }
+.rc-node-mark {
+    transition: stroke 200ms ease;
+}
 .rc.is-connected .rc-node-mark,
-.rc.is-connected .rc-node { stroke: var(--sb-green-soft); }
+.rc.is-connected .rc-node {
+    stroke: var(--sb-green-soft);
+}
 
 /* The wire is drawn twice: a static rail, plus a dashed overlay that only
    moves while a connection is actually being attempted. */
 .rc-wire {
-  fill: none;
-  stroke: var(--sb-line);
-  stroke-width: 1.6;
+    fill: none;
+    stroke: var(--sb-line);
+    stroke-width: 1.6;
 }
 
 .rc-flow {
-  fill: none;
-  stroke: var(--rc-accent);
-  stroke-width: 1.6;
-  stroke-dasharray: 5 7;
-  opacity: 0;
+    fill: none;
+    stroke: var(--rc-accent);
+    stroke-width: 1.6;
+    stroke-dasharray: 5 7;
+    opacity: 0;
 }
 
 .rc-spark {
-  fill: var(--rc-accent);
-  opacity: 0;
+    fill: var(--rc-accent);
+    opacity: 0;
 }
 
 /* Connecting: dashes crawl toward the host and a pulse runs the wire. */
 .rc.is-connecting .rc-flow {
-  opacity: 0.55;
-  animation: rc-crawl 700ms linear infinite;
+    opacity: 0.55;
+    animation: rc-crawl 700ms linear infinite;
 }
 
 .rc.is-connecting .rc-spark {
-  animation: rc-travel 1400ms ease-in-out infinite;
+    animation: rc-travel 1400ms ease-in-out infinite;
 }
 
 @keyframes rc-crawl {
-  to { stroke-dashoffset: -12; }
+    to {
+        stroke-dashoffset: -12;
+    }
 }
 
 /* The wire spans x=55→165 in the viewBox, so 110 units end to end. */
 @keyframes rc-travel {
-  0%        { transform: translateX(0);     opacity: 0; }
-  12%, 88%  {                               opacity: 1; }
-  100%      { transform: translateX(110px); opacity: 0; }
+    0% {
+        transform: translateX(0);
+        opacity: 0;
+    }
+    12%,
+    88% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(110px);
+        opacity: 0;
+    }
 }
 
 /* Broken: the X only shows once there is nothing in flight. */
 .rc-break path {
-  fill: none;
-  stroke: var(--rc-accent);
-  stroke-width: 2;
-  stroke-linecap: round;
+    fill: none;
+    stroke: var(--rc-accent);
+    stroke-width: 2;
+    stroke-linecap: round;
 }
 
 .rc-break {
-  opacity: 0;
-  transform-box: view-box;
-  transform-origin: 110px 31px;
+    opacity: 0;
+    transform-box: view-box;
+    transform-origin: 110px 31px;
 }
 
 .rc.is-retrying .rc-break,
 .rc.is-failed .rc-break {
-  opacity: 1;
-  animation: rc-snap 260ms ease-out;
+    opacity: 1;
+    animation: rc-snap 260ms ease-out;
 }
 
 .rc.is-retrying .rc-wire,
 .rc.is-failed .rc-wire {
-  stroke-dasharray: 4 6;
+    stroke-dasharray: 4 6;
 }
 
 @keyframes rc-snap {
-  from { opacity: 0; transform: scale(0.7); }
-  to   { opacity: 1; transform: scale(1); }
+    from {
+        opacity: 0;
+        transform: scale(0.7);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 .rc.is-connected .rc-wire {
-  stroke: var(--sb-green);
-  opacity: 0.7;
+    stroke: var(--sb-green);
+    opacity: 0.7;
 }
 
 /* --- Text --- */
 .rc-status {
-  font-family: var(--sb-font-head);
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--rc-accent);
-  letter-spacing: -0.02em;
+    font-family: var(--sb-font-head);
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--rc-accent);
+    letter-spacing: -0.02em;
 }
 
 .rc-target {
-  margin-top: 3px;
-  font-size: 12px;
-  font-family: var(--sb-font-mono);
-  color: var(--sb-text-muted);
-  overflow-wrap: anywhere;
+    margin-top: 3px;
+    font-size: 12px;
+    font-family: var(--sb-font-mono);
+    color: var(--sb-text-muted);
+    overflow-wrap: anywhere;
 }
 
 .rc-detail {
-  margin-top: 8px;
-  min-height: 15px;
-  font-size: 11px;
-  color: var(--sb-text-faint);
+    margin-top: 8px;
+    min-height: 15px;
+    font-size: 11px;
+    color: var(--sb-text-faint);
 }
 
 /* --- Progress --- */
@@ -466,126 +511,148 @@
    show: how long ssh has left on the handshake, and how long until the next
    attempt. --rc-duration is set per state from JS. */
 .rc-bar {
-  --rc-duration: 10000ms;
-  height: 3px;
-  margin-top: 14px;
-  border-radius: 99px;
-  background: rgba(var(--sb-overlay-rgb), 0.07);
-  overflow: hidden;
+    --rc-duration: 10000ms;
+    height: 3px;
+    margin-top: 14px;
+    border-radius: 99px;
+    background: rgba(var(--sb-overlay-rgb), 0.07);
+    overflow: hidden;
 }
 
 .rc-bar i {
-  display: block;
-  width: 0;
-  height: 100%;
-  background: var(--rc-accent);
-  border-radius: 99px;
+    display: block;
+    width: 0;
+    height: 100%;
+    background: var(--rc-accent);
+    border-radius: 99px;
 }
 
 .rc.is-connecting .rc-bar i {
-  animation: rc-fill var(--rc-duration) linear forwards;
+    animation: rc-fill var(--rc-duration) linear forwards;
 }
 
 .rc.is-retrying .rc-bar i {
-  animation: rc-drain var(--rc-duration) linear forwards;
+    animation: rc-drain var(--rc-duration) linear forwards;
 }
 
 /* Nothing is pending, so an empty track would just be noise. */
 .rc.is-failed .rc-bar,
 .rc.is-connected .rc-bar {
-  visibility: hidden;
+    visibility: hidden;
 }
 
 @keyframes rc-fill {
-  from { width: 0; }
-  to   { width: 100%; }
+    from {
+        width: 0;
+    }
+    to {
+        width: 100%;
+    }
 }
 
 @keyframes rc-drain {
-  from { width: 100%; }
-  to   { width: 0; }
+    from {
+        width: 100%;
+    }
+    to {
+        width: 0;
+    }
 }
 
 /* --- Actions --- */
 /* Ghost buttons by default — raised with a hairline ring — and the primary
    ink-on-paper button for the one action that matters once we've given up. */
 .rc-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 16px;
 }
 
 .rc-actions button {
-  padding: 6px 14px;
-  font-family: var(--sb-font-head);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--sb-text);
-  background: var(--sb-bg-raised);
-  border: 0;
-  box-shadow: inset 0 0 0 1px var(--sb-line);
-  border-radius: var(--sb-r-control);
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
+    padding: 6px 14px;
+    font-family: var(--sb-font-head);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--sb-text);
+    background: var(--sb-bg-raised);
+    border: 0;
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    border-radius: var(--sb-r-control);
+    cursor: pointer;
+    transition:
+        background 120ms ease,
+        color 120ms ease,
+        opacity 120ms ease;
 }
 
 .rc-actions button:hover {
-  background: rgba(var(--sb-overlay-rgb), 0.06);
-  color: var(--sb-text-strong);
+    background: rgba(var(--sb-overlay-rgb), 0.06);
+    color: var(--sb-text-strong);
 }
 
 .rc.is-failed .rc-retry {
-  color: var(--sb-action-text);
-  background: var(--sb-action);
-  box-shadow: none;
+    color: var(--sb-action-text);
+    background: var(--sb-action);
+    box-shadow: none;
 }
 
 .rc.is-failed .rc-retry:hover {
-  background: var(--sb-action);
-  color: var(--sb-action-text);
-  opacity: 0.88;
+    background: var(--sb-action);
+    color: var(--sb-action-text);
+    opacity: 0.88;
 }
 
 /* Retrying already has a countdown doing the work, so the button is a
    shortcut rather than the main affordance. Once we've given up it is the only
    way forward, and there is no backoff left to cancel. */
 .rc.is-connected .rc-actions,
-.rc.is-failed .rc-cancel { display: none; }
-.rc.is-connecting .rc-retry { display: none; }
+.rc.is-failed .rc-cancel {
+    display: none;
+}
+.rc.is-connecting .rc-retry {
+    display: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .rc,
-  .rc-flow,
-  .rc-spark,
-  .rc-break,
-  .rc-bar i { animation: none; }
-  .rc-flow, .rc-spark { opacity: 0.55; }
-  /* Nothing can fill it, and an always-empty track looks broken. The status
+    .rc,
+    .rc-flow,
+    .rc-spark,
+    .rc-break,
+    .rc-bar i {
+        animation: none;
+    }
+    .rc-flow,
+    .rc-spark {
+        opacity: 0.55;
+    }
+    /* Nothing can fill it, and an always-empty track looks broken. The status
      line still says how many seconds are left. */
-  .rc-bar { visibility: hidden; }
+    .rc-bar {
+        visibility: hidden;
+    }
 }
 
 /* Prevent terminal content from rendering under xterm's scrollbar */
 .terminal-container .xterm-viewport {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(var(--sb-overlay-rgb),0.1) transparent;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--sb-overlay-rgb), 0.1) transparent;
 }
 
 .terminal-container .xterm-viewport::-webkit-scrollbar {
-  width: 8px;
+    width: 8px;
 }
 
 .terminal-container .xterm-viewport::-webkit-scrollbar-track {
-  background: transparent;
+    background: transparent;
 }
 
 .terminal-container .xterm-viewport::-webkit-scrollbar-thumb {
-  background: rgba(var(--sb-overlay-rgb),0.08);
-  border-radius: 99px;
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+    border-radius: 99px;
 }
 
 .terminal-container .xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--sb-overlay-rgb),0.15);
+    background: rgba(var(--sb-overlay-rgb), 0.15);
 }

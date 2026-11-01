@@ -24,14 +24,18 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 import os from 'node:os';
 import tls from 'node:tls';
-import type { AddressInfo, Socket } from 'node:net';
-import { WebSocket, WebSocketServer } from 'ws';
+import type {AddressInfo, Socket} from 'node:net';
+import {WebSocket, WebSocketServer} from 'ws';
 
-import { CLOSE } from '../../domain/phone/protocol';
-import type { ClientMessage, ServerMessage } from '../../domain/phone/protocol';
-import type { Logger } from '../../application/ports/logger';
+import {CLOSE} from '../../domain/phone/protocol';
+import type {ClientMessage, ServerMessage} from '../../domain/phone/protocol';
+import type {Logger} from '../../application/ports/logger';
 import type {
-  ConnectionGrant, DeviceConnection, DeviceLink, DeviceLinkHandlers, ServerIdentity,
+    ConnectionGrant,
+    DeviceConnection,
+    DeviceLink,
+    DeviceLinkHandlers,
+    ServerIdentity,
 } from '../../application/ports/phone-access';
 
 /** Far more than any control message; the phone never sends bulk data. */
@@ -65,230 +69,236 @@ const CGNAT = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
  * (`fe80::1%en0`), which is what binding to one needs.
  */
 export function lanAddresses(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]>): string[] {
-  const addresses: string[] = [];
-  for (const [name, infos] of Object.entries(interfaces)) {
-    if (!infos || NON_LAN_INTERFACE.test(name)) continue;
-    for (const info of infos) {
-      if (info.internal) continue;
-      if (info.family === 'IPv4') {
-        if (!CGNAT.test(info.address)) addresses.push(info.address);
-      } else if (info.address.toLowerCase().startsWith('fe80:')) {
-        addresses.push(`${info.address.split('%')[0]}%${name}`);
-      } else {
-        addresses.push(info.address);
-      }
+    const addresses: string[] = [];
+    for (const [name, infos] of Object.entries(interfaces)) {
+        if (!infos || NON_LAN_INTERFACE.test(name)) continue;
+        for (const info of infos) {
+            if (info.internal) continue;
+            if (info.family === 'IPv4') {
+                if (!CGNAT.test(info.address)) addresses.push(info.address);
+            } else if (info.address.toLowerCase().startsWith('fe80:')) {
+                addresses.push(`${info.address.split('%')[0]}%${name}`);
+            } else {
+                addresses.push(info.address);
+            }
+        }
     }
-  }
-  return addresses;
+    return addresses;
 }
 
 export interface TlsDeviceLinkDeps {
-  /** The domain codec's text-frame parser: null for anything that isn't a ClientMessage. */
-  parse(text: string): ClientMessage | null;
-  /** The domain codec's binary terminal frame (see protocol.ts). */
-  encodeTerminalFrame(sessionId: string, data: string): Uint8Array;
-  log: Logger;
-  /** Where to listen; the LAN addresses by default. Tests pass loopback. */
-  addresses?: () => string[];
-  /** The ping interval; 20 s by default. */
-  keepaliveMs?: number;
+    /** The domain codec's text-frame parser: null for anything that isn't a ClientMessage. */
+    parse(text: string): ClientMessage | null;
+    /** The domain codec's binary terminal frame (see protocol.ts). */
+    encodeTerminalFrame(sessionId: string, data: string): Uint8Array;
+    log: Logger;
+    /** Where to listen; the LAN addresses by default. Tests pass loopback. */
+    addresses?: () => string[];
+    /** The ping interval; 20 s by default. */
+    keepaliveMs?: number;
 }
 
 interface Peer {
-  fingerprint: string;
-  grant: Exclude<ConnectionGrant, null>;
+    fingerprint: string;
+    grant: Exclude<ConnectionGrant, null>;
 }
 
 interface Live {
-  ws: WebSocket;
-  connection: DeviceConnection;
-  missedPings: number;
+    ws: WebSocket;
+    connection: DeviceConnection;
+    missedPings: number;
 }
 
 export class TlsDeviceLink implements DeviceLink {
-  #servers: tls.Server[] = [];
-  #http: http.Server | null = null;
-  #wss: WebSocketServer | null = null;
-  #keepalive: ReturnType<typeof setInterval> | null = null;
-  readonly #sockets = new Set<tls.TLSSocket>();
-  readonly #peers = new WeakMap<Socket, Peer>();
-  readonly #live = new Set<Live>();
+    private servers: tls.Server[] = [];
+    private http: http.Server | null = null;
+    private wss: WebSocketServer | null = null;
+    private keepalive: ReturnType<typeof setInterval> | null = null;
+    private readonly sockets = new Set<tls.TLSSocket>();
+    private readonly peers = new WeakMap<Socket, Peer>();
+    private readonly live = new Set<Live>();
 
-  constructor(private readonly deps: TlsDeviceLinkDeps) {}
+    constructor(private readonly deps: TlsDeviceLinkDeps) {}
 
-  get listening(): boolean {
-    return this.#servers.length > 0;
-  }
-
-  async start(identity: ServerIdentity, port: number, handlers: DeviceLinkHandlers): Promise<number> {
-    if (this.listening) throw new Error('The device link is already listening');
-    const addresses = (this.deps.addresses ?? (() => lanAddresses(os.networkInterfaces())))();
-    if (addresses.length === 0) throw new Error('No local network interface to listen on');
-
-    // The HTTP server never listens: it only parses the upgrade request on
-    // sockets the TLS servers have already authorised and hand to it.
-    const httpServer = http.createServer((_req, res) => {
-      res.writeHead(426, { Connection: 'close' });
-      res.end();
-    });
-    const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD_BYTES });
-    httpServer.on('upgrade', (req, socket, head) => {
-      const peer = this.#peers.get(socket as Socket);
-      if (!peer) return socket.destroy();
-      wss.handleUpgrade(req, socket, head, (ws) => this.#open(ws, peer, handlers));
-    });
-    this.#http = httpServer;
-    this.#wss = wss;
-
-    const options: tls.TlsOptions = {
-      key: identity.keyPem,
-      cert: identity.certPem,
-      minVersion: 'TLSv1.3',
-      requestCert: true,
-      rejectUnauthorized: false,
-      handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
-    };
-
-    let bound = port;
-    for (const address of addresses) {
-      const server = tls.createServer(options, (socket) => this.#secured(socket, handlers));
-      server.on('tlsClientError', (err) => this.deps.log.debug('[phone] TLS handshake failed:', err.message));
-      try {
-        bound = await listen(server, bound, address);
-        this.#servers.push(server);
-        this.deps.log.info(`[phone] listening on ${address} port ${bound}`);
-      } catch (err) {
-        // One address that won't bind (it went away, it's taken) shouldn't
-        // keep the others closed; none binding at all is an error.
-        this.deps.log.warn(`[phone] could not listen on ${address}:`, (err as Error).message);
-      }
-    }
-    if (this.#servers.length === 0) {
-      this.#http = null;
-      this.#wss = null;
-      throw new Error(`Could not listen on any of ${addresses.join(', ')}`);
+    public get listening(): boolean {
+        return this.servers.length > 0;
     }
 
-    this.#keepalive = setInterval(() => this.#ping(), this.deps.keepaliveMs ?? 20_000);
-    this.#keepalive.unref();
-    return bound;
-  }
+    public async start(identity: ServerIdentity, port: number, handlers: DeviceLinkHandlers): Promise<number> {
+        if (this.listening) throw new Error('The device link is already listening');
+        const addresses = (this.deps.addresses ?? (() => lanAddresses(os.networkInterfaces())))();
+        if (addresses.length === 0) throw new Error('No local network interface to listen on');
 
-  async stop(code: number, reason: string): Promise<void> {
-    const servers = this.#servers;
-    if (servers.length === 0) return;
-    this.#servers = [];
-    if (this.#keepalive) clearInterval(this.#keepalive);
-    this.#keepalive = null;
+        // The HTTP server never listens: it only parses the upgrade request on
+        // sockets the TLS servers have already authorised and hand to it.
+        const httpServer = http.createServer((_req, res) => {
+            res.writeHead(426, {Connection: 'close'});
+            res.end();
+        });
+        const wss = new WebSocketServer({noServer: true, maxPayload: MAX_PAYLOAD_BYTES});
+        httpServer.on('upgrade', (req, socket, head) => {
+            const peer = this.peers.get(socket as Socket);
+            if (!peer) return socket.destroy();
+            wss.handleUpgrade(req, socket, head, (ws) => this.open(ws, peer, handlers));
+        });
+        this.http = httpServer;
+        this.wss = wss;
 
-    for (const { ws } of this.#live) ws.close(code, reason);
-    const closed = Promise.all(servers.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
-    const grace = setTimeout(() => {
-      for (const socket of this.#sockets) socket.destroy();
-    }, STOP_GRACE_MS);
-    await closed;
-    clearTimeout(grace);
+        const options: tls.TlsOptions = {
+            key: identity.keyPem,
+            cert: identity.certPem,
+            minVersion: 'TLSv1.3',
+            requestCert: true,
+            rejectUnauthorized: false,
+            handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
+        };
 
-    this.#wss?.close();
-    this.#http = null;
-    this.#wss = null;
-  }
+        let bound = port;
+        for (const address of addresses) {
+            const server = tls.createServer(options, (socket) => this.secured(socket, handlers));
+            server.on('tlsClientError', (err) => this.deps.log.debug('[phone] TLS handshake failed:', err.message));
+            try {
+                bound = await listen(server, bound, address);
+                this.servers.push(server);
+                this.deps.log.info(`[phone] listening on ${address} port ${bound}`);
+            } catch (err) {
+                // One address that won't bind (it went away, it's taken) shouldn't
+                // keep the others closed; none binding at all is an error.
+                this.deps.log.warn(`[phone] could not listen on ${address}:`, (err as Error).message);
+            }
+        }
+        if (this.servers.length === 0) {
+            this.http = null;
+            this.wss = null;
+            throw new Error(`Could not listen on any of ${addresses.join(', ')}`);
+        }
 
-  /** A completed TLS handshake: authorise it, or end it before any HTTP. */
-  #secured(socket: tls.TLSSocket, handlers: DeviceLinkHandlers): void {
-    const fingerprint = fingerprintOf(socket);
-    const grant = fingerprint ? this.#authorize(handlers, fingerprint) : null;
-    if (!fingerprint || !grant) {
-      this.deps.log.info(`[phone] refused a connection from ${socket.remoteAddress}${fingerprint ? '' : ' (no certificate)'}`);
-      socket.destroy();
-      return;
+        this.keepalive = setInterval(() => this.ping(), this.deps.keepaliveMs ?? 20_000);
+        this.keepalive.unref();
+        return bound;
     }
-    this.#sockets.add(socket);
-    socket.on('close', () => this.#sockets.delete(socket));
-    this.#peers.set(socket, { fingerprint, grant });
-    if (!this.#http) {
-      socket.destroy();
-      return;
+
+    public async stop(code: number, reason: string): Promise<void> {
+        const servers = this.servers;
+        if (servers.length === 0) return;
+        this.servers = [];
+        if (this.keepalive) clearInterval(this.keepalive);
+        this.keepalive = null;
+
+        for (const {ws} of this.live) ws.close(code, reason);
+        const closed = Promise.all(
+            servers.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
+        );
+        const grace = setTimeout(() => {
+            for (const socket of this.sockets) socket.destroy();
+        }, STOP_GRACE_MS);
+        await closed;
+        clearTimeout(grace);
+
+        this.wss?.close();
+        this.http = null;
+        this.wss = null;
     }
-    this.#http.emit('connection', socket);
-  }
 
-  #authorize(handlers: DeviceLinkHandlers, fingerprint: string): ConnectionGrant {
-    try {
-      return handlers.authorize(fingerprint);
-    } catch (err) {
-      this.deps.log.error('[phone] authorize threw:', (err as Error).message);
-      return null;
+    /** A completed TLS handshake: authorise it, or end it before any HTTP. */
+    private secured(socket: tls.TLSSocket, handlers: DeviceLinkHandlers): void {
+        const fingerprint = fingerprintOf(socket);
+        const grant = fingerprint ? this.authorize(handlers, fingerprint) : null;
+        if (!fingerprint || !grant) {
+            this.deps.log.info(
+                `[phone] refused a connection from ${socket.remoteAddress}${fingerprint ? '' : ' (no certificate)'}`,
+            );
+            socket.destroy();
+            return;
+        }
+        this.sockets.add(socket);
+        socket.on('close', () => this.sockets.delete(socket));
+        this.peers.set(socket, {fingerprint, grant});
+        if (!this.http) {
+            socket.destroy();
+            return;
+        }
+        this.http.emit('connection', socket);
     }
-  }
 
-  #open(ws: WebSocket, peer: Peer, handlers: DeviceLinkHandlers): void {
-    const { encodeTerminalFrame } = this.deps;
-    const connection: DeviceConnection = {
-      id: crypto.randomUUID(),
-      fingerprint: peer.fingerprint,
-      grant: peer.grant,
-      send(message: ServerMessage) {
-        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
-      },
-      sendTerminal(sessionId: string, data: string) {
-        if (ws.readyState === WebSocket.OPEN) ws.send(encodeTerminalFrame(sessionId, data), { binary: true });
-      },
-      close(code: number, reason: string) {
-        ws.close(code, reason);
-      },
-    };
-    const live: Live = { ws, connection, missedPings: 0 };
-    this.#live.add(live);
-
-    ws.on('pong', () => { live.missedPings = 0; });
-    ws.on('message', (data, isBinary) => {
-      if (isBinary) return ws.close(CLOSE.protocolError, 'Binary frames are not accepted');
-      const message = this.deps.parse(rawText(data));
-      if (!message) return ws.close(CLOSE.protocolError, 'Malformed message');
-      handlers.message(connection, message);
-    });
-    ws.on('error', (err) => this.deps.log.debug('[phone] connection error:', err.message));
-    ws.on('close', () => {
-      this.#live.delete(live);
-      handlers.disconnected(connection);
-    });
-
-    handlers.connected(connection);
-  }
-
-  #ping(): void {
-    for (const live of this.#live) {
-      if (live.missedPings >= MISSED_PINGS_ALLOWED) {
-        this.deps.log.info('[phone] dropping a connection that stopped answering pings');
-        live.ws.terminate();
-        continue;
-      }
-      live.missedPings++;
-      live.ws.ping();
+    private authorize(handlers: DeviceLinkHandlers, fingerprint: string): ConnectionGrant {
+        try {
+            return handlers.authorize(fingerprint);
+        } catch (err) {
+            this.deps.log.error('[phone] authorize threw:', (err as Error).message);
+            return null;
+        }
     }
-  }
+
+    private open(ws: WebSocket, peer: Peer, handlers: DeviceLinkHandlers): void {
+        const {encodeTerminalFrame} = this.deps;
+        const connection: DeviceConnection = {
+            id: crypto.randomUUID(),
+            fingerprint: peer.fingerprint,
+            grant: peer.grant,
+            send(message: ServerMessage) {
+                if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+            },
+            sendTerminal(sessionId: string, data: string) {
+                if (ws.readyState === WebSocket.OPEN) ws.send(encodeTerminalFrame(sessionId, data), {binary: true});
+            },
+            close(code: number, reason: string) {
+                ws.close(code, reason);
+            },
+        };
+        const live: Live = {ws, connection, missedPings: 0};
+        this.live.add(live);
+
+        ws.on('pong', () => {
+            live.missedPings = 0;
+        });
+        ws.on('message', (data, isBinary) => {
+            if (isBinary) return ws.close(CLOSE.protocolError, 'Binary frames are not accepted');
+            const message = this.deps.parse(rawText(data));
+            if (!message) return ws.close(CLOSE.protocolError, 'Malformed message');
+            handlers.message(connection, message);
+        });
+        ws.on('error', (err) => this.deps.log.debug('[phone] connection error:', err.message));
+        ws.on('close', () => {
+            this.live.delete(live);
+            handlers.disconnected(connection);
+        });
+
+        handlers.connected(connection);
+    }
+
+    private ping(): void {
+        for (const live of this.live) {
+            if (live.missedPings >= MISSED_PINGS_ALLOWED) {
+                this.deps.log.info('[phone] dropping a connection that stopped answering pings');
+                live.ws.terminate();
+                continue;
+            }
+            live.missedPings++;
+            live.ws.ping();
+        }
+    }
 }
 
 /** Lowercase hex SHA-256 of the client certificate's DER, or null without one. */
 function fingerprintOf(socket: tls.TLSSocket): string | null {
-  const cert = socket.getPeerCertificate();
-  if (!cert || !cert.raw) return null;
-  return crypto.createHash('sha256').update(cert.raw).digest('hex');
+    const cert = socket.getPeerCertificate();
+    if (!cert || !cert.raw) return null;
+    return crypto.createHash('sha256').update(cert.raw).digest('hex');
 }
 
 function rawText(data: Buffer | ArrayBuffer | Buffer[]): string {
-  if (Array.isArray(data)) return Buffer.concat(data).toString('utf8');
-  if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8');
-  return data.toString('utf8');
+    if (Array.isArray(data)) return Buffer.concat(data).toString('utf8');
+    if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8');
+    return data.toString('utf8');
 }
 
 function listen(server: tls.Server, port: number, host: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, host, () => {
-      server.off('error', reject);
-      resolve((server.address() as AddressInfo).port);
+    return new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(port, host, () => {
+            server.off('error', reject);
+            resolve((server.address() as AddressInfo).port);
+        });
     });
-  });
 }

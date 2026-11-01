@@ -10,12 +10,12 @@
 
 /** True when sleep is disabled, false when it is allowed, null when the output does not say. */
 export function parseSleepDisabled(pmsetOutput: string): boolean | null {
-  const match = /^\s*SleepDisabled\s+(\d+)\s*$/m.exec(pmsetOutput);
-  if (!match) return null;
-  return match[1] !== '0';
+    const match = /^\s*SleepDisabled\s+(\d+)\s*$/m.exec(pmsetOutput);
+    if (!match) return null;
+    return match[1] !== '0';
 }
 
 /** The `pmset` arguments that put the switch in this position. */
 export function disableSleepArgs(disabled: boolean): string[] {
-  return ['disablesleep', disabled ? '1' : '0'];
+    return ['disablesleep', disabled ? '1' : '0'];
 }

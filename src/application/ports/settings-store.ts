@@ -8,7 +8,7 @@
  */
 
 export interface SettingsStore {
-  get<T = unknown>(key: string): T | null;
-  set(key: string, value: unknown): void;
-  delete(key: string): void;
+    get<T = unknown>(key: string): T | null;
+    set(key: string, value: unknown): void;
+    delete(key: string): void;
 }

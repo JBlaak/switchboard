@@ -1,40 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Switchboard</title>
-  <!-- renderer.css is what esbuild extracts from the bundle's CSS imports
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Switchboard</title>
+        <!-- renderer.css is what esbuild extracts from the bundle's CSS imports
        (xterm's stylesheet); style.css is the compiled SCSS. -->
-  <link rel="stylesheet" href="renderer.css">
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <div id="app-container">
-  <div id="sidebar" data-testid="sidebar">
-    <div id="sidebar-header"></div>
-    <div id="search-bar"></div>
-    <div id="sidebar-content" data-testid="sidebar-content"></div>
-    <div id="sidebar-footer" data-testid="sidebar-footer"></div>
-  </div>
-  <div id="sidebar-resize-handle" data-testid="sidebar-resize-handle"></div>
-  <div id="main">
-    <div id="placeholder" data-testid="empty-screen"></div>
-    <div id="settings-viewer" style="display:none;"></div>
-    <div id="session-work" data-testid="session-work" style="display:none;"></div>
-    <div id="project-page" data-testid="project-page" style="display:none;"></div>
-    <div id="tasks-page" data-testid="tasks-page" style="display:none;"></div>
-    <div id="terminal-area">
-      <div id="terminal-header" data-testid="terminal-header" style="display:none;">
-        <div id="terminal-header-info"></div>
-        <div id="terminal-header-controls">
-          <div id="terminal-header-questions" hidden></div>
+        <link rel="stylesheet" href="renderer.css" />
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <div id="app-container">
+            <div id="sidebar" data-testid="sidebar">
+                <div id="sidebar-header"></div>
+                <div id="search-bar"></div>
+                <div id="sidebar-content" data-testid="sidebar-content"></div>
+                <div id="sidebar-footer" data-testid="sidebar-footer"></div>
+            </div>
+            <div id="sidebar-resize-handle" data-testid="sidebar-resize-handle"></div>
+            <div id="main">
+                <div id="placeholder" data-testid="empty-screen"></div>
+                <div id="settings-viewer" style="display: none"></div>
+                <div id="session-work" data-testid="session-work" style="display: none"></div>
+                <div id="project-page" data-testid="project-page" style="display: none"></div>
+                <div id="tasks-page" data-testid="tasks-page" style="display: none"></div>
+                <div id="terminal-area">
+                    <div id="terminal-header" data-testid="terminal-header" style="display: none">
+                        <div id="terminal-header-info"></div>
+                        <div id="terminal-header-controls">
+                            <div id="terminal-header-questions" hidden></div>
+                        </div>
+                    </div>
+                    <div id="terminals"></div>
+                </div>
+            </div>
         </div>
-      </div>
-      <div id="terminals"></div>
-    </div>
-  </div>
-  </div><!-- /app-container -->
-  <script src="renderer.js"></script>
-</body>
+        <!-- /app-container -->
+        <script src="renderer.js"></script>
+    </body>
 </html>

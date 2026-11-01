@@ -10,8 +10,8 @@
  * store, and nothing but the terminal it belongs to cares about it, so it goes
  * straight to the terminal manager.
  */
-import type { RendererEvent } from '../state/events';
-import type { SwitchboardApi } from '../../ipc/api';
+import type {RendererEvent} from '../state/events';
+import type {SwitchboardApi} from '../../ipc/api';
 
 /**
  * Subscribe to every push channel.
@@ -23,38 +23,40 @@ import type { SwitchboardApi } from '../../ipc/api';
  * preload.
  */
 export function installIpcBridge(
-  api: SwitchboardApi,
-  send: (event: RendererEvent) => void,
-  terminalData: (sessionId: string, data: string) => void,
+    api: SwitchboardApi,
+    send: (event: RendererEvent) => void,
+    terminalData: (sessionId: string, data: string) => void,
 ): () => void {
-  const unsubscribes = [
-    api.onTerminalData(terminalData),
-    api.onProcessExited((sessionId, exitCode) => send({ type: 'processExited', sessionId, exitCode })),
-    api.onSessionForked((oldId, newId) => send({ type: 'sessionForked', oldId, newId })),
-    api.onCliBusyState((sessionId, busy) => send({ type: 'cliBusyState', sessionId, busy })),
-    api.onTerminalNotification((sessionId, message) =>
-      send({ type: 'terminalNotification', sessionId, message })),
-    api.onSessionNeedsAttention((sessionId) => send({ type: 'sessionNeedsAttention', sessionId })),
-    api.onSessionAgents((sessionId, agents) => send({ type: 'sessionAgents', sessionId, agents })),
-    // Stamped on arrival: the countdowns are measured from when it got here.
-    api.onRemoteStatus((sessionId, status) =>
-      send({ type: 'remoteStatus', sessionId, status, receivedAt: Date.now() })),
-    api.onQuestionsAsked((pending) => send({ type: 'questionsAsked', pending })),
-    api.onQuestionsSettled((settled) => send({ type: 'questionsSettled', settled })),
-    api.onProjectsChanged(() => send({ type: 'projectsChanged' })),
-    api.onStatusUpdate((text, kind) => send({ type: 'statusUpdate', text, kind })),
-    api.onFullscreenChanged((isFullscreen) => send({ type: 'fullscreenChanged', isFullscreen })),
-    api.onUpdateAvailable((update) => send({ type: 'updateAvailable', update })),
-    api.onSessionWorkSnapshot((snapshot) => send({ type: 'sessionWorkSnapshot', snapshot })),
-    api.onPrStatusChanged((change) => send({ type: 'prStatusChanged', change })),
-    api.onLaunchRequested((projectPath, initialPrompt) => send({ type: 'launchRequested', projectPath, initialPrompt })),
-    api.onPickerRequested((initialPrompt, reason) => send({ type: 'pickerRequested', initialPrompt, reason })),
-    api.onPhoneAccessChanged((state) => send({ type: 'phoneAccessChanged', state })),
-    api.onTerminalOwnerChanged((sessionId, owner) => send({ type: 'terminalOwnerChanged', sessionId, owner })),
-    api.onSessionStarted((sessionId, projectPath) => send({ type: 'sessionStarted', sessionId, projectPath })),
-    api.onSessionArchived((sessionId) => send({ type: 'sessionArchived', sessionId })),
-    api.onTasksChanged((update) => send({ type: 'tasksChanged', update })),
-    api.onSessionTaskChanged((sessionId, taskId) => send({ type: 'sessionTaskChanged', sessionId, taskId })),
-  ];
-  return () => unsubscribes.forEach(unsubscribe => unsubscribe());
+    const unsubscribes = [
+        api.onTerminalData(terminalData),
+        api.onProcessExited((sessionId, exitCode) => send({type: 'processExited', sessionId, exitCode})),
+        api.onSessionForked((oldId, newId) => send({type: 'sessionForked', oldId, newId})),
+        api.onCliBusyState((sessionId, busy) => send({type: 'cliBusyState', sessionId, busy})),
+        api.onTerminalNotification((sessionId, message) => send({type: 'terminalNotification', sessionId, message})),
+        api.onSessionNeedsAttention((sessionId) => send({type: 'sessionNeedsAttention', sessionId})),
+        api.onSessionAgents((sessionId, agents) => send({type: 'sessionAgents', sessionId, agents})),
+        // Stamped on arrival: the countdowns are measured from when it got here.
+        api.onRemoteStatus((sessionId, status) =>
+            send({type: 'remoteStatus', sessionId, status, receivedAt: Date.now()}),
+        ),
+        api.onQuestionsAsked((pending) => send({type: 'questionsAsked', pending})),
+        api.onQuestionsSettled((settled) => send({type: 'questionsSettled', settled})),
+        api.onProjectsChanged(() => send({type: 'projectsChanged'})),
+        api.onStatusUpdate((text, kind) => send({type: 'statusUpdate', text, kind})),
+        api.onFullscreenChanged((isFullscreen) => send({type: 'fullscreenChanged', isFullscreen})),
+        api.onUpdateAvailable((update) => send({type: 'updateAvailable', update})),
+        api.onSessionWorkSnapshot((snapshot) => send({type: 'sessionWorkSnapshot', snapshot})),
+        api.onPrStatusChanged((change) => send({type: 'prStatusChanged', change})),
+        api.onLaunchRequested((projectPath, initialPrompt) =>
+            send({type: 'launchRequested', projectPath, initialPrompt}),
+        ),
+        api.onPickerRequested((initialPrompt, reason) => send({type: 'pickerRequested', initialPrompt, reason})),
+        api.onPhoneAccessChanged((state) => send({type: 'phoneAccessChanged', state})),
+        api.onTerminalOwnerChanged((sessionId, owner) => send({type: 'terminalOwnerChanged', sessionId, owner})),
+        api.onSessionStarted((sessionId, projectPath) => send({type: 'sessionStarted', sessionId, projectPath})),
+        api.onSessionArchived((sessionId) => send({type: 'sessionArchived', sessionId})),
+        api.onTasksChanged((update) => send({type: 'tasksChanged', update})),
+        api.onSessionTaskChanged((sessionId, taskId) => send({type: 'sessionTaskChanged', sessionId, taskId})),
+    ];
+    return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
 }

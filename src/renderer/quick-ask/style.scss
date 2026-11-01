@@ -22,53 +22,52 @@ $spring-out: cubic-bezier(0.2, 0.9, 0.3, 1.2);
    over a white page, a black terminal or a busy photo. A backdrop-filter would
    only blur the page's own transparent pixels, so there is none. */
 :root {
-  --qa-glass:   color-mix(in srgb, var(--sb-bg-raised) 80%, transparent);
-  --qa-rim:     rgba(var(--sb-overlay-rgb), 0.22);
-  --qa-hi:      rgba(var(--sb-overlay-rgb), 0.3);
-  --qa-lo:      rgba(var(--sb-shadow-rgb), 0.35);
-  --qa-lens:    rgba(var(--sb-accent-rgb), 0.24);
-  --qa-sheen:   color-mix(in srgb, var(--sb-accent) 45%, white);
-  --qa-divider: rgba(var(--sb-overlay-rgb), 0.12);
-  /* Tighter than the prototype's: the window holds 20 px either side of the slab. */
-  --qa-shadow:
-    0 18px 34px -14px rgba(var(--sb-shadow-rgb), 0.6),
-    0 2px 8px rgba(var(--sb-shadow-rgb), 0.4);
+    --qa-glass: color-mix(in srgb, var(--sb-bg-raised) 80%, transparent);
+    --qa-rim: rgba(var(--sb-overlay-rgb), 0.22);
+    --qa-hi: rgba(var(--sb-overlay-rgb), 0.3);
+    --qa-lo: rgba(var(--sb-shadow-rgb), 0.35);
+    --qa-lens: rgba(var(--sb-accent-rgb), 0.24);
+    --qa-sheen: color-mix(in srgb, var(--sb-accent) 45%, white);
+    --qa-divider: rgba(var(--sb-overlay-rgb), 0.12);
+    /* Tighter than the prototype's: the window holds 20 px either side of the slab. */
+    --qa-shadow: 0 18px 34px -14px rgba(var(--sb-shadow-rgb), 0.6), 0 2px 8px rgba(var(--sb-shadow-rgb), 0.4);
 }
 
 /* Glass in the light is lit from within: white rims and edges, as in the
    prototype, over the palette's own white. */
 @media (prefers-color-scheme: light) {
-  :root {
-    --qa-rim:     rgba(255, 255, 255, 0.72);
-    --qa-hi:      rgba(255, 255, 255, 0.9);
-    --qa-lo:      rgba(var(--sb-overlay-rgb), 0.08);
-    --qa-lens:    rgba(var(--sb-accent-rgb), 0.16);
-    --qa-sheen:   rgba(255, 255, 255, 0.95);
-    --qa-divider: rgba(var(--sb-overlay-rgb), 0.1);
-    --qa-shadow:
-      0 18px 34px -14px rgba(var(--sb-shadow-rgb), 0.3),
-      0 2px 8px rgba(var(--sb-shadow-rgb), 0.12);
-  }
+    :root {
+        --qa-rim: rgba(255, 255, 255, 0.72);
+        --qa-hi: rgba(255, 255, 255, 0.9);
+        --qa-lo: rgba(var(--sb-overlay-rgb), 0.08);
+        --qa-lens: rgba(var(--sb-accent-rgb), 0.16);
+        --qa-sheen: rgba(255, 255, 255, 0.95);
+        --qa-divider: rgba(var(--sb-overlay-rgb), 0.1);
+        --qa-shadow: 0 18px 34px -14px rgba(var(--sb-shadow-rgb), 0.3), 0 2px 8px rgba(var(--sb-shadow-rgb), 0.12);
+    }
 }
 
 /* Reduce transparency: the user asked for none, so the surface is solid. Set
    from main's reading of it at each show. */
 :root[data-reduce-transparency] {
-  --qa-glass: var(--sb-bg-raised);
+    --qa-glass: var(--sb-bg-raised);
 }
 
 /* The window is a still transparent area larger than the slab (G3): nothing
    but the slab paints. */
-html, body {
-  background: transparent;
+html,
+body {
+    background: transparent;
 }
 
-body { display: block; }
+body {
+    display: block;
+}
 
 @property --qa-orbit {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
 }
 
 /* ========== THE SLAB ==========
@@ -76,142 +75,162 @@ body { display: block; }
    sits a quarter of the way down the display (quick-ask-bounds). It starts as
    the drop, hidden; `motion.ts` takes it from there. */
 .quick-ask-slab {
-  position: absolute;
-  top: 20px;
-  left: 50%;
-  box-sizing: border-box;
-  width: $row + 2 * $rim;
-  height: $row + 2 * $rim;
-  opacity: 0;
-  transform: translateX(-50%) scale(0.5);
-  transform-origin: 50% 30px;
-  overflow: hidden;
-  isolation: isolate;
-  border-radius: 30px;
-  background: var(--qa-glass);
-  border: $rim solid var(--qa-rim);
-  box-shadow: var(--qa-shadow), inset 0 1px 0 var(--qa-hi), inset 0 -1px 0 var(--qa-lo);
-  will-change: transform, width, height, opacity;
-
-  /* The soft sheen, from the top left. */
-  &::before {
-    content: '';
     position: absolute;
-    inset: 0;
-    z-index: -1;
-    border-radius: inherit;
-    pointer-events: none;
-    background: radial-gradient(120% 70% at 22% -20%, var(--qa-hi), transparent 55%);
-    opacity: 0.5;
-  }
+    top: 20px;
+    left: 50%;
+    box-sizing: border-box;
+    width: $row + 2 * $rim;
+    height: $row + 2 * $rim;
+    opacity: 0;
+    transform: translateX(-50%) scale(0.5);
+    transform-origin: 50% 30px;
+    overflow: hidden;
+    isolation: isolate;
+    border-radius: 30px;
+    background: var(--qa-glass);
+    border: $rim solid var(--qa-rim);
+    box-shadow:
+        var(--qa-shadow),
+        inset 0 1px 0 var(--qa-hi),
+        inset 0 -1px 0 var(--qa-lo);
+    will-change: transform, width, height, opacity;
+
+    /* The soft sheen, from the top left. */
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        border-radius: inherit;
+        pointer-events: none;
+        background: radial-gradient(120% 70% at 22% -20%, var(--qa-hi), transparent 55%);
+        opacity: 0.5;
+    }
 }
 
 /* While Patch routes, or a capture saves or is taken back: a highlight orbits
    the rim, a lap every 1.6 s (G4). */
 .quick-ask-sheen {
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1.5px;
-  pointer-events: none;
-  opacity: 0;
-  background: conic-gradient(from var(--qa-orbit), transparent 0 62%, var(--qa-sheen) 80%, transparent 96%);
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  transition: opacity 200ms;
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1.5px;
+    pointer-events: none;
+    opacity: 0;
+    background: conic-gradient(from var(--qa-orbit), transparent 0 62%, var(--qa-sheen) 80%, transparent 96%);
+    mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    transition: opacity 200ms;
 }
 
 .quick-ask-slab.is-waiting .quick-ask-sheen,
 .quick-ask-slab.is-saving .quick-ask-sheen,
 .quick-ask-slab.is-undoing .quick-ask-sheen {
-  opacity: 1;
-  animation: qa-orbit 1.6s linear infinite;
+    opacity: 1;
+    animation: qa-orbit 1.6s linear infinite;
 }
 
 @keyframes qa-orbit {
-  to { --qa-orbit: 360deg; }
+    to {
+        --qa-orbit: 360deg;
+    }
 }
 
 /* The content at full width throughout, so the slab's growing reveals it
    rather than reflowing it. */
 .quick-ask-inner {
-  position: relative;
-  width: $slab-width - 2 * $rim;
+    position: relative;
+    width: $slab-width - 2 * $rim;
 }
 
 /* ---- The box's row: the mark, the text, the hint ---- */
 .quick-ask-mark {
-  position: absolute;
-  top: 17px;
-  left: 17px;
-  z-index: 1;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--sb-accent);
-  color: var(--sb-bg-raised);
-  display: grid;
-  place-items: center;
-  will-change: transform;
+    position: absolute;
+    top: 17px;
+    left: 17px;
+    z-index: 1;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--sb-accent);
+    color: var(--sb-bg-raised);
+    display: grid;
+    place-items: center;
+    will-change: transform;
 
-  svg { width: 15px; height: 15px; }
+    svg {
+        width: 15px;
+        height: 15px;
+    }
 }
 
 .quick-ask-hint {
-  position: absolute;
-  top: 0;
-  right: 18px;
-  height: $row;
-  display: flex;
-  align-items: center;
-  font-size: 12.5px;
-  color: var(--sb-text-muted);
-  white-space: nowrap;
-  pointer-events: none;
+    position: absolute;
+    top: 0;
+    right: 18px;
+    height: $row;
+    display: flex;
+    align-items: center;
+    font-size: 12.5px;
+    color: var(--sb-text-muted);
+    white-space: nowrap;
+    pointer-events: none;
 }
 
 .quick-ask-slab:not(.is-editing) .quick-ask-hint {
-  visibility: hidden;
+    visibility: hidden;
 }
 
 .quick-ask-slab {
-  /* The box fills the row, without a field's own surface: the slab is it. */
-  .ask {
-    width: 100%;
-    max-width: none;
-    margin: 0;
-  }
+    /* The box fills the row, without a field's own surface: the slab is it. */
+    .ask {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+    }
 
-  .ask-box {
-    min-height: $row;
-    max-height: calc(5 * 24px + 36px);
-    padding: 18px 150px 18px 55px;
-    background: none;
-    border-radius: 0;
-    box-shadow: none;
-    font-size: 17px;
-    line-height: 24px;
-    color: var(--sb-text-strong);
+    .ask-box {
+        min-height: $row;
+        max-height: calc(5 * 24px + 36px);
+        padding: 18px 150px 18px 55px;
+        background: none;
+        border-radius: 0;
+        box-shadow: none;
+        font-size: 17px;
+        line-height: 24px;
+        color: var(--sb-text-strong);
 
-    &:focus { box-shadow: none; }
-    &::placeholder { color: var(--sb-text-muted); }
-  }
+        &:focus {
+            box-shadow: none;
+        }
+        &::placeholder {
+            color: var(--sb-text-muted);
+        }
+    }
 
-  /* The rim's highlight says it waits; the box doesn't breathe as well. */
-  .ask.is-waiting .ask-box:focus { animation: none; }
+    /* The rim's highlight says it waits; the box doesn't breathe as well. */
+    .ask.is-waiting .ask-box:focus {
+        animation: none;
+    }
 
-  .ask-box, .quick-ask-hint {
-    transition: opacity 200ms, transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
-  }
+    .ask-box,
+    .quick-ask-hint {
+        transition:
+            opacity 200ms,
+            transform 260ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+    }
 }
 
 /* A drop, opening or closing: the text waits until the slab is past half its
    width. */
 .quick-ask-slab[data-collapsed] {
-  .ask-box, .quick-ask-hint {
-    opacity: 0;
-    transition-duration: 120ms;
-  }
+    .ask-box,
+    .quick-ask-hint {
+        opacity: 0;
+        transition-duration: 120ms;
+    }
 }
 
 /* A result: the text slides out while the result slides in. */
@@ -219,182 +238,219 @@ body { display: block; }
 .quick-ask-slab.is-saved,
 .quick-ask-slab.is-undoing,
 .quick-ask-slab.is-undone {
-  .ask-box {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
+    .ask-box {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
 }
 
 .quick-ask-result {
-  position: absolute;
-  top: 0;
-  left: 55px;
-  right: 16px;
-  height: $row;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  animation: qa-fade 220ms both, qa-rise-10 300ms $spring-out both;
+    position: absolute;
+    top: 0;
+    left: 55px;
+    right: 16px;
+    height: $row;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    animation:
+        qa-fade 220ms both,
+        qa-rise-10 300ms $spring-out both;
 }
 
 .quick-ask-done {
-  color: var(--sb-green);
-  font-family: var(--sb-font-head);
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    color: var(--sb-green);
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .quick-ask-where {
-  color: var(--sb-text-strong);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
+    color: var(--sb-text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .quick-ask-result.is-busy .quick-ask-where {
-  color: var(--sb-text-muted);
+    color: var(--sb-text-muted);
 }
 
 /* ⌘Z, at the row's end while the saved line shows (C4). */
 .quick-ask-result.has-undo {
-  right: 112px;
+    right: 112px;
 }
 
 .quick-ask-undo {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 9px;
-  border: none;
-  border-radius: 10px;
-  background: none;
-  font: inherit;
-  font-size: 13px;
-  color: var(--sb-text-muted);
-  cursor: pointer;
-  transition: background 140ms, color 140ms;
-  animation: qa-fade 220ms both, qa-rise-10 300ms $spring-out both;
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    border: none;
+    border-radius: 10px;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: var(--sb-text-muted);
+    cursor: pointer;
+    transition:
+        background 140ms,
+        color 140ms;
+    animation:
+        qa-fade 220ms both,
+        qa-rise-10 300ms $spring-out both;
 
-  &:hover {
-    background: var(--qa-lens);
-    color: var(--sb-text-strong);
-  }
+    &:hover {
+        background: var(--qa-lens);
+        color: var(--sb-text-strong);
+    }
 }
 
 /* ---- Under the row: waiting, saving, Patch's note ---- */
 .quick-ask-foot {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 18px;
-  border-top: 1px solid var(--qa-divider);
-  font-size: 13.5px;
-  color: var(--sb-text-muted);
-  animation: qa-fade 200ms both, qa-rise-6 300ms $spring-out both;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 18px;
+    border-top: 1px solid var(--qa-divider);
+    font-size: 13.5px;
+    color: var(--sb-text-muted);
+    animation:
+        qa-fade 200ms both,
+        qa-rise-6 300ms $spring-out both;
 }
 
 .quick-ask-line {
-  line-height: 1.45;
+    line-height: 1.45;
 }
 
 .quick-ask-spinner {
-  display: none;
-  flex: none;
-  width: 12px;
-  height: 12px;
-  box-sizing: border-box;
-  border-radius: 50%;
-  border: 2px solid var(--qa-divider);
-  border-top-color: var(--sb-accent);
-  animation: qa-spin 0.9s linear infinite;
+    display: none;
+    flex: none;
+    width: 12px;
+    height: 12px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 2px solid var(--qa-divider);
+    border-top-color: var(--sb-accent);
+    animation: qa-spin 0.9s linear infinite;
 }
 
 @keyframes qa-spin {
-  to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* ---- Not sure: the choices, 45 ms apart ---- */
 .quick-ask-slab {
-  .ask-choices {
-    position: static;
-    padding: 6px;
-    border-top: 1px solid var(--qa-divider);
-    border-radius: 0;
-    background: none;
-    box-shadow: none;
-  }
-
-  .ask-choice {
-    min-height: 0;
-    padding: 8px 11px;
-    border-radius: 10px;
-    font-size: 15px;
-    animation: qa-fade 200ms both, qa-rise-8 320ms $spring-out both;
-    transition: background 140ms;
-
-    @for $i from 2 through 8 {
-      &:nth-child(#{$i}) { animation-delay: ($i - 1) * 45ms; }
+    .ask-choices {
+        position: static;
+        padding: 6px;
+        border-top: 1px solid var(--qa-divider);
+        border-radius: 0;
+        background: none;
+        box-shadow: none;
     }
 
-    /* The tinted lens. */
-    &.selected {
-      background: var(--qa-lens);
-      box-shadow: inset 0 0 0 1px var(--qa-rim);
-    }
-  }
+    .ask-choice {
+        min-height: 0;
+        padding: 8px 11px;
+        border-radius: 10px;
+        font-size: 15px;
+        animation:
+            qa-fade 200ms both,
+            qa-rise-8 320ms $spring-out both;
+        transition: background 140ms;
 
-  .ask-hints {
-    margin: 6px -6px -6px;
-    padding: 9px 18px;
-    border-top: 1px solid var(--qa-divider);
-    font-size: 12.5px;
-    color: var(--sb-text-muted);
-    animation: qa-fade 200ms both, qa-rise-6 300ms $spring-out both;
-  }
+        @for $i from 2 through 8 {
+            &:nth-child(#{$i}) {
+                animation-delay: ($i - 1) * 45ms;
+            }
+        }
+
+        /* The tinted lens. */
+        &.selected {
+            background: var(--qa-lens);
+            box-shadow: inset 0 0 0 1px var(--qa-rim);
+        }
+    }
+
+    .ask-hints {
+        margin: 6px -6px -6px;
+        padding: 9px 18px;
+        border-top: 1px solid var(--qa-divider);
+        font-size: 12.5px;
+        color: var(--sb-text-muted);
+        animation:
+            qa-fade 200ms both,
+            qa-rise-6 300ms $spring-out both;
+    }
 }
 
-@keyframes qa-fade   { from { opacity: 0; } }
-@keyframes qa-rise-6  { from { transform: translateY(6px); } }
-@keyframes qa-rise-8  { from { transform: translateY(8px); } }
-@keyframes qa-rise-10 { from { transform: translateY(10px); } }
+@keyframes qa-fade {
+    from {
+        opacity: 0;
+    }
+}
+@keyframes qa-rise-6 {
+    from {
+        transform: translateY(6px);
+    }
+}
+@keyframes qa-rise-8 {
+    from {
+        transform: translateY(8px);
+    }
+}
+@keyframes qa-rise-10 {
+    from {
+        transform: translateY(10px);
+    }
+}
 
 /* ========== REDUCE MOTION ==========
    Every moment a 120 ms fade, and a spinner in place of the rim's highlight.
    Set from main's reading of it at each show. */
 :root[data-reduce-motion] {
-  .quick-ask-sheen { display: none; }
-  .quick-ask-spinner { display: inline-block; }
-
-  .quick-ask-slab {
-    .ask-box, .quick-ask-hint {
-      transform: none;
-      transition: opacity 120ms;
+    .quick-ask-sheen {
+        display: none;
     }
-  }
+    .quick-ask-spinner {
+        display: inline-block;
+    }
 
-  .quick-ask-result,
-  .quick-ask-undo,
-  .quick-ask-foot,
-  .quick-ask-slab .ask-choice,
-  .quick-ask-slab .ask-hints {
-    animation: qa-fade 120ms both;
-  }
+    .quick-ask-slab {
+        .ask-box,
+        .quick-ask-hint {
+            transform: none;
+            transition: opacity 120ms;
+        }
+    }
+
+    .quick-ask-result,
+    .quick-ask-undo,
+    .quick-ask-foot,
+    .quick-ask-slab .ask-choice,
+    .quick-ask-slab .ask-hints {
+        animation: qa-fade 120ms both;
+    }
 }
 
 /* As on the Session work page, whose hints the list's borrow. */
 .sw-kbd {
-  font: 600 10px var(--sb-font-mono);
-  color: var(--sb-text-muted);
-  border: 1px solid var(--sb-border-strong);
-  border-radius: 5px;
-  padding: 1px 5px;
-  flex-shrink: 0;
+    font: 600 10px var(--sb-font-mono);
+    color: var(--sb-text-muted);
+    border: 1px solid var(--sb-border-strong);
+    border-radius: 5px;
+    padding: 1px 5px;
+    flex-shrink: 0;
 }

@@ -13,27 +13,27 @@
 
 /** One skill or command as found on disk, before it is named. */
 export interface SkillEntry {
-  /** Its own name: the frontmatter `name`, or its folder or file name. */
-  name: string;
-  /** The plugin it comes from, if any. */
-  plugin?: string;
+    /** Its own name: the frontmatter `name`, or its folder or file name. */
+    name: string;
+    /** The plugin it comes from, if any. */
+    plugin?: string;
 }
 
 /** The skills a request may name, by slash command, without the `/`. */
 export interface RouteSkills {
-  /** Available in every project. */
-  everywhere: string[];
-  /** A project's own skills, beyond `everywhere`, by project path. */
-  byProject: Record<string, string[]>;
+    /** Available in every project. */
+    everywhere: string[];
+    /** A project's own skills, beyond `everywhere`, by project path. */
+    byProject: Record<string, string[]>;
 }
 
-export const NO_SKILLS: RouteSkills = { everywhere: [], byProject: {} };
+export const NO_SKILLS: RouteSkills = {everywhere: [], byProject: {}};
 
 /** A skill's name and whether the user can type it as a command. */
 export interface SkillFrontmatter {
-  name?: string;
-  /** False only for `user-invocable: false`, which takes it off the `/` menu. */
-  userInvocable: boolean;
+    name?: string;
+    /** False only for `user-invocable: false`, which takes it off the `/` menu. */
+    userInvocable: boolean;
 }
 
 const FRONTMATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
@@ -45,13 +45,16 @@ const FRONTMATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
  * still counts, under its folder or file name.
  */
 export function readSkillFrontmatter(text: string): SkillFrontmatter {
-  const block = text.match(FRONTMATTER)?.[1] ?? '';
-  const value = (key: string) => {
-    const line = block.split(/\r?\n/).find(row => row.startsWith(`${key}:`));
-    return line?.slice(key.length + 1).trim().replace(/^(['"])(.*)\1$/, '$2');
-  };
-  const name = value('name');
-  return { ...(name ? { name } : {}), userInvocable: value('user-invocable') !== 'false' };
+    const block = text.match(FRONTMATTER)?.[1] ?? '';
+    const value = (key: string) => {
+        const line = block.split(/\r?\n/).find((row) => row.startsWith(`${key}:`));
+        return line
+            ?.slice(key.length + 1)
+            .trim()
+            .replace(/^(['"])(.*)\1$/, '$2');
+    };
+    const name = value('name');
+    return {...(name ? {name} : {}), userInvocable: value('user-invocable') !== 'false'};
 }
 
 /**
@@ -62,13 +65,14 @@ export function readSkillFrontmatter(text: string): SkillFrontmatter {
  * The user's and the project's own skills always keep the plain name.
  */
 export function skillCommands(entries: SkillEntry[]): string[] {
-  // The same skill found twice (a plugin listing a folder it also has by default) is one skill.
-  const unique = [...new Map(entries.map(entry => [`${entry.plugin ?? ''}\0${entry.name}`, entry])).values()];
-  const count = new Map<string, number>();
-  for (const entry of unique) count.set(entry.name, (count.get(entry.name) ?? 0) + 1);
-  const commands = unique.map(entry =>
-    entry.plugin && (count.get(entry.name) ?? 0) > 1 ? `${entry.plugin}:${entry.name}` : entry.name);
-  return [...new Set(commands)].sort();
+    // The same skill found twice (a plugin listing a folder it also has by default) is one skill.
+    const unique = [...new Map(entries.map((entry) => [`${entry.plugin ?? ''}\0${entry.name}`, entry])).values()];
+    const count = new Map<string, number>();
+    for (const entry of unique) count.set(entry.name, (count.get(entry.name) ?? 0) + 1);
+    const commands = unique.map((entry) =>
+        entry.plugin && (count.get(entry.name) ?? 0) > 1 ? `${entry.plugin}:${entry.name}` : entry.name,
+    );
+    return [...new Set(commands)].sort();
 }
 
 /**
@@ -79,15 +83,15 @@ export function skillCommands(entries: SkillEntry[]): string[] {
  * listed under the project.
  */
 export function routeSkills(everywhere: SkillEntry[], byProject: Record<string, SkillEntry[]>): RouteSkills {
-  const shared = skillCommands(everywhere);
-  const known = new Set(shared);
-  const own: Record<string, string[]> = {};
-  for (const [projectPath, entries] of Object.entries(byProject)) {
-    if (entries.length === 0) continue;
-    const extra = skillCommands([...everywhere, ...entries]).filter(command => !known.has(command));
-    if (extra.length > 0) own[projectPath] = extra;
-  }
-  return { everywhere: shared, byProject: own };
+    const shared = skillCommands(everywhere);
+    const known = new Set(shared);
+    const own: Record<string, string[]> = {};
+    for (const [projectPath, entries] of Object.entries(byProject)) {
+        if (entries.length === 0) continue;
+        const extra = skillCommands([...everywhere, ...entries]).filter((command) => !known.has(command));
+        if (extra.length > 0) own[projectPath] = extra;
+    }
+    return {everywhere: shared, byProject: own};
 }
 
 /**
@@ -96,6 +100,6 @@ export function routeSkills(everywhere: SkillEntry[], byProject: Record<string, 
  * holds for a request Haiku couldn't place.
  */
 export function startsOnSharedSkill(prompt: string, skills: RouteSkills | undefined): boolean {
-  const command = prompt.trim().match(/^\/(\S+)/)?.[1];
-  return command !== undefined && (skills?.everywhere ?? []).includes(command);
+    const command = prompt.trim().match(/^\/(\S+)/)?.[1];
+    return command !== undefined && (skills?.everywhere ?? []).includes(command);
 }

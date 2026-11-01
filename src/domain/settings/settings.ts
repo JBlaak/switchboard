@@ -6,12 +6,12 @@
  * the defaults it fills from are here so the launch path, the settings panel
  * and the scheduler all resolve a value the same way.
  */
-import type { RemoteConfig } from '../project/remote-target';
-import type { RemoteSessionRecord } from '../session/session';
-import type { AppIcon } from './app-icon';
-import type { Appearance } from './appearance';
-import { DEFAULT_WEATHER_LOCATION, parseWeatherLocation } from '../weather/weather';
-import type { WeatherLocation } from '../weather/weather';
+import type {RemoteConfig} from '../project/remote-target';
+import type {RemoteSessionRecord} from '../session/session';
+import type {AppIcon} from './app-icon';
+import type {Appearance} from './appearance';
+import {DEFAULT_WEATHER_LOCATION, parseWeatherLocation} from '../weather/weather';
+import type {WeatherLocation} from '../weather/weather';
 
 /**
  * The `global` settings blob.
@@ -20,61 +20,61 @@ import type { WeatherLocation } from '../weather/weather';
  * and only the ones read in code need to be named.
  */
 export interface GlobalSettings {
-  hiddenProjects?: string[];
-  remoteProjects?: RemoteProjectSetting[];
-  windowBounds?: WindowBounds;
-  /**
-   * Global only, never per project: it is one window's colour scheme. Read it
-   * through `normaliseAppearance`, which supplies the 'system' default.
-   */
-  appearance?: Appearance;
-  /**
-   * Global only. Whether the empty screen fetches the weather at all; read it
-   * through `resolveWeatherEnabled`, which supplies the `true` default.
-   */
-  weatherEnabled?: boolean;
-  /**
-   * Global only. Where the weather is fetched for; read it through
-   * `resolveWeatherLocation`, which supplies Amsterdam.
-   */
-  weatherLocation?: WeatherLocation;
-  /**
-   * Global only. Whether ⌥Space opens Quick Ask; read it through
-   * `resolveQuickAskEnabled`, which supplies the `true` default.
-   */
-  quickAsk?: boolean;
-  /**
-   * Global only. Whether archiving a session removes the worktrees it worked
-   * in; read it through `resolveRemoveWorktreeOnArchive`, which supplies the
-   * `false` default.
-   */
-  removeWorktreeOnArchive?: boolean;
-  /**
-   * Global only. Which icon the running app shows in the Dock; read it through
-   * `normaliseAppIcon`, which supplies 'switchboard'.
-   */
-  appIcon?: AppIcon;
-  /**
-   * Global only. The BlaakTasks MCP address, e.g. `https://tasks.example.com/mcp`:
-   * the one switch for every part of Switchboard that talks to BlaakTasks
-   * (#244). Empty, the default, keeps it all off. Read it through
-   * `resolveBlaakTasksUrl`.
-   */
-  blaakTasksUrl?: string;
-  [key: string]: unknown;
+    hiddenProjects?: string[];
+    remoteProjects?: RemoteProjectSetting[];
+    windowBounds?: WindowBounds;
+    /**
+     * Global only, never per project: it is one window's colour scheme. Read it
+     * through `normaliseAppearance`, which supplies the 'system' default.
+     */
+    appearance?: Appearance;
+    /**
+     * Global only. Whether the empty screen fetches the weather at all; read it
+     * through `resolveWeatherEnabled`, which supplies the `true` default.
+     */
+    weatherEnabled?: boolean;
+    /**
+     * Global only. Where the weather is fetched for; read it through
+     * `resolveWeatherLocation`, which supplies Amsterdam.
+     */
+    weatherLocation?: WeatherLocation;
+    /**
+     * Global only. Whether ⌥Space opens Quick Ask; read it through
+     * `resolveQuickAskEnabled`, which supplies the `true` default.
+     */
+    quickAsk?: boolean;
+    /**
+     * Global only. Whether archiving a session removes the worktrees it worked
+     * in; read it through `resolveRemoveWorktreeOnArchive`, which supplies the
+     * `false` default.
+     */
+    removeWorktreeOnArchive?: boolean;
+    /**
+     * Global only. Which icon the running app shows in the Dock; read it through
+     * `normaliseAppIcon`, which supplies 'switchboard'.
+     */
+    appIcon?: AppIcon;
+    /**
+     * Global only. The BlaakTasks MCP address, e.g. `https://tasks.example.com/mcp`:
+     * the one switch for every part of Switchboard that talks to BlaakTasks
+     * (#244). Empty, the default, keeps it all off. Read it through
+     * `resolveBlaakTasksUrl`.
+     */
+    blaakTasksUrl?: string;
+    [key: string]: unknown;
 }
 
 /** A remote project as stored in the `global` settings blob. */
 export interface RemoteProjectSetting extends RemoteConfig {
-  sessions?: RemoteSessionRecord[];
+    sessions?: RemoteSessionRecord[];
 }
 
 /** Persisted window geometry. */
 export interface WindowBounds {
-  x?: number;
-  y?: number;
-  width: number;
-  height: number;
+    x?: number;
+    y?: number;
+    width: number;
+    height: number;
 }
 
 /** The key the global blob is stored under. */
@@ -82,7 +82,7 @@ export const GLOBAL_SETTINGS_KEY = 'global';
 
 /** The key a project's overrides are stored under. */
 export function projectSettingsKey(projectPath: string): string {
-  return 'project:' + projectPath;
+    return 'project:' + projectPath;
 }
 
 /**
@@ -94,19 +94,19 @@ export function projectSettingsKey(projectPath: string): string {
  * without a fallback at every use.
  */
 export const SETTING_DEFAULTS = {
-  permissionMode: null,
-  dangerouslySkipPermissions: false,
-  worktree: false,
-  chrome: false,
-  preLaunchCmd: '',
-  addDirs: '',
-  visibleSessionCount: 25,
-  sidebarWidth: 340,
-  terminalTheme: 'switchboard',
-  terminalFontFamily: '',
-  terminalFontSize: 12,
-  terminalLineHeight: 1,
-  shellProfile: 'auto',
+    permissionMode: null,
+    dangerouslySkipPermissions: false,
+    worktree: false,
+    chrome: false,
+    preLaunchCmd: '',
+    addDirs: '',
+    visibleSessionCount: 25,
+    sidebarWidth: 340,
+    terminalTheme: 'switchboard',
+    terminalFontFamily: '',
+    terminalFontSize: 12,
+    terminalLineHeight: 1,
+    shellProfile: 'auto',
 } as const;
 
 /**
@@ -116,20 +116,20 @@ export const SETTING_DEFAULTS = {
  * know about yet.
  */
 export interface EffectiveSettings {
-  permissionMode?: string | null;
-  dangerouslySkipPermissions?: boolean;
-  worktree?: boolean;
-  chrome?: boolean;
-  preLaunchCmd?: string;
-  addDirs?: string;
-  visibleSessionCount?: number;
-  sidebarWidth?: number;
-  terminalTheme?: string;
-  terminalFontFamily?: string;
-  terminalFontSize?: number;
-  terminalLineHeight?: number;
-  shellProfile?: string;
-  [key: string]: unknown;
+    permissionMode?: string | null;
+    dangerouslySkipPermissions?: boolean;
+    worktree?: boolean;
+    chrome?: boolean;
+    preLaunchCmd?: string;
+    addDirs?: string;
+    visibleSessionCount?: number;
+    sidebarWidth?: number;
+    terminalTheme?: string;
+    terminalFontFamily?: string;
+    terminalFontSize?: number;
+    terminalLineHeight?: number;
+    shellProfile?: string;
+    [key: string]: unknown;
 }
 
 /**
@@ -140,56 +140,54 @@ export interface EffectiveSettings {
  * must not shadow the layer beneath it.
  */
 export function mergeEffectiveSettings(
-  global: Record<string, unknown> | null | undefined,
-  project: Record<string, unknown> | null | undefined,
+    global: Record<string, unknown> | null | undefined,
+    project: Record<string, unknown> | null | undefined,
 ): EffectiveSettings {
-  const effective: Record<string, unknown> = { ...SETTING_DEFAULTS };
-  for (const key of Object.keys(SETTING_DEFAULTS)) {
-    const fromGlobal = global?.[key];
-    if (fromGlobal !== undefined && fromGlobal !== null) effective[key] = fromGlobal;
-    const fromProject = project?.[key];
-    if (fromProject !== undefined && fromProject !== null) effective[key] = fromProject;
-  }
-  return effective;
+    const effective: Record<string, unknown> = {...SETTING_DEFAULTS};
+    for (const key of Object.keys(SETTING_DEFAULTS)) {
+        const fromGlobal = global?.[key];
+        if (fromGlobal !== undefined && fromGlobal !== null) effective[key] = fromGlobal;
+        const fromProject = project?.[key];
+        if (fromProject !== undefined && fromProject !== null) effective[key] = fromProject;
+    }
+    return effective;
 }
 
 /** The shell profile id a project should launch in. */
 export function resolveShellProfileId(
-  global: Record<string, unknown> | null | undefined,
-  project?: Record<string, unknown> | null,
+    global: Record<string, unknown> | null | undefined,
+    project?: Record<string, unknown> | null,
 ): string {
-  let profileId: string = SETTING_DEFAULTS.shellProfile;
-  const fromGlobal = global?.shellProfile;
-  if (fromGlobal !== undefined && fromGlobal !== null) profileId = String(fromGlobal);
-  const fromProject = project?.shellProfile;
-  if (fromProject !== undefined && fromProject !== null) profileId = String(fromProject);
-  return profileId;
+    let profileId: string = SETTING_DEFAULTS.shellProfile;
+    const fromGlobal = global?.shellProfile;
+    if (fromGlobal !== undefined && fromGlobal !== null) profileId = String(fromGlobal);
+    const fromProject = project?.shellProfile;
+    if (fromProject !== undefined && fromProject !== null) profileId = String(fromProject);
+    return profileId;
 }
 
 /** Whether to fetch the weather. On unless switched off explicitly. */
 export function resolveWeatherEnabled(global: Record<string, unknown> | null | undefined): boolean {
-  return global?.weatherEnabled !== false;
+    return global?.weatherEnabled !== false;
 }
 
 /** Whether ⌥Space opens Quick Ask. On unless switched off explicitly (H2). */
 export function resolveQuickAskEnabled(global: Record<string, unknown> | null | undefined): boolean {
-  return global?.quickAsk !== false;
+    return global?.quickAsk !== false;
 }
 
 /** Whether archiving a session removes its worktrees. Off unless switched on explicitly. */
 export function resolveRemoveWorktreeOnArchive(global: Record<string, unknown> | null | undefined): boolean {
-  return global?.removeWorktreeOnArchive === true;
+    return global?.removeWorktreeOnArchive === true;
 }
 
 /** The BlaakTasks address, trimmed; '' while BlaakTasks is off, which it is unless one is entered. */
 export function resolveBlaakTasksUrl(global: Record<string, unknown> | null | undefined): string {
-  const url = global?.blaakTasksUrl;
-  return typeof url === 'string' ? url.trim() : '';
+    const url = global?.blaakTasksUrl;
+    return typeof url === 'string' ? url.trim() : '';
 }
 
 /** Where to fetch the weather for: the stored location if it is a valid one. */
-export function resolveWeatherLocation(
-  global: Record<string, unknown> | null | undefined,
-): WeatherLocation {
-  return parseWeatherLocation(global?.weatherLocation) ?? DEFAULT_WEATHER_LOCATION;
+export function resolveWeatherLocation(global: Record<string, unknown> | null | undefined): WeatherLocation {
+    return parseWeatherLocation(global?.weatherLocation) ?? DEFAULT_WEATHER_LOCATION;
 }

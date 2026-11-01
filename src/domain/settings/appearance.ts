@@ -17,13 +17,13 @@ export const DEFAULT_APPEARANCE: Appearance = 'system';
 
 /** How each mode is named in the UI. */
 export const APPEARANCE_LABELS: Record<Appearance, string> = {
-  system: 'System',
-  light: 'Light',
-  dark: 'Dark',
+    system: 'System',
+    light: 'Light',
+    dark: 'Dark',
 };
 
 export function isAppearance(value: unknown): value is Appearance {
-  return typeof value === 'string' && (APPEARANCES as readonly string[]).includes(value);
+    return typeof value === 'string' && (APPEARANCES as readonly string[]).includes(value);
 }
 
 /**
@@ -34,16 +34,16 @@ export function isAppearance(value: unknown): value is Appearance {
  * than reaching `themeSource`, which throws on an unknown string.
  */
 export function normaliseAppearance(value: unknown): Appearance {
-  return isAppearance(value) ? value : DEFAULT_APPEARANCE;
+    return isAppearance(value) ? value : DEFAULT_APPEARANCE;
 }
 
 /** The mode one click on the toggle moves to: system → light → dark → system. */
 export function nextAppearance(mode: Appearance): Appearance {
-  const index = APPEARANCES.indexOf(mode);
-  return APPEARANCES[(index + 1) % APPEARANCES.length];
+    const index = APPEARANCES.indexOf(mode);
+    return APPEARANCES[(index + 1) % APPEARANCES.length];
 }
 
 /** The toggle's tooltip: the mode it is in, and the one a click moves to. */
 export function appearanceTitle(mode: Appearance): string {
-  return `Appearance: ${APPEARANCE_LABELS[mode]} (click for ${APPEARANCE_LABELS[nextAppearance(mode)]})`;
+    return `Appearance: ${APPEARANCE_LABELS[mode]} (click for ${APPEARANCE_LABELS[nextAppearance(mode)]})`;
 }

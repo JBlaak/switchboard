@@ -7,16 +7,16 @@
  * bookkeeping block it appends on exit and resume, which is why a transcript
  * can name one PR dozens of times and why the list is de-duplicated by URL.
  */
-import type { SessionPullRequest } from './session';
+import type {SessionPullRequest} from './session';
 
 /** How many PR chips a sidebar row shows before collapsing the rest into `+N`. */
 export const VISIBLE_PULL_REQUESTS = 2;
 
 /** The fields a `pr-link` line carries. Every one is best-effort. */
 export interface PullRequestLink {
-  prNumber?: unknown;
-  prUrl?: unknown;
-  prRepository?: unknown;
+    prNumber?: unknown;
+    prUrl?: unknown;
+    prRepository?: unknown;
 }
 
 /**
@@ -27,14 +27,14 @@ export interface PullRequestLink {
  * and a chip must not become a way to hand the OS an arbitrary scheme.
  */
 export function pullRequestFromLink(link: PullRequestLink): SessionPullRequest | null {
-  const { prNumber, prUrl, prRepository } = link;
-  if (typeof prNumber !== 'number' || !Number.isInteger(prNumber) || prNumber <= 0) return null;
-  if (typeof prUrl !== 'string' || !/^https:\/\/\S+$/i.test(prUrl)) return null;
-  return {
-    number: prNumber,
-    url: prUrl,
-    repository: typeof prRepository === 'string' ? prRepository : '',
-  };
+    const {prNumber, prUrl, prRepository} = link;
+    if (typeof prNumber !== 'number' || !Number.isInteger(prNumber) || prNumber <= 0) return null;
+    if (typeof prUrl !== 'string' || !/^https:\/\/\S+$/i.test(prUrl)) return null;
+    return {
+        number: prNumber,
+        url: prUrl,
+        repository: typeof prRepository === 'string' ? prRepository : '',
+    };
 }
 
 /**
@@ -46,35 +46,35 @@ export function pullRequestFromLink(link: PullRequestLink): SessionPullRequest |
  * the same check as a transcript line, for the same reason.
  */
 export function decodePullRequests(json: string | null | undefined): SessionPullRequest[] {
-  if (!json) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-  const result: SessionPullRequest[] = [];
-  for (const item of parsed) {
-    if (!item || typeof item !== 'object') continue;
-    const { number, url, repository } = item as Record<string, unknown>;
-    const pr = pullRequestFromLink({ prNumber: number, prUrl: url, prRepository: repository });
-    if (pr) result.push(pr);
-  }
-  return result;
+    if (!json) return [];
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(json);
+    } catch {
+        return [];
+    }
+    if (!Array.isArray(parsed)) return [];
+    const result: SessionPullRequest[] = [];
+    for (const item of parsed) {
+        if (!item || typeof item !== 'object') continue;
+        const {number, url, repository} = item as Record<string, unknown>;
+        const pr = pullRequestFromLink({prNumber: number, prUrl: url, prRepository: repository});
+        if (pr) result.push(pr);
+    }
+    return result;
 }
 
 /** `owner/repo#1309`, or just `#1309` when the transcript did not name the repo. */
 export function pullRequestLabel(pr: SessionPullRequest): string {
-  return (pr.repository || '') + '#' + pr.number;
+    return (pr.repository || '') + '#' + pr.number;
 }
 
 /** What a row shows: a few chips, and how many were left out. */
 export interface PullRequestChips {
-  /** Newest first. */
-  shown: SessionPullRequest[];
-  /** Oldest last, in the order the `+N` chip's tooltip lists them. */
-  hidden: SessionPullRequest[];
+    /** Newest first. */
+    shown: SessionPullRequest[];
+    /** Oldest last, in the order the `+N` chip's tooltip lists them. */
+    hidden: SessionPullRequest[];
 }
 
 /**
@@ -85,9 +85,9 @@ export interface PullRequestChips {
  * `+N`. `pullRequests` is chronological, as the transcript recorded them.
  */
 export function pullRequestChips(
-  pullRequests: readonly SessionPullRequest[] | null | undefined,
-  visible = VISIBLE_PULL_REQUESTS,
+    pullRequests: readonly SessionPullRequest[] | null | undefined,
+    visible = VISIBLE_PULL_REQUESTS,
 ): PullRequestChips {
-  const newestFirst = [...(pullRequests ?? [])].reverse();
-  return { shown: newestFirst.slice(0, visible), hidden: newestFirst.slice(visible) };
+    const newestFirst = [...(pullRequests ?? [])].reverse();
+    return {shown: newestFirst.slice(0, visible), hidden: newestFirst.slice(visible)};
 }

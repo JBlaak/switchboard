@@ -12,23 +12,23 @@
 
 /** One server's `--mcp-config`, on disk for one call. */
 export interface McpConfigFile {
-  readonly path: string;
-  /** Delete the file. Safe to call more than once; called in `finally`. */
-  remove(): void;
+    readonly path: string;
+    /** Delete the file. Safe to call more than once; called in `finally`. */
+    remove(): void;
 }
 
 export interface McpServers {
-  /** Whether `~/.claude.json` has a server of this name. */
-  has(name: string): boolean;
-  /** Write a config holding only that server, readable by the user alone; null when it isn't set up (C6). */
-  write(name: string): McpConfigFile | null;
-  /**
-   * The headers of the server whose URL is `url` (the bearer token among
-   * them), or null when no server has it. `{}` for a server without headers.
-   */
-  headersFor(url: string): Record<string, string> | null;
-  /** The name of the server whose URL is `url`, or null when no server has it. */
-  nameFor(url: string): string | null;
-  /** Delete every file still on disk, for quitting mid-call. */
-  removeAll(): void;
+    /** Whether `~/.claude.json` has a server of this name. */
+    has(name: string): boolean;
+    /** Write a config holding only that server, readable by the user alone; null when it isn't set up (C6). */
+    write(name: string): McpConfigFile | null;
+    /**
+     * The headers of the server whose URL is `url` (the bearer token among
+     * them), or null when no server has it. `{}` for a server without headers.
+     */
+    headersFor(url: string): Record<string, string> | null;
+    /** The name of the server whose URL is `url`, or null when no server has it. */
+    nameFor(url: string): string | null;
+    /** Delete every file still on disk, for quitting mid-call. */
+    removeAll(): void;
 }

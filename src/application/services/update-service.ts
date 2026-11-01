@@ -8,12 +8,12 @@
  * A failed check is logged and forgotten — offline, rate-limited, or no
  * release yet are all ordinary, and the next check tries again.
  */
-import { availableUpdate } from '../../domain/update/release';
-import type { AvailableUpdate, UpdateNotice } from '../../domain/update/release';
-import type { Timers } from '../ports/clock';
-import type { Logger } from '../ports/logger';
-import type { RendererGateway } from '../ports/renderer-gateway';
-import type { AppInstaller, ReleaseFeed } from '../ports/updates';
+import {availableUpdate} from '../../domain/update/release';
+import type {AvailableUpdate, UpdateNotice} from '../../domain/update/release';
+import type {Timers} from '../ports/clock';
+import type {Logger} from '../ports/logger';
+import type {RendererGateway} from '../ports/renderer-gateway';
+import type {AppInstaller, ReleaseFeed} from '../ports/updates';
 
 /** How long after launch the first check waits, so it stays out of start-up. */
 export const FIRST_CHECK_MS = 10 * 1000;
@@ -21,68 +21,74 @@ export const FIRST_CHECK_MS = 10 * 1000;
 export const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
 
 export class UpdateService {
-  #available: AvailableUpdate | null = null;
-  #installing = false;
+    private available: AvailableUpdate | null = null;
+    private installing = false;
 
-  constructor(private readonly deps: {
-    feed: ReleaseFeed;
-    installer: AppInstaller;
-    renderer: Pick<RendererGateway, 'updateAvailable'>;
-    timers: Timers;
-    log: Logger;
-    currentVersion: string;
-    arch: string;
-  }) {}
+    constructor(
+        private readonly deps: {
+            feed: ReleaseFeed;
+            installer: AppInstaller;
+            renderer: Pick<RendererGateway, 'updateAvailable'>;
+            timers: Timers;
+            log: Logger;
+            currentVersion: string;
+            arch: string;
+        },
+    ) {}
 
-  start(): void {
-    const { timers } = this.deps;
-    timers.setTimeout(() => { void this.check(); }, FIRST_CHECK_MS);
-    timers.setInterval(() => { void this.check(); }, CHECK_EVERY_MS);
-  }
-
-  async check(): Promise<void> {
-    const { feed, renderer, log, currentVersion, arch } = this.deps;
-    let found: AvailableUpdate | null;
-    try {
-      const release = await feed.latest();
-      found = release ? availableUpdate(release, currentVersion, arch) : null;
-    } catch (err) {
-      log.warn('[update] check failed:', (err as Error).message);
-      return;
+    public start(): void {
+        const {timers} = this.deps;
+        timers.setTimeout(() => {
+            void this.check();
+        }, FIRST_CHECK_MS);
+        timers.setInterval(() => {
+            void this.check();
+        }, CHECK_EVERY_MS);
     }
-    if (!found || found.version === this.#available?.version) return;
 
-    log.info(`[update] ${found.version} is available (running ${currentVersion})`);
-    this.#available = found;
-    renderer.updateAvailable(this.notice()!);
-  }
+    public async check(): Promise<void> {
+        const {feed, renderer, log, currentVersion, arch} = this.deps;
+        let found: AvailableUpdate | null;
+        try {
+            const release = await feed.latest();
+            found = release ? availableUpdate(release, currentVersion, arch) : null;
+        } catch (err) {
+            log.warn('[update] check failed:', (err as Error).message);
+            return;
+        }
+        if (!found || found.version === this.available?.version) return;
 
-  /** The update waiting to be installed, for a renderer that loaded after the event. */
-  notice(): UpdateNotice | null {
-    const update = this.#available;
-    if (!update) return null;
-    return {
-      version: update.version,
-      pageUrl: update.pageUrl,
-      installable: update.downloadUrl !== null && this.deps.installer.canInstall(),
-    };
-  }
-
-  /** Install the waiting update. False when it could not; on success the app quits instead. */
-  async install(): Promise<boolean> {
-    const { installer, log } = this.deps;
-    const url = this.#available?.downloadUrl;
-    if (!url || this.#installing || !installer.canInstall()) return false;
-
-    this.#installing = true;
-    try {
-      await installer.install(url);
-      return true;
-    } catch (err) {
-      log.error('[update] install failed:', (err as Error).message);
-      return false;
-    } finally {
-      this.#installing = false;
+        log.info(`[update] ${found.version} is available (running ${currentVersion})`);
+        this.available = found;
+        renderer.updateAvailable(this.notice()!);
     }
-  }
+
+    /** The update waiting to be installed, for a renderer that loaded after the event. */
+    public notice(): UpdateNotice | null {
+        const update = this.available;
+        if (!update) return null;
+        return {
+            version: update.version,
+            pageUrl: update.pageUrl,
+            installable: update.downloadUrl !== null && this.deps.installer.canInstall(),
+        };
+    }
+
+    /** Install the waiting update. False when it could not; on success the app quits instead. */
+    public async install(): Promise<boolean> {
+        const {installer, log} = this.deps;
+        const url = this.available?.downloadUrl;
+        if (!url || this.installing || !installer.canInstall()) return false;
+
+        this.installing = true;
+        try {
+            await installer.install(url);
+            return true;
+        } catch (err) {
+            log.error('[update] install failed:', (err as Error).message);
+            return false;
+        } finally {
+            this.installing = false;
+        }
+    }
 }

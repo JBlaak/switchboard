@@ -1,59 +1,59 @@
-import { test } from 'node:test';
+import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import { gitHubRepository, repoWebUrl } from '../src/domain/project/repo-url';
+import {gitHubRepository, repoWebUrl} from '../src/domain/project/repo-url';
 
 test('turns an scp-style ssh remote into its web page', () => {
-  /* When */
-  const github = repoWebUrl('git@github.com:MoveLab-Studio/ISMS.git');
-  const gitlab = repoWebUrl('git@gitlab.com:group/sub/repo');
+    /* When */
+    const github = repoWebUrl('git@github.com:MoveLab-Studio/ISMS.git');
+    const gitlab = repoWebUrl('git@gitlab.com:group/sub/repo');
 
-  /* Then */
-  assert.equal(github, 'https://github.com/MoveLab-Studio/ISMS');
-  assert.equal(gitlab, 'https://gitlab.com/group/sub/repo');
+    /* Then */
+    assert.equal(github, 'https://github.com/MoveLab-Studio/ISMS');
+    assert.equal(gitlab, 'https://gitlab.com/group/sub/repo');
 });
 
 test('turns an ssh:// remote into its web page, dropping user and port', () => {
-  /* When */
-  const url = repoWebUrl('ssh://git@github.com:22/JBlaak/switchboard.git');
+    /* When */
+    const url = repoWebUrl('ssh://git@github.com:22/JBlaak/switchboard.git');
 
-  /* Then */
-  assert.equal(url, 'https://github.com/JBlaak/switchboard');
+    /* Then */
+    assert.equal(url, 'https://github.com/JBlaak/switchboard');
 });
 
 test('turns an https remote into its web page, dropping credentials', () => {
-  /* When */
-  const withSuffix = repoWebUrl('https://github.com/JBlaak/switchboard.git\n');
-  const withToken = repoWebUrl('https://token@github.com/JBlaak/switchboard');
+    /* When */
+    const withSuffix = repoWebUrl('https://github.com/JBlaak/switchboard.git\n');
+    const withToken = repoWebUrl('https://token@github.com/JBlaak/switchboard');
 
-  /* Then */
-  assert.equal(withSuffix, 'https://github.com/JBlaak/switchboard');
-  assert.equal(withToken, 'https://github.com/JBlaak/switchboard');
+    /* Then */
+    assert.equal(withSuffix, 'https://github.com/JBlaak/switchboard');
+    assert.equal(withToken, 'https://github.com/JBlaak/switchboard');
 });
 
 test('answers null for a remote with no web page', () => {
-  /* Given */
-  const remotes = ['/Users/me/repos/thing.git', 'file:///Users/me/repos/thing.git', ''];
+    /* Given */
+    const remotes = ['/Users/me/repos/thing.git', 'file:///Users/me/repos/thing.git', ''];
 
-  for (const remote of remotes) {
-    /* When */
-    const url = repoWebUrl(remote);
+    for (const remote of remotes) {
+        /* When */
+        const url = repoWebUrl(remote);
 
-    /* Then */
-    assert.equal(url, null, remote);
-  }
+        /* Then */
+        assert.equal(url, null, remote);
+    }
 });
 
 test('a github.com remote names its owner/repo; any other remote names none', () => {
-  /* When */
-  const ssh = gitHubRepository('git@github.com:JBlaak/switchboard.git');
-  const https = gitHubRepository('https://github.com/JBlaak/James');
-  const gitlab = gitHubRepository('git@gitlab.com:group/repo.git');
-  const local = gitHubRepository('/srv/git/repo.git');
+    /* When */
+    const ssh = gitHubRepository('git@github.com:JBlaak/switchboard.git');
+    const https = gitHubRepository('https://github.com/JBlaak/James');
+    const gitlab = gitHubRepository('git@gitlab.com:group/repo.git');
+    const local = gitHubRepository('/srv/git/repo.git');
 
-  /* Then */
-  assert.equal(ssh, 'JBlaak/switchboard');
-  assert.equal(https, 'JBlaak/James');
-  assert.equal(gitlab, '');
-  assert.equal(local, '');
+    /* Then */
+    assert.equal(ssh, 'JBlaak/switchboard');
+    assert.equal(https, 'JBlaak/James');
+    assert.equal(gitlab, '');
+    assert.equal(local, '');
 });

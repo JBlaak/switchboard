@@ -8,12 +8,12 @@
  *
  * Pure, so the rules are tested without a DOM.
  */
-import type { EffectiveSettings } from '../../../domain/settings/settings';
-import type { SessionOptions } from '../../../domain/launch/session-options';
+import type {EffectiveSettings} from '../../../domain/settings/settings';
+import type {SessionOptions} from '../../../domain/launch/session-options';
 
 export interface PermissionSelection {
-  mode: string | null;
-  dangerousSkip: boolean;
+    mode: string | null;
+    dangerousSkip: boolean;
 }
 
 /** What the grid's control for Dangerous Skip is keyed by, beside the mode values. */
@@ -21,7 +21,7 @@ export const DANGEROUS_SKIP = 'dangerous-skip';
 
 /** The selection a dialog opens with: the project's effective settings. */
 export function initialPermissionSelection(settings: EffectiveSettings): PermissionSelection {
-  return { mode: settings.permissionMode || null, dangerousSkip: !!settings.dangerouslySkipPermissions };
+    return {mode: settings.permissionMode || null, dangerousSkip: !!settings.dangerouslySkipPermissions};
 }
 
 /**
@@ -32,18 +32,15 @@ export function initialPermissionSelection(settings: EffectiveSettings): Permiss
  * Dangerous Skip off.
  */
 export function pickPermission(selection: PermissionSelection, option: string | null): PermissionSelection {
-  if (option === DANGEROUS_SKIP) {
-    const dangerousSkip = !selection.dangerousSkip;
-    return { mode: dangerousSkip ? null : selection.mode, dangerousSkip };
-  }
-  return { mode: option, dangerousSkip: false };
+    if (option === DANGEROUS_SKIP) {
+        const dangerousSkip = !selection.dangerousSkip;
+        return {mode: dangerousSkip ? null : selection.mode, dangerousSkip};
+    }
+    return {mode: option, dangerousSkip: false};
 }
 
 /** Fold a selection into the launch options. */
-export function applyPermissionSelection(
-  options: SessionOptions,
-  { mode, dangerousSkip }: PermissionSelection,
-): void {
-  if (dangerousSkip) options.dangerouslySkipPermissions = true;
-  else if (mode) options.permissionMode = mode;
+export function applyPermissionSelection(options: SessionOptions, {mode, dangerousSkip}: PermissionSelection): void {
+    if (dangerousSkip) options.dangerouslySkipPermissions = true;
+    else if (mode) options.permissionMode = mode;
 }

@@ -1,569 +1,639 @@
-import { test } from 'node:test';
+import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GhCli, type GhResult, type GhRunner } from '../src/infrastructure/github/gh-cli';
+import {GhCli, type GhResult, type GhRunner} from '../src/infrastructure/github/gh-cli';
 import recorded from './fixtures/gh-pull-requests.json';
 
 /** A runner that answers from a script and records what it was asked. */
-function scripted(answer: (args: readonly string[]) => Partial<GhResult>): GhRunner & { calls: string[][] } {
-  const calls: string[][] = [];
-  const run = (async (args: readonly string[]) => {
-    calls.push([...args]);
-    return { missing: false, code: 0, stdout: '', stderr: '', ...answer(args) };
-  }) as GhRunner & { calls: string[][] };
-  run.calls = calls;
-  return run;
+function scripted(answer: (args: readonly string[]) => Partial<GhResult>): GhRunner & {calls: string[][]} {
+    const calls: string[][] = [];
+    const run = (async (args: readonly string[]) => {
+        calls.push([...args]);
+        return {missing: false, code: 0, stdout: '', stderr: '', ...answer(args)};
+    }) as GhRunner & {calls: string[][]};
+    run.calls = calls;
+    return run;
 }
 
 /** gh exits 1 when a GraphQL response carries errors, even next to data. */
 const partial = (): Partial<GhResult> => ({
-  code: 1,
-  stdout: JSON.stringify(recorded),
-  stderr: 'gh: Could not resolve to a PullRequest with the number of 99.\n',
+    code: 1,
+    stdout: JSON.stringify(recorded),
+    stderr: 'gh: Could not resolve to a PullRequest with the number of 99.\n',
 });
 
-const missing = (): Partial<GhResult> => ({ missing: true, code: null });
+const missing = (): Partial<GhResult> => ({missing: true, code: null});
 const signedOut = (): Partial<GhResult> => ({
-  code: 4,
-  stderr: 'To get started with GitHub CLI, please run:  gh auth login\n',
+    code: 4,
+    stderr: 'To get started with GitHub CLI, please run:  gh auth login\n',
 });
 const revoked = (): Partial<GhResult> => ({
-  code: 1,
-  stdout: '{"message":"Bad credentials","status":"401"}',
-  stderr: 'gh: Bad credentials (HTTP 401)\n',
+    code: 1,
+    stdout: '{"message":"Bad credentials","status":"401"}',
+    stderr: 'gh: Bad credentials (HTTP 401)\n',
 });
 
 /** The recorded PRs as GhCli maps them. */
 const recordedPullRequests = async (numbers: number[]) =>
-  (await new GhCli({ run: scripted(partial) }).pullRequests('acme/web', numbers))!;
+    (await new GhCli({run: scripted(partial)}).pullRequests('acme/web', numbers))!;
 
 test('all PRs of a repository come from one GraphQL call with an alias each, as argv', async () => {
-  /* Given */
-  const run = scripted(partial);
+    /* Given */
+    const run = scripted(partial);
 
-  /* When */
-  await new GhCli({ run }).pullRequests('acme/web', [12, 13, 14, 99, 12]);
+    /* When */
+    await new GhCli({run}).pullRequests('acme/web', [12, 13, 14, 99, 12]);
 
-  /* Then */
-  assert.equal(run.calls.length, 1);
-  const args = run.calls[0];
-  assert.deepEqual(args.slice(0, 3), ['api', 'graphql', '-f']);
-  const query = args[3];
-  for (const n of [12, 13, 14, 99]) assert.match(query, new RegExp(`pr${n}: pullRequest\\(number: ${n}\\)`));
-  assert.equal(query.match(/pr12:/g)?.length, 1, 'a repeated number is asked for once');
-  assert.match(query, /viewer \{ login \}/);
-  assert.deepEqual(args.slice(4), ['-f', 'owner=acme', '-f', 'name=web']);
+    /* Then */
+    assert.equal(run.calls.length, 1);
+    const args = run.calls[0];
+    assert.deepEqual(args.slice(0, 3), ['api', 'graphql', '-f']);
+    const query = args[3];
+    for (const n of [12, 13, 14, 99]) assert.match(query, new RegExp(`pr${n}: pullRequest\\(number: ${n}\\)`));
+    assert.equal(query.match(/pr12:/g)?.length, 1, 'a repeated number is asked for once');
+    assert.match(query, /viewer \{ login \}/);
+    assert.deepEqual(args.slice(4), ['-f', 'owner=acme', '-f', 'name=web']);
 });
 
 test('a recorded response maps to PR statuses, leaving out the number GitHub does not know', async () => {
-  /* When */
-  const prs = await new GhCli({ run: scripted(partial) }).pullRequests('acme/web', [12, 13, 14, 99]);
+    /* When */
+    const prs = await new GhCli({run: scripted(partial)}).pullRequests('acme/web', [12, 13, 14, 99]);
 
-  /* Then */
-  assert.ok(prs);
-  assert.deepEqual(prs.map((pr) => pr.number), [12, 13, 14]);
+    /* Then */
+    assert.ok(prs);
+    assert.deepEqual(
+        prs.map((pr) => pr.number),
+        [12, 13, 14],
+    );
 });
 
 test('an open PR maps its title, refs, mergeability, size and the issues it closes', async () => {
-  /* When */
-  const [open] = await recordedPullRequests([12, 13, 14, 99]);
+    /* When */
+    const [open] = await recordedPullRequests([12, 13, 14, 99]);
 
-  /* Then */
-  assert.equal(open.state, 'open');
-  assert.equal(open.title, 'Add the billing page');
-  assert.equal(open.url, 'https://github.com/acme/web/pull/12');
-  assert.equal(open.repository, 'acme/web');
-  assert.equal(open.headRef, 'feat/12-billing');
-  assert.equal(open.headSha, 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678');
-  assert.equal(open.baseRef, 'main');
-  assert.equal(open.mergeable, 'mergeable');
-  assert.deepEqual([open.additions, open.deletions], [120, 14]);
-  assert.deepEqual(open.closes, [
-    { repository: 'acme/web', number: 7 },
-    { repository: 'acme/api', number: 3 },
-  ]);
+    /* Then */
+    assert.equal(open.state, 'open');
+    assert.equal(open.title, 'Add the billing page');
+    assert.equal(open.url, 'https://github.com/acme/web/pull/12');
+    assert.equal(open.repository, 'acme/web');
+    assert.equal(open.headRef, 'feat/12-billing');
+    assert.equal(open.headSha, 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678');
+    assert.equal(open.baseRef, 'main');
+    assert.equal(open.mergeable, 'mergeable');
+    assert.deepEqual([open.additions, open.deletions], [120, 14]);
+    assert.deepEqual(open.closes, [
+        {repository: 'acme/web', number: 7},
+        {repository: 'acme/api', number: 3},
+    ]);
 });
 
 test('a draft PR maps as draft, conflicting, with no checks and an unknown size', async () => {
-  /* When */
-  const [, draft] = await recordedPullRequests([12, 13, 14, 99]);
+    /* When */
+    const [, draft] = await recordedPullRequests([12, 13, 14, 99]);
 
-  /* Then */
-  assert.equal(draft.additions, undefined, 'a count GitHub did not send stays unknown');
-  assert.equal(draft.state, 'draft');
-  assert.equal(draft.mergeable, 'conflicting');
-  assert.deepEqual(draft.checks, []);
+    /* Then */
+    assert.equal(draft.additions, undefined, 'a count GitHub did not send stays unknown');
+    assert.equal(draft.state, 'draft');
+    assert.equal(draft.mergeable, 'conflicting');
+    assert.deepEqual(draft.checks, []);
 });
 
 test('a merged PR maps as merged with unknown mergeability', async () => {
-  /* When */
-  const [, , merged] = await recordedPullRequests([12, 13, 14, 99]);
+    /* When */
+    const [, , merged] = await recordedPullRequests([12, 13, 14, 99]);
 
-  /* Then */
-  assert.equal(merged.state, 'merged');
-  assert.equal(merged.mergeable, 'unknown');
+    /* Then */
+    assert.equal(merged.state, 'merged');
+    assert.equal(merged.mergeable, 'unknown');
 });
 
 test('the merge method is your default where the repository allows it, else the first it allows', async () => {
-  /* When */
-  const [open, draft, merged] = await recordedPullRequests([12, 13, 14]);
+    /* When */
+    const [open, draft, merged] = await recordedPullRequests([12, 13, 14]);
 
-  /* Then */
-  assert.equal(open.mergeMethod, 'squash', 'your default, allowed');
-  assert.equal(draft.mergeMethod, 'merge', 'your default (rebase) is not allowed: the first that is');
-  assert.equal(merged.mergeMethod, undefined, 'GitHub said nothing about it');
+    /* Then */
+    assert.equal(open.mergeMethod, 'squash', 'your default, allowed');
+    assert.equal(draft.mergeMethod, 'merge', 'your default (rebase) is not allowed: the first that is');
+    assert.equal(merged.mergeMethod, undefined, 'GitHub said nothing about it');
 });
 
 test('check runs and status contexts fold into the four states', async () => {
-  /* When */
-  const [pr] = await recordedPullRequests([12]);
+    /* When */
+    const [pr] = await recordedPullRequests([12]);
 
-  /* Then */
-  assert.deepEqual(pr.checks, [
-    { name: 'test', state: 'failing', url: 'https://github.com/acme/web/actions/runs/111/job/222' },
-    { name: 'e2e', state: 'pending', url: 'https://github.com/acme/web/actions/runs/111/job/223' },
-    { name: 'publish', state: 'skipped', url: 'https://github.com/acme/web/actions/runs/111/job/224' },
-    { name: 'lint', state: 'failing' },
-    { name: 'vercel', state: 'passing', url: 'https://vercel.com/acme/web/abc' },
-  ]);
+    /* Then */
+    assert.deepEqual(pr.checks, [
+        {name: 'test', state: 'failing', url: 'https://github.com/acme/web/actions/runs/111/job/222'},
+        {name: 'e2e', state: 'pending', url: 'https://github.com/acme/web/actions/runs/111/job/223'},
+        {name: 'publish', state: 'skipped', url: 'https://github.com/acme/web/actions/runs/111/job/224'},
+        {name: 'lint', state: 'failing'},
+        {name: 'vercel', state: 'passing', url: 'https://vercel.com/acme/web/abc'},
+    ]);
 });
 
 test('behindBy is known for a PR on the default branch, and unknown on another base or with the branch gone', async () => {
-  /* When */
-  const prs = await recordedPullRequests([12, 13, 14]);
+    /* When */
+    const prs = await recordedPullRequests([12, 13, 14]);
 
-  /* Then */
-  assert.equal(prs[0].behindBy, 3);
-  assert.equal(prs[1].behindBy, undefined, 'based on release/2.1, not main');
-  assert.equal(prs[2].behindBy, undefined, 'merged and its branch deleted');
+    /* Then */
+    assert.equal(prs[0].behindBy, 3);
+    assert.equal(prs[1].behindBy, undefined, 'based on release/2.1, not main');
+    assert.equal(prs[2].behindBy, undefined, 'merged and its branch deleted');
 });
 
 /** PR 12's review threads by id. */
 async function threadsOf12() {
-  const [pr] = await recordedPullRequests([12]);
-  return new Map(pr.threads!.map((thread) => [thread.id, thread]));
+    const [pr] = await recordedPullRequests([12]);
+    return new Map(pr.threads!.map((thread) => [thread.id, thread]));
 }
 
 test('review threads come back by id, leaving out a thread of nothing but your pending comments', async () => {
-  /* When */
-  const threads = await threadsOf12();
+    /* When */
+    const threads = await threadsOf12();
 
-  /* Then */
-  assert.deepEqual([...threads.keys()], ['PRRT_bot', 'PRRT_app', 'PRRT_needs_you', 'PRRT_resolved', 'PRRT_waiting'],
-    'a thread of nothing but your pending comments is not a thread yet');
+    /* Then */
+    assert.deepEqual(
+        [...threads.keys()],
+        ['PRRT_bot', 'PRRT_app', 'PRRT_needs_you', 'PRRT_resolved', 'PRRT_waiting'],
+        'a thread of nothing but your pending comments is not a thread yet',
+    );
 });
 
 test('a review thread carries author, bot flag, path, line and side', async () => {
-  /* When */
-  const bot = (await threadsOf12()).get('PRRT_bot')!;
+    /* When */
+    const bot = (await threadsOf12()).get('PRRT_bot')!;
 
-  /* Then */
-  assert.deepEqual(bot.comments, [{
-    author: 'coderabbitai', isBot: true, body: 'Possible null dereference.', createdAt: '2026-10-16T09:00:00Z',
-  }]);
-  assert.equal(bot.path, 'src/billing.ts');
-  assert.equal(bot.line, 40);
-  assert.equal(bot.side, 'RIGHT');
-  assert.equal(bot.needsYou, false);
+    /* Then */
+    assert.deepEqual(bot.comments, [
+        {
+            author: 'coderabbitai',
+            isBot: true,
+            body: 'Possible null dereference.',
+            createdAt: '2026-10-16T09:00:00Z',
+        },
+    ]);
+    assert.equal(bot.path, 'src/billing.ts');
+    assert.equal(bot.line, 40);
+    assert.equal(bot.side, 'RIGHT');
+    assert.equal(bot.needsYou, false);
 });
 
 test('an app account is a bot by its [bot] login', async () => {
-  /* When */
-  const app = (await threadsOf12()).get('PRRT_app')!;
+    /* When */
+    const app = (await threadsOf12()).get('PRRT_app')!;
 
-  /* Then */
-  assert.equal(app.comments[0].isBot, true, 'an app account by its [bot] login');
+    /* Then */
+    assert.equal(app.comments[0].isBot, true, 'an app account by its [bot] login');
 });
 
 test('needsYou is your open last word', async () => {
-  /* When */
-  const needsYou = (await threadsOf12()).get('PRRT_needs_you')!;
+    /* When */
+    const needsYou = (await threadsOf12()).get('PRRT_needs_you')!;
 
-  /* Then */
-  assert.equal(needsYou.side, 'LEFT');
-  assert.equal(needsYou.resolved, false);
-  assert.equal(needsYou.needsYou, true);
-  assert.deepEqual(needsYou.comments.map((c) => [c.author, c.isBot]), [['sam', false], ['joris', false]]);
+    /* Then */
+    assert.equal(needsYou.side, 'LEFT');
+    assert.equal(needsYou.resolved, false);
+    assert.equal(needsYou.needsYou, true);
+    assert.deepEqual(
+        needsYou.comments.map((c) => [c.author, c.isBot]),
+        [
+            ['sam', false],
+            ['joris', false],
+        ],
+    );
 });
 
 test('a resolved thread needs nothing from you, and an outdated line is null', async () => {
-  /* When */
-  const resolved = (await threadsOf12()).get('PRRT_resolved')!;
+    /* When */
+    const resolved = (await threadsOf12()).get('PRRT_resolved')!;
 
-  /* Then */
-  assert.equal(resolved.resolved, true);
-  assert.equal(resolved.line, null, 'an outdated line is null');
-  assert.equal(resolved.needsYou, false, 'resolved, so nothing waits on you even though you spoke last');
+    /* Then */
+    assert.equal(resolved.resolved, true);
+    assert.equal(resolved.line, null, 'an outdated line is null');
+    assert.equal(resolved.needsYou, false, 'resolved, so nothing waits on you even though you spoke last');
 });
 
 test('a thread where a reviewer spoke last does not need you', async () => {
-  /* When */
-  const waiting = (await threadsOf12()).get('PRRT_waiting')!;
+    /* When */
+    const waiting = (await threadsOf12()).get('PRRT_waiting')!;
 
-  /* Then */
-  assert.equal(waiting.needsYou, false, 'a reviewer spoke last: it waits on Claude');
+    /* Then */
+    assert.equal(waiting.needsYou, false, 'a reviewer spoke last: it waits on Claude');
 });
 
-test('your pending review comes back with each comment\'s side', async () => {
-  /* When */
-  const [pr] = await recordedPullRequests([12]);
+test("your pending review comes back with each comment's side", async () => {
+    /* When */
+    const [pr] = await recordedPullRequests([12]);
 
-  /* Then */
-  assert.deepEqual(pr.pendingReview, [
-    { path: 'src/billing.ts', line: 8, side: 'LEFT', body: 'Why was this removed?', threadId: 'PRRT_pending' },
-    { path: 'src/billing.ts', line: 61, side: 'RIGHT', body: 'Typo in the label.' },
-  ]);
+    /* Then */
+    assert.deepEqual(pr.pendingReview, [
+        {path: 'src/billing.ts', line: 8, side: 'LEFT', body: 'Why was this removed?', threadId: 'PRRT_pending'},
+        {path: 'src/billing.ts', line: 61, side: 'RIGHT', body: 'Typo in the label.'},
+    ]);
 });
 
 test('a pending review started anywhere comes back with its id, and the PR with its own', async () => {
-  /* When */
-  const [pr, draft] = await recordedPullRequests([12, 13]);
+    /* When */
+    const [pr, draft] = await recordedPullRequests([12, 13]);
 
-  /* Then */
-  assert.equal(pr.pendingReviewId, 'PRR_pending12');
-  assert.equal(pr.nodeId, 'PR_kwDO12');
-  assert.equal(draft.pendingReviewId, undefined, 'no pending review: none');
+    /* Then */
+    assert.equal(pr.pendingReviewId, 'PRR_pending12');
+    assert.equal(pr.nodeId, 'PR_kwDO12');
+    assert.equal(draft.pendingReviewId, undefined, 'no pending review: none');
 });
 
 test('a resolved thread says who resolved it', async () => {
-  /* When */
-  const threads = await threadsOf12();
+    /* When */
+    const threads = await threadsOf12();
 
-  /* Then */
-  assert.equal(threads.get('PRRT_resolved')!.resolvedBy, 'sam');
-  assert.equal(threads.get('PRRT_bot')!.resolvedBy, undefined);
+    /* Then */
+    assert.equal(threads.get('PRRT_resolved')!.resolvedBy, 'sam');
+    assert.equal(threads.get('PRRT_bot')!.resolvedBy, undefined);
 });
 
 // ── Your review: the only writes ──
 
 /** The GraphQL variables of a `gh api graphql` call, by name, with the flag each was passed with. */
-function variablesOf(args: readonly string[]): Map<string, { flag: string; value: string }> {
-  const variables = new Map<string, { flag: string; value: string }>();
-  for (let i = 4; i < args.length; i += 2) {
-    const [key, ...rest] = args[i + 1].split('=');
-    variables.set(key, { flag: args[i], value: rest.join('=') });
-  }
-  return variables;
+function variablesOf(args: readonly string[]): Map<string, {flag: string; value: string}> {
+    const variables = new Map<string, {flag: string; value: string}>();
+    for (let i = 4; i < args.length; i += 2) {
+        const [key, ...rest] = args[i + 1].split('=');
+        variables.set(key, {flag: args[i], value: rest.join('=')});
+    }
+    return variables;
 }
 
-const answers = (data: unknown): Partial<GhResult> => ({ code: 0, stdout: JSON.stringify({ data }) });
+const answers = (data: unknown): Partial<GhResult> => ({code: 0, stdout: JSON.stringify({data})});
 
 test('starting a pending review: addPullRequestReview without an event, the PR id as a variable', async () => {
-  /* Given */
-  const run = scripted(() => answers({ addPullRequestReview: { pullRequestReview: { id: 'PRR_new' } } }));
+    /* Given */
+    const run = scripted(() => answers({addPullRequestReview: {pullRequestReview: {id: 'PRR_new'}}}));
 
-  /* When */
-  const result = await new GhCli({ run }).startPendingReview('PR_kwDO12');
+    /* When */
+    const result = await new GhCli({run}).startPendingReview('PR_kwDO12');
 
-  /* Then */
-  assert.deepEqual(result, { ok: true, reviewId: 'PRR_new' });
-  const args = run.calls[0];
-  assert.deepEqual(args.slice(0, 3), ['api', 'graphql', '-f']);
-  assert.match(args[3], /^query=mutation\(\$pullRequestId: ID!\)/);
-  assert.match(args[3], /addPullRequestReview\(input: \{ pullRequestId: \$pullRequestId \}\)/);
-  assert.doesNotMatch(args[3], /event/, 'no event: the review stays pending');
-  assert.deepEqual([...variablesOf(args)], [['pullRequestId', { flag: '-f', value: 'PR_kwDO12' }]]);
+    /* Then */
+    assert.deepEqual(result, {ok: true, reviewId: 'PRR_new'});
+    const args = run.calls[0];
+    assert.deepEqual(args.slice(0, 3), ['api', 'graphql', '-f']);
+    assert.match(args[3], /^query=mutation\(\$pullRequestId: ID!\)/);
+    assert.match(args[3], /addPullRequestReview\(input: \{ pullRequestId: \$pullRequestId \}\)/);
+    assert.doesNotMatch(args[3], /event/, 'no event: the review stays pending');
+    assert.deepEqual([...variablesOf(args)], [['pullRequestId', {flag: '-f', value: 'PR_kwDO12'}]]);
 });
 
 test('a comment goes in as variables: the body verbatim with -f, the line as an Int with -F', async () => {
-  /* Given */
-  const run = scripted(() => answers({ addPullRequestReviewThread: { thread: { id: 'PRRT_new' } } }));
-  const body = '@here `rm -rf /` "quoted" $(whoami)\nline two } query {';
+    /* Given */
+    const run = scripted(() => answers({addPullRequestReviewThread: {thread: {id: 'PRRT_new'}}}));
+    const body = '@here `rm -rf /` "quoted" $(whoami)\nline two } query {';
 
-  /* When */
-  const result = await new GhCli({ run }).addPendingComment('PRR_1', { path: 'src/a b.ts', line: 42, side: 'LEFT', body });
+    /* When */
+    const result = await new GhCli({run}).addPendingComment('PRR_1', {
+        path: 'src/a b.ts',
+        line: 42,
+        side: 'LEFT',
+        body,
+    });
 
-  /* Then */
-  assert.deepEqual(result, { ok: true, threadId: 'PRRT_new' });
-  const args = run.calls[0];
-  assert.match(args[3], /addPullRequestReviewThread\(input: \{\s*pullRequestReviewId: \$reviewId, path: \$path, line: \$line, side: \$side, body: \$body/);
-  assert.ok(!args[3].includes(body) && !args[3].includes('src/a b.ts'), 'nothing is written into the query text');
-  assert.deepEqual(Object.fromEntries(variablesOf(args)), {
-    reviewId: { flag: '-f', value: 'PRR_1' },
-    path: { flag: '-f', value: 'src/a b.ts' },
-    line: { flag: '-F', value: '42' },
-    side: { flag: '-f', value: 'LEFT' },
-    body: { flag: '-f', value: body },
-  });
+    /* Then */
+    assert.deepEqual(result, {ok: true, threadId: 'PRRT_new'});
+    const args = run.calls[0];
+    assert.match(
+        args[3],
+        /addPullRequestReviewThread\(input: \{\s*pullRequestReviewId: \$reviewId, path: \$path, line: \$line, side: \$side, body: \$body/,
+    );
+    assert.ok(!args[3].includes(body) && !args[3].includes('src/a b.ts'), 'nothing is written into the query text');
+    assert.deepEqual(Object.fromEntries(variablesOf(args)), {
+        reviewId: {flag: '-f', value: 'PRR_1'},
+        path: {flag: '-f', value: 'src/a b.ts'},
+        line: {flag: '-F', value: '42'},
+        side: {flag: '-f', value: 'LEFT'},
+        body: {flag: '-f', value: body},
+    });
 });
 
 test('a line that is not a positive integer is refused without asking gh', async () => {
-  /* Given */
-  const run = scripted(() => answers({}));
+    /* Given */
+    const run = scripted(() => answers({}));
 
-  /* When */
-  const result = await new GhCli({ run }).addPendingComment('PRR_1', { path: 'a.ts', line: 0, side: 'RIGHT', body: 'x' });
+    /* When */
+    const result = await new GhCli({run}).addPendingComment('PRR_1', {path: 'a.ts', line: 0, side: 'RIGHT', body: 'x'});
 
-  /* Then */
-  assert.equal(result.ok, false);
-  assert.equal(run.calls.length, 0);
+    /* Then */
+    assert.equal(result.ok, false);
+    assert.equal(run.calls.length, 0);
 });
 
 /** A gh that accepts deleting and submitting a review. */
-const reviewWrites = () => scripted((args) => answers(args[3].includes('deletePullRequestReview')
-  ? { deletePullRequestReview: { pullRequestReview: { id: 'PRR_1' } } }
-  : { submitPullRequestReview: { pullRequestReview: { id: 'PRR_1', state: 'CHANGES_REQUESTED' } } }));
+const reviewWrites = () =>
+    scripted((args) =>
+        answers(
+            args[3].includes('deletePullRequestReview')
+                ? {deletePullRequestReview: {pullRequestReview: {id: 'PRR_1'}}}
+                : {submitPullRequestReview: {pullRequestReview: {id: 'PRR_1', state: 'CHANGES_REQUESTED'}}},
+        ),
+    );
 
 test('discarding deletes the pending review', async () => {
-  /* Given */
-  const run = reviewWrites();
+    /* Given */
+    const run = reviewWrites();
 
-  /* When */
-  const result = await new GhCli({ run }).deletePendingReview('PRR_1');
+    /* When */
+    const result = await new GhCli({run}).deletePendingReview('PRR_1');
 
-  /* Then */
-  assert.deepEqual(result, { ok: true });
-  assert.match(run.calls[0][3], /deletePullRequestReview\(input: \{ pullRequestReviewId: \$reviewId \}\)/);
-  assert.deepEqual([...variablesOf(run.calls[0])], [['reviewId', { flag: '-f', value: 'PRR_1' }]]);
+    /* Then */
+    assert.deepEqual(result, {ok: true});
+    assert.match(run.calls[0][3], /deletePullRequestReview\(input: \{ pullRequestReviewId: \$reviewId \}\)/);
+    assert.deepEqual([...variablesOf(run.calls[0])], [['reviewId', {flag: '-f', value: 'PRR_1'}]]);
 });
 
 test('submitting sends the event as a variable', async () => {
-  /* Given */
-  const run = reviewWrites();
+    /* Given */
+    const run = reviewWrites();
 
-  /* When */
-  const result = await new GhCli({ run }).submitPendingReview('PRR_1', 'REQUEST_CHANGES');
+    /* When */
+    const result = await new GhCli({run}).submitPendingReview('PRR_1', 'REQUEST_CHANGES');
 
-  /* Then */
-  assert.deepEqual(result, { ok: true });
-  assert.match(run.calls[0][3], /submitPullRequestReview\(input: \{ pullRequestReviewId: \$reviewId, event: \$event \}\)/);
-  assert.equal(variablesOf(run.calls[0]).get('event')!.value, 'REQUEST_CHANGES');
+    /* Then */
+    assert.deepEqual(result, {ok: true});
+    assert.match(
+        run.calls[0][3],
+        /submitPullRequestReview\(input: \{ pullRequestReviewId: \$reviewId, event: \$event \}\)/,
+    );
+    assert.equal(variablesOf(run.calls[0]).get('event')!.value, 'REQUEST_CHANGES');
 });
 
 test('submitting a comment review sends COMMENT as the event', async () => {
-  /* Given */
-  const run = reviewWrites();
+    /* Given */
+    const run = reviewWrites();
 
-  /* When */
-  const result = await new GhCli({ run }).submitPendingReview('PRR_1', 'COMMENT');
+    /* When */
+    const result = await new GhCli({run}).submitPendingReview('PRR_1', 'COMMENT');
 
-  /* Then */
-  assert.deepEqual(result, { ok: true });
-  assert.equal(variablesOf(run.calls[0]).get('event')!.value, 'COMMENT');
+    /* Then */
+    assert.deepEqual(result, {ok: true});
+    assert.equal(variablesOf(run.calls[0]).get('event')!.value, 'COMMENT');
 });
 
 test('a write GitHub refuses answers its reason', async () => {
-  /* Given */
-  const refused = scripted(() => ({
-    code: 1,
-    stdout: JSON.stringify({ errors: [{ message: 'User can only have one pending review per pull request' }] }),
-    stderr: 'gh: User can only have one pending review per pull request\n',
-  }));
+    /* Given */
+    const refused = scripted(() => ({
+        code: 1,
+        stdout: JSON.stringify({errors: [{message: 'User can only have one pending review per pull request'}]}),
+        stderr: 'gh: User can only have one pending review per pull request\n',
+    }));
 
-  /* When */
-  const result = await new GhCli({ run: refused }).startPendingReview('PR_1');
+    /* When */
+    const result = await new GhCli({run: refused}).startPendingReview('PR_1');
 
-  /* Then */
-  assert.deepEqual(result, { ok: false, reason: 'User can only have one pending review per pull request' });
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: 'User can only have one pending review per pull request'});
 });
 
 test('a write with gh missing says gh is not installed', async () => {
-  /* When */
-  const result = await new GhCli({ run: scripted(missing) }).deletePendingReview('PRR_1');
+    /* When */
+    const result = await new GhCli({run: scripted(missing)}).deletePendingReview('PRR_1');
 
-  /* Then */
-  assert.deepEqual(result, { ok: false, reason: 'gh is not installed' });
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: 'gh is not installed'});
 });
 
 test('a write with gh signed out says gh is not signed in', async () => {
-  /* When */
-  const result = await new GhCli({ run: scripted(signedOut) }).submitPendingReview('PRR_1', 'COMMENT');
+    /* When */
+    const result = await new GhCli({run: scripted(signedOut)}).submitPendingReview('PRR_1', 'COMMENT');
 
-  /* Then */
-  assert.deepEqual(result, { ok: false, reason: 'gh is not signed in to github.com' });
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: 'gh is not signed in to github.com'});
 });
 
-test('a write that cannot reach GitHub answers gh\'s error', async () => {
-  /* Given */
-  const offline = scripted(() => ({ code: 1, stderr: 'error connecting to api.github.com\n' }));
+test("a write that cannot reach GitHub answers gh's error", async () => {
+    /* Given */
+    const offline = scripted(() => ({code: 1, stderr: 'error connecting to api.github.com\n'}));
 
-  /* When */
-  const result = await new GhCli({ run: offline }).deletePendingReview('PRR_1');
+    /* When */
+    const result = await new GhCli({run: offline}).deletePendingReview('PRR_1');
 
-  /* Then */
-  assert.deepEqual(result, { ok: false, reason: 'error connecting to api.github.com' });
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: 'error connecting to api.github.com'});
 });
 
 /** Every read GhCli offers, answered. */
-const everyRead = (gh: GhCli) => Promise.all([
-  gh.pullRequests('acme/web', [12]),
-  gh.pullRequestDiff('acme/web', 12),
-  gh.checkLogTail('acme/web', 'https://github.com/acme/web/actions/runs/1/job/2', 50),
-  gh.issues('acme/web', [7]),
-]);
+const everyRead = (gh: GhCli) =>
+    Promise.all([
+        gh.pullRequests('acme/web', [12]),
+        gh.pullRequestDiff('acme/web', 12),
+        gh.checkLogTail('acme/web', 'https://github.com/acme/web/actions/runs/1/job/2', 50),
+        gh.issues('acme/web', [7]),
+    ]);
 
 test('missing gh: available says so', async () => {
-  /* Given */
-  const gh = new GhCli({ run: scripted(missing) });
+    /* Given */
+    const gh = new GhCli({run: scripted(missing)});
 
-  /* When */
-  const available = await gh.available();
+    /* When */
+    const available = await gh.available();
 
-  /* Then */
-  assert.equal(available, 'missing');
+    /* Then */
+    assert.equal(available, 'missing');
 });
 
 test('missing gh: every call answers null without throwing', async () => {
-  /* Given */
-  const gh = new GhCli({ run: scripted(missing) });
+    /* Given */
+    const gh = new GhCli({run: scripted(missing)});
 
-  /* When */
-  const reads = await everyRead(gh);
-
-  /* Then */
-  assert.deepEqual(reads, [null, null, null, null]);
-});
-
-test('signed out or revoked: available says unauthenticated', async () => {
-  /* Given */
-  const outcomes = [signedOut, revoked];
-
-  for (const answer of outcomes) {
     /* When */
-    const available = await new GhCli({ run: scripted(answer) }).available();
-
-    /* Then */
-    assert.equal(available, 'unauthenticated');
-  }
-});
-
-test('signed out or revoked: every call answers null', async () => {
-  /* Given */
-  const outcomes = [signedOut, revoked];
-
-  for (const answer of outcomes) {
-    /* When */
-    const reads = await everyRead(new GhCli({ run: scripted(answer) }));
+    const reads = await everyRead(gh);
 
     /* Then */
     assert.deepEqual(reads, [null, null, null, null]);
-  }
+});
+
+test('signed out or revoked: available says unauthenticated', async () => {
+    /* Given */
+    const outcomes = [signedOut, revoked];
+
+    for (const answer of outcomes) {
+        /* When */
+        const available = await new GhCli({run: scripted(answer)}).available();
+
+        /* Then */
+        assert.equal(available, 'unauthenticated');
+    }
+});
+
+test('signed out or revoked: every call answers null', async () => {
+    /* Given */
+    const outcomes = [signedOut, revoked];
+
+    for (const answer of outcomes) {
+        /* When */
+        const reads = await everyRead(new GhCli({run: scripted(answer)}));
+
+        /* Then */
+        assert.deepEqual(reads, [null, null, null, null]);
+    }
 });
 
 test('available is ok when gh auth status passes', async () => {
-  /* Given */
-  const run = scripted(() => ({ code: 0 }));
+    /* Given */
+    const run = scripted(() => ({code: 0}));
 
-  /* When */
-  const available = await new GhCli({ run }).available();
+    /* When */
+    const available = await new GhCli({run}).available();
 
-  /* Then */
-  assert.equal(available, 'ok');
-  assert.deepEqual(run.calls[0], ['auth', 'status', '--hostname', 'github.com']);
+    /* Then */
+    assert.equal(available, 'ok');
+    assert.deepEqual(run.calls[0], ['auth', 'status', '--hostname', 'github.com']);
 });
 
 test('a malformed repository asks nothing', async () => {
-  /* Given */
-  const run = scripted(partial);
-  const gh = new GhCli({ run });
+    /* Given */
+    const run = scripted(partial);
+    const gh = new GhCli({run});
 
-  /* When */
-  const notARepo = await gh.pullRequests('not a repo', [1]);
-  const injected = await gh.pullRequests('acme/web; rm -rf /', [1]);
+    /* When */
+    const notARepo = await gh.pullRequests('not a repo', [1]);
+    const injected = await gh.pullRequests('acme/web; rm -rf /', [1]);
 
-  /* Then */
-  assert.equal(notARepo, null);
-  assert.equal(injected, null);
-  assert.equal(run.calls.length, 0);
+    /* Then */
+    assert.equal(notARepo, null);
+    assert.equal(injected, null);
+    assert.equal(run.calls.length, 0);
 });
 
 test('no numbers asks nothing', async () => {
-  /* Given */
-  const run = scripted(partial);
-  const gh = new GhCli({ run });
+    /* Given */
+    const run = scripted(partial);
+    const gh = new GhCli({run});
 
-  /* When */
-  const prs = await gh.pullRequests('acme/web', []);
-  const issues = await gh.issues('acme/web', [0, -1, 1.5]);
+    /* When */
+    const prs = await gh.pullRequests('acme/web', []);
+    const issues = await gh.issues('acme/web', [0, -1, 1.5]);
 
-  /* Then */
-  assert.deepEqual(prs, []);
-  assert.deepEqual(issues, []);
-  assert.equal(run.calls.length, 0);
+    /* Then */
+    assert.deepEqual(prs, []);
+    assert.deepEqual(issues, []);
+    assert.equal(run.calls.length, 0);
 });
 
 test('issues keeps only what GitHub confirms is an issue', async () => {
-  /* Given */
-  const run = scripted(() => ({
-    code: 1,
-    stdout: JSON.stringify({
-      data: {
-        repository: {
-          i7: { __typename: 'Issue', number: 7, title: 'Billing page', state: 'OPEN', url: 'https://github.com/acme/web/issues/7' },
-          i8: { __typename: 'Issue', number: 8, title: 'Old bug', state: 'CLOSED', url: 'https://github.com/acme/web/issues/8' },
-          i12: { __typename: 'PullRequest' },
-          i404: null,
+    /* Given */
+    const run = scripted(() => ({
+        code: 1,
+        stdout: JSON.stringify({
+            data: {
+                repository: {
+                    i7: {
+                        __typename: 'Issue',
+                        number: 7,
+                        title: 'Billing page',
+                        state: 'OPEN',
+                        url: 'https://github.com/acme/web/issues/7',
+                    },
+                    i8: {
+                        __typename: 'Issue',
+                        number: 8,
+                        title: 'Old bug',
+                        state: 'CLOSED',
+                        url: 'https://github.com/acme/web/issues/8',
+                    },
+                    i12: {__typename: 'PullRequest'},
+                    i404: null,
+                },
+            },
+            errors: [
+                {
+                    type: 'NOT_FOUND',
+                    path: ['repository', 'i404'],
+                    message: 'Could not resolve to an issue or pull request with the number of 404.',
+                },
+            ],
+        }),
+    }));
+
+    /* When */
+    const issues = await new GhCli({run}).issues('acme/web', [7, 8, 12, 404]);
+
+    /* Then */
+    assert.deepEqual(issues, [
+        {
+            repository: 'acme/web',
+            number: 7,
+            title: 'Billing page',
+            state: 'open',
+            url: 'https://github.com/acme/web/issues/7',
         },
-      },
-      errors: [{ type: 'NOT_FOUND', path: ['repository', 'i404'], message: 'Could not resolve to an issue or pull request with the number of 404.' }],
-    }),
-  }));
-
-  /* When */
-  const issues = await new GhCli({ run }).issues('acme/web', [7, 8, 12, 404]);
-
-  /* Then */
-  assert.deepEqual(issues, [
-    { repository: 'acme/web', number: 7, title: 'Billing page', state: 'open', url: 'https://github.com/acme/web/issues/7' },
-    { repository: 'acme/web', number: 8, title: 'Old bug', state: 'closed', url: 'https://github.com/acme/web/issues/8' },
-  ]);
-  assert.equal(run.calls.length, 1, 'one call for every number');
-  assert.match(run.calls[0][3], /i12: issueOrPullRequest\(number: 12\)/);
+        {
+            repository: 'acme/web',
+            number: 8,
+            title: 'Old bug',
+            state: 'closed',
+            url: 'https://github.com/acme/web/issues/8',
+        },
+    ]);
+    assert.equal(run.calls.length, 1, 'one call for every number');
+    assert.match(run.calls[0][3], /i12: issueOrPullRequest\(number: 12\)/);
 });
 
 test('pullRequestDiff runs gh pr diff with plain output', async () => {
-  /* Given */
-  const run = scripted(() => ({ stdout: 'diff --git a/x b/x\n' }));
+    /* Given */
+    const run = scripted(() => ({stdout: 'diff --git a/x b/x\n'}));
 
-  /* When */
-  const diff = await new GhCli({ run }).pullRequestDiff('acme/web', 12);
+    /* When */
+    const diff = await new GhCli({run}).pullRequestDiff('acme/web', 12);
 
-  /* Then */
-  assert.equal(diff, 'diff --git a/x b/x\n');
-  assert.deepEqual(run.calls[0], ['pr', 'diff', '12', '--repo', 'acme/web', '--color', 'never']);
+    /* Then */
+    assert.equal(diff, 'diff --git a/x b/x\n');
+    assert.deepEqual(run.calls[0], ['pr', 'diff', '12', '--repo', 'acme/web', '--color', 'never']);
 });
 
-test('checkLogTail reads the failed steps of an Actions job, without gh\'s prefixes', async () => {
-  /* Given */
-  const log = [
-    'test\tRun tests\t2026-10-16T09:00:00.0000000Z > switchboard@2.2.0 test',
-    'test\tRun tests\t2026-10-16T09:00:01.0000000Z not ok 3 - parses a rename',
-    'test\tRun tests\t2026-10-16T09:00:02.0000000Z ##[error]Process completed with exit code 1.',
-    '',
-  ].join('\n');
-  const run = scripted((args) => (args.includes('--log-failed') ? { stdout: log } : { code: 1 }));
+test("checkLogTail reads the failed steps of an Actions job, without gh's prefixes", async () => {
+    /* Given */
+    const log = [
+        'test\tRun tests\t2026-10-16T09:00:00.0000000Z > switchboard@2.2.0 test',
+        'test\tRun tests\t2026-10-16T09:00:01.0000000Z not ok 3 - parses a rename',
+        'test\tRun tests\t2026-10-16T09:00:02.0000000Z ##[error]Process completed with exit code 1.',
+        '',
+    ].join('\n');
+    const run = scripted((args) => (args.includes('--log-failed') ? {stdout: log} : {code: 1}));
 
-  /* When */
-  const tail = await new GhCli({ run }).checkLogTail('acme/web', 'https://github.com/acme/web/actions/runs/111/job/222', 2);
+    /* When */
+    const tail = await new GhCli({run}).checkLogTail(
+        'acme/web',
+        'https://github.com/acme/web/actions/runs/111/job/222',
+        2,
+    );
 
-  /* Then */
-  assert.equal(tail, 'not ok 3 - parses a rename\n##[error]Process completed with exit code 1.');
-  assert.deepEqual(run.calls[0], ['run', 'view', '--repo', 'acme/web', '--job', '222', '--log-failed']);
+    /* Then */
+    assert.equal(tail, 'not ok 3 - parses a rename\n##[error]Process completed with exit code 1.');
+    assert.deepEqual(run.calls[0], ['run', 'view', '--repo', 'acme/web', '--job', '222', '--log-failed']);
 });
 
 /** A gh with no failed-step log for a job, only the whole log. */
 const wholeLogOnly = () =>
-  scripted((args) => (args.includes('--log') ? { stdout: 'build\tSet up\t2026-10-16T09:00:00Z hello\n' } : { stdout: '' }));
+    scripted((args) =>
+        args.includes('--log') ? {stdout: 'build\tSet up\t2026-10-16T09:00:00Z hello\n'} : {stdout: ''},
+    );
 
 test('checkLogTail falls back to the whole log', async () => {
-  /* Given */
-  const run = wholeLogOnly();
+    /* Given */
+    const run = wholeLogOnly();
 
-  /* When */
-  const tail = await new GhCli({ run }).checkLogTail('acme/web', 'https://github.com/acme/web/runs/555', 10);
+    /* When */
+    const tail = await new GhCli({run}).checkLogTail('acme/web', 'https://github.com/acme/web/runs/555', 10);
 
-  /* Then */
-  assert.equal(tail, 'hello');
-  assert.equal(run.calls[1][5], '555');
+    /* Then */
+    assert.equal(tail, 'hello');
+    assert.equal(run.calls[1][5], '555');
 });
 
 test('checkLogTail answers null for a check that is not an Actions job', async () => {
-  /* Given */
-  const run = wholeLogOnly();
+    /* Given */
+    const run = wholeLogOnly();
 
-  /* When */
-  const tail = await new GhCli({ run }).checkLogTail('acme/web', 'https://vercel.com/acme/web/abc', 10);
+    /* When */
+    const tail = await new GhCli({run}).checkLogTail('acme/web', 'https://vercel.com/acme/web/abc', 10);
 
-  /* Then */
-  assert.equal(tail, null);
+    /* Then */
+    assert.equal(tail, null);
 });

@@ -9,19 +9,19 @@
 export type IdRecord<T> = Readonly<Record<string, T>>;
 
 export function withEntry<T>(record: IdRecord<T>, id: string, value: T): IdRecord<T> {
-  if (Object.prototype.hasOwnProperty.call(record, id) && Object.is(record[id], value)) return record;
-  return { ...record, [id]: value };
+    if (Object.prototype.hasOwnProperty.call(record, id) && Object.is(record[id], value)) return record;
+    return {...record, [id]: value};
 }
 
 export function withoutEntry<T>(record: IdRecord<T>, id: string): IdRecord<T> {
-  if (!Object.prototype.hasOwnProperty.call(record, id)) return record;
-  const next = { ...record };
-  delete next[id];
-  return next;
+    if (!Object.prototype.hasOwnProperty.call(record, id)) return record;
+    const next = {...record};
+    delete next[id];
+    return next;
 }
 
 export function hasEntry(record: IdRecord<unknown>, id: string): boolean {
-  return Object.prototype.hasOwnProperty.call(record, id);
+    return Object.prototype.hasOwnProperty.call(record, id);
 }
 
 /**
@@ -33,7 +33,7 @@ export function hasEntry(record: IdRecord<unknown>, id: string): boolean {
  * Either way nothing is left under `oldId`.
  */
 export function movedEntry<T>(record: IdRecord<T>, oldId: string, newId: string): IdRecord<T> {
-  if (oldId === newId || !hasEntry(record, oldId)) return record;
-  const next = withoutEntry(record, oldId);
-  return hasEntry(next, newId) ? next : { ...next, [newId]: record[oldId] };
+    if (oldId === newId || !hasEntry(record, oldId)) return record;
+    const next = withoutEntry(record, oldId);
+    return hasEntry(next, newId) ? next : {...next, [newId]: record[oldId]};
 }

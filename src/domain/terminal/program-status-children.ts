@@ -20,14 +20,14 @@
  * Kept apart from `CliBusyTracker` because the two answer different questions
  * from the same stream, and either is easier to test without the other.
  */
-import type { ProgramStatusReport, ProgramStatusState } from './osc';
+import type {ProgramStatusReport, ProgramStatusState} from './osc';
 
 /** One agent the session has working. */
 export interface WorkingAgent {
-  /** The record's slash path, e.g. `a2b4e2746e65ed41b` or `a/b` for a sub-subagent. */
-  id: string;
-  /** What it is doing, when the CLI said. */
-  title?: string;
+    /** The record's slash path, e.g. `a2b4e2746e65ed41b` or `a/b` for a sub-subagent. */
+    id: string;
+    /** What it is doing, when the CLI said. */
+    title?: string;
 }
 
 /**
@@ -42,11 +42,11 @@ const WORKING_STATES: ReadonlySet<ProgramStatusState> = new Set<ProgramStatusSta
 
 /** True when `id` is `ancestor` itself or sits somewhere beneath it. */
 function isWithin(id: string, ancestor: string): boolean {
-  return id === ancestor || id.startsWith(ancestor + '/');
+    return id === ancestor || id.startsWith(ancestor + '/');
 }
 
 function sameAgents(a: readonly WorkingAgent[], b: readonly WorkingAgent[]): boolean {
-  return a.length === b.length && a.every((agent, i) => agent.id === b[i].id && agent.title === b[i].title);
+    return a.length === b.length && a.every((agent, i) => agent.id === b[i].id && agent.title === b[i].title);
 }
 
 /**
@@ -58,36 +58,36 @@ function sameAgents(a: readonly WorkingAgent[], b: readonly WorkingAgent[]): boo
  * tooltip listing them from reshuffling as reports arrive.
  */
 export class ProgramStatusChildren {
-  /** id → the latest report for it. A Map keeps first-seen order through replacements. */
-  readonly #records = new Map<string, { state: ProgramStatusState; title?: string }>();
-  #working: readonly WorkingAgent[] = [];
+    /** id → the latest report for it. A Map keeps first-seen order through replacements. */
+    private readonly records = new Map<string, {state: ProgramStatusState; title?: string}>();
+    private workingAgents: readonly WorkingAgent[] = [];
 
-  /** The agents working right now. */
-  get working(): readonly WorkingAgent[] {
-    return this.#working;
-  }
-
-  /** Apply one report; the new working list if it changed, else null. */
-  observe(report: ProgramStatusReport): WorkingAgent[] | null {
-    const { id, state } = report;
-
-    if (state === 'clear') {
-      if (id === undefined) this.#records.clear();
-      else for (const key of [...this.#records.keys()]) if (isWithin(key, id)) this.#records.delete(key);
-    } else if (id !== undefined) {
-      this.#records.set(id, report.title === undefined ? { state } : { state, title: report.title });
-    } else {
-      return null;
+    /** The agents working right now. */
+    public get working(): readonly WorkingAgent[] {
+        return this.workingAgents;
     }
 
-    const working: WorkingAgent[] = [];
-    for (const [key, record] of this.#records) {
-      if (!WORKING_STATES.has(record.state)) continue;
-      working.push(record.title === undefined ? { id: key } : { id: key, title: record.title });
-    }
+    /** Apply one report; the new working list if it changed, else null. */
+    public observe(report: ProgramStatusReport): WorkingAgent[] | null {
+        const {id, state} = report;
 
-    if (sameAgents(working, this.#working)) return null;
-    this.#working = working;
-    return working;
-  }
+        if (state === 'clear') {
+            if (id === undefined) this.records.clear();
+            else for (const key of [...this.records.keys()]) if (isWithin(key, id)) this.records.delete(key);
+        } else if (id !== undefined) {
+            this.records.set(id, report.title === undefined ? {state} : {state, title: report.title});
+        } else {
+            return null;
+        }
+
+        const working: WorkingAgent[] = [];
+        for (const [key, record] of this.records) {
+            if (!WORKING_STATES.has(record.state)) continue;
+            working.push(record.title === undefined ? {id: key} : {id: key, title: record.title});
+        }
+
+        if (sameAgents(working, this.workingAgents)) return null;
+        this.workingAgents = working;
+        return working;
+    }
 }

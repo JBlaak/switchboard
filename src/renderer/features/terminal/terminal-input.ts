@@ -15,16 +15,16 @@ export const DEFAULT_TERMINAL_LINE_HEIGHT = 1;
 
 /** Font settings as they are stored — every field optional and unvalidated. */
 export interface StoredFontSettings {
-  fontFamily?: unknown;
-  fontSize?: unknown;
-  lineHeight?: unknown;
+    fontFamily?: unknown;
+    fontSize?: unknown;
+    lineHeight?: unknown;
 }
 
 /** Font settings xterm will accept. */
 export interface TerminalFontSettings {
-  fontFamily: string;
-  fontSize: number;
-  lineHeight: number;
+    fontFamily: string;
+    fontSize: number;
+    lineHeight: number;
 }
 
 // Always leave a monospace font behind the user's choice. A family the browser cannot
@@ -33,8 +33,8 @@ export interface TerminalFontSettings {
 // the terminal's column alignment. Keeping the default stack as a tail means an
 // unresolvable name degrades to the normal terminal font instead.
 function withMonospaceFallback(family: string): string {
-  if (family === DEFAULT_TERMINAL_FONT_FAMILY) return family;
-  return family + ', ' + DEFAULT_TERMINAL_FONT_FAMILY;
+    if (family === DEFAULT_TERMINAL_FONT_FAMILY) return family;
+    return family + ', ' + DEFAULT_TERMINAL_FONT_FAMILY;
 }
 
 // Coerce stored settings into values xterm accepts. xterm throws outright on
@@ -47,20 +47,22 @@ function withMonospaceFallback(family: string): string {
 // default, and xterm renders that as badly-stretched text with uneven cell widths —
 // see isFontAvailable, which warns about the same mistake up front in the settings
 // panel.
-export function normalizeTerminalFont(
-  { fontFamily, fontSize, lineHeight }: StoredFontSettings = {},
-): TerminalFontSettings {
-  const chosen = typeof fontFamily === 'string' ? fontFamily.trim() : '';
-  const family = chosen || DEFAULT_TERMINAL_FONT_FAMILY;
-  const size = Number(fontSize);
-  const height = Number(lineHeight);
-  return {
-    fontFamily: withMonospaceFallback(family),
-    fontSize: Number.isFinite(size) && size > 0 ? Math.min(32, Math.max(6, size)) : DEFAULT_TERMINAL_FONT_SIZE,
-    lineHeight: Number.isFinite(height) && height > 0 ? Math.min(3, Math.max(1, height)) : DEFAULT_TERMINAL_LINE_HEIGHT,
-  };
+export function normalizeTerminalFont({
+    fontFamily,
+    fontSize,
+    lineHeight,
+}: StoredFontSettings = {}): TerminalFontSettings {
+    const chosen = typeof fontFamily === 'string' ? fontFamily.trim() : '';
+    const family = chosen || DEFAULT_TERMINAL_FONT_FAMILY;
+    const size = Number(fontSize);
+    const height = Number(lineHeight);
+    return {
+        fontFamily: withMonospaceFallback(family),
+        fontSize: Number.isFinite(size) && size > 0 ? Math.min(32, Math.max(6, size)) : DEFAULT_TERMINAL_FONT_SIZE,
+        lineHeight:
+            Number.isFinite(height) && height > 0 ? Math.min(3, Math.max(1, height)) : DEFAULT_TERMINAL_LINE_HEIGHT,
+    };
 }
-
 
 // True when a keydown is being consumed by an IME (e.g. Korean/Japanese/Chinese)
 // to compose a character. Chromium reports keyCode 229 for such keydowns, and
@@ -68,7 +70,7 @@ export function normalizeTerminalFont(
 // its composition helper in this state — but only if our custom handler lets the
 // event through (returns true) instead of intercepting it.
 export function isImeComposing(e: KeyboardEvent): boolean {
-  return e.isComposing === true || e.keyCode === 229;
+    return e.isComposing === true || e.keyCode === 229;
 }
 
 // Whether a Space keydown should be written straight to the PTY (the push-to-talk
@@ -76,9 +78,7 @@ export function isImeComposing(e: KeyboardEvent): boolean {
 // composition: preventDefault-ing the Space there drops the in-progress syllable
 // (e.g. Korean "녕 " came out as " 녕" or lost the syllable entirely).
 export function shouldSendSpaceDirectly(e: KeyboardEvent): boolean {
-  return e.key === ' '
-    && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey
-    && !isImeComposing(e);
+    return e.key === ' ' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && !isImeComposing(e);
 }
 
 // Map a modified-Enter keydown to the kitty CSI-u sequence Claude Code expects, or
@@ -88,10 +88,10 @@ export function shouldSendSpaceDirectly(e: KeyboardEvent): boolean {
 //   Shift+Enter → CSI 13;2u : newline instead of submit.
 //   Ctrl+Enter  → CSI 13;5u : send now (modifier 5 = 1 + ctrl(4)).
 export function enterKittySequence(e: KeyboardEvent): string | null {
-  if (e.key !== 'Enter' || e.altKey || e.metaKey) return null;
-  if (e.shiftKey && !e.ctrlKey) return '\x1b[13;2u';
-  if (e.ctrlKey && !e.shiftKey) return '\x1b[13;5u';
-  return null;
+    if (e.key !== 'Enter' || e.altKey || e.metaKey) return null;
+    if (e.shiftKey && !e.ctrlKey) return '\x1b[13;2u';
+    if (e.ctrlKey && !e.shiftKey) return '\x1b[13;5u';
+    return null;
 }
 
 // Decode an OSC 52 payload into the text the program wants on the clipboard.
@@ -106,10 +106,9 @@ export function enterKittySequence(e: KeyboardEvent): string | null {
 //
 // Throws on malformed base64 (atob), which the caller reports as unhandled.
 export function decodeOsc52Payload(payload: string): string | null {
-  const sep = payload.indexOf(';');
-  const b64 = sep === -1 ? payload : payload.slice(sep + 1);
-  if (!b64 || b64 === '?') return null;
-  const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
+    const sep = payload.indexOf(';');
+    const b64 = sep === -1 ? payload : payload.slice(sep + 1);
+    if (!b64 || b64 === '?') return null;
+    const bytes = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
 }
-

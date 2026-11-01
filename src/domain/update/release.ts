@@ -10,51 +10,51 @@
  */
 
 export interface ReleaseAsset {
-  name: string;
-  url: string;
+    name: string;
+    url: string;
 }
 
 /** A release as GitHub publishes it, reduced to what an update needs. */
 export interface PublishedRelease {
-  version: string;
-  pageUrl: string;
-  assets: ReleaseAsset[];
+    version: string;
+    pageUrl: string;
+    assets: ReleaseAsset[];
 }
 
 /** What the sidebar offers: a newer version, and the zip to install it from. */
 export interface AvailableUpdate {
-  version: string;
-  pageUrl: string;
-  /** Null when the release has no zip for this architecture. */
-  downloadUrl: string | null;
+    version: string;
+    pageUrl: string;
+    /** Null when the release has no zip for this architecture. */
+    downloadUrl: string | null;
 }
 
 /** What the sidebar shows. */
 export interface UpdateNotice {
-  version: string;
-  pageUrl: string;
-  /** True when Install can swap the app in place; otherwise the notice links to the release. */
-  installable: boolean;
+    version: string;
+    pageUrl: string;
+    /** True when Install can swap the app in place; otherwise the notice links to the release. */
+    installable: boolean;
 }
 
 type Version = [number, number, number];
 
 /** `2.1.3` or `v2.1.3` as numbers; null for anything else, pre-releases included. */
 export function parseVersion(text: string): Version | null {
-  const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(text.trim());
-  if (!match) return null;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+    const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(text.trim());
+    if (!match) return null;
+    return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
 /** True when `candidate` is a later version than `current`; false when either is unreadable. */
 export function isNewer(candidate: string, current: string): boolean {
-  const a = parseVersion(candidate);
-  const b = parseVersion(current);
-  if (!a || !b) return false;
-  for (let i = 0; i < 3; i++) {
-    if (a[i] !== b[i]) return a[i] > b[i];
-  }
-  return false;
+    const a = parseVersion(candidate);
+    const b = parseVersion(current);
+    if (!a || !b) return false;
+    for (let i = 0; i < 3; i++) {
+        if (a[i] !== b[i]) return a[i] > b[i];
+    }
+    return false;
 }
 
 /**
@@ -63,35 +63,37 @@ export function isNewer(candidate: string, current: string): boolean {
  * refused here as well so a different source cannot slip one through.
  */
 export function parseLatestRelease(body: unknown): PublishedRelease | null {
-  if (!body || typeof body !== 'object') return null;
-  const release = body as Record<string, unknown>;
-  if (release.draft || release.prerelease) return null;
-  if (typeof release.tag_name !== 'string' || !parseVersion(release.tag_name)) return null;
+    if (!body || typeof body !== 'object') return null;
+    const release = body as Record<string, unknown>;
+    if (release.draft || release.prerelease) return null;
+    if (typeof release.tag_name !== 'string' || !parseVersion(release.tag_name)) return null;
 
-  const assets: ReleaseAsset[] = [];
-  for (const asset of Array.isArray(release.assets) ? release.assets : []) {
-    const { name, browser_download_url: url } = (asset ?? {}) as Record<string, unknown>;
-    if (typeof name === 'string' && typeof url === 'string') assets.push({ name, url });
-  }
+    const assets: ReleaseAsset[] = [];
+    for (const asset of Array.isArray(release.assets) ? release.assets : []) {
+        const {name, browser_download_url: url} = (asset ?? {}) as Record<string, unknown>;
+        if (typeof name === 'string' && typeof url === 'string') assets.push({name, url});
+    }
 
-  return {
-    version: release.tag_name.replace(/^v/, ''),
-    pageUrl: typeof release.html_url === 'string' ? release.html_url : '',
-    assets,
-  };
+    return {
+        version: release.tag_name.replace(/^v/, ''),
+        pageUrl: typeof release.html_url === 'string' ? release.html_url : '',
+        assets,
+    };
 }
 
 /** The zip electron-builder names for this version and architecture. */
 export function updateAssetName(version: string, arch: string): string {
-  return `Switchboard-${version}-${arch}.zip`;
+    return `Switchboard-${version}-${arch}.zip`;
 }
 
 /** The update this release offers a Mac running `currentVersion` on `arch`, if any. */
 export function availableUpdate(
-  release: PublishedRelease, currentVersion: string, arch: string,
+    release: PublishedRelease,
+    currentVersion: string,
+    arch: string,
 ): AvailableUpdate | null {
-  if (!isNewer(release.version, currentVersion)) return null;
-  const wanted = updateAssetName(release.version, arch);
-  const asset = release.assets.find(a => a.name === wanted);
-  return { version: release.version, pageUrl: release.pageUrl, downloadUrl: asset?.url ?? null };
+    if (!isNewer(release.version, currentVersion)) return null;
+    const wanted = updateAssetName(release.version, arch);
+    const asset = release.assets.find((a) => a.name === wanted);
+    return {version: release.version, pageUrl: release.pageUrl, downloadUrl: asset?.url ?? null};
 }

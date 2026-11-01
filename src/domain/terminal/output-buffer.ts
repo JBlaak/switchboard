@@ -15,57 +15,57 @@
 export const DEFAULT_MAX_BUFFER_SIZE = 256 * 1024;
 
 export class OutputBuffer {
-  readonly #chunks: string[] = [];
-  #size = 0;
-  readonly #maxSize: number;
-  /** Set while a resize redraw is in flight, to keep it out of the replay. */
-  #suppressed = false;
+    private readonly stored: string[] = [];
+    private storedSize = 0;
+    private readonly maxSize: number;
+    /** Set while a resize redraw is in flight, to keep it out of the replay. */
+    private isSuppressed = false;
 
-  constructor(maxSize: number = DEFAULT_MAX_BUFFER_SIZE) {
-    this.#maxSize = maxSize;
-  }
-
-  get size(): number {
-    return this.#size;
-  }
-
-  get suppressed(): boolean {
-    return this.#suppressed;
-  }
-
-  /**
-   * Stop recording.
-   *
-   * A plain terminal redraws its prompt on every resize, and those redraws
-   * accumulate into a replay of a dozen stacked prompts. Suppressing across the
-   * resize is what keeps a reattach showing one.
-   */
-  suppress(): void {
-    this.#suppressed = true;
-  }
-
-  resume(): void {
-    this.#suppressed = false;
-  }
-
-  append(data: string): void {
-    if (this.#suppressed) return;
-    this.#chunks.push(data);
-    this.#size += data.length;
-    // Always leave one chunk, however large: an empty replay is worse than an
-    // over-long one, and a single write can exceed the whole budget.
-    while (this.#size > this.#maxSize && this.#chunks.length > 1) {
-      this.#size -= (this.#chunks.shift() ?? '').length;
+    constructor(maxSize: number = DEFAULT_MAX_BUFFER_SIZE) {
+        this.maxSize = maxSize;
     }
-  }
 
-  /** What to replay, oldest first. */
-  chunks(): readonly string[] {
-    return this.#chunks;
-  }
+    public get size(): number {
+        return this.storedSize;
+    }
 
-  clear(): void {
-    this.#chunks.length = 0;
-    this.#size = 0;
-  }
+    public get suppressed(): boolean {
+        return this.isSuppressed;
+    }
+
+    /**
+     * Stop recording.
+     *
+     * A plain terminal redraws its prompt on every resize, and those redraws
+     * accumulate into a replay of a dozen stacked prompts. Suppressing across the
+     * resize is what keeps a reattach showing one.
+     */
+    public suppress(): void {
+        this.isSuppressed = true;
+    }
+
+    public resume(): void {
+        this.isSuppressed = false;
+    }
+
+    public append(data: string): void {
+        if (this.isSuppressed) return;
+        this.stored.push(data);
+        this.storedSize += data.length;
+        // Always leave one chunk, however large: an empty replay is worse than an
+        // over-long one, and a single write can exceed the whole budget.
+        while (this.storedSize > this.maxSize && this.stored.length > 1) {
+            this.storedSize -= (this.stored.shift() ?? '').length;
+        }
+    }
+
+    /** What to replay, oldest first. */
+    public chunks(): readonly string[] {
+        return this.stored;
+    }
+
+    public clear(): void {
+        this.stored.length = 0;
+        this.storedSize = 0;
+    }
 }

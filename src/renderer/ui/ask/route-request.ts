@@ -6,11 +6,11 @@
  * of them count as candidates, and what is said about each, is a rule of the
  * routing itself (R2, R3).
  */
-import { routeCandidates } from '../../../domain/ask/route';
-import type { Project } from '../../../domain/project/project';
-import type { RouteRequest } from '../../../domain/ask/model';
+import {routeCandidates} from '../../../domain/ask/route';
+import type {Project} from '../../../domain/project/project';
+import type {RouteRequest} from '../../../domain/ask/model';
 
 /** `text` is sent exactly as typed. */
 export function routeRequest(text: string, projects: readonly Project[]): RouteRequest {
-  return { text, candidates: routeCandidates([...projects]) };
+    return {text, candidates: routeCandidates([...projects])};
 }

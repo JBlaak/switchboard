@@ -8,14 +8,14 @@
  * done to the DOM itself — scrolling it into view, and pressing its archive
  * button so the slide-out and the confetti start from it.
  */
-import { dispatch } from '../../state/app-store';
-import { sidebarContent } from '../../lib/dom';
+import {dispatch} from '../../state/app-store';
+import {sidebarContent} from '../../lib/dom';
 
-export { headerTarget } from '../../state/list-cursor';
+export {headerTarget} from '../../state/list-cursor';
 
 /** Put the cursor on the target of this name, or take it away. */
 export function setListCursor(target: string | null): void {
-  dispatch({ type: 'listCursorMoved', target });
+    dispatch({type: 'listCursorMoved', target});
 }
 
 /**
@@ -23,12 +23,12 @@ export function setListCursor(target: string | null): void {
  * group's header, the header at the top of the group's element.
  */
 export function cursorElement(target: string): HTMLElement | null {
-  if (target.startsWith('header:')) {
-    const group = document.getElementById(target.slice('header:'.length));
-    return group?.querySelector<HTMLElement>(':scope > .slug-group-header') ?? null;
-  }
-  const el = document.getElementById(target);
-  return el && sidebarContent.contains(el) ? el : null;
+    if (target.startsWith('header:')) {
+        const group = document.getElementById(target.slice('header:'.length));
+        return group?.querySelector<HTMLElement>(':scope > .slug-group-header') ?? null;
+    }
+    const el = document.getElementById(target);
+    return el && sidebarContent.contains(el) ? el : null;
 }
 
 /**
@@ -36,8 +36,7 @@ export function cursorElement(target: string): HTMLElement | null {
  * False when it has none (a plain terminal's row).
  */
 export function pressArchive(target: string): boolean {
-  const button = cursorElement(target)
-    ?.querySelector<HTMLElement>('.session-archive-btn, .slug-group-archive-btn');
-  button?.click();
-  return !!button;
+    const button = cursorElement(target)?.querySelector<HTMLElement>('.session-archive-btn, .slug-group-archive-btn');
+    button?.click();
+    return !!button;
 }

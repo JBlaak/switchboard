@@ -6,55 +6,55 @@
  * as it goes and posts one result at the end; the adapter that starts it
  * (infrastructure/worker/worker-project-scanner.ts) turns that into a promise.
  */
-import { parentPort, workerData } from 'node:worker_threads';
-import { NodeFileSystem } from '../infrastructure/fs/node-file-system';
-import { FileTranscriptStore } from '../infrastructure/fs/transcript-store';
-import type { FolderScan, Session } from '../domain/session/session';
-import type { ScanProgress, ScanResult } from '../infrastructure/worker/worker-project-scanner';
+import {parentPort, workerData} from 'node:worker_threads';
+import {NodeFileSystem} from '../infrastructure/fs/node-file-system';
+import {FileTranscriptStore} from '../infrastructure/fs/transcript-store';
+import type {FolderScan, Session} from '../domain/session/session';
+import type {ScanProgress, ScanResult} from '../infrastructure/worker/worker-project-scanner';
 
 const port = parentPort;
 if (!port) throw new Error('scan-projects must be run as a worker thread');
 
-const { projectsDir } = workerData as { projectsDir: string };
+const {projectsDir} = workerData as {projectsDir: string};
 const transcripts = new FileTranscriptStore(new NodeFileSystem(), projectsDir);
 
 /** How often a progress tick is posted, in folders. */
 const PROGRESS_EVERY = 5;
 
 function scanFolder(folder: string): FolderScan | null {
-  const projectPath = transcripts.resolveProjectPath(folder);
-  if (!projectPath) return null;
+    const projectPath = transcripts.resolveProjectPath(folder);
+    if (!projectPath) return null;
 
-  const sessions: Session[] = [];
-  for (const sessionId of transcripts.listSessionIds(folder)) {
-    const session = transcripts.readSession(folder, sessionId, projectPath);
-    if (session) sessions.push(session);
-  }
+    const sessions: Session[] = [];
+    for (const sessionId of transcripts.listSessionIds(folder)) {
+        const session = transcripts.readSession(folder, sessionId, projectPath);
+        if (session) sessions.push(session);
+    }
 
-  return {
-    folder,
-    projectPath,
-    sessions,
-    indexMtimeMs: transcripts.folderIndexMtimeMs(folder),
-  };
+    return {
+        folder,
+        projectPath,
+        sessions,
+        indexMtimeMs: transcripts.folderIndexMtimeMs(folder),
+    };
 }
 
 try {
-  const folders = transcripts.listFolders();
-  const results: FolderScan[] = [];
+    const folders = transcripts.listFolders();
+    const results: FolderScan[] = [];
 
-  for (let i = 0; i < folders.length; i++) {
-    if (i % PROGRESS_EVERY === 0 || i === folders.length - 1) {
-      port.postMessage({
-        type: 'progress',
-        text: `Scanning projects (${i + 1}/${folders.length})…`,
-      } satisfies ScanProgress);
+    for (let i = 0; i < folders.length; i++) {
+        if (i % PROGRESS_EVERY === 0 || i === folders.length - 1) {
+            port.postMessage({
+                type: 'progress',
+                text: `Scanning projects (${i + 1}/${folders.length})…`,
+            } satisfies ScanProgress);
+        }
+        const result = scanFolder(folders[i]);
+        if (result) results.push(result);
     }
-    const result = scanFolder(folders[i]);
-    if (result) results.push(result);
-  }
 
-  port.postMessage({ ok: true, results } satisfies ScanResult);
+    port.postMessage({ok: true, results} satisfies ScanResult);
 } catch (err) {
-  port.postMessage({ ok: false, error: (err as Error).message } satisfies ScanResult);
+    port.postMessage({ok: false, error: (err as Error).message} satisfies ScanResult);
 }

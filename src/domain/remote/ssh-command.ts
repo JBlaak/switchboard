@@ -10,9 +10,9 @@
  * remote-desktop behaviour. Killing the local ssh only detaches; the tmux
  * session lives on.
  */
-import { quoteArgvForShell, shellArgs } from '../shell/quoting';
-import { expandRemoteDir, normalizeRemoteDir, tmuxSessionName } from '../project/remote-target';
-import type { RemoteConfig } from '../project/remote-target';
+import {quoteArgvForShell, shellArgs} from '../shell/quoting';
+import {expandRemoteDir, normalizeRemoteDir, tmuxSessionName} from '../project/remote-target';
+import type {RemoteConfig} from '../project/remote-target';
 
 /**
  * A stable path the tmux pane can export as SSH_AUTH_SOCK.
@@ -35,43 +35,48 @@ export const CONNECT_TIMEOUT_SECONDS = 10;
 
 /** How the PTY should invoke ssh. */
 export interface SshSpawn {
-  file: string;
-  args: string[];
+    file: string;
+    args: string[];
 }
 
 /** The argv for ssh itself, ending in the command to run on the remote host. */
 export function buildSshArgv(remote: RemoteConfig, sessionId: string, kind?: string): string[] {
-  const name = tmuxSessionName(sessionId);
-  const exportSock = `export SSH_AUTH_SOCK=${AGENT_SOCK}`;
-  // send-keys types into the pane's login shell, so $HOME expands there.
-  const bootstrap = kind === 'shell'
-    ? ` && tmux send-keys -t ${name} '${exportSock}' Enter`
-    : ` && tmux send-keys -t ${name} '${exportSock}; claude' Enter`;
-  // Working directory: created if missing (mirrors how adding a local project
-  // creates its folder) and set as the pane's start directory via tmux -c.
-  const dir = normalizeRemoteDir(remote.dir);
-  const dirSetup = dir ? `mkdir -p "${expandRemoteDir(dir)}" 2>/dev/null; ` : '';
-  const dirArg = dir ? ` -c "${expandRemoteDir(dir)}"` : '';
-  const remoteCmd =
-    'command -v tmux >/dev/null 2>&1 || { echo "Switchboard: tmux is not installed on the remote host (e.g. apt install tmux)." >&2; exit 127; }; ' +
-    `if [ -n "$SSH_AUTH_SOCK" ]; then mkdir -p $HOME/.ssh && ln -sf "$SSH_AUTH_SOCK" ${AGENT_SOCK}; fi; ` +
-    dirSetup +
-    `tmux new-session -d -s ${name}${dirArg} 2>/dev/null${bootstrap}; ` +
-    `exec tmux attach-session -t ${name}`;
+    const name = tmuxSessionName(sessionId);
+    const exportSock = `export SSH_AUTH_SOCK=${AGENT_SOCK}`;
+    // send-keys types into the pane's login shell, so $HOME expands there.
+    const bootstrap =
+        kind === 'shell'
+            ? ` && tmux send-keys -t ${name} '${exportSock}' Enter`
+            : ` && tmux send-keys -t ${name} '${exportSock}; claude' Enter`;
+    // Working directory: created if missing (mirrors how adding a local project
+    // creates its folder) and set as the pane's start directory via tmux -c.
+    const dir = normalizeRemoteDir(remote.dir);
+    const dirSetup = dir ? `mkdir -p "${expandRemoteDir(dir)}" 2>/dev/null; ` : '';
+    const dirArg = dir ? ` -c "${expandRemoteDir(dir)}"` : '';
+    const remoteCmd =
+        'command -v tmux >/dev/null 2>&1 || { echo "Switchboard: tmux is not installed on the remote host (e.g. apt install tmux)." >&2; exit 127; }; ' +
+        `if [ -n "$SSH_AUTH_SOCK" ]; then mkdir -p $HOME/.ssh && ln -sf "$SSH_AUTH_SOCK" ${AGENT_SOCK}; fi; ` +
+        dirSetup +
+        `tmux new-session -d -s ${name}${dirArg} 2>/dev/null${bootstrap}; ` +
+        `exec tmux attach-session -t ${name}`;
 
-  // ConnectTimeout: without it ssh blocks on the OS TCP timeout printing
-  // nothing at all, which is indistinguishable from a hung app.
-  // ServerAliveCountMax is set explicitly so a dropped link is noticed in
-  // ~45s regardless of what the user's ssh_config says.
-  const argv = [
-    '-t', '-A',
-    '-o', 'ConnectTimeout=' + CONNECT_TIMEOUT_SECONDS,
-    '-o', 'ServerAliveInterval=15',
-    '-o', 'ServerAliveCountMax=3',
-  ];
-  if (remote.port && Number(remote.port) !== 22) argv.push('-p', String(remote.port));
-  argv.push(remote.user + '@' + remote.host, remoteCmd);
-  return argv;
+    // ConnectTimeout: without it ssh blocks on the OS TCP timeout printing
+    // nothing at all, which is indistinguishable from a hung app.
+    // ServerAliveCountMax is set explicitly so a dropped link is noticed in
+    // ~45s regardless of what the user's ssh_config says.
+    const argv = [
+        '-t',
+        '-A',
+        '-o',
+        'ConnectTimeout=' + CONNECT_TIMEOUT_SECONDS,
+        '-o',
+        'ServerAliveInterval=15',
+        '-o',
+        'ServerAliveCountMax=3',
+    ];
+    if (remote.port && Number(remote.port) !== 22) argv.push('-p', String(remote.port));
+    argv.push(remote.user + '@' + remote.host, remoteCmd);
+    return argv;
 }
 
 /**
@@ -89,7 +94,7 @@ export function buildSshArgv(remote: RemoteConfig, sessionId: string, kind?: str
  * before.
  */
 export function buildSshSpawn(sshArgv: string[], shell?: string | null): SshSpawn {
-  if (!shell) return { file: 'ssh', args: sshArgv };
-  const cmd = 'exec ssh ' + quoteArgvForShell(sshArgv);
-  return { file: shell, args: shellArgs(shell, cmd) };
+    if (!shell) return {file: 'ssh', args: sshArgv};
+    const cmd = 'exec ssh ' + quoteArgvForShell(sshArgv);
+    return {file: shell, args: shellArgs(shell, cmd)};
 }

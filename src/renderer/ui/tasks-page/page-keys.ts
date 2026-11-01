@@ -9,35 +9,49 @@
  * typed): `TasksPage` leaves modified keys, and keys typed into an input,
  * alone. Pure, so it is tested in node; the page carries the answer out.
  */
-import { steppedCursor } from '../../state/project-page-slice';
-import type { TaskRow } from '../../../domain/tasks/model';
+import {steppedCursor} from '../../state/project-page-slice';
+import type {TaskRow} from '../../../domain/tasks/model';
 
 export type TasksKeyAction =
-  | { readonly kind: 'cursor'; readonly taskId: string | null }
-  | { readonly kind: 'start' | 'star' | 'done' | 'snooze' | 'notion' | 'detail'; readonly task: TaskRow }
-  | { readonly kind: 'search' };
+    | {readonly kind: 'cursor'; readonly taskId: string | null}
+    | {readonly kind: 'start' | 'star' | 'done' | 'snooze' | 'notion' | 'detail'; readonly task: TaskRow}
+    | {readonly kind: 'search'};
 
 /** What `key` does with the cursor on `cursor` among `rows`; null for nothing. */
 export function tasksKeyAction(key: string, rows: readonly TaskRow[], cursor: string | null): TasksKeyAction | null {
-  // A cursor on no row (yet, or any more) is on the first, as the page shows it.
-  const task = rows.find(row => row.id === cursor) ?? rows[0];
-  if (key === 'ArrowDown' || key === 'j' || key === 'ArrowUp' || key === 'k') {
-    const step = key === 'ArrowDown' || key === 'j' ? 1 : -1;
-    return { kind: 'cursor', taskId: steppedCursor(rows.map(row => row.id), task?.id ?? null, step) };
-  }
-  if (key === '/') return { kind: 'search' };
-  if (!task) return null;
-  switch (key) {
-    case 's':
-    case 'S': return { kind: 'start', task };
-    case '*': return { kind: 'star', task };
-    case 'd':
-    case 'D': return { kind: 'done', task };
-    case 'z':
-    case 'Z': return { kind: 'snooze', task };
-    case 'o':
-    case 'O': return { kind: 'notion', task };
-    case 'Enter': return { kind: 'detail', task };
-    default: return null;
-  }
+    // A cursor on no row (yet, or any more) is on the first, as the page shows it.
+    const task = rows.find((row) => row.id === cursor) ?? rows[0];
+    if (key === 'ArrowDown' || key === 'j' || key === 'ArrowUp' || key === 'k') {
+        const step = key === 'ArrowDown' || key === 'j' ? 1 : -1;
+        return {
+            kind: 'cursor',
+            taskId: steppedCursor(
+                rows.map((row) => row.id),
+                task?.id ?? null,
+                step,
+            ),
+        };
+    }
+    if (key === '/') return {kind: 'search'};
+    if (!task) return null;
+    switch (key) {
+        case 's':
+        case 'S':
+            return {kind: 'start', task};
+        case '*':
+            return {kind: 'star', task};
+        case 'd':
+        case 'D':
+            return {kind: 'done', task};
+        case 'z':
+        case 'Z':
+            return {kind: 'snooze', task};
+        case 'o':
+        case 'O':
+            return {kind: 'notion', task};
+        case 'Enter':
+            return {kind: 'detail', task};
+        default:
+            return null;
+    }
 }

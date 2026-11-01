@@ -4,14 +4,14 @@
  * (#168), inside its project's page (#173). Going back and closing are the
  * project page's (`ui/project-page/actions`).
  */
-import { dispatch } from '../../state/app-store';
-import { recordRecentPlan } from '../project-page/recent-plans';
+import {dispatch} from '../../state/app-store';
+import {recordRecentPlan} from '../project-page/recent-plans';
 
 /** A plan, and the project it was picked in: new issue sessions start there. */
 export interface PlanPage {
-  readonly projectPath: string;
-  readonly repository: string;
-  readonly number: number;
+    readonly projectPath: string;
+    readonly repository: string;
+    readonly number: number;
 }
 
 /**
@@ -20,10 +20,10 @@ export interface PlanPage {
  * on the same event); the session on screen stays the one to return to.
  */
 export function openPlanPage(page: PlanPage): void {
-  recordRecentPlan(page.projectPath, page);
-  dispatch({
-    type: 'projectOpened',
-    projectPath: page.projectPath,
-    view: { kind: 'plan', repository: page.repository, number: page.number },
-  });
+    recordRecentPlan(page.projectPath, page);
+    dispatch({
+        type: 'projectOpened',
+        projectPath: page.projectPath,
+        view: {kind: 'plan', repository: page.repository, number: page.number},
+    });
 }

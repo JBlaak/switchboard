@@ -14,29 +14,33 @@
  * keep their elements across redraws (they are keyed by their local key), so
  * one caught mid-glide keeps its spring and heads for its newest place.
  */
-import { useLayoutEffect, useRef } from 'react';
-import { store } from '../../state/app-store';
-import { play, snapshot } from '../../lib/motion/reflow';
-import { redrawGlides } from '../../state/list-reflow';
-import type { Snapshot } from '../../lib/motion/reflow';
+import {useLayoutEffect, useRef} from 'react';
+import {store} from '../../state/app-store';
+import {play, snapshot} from '../../lib/motion/reflow';
+import {redrawGlides} from '../../state/list-reflow';
+import type {Snapshot} from '../../lib/motion/reflow';
 
 /** The list's top-level entries: rows, slug groups, section labels and the "older" toggle — never what sits inside a group. */
 const REFLOW_SELECTOR = '.session-list > [id], .sessions-older > [id]';
 
 export function useReflow(container: HTMLElement, revision: number): void {
-  const before = useRef<Snapshot | null>(null);
+    const before = useRef<Snapshot | null>(null);
 
-  useLayoutEffect(() => store.subscribe((state, previous) => {
-    if (state.sessionList.revision === previous.sessionList.revision) return;
-    const animate = redrawGlides(previous, state);
-    // Two redraws before one commit: the first snapshot is still the DOM on screen.
-    if (!animate) before.current = null;
-    else before.current ??= snapshot(container, REFLOW_SELECTOR);
-  }), [container]);
+    useLayoutEffect(
+        () =>
+            store.subscribe((state, previous) => {
+                if (state.sessionList.revision === previous.sessionList.revision) return;
+                const animate = redrawGlides(previous, state);
+                // Two redraws before one commit: the first snapshot is still the DOM on screen.
+                if (!animate) before.current = null;
+                else before.current ??= snapshot(container, REFLOW_SELECTOR);
+            }),
+        [container],
+    );
 
-  useLayoutEffect(() => {
-    const taken = before.current;
-    before.current = null;
-    if (taken) play(taken);
-  }, [revision]);
+    useLayoutEffect(() => {
+        const taken = before.current;
+        before.current = null;
+        if (taken) play(taken);
+    }, [revision]);
 }

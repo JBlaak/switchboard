@@ -19,10 +19,10 @@ export type Reducer<S, E> = (state: S, event: E) => S;
 export type Listener<S, E> = (state: S, previous: S, event: E) => void;
 
 export interface Store<S, E> {
-  getState(): S;
-  dispatch(event: E): void;
-  /** Answers the unsubscribe. */
-  subscribe(listener: Listener<S, E>): () => void;
+    getState(): S;
+    dispatch(event: E): void;
+    /** Answers the unsubscribe. */
+    subscribe(listener: Listener<S, E>): () => void;
 }
 
 /**
@@ -45,44 +45,46 @@ export interface Store<S, E> {
  *   order.
  */
 export function createStore<S, E>(reducer: Reducer<S, E>, initial: S): Store<S, E> {
-  let state = initial;
-  const listeners = new Set<Listener<S, E>>();
-  const queue: { next: S; previous: S; event: E }[] = [];
-  let notifying = false;
+    let state = initial;
+    const listeners = new Set<Listener<S, E>>();
+    const queue: {next: S; previous: S; event: E}[] = [];
+    let notifying = false;
 
-  function dispatch(event: E): void {
-    const previous = state;
-    const next = reducer(previous, event);
-    state = next;
-    queue.push({ next, previous, event });
-    if (notifying) return;
+    function dispatch(event: E): void {
+        const previous = state;
+        const next = reducer(previous, event);
+        state = next;
+        queue.push({next, previous, event});
+        if (notifying) return;
 
-    notifying = true;
-    try {
-      while (queue.length) {
-        const transition = queue.shift()!;
-        // A snapshot, so a listener that unsubscribes another mid-round does
-        // not skip a third.
-        for (const listener of [...listeners]) {
-          listener(transition.next, transition.previous, transition.event);
+        notifying = true;
+        try {
+            while (queue.length) {
+                const transition = queue.shift()!;
+                // A snapshot, so a listener that unsubscribes another mid-round does
+                // not skip a third.
+                for (const listener of [...listeners]) {
+                    listener(transition.next, transition.previous, transition.event);
+                }
+            }
+        } finally {
+            notifying = false;
+            // A listener that threw leaves the rest of its round undelivered; the
+            // next dispatch must not inherit it.
+            queue.length = 0;
         }
-      }
-    } finally {
-      notifying = false;
-      // A listener that threw leaves the rest of its round undelivered; the
-      // next dispatch must not inherit it.
-      queue.length = 0;
     }
-  }
 
-  return {
-    getState: () => state,
-    dispatch,
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => { listeners.delete(listener); };
-    },
-  };
+    return {
+        getState: () => state,
+        dispatch,
+        subscribe(listener) {
+            listeners.add(listener);
+            return () => {
+                listeners.delete(listener);
+            };
+        },
+    };
 }
 
 /**
@@ -100,36 +102,36 @@ export function createStore<S, E>(reducer: Reducer<S, E>, initial: S): Store<S, 
  * change.
  */
 export function memoSelector<S, T>(
-  selector: (state: S) => T,
-  isEqual: (a: T, b: T) => boolean = Object.is,
-  seed?: { value: T },
+    selector: (state: S) => T,
+    isEqual: (a: T, b: T) => boolean = Object.is,
+    seed?: {value: T},
 ): (state: S) => T {
-  let hasState = false;
-  let lastState: S;
-  let hasValue = seed !== undefined;
-  let lastValue = seed?.value as T;
+    let hasState = false;
+    let lastState: S;
+    let hasValue = seed !== undefined;
+    let lastValue = seed?.value as T;
 
-  return (state: S): T => {
-    if (hasState && Object.is(state, lastState)) return lastValue;
-    const next = selector(state);
-    hasState = true;
-    lastState = state;
-    if (hasValue && isEqual(lastValue, next)) return lastValue;
-    hasValue = true;
-    lastValue = next;
-    return next;
-  };
+    return (state: S): T => {
+        if (hasState && Object.is(state, lastState)) return lastValue;
+        const next = selector(state);
+        hasState = true;
+        lastState = state;
+        if (hasValue && isEqual(lastValue, next)) return lastValue;
+        hasValue = true;
+        lastValue = next;
+        return next;
+    };
 }
 
 /** Equality for a selection that is a flat object or array of values. */
 export function shallowEqual<T>(a: T, b: T): boolean {
-  if (Object.is(a, b)) return true;
-  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
-  const aKeys = Object.keys(a);
-  if (aKeys.length !== Object.keys(b).length) return false;
-  for (const key of aKeys) {
-    if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
-    if (!Object.is((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) return false;
-  }
-  return true;
+    if (Object.is(a, b)) return true;
+    if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+    const aKeys = Object.keys(a);
+    if (aKeys.length !== Object.keys(b).length) return false;
+    for (const key of aKeys) {
+        if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+        if (!Object.is((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) return false;
+    }
+    return true;
 }

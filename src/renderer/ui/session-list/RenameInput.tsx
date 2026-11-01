@@ -9,53 +9,53 @@
  * them has happened the input ignores the rest — closing the input moves the
  * focus, and the blur that follows must not save a cancelled rename.
  */
-import { useLayoutEffect, useRef } from 'react';
-import { fallbackName } from '../../state/session-list-layout';
-import { sessionMap } from '../../state/session-store';
-import { cancelRename, finishRename } from './actions';
-import type { JSX } from 'react';
-import type { SessionRow } from '../../../domain/session/session';
+import {useLayoutEffect, useRef} from 'react';
+import {fallbackName} from '../../state/session-list-layout';
+import {sessionMap} from '../../state/session-store';
+import {cancelRename, finishRename} from './actions';
+import type {JSX} from 'react';
+import type {SessionRow} from '../../../domain/session/session';
 
 export interface RenameInputProps {
-  rowId: string;
-  /** The layout's copy; the shared row, if there is one, has the latest name. */
-  session: SessionRow;
+    rowId: string;
+    /** The layout's copy; the shared row, if there is one, has the latest name. */
+    session: SessionRow;
 }
 
-export function RenameInput({ rowId, session }: RenameInputProps): JSX.Element {
-  const input = useRef<HTMLInputElement>(null);
-  const done = useRef(false);
+export function RenameInput({rowId, session}: RenameInputProps): JSX.Element {
+    const input = useRef<HTMLInputElement>(null);
+    const done = useRef(false);
 
-  // Focused with its text selected, ready to be typed over.
-  useLayoutEffect(() => {
-    input.current?.focus();
-    input.current?.select();
-  }, []);
+    // Focused with its text selected, ready to be typed over.
+    useLayoutEffect(() => {
+        input.current?.focus();
+        input.current?.select();
+    }, []);
 
-  const current = sessionMap.get(session.sessionId) ?? session;
+    const current = sessionMap.get(session.sessionId) ?? session;
 
-  const save = (): void => {
-    if (done.current || !input.current) return;
-    done.current = true;
-    void finishRename(rowId, session.sessionId, input.current.value);
-  };
-
-  return (
-    <input
-      ref={input}
-      type="text"
-      className="session-rename-input"
-      defaultValue={current.name || fallbackName(current)}
-      onBlur={save}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.currentTarget.blur();
-          return;
-        }
-        if (e.key !== 'Escape') return;
+    const save = (): void => {
+        if (done.current || !input.current) return;
         done.current = true;
-        cancelRename(rowId);
-      }}
-    />
-  );
+        void finishRename(rowId, session.sessionId, input.current.value);
+    };
+
+    return (
+        <input
+            ref={input}
+            type="text"
+            className="session-rename-input"
+            defaultValue={current.name || fallbackName(current)}
+            onBlur={save}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                    return;
+                }
+                if (e.key !== 'Escape') return;
+                done.current = true;
+                cancelRename(rowId);
+            }}
+        />
+    );
 }

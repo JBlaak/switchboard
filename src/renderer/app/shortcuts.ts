@@ -8,77 +8,78 @@
  * twice.
  */
 import {
-  archiveActiveSession, focusSidebar, isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey,
+    archiveActiveSession,
+    focusSidebar,
+    isArchiveSessionKey,
+    isSessionPickerKey,
+    isSidebarFocusKey,
 } from '../features/sessions/sidebar-keyboard';
-import { openDialog } from '../ui/dialogs/actions';
-import { handleSessionNavKey } from '../features/terminal/session-nav';
-import { isSessionWorkKey, toggleSessionWork } from '../ui/session-work/actions';
-import { isSidebarToggleKey, toggleSidebar } from '../ui/toolbar/actions';
-import { isTasksPageKey, isUndoArchiveKey } from '../lib/shortcut-keys';
-import { undoArchive } from '../ui/archive-undo/actions';
-import { toggleTasksPage } from '../ui/tasks-page/actions';
-import { getState } from '../state/app-store';
-import {
-  isBareQuickSessionKey, isQuickSessionKey, launchQuickSession,
-} from '../features/sessions/quick-session';
+import {openDialog} from '../ui/dialogs/actions';
+import {handleSessionNavKey} from '../features/terminal/session-nav';
+import {isSessionWorkKey, toggleSessionWork} from '../ui/session-work/actions';
+import {isSidebarToggleKey, toggleSidebar} from '../ui/toolbar/actions';
+import {isTasksPageKey, isUndoArchiveKey} from '../lib/shortcut-keys';
+import {undoArchive} from '../ui/archive-undo/actions';
+import {toggleTasksPage} from '../ui/tasks-page/actions';
+import {getState} from '../state/app-store';
+import {isBareQuickSessionKey, isQuickSessionKey, launchQuickSession} from '../features/sessions/quick-session';
 
 /** An event xterm's own handler has already acted on. */
-type MarkedEvent = KeyboardEvent & { _handled?: boolean };
+type MarkedEvent = KeyboardEvent & {_handled?: boolean};
 
 export function installShortcuts(): void {
-  document.addEventListener('keydown', (e: MarkedEvent) => {
-    if (e._handled) return;
+    document.addEventListener('keydown', (e: MarkedEvent) => {
+        if (e._handled) return;
 
-    // Cmd+Shift+[ / ] and Cmd+Arrow move between sessions.
-    handleSessionNavKey(e);
+        // Cmd+Shift+[ / ] and Cmd+Arrow move between sessions.
+        handleSessionNavKey(e);
 
-    // Cmd+L puts a cursor in the session list.
-    if (isSidebarFocusKey(e)) {
-      e.preventDefault();
-      focusSidebar();
-    }
+        // Cmd+L puts a cursor in the session list.
+        if (isSidebarFocusKey(e)) {
+            e.preventDefault();
+            focusSidebar();
+        }
 
-    // Cmd+S hides or shows the sidebar.
-    if (isSidebarToggleKey(e)) {
-      e.preventDefault();
-      toggleSidebar();
-    }
+        // Cmd+S hides or shows the sidebar.
+        if (isSidebarToggleKey(e)) {
+            e.preventDefault();
+            toggleSidebar();
+        }
 
-    // Cmd+A opens the Projects modal; in a text field it is Select All.
-    if (isSessionPickerKey(e)) {
-      e.preventDefault();
-      openDialog({ kind: 'projectPicker' });
-    }
+        // Cmd+A opens the Projects modal; in a text field it is Select All.
+        if (isSessionPickerKey(e)) {
+            e.preventDefault();
+            openDialog({kind: 'projectPicker'});
+        }
 
-    // Cmd+E archives the open session; in a text field it is left alone.
-    if (isArchiveSessionKey(e)) {
-      e.preventDefault();
-      archiveActiveSession();
-    }
+        // Cmd+E archives the open session; in a text field it is left alone.
+        if (isArchiveSessionKey(e)) {
+            e.preventDefault();
+            archiveActiveSession();
+        }
 
-    // Cmd+Z, while the Undo toast is up, takes the archive back.
-    if (isUndoArchiveKey(e) && getState().archiveUndo.undo) {
-      e.preventDefault();
-      void undoArchive();
-    }
+        // Cmd+Z, while the Undo toast is up, takes the archive back.
+        if (isUndoArchiveKey(e) && getState().archiveUndo.undo) {
+            e.preventDefault();
+            void undoArchive();
+        }
 
-    // Cmd+G opens or closes the Session work page of the session on screen.
-    if (isSessionWorkKey(e)) {
-      e.preventDefault();
-      void toggleSessionWork();
-    }
+        // Cmd+G opens or closes the Session work page of the session on screen.
+        if (isSessionWorkKey(e)) {
+            e.preventDefault();
+            void toggleSessionWork();
+        }
 
-    // Cmd+T opens or closes the Tasks page, while BlaakTasks is on.
-    if (isTasksPageKey(e) && getState().tasks.enabled) {
-      e.preventDefault();
-      toggleTasksPage();
-    }
+        // Cmd+T opens or closes the Tasks page, while BlaakTasks is on.
+        if (isTasksPageKey(e) && getState().tasks.enabled) {
+            e.preventDefault();
+            toggleTasksPage();
+        }
 
-    // Cmd+N, or N outside the terminal and text fields, starts a quick session.
-    if (isQuickSessionKey(e) || isBareQuickSessionKey(e)) {
-      e.preventDefault();
-      void launchQuickSession();
-    }
-  });
+        // Cmd+N, or N outside the terminal and text fields, starts a quick session.
+        if (isQuickSessionKey(e) || isBareQuickSessionKey(e)) {
+            e.preventDefault();
+            void launchQuickSession();
+        }
+    });
 }
-

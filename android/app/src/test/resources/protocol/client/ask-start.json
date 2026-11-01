@@ -1,1 +1,6 @@
-{"type":"ask-start","requestId":"r-1","projectPath":"/Users/joris/Development/switchboard","prompt":"Bump the release notes"}
+{
+    "type": "ask-start",
+    "requestId": "r-1",
+    "projectPath": "/Users/joris/Development/switchboard",
+    "prompt": "Bump the release notes"
+}

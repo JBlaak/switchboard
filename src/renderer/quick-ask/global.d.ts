@@ -2,14 +2,14 @@
  * `window.quickAsk`, set by the Quick Ask pop-up's own preload. Only the
  * pop-up's bundle reads it; the main window has `window.api` instead.
  */
-import type { QuickAskApi } from '../../ipc/quick-ask-api';
+import type {QuickAskApi} from '../../ipc/quick-ask-api';
 
 declare global {
-  interface Window {
-    quickAsk: QuickAskApi;
-    /** The e2e harness launched the app (the pop-up's preload sets it). */
-    switchboardE2E?: true;
-  }
+    interface Window {
+        quickAsk: QuickAskApi;
+        /** The e2e harness launched the app (the pop-up's preload sets it). */
+        switchboardE2E?: true;
+    }
 }
 
 export {};

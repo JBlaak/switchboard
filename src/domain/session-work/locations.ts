@@ -7,13 +7,13 @@
  * the main transcript and every `subagents/*.jsonl` together name each place
  * the session touched.
  */
-import { parseTranscriptLine } from '../session/transcript';
-import type { WorkLocation } from './model';
+import {parseTranscriptLine} from '../session/transcript';
+import type {WorkLocation} from './model';
 
 /** One transcript's lines, and whether a subagent wrote it. */
 export interface TranscriptSource {
-  lines: readonly string[];
-  fromSubagent: boolean;
+    lines: readonly string[];
+    fromSubagent: boolean;
 }
 
 /**
@@ -25,13 +25,13 @@ export interface TranscriptSource {
  * was still somewhere the session worked.
  */
 export function worktreeRootOf(cwd: string, worktreeRoots: readonly string[]): string {
-  let best: string | null = null;
-  for (const root of worktreeRoots) {
-    const trimmed = root.replace(/\/+$/, '') || '/';
-    const inside = cwd === trimmed || cwd.startsWith(trimmed === '/' ? '/' : trimmed + '/');
-    if (inside && (best === null || trimmed.length > best.length)) best = trimmed;
-  }
-  return best ?? cwd;
+    let best: string | null = null;
+    for (const root of worktreeRoots) {
+        const trimmed = root.replace(/\/+$/, '') || '/';
+        const inside = cwd === trimmed || cwd.startsWith(trimmed === '/' ? '/' : trimmed + '/');
+        if (inside && (best === null || trimmed.length > best.length)) best = trimmed;
+    }
+    return best ?? cwd;
 }
 
 /**
@@ -43,24 +43,21 @@ export function worktreeRootOf(cwd: string, worktreeRoots: readonly string[]): s
  * subagents went there. A detached HEAD is not a branch anyone can open a PR
  * from, so it is left out.
  */
-export function workLocations(
-  sources: readonly TranscriptSource[],
-  worktreeRoots: readonly string[],
-): WorkLocation[] {
-  const entries: WorkLocation[] = [];
-  for (const source of sources) {
-    for (const line of source.lines) {
-      const entry = parseTranscriptLine(line) as { cwd?: unknown; gitBranch?: unknown } | null;
-      if (!entry || typeof entry.cwd !== 'string' || !entry.cwd) continue;
-      if (typeof entry.gitBranch !== 'string' || !entry.gitBranch || entry.gitBranch === 'HEAD') continue;
-      entries.push({
-        worktree: worktreeRootOf(entry.cwd, worktreeRoots),
-        branch: entry.gitBranch,
-        fromSubagent: source.fromSubagent,
-      });
+export function workLocations(sources: readonly TranscriptSource[], worktreeRoots: readonly string[]): WorkLocation[] {
+    const entries: WorkLocation[] = [];
+    for (const source of sources) {
+        for (const line of source.lines) {
+            const entry = parseTranscriptLine(line) as {cwd?: unknown; gitBranch?: unknown} | null;
+            if (!entry || typeof entry.cwd !== 'string' || !entry.cwd) continue;
+            if (typeof entry.gitBranch !== 'string' || !entry.gitBranch || entry.gitBranch === 'HEAD') continue;
+            entries.push({
+                worktree: worktreeRootOf(entry.cwd, worktreeRoots),
+                branch: entry.gitBranch,
+                fromSubagent: source.fromSubagent,
+            });
+        }
     }
-  }
-  return mergeWorkLocations(entries);
+    return mergeWorkLocations(entries);
 }
 
 /**
@@ -73,20 +70,20 @@ export function workLocations(
  * subdirectories of one worktree become one place.
  */
 export function mergeWorkLocations(entries: readonly WorkLocation[]): WorkLocation[] {
-  const found = new Map<string, WorkLocation>();
-  for (const entry of entries) {
-    const key = locationKey(entry.worktree, entry.branch);
-    const known = found.get(key);
-    if (known) {
-      if (!entry.fromSubagent) known.fromSubagent = false;
-    } else {
-      found.set(key, { ...entry });
+    const found = new Map<string, WorkLocation>();
+    for (const entry of entries) {
+        const key = locationKey(entry.worktree, entry.branch);
+        const known = found.get(key);
+        if (known) {
+            if (!entry.fromSubagent) known.fromSubagent = false;
+        } else {
+            found.set(key, {...entry});
+        }
     }
-  }
-  return [...found.values()];
+    return [...found.values()];
 }
 
 /** The identity of a location: two lines in the same worktree on the same branch are one place. */
 export function locationKey(worktree: string, branch: string): string {
-  return worktree + '\0' + branch;
+    return worktree + '\0' + branch;
 }

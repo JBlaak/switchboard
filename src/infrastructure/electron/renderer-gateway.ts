@@ -14,160 +14,160 @@
  * what a window is opened for (R4), so they wait for one whose renderer has
  * said it is ready, having loaded the projects and restored its view.
  */
-import { EVENT } from '../../ipc/channels';
-import type { BrowserWindow } from 'electron';
-import type { RemoteStatusPayload } from '../../domain/remote/remote-status';
-import type { WorkingAgent } from '../../domain/terminal/program-status-children';
-import type { UpdateNotice } from '../../domain/update/release';
-import type { PendingQuestions, QuestionsSettled } from '../../domain/questions/question';
-import type { SessionWorkSnapshot } from '../../domain/session-work/model';
-import type { PullRequestStatusChange } from '../../domain/session-work/status';
-import type { RendererGateway } from '../../application/ports/renderer-gateway';
-import type { PhoneAccessState, TerminalOwner } from '../../domain/phone/state';
-import type { TasksUpdate } from '../../domain/tasks/surface';
+import {EVENT} from '../../ipc/channels';
+import type {BrowserWindow} from 'electron';
+import type {RemoteStatusPayload} from '../../domain/remote/remote-status';
+import type {WorkingAgent} from '../../domain/terminal/program-status-children';
+import type {UpdateNotice} from '../../domain/update/release';
+import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
+import type {SessionWorkSnapshot} from '../../domain/session-work/model';
+import type {PullRequestStatusChange} from '../../domain/session-work/status';
+import type {RendererGateway} from '../../application/ports/renderer-gateway';
+import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
+import type {TasksUpdate} from '../../domain/tasks/surface';
 
 export class ElectronRendererGateway implements RendererGateway {
-  /** The window whose renderer said it is ready, while it is the current one. */
-  #ready: BrowserWindow | null = null;
-  /** Quick Ask's sends, held until then. */
-  #held: [channel: string, args: unknown[]][] = [];
+    /** The window whose renderer said it is ready, while it is the current one. */
+    private ready: BrowserWindow | null = null;
+    /** Quick Ask's sends, held until then. */
+    private held: [channel: string, args: unknown[]][] = [];
 
-  constructor(private readonly getWindow: () => BrowserWindow | null) {}
+    constructor(private readonly getWindow: () => BrowserWindow | null) {}
 
-  /**
-   * The main window's renderer is ready: send what was held for it. Only its
-   * preload has the channel, so the sender is the current window.
-   */
-  rendererReady(): void {
-    const window = this.getWindow();
-    if (!window || window.isDestroyed()) return;
-    this.#ready = window;
-    const held = this.#held;
-    this.#held = [];
-    for (const [channel, args] of held) this.#send(channel, ...args);
-  }
-
-  get attached(): boolean {
-    const window = this.getWindow();
-    return !!window && !window.isDestroyed();
-  }
-
-  // ── Terminal stream ──
-  terminalData(sessionId: string, data: string): void {
-    this.#send(EVENT.terminalData, sessionId, data);
-  }
-
-  processExited(sessionId: string, exitCode: number): void {
-    this.#send(EVENT.processExited, sessionId, exitCode);
-  }
-
-  // ── Session identity ──
-  sessionForked(oldId: string, newId: string): void {
-    this.#send(EVENT.sessionForked, oldId, newId);
-  }
-
-  // ── Session state ──
-  cliBusyState(sessionId: string, busy: boolean): void {
-    this.#send(EVENT.cliBusyState, sessionId, busy);
-  }
-
-  terminalNotification(sessionId: string, message: string): void {
-    this.#send(EVENT.terminalNotification, sessionId, message);
-  }
-
-  sessionNeedsAttention(sessionId: string): void {
-    this.#send(EVENT.sessionNeedsAttention, sessionId);
-  }
-
-  sessionAgents(sessionId: string, agents: WorkingAgent[]): void {
-    this.#send(EVENT.sessionAgents, sessionId, agents);
-  }
-
-  remoteStatus(sessionId: string, status: RemoteStatusPayload): void {
-    this.#send(EVENT.remoteStatus, sessionId, status);
-  }
-
-  // ── Questions ──
-  questionsAsked(pending: PendingQuestions): void {
-    this.#send(EVENT.questionsAsked, pending);
-  }
-
-  questionsSettled(settled: QuestionsSettled): void {
-    this.#send(EVENT.questionsSettled, settled);
-  }
-
-  // ── Lists and chrome ──
-  projectsChanged(): void {
-    this.#send(EVENT.projectsChanged);
-  }
-
-  statusUpdate(text: string, type: string): void {
-    this.#send(EVENT.statusUpdate, text, type);
-  }
-
-  fullscreenChanged(isFullscreen: boolean): void {
-    this.#send(EVENT.fullscreenChanged, isFullscreen);
-  }
-
-  updateAvailable(update: UpdateNotice): void {
-    this.#send(EVENT.updateAvailable, update);
-  }
-
-  // ── Session work ──
-  sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void {
-    this.#send(EVENT.sessionWorkSnapshot, snapshot);
-  }
-
-  prStatusChanged(change: PullRequestStatusChange): void {
-    this.#send(EVENT.prStatusChanged, change);
-  }
-
-  // ── Quick Ask ──
-  launchRequested(projectPath: string, initialPrompt: string): void {
-    this.#sendWhenReady(EVENT.launchRequested, projectPath, initialPrompt);
-  }
-
-  pickerRequested(initialPrompt: string, reason?: string): void {
-    this.#sendWhenReady(EVENT.pickerRequested, initialPrompt, reason);
-  }
-
-  phoneAccessChanged(state: PhoneAccessState): void {
-    this.#send(EVENT.phoneAccessChanged, state);
-  }
-
-  terminalOwnerChanged(sessionId: string, owner: TerminalOwner): void {
-    this.#send(EVENT.terminalOwnerChanged, sessionId, owner);
-  }
-
-  sessionStarted(sessionId: string, projectPath: string): void {
-    this.#send(EVENT.sessionStarted, sessionId, projectPath);
-  }
-
-  sessionArchived(sessionId: string): void {
-    this.#send(EVENT.sessionArchived, sessionId);
-  }
-
-  tasksChanged(update: TasksUpdate): void {
-    this.#send(EVENT.tasksChanged, update);
-  }
-
-  sessionTaskChanged(sessionId: string, taskId: string | null): void {
-    this.#send(EVENT.sessionTaskChanged, sessionId, taskId);
-  }
-
-  #sendWhenReady(channel: string, ...args: unknown[]): void {
-    const window = this.getWindow();
-    // A reload or a new window says it is ready again.
-    if (window && !window.isDestroyed() && window === this.#ready && !window.webContents.isLoading()) {
-      this.#send(channel, ...args);
-    } else {
-      this.#held.push([channel, args]);
+    /**
+     * The main window's renderer is ready: send what was held for it. Only its
+     * preload has the channel, so the sender is the current window.
+     */
+    public rendererReady(): void {
+        const window = this.getWindow();
+        if (!window || window.isDestroyed()) return;
+        this.ready = window;
+        const held = this.held;
+        this.held = [];
+        for (const [channel, args] of held) this.send(channel, ...args);
     }
-  }
 
-  #send(channel: string, ...args: unknown[]): void {
-    const window = this.getWindow();
-    if (!window || window.isDestroyed()) return;
-    window.webContents.send(channel, ...args);
-  }
+    public get attached(): boolean {
+        const window = this.getWindow();
+        return !!window && !window.isDestroyed();
+    }
+
+    // ── Terminal stream ──
+    public terminalData(sessionId: string, data: string): void {
+        this.send(EVENT.terminalData, sessionId, data);
+    }
+
+    public processExited(sessionId: string, exitCode: number): void {
+        this.send(EVENT.processExited, sessionId, exitCode);
+    }
+
+    // ── Session identity ──
+    public sessionForked(oldId: string, newId: string): void {
+        this.send(EVENT.sessionForked, oldId, newId);
+    }
+
+    // ── Session state ──
+    public cliBusyState(sessionId: string, busy: boolean): void {
+        this.send(EVENT.cliBusyState, sessionId, busy);
+    }
+
+    public terminalNotification(sessionId: string, message: string): void {
+        this.send(EVENT.terminalNotification, sessionId, message);
+    }
+
+    public sessionNeedsAttention(sessionId: string): void {
+        this.send(EVENT.sessionNeedsAttention, sessionId);
+    }
+
+    public sessionAgents(sessionId: string, agents: WorkingAgent[]): void {
+        this.send(EVENT.sessionAgents, sessionId, agents);
+    }
+
+    public remoteStatus(sessionId: string, status: RemoteStatusPayload): void {
+        this.send(EVENT.remoteStatus, sessionId, status);
+    }
+
+    // ── Questions ──
+    public questionsAsked(pending: PendingQuestions): void {
+        this.send(EVENT.questionsAsked, pending);
+    }
+
+    public questionsSettled(settled: QuestionsSettled): void {
+        this.send(EVENT.questionsSettled, settled);
+    }
+
+    // ── Lists and chrome ──
+    public projectsChanged(): void {
+        this.send(EVENT.projectsChanged);
+    }
+
+    public statusUpdate(text: string, type: string): void {
+        this.send(EVENT.statusUpdate, text, type);
+    }
+
+    public fullscreenChanged(isFullscreen: boolean): void {
+        this.send(EVENT.fullscreenChanged, isFullscreen);
+    }
+
+    public updateAvailable(update: UpdateNotice): void {
+        this.send(EVENT.updateAvailable, update);
+    }
+
+    // ── Session work ──
+    public sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void {
+        this.send(EVENT.sessionWorkSnapshot, snapshot);
+    }
+
+    public prStatusChanged(change: PullRequestStatusChange): void {
+        this.send(EVENT.prStatusChanged, change);
+    }
+
+    // ── Quick Ask ──
+    public launchRequested(projectPath: string, initialPrompt: string): void {
+        this.sendWhenReady(EVENT.launchRequested, projectPath, initialPrompt);
+    }
+
+    public pickerRequested(initialPrompt: string, reason?: string): void {
+        this.sendWhenReady(EVENT.pickerRequested, initialPrompt, reason);
+    }
+
+    public phoneAccessChanged(state: PhoneAccessState): void {
+        this.send(EVENT.phoneAccessChanged, state);
+    }
+
+    public terminalOwnerChanged(sessionId: string, owner: TerminalOwner): void {
+        this.send(EVENT.terminalOwnerChanged, sessionId, owner);
+    }
+
+    public sessionStarted(sessionId: string, projectPath: string): void {
+        this.send(EVENT.sessionStarted, sessionId, projectPath);
+    }
+
+    public sessionArchived(sessionId: string): void {
+        this.send(EVENT.sessionArchived, sessionId);
+    }
+
+    public tasksChanged(update: TasksUpdate): void {
+        this.send(EVENT.tasksChanged, update);
+    }
+
+    public sessionTaskChanged(sessionId: string, taskId: string | null): void {
+        this.send(EVENT.sessionTaskChanged, sessionId, taskId);
+    }
+
+    private sendWhenReady(channel: string, ...args: unknown[]): void {
+        const window = this.getWindow();
+        // A reload or a new window says it is ready again.
+        if (window && !window.isDestroyed() && window === this.ready && !window.webContents.isLoading()) {
+            this.send(channel, ...args);
+        } else {
+            this.held.push([channel, args]);
+        }
+    }
+
+    private send(channel: string, ...args: unknown[]): void {
+        const window = this.getWindow();
+        if (!window || window.isDestroyed()) return;
+        window.webContents.send(channel, ...args);
+    }
 }
