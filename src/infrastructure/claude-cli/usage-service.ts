@@ -9,7 +9,7 @@
  * reported in the result, because the status bar has to render something.
  */
 import {transformUsageResponse} from '../../domain/usage/usage';
-import {readOAuthToken} from './credentials';
+import {readOAuthToken} from './support/credentials';
 import type {ApiUsage, Usage} from '../../domain/usage/usage';
 import type {UsageService} from '../../application/ports/claude-cli';
 import type {Logger} from '../../application/ports/logger';

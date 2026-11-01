@@ -31,7 +31,7 @@ import type {PhoneAccessState} from '../src/domain/phone/state';
 import type {Project} from '../src/domain/project/project';
 import type {Container} from '../src/main/composition-root';
 import type {SessionStopper} from '../src/main/stop-session';
-import type {IpcRegistrar} from '../src/main/ipc/registrar';
+import type {IpcRegistrar} from '../src/main/ipc/support/registrar';
 
 /**
  * Phone access wired the way the app wires it (`main/phone-access`), against

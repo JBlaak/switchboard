@@ -7,7 +7,7 @@ import {INVOKE, SEND} from '../../ipc/channels';
 import type {ActionRequest} from '../../domain/session-work/actions';
 import type {CommentRequest, ReviewRequest} from '../../domain/session-work/review';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerSessionWorkHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.sessionWorkOpen, (sessionId: string) => app.sessionWork.open(sessionId));

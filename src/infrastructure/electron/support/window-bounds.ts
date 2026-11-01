@@ -7,7 +7,7 @@
  * restored when some current display still contains it.
  */
 import type {BrowserWindow, Display} from 'electron';
-import type {WindowBounds} from '../../domain/settings/settings';
+import type {WindowBounds} from '../../../domain/settings/settings';
 
 export const DEFAULT_BOUNDS = {width: 1400, height: 900};
 export const MIN_BOUNDS = {minWidth: 800, minHeight: 500};

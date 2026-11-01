@@ -22,6 +22,11 @@ Dependencies point inward only. `domain` imports nothing. `application` imports
 `domain` and its own port interfaces. `infrastructure` implements those ports.
 `main` is the only place that knows both an interface and the thing behind it.
 
+Within any folder, a `support/` subfolder holds its helpers: files that do a
+technical job for the folder (encoding, parsing, geometry, protocol framing)
+and that nothing outside its feature uses, such as `domain/voice/support/wav.ts`.
+What the folder is about stays at its top level.
+
 ## The layers
 
 ### `src/domain` — the rules

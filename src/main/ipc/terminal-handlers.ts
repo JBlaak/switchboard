@@ -12,7 +12,7 @@
 import {INVOKE, SEND} from '../../ipc/channels';
 import type {SessionOptions} from '../../domain/launch/session-options';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 /**
  * How long buffering stays suppressed after a plain terminal's resize.

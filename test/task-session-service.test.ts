@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {TaskSessionService} from '../src/application/services/task-session-service';
-import type {BranchSessionCandidate} from '../src/application/services/branch-worktrees';
+import type {BranchSessionCandidate} from '../src/application/services/support/branch-worktrees';
 import type {RouteCandidate, RouteResult} from '../src/domain/ask/model';
 import type {WorktreeSummary} from '../src/domain/project/overview';
 import type {TaskStartInput} from '../src/domain/tasks/start';

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {INVOKE} from '../src/ipc/channels';
 import {registerTasksHandlers} from '../src/main/ipc/tasks-handlers';
-import type {IpcRegistrar, InvokeHandler} from '../src/main/ipc/registrar';
+import type {IpcRegistrar, InvokeHandler} from '../src/main/ipc/support/registrar';
 import type {Container} from '../src/main/composition-root';
 
 const TASK = '1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9';

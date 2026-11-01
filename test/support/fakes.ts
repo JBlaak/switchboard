@@ -12,7 +12,7 @@ import type {WorkingAgent} from '../../src/domain/terminal/program-status-childr
 import type {RepositoryIssue, RepositoryPullRequest, WorktreeSummary} from '../../src/domain/project/overview';
 import type {Timers} from '../../src/application/ports/clock';
 import type {GitWorkspace, GitWrite} from '../../src/application/ports/git-workspace';
-import type {BranchWorktreesDeps} from '../../src/application/services/branch-worktrees';
+import type {BranchWorktreesDeps} from '../../src/application/services/support/branch-worktrees';
 import type {RouteRequest, RouteResult} from '../../src/domain/ask/model';
 import type {GitHubCli, ProjectReads} from '../../src/application/ports/github-cli';
 import type {Logger} from '../../src/application/ports/logger';

@@ -4,7 +4,7 @@
  */
 import {INVOKE} from '../../ipc/channels';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerProjectOverviewHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.projectOverview, (projectPath: string, options?: {closed?: unknown; merged?: unknown}) =>

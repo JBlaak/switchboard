@@ -6,7 +6,7 @@
  * user can invoke by hand. Each run resumes a freshly seeded session, which is
  * what groups the runs under one slug in the sidebar.
  */
-import {block, parseFrontmatter, scalar} from './frontmatter';
+import {block, parseFrontmatter, scalar} from './support/frontmatter';
 
 /** The `cli:` block of a schedule's frontmatter — flags passed through to claude. */
 export type ScheduleCli = Record<string, string>;

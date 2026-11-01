@@ -5,7 +5,7 @@
 import {INVOKE} from '../../ipc/channels';
 import type {RouteRequest} from '../../domain/ask/model';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerAskHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.askRoute, (request: RouteRequest) => app.askRoute.route(request));

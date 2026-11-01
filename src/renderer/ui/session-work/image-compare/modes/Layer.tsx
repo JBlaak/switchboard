@@ -7,7 +7,7 @@
  */
 import {useEffect, useRef} from 'react';
 import type {CSSProperties, JSX} from 'react';
-import {drawPixels} from './draw';
+import {drawPixels} from './support/draw';
 import type {LoadedImage} from './types';
 
 export function Layer({image, style}: {image: LoadedImage; style?: CSSProperties}): JSX.Element {

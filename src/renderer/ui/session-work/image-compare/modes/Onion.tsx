@@ -6,7 +6,7 @@ import {useState} from 'react';
 import type {JSX} from 'react';
 import {ImageStage} from '../ImageStage';
 import {Layer} from './Layer';
-import {contentSize} from './overlay';
+import {contentSize} from './support/overlay';
 import type {ModeProps} from './types';
 
 export function Onion({before, after, view, onView, onFrameSize, background}: ModeProps): JSX.Element {

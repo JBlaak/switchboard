@@ -8,7 +8,7 @@ import {normalizeRemoteDir, remoteProjectPath, validateRemoteInput} from '../../
 import {uuidGenerator} from '../../application/ports/ids';
 import type {RemoteProjectSetting} from '../../domain/settings/settings';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerProjectHandlers(ipc: IpcRegistrar, app: Container): void {
     /**

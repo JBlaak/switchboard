@@ -13,7 +13,7 @@
  */
 import hljs from 'highlight.js/lib/core';
 import type {LanguageFn} from 'highlight.js';
-import type {SplitRow, UnifiedRow} from '../../../domain/session-work/diff-layout';
+import type {SplitRow, UnifiedRow} from '../../../../domain/session-work/diff-layout';
 
 type Loader = () => Promise<{default: LanguageFn}>;
 

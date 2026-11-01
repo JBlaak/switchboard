@@ -6,7 +6,7 @@
  */
 import {INVOKE} from '../../ipc/channels';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerPhoneAccessHandlers(ipc: IpcRegistrar, app: Container): void {
     const {phoneAccess, phoneSessions} = app;

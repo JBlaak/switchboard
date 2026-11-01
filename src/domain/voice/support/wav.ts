@@ -5,7 +5,7 @@
  * throughout: mono, 16-bit, at the phone's 16 kHz, which is also the rate
  * Whisper wants, so nothing is resampled.
  */
-import {SAMPLE_RATE} from './recording';
+import {SAMPLE_RATE} from '../recording';
 
 const HEADER_BYTES = 44;
 

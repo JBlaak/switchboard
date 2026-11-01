@@ -8,10 +8,10 @@
  * to do with it (`existing`); the refusal says what is there, and which
  * session worked on it last.
  */
-import {isRemoteProjectPath} from '../../domain/project/remote-target';
-import type {ExistingBranch, ExistingBranchChoice} from '../../domain/project/branch-worktree';
-import type {GitWorkspace, GitWorktrees} from '../ports/git-workspace';
-import type {TranscriptStore} from '../ports/transcript-store';
+import {isRemoteProjectPath} from '../../../domain/project/remote-target';
+import type {ExistingBranch, ExistingBranchChoice} from '../../../domain/project/branch-worktree';
+import type {GitWorkspace, GitWorktrees} from '../../ports/git-workspace';
+import type {TranscriptStore} from '../../ports/transcript-store';
 
 /** Where a new session's worktree goes, under the repository's main checkout. */
 export const WORKTREES_DIR = '/.claude/worktrees/';

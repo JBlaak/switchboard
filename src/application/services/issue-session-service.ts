@@ -26,7 +26,7 @@ import type {GitHubCli} from '../ports/github-cli';
 import type {GitRemotes} from '../ports/git-remotes';
 import type {Logger} from '../ports/logger';
 import type {TranscriptStore} from '../ports/transcript-store';
-import {BranchWorktrees, WORKTREES_DIR, type ChosenBase} from './branch-worktrees';
+import {BranchWorktrees, WORKTREES_DIR, type ChosenBase} from './support/branch-worktrees';
 
 /** How long a PR's closing references are trusted before `gh` is asked again. */
 export const CLOSING_REFS_TTL_MS = 5 * 60_000;

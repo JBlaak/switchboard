@@ -21,7 +21,7 @@ import {
 import {deviceLine, failureLine, listeningLine, pairingTimeLeft} from './phone-access-copy';
 import {PhoneIcon} from './icons';
 import {QrImage} from './QrImage';
-import {useNow} from './use-now';
+import {useNow} from './support/use-now';
 import type {JSX} from 'react';
 import type {PhoneAccessState, PhoneDeviceView} from '../../../domain/phone/state';
 

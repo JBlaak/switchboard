@@ -3,7 +3,7 @@
  */
 import {INVOKE} from '../../ipc/channels';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerUpdateHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.getUpdate, () => app.updates.notice());

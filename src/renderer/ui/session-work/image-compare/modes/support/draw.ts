@@ -3,7 +3,7 @@
  * (#116). The DOM side of `overlay.ts`.
  */
 import {parseCssColor} from './overlay';
-import type {Background, Pixels, Rgb} from '../types';
+import type {Background, Pixels, Rgb} from '../../types';
 
 /** Size `canvas` to `pixels` and paint them, one canvas pixel per image pixel. */
 export function drawPixels(canvas: HTMLCanvasElement, pixels: Pixels): void {

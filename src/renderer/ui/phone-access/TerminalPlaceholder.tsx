@@ -12,7 +12,7 @@ import {useStore} from '../use-store';
 import {useTerminalHere} from './actions';
 import {PhoneIcon} from './icons';
 import {failureLine, placeholderCopy} from './phone-access-copy';
-import {useNow} from './use-now';
+import {useNow} from './support/use-now';
 import type {JSX} from 'react';
 
 export function TerminalPlaceholder({sessionId}: {sessionId: string}): JSX.Element | null {

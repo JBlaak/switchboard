@@ -12,7 +12,7 @@ import type {ExistingBranchChoice} from '../../domain/project/branch-worktree';
 import type {TaskListOptions, TaskView} from '../../domain/tasks/model';
 import type {TaskChange, TaskQuery, TaskStartRequest} from '../../domain/tasks/surface';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 const VIEWS: readonly TaskView[] = [
     'quick',

@@ -21,7 +21,7 @@ import {
     type TaskSessionPreparation,
     type TaskStartInput,
 } from '../../domain/tasks/start';
-import {BranchWorktrees, type BranchSessionCandidate, type BranchWorktreesDeps} from './branch-worktrees';
+import {BranchWorktrees, type BranchSessionCandidate, type BranchWorktreesDeps} from './support/branch-worktrees';
 
 export interface TaskSessionServiceDeps extends BranchWorktreesDeps<BranchSessionCandidate> {
     /** The project the task was last started or linked in; null when it has none yet. */

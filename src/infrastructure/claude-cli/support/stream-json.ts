@@ -8,7 +8,7 @@
  * fields `--output-format json` prints. Handing that event on as the run's
  * stdout is what keeps the readers (`readRouteRun`) the same for both paths.
  */
-import type {ClaudeRun} from '../../domain/ask/route';
+import type {ClaudeRun} from '../../../domain/ask/route';
 
 /** Flags whose value the stream-json ones replace. */
 const REPLACED = new Set(['--input-format', '--output-format']);

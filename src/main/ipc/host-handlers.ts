@@ -4,7 +4,7 @@
 import {INVOKE, SEND} from '../../ipc/channels';
 import {repoWebUrl} from '../../domain/project/repo-url';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerHostHandlers(ipc: IpcRegistrar, app: Container): void {
     // ── Host ──

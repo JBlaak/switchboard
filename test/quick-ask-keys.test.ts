@@ -5,7 +5,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {overSlab, quickAskKey} from '../src/renderer/quick-ask/quick-ask-keys';
-import {QUICK_ASK_SIZE, SLAB_TOP, quickAskBounds} from '../src/infrastructure/electron/quick-ask-bounds';
+import {QUICK_ASK_SIZE, SLAB_TOP, quickAskBounds} from '../src/infrastructure/electron/support/quick-ask-bounds';
 
 const press = (key: string, shiftKey = false, isComposing = false) => ({key, shiftKey, isComposing});
 

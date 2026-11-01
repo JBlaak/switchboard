@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {VoiceService} from '../src/application/services/voice-service';
 import {CLEANUP_TIMEOUT_MS} from '../src/domain/voice/cleanup';
 import {GAP_REASON} from '../src/domain/voice/recording';
-import {wavFile} from '../src/domain/voice/wav';
+import {wavFile} from '../src/domain/voice/support/wav';
 import {fakeDeviceConnection, fakeTimers, silentLog} from './support/fakes';
 import type {FakeDeviceConnection} from './support/fakes';
 import type {ClaudeCaller} from '../src/application/ports/claude-cli';

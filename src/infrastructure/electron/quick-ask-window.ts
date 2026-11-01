@@ -20,7 +20,7 @@ import {BrowserWindow, nativeTheme, screen, systemPreferences} from 'electron';
 import path from 'node:path';
 import {QUICK_ASK_EVENT} from '../../ipc/channels';
 import {containNavigation, hiddenForE2e} from './main-window';
-import {QUICK_ASK_SIZE, quickAskBounds} from './quick-ask-bounds';
+import {QUICK_ASK_SIZE, quickAskBounds} from './support/quick-ask-bounds';
 import type {QuickAskPanel} from '../../application/ports/quick-ask-panel';
 import type {CaptureTarget, QuickAskLooks} from '../../ipc/quick-ask-api';
 

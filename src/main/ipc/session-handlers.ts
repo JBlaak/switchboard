@@ -5,7 +5,7 @@ import {INVOKE} from '../../ipc/channels';
 import {searchTitleFor} from '../../domain/session/title';
 import {stopSession} from '../stop-session';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.getActiveSessions, () => app.lifecycle.runningSessionIds());

@@ -8,8 +8,8 @@
  */
 import {BrowserWindow, screen, shell} from 'electron';
 import path from 'node:path';
-import {boundsToSave, MIN_BOUNDS, restorableBounds} from './window-bounds';
-import {windowChromeOptions} from './window-chrome';
+import {boundsToSave, MIN_BOUNDS, restorableBounds} from './support/window-bounds';
+import {windowChromeOptions} from './support/window-chrome';
 import type {WindowBounds} from '../../domain/settings/settings';
 import type {Timers} from '../../application/ports/clock';
 

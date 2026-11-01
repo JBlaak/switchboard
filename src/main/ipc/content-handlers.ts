@@ -5,7 +5,7 @@ import {INVOKE} from '../../ipc/channels';
 import {SEARCH_RESULT_LIMIT} from '../../domain/search/search';
 import type {SearchType} from '../../domain/search/search';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerContentHandlers(ipc: IpcRegistrar, app: Container): void {
     // ── Usage ──

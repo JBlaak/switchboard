@@ -3,7 +3,7 @@
  */
 import {INVOKE} from '../../ipc/channels';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerSleepHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.getSleepDisabled, () => app.sleep.isSleepDisabled());

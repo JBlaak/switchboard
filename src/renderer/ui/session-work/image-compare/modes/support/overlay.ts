@@ -5,7 +5,7 @@
  *
  * Kept free of React and the DOM, so it is unit-tested in node.
  */
-import type {Point, Rgb, Size, View} from '../types';
+import type {Point, Rgb, Size, View} from '../../types';
 
 /**
  * The stage content for two images aligned top-left at actual size (M1): the

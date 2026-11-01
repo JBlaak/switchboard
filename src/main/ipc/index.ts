@@ -5,7 +5,7 @@
  * adding a capability means one new module and one line here — which is the
  * whole point of the channel table these read their names from.
  */
-import {createRegistrar} from './registrar';
+import {createRegistrar} from './support/registrar';
 import {registerContentHandlers} from './content-handlers';
 import {registerHostHandlers} from './host-handlers';
 import {registerProjectHandlers} from './project-handlers';

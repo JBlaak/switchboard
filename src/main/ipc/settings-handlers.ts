@@ -8,7 +8,7 @@ import {GLOBAL_SETTINGS_KEY} from '../../domain/settings/settings';
 import {blaakTasksEndpoint} from '../../domain/tasks/model';
 import {captureServer, offeredTargets} from '../../application/services/quick-ask-service';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.getSetting, (key: string) => app.settings.get(key));

@@ -4,7 +4,7 @@
  */
 import {INVOKE} from '../../ipc/channels';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerPlanHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.planSessionPlans, (sessionId: string) => app.plans.sessionPlans(String(sessionId)));

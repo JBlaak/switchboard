@@ -17,7 +17,7 @@ import {spawn} from 'node:child_process';
 import type {ChildProcess} from 'node:child_process';
 import {headlessEnv} from '../../domain/launch/terminal-env';
 import {loginShellEnv} from '../shell/login-shell-env';
-import {endedRun, finishedRun, streamJsonArgs, userMessageLine} from './stream-json';
+import {endedRun, finishedRun, streamJsonArgs, userMessageLine} from './support/stream-json';
 import type {ClaudeRun} from '../../domain/ask/route';
 import {WARM_IDLE_MS} from '../../application/ports/claude-cli';
 import type {ClaudeCaller, WarmCall} from '../../application/ports/claude-cli';

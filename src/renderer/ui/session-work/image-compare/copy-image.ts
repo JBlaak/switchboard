@@ -7,7 +7,7 @@
  * after. It goes out as a PNG of the first frame, whatever the format, so an
  * SVG lands as the pixels it was drawn at.
  */
-import {drawPixels} from './modes/draw';
+import {drawPixels} from './modes/support/draw';
 import type {ImageMode, LoadedImage} from './modes/types';
 
 export type Side = 'before' | 'after';

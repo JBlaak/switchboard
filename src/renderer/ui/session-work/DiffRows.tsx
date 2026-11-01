@@ -32,7 +32,7 @@ import {
     isLanguageReady,
     languageFor,
     subscribeLanguages,
-} from './highlight';
+} from './support/highlight';
 
 /** Rows per memoised chunk. */
 const CHUNK_ROWS = 100;

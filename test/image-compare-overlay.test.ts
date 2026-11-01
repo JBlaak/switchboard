@@ -10,7 +10,7 @@ import {
     initialDivider,
     isClick,
     parseCssColor,
-} from '../src/renderer/ui/session-work/image-compare/modes/overlay';
+} from '../src/renderer/ui/session-work/image-compare/modes/support/overlay';
 import {zoomAt} from '../src/renderer/ui/session-work/image-compare/viewport';
 import type {View} from '../src/renderer/ui/session-work/image-compare/types';
 

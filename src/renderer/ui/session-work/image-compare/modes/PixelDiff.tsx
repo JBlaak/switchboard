@@ -15,8 +15,8 @@ import {useEffect, useRef, useState} from 'react';
 import type {JSX} from 'react';
 import {ImageStage} from '../ImageStage';
 import {pixelDiff} from '../pixel-diff';
-import {backgroundColor, drawPixels, tokenColor} from './draw';
-import {contentSize, describeChange} from './overlay';
+import {backgroundColor, drawPixels, tokenColor} from './support/draw';
+import {contentSize, describeChange} from './support/overlay';
 import type {ModeProps} from './types';
 
 /** pixelmatch's own default, which suits most re-exports and small edits. */

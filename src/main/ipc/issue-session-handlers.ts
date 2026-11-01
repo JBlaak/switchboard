@@ -5,7 +5,7 @@
 import {INVOKE} from '../../ipc/channels';
 import type {IssueWorktreeRequest} from '../../domain/plan/issue-session';
 import type {Container} from '../composition-root';
-import type {IpcRegistrar} from './registrar';
+import type {IpcRegistrar} from './support/registrar';
 
 export function registerIssueSessionHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.planIssueSessions, (repository: string) =>

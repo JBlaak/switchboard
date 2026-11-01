@@ -10,7 +10,7 @@ import {useRef} from 'react';
 import type {JSX, PointerEvent as ReactPointerEvent} from 'react';
 import {ImageStage} from '../ImageStage';
 import {Layer} from './Layer';
-import {contentSize, isClick} from './overlay';
+import {contentSize, isClick} from './support/overlay';
 import type {Point} from '../types';
 import type {ModeProps} from './types';
 

@@ -1,7 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {endedRun, finishedRun, streamJsonArgs, userMessageLine} from '../src/infrastructure/claude-cli/stream-json';
+import {
+    endedRun,
+    finishedRun,
+    streamJsonArgs,
+    userMessageLine,
+} from '../src/infrastructure/claude-cli/support/stream-json';
 import {readRouteRun} from '../src/domain/ask/route';
 import type {RouteRequest} from '../src/domain/ask/model';
 

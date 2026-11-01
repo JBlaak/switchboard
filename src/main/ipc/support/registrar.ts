@@ -8,7 +8,7 @@
  * cross the boundary as a rejected invoke with a mangled stack.
  */
 import {ipcMain} from 'electron';
-import type {Logger} from '../../application/ports/logger';
+import type {Logger} from '../../../application/ports/logger';
 
 /** A request the renderer waits for an answer to. */
 export type InvokeHandler = (...args: never[]) => unknown;

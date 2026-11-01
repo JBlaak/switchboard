@@ -10,7 +10,7 @@ import {
     languageFor,
     splitHighlighted,
     subscribeLanguages,
-} from '../src/renderer/ui/session-work/highlight';
+} from '../src/renderer/ui/session-work/support/highlight';
 import {parseUnifiedDiff} from '../src/domain/session-work/diff';
 import {splitRows, unifiedRows} from '../src/domain/session-work/diff-layout';
 

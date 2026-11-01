@@ -19,9 +19,9 @@
  */
 import {CLEANUP_TIMEOUT_MS, cleanupArgs, keepsToTranscript, readCleanupRun} from '../../domain/voice/cleanup';
 import {GAP_REASON, Recording} from '../../domain/voice/recording';
-import {hasSpeech} from '../../domain/voice/speech';
+import {hasSpeech} from '../../domain/voice/support/speech';
 import {voiceVocabulary} from '../../domain/voice/vocabulary';
-import {wavFile} from '../../domain/voice/wav';
+import {wavFile} from '../../domain/voice/support/wav';
 import {readTranscript, whisperPrompt} from '../../domain/voice/whisper';
 import {folderName, routeCandidates} from '../../domain/ask/route';
 import type {ClientMessage, VoiceResult, VoiceStatus} from '../../domain/phone/protocol';

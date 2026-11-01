@@ -11,7 +11,7 @@ import {useRef, useState} from 'react';
 import type {JSX, PointerEvent as ReactPointerEvent} from 'react';
 import {ImageStage} from '../ImageStage';
 import {Layer} from './Layer';
-import {contentSize, dividerOnScreen, dragDivider, initialDivider} from './overlay';
+import {contentSize, dividerOnScreen, dragDivider, initialDivider} from './support/overlay';
 import type {ModeProps} from './types';
 
 export function Swipe({before, after, view, onView, onFrameSize, background}: ModeProps): JSX.Element {

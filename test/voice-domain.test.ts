@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import {CLEANUP_SYSTEM_PROMPT, cleanupArgs, keepsToTranscript, readCleanupRun} from '../src/domain/voice/cleanup';
 import {MAX_RECORDING_BYTES, Recording} from '../src/domain/voice/recording';
 import {FIXED_VOCABULARY, MAX_VOCABULARY, voiceVocabulary} from '../src/domain/voice/vocabulary';
-import {hasSpeech} from '../src/domain/voice/speech';
-import {wavFile} from '../src/domain/voice/wav';
+import {hasSpeech} from '../src/domain/voice/support/speech';
+import {wavFile} from '../src/domain/voice/support/wav';
 import {
     readTranscript,
     whisperArgs,
