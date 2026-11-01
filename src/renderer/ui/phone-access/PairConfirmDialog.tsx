@@ -40,7 +40,7 @@ export function PairConfirmDialog(): JSX.Element | null {
                 type into them, whenever Phone access is on.
             </p>
             <p className="pa-confirm-note">
-                Only pair a phone you're holding right now. You can revoke it any time in Settings → Phone access.
+                Only pair a phone you&apos;re holding right now. You can revoke it any time in Settings → Phone access.
             </p>
             {failure?.call === 'confirm' && (
                 <div className="pa-error" role="alert">
@@ -49,7 +49,7 @@ export function PairConfirmDialog(): JSX.Element | null {
             )}
             <div className="pa-confirm-actions">
                 <button type="button" className="settings-cancel-btn" onClick={() => answer(false)}>
-                    Don't pair
+                    Don&apos;t pair
                 </button>
                 <button type="button" className="settings-save-btn" onClick={() => answer(true)}>
                     Pair

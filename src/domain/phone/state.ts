@@ -3,8 +3,6 @@
  * toolbar indicator and the pairing dialog all read this one snapshot, pushed
  * whole on every change.
  */
-import type {TerminalOwner} from './protocol';
-
 export type {TerminalOwner} from './protocol';
 
 export interface PhoneDeviceView {

@@ -26,6 +26,7 @@ log.transports.console.level = app.isPackaged ? 'info' : 'debug';
 // Dev-only live reload. A bare require so the dependency stays out of the
 // packaged bundle's import graph; esbuild keeps it external.
 try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires -- see above
     require('electron-reloader')(module, {watchRenderer: true});
 } catch {
     // Not installed, or a packaged build.

@@ -151,7 +151,7 @@ function Pairing({access}: {access: PhoneAccessState}): JSX.Element {
                 <ol className="pa-steps">
                     <li>Open Switchboard on your phone.</li>
                     <li>Scan this code.</li>
-                    <li>Confirm the phone's name here.</li>
+                    <li>Confirm the phone&apos;s name here.</li>
                 </ol>
                 <div className="pa-expiry">
                     <span className="pa-expiry-pill">Expires in {left}</span>

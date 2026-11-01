@@ -160,16 +160,24 @@ const MIGRATIONS: Migration[] = [
     (db, result) => {
         try {
             db.exec('DELETE FROM session_cache');
-        } catch {}
+        } catch {
+            // Nothing to clear.
+        }
         try {
             db.exec('DELETE FROM cache_meta');
-        } catch {}
+        } catch {
+            // Nothing to clear.
+        }
         try {
             db.exec('DELETE FROM search_map');
-        } catch {}
+        } catch {
+            // Nothing to clear.
+        }
         try {
             db.exec('DROP TABLE IF EXISTS search_fts');
-        } catch {}
+        } catch {
+            // Nothing to clear.
+        }
         result.searchFtsRecreated = true;
     },
     // v3: add aiTitle, and clear the cache so a re-index populates it.
@@ -181,13 +189,19 @@ const MIGRATIONS: Migration[] = [
     (db) => {
         try {
             db.exec('ALTER TABLE session_cache ADD COLUMN aiTitle TEXT');
-        } catch {}
+        } catch {
+            // The column is already there.
+        }
         try {
             db.exec('DELETE FROM session_cache');
-        } catch {}
+        } catch {
+            // Nothing to clear.
+        }
         try {
             db.exec('DELETE FROM cache_meta');
-        } catch {}
+        } catch {
+            // Nothing to clear.
+        }
     },
     // v4: superseded — fileMtime is added by the reconciliation below, keyed on
     // column presence rather than a version number.
@@ -199,10 +213,14 @@ const MIGRATIONS: Migration[] = [
     (db) => {
         try {
             db.exec('DELETE FROM session_cache');
-        } catch {}
+        } catch {
+            // Nothing to clear.
+        }
         try {
             db.exec('DELETE FROM cache_meta');
-        } catch {}
+        } catch {
+            // Nothing to clear.
+        }
     },
 ];
 

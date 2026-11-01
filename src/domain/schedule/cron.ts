@@ -6,7 +6,7 @@
  * skipped run rather than a burst of catch-up runs, and a schedule edited
  * mid-flight takes effect on the next minute.
  *
- * Supports `*`, steps (`*​/5`), lists (`1,3,5`) and ranges (`1-5`).
+ * Supports `*`, steps (`*` followed by `/5`), lists (`1,3,5`) and ranges (`1-5`).
  */
 
 function fieldMatches(field: string, value: number): boolean {

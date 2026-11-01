@@ -602,7 +602,7 @@ function reviewThreads(node: any, viewer: string): {threads: ReviewThread[]; pen
 function stripLogPrefix(line: string): string {
     const fields = line.split('\t');
     const text = fields.length >= 3 ? fields.slice(2).join('\t') : line;
-    return text.replace(/^﻿?\d{4}-\d{2}-\d{2}T[\d:.]+Z ?/, '');
+    return text.replace(/^\uFEFF?\d{4}-\d{2}-\d{2}T[\d:.]+Z ?/, '');
 }
 
 function tail(lines: string[], count: number): string {

@@ -81,5 +81,6 @@ function textOf(cells: readonly BangCell[], from: number, to: number): string {
  * then the command, then Enter once it has (see `PtySessionPrompter`).
  */
 export function bangCommandKeys(command: string): string[] {
+    // eslint-disable-next-line no-control-regex -- stripping control characters is the point
     return ['!', command.replace(/[\x00-\x1f\x7f]/g, ''), '\r'];
 }

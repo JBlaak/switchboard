@@ -107,7 +107,6 @@ function harness() {
         return pty;
     };
 
-    let service: PhoneSessionsService;
     // The wiring tees the gateway into the phone service; the questions do it here.
     const questionRenderer = {
         ...renderer,
@@ -129,7 +128,7 @@ function harness() {
         log: silentLog,
     });
 
-    service = new PhoneSessionsService({
+    const service = new PhoneSessionsService({
         registry,
         running: {
             runningSessionIds: () =>

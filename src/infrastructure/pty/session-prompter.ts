@@ -52,6 +52,7 @@ export interface PromptableSessions {
  * a newline in the message.
  */
 export function pasteBytes(prompt: string): string {
+    // eslint-disable-next-line no-control-regex -- stripping control characters is the point
     const text = prompt.replace(/\r\n?/g, '\n').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '');
     return PASTE_START + text + PASTE_END;
 }

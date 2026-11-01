@@ -79,6 +79,7 @@ const PROGRAM_STATUS_STATES: ReadonlySet<string> = new Set<ProgramStatusState>([
 const PROGRAM_STATUS_BLOCKS: ReadonlySet<string> = new Set<ProgramStatusBlock>(['permission', 'question', 'auth']);
 
 /** C0, DEL and C1 — none belongs in a decoded title or message. */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
 const CONTROL_CHARS = /[\x00-\x1f\x7f-\x9f]/;
 
 /**
@@ -196,6 +197,7 @@ export function parseTerminalEvents(data: string): TerminalEvent[] {
         // the 7501 probe that costs the session its program status (it falls back
         // to titles), which is acceptable because the CLI writes the probe in one
         // small burst at startup and it arrives as a single chunk in practice.
+        // eslint-disable-next-line no-control-regex -- OSC sequences are delimited by ESC and BEL
         for (const m of data.matchAll(/\x1b\](\d+);([^\x07\x1b]*)(?:\x07|\x1b\\)/g)) {
             if (m[1] === '0') {
                 events.push({kind: 'title', text: m[2].slice(0, PAYLOAD_LIMIT)});
@@ -208,6 +210,7 @@ export function parseTerminalEvents(data: string): TerminalEvent[] {
                 }
             }
         }
+        // eslint-disable-next-line no-control-regex -- OSC sequences are delimited by ESC and BEL
         for (const m of data.matchAll(/\x1b\]9;([^\x07\x1b]*)(?:\x07|\x1b\\)/g)) {
             const payload = m[1];
             // OSC 9;4 is progress: 4;0; = clear/done, 4;1;N = running at N%,

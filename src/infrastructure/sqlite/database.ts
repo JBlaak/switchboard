@@ -60,10 +60,14 @@ function inheritLegacyDatabase(dbPath: string): void {
         // The -wal and -shm files are optional; a cleanly closed database has none.
         try {
             fs.renameSync(oldPath + '-wal', dbPath + '-wal');
-        } catch {}
+        } catch {
+            // None to move.
+        }
         try {
             fs.renameSync(oldPath + '-shm', dbPath + '-shm');
-        } catch {}
+        } catch {
+            // None to move.
+        }
         return;
     }
 }
@@ -90,7 +94,9 @@ export function openDatabase(): SwitchboardDatabase {
         close(): void {
             try {
                 db.close();
-            } catch {}
+            } catch {
+                // Already closed.
+            }
         },
     };
 }

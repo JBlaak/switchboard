@@ -283,7 +283,7 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
                     label="Tasks URL"
                     description={
                         <>
-                            Your tasks' MCP address. Leave it empty to keep tasks out of Switchboard
+                            Your tasks&apos; MCP address. Leave it empty to keep tasks out of Switchboard
                             {blaakTasks.checked && blaakTasks.setUp === false && (
                                 <span id="sv-blaak-tasks-warning" className="settings-warning">
                                     {ADD_TO_CLAUDE_LINE}:{' '}

@@ -70,7 +70,7 @@ export class AskRouteService<R extends QuickRouteResult = RouteResult> {
 
     /** Route one request; a request still in flight answers `cancelled`. */
     route(request: RouteRequest): Promise<R | Ended> {
-        const {cli, timers, log} = this.deps;
+        const {timers, log} = this.deps;
         this.#inFlight?.settle({kind: 'cancelled'});
 
         const controller = new AbortController();

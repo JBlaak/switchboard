@@ -84,6 +84,7 @@ export class UnsafeScheduleFieldError extends Error {}
  * this app that another Claude session writes, so a value that could not
  * possibly be legitimate is refused rather than escaped.
  */
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
 const CONTROL_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/;
 
 function assertSafe(field: string, value: string): string {

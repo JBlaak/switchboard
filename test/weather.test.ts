@@ -183,7 +183,6 @@ test('weather is in Amsterdam unless the global settings hold a whole location',
 
 // ── The service ──
 
-const MINUTE = 60 * 1000;
 const oslo: WeatherLocation = {name: 'Oslo', latitude: 59.91, longitude: 10.75};
 
 /** A source whose answers the test sets, counting the fetches it served. */
