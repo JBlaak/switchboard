@@ -1,37 +1,37 @@
-Perform a release for this project. Steps:
+Cut a patch release of Switchboard: bump the version, tag it, let CI build it, then publish the draft with notes.
 
-1. Find the most recent version tag with `git describe --tags --abbrev=0` and collect all commits between it and HEAD using `git log {prev_tag}..HEAD --format="%B---"`
-2. Bump the version with `npm version patch --no-git-tag-version`
-3. Commit the version bump with message: `v{version}: {short summary of changes}`
-4. Create a git tag `v{version}`
-5. Push commits and tag: `git push && git push --tags`
-6. Wait for the GitHub Actions build to complete using `gh run watch` on the latest run
-7. Once the build finishes and creates a draft release, check it has the DMG and zip and `Switchboard-{version}.apk` (the APK is only built when the `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets are set; without them the run leaves a notice, so say the APK is missing). Then publish it with release notes using `gh release edit v{version} --draft=false --notes "..."`
-8. Release notes format:
+1. Look up the last release tag (`git describe --tags --abbrev=0`) and read every commit since it, bodies included: `git log <last tag>..HEAD --format="%B---"`.
+2. Raise the patch version without letting npm tag: `npm version patch --no-git-tag-version`.
+3. Commit the bump as `v<version>: <one-line summary of what changed>`.
+4. Tag that commit `v<version>`.
+5. Push the commit and the tag: `git push && git push --tags`.
+6. The tag starts the "Package and release" workflow. Follow its newest run with `gh run watch` until it finishes.
+7. The run leaves a draft release. Check it carries the DMG, the zip and `Switchboard-<version>.apk`. The APK only gets built when all four signing secrets are set (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`); without them the run leaves a notice instead, and you say the APK is missing. Then publish the draft with its notes: `gh release edit v<version> --draft=false --notes "..."`.
+8. Lay the notes out like this, one heading per kind of change (say Features, Bug Fixes, Performance Improvements):
+
     ```
     ## What's Changed
 
-    ### {Category}
-    - {change description}
+    ### <kind of change>
+    - <entry>
 
-    ### {Category}
-    - {change description}
+    ### <kind of change>
+    - <entry>
     ```
-    Group changes by category (e.g. "Features", "Bug Fixes", "Performance Improvements", etc.).
 
-## Writing the release notes
+## What goes in the notes
 
-Write them for the person using the app, not for someone reading the git log. Read every commit between the tags so nothing user-facing gets missed — but the notes describe what changed for the user, they are not a summary of each commit.
+The reader is someone who uses the app, not someone who reads its history. Go through all the commits so nothing they would notice slips through, but don't retell the commits one by one: say what is different for them.
 
-Each entry says what the user will notice: what the app did before, what it does now. Don't name internal symbols, columns, migrations, or files.
+An entry describes what the user sees: how the app behaved before and how it behaves now. It never names code, database columns, migrations or files.
 
-Leave out:
+Skip:
 
-- **Fixes for bugs introduced after the previous tag.** The user never ran that code, so there's nothing to announce. Describe only the net change since the last release.
-- Refactors, schema migrations, test-only changes, and dev tooling with no visible effect.
-- Cosmetic tweaks too small to notice — padding, font sizes, color nudges.
-- **Anything not confirmed to actually work.** If a change is unverified or known broken, raise it before publishing instead of listing it.
+- **Fixes to bugs that appeared after the last tag.** Nobody ran the broken version, so there is nothing to tell. Describe where things stand compared with the last release.
+- Refactors, migrations, test changes and tooling that change nothing the user can see.
+- Visual nudges too small to spot, like a bit of padding, a font size or a shade of colour.
+- **Anything nobody has seen working.** If a change is untested or known to be broken, bring it up before publishing rather than announcing it.
 
-Collapse a feature and its follow-up fixes into a single entry describing where things landed. Several commits often add up to one user-facing change; one commit sometimes makes several.
+A feature and the fixes that followed it are one entry, describing how it ended up. Often several commits make one change the user notices, and sometimes one commit makes several.
 
-A short release with three real entries beats a padded one with twelve. If nothing user-facing changed, say so plainly.
+Three entries that matter are better than twelve that pad. When nothing changed for the user, the notes say exactly that.

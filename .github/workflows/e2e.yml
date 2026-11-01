@@ -32,24 +32,13 @@ jobs:
         timeout-minutes: 20
 
         steps:
-            - uses: actions/checkout@v4
+            - name: Check out
+              uses: actions/checkout@v4
 
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-                  cache: npm
-
-            - uses: actions/setup-python@v5
-              with:
-                  python-version: '3.12'
-
-            - name: Install setuptools (node-gyp distutils fix)
-              run: python -m pip install setuptools
-
-            # postinstall rebuilds better-sqlite3 and node-pty for Electron's ABI,
-            # which both the app and the fixture's database seeding need.
+            # The app and the fixture's database seeding both load the native
+            # modules postinstall rebuilds for Electron.
             - name: Install dependencies
-              run: npm ci
+              uses: ./.github/actions/install-dependencies
 
             - name: Build
               run: npm run build

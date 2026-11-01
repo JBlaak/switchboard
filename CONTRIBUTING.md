@@ -93,41 +93,38 @@ Leave out `/* Given */` when there is no setup. Test one behaviour per test. A
 test that walks a sequence, such as an e2e journey, may repeat `/* When */` and
 `/* Then */` pairs. Assertions never go in Given, and actions never go in Then.
 
-## Building
+## Packaging
 
-All build commands build the app first, then invoke electron-builder.
-
-```bash
-npm run build:mac     # DMG + zip (arm64 + x64)
-```
-
-Output goes to `dist/`.
+`npm run build:mac` compiles the app and has electron-builder package it for
+Apple silicon and Intel, each as a DMG and a zip, into `dist/`.
 
 ## Releasing
 
-Releases are driven by git tags:
+Pushing a version tag starts a release:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v2.12.0
+git push origin v2.12.0
 ```
 
-The GitHub Actions workflow builds the macOS app and publishes to GitHub Releases. You can also release locally:
+CI packages the Mac app and puts it in a draft GitHub release. The `/release`
+Claude command does the whole round for you: bump, tag, push, wait for CI,
+write the notes and publish the draft.
 
-```bash
-npm run release   # builds + publishes to GitHub Releases
-```
+To release from your own machine instead, export `GH_TOKEN` (a GitHub personal
+access token with the `repo` scope) and run `npm run release`, which builds,
+packages and uploads to GitHub Releases.
 
-Set `GH_TOKEN` in your environment (a GitHub personal access token with `repo` scope).
+## Signing
 
-## Code Signing
+To sign a build, give electron-builder a certificate: a .p12 in `CSC_LINK` with
+its password in `CSC_KEY_PASSWORD`, or one in your Keychain. CI packages
+unsigned, and sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so electron-builder
+doesn't go looking for one.
 
-For distribution, set these environment variables:
-
-- `CSC_LINK` (p12 certificate) and `CSC_KEY_PASSWORD`, or sign via Keychain
-- Set `CSC_IDENTITY_AUTO_DISCOVERY=false` to skip signing (CI artifact builds)
-
-The macOS build uses custom entitlements (`build/entitlements.mac.plist`) to allow JIT and unsigned memory execution, required by native modules (node-pty, better-sqlite3).
+node-pty and better-sqlite3 need JIT and unsigned executable memory, which the
+hardened runtime forbids unless an entitlement allows it;
+`build/entitlements.mac.plist` grants both.
 
 ## Project Structure
 
@@ -150,8 +147,8 @@ src/workers/         Worker threads (the cold-start project scanner)
 app/                 Build output (gitignored) — what Electron actually runs
 test/                Node test-runner suites, run through tsx
 scripts/             Build (esbuild + sass), icon and postinstall scripts
-build/               Icons, entitlements, builder resources
-.github/workflows/   CI/CD
+build/               What electron-builder packages with: icons, DMG art, entitlements
+.github/             CI and release workflows, and their shared install step
 ```
 
 The app is written in TypeScript (strict) and SCSS. `npm run build` compiles

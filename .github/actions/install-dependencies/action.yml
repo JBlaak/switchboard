@@ -1,0 +1,28 @@
+name: Install dependencies
+description: >-
+    Node 20 with the npm cache, and a Python that node-gyp can build with, then
+    `npm ci`. Its postinstall rebuilds better-sqlite3 and node-pty for Electron.
+
+runs:
+    using: composite
+    steps:
+        - name: Set up Node
+          uses: actions/setup-node@v4
+          with:
+              node-version: 20
+              cache: npm
+
+        # Python 3.12 dropped distutils, which node-gyp still imports when it
+        # compiles a native module; setuptools brings it back.
+        - name: Set up Python for node-gyp
+          uses: actions/setup-python@v5
+          with:
+              python-version: '3.12'
+
+        - name: Give node-gyp distutils
+          shell: bash
+          run: python -m pip install setuptools
+
+        - name: npm ci
+          shell: bash
+          run: npm ci

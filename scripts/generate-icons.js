@@ -1,115 +1,80 @@
 #!/usr/bin/env node
-const {execSync} = require('child_process');
+/**
+ * Builds the app's macOS icons from the committed artwork in build/:
+ * build/icon.icns for the bundle, and build/dock/*.png for the Dock icons the
+ * App Icon setting swaps between at runtime.
+ *
+ * macOS icons don't fill their square: the artwork sits at 80% of the canvas
+ * with a transparent margin around it, so every output goes through `inset()`
+ * first. Without it the app icon looks oversized next to the system's own.
+ */
+const {execFileSync} = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const {createCanvas} = require('@napi-rs/canvas');
 
-const OUTPUT_DIR = path.join(__dirname, '..', 'build');
-const pngPath = path.join(OUTPUT_DIR, 'icon.png');
+const BUILD_DIR = path.join(__dirname, '..', 'build');
+const ARTWORK = path.join(BUILD_DIR, 'icon.png');
+const PATCH_ARTWORK = path.join(BUILD_DIR, 'icon-patch.png');
 
-fs.mkdirSync(OUTPUT_DIR, {recursive: true});
+const CANVAS_SIZE = 1024;
+const MARGIN = Math.round(CANVAS_SIZE * 0.1);
+const ARTWORK_SIZE = CANVAS_SIZE - 2 * MARGIN;
 
-// If icon.png already exists, use it; otherwise generate a placeholder
-if (!fs.existsSync(pngPath)) {
-    const SIZE = 1024;
-    const canvas = createCanvas(SIZE, SIZE);
-    const ctx = canvas.getContext('2d');
+/** The point sizes an .iconset holds; each comes at 1x and at 2x. */
+const ICONSET_POINT_SIZES = [16, 32, 128, 256, 512];
 
-    const gradient = ctx.createLinearGradient(0, 0, SIZE, SIZE);
-    gradient.addColorStop(0, '#6B21A8');
-    gradient.addColorStop(0.5, '#7C3AED');
-    gradient.addColorStop(1, '#0D9488');
-
-    const radius = SIZE * 0.22;
-    ctx.beginPath();
-    ctx.moveTo(radius, 0);
-    ctx.lineTo(SIZE - radius, 0);
-    ctx.quadraticCurveTo(SIZE, 0, SIZE, radius);
-    ctx.lineTo(SIZE, SIZE - radius);
-    ctx.quadraticCurveTo(SIZE, SIZE, SIZE - radius, SIZE);
-    ctx.lineTo(radius, SIZE);
-    ctx.quadraticCurveTo(0, SIZE, 0, SIZE - radius);
-    ctx.lineTo(0, radius);
-    ctx.quadraticCurveTo(0, 0, radius, 0);
-    ctx.closePath();
-    ctx.fillStyle = gradient;
-    ctx.fill();
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${SIZE * 0.45}px -apple-system, "Segoe UI", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('SB', SIZE / 2, SIZE / 2 + SIZE * 0.02);
-
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = `${SIZE * 0.07}px -apple-system, "Segoe UI", sans-serif`;
-    ctx.fillText('Switchboard', SIZE / 2, SIZE * 0.85);
-
-    fs.writeFileSync(pngPath, canvas.toBuffer('image/png'));
-    console.log(`Generated placeholder ${pngPath}`);
-} else {
-    console.log(`Using existing ${pngPath}`);
-}
-
-// Create a padded icon (macOS expects ~80% inset with transparent border)
-// then use iconutil for perfect transparency support
-const PADDED_SIZE = 1024;
-const INSET = Math.round(PADDED_SIZE * 0.1); // 10% padding on each side = 80% content
-const INNER = PADDED_SIZE - INSET * 2;
-
-/** Write `src` onto a 1024x1024 transparent canvas at 80%, centered, as `dest`. */
-function pad(src, dest) {
-    execSync(`sips -z ${INNER} ${INNER} "${src}" --out "${dest}"`, {stdio: 'ignore'});
-    // sips can't composite easily, so use a Python one-liner with PIL
-    execSync(
-        `python3 -c "
+/**
+ * Places the artwork on a transparent square. sips does the scaling, but it
+ * can't composite onto a larger canvas, so Pillow does that part.
+ */
+const COMPOSITE_PY = `
+import sys
 from PIL import Image
-bg = Image.new('RGBA', (${PADDED_SIZE}, ${PADDED_SIZE}), (0, 0, 0, 0))
-fg = Image.open('${dest}').convert('RGBA')
-bg.paste(fg, (${INSET}, ${INSET}), fg)
-bg.save('${dest}')
-"`,
-        {stdio: 'inherit'},
-    );
+path, size, offset = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+art = Image.open(path).convert('RGBA')
+canvas = Image.new('RGBA', (size, size))
+canvas.paste(art, (offset, offset), mask=art)
+canvas.save(path)
+`;
+
+function resize(src, dest, pixels) {
+    execFileSync('sips', ['-z', String(pixels), String(pixels), src, '--out', dest], {stdio: 'ignore'});
 }
 
-const paddedPath = path.join(OUTPUT_DIR, 'icon-padded.png');
-pad(pngPath, paddedPath);
+function inset(src, dest) {
+    resize(src, dest, ARTWORK_SIZE);
+    execFileSync('python3', ['-c', COMPOSITE_PY, dest, String(CANVAS_SIZE), String(MARGIN)], {stdio: 'inherit'});
+}
 
-const iconsetDir = path.join(OUTPUT_DIR, 'icon.iconset');
-fs.mkdirSync(iconsetDir, {recursive: true});
-
-const sizes = [16, 32, 64, 128, 256, 512, 1024];
-for (const size of sizes) {
-    // Standard resolution
-    execSync(`sips -z ${size} ${size} "${paddedPath}" --out "${path.join(iconsetDir, `icon_${size}x${size}.png`)}"`, {
-        stdio: 'ignore',
-    });
-    // @2x (half the name, double the pixels)
-    if (size <= 512) {
-        execSync(
-            `sips -z ${size * 2} ${size * 2} "${paddedPath}" --out "${path.join(iconsetDir, `icon_${size}x${size}@2x.png`)}"`,
-            {stdio: 'ignore'},
-        );
+function buildIcns(artwork, icnsPath) {
+    const iconset = path.join(BUILD_DIR, 'icon.iconset');
+    const framed = path.join(BUILD_DIR, 'icon-inset.png');
+    fs.mkdirSync(iconset, {recursive: true});
+    try {
+        inset(artwork, framed);
+        for (const points of ICONSET_POINT_SIZES) {
+            resize(framed, path.join(iconset, `icon_${points}x${points}.png`), points);
+            resize(framed, path.join(iconset, `icon_${points}x${points}@2x.png`), points * 2);
+        }
+        execFileSync('iconutil', ['-c', 'icns', iconset, '-o', icnsPath], {stdio: 'ignore'});
+    } finally {
+        fs.rmSync(iconset, {recursive: true, force: true});
+        fs.rmSync(framed, {force: true});
     }
 }
-// Rename 1024 to 512@2x (required by iconutil)
-const icon1024 = path.join(iconsetDir, 'icon_1024x1024.png');
-if (fs.existsSync(icon1024)) fs.unlinkSync(icon1024);
 
-const icnsPath = path.join(OUTPUT_DIR, 'icon.icns');
-execSync(`iconutil -c icns "${iconsetDir}" -o "${icnsPath}"`, {stdio: 'ignore'});
-// Clean up
-fs.rmSync(iconsetDir, {recursive: true});
-fs.unlinkSync(paddedPath);
-console.log(`Created ${icnsPath} (with macOS padding)`);
+if (!fs.existsSync(ARTWORK)) {
+    console.error(`Missing ${ARTWORK}: the icons are built from it.`);
+    process.exit(1);
+}
 
-// The Dock icons the App Icon setting switches between at runtime. They get the
-// same inset as the .icns, so a swapped icon sits in the Dock at the same size.
-const dockDir = path.join(OUTPUT_DIR, 'dock');
+const icnsPath = path.join(BUILD_DIR, 'icon.icns');
+buildIcns(ARTWORK, icnsPath);
+console.log(`Wrote ${icnsPath}`);
+
+// Same inset as the .icns, so swapping the Dock icon doesn't change its size.
+const dockDir = path.join(BUILD_DIR, 'dock');
 fs.mkdirSync(dockDir, {recursive: true});
-pad(pngPath, path.join(dockDir, 'switchboard.png'));
-pad(path.join(OUTPUT_DIR, 'icon-patch.png'), path.join(dockDir, 'patch.png'));
-console.log(`Created Dock icons in ${dockDir}`);
-
-console.log('Icon generation complete.');
+inset(ARTWORK, path.join(dockDir, 'switchboard.png'));
+inset(PATCH_ARTWORK, path.join(dockDir, 'patch.png'));
+console.log(`Wrote the Dock icons to ${dockDir}`);

@@ -19,25 +19,14 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v4
+            - name: Check out
+              uses: actions/checkout@v4
 
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-                  cache: npm
-
-            - uses: actions/setup-python@v5
-              with:
-                  python-version: '3.12'
-
-            - name: Install setuptools (node-gyp distutils fix)
-              run: python -m pip install setuptools
-
-            # postinstall runs `electron-builder install-app-deps`, which rebuilds
-            # better-sqlite3 against Electron's ABI — db-schema-reconcile.test.ts
-            # loads the built DB module under Electron-as-Node and needs that.
+            # db-schema-reconcile.test.ts runs the built database module under
+            # Electron-as-Node, so it needs the Electron build of better-sqlite3
+            # that postinstall makes.
             - name: Install dependencies
-              run: npm ci
+              uses: ./.github/actions/install-dependencies
 
             - name: Typecheck
               run: npm run typecheck
