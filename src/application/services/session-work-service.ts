@@ -21,6 +21,7 @@ import {imageFormatOf, imagePaths, type ImageFormat} from '../../domain/session-
 import {byRepository, confirmedIssues} from '../../domain/session-work/issues';
 import {deriveWorkItems, workItemKey, type BranchFacts, type WorktreeChanges} from '../../domain/session-work/items';
 import {mergeWorkLocations} from '../../domain/session-work/locations';
+import type {FileRefinement} from '../../domain/session-work/refinement';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {gitHubRepository} from '../../domain/project/repo-url';
 import type {SessionPullRequest} from '../../domain/session/session';
@@ -44,6 +45,7 @@ import type {CiJobQueueCalls, GitHubCli, PlanReads, ProjectReads, QueueLabelWrit
 import type {GitRemotes} from '../ports/git-remotes';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
+import {noStructuralDiffer, type StructuralDiffer} from '../ports/structural-differ';
 import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
 
 /** How long git's watchers have to be quiet before the page is rebuilt. */
@@ -79,6 +81,8 @@ export interface SessionWorkServiceDeps {
     >;
     remotes: GitRemotes;
     renderer: Pick<RendererGateway, 'sessionWorkSnapshot'>;
+    /** OmniDiff, for the finer marks inside a file's changed lines; without it, none. */
+    differ?: StructuralDiffer;
     clock: Clock;
     timers: Timers;
     log: Logger;
@@ -115,6 +119,9 @@ interface DiffSides {
     /** The commit the after side is read at; null for the working tree. */
     after: string | null;
 }
+
+/** Past this, a side is not refined: its lines are drawn plain. */
+export const REFINE_MAX_BYTES = 1024 * 1024;
 
 /** A parsed diff, and for a local one where its sides are read. */
 interface CachedDiff {
@@ -155,6 +162,8 @@ interface Page {
      * read, at the only commits it will read them at (L3).
      */
     readonly served: Map<string, {files: FileDiff[]; sides: DiffSides}>;
+    /** Refinements between two commits, by the commits and both paths: they never change. */
+    readonly refinements: Map<string, Promise<FileRefinement | null>>;
     last: SessionWorkSnapshot | null;
     lastKey: string;
     closed: boolean;
@@ -231,6 +240,7 @@ export class SessionWorkService {
             diffErrors: new Map(),
             diffCache: new Map(),
             served: new Map(),
+            refinements: new Map(),
             last: null,
             lastKey: '',
             closed: false,
@@ -363,6 +373,65 @@ export class SessionWorkService {
         }
         if (side !== 'after' || !file.image.after || !paths.after) return null;
         return after ? git.blob(worktree, after, paths.after) : git.workingFile(worktree, paths.after);
+    }
+
+    /**
+     * OmniDiff's finer reading of one file in an item's diff: which parts of
+     * its changed lines changed. Null when there is none to have.
+     *
+     * The same guard as `image` (L3): only a file in the local diff the item
+     * last answered with, read at that diff's commits. Only a modified or
+     * renamed text file with hunks is refined, and only when both sides are
+     * UTF-8 text no larger than `REFINE_MAX_BYTES`. A refinement between two
+     * commits is kept for the page's life; one of the working tree is made
+     * fresh each time.
+     */
+    public async refinement(sessionId: string, itemId: string, path: string): Promise<FileRefinement | null> {
+        const page = this.page;
+        if (!page || page.sessionId !== sessionId || !page.items.has(itemId)) return null;
+        const served = page.served.get(itemId);
+        const file = served?.files.find((candidate) => candidate.path === path);
+        if (!served || !file || !refinable(file)) return null;
+        const {worktree, before, after} = served.sides;
+        if (!before) return null;
+
+        const oldPath = file.oldPath ?? file.path;
+        if (!after) return this.refine(worktree, before, null, oldPath, file.path);
+        const key = [worktree, before, after, oldPath, file.path].join('\0');
+        let refinement = page.refinements.get(key);
+        if (!refinement) {
+            refinement = this.refine(worktree, before, after, oldPath, file.path);
+            page.refinements.set(key, refinement);
+            // A null may be a passing failure (a timeout under load): the next ask tries again.
+            void refinement.then((answer) => {
+                if (answer === null) page.refinements.delete(key);
+            });
+        }
+        return refinement;
+    }
+
+    /** Read both sides and hand them to the differ; null when either is not text it should see. */
+    private async refine(
+        worktree: string,
+        before: string,
+        after: string | null,
+        oldPath: string,
+        path: string,
+    ): Promise<FileRefinement | null> {
+        const {git, differ = noStructuralDiffer, log} = this.deps;
+        try {
+            const [beforeBytes, afterBytes] = await Promise.all([
+                git.blob(worktree, before, oldPath),
+                after ? git.blob(worktree, after, path) : git.workingFile(worktree, path),
+            ]);
+            const beforeText = refinableText(beforeBytes);
+            const afterText = refinableText(afterBytes);
+            if (beforeText === null || afterText === null) return null;
+            return await differ.refine(path, beforeText, afterText);
+        } catch (err) {
+            log.debug('[session-work] refining', path, 'failed:', (err as Error).message);
+            return null;
+        }
     }
 
     // ── Building the snapshot ──
@@ -788,4 +857,25 @@ function pullRequestError(item: WorkItem, github: GitHubFacts, repository: strin
     if (answer === null) return 'GitHub did not answer for this PR';
     if (answer && !answer.some((pr) => pr.number === item.pr.number)) return 'GitHub does not know this PR';
     return undefined;
+}
+
+/** A file OmniDiff can say more about than its lines do: changed on both sides, and text. */
+function refinable(file: FileDiff): boolean {
+    return (
+        (file.status === 'modified' || file.status === 'renamed') &&
+        !file.binary &&
+        !file.image &&
+        file.hunks.length > 0
+    );
+}
+
+/** A side's bytes as text, or null when they are missing, too large, or not UTF-8 text. */
+function refinableText(bytes: Uint8Array | null): string | null {
+    if (!bytes || bytes.length > REFINE_MAX_BYTES || bytes.includes(0)) return null;
+    try {
+        // A byte order mark stays, as it does in git's first line.
+        return new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(bytes);
+    } catch {
+        return null;
+    }
 }
