@@ -48,7 +48,7 @@ export class Spring {
     public onUpdate?: (x: number) => void;
     public onRest?: () => void;
 
-    public constructor(x = 0, o: SpringOptions = {}) {
+    constructor(x = 0, o: SpringOptions = {}) {
         this.x = x;
         this.target = x;
         this.o = o;

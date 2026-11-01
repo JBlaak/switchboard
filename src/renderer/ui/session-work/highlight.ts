@@ -271,19 +271,19 @@ export function highlightSplitRows(
 
 /** One side's lines in order, and the row each belongs to. */
 class Side {
-    readonly #at: number[] = [];
-    readonly #texts: string[] = [];
+    private readonly at: number[] = [];
+    private readonly texts: string[] = [];
 
-    add(at: number, text: string): void {
-        this.#at.push(at);
-        this.#texts.push(text);
+    public add(at: number, text: string): void {
+        this.at.push(at);
+        this.texts.push(text);
     }
 
     /** Write each line's HTML into `into` at its row; leaves `into` alone when highlighting fails. */
-    highlight(language: string, into: Array<string | null>): void {
-        const html = highlightLines(this.#texts, language);
+    public highlight(language: string, into: Array<string | null>): void {
+        const html = highlightLines(this.texts, language);
         if (!html) return;
-        this.#at.forEach((at, i) => {
+        this.at.forEach((at, i) => {
             into[at] = html[i];
         });
     }

@@ -36,30 +36,30 @@ interface InstalledPlugin {
 export class ClaudeSkillCatalog implements SkillCatalog {
     constructor(private readonly deps: ClaudeSkillCatalogDeps) {}
 
-    list(projectPaths: string[]): RouteSkills {
+    public list(projectPaths: string[]): RouteSkills {
         const {fs, claudeDir} = this.deps;
         const wanted = new Set(projectPaths);
         const everywhere = [
-            ...this.#skillsIn(fs.join(claudeDir, 'skills')),
-            ...this.#commandsIn(fs.join(claudeDir, 'commands')),
+            ...this.skillsIn(fs.join(claudeDir, 'skills')),
+            ...this.commandsIn(fs.join(claudeDir, 'commands')),
         ];
         const byProject: Record<string, SkillEntry[]> = {};
         for (const projectPath of projectPaths) {
             byProject[projectPath] = [
-                ...this.#skillsIn(fs.join(projectPath, '.claude', 'skills')),
-                ...this.#commandsIn(fs.join(projectPath, '.claude', 'commands')),
+                ...this.skillsIn(fs.join(projectPath, '.claude', 'skills')),
+                ...this.commandsIn(fs.join(projectPath, '.claude', 'commands')),
             ];
         }
 
-        const enabled = this.#enabledPlugins();
-        for (const [key, installs] of Object.entries(this.#installedPlugins())) {
+        const enabled = this.enabledPlugins();
+        for (const [key, installs] of Object.entries(this.installedPlugins())) {
             for (const install of installs) {
                 if (install.scope === 'project' || install.scope === 'local') {
                     if (install.projectPath && wanted.has(install.projectPath)) {
-                        byProject[install.projectPath].push(...this.#pluginSkills(key, install.installPath));
+                        byProject[install.projectPath].push(...this.pluginSkills(key, install.installPath));
                     }
                 } else if (enabled.has(key)) {
-                    everywhere.push(...this.#pluginSkills(key, install.installPath));
+                    everywhere.push(...this.pluginSkills(key, install.installPath));
                 }
             }
         }
@@ -67,9 +67,9 @@ export class ClaudeSkillCatalog implements SkillCatalog {
     }
 
     /** The skills of one installed plugin, under its name. */
-    #pluginSkills(key: string, installPath: string): SkillEntry[] {
+    private pluginSkills(key: string, installPath: string): SkillEntry[] {
         const {fs} = this.deps;
-        const manifest = this.#json(fs.join(installPath, '.claude-plugin', 'plugin.json'));
+        const manifest = this.json(fs.join(installPath, '.claude-plugin', 'plugin.json'));
         const plugin = typeof manifest?.name === 'string' ? manifest.name : key.split('@')[0];
         const paths = (field: unknown) =>
             (typeof field === 'string' ? [field] : Array.isArray(field) ? field : [])
@@ -78,45 +78,45 @@ export class ClaudeSkillCatalog implements SkillCatalog {
 
         const skills = [fs.join(installPath, 'skills'), ...paths(manifest?.skills)]
             // A listed path is a skill's own folder or a folder of them.
-            .flatMap((dir) => (fs.exists(fs.join(dir, 'SKILL.md')) ? this.#skill(dir) : this.#skillsIn(dir)));
+            .flatMap((dir) => (fs.exists(fs.join(dir, 'SKILL.md')) ? this.skill(dir) : this.skillsIn(dir)));
         const commands = [fs.join(installPath, 'commands'), ...paths(manifest?.commands)].flatMap((dir) =>
-            this.#commandsIn(dir),
+            this.commandsIn(dir),
         );
         return [...skills, ...commands].map((entry) => ({...entry, plugin}));
     }
 
     /** Each `<dir>/<name>/SKILL.md`. */
-    #skillsIn(dir: string): SkillEntry[] {
-        return this.#entries(dir)
+    private skillsIn(dir: string): SkillEntry[] {
+        return this.entries(dir)
             .filter((entry) => entry.isDirectory)
-            .flatMap((entry) => this.#skill(this.deps.fs.join(dir, entry.name)));
+            .flatMap((entry) => this.skill(this.deps.fs.join(dir, entry.name)));
     }
 
     /** The skill in one folder, unless the user can't type it. */
-    #skill(dir: string): SkillEntry[] {
+    private skill(dir: string): SkillEntry[] {
         const {fs} = this.deps;
         const file = fs.join(dir, 'SKILL.md');
-        const text = this.#text(file);
+        const text = this.text(file);
         if (text === null) return [];
         const front = readSkillFrontmatter(text);
         return front.userInvocable ? [{name: front.name ?? fs.basename(dir)}] : [];
     }
 
     /** Each `.md` under `dir`; one in a subfolder is typed `/sub:name`. */
-    #commandsIn(dir: string, prefix = ''): SkillEntry[] {
+    private commandsIn(dir: string, prefix = ''): SkillEntry[] {
         const {fs} = this.deps;
-        return this.#entries(dir).flatMap((entry) => {
-            if (entry.isDirectory) return this.#commandsIn(fs.join(dir, entry.name), `${prefix}${entry.name}:`);
+        return this.entries(dir).flatMap((entry) => {
+            if (entry.isDirectory) return this.commandsIn(fs.join(dir, entry.name), `${prefix}${entry.name}:`);
             if (!entry.isFile || !entry.name.endsWith('.md')) return [];
-            const text = this.#text(fs.join(dir, entry.name));
+            const text = this.text(fs.join(dir, entry.name));
             if (text === null || !readSkillFrontmatter(text).userInvocable) return [];
             return [{name: `${prefix}${fs.basename(entry.name, '.md')}`}];
         });
     }
 
     /** The plugins switched on in the user's settings, as `name@marketplace`. */
-    #enabledPlugins(): Set<string> {
-        const settings = this.#json(this.deps.fs.join(this.deps.claudeDir, 'settings.json'));
+    private enabledPlugins(): Set<string> {
+        const settings = this.json(this.deps.fs.join(this.deps.claudeDir, 'settings.json'));
         const enabled = settings?.enabledPlugins;
         if (typeof enabled !== 'object' || enabled === null) return new Set();
         return new Set(
@@ -127,8 +127,8 @@ export class ClaudeSkillCatalog implements SkillCatalog {
     }
 
     /** `installed_plugins.json`'s plugins, each with its installs. */
-    #installedPlugins(): Record<string, InstalledPlugin[]> {
-        const installed = this.#json(this.deps.fs.join(this.deps.claudeDir, 'plugins', 'installed_plugins.json'));
+    private installedPlugins(): Record<string, InstalledPlugin[]> {
+        const installed = this.json(this.deps.fs.join(this.deps.claudeDir, 'plugins', 'installed_plugins.json'));
         const plugins = installed?.plugins;
         if (typeof plugins !== 'object' || plugins === null) return {};
         const out: Record<string, InstalledPlugin[]> = {};
@@ -142,7 +142,7 @@ export class ClaudeSkillCatalog implements SkillCatalog {
         return out;
     }
 
-    #entries(dir: string) {
+    private entries(dir: string) {
         const {fs} = this.deps;
         if (!fs.isDirectory(dir)) return [];
         try {
@@ -152,7 +152,7 @@ export class ClaudeSkillCatalog implements SkillCatalog {
         }
     }
 
-    #text(path: string): string | null {
+    private text(path: string): string | null {
         const {fs} = this.deps;
         if (!fs.exists(path)) return null;
         try {
@@ -162,8 +162,8 @@ export class ClaudeSkillCatalog implements SkillCatalog {
         }
     }
 
-    #json(path: string): Record<string, unknown> | null {
-        const text = this.#text(path);
+    private json(path: string): Record<string, unknown> | null {
+        const text = this.text(path);
         if (text === null) return null;
         try {
             const parsed: unknown = JSON.parse(text);

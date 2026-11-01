@@ -14,51 +14,55 @@ import type {SearchEntry, SearchResult, SearchType} from '../../domain/search/se
 import type {SearchIndex} from '../../application/ports/search-index';
 
 export class SqliteSearchIndex implements SearchIndex {
-    readonly #sessionCount;
-    readonly #lookup;
-    readonly #insertMap;
-    readonly #insertFts;
-    readonly #deleteFtsByRowid;
-    readonly #deleteMapByRowid;
-    readonly #deleteFtsBySession;
-    readonly #deleteMapBySession;
-    readonly #deleteFtsByFolder;
-    readonly #deleteMapByFolder;
-    readonly #updateTitle;
-    readonly #query;
+    private readonly sessionCountStatement;
+    private readonly lookupStatement;
+    private readonly insertMapStatement;
+    private readonly insertFtsStatement;
+    private readonly deleteFtsByRowidStatement;
+    private readonly deleteMapByRowidStatement;
+    private readonly deleteFtsBySessionStatement;
+    private readonly deleteMapBySessionStatement;
+    private readonly deleteFtsByFolderStatement;
+    private readonly deleteMapByFolderStatement;
+    private readonly updateTitleStatement;
+    private readonly queryStatement;
 
-    readonly #upsertMany;
-    readonly #recreated: boolean;
+    private readonly upsertManyTransaction;
+    private readonly recreated: boolean;
 
     constructor(db: Database.Database, searchFtsRecreated: boolean) {
-        this.#recreated = searchFtsRecreated;
+        this.recreated = searchFtsRecreated;
 
-        this.#sessionCount = db.prepare<[SearchType], {cnt: number}>(
+        this.sessionCountStatement = db.prepare<[SearchType], {cnt: number}>(
             'SELECT COUNT(*) as cnt FROM search_map WHERE type = ?',
         );
-        this.#lookup = db.prepare<[string, SearchType], {rowid: number}>(
+        this.lookupStatement = db.prepare<[string, SearchType], {rowid: number}>(
             'SELECT rowid FROM search_map WHERE id = ? AND type = ?',
         );
-        this.#insertMap = db.prepare<[string, SearchType, string | null]>(
+        this.insertMapStatement = db.prepare<[string, SearchType, string | null]>(
             'INSERT OR REPLACE INTO search_map(id, type, folder) VALUES (?, ?, ?)',
         );
-        this.#insertFts = db.prepare<[number | bigint, string, string]>(
+        this.insertFtsStatement = db.prepare<[number | bigint, string, string]>(
             'INSERT OR REPLACE INTO search_fts(rowid, title, body) VALUES (?, ?, ?)',
         );
-        this.#deleteFtsByRowid = db.prepare<[number]>('DELETE FROM search_fts WHERE rowid = ?');
-        this.#deleteMapByRowid = db.prepare<[number]>('DELETE FROM search_map WHERE rowid = ?');
-        this.#deleteFtsBySession = db.prepare<[string]>(
+        this.deleteFtsByRowidStatement = db.prepare<[number]>('DELETE FROM search_fts WHERE rowid = ?');
+        this.deleteMapByRowidStatement = db.prepare<[number]>('DELETE FROM search_map WHERE rowid = ?');
+        this.deleteFtsBySessionStatement = db.prepare<[string]>(
             "DELETE FROM search_fts WHERE rowid IN (SELECT rowid FROM search_map WHERE type = 'session' AND id = ?)",
         );
-        this.#deleteMapBySession = db.prepare<[string]>("DELETE FROM search_map WHERE type = 'session' AND id = ?");
-        this.#deleteFtsByFolder = db.prepare<[string]>(
+        this.deleteMapBySessionStatement = db.prepare<[string]>(
+            "DELETE FROM search_map WHERE type = 'session' AND id = ?",
+        );
+        this.deleteFtsByFolderStatement = db.prepare<[string]>(
             "DELETE FROM search_fts WHERE rowid IN (SELECT rowid FROM search_map WHERE type = 'session' AND folder = ?)",
         );
-        this.#deleteMapByFolder = db.prepare<[string]>("DELETE FROM search_map WHERE type = 'session' AND folder = ?");
-        this.#updateTitle = db.prepare<[string, string, SearchType]>(
+        this.deleteMapByFolderStatement = db.prepare<[string]>(
+            "DELETE FROM search_map WHERE type = 'session' AND folder = ?",
+        );
+        this.updateTitleStatement = db.prepare<[string, string, SearchType]>(
             'UPDATE search_fts SET title = ? WHERE rowid = (SELECT rowid FROM search_map WHERE id = ? AND type = ?)',
         );
-        this.#query = db.prepare<[SearchType, string, number], SearchResult>(`
+        this.queryStatement = db.prepare<[SearchType, string, number], SearchResult>(`
       SELECT search_map.id, snippet(search_fts, 1, '<mark>', '</mark>', '...', 40) as snippet
       FROM search_fts
       JOIN search_map ON search_fts.rowid = search_map.rowid
@@ -67,53 +71,53 @@ export class SqliteSearchIndex implements SearchIndex {
       LIMIT ?
     `);
 
-        this.#upsertMany = db.transaction((entries: readonly SearchEntry[]) => {
+        this.upsertManyTransaction = db.transaction((entries: readonly SearchEntry[]) => {
             for (const entry of entries) {
-                const existing = this.#lookup.get(entry.id, entry.type);
+                const existing = this.lookupStatement.get(entry.id, entry.type);
                 if (existing) {
-                    this.#deleteFtsByRowid.run(existing.rowid);
-                    this.#deleteMapByRowid.run(existing.rowid);
+                    this.deleteFtsByRowidStatement.run(existing.rowid);
+                    this.deleteMapByRowidStatement.run(existing.rowid);
                 }
-                const inserted = this.#insertMap.run(entry.id, entry.type, entry.folder || null);
-                this.#insertFts.run(inserted.lastInsertRowid, entry.title || '', entry.body || '');
+                const inserted = this.insertMapStatement.run(entry.id, entry.type, entry.folder || null);
+                this.insertFtsStatement.run(inserted.lastInsertRowid, entry.title || '', entry.body || '');
             }
         });
     }
 
-    isPopulated(): boolean {
-        return (this.#sessionCount.get('session')?.cnt ?? 0) > 0;
+    public isPopulated(): boolean {
+        return (this.sessionCountStatement.get('session')?.cnt ?? 0) > 0;
     }
 
-    wasRecreated(): boolean {
-        return this.#recreated;
+    public wasRecreated(): boolean {
+        return this.recreated;
     }
 
-    upsert(entries: readonly SearchEntry[]): void {
-        this.#upsertMany(entries);
+    public upsert(entries: readonly SearchEntry[]): void {
+        this.upsertManyTransaction(entries);
     }
 
-    deleteSession(sessionId: string): void {
-        this.#deleteFtsBySession.run(sessionId);
-        this.#deleteMapBySession.run(sessionId);
+    public deleteSession(sessionId: string): void {
+        this.deleteFtsBySessionStatement.run(sessionId);
+        this.deleteMapBySessionStatement.run(sessionId);
     }
 
-    deleteFolder(folder: string): void {
-        this.#deleteFtsByFolder.run(folder);
-        this.#deleteMapByFolder.run(folder);
+    public deleteFolder(folder: string): void {
+        this.deleteFtsByFolderStatement.run(folder);
+        this.deleteMapByFolderStatement.run(folder);
     }
 
-    updateTitle(id: string, type: SearchType, title: string): void {
+    public updateTitle(id: string, type: SearchType, title: string): void {
         try {
-            this.#updateTitle.run(title, id, type);
+            this.updateTitleStatement.run(title, id, type);
         } catch {
             // A rename of a session that is not indexed yet; the next index pass
             // writes the title anyway.
         }
     }
 
-    query(type: SearchType, query: string, limit: number, titleOnly: boolean): SearchResult[] {
+    public query(type: SearchType, query: string, limit: number, titleOnly: boolean): SearchResult[] {
         try {
-            return this.#query.all(type, ftsMatchExpression(query, titleOnly), limit);
+            return this.queryStatement.all(type, ftsMatchExpression(query, titleOnly), limit);
         } catch {
             // FTS5 rejects some inputs outright (an unbalanced quote survives
             // escaping as a syntax error). No results beats an error dialog while

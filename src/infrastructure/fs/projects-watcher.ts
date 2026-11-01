@@ -24,31 +24,31 @@ export interface ProjectsWatcherDeps {
 }
 
 export class ProjectsWatcher {
-    #watcher: Watcher | null = null;
-    #pending = new Set<string>();
-    #debounce: unknown = null;
+    private watcher: Watcher | null = null;
+    private pending = new Set<string>();
+    private debounce: unknown = null;
 
     constructor(private readonly deps: ProjectsWatcherDeps) {}
 
-    start(): void {
+    public start(): void {
         const {fs, projectsDir, log} = this.deps;
-        if (this.#watcher || !fs.exists(projectsDir)) return;
+        if (this.watcher || !fs.exists(projectsDir)) return;
 
         try {
-            this.#watcher = fs.watch(projectsDir, {recursive: true}, (_event, relativePath) => {
-                if (relativePath) this.#note(relativePath);
+            this.watcher = fs.watch(projectsDir, {recursive: true}, (_event, relativePath) => {
+                if (relativePath) this.note(relativePath);
             });
         } catch (err) {
             log.error('[watcher] could not watch the projects directory:', (err as Error).message);
         }
     }
 
-    stop(): void {
-        this.#watcher?.close();
-        this.#watcher = null;
-        this.deps.timers.clearTimeout(this.#debounce);
-        this.#debounce = null;
-        this.#pending.clear();
+    public stop(): void {
+        this.watcher?.close();
+        this.watcher = null;
+        this.deps.timers.clearTimeout(this.debounce);
+        this.debounce = null;
+        this.pending.clear();
     }
 
     /**
@@ -58,7 +58,7 @@ export class ProjectsWatcher {
      * disappearing. Everything else in there — index files, lock files, the CLI's
      * own scratch — would just cost a re-index.
      */
-    #note(relativePath: string): void {
+    private note(relativePath: string): void {
         const parts = relativePath.split(this.deps.fs.separator);
         const folder = parts[0];
         if (!folder || folder === '.git') return;
@@ -67,17 +67,17 @@ export class ProjectsWatcher {
         const isTranscript = parts[parts.length - 1].endsWith('.jsonl');
         if (!isFolderItself && !isTranscript) return;
 
-        this.#pending.add(folder);
+        this.pending.add(folder);
 
         const {timers} = this.deps;
-        timers.clearTimeout(this.#debounce);
-        this.#debounce = timers.setTimeout(() => this.#flush(), DEBOUNCE_MS);
+        timers.clearTimeout(this.debounce);
+        this.debounce = timers.setTimeout(() => this.flush(), DEBOUNCE_MS);
     }
 
-    #flush(): void {
-        this.#debounce = null;
-        const folders = [...this.#pending];
-        this.#pending.clear();
+    private flush(): void {
+        this.debounce = null;
+        const folders = [...this.pending];
+        this.pending.clear();
         if (folders.length) this.deps.onFoldersChanged(folders);
     }
 }

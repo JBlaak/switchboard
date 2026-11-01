@@ -75,7 +75,7 @@ export class SessionLifecycle {
      * Called again on every remote reconnect: a remote session re-spawns its PTY
      * and has to rewire the fresh one to the same session record.
      */
-    wire(sessionId: string, session: ActiveSession): void {
+    public wire(sessionId: string, session: ActiveSession): void {
         const {renderer, remote, log} = this.deps;
         const pty = session.pty;
 
@@ -154,7 +154,7 @@ export class SessionLifecycle {
      * live stream or the resize nudge re-shows it at the correct position, which
      * avoids a stale cursor sitting wherever the replay ended.
      */
-    replayTo(sessionId: string, session: ActiveSession): void {
+    public replayTo(sessionId: string, session: ActiveSession): void {
         const {renderer} = this.deps;
         if (session.altScreen && !session.isPlainTerminal) {
             renderer.terminalData(sessionId, ENTER_ALT_SCREEN);
@@ -171,7 +171,7 @@ export class SessionLifecycle {
      * Idempotent: the exit event and the escalation timer both call it, and
      * whichever arrives first wins.
      */
-    retire(sessionId: string, session: ActiveSession, exitCode: number): void {
+    public retire(sessionId: string, session: ActiveSession, exitCode: number): void {
         if (session.retired) return;
         session.retired = true;
         session.exited = true;
@@ -209,7 +209,7 @@ export class SessionLifecycle {
     }
 
     /** Ask a session to stop, and make sure it does. */
-    stop(sessionId: string, session: ActiveSession): void {
+    public stop(sessionId: string, session: ActiveSession): void {
         const {terminals, timers, log} = this.deps;
         const pty = session.pty;
 
@@ -239,7 +239,7 @@ export class SessionLifecycle {
      * green for the life of the app. The pid is the ground truth, and checking it
      * here means the next poll clears the row instead of needing a restart.
      */
-    runningSessionIds(): string[] {
+    public runningSessionIds(): string[] {
         const {registry, terminals, log} = this.deps;
         const running: string[] = [];
         for (const [sessionId, session] of registry.snapshot()) {
@@ -259,7 +259,7 @@ export class SessionLifecycle {
     }
 
     /** Signal every session on the way out, so nothing is left orphaned. */
-    terminateAll(): void {
+    public terminateAll(): void {
         const {registry, terminals, remote} = this.deps;
         for (const [sessionId, session] of registry.snapshot()) {
             remote.markDisconnected(session);

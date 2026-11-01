@@ -55,8 +55,8 @@ interface InFlight<R> {
 }
 
 export class AskRouteService<R extends QuickRouteResult = RouteResult> {
-    #inFlight: InFlight<R> | null = null;
-    #warm: {call: WarmCall; timer: TimerHandle} | null = null;
+    private inFlight: InFlight<R> | null = null;
+    private warmCall: {call: WarmCall; timer: TimerHandle} | null = null;
 
     constructor(
         private readonly deps: {
@@ -69,9 +69,9 @@ export class AskRouteService<R extends QuickRouteResult = RouteResult> {
     ) {}
 
     /** Route one request; a request still in flight answers `cancelled`. */
-    route(request: RouteRequest): Promise<R | Ended> {
+    public route(request: RouteRequest): Promise<R | Ended> {
         const {timers, log} = this.deps;
-        this.#inFlight?.settle({kind: 'cancelled'});
+        this.inFlight?.settle({kind: 'cancelled'});
 
         const controller = new AbortController();
         return new Promise((resolve) => {
@@ -81,20 +81,20 @@ export class AskRouteService<R extends QuickRouteResult = RouteResult> {
                     if (settled) return;
                     settled = true;
                     timers.clearTimeout(timer);
-                    if (this.#inFlight === flight) this.#inFlight = null;
+                    if (this.inFlight === flight) this.inFlight = null;
                     // A no-op once the call has ended; kills it when it hasn't.
                     controller.abort();
                     resolve(result);
                 },
             };
-            this.#inFlight = flight;
+            this.inFlight = flight;
 
             const timer = timers.setTimeout(() => {
                 log.warn('[ask] routing call timed out');
                 flight.settle({kind: 'failed', reason: TIMEOUT_LINE});
             }, ASK_ROUTE_TIMEOUT_MS);
 
-            this.#run(request, controller.signal).then(
+            this.run(request, controller.signal).then(
                 (run) => {
                     const result = this.deps.call.read(run, request);
                     const read: QuickRouteResult = result;
@@ -112,26 +112,26 @@ export class AskRouteService<R extends QuickRouteResult = RouteResult> {
      * second call while one is ready does nothing. One left unused is forgotten
      * once the caller has killed it for idling, so the next call warms afresh.
      */
-    warm(): void {
-        if (this.#warm) return;
+    public warm(): void {
+        if (this.warmCall) return;
         const {cli, timers} = this.deps;
         const timer = timers.setTimeout(() => {
-            this.#warm = null;
+            this.warmCall = null;
         }, WARM_IDLE_MS);
-        this.#warm = {call: cli.warm(this.deps.call.bootArgs()), timer};
+        this.warmCall = {call: cli.warm(this.deps.call.bootArgs()), timer};
     }
 
     /** Through the warm process when there is one, which this uses up; otherwise a cold call. */
-    #run(request: RouteRequest, signal: AbortSignal): Promise<ClaudeRun> {
-        const warm = this.#warm;
+    private run(request: RouteRequest, signal: AbortSignal): Promise<ClaudeRun> {
+        const warm = this.warmCall;
         if (!warm) return this.deps.cli.call(this.deps.call.args(request), signal);
-        this.#warm = null;
+        this.warmCall = null;
         this.deps.timers.clearTimeout(warm.timer);
         return warm.call.send(this.deps.call.prompt(request), signal);
     }
 
     /** Stop the request in flight, which then answers `cancelled`. */
-    cancel(): void {
-        this.#inFlight?.settle({kind: 'cancelled'});
+    public cancel(): void {
+        this.inFlight?.settle({kind: 'cancelled'});
     }
 }

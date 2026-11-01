@@ -22,13 +22,13 @@ function run(file: string, args: string[]): Promise<string | null> {
 export class PmsetSleepControl implements SleepControl {
     constructor(private readonly log: Logger) {}
 
-    async isSleepDisabled(): Promise<boolean | null> {
+    public async isSleepDisabled(): Promise<boolean | null> {
         if (process.platform !== 'darwin') return null;
         const output = await run(PMSET, ['-g']);
         return output === null ? null : parseSleepDisabled(output);
     }
 
-    async setSleepDisabled(disabled: boolean): Promise<boolean | null> {
+    public async setSleepDisabled(disabled: boolean): Promise<boolean | null> {
         if (process.platform !== 'darwin') return null;
         const args = disableSleepArgs(disabled);
 

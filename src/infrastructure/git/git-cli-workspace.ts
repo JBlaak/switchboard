@@ -87,12 +87,12 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         private readonly toolEnv: () => Promise<Record<string, string | undefined>> = async () => process.env,
     ) {}
 
-    async worktreeRoot(cwd: string): Promise<string | null> {
+    public async worktreeRoot(cwd: string): Promise<string | null> {
         const result = await git(cwd, ['rev-parse', '--show-toplevel']);
         return result.code === 0 ? result.stdout.trim() || null : null;
     }
 
-    async defaultBranch(worktree: string): Promise<string> {
+    public async defaultBranch(worktree: string): Promise<string> {
         const head = await git(worktree, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
         const fromOrigin = head.code === 0 ? head.stdout.trim().replace(/^origin\//, '') : '';
         if (fromOrigin) return fromOrigin;
@@ -111,24 +111,24 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return 'main';
     }
 
-    async currentBranch(worktree: string): Promise<string | null> {
+    public async currentBranch(worktree: string): Promise<string | null> {
         const result = await git(worktree, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
         return result.code === 0 ? result.stdout.trim() || null : null;
     }
 
-    async commitSha(worktree: string, ref: string): Promise<string | null> {
+    public async commitSha(worktree: string, ref: string): Promise<string | null> {
         if (!isSafeRef(ref)) return null;
         const result = await git(worktree, ['rev-parse', '--verify', '--quiet', ref + '^{commit}']);
         return result.code === 0 ? result.stdout.trim() || null : null;
     }
 
-    async branchExists(worktree: string, branch: string): Promise<boolean> {
+    public async branchExists(worktree: string, branch: string): Promise<boolean> {
         if (!isSafeRef(branch)) return false;
         const result = await git(worktree, ['show-ref', '--verify', '--quiet', 'refs/heads/' + branch]);
         return result.code === 0;
     }
 
-    async isPushed(worktree: string, branch: string): Promise<boolean> {
+    public async isPushed(worktree: string, branch: string): Promise<boolean> {
         if (!isSafeRef(branch)) return false;
         const upstream = await git(worktree, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}@{upstream}`]);
         if (upstream.code === 0) return true;
@@ -136,7 +136,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return origin.code === 0;
     }
 
-    async aheadBehind(worktree: string, branch: string, base: string): Promise<{ahead: number; behind: number}> {
+    public async aheadBehind(worktree: string, branch: string, base: string): Promise<{ahead: number; behind: number}> {
         if (!isSafeRef(branch) || !isSafeRef(base)) return {ahead: 0, behind: 0};
         // Left is what only `base` has, right what only `branch` has.
         const result = await git(worktree, ['rev-list', '--left-right', '--count', `${base}...${branch}`, '--']);
@@ -144,34 +144,34 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return {ahead: ahead || 0, behind: behind || 0};
     }
 
-    async branchDiff(worktree: string, branch: string, base: string): Promise<string> {
+    public async branchDiff(worktree: string, branch: string, base: string): Promise<string> {
         if (!isSafeRef(branch) || !isSafeRef(base)) return '';
         // `a...b` in `git diff` is the diff from their merge-base to `b`.
         const result = await git(worktree, ['diff', ...DIFF_FLAGS, `${base}...${branch}`, '--']);
         return result.code === 0 ? result.stdout : '';
     }
 
-    async branchLineStats(worktree: string, branch: string, base: string): Promise<LineStats> {
+    public async branchLineStats(worktree: string, branch: string, base: string): Promise<LineStats> {
         if (!isSafeRef(branch) || !isSafeRef(base)) return {additions: 0, deletions: 0};
         const result = await git(worktree, ['diff', '--numstat', ...DIFF_FLAGS, `${base}...${branch}`, '--']);
         return sumNumstat(result.code === 0 ? result.stdout : '');
     }
 
-    async status(worktree: string): Promise<FileChange[]> {
+    public async status(worktree: string): Promise<FileChange[]> {
         const result = await git(worktree, ['status', '--porcelain=v1', '-z', '--untracked-files=all']);
         return result.code === 0 ? parseStatus(result.stdout) : [];
     }
 
-    workingDiff(worktree: string): Promise<string> {
-        return this.#working(worktree, []);
+    public workingDiff(worktree: string): Promise<string> {
+        return this.working(worktree, []);
     }
 
-    async workingLineStats(worktree: string): Promise<LineStats> {
-        return sumNumstat(await this.#working(worktree, ['--numstat']));
+    public async workingLineStats(worktree: string): Promise<LineStats> {
+        return sumNumstat(await this.working(worktree, ['--numstat']));
     }
 
     /** `git diff` of the uncommitted changes in `format`, with untracked files as new ones. */
-    async #working(worktree: string, format: readonly string[]): Promise<string> {
+    private async working(worktree: string, format: readonly string[]): Promise<string> {
         const head = await git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD']);
         const base = head.code === 0 ? 'HEAD' : EMPTY_TREE;
         const tracked = await git(worktree, ['diff', ...format, ...DIFF_FLAGS, base, '--']);
@@ -198,13 +198,13 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return diff;
     }
 
-    async mergeBase(worktree: string, branch: string, base: string): Promise<string | null> {
+    public async mergeBase(worktree: string, branch: string, base: string): Promise<string | null> {
         if (!isSafeRef(branch) || !isSafeRef(base)) return null;
         const result = await git(worktree, ['merge-base', base, branch]);
         return result.code === 0 ? result.stdout.trim() || null : null;
     }
 
-    async blobSizes(worktree: string, revision: string, paths: readonly string[]): Promise<Map<string, number>> {
+    public async blobSizes(worktree: string, revision: string, paths: readonly string[]): Promise<Map<string, number>> {
         const sizes = new Map<string, number>();
         // One object name per line: a path with a newline in it cannot be asked.
         const asked = paths.filter((file) => file.length > 0 && !file.includes('\n'));
@@ -221,14 +221,14 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return sizes;
     }
 
-    async blob(worktree: string, revision: string, file: string): Promise<Uint8Array | null> {
+    public async blob(worktree: string, revision: string, file: string): Promise<Uint8Array | null> {
         if (!isSafeRef(revision) || file.length === 0) return null;
         // `cat-file blob` rather than `git show`: no textconv or other filter
         // stands between the bytes in the repository and the ones sent on.
         return gitBytes(worktree, ['cat-file', 'blob', `${revision}:${file}`]);
     }
 
-    async workingFileSizes(worktree: string, paths: readonly string[]): Promise<Map<string, number>> {
+    public async workingFileSizes(worktree: string, paths: readonly string[]): Promise<Map<string, number>> {
         const sizes = new Map<string, number>();
         for (const file of paths) {
             const full = await workingFilePath(worktree, file);
@@ -242,7 +242,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return sizes;
     }
 
-    async workingFile(worktree: string, file: string): Promise<Uint8Array | null> {
+    public async workingFile(worktree: string, file: string): Promise<Uint8Array | null> {
         const full = await workingFilePath(worktree, file);
         if (!full) return null;
         try {
@@ -253,7 +253,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         }
     }
 
-    async generatedPaths(worktree: string, paths: readonly string[]): Promise<string[]> {
+    public async generatedPaths(worktree: string, paths: readonly string[]): Promise<string[]> {
         const generated: string[] = [];
         for (let i = 0; i < paths.length; i += CHECK_ATTR_CHUNK) {
             const chunk = paths.slice(i, i + CHECK_ATTR_CHUNK);
@@ -269,7 +269,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return generated;
     }
 
-    async worktrees(repository: string): Promise<WorktreeSummary[]> {
+    public async worktrees(repository: string): Promise<WorktreeSummary[]> {
         const list = await git(repository, ['worktree', 'list', '--porcelain', '-z']);
         if (list.code !== 0) return [];
         const entries = parseWorktreeList(list.stdout).filter((entry) => !entry.bare && !entry.prunable);
@@ -305,7 +305,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         );
     }
 
-    watch(worktree: string, onChange: () => void): Disposable {
+    public watch(worktree: string, onChange: () => void): Disposable {
         const dirs = gitDirs(worktree);
         const watchers: fs.FSWatcher[] = [];
         let timer: ReturnType<typeof setTimeout> | null = null;
@@ -353,7 +353,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
 
     // ── GitWorktrees: the worktree a session on a plan's issue starts in (A2), and its removal on archive ──
 
-    async mainCheckout(cwd: string): Promise<string | null> {
+    public async mainCheckout(cwd: string): Promise<string | null> {
         const result = await git(cwd, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
         const common = result.code === 0 ? result.stdout.trim() : '';
         if (!common) return null;
@@ -363,7 +363,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return this.worktreeRoot(cwd);
     }
 
-    async fetchBranch(repository: string, branch: string): Promise<GitWrite> {
+    public async fetchBranch(repository: string, branch: string): Promise<GitWrite> {
         if (!isSafeRef(branch)) return {ok: false, reason: 'Not a branch name: ' + branch};
         return gitWrite(
             repository,
@@ -373,7 +373,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         );
     }
 
-    async addWorktree(repository: string, worktree: string, branch: string, base: string): Promise<GitWrite> {
+    public async addWorktree(repository: string, worktree: string, branch: string, base: string): Promise<GitWrite> {
         if (!isSafeRef(branch) || !isSafeRef(base)) return {ok: false, reason: 'Not a branch name: ' + branch};
         // The checkout runs LFS's smudge filter, which may download: give it the fetch's time.
         return gitWrite(
@@ -384,7 +384,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         );
     }
 
-    async checkoutWorktree(repository: string, worktree: string, branch: string): Promise<GitWrite> {
+    public async checkoutWorktree(repository: string, worktree: string, branch: string): Promise<GitWrite> {
         if (!isSafeRef(branch)) return {ok: false, reason: 'Not a branch name: ' + branch};
         return gitWrite(
             repository,
@@ -394,7 +394,7 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         );
     }
 
-    async removeWorktree(
+    public async removeWorktree(
         repository: string,
         worktree: string,
         {force = false}: {force?: boolean} = {},
@@ -404,11 +404,11 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return gitWrite(repository, args, REMOVE_TIMEOUT_MS, await this.toolEnv());
     }
 
-    async pruneWorktrees(repository: string): Promise<GitWrite> {
+    public async pruneWorktrees(repository: string): Promise<GitWrite> {
         return gitWrite(repository, ['worktree', 'prune'], REMOVE_TIMEOUT_MS, await this.toolEnv());
     }
 
-    async deleteBranch(repository: string, branch: string): Promise<GitWrite> {
+    public async deleteBranch(repository: string, branch: string): Promise<GitWrite> {
         if (!isSafeRef(branch)) return {ok: false, reason: 'Not a branch name: ' + branch};
         return gitWrite(repository, ['branch', '-D', branch], REMOVE_TIMEOUT_MS, await this.toolEnv());
     }

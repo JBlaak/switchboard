@@ -15,22 +15,22 @@
 export const DEFAULT_MAX_BUFFER_SIZE = 256 * 1024;
 
 export class OutputBuffer {
-    readonly #chunks: string[] = [];
-    #size = 0;
-    readonly #maxSize: number;
+    private readonly stored: string[] = [];
+    private storedSize = 0;
+    private readonly maxSize: number;
     /** Set while a resize redraw is in flight, to keep it out of the replay. */
-    #suppressed = false;
+    private isSuppressed = false;
 
     constructor(maxSize: number = DEFAULT_MAX_BUFFER_SIZE) {
-        this.#maxSize = maxSize;
+        this.maxSize = maxSize;
     }
 
-    get size(): number {
-        return this.#size;
+    public get size(): number {
+        return this.storedSize;
     }
 
-    get suppressed(): boolean {
-        return this.#suppressed;
+    public get suppressed(): boolean {
+        return this.isSuppressed;
     }
 
     /**
@@ -40,32 +40,32 @@ export class OutputBuffer {
      * accumulate into a replay of a dozen stacked prompts. Suppressing across the
      * resize is what keeps a reattach showing one.
      */
-    suppress(): void {
-        this.#suppressed = true;
+    public suppress(): void {
+        this.isSuppressed = true;
     }
 
-    resume(): void {
-        this.#suppressed = false;
+    public resume(): void {
+        this.isSuppressed = false;
     }
 
-    append(data: string): void {
-        if (this.#suppressed) return;
-        this.#chunks.push(data);
-        this.#size += data.length;
+    public append(data: string): void {
+        if (this.isSuppressed) return;
+        this.stored.push(data);
+        this.storedSize += data.length;
         // Always leave one chunk, however large: an empty replay is worse than an
         // over-long one, and a single write can exceed the whole budget.
-        while (this.#size > this.#maxSize && this.#chunks.length > 1) {
-            this.#size -= (this.#chunks.shift() ?? '').length;
+        while (this.storedSize > this.maxSize && this.stored.length > 1) {
+            this.storedSize -= (this.stored.shift() ?? '').length;
         }
     }
 
     /** What to replay, oldest first. */
-    chunks(): readonly string[] {
-        return this.#chunks;
+    public chunks(): readonly string[] {
+        return this.stored;
     }
 
-    clear(): void {
-        this.#chunks.length = 0;
-        this.#size = 0;
+    public clear(): void {
+        this.stored.length = 0;
+        this.storedSize = 0;
     }
 }

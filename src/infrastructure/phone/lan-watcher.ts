@@ -24,30 +24,30 @@ export interface LanWatcherDeps {
 }
 
 export class LanWatcher {
-    #timer: TimerHandle | null = null;
-    #last = '';
+    private timer: TimerHandle | null = null;
+    private last = '';
 
     constructor(private readonly deps: LanWatcherDeps) {}
 
-    start(): void {
-        if (this.#timer !== null) return;
-        this.#last = this.#read();
-        this.#timer = this.deps.timers.setInterval(() => this.#check(), this.deps.intervalMs ?? LAN_POLL_MS);
+    public start(): void {
+        if (this.timer !== null) return;
+        this.last = this.read();
+        this.timer = this.deps.timers.setInterval(() => this.check(), this.deps.intervalMs ?? LAN_POLL_MS);
     }
 
-    stop(): void {
-        this.deps.timers.clearInterval(this.#timer);
-        this.#timer = null;
+    public stop(): void {
+        this.deps.timers.clearInterval(this.timer);
+        this.timer = null;
     }
 
-    #check(): void {
-        const now = this.#read();
-        if (now === this.#last) return;
-        this.#last = now;
+    private check(): void {
+        const now = this.read();
+        if (now === this.last) return;
+        this.last = now;
         this.deps.onChange();
     }
 
-    #read(): string {
+    private read(): string {
         const read = this.deps.addresses ?? (() => lanAddresses(os.networkInterfaces()));
         return [...read()].sort().join(' ');
     }

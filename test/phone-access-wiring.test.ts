@@ -292,22 +292,22 @@ type Received = ServerMessage | {type: 'frame'; sessionId: string; data: string}
 
 /** A phone app reduced to its socket: connects with its certificate, sends messages, waits for what comes back. */
 class ScriptedPhone {
-    readonly received: Received[] = [];
-    serverFingerprint: string | null = null;
-    readonly closed: Promise<number>;
-    readonly #ws: WebSocket;
+    public readonly received: Received[] = [];
+    public serverFingerprint: string | null = null;
+    public readonly closed: Promise<number>;
+    private readonly ws: WebSocket;
 
     constructor(port: number, cert: Pair) {
-        this.#ws = new WebSocket(`wss://127.0.0.1:${port}`, {
+        this.ws = new WebSocket(`wss://127.0.0.1:${port}`, {
             key: cert.keyPem,
             cert: cert.certPem,
             rejectUnauthorized: false,
         });
-        this.#ws.on('upgrade', (response) => {
+        this.ws.on('upgrade', (response) => {
             const raw = (response.socket as import('node:tls').TLSSocket).getPeerCertificate().raw;
             this.serverFingerprint = crypto.createHash('sha256').update(raw).digest('hex');
         });
-        this.#ws.on('message', (data, isBinary) => {
+        this.ws.on('message', (data, isBinary) => {
             if (isBinary) {
                 const frame = decodeTerminalFrame(new Uint8Array(data as Buffer));
                 if (frame) this.received.push({type: 'frame', ...frame});
@@ -315,43 +315,43 @@ class ScriptedPhone {
                 this.received.push(JSON.parse((data as Buffer).toString('utf8')) as ServerMessage);
             }
         });
-        this.closed = new Promise((resolve) => this.#ws.once('close', (code) => resolve(code)));
+        this.closed = new Promise((resolve) => this.ws.once('close', (code) => resolve(code)));
     }
 
-    opened(): Promise<void> {
+    public opened(): Promise<void> {
         return new Promise((resolve, reject) => {
-            this.#ws.once('open', () => resolve());
-            this.#ws.once('error', reject);
+            this.ws.once('open', () => resolve());
+            this.ws.once('error', reject);
         });
     }
 
-    send(message: ClientMessage): void {
-        this.#ws.send(JSON.stringify(message));
+    public send(message: ClientMessage): void {
+        this.ws.send(JSON.stringify(message));
     }
 
     /** The first message of that type, once it has arrived. */
-    async next<T extends Received['type']>(type: T): Promise<Extract<Received, {type: T}>> {
+    public async next<T extends Received['type']>(type: T): Promise<Extract<Received, {type: T}>> {
         await until(() => this.received.some((message) => message.type === type), `a ${type} message`);
         return this.received.find((message) => message.type === type) as Extract<Received, {type: T}>;
     }
 
-    of<T extends Received['type']>(type: T): Extract<Received, {type: T}>[] {
+    public of<T extends Received['type']>(type: T): Extract<Received, {type: T}>[] {
         return this.received.filter((message) => message.type === type) as Extract<Received, {type: T}>[];
     }
 
-    output(sessionId: string): string {
+    public output(sessionId: string): string {
         return this.of('frame')
             .filter((frame) => frame.sessionId === sessionId)
             .map((frame) => frame.data)
             .join('');
     }
 
-    clear(): void {
+    public clear(): void {
         this.received.length = 0;
     }
 
-    close(): void {
-        this.#ws.close(1000, 'done');
+    public close(): void {
+        this.ws.close(1000, 'done');
     }
 }
 

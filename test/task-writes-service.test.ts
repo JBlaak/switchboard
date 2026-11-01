@@ -22,26 +22,26 @@ const ROW = {id: TASK} as TaskRow;
 
 /** BlaakTasks, recording every write and answering what the test says it should. */
 class FakeBlaakTasks implements Pick<BlaakTasks, 'get' | 'update' | 'progress'> {
-    calls: Call[] = [];
+    public calls: Call[] = [];
     /** The ids `get` was asked for. */
-    reads: string[] = [];
+    public reads: string[] = [];
     /** The PRs the task carries already, as `get` answers them. */
-    carried: string[] = [];
+    public carried: string[] = [];
     /** The answer every call gets, until the test changes it. */
-    answer: BlaakTasksResult<TaskRow> = {kind: 'ok', value: ROW};
+    public answer: BlaakTasksResult<TaskRow> = {kind: 'ok', value: ROW};
     /** `get`'s answer when it differs from every other call's. */
-    getAnswer: BlaakTasksResult<TaskDetail> | null = null;
-    async get(id: string): Promise<BlaakTasksResult<TaskDetail>> {
+    public getAnswer: BlaakTasksResult<TaskDetail> | null = null;
+    public async get(id: string): Promise<BlaakTasksResult<TaskDetail>> {
         this.reads.push(id);
         if (this.getAnswer) return this.getAnswer;
         if (this.answer.kind !== 'ok') return this.answer;
         return {kind: 'ok', value: {...ROW, pullRequests: [...this.carried]} as TaskDetail};
     }
-    async update(id: string, patch: TaskPatch) {
+    public async update(id: string, patch: TaskPatch) {
         this.calls.push(['update', id, patch]);
         return this.answer;
     }
-    async progress(id: string, text: string, pullRequest?: string) {
+    public async progress(id: string, text: string, pullRequest?: string) {
         this.calls.push(['progress', id, text, pullRequest]);
         return this.answer;
     }

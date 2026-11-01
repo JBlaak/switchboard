@@ -60,7 +60,7 @@ export interface RemoteSupervisorDeps {
 }
 
 export class RemoteConnectionSupervisor implements RemoteObserver {
-    #wiring: SessionWiring | null = null;
+    private wiring: SessionWiring | null = null;
 
     constructor(private readonly deps: RemoteSupervisorDeps) {}
 
@@ -70,12 +70,12 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
      * Called once by the composition root: the supervisor and the lifecycle each
      * need the other, and a setter is clearer than a lazily resolved dependency.
      */
-    attach(wiring: SessionWiring): void {
-        this.#wiring = wiring;
+    public attach(wiring: SessionWiring): void {
+        this.wiring = wiring;
     }
 
     /** Dial the host, ready for the lifecycle to wire. */
-    spawn(sessionId: string, state: RemoteConnectionState): PtyHandle {
+    public spawn(sessionId: string, state: RemoteConnectionState): PtyHandle {
         const {terminals, log} = this.deps;
         const sshArgv = buildSshArgv(state.remote, sessionId, state.kind);
         const spawn = buildSshSpawn(sshArgv, state.shell);
@@ -107,7 +107,7 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
      * Output is also where a permanently broken connection announces itself, and
      * the phrase can straddle two chunks, so a short tail is kept.
      */
-    observeOutput(sessionId: string, session: ActiveSession, data: string): void {
+    public observeOutput(sessionId: string, session: ActiveSession, data: string): void {
         const state = session.remote;
         if (!state) return;
 
@@ -125,7 +125,7 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
     }
 
     /** Decide what a dead ssh means; true when a reconnect is scheduled. */
-    handleExit(sessionId: string, session: ActiveSession, exitCode: number, signal?: number): boolean {
+    public handleExit(sessionId: string, session: ActiveSession, exitCode: number, signal?: number): boolean {
         const state = session.remote;
         if (!state) return false;
 
@@ -165,7 +165,7 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
         // starts the backoff over rather than inheriting the previous attempt count.
         if (lasted >= REMOTE_STABLE_MS) state.attempt = 0;
 
-        return this.#scheduleReconnect(sessionId, state, describeSshExit(exitCode, signal));
+        return this.scheduleReconnect(sessionId, state, describeSshExit(exitCode, signal));
     }
 
     /**
@@ -175,7 +175,7 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
      * shouldn't wait out the timer. Safe to call at any time: it no-ops unless
      * the session is remote, still held, and actually between connections.
      */
-    redialNow(sessionId: string): void {
+    public redialNow(sessionId: string): void {
         const {registry, timers, clock, log} = this.deps;
         const session = registry.get(sessionId);
         const state = session?.remote;
@@ -190,7 +190,7 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
             pty = this.spawn(sessionId, state);
         } catch (err) {
             log.error(`[remote] session=${sessionId} respawn failed: ${(err as Error).message}`);
-            this.#scheduleReconnect(sessionId, state, (err as Error).message);
+            this.scheduleReconnect(sessionId, state, (err as Error).message);
             return;
         }
 
@@ -207,7 +207,7 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
             attempt: state.attempt,
             maxAttempts: MAX_RETRIES,
         });
-        this.#wiring?.wire(sessionId, session);
+        this.wiring?.wire(sessionId, session);
     }
 
     /**
@@ -216,7 +216,7 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
      * Starts the backoff ladder over: the user knows something changed (VPN up,
      * host awake) that the previous attempts did not.
      */
-    retryNow(sessionId: string): {ok: boolean; error?: string; alreadyConnected?: boolean} {
+    public retryNow(sessionId: string): {ok: boolean; error?: string; alreadyConnected?: boolean} {
         const session = this.deps.registry.get(sessionId);
         if (!session?.remote) return {ok: false, error: 'not a remote session'};
         if (session.remote.userDisconnected) return {ok: false, error: 'disconnected'};
@@ -232,7 +232,7 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
      * Marked on the record rather than just clearing the timer, because the PTY's
      * own exit runs afterwards and would otherwise read as a drop worth retrying.
      */
-    markDisconnected(session: ActiveSession): void {
+    public markDisconnected(session: ActiveSession): void {
         const state = session.remote;
         if (!state) return;
         state.userDisconnected = true;
@@ -246,18 +246,18 @@ export class RemoteConnectionSupervisor implements RemoteObserver {
      * Remembered so a renderer that reloads (or reattaches) can be told where the
      * connection stands instead of inferring it from an empty screen.
      */
-    sendStatus(sessionId: string, status: RemoteStatusPayload): void {
+    public sendStatus(sessionId: string, status: RemoteStatusPayload): void {
         const session = this.deps.registry.get(sessionId);
         if (session?.remote) session.remote.status = status;
         this.deps.renderer.remoteStatus(sessionId, status);
     }
 
     /** Re-send the last known status, for a renderer that just reattached. */
-    resendStatus(sessionId: string, session: ActiveSession): void {
+    public resendStatus(sessionId: string, session: ActiveSession): void {
         if (session.remote?.status) this.deps.renderer.remoteStatus(sessionId, session.remote.status);
     }
 
-    #scheduleReconnect(sessionId: string, state: RemoteConnectionState, reason: string): boolean {
+    private scheduleReconnect(sessionId: string, state: RemoteConnectionState, reason: string): boolean {
         const {timers, log} = this.deps;
         state.attempt += 1;
 

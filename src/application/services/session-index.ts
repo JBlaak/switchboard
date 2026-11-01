@@ -50,12 +50,12 @@ function folderProject(projectPath: string, listable: boolean, transcriptCount: 
 }
 
 export class SessionIndex {
-    #rebuilding = false;
+    private rebuilding = false;
 
     constructor(private readonly deps: SessionIndexDeps) {}
 
     /** True when there is nothing usable to render from yet. */
-    needsRebuild(): boolean {
+    public needsRebuild(): boolean {
         const {repository, searchIndex} = this.deps;
         return !repository.isCachePopulated() || !searchIndex.isPopulated();
     }
@@ -67,7 +67,7 @@ export class SessionIndex {
      * store's write lock held for as short a time as possible — this runs from a
      * filesystem watcher, so it can fire while the renderer is mid-query.
      */
-    refreshFolder(folder: string): void {
+    public refreshFolder(folder: string): void {
         const {repository, searchIndex, transcripts} = this.deps;
 
         if (!transcripts.folderExists(folder)) {
@@ -149,7 +149,7 @@ export class SessionIndex {
      * which first indexed it, is otherwise never picked up — the cold-start
      * rebuild only runs when the cache is completely empty.
      */
-    reconcile(): void {
+    public reconcile(): void {
         const {repository, transcripts, log} = this.deps;
         try {
             const meta = repository.getAllFolderMeta();
@@ -165,7 +165,7 @@ export class SessionIndex {
     }
 
     /** Forget a folder entirely — the user removed the project. */
-    forgetFolder(folder: string): void {
+    public forgetFolder(folder: string): void {
         this.deps.repository.deleteCachedFolder(folder);
         this.deps.searchIndex.deleteFolder(folder);
     }
@@ -177,26 +177,26 @@ export class SessionIndex {
      * the sidebar when it lands. Re-entrant calls are dropped rather than queued —
      * a second full scan would only produce the same answer.
      */
-    rebuild(): void {
-        if (this.#rebuilding) return;
-        this.#rebuilding = true;
-        this.#status('Scanning projects…', 'active');
+    public rebuild(): void {
+        if (this.rebuilding) return;
+        this.rebuilding = true;
+        this.status('Scanning projects…', 'active');
 
-        void this.#runRebuild()
+        void this.runRebuild()
             .catch((err: Error) => {
                 this.deps.log.error('[index] rebuild failed:', err.message);
-                this.#status('Scan failed: ' + err.message, 'error');
+                this.status('Scan failed: ' + err.message, 'error');
             })
             .finally(() => {
-                this.#rebuilding = false;
+                this.rebuilding = false;
             });
     }
 
-    async #runRebuild(): Promise<void> {
+    private async runRebuild(): Promise<void> {
         const {repository, searchIndex, scanner, renderer} = this.deps;
 
-        const results = await scanner.scan((text) => this.#status(text, 'active'));
-        this.#status(`Indexing ${results.length} projects…`, 'active');
+        const results = await scanner.scan((text) => this.status(text, 'active'));
+        this.status(`Indexing ${results.length} projects…`, 'active');
 
         let sessionCount = 0;
         for (const {folder, projectPath, sessions, indexMtimeMs} of results) {
@@ -229,12 +229,12 @@ export class SessionIndex {
             );
         }
 
-        this.#status(`Indexed ${sessionCount} sessions across ${results.length} projects`, 'done');
-        this.deps.timers.setTimeout(() => this.#status(''), STATUS_LINGER_MS);
+        this.status(`Indexed ${sessionCount} sessions across ${results.length} projects`, 'done');
+        this.deps.timers.setTimeout(() => this.status(''), STATUS_LINGER_MS);
         renderer.projectsChanged();
     }
 
-    #status(text: string, type = 'info'): void {
+    private status(text: string, type = 'info'): void {
         if (text) this.deps.log.info(`[status] (${type}) ${text}`);
         this.deps.renderer.statusUpdate(text, type);
     }

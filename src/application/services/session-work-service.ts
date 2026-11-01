@@ -171,10 +171,10 @@ export const LOCAL_DIFFERS = "Local branch differs from the PR; showing GitHub's
 const NO_ACTIVITIES: SessionActivities = {byItem: new Map(), queued: 0, shipping: false};
 
 export class SessionWorkService implements WorkPageSource {
-    #page: Page | null = null;
+    private page: Page | null = null;
     /** Bumped by every open (and by a close of the one still opening), so only the latest takes effect. */
-    #opening = 0;
-    #pending: string | null = null;
+    private opening = 0;
+    private pending: string | null = null;
 
     constructor(private readonly deps: SessionWorkServiceDeps) {}
 
@@ -182,8 +182,8 @@ export class SessionWorkService implements WorkPageSource {
      * Can the page open for this session (D14)? Not for a remote session, and
      * not for one whose directory is not in a git repository.
      */
-    async canOpen(sessionId: string): Promise<boolean> {
-        return (await this.#projectRoot(sessionId)) !== null;
+    public async canOpen(sessionId: string): Promise<boolean> {
+        return (await this.projectRoot(sessionId)) !== null;
     }
 
     /**
@@ -191,25 +191,25 @@ export class SessionWorkService implements WorkPageSource {
      * poll `gh`. Closes whichever page was open. Answers the first snapshot, or
      * null when the page cannot open for this session (see `canOpen`).
      */
-    async open(sessionId: string): Promise<SessionWorkSnapshot | null> {
-        const current = this.#page;
+    public async open(sessionId: string): Promise<SessionWorkSnapshot | null> {
+        const current = this.page;
         if (current && current.sessionId === sessionId) {
-            this.#opening++;
-            this.#pending = null;
+            this.opening++;
+            this.pending = null;
             current.askGitHub = true;
-            await this.#refresh(current);
+            await this.refresh(current);
             return current.last;
         }
-        if (current) this.#dispose(current);
+        if (current) this.dispose(current);
 
         // Another open, or a close, may come in while git is answering; the last word wins.
-        const ticket = ++this.#opening;
-        this.#pending = sessionId;
-        const located = await this.#projectRoot(sessionId);
-        if (ticket !== this.#opening) return null;
-        this.#pending = null;
+        const ticket = ++this.opening;
+        this.pending = sessionId;
+        const located = await this.projectRoot(sessionId);
+        if (ticket !== this.opening) return null;
+        this.pending = null;
         if (!located) return null;
-        if (this.#page) this.#dispose(this.#page);
+        if (this.page) this.dispose(this.page);
 
         const page: Page = {
             sessionId,
@@ -236,50 +236,50 @@ export class SessionWorkService implements WorkPageSource {
             lastKey: '',
             closed: false,
         };
-        this.#page = page;
+        this.page = page;
         page.poll = this.deps.timers.setInterval(() => {
             // The Ship it poll asks more often already.
             if (page.shipPoll) return;
             page.askGitHub = true;
-            void this.#refresh(page);
+            void this.refresh(page);
         }, GITHUB_REFRESH_MS);
 
-        await this.#refresh(page);
+        await this.refresh(page);
         return page.closed ? null : page.last;
     }
 
     /** Close the page: stop the watchers and the polling. A close for a page that is no longer open is ignored. */
-    close(sessionId: string): void {
-        if (this.#pending === sessionId) {
-            this.#opening++;
-            this.#pending = null;
+    public close(sessionId: string): void {
+        if (this.pending === sessionId) {
+            this.opening++;
+            this.pending = null;
         }
-        const page = this.#page;
-        if (page && page.sessionId === sessionId) this.#dispose(page);
+        const page = this.page;
+        if (page && page.sessionId === sessionId) this.dispose(page);
     }
 
     /** Close whatever page is open, for shutdown. */
-    closeAll(): void {
-        this.#opening++;
-        this.#pending = null;
-        if (this.#page) this.#dispose(this.#page);
+    public closeAll(): void {
+        this.opening++;
+        this.pending = null;
+        if (this.page) this.dispose(this.page);
     }
 
     /** The session whose page is open, if any. */
-    get openSessionId(): string | null {
-        return this.#page?.sessionId ?? null;
+    public get openSessionId(): string | null {
+        return this.page?.sessionId ?? null;
     }
 
     /** An item of the open page, as last built; null when the page is not this session's. */
-    item(sessionId: string, itemId: string): SessionWorkItem | null {
-        const page = this.#page;
+    public item(sessionId: string, itemId: string): SessionWorkItem | null {
+        const page = this.page;
         if (!page || page.sessionId !== sessionId || !page.last) return null;
         return page.items.get(itemId) ?? null;
     }
 
     /** What an action's prompt needs to know about the open page's session. */
-    context(sessionId: string): ActionContext | null {
-        const page = this.#page;
+    public context(sessionId: string): ActionContext | null {
+        const page = this.page;
         if (!page || page.sessionId !== sessionId || !page.last) return null;
         return {
             repository: page.repository ?? '',
@@ -292,20 +292,20 @@ export class SessionWorkService implements WorkPageSource {
      * An action changed phase. The open page shows it at once, without asking
      * git or `gh` again; a snapshot is pushed when that changed anything.
      */
-    activitiesChanged(_sessionId: string): void {
-        const page = this.#page;
-        if (page && page.last && !page.closed) this.#publish(page);
+    public activitiesChanged(_sessionId: string): void {
+        const page = this.page;
+        if (page && page.last && !page.closed) this.publish(page);
     }
 
     /**
      * Ask `gh` again now and rebuild, for the open page of this session: after
      * your review was written, so the page shows what GitHub made of it.
      */
-    async refreshGitHub(sessionId: string): Promise<void> {
-        const page = this.#page;
+    public async refreshGitHub(sessionId: string): Promise<void> {
+        const page = this.page;
         if (!page || page.sessionId !== sessionId || page.closed) return;
         page.askGitHub = true;
-        await this.#refresh(page);
+        await this.refresh(page);
     }
 
     /**
@@ -313,9 +313,9 @@ export class SessionWorkService implements WorkPageSource {
      * page is rebuilt: Claude may have moved to another worktree, opened a PR,
      * or edited files (which git's watchers do not report).
      */
-    transcriptsChanged(folder: string): void {
-        const page = this.#page;
-        if (page && page.target.folder === folder) this.#schedule(page);
+    public transcriptsChanged(folder: string): void {
+        const page = this.page;
+        if (page && page.target.folder === folder) this.schedule(page);
     }
 
     /**
@@ -325,8 +325,8 @@ export class SessionWorkService implements WorkPageSource {
      * head commit; uncommitted changes are read fresh each time. When no diff
      * can be had the item says why, and the answer is empty.
      */
-    async diff(sessionId: string, itemId: string): Promise<SessionWorkDiff> {
-        const page = this.#page;
+    public async diff(sessionId: string, itemId: string): Promise<SessionWorkDiff> {
+        const page = this.page;
         if (!page || page.sessionId !== sessionId) return NO_DIFF;
         const item = page.items.get(itemId);
         if (!item) return NO_DIFF;
@@ -334,7 +334,7 @@ export class SessionWorkService implements WorkPageSource {
         let result: SessionWorkDiff;
         let sides: DiffSides | undefined;
         try {
-            ({sides, ...result} = await this.#diffOf(page, item));
+            ({sides, ...result} = await this.diffOf(page, item));
         } catch (err) {
             result = {files: [], source: null, error: (err as Error).message || 'The diff could not be read'};
         }
@@ -346,7 +346,7 @@ export class SessionWorkService implements WorkPageSource {
         const before = page.diffErrors.get(itemId);
         if (result.error) page.diffErrors.set(itemId, result.error);
         else page.diffErrors.delete(itemId);
-        if (before !== page.diffErrors.get(itemId)) this.#publish(page);
+        if (before !== page.diffErrors.get(itemId)) this.publish(page);
         return result;
     }
 
@@ -359,8 +359,13 @@ export class SessionWorkService implements WorkPageSource {
      * commits that diff was made from — never at a revision, or a path, the
      * renderer could choose.
      */
-    async image(sessionId: string, itemId: string, path: string, side: 'before' | 'after'): Promise<Uint8Array | null> {
-        const page = this.#page;
+    public async image(
+        sessionId: string,
+        itemId: string,
+        path: string,
+        side: 'before' | 'after',
+    ): Promise<Uint8Array | null> {
+        const page = this.page;
         if (!page || page.sessionId !== sessionId || !page.items.has(itemId)) return null;
         const served = page.served.get(itemId);
         const file = served?.files.find((candidate) => candidate.path === path && candidate.image);
@@ -378,7 +383,7 @@ export class SessionWorkService implements WorkPageSource {
 
     // ── Building the snapshot ──
 
-    async #projectRoot(sessionId: string): Promise<{target: SessionWorkTarget; root: string} | null> {
+    private async projectRoot(sessionId: string): Promise<{target: SessionWorkTarget; root: string} | null> {
         const target = this.deps.locate(sessionId);
         if (!target || isRemoteProjectPath(target.projectPath)) return null;
         const root = await this.deps.git.worktreeRoot(target.projectPath);
@@ -386,17 +391,17 @@ export class SessionWorkService implements WorkPageSource {
     }
 
     /** Rebuild the page once per burst of watcher events. */
-    #schedule(page: Page): void {
+    private schedule(page: Page): void {
         if (page.closed) return;
         this.deps.timers.clearTimeout(page.debounce);
         page.debounce = this.deps.timers.setTimeout(() => {
             page.debounce = null;
-            void this.#refresh(page);
+            void this.refresh(page);
         }, WATCH_DEBOUNCE_MS);
     }
 
     /** Rebuild, one build at a time: a change during a build runs one more after it. */
-    #refresh(page: Page): Promise<void> {
+    private refresh(page: Page): Promise<void> {
         if (page.building) {
             page.again = true;
             return page.building;
@@ -405,7 +410,7 @@ export class SessionWorkService implements WorkPageSource {
             do {
                 page.again = false;
                 try {
-                    await this.#build(page);
+                    await this.build(page);
                 } catch (err) {
                     this.deps.log.error('[session-work] building the page failed:', (err as Error).message);
                 }
@@ -416,16 +421,16 @@ export class SessionWorkService implements WorkPageSource {
         return page.building;
     }
 
-    async #build(page: Page): Promise<void> {
+    private async build(page: Page): Promise<void> {
         const {git, transcripts} = this.deps;
         const {folder, projectPath} = page.target;
 
-        if (page.repository === null) page.repository = await this.#repository(page.projectRoot);
+        if (page.repository === null) page.repository = await this.repository(page.projectRoot);
         const repository = page.repository;
 
-        const locations = await this.#locations(page);
+        const locations = await this.locations(page);
         if (page.closed) return;
-        this.#syncWatchers(page, locations);
+        this.syncWatchers(page, locations);
 
         const pullRequests: SessionPullRequest[] = folder
             ? (transcripts.readSession(folder, page.sessionId, projectPath)?.pullRequests ?? [])
@@ -444,8 +449,8 @@ export class SessionWorkService implements WorkPageSource {
         const branches: BranchFacts[] = [];
         for (const location of locations) {
             if (!(await git.branchExists(location.worktree, location.branch))) continue;
-            const defaultBranch = await this.#defaultBranch(page, location.worktree);
-            const base = await this.#baseRef(page, location.worktree);
+            const defaultBranch = await this.defaultBranch(page, location.worktree);
+            const base = await this.baseRef(page, location.worktree);
             const isDefault = location.branch === defaultBranch;
             const ahead = isDefault ? 0 : (await git.aheadBehind(location.worktree, location.branch, base)).ahead;
             const stats = ahead > 0 ? await git.branchLineStats(location.worktree, location.branch, base) : NO_LINES;
@@ -462,7 +467,7 @@ export class SessionWorkService implements WorkPageSource {
         }
         if (page.closed) return;
 
-        const github = await this.#github(page, pullRequests, mentions, repository);
+        const github = await this.github(page, pullRequests, mentions, repository);
         if (page.closed) return;
 
         const ok = github.availability === 'ok';
@@ -478,7 +483,7 @@ export class SessionWorkService implements WorkPageSource {
             github: ok ? [...github.pullRequests.values()].flatMap((list) => list ?? []) : null,
             issueMentions: ok ? confirmedIssues(mentions, github.issues, repository) : mentions,
             repository,
-            activities: this.#activities(page).byItem,
+            activities: this.activities(page).byItem,
         });
 
         const items = new Map<string, SessionWorkItem>();
@@ -494,7 +499,7 @@ export class SessionWorkService implements WorkPageSource {
         for (const id of [...page.served.keys()]) {
             if (!items.has(id)) page.served.delete(id);
         }
-        this.#publish(page);
+        this.publish(page);
     }
 
     /**
@@ -502,10 +507,10 @@ export class SessionWorkService implements WorkPageSource {
      * action is laid over it here rather than in the build, so a change of phase
      * shows without asking git or `gh` again.
      */
-    #publish(page: Page): void {
+    private publish(page: Page): void {
         const gh = page.github?.availability ?? 'missing';
-        const activities = this.#activities(page);
-        this.#syncShipPoll(page, activities.shipping);
+        const activities = this.activities(page);
+        this.syncShipPoll(page, activities.shipping);
         const items = [...page.items.values()].map((built) => {
             const item: SessionWorkItem =
                 built.kind === 'pr' || built.kind === 'branch'
@@ -533,17 +538,17 @@ export class SessionWorkService implements WorkPageSource {
         this.deps.renderer.sessionWorkSnapshot(page.last);
     }
 
-    #activities(page: Page): SessionActivities {
+    private activities(page: Page): SessionActivities {
         return this.deps.activities?.forSession(page.sessionId) ?? NO_ACTIVITIES;
     }
 
     /** Poll `gh` every 20 s instead of every minute while a Ship it is under way. */
-    #syncShipPoll(page: Page, shipping: boolean): void {
+    private syncShipPoll(page: Page, shipping: boolean): void {
         if (page.closed) return;
         if (shipping && !page.shipPoll) {
             page.shipPoll = this.deps.timers.setInterval(() => {
                 page.askGitHub = true;
-                void this.#refresh(page);
+                void this.refresh(page);
             }, SHIP_REFRESH_MS);
         } else if (!shipping && page.shipPoll) {
             this.deps.timers.clearInterval(page.shipPoll);
@@ -557,7 +562,7 @@ export class SessionWorkService implements WorkPageSource {
      * Roots are remembered per `cwd`, but each one found is checked again every
      * build, so a worktree that was removed drops out (and its `cwd`s with it).
      */
-    async #locations(page: Page): Promise<WorkLocation[]> {
+    private async locations(page: Page): Promise<WorkLocation[]> {
         const {folder} = page.target;
         if (!folder) return [];
         const written = this.deps.transcripts.locations(folder, page.sessionId);
@@ -582,7 +587,7 @@ export class SessionWorkService implements WorkPageSource {
     }
 
     /** Watch exactly the worktrees the page shows. */
-    #syncWatchers(page: Page, locations: readonly WorkLocation[]): void {
+    private syncWatchers(page: Page, locations: readonly WorkLocation[]): void {
         const wanted = new Set(locations.map((location) => location.worktree));
         for (const [worktree, watcher] of page.watchers) {
             if (wanted.has(worktree)) continue;
@@ -593,12 +598,12 @@ export class SessionWorkService implements WorkPageSource {
             if (page.watchers.has(worktree)) continue;
             page.watchers.set(
                 worktree,
-                this.deps.git.watch(worktree, () => this.#schedule(page)),
+                this.deps.git.watch(worktree, () => this.schedule(page)),
             );
         }
     }
 
-    async #defaultBranch(page: Page, worktree: string): Promise<string> {
+    private async defaultBranch(page: Page, worktree: string): Promise<string> {
         let branch = page.defaultBranches.get(worktree);
         if (branch === undefined) {
             branch = await this.deps.git.defaultBranch(worktree);
@@ -608,10 +613,10 @@ export class SessionWorkService implements WorkPageSource {
     }
 
     /** `origin/<default>`, or the local default branch in a repository without that remote branch. */
-    async #baseRef(page: Page, worktree: string): Promise<string> {
+    private async baseRef(page: Page, worktree: string): Promise<string> {
         let base = page.baseRefs.get(worktree);
         if (base === undefined) {
-            const defaultBranch = await this.#defaultBranch(page, worktree);
+            const defaultBranch = await this.defaultBranch(page, worktree);
             const remote = 'origin/' + defaultBranch;
             base = (await this.deps.git.commitSha(worktree, remote)) ? remote : defaultBranch;
             page.baseRefs.set(worktree, base);
@@ -620,7 +625,7 @@ export class SessionWorkService implements WorkPageSource {
     }
 
     /** `owner/repo` of the origin remote when it is on github.com; '' otherwise. */
-    async #repository(projectRoot: string): Promise<string> {
+    private async repository(projectRoot: string): Promise<string> {
         const origin = await this.deps.remotes.originUrl(projectRoot);
         return origin ? gitHubRepository(origin) : '';
     }
@@ -629,7 +634,7 @@ export class SessionWorkService implements WorkPageSource {
      * What `gh` says, asked again on the minute's poll, when the page opens, and
      * when the session linked a PR or mentioned an issue it had not before.
      */
-    async #github(
+    private async github(
         page: Page,
         pullRequests: readonly SessionPullRequest[],
         mentions: readonly IssueRef[],
@@ -675,7 +680,7 @@ export class SessionWorkService implements WorkPageSource {
     // ── Diffs ──
 
     /** An item's diff, and for a local one where its sides are read. */
-    async #diffOf(page: Page, item: SessionWorkItem): Promise<SessionWorkDiff & {sides?: DiffSides}> {
+    private async diffOf(page: Page, item: SessionWorkItem): Promise<SessionWorkDiff & {sides?: DiffSides}> {
         const {git, github} = this.deps;
         const failed = (error: string): SessionWorkDiff => ({files: [], source: null, error});
         if (item.kind === 'issue') return NO_DIFF;
@@ -683,7 +688,7 @@ export class SessionWorkService implements WorkPageSource {
             const worktree = item.location.worktree;
             // HEAD is read before the diff, so the before side is the commit the diff was taken against.
             const sides: DiffSides = {worktree, before: await git.commitSha(worktree, 'HEAD'), after: null};
-            const files = await this.#withImages(sides, await this.#parse(worktree, await git.workingDiff(worktree)));
+            const files = await this.withImages(sides, await this.parse(worktree, await git.workingDiff(worktree)));
             return {files, source: 'local', sides};
         }
 
@@ -701,14 +706,14 @@ export class SessionWorkService implements WorkPageSource {
             if (headSha && !differs) {
                 // The merge-base follows from both commits, so the key covers the image sides too.
                 const key = ['local', worktree, head, headSha, base, baseSha ?? ''].join('\0');
-                const {files, sides} = await this.#cached(page, key, async () => {
+                const {files, sides} = await this.cached(page, key, async () => {
                     const sides: DiffSides = {
                         worktree,
                         before: await git.mergeBase(worktree, headSha, baseSha ?? base),
                         after: headSha,
                     };
-                    const parsed = await this.#parse(worktree, await git.branchDiff(worktree, head, base));
-                    return {files: await this.#withImages(sides, parsed), sides};
+                    const parsed = await this.parse(worktree, await git.branchDiff(worktree, head, base));
+                    return {files: await this.withImages(sides, parsed), sides};
                 });
                 return {files, source: 'local', ...(sides ? {sides} : {})};
             }
@@ -732,7 +737,7 @@ export class SessionWorkService implements WorkPageSource {
 
         const fetch = async (): Promise<FileDiff[] | null> => {
             const text = await github.pullRequestDiff(repository, pr.number);
-            return text === null ? null : this.#parse(page.projectRoot, text);
+            return text === null ? null : this.parse(page.projectRoot, text);
         };
         const fromGitHub = (files: FileDiff[] | null | undefined): SessionWorkDiff =>
             files
@@ -747,7 +752,7 @@ export class SessionWorkService implements WorkPageSource {
         return fromGitHub(files);
     }
 
-    async #cached(page: Page, key: string, read: () => Promise<CachedDiff>): Promise<CachedDiff> {
+    private async cached(page: Page, key: string, read: () => Promise<CachedDiff>): Promise<CachedDiff> {
         const cached = page.diffCache.get(key);
         if (cached) return cached;
         const diff = await read();
@@ -761,7 +766,7 @@ export class SessionWorkService implements WorkPageSource {
      * (L1). A side that cannot be found is left null; a file with neither side
      * stays a plain file.
      */
-    async #withImages(sides: DiffSides, files: FileDiff[]): Promise<FileDiff[]> {
+    private async withImages(sides: DiffSides, files: FileDiff[]): Promise<FileDiff[]> {
         const images = new Map<FileDiff, {format: ImageFormat; before: string | null; after: string | null}>();
         for (const file of files) {
             const format = imageFormatOf(file.path);
@@ -802,7 +807,7 @@ export class SessionWorkService implements WorkPageSource {
     }
 
     /** Parse a diff, with the files `.gitattributes` marks generated collapsed (D7). */
-    async #parse(worktree: string, text: string): Promise<FileDiff[]> {
+    private async parse(worktree: string, text: string): Promise<FileDiff[]> {
         const files = parseUnifiedDiff(text);
         if (files.length === 0) return files;
         const generated = await this.deps.git.generatedPaths(
@@ -812,7 +817,7 @@ export class SessionWorkService implements WorkPageSource {
         return generated.length > 0 ? parseUnifiedDiff(text, {generatedPaths: generated}) : files;
     }
 
-    #dispose(page: Page): void {
+    private dispose(page: Page): void {
         page.closed = true;
         this.deps.timers.clearTimeout(page.debounce);
         this.deps.timers.clearInterval(page.poll);
@@ -822,7 +827,7 @@ export class SessionWorkService implements WorkPageSource {
         page.shipPoll = null;
         for (const watcher of page.watchers.values()) watcher.dispose();
         page.watchers.clear();
-        if (this.#page === page) this.#page = null;
+        if (this.page === page) this.page = null;
     }
 }
 

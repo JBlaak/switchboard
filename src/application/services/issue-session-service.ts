@@ -57,28 +57,28 @@ export interface IssueSessionServiceDeps {
 
 export class IssueSessionService {
     /** `owner/repo` by project path; only answers that found one are kept. */
-    readonly #repositories = new Map<string, string>();
+    private readonly repositories = new Map<string, string>();
     /** The worktree mechanics, and the branches each session worked on. */
-    readonly #worktrees: BranchWorktrees<IssueSessionCandidate>;
+    private readonly worktrees: BranchWorktrees<IssueSessionCandidate>;
     /** The issues each PR (`owner/repo#n`) closes, and when `gh` said so. */
-    readonly #closes = new Map<string, {at: number; closes: IssueKey[]}>();
+    private readonly closes = new Map<string, {at: number; closes: IssueKey[]}>();
 
     constructor(private readonly deps: IssueSessionServiceDeps) {
-        this.#worktrees = new BranchWorktrees(deps);
+        this.worktrees = new BranchWorktrees(deps);
     }
 
     // ── Ownership (S1) ──
 
     /** `owner/repo#n` → the id of the session that owns it, across the repository's sessions. */
-    async issueSessions(repository: string): Promise<Record<string, string>> {
+    public async issueSessions(repository: string): Promise<Record<string, string>> {
         const candidates: {session: IssueSessionCandidate; branches: string[]}[] = [];
         for (const session of this.deps.sessions()) {
             if (session.archived || isRemoteProjectPath(session.projectPath)) continue;
-            if ((await this.#repositoryOf(session.projectPath)) !== repository) continue;
-            candidates.push({session, branches: await this.#worktrees.branchesOf(session)});
+            if ((await this.repositoryOf(session.projectPath)) !== repository) continue;
+            candidates.push({session, branches: await this.worktrees.branchesOf(session)});
         }
 
-        const closes = await this.#closingRefs(
+        const closes = await this.closingRefs(
             candidates.flatMap(({session}) => session.pullRequests),
             repository,
         );
@@ -92,14 +92,14 @@ export class IssueSessionService {
     }
 
     /** What each of these PRs closes, asked of `gh` once per few minutes per PR. */
-    async #closingRefs(
+    private async closingRefs(
         pullRequests: readonly SessionPullRequest[],
         repository: string,
     ): Promise<Map<string, IssueKey[]>> {
         const now = this.deps.clock.now();
         const stale = new Map<string, Set<number>>();
         for (const pr of pullRequests) {
-            const cached = this.#closes.get(prKey(pr, repository));
+            const cached = this.closes.get(prKey(pr, repository));
             if (cached && now - cached.at < CLOSING_REFS_TTL_MS) continue;
             const repo = pr.repository || repository;
             if (!stale.has(repo)) stale.set(repo, new Set());
@@ -123,29 +123,29 @@ export class IssueSessionService {
                         repository: issue.repository || repo,
                         number: issue.number,
                     }));
-                    this.#closes.set(repo + '#' + number, {at: now, closes});
+                    this.closes.set(repo + '#' + number, {at: now, closes});
                 }
             }
         }
 
         const answer = new Map<string, IssueKey[]>();
         for (const pr of pullRequests) {
-            const cached = this.#closes.get(prKey(pr, repository));
+            const cached = this.closes.get(prKey(pr, repository));
             if (cached) answer.set(prKey(pr, repository), cached.closes);
         }
         return answer;
     }
 
     /** `owner/repo` of the project's origin, or null when it is not on GitHub. */
-    async #repositoryOf(projectPath: string): Promise<string | null> {
-        const known = this.#repositories.get(projectPath);
+    private async repositoryOf(projectPath: string): Promise<string | null> {
+        const known = this.repositories.get(projectPath);
         if (known) return known;
         let origin = await this.deps.remotes.originUrl(projectPath);
         // A worktree that has been removed still names its repository in its path.
         const at = projectPath.indexOf(WORKTREES_DIR);
         if (!origin && at > 0) origin = await this.deps.remotes.originUrl(projectPath.slice(0, at));
         const repository = (origin && gitHubRepository(origin)) || null;
-        if (repository) this.#repositories.set(projectPath, repository);
+        if (repository) this.repositories.set(projectPath, repository);
         return repository;
     }
 
@@ -160,7 +160,7 @@ export class IssueSessionService {
      * When the branch exists already, nothing is written unless the request
      * says what to do with it (`existing`); the refusal says what is there.
      */
-    async prepareIssueWorktree({
+    public async prepareIssueWorktree({
         projectPath,
         issue,
         plan,
@@ -210,7 +210,7 @@ export class IssueSessionService {
             return {base: null, warnings: []};
         };
 
-        const made = await this.#worktrees.prepare({root, branch: issueBranchName(planIssue), existing, base});
+        const made = await this.worktrees.prepare({root, branch: issueBranchName(planIssue), existing, base});
         if (!made.ok) return made;
         const {worktreePath, branch} = made;
         if (made.reused) return {ok: true, worktreePath, branch, prompt: issueContinuePrompt(issue, plan)};

@@ -58,33 +58,33 @@ export function pasteBytes(prompt: string): string {
 }
 
 export class PtySessionPrompter implements SessionPrompter {
-    readonly #listeners = new Map<string, Set<() => void>>();
-    readonly #exitListeners = new Map<string, Set<() => void>>();
+    private readonly listeners = new Map<string, Set<() => void>>();
+    private readonly exitListeners = new Map<string, Set<() => void>>();
 
     constructor(private readonly deps: {sessions: PromptableSessions; timers: Timers; log: Logger}) {}
 
-    runningId(sessionId: string): string | null {
-        const found = this.#find(sessionId);
+    public runningId(sessionId: string): string | null {
+        const found = this.find(sessionId);
         return found ? found.key : null;
     }
 
-    isBusy(sessionId: string): boolean {
-        const found = this.#find(sessionId);
+    public isBusy(sessionId: string): boolean {
+        const found = this.find(sessionId);
         if (!found) return true;
         const {busy, ready} = found.session.cliBusy;
         return busy || !ready;
     }
 
-    onIdle(sessionId: string, fn: () => void): Disposable {
-        return listen(this.#listeners, sessionId, fn);
+    public onIdle(sessionId: string, fn: () => void): Disposable {
+        return listen(this.listeners, sessionId, fn);
     }
 
-    onExit(sessionId: string, fn: () => void): Disposable {
-        return listen(this.#exitListeners, sessionId, fn);
+    public onExit(sessionId: string, fn: () => void): Disposable {
+        return listen(this.exitListeners, sessionId, fn);
     }
 
-    send(sessionId: string, prompt: string): void {
-        const found = this.#find(sessionId);
+    public send(sessionId: string, prompt: string): void {
+        const found = this.find(sessionId);
         if (!found) {
             this.deps.log.warn(`[session-work] not sending to ${sessionId}: it is not running`);
             return;
@@ -100,19 +100,19 @@ export class PtySessionPrompter implements SessionPrompter {
     }
 
     /** From the lifecycle: a session's CLI changed state. */
-    cliStateChanged(sessionId: string, session: PromptableSession, change: CliStateChange): void {
+    public cliStateChanged(sessionId: string, session: PromptableSession, change: CliStateChange): void {
         const idle = change.kind === 'ready' || (change.kind === 'busy' && !change.busy);
         if (!idle) return;
-        this.#notify(this.#listeners, sessionId, session, 'idle');
+        this.notify(this.listeners, sessionId, session, 'idle');
     }
 
     /** From the lifecycle: a session's process ended for good. */
-    sessionEnded(sessionId: string, session: PromptableSession): void {
-        this.#notify(this.#exitListeners, sessionId, session, 'exit');
+    public sessionEnded(sessionId: string, session: PromptableSession): void {
+        this.notify(this.exitListeners, sessionId, session, 'exit');
     }
 
     /** Call every listener filed under any id the session has answered to. */
-    #notify(
+    private notify(
         listeners: Map<string, Set<() => void>>,
         sessionId: string,
         session: PromptableSession,
@@ -131,7 +131,7 @@ export class PtySessionPrompter implements SessionPrompter {
         }
     }
 
-    #find(sessionId: string): {key: string; session: PromptableSession} | null {
+    private find(sessionId: string): {key: string; session: PromptableSession} | null {
         const found = this.deps.sessions.find(sessionId);
         if (!found || found.session.exited || found.session.isPlainTerminal) return null;
         return found;

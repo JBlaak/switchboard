@@ -24,12 +24,12 @@ export class ProjectFolderService {
     constructor(private readonly deps: ProjectFolderServiceDeps) {}
 
     /** What `typed` points at, read the way the user typed it. */
-    async check(typed: string): Promise<ProjectFolderCheck> {
+    public async check(typed: string): Promise<ProjectFolderCheck> {
         const text = typed.trim();
-        const path = this.#expand(text).replace(/(.)\/+$/, '$1');
+        const path = this.expand(text).replace(/(.)\/+$/, '$1');
         const exists = text !== '' && this.deps.fs.exists(path);
         const directory = exists && this.deps.fs.isDirectory(path);
-        const completion = this.#complete(text);
+        const completion = this.complete(text);
         if (!directory) {
             return {path, exists, directory, git: false, branch: null, gitHubRepository: null, completion};
         }
@@ -51,15 +51,15 @@ export class ProjectFolderService {
         };
     }
 
-    #expand(text: string): string {
+    private expand(text: string): string {
         return expandHome(text, this.deps.fs.homeDir);
     }
 
     /** The folders beside the last `/` of `text` that could complete it. */
-    #complete(text: string): string | null {
+    private complete(text: string): string | null {
         const target = completionTarget(text);
         if (!target) return null;
-        const folder = this.#expand(target.folder);
+        const folder = this.expand(target.folder);
         if (!this.deps.fs.isDirectory(folder)) return null;
         let names: string[];
         try {

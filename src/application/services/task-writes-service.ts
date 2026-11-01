@@ -64,19 +64,19 @@ interface Queued {
 const ALREADY_THERE = Symbol('already there');
 
 export class TaskWritesService {
-    readonly #queue: Queued[] = [];
+    private readonly queue: Queued[] = [];
     /** The PRs already written, as `taskId url`: each goes on its task once. */
-    readonly #written = new Set<string>();
+    private readonly written = new Set<string>();
     /** The drain running now, or the last one; drains never overlap. */
-    #draining: Promise<void> = Promise.resolve();
+    private draining: Promise<void> = Promise.resolve();
 
     constructor(private readonly deps: TaskWritesServiceDeps) {}
 
     /** A session started from its task: In progress, and starred for today. */
-    sessionStarted(sessionId: string): Promise<TaskWriteOutcome> {
+    public sessionStarted(sessionId: string): Promise<TaskWriteOutcome> {
         const taskId = this.deps.links.taskOf(sessionId);
         if (!taskId) return Promise.resolve('skipped');
-        return this.#send({kind: 'update', taskId, patch: {...STARTED_PATCH}});
+        return this.send({kind: 'update', taskId, patch: {...STARTED_PATCH}});
     }
 
     /**
@@ -84,13 +84,13 @@ export class TaskWritesService {
      * The task is read first, and a PR it already carries is not written again,
      * so replaying a session's `pr-link`s after a restart logs nothing twice.
      */
-    pullRequestOpened(sessionId: string, pr: SessionPullRequest): Promise<TaskWriteOutcome> {
+    public pullRequestOpened(sessionId: string, pr: SessionPullRequest): Promise<TaskWriteOutcome> {
         const taskId = this.deps.links.taskOf(sessionId);
         if (!taskId) return Promise.resolve('skipped');
         const key = `${taskId} ${pr.url}`;
-        if (this.#written.has(key)) return Promise.resolve('skipped');
-        this.#written.add(key);
-        return this.#send({kind: 'progress', taskId, text: openedPullRequestLine(pr), pullRequest: pr.url});
+        if (this.written.has(key)) return Promise.resolve('skipped');
+        this.written.add(key);
+        return this.send({kind: 'progress', taskId, text: openedPullRequestLine(pr), pullRequest: pr.url});
     }
 
     /**
@@ -99,10 +99,10 @@ export class TaskWritesService {
      * to offer Mark done: only when you archived it and every PR it opened is
      * merged. A session that has no task is offered nothing.
      */
-    async sessionArchived(sessionId: string, archive: {byUser: boolean}): Promise<boolean> {
+    public async sessionArchived(sessionId: string, archive: {byUser: boolean}): Promise<boolean> {
         const taskId = this.deps.links.taskOf(sessionId);
         if (!taskId) return false;
-        void this.#send({kind: 'progress', taskId, text: SESSION_ARCHIVED_LINE});
+        void this.send({kind: 'progress', taskId, text: SESSION_ARCHIVED_LINE});
         try {
             return offersMarkDone(archive, this.deps.pullRequests(sessionId), (url) => this.deps.pullRequestState(url));
         } catch (err) {
@@ -112,39 +112,39 @@ export class TaskWritesService {
     }
 
     /** You pressed Mark done: the task is Done. The only write that sets it. */
-    markDone(taskId: string): Promise<TaskWriteOutcome> {
+    public markDone(taskId: string): Promise<TaskWriteOutcome> {
         const id = taskIdFrom(taskId);
         if (!id) return Promise.resolve('skipped');
-        return this.#send({kind: 'update', taskId: id, patch: {...DONE_PATCH}});
+        return this.send({kind: 'update', taskId: id, patch: {...DONE_PATCH}});
     }
 
     /** Send what did not get through, in order: on the next poll. */
-    retry(): Promise<void> {
-        return this.#drain();
+    public retry(): Promise<void> {
+        return this.drain();
     }
 
     /** The writes still waiting to get through, oldest first. */
-    pending(): TaskWrite[] {
-        return this.#queue.map((entry) => entry.write);
+    public pending(): TaskWrite[] {
+        return this.queue.map((entry) => entry.write);
     }
 
-    async #send(write: TaskWrite): Promise<TaskWriteOutcome> {
+    private async send(write: TaskWrite): Promise<TaskWriteOutcome> {
         const entry: Queued = {write, refused: 0, outcome: 'queued'};
-        this.#queue.push(entry);
-        await this.#drain();
+        this.queue.push(entry);
+        await this.drain();
         return entry.outcome;
     }
 
-    #drain(): Promise<void> {
-        this.#draining = this.#draining.then(() => this.#sendQueued());
-        return this.#draining;
+    private drain(): Promise<void> {
+        this.draining = this.draining.then(() => this.sendQueued());
+        return this.draining;
     }
 
     /** Send from the head of the queue until it is empty or a write does not get through. */
-    async #sendQueued(): Promise<void> {
-        while (this.#queue.length > 0) {
-            const entry = this.#queue[0];
-            const result = await this.#call(entry.write);
+    private async sendQueued(): Promise<void> {
+        while (this.queue.length > 0) {
+            const entry = this.queue[0];
+            const result = await this.call(entry.write);
             if (result === ALREADY_THERE) {
                 entry.outcome = 'skipped';
             } else if (result.kind === 'ok') {
@@ -159,7 +159,7 @@ export class TaskWritesService {
                 this.deps.log.info(`[task-writes] ${describe(entry.write)} queued: ${result.reason}`);
                 return;
             }
-            this.#queue.shift();
+            this.queue.shift();
         }
     }
 
@@ -168,7 +168,7 @@ export class TaskWritesService {
      * `ALREADY_THERE` when the task carries that PR already; a read that does
      * not get through holds the write back like the write itself would.
      */
-    async #call(write: TaskWrite): Promise<BlaakTasksResult<unknown> | typeof ALREADY_THERE> {
+    private async call(write: TaskWrite): Promise<BlaakTasksResult<unknown> | typeof ALREADY_THERE> {
         try {
             if (write.kind === 'progress' && write.pullRequest) {
                 const task = await this.deps.tasks.get(write.taskId);

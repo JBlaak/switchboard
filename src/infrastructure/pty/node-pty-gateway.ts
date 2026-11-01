@@ -41,35 +41,35 @@ export function cleanChildEnv(env: NodeJS.ProcessEnv = process.env): Record<stri
 type NodePty = pty.IPty & {_isDisposed?: boolean};
 
 class NodePtyHandle implements PtyHandle {
-    constructor(readonly process: NodePty) {}
+    constructor(public readonly process: NodePty) {}
 
-    get pid(): number | undefined {
+    public get pid(): number | undefined {
         return this.process.pid;
     }
 
-    get disposed(): boolean {
+    public get disposed(): boolean {
         // node-pty has no public equivalent; reading it is what stops a write
         // landing in a PTY whose process is already gone.
         return this.process._isDisposed === true;
     }
 
-    write(data: string): void {
+    public write(data: string): void {
         this.process.write(data);
     }
 
-    resize(cols: number, rows: number): void {
+    public resize(cols: number, rows: number): void {
         this.process.resize(cols, rows);
     }
 
-    onData(listener: (data: string) => void): void {
+    public onData(listener: (data: string) => void): void {
         this.process.onData(listener);
     }
 
-    onExit(listener: (event: {exitCode: number; signal?: number}) => void): void {
+    public onExit(listener: (event: {exitCode: number; signal?: number}) => void): void {
         this.process.onExit(listener);
     }
 
-    kill(signal?: NodeJS.Signals): void {
+    public kill(signal?: NodeJS.Signals): void {
         this.process.kill(signal);
     }
 }
@@ -83,15 +83,15 @@ export interface NodePtyGatewayOptions {
 }
 
 export class NodePtyGateway implements TerminalGateway {
-    readonly baseEnv: Record<string, string>;
-    readonly #kill: KillFn;
+    public readonly baseEnv: Record<string, string>;
+    private readonly kill: KillFn;
 
     constructor(options: NodePtyGatewayOptions = {}) {
         this.baseEnv = cleanChildEnv(options.env);
-        this.#kill = options.kill ?? ((pid, signal) => process.kill(pid, signal));
+        this.kill = options.kill ?? ((pid, signal) => process.kill(pid, signal));
     }
 
-    spawn(spec: SpawnSpec): PtyHandle {
+    public spawn(spec: SpawnSpec): PtyHandle {
         return new NodePtyHandle(
             pty.spawn(spec.file, [...spec.args], {
                 name: 'xterm-256color',
@@ -113,11 +113,11 @@ export class NodePtyGateway implements TerminalGateway {
      * When the group cannot be signalled, the fallback signals the shell alone
      * through node-pty's own kill.
      */
-    signalTree(handle: PtyHandle, signal: NodeJS.Signals): boolean {
+    public signalTree(handle: PtyHandle, signal: NodeJS.Signals): boolean {
         const pid = handle.pid;
         if (!pid) return false;
         try {
-            this.#kill(-pid, signal);
+            this.kill(-pid, signal);
             return true;
         } catch {
             // No process group to signal.
@@ -137,11 +137,11 @@ export class NodePtyGateway implements TerminalGateway {
      * reap still answers, so this only reads false once the process is genuinely
      * gone. EPERM means it exists but is not ours to signal — still alive.
      */
-    isAlive(handle: PtyHandle): boolean {
+    public isAlive(handle: PtyHandle): boolean {
         const pid = handle.pid;
         if (!pid) return false;
         try {
-            this.#kill(pid, 0);
+            this.kill(pid, 0);
             return true;
         } catch (err) {
             return (err as NodeJS.ErrnoException).code === 'EPERM';
@@ -149,7 +149,7 @@ export class NodePtyGateway implements TerminalGateway {
     }
 
     /** Where a process is spawned when the project directory is not usable. */
-    get homeDir(): string {
+    public get homeDir(): string {
         return os.homedir();
     }
 }

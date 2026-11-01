@@ -22,22 +22,22 @@ const pr = (n: number): SessionPullRequest => ({
 
 /** BlaakTasks, recording every call and answering what the test says. */
 class FakeBlaakTasks implements BlaakTasks {
-    calls: string[] = [];
-    rows: TaskRow[] = [row(TASK)];
-    answer: BlaakTasksResult<never> | null = null;
-    async list(view: TaskView): Promise<BlaakTasksResult<TaskRow[]>> {
+    public calls: string[] = [];
+    public rows: TaskRow[] = [row(TASK)];
+    public answer: BlaakTasksResult<never> | null = null;
+    public async list(view: TaskView): Promise<BlaakTasksResult<TaskRow[]>> {
         this.calls.push('list ' + view);
         return this.answer ?? {kind: 'ok', value: this.rows};
     }
-    async get(id: string): Promise<BlaakTasksResult<TaskDetail>> {
+    public async get(id: string): Promise<BlaakTasksResult<TaskDetail>> {
         this.calls.push('get ' + id);
         return this.answer ?? {kind: 'ok', value: {...row(id), pullRequests: []} as unknown as TaskDetail};
     }
-    async update(id: string, patch: TaskPatch): Promise<BlaakTasksResult<TaskRow>> {
+    public async update(id: string, patch: TaskPatch): Promise<BlaakTasksResult<TaskRow>> {
         this.calls.push(`update ${id} ${JSON.stringify(patch)}`);
         return this.answer ?? {kind: 'ok', value: row(id)};
     }
-    async progress(id: string, text: string, pullRequest?: string): Promise<BlaakTasksResult<TaskRow>> {
+    public async progress(id: string, text: string, pullRequest?: string): Promise<BlaakTasksResult<TaskRow>> {
         this.calls.push(`progress ${id} ${text}` + (pullRequest ? ' ' + pullRequest : ''));
         return this.answer ?? {kind: 'ok', value: row(id)};
     }

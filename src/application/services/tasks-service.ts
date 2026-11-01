@@ -88,12 +88,12 @@ interface Watch {
 }
 
 export class TasksService {
-    #built: {url: string; services: TaskServices} | null = null;
-    readonly #watches = new Map<string, Watch>();
-    #interval: TimerHandle | null = null;
-    #polling: Promise<void> | null = null;
+    private built: {url: string; services: TaskServices} | null = null;
+    private readonly watches = new Map<string, Watch>();
+    private interval: TimerHandle | null = null;
+    private pollInFlight: Promise<void> | null = null;
     /** The transcript write each session was last read at, so an unchanged one is not read again. */
-    readonly #scanned = new Map<string, number>();
+    private readonly scanned = new Map<string, number>();
 
     constructor(private readonly deps: TasksServiceDeps) {}
 
@@ -102,67 +102,67 @@ export class TasksService {
      * while it is empty. Building replays the PRs of the linked sessions, which
      * the writes service writes once each.
      */
-    services(): TaskServices | null {
+    public services(): TaskServices | null {
         const url = this.deps.url().trim();
         if (!url) {
-            if (this.#built) this.deps.log.info('[tasks] BlaakTasks switched off');
-            this.#built = null;
+            if (this.built) this.deps.log.info('[tasks] BlaakTasks switched off');
+            this.built = null;
             return null;
         }
-        if (this.#built?.url === url) return this.#built.services;
-        this.deps.log.info(this.#built ? '[tasks] the BlaakTasks URL changed; rebuilding' : '[tasks] BlaakTasks on');
+        if (this.built?.url === url) return this.built.services;
+        this.deps.log.info(this.built ? '[tasks] the BlaakTasks URL changed; rebuilding' : '[tasks] BlaakTasks on');
         const services = this.deps.build(url);
-        this.#built = {url, services};
-        this.#scanned.clear();
-        this.#replay(services);
+        this.built = {url, services};
+        this.scanned.clear();
+        this.replay(services);
         return services;
     }
 
     /** At startup: build the services when the URL is set, so linked sessions' PRs catch up. */
-    start(): void {
+    public start(): void {
         this.services();
     }
 
     // ── Reading ──
 
-    list(query: TaskQuery): Promise<BlaakTasksResult<TaskRow[]>> {
+    public list(query: TaskQuery): Promise<BlaakTasksResult<TaskRow[]>> {
         const services = this.services();
         if (!services) return Promise.resolve({kind: 'off'});
         return services.tasks.list(query.view, query.options);
     }
 
-    get(taskId: string): Promise<BlaakTasksResult<TaskDetail>> {
+    public get(taskId: string): Promise<BlaakTasksResult<TaskDetail>> {
         const services = this.services();
         if (!services) return Promise.resolve({kind: 'off'});
         return services.tasks.get(taskId);
     }
 
     /** The task a session works on, or null. */
-    sessionTask(sessionId: string): string | null {
+    public sessionTask(sessionId: string): string | null {
         return this.services()?.links.taskOf(sessionId) ?? null;
     }
 
     /** Every linked session's task, by session id. */
-    sessionTasks(): Record<string, string> {
+    public sessionTasks(): Record<string, string> {
         return this.services()?.links.sessionTasks() ?? {};
     }
 
     /** A task's sessions, the most recently linked first, and its owner. */
-    taskSessions(taskId: string): TaskSessions {
+    public taskSessions(taskId: string): TaskSessions {
         const links = this.services()?.links;
         if (!links) return {sessions: [], owner: null};
         return {sessions: links.sessionsOf(taskId), owner: links.ownerOf(taskId)};
     }
 
     /** The tasks whose repo is this project, the most recently linked first. */
-    projectTasks(projectPath: string): string[] {
+    public projectTasks(projectPath: string): string[] {
         return this.services()?.links.tasksIn(projectPath) ?? [];
     }
 
     // ── Changing ──
 
     /** ★, snooze or Done. Done goes through the writes queue, so it is retried until it gets through. */
-    async update(taskId: string, change: TaskChange): Promise<TaskUpdateResult> {
+    public async update(taskId: string, change: TaskChange): Promise<TaskUpdateResult> {
         const services = this.services();
         if (!services) return {kind: 'off'};
         let result: TaskUpdateResult;
@@ -183,17 +183,17 @@ export class TasksService {
                 change.kind === 'star' ? {today: change.today} : {snoozedUntil: change.until},
             );
         }
-        if (result.kind === 'ok') this.#refresh();
+        if (result.kind === 'ok') this.refresh();
         return result;
     }
 
     /** Moves the task to another repo by hand. */
-    setRepo(taskId: string, projectPath: string): void {
-        this.#require().links.setRepo(taskId, projectPath);
+    public setRepo(taskId: string, projectPath: string): void {
+        this.require().links.setRepo(taskId, projectPath);
     }
 
     /** The worktree and prompt of a new session on the task, or why there is none yet. */
-    prepareStart(request: TaskStartRequest): Promise<TaskStartPreparation> {
+    public prepareStart(request: TaskStartRequest): Promise<TaskStartPreparation> {
         const services = this.services();
         if (!services) return Promise.resolve({kind: 'off'});
         const {task, projectPath, existing} = request;
@@ -205,25 +205,25 @@ export class TasksService {
      * project is the repository's main checkout), and the task is set In
      * progress and starred in the background, never holding the session up.
      */
-    sessionStarted(taskId: string, sessionId: string, projectPath: string): void {
-        const services = this.#require();
-        this.#link(services, taskId, sessionId, projectPath, 'start');
+    public sessionStarted(taskId: string, sessionId: string, projectPath: string): void {
+        const services = this.require();
+        this.linkTask(services, taskId, sessionId, projectPath, 'start');
         void services.writes.sessionStarted(sessionId).then((outcome) => {
-            if (outcome === 'sent') this.#refresh();
+            if (outcome === 'sent') this.refresh();
         });
     }
 
     /** "Link task…": the session works on this task now, in its repository. */
-    async link(sessionId: string, taskId: string): Promise<void> {
-        const services = this.#require();
+    public async link(sessionId: string, taskId: string): Promise<void> {
+        const services = this.require();
         const projectPath = this.deps.sessionProject(sessionId);
         if (!projectPath) throw new Error('No such session: ' + sessionId);
-        this.#link(services, taskId, sessionId, await this.deps.repoRoot(projectPath), 'manual');
+        this.linkTask(services, taskId, sessionId, await this.deps.repoRoot(projectPath), 'manual');
     }
 
     /** The session no longer works on a task. */
-    unlink(sessionId: string): void {
-        this.#require().links.unlink(sessionId);
+    public unlink(sessionId: string): void {
+        this.require().links.unlink(sessionId);
         this.deps.renderer.sessionTaskChanged(sessionId, null);
     }
 
@@ -233,7 +233,7 @@ export class TasksService {
      * A session was archived: a line on its task, and whether to offer Mark
      * done — only when you archived it (`byUser`) and every PR it opened is merged.
      */
-    async archived(sessionId: string, archive: {byUser: boolean}): Promise<MarkDoneOffer | null> {
+    public async archived(sessionId: string, archive: {byUser: boolean}): Promise<MarkDoneOffer | null> {
         const services = this.services();
         if (!services) return null;
         const taskId = services.links.taskOf(sessionId);
@@ -251,13 +251,13 @@ export class TasksService {
      * written since its last read is read for the task its BlaakTasks calls name,
      * and its PRs (the `pr-link`s the index just read) go on its task.
      */
-    async transcriptsChanged(folder: string): Promise<void> {
+    public async transcriptsChanged(folder: string): Promise<void> {
         const services = this.services();
         if (!services) return;
         for (const session of this.deps.sessionsIn(folder)) {
             try {
-                await this.#scan(services, folder, session);
-                this.#pullRequests(services, session.sessionId);
+                await this.scan(services, folder, session);
+                this.pullRequests(services, session.sessionId);
             } catch (err) {
                 this.deps.log.error('[tasks] reading a transcript for its task:', (err as Error).message);
             }
@@ -271,43 +271,43 @@ export class TasksService {
      * asked now, then on every poll until `unwatch`. Watching again under the
      * same id replaces its query.
      */
-    watch(watchId: string, query: TaskQuery | null): void {
-        const previous = this.#watches.get(watchId);
+    public watch(watchId: string, query: TaskQuery | null): void {
+        const previous = this.watches.get(watchId);
         const same = previous && query && JSON.stringify(previous.query) === JSON.stringify(query);
-        if (query) this.#watches.set(watchId, same ? previous : {query, rows: [], fetchedAt: null});
-        else this.#watches.set(watchId, {query: NO_LIST, rows: [], fetchedAt: null});
-        if (this.#interval === null) {
-            this.#interval = this.deps.timers.setInterval(() => void this.poll(), TASKS_POLL_MS);
+        if (query) this.watches.set(watchId, same ? previous : {query, rows: [], fetchedAt: null});
+        else this.watches.set(watchId, {query: NO_LIST, rows: [], fetchedAt: null});
+        if (this.interval === null) {
+            this.interval = this.deps.timers.setInterval(() => void this.poll(), TASKS_POLL_MS);
         }
-        if (query && !same) void this.#fetch(watchId);
+        if (query && !same) void this.fetch(watchId);
     }
 
-    unwatch(watchId: string): void {
-        this.#watches.delete(watchId);
-        if (this.#watches.size === 0) this.#stopPolling();
+    public unwatch(watchId: string): void {
+        this.watches.delete(watchId);
+        if (this.watches.size === 0) this.stopPolling();
     }
 
     /** Every surface went away (the window closed): nothing is polled. */
-    unwatchAll(): void {
-        this.#watches.clear();
-        this.#stopPolling();
+    public unwatchAll(): void {
+        this.watches.clear();
+        this.stopPolling();
     }
 
     /** Whether a surface is watching, so the poll runs. */
-    get polling(): boolean {
-        return this.#interval !== null;
+    public get polling(): boolean {
+        return this.interval !== null;
     }
 
     /** Send what did not get through, then ask every watched list again. One at a time. */
-    poll(): Promise<void> {
-        if (this.#polling) return this.#polling;
-        this.#polling = this.#poll().finally(() => {
-            this.#polling = null;
+    public poll(): Promise<void> {
+        if (this.pollInFlight) return this.pollInFlight;
+        this.pollInFlight = this.pollOnce().finally(() => {
+            this.pollInFlight = null;
         });
-        return this.#polling;
+        return this.pollInFlight;
     }
 
-    async #poll(): Promise<void> {
+    private async pollOnce(): Promise<void> {
         const services = this.services();
         if (services) {
             try {
@@ -316,17 +316,17 @@ export class TasksService {
                 this.deps.log.error('[tasks] retrying writes:', (err as Error).message);
             }
         }
-        await Promise.all([...this.#watches.keys()].map((watchId) => this.#fetch(watchId)));
+        await Promise.all([...this.watches.keys()].map((watchId) => this.fetch(watchId)));
     }
 
     /** Ask a watched list again, and push how it stands. */
-    async #fetch(watchId: string): Promise<void> {
-        const watch = this.#watches.get(watchId);
+    private async fetch(watchId: string): Promise<void> {
+        const watch = this.watches.get(watchId);
         if (!watch || watch.query === NO_LIST) return;
         const {query} = watch;
         const result = await this.list(query);
         // Unwatched, or watching another list, while it was asked.
-        if (this.#watches.get(watchId)?.query !== query) return;
+        if (this.watches.get(watchId)?.query !== query) return;
         if (result.kind === 'ok') {
             watch.rows = result.value;
             watch.fetchedAt = this.deps.clock.now();
@@ -346,25 +346,25 @@ export class TasksService {
     }
 
     /** A change made from here: the watched lists show it now rather than within the minute. */
-    #refresh(): void {
-        if (this.#watches.size > 0) void Promise.all([...this.#watches.keys()].map((watchId) => this.#fetch(watchId)));
+    private refresh(): void {
+        if (this.watches.size > 0) void Promise.all([...this.watches.keys()].map((watchId) => this.fetch(watchId)));
     }
 
-    #stopPolling(): void {
-        if (this.#interval === null) return;
-        this.deps.timers.clearInterval(this.#interval);
-        this.#interval = null;
+    private stopPolling(): void {
+        if (this.interval === null) return;
+        this.deps.timers.clearInterval(this.interval);
+        this.interval = null;
     }
 
     // ── Links ──
 
-    #require(): TaskServices {
+    private require(): TaskServices {
         const services = this.services();
         if (!services) throw new Error('BlaakTasks is off: no URL is set in Settings');
         return services;
     }
 
-    #link(
+    private linkTask(
         services: TaskServices,
         taskId: string,
         sessionId: string,
@@ -375,14 +375,14 @@ export class TasksService {
         this.deps.renderer.sessionTaskChanged(sessionId, link.taskId);
     }
 
-    async #scan(
+    private async scan(
         services: TaskServices,
         folder: string,
         session: {sessionId: string; projectPath: string},
     ): Promise<void> {
         const at = this.deps.modifiedAt(folder, session.sessionId);
-        if (at === null || this.#scanned.get(session.sessionId) === at) return;
-        this.#scanned.set(session.sessionId, at);
+        if (at === null || this.scanned.get(session.sessionId) === at) return;
+        this.scanned.set(session.sessionId, at);
         const lines = this.deps.transcript(folder, session.sessionId);
         const projectPath = await this.deps.repoRoot(session.projectPath);
         const link = services.links.scan(session.sessionId, lines, projectPath);
@@ -390,16 +390,16 @@ export class TasksService {
     }
 
     /** The session's PRs, each written on its task once; nothing without a task. */
-    #pullRequests(services: TaskServices, sessionId: string): void {
+    private pullRequests(services: TaskServices, sessionId: string): void {
         if (!services.links.taskOf(sessionId)) return;
         for (const pr of this.deps.pullRequests(sessionId)) void services.writes.pullRequestOpened(sessionId, pr);
     }
 
     /** Every linked session still in play has its PRs written, once each. */
-    #replay(services: TaskServices): void {
+    private replay(services: TaskServices): void {
         try {
             for (const sessionId of Object.keys(services.links.sessionTasks())) {
-                if (!this.deps.archived(sessionId)) this.#pullRequests(services, sessionId);
+                if (!this.deps.archived(sessionId)) this.pullRequests(services, sessionId);
             }
         } catch (err) {
             this.deps.log.error('[tasks] replaying the PRs of linked sessions:', (err as Error).message);

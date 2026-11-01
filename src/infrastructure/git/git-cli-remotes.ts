@@ -8,7 +8,7 @@ import {execFile} from 'node:child_process';
 import type {GitRemotes} from '../../application/ports/git-remotes';
 
 export class GitCliRemotes implements GitRemotes {
-    originUrl(projectPath: string): Promise<string | null> {
+    public originUrl(projectPath: string): Promise<string | null> {
         return new Promise((resolve) => {
             execFile('git', ['-C', projectPath, 'remote', 'get-url', 'origin'], {timeout: 5_000}, (err, stdout) =>
                 resolve(err ? null : stdout.trim() || null),

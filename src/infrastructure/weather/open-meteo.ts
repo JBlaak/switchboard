@@ -22,24 +22,24 @@ export class OpenMeteoWeatherSource implements WeatherSource {
         private readonly log: Logger,
     ) {}
 
-    async current(loc: WeatherLocation): Promise<Weather | null> {
+    public async current(loc: WeatherLocation): Promise<Weather | null> {
         const url = new URL(FORECAST_ENDPOINT);
         url.searchParams.set('latitude', String(loc.latitude));
         url.searchParams.set('longitude', String(loc.longitude));
         url.searchParams.set('current', 'weather_code,is_day');
-        const body = await this.#getJson(url);
+        const body = await this.getJson(url);
         return body === null ? null : parseForecastResponse(body, loc, this.clock.now());
     }
 
-    async geocode(name: string): Promise<WeatherLocation | null> {
+    public async geocode(name: string): Promise<WeatherLocation | null> {
         const url = new URL(GEOCODING_ENDPOINT);
         url.searchParams.set('name', name);
         url.searchParams.set('count', '1');
-        const body = await this.#getJson(url);
+        const body = await this.getJson(url);
         return body === null ? null : parseGeocodingResponse(body);
     }
 
-    async #getJson(url: URL): Promise<unknown> {
+    private async getJson(url: URL): Promise<unknown> {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
         try {

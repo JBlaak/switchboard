@@ -47,14 +47,14 @@ interface WarmProcess {
 }
 
 export class ShellClaudeCaller implements ClaudeCaller {
-    #env: {shell: string; read: () => Promise<Record<string, string>>} | null = null;
-    readonly #warm = new Set<WarmProcess>();
+    private env: {shell: string; read: () => Promise<Record<string, string>>} | null = null;
+    private readonly warmProcesses = new Set<WarmProcess>();
 
     constructor(private readonly deps: ShellClaudeCallerDeps) {}
 
-    call(claudeArgs: readonly string[], signal: AbortSignal): Promise<ClaudeRun> {
+    public call(claudeArgs: readonly string[], signal: AbortSignal): Promise<ClaudeRun> {
         const {log} = this.deps;
-        return this.#environment().then(
+        return this.environment().then(
             (env) =>
                 new Promise((resolve, reject) => {
                     if (signal.aborted) {
@@ -62,7 +62,7 @@ export class ShellClaudeCaller implements ClaudeCaller {
                         return;
                     }
 
-                    const child = this.#spawn(claudeArgs, env, 'ignore');
+                    const child = this.spawn(claudeArgs, env, 'ignore');
                     let stdout = '';
                     let stderr = '';
                     child.stdout!.on('data', (chunk: Buffer) => {
@@ -72,7 +72,7 @@ export class ShellClaudeCaller implements ClaudeCaller {
                         stderr += chunk.toString();
                     });
 
-                    const kill = (): void => this.#kill(child);
+                    const kill = (): void => this.kill(child);
                     signal.addEventListener('abort', kill, {once: true});
 
                     child.on('close', (code) => {
@@ -92,11 +92,11 @@ export class ShellClaudeCaller implements ClaudeCaller {
      * A process booted now, for one `send` later. A send that finds it gone —
      * killed for idling, or crashed — starts another, so it still answers.
      */
-    warm(bootArgs: readonly string[]): WarmCall {
-        let ready: WarmProcess | null = this.#startWarm(bootArgs);
+    public warm(bootArgs: readonly string[]): WarmCall {
+        let ready: WarmProcess | null = this.startWarm(bootArgs);
         return {
             send: (prompt, signal) => {
-                const next = ready?.alive ? ready : this.#startWarm(bootArgs);
+                const next = ready?.alive ? ready : this.startWarm(bootArgs);
                 ready = null;
                 return next.send(prompt, signal);
             },
@@ -104,11 +104,11 @@ export class ShellClaudeCaller implements ClaudeCaller {
     }
 
     /** Kill every warm process, for quitting. */
-    close(): void {
-        for (const warm of [...this.#warm]) warm.kill();
+    public close(): void {
+        for (const warm of [...this.warmProcesses]) warm.kill();
     }
 
-    #startWarm(bootArgs: readonly string[]): WarmProcess {
+    private startWarm(bootArgs: readonly string[]): WarmProcess {
         const {timers, log} = this.deps;
         let child: ChildProcess | null = null;
         let ended = false;
@@ -119,7 +119,7 @@ export class ShellClaudeCaller implements ClaudeCaller {
         let exitTimer: unknown = null;
 
         const kill = (): void => {
-            if (child) this.#kill(child);
+            if (child) this.kill(child);
             else end();
         };
         const end = (): void => {
@@ -127,7 +127,7 @@ export class ShellClaudeCaller implements ClaudeCaller {
             ended = true;
             timers.clearTimeout(idleTimer);
             timers.clearTimeout(exitTimer);
-            this.#warm.delete(warm);
+            this.warmProcesses.delete(warm);
         };
         const settle = (run: ClaudeRun): void => {
             answer?.resolve(run);
@@ -138,9 +138,9 @@ export class ShellClaudeCaller implements ClaudeCaller {
             kill();
         }, WARM_IDLE_MS);
 
-        const started = this.#environment().then((env) => {
+        const started = this.environment().then((env) => {
             if (ended) return;
-            child = this.#spawn(streamJsonArgs(bootArgs), env, 'pipe');
+            child = this.spawn(streamJsonArgs(bootArgs), env, 'pipe');
             // A process killed before it reads stdin makes writing to it fail; the
             // close below is what reports that.
             child.stdin!.on('error', () => {});
@@ -202,19 +202,19 @@ export class ShellClaudeCaller implements ClaudeCaller {
                 });
             },
         };
-        this.#warm.add(warm);
+        this.warmProcesses.add(warm);
         return warm;
     }
 
     /** The login shell's environment, read once per shell, ready for a headless run. */
-    #environment(): Promise<Record<string, string>> {
+    private environment(): Promise<Record<string, string>> {
         const {shells, terminals, log} = this.deps;
         const shell = shells.resolve(this.deps.shellProfileId()).path;
-        if (this.#env?.shell !== shell) this.#env = {shell, read: loginShellEnv(() => shell, terminals.baseEnv, log)};
-        return this.#env.read().then(headlessEnv);
+        if (this.env?.shell !== shell) this.env = {shell, read: loginShellEnv(() => shell, terminals.baseEnv, log)};
+        return this.env.read().then(headlessEnv);
     }
 
-    #spawn(args: readonly string[], env: Record<string, string>, stdin: 'ignore' | 'pipe'): ChildProcess {
+    private spawn(args: readonly string[], env: Record<string, string>, stdin: 'ignore' | 'pipe'): ChildProcess {
         // `claude` is looked up on `env.PATH`, the login shell's.
         return spawn('claude', args, {
             cwd: this.deps.homeDir,
@@ -224,7 +224,7 @@ export class ShellClaudeCaller implements ClaudeCaller {
         });
     }
 
-    #kill(child: ChildProcess): void {
+    private kill(child: ChildProcess): void {
         if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
         try {
             process.kill(-child.pid, 'SIGTERM');

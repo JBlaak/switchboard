@@ -62,115 +62,115 @@ export class PhoneEventTee implements RendererGateway {
         private readonly phones: () => PhoneSessionEvents | null,
     ) {}
 
-    get attached(): boolean {
+    public get attached(): boolean {
         return this.inner.attached;
     }
 
-    terminalData(sessionId: string, data: string): void {
+    public terminalData(sessionId: string, data: string): void {
         this.inner.terminalData(sessionId, data);
         this.phones()?.terminalData(sessionId, data);
     }
 
-    processExited(sessionId: string, exitCode: number): void {
+    public processExited(sessionId: string, exitCode: number): void {
         this.inner.processExited(sessionId, exitCode);
         this.phones()?.processExited(sessionId, exitCode);
     }
 
-    sessionForked(oldId: string, newId: string): void {
+    public sessionForked(oldId: string, newId: string): void {
         this.inner.sessionForked(oldId, newId);
         this.phones()?.sessionForked(oldId, newId);
     }
 
-    cliBusyState(sessionId: string, busy: boolean): void {
+    public cliBusyState(sessionId: string, busy: boolean): void {
         this.inner.cliBusyState(sessionId, busy);
         this.phones()?.cliBusyState(sessionId, busy);
     }
 
-    terminalNotification(sessionId: string, message: string): void {
+    public terminalNotification(sessionId: string, message: string): void {
         this.inner.terminalNotification(sessionId, message);
     }
 
-    sessionNeedsAttention(sessionId: string): void {
+    public sessionNeedsAttention(sessionId: string): void {
         this.inner.sessionNeedsAttention(sessionId);
         this.phones()?.sessionNeedsAttention(sessionId);
     }
 
-    sessionAgents(sessionId: string, agents: WorkingAgent[]): void {
+    public sessionAgents(sessionId: string, agents: WorkingAgent[]): void {
         this.inner.sessionAgents(sessionId, agents);
     }
 
-    remoteStatus(sessionId: string, status: RemoteStatusPayload): void {
+    public remoteStatus(sessionId: string, status: RemoteStatusPayload): void {
         this.inner.remoteStatus(sessionId, status);
     }
 
-    questionsAsked(pending: PendingQuestions): void {
+    public questionsAsked(pending: PendingQuestions): void {
         this.inner.questionsAsked(pending);
         this.phones()?.questionsAsked(pending);
     }
 
-    questionsSettled(settled: QuestionsSettled): void {
+    public questionsSettled(settled: QuestionsSettled): void {
         this.inner.questionsSettled(settled);
         this.phones()?.questionsSettled(settled);
     }
 
     /** A session started, ended, was renamed or got its title: the phones' list follows. */
-    projectsChanged(): void {
+    public projectsChanged(): void {
         this.inner.projectsChanged();
         this.phones()?.sessionsChanged();
     }
 
-    statusUpdate(text: string, type: string): void {
+    public statusUpdate(text: string, type: string): void {
         this.inner.statusUpdate(text, type);
     }
 
-    fullscreenChanged(isFullscreen: boolean): void {
+    public fullscreenChanged(isFullscreen: boolean): void {
         this.inner.fullscreenChanged(isFullscreen);
     }
 
-    updateAvailable(update: UpdateNotice): void {
+    public updateAvailable(update: UpdateNotice): void {
         this.inner.updateAvailable(update);
     }
 
-    sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void {
+    public sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void {
         this.inner.sessionWorkSnapshot(snapshot);
     }
 
-    prStatusChanged(change: PullRequestStatusChange): void {
+    public prStatusChanged(change: PullRequestStatusChange): void {
         this.inner.prStatusChanged(change);
     }
 
-    launchRequested(projectPath: string, initialPrompt: string): void {
+    public launchRequested(projectPath: string, initialPrompt: string): void {
         this.inner.launchRequested(projectPath, initialPrompt);
     }
 
-    pickerRequested(initialPrompt: string, reason?: string): void {
+    public pickerRequested(initialPrompt: string, reason?: string): void {
         this.inner.pickerRequested(initialPrompt, reason);
     }
 
-    phoneAccessChanged(state: PhoneAccessState): void {
+    public phoneAccessChanged(state: PhoneAccessState): void {
         this.inner.phoneAccessChanged(state);
     }
 
-    terminalOwnerChanged(sessionId: string, owner: TerminalOwner): void {
+    public terminalOwnerChanged(sessionId: string, owner: TerminalOwner): void {
         this.inner.terminalOwnerChanged(sessionId, owner);
     }
 
-    sessionStarted(sessionId: string, projectPath: string): void {
+    public sessionStarted(sessionId: string, projectPath: string): void {
         this.inner.sessionStarted(sessionId, projectPath);
         this.phones()?.sessionsChanged();
     }
 
-    sessionArchived(sessionId: string): void {
+    public sessionArchived(sessionId: string): void {
         this.inner.sessionArchived(sessionId);
         this.phones()?.sessionArchived(sessionId);
     }
 
     // Tasks are not on the phones (#244): the window's alone.
-    tasksChanged(update: TasksUpdate): void {
+    public tasksChanged(update: TasksUpdate): void {
         this.inner.tasksChanged(update);
     }
 
-    sessionTaskChanged(sessionId: string, taskId: string | null): void {
+    public sessionTaskChanged(sessionId: string, taskId: string | null): void {
         this.inner.sessionTaskChanged(sessionId, taskId);
     }
 }

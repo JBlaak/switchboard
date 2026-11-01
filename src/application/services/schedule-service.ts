@@ -55,7 +55,7 @@ export class ScheduleService {
      * parsing 4KB of every project's history each time was the whole cost of the
      * feature.
      */
-    scan(): Schedule[] {
+    public scan(): Schedule[] {
         const {fs, transcripts, repository, log} = this.deps;
         const schedules: Schedule[] = [];
 
@@ -109,7 +109,7 @@ export class ScheduleService {
      * `09:00` runs at `09:00:00`-ish rather than at whatever second the app
      * happened to launch on.
      */
-    start(): () => void {
+    public start(): () => void {
         const {timers, clock, log} = this.deps;
         let running = true;
         const inFlight = new Set<string>();
@@ -130,7 +130,7 @@ export class ScheduleService {
                 log.info(`[schedule] triggering: ${schedule.name} (${schedule.cron})`);
                 try {
                     inFlight.add(key);
-                    this.#dispatch(schedule, () => inFlight.delete(key));
+                    this.dispatch(schedule, () => inFlight.delete(key));
                 } catch (err) {
                     inFlight.delete(key);
                     log.error(`[schedule] could not run ${schedule.name}:`, (err as Error).message);
@@ -154,10 +154,10 @@ export class ScheduleService {
     // ── The schedule creator ──
 
     /** Install the creator command, if the user does not already have it. */
-    ensureCreatorCommand(): void {
+    public ensureCreatorCommand(): void {
         const {fs, log} = this.deps;
         try {
-            const commandPath = this.#creatorCommandPath();
+            const commandPath = this.creatorCommandPath();
             if (fs.exists(commandPath)) return;
             fs.makeDir(this.deps.commandsDir);
             fs.writeText(commandPath, SCHEDULE_CREATOR_TEMPLATE);
@@ -167,7 +167,7 @@ export class ScheduleService {
     }
 
     /** Seed a session for one run and hand it to the runner. */
-    #dispatch(schedule: Schedule, onDone: () => void): void {
+    private dispatch(schedule: Schedule, onDone: () => void): void {
         const {transcripts, ids, clock, runner} = this.deps;
 
         const sessionId = ids.newId();
@@ -187,7 +187,7 @@ export class ScheduleService {
         runner.run(buildScheduleArgs(sessionId, schedule), schedule.projectPath, schedule.name, onDone);
     }
 
-    #creatorCommandPath(): string {
+    private creatorCommandPath(): string {
         return this.deps.fs.join(this.deps.commandsDir, 'create-switchboard-schedule.md');
     }
 }

@@ -21,8 +21,8 @@ export const FIRST_CHECK_MS = 10 * 1000;
 export const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
 
 export class UpdateService {
-    #available: AvailableUpdate | null = null;
-    #installing = false;
+    private available: AvailableUpdate | null = null;
+    private installing = false;
 
     constructor(
         private readonly deps: {
@@ -36,7 +36,7 @@ export class UpdateService {
         },
     ) {}
 
-    start(): void {
+    public start(): void {
         const {timers} = this.deps;
         timers.setTimeout(() => {
             void this.check();
@@ -46,7 +46,7 @@ export class UpdateService {
         }, CHECK_EVERY_MS);
     }
 
-    async check(): Promise<void> {
+    public async check(): Promise<void> {
         const {feed, renderer, log, currentVersion, arch} = this.deps;
         let found: AvailableUpdate | null;
         try {
@@ -56,16 +56,16 @@ export class UpdateService {
             log.warn('[update] check failed:', (err as Error).message);
             return;
         }
-        if (!found || found.version === this.#available?.version) return;
+        if (!found || found.version === this.available?.version) return;
 
         log.info(`[update] ${found.version} is available (running ${currentVersion})`);
-        this.#available = found;
+        this.available = found;
         renderer.updateAvailable(this.notice()!);
     }
 
     /** The update waiting to be installed, for a renderer that loaded after the event. */
-    notice(): UpdateNotice | null {
-        const update = this.#available;
+    public notice(): UpdateNotice | null {
+        const update = this.available;
         if (!update) return null;
         return {
             version: update.version,
@@ -75,12 +75,12 @@ export class UpdateService {
     }
 
     /** Install the waiting update. False when it could not; on success the app quits instead. */
-    async install(): Promise<boolean> {
+    public async install(): Promise<boolean> {
         const {installer, log} = this.deps;
-        const url = this.#available?.downloadUrl;
-        if (!url || this.#installing || !installer.canInstall()) return false;
+        const url = this.available?.downloadUrl;
+        if (!url || this.installing || !installer.canInstall()) return false;
 
-        this.#installing = true;
+        this.installing = true;
         try {
             await installer.install(url);
             return true;
@@ -88,7 +88,7 @@ export class UpdateService {
             log.error('[update] install failed:', (err as Error).message);
             return false;
         } finally {
-            this.#installing = false;
+            this.installing = false;
         }
     }
 }

@@ -10,33 +10,33 @@ import {globalShortcut} from 'electron';
 import type {GlobalHotkey} from '../../application/ports/quick-ask-panel';
 
 export class ElectronGlobalHotkey implements GlobalHotkey {
-    register(accelerator: string, onPress: () => void): boolean {
+    public register(accelerator: string, onPress: () => void): boolean {
         return globalShortcut.register(accelerator, onPress);
     }
 
-    unregister(accelerator: string): void {
+    public unregister(accelerator: string): void {
         globalShortcut.unregister(accelerator);
     }
 }
 
 export class E2eGlobalHotkey implements GlobalHotkey {
-    readonly #held = new Map<string, () => void>();
+    private readonly held = new Map<string, () => void>();
     /** Set by a test: every registration fails, as if another app had the key. */
-    refusing = false;
+    public refusing = false;
 
-    register(accelerator: string, onPress: () => void): boolean {
-        if (this.refusing || this.#held.has(accelerator)) return false;
-        this.#held.set(accelerator, onPress);
+    public register(accelerator: string, onPress: () => void): boolean {
+        if (this.refusing || this.held.has(accelerator)) return false;
+        this.held.set(accelerator, onPress);
         return true;
     }
 
-    unregister(accelerator: string): void {
-        this.#held.delete(accelerator);
+    public unregister(accelerator: string): void {
+        this.held.delete(accelerator);
     }
 
     /** Do what pressing the key would. False when nothing holds it. */
-    press(accelerator: string): boolean {
-        const onPress = this.#held.get(accelerator);
+    public press(accelerator: string): boolean {
+        const onPress = this.held.get(accelerator);
         onPress?.();
         return !!onPress;
     }

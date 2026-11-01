@@ -48,11 +48,11 @@ export function localHostName(hostname: string): string {
 }
 
 export class DnsSdAdvertiser implements ServiceAdvertiser {
-    #process: AdvertiserProcess | null = null;
+    private process: AdvertiserProcess | null = null;
 
     constructor(private readonly deps: DnsSdAdvertiserDeps) {}
 
-    advertise(name: string, port: number, txt: Record<string, string>): void {
+    public advertise(name: string, port: number, txt: Record<string, string>): void {
         this.withdraw();
         const spawn: (command: string, args: string[]) => AdvertiserProcess =
             this.deps.spawn ?? ((command, args) => nodeSpawn(command, args, {stdio: 'ignore'}));
@@ -65,24 +65,24 @@ export class DnsSdAdvertiser implements ServiceAdvertiser {
             ...Object.entries(txt).map(([key, value]) => `${key}=${value}`),
         ];
         const child = spawn(DNS_SD, args);
-        this.#process = child;
+        this.process = child;
         child.on('error', (err) => this.deps.log.error('[phone] dns-sd failed to start:', err.message));
         child.on('exit', (code, signal) => {
-            if (this.#process !== child) return;
-            this.#process = null;
+            if (this.process !== child) return;
+            this.process = null;
             this.deps.log.warn(`[phone] dns-sd exited (${signal ?? code}); the Mac is no longer advertised`);
         });
         this.deps.log.info(`[phone] advertising "${name}" as ${BONJOUR_SERVICE_TYPE} on port ${port}`);
     }
 
-    withdraw(): void {
-        const child = this.#process;
+    public withdraw(): void {
+        const child = this.process;
         if (!child) return;
-        this.#process = null;
+        this.process = null;
         child.kill();
     }
 
-    hostName(): string {
+    public hostName(): string {
         return this.deps.localName?.() ?? localHostName((this.deps.hostname ?? os.hostname)());
     }
 }

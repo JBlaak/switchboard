@@ -44,28 +44,28 @@ export interface McpBlaakTasksDeps {
 }
 
 export class McpBlaakTasks implements BlaakTasks {
-    #nextId = 0;
+    private nextId = 0;
 
     constructor(private readonly deps: McpBlaakTasksDeps) {}
 
-    list(view: TaskView, options: TaskListOptions = {}): Promise<BlaakTasksResult<TaskRow[]>> {
-        return this.#call('list', {view, ...options}, parseTaskRows);
+    public list(view: TaskView, options: TaskListOptions = {}): Promise<BlaakTasksResult<TaskRow[]>> {
+        return this.call('list', {view, ...options}, parseTaskRows);
     }
 
-    get(id: string): Promise<BlaakTasksResult<TaskDetail>> {
-        return this.#call('get', {task: id}, parseTaskDetail);
+    public get(id: string): Promise<BlaakTasksResult<TaskDetail>> {
+        return this.call('get', {task: id}, parseTaskDetail);
     }
 
-    update(id: string, patch: TaskPatch): Promise<BlaakTasksResult<TaskRow>> {
-        return this.#call('update', {...patch, id}, parseTaskRow);
+    public update(id: string, patch: TaskPatch): Promise<BlaakTasksResult<TaskRow>> {
+        return this.call('update', {...patch, id}, parseTaskRow);
     }
 
-    progress(id: string, text: string, pullRequest?: string): Promise<BlaakTasksResult<TaskRow>> {
-        return this.#call('progress', {id, text, ...(pullRequest ? {pullRequest} : {})}, parseTaskRow);
+    public progress(id: string, text: string, pullRequest?: string): Promise<BlaakTasksResult<TaskRow>> {
+        return this.call('progress', {id, text, ...(pullRequest ? {pullRequest} : {})}, parseTaskRow);
     }
 
     /** One `tools/call`, read with `parse`; a null from it means the reply wasn't what the tool sends. */
-    async #call<T>(
+    private async call<T>(
         tool: string,
         args: Record<string, unknown>,
         parse: (value: unknown) => T | null,
@@ -76,7 +76,7 @@ export class McpBlaakTasks implements BlaakTasks {
         const headers = this.deps.mcpServers.headersFor(url);
         if (!headers) return {kind: 'notSetUp'};
 
-        const answer = await this.#post(url, headers, tool, args);
+        const answer = await this.post(url, headers, tool, args);
         if (answer.kind !== 'ok') {
             log.warn(`[blaaktasks] ${tool}: ${answer.kind}: ${answer.reason}`);
             return answer;
@@ -92,13 +92,13 @@ export class McpBlaakTasks implements BlaakTasks {
     }
 
     /** POST the request; the JSON-RPC `result`, or how it went wrong. */
-    async #post(
+    private async post(
         url: string,
         headers: Record<string, string>,
         tool: string,
         args: Record<string, unknown>,
     ): Promise<Posted> {
-        const id = ++this.#nextId;
+        const id = ++this.nextId;
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), this.deps.timeoutMs ?? BLAAKTASKS_TIMEOUT_MS);
         try {

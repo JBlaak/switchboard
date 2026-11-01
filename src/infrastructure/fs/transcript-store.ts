@@ -39,7 +39,7 @@ export class FileTranscriptStore implements TranscriptStore {
         private readonly projectsDir: string,
     ) {}
 
-    listFolders(): string[] {
+    public listFolders(): string[] {
         if (!this.fs.exists(this.projectsDir)) return [];
         return this.fs
             .readDir(this.projectsDir)
@@ -47,14 +47,14 @@ export class FileTranscriptStore implements TranscriptStore {
             .map((entry) => entry.name);
     }
 
-    folderExists(folder: string): boolean {
-        return this.fs.exists(this.#folderPath(folder));
+    public folderExists(folder: string): boolean {
+        return this.fs.exists(this.folderPath(folder));
     }
 
-    listSessionIds(folder: string): string[] {
+    public listSessionIds(folder: string): string[] {
         try {
             return this.fs
-                .readDir(this.#folderPath(folder))
+                .readDir(this.folderPath(folder))
                 .filter((entry) => entry.isFile && entry.name.endsWith('.jsonl'))
                 .map((entry) => this.fs.basename(entry.name, '.jsonl'));
         } catch {
@@ -73,9 +73,9 @@ export class FileTranscriptStore implements TranscriptStore {
      * A worktree resolves to the repository it was cut from, so a `--worktree`
      * session does not appear as a project of its own next to it.
      */
-    resolveProjectPath(folder: string): string | null {
-        const folderPath = this.#folderPath(folder);
-        const cwd = this.#findCwd(folderPath);
+    public resolveProjectPath(folder: string): string | null {
+        const folderPath = this.folderPath(folder);
+        const cwd = this.findCwd(folderPath);
         if (!cwd) return null;
         const parent = worktreeParentPath(cwd);
         return parent && this.fs.exists(parent) ? parent : cwd;
@@ -88,8 +88,8 @@ export class FileTranscriptStore implements TranscriptStore {
      * often leaves the containing directory's alone — so the directory's own
      * mtime is only a floor.
      */
-    folderIndexMtimeMs(folder: string): number {
-        const folderPath = this.#folderPath(folder);
+    public folderIndexMtimeMs(folder: string): number {
+        const folderPath = this.folderPath(folder);
         const dirStat = this.fs.stat(folderPath);
         if (!dirStat) return 0;
 
@@ -106,16 +106,16 @@ export class FileTranscriptStore implements TranscriptStore {
         return newest;
     }
 
-    sessionFingerprint(folder: string, sessionId: string): string | null {
-        return this.fs.stat(this.#sessionPath(folder, sessionId))?.modifiedIso ?? null;
+    public sessionFingerprint(folder: string, sessionId: string): string | null {
+        return this.fs.stat(this.sessionPath(folder, sessionId))?.modifiedIso ?? null;
     }
 
-    sessionMtimeMs(folder: string, sessionId: string): number | null {
-        return this.fs.stat(this.#sessionPath(folder, sessionId))?.mtimeMs ?? null;
+    public sessionMtimeMs(folder: string, sessionId: string): number | null {
+        return this.fs.stat(this.sessionPath(folder, sessionId))?.mtimeMs ?? null;
     }
 
-    readSession(folder: string, sessionId: string, projectPath: string): Session | null {
-        const filePath = this.#sessionPath(folder, sessionId);
+    public readSession(folder: string, sessionId: string, projectPath: string): Session | null {
+        const filePath = this.sessionPath(folder, sessionId);
         const stat = this.fs.stat(filePath);
         if (!stat) return null;
         try {
@@ -130,12 +130,12 @@ export class FileTranscriptStore implements TranscriptStore {
         }
     }
 
-    readHeadLines(folder: string, sessionId: string, byteLimit: number): string[] {
-        return this.#readHead(this.#sessionPath(folder, sessionId), byteLimit).split('\n').filter(Boolean);
+    public readHeadLines(folder: string, sessionId: string, byteLimit: number): string[] {
+        return this.readHead(this.sessionPath(folder, sessionId), byteLimit).split('\n').filter(Boolean);
     }
 
-    readTail(folder: string, sessionId: string, byteLimit: number): string {
-        const filePath = this.#sessionPath(folder, sessionId);
+    public readTail(folder: string, sessionId: string, byteLimit: number): string {
+        const filePath = this.sessionPath(folder, sessionId);
         const stat = this.fs.stat(filePath);
         if (!stat) return '';
         const length = Math.min(stat.size, byteLimit);
@@ -146,19 +146,19 @@ export class FileTranscriptStore implements TranscriptStore {
         }
     }
 
-    locations(folder: string, sessionId: string): TranscriptLocation[] {
+    public locations(folder: string, sessionId: string): TranscriptLocation[] {
         // No worktree roots: each `cwd` stays as written, for whoever has git to
         // resolve to its worktree.
-        return workLocations(this.#sessionSources(folder, sessionId), []).map(({worktree, branch, fromSubagent}) => ({
+        return workLocations(this.sessionSources(folder, sessionId), []).map(({worktree, branch, fromSubagent}) => ({
             cwd: worktree,
             branch,
             fromSubagent,
         }));
     }
 
-    issueMentions(folder: string, sessionId: string, repository: string): IssueRef[] {
+    public issueMentions(folder: string, sessionId: string, repository: string): IssueRef[] {
         const found = new Map<string, IssueRef>();
-        for (const source of this.#sessionSources(folder, sessionId)) {
+        for (const source of this.sessionSources(folder, sessionId)) {
             for (const issue of issueMentionsInTranscript(source.lines, repository)) {
                 const key = issue.repository + '#' + issue.number;
                 if (!found.has(key)) found.set(key, issue);
@@ -167,7 +167,7 @@ export class FileTranscriptStore implements TranscriptStore {
         return [...found.values()];
     }
 
-    readSlug(folder: string, sessionId: string): string | null {
+    public readSlug(folder: string, sessionId: string): string | null {
         for (const line of this.readHeadLines(folder, sessionId, SLUG_SCAN_BYTES)) {
             const entry = parseTranscriptLine(line);
             if (entry?.slug) return entry.slug;
@@ -175,10 +175,10 @@ export class FileTranscriptStore implements TranscriptStore {
         return null;
     }
 
-    ensureProjectFolder(projectPath: string, seed: TranscriptSeed): string {
+    public ensureProjectFolder(projectPath: string, seed: TranscriptSeed): string {
         const folder = encodeProjectPath(projectPath);
-        this.fs.makeDir(this.#folderPath(folder));
-        if (!this.#isEmpty(folder)) return folder;
+        this.fs.makeDir(this.folderPath(folder));
+        if (!this.isEmpty(folder)) return folder;
 
         this.seedSession(folder, seed.sessionId, [
             {
@@ -193,11 +193,11 @@ export class FileTranscriptStore implements TranscriptStore {
         return folder;
     }
 
-    seedSession(folder: string, sessionId: string, lines: readonly unknown[]): void {
-        const folderPath = this.#folderPath(folder);
+    public seedSession(folder: string, sessionId: string, lines: readonly unknown[]): void {
+        const folderPath = this.folderPath(folder);
         this.fs.makeDir(folderPath);
         const body = lines.map((line) => JSON.stringify(line)).join('\n') + '\n';
-        this.fs.writeText(this.#sessionPath(folder, sessionId), body);
+        this.fs.writeText(this.sessionPath(folder, sessionId), body);
     }
 
     /**
@@ -205,9 +205,9 @@ export class FileTranscriptStore implements TranscriptStore {
      * main first, then the subagents by file name. A file that cannot be read is
      * skipped. Read whole: every line can carry a `cwd` or a mention.
      */
-    #sessionSources(folder: string, sessionId: string): TranscriptSource[] {
+    private sessionSources(folder: string, sessionId: string): TranscriptSource[] {
         const sources: TranscriptSource[] = [];
-        const main = this.#readLines(this.#sessionPath(folder, sessionId));
+        const main = this.readLines(this.sessionPath(folder, sessionId));
         if (main) sources.push({lines: main, fromSubagent: false});
 
         const agentDir = this.fs.join(this.projectsDir, folder, sessionId, 'subagents');
@@ -222,13 +222,13 @@ export class FileTranscriptStore implements TranscriptStore {
             // No subagents, the common case.
         }
         for (const name of names) {
-            const lines = this.#readLines(this.fs.join(agentDir, name));
+            const lines = this.readLines(this.fs.join(agentDir, name));
             if (lines) sources.push({lines, fromSubagent: true});
         }
         return sources;
     }
 
-    #readLines(filePath: string): string[] | null {
+    private readLines(filePath: string): string[] | null {
         try {
             return this.fs.readText(filePath).split('\n').filter(Boolean);
         } catch {
@@ -237,11 +237,11 @@ export class FileTranscriptStore implements TranscriptStore {
     }
 
     /** True when the folder holds no transcript at all. */
-    #isEmpty(folder: string): boolean {
+    private isEmpty(folder: string): boolean {
         return this.listSessionIds(folder).length === 0;
     }
 
-    #findCwd(folderPath: string): string | null {
+    private findCwd(folderPath: string): string | null {
         let entries;
         try {
             entries = this.fs.readDir(folderPath);
@@ -252,7 +252,7 @@ export class FileTranscriptStore implements TranscriptStore {
         // Transcripts sitting directly in the folder are the common case.
         for (const entry of entries) {
             if (!entry.isFile || !entry.name.endsWith('.jsonl')) continue;
-            const cwd = this.#cwdOf(this.fs.join(folderPath, entry.name));
+            const cwd = this.cwdOf(this.fs.join(folderPath, entry.name));
             if (cwd) return cwd;
         }
 
@@ -272,7 +272,7 @@ export class FileTranscriptStore implements TranscriptStore {
                         if (first) candidate = this.fs.join(agentDir, first.name);
                     }
                     if (!candidate) continue;
-                    const cwd = this.#cwdOf(candidate);
+                    const cwd = this.cwdOf(candidate);
                     if (cwd) return cwd;
                 }
             } catch {
@@ -283,9 +283,9 @@ export class FileTranscriptStore implements TranscriptStore {
         return null;
     }
 
-    #cwdOf(filePath: string): string | null {
+    private cwdOf(filePath: string): string | null {
         try {
-            const head = this.#readHead(filePath, CWD_SCAN_BYTES);
+            const head = this.readHead(filePath, CWD_SCAN_BYTES);
             const fromHead = cwdFromTranscript(head.split('\n'));
             if (fromHead) return fromHead;
             // The head was a truncated prefix, so the answer may still be further in.
@@ -303,17 +303,17 @@ export class FileTranscriptStore implements TranscriptStore {
      * The last line is likely truncated mid-JSON; every caller parses line by
      * line and tolerates a line that will not parse.
      */
-    #readHead(filePath: string, byteLimit: number): string {
+    private readHead(filePath: string, byteLimit: number): string {
         const stat = this.fs.stat(filePath);
         if (!stat) return '';
         return this.fs.readSlice(filePath, {start: 0, length: Math.min(stat.size, byteLimit)});
     }
 
-    #folderPath(folder: string): string {
+    private folderPath(folder: string): string {
         return this.fs.join(this.projectsDir, folder);
     }
 
-    #sessionPath(folder: string, sessionId: string): string {
+    private sessionPath(folder: string, sessionId: string): string {
         return this.fs.join(this.projectsDir, folder, sessionId + '.jsonl');
     }
 }

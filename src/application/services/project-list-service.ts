@@ -25,14 +25,14 @@ export interface ProjectListDeps {
 export class ProjectListService {
     constructor(private readonly deps: ProjectListDeps) {}
 
-    list(showArchived: boolean): Project[] {
+    public list(showArchived: boolean): Project[] {
         const {repository, settings, registry} = this.deps;
         return buildProjectList({
             cached: repository.getAllCached(),
             meta: repository.getAllMeta(),
             hiddenProjects: settings.hiddenProjects(),
-            knownProjectPaths: this.#knownProjectPaths(),
-            activeTerminals: this.#activeTerminals(registry),
+            knownProjectPaths: this.knownProjectPaths(),
+            activeTerminals: this.activeTerminals(registry),
             remoteProjects: settings.remoteProjects(),
             pinnedPlans: repository.getPinnedPlans(),
             pinnedIssuePlans: repository.getPinnedIssuePlans(),
@@ -48,7 +48,7 @@ export class ProjectListService {
      * off disk once and written back with a zero mtime, which leaves the
      * incremental re-index free to index it properly later.
      */
-    #knownProjectPaths(): string[] {
+    private knownProjectPaths(): string[] {
         const {repository, transcripts} = this.deps;
         const paths: string[] = [];
         try {
@@ -71,7 +71,7 @@ export class ProjectListService {
     }
 
     /** Plain terminals, which exist only in memory while they run. */
-    #activeTerminals(registry: SessionRegistry): ActiveTerminalRow[] {
+    private activeTerminals(registry: SessionRegistry): ActiveTerminalRow[] {
         const rows: ActiveTerminalRow[] = [];
         for (const [sessionId, session] of registry.snapshot()) {
             if (session.exited || !session.isPlainTerminal || !session.projectPath) continue;

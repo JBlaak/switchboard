@@ -80,10 +80,10 @@ export interface SessionLauncherDeps {
 export class SessionLauncher {
     constructor(private readonly deps: SessionLauncherDeps) {}
 
-    async open(request: OpenSessionRequest): Promise<OpenSessionResult> {
+    public async open(request: OpenSessionRequest): Promise<OpenSessionResult> {
         const existing = this.deps.registry.get(request.sessionId);
-        if (existing) return this.#reattach(request.sessionId, existing);
-        return this.#spawn(request);
+        if (existing) return this.reattach(request.sessionId, existing);
+        return this.spawn(request);
     }
 
     /**
@@ -92,7 +92,7 @@ export class SessionLauncher {
      * Everything the renderer lost — the alternate screen, the scrollback, where
      * a remote connection stands — is replayed rather than re-derived.
      */
-    #reattach(sessionId: string, session: ActiveSession): OpenSessionResult {
+    private reattach(sessionId: string, session: ActiveSession): OpenSessionResult {
         session.rendererAttached = true;
         session.firstResize = !session.isPlainTerminal;
 
@@ -110,7 +110,7 @@ export class SessionLauncher {
         return {ok: true, reattached: true};
     }
 
-    async #spawn(request: OpenSessionRequest): Promise<OpenSessionResult> {
+    private async spawn(request: OpenSessionRequest): Promise<OpenSessionResult> {
         const {projectPath, sessionId, isNew, options} = request;
         const {registry, lifecycle, remote, log} = this.deps;
 
@@ -120,12 +120,12 @@ export class SessionLauncher {
         }
 
         const isPlainTerminal = !isRemote && options?.type === 'terminal';
-        const shell = this.#resolveShell(projectPath);
+        const shell = this.resolveShell(projectPath);
         log.info(`[shell] profile=${shell.id} shell=${shell.path}`);
 
         const bookkeeping =
             !isPlainTerminal && !isRemote
-                ? this.#snapshotTranscripts(projectPath, sessionId, isNew)
+                ? this.snapshotTranscripts(projectPath, sessionId, isNew)
                 : {projectFolder: null, knownTranscriptIds: null, sessionSlug: null};
 
         let pty: PtyHandle;
@@ -133,14 +133,14 @@ export class SessionLauncher {
 
         try {
             if (isRemote) {
-                const started = this.#startRemote(sessionId, projectPath, shell, options);
+                const started = this.startRemote(sessionId, projectPath, shell, options);
                 if ('error' in started) return {ok: false, error: started.error};
                 remoteState = started.state;
                 pty = started.pty;
             } else if (isPlainTerminal) {
-                pty = this.#startPlainTerminal(projectPath, shell);
+                pty = this.startPlainTerminal(projectPath, shell);
             } else {
-                const started = await this.#startClaude(sessionId, projectPath, isNew, shell, options);
+                const started = await this.startClaude(sessionId, projectPath, isNew, shell, options);
                 if ('error' in started) return {ok: false, error: started.error};
                 pty = started.pty;
             }
@@ -173,7 +173,7 @@ export class SessionLauncher {
     }
 
     /** Which shell to launch in. */
-    #resolveShell(projectPath: string): ShellProfile {
+    private resolveShell(projectPath: string): ShellProfile {
         const {shells, settings} = this.deps;
         return shells.resolve(settings.shellProfileId(projectPath));
     }
@@ -185,7 +185,7 @@ export class SessionLauncher {
      * appearing that was not in the snapshot is the signal, and the slug is what
      * ties a plan handover to the session it came from.
      */
-    #snapshotTranscripts(
+    private snapshotTranscripts(
         projectPath: string,
         sessionId: string,
         isNew: boolean,
@@ -214,7 +214,7 @@ export class SessionLauncher {
      * interaction (host key prompts, 1Password approval, passwords) that renders
      * in the terminal.
      */
-    #startRemote(
+    private startRemote(
         sessionId: string,
         projectPath: string,
         shell: ShellProfile,
@@ -251,7 +251,7 @@ export class SessionLauncher {
     }
 
     /** Start an interactive login shell, with no `claude` in it. */
-    #startPlainTerminal(projectPath: string, shell: ShellProfile): PtyHandle {
+    private startPlainTerminal(projectPath: string, shell: ShellProfile): PtyHandle {
         const {terminals, timers} = this.deps;
         const pty = terminals.spawn({
             file: shell.path,
@@ -278,7 +278,7 @@ export class SessionLauncher {
     }
 
     /** Start a Claude session. */
-    async #startClaude(
+    private async startClaude(
         sessionId: string,
         projectPath: string,
         isNew: boolean,

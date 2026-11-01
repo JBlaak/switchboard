@@ -62,21 +62,21 @@ export class BundleInstaller implements AppInstaller {
     constructor(private readonly log: Logger) {}
 
     /** `/Applications/Switchboard.app`, from `…/Switchboard.app/Contents/MacOS/Switchboard`. */
-    #bundlePath(): string {
+    private bundlePath(): string {
         return path.resolve(app.getPath('exe'), '..', '..', '..');
     }
 
-    canInstall(): boolean {
+    public canInstall(): boolean {
         if (!app.isPackaged || process.platform !== 'darwin') return false;
-        const bundle = this.#bundlePath();
+        const bundle = this.bundlePath();
         // A quarantined app opened from Downloads runs from a read-only random
         // path; replacing that copy would change nothing the user launches.
         if (!bundle.endsWith('.app') || bundle.includes('/AppTranslocation/')) return false;
         return writable(bundle) && writable(path.dirname(bundle));
     }
 
-    async install(downloadUrl: string): Promise<void> {
-        const bundle = this.#bundlePath();
+    public async install(downloadUrl: string): Promise<void> {
+        const bundle = this.bundlePath();
         const work = await fs.mkdtemp(path.join(os.tmpdir(), 'switchboard-update-'));
         try {
             const zip = path.join(work, 'update.zip');

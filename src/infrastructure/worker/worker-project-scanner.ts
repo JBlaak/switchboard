@@ -30,7 +30,7 @@ export interface WorkerProjectScannerDeps {
 export class WorkerProjectScanner implements ProjectScanner {
     constructor(private readonly deps: WorkerProjectScannerDeps) {}
 
-    scan(onProgress: (text: string) => void): Promise<FolderScan[]> {
+    public scan(onProgress: (text: string) => void): Promise<FolderScan[]> {
         const {workerPath, projectsDir, log} = this.deps;
 
         return new Promise<FolderScan[]>((resolve, reject) => {

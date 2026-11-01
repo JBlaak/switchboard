@@ -20,15 +20,15 @@ const WHISPER_TIMEOUT_MS = 5 * 60_000;
 export class WhisperCliTranscriber implements Transcriber {
     constructor(private readonly deps: {log: Logger; pathEnv?: () => string | undefined}) {}
 
-    async available(): Promise<boolean> {
-        return this.#locate() !== null;
+    public async available(): Promise<boolean> {
+        return this.locate() !== null;
     }
 
-    async transcribe(
+    public async transcribe(
         request: {wav: Uint8Array; modelPath: string; prompt: string},
         signal: AbortSignal,
     ): Promise<string> {
-        const whisper = this.#locate();
+        const whisper = this.locate();
         if (!whisper) throw new Error('whisper-cli is not installed');
         const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'switchboard-voice-'));
         try {
@@ -60,7 +60,7 @@ export class WhisperCliTranscriber implements Transcriber {
     }
 
     /** The first executable `whisper-cli` in Homebrew's directories or on PATH. */
-    #locate(): string | null {
+    private locate(): string | null {
         const pathEnv = this.deps.pathEnv ? this.deps.pathEnv() : process.env.PATH;
         for (const candidate of whisperCandidates(pathEnv)) {
             try {

@@ -62,36 +62,36 @@ export interface ActiveSessionSpec {
 }
 
 export class ActiveSession {
-    pty: PtyHandle;
-    readonly output: OutputBuffer;
+    public pty: PtyHandle;
+    public readonly output: OutputBuffer;
     /** Whether a CLI turn is in flight, tracked off OSC 7501 (or, failing that, the OSC 0 title). */
-    readonly cliBusy = new CliBusyTracker();
+    public readonly cliBusy = new CliBusyTracker();
     /** The subagents the CLI has working, tracked off OSC 7501's child records. */
-    readonly agents = new ProgramStatusChildren();
+    public readonly agents = new ProgramStatusChildren();
 
-    rendererAttached = true;
-    exited = false;
+    public rendererAttached = true;
+    public exited = false;
     /** Set once the record has been torn down; makes retirement idempotent. */
-    retired = false;
+    public retired = false;
     /** True while the process has switched to the alternate screen buffer. */
-    altScreen = false;
+    public altScreen = false;
     /** The next resize should nudge the size, to force a TUI repaint. */
-    firstResize = true;
+    public firstResize = true;
 
-    readonly projectPath: string;
-    readonly projectFolder: string | null;
-    knownTranscriptIds: Set<string> | null;
-    sessionSlug: string | null;
-    readonly isPlainTerminal: boolean;
-    readonly openedAt: number;
-    remote: RemoteConnectionState | null;
+    public readonly projectPath: string;
+    public readonly projectFolder: string | null;
+    public knownTranscriptIds: Set<string> | null;
+    public sessionSlug: string | null;
+    public readonly isPlainTerminal: boolean;
+    public readonly openedAt: number;
+    public remote: RemoteConnectionState | null;
 
     /** The id Claude actually wrote, once a fork or plan-accept re-keys us. */
-    realSessionId?: string;
+    public realSessionId?: string;
     /** Every id this session has answered to, so a stale row can still stop it. */
-    priorIds?: Set<string>;
+    public priorIds?: Set<string>;
     /** The pending step of a stop escalation. */
-    killTimer: TimerHandle | null = null;
+    public killTimer: TimerHandle | null = null;
 
     constructor(spec: ActiveSessionSpec) {
         this.pty = spec.pty;
@@ -106,7 +106,7 @@ export class ActiveSession {
     }
 
     /** True when this session is reached over ssh. */
-    get isRemote(): boolean {
+    public get isRemote(): boolean {
         return this.remote !== null;
     }
 
@@ -117,17 +117,17 @@ export class ActiveSession {
      * is running and a reconnect is on a timer — so reporting it stopped would
      * blank its sidebar dot and stop the renderer restoring it after a reload.
      */
-    get isReconnecting(): boolean {
+    public get isReconnecting(): boolean {
         return !!(this.remote && this.remote.timer && !this.remote.userDisconnected);
     }
 
     /** Clicking a disconnected remote session is an ask for the connection back. */
-    get wantsRedial(): boolean {
+    public get wantsRedial(): boolean {
         return !!(this.remote && this.exited && !this.remote.userDisconnected);
     }
 
     /** Every id a renderer might still be displaying this session under. */
-    allIds(currentKey: string): string[] {
+    public allIds(currentKey: string): string[] {
         const ids = new Set<string>([currentKey]);
         if (this.realSessionId) ids.add(this.realSessionId);
         for (const prior of this.priorIds ?? []) ids.add(prior);

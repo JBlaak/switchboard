@@ -47,7 +47,7 @@ export class SessionTransitionDetector {
     constructor(private readonly deps: TransitionDetectorDeps) {}
 
     /** Check every session running in this folder against its new transcripts. */
-    detect(folder: string): void {
+    public detect(folder: string): void {
         const {registry, transcripts} = this.deps;
 
         let currentIds: string[];
@@ -58,8 +58,8 @@ export class SessionTransitionDetector {
         }
 
         for (const [sessionId, session] of registry.snapshot()) {
-            if (!this.#isCandidate(session, folder)) continue;
-            this.#checkSession(folder, sessionId, session, currentIds);
+            if (!this.isCandidate(session, folder)) continue;
+            this.checkSession(folder, sessionId, session, currentIds);
         }
     }
 
@@ -70,7 +70,7 @@ export class SessionTransitionDetector {
      * fork, and a session running in another project's folder cannot be the
      * origin of a file in this one.
      */
-    #isCandidate(session: ActiveSession, folder: string): boolean {
+    private isCandidate(session: ActiveSession, folder: string): boolean {
         return (
             !session.exited &&
             !session.isPlainTerminal &&
@@ -79,7 +79,12 @@ export class SessionTransitionDetector {
         );
     }
 
-    #checkSession(folder: string, sessionId: string, session: ActiveSession, currentIds: readonly string[]): void {
+    private checkSession(
+        folder: string,
+        sessionId: string,
+        session: ActiveSession,
+        currentIds: readonly string[],
+    ): void {
         const known = session.knownTranscriptIds!;
         const newIds = currentIds.filter((id) => !known.has(id));
         if (newIds.length === 0) return;
@@ -100,7 +105,7 @@ export class SessionTransitionDetector {
             );
 
             if (hasNoSignals(signals)) {
-                if (this.#isStale(folder, newId)) {
+                if (this.isStale(folder, newId)) {
                     this.deps.log.info(`[detect] session=${sessionId} ignoring stale empty transcript=${newId}`);
                 } else {
                     stillEmpty.add(newId);
@@ -108,8 +113,8 @@ export class SessionTransitionDetector {
                 continue;
             }
 
-            if (this.#matches(folder, sessionId, newId, signals)) {
-                this.#applyTransition(sessionId, session, newId, signals, currentIds);
+            if (this.matches(folder, sessionId, newId, signals)) {
+                this.applyTransition(sessionId, session, newId, signals, currentIds);
                 // Only one transition per session per pass: a second would be re-keying
                 // a session that has already moved.
                 return;
@@ -122,12 +127,12 @@ export class SessionTransitionDetector {
     }
 
     /** A transcript untouched for an hour is not the one we are waiting for. */
-    #isStale(folder: string, sessionId: string): boolean {
+    private isStale(folder: string, sessionId: string): boolean {
         const mtime = this.deps.transcripts.sessionMtimeMs(folder, sessionId);
         return mtime !== null && this.deps.clock.now() - mtime > STALE_EMPTY_FILE_MS;
     }
 
-    #matches(folder: string, sessionId: string, newId: string, signals: NewSessionSignals): boolean {
+    private matches(folder: string, sessionId: string, newId: string, signals: NewSessionSignals): boolean {
         if (matchesFork(signals, {sessionId})) return true;
 
         const {transcripts} = this.deps;
@@ -148,7 +153,7 @@ export class SessionTransitionDetector {
      * Two things follow it: the registry (which remembers the old id so a stale
      * row can still stop the session) and the renderer.
      */
-    #applyTransition(
+    private applyTransition(
         sessionId: string,
         session: ActiveSession,
         newId: string,

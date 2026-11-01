@@ -40,14 +40,14 @@ export interface TaskSessionOptions {
 }
 
 export class TaskSessionService {
-    readonly #worktrees: BranchWorktrees;
+    private readonly worktrees: BranchWorktrees;
 
     constructor(private readonly deps: TaskSessionServiceDeps) {
-        this.#worktrees = new BranchWorktrees(deps);
+        this.worktrees = new BranchWorktrees(deps);
     }
 
     /** The worktree and prompt of a new session on `task`, or why there is none yet. */
-    async prepare(
+    public async prepare(
         task: TaskStartInput,
         {projectPath, existing}: TaskSessionOptions = {},
     ): Promise<TaskSessionPreparation> {
@@ -67,7 +67,7 @@ export class TaskSessionService {
         const root = await this.deps.git.mainCheckout(project);
         if (!root) return failed('Not a git repository: ' + project);
 
-        const made = await this.#worktrees.prepare({root, branch: taskBranchName(task.title), existing});
+        const made = await this.worktrees.prepare({root, branch: taskBranchName(task.title), existing});
         if (!made.ok) {
             return made.existing
                 ? {kind: 'existing', projectPath: root, reason: made.reason, existing: made.existing}

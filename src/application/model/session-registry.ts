@@ -10,26 +10,26 @@
 import type {ActiveSession} from './active-session';
 
 export class SessionRegistry {
-    readonly #byId = new Map<string, ActiveSession>();
+    private readonly byId = new Map<string, ActiveSession>();
 
-    get size(): number {
-        return this.#byId.size;
+    public get size(): number {
+        return this.byId.size;
     }
 
-    get(sessionId: string): ActiveSession | undefined {
-        return this.#byId.get(sessionId);
+    public get(sessionId: string): ActiveSession | undefined {
+        return this.byId.get(sessionId);
     }
 
-    has(sessionId: string): boolean {
-        return this.#byId.has(sessionId);
+    public has(sessionId: string): boolean {
+        return this.byId.has(sessionId);
     }
 
-    add(sessionId: string, session: ActiveSession): void {
-        this.#byId.set(sessionId, session);
+    public add(sessionId: string, session: ActiveSession): void {
+        this.byId.set(sessionId, session);
     }
 
-    delete(sessionId: string): boolean {
-        return this.#byId.delete(sessionId);
+    public delete(sessionId: string): boolean {
+        return this.byId.delete(sessionId);
     }
 
     /**
@@ -38,8 +38,8 @@ export class SessionRegistry {
      * Callers iterate while retiring sessions, which deletes from the map; a live
      * iterator would skip entries.
      */
-    snapshot(): [string, ActiveSession][] {
-        return [...this.#byId];
+    public snapshot(): [string, ActiveSession][] {
+        return [...this.byId];
     }
 
     /**
@@ -48,10 +48,10 @@ export class SessionRegistry {
      * A stop aimed at an id the map no longer knows used to report "not running"
      * while the PTY kept going.
      */
-    find(sessionId: string): {key: string; session: ActiveSession} | null {
-        const direct = this.#byId.get(sessionId);
+    public find(sessionId: string): {key: string; session: ActiveSession} | null {
+        const direct = this.byId.get(sessionId);
         if (direct) return {key: sessionId, session: direct};
-        for (const [key, session] of this.#byId) {
+        for (const [key, session] of this.byId) {
             if (session.priorIds?.has(sessionId)) return {key, session};
         }
         return null;
@@ -60,13 +60,13 @@ export class SessionRegistry {
     /**
      * Move a session to a new id, remembering the one it is leaving behind.
      */
-    rekey(oldSessionId: string, newSessionId: string): void {
-        const session = this.#byId.get(oldSessionId);
+    public rekey(oldSessionId: string, newSessionId: string): void {
+        const session = this.byId.get(oldSessionId);
         if (!session) return;
         session.priorIds = session.priorIds ?? new Set();
         session.priorIds.add(oldSessionId);
         session.realSessionId = newSessionId;
-        this.#byId.delete(oldSessionId);
-        this.#byId.set(newSessionId, session);
+        this.byId.delete(oldSessionId);
+        this.byId.set(newSessionId, session);
     }
 }

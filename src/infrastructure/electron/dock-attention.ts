@@ -17,7 +17,7 @@ export class ElectronDockAttention {
     /** The running bounce, as `app.dock.bounce` answered it; null when none. */
     private bounceId: number | null = null;
 
-    set(count: number): void {
+    public set(count: number): void {
         if (!Number.isFinite(count) || count < 0) return;
         const dock = app.dock;
         if (count > this.count && dock) {

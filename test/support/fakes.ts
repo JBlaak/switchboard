@@ -340,24 +340,24 @@ export function resizingPty(pid = 4242): FakePty & {readonly resizes: [number, n
 
 /** A repository with `main` on origin, for starting a session on a branch: records every write. */
 export class FakeStartGit {
-    readonly writes: string[] = [];
-    readonly branches = new Set<string>(['main']);
-    readonly remoteBranches = new Set<string>(['main']);
+    public readonly writes: string[] = [];
+    public readonly branches = new Set<string>(['main']);
+    public readonly remoteBranches = new Set<string>(['main']);
     /** Branches whose fetch fails, with git's reason. */
-    readonly unfetchable = new Map<string, string>();
-    checkout: string | null;
-    current = new Map<string, string>();
+    public readonly unfetchable = new Map<string, string>();
+    public checkout: string | null;
+    public current = new Map<string, string>();
     /** The checkouts `worktrees` lists, the main one first. */
-    checkouts: WorktreeSummary[] = [];
+    public checkouts: WorktreeSummary[] = [];
     /** A write that fails, by its first word (`remove`, `delete`, `checkout`), with git's reason. */
-    readonly failing = new Map<string, string>();
+    public readonly failing = new Map<string, string>();
 
     /** `root` is the main checkout `mainCheckout` answers. */
     constructor(root: string) {
         this.checkout = root;
     }
 
-    readonly port: BranchWorktreesDeps['git'] = {
+    public readonly port: BranchWorktreesDeps['git'] = {
         mainCheckout: async () => this.checkout,
         defaultBranch: async () => 'main',
         currentBranch: async (worktree) => this.current.get(worktree) ?? null,
@@ -419,30 +419,30 @@ export function fakeRouter(result: RouteResult): FakeRouter {
 
 /** The store as the SQLite one behaves: one link per session, one repo set by hand per task. */
 export class MemoryTaskLinkStore implements TaskLinkStore {
-    links: TaskLink[] = [];
-    unlinks = new Map<string, number>();
-    all(): TaskLink[] {
+    public links: TaskLink[] = [];
+    public unlinks = new Map<string, number>();
+    public all(): TaskLink[] {
         return [...this.links];
     }
-    forTask(taskId: string): TaskLink[] {
+    public forTask(taskId: string): TaskLink[] {
         return this.links.filter((link) => link.taskId === taskId);
     }
-    forSession(sessionId: string): TaskLink | null {
+    public forSession(sessionId: string): TaskLink | null {
         return this.links.find((link) => link.sessionId === sessionId) ?? null;
     }
-    link(link: SessionTaskLink): void {
+    public link(link: SessionTaskLink): void {
         this.links = this.links.filter((other) => other.sessionId !== link.sessionId);
         this.links.push({...link});
         this.unlinks.delete(link.sessionId);
     }
-    unlink(sessionId: string, at: number): void {
+    public unlink(sessionId: string, at: number): void {
         this.links = this.links.filter((link) => link.sessionId !== sessionId);
         this.unlinks.set(sessionId, at);
     }
-    unlinkedAt(sessionId: string): number | null {
+    public unlinkedAt(sessionId: string): number | null {
         return this.unlinks.get(sessionId) ?? null;
     }
-    setRepo(taskId: string, projectPath: string, at: number): void {
+    public setRepo(taskId: string, projectPath: string, at: number): void {
         this.links = this.links.filter((link) => !(link.taskId === taskId && link.sessionId === null));
         this.links.push({taskId, projectPath, sessionId: null, source: 'manual', linkedAt: at});
     }

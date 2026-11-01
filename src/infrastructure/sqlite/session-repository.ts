@@ -21,85 +21,87 @@ function fromRow(row: CachedSessionRow): CachedSession {
 }
 
 export class SqliteSessionRepository implements SessionRepository {
-    readonly #metaGet;
-    readonly #metaGetAll;
-    readonly #metaUpsertName;
-    readonly #metaToggleStar;
-    readonly #metaUpsertArchived;
-    readonly #metaUpsertSnoozed;
+    private readonly metaGetStatement;
+    private readonly metaGetAllStatement;
+    private readonly metaUpsertNameStatement;
+    private readonly metaToggleStarStatement;
+    private readonly metaUpsertArchivedStatement;
+    private readonly metaUpsertSnoozedStatement;
 
-    readonly #planPinsGetAll;
-    readonly #planPinInsert;
-    readonly #planPinDelete;
-    readonly #issuePlanPinsGetAll;
-    readonly #issuePlanPinInsert;
-    readonly #issuePlanPinDelete;
+    private readonly planPinsGetAllStatement;
+    private readonly planPinInsertStatement;
+    private readonly planPinDeleteStatement;
+    private readonly issuePlanPinsGetAllStatement;
+    private readonly issuePlanPinInsertStatement;
+    private readonly issuePlanPinDeleteStatement;
 
-    readonly #cacheCount;
-    readonly #cacheGetAll;
-    readonly #cacheGetOne;
-    readonly #cacheGetFolder;
-    readonly #cacheGetFingerprints;
-    readonly #cacheUpsert;
-    readonly #cacheDeleteOne;
-    readonly #cacheDeleteFolder;
+    private readonly cacheCountStatement;
+    private readonly cacheGetAllStatement;
+    private readonly cacheGetOneStatement;
+    private readonly cacheGetFolderStatement;
+    private readonly cacheGetFingerprints;
+    private readonly cacheUpsertStatement;
+    private readonly cacheDeleteOneStatement;
+    private readonly cacheDeleteFolderStatement;
 
-    readonly #folderGetAll;
-    readonly #folderUpsert;
-    readonly #folderDelete;
+    private readonly folderGetAllStatement;
+    private readonly folderUpsertStatement;
+    private readonly folderDeleteStatement;
 
-    readonly #upsertMany;
+    private readonly upsertManyTransaction;
 
     constructor(db: Database.Database) {
-        this.#metaGet = db.prepare<[string], SessionMeta>('SELECT * FROM session_meta WHERE sessionId = ?');
-        this.#metaGetAll = db.prepare<[], SessionMeta>('SELECT * FROM session_meta');
-        this.#metaUpsertName = db.prepare<[string, string | null]>(`
+        this.metaGetStatement = db.prepare<[string], SessionMeta>('SELECT * FROM session_meta WHERE sessionId = ?');
+        this.metaGetAllStatement = db.prepare<[], SessionMeta>('SELECT * FROM session_meta');
+        this.metaUpsertNameStatement = db.prepare<[string, string | null]>(`
       INSERT INTO session_meta (sessionId, name) VALUES (?, ?)
       ON CONFLICT(sessionId) DO UPDATE SET name = excluded.name
     `);
-        this.#metaToggleStar = db.prepare<[string]>(`
+        this.metaToggleStarStatement = db.prepare<[string]>(`
       INSERT INTO session_meta (sessionId, starred) VALUES (?, 1)
       ON CONFLICT(sessionId) DO UPDATE SET starred = CASE WHEN starred = 1 THEN 0 ELSE 1 END
     `);
-        this.#metaUpsertArchived = db.prepare<[string, 0 | 1]>(`
+        this.metaUpsertArchivedStatement = db.prepare<[string, 0 | 1]>(`
       INSERT INTO session_meta (sessionId, archived) VALUES (?, ?)
       ON CONFLICT(sessionId) DO UPDATE SET archived = excluded.archived
     `);
-        this.#metaUpsertSnoozed = db.prepare<[string, string | null]>(`
+        this.metaUpsertSnoozedStatement = db.prepare<[string, string | null]>(`
       INSERT INTO session_meta (sessionId, snoozedUntil) VALUES (?, ?)
       ON CONFLICT(sessionId) DO UPDATE SET snoozedUntil = excluded.snoozedUntil
     `);
 
-        this.#planPinsGetAll = db.prepare<[], {project_path: string; slug: string}>(
+        this.planPinsGetAllStatement = db.prepare<[], {project_path: string; slug: string}>(
             'SELECT project_path, slug FROM pinned_plans',
         );
-        this.#planPinInsert = db.prepare<[string, string]>(
+        this.planPinInsertStatement = db.prepare<[string, string]>(
             'INSERT OR IGNORE INTO pinned_plans (project_path, slug) VALUES (?, ?)',
         );
-        this.#planPinDelete = db.prepare<[string, string]>(
+        this.planPinDeleteStatement = db.prepare<[string, string]>(
             'DELETE FROM pinned_plans WHERE project_path = ? AND slug = ?',
         );
-        this.#issuePlanPinsGetAll = db.prepare<
+        this.issuePlanPinsGetAllStatement = db.prepare<
             [],
             {project_path: string; repository: string; number: number; title: string; pinned_at: number}
         >('SELECT project_path, repository, number, title, pinned_at FROM pinned_issue_plans ORDER BY pinned_at');
-        this.#issuePlanPinInsert = db.prepare<[string, string, number, string, number]>(
+        this.issuePlanPinInsertStatement = db.prepare<[string, string, number, string, number]>(
             'INSERT OR IGNORE INTO pinned_issue_plans (project_path, repository, number, title, pinned_at) VALUES (?, ?, ?, ?, ?)',
         );
-        this.#issuePlanPinDelete = db.prepare<[string, string, number]>(
+        this.issuePlanPinDeleteStatement = db.prepare<[string, string, number]>(
             'DELETE FROM pinned_issue_plans WHERE project_path = ? AND repository = ? AND number = ?',
         );
 
-        this.#cacheCount = db.prepare<[], {cnt: number}>('SELECT COUNT(*) as cnt FROM session_cache');
-        this.#cacheGetAll = db.prepare<[], CachedSessionRow>('SELECT * FROM session_cache');
-        this.#cacheGetOne = db.prepare<[string], CachedSessionRow>('SELECT * FROM session_cache WHERE sessionId = ?');
-        this.#cacheGetFolder = db.prepare<[string], {folder: string}>(
+        this.cacheCountStatement = db.prepare<[], {cnt: number}>('SELECT COUNT(*) as cnt FROM session_cache');
+        this.cacheGetAllStatement = db.prepare<[], CachedSessionRow>('SELECT * FROM session_cache');
+        this.cacheGetOneStatement = db.prepare<[string], CachedSessionRow>(
+            'SELECT * FROM session_cache WHERE sessionId = ?',
+        );
+        this.cacheGetFolderStatement = db.prepare<[string], {folder: string}>(
             'SELECT folder FROM session_cache WHERE sessionId = ?',
         );
-        this.#cacheGetFingerprints = db.prepare<[string], Pick<CachedSession, 'sessionId' | 'fileMtime'>>(
+        this.cacheGetFingerprints = db.prepare<[string], Pick<CachedSession, 'sessionId' | 'fileMtime'>>(
             'SELECT sessionId, fileMtime FROM session_cache WHERE folder = ?',
         );
-        this.#cacheUpsert = db.prepare<
+        this.cacheUpsertStatement = db.prepare<
             [
                 string,
                 string,
@@ -127,20 +129,20 @@ export class SqliteSessionRepository implements SessionRepository {
         aiTitle = excluded.aiTitle, fileMtime = excluded.fileMtime,
         pullRequests = excluded.pullRequests
     `);
-        this.#cacheDeleteOne = db.prepare<[string]>('DELETE FROM session_cache WHERE sessionId = ?');
-        this.#cacheDeleteFolder = db.prepare<[string]>('DELETE FROM session_cache WHERE folder = ?');
+        this.cacheDeleteOneStatement = db.prepare<[string]>('DELETE FROM session_cache WHERE sessionId = ?');
+        this.cacheDeleteFolderStatement = db.prepare<[string]>('DELETE FROM session_cache WHERE folder = ?');
 
-        this.#folderGetAll = db.prepare<[], FolderMeta>('SELECT * FROM cache_meta');
-        this.#folderUpsert = db.prepare<[string, string | null, number]>(`
+        this.folderGetAllStatement = db.prepare<[], FolderMeta>('SELECT * FROM cache_meta');
+        this.folderUpsertStatement = db.prepare<[string, string | null, number]>(`
       INSERT INTO cache_meta (folder, projectPath, indexMtimeMs) VALUES (?, ?, ?)
       ON CONFLICT(folder) DO UPDATE SET
         projectPath = excluded.projectPath, indexMtimeMs = excluded.indexMtimeMs
     `);
-        this.#folderDelete = db.prepare<[string]>('DELETE FROM cache_meta WHERE folder = ?');
+        this.folderDeleteStatement = db.prepare<[string]>('DELETE FROM cache_meta WHERE folder = ?');
 
-        this.#upsertMany = db.transaction((sessions: readonly CachedSession[]) => {
+        this.upsertManyTransaction = db.transaction((sessions: readonly CachedSession[]) => {
             for (const s of sessions) {
-                this.#cacheUpsert.run(
+                this.cacheUpsertStatement.run(
                     s.sessionId,
                     s.folder,
                     s.projectPath,
@@ -160,45 +162,45 @@ export class SqliteSessionRepository implements SessionRepository {
 
     // ── Metadata ──
 
-    getMeta(sessionId: string): SessionMeta | null {
-        return this.#metaGet.get(sessionId) ?? null;
+    public getMeta(sessionId: string): SessionMeta | null {
+        return this.metaGetStatement.get(sessionId) ?? null;
     }
 
-    getAllMeta(): Map<string, SessionMeta> {
+    public getAllMeta(): Map<string, SessionMeta> {
         const map = new Map<string, SessionMeta>();
-        for (const row of this.#metaGetAll.all()) map.set(row.sessionId, row);
+        for (const row of this.metaGetAllStatement.all()) map.set(row.sessionId, row);
         return map;
     }
 
-    setName(sessionId: string, name: string | null): void {
-        this.#metaUpsertName.run(sessionId, name);
+    public setName(sessionId: string, name: string | null): void {
+        this.metaUpsertNameStatement.run(sessionId, name);
     }
 
-    toggleStar(sessionId: string): 0 | 1 {
-        this.#metaToggleStar.run(sessionId);
-        return this.#metaGet.get(sessionId)?.starred ?? 0;
+    public toggleStar(sessionId: string): 0 | 1 {
+        this.metaToggleStarStatement.run(sessionId);
+        return this.metaGetStatement.get(sessionId)?.starred ?? 0;
     }
 
-    setArchived(sessionId: string, archived: boolean): void {
-        this.#metaUpsertArchived.run(sessionId, archived ? 1 : 0);
+    public setArchived(sessionId: string, archived: boolean): void {
+        this.metaUpsertArchivedStatement.run(sessionId, archived ? 1 : 0);
     }
 
-    setSnoozedUntil(sessionId: string, until: string | null): void {
-        this.#metaUpsertSnoozed.run(sessionId, until);
+    public setSnoozedUntil(sessionId: string, until: string | null): void {
+        this.metaUpsertSnoozedStatement.run(sessionId, until);
     }
 
-    getPinnedPlans(): PlanPin[] {
-        return this.#planPinsGetAll.all().map((row) => ({projectPath: row.project_path, slug: row.slug}));
+    public getPinnedPlans(): PlanPin[] {
+        return this.planPinsGetAllStatement.all().map((row) => ({projectPath: row.project_path, slug: row.slug}));
     }
 
-    togglePlanPin(projectPath: string, slug: string): boolean {
-        if (this.#planPinDelete.run(projectPath, slug).changes > 0) return false;
-        this.#planPinInsert.run(projectPath, slug);
+    public togglePlanPin(projectPath: string, slug: string): boolean {
+        if (this.planPinDeleteStatement.run(projectPath, slug).changes > 0) return false;
+        this.planPinInsertStatement.run(projectPath, slug);
         return true;
     }
 
-    getPinnedIssuePlans(): IssuePlanPin[] {
-        return this.#issuePlanPinsGetAll.all().map((row) => ({
+    public getPinnedIssuePlans(): IssuePlanPin[] {
+        return this.issuePlanPinsGetAllStatement.all().map((row) => ({
             projectPath: row.project_path,
             repository: row.repository,
             number: row.number,
@@ -207,57 +209,57 @@ export class SqliteSessionRepository implements SessionRepository {
         }));
     }
 
-    toggleIssuePlanPin(projectPath: string, repository: string, number: number, title: string): boolean {
-        if (this.#issuePlanPinDelete.run(projectPath, repository, number).changes > 0) return false;
-        this.#issuePlanPinInsert.run(projectPath, repository, number, title, Date.now());
+    public toggleIssuePlanPin(projectPath: string, repository: string, number: number, title: string): boolean {
+        if (this.issuePlanPinDeleteStatement.run(projectPath, repository, number).changes > 0) return false;
+        this.issuePlanPinInsertStatement.run(projectPath, repository, number, title, Date.now());
         return true;
     }
 
     // ── Cache ──
 
-    isCachePopulated(): boolean {
-        return (this.#cacheCount.get()?.cnt ?? 0) > 0;
+    public isCachePopulated(): boolean {
+        return (this.cacheCountStatement.get()?.cnt ?? 0) > 0;
     }
 
-    getAllCached(): CachedSession[] {
-        return this.#cacheGetAll.all().map(fromRow);
+    public getAllCached(): CachedSession[] {
+        return this.cacheGetAllStatement.all().map(fromRow);
     }
 
-    getCachedSession(sessionId: string): CachedSession | null {
-        const row = this.#cacheGetOne.get(sessionId);
+    public getCachedSession(sessionId: string): CachedSession | null {
+        const row = this.cacheGetOneStatement.get(sessionId);
         return row ? fromRow(row) : null;
     }
 
-    getCachedFolder(sessionId: string): string | null {
-        return this.#cacheGetFolder.get(sessionId)?.folder ?? null;
+    public getCachedFolder(sessionId: string): string | null {
+        return this.cacheGetFolderStatement.get(sessionId)?.folder ?? null;
     }
 
-    getCachedFingerprints(folder: string): Pick<CachedSession, 'sessionId' | 'fileMtime'>[] {
-        return this.#cacheGetFingerprints.all(folder);
+    public getCachedFingerprints(folder: string): Pick<CachedSession, 'sessionId' | 'fileMtime'>[] {
+        return this.cacheGetFingerprints.all(folder);
     }
 
-    upsertCachedSessions(sessions: readonly CachedSession[]): void {
-        this.#upsertMany(sessions);
+    public upsertCachedSessions(sessions: readonly CachedSession[]): void {
+        this.upsertManyTransaction(sessions);
     }
 
-    deleteCachedSession(sessionId: string): void {
-        this.#cacheDeleteOne.run(sessionId);
+    public deleteCachedSession(sessionId: string): void {
+        this.cacheDeleteOneStatement.run(sessionId);
     }
 
-    deleteCachedFolder(folder: string): void {
-        this.#cacheDeleteFolder.run(folder);
-        this.#folderDelete.run(folder);
+    public deleteCachedFolder(folder: string): void {
+        this.cacheDeleteFolderStatement.run(folder);
+        this.folderDeleteStatement.run(folder);
     }
 
     // ── Folder index gate ──
 
-    getAllFolderMeta(): Map<string, FolderMeta> {
+    public getAllFolderMeta(): Map<string, FolderMeta> {
         const map = new Map<string, FolderMeta>();
-        for (const row of this.#folderGetAll.all()) map.set(row.folder, row);
+        for (const row of this.folderGetAllStatement.all()) map.set(row.folder, row);
         return map;
     }
 
-    setFolderMeta(folder: string, projectPath: string | null, indexMtimeMs: number): void {
-        this.#folderUpsert.run(folder, projectPath, indexMtimeMs);
+    public setFolderMeta(folder: string, projectPath: string | null, indexMtimeMs: number): void {
+        this.folderUpsertStatement.run(folder, projectPath, indexMtimeMs);
     }
 }

@@ -25,14 +25,14 @@ import type {QuickAskPanel} from '../../application/ports/quick-ask-panel';
 import type {CaptureTarget, QuickAskLooks} from '../../ipc/quick-ask-api';
 
 export class QuickAskWindow implements QuickAskPanel {
-    readonly #window: BrowserWindow;
-    #shown = false;
-    #passingThrough = true;
-    readonly #shownListeners: (() => void)[] = [];
+    private readonly window: BrowserWindow;
+    private shown = false;
+    private isPassingThrough = true;
+    private readonly shownListeners: (() => void)[] = [];
 
     /** Created hidden, and loaded, ready for the first press (B1). */
     constructor(appDir: string) {
-        this.#window = new BrowserWindow({
+        this.window = new BrowserWindow({
             type: 'panel',
             ...QUICK_ASK_SIZE,
             frame: false,
@@ -57,66 +57,66 @@ export class QuickAskWindow implements QuickAskPanel {
             },
         });
         // Over every Space, full-screen apps included (B2).
-        this.#window.setAlwaysOnTop(true, 'pop-up-menu');
-        this.#window.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true});
-        this.#window.setIgnoreMouseEvents(true, {forward: true});
-        containNavigation(this.#window);
-        void this.#window.loadFile(path.join(appDir, 'quick-ask', 'index.html'));
+        this.window.setAlwaysOnTop(true, 'pop-up-menu');
+        this.window.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true});
+        this.window.setIgnoreMouseEvents(true, {forward: true});
+        containNavigation(this.window);
+        void this.window.loadFile(path.join(appDir, 'quick-ask', 'index.html'));
     }
 
-    get visible(): boolean {
-        return this.#shown;
+    public get visible(): boolean {
+        return this.shown;
     }
 
     /** Whether a click on the window would go to the one underneath; for the e2e suite. */
-    get passingThrough(): boolean {
-        return this.#passingThrough;
+    public get passingThrough(): boolean {
+        return this.isPassingThrough;
     }
 
-    show(): void {
-        if (this.#window.isDestroyed()) return;
-        this.#window.setBounds(quickAskBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea));
+    public show(): void {
+        if (this.window.isDestroyed()) return;
+        this.window.setBounds(quickAskBounds(screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea));
         // The pointer is wherever it was; the pop-up says once it is over the slab.
         this.pointerOverSlab(false);
         if (!hiddenForE2e()) {
-            this.#window.show();
-            this.#window.focus();
+            this.window.show();
+            this.window.focus();
         }
-        this.#shown = true;
-        this.#send(QUICK_ASK_EVENT.shown, looks());
-        for (const listener of this.#shownListeners) listener();
+        this.shown = true;
+        this.send(QUICK_ASK_EVENT.shown, looks());
+        for (const listener of this.shownListeners) listener();
     }
 
-    onShown(listener: () => void): void {
-        this.#shownListeners.push(listener);
+    public onShown(listener: () => void): void {
+        this.shownListeners.push(listener);
     }
 
-    hide(): void {
-        if (!this.#shown || this.#window.isDestroyed()) return;
-        this.#shown = false;
-        if (!hiddenForE2e()) this.#window.hide();
+    public hide(): void {
+        if (!this.shown || this.window.isDestroyed()) return;
+        this.shown = false;
+        if (!hiddenForE2e()) this.window.hide();
     }
 
     /** Hiding is the pop-up's call: it stays while it waits or saves (B4). */
-    toggle(): void {
-        if (this.#shown) this.#send(QUICK_ASK_EVENT.closeRequested);
+    public toggle(): void {
+        if (this.shown) this.send(QUICK_ASK_EVENT.closeRequested);
         else this.show();
     }
 
     /** A send turned out to be a capture, into `target`, and it is being written (C4). */
-    saving(target: CaptureTarget): void {
-        if (!this.#window.isDestroyed()) this.#send(QUICK_ASK_EVENT.saving, target);
+    public saving(target: CaptureTarget): void {
+        if (!this.window.isDestroyed()) this.send(QUICK_ASK_EVENT.saving, target);
     }
 
-    pointerOverSlab(over: boolean): void {
-        if (this.#window.isDestroyed()) return;
-        this.#passingThrough = !over;
-        this.#window.setIgnoreMouseEvents(!over, {forward: true});
+    public pointerOverSlab(over: boolean): void {
+        if (this.window.isDestroyed()) return;
+        this.isPassingThrough = !over;
+        this.window.setIgnoreMouseEvents(!over, {forward: true});
     }
 
     /** Waits for the page on the first press, which can come before it has loaded. */
-    #send(channel: string, ...args: unknown[]): void {
-        const contents = this.#window.webContents;
+    private send(channel: string, ...args: unknown[]): void {
+        const contents = this.window.webContents;
         if (contents.isLoading()) contents.once('did-finish-load', () => contents.send(channel, ...args));
         else contents.send(channel, ...args);
     }

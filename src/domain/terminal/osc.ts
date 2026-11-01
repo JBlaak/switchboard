@@ -276,64 +276,64 @@ export type CliStateChange =
  * makes it useless as an idle signal.
  */
 export class CliBusyTracker {
-    #busy = false;
-    #sawIdleTitle = false;
+    private isBusy = false;
+    private hasSeenIdleTitle = false;
     /** Set by the first 7501 report; from then on 7501 alone drives state. */
-    #speaksProgramStatus = false;
+    private programStatusSeen = false;
     /** The root record's current block, so a repeated report is not re-announced. */
-    #blockedOn: string | null = null;
+    private blockedOn: string | null = null;
     /** Set once the CLI has been seen at its prompt. */
-    #ready = false;
+    private isReady = false;
 
-    get busy(): boolean {
-        return this.#busy;
+    public get busy(): boolean {
+        return this.isBusy;
     }
 
     /**
      * True once the CLI has been seen at its prompt, idle: it can take input.
      * A session that just started is not busy, but not ready either.
      */
-    get ready(): boolean {
-        return this.#ready;
+    public get ready(): boolean {
+        return this.isReady;
     }
 
     /** True once an OSC 0 idle glyph has been seen — the CLI is at a prompt. */
-    get sawIdleTitle(): boolean {
-        return this.#sawIdleTitle;
+    public get sawIdleTitle(): boolean {
+        return this.hasSeenIdleTitle;
     }
 
     /** True once the CLI has sent an OSC 7501 report. */
-    get speaksProgramStatus(): boolean {
-        return this.#speaksProgramStatus;
+    public get speaksProgramStatus(): boolean {
+        return this.programStatusSeen;
     }
 
-    observe(event: TerminalEvent): CliStateChange | null {
-        if (event.kind === 'program-status') return this.#observeProgramStatus(event);
-        if (this.#speaksProgramStatus) return null;
+    public observe(event: TerminalEvent): CliStateChange | null {
+        if (event.kind === 'program-status') return this.observeProgramStatus(event);
+        if (this.programStatusSeen) return null;
 
         if (event.kind === 'title') {
-            if (titleMeansBusy(event.text) && !this.#busy) {
-                this.#busy = true;
-                this.#sawIdleTitle = false;
+            if (titleMeansBusy(event.text) && !this.isBusy) {
+                this.isBusy = true;
+                this.hasSeenIdleTitle = false;
                 return {kind: 'busy', busy: true};
             }
-            if (titleMeansIdle(event.text) && this.#busy) {
-                this.#busy = false;
-                this.#sawIdleTitle = true;
-                this.#ready = true;
+            if (titleMeansIdle(event.text) && this.isBusy) {
+                this.isBusy = false;
+                this.hasSeenIdleTitle = true;
+                this.isReady = true;
                 return {kind: 'busy', busy: false};
             }
-            if (titleMeansIdle(event.text) && !this.#ready) {
-                this.#ready = true;
+            if (titleMeansIdle(event.text) && !this.isReady) {
+                this.isReady = true;
                 return {kind: 'ready'};
             }
             return null;
         }
         if (event.kind === 'progress') {
             if (event.level === '0') return null;
-            if ((event.level === '1' || event.level === '2' || event.level === '3') && !this.#busy) {
-                this.#busy = true;
-                this.#sawIdleTitle = false;
+            if ((event.level === '1' || event.level === '2' || event.level === '3') && !this.isBusy) {
+                this.isBusy = true;
+                this.hasSeenIdleTitle = false;
                 return {kind: 'busy', busy: true};
             }
         }
@@ -348,26 +348,26 @@ export class CliBusyTracker {
      * moving straight on to a different prompt — not on every repeat of the
      * same one.
      */
-    #observeProgramStatus(report: ProgramStatusReport): CliStateChange | null {
-        this.#speaksProgramStatus = true;
+    private observeProgramStatus(report: ProgramStatusReport): CliStateChange | null {
+        this.programStatusSeen = true;
         if (report.id !== undefined) return null;
 
         if (report.state === 'blocked') {
             const block = `${report.blockedOn ?? ''}:${report.msg ?? ''}`;
-            if (this.#blockedOn === block) return null;
-            this.#blockedOn = block;
+            if (this.blockedOn === block) return null;
+            this.blockedOn = block;
             return {kind: 'needs-attention'};
         }
-        this.#blockedOn = null;
+        this.blockedOn = null;
 
         const busy = report.state === 'working';
-        if (busy === this.#busy) {
-            if (busy || this.#ready) return null;
-            this.#ready = true;
+        if (busy === this.isBusy) {
+            if (busy || this.isReady) return null;
+            this.isReady = true;
             return {kind: 'ready'};
         }
-        this.#busy = busy;
-        if (!busy) this.#ready = true;
+        this.isBusy = busy;
+        if (!busy) this.isReady = true;
         return {kind: 'busy', busy};
     }
 }

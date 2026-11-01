@@ -44,7 +44,7 @@ export class TaskLinkService {
      * Links a session to a task, replacing any task it had, and answers the
      * link. Throws on a task id that cannot be a Notion page id.
      */
-    link(taskId: string, sessionId: string, projectPath: string, source: TaskLinkSource): TaskLink {
+    public link(taskId: string, sessionId: string, projectPath: string, source: TaskLinkSource): TaskLink {
         const id = taskIdFrom(taskId);
         if (!id) throw new Error(`Not a task id: ${taskId}`);
         const link = {taskId: id, projectPath, sessionId, source, linkedAt: this.deps.clock.now()};
@@ -53,17 +53,17 @@ export class TaskLinkService {
     }
 
     /** The session no longer works on a task, until it names one again after now. */
-    unlink(sessionId: string): void {
+    public unlink(sessionId: string): void {
         this.deps.store.unlink(sessionId, this.deps.clock.now());
     }
 
     /** The task the session works on, or null. */
-    taskOf(sessionId: string): string | null {
+    public taskOf(sessionId: string): string | null {
         return this.deps.store.forSession(sessionId)?.taskId ?? null;
     }
 
     /** Every linked session's task, by session id: for the sidebar's task markers. */
-    sessionTasks(): Record<string, string> {
+    public sessionTasks(): Record<string, string> {
         const tasks: Record<string, string> = {};
         // Oldest first, so a session's newest link is the one left standing.
         for (const link of this.deps.store.all()) if (link.sessionId !== null) tasks[link.sessionId] = link.taskId;
@@ -71,13 +71,13 @@ export class TaskLinkService {
     }
 
     /** Where the task's work happens: its latest link's project, or null when it has none. */
-    repoOf(taskId: string): string | null {
+    public repoOf(taskId: string): string | null {
         const id = taskIdFrom(taskId);
         return id ? taskRepo(this.deps.store.forTask(id), id) : null;
     }
 
     /** The sessions that work on the task, the most recently linked first. */
-    sessionsOf(taskId: string): string[] {
+    public sessionsOf(taskId: string): string[] {
         const id = taskIdFrom(taskId);
         return id ? taskSessions(this.deps.store.forTask(id), id) : [];
     }
@@ -87,7 +87,7 @@ export class TaskLinkService {
      * can own it. A linked session not listed yet (just started) counts as
      * active from the moment it was linked; an archived one owns nothing.
      */
-    ownerOf(taskId: string): string | null {
+    public ownerOf(taskId: string): string | null {
         const id = taskIdFrom(taskId);
         if (!id) return null;
         const links = this.deps.store.forTask(id);
@@ -100,12 +100,12 @@ export class TaskLinkService {
     }
 
     /** The tasks whose repo is this project, the most recently linked first. */
-    tasksIn(projectPath: string): string[] {
+    public tasksIn(projectPath: string): string[] {
         return repoTasks(this.deps.store.all(), projectPath);
     }
 
     /** Moves the task to another repo by hand, until a newer link moves it again. */
-    setRepo(taskId: string, projectPath: string): void {
+    public setRepo(taskId: string, projectPath: string): void {
         const id = taskIdFrom(taskId);
         if (!id) throw new Error(`Not a task id: ${taskId}`);
         this.deps.store.setRepo(id, projectPath, this.deps.clock.now());
@@ -117,7 +117,7 @@ export class TaskLinkService {
      * was made. A session unlinked by hand is relinked only by a call made
      * after the unlink. Answers the new link, or null when nothing changed.
      */
-    scan(sessionId: string, transcript: readonly string[], projectPath: string): TaskLink | null {
+    public scan(sessionId: string, transcript: readonly string[], projectPath: string): TaskLink | null {
         const detected = detectTask(transcript);
         if (!detected) return null;
         const {store} = this.deps;

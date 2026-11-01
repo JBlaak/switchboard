@@ -107,24 +107,24 @@ interface PendingConfirm {
 }
 
 export class PhoneAccessService {
-    readonly #links = new Map<string, Link>();
-    #listening = false;
-    #error: string | null = null;
-    #host: string | null = null;
-    #port: number | null = null;
-    #identity: ServerIdentity | null = null;
-    #pairing: PairingState = PAIRING_IDLE;
-    #invite: string | null = null;
-    #expiry: TimerHandle | null = null;
-    #confirm: PendingConfirm | null = null;
+    private readonly links = new Map<string, Link>();
+    private listening = false;
+    private error: string | null = null;
+    private host: string | null = null;
+    private port: number | null = null;
+    private identity: ServerIdentity | null = null;
+    private pairing: PairingState = PAIRING_IDLE;
+    private invite: string | null = null;
+    private expiry: TimerHandle | null = null;
+    private confirm: PendingConfirm | null = null;
     /** The tail of the lifecycle queue. */
-    #queue: Promise<unknown> = Promise.resolve();
+    private queue: Promise<unknown> = Promise.resolve();
 
-    readonly #handlers: DeviceLinkHandlers = {
-        authorize: (fingerprint) => this.#authorize(fingerprint),
-        connected: (connection) => this.#connected(connection),
-        message: (connection, message) => this.#message(connection, message),
-        disconnected: (connection) => this.#disconnected(connection),
+    private readonly handlers: DeviceLinkHandlers = {
+        authorize: (fingerprint) => this.authorize(fingerprint),
+        connected: (connection) => this.connected(connection),
+        message: (connection, message) => this.message(connection, message),
+        disconnected: (connection) => this.disconnected(connection),
     };
 
     constructor(private readonly deps: PhoneAccessServiceDeps) {}
@@ -132,15 +132,15 @@ export class PhoneAccessService {
     // ── Lifecycle ──
 
     /** At boot: bring the listener up if Phone access was left on. */
-    start(): Promise<PhoneAccessState> {
-        return this.#serial(async () => {
-            if (this.#enabled()) await this.#bringUp();
+    public start(): Promise<PhoneAccessState> {
+        return this.serial(async () => {
+            if (this.enabled()) await this.bringUp();
         });
     }
 
     /** At quit: close every connection and stop advertising. The setting stays. */
-    shutdown(): Promise<void> {
-        return this.#serial(() => this.#bringDown(GOING_AWAY, 'Switchboard is quitting')).then(() => undefined);
+    public shutdown(): Promise<void> {
+        return this.serial(() => this.bringDown(GOING_AWAY, 'Switchboard is quitting')).then(() => undefined);
     }
 
     /**
@@ -148,11 +148,11 @@ export class PhoneAccessService {
      * network changes it has to start again to follow. Phones see "going away"
      * and reconnect. A no-op while Phone access is off.
      */
-    restart(): Promise<PhoneAccessState> {
-        return this.#serial(async () => {
-            if (!this.#enabled()) return;
-            await this.#bringDown(GOING_AWAY, 'The Mac changed networks');
-            await this.#bringUp();
+    public restart(): Promise<PhoneAccessState> {
+        return this.serial(async () => {
+            if (!this.enabled()) return;
+            await this.bringDown(GOING_AWAY, 'The Mac changed networks');
+            await this.bringUp();
         });
     }
 
@@ -160,46 +160,46 @@ export class PhoneAccessService {
      * The toggle in Settings. On also retries a listener that failed to start;
      * off closes every connection with `turnedOff`.
      */
-    setEnabled(enabled: boolean): Promise<PhoneAccessState> {
-        return this.#serial(async () => {
+    public setEnabled(enabled: boolean): Promise<PhoneAccessState> {
+        return this.serial(async () => {
             this.deps.settings.set(PHONE_ACCESS_ENABLED_KEY, enabled);
-            if (enabled && !this.#listening) await this.#bringUp();
-            else if (!enabled) await this.#bringDown(CLOSE.turnedOff, 'Phone access was turned off');
-            else this.#changed();
+            if (enabled && !this.listening) await this.bringUp();
+            else if (!enabled) await this.bringDown(CLOSE.turnedOff, 'Phone access was turned off');
+            else this.changed();
         });
     }
 
     // ── Pairing ──
 
     /** Show a fresh code; any earlier one dies. Only while listening: the invite needs the port. */
-    startPairing(): PhoneAccessState {
+    public startPairing(): PhoneAccessState {
         const {clock, timers, randomBytes, advertiser} = this.deps;
-        if (!this.#listening || !this.#identity || this.#port === null) return this.state();
+        if (!this.listening || !this.identity || this.port === null) return this.state();
 
         const now = clock.now();
-        this.#pairing = startPairing(this.#pairing, randomBytes(PAIRING_CODE_LENGTH), now);
-        if (this.#pairing.kind !== 'live') return this.state();
-        this.#invite = encodeInvite({
+        this.pairing = startPairing(this.pairing, randomBytes(PAIRING_CODE_LENGTH), now);
+        if (this.pairing.kind !== 'live') return this.state();
+        this.invite = encodeInvite({
             protocol: PROTOCOL_VERSION,
-            fingerprint: this.#identity.fingerprint,
-            code: this.#pairing.code,
-            host: this.#host ?? advertiser.hostName(),
-            port: this.#port,
+            fingerprint: this.identity.fingerprint,
+            code: this.pairing.code,
+            host: this.host ?? advertiser.hostName(),
+            port: this.port,
         });
-        timers.clearTimeout(this.#expiry);
-        this.#expiry = timers.setTimeout(() => {
-            this.#expiry = null;
-            this.#endPairing();
-            this.#changed();
-        }, this.#pairing.expiresAt - now);
-        this.#changed();
+        timers.clearTimeout(this.expiry);
+        this.expiry = timers.setTimeout(() => {
+            this.expiry = null;
+            this.endPairing();
+            this.changed();
+        }, this.pairing.expiresAt - now);
+        this.changed();
         return this.state();
     }
 
     /** The user closed the pairing screen. A confirm already showing stays. */
-    stopPairing(): PhoneAccessState {
-        this.#endPairing();
-        this.#changed();
+    public stopPairing(): PhoneAccessState {
+        this.endPairing();
+        this.changed();
         return this.state();
     }
 
@@ -209,13 +209,13 @@ export class PhoneAccessService {
      * ran the pairing; either way the phone hears the outcome and is closed, to
      * reconnect as paired or not. `confirm` is cleared whatever happens.
      */
-    confirmPairing(requestId: string, accept: boolean): PhoneAccessState {
+    public confirmPairing(requestId: string, accept: boolean): PhoneAccessState {
         const {devices, ids, clock, log} = this.deps;
-        const confirm = this.#confirm;
+        const confirm = this.confirm;
         if (!confirm || confirm.requestId !== requestId) return this.state();
-        this.#confirm = null;
+        this.confirm = null;
 
-        const link = this.#links.get(confirm.connectionId);
+        const link = this.links.get(confirm.connectionId);
         if (link) {
             const {connection} = link;
             if (accept) {
@@ -235,21 +235,21 @@ export class PhoneAccessService {
                 connection.close(CLOSE.pairingOver, 'Pairing declined');
             }
         }
-        this.#changed();
+        this.changed();
         return this.state();
     }
 
     // ── Devices ──
 
     /** Un-pair one phone; its live connections are told and closed at once. */
-    revoke(deviceId: string): PhoneAccessState {
+    public revoke(deviceId: string): PhoneAccessState {
         this.deps.devices.remove(deviceId);
-        for (const link of [...this.#links.values()]) {
+        for (const link of [...this.links.values()]) {
             const {grant} = link.connection;
-            if (grant.kind === 'device' && grant.deviceId === deviceId) this.#sendRevoked(link.connection);
+            if (grant.kind === 'device' && grant.deviceId === deviceId) this.sendRevoked(link.connection);
         }
         this.deps.sessions.deviceRemoved(deviceId);
-        this.#changed();
+        this.changed();
         return this.state();
     }
 
@@ -258,45 +258,45 @@ export class PhoneAccessService {
      * no longer matches. Also the way out when the stored key can't be read.
      * The listener, if on, starts again with the new certificate.
      */
-    reset(): Promise<PhoneAccessState> {
-        return this.#serial(async () => {
+    public reset(): Promise<PhoneAccessState> {
+        return this.serial(async () => {
             const {devices, identity, sessions, log} = this.deps;
             const removed = devices.list().map((device) => device.id);
-            for (const link of [...this.#links.values()]) {
-                if (link.connection.grant.kind === 'device') this.#sendRevoked(link.connection);
+            for (const link of [...this.links.values()]) {
+                if (link.connection.grant.kind === 'device') this.sendRevoked(link.connection);
             }
             devices.clear();
             for (const id of removed) sessions.deviceRemoved(id);
 
-            await this.#bringDown(CLOSE.notPaired, 'Phone access was reset');
+            await this.bringDown(CLOSE.notPaired, 'Phone access was reset');
             let fresh: ServerIdentity;
             try {
                 fresh = await identity.reset();
             } catch (err) {
                 log.error('[phone] reset failed:', (err as Error).message);
-                this.#error = `Could not make a new identity: ${(err as Error).message}`;
-                this.#changed();
+                this.error = `Could not make a new identity: ${(err as Error).message}`;
+                this.changed();
                 return;
             }
-            this.#error = null;
-            if (this.#enabled()) await this.#bringUp(fresh);
-            else this.#changed();
+            this.error = null;
+            if (this.enabled()) await this.bringUp(fresh);
+            else this.changed();
         });
     }
 
     // ── The snapshot ──
 
-    state(): PhoneAccessState {
+    public state(): PhoneAccessState {
         const connected = new Set<string>();
-        for (const {connection} of this.#links.values()) {
+        for (const {connection} of this.links.values()) {
             if (connection.grant.kind === 'device') connected.add(connection.grant.deviceId);
         }
         return {
-            enabled: this.#enabled(),
-            listening: this.#listening,
-            error: this.#error,
-            host: this.#listening ? this.#host : null,
-            port: this.#listening ? this.#port : null,
+            enabled: this.enabled(),
+            listening: this.listening,
+            error: this.error,
+            host: this.listening ? this.host : null,
+            port: this.listening ? this.port : null,
             devices: this.deps.devices.list().map((device) => ({
                 id: device.id,
                 name: device.name,
@@ -305,62 +305,62 @@ export class PhoneAccessService {
                 connected: connected.has(device.id),
             })),
             pairing:
-                this.#pairing.kind === 'live' && this.#invite
-                    ? {invite: this.#invite, expiresAt: this.#pairing.expiresAt}
+                this.pairing.kind === 'live' && this.invite
+                    ? {invite: this.invite, expiresAt: this.pairing.expiresAt}
                     : null,
-            confirm: this.#confirm ? {requestId: this.#confirm.requestId, deviceName: this.#confirm.deviceName} : null,
+            confirm: this.confirm ? {requestId: this.confirm.requestId, deviceName: this.confirm.deviceName} : null,
         };
     }
 
     // ── The listener's handlers ──
 
-    #authorize(fingerprint: string): ConnectionGrant {
+    private authorize(fingerprint: string): ConnectionGrant {
         const device = this.deps.devices.findByFingerprint(fingerprint);
         if (device) return {kind: 'device', deviceId: device.id};
-        if (isPairingOpen(this.#pairing, this.deps.clock.now())) return {kind: 'pairing'};
+        if (isPairingOpen(this.pairing, this.deps.clock.now())) return {kind: 'pairing'};
         return null;
     }
 
-    #connected(connection: DeviceConnection): void {
-        this.#links.set(connection.id, {connection, greeted: false, paired: false});
+    private connected(connection: DeviceConnection): void {
+        this.links.set(connection.id, {connection, greeted: false, paired: false});
         if (connection.grant.kind === 'device') {
             this.deps.devices.touch(connection.grant.deviceId, this.deps.clock.now());
-            this.#changed();
+            this.changed();
         }
     }
 
-    #message(connection: DeviceConnection, message: ClientMessage): void {
-        const link = this.#links.get(connection.id);
+    private message(connection: DeviceConnection, message: ClientMessage): void {
+        const link = this.links.get(connection.id);
         if (!link) return;
 
         if (!link.greeted) {
-            if (message.type !== 'hello') return this.#protocolError(connection, 'Expected hello');
-            this.#hello(link, message.protocol);
+            if (message.type !== 'hello') return this.protocolError(connection, 'Expected hello');
+            this.hello(link, message.protocol);
             return;
         }
         if (connection.grant.kind === 'device') {
-            if (message.type === 'hello') return this.#protocolError(connection, 'Hello was already answered');
+            if (message.type === 'hello') return this.protocolError(connection, 'Hello was already answered');
             this.deps.sessions.message(connection, message);
             return;
         }
         if (message.type !== 'pair' || link.paired)
-            return this.#protocolError(connection, 'A pairing connection may only pair');
+            return this.protocolError(connection, 'A pairing connection may only pair');
         link.paired = true;
-        this.#pair(connection, message.code, message.deviceName);
+        this.pair(connection, message.code, message.deviceName);
     }
 
-    #disconnected(connection: DeviceConnection): void {
-        const link = this.#links.get(connection.id);
+    private disconnected(connection: DeviceConnection): void {
+        const link = this.links.get(connection.id);
         if (!link || link.connection !== connection) return;
-        this.#links.delete(connection.id);
+        this.links.delete(connection.id);
         if (link.greeted && connection.grant.kind === 'device') this.deps.sessions.disconnected(connection);
-        if (this.#confirm?.connectionId === connection.id) this.#confirm = null;
-        this.#changed();
+        if (this.confirm?.connectionId === connection.id) this.confirm = null;
+        this.changed();
     }
 
     // ── Hello and pair ──
 
-    #hello(link: Link, protocol: number): void {
+    private hello(link: Link, protocol: number): void {
         const {connection} = link;
         const {macName, appVersion, devices, sessions} = this.deps;
         const reply = helloReply(protocol, connection.grant, {name: macName, version: appVersion});
@@ -382,69 +382,69 @@ export class PhoneAccessService {
      * the confirm dialog up; every rejection ends the connection, since the
      * phone has nothing else to try with the code it scanned.
      */
-    #pair(connection: DeviceConnection, code: string, deviceName: string): void {
+    private pair(connection: DeviceConnection, code: string, deviceName: string): void {
         const {clock, ids, timers} = this.deps;
-        const {state, verdict} = attemptPairing(this.#pairing, code, clock.now());
-        this.#pairing = state;
+        const {state, verdict} = attemptPairing(this.pairing, code, clock.now());
+        this.pairing = state;
         if (verdict !== 'ok') {
             connection.send({type: 'pair-rejected', reason: verdict});
             connection.close(CLOSE.pairingOver, `Pairing rejected: ${verdict}`);
             return;
         }
-        timers.clearTimeout(this.#expiry);
-        this.#expiry = null;
-        this.#invite = null;
-        this.#confirm = {
+        timers.clearTimeout(this.expiry);
+        this.expiry = null;
+        this.invite = null;
+        this.confirm = {
             requestId: ids.newId(),
             deviceName: deviceName.trim() || UNNAMED_DEVICE,
             connectionId: connection.id,
         };
         connection.send({type: 'pair-pending'});
-        this.#changed();
+        this.changed();
     }
 
     // ── Internals ──
 
-    #enabled(): boolean {
+    private enabled(): boolean {
         return this.deps.settings.get<boolean>(PHONE_ACCESS_ENABLED_KEY) === true;
     }
 
     /** Load the identity (unless handed a fresh one), listen, advertise. Failures land in `error`. */
-    async #bringUp(identity?: ServerIdentity): Promise<void> {
+    private async bringUp(identity?: ServerIdentity): Promise<void> {
         const {link, advertiser, log} = this.deps;
-        this.#error = null;
-        this.#changed();
+        this.error = null;
+        this.changed();
 
         try {
-            this.#identity = identity ?? (await this.deps.identity.load());
+            this.identity = identity ?? (await this.deps.identity.load());
         } catch (err) {
             log.error('[phone] identity failed to load:', (err as Error).message);
-            this.#error = `The Mac's Phone access key could not be read (${(err as Error).message}). Reset Phone access to make a new one; every phone will need pairing again.`;
-            this.#changed();
+            this.error = `The Mac's Phone access key could not be read (${(err as Error).message}). Reset Phone access to make a new one; every phone will need pairing again.`;
+            this.changed();
             return;
         }
 
         try {
-            this.#port = await link.start(this.#identity, this.deps.port ?? 0, this.#handlers);
+            this.port = await link.start(this.identity, this.deps.port ?? 0, this.handlers);
         } catch (err) {
             log.error('[phone] listener failed to start:', (err as Error).message);
-            this.#error = `Could not start listening: ${(err as Error).message}`;
-            this.#port = null;
-            this.#changed();
+            this.error = `Could not start listening: ${(err as Error).message}`;
+            this.port = null;
+            this.changed();
             return;
         }
-        this.#host = advertiser.hostName();
-        this.#listening = true;
-        advertiser.advertise(this.deps.macName, this.#port, {v: String(PROTOCOL_VERSION)});
-        this.#changed();
+        this.host = advertiser.hostName();
+        this.listening = true;
+        advertiser.advertise(this.deps.macName, this.port, {v: String(PROTOCOL_VERSION)});
+        this.changed();
     }
 
     /** Stop listening with `code` on every connection, withdraw the advertisement, drop any pairing. */
-    async #bringDown(code: number, reason: string): Promise<void> {
+    private async bringDown(code: number, reason: string): Promise<void> {
         const {link, advertiser, log} = this.deps;
-        this.#endPairing();
-        this.#confirm = null;
-        if (this.#listening || link.listening) {
+        this.endPairing();
+        this.confirm = null;
+        if (this.listening || link.listening) {
             try {
                 await link.stop(code, reason);
             } catch (err) {
@@ -453,39 +453,39 @@ export class PhoneAccessService {
             advertiser.withdraw();
         }
         // The link reports closes as they happen; whatever it hasn't yet is gone all the same.
-        for (const {connection} of [...this.#links.values()]) this.#disconnected(connection);
-        this.#listening = false;
-        this.#host = null;
-        this.#port = null;
-        if (!this.#enabled()) this.#error = null;
-        this.#changed();
+        for (const {connection} of [...this.links.values()]) this.disconnected(connection);
+        this.listening = false;
+        this.host = null;
+        this.port = null;
+        if (!this.enabled()) this.error = null;
+        this.changed();
     }
 
-    #endPairing(): void {
-        this.deps.timers.clearTimeout(this.#expiry);
-        this.#expiry = null;
-        this.#pairing = stopPairing(this.#pairing, this.deps.clock.now());
-        this.#invite = null;
+    private endPairing(): void {
+        this.deps.timers.clearTimeout(this.expiry);
+        this.expiry = null;
+        this.pairing = stopPairing(this.pairing, this.deps.clock.now());
+        this.invite = null;
     }
 
-    #sendRevoked(connection: DeviceConnection): void {
+    private sendRevoked(connection: DeviceConnection): void {
         connection.send({type: 'revoked'});
         connection.close(CLOSE.notPaired, 'No longer paired');
     }
 
-    #protocolError(connection: DeviceConnection, reason: string): void {
+    private protocolError(connection: DeviceConnection, reason: string): void {
         this.deps.log.warn(`[phone] connection ${connection.id}: ${reason}`);
         connection.close(CLOSE.protocolError, reason);
     }
 
-    #changed(): void {
+    private changed(): void {
         this.deps.renderer.phoneAccessChanged(this.state());
     }
 
     /** Run `step` after every earlier lifecycle call, and answer the snapshot after it. */
-    #serial(step: () => Promise<void>): Promise<PhoneAccessState> {
-        const run = this.#queue.then(step);
-        this.#queue = run.catch(() => undefined);
+    private serial(step: () => Promise<void>): Promise<PhoneAccessState> {
+        const run = this.queue.then(step);
+        this.queue = run.catch(() => undefined);
         return run.then(() => this.state());
     }
 }

@@ -25,19 +25,19 @@ import type {SettingsStore} from '../ports/settings-store';
 export class SettingsService {
     constructor(private readonly store: SettingsStore) {}
 
-    get<T = unknown>(key: string): T | null {
+    public get<T = unknown>(key: string): T | null {
         return this.store.get<T>(key);
     }
 
-    set(key: string, value: unknown): void {
+    public set(key: string, value: unknown): void {
         this.store.set(key, value);
     }
 
-    global(): GlobalSettings {
+    public global(): GlobalSettings {
         return this.store.get<GlobalSettings>(GLOBAL_SETTINGS_KEY) || {};
     }
 
-    saveGlobal(settings: GlobalSettings): void {
+    public saveGlobal(settings: GlobalSettings): void {
         this.store.set(GLOBAL_SETTINGS_KEY, settings);
     }
 
@@ -48,51 +48,51 @@ export class SettingsService {
      * hand at each call site is how a caller ends up dropping the keys it did not
      * know about.
      */
-    updateGlobal<T>(mutate: (settings: GlobalSettings) => T): T {
+    public updateGlobal<T>(mutate: (settings: GlobalSettings) => T): T {
         const settings = this.global();
         const result = mutate(settings);
         this.saveGlobal(settings);
         return result;
     }
 
-    project(projectPath: string | null | undefined): Record<string, unknown> {
+    public project(projectPath: string | null | undefined): Record<string, unknown> {
         if (!projectPath) return {};
         return this.store.get<Record<string, unknown>>(projectSettingsKey(projectPath)) || {};
     }
 
-    forgetProject(projectPath: string): void {
+    public forgetProject(projectPath: string): void {
         this.store.delete(projectSettingsKey(projectPath));
     }
 
-    effective(projectPath: string | null | undefined): EffectiveSettings {
+    public effective(projectPath: string | null | undefined): EffectiveSettings {
         return mergeEffectiveSettings(this.global(), this.project(projectPath));
     }
 
     /** The shell profile id a project should launch in. */
-    shellProfileId(projectPath?: string | null): string {
+    public shellProfileId(projectPath?: string | null): string {
         return resolveShellProfileId(this.global(), projectPath ? this.project(projectPath) : null);
     }
 
     // ── Weather ──
     // Global only: it is the one empty screen's weather, not a project's.
 
-    weatherEnabled(): boolean {
+    public weatherEnabled(): boolean {
         return resolveWeatherEnabled(this.global());
     }
 
-    weatherLocation(): WeatherLocation {
+    public weatherLocation(): WeatherLocation {
         return resolveWeatherLocation(this.global());
     }
 
     // ── Quick Ask ──
 
-    quickAskEnabled(): boolean {
+    public quickAskEnabled(): boolean {
         return resolveQuickAskEnabled(this.global());
     }
 
     // ── Archive ──
 
-    removeWorktreeOnArchive(): boolean {
+    public removeWorktreeOnArchive(): boolean {
         return resolveRemoveWorktreeOnArchive(this.global());
     }
 
@@ -100,11 +100,11 @@ export class SettingsService {
     // "Removing" a project does not delete anything: the transcripts stay on
     // disk, because Claude CLI owns them. It is a hide list.
 
-    hiddenProjects(): Set<string> {
+    public hiddenProjects(): Set<string> {
         return new Set(this.global().hiddenProjects || []);
     }
 
-    hideProject(projectPath: string): void {
+    public hideProject(projectPath: string): void {
         this.updateGlobal((settings) => {
             const hidden = settings.hiddenProjects || [];
             if (!hidden.includes(projectPath)) hidden.push(projectPath);
@@ -112,7 +112,7 @@ export class SettingsService {
         });
     }
 
-    unhideProject(projectPath: string): void {
+    public unhideProject(projectPath: string): void {
         this.updateGlobal((settings) => {
             if (!settings.hiddenProjects?.includes(projectPath)) return;
             settings.hiddenProjects = settings.hiddenProjects.filter((p) => p !== projectPath);
@@ -124,16 +124,16 @@ export class SettingsService {
     // session history lives on the remote host, so the only local state is the
     // connection info and which tmux sessions we created.
 
-    remoteProjects(): RemoteProjectSetting[] {
+    public remoteProjects(): RemoteProjectSetting[] {
         return this.global().remoteProjects || [];
     }
 
-    findRemoteProject(projectPath: string): RemoteProjectSetting | null {
+    public findRemoteProject(projectPath: string): RemoteProjectSetting | null {
         return this.remoteProjects().find((r) => remoteProjectPath(r) === projectPath) ?? null;
     }
 
     /** Adds a remote, or answers false when it is already there. */
-    addRemoteProject(remote: RemoteProjectSetting): boolean {
+    public addRemoteProject(remote: RemoteProjectSetting): boolean {
         const projectPath = remoteProjectPath(remote);
         return this.updateGlobal((settings) => {
             const list = settings.remoteProjects || [];
@@ -144,7 +144,7 @@ export class SettingsService {
         });
     }
 
-    removeRemoteProject(projectPath: string): void {
+    public removeRemoteProject(projectPath: string): void {
         this.updateGlobal((settings) => {
             settings.remoteProjects = (settings.remoteProjects || []).filter(
                 (r) => remoteProjectPath(r) !== projectPath,
@@ -161,7 +161,7 @@ export class SettingsService {
      *
      * Returns null when the remote project is no longer configured.
      */
-    touchRemoteSession(
+    public touchRemoteSession(
         projectPath: string,
         sessionId: string,
         kind: string,

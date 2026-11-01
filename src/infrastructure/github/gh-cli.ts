@@ -116,26 +116,26 @@ function isAuthFailure(result: GhResult): boolean {
 }
 
 export class GhCli implements GitHubCli {
-    readonly #run: GhRunner;
+    private readonly run: GhRunner;
 
     constructor(options: GhCliOptions = {}) {
-        this.#run = options.run ?? defaultGhRunner(options.env);
+        this.run = options.run ?? defaultGhRunner(options.env);
     }
 
-    async available(): Promise<GitHubAvailability> {
-        const result = await this.#run(['auth', 'status', '--hostname', 'github.com']);
+    public async available(): Promise<GitHubAvailability> {
+        const result = await this.run(['auth', 'status', '--hostname', 'github.com']);
         if (result.missing) return 'missing';
         if (result.code === 0) return 'ok';
         return 'unauthenticated';
     }
 
-    async pullRequests(repo: string, numbers: readonly number[]): Promise<PullRequestStatus[] | null> {
+    public async pullRequests(repo: string, numbers: readonly number[]): Promise<PullRequestStatus[] | null> {
         const wanted = validNumbers(numbers);
         const parts = REPO.exec(repo);
         if (!parts) return null;
         if (wanted.length === 0) return [];
 
-        const data = await this.#graphql(pullRequestsQuery(wanted), {owner: parts[1], name: parts[2]});
+        const data = await this.graphql(pullRequestsQuery(wanted), {owner: parts[1], name: parts[2]});
         if (!data) return null;
         const viewer = typeof data.viewer?.login === 'string' ? data.viewer.login : '';
         const repository = data.repository;
@@ -149,13 +149,13 @@ export class GhCli implements GitHubCli {
         return found;
     }
 
-    async pullRequestDiff(repo: string, number: number): Promise<string | null> {
+    public async pullRequestDiff(repo: string, number: number): Promise<string | null> {
         if (!REPO.test(repo) || validNumbers([number]).length === 0) return null;
-        const result = await this.#run(['pr', 'diff', String(number), '--repo', repo, '--color', 'never']);
+        const result = await this.run(['pr', 'diff', String(number), '--repo', repo, '--color', 'never']);
         return result.code === 0 ? result.stdout : null;
     }
 
-    async checkLogTail(repo: string, checkRunUrl: string, lines: number): Promise<string | null> {
+    public async checkLogTail(repo: string, checkRunUrl: string, lines: number): Promise<string | null> {
         if (!REPO.test(repo)) return null;
         const job = ACTIONS_JOB_URL.exec(checkRunUrl) ?? CHECK_RUN_URL.exec(checkRunUrl);
         if (!job) return null;
@@ -163,7 +163,7 @@ export class GhCli implements GitHubCli {
         // with the runner cleaning up. A job with no failed step (cancelled, or
         // still running) only has the whole log.
         for (const which of ['--log-failed', '--log']) {
-            const result = await this.#run(['run', 'view', '--repo', repo, '--job', job[1], which]);
+            const result = await this.run(['run', 'view', '--repo', repo, '--job', job[1], which]);
             if (result.missing || isAuthFailure(result)) return null;
             if (result.code === 0 && result.stdout.trim())
                 return tail(result.stdout.split('\n').map(stripLogPrefix), lines);
@@ -171,7 +171,7 @@ export class GhCli implements GitHubCli {
         return null;
     }
 
-    async issues(repo: string, numbers: readonly number[]): Promise<IssueStatus[] | null> {
+    public async issues(repo: string, numbers: readonly number[]): Promise<IssueStatus[] | null> {
         const wanted = validNumbers(numbers);
         const parts = REPO.exec(repo);
         if (!parts) return null;
@@ -182,7 +182,7 @@ export class GhCli implements GitHubCli {
                 `i${number}: issueOrPullRequest(number: ${number}) { __typename ... on Issue { number title state url } }`,
         );
         const query = `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields.join(' ')} } }`;
-        const data = await this.#graphql(query, {owner: parts[1], name: parts[2]});
+        const data = await this.graphql(query, {owner: parts[1], name: parts[2]});
         if (!data?.repository) return null;
 
         const found: IssueStatus[] = [];
@@ -203,20 +203,20 @@ export class GhCli implements GitHubCli {
 
     // ── Plans (#121): the queries and their mapping are in `gh-plans.ts` ──
 
-    async plan(repo: string, number: number): Promise<Plan | null> {
+    public async plan(repo: string, number: number): Promise<Plan | null> {
         const parts = REPO.exec(repo);
         if (!parts || validNumbers([number]).length === 0) return null;
-        const data = await this.#graphql(planQuery(number), {owner: parts[1], name: parts[2]});
+        const data = await this.graphql(planQuery(number), {owner: parts[1], name: parts[2]});
         return data ? toPlan(data, repo) : null;
     }
 
-    async plansIn(repo: string, options: {closed: boolean}): Promise<PlanSummary[] | null> {
+    public async plansIn(repo: string, options: {closed: boolean}): Promise<PlanSummary[] | null> {
         if (!REPO.test(repo)) return null;
-        const data = await this.#graphql(PLANS_QUERY, {search: plansSearch(repo, options.closed === true)});
+        const data = await this.graphql(PLANS_QUERY, {search: plansSearch(repo, options.closed === true)});
         return data ? toPlanSummaries(data, repo) : null;
     }
 
-    async plansOf(issues: readonly IssueKey[]): Promise<IssueKey[] | null> {
+    public async plansOf(issues: readonly IssueKey[]): Promise<IssueKey[] | null> {
         const seen = new Set<string>();
         const wanted = issues.filter((issue) => {
             const key = issue.repository + '#' + issue.number;
@@ -226,32 +226,32 @@ export class GhCli implements GitHubCli {
             return true;
         });
         if (wanted.length === 0) return [];
-        const data = await this.#graphql(plansOfQuery(wanted), {});
+        const data = await this.graphql(plansOfQuery(wanted), {});
         return data ? toPlansOf(data, wanted) : null;
     }
 
-    async closingIssues(repo: string, numbers: readonly number[]): Promise<PullRequestCloses[] | null> {
+    public async closingIssues(repo: string, numbers: readonly number[]): Promise<PullRequestCloses[] | null> {
         const wanted = validNumbers(numbers);
         const parts = REPO.exec(repo);
         if (!parts) return null;
         if (wanted.length === 0) return [];
-        const data = await this.#graphql(closingIssuesQuery(wanted), {owner: parts[1], name: parts[2]});
+        const data = await this.graphql(closingIssuesQuery(wanted), {owner: parts[1], name: parts[2]});
         return data ? toClosingIssues(data, repo, wanted) : null;
     }
 
     // ── The project page (#167): the queries and their mapping are in `gh-overview.ts` ──
 
-    async issuesIn(repo: string, options: {closed: boolean}): Promise<RepositoryIssue[] | null> {
+    public async issuesIn(repo: string, options: {closed: boolean}): Promise<RepositoryIssue[] | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
-        const data = await this.#graphql(issuesQuery(options.closed === true), {owner: parts[1], name: parts[2]});
+        const data = await this.graphql(issuesQuery(options.closed === true), {owner: parts[1], name: parts[2]});
         return data ? toRepositoryIssues(data, repo) : null;
     }
 
-    async pullRequestsIn(repo: string, options: {merged: boolean}): Promise<RepositoryPullRequest[] | null> {
+    public async pullRequestsIn(repo: string, options: {merged: boolean}): Promise<RepositoryPullRequest[] | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
-        const data = await this.#graphql(pullRequestsInQuery(options.merged === true), {
+        const data = await this.graphql(pullRequestsInQuery(options.merged === true), {
             owner: parts[1],
             name: parts[2],
         });
@@ -265,8 +265,8 @@ export class GhCli implements GitHubCli {
     // passes verbatim (`-F` would read a body starting with `@` as a file); only
     // the line number goes with `-F`, which makes it an Int.
 
-    async startPendingReview(pullRequestId: string): Promise<GitHubWrite<{reviewId: string}>> {
-        const answer = await this.#mutate(START_REVIEW, [['-f', 'pullRequestId', pullRequestId]]);
+    public async startPendingReview(pullRequestId: string): Promise<GitHubWrite<{reviewId: string}>> {
+        const answer = await this.mutate(START_REVIEW, [['-f', 'pullRequestId', pullRequestId]]);
         if (!answer.ok) return answer;
         const reviewId = answer.data.addPullRequestReview?.pullRequestReview?.id;
         return typeof reviewId === 'string' && reviewId
@@ -274,10 +274,13 @@ export class GhCli implements GitHubCli {
             : {ok: false, reason: 'GitHub did not start the review'};
     }
 
-    async addPendingComment(reviewId: string, comment: NewLineComment): Promise<GitHubWrite<{threadId: string}>> {
+    public async addPendingComment(
+        reviewId: string,
+        comment: NewLineComment,
+    ): Promise<GitHubWrite<{threadId: string}>> {
         if (!Number.isSafeInteger(comment.line) || comment.line < 1)
             return {ok: false, reason: 'That line cannot take a comment'};
-        const answer = await this.#mutate(ADD_COMMENT, [
+        const answer = await this.mutate(ADD_COMMENT, [
             ['-f', 'reviewId', reviewId],
             ['-f', 'path', comment.path],
             ['-F', 'line', String(comment.line)],
@@ -291,13 +294,13 @@ export class GhCli implements GitHubCli {
             : {ok: false, reason: 'GitHub did not add the comment'};
     }
 
-    async deletePendingReview(reviewId: string): Promise<GitHubWrite> {
-        const answer = await this.#mutate(DELETE_REVIEW, [['-f', 'reviewId', reviewId]]);
+    public async deletePendingReview(reviewId: string): Promise<GitHubWrite> {
+        const answer = await this.mutate(DELETE_REVIEW, [['-f', 'reviewId', reviewId]]);
         return answer.ok ? {ok: true} : answer;
     }
 
-    async submitPendingReview(reviewId: string, event: ReviewEvent): Promise<GitHubWrite> {
-        const answer = await this.#mutate(SUBMIT_REVIEW, [
+    public async submitPendingReview(reviewId: string, event: ReviewEvent): Promise<GitHubWrite> {
+        const answer = await this.mutate(SUBMIT_REVIEW, [
             ['-f', 'reviewId', reviewId],
             ['-f', 'event', event === 'REQUEST_CHANGES' ? 'REQUEST_CHANGES' : 'COMMENT'],
         ]);
@@ -305,13 +308,13 @@ export class GhCli implements GitHubCli {
     }
 
     /** Run a mutation; answer its `data`, or why it did not go through. */
-    async #mutate(
+    private async mutate(
         mutation: string,
         variables: ReadonlyArray<readonly ['-f' | '-F', string, string]>,
     ): Promise<{ok: true; data: any} | {ok: false; reason: string}> {
         const args = ['api', 'graphql', '-f', 'query=' + mutation];
         for (const [flag, key, value] of variables) args.push(flag, `${key}=${value}`);
-        const result = await this.#run(args);
+        const result = await this.run(args);
         if (result.missing) return {ok: false, reason: 'gh is not installed'};
         if (isAuthFailure(result)) return {ok: false, reason: 'gh is not signed in to github.com'};
         let body: {data?: any; errors?: Array<{message?: unknown}>} | null = null;
@@ -335,10 +338,10 @@ export class GhCli implements GitHubCli {
      * and `gh` exits 1 for that, so a failed exit with `data` in it is still an
      * answer.
      */
-    async #graphql(query: string, variables: Record<string, string>): Promise<any | null> {
+    private async graphql(query: string, variables: Record<string, string>): Promise<any | null> {
         const args = ['api', 'graphql', '-f', 'query=' + query];
         for (const [key, value] of Object.entries(variables)) args.push('-f', `${key}=${value}`);
-        const result = await this.#run(args);
+        const result = await this.run(args);
         if (result.missing || isAuthFailure(result)) return null;
         try {
             const body = JSON.parse(result.stdout) as {data?: unknown};

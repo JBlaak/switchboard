@@ -14,7 +14,7 @@ const TIMEOUT_MS = 15_000;
 export class GitHubReleaseFeed implements ReleaseFeed {
     constructor(private readonly repo: {owner: string; name: string}) {}
 
-    async latest(): Promise<PublishedRelease | null> {
+    public async latest(): Promise<PublishedRelease | null> {
         const url = `https://api.github.com/repos/${this.repo.owner}/${this.repo.name}/releases/latest`;
         const response = await fetch(url, {
             headers: {Accept: 'application/vnd.github+json'},

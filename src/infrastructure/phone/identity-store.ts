@@ -73,41 +73,41 @@ function pemBlock(text: string, label: string): string | null {
 }
 
 export class OpensslIdentityStore implements ServerIdentityStore {
-    readonly #directory: string;
-    readonly #encryption: Encryption;
-    readonly #openssl: string;
-    readonly #exec: Exec;
+    private readonly directory: string;
+    private readonly encryption: Encryption;
+    private readonly openssl: string;
+    private readonly exec: Exec;
     /** The identity once read or made, so concurrent loads make only one. */
-    #current: Promise<ServerIdentity> | null = null;
+    private current: Promise<ServerIdentity> | null = null;
 
     constructor(options: IdentityStoreOptions) {
-        this.#directory = options.directory;
-        this.#encryption = options.encryption;
-        this.#openssl = options.openssl ?? 'openssl';
-        this.#exec = options.exec ?? execOutput;
+        this.directory = options.directory;
+        this.encryption = options.encryption;
+        this.openssl = options.openssl ?? 'openssl';
+        this.exec = options.exec ?? execOutput;
     }
 
-    load(): Promise<ServerIdentity> {
-        this.#current ??= this.#readOrCreate();
+    public load(): Promise<ServerIdentity> {
+        this.current ??= this.readOrCreate();
         // A failed load is not remembered, so the next one tries again.
-        this.#current.catch(() => {
-            this.#current = null;
+        this.current.catch(() => {
+            this.current = null;
         });
-        return this.#current;
+        return this.current;
     }
 
-    reset(): Promise<ServerIdentity> {
-        const next = (this.#current ?? Promise.resolve(null)).catch(() => null).then(() => this.#create());
-        this.#current = next;
+    public reset(): Promise<ServerIdentity> {
+        const next = (this.current ?? Promise.resolve(null)).catch(() => null).then(() => this.create());
+        this.current = next;
         next.catch(() => {
-            this.#current = null;
+            this.current = null;
         });
         return next;
     }
 
-    async #readOrCreate(): Promise<ServerIdentity> {
-        const stored = await this.#read();
-        return stored ?? this.#create();
+    private async readOrCreate(): Promise<ServerIdentity> {
+        const stored = await this.read();
+        return stored ?? this.create();
     }
 
     /**
@@ -116,45 +116,45 @@ export class OpensslIdentityStore implements ServerIdentityStore {
      * A key that will not decrypt throws: making a new one would silently
      * un-pair every phone.
      */
-    async #read(): Promise<ServerIdentity | null> {
+    private async read(): Promise<ServerIdentity | null> {
         let encryptedKey: Buffer;
         let certPem: string;
         try {
             [encryptedKey, certPem] = await Promise.all([
-                fs.readFile(path.join(this.#directory, KEY_FILE)),
-                fs.readFile(path.join(this.#directory, CERT_FILE), 'utf8'),
+                fs.readFile(path.join(this.directory, KEY_FILE)),
+                fs.readFile(path.join(this.directory, CERT_FILE), 'utf8'),
             ]);
         } catch (err) {
             if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
             throw err;
         }
-        const keyPem = this.#encryption.decrypt(encryptedKey);
+        const keyPem = this.encryption.decrypt(encryptedKey);
         const certificate = new X509Certificate(certPem);
         if (!certificate.checkPrivateKey(createPrivateKey(keyPem))) return null;
         return {keyPem, certPem, fingerprint: certificateFingerprint(certPem)};
     }
 
-    async #create(): Promise<ServerIdentity> {
-        const {keyPem, certPem} = await this.#generate();
+    private async create(): Promise<ServerIdentity> {
+        const {keyPem, certPem} = await this.generate();
 
-        await fs.mkdir(this.#directory, {recursive: true});
+        await fs.mkdir(this.directory, {recursive: true});
         // Each file is written beside its final name and renamed over it, so a
         // crash part-way leaves the old file whole rather than a truncated one.
-        await this.#writeAtomically(KEY_FILE, this.#encryption.encrypt(keyPem));
-        await this.#writeAtomically(CERT_FILE, certPem);
+        await this.writeAtomically(KEY_FILE, this.encryption.encrypt(keyPem));
+        await this.writeAtomically(CERT_FILE, certPem);
 
         return {keyPem, certPem, fingerprint: certificateFingerprint(certPem)};
     }
 
     /** A fresh key and certificate; the key is only ever on disk encrypted, and only for this call. */
-    async #generate(): Promise<{keyPem: string; certPem: string}> {
+    private async generate(): Promise<{keyPem: string; certPem: string}> {
         const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'switchboard-identity-'));
         try {
             await fs.chmod(scratch, 0o700);
             const keyFile = path.join(scratch, 'key.pem');
             const passphrase = randomBytes(32).toString('hex');
-            const output = await this.#exec(
-                this.#openssl,
+            const output = await this.exec(
+                this.openssl,
                 [
                     'req',
                     '-x509',
@@ -189,8 +189,8 @@ export class OpensslIdentityStore implements ServerIdentityStore {
         }
     }
 
-    async #writeAtomically(name: string, data: Buffer | string): Promise<void> {
-        const target = path.join(this.#directory, name);
+    private async writeAtomically(name: string, data: Buffer | string): Promise<void> {
+        const target = path.join(this.directory, name);
         const temporary = `${target}.${process.pid}.tmp`;
         await fs.writeFile(temporary, data, {mode: 0o600});
         await fs.rename(temporary, target);

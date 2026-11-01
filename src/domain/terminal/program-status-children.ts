@@ -59,35 +59,35 @@ function sameAgents(a: readonly WorkingAgent[], b: readonly WorkingAgent[]): boo
  */
 export class ProgramStatusChildren {
     /** id → the latest report for it. A Map keeps first-seen order through replacements. */
-    readonly #records = new Map<string, {state: ProgramStatusState; title?: string}>();
-    #working: readonly WorkingAgent[] = [];
+    private readonly records = new Map<string, {state: ProgramStatusState; title?: string}>();
+    private workingAgents: readonly WorkingAgent[] = [];
 
     /** The agents working right now. */
-    get working(): readonly WorkingAgent[] {
-        return this.#working;
+    public get working(): readonly WorkingAgent[] {
+        return this.workingAgents;
     }
 
     /** Apply one report; the new working list if it changed, else null. */
-    observe(report: ProgramStatusReport): WorkingAgent[] | null {
+    public observe(report: ProgramStatusReport): WorkingAgent[] | null {
         const {id, state} = report;
 
         if (state === 'clear') {
-            if (id === undefined) this.#records.clear();
-            else for (const key of [...this.#records.keys()]) if (isWithin(key, id)) this.#records.delete(key);
+            if (id === undefined) this.records.clear();
+            else for (const key of [...this.records.keys()]) if (isWithin(key, id)) this.records.delete(key);
         } else if (id !== undefined) {
-            this.#records.set(id, report.title === undefined ? {state} : {state, title: report.title});
+            this.records.set(id, report.title === undefined ? {state} : {state, title: report.title});
         } else {
             return null;
         }
 
         const working: WorkingAgent[] = [];
-        for (const [key, record] of this.#records) {
+        for (const [key, record] of this.records) {
             if (!WORKING_STATES.has(record.state)) continue;
             working.push(record.title === undefined ? {id: key} : {id: key, title: record.title});
         }
 
-        if (sameAgents(working, this.#working)) return null;
-        this.#working = working;
+        if (sameAgents(working, this.workingAgents)) return null;
+        this.workingAgents = working;
         return working;
     }
 }

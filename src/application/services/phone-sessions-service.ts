@@ -111,28 +111,28 @@ interface Phone {
 }
 
 export class PhoneSessionsService {
-    readonly #phones = new Map<string, Phone>();
+    private readonly phones = new Map<string, Phone>();
     /** What each device called itself, kept past its disconnect: it may still own sessions. */
-    readonly #names = new Map<string, string>();
-    #ownership: OwnershipState = NO_OWNERSHIP;
+    private readonly names = new Map<string, string>();
+    private ownership: OwnershipState = NO_OWNERSHIP;
     /** Sessions whose CLI is mid-turn. */
-    readonly #busy = new Set<string>();
+    private readonly busy = new Set<string>();
     /** Sessions blocked on the user in the terminal, until their next turn starts. */
-    readonly #attention = new Set<string>();
+    private readonly attention = new Set<string>();
     /** When each session's state last changed, for the row's "2m". */
-    readonly #changedAt = new Map<string, number>();
+    private readonly changedAt = new Map<string, number>();
     /** The ids the phones were last sent, so an exit is told once and under the id they know. */
-    #listed = new Set<string>();
-    #pushTimer: unknown = null;
+    private listed = new Set<string>();
+    private pushTimer: unknown = null;
 
     constructor(private readonly deps: PhoneSessionsServiceDeps) {}
 
     // ── The phones ──
 
     /** An enrolled phone said hello and was welcomed: it gets the list, the questions and the voice status. */
-    connected(connection: DeviceConnection, device: {id: string; name: string}): void {
-        this.#names.set(device.id, device.name);
-        this.#phones.set(connection.id, {
+    public connected(connection: DeviceConnection, device: {id: string; name: string}): void {
+        this.names.set(device.id, device.name);
+        this.phones.set(connection.id, {
             connection,
             deviceId: device.id,
             attached: new Set(),
@@ -140,24 +140,24 @@ export class PhoneSessionsService {
             asking: null,
             open: true,
         });
-        connection.send({type: 'sessions', sessions: this.#sessionList()});
+        connection.send({type: 'sessions', sessions: this.sessionList()});
         connection.send({type: 'questions', pending: this.deps.questions.pending()});
         this.deps.voice.connected(connection);
     }
 
-    message(connection: DeviceConnection, message: ClientMessage): void {
-        const phone = this.#phones.get(connection.id);
+    public message(connection: DeviceConnection, message: ClientMessage): void {
+        const phone = this.phones.get(connection.id);
         if (!phone) return;
         switch (message.type) {
             case 'attach':
-                return this.#attach(phone, message.sessionId, {cols: message.cols, rows: message.rows});
+                return this.attach(phone, message.sessionId, {cols: message.cols, rows: message.rows});
             case 'detach':
-                phone.attached.delete(this.#currentId(message.sessionId) ?? message.sessionId);
+                phone.attached.delete(this.currentId(message.sessionId) ?? message.sessionId);
                 return;
             case 'size': {
-                const sessionId = this.#currentId(message.sessionId);
+                const sessionId = this.currentId(message.sessionId);
                 if (sessionId)
-                    this.#apply({
+                    this.apply({
                         type: 'size',
                         sessionId,
                         device: phone.deviceId,
@@ -166,28 +166,28 @@ export class PhoneSessionsService {
                 return;
             }
             case 'use-here': {
-                const sessionId = this.#currentId(message.sessionId);
-                if (sessionId) this.#apply({type: 'use-here', sessionId, device: phone.deviceId});
+                const sessionId = this.currentId(message.sessionId);
+                if (sessionId) this.apply({type: 'use-here', sessionId, device: phone.deviceId});
                 return;
             }
             case 'input':
-                return this.#input(phone, message.sessionId, message.data);
+                return this.input(phone, message.sessionId, message.data);
             case 'answer':
-                return this.#answer(phone, message.sessionId, message.toolUseId, message.answers);
+                return this.answer(phone, message.sessionId, message.toolUseId, message.answers);
             case 'ask':
-                void this.#ask(phone, message.requestId, message.text, sizeOf(message));
+                void this.ask(phone, message.requestId, message.text, sizeOf(message));
                 return;
             case 'ask-cancel':
                 if (phone.asking === message.requestId) phone.router?.cancel();
                 return;
             case 'ask-start':
-                void this.#askStart(phone, message.requestId, message.projectPath, message.prompt, sizeOf(message));
+                void this.askStart(phone, message.requestId, message.projectPath, message.prompt, sizeOf(message));
                 return;
             case 'list-projects':
-                connection.send({type: 'projects', projects: this.#projects()});
+                connection.send({type: 'projects', projects: this.projects()});
                 return;
             case 'archive':
-                return this.#archive(phone, message.sessionId);
+                return this.archive(phone, message.sessionId);
             case 'voice-start':
             case 'voice-chunk':
             case 'voice-end':
@@ -201,30 +201,30 @@ export class PhoneSessionsService {
     }
 
     /** The connection closed. Ownership stays where it is (#194: a dropped phone keeps its sessions). */
-    disconnected(connection: DeviceConnection): void {
-        const phone = this.#phones.get(connection.id);
+    public disconnected(connection: DeviceConnection): void {
+        const phone = this.phones.get(connection.id);
         if (!phone) return;
         phone.open = false;
-        this.#phones.delete(connection.id);
+        this.phones.delete(connection.id);
         // Killed, not left to finish on the user's quota.
         phone.router?.cancel();
         this.deps.voice.disconnected(connection);
-        this.#apply({type: 'device-left', device: phone.deviceId});
+        this.apply({type: 'device-left', device: phone.deviceId});
     }
 
     /** Revoked, or every device by Reset: its sessions go back to the Mac. */
-    deviceRemoved(deviceId: string): void {
-        this.#apply({type: 'device-removed', device: deviceId});
-        this.#names.delete(deviceId);
+    public deviceRemoved(deviceId: string): void {
+        this.apply({type: 'device-removed', device: deviceId});
+        this.names.delete(deviceId);
     }
 
     // ── The Mac's side ──
 
     /** Every session something has happened to, with its owner; any other running session is the Mac's. */
-    owners(): Record<string, TerminalOwner> {
+    public owners(): Record<string, TerminalOwner> {
         const owners: Record<string, TerminalOwner> = {};
-        for (const sessionId of Object.keys(this.#ownership.sessions)) {
-            owners[sessionId] = this.#wireOwner(ownerOf(this.#ownership, sessionId));
+        for (const sessionId of Object.keys(this.ownership.sessions)) {
+            owners[sessionId] = this.wireOwner(ownerOf(this.ownership, sessionId));
         }
         return owners;
     }
@@ -233,13 +233,13 @@ export class PhoneSessionsService {
      * Use here on the Mac. With the Mac's size, it is remembered first so the
      * PTY takes it at once; without, the renderer's resize that follows does it.
      */
-    useHereOnMac(sessionId: string, cols?: number, rows?: number): {ok: boolean; error?: string} {
-        const id = this.#currentId(sessionId);
+    public useHereOnMac(sessionId: string, cols?: number, rows?: number): {ok: boolean; error?: string} {
+        const id = this.currentId(sessionId);
         if (!id) return {ok: false, error: 'That session is not running'};
         if (cols !== undefined && rows !== undefined) {
-            this.#apply({type: 'size', sessionId: id, device: MAC, size: {cols, rows}});
+            this.apply({type: 'size', sessionId: id, device: MAC, size: {cols, rows}});
         }
-        this.#apply({type: 'use-here', sessionId: id, device: MAC});
+        this.apply({type: 'use-here', sessionId: id, device: MAC});
         return {ok: true};
     }
 
@@ -248,26 +248,26 @@ export class PhoneSessionsService {
      * PTY should take it now, which the caller does the way it always has; false
      * while a phone owns the session, whose size it keeps.
      */
-    macResized(sessionId: string, cols: number, rows: number): boolean {
-        const id = this.#currentId(sessionId) ?? sessionId;
-        this.#ownership = applyOwnership(this.#ownership, {
+    public macResized(sessionId: string, cols: number, rows: number): boolean {
+        const id = this.currentId(sessionId) ?? sessionId;
+        this.ownership = applyOwnership(this.ownership, {
             type: 'size',
             sessionId: id,
             device: MAC,
             size: {cols, rows},
         }).state;
-        return ownerOf(this.#ownership, id) === MAC;
+        return ownerOf(this.ownership, id) === MAC;
     }
 
     /** Whether the Mac's typing reaches the PTY: only while the Mac owns the session. */
-    macInputAllowed(sessionId: string): boolean {
-        return acceptsInput(this.#ownership, this.#currentId(sessionId) ?? sessionId, MAC);
+    public macInputAllowed(sessionId: string): boolean {
+        return acceptsInput(this.ownership, this.currentId(sessionId) ?? sessionId, MAC);
     }
 
     // ── Events, from where the renderer gateway gets them ──
 
-    terminalData(sessionId: string, data: string): void {
-        for (const phone of this.#phones.values()) {
+    public terminalData(sessionId: string, data: string): void {
+        for (const phone of this.phones.values()) {
             if (phone.attached.has(sessionId)) phone.connection.sendTerminal(sessionId, data);
         }
     }
@@ -276,53 +276,53 @@ export class PhoneSessionsService {
      * A session's process ended. The lifecycle says so under every id the
      * session has had; the phones hear it once, under the one they know.
      */
-    processExited(sessionId: string, exitCode: number): void {
+    public processExited(sessionId: string, exitCode: number): void {
         const known =
-            this.#listed.has(sessionId) || [...this.#phones.values()].some((phone) => phone.attached.has(sessionId));
-        for (const phone of this.#phones.values()) phone.attached.delete(sessionId);
-        this.#listed.delete(sessionId);
-        this.#busy.delete(sessionId);
-        this.#attention.delete(sessionId);
-        this.#changedAt.delete(sessionId);
-        this.#apply({type: 'ended', sessionId});
-        if (known) this.#broadcast({type: 'exited', sessionId, exitCode});
-        this.#schedulePush();
+            this.listed.has(sessionId) || [...this.phones.values()].some((phone) => phone.attached.has(sessionId));
+        for (const phone of this.phones.values()) phone.attached.delete(sessionId);
+        this.listed.delete(sessionId);
+        this.busy.delete(sessionId);
+        this.attention.delete(sessionId);
+        this.changedAt.delete(sessionId);
+        this.apply({type: 'ended', sessionId});
+        if (known) this.broadcast({type: 'exited', sessionId, exitCode});
+        this.schedulePush();
     }
 
     /** A fork or plan accept re-keyed a running session: the phones move the row, not replace it. */
-    sessionForked(oldId: string, newId: string): void {
+    public sessionForked(oldId: string, newId: string): void {
         if (oldId === newId) return;
-        this.#apply({type: 'rekeyed', from: oldId, to: newId});
-        for (const phone of this.#phones.values()) moveKey(phone.attached, oldId, newId);
-        moveKey(this.#busy, oldId, newId);
-        moveKey(this.#attention, oldId, newId);
-        const changedAt = this.#changedAt.get(oldId);
-        this.#changedAt.delete(oldId);
-        if (changedAt !== undefined) this.#changedAt.set(newId, changedAt);
-        if (this.#listed.delete(oldId)) this.#listed.add(newId);
-        this.#broadcast({type: 'session-rekeyed', from: oldId, to: newId});
-        this.#schedulePush();
+        this.apply({type: 'rekeyed', from: oldId, to: newId});
+        for (const phone of this.phones.values()) moveKey(phone.attached, oldId, newId);
+        moveKey(this.busy, oldId, newId);
+        moveKey(this.attention, oldId, newId);
+        const changedAt = this.changedAt.get(oldId);
+        this.changedAt.delete(oldId);
+        if (changedAt !== undefined) this.changedAt.set(newId, changedAt);
+        if (this.listed.delete(oldId)) this.listed.add(newId);
+        this.broadcast({type: 'session-rekeyed', from: oldId, to: newId});
+        this.schedulePush();
     }
 
-    cliBusyState(sessionId: string, busy: boolean): void {
+    public cliBusyState(sessionId: string, busy: boolean): void {
         if (busy) {
-            this.#busy.add(sessionId);
+            this.busy.add(sessionId);
             // A turn starting means whatever it was blocked on got its answer.
-            this.#attention.delete(sessionId);
+            this.attention.delete(sessionId);
         } else {
-            this.#busy.delete(sessionId);
+            this.busy.delete(sessionId);
         }
-        this.#changed(sessionId);
+        this.changed(sessionId);
     }
 
-    sessionNeedsAttention(sessionId: string): void {
-        this.#attention.add(sessionId);
-        this.#changed(sessionId);
+    public sessionNeedsAttention(sessionId: string): void {
+        this.attention.add(sessionId);
+        this.changed(sessionId);
     }
 
-    questionsAsked(pending: PendingQuestions): void {
-        this.#broadcast({type: 'questions', pending: this.deps.questions.pending()});
-        this.#changed(pending.sessionId);
+    public questionsAsked(pending: PendingQuestions): void {
+        this.broadcast({type: 'questions', pending: this.deps.questions.pending()});
+        this.changed(pending.sessionId);
     }
 
     /**
@@ -330,79 +330,79 @@ export class PhoneSessionsService {
      * active device, as one from a phone makes that phone it (#194); the
      * phone's own answer moved ownership when it was given.
      */
-    questionsSettled(settled: QuestionsSettled): void {
+    public questionsSettled(settled: QuestionsSettled): void {
         const {sessionId, toolUseId, outcome} = settled;
-        this.#broadcast({
+        this.broadcast({
             type: 'questions-settled',
             sessionId,
             toolUseId,
             outcome,
             answeredOn: settled.answeredOn ?? null,
         });
-        this.#broadcast({type: 'questions', pending: this.deps.questions.pending()});
+        this.broadcast({type: 'questions', pending: this.deps.questions.pending()});
         if (outcome === 'answered' && settled.answeredOn === 'mac') {
-            const id = this.#currentId(sessionId);
-            if (id) this.#apply({type: 'answered', sessionId: id, device: MAC});
+            const id = this.currentId(sessionId);
+            if (id) this.apply({type: 'answered', sessionId: id, device: MAC});
         }
-        this.#changed(sessionId);
+        this.changed(sessionId);
     }
 
     /** The project list changed: a session started, ended, was renamed or got its title. */
-    sessionsChanged(): void {
-        this.#schedulePush();
+    public sessionsChanged(): void {
+        this.schedulePush();
     }
 
     /** A session was archived, on the Mac or from a phone: every phone closes it, under the id it knows. */
-    sessionArchived(sessionId: string): void {
-        this.#broadcast({type: 'archived', sessionId: this.#currentId(sessionId) ?? sessionId});
-        this.#schedulePush();
+    public sessionArchived(sessionId: string): void {
+        this.broadcast({type: 'archived', sessionId: this.currentId(sessionId) ?? sessionId});
+        this.schedulePush();
     }
 
     // ── The terminal ──
 
     /** `attached`, then the replay, then live output as it comes. A second attach replays again. */
-    #attach(phone: Phone, requested: string, size: TerminalSize): void {
+    private attach(phone: Phone, requested: string, size: TerminalSize): void {
         const found = this.deps.registry.find(requested);
         if (!found || (found.session.exited && !found.session.isReconnecting)) {
             this.deps.log.info(`[phone] attach to ${requested}, which is not running`);
             return;
         }
         const {key: sessionId, session} = found;
-        this.#apply({type: 'size', sessionId, device: phone.deviceId, size});
+        this.apply({type: 'size', sessionId, device: phone.deviceId, size});
         phone.connection.send({
             type: 'attached',
             sessionId,
-            owner: this.#wireOwner(ownerOf(this.#ownership, sessionId)),
+            owner: this.wireOwner(ownerOf(this.ownership, sessionId)),
         });
         for (const chunk of replay(session)) phone.connection.sendTerminal(sessionId, chunk);
         phone.attached.add(sessionId);
     }
 
     /** Prompt-box text or a key: dropped unless this phone owns the session. */
-    #input(phone: Phone, requested: string, data: string): void {
+    private input(phone: Phone, requested: string, data: string): void {
         const found = this.deps.registry.find(requested);
         if (!found || found.session.exited) return;
-        if (!acceptsInput(this.#ownership, found.key, phone.deviceId)) {
+        if (!acceptsInput(this.ownership, found.key, phone.deviceId)) {
             this.deps.log.info(`[phone] input for ${found.key} from a device that isn't active; dropped`);
             return;
         }
         found.session.pty.write(data);
     }
 
-    #answer(phone: Phone, requested: string, toolUseId: string, answers: Record<string, string>): void {
+    private answer(phone: Phone, requested: string, toolUseId: string, answers: Record<string, string>): void {
         const result = this.deps.questions.answer(requested, toolUseId, answers, 'phone');
         phone.connection.send({type: 'answer-result', sessionId: requested, toolUseId, ...result});
         if (!result.ok) return;
-        const sessionId = this.#currentId(requested);
-        if (sessionId) this.#apply({type: 'answered', sessionId, device: phone.deviceId});
+        const sessionId = this.currentId(requested);
+        if (sessionId) this.apply({type: 'answered', sessionId, device: phone.deviceId});
     }
 
     /**
      * Archive under the session's current id, or the one asked for once it has
      * exited: a row with nothing running under it can still be archived.
      */
-    #archive(phone: Phone, requested: string): void {
-        const sessionId = this.#currentId(requested) ?? requested;
+    private archive(phone: Phone, requested: string): void {
+        const sessionId = this.currentId(requested) ?? requested;
         let result: {ok: boolean; error?: string};
         try {
             result = this.deps.archiver.archive(sessionId);
@@ -414,22 +414,22 @@ export class PhoneSessionsService {
     }
 
     /** Feed an event to the ownership rules, and do what they say. */
-    #apply(event: OwnershipEvent): void {
-        const change = applyOwnership(this.#ownership, event);
-        this.#ownership = change.state;
+    private apply(event: OwnershipEvent): void {
+        const change = applyOwnership(this.ownership, event);
+        this.ownership = change.state;
         // A move gets the nudge even at an unchanged size: the TUI has to repaint for the device that took over.
         const moved =
             event.type === 'use-here' ||
             event.type === 'answered' ||
             event.type === 'started' ||
             event.type === 'device-removed';
-        for (const [sessionId, size] of Object.entries(change.resize)) this.#resizePty(sessionId, size, moved);
+        for (const [sessionId, size] of Object.entries(change.resize)) this.resizePty(sessionId, size, moved);
         for (const sessionId of change.ownerChanged) {
-            const owner = this.#wireOwner(ownerOf(this.#ownership, sessionId));
-            this.#broadcast({type: 'owner', sessionId, owner});
+            const owner = this.wireOwner(ownerOf(this.ownership, sessionId));
+            this.broadcast({type: 'owner', sessionId, owner});
             this.deps.renderer.terminalOwnerChanged(sessionId, owner);
         }
-        if (change.ownerChanged.length > 0) this.#schedulePush();
+        if (change.ownerChanged.length > 0) this.schedulePush();
     }
 
     /**
@@ -439,7 +439,7 @@ export class PhoneSessionsService {
      * full-screen TUI repaints — on the first resize after an attach, and on
      * every move.
      */
-    #resizePty(sessionId: string, {cols, rows}: TerminalSize, moved: boolean): void {
+    private resizePty(sessionId: string, {cols, rows}: TerminalSize, moved: boolean): void {
         const session = this.deps.registry.get(sessionId);
         if (!session) return;
         const {timers} = this.deps;
@@ -481,7 +481,7 @@ export class PhoneSessionsService {
      * anything else goes back for the phone to settle. A newer request from the
      * same phone answers the older one `cancelled`.
      */
-    async #ask(phone: Phone, requestId: string, text: string, size: TerminalSize | undefined): Promise<void> {
+    private async ask(phone: Phone, requestId: string, text: string, size: TerminalSize | undefined): Promise<void> {
         const candidates = routeCandidates(this.deps.projects.list(false));
         phone.router ??= this.deps.router();
         phone.asking = requestId;
@@ -494,7 +494,7 @@ export class PhoneSessionsService {
             phone.connection.send({type: 'ask-result', requestId, result: phoneAskResult(result, candidates)});
             return;
         }
-        const started = await this.#launch(phone, result.projectPath, result.prompt, size);
+        const started = await this.launch(phone, result.projectPath, result.prompt, size);
         if (!phone.open) return;
         if ('error' in started) {
             phone.connection.send({type: 'ask-error', requestId, error: started.error});
@@ -508,7 +508,7 @@ export class PhoneSessionsService {
     }
 
     /** The user picked the project: an unsure candidate, or one from the list after no match. */
-    async #askStart(
+    private async askStart(
         phone: Phone,
         requestId: string,
         projectPath: string,
@@ -524,7 +524,7 @@ export class PhoneSessionsService {
             });
             return;
         }
-        const started = await this.#launch(phone, projectPath, prompt, size);
+        const started = await this.launch(phone, projectPath, prompt, size);
         if (!phone.open) return;
         if ('error' in started) phone.connection.send({type: 'ask-error', requestId, error: started.error});
         else phone.connection.send({type: 'ask-started', requestId, sessionId: started.sessionId});
@@ -535,7 +535,7 @@ export class PhoneSessionsService {
      * phone from the start: the PTY takes its size as soon as it exists, and the
      * Mac shows the placeholder for it.
      */
-    async #launch(
+    private async launch(
         phone: Phone,
         projectPath: string,
         prompt: string,
@@ -555,14 +555,14 @@ export class PhoneSessionsService {
             return {error: opened.error ?? 'The session could not be started'};
         }
         log.info(`[phone] started ${sessionId} in ${projectPath} from ${phone.deviceId}`);
-        this.#apply({type: 'started', sessionId, device: phone.deviceId, ...(size ? {size} : {})});
+        this.apply({type: 'started', sessionId, device: phone.deviceId, ...(size ? {size} : {})});
         renderer.projectsChanged();
-        this.#schedulePush();
+        this.schedulePush();
         return {sessionId};
     }
 
     /** The local projects Ask Patch may start in, with how many sessions run in each. */
-    #projects(): PhoneProject[] {
+    private projects(): PhoneProject[] {
         const running = new Map<string, number>();
         for (const sessionId of this.deps.running.runningSessionIds()) {
             const path = this.deps.registry.get(sessionId)?.projectPath;
@@ -577,17 +577,17 @@ export class PhoneSessionsService {
 
     // ── The list ──
 
-    #changed(sessionId: string): void {
-        this.#changedAt.set(sessionId, this.deps.clock.now());
-        this.#schedulePush();
+    private changed(sessionId: string): void {
+        this.changedAt.set(sessionId, this.deps.clock.now());
+        this.schedulePush();
     }
 
-    #schedulePush(): void {
-        if (this.#pushTimer !== null || this.#phones.size === 0) return;
-        this.#pushTimer = this.deps.timers.setTimeout(() => {
-            this.#pushTimer = null;
-            if (this.#phones.size === 0) return;
-            this.#broadcast({type: 'sessions', sessions: this.#sessionList()});
+    private schedulePush(): void {
+        if (this.pushTimer !== null || this.phones.size === 0) return;
+        this.pushTimer = this.deps.timers.setTimeout(() => {
+            this.pushTimer = null;
+            if (this.phones.size === 0) return;
+            this.broadcast({type: 'sessions', sessions: this.sessionList()});
         }, SESSIONS_PUSH_MS);
     }
 
@@ -596,7 +596,7 @@ export class PhoneSessionsService {
      * first, then idle (most recent first), then working (newest started
      * first) — `sessionTier` and the sidebar's sort keys, for live rows only.
      */
-    #sessionList(): PhoneSession[] {
+    private sessionList(): PhoneSession[] {
         const {registry, running, projects, questions} = this.deps;
         const rows = new Map<string, SessionRow>();
         for (const project of projects.list(true)) {
@@ -609,8 +609,8 @@ export class PhoneSessionsService {
             const session = registry.get(sessionId);
             if (!session) continue;
             const row = findRow(rows, session, sessionId);
-            const busy = this.#busy.has(sessionId);
-            const terminal = this.#attention.has(sessionId);
+            const busy = this.busy.has(sessionId);
+            const terminal = this.attention.has(sessionId);
             const questionsWaiting = asking.has(sessionId);
             const tier = sessionTier({
                 needsAttention: terminal || questionsWaiting,
@@ -632,30 +632,30 @@ export class PhoneSessionsService {
                     remote: session.remote?.target ?? null,
                     state: tier === TIER_ATTENTION ? 'needs-you' : busy ? 'busy' : 'idle',
                     waiting: questionsWaiting ? 'questions' : terminal ? 'terminal' : null,
-                    owner: this.#wireOwner(ownerOf(this.#ownership, sessionId)),
-                    changedAt: this.#changedAt.get(sessionId) ?? session.openedAt,
+                    owner: this.wireOwner(ownerOf(this.ownership, sessionId)),
+                    changedAt: this.changedAt.get(sessionId) ?? session.openedAt,
                 },
             });
         }
         listed.sort((a, b) => b.tier - a.tier || b.sortTime - a.sortTime);
-        this.#listed = new Set(listed.map((entry) => entry.session.id));
+        this.listed = new Set(listed.map((entry) => entry.session.id));
         return listed.map((entry) => entry.session);
     }
 
     // ── Helpers ──
 
-    #broadcast(message: ServerMessage): void {
-        for (const phone of this.#phones.values()) phone.connection.send(message);
+    private broadcast(message: ServerMessage): void {
+        for (const phone of this.phones.values()) phone.connection.send(message);
     }
 
     /** The id a session is registered under now, from any id it has had; null when it isn't running. */
-    #currentId(sessionId: string): string | null {
+    private currentId(sessionId: string): string | null {
         return this.deps.registry.find(sessionId)?.key ?? null;
     }
 
-    #wireOwner(device: Device): TerminalOwner {
+    private wireOwner(device: Device): TerminalOwner {
         if (device === MAC) return {kind: 'mac'};
-        return {kind: 'device', deviceId: device, name: this.#names.get(device) ?? 'Phone'};
+        return {kind: 'device', deviceId: device, name: this.names.get(device) ?? 'Phone'};
     }
 }
 

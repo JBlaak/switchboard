@@ -139,10 +139,10 @@ interface FailedCapture {
 
 export class QuickAskService {
     /** The rewritten prompt of the last unsure answer, for a choice from the list or Tab. */
-    #choosing: {prompt: string; candidates: string[]} | null = null;
-    #failed: FailedCapture | null = null;
+    private choosing: {prompt: string; candidates: string[]} | null = null;
+    private failed: FailedCapture | null = null;
     /** The last capture's ids and the server that stored them, for ⌘Z, until they expire. */
-    #kept: {receipt: CaptureReceipt; server: string; timer: TimerHandle} | null = null;
+    private kept: {receipt: CaptureReceipt; server: string; timer: TimerHandle} | null = null;
 
     constructor(private readonly deps: QuickAskServiceDeps) {
         // A process booted while the user types, so Enter waits on the model only (S2).
@@ -150,17 +150,17 @@ export class QuickAskService {
     }
 
     /** Route what was typed and act on the answer. */
-    async route(text: string): Promise<QuickAskReply> {
+    public async route(text: string): Promise<QuickAskReply> {
         const {router, projects, log} = this.deps;
-        this.#choosing = null;
-        const failed = this.#failed;
-        if (failed?.typed === text) return this.#capture(failed.target, failed.text, text, failed.captureId);
-        this.#failed = null;
+        this.choosing = null;
+        const failed = this.failed;
+        if (failed?.typed === text) return this.capture(failed.target, failed.text, text, failed.captureId);
+        this.failed = null;
         const candidates = routeCandidates(projects.list(false));
         const skills = this.deps.skills.list(candidates.map((candidate) => candidate.projectPath));
         const result = await router.route({text, candidates, skills});
         log.info(`[quick-ask] routed: ${result.kind}`);
-        return this.#follow(quickAskOutcome(result, text, this.#quickFolder()), text);
+        return this.follow(quickAskOutcome(result, text, this.quickFolder()), text);
     }
 
     /**
@@ -168,39 +168,39 @@ export class QuickAskService {
      * is nothing to wait on; without a Quick Session Folder there is nowhere to
      * start it, and the text goes to the picker instead.
      */
-    quick(text: string): QuickAskReply {
-        this.#choosing = null;
-        this.#failed = null;
-        const folder = this.#quickFolder();
-        if (folder) return this.#launch(folder, text);
-        this.#handOff(text, NO_QUICK_FOLDER_LINE);
+    public quick(text: string): QuickAskReply {
+        this.choosing = null;
+        this.failed = null;
+        const folder = this.quickFolder();
+        if (folder) return this.launch(folder, text);
+        this.handOff(text, NO_QUICK_FOLDER_LINE);
         return {kind: 'handedOff'};
     }
 
     /** A choice from the list, started on the rewritten prompt. */
-    start(projectPath: string): QuickAskReply {
-        const choosing = this.#choosing;
+    public start(projectPath: string): QuickAskReply {
+        const choosing = this.choosing;
         if (!choosing || !choosing.candidates.includes(projectPath)) return {kind: 'unlocked'};
-        this.#choosing = null;
-        return this.#launch(projectPath, choosing.prompt);
+        this.choosing = null;
+        return this.launch(projectPath, choosing.prompt);
     }
 
     /** Tab from the list: the New Session picker in the main window, with the rewritten prompt. */
-    openPicker(): void {
-        const choosing = this.#choosing;
+    public openPicker(): void {
+        const choosing = this.choosing;
         if (!choosing) return;
-        this.#choosing = null;
-        this.#handOff(choosing.prompt);
+        this.choosing = null;
+        this.handOff(choosing.prompt);
     }
 
     /** ⌘Z after a capture: take back what it stored, while its ids are kept. */
-    async undo(): Promise<{ok: boolean}> {
-        const kept = this.#kept;
+    public async undo(): Promise<{ok: boolean}> {
+        const kept = this.kept;
         if (!kept) return {ok: false};
-        this.#forget();
+        this.forget();
         const {target, ids} = kept.receipt;
         const {server} = kept;
-        const run = await this.#oneToolCall(server, (path) => undoArgs(target, ids, path, server));
+        const run = await this.oneToolCall(server, (path) => undoArgs(target, ids, path, server));
         const ok = run !== null && readUndoRun(run);
         if (ok) this.deps.log.info(`[quick-ask] undid a capture in ${server}`);
         // The ids, so whatever is left can be found and removed by hand.
@@ -209,16 +209,16 @@ export class QuickAskService {
     }
 
     /** Esc while waiting: the request in flight answers `cancelled`. */
-    cancel(): void {
+    public cancel(): void {
         this.deps.router.cancel();
     }
 
-    #follow(outcome: QuickAskOutcome, text: string): QuickAskReply | Promise<QuickAskReply> {
+    private follow(outcome: QuickAskOutcome, text: string): QuickAskReply | Promise<QuickAskReply> {
         switch (outcome.kind) {
             case 'start':
-                return this.#launch(outcome.projectPath, outcome.prompt);
+                return this.launch(outcome.projectPath, outcome.prompt);
             case 'choose':
-                this.#choosing = {prompt: outcome.prompt, candidates: outcome.candidates};
+                this.choosing = {prompt: outcome.prompt, candidates: outcome.candidates};
                 return {
                     kind: 'choose',
                     candidates: outcome.candidates.map((projectPath) => ({
@@ -227,10 +227,10 @@ export class QuickAskService {
                     })),
                 };
             case 'picker':
-                this.#handOff(outcome.prompt, outcome.reason);
+                this.handOff(outcome.prompt, outcome.reason);
                 return {kind: 'handedOff'};
             case 'capture':
-                return this.#capture(outcome.target, outcome.text, text, this.deps.ids.newId());
+                return this.capture(outcome.target, outcome.text, text, this.deps.ids.newId());
             case 'unlock':
                 return {kind: 'unlocked'};
         }
@@ -241,34 +241,39 @@ export class QuickAskService {
      * server isn't set up in Claude Code (C6), takes the no-match path, with the
      * text as typed.
      */
-    async #capture(target: CaptureTarget, text: string, typed: string, captureId: string): Promise<QuickAskReply> {
+    private async capture(
+        target: CaptureTarget,
+        text: string,
+        typed: string,
+        captureId: string,
+    ): Promise<QuickAskReply> {
         const {mcpServers, popUp, settings, log} = this.deps;
-        this.#failed = null;
+        this.failed = null;
         if (!offeredTargets(settings.global()).includes(target)) {
             log.info('[quick-ask] that capture is off; no match instead');
-            return this.#follow(
-                quickAskOutcome({kind: 'noMatch', reason: NO_MATCH_LINE}, typed, this.#quickFolder()),
+            return this.follow(
+                quickAskOutcome({kind: 'noMatch', reason: NO_MATCH_LINE}, typed, this.quickFolder()),
                 typed,
             );
         }
         const server = captureServer(target, settings.global(), mcpServers);
         if (!server) {
             log.info(`[quick-ask] ${CAPTURE_SERVERS[target]} isn't set up; no match instead`);
-            return this.#follow(
-                quickAskOutcome({kind: 'noMatch', reason: NO_MATCH_LINE}, typed, this.#quickFolder()),
+            return this.follow(
+                quickAskOutcome({kind: 'noMatch', reason: NO_MATCH_LINE}, typed, this.quickFolder()),
                 typed,
             );
         }
         popUp.saving(target);
-        const run = await this.#oneToolCall(server, (path) => captureArgs(target, text, captureId, path, server));
+        const run = await this.oneToolCall(server, (path) => captureArgs(target, text, captureId, path, server));
         const read = run ? readCaptureRun(run, target) : {kind: 'failed' as const, reason: noAnswerLine(target)};
         if ('kind' in read) {
             log.warn(`[quick-ask] capture into ${server} failed`);
-            this.#failed = {typed, target, text, captureId};
+            this.failed = {typed, target, text, captureId};
             return {kind: 'captureFailed', reason: read.reason};
         }
         log.info(`[quick-ask] captured into ${server}: ${read.ids.join(', ')}`);
-        this.#keep(read, server);
+        this.keep(read, server);
         return {kind: 'saved', target, summary: read.summary};
     }
 
@@ -278,7 +283,7 @@ export class QuickAskService {
      * server went missing, the config couldn't be written, `claude` couldn't
      * start, or it took too long and was killed.
      */
-    async #oneToolCall(server: string, args: (mcpConfigPath: string) => string[]): Promise<ClaudeRun | null> {
+    private async oneToolCall(server: string, args: (mcpConfigPath: string) => string[]): Promise<ClaudeRun | null> {
         const {mcpServers, cli, timers, log} = this.deps;
         const controller = new AbortController();
         const timer = timers.setTimeout(() => {
@@ -301,33 +306,33 @@ export class QuickAskService {
     }
 
     /** Hold the ids for ⌘Z, for ten minutes; a newer capture replaces them. */
-    #keep(receipt: CaptureReceipt, server: string): void {
-        this.#forget();
+    private keep(receipt: CaptureReceipt, server: string): void {
+        this.forget();
         const timer = this.deps.timers.setTimeout(() => {
-            this.#kept = null;
+            this.kept = null;
         }, UNDO_KEPT_MS);
-        this.#kept = {receipt, server, timer};
+        this.kept = {receipt, server, timer};
     }
 
-    #forget(): void {
-        if (this.#kept) this.deps.timers.clearTimeout(this.#kept.timer);
-        this.#kept = null;
+    private forget(): void {
+        if (this.kept) this.deps.timers.clearTimeout(this.kept.timer);
+        this.kept = null;
     }
 
     /** The session starts in the main window, which stays where it is. */
-    #launch(projectPath: string, prompt: string): QuickAskReply {
+    private launch(projectPath: string, prompt: string): QuickAskReply {
         this.deps.mainWindow.ensureOpen();
         this.deps.renderer.launchRequested(projectPath, prompt);
         return {kind: 'started', folder: folderName(projectPath)};
     }
 
-    #handOff(prompt: string, reason?: string): void {
+    private handOff(prompt: string, reason?: string): void {
         this.deps.mainWindow.bringForward();
         this.deps.renderer.pickerRequested(prompt, reason);
     }
 
     /** The Quick Session Folder, or '' when none is set. */
-    #quickFolder(): string {
+    private quickFolder(): string {
         const folder = this.deps.settings.global().quickSessionPath;
         return typeof folder === 'string' ? folder.trim() : '';
     }

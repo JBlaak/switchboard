@@ -37,32 +37,32 @@ function status(headSha: string, state: CheckRun['state'], more: Partial<PullReq
 
 /** `gh`, answering from a table the test edits between polls. */
 class FakeGitHub {
-    availability: GitHubAvailability = 'ok';
-    prs = new Map<number, PullRequestStatus>();
-    calls: Array<[string, number[]]> = [];
-    logs: Array<[string, string, number]> = [];
-    async available() {
+    public availability: GitHubAvailability = 'ok';
+    public prs = new Map<number, PullRequestStatus>();
+    public calls: Array<[string, number[]]> = [];
+    public logs: Array<[string, string, number]> = [];
+    public async available() {
         return this.availability;
     }
     /** While set, every answer waits for it: an answer still on its way. */
-    gate: Promise<void> | null = null;
-    async pullRequests(repo: string, numbers: readonly number[]) {
+    public gate: Promise<void> | null = null;
+    public async pullRequests(repo: string, numbers: readonly number[]) {
         this.calls.push([repo, [...numbers]]);
         if (this.gate) await this.gate;
         return numbers.flatMap((n) => (this.prs.has(n) ? [{...this.prs.get(n)!}] : []));
     }
-    async checkLogTail(repo: string, checkRunUrl: string, lines: number) {
+    public async checkLogTail(repo: string, checkRunUrl: string, lines: number) {
         this.logs.push([repo, checkRunUrl, lines]);
         return 'FAIL src/login.test.ts\nexpected 2, got 3';
     }
 }
 
 class MemoryHistory implements AutoFixHistory {
-    rows: AutoFixRecord[] = [];
-    record(event: AutoFixRecord) {
+    public rows: AutoFixRecord[] = [];
+    public record(event: AutoFixRecord) {
         this.rows.push({...event});
     }
-    forPullRequest(repository: string, number: number) {
+    public forPullRequest(repository: string, number: number) {
         return this.rows
             .filter((row) => row.repository === repository && row.number === number)
             .map((row) => ({...row}));

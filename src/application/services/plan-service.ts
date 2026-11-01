@@ -57,7 +57,7 @@ interface Cached<T> {
 }
 
 export class PlanService {
-    readonly #cache = new Map<string, Cached<unknown>>();
+    private readonly cache = new Map<string, Cached<unknown>>();
 
     constructor(private readonly deps: PlanServiceDeps) {}
 
@@ -65,13 +65,13 @@ export class PlanService {
      * The plans a session works on, and its repository's open plans. Null for a
      * session that is not in a GitHub repository, or when `gh` could not be asked.
      */
-    sessionPlans(sessionId: string): Promise<SessionPlans | null> {
-        return this.#cached('session:' + sessionId, () => this.#sessionPlans(sessionId));
+    public sessionPlans(sessionId: string): Promise<SessionPlans | null> {
+        return this.cached('session:' + sessionId, () => this.fetchSessionPlans(sessionId));
     }
 
     /** One plan, by its issue (F2). Null when `gh` could not be asked or there is no such issue. */
-    plan(repo: string, number: number): Promise<Plan | null> {
-        return this.#cached(`plan:${repo}#${number}`, () => this.deps.github.plan(repo, number));
+    public plan(repo: string, number: number): Promise<Plan | null> {
+        return this.cached(`plan:${repo}#${number}`, () => this.deps.github.plan(repo, number));
     }
 
     /**
@@ -79,25 +79,25 @@ export class PlanService {
      * `closed` (F3). Null for a project that is not a GitHub repository, or when
      * `gh` could not be asked.
      */
-    async projectPlans(projectPath: string, options: {closed: boolean}): Promise<PlanSummary[] | null> {
-        const repository = await this.#repositoryOf(projectPath);
-        return repository ? this.#plansIn(repository, options.closed === true) : null;
+    public async projectPlans(projectPath: string, options: {closed: boolean}): Promise<PlanSummary[] | null> {
+        const repository = await this.repositoryOf(projectPath);
+        return repository ? this.plansIn(repository, options.closed === true) : null;
     }
 
-    async #sessionPlans(sessionId: string): Promise<SessionPlans | null> {
+    private async fetchSessionPlans(sessionId: string): Promise<SessionPlans | null> {
         const target = this.deps.locate(sessionId);
         if (!target) return null;
-        const repository = await this.#repositoryOf(target.projectPath);
+        const repository = await this.repositoryOf(target.projectPath);
         if (!repository) return null;
 
-        const issues = await this.#sessionIssues(sessionId, target, repository);
+        const issues = await this.sessionIssues(sessionId, target, repository);
         if (!issues) return null;
         const keys = issues.length > 0 ? await this.deps.github.plansOf(issues) : [];
         if (!keys) return null;
 
         const [plans, others] = await Promise.all([
             Promise.all(keys.map((key) => this.plan(key.repository, key.number))),
-            this.#plansIn(repository, false),
+            this.plansIn(repository, false),
         ]);
         if (!others) return null;
         const found = plans.filter((plan): plan is Plan => plan !== null);
@@ -109,7 +109,11 @@ export class PlanService {
      * The issues a session owns (S1): the issues its branches are named after,
      * and the issues its PRs close, once each. Null when `gh` could not be asked.
      */
-    async #sessionIssues(sessionId: string, target: PlanSessionTarget, repository: string): Promise<IssueKey[] | null> {
+    private async sessionIssues(
+        sessionId: string,
+        target: PlanSessionTarget,
+        repository: string,
+    ): Promise<IssueKey[] | null> {
         const {transcripts, github} = this.deps;
         const owned = new Map<string, IssueKey>();
         const add = (issue: IssueKey) =>
@@ -137,14 +141,14 @@ export class PlanService {
         return [...owned.values()];
     }
 
-    #plansIn(repository: string, closed: boolean): Promise<PlanSummary[] | null> {
-        return this.#cached(`plans:${repository}:${closed ? 'all' : 'open'}`, () =>
+    private plansIn(repository: string, closed: boolean): Promise<PlanSummary[] | null> {
+        return this.cached(`plans:${repository}:${closed ? 'all' : 'open'}`, () =>
             this.deps.github.plansIn(repository, {closed}),
         );
     }
 
     /** `owner/repo` of the project's origin remote; null when it is not a GitHub repository. */
-    async #repositoryOf(projectPath: string): Promise<string | null> {
+    private async repositoryOf(projectPath: string): Promise<string | null> {
         if (isRemoteProjectPath(projectPath)) return null;
         const root = await this.deps.git.worktreeRoot(projectPath);
         if (!root) return null;
@@ -153,19 +157,19 @@ export class PlanService {
     }
 
     /** The answer kept under `key` while it is fresh; a null answer is dropped once it lands. */
-    #cached<T>(key: string, ask: () => Promise<T | null>): Promise<T | null> {
+    private cached<T>(key: string, ask: () => Promise<T | null>): Promise<T | null> {
         const now = this.deps.clock.now();
-        const hit = this.#cache.get(key) as Cached<T> | undefined;
+        const hit = this.cache.get(key) as Cached<T> | undefined;
         if (hit && now - hit.at < PLAN_CACHE_MS) return hit.answer;
 
         const entry: Cached<T> = {at: now, answer: ask().catch(() => null)};
-        this.#cache.set(key, entry);
+        this.cache.set(key, entry);
         void entry.answer.then((answer) => {
-            if (answer === null && this.#cache.get(key) === entry) this.#cache.delete(key);
+            if (answer === null && this.cache.get(key) === entry) this.cache.delete(key);
         });
         // Drop what has gone stale, so the cache does not grow with every session asked about.
-        for (const [other, cached] of this.#cache) {
-            if (now - cached.at >= PLAN_CACHE_MS) this.#cache.delete(other);
+        for (const [other, cached] of this.cache) {
+            if (now - cached.at >= PLAN_CACHE_MS) this.cache.delete(other);
         }
         return entry.answer;
     }

@@ -64,16 +64,16 @@ export type BranchWorktreeResult =
 
 export class BranchWorktrees<S extends BranchSessionCandidate = BranchSessionCandidate> {
     /** A session's transcript branches, as of its last activity. */
-    readonly #branches = new Map<string, {activeAt: number; branches: string[]}>();
+    private readonly branches = new Map<string, {activeAt: number; branches: string[]}>();
 
     constructor(private readonly deps: BranchWorktreesDeps<S>) {}
 
     /** Make the worktree for `branch`, or say why not. */
-    async prepare({root, branch, existing, base}: BranchWorktreeRequest): Promise<BranchWorktreeResult> {
+    public async prepare({root, branch, existing, base}: BranchWorktreeRequest): Promise<BranchWorktreeResult> {
         const {git} = this.deps;
         const worktreePath = root.replace(/\/+$/, '') + WORKTREES_DIR + branch;
         if (await git.branchExists(root, branch)) {
-            const found = await this.#existingBranch(root, branch);
+            const found = await this.existingBranch(root, branch);
             if (existing === 'reuse') {
                 if (!found.worktreePath) {
                     // A worktree whose directory has gone still holds its branch until it is pruned.
@@ -121,8 +121,8 @@ export class BranchWorktrees<S extends BranchSessionCandidate = BranchSessionCan
      * The branches its transcripts were written on; a session with none yet
      * (just started) is on the branch its directory has checked out.
      */
-    async branchesOf(session: S): Promise<string[]> {
-        const known = this.#branches.get(session.sessionId);
+    public async branchesOf(session: S): Promise<string[]> {
+        const known = this.branches.get(session.sessionId);
         if (known && known.activeAt === session.activeAt && known.branches.length > 0) return known.branches;
         const written = session.folder ? this.deps.transcripts.locations(session.folder, session.sessionId) : [];
         let branches = [...new Set(written.map((location) => location.branch).filter(Boolean))];
@@ -130,7 +130,7 @@ export class BranchWorktrees<S extends BranchSessionCandidate = BranchSessionCan
             const current = await this.deps.git.currentBranch(session.projectPath);
             branches = current ? [current] : [];
         }
-        this.#branches.set(session.sessionId, {activeAt: session.activeAt, branches});
+        this.branches.set(session.sessionId, {activeAt: session.activeAt, branches});
         return branches;
     }
 
@@ -139,7 +139,7 @@ export class BranchWorktrees<S extends BranchSessionCandidate = BranchSessionCan
      * that worked there last: one in its worktree, else one whose transcripts
      * were written on the branch.
      */
-    async #existingBranch(root: string, branch: string): Promise<ExistingBranch> {
+    private async existingBranch(root: string, branch: string): Promise<ExistingBranch> {
         const checkout = (await this.deps.git.worktrees(root)).find((worktree) => worktree.branch === branch) ?? null;
         const local = this.deps.sessions().filter((session) => !isRemoteProjectPath(session.projectPath));
         const newest = (sessions: S[]) =>

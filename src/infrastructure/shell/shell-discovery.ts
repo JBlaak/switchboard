@@ -65,11 +65,11 @@ function discoverProfiles(): ShellProfile[] {
 }
 
 export class SystemShellProfileProvider implements ShellProfileProvider {
-    #profiles: ShellProfile[] | null = null;
+    private profiles: ShellProfile[] | null = null;
 
-    list(): ShellProfile[] {
-        this.#profiles ??= discoverProfiles();
-        return this.#profiles;
+    public list(): ShellProfile[] {
+        this.profiles ??= discoverProfiles();
+        return this.profiles;
     }
 
     /**
@@ -79,15 +79,15 @@ export class SystemShellProfileProvider implements ShellProfileProvider {
      * then uninstalled falls through to auto-detection rather than failing the
      * launch.
      */
-    resolve(profileId?: string | null): ShellProfile {
+    public resolve(profileId?: string | null): ShellProfile {
         if (profileId && profileId !== 'auto') {
             const profile = this.list().find((p) => p.id === profileId);
             if (profile && fs.existsSync(profile.path)) return profile;
         }
-        return this.#autoDetect();
+        return this.autoDetect();
     }
 
-    #autoDetect(): ShellProfile {
+    private autoDetect(): ShellProfile {
         const auto = (shellPath: string): ShellProfile => ({id: 'auto', name: 'Auto', path: shellPath});
 
         // SHELL is what the user's own terminal uses, so it outranks any guess.

@@ -19,22 +19,22 @@ interface Row {
 }
 
 export class SqliteAutoFixHistory implements AutoFixHistory {
-    readonly #insert;
-    readonly #forPullRequest;
+    private readonly insertStatement;
+    private readonly forPullRequestStatement;
 
     constructor(db: Database.Database) {
-        this.#insert = db.prepare<[Row]>(`
+        this.insertStatement = db.prepare<[Row]>(`
       INSERT INTO auto_fix_attempts (kind, repository, number, check_name, head_sha, origin, activity_id, at)
       VALUES (@kind, @repository, @number, @check_name, @head_sha, @origin, @activity_id, @at)
     `);
-        this.#forPullRequest = db.prepare<[string, number], Row>(
+        this.forPullRequestStatement = db.prepare<[string, number], Row>(
             'SELECT * FROM auto_fix_attempts WHERE repository = ? AND number = ? ORDER BY id',
         );
     }
 
-    record(event: AutoFixRecord): void {
+    public record(event: AutoFixRecord): void {
         const attempt = event.kind === 'attempt' ? event : null;
-        this.#insert.run({
+        this.insertStatement.run({
             kind: event.kind,
             repository: event.repository,
             number: event.number,
@@ -46,8 +46,8 @@ export class SqliteAutoFixHistory implements AutoFixHistory {
         });
     }
 
-    forPullRequest(repository: string, number: number): AutoFixRecord[] {
-        return this.#forPullRequest.all(repository, number).map((row): AutoFixRecord => {
+    public forPullRequest(repository: string, number: number): AutoFixRecord[] {
+        return this.forPullRequestStatement.all(repository, number).map((row): AutoFixRecord => {
             const base = {repository: row.repository, number: row.number, checkName: row.check_name, at: row.at};
             if (row.kind === 'attempt') {
                 return {

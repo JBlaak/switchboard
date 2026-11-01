@@ -19,13 +19,13 @@ export const WHISPER_MODEL_FILE = 'ggml-large-v3-turbo.bin';
 export const WHISPER_MODEL_URL = `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${WHISPER_MODEL_FILE}`;
 
 export class WhisperModelStore implements VoiceModelStore {
-    readonly path: string;
+    public readonly path: string;
 
     constructor(private readonly deps: {directory: string; log: Logger; url?: string}) {
         this.path = path.join(deps.directory, WHISPER_MODEL_FILE);
     }
 
-    async present(): Promise<boolean> {
+    public async present(): Promise<boolean> {
         try {
             const stat = await fs.stat(this.path);
             return stat.isFile() && stat.size > 0;
@@ -34,7 +34,7 @@ export class WhisperModelStore implements VoiceModelStore {
         }
     }
 
-    async download(onProgress: (progress: number | null) => void): Promise<void> {
+    public async download(onProgress: (progress: number | null) => void): Promise<void> {
         const url = this.deps.url ?? WHISPER_MODEL_URL;
         const part = `${this.path}.part`;
         await fs.mkdir(this.deps.directory, {recursive: true});

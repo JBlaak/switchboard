@@ -26,24 +26,24 @@ export interface QuickAskHotkeyDeps {
 }
 
 export class QuickAskHotkey {
-    #registered = false;
+    private isRegistered = false;
 
     constructor(private readonly deps: QuickAskHotkeyDeps) {}
 
     /** Whether the shortcut is held right now. */
-    get registered(): boolean {
-        return this.#registered;
+    public get registered(): boolean {
+        return this.isRegistered;
     }
 
-    apply(): void {
+    public apply(): void {
         const {hotkey, panel, settings, log} = this.deps;
         if (!settings.quickAskEnabled()) {
-            if (this.#registered) hotkey.unregister(QUICK_ASK_ACCELERATOR);
-            this.#registered = false;
+            if (this.isRegistered) hotkey.unregister(QUICK_ASK_ACCELERATOR);
+            this.isRegistered = false;
             return;
         }
-        if (this.#registered) return;
-        this.#registered = hotkey.register(QUICK_ASK_ACCELERATOR, () => panel.toggle());
-        if (!this.#registered) log.warn(`[quick-ask] ${QUICK_ASK_ACCELERATOR} is in use by another app`);
+        if (this.isRegistered) return;
+        this.isRegistered = hotkey.register(QUICK_ASK_ACCELERATOR, () => panel.toggle());
+        if (!this.isRegistered) log.warn(`[quick-ask] ${QUICK_ASK_ACCELERATOR} is in use by another app`);
     }
 }

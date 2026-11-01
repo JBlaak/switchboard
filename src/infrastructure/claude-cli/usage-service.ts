@@ -20,9 +20,9 @@ const REQUEST_TIMEOUT_MS = 10000;
 export class OAuthUsageService implements UsageService {
     constructor(private readonly log: Logger) {}
 
-    async fetch(): Promise<Usage> {
+    public async fetch(): Promise<Usage> {
         try {
-            const raw = await this.#request();
+            const raw = await this.request();
             if (raw === null) {
                 return {_error: true, message: 'Could not fetch usage (no token or API error)'};
             }
@@ -35,7 +35,7 @@ export class OAuthUsageService implements UsageService {
         }
     }
 
-    async #request(): Promise<ApiUsage | null> {
+    private async request(): Promise<ApiUsage | null> {
         const oauth = readOAuthToken();
         if (!oauth?.accessToken) return null;
 

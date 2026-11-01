@@ -29,7 +29,7 @@ export interface ClaudeCommandRunnerDeps {
 export class ClaudeCommandRunner implements CommandRunner {
     constructor(private readonly deps: ClaudeCommandRunnerDeps) {}
 
-    run(claudeArgs: readonly string[], cwd: string, name: string, onDone: () => void): void {
+    public run(claudeArgs: readonly string[], cwd: string, name: string, onDone: () => void): void {
         const {shells, terminals, log} = this.deps;
         const profile = shells.resolve(this.deps.shellProfileId());
         const command = 'claude ' + quoteArgvForShell(claudeArgs);

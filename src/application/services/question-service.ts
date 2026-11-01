@@ -93,9 +93,9 @@ export interface QuestionServiceDeps {
 }
 
 export class QuestionService {
-    readonly #pending = new Map<ActiveSession, Entry>();
+    private readonly pendingBySession = new Map<ActiveSession, Entry>();
     /** Numbers the made-up ids of grilling rounds. */
-    #rounds = 0;
+    private rounds = 0;
 
     constructor(private readonly deps: QuestionServiceDeps) {}
 
@@ -107,7 +107,7 @@ export class QuestionService {
      * (the CLI moved on without us noticing the close): it is released with no
      * decision and withdrawn from the UI before the new one is shown.
      */
-    receive(launchId: string, asked: AskedQuestions, reply: QuestionReply): PendingQuestionsHandle {
+    public receive(launchId: string, asked: AskedQuestions, reply: QuestionReply): PendingQuestionsHandle {
         const {registry, renderer, clock, log} = this.deps;
 
         const found = registry.find(launchId);
@@ -118,7 +118,7 @@ export class QuestionService {
         }
         const {key, session} = found;
 
-        this.#replace(session);
+        this.replace(session);
 
         const askedAt = clock.now();
         const entry: AskEntry = {
@@ -131,17 +131,17 @@ export class QuestionService {
             askedAt,
             deadline: askedAt + QUESTION_HOOK_TIMEOUT_SECONDS * 1000,
         };
-        this.#pending.set(session, entry);
+        this.pendingBySession.set(session, entry);
         log.info(
             `[questions] session=${currentId(session, key)} tool=${toolUseLabel(asked.toolUseId)} asked ${asked.questions.length} question(s)`,
         );
-        renderer.questionsAsked(this.#toPending(session, entry));
+        renderer.questionsAsked(this.toPending(session, entry));
 
         return {
             withdraw: () => {
                 // Only this request's entry: a replacement may already sit in its place.
-                if (this.#pending.get(session) !== entry) return;
-                this.#settle(session, entry, 'withdrawn');
+                if (this.pendingBySession.get(session) !== entry) return;
+                this.settle(session, entry, 'withdrawn');
             },
         };
     }
@@ -151,40 +151,40 @@ export class QuestionService {
      * `launchId`. Like a new AskUserQuestion, it replaces whatever the session
      * was still asking: Claude has moved on from it.
      */
-    receiveRound(launchId: string, questions: Question[]): void {
+    public receiveRound(launchId: string, questions: Question[]): void {
         const {registry, renderer, prompter, clock, log} = this.deps;
         const found = registry.find(launchId);
         if (!found) return;
         const {key, session} = found;
-        this.#replace(session);
+        this.replace(session);
 
         const askedAt = clock.now();
         const entry: GrillEntry = {
             source: 'grill',
             key,
-            toolUseId: `grill-${askedAt}-${++this.#rounds}`,
+            toolUseId: `grill-${askedAt}-${++this.rounds}`,
             questions,
             askedAt,
             exitWatch: null,
         };
-        this.#pending.set(session, entry);
+        this.pendingBySession.set(session, entry);
         entry.exitWatch = prompter.onExit(key, () => {
-            if (this.#pending.get(session) === entry) this.#settle(session, entry, 'withdrawn');
+            if (this.pendingBySession.get(session) === entry) this.settle(session, entry, 'withdrawn');
         });
         log.info(
             `[questions] session=${currentId(session, key)} tool=${entry.toolUseId} grilling round of ${questions.length} question(s)`,
         );
-        renderer.questionsAsked(this.#toPending(session, entry));
+        renderer.questionsAsked(this.toPending(session, entry));
     }
 
     /**
      * A prompt went in to the session launched as `launchId`. A grilling round
      * still waiting has been answered in the terminal, or passed over.
      */
-    promptSubmitted(launchId: string): void {
+    public promptSubmitted(launchId: string): void {
         const found = this.deps.registry.find(launchId);
-        const entry = found ? this.#pending.get(found.session) : undefined;
-        if (found && entry?.source === 'grill') this.#settle(found.session, entry, 'withdrawn');
+        const entry = found ? this.pendingBySession.get(found.session) : undefined;
+        if (found && entry?.source === 'grill') this.settle(found.session, entry, 'withdrawn');
     }
 
     /**
@@ -192,34 +192,34 @@ export class QuestionService {
      * `answeredOn` is where the answer came from (#194), carried on the settled
      * set so the other device can say "Answered on phone" or "Answered on Mac".
      */
-    answer(
+    public answer(
         sessionId: string,
         toolUseId: string,
         answers: Answers,
         answeredOn: 'mac' | 'phone' = 'mac',
     ): {ok: boolean; error?: string} {
         const found = this.deps.registry.find(sessionId);
-        const entry = found ? this.#pending.get(found.session) : undefined;
+        const entry = found ? this.pendingBySession.get(found.session) : undefined;
         if (!found || !entry || entry.toolUseId !== toolUseId) {
             return {ok: false, error: 'These questions are no longer waiting'};
         }
         // Settled first: the prompt typed in fires UserPromptSubmit, which must find nothing left to withdraw.
-        this.#settle(found.session, entry, 'answered', answeredOn);
+        this.settle(found.session, entry, 'answered', answeredOn);
         if (entry.source === 'ask') entry.reply(questionHookResponse(entry.asked.toolInput, answers));
         else this.deps.prompter.send(found.key, grillReply(entry.questions, answers));
         return {ok: true};
     }
 
     /** Every set still waiting, for a renderer that has just (re)loaded. */
-    pending(): PendingQuestions[] {
-        return [...this.#pending].map(([session, entry]) => this.#toPending(session, entry));
+    public pending(): PendingQuestions[] {
+        return [...this.pendingBySession].map(([session, entry]) => this.toPending(session, entry));
     }
 
     /**
      * The `--settings` value that installs the hook for a session launched as
      * `sessionId`, or null while the server is not listening.
      */
-    settingsFor(sessionId: string): string | null {
+    public settingsFor(sessionId: string): string | null {
         const {url, token} = this.deps.endpoint;
         if (!url) return null;
         const id = encodeURIComponent(sessionId);
@@ -233,15 +233,20 @@ export class QuestionService {
      * A session is about to ask something new: whatever it was still asking is
      * stale. A held request is released with no decision.
      */
-    #replace(session: ActiveSession): void {
-        const previous = this.#pending.get(session);
+    private replace(session: ActiveSession): void {
+        const previous = this.pendingBySession.get(session);
         if (!previous) return;
-        this.#settle(session, previous, 'withdrawn');
+        this.settle(session, previous, 'withdrawn');
         if (previous.source === 'ask') previous.reply(NO_DECISION);
     }
 
-    #settle(session: ActiveSession, entry: Entry, outcome: QuestionsOutcome, answeredOn?: 'mac' | 'phone'): void {
-        this.#pending.delete(session);
+    private settle(
+        session: ActiveSession,
+        entry: Entry,
+        outcome: QuestionsOutcome,
+        answeredOn?: 'mac' | 'phone',
+    ): void {
+        this.pendingBySession.delete(session);
         if (entry.source === 'grill') entry.exitWatch?.dispose();
         const sessionId = currentId(session, entry.key);
         this.deps.log.info(
@@ -255,7 +260,7 @@ export class QuestionService {
         });
     }
 
-    #toPending(session: ActiveSession, entry: Entry): PendingQuestions {
+    private toPending(session: ActiveSession, entry: Entry): PendingQuestions {
         return {
             sessionId: currentId(session, entry.key),
             toolUseId: entry.toolUseId,

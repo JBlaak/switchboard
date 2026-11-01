@@ -34,12 +34,12 @@ export interface ArchiveToolServiceDeps {
 }
 
 export class ArchiveToolService {
-    readonly #requested = new WeakSet<ActiveSession>();
+    private readonly requested = new WeakSet<ActiveSession>();
 
     constructor(private readonly deps: ArchiveToolServiceDeps) {}
 
     /** The tool for a session launched as `sessionId`, or null while the server is not listening. */
-    launchFor(sessionId: string): ArchiveToolLaunch | null {
+    public launchFor(sessionId: string): ArchiveToolLaunch | null {
         const {url, token} = this.deps.endpoint;
         if (!url) return null;
         return {
@@ -51,11 +51,11 @@ export class ArchiveToolService {
     }
 
     /** The session launched as `launchId` called the tool. */
-    request(launchId: string): ArchiveToolOutcome {
+    public request(launchId: string): ArchiveToolOutcome {
         const found = this.deps.registry.find(launchId);
         if (!found)
             return {ok: false, message: 'Switchboard has no running session by this id, so nothing was archived.'};
-        this.#requested.add(found.session);
+        this.requested.add(found.session);
         this.deps.log.info(`[archive-tool] session=${currentId(found.session, found.key)} asked to be archived`);
         return {
             ok: true,
@@ -64,10 +64,10 @@ export class ArchiveToolService {
     }
 
     /** A turn of the session launched as `launchId` ended: archive it, if it asked. */
-    turnEnded(launchId: string): void {
+    public turnEnded(launchId: string): void {
         const found = this.deps.registry.find(launchId);
-        if (!found || !this.#requested.has(found.session)) return;
-        this.#requested.delete(found.session);
+        if (!found || !this.requested.has(found.session)) return;
+        this.requested.delete(found.session);
         const sessionId = currentId(found.session, found.key);
         const {ok} = this.deps.archiver.archive(sessionId);
         this.deps.log.info(

@@ -35,16 +35,16 @@ export class WorktreeCleanupService {
     constructor(private readonly deps: WorktreeCleanupDeps) {}
 
     /** Remove what `sessionId`, just archived, leaves behind; never throws. */
-    async afterArchive(sessionId: string): Promise<void> {
+    public async afterArchive(sessionId: string): Promise<void> {
         if (!this.deps.enabled()) return;
         try {
-            await this.#clean(sessionId);
+            await this.clean(sessionId);
         } catch (err) {
             this.deps.log.warn(`[worktree-cleanup] ${sessionId}: ${(err as Error).message}`);
         }
     }
 
-    async #clean(sessionId: string): Promise<void> {
+    private async clean(sessionId: string): Promise<void> {
         const target = this.deps.locate(sessionId);
         if (!target || isRemoteProjectPath(target.projectPath)) return;
 

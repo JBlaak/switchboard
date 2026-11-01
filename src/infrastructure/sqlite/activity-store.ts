@@ -23,19 +23,19 @@ interface Row {
 }
 
 export class SqliteActivityStore implements ActivityStore {
-    readonly #insert;
-    readonly #update;
-    readonly #remove;
-    readonly #unfinished;
+    private readonly insertStatement;
+    private readonly updateStatement;
+    private readonly removeStatement;
+    private readonly unfinishedStatement;
 
     constructor(db: Database.Database) {
-        this.#insert = db.prepare<[Row]>(`
+        this.insertStatement = db.prepare<[Row]>(`
       INSERT INTO session_actions
         (id, session, repository, item_key, action, origin, phase, prompt, queued_at, sent_at, done_at, details)
       VALUES
         (@id, @session, @repository, @item_key, @action, @origin, @phase, @prompt, @queued_at, @sent_at, @done_at, @details)
     `);
-        this.#update = db.prepare<
+        this.updateStatement = db.prepare<
             [{id: string; phase: string | null; sent_at: string | null; done_at: string | null}]
         >(`
       UPDATE session_actions SET
@@ -44,14 +44,14 @@ export class SqliteActivityStore implements ActivityStore {
         done_at = COALESCE(@done_at, done_at)
       WHERE id = @id
     `);
-        this.#remove = db.prepare<[string]>('DELETE FROM session_actions WHERE id = ?');
-        this.#unfinished = db.prepare<[], Row>(
+        this.removeStatement = db.prepare<[string]>('DELETE FROM session_actions WHERE id = ?');
+        this.unfinishedStatement = db.prepare<[], Row>(
             "SELECT * FROM session_actions WHERE phase IN ('queued', 'sent', 'gave-up') ORDER BY queued_at, rowid",
         );
     }
 
-    add(action: StoredAction): void {
-        this.#insert.run({
+    public add(action: StoredAction): void {
+        this.insertStatement.run({
             id: action.id,
             session: action.sessionId,
             repository: action.repository,
@@ -67,8 +67,8 @@ export class SqliteActivityStore implements ActivityStore {
         });
     }
 
-    update(id: string, changes: Partial<Pick<StoredAction, 'phase' | 'sentAt' | 'doneAt'>>): void {
-        this.#update.run({
+    public update(id: string, changes: Partial<Pick<StoredAction, 'phase' | 'sentAt' | 'doneAt'>>): void {
+        this.updateStatement.run({
             id,
             phase: changes.phase ?? null,
             sent_at: changes.sentAt ?? null,
@@ -76,12 +76,12 @@ export class SqliteActivityStore implements ActivityStore {
         });
     }
 
-    remove(id: string): void {
-        this.#remove.run(id);
+    public remove(id: string): void {
+        this.removeStatement.run(id);
     }
 
-    unfinished(): StoredAction[] {
-        return this.#unfinished.all().map((row) => ({
+    public unfinished(): StoredAction[] {
+        return this.unfinishedStatement.all().map((row) => ({
             id: row.id,
             sessionId: row.session,
             repository: row.repository,

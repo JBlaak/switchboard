@@ -69,14 +69,14 @@ interface GitHubReads {
 
 export class ProjectOverviewService {
     /** Reads by repository and options, while they are fresh; a failed read is dropped once it lands. */
-    readonly #fresh = new Map<string, {at: number; reads: Promise<GitHubReads | null>}>();
+    private readonly fresh = new Map<string, {at: number; reads: Promise<GitHubReads | null>}>();
     /** The last good reads by repository and options, for when a refresh fails. */
-    readonly #last = new Map<string, GitHubReads>();
+    private readonly last = new Map<string, GitHubReads>();
 
     constructor(private readonly deps: ProjectOverviewServiceDeps) {}
 
     /** The project page's answer for `projectPath`. Closed plans and merged PRs only when asked. */
-    async overview(projectPath: string, options: ProjectOverviewOptions = {}): Promise<ProjectOverview> {
+    public async overview(projectPath: string, options: ProjectOverviewOptions = {}): Promise<ProjectOverview> {
         const running = this.deps.running();
 
         if (isRemoteProjectPath(projectPath)) {
@@ -98,7 +98,7 @@ export class ProjectOverviewService {
 
         const [checkouts, github] = await Promise.all([
             root ? this.deps.git.worktrees(root) : Promise.resolve<WorktreeSummary[]>([]),
-            repository ? this.#github(projectPath, repository, running, options) : Promise.resolve(null),
+            repository ? this.github(projectPath, repository, running, options) : Promise.resolve(null),
         ]);
 
         const worktrees = sessionsByWorktree(checkouts, running);
@@ -110,7 +110,7 @@ export class ProjectOverviewService {
         return {projectPath, remote: false, repository, github, worktrees, running: [...projectRunning]};
     }
 
-    async #github(
+    private async github(
         projectPath: string,
         repository: string,
         running: RunningSession[],
@@ -120,10 +120,10 @@ export class ProjectOverviewService {
         const merged = options.merged === true;
         const key = `${repository}:${closed ? 'closed' : 'open'}:${merged ? 'merged' : 'open'}`;
 
-        const fresh = await this.#reads(key, () => this.#read(projectPath, repository, closed, merged));
-        if (fresh) this.#last.set(key, fresh);
-        const reads = fresh ?? this.#last.get(key);
-        if (!reads) return {ok: false, reason: await this.#unavailable()};
+        const fresh = await this.reads(key, () => this.read(projectPath, repository, closed, merged));
+        if (fresh) this.last.set(key, fresh);
+        const reads = fresh ?? this.last.get(key);
+        if (!reads) return {ok: false, reason: await this.unavailable()};
 
         const owners = await this.deps.owners.issueSessions(repository).catch(() => ({}));
         const sessions = {owners, running: new Set(running.map((session) => session.sessionId))};
@@ -138,7 +138,7 @@ export class ProjectOverviewService {
     }
 
     /** Everything `gh` is asked for one answer; null when any of it could not be read. */
-    async #read(
+    private async read(
         projectPath: string,
         repository: string,
         closed: boolean,
@@ -170,24 +170,24 @@ export class ProjectOverviewService {
     }
 
     /** Why `gh` could not answer: it is missing, signed out, or GitHub was not reached. */
-    async #unavailable(): Promise<GitHubUnavailableReason> {
+    private async unavailable(): Promise<GitHubUnavailableReason> {
         const availability = await this.deps.github.available().catch(() => 'ok' as const);
         return availability === 'missing' ? 'no-gh' : availability === 'unauthenticated' ? 'signed-out' : 'unreachable';
     }
 
     /** The reads kept under `key` while they are fresh, or a new read. */
-    #reads(key: string, read: () => Promise<GitHubReads | null>): Promise<GitHubReads | null> {
+    private reads(key: string, read: () => Promise<GitHubReads | null>): Promise<GitHubReads | null> {
         const now = this.deps.clock.now();
-        const hit = this.#fresh.get(key);
+        const hit = this.fresh.get(key);
         if (hit && now - hit.at < PLAN_CACHE_MS) return hit.reads;
 
         const entry = {at: now, reads: read().catch(() => null)};
-        this.#fresh.set(key, entry);
+        this.fresh.set(key, entry);
         void entry.reads.then((reads) => {
-            if (reads === null && this.#fresh.get(key) === entry) this.#fresh.delete(key);
+            if (reads === null && this.fresh.get(key) === entry) this.fresh.delete(key);
         });
-        for (const [other, cached] of this.#fresh) {
-            if (now - cached.at >= PLAN_CACHE_MS) this.#fresh.delete(other);
+        for (const [other, cached] of this.fresh) {
+            if (now - cached.at >= PLAN_CACHE_MS) this.fresh.delete(other);
         }
         return entry.reads;
     }

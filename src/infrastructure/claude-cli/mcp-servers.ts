@@ -25,51 +25,51 @@ export interface ClaudeJsonMcpServersDeps {
 }
 
 export class ClaudeJsonMcpServers implements McpServers {
-    readonly #written = new Set<string>();
+    private readonly written = new Set<string>();
 
     constructor(private readonly deps: ClaudeJsonMcpServersDeps) {}
 
-    has(name: string): boolean {
-        return this.#config(name) !== null;
+    public has(name: string): boolean {
+        return this.config(name) !== null;
     }
 
-    write(name: string): McpConfigFile | null {
-        const config = this.#config(name);
+    public write(name: string): McpConfigFile | null {
+        const config = this.config(name);
         if (!config) return null;
         const {fs, tempDir, ids} = this.deps;
         const path = fs.join(tempDir, `switchboard-mcp-${ids.newId()}.json`);
-        this.#written.add(path);
+        this.written.add(path);
         try {
             fs.writeText(path, JSON.stringify(config), {mode: 0o600});
         } catch (err) {
-            this.#remove(path);
+            this.remove(path);
             throw err;
         }
-        return {path, remove: () => this.#remove(path)};
+        return {path, remove: () => this.remove(path)};
     }
 
-    headersFor(url: string): Record<string, string> | null {
-        const claudeJson = this.#claudeJson();
+    public headersFor(url: string): Record<string, string> | null {
+        const claudeJson = this.claudeJson();
         return claudeJson === null ? null : mcpServerHeaders(claudeJson, url);
     }
 
-    nameFor(url: string): string | null {
-        const claudeJson = this.#claudeJson();
+    public nameFor(url: string): string | null {
+        const claudeJson = this.claudeJson();
         return claudeJson === null ? null : mcpServerName(claudeJson, url);
     }
 
-    removeAll(): void {
-        for (const path of [...this.#written]) this.#remove(path);
+    public removeAll(): void {
+        for (const path of [...this.written]) this.remove(path);
     }
 
     /** The `--mcp-config` content for `name`, or null when it isn't set up or the file can't be read. */
-    #config(name: string): ReturnType<typeof mcpServerConfig> {
-        const claudeJson = this.#claudeJson();
+    private config(name: string): ReturnType<typeof mcpServerConfig> {
+        const claudeJson = this.claudeJson();
         return claudeJson === null ? null : mcpServerConfig(claudeJson, name);
     }
 
     /** `~/.claude.json`, parsed, or null when it isn't there or can't be read. */
-    #claudeJson(): unknown {
+    private claudeJson(): unknown {
         const {fs, homeDir, log} = this.deps;
         const file = fs.join(homeDir, '.claude.json');
         if (!fs.exists(file)) return null;
@@ -82,8 +82,8 @@ export class ClaudeJsonMcpServers implements McpServers {
         }
     }
 
-    #remove(path: string): void {
-        this.#written.delete(path);
+    private remove(path: string): void {
+        this.written.delete(path);
         try {
             this.deps.fs.remove(path);
         } catch (err) {

@@ -52,30 +52,30 @@ export interface QuestionHookServerDeps {
 }
 
 export class QuestionHookServer implements QuestionHookEndpoint {
-    readonly token = crypto.randomBytes(32).toString('hex');
-    readonly #tokenBuffer = Buffer.from(this.token);
-    #server: http.Server | null = null;
-    #url: string | null = null;
+    public readonly token = crypto.randomBytes(32).toString('hex');
+    private readonly tokenBuffer = Buffer.from(this.token);
+    private server: http.Server | null = null;
+    private listeningUrl: string | null = null;
 
     constructor(private readonly deps: QuestionHookServerDeps) {}
 
-    get url(): string | null {
-        return this.#url;
+    public get url(): string | null {
+        return this.listeningUrl;
     }
 
-    start(): Promise<void> {
-        if (this.#server) return Promise.resolve();
-        const server = http.createServer((req, res) => this.#handle(req, res));
+    public start(): Promise<void> {
+        if (this.server) return Promise.resolve();
+        const server = http.createServer((req, res) => this.handle(req, res));
         // A held request is the normal case: the CLI's hook timeout (ten minutes)
         // governs how long one may wait, not ours. Node's defaults would cut it at
         // five minutes (requestTimeout); headers still have to arrive promptly.
         server.requestTimeout = 0;
         server.timeout = 0;
-        this.#server = server;
+        this.server = server;
 
         return new Promise((resolve, reject) => {
             const onError = (err: Error): void => {
-                this.#server = null;
+                this.server = null;
                 reject(err);
             };
             server.once('error', onError);
@@ -83,8 +83,8 @@ export class QuestionHookServer implements QuestionHookEndpoint {
                 server.off('error', onError);
                 server.on('error', (err) => this.deps.log.error('[questions] hook server error:', err.message));
                 const {port} = server.address() as AddressInfo;
-                this.#url = `http://127.0.0.1:${port}`;
-                this.deps.log.info(`[questions] hook server listening on ${this.#url}`);
+                this.listeningUrl = `http://127.0.0.1:${port}`;
+                this.deps.log.info(`[questions] hook server listening on ${this.listeningUrl}`);
                 resolve();
             });
         });
@@ -94,26 +94,26 @@ export class QuestionHookServer implements QuestionHookEndpoint {
      * Stop listening and drop every held request. Each drop withdraws its
      * pending set, and the CLI falls back to its own prompt.
      */
-    stop(): void {
-        const server = this.#server;
+    public stop(): void {
+        const server = this.server;
         if (!server) return;
-        this.#server = null;
-        this.#url = null;
+        this.server = null;
+        this.listeningUrl = null;
         server.close();
         server.closeAllConnections();
     }
 
-    #handle(req: http.IncomingMessage, res: http.ServerResponse): void {
+    private handle(req: http.IncomingMessage, res: http.ServerResponse): void {
         const match = req.method === 'POST' ? HOOK_PATH.exec(req.url ?? '') : null;
-        if (!match) return this.#end(res, 404);
-        if (!this.#authorised(req.headers[QUESTION_HOOK_TOKEN_HEADER.toLowerCase()])) return this.#end(res, 401);
+        if (!match) return this.end(res, 404);
+        if (!this.authorised(req.headers[QUESTION_HOOK_TOKEN_HEADER.toLowerCase()])) return this.end(res, 401);
 
         const route = match[1] as Route;
         let launchId: string;
         try {
             launchId = decodeURIComponent(match[2]);
         } catch {
-            return this.#end(res, 404);
+            return this.end(res, 404);
         }
 
         const chunks: Buffer[] = [];
@@ -125,41 +125,41 @@ export class QuestionHookServer implements QuestionHookEndpoint {
             if (size > MAX_BODY_BYTES) {
                 tooLarge = true;
                 res.setHeader('Connection', 'close');
-                this.#end(res, 413);
+                this.end(res, 413);
                 return;
             }
             chunks.push(chunk);
         });
         req.on('end', () => {
             if (tooLarge) return;
-            this.#dispatch(route, launchId, Buffer.concat(chunks).toString('utf8'), res);
+            this.dispatch(route, launchId, Buffer.concat(chunks).toString('utf8'), res);
         });
     }
 
-    #dispatch(route: Route, launchId: string, raw: string, res: http.ServerResponse): void {
+    private dispatch(route: Route, launchId: string, raw: string, res: http.ServerResponse): void {
         let body: unknown;
         try {
             body = JSON.parse(raw);
         } catch {
             body = null;
         }
-        if (route === 'stop') return this.#stopped(launchId, body, res);
-        if (route === 'mcp') return this.#mcp(launchId, body, res);
+        if (route === 'stop') return this.stopped(launchId, body, res);
+        if (route === 'mcp') return this.mcp(launchId, body, res);
         if (route === 'prompt') {
-            this.#json(res, {});
+            this.json(res, {});
             this.deps.receiver.promptSubmitted(launchId);
             return;
         }
 
         const asked = parseQuestionHookInput(body);
         // Not something we can show: no decision, so the CLI carries on as usual.
-        if (!asked) return this.#json(res, {});
+        if (!asked) return this.json(res, {});
 
         let replied = false;
         const handle = this.deps.receiver.receive(launchId, asked, (json) => {
             if (replied) return;
             replied = true;
-            this.#json(res, json);
+            this.json(res, json);
         });
 
         // 'close' on the response fires when the connection goes away as well as
@@ -173,36 +173,36 @@ export class QuestionHookServer implements QuestionHookEndpoint {
     }
 
     /** The turn is over either way: let the CLI go, then look for a round in what it said. */
-    #stopped(launchId: string, body: unknown, res: http.ServerResponse): void {
-        this.#json(res, {});
+    private stopped(launchId: string, body: unknown, res: http.ServerResponse): void {
+        this.json(res, {});
         const text = parseStopHookInput(body);
         const questions = text ? parseGrillRound(text) : null;
         if (questions) this.deps.receiver.receiveRound(launchId, questions);
         this.deps.archiveTool?.turnEnded(launchId);
     }
 
-    #mcp(launchId: string, body: unknown, res: http.ServerResponse): void {
+    private mcp(launchId: string, body: unknown, res: http.ServerResponse): void {
         const {archiveTool} = this.deps;
-        if (!archiveTool) return this.#end(res, 404);
+        if (!archiveTool) return this.end(res, 404);
         const reply = archiveToolReply(body, () => archiveTool.request(launchId));
-        if (reply) this.#json(res, reply);
-        else this.#end(res, 202);
+        if (reply) this.json(res, reply);
+        else this.end(res, 202);
     }
 
-    #authorised(header: string | string[] | undefined): boolean {
+    private authorised(header: string | string[] | undefined): boolean {
         if (typeof header !== 'string') return false;
         const given = Buffer.from(header);
-        return given.length === this.#tokenBuffer.length && crypto.timingSafeEqual(given, this.#tokenBuffer);
+        return given.length === this.tokenBuffer.length && crypto.timingSafeEqual(given, this.tokenBuffer);
     }
 
-    #json(res: http.ServerResponse, json: Record<string, unknown>): void {
+    private json(res: http.ServerResponse, json: Record<string, unknown>): void {
         if (res.headersSent || res.destroyed) return;
         const payload = JSON.stringify(json);
         res.writeHead(200, {'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload)});
         res.end(payload);
     }
 
-    #end(res: http.ServerResponse, status: number): void {
+    private end(res: http.ServerResponse, status: number): void {
         if (res.headersSent || res.destroyed) return;
         res.writeHead(status);
         res.end();

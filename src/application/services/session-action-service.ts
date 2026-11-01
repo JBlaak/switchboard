@@ -108,15 +108,15 @@ export interface SessionActionServiceDeps {
 
 export class SessionActionService {
     /** Every unfinished action, in the order they were queued. */
-    readonly #actions: StoredAction[] = [];
+    private readonly actions: StoredAction[] = [];
     /** Idle listeners, one per session id a queue is stored under. */
-    readonly #listening = new Map<string, Disposable>();
-    #page: WorkPageSource | null = null;
+    private readonly listening = new Map<string, Disposable>();
+    private page: WorkPageSource | null = null;
     /** Others that follow the actions' phases (the CI watch's sidebar dots). */
-    readonly #followers: Array<(sessionId: string) => void> = [];
+    private readonly followers: Array<(sessionId: string) => void> = [];
 
     constructor(private readonly deps: SessionActionServiceDeps) {
-        const now = this.#now();
+        const now = this.now();
         for (const action of deps.store.unfinished()) {
             // A sent action was with a session that ended when the app did: there is
             // nothing left to wait for, and what Claude finished shows on the item.
@@ -124,21 +124,21 @@ export class SessionActionService {
                 deps.store.update(action.id, {phase: 'done', doneAt: now});
                 continue;
             }
-            this.#actions.push(action);
+            this.actions.push(action);
         }
-        for (const sessionId of new Set(this.#actions.filter(isQueued).map((action) => action.sessionId))) {
-            this.#listen(sessionId);
+        for (const sessionId of new Set(this.actions.filter(isQueued).map((action) => action.sessionId))) {
+            this.listen(sessionId);
         }
     }
 
     /** The page the actions are asked from. Set once, after both exist. */
-    attach(page: WorkPageSource): void {
-        this.#page = page;
+    public attach(page: WorkPageSource): void {
+        this.page = page;
     }
 
     /** Hear every change of an action's phase, as the page does. */
-    follow(fn: (sessionId: string) => void): void {
-        this.#followers.push(fn);
+    public follow(fn: (sessionId: string) => void): void {
+        this.followers.push(fn);
     }
 
     /**
@@ -150,7 +150,7 @@ export class SessionActionService {
      * `options.threadIds` has a Fix comments hand over only those threads
      * (Have Claude fix, Submit & have Claude fix).
      */
-    async request(
+    public async request(
         sessionId: string,
         itemId: string,
         action: WorkAction,
@@ -159,7 +159,7 @@ export class SessionActionService {
     ): Promise<ActionResult> {
         const {prompter} = this.deps;
         if (!prompter.runningId(sessionId)) return {ok: false, reason: NOT_RUNNING_REASON};
-        const page = this.#page;
+        const page = this.page;
         const {resolved, threadIds} = options;
         const item = resolved?.item ?? page?.item(sessionId, itemId) ?? null;
         const context = resolved?.context ?? page?.context(sessionId) ?? null;
@@ -167,7 +167,7 @@ export class SessionActionService {
         if (!availableActions(item, context.gh).includes(action)) {
             return {ok: false, reason: 'This item has nothing for that action to do'};
         }
-        const same = this.#forSession(sessionId).filter(
+        const same = this.storedForSession(sessionId).filter(
             (existing) =>
                 existing.itemKey === itemId &&
                 existing.action === action &&
@@ -182,7 +182,7 @@ export class SessionActionService {
                 : same[0];
         if (busy) return {ok: false, reason: busy.phase === 'queued' ? 'Already queued' : 'Claude is already on it'};
 
-        const request = await this.#promptRequest(item, action, context, options);
+        const request = await this.promptRequest(item, action, context, options);
         if (!request) return {ok: false, reason: 'This item has nothing for that action to do'};
         // The session may have ended while the CI log was fetched.
         if (!prompter.runningId(sessionId)) return {ok: false, reason: NOT_RUNNING_REASON};
@@ -196,35 +196,35 @@ export class SessionActionService {
             origin,
             phase: 'queued',
             prompt: renderPrompt(request),
-            queuedAt: this.#now(),
+            queuedAt: this.now(),
             sentAt: null,
             doneAt: null,
             details: request.action === 'fix-ci' ? fixCiDetails(request.checkName, request.automaticAttempt) : null,
         };
         this.deps.store.add(stored);
-        this.#actions.push(stored);
-        this.#listen(sessionId);
-        this.#changed(sessionId);
-        this.#pump(sessionId);
+        this.actions.push(stored);
+        this.listen(sessionId);
+        this.changed(sessionId);
+        this.pump(sessionId);
         return {ok: true, activityId: stored.id};
     }
 
     /** Take a queued action out of its queue. One already typed in cannot be taken back. */
-    cancel(activityId: string): CancelResult {
-        const index = this.#actions.findIndex((action) => action.id === activityId);
+    public cancel(activityId: string): CancelResult {
+        const index = this.actions.findIndex((action) => action.id === activityId);
         if (index === -1) return {ok: false, reason: 'Nothing is queued by that id'};
-        const action = this.#actions[index];
+        const action = this.actions[index];
         if (action.phase !== 'queued') return {ok: false, reason: 'It was already handed to Claude'};
-        this.#actions.splice(index, 1);
+        this.actions.splice(index, 1);
         this.deps.store.remove(action.id);
-        this.#unlistenIfIdle(action.sessionId);
-        this.#changed(action.sessionId);
+        this.unlistenIfIdle(action.sessionId);
+        this.changed(action.sessionId);
         return {ok: true};
     }
 
     /** Is this action still waiting for the session, or with Claude? */
-    isInFlight(activityId: string): boolean {
-        const action = this.#actions.find((candidate) => candidate.id === activityId);
+    public isInFlight(activityId: string): boolean {
+        const action = this.actions.find((candidate) => candidate.id === activityId);
         return action !== undefined && (action.phase === 'queued' || action.phase === 'sent');
     }
 
@@ -232,7 +232,7 @@ export class SessionActionService {
      * Auto-fix ran out of attempts on an item's check (W3): show it as given up,
      * red, until the check goes green or the PR is done. Nothing is typed in.
      */
-    giveUp(sessionId: string, itemKey: string, repository: string, details: GaveUpDetails): void {
+    public giveUp(sessionId: string, itemKey: string, repository: string, details: GaveUpDetails): void {
         const stored: StoredAction = {
             id: this.deps.ids.newId(),
             sessionId,
@@ -242,36 +242,36 @@ export class SessionActionService {
             origin: 'auto',
             phase: 'gave-up',
             prompt: '',
-            queuedAt: this.#now(),
+            queuedAt: this.now(),
             sentAt: null,
             doneAt: null,
             details,
         };
         this.deps.store.add(stored);
-        this.#actions.push(stored);
-        this.#changed(sessionId);
+        this.actions.push(stored);
+        this.changed(sessionId);
     }
 
     /**
      * The check auto-fix gave up on is green again, or the PR is done: the item
      * no longer needs you. Without `checkName`, every give-up on the item ends.
      */
-    settleGaveUp(sessionId: string, itemKey: string, checkName?: string): void {
-        const now = this.#now();
+    public settleGaveUp(sessionId: string, itemKey: string, checkName?: string): void {
+        const now = this.now();
         let settled = false;
-        for (const action of this.#forSession(sessionId)) {
+        for (const action of this.storedForSession(sessionId)) {
             if (action.phase !== 'gave-up' || action.itemKey !== itemKey) continue;
             if (checkName !== undefined && action.details?.checkName !== checkName) continue;
-            this.#actions.splice(this.#actions.indexOf(action), 1);
+            this.actions.splice(this.actions.indexOf(action), 1);
             this.deps.store.update(action.id, {phase: 'done', doneAt: now});
             settled = true;
         }
-        if (settled) this.#changed(sessionId);
+        if (settled) this.changed(sessionId);
     }
 
     /** One session's actions for its page, under any id it has gone by. */
-    forSession(sessionId: string): SessionActivities {
-        const actions = this.#forSession(sessionId);
+    public forSession(sessionId: string): SessionActivities {
+        const actions = this.storedForSession(sessionId);
         const byKey = new Map<string, Activity[]>();
         for (const action of actions) {
             const list = byKey.get(action.itemKey) ?? [];
@@ -296,20 +296,20 @@ export class SessionActionService {
     // ── The queue ──
 
     /** Type the next queued action in, when the session is idle and has nothing else with Claude. */
-    #pump(sessionId: string): void {
+    private pump(sessionId: string): void {
         const {prompter} = this.deps;
         if (!prompter.runningId(sessionId) || prompter.isBusy(sessionId)) return;
-        const actions = this.#forSession(sessionId);
+        const actions = this.storedForSession(sessionId);
         if (actions.some((action) => action.phase === 'sent')) return;
         const next = actions.find(isQueued);
         if (!next) return;
 
         next.phase = 'sent';
-        next.sentAt = this.#now();
+        next.sentAt = this.now();
         this.deps.store.update(next.id, {phase: 'sent', sentAt: next.sentAt});
         this.deps.log.info(`[session-work] typing ${next.action} into ${sessionId}`);
         prompter.send(sessionId, next.prompt);
-        this.#changed(sessionId);
+        this.changed(sessionId);
     }
 
     /**
@@ -318,18 +318,18 @@ export class SessionActionService {
      * is typed into a session that has not started), so it is done; then the
      * next one goes in.
      */
-    #idle(sessionId: string): void {
-        const now = this.#now();
+    private idle(sessionId: string): void {
+        const now = this.now();
         let finished = false;
-        for (const action of this.#forSession(sessionId)) {
+        for (const action of this.storedForSession(sessionId)) {
             if (action.phase !== 'sent') continue;
-            this.#actions.splice(this.#actions.indexOf(action), 1);
+            this.actions.splice(this.actions.indexOf(action), 1);
             this.deps.store.update(action.id, {phase: 'done', doneAt: now});
             finished = true;
         }
-        if (finished) this.#changed(sessionId);
-        this.#pump(sessionId);
-        this.#unlistenIfIdle(sessionId);
+        if (finished) this.changed(sessionId);
+        this.pump(sessionId);
+        this.unlistenIfIdle(sessionId);
     }
 
     /**
@@ -337,17 +337,17 @@ export class SessionActionService {
      * that turn, so it is done now rather than left amber until a restart (which
      * would do the same). What is still queued waits for the session to run again.
      */
-    #exited(sessionId: string): void {
-        const now = this.#now();
+    private exited(sessionId: string): void {
+        const now = this.now();
         let finished = false;
-        for (const action of this.#forSession(sessionId)) {
+        for (const action of this.storedForSession(sessionId)) {
             if (action.phase !== 'sent') continue;
-            this.#actions.splice(this.#actions.indexOf(action), 1);
+            this.actions.splice(this.actions.indexOf(action), 1);
             this.deps.store.update(action.id, {phase: 'done', doneAt: now});
             finished = true;
         }
-        if (finished) this.#changed(sessionId);
-        this.#unlistenIfIdle(sessionId);
+        if (finished) this.changed(sessionId);
+        this.unlistenIfIdle(sessionId);
     }
 
     /**
@@ -355,13 +355,13 @@ export class SessionActionService {
      * under an id the session has since moved on from is heard through that old
      * id, which the prompter still matches.
      */
-    #listen(sessionId: string): void {
-        for (const id of this.#listening.keys()) {
-            if (this.#sameSession(id, sessionId)) return;
+    private listen(sessionId: string): void {
+        for (const id of this.listening.keys()) {
+            if (this.sameSession(id, sessionId)) return;
         }
-        const idle = this.deps.prompter.onIdle(sessionId, () => this.#idle(sessionId));
-        const exit = this.deps.prompter.onExit(sessionId, () => this.#exited(sessionId));
-        this.#listening.set(sessionId, {
+        const idle = this.deps.prompter.onIdle(sessionId, () => this.idle(sessionId));
+        const exit = this.deps.prompter.onExit(sessionId, () => this.exited(sessionId));
+        this.listening.set(sessionId, {
             dispose: () => {
                 idle.dispose();
                 exit.dispose();
@@ -370,40 +370,41 @@ export class SessionActionService {
     }
 
     /** Stop listening for a session that has nothing left waiting or with Claude. */
-    #unlistenIfIdle(sessionId: string): void {
-        for (const [id, listener] of this.#listening) {
-            if (!this.#sameSession(id, sessionId)) continue;
-            if (this.#forSession(id).some((action) => action.phase === 'queued' || action.phase === 'sent')) continue;
+    private unlistenIfIdle(sessionId: string): void {
+        for (const [id, listener] of this.listening) {
+            if (!this.sameSession(id, sessionId)) continue;
+            if (this.storedForSession(id).some((action) => action.phase === 'queued' || action.phase === 'sent'))
+                continue;
             listener.dispose();
-            this.#listening.delete(id);
+            this.listening.delete(id);
         }
     }
 
     /** This session's unfinished actions, in queue order, whichever of its ids each was stored under. */
-    #forSession(sessionId: string): StoredAction[] {
-        return this.#actions.filter((action) => this.#sameSession(action.sessionId, sessionId));
+    private storedForSession(sessionId: string): StoredAction[] {
+        return this.actions.filter((action) => this.sameSession(action.sessionId, sessionId));
     }
 
     /** Do two ids name one session? They do when equal, or when the running session answers to both. */
-    #sameSession(a: string, b: string): boolean {
+    private sameSession(a: string, b: string): boolean {
         if (a === b) return true;
         const current = this.deps.prompter.runningId(a);
         return current !== null && current === this.deps.prompter.runningId(b);
     }
 
-    #changed(sessionId: string): void {
-        this.#page?.activitiesChanged(sessionId);
-        for (const fn of this.#followers) fn(sessionId);
+    private changed(sessionId: string): void {
+        this.page?.activitiesChanged(sessionId);
+        for (const fn of this.followers) fn(sessionId);
     }
 
-    #now(): string {
+    private now(): string {
         return new Date(this.deps.clock.now()).toISOString();
     }
 
     // ── Prompts ──
 
     /** What the item's prompt needs, from the page's facts; null when the item cannot take the action. */
-    async #promptRequest(
+    private async promptRequest(
         item: SessionWorkItem,
         action: WorkAction,
         context: ActionContext,

@@ -19,14 +19,14 @@ import type {
 } from '../../application/ports/file-system';
 
 export class NodeFileSystem implements FileSystem {
-    readonly separator = path.sep;
-    readonly homeDir = os.homedir();
+    public readonly separator = path.sep;
+    public readonly homeDir = os.homedir();
 
-    exists(target: string): boolean {
+    public exists(target: string): boolean {
         return fs.existsSync(target);
     }
 
-    isDirectory(target: string): boolean {
+    public isDirectory(target: string): boolean {
         try {
             return fs.statSync(target).isDirectory();
         } catch {
@@ -34,15 +34,15 @@ export class NodeFileSystem implements FileSystem {
         }
     }
 
-    readText(target: string): string {
+    public readText(target: string): string {
         return fs.readFileSync(target, 'utf8');
     }
 
-    writeText(target: string, content: string, options?: {mode?: number}): void {
+    public writeText(target: string, content: string, options?: {mode?: number}): void {
         fs.writeFileSync(target, content, {encoding: 'utf8', ...options});
     }
 
-    readSlice(target: string, range: {start: number; length: number}): string {
+    public readSlice(target: string, range: {start: number; length: number}): string {
         if (range.length <= 0) return '';
         const buffer = Buffer.alloc(range.length);
         const fd = fs.openSync(target, 'r');
@@ -54,7 +54,7 @@ export class NodeFileSystem implements FileSystem {
         }
     }
 
-    readDir(target: string): DirEntry[] {
+    public readDir(target: string): DirEntry[] {
         return fs.readdirSync(target, {withFileTypes: true}).map((entry) => ({
             name: entry.name,
             isFile: entry.isFile(),
@@ -62,7 +62,7 @@ export class NodeFileSystem implements FileSystem {
         }));
     }
 
-    stat(target: string): FileStat | null {
+    public stat(target: string): FileStat | null {
         try {
             const stat = fs.statSync(target);
             return {
@@ -76,19 +76,19 @@ export class NodeFileSystem implements FileSystem {
         }
     }
 
-    makeDir(target: string): void {
+    public makeDir(target: string): void {
         fs.mkdirSync(target, {recursive: true});
     }
 
-    remove(target: string): void {
+    public remove(target: string): void {
         fs.rmSync(target, {recursive: true, force: true});
     }
 
-    rename(from: string, to: string): void {
+    public rename(from: string, to: string): void {
         fs.renameSync(from, to);
     }
 
-    watch(target: string, options: WatchOptions, listener: WatchListener): Watcher {
+    public watch(target: string, options: WatchOptions, listener: WatchListener): Watcher {
         const watcher = fs.watch(target, {recursive: options.recursive}, (eventType, filename) => {
             listener(eventType, filename === null ? null : String(filename));
         });
@@ -98,19 +98,19 @@ export class NodeFileSystem implements FileSystem {
         return {close: () => watcher.close()};
     }
 
-    join(...parts: string[]): string {
+    public join(...parts: string[]): string {
         return path.join(...parts);
     }
 
-    basename(target: string, ext?: string): string {
+    public basename(target: string, ext?: string): string {
         return path.basename(target, ext);
     }
 
-    dirname(target: string): string {
+    public dirname(target: string): string {
         return path.dirname(target);
     }
 
-    isInside(parent: string, child: string): boolean {
+    public isInside(parent: string, child: string): boolean {
         const from = path.resolve(parent);
         const to = path.resolve(child);
         if (to === from) return true;

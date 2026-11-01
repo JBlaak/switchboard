@@ -37,7 +37,7 @@ function locationKey(loc: WeatherLocation): string {
 }
 
 export class WeatherService {
-    #cached: CachedWeather | null = null;
+    private cached: CachedWeather | null = null;
 
     constructor(
         private readonly deps: {
@@ -49,7 +49,7 @@ export class WeatherService {
     ) {}
 
     /** The weather at the configured location, or null when off or unknown. */
-    async current(): Promise<Weather | null> {
+    public async current(): Promise<Weather | null> {
         const {source, settings, clock, log} = this.deps;
         try {
             if (!settings.weatherEnabled()) return null;
@@ -57,7 +57,7 @@ export class WeatherService {
             const key = locationKey(location);
             const now = clock.now();
 
-            const cached = this.#cached?.key === key ? this.#cached.weather : null;
+            const cached = this.cached?.key === key ? this.cached.weather : null;
             if (cached && now - cached.fetchedAt < WEATHER_CACHE_MS) return cached;
 
             let fresh: Weather | null = null;
@@ -67,7 +67,7 @@ export class WeatherService {
                 log.warn('[weather] fetch failed:', (err as Error).message);
             }
             if (fresh) {
-                this.#cached = {key, weather: fresh};
+                this.cached = {key, weather: fresh};
                 return fresh;
             }
             if (cached && now - cached.fetchedAt < WEATHER_STALE_MS) return cached;
@@ -79,7 +79,7 @@ export class WeatherService {
     }
 
     /** Resolve a place name the user typed, or null when there is no match. */
-    async geocode(name: string): Promise<WeatherLocation | null> {
+    public async geocode(name: string): Promise<WeatherLocation | null> {
         const query = typeof name === 'string' ? name.trim() : '';
         if (!query) return null;
         try {

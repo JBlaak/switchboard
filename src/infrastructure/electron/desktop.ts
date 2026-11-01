@@ -13,7 +13,7 @@ import type {Appearance} from '../../domain/settings/appearance';
 export class ElectronDialogService implements DialogService {
     constructor(private readonly getWindow: () => BrowserWindow | null) {}
 
-    async chooseDirectory(title: string): Promise<string | null> {
+    public async chooseDirectory(title: string): Promise<string | null> {
         const window = this.getWindow();
         if (!window || window.isDestroyed()) return null;
         const result = await dialog.showOpenDialog(window, {
@@ -35,23 +35,23 @@ export class ElectronSystemGateway implements SystemGateway {
      * arbitrary scheme to the OS is how a link in a session's output gets to run
      * something.
      */
-    async openExternal(url: string): Promise<void> {
+    public async openExternal(url: string): Promise<void> {
         if (!/^https?:\/\//i.test(url)) return;
         this.log.info('[system] opening externally:', url);
         await shell.openExternal(url);
     }
 
-    writeClipboard(text: string): void {
+    public writeClipboard(text: string): void {
         if (typeof text === 'string') clipboard.writeText(text);
     }
 
-    writeClipboardImage(png: Uint8Array): void {
+    public writeClipboardImage(png: Uint8Array): void {
         if (!(png instanceof Uint8Array)) return;
         const image = nativeImage.createFromBuffer(Buffer.from(png));
         if (!image.isEmpty()) clipboard.writeImage(image);
     }
 
-    appVersion(): string {
+    public appVersion(): string {
         return app.getVersion();
     }
 }
@@ -64,7 +64,7 @@ export class ElectronSystemGateway implements SystemGateway {
  * listens to for the parts CSS cannot reach.
  */
 export class ElectronAppearanceGateway implements AppearanceGateway {
-    apply(mode: Appearance): void {
+    public apply(mode: Appearance): void {
         nativeTheme.themeSource = mode;
     }
 }
@@ -87,7 +87,7 @@ export class ElectronAppIconGateway implements AppIconGateway {
         private readonly log: Logger,
     ) {}
 
-    apply(icon: AppIcon): void {
+    public apply(icon: AppIcon): void {
         const dock = app.dock;
         if (!dock || icon === this.shown) return;
         const image = nativeImage.createFromPath(path.join(this.dir, `${icon}.png`));

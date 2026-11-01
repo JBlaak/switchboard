@@ -25,20 +25,20 @@ export class ElectronWindowDrag {
     constructor(private readonly getWindow: () => BrowserWindow | null) {}
 
     /** Take hold of the window where it is now. A full-screen window stays put. */
-    start(): void {
+    public start(): void {
         const window = this.getWindow();
         if (!window || window.isFullScreen()) return;
         const [x = 0, y = 0] = window.getPosition();
         this.grip = {x, y};
     }
 
-    move(dx: number, dy: number): void {
+    public move(dx: number, dy: number): void {
         const window = this.getWindow();
         if (!window || !this.grip || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
         window.setPosition(Math.round(this.grip.x + dx), Math.round(this.grip.y + dy));
     }
 
-    end(): void {
+    public end(): void {
         this.grip = null;
     }
 }

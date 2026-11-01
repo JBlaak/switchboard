@@ -34,20 +34,20 @@ function toLink(row: Row): TaskLink {
 const COLUMNS = 'task_id, project_path, session_id, source, linked_at';
 
 export class SqliteTaskLinkStore implements TaskLinkStore {
-    readonly #all;
-    readonly #forTask;
-    readonly #forSession;
-    readonly #link;
-    readonly #unlink;
-    readonly #unlinkedAt;
-    readonly #setRepo;
+    private readonly allStatement;
+    private readonly forTaskStatement;
+    private readonly forSessionStatement;
+    private readonly linkTransaction;
+    private readonly unlinkTransaction;
+    private readonly unlinkedAtStatement;
+    private readonly setRepoTransaction;
 
     constructor(db: Database.Database) {
-        this.#all = db.prepare<[], Row>(`SELECT ${COLUMNS} FROM task_links ORDER BY linked_at, id`);
-        this.#forTask = db.prepare<[string], Row>(
+        this.allStatement = db.prepare<[], Row>(`SELECT ${COLUMNS} FROM task_links ORDER BY linked_at, id`);
+        this.forTaskStatement = db.prepare<[string], Row>(
             `SELECT ${COLUMNS} FROM task_links WHERE task_id = ? ORDER BY linked_at, id`,
         );
-        this.#forSession = db.prepare<[string], Row>(`SELECT ${COLUMNS} FROM task_links WHERE session_id = ?`);
+        this.forSessionStatement = db.prepare<[string], Row>(`SELECT ${COLUMNS} FROM task_links WHERE session_id = ?`);
         const upsert = db.prepare<[Row]>(`
       INSERT INTO task_links (${COLUMNS})
       VALUES (@task_id, @project_path, @session_id, @source, @linked_at)
@@ -56,7 +56,7 @@ export class SqliteTaskLinkStore implements TaskLinkStore {
         source = excluded.source, linked_at = excluded.linked_at
     `);
         const forgetUnlink = db.prepare<[string]>('DELETE FROM task_unlinks WHERE session_id = ?');
-        this.#link = db.transaction((row: Row) => {
+        this.linkTransaction = db.transaction((row: Row) => {
             upsert.run(row);
             forgetUnlink.run(row.session_id as string);
         });
@@ -65,38 +65,38 @@ export class SqliteTaskLinkStore implements TaskLinkStore {
       INSERT INTO task_unlinks (session_id, unlinked_at) VALUES (?, ?)
       ON CONFLICT (session_id) DO UPDATE SET unlinked_at = excluded.unlinked_at
     `);
-        this.#unlink = db.transaction((sessionId: string, at: number) => {
+        this.unlinkTransaction = db.transaction((sessionId: string, at: number) => {
             dropLink.run(sessionId);
             rememberUnlink.run(sessionId, at);
         });
-        this.#unlinkedAt = db.prepare<[string], {unlinked_at: number}>(
+        this.unlinkedAtStatement = db.prepare<[string], {unlinked_at: number}>(
             'SELECT unlinked_at FROM task_unlinks WHERE session_id = ?',
         );
         const dropRepo = db.prepare<[string]>('DELETE FROM task_links WHERE task_id = ? AND session_id IS NULL');
         const addRepo = db.prepare<[Row]>(
             `INSERT INTO task_links (${COLUMNS}) VALUES (@task_id, @project_path, @session_id, @source, @linked_at)`,
         );
-        this.#setRepo = db.transaction((row: Row) => {
+        this.setRepoTransaction = db.transaction((row: Row) => {
             dropRepo.run(row.task_id);
             addRepo.run(row);
         });
     }
 
-    all(): TaskLink[] {
-        return this.#all.all().map(toLink);
+    public all(): TaskLink[] {
+        return this.allStatement.all().map(toLink);
     }
 
-    forTask(taskId: string): TaskLink[] {
-        return this.#forTask.all(taskId).map(toLink);
+    public forTask(taskId: string): TaskLink[] {
+        return this.forTaskStatement.all(taskId).map(toLink);
     }
 
-    forSession(sessionId: string): TaskLink | null {
-        const row = this.#forSession.get(sessionId);
+    public forSession(sessionId: string): TaskLink | null {
+        const row = this.forSessionStatement.get(sessionId);
         return row ? toLink(row) : null;
     }
 
-    link(link: SessionTaskLink): void {
-        this.#link({
+    public link(link: SessionTaskLink): void {
+        this.linkTransaction({
             task_id: link.taskId,
             project_path: link.projectPath,
             session_id: link.sessionId,
@@ -105,15 +105,21 @@ export class SqliteTaskLinkStore implements TaskLinkStore {
         });
     }
 
-    unlink(sessionId: string, at: number): void {
-        this.#unlink(sessionId, at);
+    public unlink(sessionId: string, at: number): void {
+        this.unlinkTransaction(sessionId, at);
     }
 
-    unlinkedAt(sessionId: string): number | null {
-        return this.#unlinkedAt.get(sessionId)?.unlinked_at ?? null;
+    public unlinkedAt(sessionId: string): number | null {
+        return this.unlinkedAtStatement.get(sessionId)?.unlinked_at ?? null;
     }
 
-    setRepo(taskId: string, projectPath: string, at: number): void {
-        this.#setRepo({task_id: taskId, project_path: projectPath, session_id: null, source: 'manual', linked_at: at});
+    public setRepo(taskId: string, projectPath: string, at: number): void {
+        this.setRepoTransaction({
+            task_id: taskId,
+            project_path: projectPath,
+            session_id: null,
+            source: 'manual',
+            linked_at: at,
+        });
     }
 }

@@ -196,16 +196,16 @@ function gfMultiply(x: number, y: number): number {
 // ── The grid ──
 
 class Grid {
-    readonly modules: boolean[][];
+    public readonly modules: boolean[][];
     /** The modules the mask leaves alone: finders, timing, alignment, format and version. */
-    readonly reserved: boolean[][];
+    public readonly reserved: boolean[][];
 
-    constructor(readonly size: number) {
+    constructor(public readonly size: number) {
         this.modules = Array.from({length: size}, () => new Array<boolean>(size).fill(false));
         this.reserved = Array.from({length: size}, () => new Array<boolean>(size).fill(false));
     }
 
-    fixed(x: number, y: number, dark: boolean): void {
+    public fixed(x: number, y: number, dark: boolean): void {
         this.modules[y][x] = dark;
         this.reserved[y][x] = true;
     }

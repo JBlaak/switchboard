@@ -54,23 +54,23 @@ export class ReviewService {
      * Reviews started here that the page may not show yet, by PR URL: the next
      * comment goes into the same one even before `gh` has been asked again.
      */
-    readonly #started = new Map<string, string>();
-    #queue: Promise<unknown> = Promise.resolve();
+    private readonly started = new Map<string, string>();
+    private queue: Promise<unknown> = Promise.resolve();
 
     constructor(private readonly deps: ReviewServiceDeps) {}
 
     /** Add a line comment to your pending review on the PR, starting one if there is none. */
-    comment(request: CommentRequest): Promise<ReviewResult> {
-        return this.#serial(() => this.#comment(request));
+    public comment(request: CommentRequest): Promise<ReviewResult> {
+        return this.serial(() => this.addComment(request));
     }
 
     /** Finish your pending review on the PR (C2). */
-    review(request: ReviewRequest): Promise<ReviewResult> {
-        return this.#serial(() => this.#finish(request.sessionId, request.itemId, request.mode));
+    public review(request: ReviewRequest): Promise<ReviewResult> {
+        return this.serial(() => this.finish(request.sessionId, request.itemId, request.mode));
     }
 
-    async #comment(request: CommentRequest): Promise<ReviewResult> {
-        const found = this.#item(request.sessionId, request.itemId);
+    private async addComment(request: CommentRequest): Promise<ReviewResult> {
+        const found = this.item(request.sessionId, request.itemId);
         if (!found.ok) return found;
         const {pr} = found.item;
         const body = request.body.trim();
@@ -79,13 +79,13 @@ export class ReviewService {
             return {ok: false, reason: 'That line cannot take a comment'};
         }
 
-        let reviewId = this.#reviewId(pr);
+        let reviewId = this.reviewId(pr);
         if (!reviewId) {
             if (!pr.nodeId) return {ok: false, reason: 'GitHub has not said enough about this PR yet'};
             const started = await this.deps.github.startPendingReview(pr.nodeId);
-            if (!started.ok) return this.#failed('start a review', started.reason);
+            if (!started.ok) return this.failed('start a review', started.reason);
             reviewId = started.reviewId;
-            this.#started.set(pr.url, reviewId);
+            this.started.set(pr.url, reviewId);
         }
         const added = await this.deps.github.addPendingComment(reviewId, {
             path: request.path,
@@ -97,22 +97,22 @@ export class ReviewService {
         // Once the page shows the review, it is the one to go by: should it be
         // submitted in the browser, the page stops showing it and nothing stale is kept.
         const after = this.deps.page.item(request.sessionId, request.itemId);
-        if (after?.kind === 'pr' && after.pr.pendingReviewId) this.#started.delete(pr.url);
-        return added.ok ? {ok: true} : this.#failed('add the comment', added.reason);
+        if (after?.kind === 'pr' && after.pr.pendingReviewId) this.started.delete(pr.url);
+        return added.ok ? {ok: true} : this.failed('add the comment', added.reason);
     }
 
-    async #finish(sessionId: string, itemId: string, mode: ReviewMode): Promise<ReviewResult> {
-        const found = this.#item(sessionId, itemId);
+    private async finish(sessionId: string, itemId: string, mode: ReviewMode): Promise<ReviewResult> {
+        const found = this.item(sessionId, itemId);
         if (!found.ok) return found;
         const {pr} = found.item;
-        const reviewId = this.#reviewId(pr);
+        const reviewId = this.reviewId(pr);
         if (!reviewId) return {ok: false, reason: 'There is no review in progress'};
 
         if (mode === 'discard') {
             const deleted = await this.deps.github.deletePendingReview(reviewId);
-            if (deleted.ok) this.#started.delete(pr.url);
+            if (deleted.ok) this.started.delete(pr.url);
             await this.deps.page.refreshGitHub(sessionId);
-            return deleted.ok ? {ok: true} : this.#failed('discard the review', deleted.reason);
+            return deleted.ok ? {ok: true} : this.failed('discard the review', deleted.reason);
         }
 
         const pending = pr.pendingReview ?? [];
@@ -126,9 +126,9 @@ export class ReviewService {
         const threadIds = pending.flatMap((comment) => (comment.threadId ? [comment.threadId] : []));
 
         const submitted = await this.deps.github.submitPendingReview(reviewId, submitEvent(mode));
-        if (submitted.ok) this.#started.delete(pr.url);
+        if (submitted.ok) this.started.delete(pr.url);
         await this.deps.page.refreshGitHub(sessionId);
-        if (!submitted.ok) return this.#failed('submit the review', submitted.reason);
+        if (!submitted.ok) return this.failed('submit the review', submitted.reason);
         if (mode === 'submit') return {ok: true};
 
         if (threadIds.length === 0)
@@ -138,7 +138,7 @@ export class ReviewService {
     }
 
     /** The PR item a review is about, when it can take one. */
-    #item(sessionId: string, itemId: string): {ok: true; item: PullRequestItem} | {ok: false; reason: string} {
+    private item(sessionId: string, itemId: string): {ok: true; item: PullRequestItem} | {ok: false; reason: string} {
         const item = this.deps.page.item(sessionId, itemId);
         const context = this.deps.page.context(sessionId);
         if (!item || !context) return {ok: false, reason: 'This item is no longer on the page'};
@@ -149,19 +149,19 @@ export class ReviewService {
     }
 
     /** Your pending review on the PR: the one GitHub reported, else one started here since. */
-    #reviewId(pr: PullRequestStatus): string | null {
-        return pr.pendingReviewId ?? this.#started.get(pr.url) ?? null;
+    private reviewId(pr: PullRequestStatus): string | null {
+        return pr.pendingReviewId ?? this.started.get(pr.url) ?? null;
     }
 
-    #failed(what: string, reason: string): ReviewResult {
+    private failed(what: string, reason: string): ReviewResult {
         this.deps.log.warn(`[session-work] could not ${what}: ${reason}`);
         return {ok: false, reason: `Could not ${what}: ${reason}`};
     }
 
     /** Run one write after the one before it has finished. */
-    #serial<T>(write: () => Promise<T>): Promise<T> {
-        const next = this.#queue.then(write, write);
-        this.#queue = next.catch(() => undefined);
+    private serial<T>(write: () => Promise<T>): Promise<T> {
+        const next = this.queue.then(write, write);
+        this.queue = next.catch(() => undefined);
         return next;
     }
 }

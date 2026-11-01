@@ -71,13 +71,13 @@ interface Phone {
 }
 
 export class VoiceService {
-    readonly #phones = new Map<string, Phone>();
+    private readonly phones = new Map<string, Phone>();
     /** As of the last look; looked at again on every `voice-start`. */
-    #whisperMissing = false;
+    private whisperMissing = false;
     /** The model download in progress, in whole percents. */
-    #download: {percent: number | null} | null = null;
+    private download: {percent: number | null} | null = null;
     /** Why the last download failed, until the next one starts or the model turns up. */
-    #failed: string | null = null;
+    private failed: string | null = null;
 
     constructor(private readonly deps: VoiceServiceDeps) {}
 
@@ -87,62 +87,62 @@ export class VoiceService {
      * fetches it; Whisper itself is looked for now, so a Mac without it says so
      * before anyone holds the mic.
      */
-    connected(connection: DeviceConnection): void {
-        this.#phones.set(connection.id, {connection, take: null, jobs: new Map()});
+    public connected(connection: DeviceConnection): void {
+        this.phones.set(connection.id, {connection, take: null, jobs: new Map()});
         connection.send({type: 'voice-status', status: this.status()});
-        void this.#lookForWhisper();
+        void this.lookForWhisper();
     }
 
-    message(connection: DeviceConnection, message: VoiceMessage): void {
-        const phone = this.#phones.get(connection.id);
+    public message(connection: DeviceConnection, message: VoiceMessage): void {
+        const phone = this.phones.get(connection.id);
         if (!phone) return;
         switch (message.type) {
             case 'voice-start':
-                return this.#start(phone, message.voiceId, message.sessionId ?? null);
+                return this.start(phone, message.voiceId, message.sessionId ?? null);
             case 'voice-chunk':
                 if (phone.take?.recording.voiceId === message.voiceId) {
                     phone.take.recording.add(message.seq, Buffer.from(message.audio, 'base64'));
                 }
                 return;
             case 'voice-end':
-                return this.#end(phone, message.voiceId);
+                return this.end(phone, message.voiceId);
             case 'voice-cancel':
-                if (phone.take?.recording.voiceId === message.voiceId) this.#drop(phone);
+                if (phone.take?.recording.voiceId === message.voiceId) this.drop(phone);
                 phone.jobs.get(message.voiceId)?.abort();
                 return;
         }
     }
 
     /** The connection closed: what it was recording is dropped, and nothing more is transcribed for it. */
-    disconnected(connection: DeviceConnection): void {
-        const phone = this.#phones.get(connection.id);
+    public disconnected(connection: DeviceConnection): void {
+        const phone = this.phones.get(connection.id);
         if (!phone) return;
-        this.#phones.delete(connection.id);
-        this.#drop(phone);
+        this.phones.delete(connection.id);
+        this.drop(phone);
         for (const job of phone.jobs.values()) job.abort();
     }
 
     /** A running download first, since it ends in one of the others; then a missing Whisper; then a failed download. */
-    status(): VoiceStatus {
-        if (this.#download)
-            return {kind: 'preparing', progress: this.#download.percent === null ? null : this.#download.percent / 100};
-        if (this.#whisperMissing) return {kind: 'no-whisper'};
-        if (this.#failed !== null) return {kind: 'prepare-failed', reason: this.#failed};
+    public status(): VoiceStatus {
+        if (this.download)
+            return {kind: 'preparing', progress: this.download.percent === null ? null : this.download.percent / 100};
+        if (this.whisperMissing) return {kind: 'no-whisper'};
+        if (this.failed !== null) return {kind: 'prepare-failed', reason: this.failed};
         return {kind: 'ready'};
     }
 
     // ── A recording ──
 
-    #start(phone: Phone, voiceId: string, sessionId: string | null): void {
-        this.#drop(phone);
+    private start(phone: Phone, voiceId: string, sessionId: string | null): void {
+        this.drop(phone);
         const recording = new Recording(voiceId, sessionId);
         const take: Take = {
             recording,
             dropped: false,
-            usable: this.#readiness().then((unavailable) => {
+            usable: this.readiness().then((unavailable) => {
                 if (!unavailable) return true;
                 if (phone.take === take) phone.take = null;
-                if (!take.dropped && this.#phones.get(phone.connection.id) === phone) {
+                if (!take.dropped && this.phones.get(phone.connection.id) === phone) {
                     phone.connection.send({
                         type: 'voice-result',
                         voiceId,
@@ -155,38 +155,38 @@ export class VoiceService {
         phone.take = take;
     }
 
-    #drop(phone: Phone): void {
+    private drop(phone: Phone): void {
         if (!phone.take) return;
         phone.take.dropped = true;
         phone.take = null;
     }
 
-    #end(phone: Phone, voiceId: string): void {
+    private end(phone: Phone, voiceId: string): void {
         const take = phone.take;
         if (!take || take.recording.voiceId !== voiceId) return;
         phone.take = null;
         const job = new AbortController();
         phone.jobs.set(voiceId, job);
-        void this.#finish(phone, take, job.signal).finally(() => {
+        void this.finish(phone, take, job.signal).finally(() => {
             if (phone.jobs.get(voiceId) === job) phone.jobs.delete(voiceId);
         });
     }
 
-    async #finish(phone: Phone, take: Take, signal: AbortSignal): Promise<void> {
+    private async finish(phone: Phone, take: Take, signal: AbortSignal): Promise<void> {
         if (!(await take.usable) || signal.aborted) return;
-        const result = await this.#transcribe(take.recording, signal);
-        if (signal.aborted || this.#phones.get(phone.connection.id) !== phone) return;
+        const result = await this.transcribe(take.recording, signal);
+        if (signal.aborted || this.phones.get(phone.connection.id) !== phone) return;
         phone.connection.send({type: 'voice-result', voiceId: take.recording.voiceId, result});
     }
 
-    async #transcribe(recording: Recording, signal: AbortSignal): Promise<VoiceResult> {
+    private async transcribe(recording: Recording, signal: AbortSignal): Promise<VoiceResult> {
         const {transcriber, model, log} = this.deps;
         if (recording.broken) return {kind: 'failed', reason: GAP_REASON};
         const pcm = recording.pcm();
         // Whisper makes words up out of silence ("you", "."), so silence never reaches it.
         if (pcm.length === 0 || !(this.deps.heard ?? hasSpeech)(pcm)) return {kind: 'empty'};
 
-        const vocabulary = this.#vocabulary(recording.sessionId);
+        const vocabulary = this.vocabulary(recording.sessionId);
         let printed: string;
         try {
             printed = await transcriber.transcribe(
@@ -200,12 +200,12 @@ export class VoiceService {
         }
         const transcript = readTranscript(printed);
         if (transcript === '') return {kind: 'empty'};
-        const cleaned = await this.#cleanUp(transcript, vocabulary, signal);
+        const cleaned = await this.cleanUp(transcript, vocabulary, signal);
         return {kind: 'text', text: cleaned ?? transcript};
     }
 
     /** Haiku's tidy version, or null when it failed or took too long; the call is killed either way. */
-    async #cleanUp(transcript: string, vocabulary: string[], signal: AbortSignal): Promise<string | null> {
+    private async cleanUp(transcript: string, vocabulary: string[], signal: AbortSignal): Promise<string | null> {
         const {cli, timers, log} = this.deps;
         const controller = new AbortController();
         const abort = (): void => controller.abort();
@@ -242,7 +242,7 @@ export class VoiceService {
     }
 
     /** The session's project, the local projects, and the fixed words. */
-    #vocabulary(sessionId: string | null): string[] {
+    private vocabulary(sessionId: string | null): string[] {
         const session = sessionId ? this.deps.registry.find(sessionId)?.session : undefined;
         const projects = routeCandidates(this.deps.projects.list(false)).map((candidate) =>
             folderName(candidate.projectPath),
@@ -253,9 +253,9 @@ export class VoiceService {
     // ── Whisper and its model ──
 
     /** Null when a recording can go ahead; otherwise why not, having started the download if that is why. */
-    async #readiness(): Promise<Unavailable | null> {
-        if (!(await this.#lookForWhisper())) return {kind: 'no-whisper'};
-        if (this.#download) return this.#preparing();
+    private async readiness(): Promise<Unavailable | null> {
+        if (!(await this.lookForWhisper())) return {kind: 'no-whisper'};
+        if (this.download) return this.preparing();
         let present: boolean;
         try {
             present = await this.deps.model.present();
@@ -263,72 +263,72 @@ export class VoiceService {
             present = false;
         }
         // Another recording may have started the download while this one looked.
-        if (this.#download) return this.#preparing();
+        if (this.download) return this.preparing();
         if (present) {
-            this.#update(() => {
-                this.#failed = null;
+            this.update(() => {
+                this.failed = null;
             });
             return null;
         }
-        this.#startDownload();
-        return this.#preparing();
+        this.startDownload();
+        return this.preparing();
     }
 
-    async #lookForWhisper(): Promise<boolean> {
+    private async lookForWhisper(): Promise<boolean> {
         let found: boolean;
         try {
             found = await this.deps.transcriber.available();
         } catch {
             found = false;
         }
-        this.#update(() => {
-            this.#whisperMissing = !found;
+        this.update(() => {
+            this.whisperMissing = !found;
         });
         return found;
     }
 
-    #preparing(): Unavailable {
-        return {kind: 'preparing', progress: this.#download?.percent == null ? null : this.#download.percent / 100};
+    private preparing(): Unavailable {
+        return {kind: 'preparing', progress: this.download?.percent == null ? null : this.download.percent / 100};
     }
 
-    #startDownload(): void {
+    private startDownload(): void {
         const {model, log} = this.deps;
         log.info('[voice] downloading the Whisper model to', model.path);
-        this.#update(() => {
-            this.#download = {percent: null};
-            this.#failed = null;
+        this.update(() => {
+            this.download = {percent: null};
+            this.failed = null;
         });
         model
             .download((progress) => {
                 const percent = progress === null ? null : Math.max(0, Math.min(100, Math.floor(progress * 100)));
-                this.#update(() => {
-                    if (this.#download) this.#download.percent = percent;
+                this.update(() => {
+                    if (this.download) this.download.percent = percent;
                 });
             })
             .then(
                 () => {
                     log.info('[voice] the Whisper model is in place');
-                    this.#update(() => {
-                        this.#download = null;
+                    this.update(() => {
+                        this.download = null;
                     });
                 },
                 (err: Error) => {
                     log.error('[voice] the Whisper model download failed:', err.message);
-                    this.#update(() => {
-                        this.#download = null;
-                        this.#failed = reasonLine(`The speech model couldn’t be downloaded: ${err.message}`);
+                    this.update(() => {
+                        this.download = null;
+                        this.failed = reasonLine(`The speech model couldn’t be downloaded: ${err.message}`);
                     });
                 },
             );
     }
 
     /** Make a change, and tell every phone when the status it gives is different. */
-    #update(change: () => void): void {
+    private update(change: () => void): void {
         const before = JSON.stringify(this.status());
         change();
         const status = this.status();
         if (JSON.stringify(status) === before) return;
-        for (const phone of this.#phones.values()) phone.connection.send({type: 'voice-status', status});
+        for (const phone of this.phones.values()) phone.connection.send({type: 'voice-status', status});
     }
 }
 
