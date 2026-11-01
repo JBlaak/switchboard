@@ -6,6 +6,7 @@ import {
     markPlain,
     markSplitRows,
     markUnifiedRows,
+    wholeLine,
 } from '../src/renderer/ui/session-work/support/change-marks';
 import {ensureLanguage, highlightUnifiedRows} from '../src/renderer/ui/session-work/support/highlight';
 import {parseUnifiedDiff} from '../src/domain/session-work/diff';
@@ -263,4 +264,22 @@ test('split rows: deletions on the left take the old file marks, additions on th
     assert.equal(html.right[1], null, 'context');
     assert.deepEqual(markedTexts(html.left[2]!), ['let']);
     assert.deepEqual(markedTexts(html.right[2]!), ['const', '* item.quantity']);
+});
+
+test('a line inserted or deleted whole keeps its own tint, with no marks painted over it', () => {
+    /* Given */
+    const added = '    pinnedPlans: repository.getPinnedPlans(),';
+    const whole = [{start: 4, end: added.length, kind: 'insert' as const}];
+    const part = [{start: 17, end: 27, kind: 'insert' as const}];
+    const moved = [{start: 4, end: added.length, kind: 'move' as const, otherLine: 3}];
+
+    /* When */
+    const wholeIsLine = wholeLine(added, whole);
+    const partIsLine = wholeLine(added, part);
+    const moveIsLine = wholeLine(added, moved);
+
+    /* Then */
+    assert.equal(wholeIsLine, true);
+    assert.equal(partIsLine, false);
+    assert.equal(moveIsLine, false);
 });

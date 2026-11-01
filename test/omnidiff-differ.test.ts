@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {OmnidiffDiffer} from '../src/infrastructure/omnidiff/omnidiff-differ';
-import {locateOmnidiff, omnidiffPath} from '../src/infrastructure/omnidiff/locate-omnidiff';
+import {locateOmnidiff, omnidiffPaths} from '../src/infrastructure/omnidiff/locate-omnidiff';
 import type {Logger} from '../src/application/ports/logger';
 import {silentLog} from './support/fakes';
 
@@ -258,12 +258,28 @@ test(
 
 test('the binary is in the resources when packaged, and under vendor/<arch> in a checkout', () => {
     /* When */
-    const packaged = omnidiffPath({packaged: true, resourcesPath: '/App/Resources', appPath: '/x', arch: 'arm64'});
-    const checkout = omnidiffPath({packaged: false, resourcesPath: '/x', appPath: '/code/sb', arch: 'arm64'});
+    const packaged = omnidiffPaths({packaged: true, resourcesPath: '/App/Resources', appPath: '/x', arch: 'arm64'});
+    const checkout = omnidiffPaths({packaged: false, resourcesPath: '/x', appPath: '/code/sb', arch: 'arm64'});
 
     /* Then */
-    assert.equal(packaged, '/App/Resources/omnidiff/omnidiff');
-    assert.equal(checkout, '/code/sb/vendor/omnidiff/arm64/omnidiff');
+    assert.deepEqual(packaged, ['/App/Resources/omnidiff/omnidiff']);
+    assert.equal(checkout[0], '/code/sb/vendor/omnidiff/arm64/omnidiff');
+});
+
+test('locateOmnidiff finds the checkout binary when the app was started on its app/ build folder', () => {
+    /* Given */
+    const checkout = scratch();
+    const appPath = path.join(checkout, 'app');
+    fs.mkdirSync(appPath);
+    const binary = path.join(checkout, 'vendor', 'omnidiff', 'arm64', 'omnidiff');
+    fs.mkdirSync(path.dirname(binary), {recursive: true});
+    fs.writeFileSync(binary, '#!/bin/sh\n', {mode: 0o755});
+
+    /* When */
+    const found = locateOmnidiff({packaged: false, resourcesPath: '/x', appPath, arch: 'arm64'});
+
+    /* Then */
+    assert.equal(found, binary);
 });
 
 test('locateOmnidiff finds an executable file, and nothing else', () => {
