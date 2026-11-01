@@ -2,7 +2,9 @@
  * The project page's work outside React (#173, #174): its memory read back
  * from localStorage as the page opens on a project, and written as it
  * changes; and the project's overview (#172), asked for as the overview comes
- * on screen and every 60 s while it stays there.
+ * on screen and every 60 s while it stays there. Each full answer is stored
+ * (`stored-overviews`), and read back as the page opens on the project again,
+ * so it shows at once while main is asked.
  *
  * The panel is swapped in by the main area's route
  * (`ui/main-area/install-main-area`), and a plan inside the page is opened by
@@ -24,6 +26,7 @@ import {
 } from '../../state/project-page-slice';
 import type {RendererState} from '../../state/root';
 import {STORAGE_KEYS, readStored, writeStored} from '../../state/storage';
+import {isStorable, parseStoredOverviews, storedOverviewFor, storedOverviewsWith} from '../../state/stored-overviews';
 import {issueKeyString} from '../../../domain/plan/model';
 import {loadProjectOverview, reloadProjectOverview} from './actions';
 import {loadProjectTasks, tasksRequest} from './project-tasks';
@@ -97,7 +100,14 @@ export function installProjectPage(): () => void {
                     now.projectPath,
                 );
                 const memory = withRecentPlan(stored, recentPlansIn(now.projectPath));
-                dispatch({type: 'projectPageRestored', projectPath: now.projectPath, memory});
+                // Show merged starts off on every visit.
+                const overview = storedOverviewFor(
+                    parseStoredOverviews(readStored('localStorage', STORAGE_KEYS.projectOverviews)),
+                    now.projectPath,
+                    memory.showClosed,
+                    false,
+                );
+                dispatch({type: 'projectPageRestored', projectPath: now.projectPath, memory, stored: overview});
                 return;
             }
             // Back from one of its plans: that plan, viewed last, is expanded.
@@ -107,6 +117,18 @@ export function installProjectPage(): () => void {
         }
 
         follow(state);
+
+        // A full answer the page took as it is: kept for the next visit.
+        if (
+            event.type === 'projectOverviewAnswered' &&
+            event.plans &&
+            state.projectPage.overview === event.overview &&
+            isStorable(event.overview)
+        ) {
+            const stored = parseStoredOverviews(readStored('localStorage', STORAGE_KEYS.projectOverviews));
+            const entry = {overview: event.overview, closed: event.closed, merged: event.merged};
+            writeStored('localStorage', STORAGE_KEYS.projectOverviews, storedOverviewsWith(stored, entry));
+        }
 
         const page = state.projectPage;
         const before = previous.projectPage;

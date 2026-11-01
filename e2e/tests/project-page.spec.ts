@@ -7,7 +7,8 @@
  * page and coming back finds it expanded, and / filters the rows. The pull
  * requests show with their plan chip, which expands that plan, Show merged
  * adds the merged one, and ↵ opens one on GitHub; with `gh` signed out one
- * message stands in for the GitHub sections (#175).
+ * message stands in for the GitHub sections (#175). A project opened again
+ * shows the answer stored from its last visit while main is asked.
  *
  * The page's own state (expanded plans, Show closed, cursor, filter, what is
  * remembered per project) and the Sessions section's choice are unit tested
@@ -18,7 +19,7 @@
  */
 import {test, expect, forEachAppearance} from '../support/test';
 import {expectScreen, openSession, sidebar, terminalHeader} from '../support/app';
-import {clipboardWrites, openedExternally} from '../support/main-process';
+import {clipboardWrites, openedExternally, setHostStub} from '../support/main-process';
 import {sessionItem} from '../support/session-list';
 import {LABEL, P, S} from '../fixtures/standard';
 import {acmeOverview, plansStub} from '../fixtures/plans';
@@ -130,6 +131,11 @@ test.describe('plans and issues', () => {
         return plansSection(page).locator('.pp-issue .pp-issue-title');
     }
 
+    /** The cursor on the first plan: past the three pull requests, which come first. */
+    async function cursorToFirstPlan(page: Page) {
+        for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowDown');
+    }
+
     test('a plan is one row that expands to its issues in level order, with the keys, and ↵ opens it inside the page', async ({
         page,
     }) => {
@@ -145,7 +151,7 @@ test.describe('plans and issues', () => {
         await expect(plansSection(page).getByText('Move to Postgres 16')).toHaveCount(0);
 
         /* When */
-        await page.keyboard.press('ArrowDown');
+        await cursorToFirstPlan(page);
         await page.keyboard.press('ArrowRight');
 
         /* Then */
@@ -208,7 +214,7 @@ test.describe('plans and issues', () => {
         const pinnedRow = sidebar(page).locator('.pinned-plan-item').filter({hasText: 'Login rework'});
         await rowProjectLink(page, S.loginFix).click();
         await expect(plansSection(page).getByText('Login rework', {exact: true})).toBeVisible();
-        await page.keyboard.press('ArrowDown');
+        await cursorToFirstPlan(page);
         await page.keyboard.press('Enter');
         await expect(planPage.getByRole('heading', {name: 'Login rework'})).toBeVisible();
 
@@ -315,6 +321,30 @@ test.describe('plans and issues', () => {
         await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1331');
     });
 
+    test('a project opened again shows its last answer, stored, until main answers: unreachable, it stays, marked stale', async ({
+        page,
+        app,
+    }) => {
+        /* Given */
+        await rowProjectLink(page, S.loginFix).click();
+        await expect(plansSection(page).getByText('Login rework', {exact: true})).toBeVisible();
+        await page.keyboard.press('Escape');
+        await rowProjectLink(page, S.chartsDarkMode).click();
+        await expect(page.getByRole('region', {name: /^Project /})).not.toHaveAccessibleName('Project ' + P.acmeApi);
+        await page.keyboard.press('Escape');
+        await setHostStub(app, 'projectOverview', {
+            [P.acmeApi]: {...acmeOverview(), github: {ok: false, reason: 'unreachable'}},
+        });
+
+        /* When */
+        await rowProjectLink(page, S.loginFix).click();
+
+        /* Then */
+        await expect(projectPage(page).getByText('Couldn’t reach GitHub. Showing what it said')).toBeVisible();
+        await expect(plansSection(page).getByText('Login rework', {exact: true})).toBeVisible();
+        await expect(projectPage(page).getByRole('region', {name: 'Pull requests'}).locator('.pp-pr')).toHaveCount(3);
+    });
+
     forEachAppearance(() => {
         test('the project page with its plans and issues', async ({page, home}) => {
             /* Given */
@@ -322,7 +352,7 @@ test.describe('plans and issues', () => {
             await expect(issueTitles(page)).toHaveCount(3);
 
             /* When */
-            await page.keyboard.press('ArrowDown');
+            await cursorToFirstPlan(page);
             await page.keyboard.press('ArrowRight');
             await page.keyboard.press('ArrowDown');
             await page.keyboard.press('ArrowDown');

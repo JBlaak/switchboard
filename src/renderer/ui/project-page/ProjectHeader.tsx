@@ -4,7 +4,8 @@
  *
  * The subline has the GitHub repository and the current branch, as the
  * project overview (#172) answers them (#174), then the path, then how fresh
- * GitHub's part of the page is. A remote project, which has no GitHub, shows
+ * GitHub's part of the page is, and "Updating…" while what shows is the
+ * answer stored from an earlier visit, with main asked again. A remote project, which has no GitHub, shows
  * no GitHub button but names its host (#175); nor does a project the overview
  * answers has no GitHub remote.
  */
@@ -52,15 +53,25 @@ function HeaderFacts({projectPath}: {projectPath: string}): JSX.Element | null {
     );
 }
 
-/** "Updated 2m ago": when GitHub's part of the page was read. */
+/** "Updated 2m ago": when GitHub's part of the page was read; "· Updating…" while it is the stored answer. */
 function UpdatedAt({projectPath}: {projectPath: string}): JSX.Element | null {
     const fetchedAt = useStore((state) => {
         const overview = state.projectPage.overview;
         return overview?.projectPath === projectPath && overview.github?.ok ? overview.github.fetchedAt : null;
     });
+    const updating = useStore(
+        (state) =>
+            state.projectPage.overview?.projectPath === projectPath && state.projectPage.overviewFrom?.stored === true,
+    );
     const now = useStore((state) => state.sessionList.now) || Date.now();
-    if (fetchedAt === null) return null;
-    return <span className="pp-updated">Updated {formatDate(new Date(fetchedAt), Math.max(now, fetchedAt))}</span>;
+    if (fetchedAt === null && !updating) return null;
+    return (
+        <span className="pp-updated">
+            {fetchedAt !== null && 'Updated ' + formatDate(new Date(fetchedAt), Math.max(now, fetchedAt))}
+            {fetchedAt !== null && updating && ' · '}
+            {updating && 'Updating…'}
+        </span>
+    );
 }
 
 export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element {

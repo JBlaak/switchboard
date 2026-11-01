@@ -14,7 +14,7 @@ import {PlanDiagram, PlanLegend} from './PlanDiagram';
 import {IssueDetail} from './IssueDetail';
 import {LevelStart} from './LevelStart';
 import {NO_HANDLERS, NO_PLAN_UI} from './types';
-import type {IssueActions, PlanData, PlanHandlers, PlanPinControl, PlanUi} from './types';
+import type {IssueActions, PlanData, PlanHandlers, PlanPinControl, PlanRefresh, PlanUi} from './types';
 
 export type PlanViewProps = PlanData & {readonly issueActions?: IssueActions; readonly pin?: PlanPinControl};
 
@@ -24,6 +24,8 @@ export function PlanViewContent(
         readonly on?: PlanHandlers;
         /** Issues a level-up just made Ready (A4). */
         readonly arriving?: readonly IssueKey[];
+        /** Showing a stored copy while main is asked again, or after it could not answer (`planRefresh`). */
+        readonly refresh?: PlanRefresh | null;
     },
 ): JSX.Element {
     const ui = props.ui ?? NO_PLAN_UI;
@@ -58,7 +60,7 @@ export function PlanViewContent(
             )}
             <div className="pv-body">
                 <div className="pv-scroll" data-testid="plan-scroll">
-                    <PlanHeader plan={plan} layout={layout} on={on} pin={props.pin} />
+                    <PlanHeader plan={plan} layout={layout} on={on} pin={props.pin} refresh={props.refresh ?? null} />
                     <PlanWarnings plan={plan} layout={layout} />
                     <LevelStart plan={plan} issueActions={props.issueActions} />
                     {plan.issues.length ? (

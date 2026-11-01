@@ -114,16 +114,21 @@ function cachedProject(projectPath: string): Project {
 
 /**
  * Ask main for the project's overview, closed plans and merged pull requests
- * included or not, and keep the answer. A failed call keeps what the page
- * had: the next poll asks again.
+ * included or not, and keep the answer. It is asked twice at once: without
+ * plans, which answers in a fraction of the time, so the pull requests show
+ * first, and in full. The slice keeps a full answer over one without plans.
+ * A failed call keeps what the page had: the next poll asks again.
  */
 export async function loadProjectOverview(projectPath: string, closed: boolean, merged: boolean): Promise<void> {
-    try {
-        const overview = await window.api.projectOverview(projectPath, {closed, merged});
-        dispatch({type: 'projectOverviewAnswered', projectPath, closed, merged, overview});
-    } catch {
-        // Main could not answer at all; the section stays as it was.
-    }
+    const ask = async (plans: boolean): Promise<void> => {
+        try {
+            const overview = await window.api.projectOverview(projectPath, {closed, merged, plans});
+            dispatch({type: 'projectOverviewAnswered', projectPath, closed, merged, plans, overview});
+        } catch {
+            // Main could not answer at all; the section stays as it was.
+        }
+    };
+    await Promise.all([ask(false), ask(true)]);
 }
 
 /** Ask again now, for whatever the page shows: after a session started from it, say. */

@@ -127,7 +127,7 @@ function overview(looseCount = 3): ProjectOverview {
         repository: REPO,
         running: ['session-a'],
         worktrees: [],
-        github: {ok: true, fetchedAt: 1, stale: false, ...groups},
+        github: {ok: true, fetchedAt: 1, stale: false, plansPending: false, ...groups},
     };
 }
 
@@ -151,6 +151,7 @@ test('the overview is kept for the project whose page is open', () => {
     /* When */
     const next = run(state, {
         type: 'projectOverviewAnswered',
+        plans: true,
         projectPath: APP,
         closed: false,
         merged: false,
@@ -168,6 +169,7 @@ test('an answer for another project, or one asked before Show closed flipped, is
     /* When */
     const other = run(state, {
         type: 'projectOverviewAnswered',
+        plans: true,
         projectPath: '/dev/other',
         closed: true,
         merged: false,
@@ -175,6 +177,7 @@ test('an answer for another project, or one asked before Show closed flipped, is
     });
     const stale = run(state, {
         type: 'projectOverviewAnswered',
+        plans: true,
         projectPath: APP,
         closed: false,
         merged: false,
@@ -190,7 +193,14 @@ test('reopening the same project keeps its last answer on screen; another projec
     /* Given */
     const answered = run(
         opened(),
-        {type: 'projectOverviewAnswered', projectPath: APP, closed: false, merged: false, overview: overview()},
+        {
+            type: 'projectOverviewAnswered',
+            projectPath: APP,
+            closed: false,
+            merged: false,
+            plans: true,
+            overview: overview(),
+        },
         {type: 'projectLooseExpanded'},
     );
 
@@ -406,6 +416,7 @@ test('a plan with nothing behind its view state answers no rows until there is a
     const after = plansViewOf(
         run(opened(), {
             type: 'projectOverviewAnswered',
+            plans: true,
             projectPath: APP,
             closed: false,
             merged: false,

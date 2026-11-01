@@ -2,25 +2,28 @@
  * The plan's header (D2): where it lives, its title and the parent above it,
  * the level you are on, how much is closed, the linked PRs, and one progress
  * bullet per level. Where the page can pin the plan to the sidebar, a pin
- * before the title.
+ * before the title. While the plan is a stored copy main has not confirmed
+ * yet, a quiet note at the end of the crumbs says so.
  */
 import type {JSX} from 'react';
 import type {Plan, PlanLayout} from '../../../../domain/plan/model';
 import {closedCount, hereLabel, issueUrl, linkedPrCount, planLevelBullets, shortRef} from './describe';
 import {LevelBullets} from './LevelBullets';
 import {HTML} from '../../session-list/markup';
-import type {PlanHandlers, PlanPinControl} from './types';
+import type {PlanHandlers, PlanPinControl, PlanRefresh} from './types';
 
 export function PlanHeader({
     plan,
     layout,
     on,
     pin,
+    refresh = null,
 }: {
     plan: Plan;
     layout: PlanLayout;
     on: PlanHandlers;
     pin?: PlanPinControl;
+    refresh?: PlanRefresh | null;
 }): JSX.Element {
     const bullets = planLevelBullets(layout);
     return (
@@ -56,6 +59,11 @@ export function PlanHeader({
                                 {shortRef(plan, plan.parent) + ' ' + plan.parent.title}
                             </a>
                         </>
+                    )}
+                    {refresh && (
+                        <span className={'pv-refresh ' + refresh} role="status" data-testid="plan-refresh">
+                            {refresh === 'refreshing' ? 'Refreshing…' : 'Couldn’t refresh, trying again in a minute'}
+                        </span>
                     )}
                 </div>
                 <div className="pv-title-row">

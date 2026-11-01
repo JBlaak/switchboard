@@ -180,7 +180,7 @@ function overview(fields: Partial<ProjectOverview> = {}): ProjectOverview {
         projectPath: APP,
         remote: false,
         repository: REPO,
-        github: {ok: true, fetchedAt: 0, stale: false, ...groups},
+        github: {ok: true, fetchedAt: 0, stale: false, plansPending: false, ...groups},
         worktrees: WORKTREES,
         running: ['s1'],
         ...fields,
@@ -221,6 +221,7 @@ test('an answer asked before Show merged flipped is dropped', () => {
     /* When */
     const stale = run(shown, {
         type: 'projectOverviewAnswered',
+        plans: true,
         projectPath: APP,
         closed: false,
         merged: false,
@@ -228,6 +229,7 @@ test('an answer asked before Show merged flipped is dropped', () => {
     });
     const fresh = run(shown, {
         type: 'projectOverviewAnswered',
+        plans: true,
         projectPath: APP,
         closed: false,
         merged: true,
@@ -434,7 +436,7 @@ test('the filter finds a worktree by branch or folder', () => {
 
 // ── The cursor and the keys ──
 
-test('the cursor walks plans, then pull requests, then sessions, then worktrees', () => {
+test('the cursor walks pull requests, then plans, then sessions, then worktrees, as the page shows them', () => {
     /* Given */
     const o = overview();
     const plans = planRows(
@@ -453,10 +455,10 @@ test('the cursor walks plans, then pull requests, then sessions, then worktrees'
     assert.deepEqual(
         rows.map((row) => row.id),
         [
-            'plan:acme/app#10',
             'pr:acme/app#20',
             'pr:acme/app#21',
             'pr:acme/app#22',
+            'plan:acme/app#10',
             'session:s1',
             'worktree:' + APP,
             'worktree:' + APP + '/.claude/worktrees/redirect',

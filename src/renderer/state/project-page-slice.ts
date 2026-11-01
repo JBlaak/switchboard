@@ -12,7 +12,11 @@
  * The project's overview (#172) is kept here too, as main last answered it
  * for the open project: `ui/project-page/install-project-page` asks for it as
  * the page opens and every minute while it stays on screen (#174). Which of
- * its rows are on screen is `ui/project-page/page-rows`.
+ * its rows are on screen is `ui/project-page/page-rows`. It is asked twice at
+ * once, without plans and in full: the first to land shows, but an answer
+ * without plans never takes the place of a full one (`overviewAnswered`).
+ * As the page opens, the last full answer stored for it (`stored-overviews`)
+ * shows until main's come, marked as being updated.
  *
  * So are the project's open BlaakTasks tasks (#251), the ones linked to it,
  * asked alongside the overview while BlaakTasks is on. A row key on the
@@ -32,21 +36,32 @@ import {projectRoute} from './main-area-slice';
 import type {ProjectOverview} from '../../domain/project/overview';
 import type {IssueSessionStart} from '../../domain/plan/issue-session';
 import type {TaskRow} from '../../domain/tasks/model';
+import type {StoredOverview} from './stored-overviews';
 
 export type ProjectPageEvent =
     /** The page opened on `projectPath`, with what it remembered of it. */
-    | {type: 'projectPageRestored'; projectPath: string; memory: ProjectPageMemory}
+    | {
+          type: 'projectPageRestored';
+          projectPath: string;
+          memory: ProjectPageMemory;
+          /** Its last full overview from an earlier visit, asked as `memory` asks now; shown until main answers. */
+          stored?: StoredOverview | null;
+      }
     /** A plan (`owner/repo#n`) expanded or collapsed in place. */
     | {type: 'projectPlanToggled'; plan: string}
     /** A plan expanded (→), or collapsed (←); nothing when it already is. */
     | {type: 'projectPlanExpanded'; plan: string}
     | {type: 'projectPlanCollapsed'; plan: string}
-    /** Main answered the overview of `projectPath`, asked with closed plans and merged PRs or without. */
+    /**
+     * Main answered the overview of `projectPath`, asked with closed plans and
+     * merged PRs or without, and with its plans or (`plans` false) without.
+     */
     | {
           type: 'projectOverviewAnswered';
           projectPath: string;
           closed: boolean;
           merged: boolean;
+          plans: boolean;
           overview: ProjectOverview;
       }
     /** Show N more: every issue that is not in a plan, not only the first few. */
@@ -98,8 +113,10 @@ export interface ProjectPageState extends ProjectPageMemory {
     /** The row the keyboard cursor is on, by the id its section gives it. */
     readonly cursor: string | null;
     readonly filter: string;
-    /** Main's last answer for the project; null until the first one comes. */
+    /** Main's last answer for the project, or the one stored from an earlier visit; null until there is one. */
     readonly overview: ProjectOverview | null;
+    /** What `overview` was asked with, and whether it is the stored one, being updated; null with no overview. */
+    readonly overviewFrom: OverviewFrom | null;
     /** Show N more was clicked: the issues not in a plan are listed in full. */
     readonly looseExpanded: boolean;
     /** A session starting on one of the page's issues, or why the last one did not. */
@@ -110,6 +127,13 @@ export interface ProjectPageState extends ProjectPageMemory {
     readonly worktreeStart: ProjectWorktreeStart | null;
     /** The project's open tasks (#251); null until read, and while BlaakTasks is off. */
     readonly tasks: ProjectTasks | null;
+}
+
+export interface OverviewFrom {
+    readonly closed: boolean;
+    readonly merged: boolean;
+    /** Read back from storage as the page opened: shown while main is asked again. */
+    readonly stored: boolean;
 }
 
 export type ProjectIssueStart =
@@ -128,6 +152,7 @@ export const initialProjectPageState: ProjectPageState = {
     cursor: null,
     filter: '',
     overview: null,
+    overviewFrom: null,
     looseExpanded: false,
     start: null,
     showMerged: false,
@@ -137,21 +162,29 @@ export const initialProjectPageState: ProjectPageState = {
 
 export function projectPageReducer(state: ProjectPageState, event: RendererEvent): ProjectPageState {
     switch (event.type) {
-        case 'projectPageRestored':
+        case 'projectPageRestored': {
+            // The same project again keeps its last answer on screen until the next; else what was stored of it.
+            const kept = state.projectPath === event.projectPath && state.overview !== null;
+            const stored = event.stored ?? null;
             return {
                 projectPath: event.projectPath,
                 expandedPlans: event.memory.expandedPlans,
                 showClosed: event.memory.showClosed,
                 cursor: null,
                 filter: '',
-                // The same project again keeps its last answer on screen until the next.
-                overview: state.projectPath === event.projectPath ? state.overview : null,
+                overview: kept ? state.overview : (stored?.overview ?? null),
+                overviewFrom: kept
+                    ? state.overviewFrom
+                    : stored
+                      ? {closed: stored.closed, merged: stored.merged, stored: true}
+                      : null,
                 looseExpanded: false,
                 start: null,
                 showMerged: false,
                 worktreeStart: null,
                 tasks: state.tasks?.projectPath === event.projectPath ? state.tasks : null,
             };
+        }
 
         case 'projectPlanToggled': {
             if (state.projectPath === null) return state;
@@ -180,7 +213,7 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
                 event.merged !== state.showMerged
             )
                 return state;
-            return {...state, overview: event.overview};
+            return overviewAnswered(state, event);
 
         case 'projectLooseExpanded':
             return state.looseExpanded ? state : {...state, looseExpanded: true};
@@ -248,6 +281,43 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
         default:
             return state;
     }
+}
+
+/**
+ * Main's answer taken in. A full one always replaces what is held. One
+ * without plans never takes a full one's place: over the full answer to the
+ * same options it is dropped, and over the stored answer, or a full one asked
+ * before Show closed or Show merged flipped, it brings its fresh parts (pull
+ * requests, loose issues, worktrees, running sessions) and leaves the plans,
+ * so they never fall back to a skeleton. When GitHub could not be asked, the
+ * stored answer's GitHub part stays, marked stale, rather than the message.
+ */
+function overviewAnswered(
+    state: ProjectPageState,
+    event: Extract<RendererEvent, {type: 'projectOverviewAnswered'}>,
+): ProjectPageState {
+    const answer = event.overview;
+    const held = state.overview?.projectPath === event.projectPath ? state.overview : null;
+    const from = held ? state.overviewFrom : null;
+    const sameOptions = !!from && from.closed === event.closed && from.merged === event.merged;
+
+    if (!event.plans && held && !(held.github?.ok && held.github.plansPending)) {
+        if (sameOptions && !from?.stored) return state;
+        return {...state, overview: withFreshParts(held, answer)};
+    }
+    const answered: OverviewFrom = {closed: event.closed, merged: event.merged, stored: false};
+    if (sameOptions && from?.stored && held?.github?.ok && answer.github && !answer.github.ok)
+        return {...state, overview: {...answer, github: {...held.github, stale: true}}, overviewFrom: answered};
+    return {...state, overview: answer, overviewFrom: answered};
+}
+
+/** `held`, its plans kept, with the fresh parts of an answer without plans. */
+function withFreshParts(held: ProjectOverview, answer: ProjectOverview): ProjectOverview {
+    const github =
+        held.github?.ok && answer.github?.ok
+            ? {...held.github, loose: answer.github.loose, pullRequests: answer.github.pullRequests}
+            : held.github;
+    return {...held, worktrees: answer.worktrees, running: answer.running, github};
 }
 
 /**

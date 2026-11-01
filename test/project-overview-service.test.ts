@@ -227,6 +227,7 @@ test('a project with a GitHub remote answers its plans, loose issues, PRs and wo
     assert.equal(answer.remote, false);
     const github = answered(answer.github);
     assert.equal(github.stale, false);
+    assert.equal(github.plansPending, false);
     assert.equal(github.fetchedAt, 1_000_000);
     assert.deepEqual(
         github.plans.map((row) => row.plan.number),
@@ -343,6 +344,97 @@ test('a refresh after a failed one is fresh again', async () => {
     const github = answered(answer.github);
     assert.equal(github.stale, false);
     assert.equal(github.fetchedAt, 1_046_000);
+});
+
+test('asked without plans, it reads no plan, answers the issues and PRs with the plans pending, and the worktrees', async () => {
+    /* Given */
+    const {service, calls} = setUp({
+        summaries: [summary(112)],
+        plans: [plan(112, [planIssue(113), planIssue(114)])],
+        issues: [
+            issue(112, {subIssues: 2}),
+            issue(113, {parent: {repository: REPO, number: 112}}),
+            issue(114, {parent: {repository: REPO, number: 112}}),
+            issue(150),
+        ],
+        pullRequests: [pullRequest(119, [114])],
+        worktrees: [checkout(PROJECT, true), checkout(WORKTREE)],
+    });
+
+    /* When */
+    const answer = await service.overview(PROJECT, {plans: false});
+
+    /* Then */
+    assert.deepEqual([...calls].sort(), ['issuesIn', 'pullRequestsIn']);
+    const github = answered(answer.github);
+    assert.equal(github.plansPending, true);
+    assert.deepEqual(github.plans, []);
+    assert.deepEqual(
+        github.loose.map((row) => row.issue.number),
+        [150],
+    );
+    assert.deepEqual(
+        github.pullRequests.map((row) => [row.pullRequest.number, row.plan?.number]),
+        [[119, 112]],
+    );
+    assert.deepEqual(
+        answer.worktrees.map((worktree) => worktree.path),
+        [PROJECT, WORKTREE],
+    );
+});
+
+test('the answer without plans is kept apart from the full one: neither stands in for the other', async () => {
+    /* Given */
+    const {service, calls} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
+    await service.overview(PROJECT, {plans: false});
+
+    /* When */
+    const full = answered((await service.overview(PROJECT)).github);
+    calls.length = 0;
+    const quick = answered((await service.overview(PROJECT, {plans: false})).github);
+    const again = answered((await service.overview(PROJECT)).github);
+
+    /* Then */
+    assert.equal(full.plansPending, false);
+    assert.deepEqual(
+        full.plans.map((row) => row.plan.number),
+        [112],
+    );
+    assert.equal(quick.plansPending, true);
+    assert.equal(again.plansPending, false);
+    assert.deepEqual(calls, []);
+});
+
+test('asked with and without plans at once, gh and git are read once for both', async () => {
+    /* Given */
+    const {service, calls, git} = setUp({summaries: [summary(112)], plans: [plan(112, [planIssue(113)])]});
+
+    /* When */
+    const [quick, full] = await Promise.all([
+        service.overview(PROJECT, {plans: false}),
+        service.overview(PROJECT, {closed: true}),
+    ]);
+
+    /* Then */
+    assert.equal(answered(quick.github).plansPending, true);
+    assert.equal(answered(full.github).plansPending, false);
+    assert.equal(calls.filter((call) => call === 'issuesIn').length, 1);
+    assert.equal(calls.filter((call) => call === 'pullRequestsIn').length, 1);
+    assert.deepEqual(git.calls, [PROJECT]);
+});
+
+test('without plans, Show closed asks nothing new', async () => {
+    /* Given */
+    const {service, calls} = setUp({issues: [issue(150)]});
+    await service.overview(PROJECT, {plans: false});
+    calls.length = 0;
+
+    /* When */
+    const answer = await service.overview(PROJECT, {plans: false, closed: true});
+
+    /* Then */
+    assert.deepEqual(calls, []);
+    assert.equal(answered(answer.github).plansPending, true);
 });
 
 for (const [availability, reason] of [

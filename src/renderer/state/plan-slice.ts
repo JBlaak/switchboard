@@ -10,6 +10,10 @@
  * plan by its issue (F2). The view is polled while it is open (W4, see
  * `ui/session-work/plan/install-plan`); a poll that fails keeps the last answer
  * on screen rather than blanking it.
+ *
+ * A plan opened before is shown at once from the copy stored when it last
+ * loaded (`planSeeded`, see `ui/session-work/plan/stored-plans`) while main is
+ * asked again; `planRefresh` tells the view it is showing that copy.
  */
 import type {IssueKey, Plan, PlanSummary} from '../../domain/plan/model';
 import type {IssueSessionStart} from '../../domain/plan/issue-session';
@@ -38,7 +42,10 @@ export interface PlanViewState {
     readonly source: PlanSource;
     /** The source picked away from, for the way back; null when this is where the view opened. */
     readonly from: PlanSource | null;
-    /** `loading` until the first answer for this source; a failed poll after that keeps `loaded`. */
+    /**
+     * `loading` until main first answers for this source, even while a stored
+     * answer is shown; a failed poll after that keeps `loaded`.
+     */
     readonly phase: 'loading' | 'loaded' | 'failed';
     /** The last answer; a plan source answers as one plan and no others. */
     readonly answer: SessionPlansAnswer | null;
@@ -227,7 +234,9 @@ function reduceView(state: PlanState, event: RendererEvent): PlanState {
         case 'planLoaded': {
             if (!view || view.owner !== event.owner || planSourceKey(view.source) !== event.sourceKey) return state;
             if (event.answer === null) {
-                return view.answer ? state : {...state, view: {...view, phase: 'failed'}};
+                return view.phase === 'loaded' || view.phase === 'failed'
+                    ? state
+                    : {...state, view: {...view, phase: 'failed'}};
             }
             const answer = event.answer;
             const plans = answer.plans;
@@ -245,6 +254,13 @@ function reduceView(state: PlanState, event: RendererEvent): PlanState {
                     selected: inPlan(view.selected) ? view.selected : null,
                 },
             };
+        }
+
+        // The stored answer, until main's own: never over an answer already on screen.
+        case 'planSeeded': {
+            if (!view || view.owner !== event.owner || planSourceKey(view.source) !== event.sourceKey) return state;
+            if (view.answer || !event.answer.plans.length) return state;
+            return {...state, view: {...view, answer: event.answer}};
         }
 
         case 'planOwnersLoaded': {
@@ -326,6 +342,16 @@ export function chosenPlan(view: PlanViewState): Plan | null {
         if (found) return found;
     }
     return plans[0] ?? null;
+}
+
+/**
+ * Whether the view shows a stored answer main has not confirmed yet:
+ * `refreshing` while it is being asked, `failed` when it could not answer.
+ * Null once main answered, and while there is nothing on screen.
+ */
+export function planRefresh(view: PlanViewState): 'refreshing' | 'failed' | null {
+    if (!view.answer || view.phase === 'loaded') return null;
+    return view.phase === 'loading' ? 'refreshing' : 'failed';
 }
 
 /**

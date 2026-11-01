@@ -12,6 +12,7 @@
 import type {JSX} from 'react';
 import {useStore} from '../../use-store';
 import {shallowEqual} from '../../../state/store';
+import {planRefresh} from '../../../state/plan-slice';
 import {planHandlers} from './load';
 import {NO_PLAN_UI} from './types';
 import {PlanViewContent} from './PlanViewContent';
@@ -28,10 +29,11 @@ export function PlanView(props: PlanViewProps): JSX.Element {
     }, shallowEqual);
     const canGoBack = useStore((state) => !!state.plan.view?.from);
     const on = canGoBack ? planHandlers : {...planHandlers, back: undefined};
+    const refresh = useStore((state) => (state.plan.view ? planRefresh(state.plan.view) : null));
     const cheer = useCheer();
     return (
         <>
-            <PlanViewContent {...props} ui={ui} on={on} arriving={cheer?.arriving} />
+            <PlanViewContent {...props} ui={ui} on={on} arriving={cheer?.arriving} refresh={refresh} />
             {cheer && <PlanCheer cheer={cheer} />}
         </>
     );

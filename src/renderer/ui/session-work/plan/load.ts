@@ -15,6 +15,7 @@ import {issueKeyString} from '../../../../domain/plan/model';
 import type {IssueKey, PlanSummary} from '../../../../domain/plan/model';
 import type {PlanHandlers} from './types';
 import {loadIssueSessions} from './actions';
+import {storePlans, storedPlan} from './stored-plans';
 
 /** Sources being asked right now, so a poll never stacks on a slow answer. */
 const asking = new Set<string>();
@@ -34,7 +35,24 @@ export async function loadPlanView(view: Pick<PlanViewState, 'owner' | 'source'>
         asking.delete(ask);
     }
     dispatch({type: 'planLoaded', owner: view.owner, sourceKey, answer});
-    if (answer) await loadOwners(view.owner, answer);
+    if (answer) {
+        storePlans(answer.plans);
+        await loadOwners(view.owner, answer);
+    }
+}
+
+/**
+ * Show a plan source's stored copy while main is asked (see `stored-plans`),
+ * with which sessions own its issues now. Nothing for a session's plans, or a
+ * plan never loaded before.
+ */
+export function seedPlanView(view: Pick<PlanViewState, 'owner' | 'source'>): void {
+    if (view.source.kind !== 'plan') return;
+    const plan = storedPlan(view.source);
+    if (!plan) return;
+    const answer: SessionPlansAnswer = {plans: [plan], others: []};
+    dispatch({type: 'planSeeded', owner: view.owner, sourceKey: planSourceKey(view.source), answer});
+    void loadOwners(view.owner, answer);
 }
 
 /** Ask again which sessions own the open view's issues, e.g. straight after Start level made some. */

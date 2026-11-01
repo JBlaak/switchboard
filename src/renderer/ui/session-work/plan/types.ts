@@ -12,6 +12,9 @@ export interface PlanPinControl {
     toggle(): void;
 }
 
+/** Where a stored copy on screen is: being refreshed, or main could not answer (`planRefresh`). */
+export type PlanRefresh = 'refreshing' | 'failed';
+
 /** A session's plans (W2), or one plan given directly (F2). */
 export type PlanData = {readonly sessionPlans: SessionPlansAnswer} | {readonly plan: Plan};
 

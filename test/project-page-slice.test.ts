@@ -59,6 +59,7 @@ test('a page opens on what its project remembered, with no cursor and no filter'
         cursor: null,
         filter: '',
         overview: null,
+        overviewFrom: null,
         looseExpanded: false,
         start: null,
         showMerged: false,

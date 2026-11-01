@@ -11,11 +11,13 @@
  *
  * The body follows the GitHub part's state (#175, `page-state`): a project
  * with no GitHub remote, or a remote one, has a single column of what is
- * local; when GitHub could not be asked, one message takes the place of Plans
- * and Pull requests; stale data is dimmed under a line saying how old it is.
+ * local; when GitHub could not be asked, one message takes the place of Pull
+ * requests and Plans; stale data is dimmed under a line saying how old it is.
+ * Pull requests come first: checking one out is what the page is opened for
+ * most, and they are answered before the plans.
  *
  * While BlaakTasks is on, the Tasks section (#251) lists the repo's open
- * tasks under Pull requests (at the top of the one column without GitHub),
+ * tasks under Plans & issues (at the top of the one column without GitHub),
  * with the Tasks page's keys on its rows. Esc puts away a task's project
  * list, start answer or detail before it clears the filter or closes the page.
  */
@@ -281,8 +283,8 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
                             <GitHubMessage reason={github.reason} />
                         ) : (
                             <>
-                                <PlansSection projectPath={projectPath} />
                                 <PullRequestsSection projectPath={projectPath} />
+                                <PlansSection projectPath={projectPath} />
                             </>
                         )}
                         <TasksSection projectPath={projectPath} />
