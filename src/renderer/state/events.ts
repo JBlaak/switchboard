@@ -250,6 +250,8 @@ export type LocalEvent =
     | {type: 'planSourcePicked'; owner: string; source: PlanSource}
     /** Main answered for a source (`planSourceKey`); null when it could not. */
     | {type: 'planLoaded'; owner: string; sourceKey: string; answer: SessionPlansAnswer | null}
+    /** The answer stored when the source last loaded, shown until main answers (`plan/stored-plans`). */
+    | {type: 'planSeeded'; owner: string; sourceKey: string; answer: SessionPlansAnswer}
     /** A plan picked in the switcher (W2). */
     | {type: 'planChosen'; plan: IssueKey}
     /** The pointer is over an issue, or over none (D3). */

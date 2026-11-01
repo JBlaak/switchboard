@@ -290,6 +290,25 @@ a.pv-num:hover {
     color: var(--sb-text-dimmest);
 }
 
+/* A stored copy on screen while main is asked again: quiet, and out of the way. */
+.pv-refresh {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--sb-text-dimmest);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .pv-refresh.refreshing {
+        animation: pv-refresh-pulse 1.6s ease-in-out infinite;
+    }
+}
+
+@keyframes pv-refresh-pulse {
+    50% {
+        opacity: 0.45;
+    }
+}
+
 .pv-parent {
     color: var(--sb-text-muted);
     text-decoration: none;

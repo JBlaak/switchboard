@@ -2,7 +2,8 @@
  * The plan view's work outside React (W4): putting the Plan tab's view on
  * screen while the Session work page shows that tab, asking main for its plans
  * when it opens (or another plan is picked), and asking again every minute
- * while it stays on screen. Nothing runs while no plan view is open.
+ * while it stays on screen. Nothing runs while no plan view is open. A plan
+ * opened before shows its stored copy until main answers (`stored-plans`).
  *
  * Fetching and polling follow whichever plan view is open, whoever opened it,
  * so #128's Plan view without a session gets them by opening its view.
@@ -11,7 +12,7 @@ import {dispatch, store} from '../../../state/app-store';
 import {planSourceKey} from '../../../state/plan-slice';
 import {workTabOf} from '../../../state/session-work-slice';
 import type {RendererState} from '../../../state/root';
-import {loadPlanView} from './load';
+import {loadPlanView, seedPlanView} from './load';
 import {installLevelsSeen} from './levels-seen';
 
 /** How often an open plan view asks again (W4). */
@@ -50,6 +51,8 @@ export function installPlan(): () => void {
         if (poll) clearInterval(poll);
         poll = null;
         if (!view) return;
+        // A plan opened before shows its stored copy at once; main's answer replaces it.
+        if (!view.answer) seedPlanView(view);
         void loadPlanView(view);
         poll = setInterval(() => {
             const current = store.getState().plan.view;

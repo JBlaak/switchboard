@@ -22,6 +22,7 @@ export const STORAGE_KEYS = {
     imageCompareBackground: 'imageCompareBackground',
     /** `owner/repo#n` → the plan's level last seen, as JSON (localStorage), so a level-up outlives a restart (A4). */
     planLevelsSeen: 'planLevelsSeen',
+    storedPlans: 'storedPlans', // The plans last loaded, newest first (localStorage; see `plan/stored-plans`).
     /** The plans opened recently, per project (localStorage; see `ui/project-page/recent-plans`). */
     recentPlans: 'recentPlans',
     /** Each project page's expanded plans and Show closed, per project (localStorage; see `project-page-slice`). */
