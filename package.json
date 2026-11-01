@@ -23,7 +23,9 @@
     "build:mac": "npm run build && electron-builder --mac && node scripts/postinstall.js",
     "build:mac:arm64": "npm run build && electron-builder --mac --arm64 && node scripts/postinstall.js",
     "release": "npm run build && electron-builder --publish always",
-    "postinstall": "node scripts/postinstall.js"
+    "postinstall": "node scripts/postinstall.js",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,scss,md,html,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,scss,md,html,yml}\""
   },
   "dependencies": {
     "@fontsource-variable/mulish": "^5.3.0",
@@ -56,6 +58,7 @@
     "electron-builder": "^26.0.0",
     "electron-reloader": "^1.2.3",
     "esbuild": "^0.27.3",
+    "prettier": "^3.9.10",
     "sass": "^1.104.0",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
