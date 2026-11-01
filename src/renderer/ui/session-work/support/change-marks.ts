@@ -116,8 +116,22 @@ function marked(
     marks: readonly ChangeMark[] | undefined,
     side: MarkSide,
 ): string | null {
-    if (!marks || marks.length === 0) return html;
+    if (!marks || marks.length === 0 || wholeLine(text, marks)) return html;
     return html !== null ? markHighlighted(html, marks, side) : markPlain(text, marks, side);
+}
+
+/**
+ * The marks are an insertion or a deletion of everything on the line but its
+ * indentation: the line's own tint already says that, and painting it again
+ * only turns a block of new lines into a block of louder new lines.
+ */
+export function wholeLine(text: string, marks: readonly ChangeMark[]): boolean {
+    if (marks.some((mark) => mark.kind !== 'insert' && mark.kind !== 'delete')) return false;
+    for (let column = 0; column < text.length; column++) {
+        if (/\s/.test(text[column])) continue;
+        if (!marks.some((mark) => mark.start <= column && column < mark.end)) return false;
+    }
+    return true;
 }
 
 /** Marks clamped to the line, empty ones dropped, in column order and never overlapping. */

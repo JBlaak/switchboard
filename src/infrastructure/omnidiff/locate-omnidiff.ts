@@ -12,25 +12,32 @@ export interface OmnidiffWhere {
     packaged: boolean;
     /** `process.resourcesPath`. */
     resourcesPath: string;
-    /** Electron's `app.getAppPath()`: the checkout in development. */
+    /**
+     * Electron's `app.getAppPath()`: the checkout when started as `electron .`,
+     * its `app/` build folder when started on `app/main.js` (as the e2e suite does).
+     */
     appPath: string;
     /** `process.arch`. */
     arch: string;
 }
 
-export function omnidiffPath(where: OmnidiffWhere): string {
-    return where.packaged
-        ? path.join(where.resourcesPath, 'omnidiff', 'omnidiff')
-        : path.join(where.appPath, 'vendor', 'omnidiff', where.arch, 'omnidiff');
+/** Where the binary may be, most likely first. */
+export function omnidiffPaths(where: OmnidiffWhere): string[] {
+    if (where.packaged) return [path.join(where.resourcesPath, 'omnidiff', 'omnidiff')];
+    const vendored = (root: string): string => path.join(root, 'vendor', 'omnidiff', where.arch, 'omnidiff');
+    return [vendored(where.appPath), vendored(path.dirname(where.appPath))];
 }
 
 export function locateOmnidiff(where: OmnidiffWhere): string | null {
-    const candidate = omnidiffPath(where);
+    return omnidiffPaths(where).find(isExecutableFile) ?? null;
+}
+
+function isExecutableFile(candidate: string): boolean {
     try {
-        if (!statSync(candidate).isFile()) return null;
+        if (!statSync(candidate).isFile()) return false;
         accessSync(candidate, constants.X_OK);
-        return candidate;
+        return true;
     } catch {
-        return null;
+        return false;
     }
 }
