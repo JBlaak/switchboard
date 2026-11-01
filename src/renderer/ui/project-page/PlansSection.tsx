@@ -10,8 +10,10 @@
  *
  * Reads the overview `install-project-page` keeps asking for; which rows are
  * on screen is `page-rows`, shared with the page's keys. Until the first
- * answer the section shimmers. When GitHub had nothing to say the section is
- * left out; #175 says why in its place.
+ * answer the section shimmers; while the answer has come without its plans
+ * (`plansPending`), only the plans do, over the loose issues already listed.
+ * When GitHub had nothing to say the section is left out; #175 says why in
+ * its place.
  */
 import type {JSX, MouseEvent, ReactNode} from 'react';
 import {useStore} from '../use-store';
@@ -27,6 +29,7 @@ import {cursorId, planBullets, plansViewOf, runningCount, type PlanOnScreen} fro
 import {openIssueOnGitHub, openProjectPlan, startPageIssueSession} from './actions';
 import {dispatch} from '../../state/app-store';
 import type {SectionProps} from './slots';
+import {SectionSkeleton} from './SectionSkeleton';
 
 export function PlansSection({projectPath}: SectionProps): JSX.Element | null {
     const page = useStore((state) => state.projectPage);
@@ -37,6 +40,7 @@ export function PlansSection({projectPath}: SectionProps): JSX.Element | null {
     const github = answered?.github?.ok ? answered.github : null;
     const planCount = github ? github.plans.filter((plan) => page.showClosed || plan.state === 'open').length : 0;
     const looseCount = github ? github.loose.length : 0;
+    const pending = view?.plansPending === true;
 
     return (
         <section className="pp-section pp-plans" aria-labelledby="pp-plans-heading">
@@ -44,7 +48,8 @@ export function PlansSection({projectPath}: SectionProps): JSX.Element | null {
                 <h2 id="pp-plans-heading">Plans &amp; issues</h2>
                 {github && (
                     <span className="pp-count">
-                        {plural(planCount, 'plan')} · {plural(looseCount, 'other issue')}
+                        {pending ? '' : plural(planCount, 'plan') + ' · '}
+                        {plural(looseCount, 'other issue')}
                     </span>
                 )}
                 <button type="button" className="pp-link" onClick={() => dispatch({type: 'projectShowClosedToggled'})}>
@@ -52,8 +57,9 @@ export function PlansSection({projectPath}: SectionProps): JSX.Element | null {
                 </button>
             </div>
             <div className="pp-card" aria-busy={!view}>
-                {!view && <SectionSkeleton />}
-                {view && view.plans.length === 0 && view.loose.length === 0 && (
+                {!view && <SectionSkeleton label="Loading plans and issues" />}
+                {pending && <SectionSkeleton label="Loading plans" rows={2} />}
+                {view && !pending && view.plans.length === 0 && view.loose.length === 0 && (
                     <div className="pp-quiet">
                         {page.filter ? 'Nothing here matches “' + page.filter + '”.' : 'No open plans or issues.'}
                     </div>
@@ -279,16 +285,6 @@ function LabelPill({label}: {label: IssueLabel}): JSX.Element {
     const name = label.name.toLowerCase();
     const role = name.includes('bug') ? ' is-bug' : name.includes('agent') ? ' is-agent' : '';
     return <span className={'pp-pill pp-label' + role}>{label.name}</span>;
-}
-
-function SectionSkeleton(): JSX.Element {
-    return (
-        <div className="pp-skeletons" aria-label="Loading plans and issues">
-            <div className="pp-skeleton" />
-            <div className="pp-skeleton" />
-            <div className="pp-skeleton" />
-        </div>
-    );
 }
 
 function plural(count: number, noun: string): string {

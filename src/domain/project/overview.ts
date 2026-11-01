@@ -111,6 +111,12 @@ export type ProjectGitHubOverview =
           fetchedAt: number;
           /** The last refresh failed: this is the answer before it, as of `fetchedAt`. */
           stale: boolean;
+          /**
+           * Asked without plans (`plans: false`): `plans` is empty and the issues
+           * and PRs were grouped without them, so the page shows its plans as
+           * still coming. False on a full answer.
+           */
+          plansPending: boolean;
       } & ProjectOverviewGroups<ProjectIssue, ProjectPullRequest>)
     | {ok: false; reason: GitHubUnavailableReason};
 
@@ -141,4 +147,10 @@ export interface ProjectOverviewOptions {
     closed?: boolean;
     /** Merged pull requests too. */
     merged?: boolean;
+    /**
+     * False: answer without reading the plans, the slow part, so the pull
+     * requests, loose issues and worktrees can show first (`plansPending`).
+     * Plans are read unless this is false.
+     */
+    plans?: boolean;
 }

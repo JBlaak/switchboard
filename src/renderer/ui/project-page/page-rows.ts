@@ -4,8 +4,8 @@
  * filter; and the rows the keyboard cursor walks, across every section.
  *
  * Every section hands the cursor its rows as `PageRow`s, in the order it
- * shows them, and the page walks them in reading order: Plans & issues,
- * Pull requests, then the right column's Sessions and Worktrees. Each row's
+ * shows them, and the page walks them in reading order: Pull requests,
+ * Plans & issues, then the right column's Sessions and Worktrees. Each row's
  * `id` is what `projectPage.cursor` holds, and what the row's element carries
  * as `data-cursor-id`. The Pull requests and Worktrees sections (#175) add
  * theirs: a PR (↵ opens it on GitHub) and a worktree (S starts a session there).
@@ -86,6 +86,8 @@ export interface PlanOnScreen {
 
 /** What the Plans & issues section shows. */
 export interface PlansView {
+    /** The answer came without plans (`plansPending`): none listed yet, the loose issues are. */
+    readonly plansPending: boolean;
     readonly plans: readonly PlanOnScreen[];
     /** The issues not in a plan that are listed. */
     readonly loose: readonly LooseRow[];
@@ -106,15 +108,16 @@ export interface PlansViewOptions {
  * the overview orders them). With a filter, a plan stays when it matches or
  * one of its issues does; one kept for its issues shows just those, expanded.
  * The issues not in a plan are filtered, then capped at `LOOSE_SHOWN` until
- * Show N more.
+ * Show N more. While the plans are still coming, none is listed.
  */
 export function plansView(
-    groups: ProjectOverviewGroups<ProjectIssue, ProjectPullRequest>,
+    groups: ProjectOverviewGroups<ProjectIssue, ProjectPullRequest> & {readonly plansPending?: boolean},
     options: PlansViewOptions,
 ): PlansView {
     const {expandedPlans, showClosed, filter, looseExpanded} = options;
+    const plansPending = groups.plansPending === true;
     const plans: PlanOnScreen[] = [];
-    for (const plan of groups.plans) {
+    for (const plan of plansPending ? [] : groups.plans) {
         if (plan.state === 'closed' && !showClosed) continue;
         const expanded = expandedPlans.includes(issueKeyString(plan.plan));
         if (matchesFilter(issueText(plan.plan), filter)) {
@@ -129,7 +132,7 @@ export function plansView(
         matchesFilter(issueText(row.issue) + ' ' + row.issue.labels.map((l) => l.name).join(' '), filter),
     );
     const shown = looseExpanded ? loose : loose.slice(0, LOOSE_SHOWN);
-    return {plans, loose: shown, hiddenLoose: loose.length - shown.length};
+    return {plansPending, plans, loose: shown, hiddenLoose: loose.length - shown.length};
 }
 
 /**
@@ -190,9 +193,9 @@ export function sessionRows(sessionIds: readonly string[]): PageRow[] {
 
 /**
  * Every row on the page, in the order ↑/↓ walk them: the left column's
- * sections, then the right column's. #175 passes its Pull requests and
- * Worktrees rows in their places, and #251 its Tasks rows: under Pull
- * requests, or at the top of the one column of a page without GitHub.
+ * sections, then the right column's. Pull requests come first, over Plans &
+ * issues, as the page shows them; #251 passes its Tasks rows under Plans &
+ * issues, or at the top of the one column of a page without GitHub.
  */
 export function pageRows(sections: {
     readonly plans: readonly PageRow[];
@@ -202,8 +205,8 @@ export function pageRows(sections: {
     readonly worktrees?: readonly PageRow[];
 }): PageRow[] {
     return [
-        ...sections.plans,
         ...(sections.pullRequests ?? []),
+        ...sections.plans,
         ...(sections.tasks ?? []),
         ...sections.sessions,
         ...(sections.worktrees ?? []),

@@ -1,5 +1,5 @@
 /**
- * The project page's Pull requests section (#175), under Plans & issues: each
+ * The project page's Pull requests section (#175), first, over Plans & issues: each
  * open PR as a two-line row with its state, title, number and head branch,
  * then an "in #n" chip when it closes an issue in a plan (a click expands that
  * plan), its checks and where its review stands. Drafts are dimmed. Show

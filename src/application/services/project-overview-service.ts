@@ -16,6 +16,12 @@
  *
  * A project without a GitHub remote answers only its local parts. An ssh
  * project answers its running sessions only: no git and no `gh` reads.
+ *
+ * Asked with `plans: false`, it answers without the plans, the slow part:
+ * the issues and PRs grouped without them and `plansPending` set, kept under
+ * its own key. The page asks that and the full answer at once, so its pull
+ * requests show before its plans. The two share their `gh` and git reads
+ * while both are in flight, so asking both costs no second read.
  */
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {gitHubRepository} from '../../domain/project/repo-url';
@@ -73,9 +79,28 @@ export class ProjectOverviewService {
     /** The last good reads by repository and options, for when a refresh fails. */
     private readonly last = new Map<string, GitHubReads>();
 
-    constructor(private readonly deps: ProjectOverviewServiceDeps) {}
+    private readonly deps: ProjectOverviewServiceDeps;
 
-    /** The project page's answer for `projectPath`. Closed plans and merged PRs only when asked. */
+    constructor(deps: ProjectOverviewServiceDeps) {
+        const {github, git} = deps;
+        this.deps = {
+            ...deps,
+            github: {
+                available: () => github.available(),
+                issuesIn: inFlightShared((repository, options) => github.issuesIn(repository, options)),
+                pullRequestsIn: inFlightShared((repository, options) => github.pullRequestsIn(repository, options)),
+            },
+            git: {
+                worktreeRoot: (cwd) => git.worktreeRoot(cwd),
+                worktrees: inFlightShared((root) => git.worktrees(root)),
+            },
+        };
+    }
+
+    /**
+     * The project page's answer for `projectPath`. Closed plans and merged PRs
+     * only when asked; the plans themselves unless asked without them.
+     */
     public async overview(projectPath: string, options: ProjectOverviewOptions = {}): Promise<ProjectOverview> {
         const running = this.deps.running();
 
@@ -118,9 +143,15 @@ export class ProjectOverviewService {
     ): Promise<ProjectGitHubOverview> {
         const closed = options.closed === true;
         const merged = options.merged === true;
-        const key = `${repository}:${closed ? 'closed' : 'open'}:${merged ? 'merged' : 'open'}`;
+        const withPlans = options.plans !== false;
+        // Without plans, Show closed changes nothing: one key for both.
+        const key = withPlans
+            ? `${repository}:${closed ? 'closed' : 'open'}:${merged ? 'merged' : 'open'}`
+            : `${repository}:no-plans:${merged ? 'merged' : 'open'}`;
 
-        const fresh = await this.reads(key, () => this.read(projectPath, repository, closed, merged));
+        const fresh = await this.reads(key, () =>
+            withPlans ? this.read(projectPath, repository, closed, merged) : this.readWithoutPlans(repository, merged),
+        );
         if (fresh) this.last.set(key, fresh);
         const reads = fresh ?? this.last.get(key);
         if (!reads) return {ok: false, reason: await this.unavailable()};
@@ -134,7 +165,15 @@ export class ProjectOverviewService {
         // Merged PRs are listed with their issues and plan, but never stand for an open issue's PR.
         if (mergedOnes.length > 0)
             groups.pullRequests.push(...groupOverview({...input, pullRequests: mergedOnes}).pullRequests);
-        return {ok: true, fetchedAt: reads.fetchedAt, stale: fresh === null, ...groups};
+        return {
+            ok: true,
+            fetchedAt: reads.fetchedAt,
+            stale: fresh === null,
+            plansPending: !withPlans,
+            ...groups,
+            // Grouped without plans, an issue with sub-issues stands as an unlevelled plan: not shown until the plans are read.
+            plans: withPlans ? groups.plans : [],
+        };
     }
 
     /** Everything `gh` is asked for one answer; null when any of it could not be read. */
@@ -169,6 +208,23 @@ export class ProjectOverviewService {
         };
     }
 
+    /** The issues and PRs alone, for an answer without plans; null when either could not be read. */
+    private async readWithoutPlans(repository: string, merged: boolean): Promise<GitHubReads | null> {
+        const {github, clock} = this.deps;
+        const fetchedAt = clock.now();
+        const [issues, pullRequests] = await Promise.all([
+            github.issuesIn(repository, {closed: false}),
+            github.pullRequestsIn(repository, {merged}),
+        ]);
+        if (!issues || !pullRequests) return null;
+        return {
+            fetchedAt,
+            plans: [],
+            issues: issues.map((issue) => projectIssue(issue, repository)),
+            pullRequests: pullRequests.map((pr) => projectPullRequest(pr, repository)),
+        };
+    }
+
     /** Why `gh` could not answer: it is missing, signed out, or GitHub was not reached. */
     private async unavailable(): Promise<GitHubUnavailableReason> {
         const availability = await this.deps.github.available().catch(() => 'ok' as const);
@@ -191,6 +247,22 @@ export class ProjectOverviewService {
         }
         return entry.reads;
     }
+}
+
+/**
+ * `read`, with one call in flight per set of arguments: a second ask while
+ * the first is out gets the same promise. Nothing is kept once it settles.
+ */
+function inFlightShared<A extends unknown[], R>(read: (...args: A) => Promise<R>): (...args: A) => Promise<R> {
+    const pending = new Map<string, Promise<R>>();
+    return (...args) => {
+        const key = JSON.stringify(args);
+        const out = pending.get(key);
+        if (out) return out;
+        const call = read(...args).finally(() => pending.delete(key));
+        pending.set(key, call);
+        return call;
+    };
 }
 
 function projectIssue(issue: RepositoryIssue, repository: string): ProjectIssue {

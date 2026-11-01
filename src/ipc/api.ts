@@ -221,7 +221,8 @@ export interface SwitchboardApi {
      * Everything the project page shows in one answer: its repository, grouped
      * plans, loose issues and PRs, worktrees and running sessions. The GitHub
      * part is kept for 30 s in main, and served stale when a refresh fails.
-     * Closed plans and merged PRs only when asked.
+     * Closed plans and merged PRs only when asked; with `plans: false`, no
+     * plans at all (`plansPending`), which answers in a fraction of the time.
      */
     projectOverview(projectPath: string, options?: ProjectOverviewOptions): Promise<ProjectOverview>;
 

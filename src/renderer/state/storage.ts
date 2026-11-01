@@ -26,6 +26,7 @@ export const STORAGE_KEYS = {
     recentPlans: 'recentPlans',
     /** Each project page's expanded plans and Show closed, per project (localStorage; see `project-page-slice`). */
     projectPages: 'projectPages',
+    projectOverviews: 'projectOverviews', // The last full overview per project page (localStorage; see `stored-overviews`).
 } as const;
 
 /**
