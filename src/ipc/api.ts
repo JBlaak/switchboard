@@ -20,6 +20,7 @@ import type {ShellProfile} from '../domain/shell/shell-profile';
 import type {GrillAnswer, GrillChanged, GrillResult, GrillView} from '../domain/grill/model';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../domain/session-work/model';
 import type {PullRequestPeek, PullRequestRef} from '../domain/session-work/pull-request-link';
+import type {FileRefinement} from '../domain/session-work/refinement';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
 import type {BumpRequest, BumpResult, CiJobQueueAnswer} from '../domain/project/ci-job-queue';
@@ -296,6 +297,13 @@ export interface SwitchboardApi {
         path: string;
         side: 'before' | 'after';
     }): Promise<Uint8Array | null>;
+    /**
+     * OmniDiff's finer reading of one modified file in an item's local diff;
+     * null when there is none (no differ, a GitHub diff, an added, deleted,
+     * binary or oversized file, or OmniDiff failed). Only a file in the diff
+     * the item last answered with can be named, read at that diff's commits.
+     */
+    sessionWorkRefinement(request: {sessionId: string; itemId: string; path: string}): Promise<FileRefinement | null>;
     /** Add a line comment to your pending review on a PR item, starting the review if there is none (C1, C2). */
     sessionWorkComment(request: CommentRequest): Promise<ReviewResult>;
     /** Finish your pending review on a PR item: submit it (and hand its threads to Claude), or discard it (C2). */

@@ -136,6 +136,7 @@ const api: SwitchboardApi = {
     getSessionLinks: (sessionId) => ipcRenderer.invoke(INVOKE.sessionLinks, sessionId),
     getSessionWorkDiff: (request) => ipcRenderer.invoke(INVOKE.sessionWorkDiff, request),
     sessionWorkImage: (request) => ipcRenderer.invoke(INVOKE.sessionWorkImage, request),
+    sessionWorkRefinement: (request) => ipcRenderer.invoke(INVOKE.sessionWorkRefinement, request),
     sessionWorkComment: (request) => ipcRenderer.invoke(INVOKE.sessionWorkComment, request),
     sessionWorkReview: (request) => ipcRenderer.invoke(INVOKE.sessionWorkReview, request),
     getCheckLog: (request) => ipcRenderer.invoke(INVOKE.sessionWorkCheckLog, request),
