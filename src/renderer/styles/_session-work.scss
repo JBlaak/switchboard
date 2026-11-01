@@ -812,6 +812,36 @@
     }
 }
 
+/*
+ * OmniDiff's marks inside a changed line: the stretch that really changed, a
+ * stronger tint of the line's own. An update follows its line (green on the
+ * new side, red on the old); a move is blue with a dashed underline, so it
+ * reads as "the same code, elsewhere" rather than as an edit. No padding, so
+ * the text never shifts when the marks arrive.
+ */
+.sw-ch {
+    color: inherit;
+    background: transparent;
+    border-radius: 2px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+
+    &.is-insert,
+    .sw-dl-code.is-add &.is-update {
+        background: rgba(var(--sb-green-rgb), 0.34);
+    }
+    &.is-delete,
+    .sw-dl-code.is-delete &.is-update {
+        background: rgba(var(--sb-red-rgb), 0.34);
+    }
+    &.is-move {
+        background: rgba(var(--sb-blue-rgb), 0.22);
+        text-decoration: underline dashed rgba(var(--sb-blue-rgb), 0.9);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+    }
+}
+
 .sw-lines-pending {
     background: rgba(var(--sb-overlay-rgb), 0.02);
 }
