@@ -13,6 +13,7 @@ import {pullRequestChips, pullRequestLabel} from '../../../domain/session/pull-r
 import {projectLabel} from '../../features/sessions/project-label';
 import {agentsTitle, askingLabel, sessionDisplayName, sessionTimeLabel} from '../../state/session-list-layout';
 import {useStore} from '../use-store';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 import {canOpenSessionWork} from '../session-work/actions';
 import {isRemoteRow, workTrigger} from './work-trigger';
 import {agentsBadgeHtml, HTML} from './markup';
@@ -37,7 +38,8 @@ export function RowMeta({row, asking, agents, now, onOpenWork}: RowMetaProps): J
     const {session} = row;
     const path = row.projectPath || session.projectPath;
     const remote = isRemoteRow(session, path);
-    const trigger = workTrigger(remote, useCanOpenWork(session.sessionId, remote));
+    const vm = useStore((state) => isVmProjectIn(state.agentHost, path));
+    const trigger = workTrigger(remote, useCanOpenWork(session.sessionId, remote), {vm});
 
     const content = (
         <span className="session-meta-left">

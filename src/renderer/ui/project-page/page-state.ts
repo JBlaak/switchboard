@@ -3,7 +3,9 @@
  * overview's answer: what the GitHub part has to say, and so which sections
  * show, which are left out, and what stands in their place.
  *
- * - `remote`: an ssh project. Sessions and settings only, with the host named.
+ * - `remote`: an ssh project. Sessions and settings only, with the host named;
+ *   `vm` when its host runs a Switchboard agent (#276), whose GitHub, plans and
+ *   worktrees parts come in a later stage.
  * - `loading`: no answer yet. The local Sessions show at once; the sections
  *   that wait for the answer shimmer.
  * - `none`: no GitHub remote. The GitHub sections and button are left out.
@@ -19,15 +21,18 @@ import {isRemoteProjectPath, parseRemoteProjectPath} from '../../../domain/proje
 import type {GitHubUnavailableReason, ProjectOverview} from '../../../domain/project/overview';
 
 export type GitHubPart =
-    | {readonly kind: 'remote'; readonly host: string}
+    | {readonly kind: 'remote'; readonly host: string; readonly vm: boolean}
     | {readonly kind: 'loading'}
     | {readonly kind: 'none'}
     | {readonly kind: 'unavailable'; readonly reason: GitHubUnavailableReason}
     | {readonly kind: 'ok'; readonly stale: boolean; readonly fetchedAt: number};
 
-/** What the page shows of GitHub for `projectPath`, given the overview it holds (for any project). */
-export function githubPart(overview: ProjectOverview | null, projectPath: string): GitHubPart {
-    if (isRemoteProjectPath(projectPath)) return {kind: 'remote', host: remoteHost(projectPath)};
+/**
+ * What the page shows of GitHub for `projectPath`, given the overview it holds
+ * (for any project), and whether the project is a VM project.
+ */
+export function githubPart(overview: ProjectOverview | null, projectPath: string, vm = false): GitHubPart {
+    if (isRemoteProjectPath(projectPath)) return {kind: 'remote', host: remoteHost(projectPath), vm};
     const answer = overview?.projectPath === projectPath ? overview : null;
     if (!answer) return {kind: 'loading'};
     const github = answer.github;
@@ -47,6 +52,11 @@ export function showsWorktrees(overview: ProjectOverview | null, projectPath: st
 export function remoteHost(projectPath: string): string {
     const remote = parseRemoteProjectPath(projectPath);
     return remote ? `${remote.user}@${remote.host}:${remote.port}` : projectPath.replace(/^ssh:\/\//, '');
+}
+
+/** Under a remote project's sessions: what the page does not read there, and why. */
+export function remoteNote(vm: boolean): string {
+    return vm ? 'Plans and worktrees aren’t available on a VM yet.' : 'Plans and worktrees aren’t read over ssh.';
 }
 
 /** The command that signs `gh` in, which the message shows and Copy command copies. */

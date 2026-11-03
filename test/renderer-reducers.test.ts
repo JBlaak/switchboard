@@ -87,6 +87,7 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
     },
     sessionStarted: {type: 'sessionStarted', sessionId: 's9', projectPath: '/code/app'},
     sessionArchived: {type: 'sessionArchived', sessionId: 's9'},
+    agentInstallProgress: {type: 'agentInstallProgress', projectPath: 'ssh://me@vm/app', line: 'Checking systemd'},
     tasksChanged: {
         type: 'tasksChanged',
         update: {watchId: 'w1', query: {view: 'today'}, state: 'ok', rows: [], fetchedAt: 5},

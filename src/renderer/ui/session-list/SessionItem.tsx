@@ -14,6 +14,7 @@ import {rowActivity} from '../../state/row-activity';
 import {rowButtons, sessionDisplayName, showsTerminalBadge} from '../../state/session-list-layout';
 import {shallowEqual} from '../../state/store';
 import {useStore} from '../use-store';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 import {HTML} from './markup';
 import {RenameInput} from './RenameInput';
 import {RowMeta, useCanOpenWork} from './RowMeta';
@@ -179,7 +180,8 @@ function RowActions({row, onOpenWork, onStop, onArchive, onSnooze, onResume}: Ro
     const path = row.projectPath || session.projectPath;
     const remote = session.type === 'remote' || !!path?.startsWith('ssh://');
     const canOpenWork = useCanOpenWork(session.sessionId, remote);
-    const buttons = rowButtons(session);
+    const vm = useStore((state) => isVmProjectIn(state.agentHost, path));
+    const buttons = rowButtons(session, {vm});
     const snooze = useRef<HTMLButtonElement>(null);
     const [snoozing, setSnoozing] = useState(false);
     const closeSnooze = useCallback(() => setSnoozing(false), []);

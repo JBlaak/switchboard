@@ -24,6 +24,7 @@ import {registerAskHandlers} from './ask-handlers';
 import {registerQuickAskHandlers} from './quick-ask-handlers';
 import {registerPhoneAccessHandlers} from './phone-access-handlers';
 import {registerTasksHandlers} from './tasks-handlers';
+import {registerAgentHandlers} from './agent-handlers';
 import type {Container} from '../composition-root';
 
 export function registerIpcHandlers(app: Container): void {
@@ -46,4 +47,5 @@ export function registerIpcHandlers(app: Container): void {
     registerQuickAskHandlers(ipc, app);
     registerPhoneAccessHandlers(ipc, app);
     registerTasksHandlers(ipc, app);
+    registerAgentHandlers(ipc, app);
 }

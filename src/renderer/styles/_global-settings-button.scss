@@ -41,3 +41,9 @@
     margin-left: 4px;
     vertical-align: 1px;
 }
+
+/* A remote that runs a Switchboard agent (#276), in the accent rather than ssh's blue. */
+.remote-badge.is-vm {
+    color: var(--sb-accent);
+    background: var(--sb-mint);
+}

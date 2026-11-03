@@ -33,6 +33,8 @@ import {PullRequestsSection} from './PullRequestsSection';
 import {WorktreesSection} from './WorktreesSection';
 import {TasksSection} from './TasksSection';
 import {GitHubMessage, RemoteNote, StaleLine} from './EdgeStates';
+import {InstallAgentCard, SetupSection} from './AgentHostSections';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 import {
     closeProject,
     openIssueOnGitHub,
@@ -125,7 +127,8 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
     const cursor = useStore((state) => state.projectPage.cursor);
     const filter = useStore((state) => state.projectPage.filter);
     const overview = useStore((state) => state.projectPage.overview);
-    const github = githubPart(overview, projectPath);
+    const vm = useStore((state) => isVmProjectIn(state.agentHost, projectPath));
+    const github = githubPart(overview, projectPath, vm);
     const [filtering, setFiltering] = useState(false);
 
     // Into the page as it opens, so its keys reach it without a click.
@@ -272,7 +275,18 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
                     <div className="pp-column">
                         {github.kind === 'none' && <TasksSection projectPath={projectPath} />}
                         <SessionsSection projectPath={projectPath} />
-                        {github.kind === 'remote' ? <RemoteNote /> : <WorktreesSection projectPath={projectPath} />}
+                        {github.kind === 'remote' ? (
+                            <>
+                                {github.vm ? (
+                                    <SetupSection projectPath={projectPath} />
+                                ) : (
+                                    <InstallAgentCard projectPath={projectPath} />
+                                )}
+                                <RemoteNote vm={github.vm} />
+                            </>
+                        ) : (
+                            <WorktreesSection projectPath={projectPath} />
+                        )}
                     </div>
                 </div>
             ) : (

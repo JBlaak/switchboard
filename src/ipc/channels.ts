@@ -129,6 +129,14 @@ export const INVOKE = {
     phoneAccessReset: 'phone-access:reset',
     terminalOwners: 'terminal-owners',
     useTerminalHere: 'use-terminal-here',
+
+    // VM hosts: the Switchboard agent (#276)
+    agentStatus: 'agent:status',
+    agentInstall: 'agent:install',
+    agentCheckTools: 'agent:check-tools',
+    agentHostSettings: 'agent:host-settings',
+    agentSetHostSettings: 'agent:set-host-settings',
+    agentOpenSetupTerminal: 'agent:open-setup-terminal',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -172,6 +180,7 @@ export const EVENT = {
     sessionArchived: 'session:archived',
     tasksChanged: 'tasks:changed',
     sessionTaskChanged: 'tasks:session-task-changed',
+    agentInstallProgress: 'agent:install-progress',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */

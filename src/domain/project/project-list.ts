@@ -132,6 +132,8 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
         const project = upsert(projectPath);
         if (!project) continue;
         project.remote = true;
+        // A host with a Switchboard agent (#276) is a VM: its badge says so.
+        if (remote.agent) project.agent = true;
         for (const record of remote.sessions || []) {
             const meta = inputs.meta.get(record.sessionId);
             if (!inputs.showArchived && meta?.archived) continue;

@@ -8,6 +8,7 @@
  * none takes the focus from the filter.
  */
 import {isWorktreeProject} from '../../features/sessions/project-label';
+import {remoteBadge} from '../../features/sessions/remote-badge';
 import {labelRuns} from './rank-projects';
 import {sessionCountLabel} from './picker-selection';
 import type {JSX, MouseEvent, ReactNode, Ref} from 'react';
@@ -52,6 +53,7 @@ export function ProjectPickerRow({
 }: ProjectPickerRowProps): JSX.Element {
     const {project, label, positions} = candidate;
     const total = project.sessions.length;
+    const badge = remoteBadge(project);
 
     return (
         <div
@@ -69,7 +71,11 @@ export function ProjectPickerRow({
                         run.text
                     ),
                 )}
-                {project.remote && <span className="remote-badge">SSH</span>}
+                {badge && (
+                    <span className={'remote-badge' + (badge.label === 'VM' ? ' is-vm' : '')} title={badge.title}>
+                        {badge.label}
+                    </span>
+                )}
             </div>
             {isWorktreeProject(project.projectPath) && <span className="worktree-badge">WORKTREE</span>}
             <span className={'project-picker-count' + (running > 0 ? ' running' : '')}>

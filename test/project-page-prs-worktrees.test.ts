@@ -575,7 +575,7 @@ test('an ssh project is remote at once, names its host, and shows no worktrees',
     const part = githubPart(null, path);
 
     /* Then */
-    assert.deepEqual(part, {kind: 'remote', host: 'joris@build.movelab:22'});
+    assert.deepEqual(part, {kind: 'remote', host: 'joris@build.movelab:22', vm: false});
     assert.equal(remoteHost('ssh://ci@runner:2222'), 'ci@runner:2222');
     assert.equal(showsWorktrees(null, path), false);
 });
