@@ -39,7 +39,17 @@
  * and an agentless remote's rows say why not. Nothing here reads git or `gh`
  * on a VM. Which parts show is unit tested in test/project-page-vm.test.ts and
  * test/session-list-work-trigger.test.ts.
+ *
+ * Stage 5 (#276): the Schedules line on a local project's page and its copy's,
+ * the hand-off dialog's "Run this project’s schedules on the VM", the Tasks
+ * section on a VM project, and files dropped on a VM session's terminal. The
+ * `vm-schedules:*` and `dropped-files:to-session` channels answer from the
+ * `vmSchedules` and `droppedFiles` stubs, and BlaakTasks from a stand-in on
+ * loopback, so nothing here reaches a VM. What the parts say is unit tested in
+ * test/schedules-view.test.ts and test/dropped-files.test.ts.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import {test, expect, forEachAppearance} from '../support/test';
 import {
     dialog,
@@ -53,6 +63,7 @@ import {
 } from '../support/app';
 import {
     agentRequests,
+    droppedFilesRequests,
     handoffRequests,
     openedExternally,
     pushRemoteStatus,
@@ -66,11 +77,14 @@ import {
     STUB_SESSION_PREVIEW,
     stubOpenTerminal,
     stubReconnectRemote,
+    terminalInput,
     terminalsOpened,
+    vmSchedulesRequests,
 } from '../support/main-process';
 import {redraw, sessionItem} from '../support/session-list';
 import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
-import {expectTerminalText, hasTerminal} from '../support/terminal';
+import {cellPoint, expectTerminalText, hasTerminal} from '../support/terminal';
+import {fakeBlaakTasks, switchBlaakTasksOn, TASK, TITLE, writeBlaakTasksConfig} from '../support/blaak-tasks';
 import {
     COPY_REMOTE,
     handoffFixture,
@@ -88,8 +102,11 @@ import {LOGIN_FIX_WORK} from '../fixtures/session-work';
 import {hoursAgo, sessionId} from '../support/fixture-home';
 import {REMOTE_REASON, VM_SHELL_REASON} from '../../src/renderer/ui/session-list/work-trigger';
 import {REMOTE_NOTE} from '../../src/renderer/ui/project-page/page-state';
+import {SCHEDULES_CHOICE} from '../../src/renderer/ui/project-page/schedules-view';
+import {posixQuote} from '../../src/domain/shell/quoting';
 import type {FixtureHome, FixtureSpec} from '../support/fixture-home';
-import type {HandoffStub, SessionWorkStub} from '../support/main-process';
+import type {HandoffStub, SessionWorkStub, VmSchedulesStub} from '../support/main-process';
+import type {ScheduleLocation} from '../../src/application/services/vm-schedules';
 import type {ProjectOverview} from '../../src/domain/project/overview';
 import type {Locator, Page} from '@playwright/test';
 
@@ -127,6 +144,23 @@ async function openProjectPage(page: Page, label: string): Promise<void> {
     await projectsModal(page).getByLabel('Filter projects').fill(label);
     await page.keyboard.press('ArrowRight');
     await expect(projectPage(page, label)).toBeVisible();
+}
+
+function handOffDialog(page: Page): Locator {
+    return page.getByRole('dialog', {name: 'Hand off to ' + STUB_HANDOFF_HOST.label});
+}
+
+/** The hand-off stub, with acme-api's copy linked both ways. */
+function linkedCopy(home: FixtureHome, change: Partial<HandoffStub> = {}): HandoffStub {
+    const local = home.projectPath(P.acmeApi);
+    return {
+        ...STUB_HANDOFF,
+        copies: {
+            [local]: [{copyPath: COPY_PATH, hostKey: STUB_HANDOFF_HOST.key, hostLabel: STUB_HANDOFF_HOST.label}],
+        },
+        origins: {[COPY_PATH]: local},
+        ...change,
+    };
 }
 
 test.describe('connecting', () => {
@@ -429,25 +463,8 @@ test.describe('VM hosts', () => {
 test.describe('project hand-off', () => {
     test.use({fixture: handoffFixture(), stubs: {handoff: STUB_HANDOFF}});
 
-    function handOffDialog(page: Page): Locator {
-        return page.getByRole('dialog', {name: 'Hand off to ' + STUB_HANDOFF_HOST.label});
-    }
-
     function thisCopy(page: Page): Locator {
         return projectPage(page, REMOTE_LABEL.copy).getByRole('region', {name: 'This copy'});
-    }
-
-    /** The hand-off stub, with acme-api's copy linked both ways. */
-    function linkedCopy(home: FixtureHome, change: Partial<HandoffStub> = {}): HandoffStub {
-        const local = home.projectPath(P.acmeApi);
-        return {
-            ...STUB_HANDOFF,
-            copies: {
-                [local]: [{copyPath: COPY_PATH, hostKey: STUB_HANDOFF_HOST.key, hostLabel: STUB_HANDOFF_HOST.label}],
-            },
-            origins: {[COPY_PATH]: local},
-            ...change,
-        };
     }
 
     test('Hand off to… shows what goes over and the ignored files, hands off the ticked ones with its progress, and opens the copy', async ({
@@ -489,7 +506,12 @@ test.describe('project hand-off', () => {
         await expect(dialog.getByRole('status')).toHaveText('Handed off');
         await expect(dialog.getByRole('button', {name: 'Close', exact: true})).toBeVisible();
         expect((await handoffRequests(app)).handOff).toEqual([
-            {localPath: home.projectPath(P.acmeApi), hostKey: STUB_HANDOFF_HOST.key, ticked: ['.env.local']},
+            {
+                localPath: home.projectPath(P.acmeApi),
+                hostKey: STUB_HANDOFF_HOST.key,
+                ticked: ['.env.local'],
+                choices: {},
+            },
         ]);
 
         /* When */
@@ -681,10 +703,6 @@ test.describe('project hand-off', () => {
 
 test.describe('session hand-off', () => {
     test.use({fixture: handoffFixture(), stubs: {handoff: STUB_HANDOFF}});
-
-    function handOffDialog(page: Page): Locator {
-        return page.getByRole('dialog', {name: 'Hand off to ' + STUB_HANDOFF_HOST.label});
-    }
 
     /** Hand off to… on a row; the row's buttons show while the pointer is over it. */
     async function handOffButton(page: Page, sessionId: string): Promise<Locator> {
@@ -982,6 +1000,368 @@ test.describe('VM project pages', () => {
         /* Then */
         await expect.poll(() => openedExternally(app)).toEqual(['repository:' + VM_PATH]);
         await expect(projectPage(page, REMOTE_LABEL.vm)).toHaveCount(0);
+    });
+});
+
+test.describe('stage 5', () => {
+    /** Where acme-api's schedules run: on this Mac, or in its copy. */
+    function scheduleLocation(home: FixtureHome, runsOn: 'mac' | 'copy', count = 3): ScheduleLocation {
+        return {
+            localPath: home.projectPath(P.acmeApi),
+            runsOn: runsOn === 'mac' ? {kind: 'mac'} : {kind: 'vm', copyPath: COPY_PATH},
+            count,
+        };
+    }
+
+    /** The schedules stub, answering `location` for acme-api and its copy alike. */
+    function schedulesAt(location: ScheduleLocation, runOn: VmSchedulesStub['runOn'] = location): VmSchedulesStub {
+        return {where: {[location.localPath]: location, [COPY_PATH]: location}, runOn};
+    }
+
+    function schedulesPicker(page: Page, label: string): Locator {
+        return projectPage(page, label)
+            .getByRole('region', {name: 'Schedules'})
+            .getByRole('combobox', {name: 'Where the schedules run'});
+    }
+
+    test.describe('where schedules run', () => {
+        test.use({fixture: handoffFixture(), stubs: {handoff: STUB_HANDOFF}});
+
+        test('a local project with a copy and schedules runs them on this Mac, and picking the copy moves them there', async ({
+            page,
+            app,
+            home,
+        }) => {
+            /* Given */
+            const local = home.projectPath(P.acmeApi);
+            await setHostStub(app, 'handoff', linkedCopy(home));
+            await setHostStub(
+                app,
+                'vmSchedules',
+                schedulesAt(scheduleLocation(home, 'mac'), scheduleLocation(home, 'copy')),
+            );
+
+            /* When */
+            await openProjectPage(page, P.acmeApi);
+
+            /* Then */
+            const picker = schedulesPicker(page, P.acmeApi);
+            await expect(projectPage(page, P.acmeApi).getByRole('region', {name: 'Schedules'})).toContainText(
+                '3 schedules',
+            );
+            await expect(picker.locator('option')).toHaveText(['Run on this Mac', 'Run on joris@devbox.local (copy)']);
+            await expect(picker.locator('option:checked')).toHaveText('Run on this Mac');
+
+            /* When */
+            await picker.selectOption({label: 'Run on joris@devbox.local (copy)'});
+
+            /* Then */
+            await expect(picker.locator('option:checked')).toHaveText('Run on joris@devbox.local (copy)');
+            expect((await vmSchedulesRequests(app)).runOn).toEqual([{localPath: local, copyPath: COPY_PATH}]);
+        });
+
+        test('a move the VM can’t be told of shows why, and leaves the schedules where they were', async ({
+            page,
+            app,
+            home,
+        }) => {
+            /* Given */
+            await setHostStub(app, 'handoff', linkedCopy(home));
+            await setHostStub(
+                app,
+                'vmSchedules',
+                schedulesAt(scheduleLocation(home, 'mac'), {error: 'Couldn’t reach joris@devbox.local'}),
+            );
+            await openProjectPage(page, P.acmeApi);
+            const picker = schedulesPicker(page, P.acmeApi);
+
+            /* When */
+            await picker.selectOption({label: 'Run on joris@devbox.local (copy)'});
+
+            /* Then */
+            await expect(
+                projectPage(page, P.acmeApi).getByRole('region', {name: 'Schedules'}).getByRole('alert'),
+            ).toHaveText('Couldn’t reach joris@devbox.local');
+            await expect(picker.locator('option:checked')).toHaveText('Run on this Mac');
+            await expect(picker).toBeEnabled();
+            expect((await vmSchedulesRequests(app)).runOn).toEqual([
+                {localPath: home.projectPath(P.acmeApi), copyPath: COPY_PATH},
+            ]);
+        });
+
+        test('the copy’s page offers Run here and Run on the Mac, and Run on the Mac moves them back', async ({
+            page,
+            app,
+            home,
+        }) => {
+            /* Given */
+            await setHostStub(app, 'handoff', linkedCopy(home));
+            await setHostStub(
+                app,
+                'vmSchedules',
+                schedulesAt(scheduleLocation(home, 'copy'), scheduleLocation(home, 'mac')),
+            );
+
+            /* When */
+            await openProjectPage(page, REMOTE_LABEL.copy);
+
+            /* Then */
+            const picker = schedulesPicker(page, REMOTE_LABEL.copy);
+            await expect(picker.locator('option')).toHaveText(['Run here', 'Run on the Mac']);
+            await expect(picker.locator('option:checked')).toHaveText('Run here');
+            expect((await vmSchedulesRequests(app)).where).toContain(COPY_PATH);
+
+            /* When */
+            await picker.selectOption({label: 'Run on the Mac'});
+
+            /* Then */
+            await expect(picker.locator('option:checked')).toHaveText('Run on the Mac');
+            expect((await vmSchedulesRequests(app)).runOn).toEqual([
+                {localPath: home.projectPath(P.acmeApi), copyPath: null},
+            ]);
+        });
+
+        test('a local project with schedules but no copy shows no Schedules line', async ({page, app, home}) => {
+            /* Given */
+            await setHostStub(app, 'vmSchedules', schedulesAt(scheduleLocation(home, 'mac')));
+
+            /* When */
+            await openProjectPage(page, P.acmeApi);
+
+            /* Then */
+            await expect
+                .poll(async () => (await vmSchedulesRequests(app)).where)
+                .toContain(home.projectPath(P.acmeApi));
+            await expect(projectPage(page, P.acmeApi).getByRole('region', {name: 'Schedules'})).toHaveCount(0);
+        });
+    });
+
+    test.describe('the hand-off’s schedules choice', () => {
+        test.use({fixture: handoffFixture(), stubs: {handoff: STUB_HANDOFF}});
+
+        test('with schedules the dialog offers to run them on the VM, ticked, and unticked it hands off without them', async ({
+            page,
+            app,
+            home,
+        }) => {
+            /* Given */
+            await setHostStub(app, 'vmSchedules', schedulesAt(scheduleLocation(home, 'mac', 2)));
+            await openProjectPage(page, P.acmeApi);
+
+            /* When */
+            await projectPage(page, P.acmeApi).getByRole('button', {name: 'Hand off to…'}).click();
+
+            /* Then */
+            const dialog = handOffDialog(page);
+            const choice = dialog.getByRole('checkbox', {name: SCHEDULES_CHOICE, exact: true});
+            await expect(choice).toBeChecked();
+            await expect(dialog).toContainText('2 schedules. Ticked, they stop running on this Mac.');
+
+            /* When */
+            await choice.uncheck();
+            await dialog.getByRole('button', {name: 'Hand off', exact: true}).click();
+
+            /* Then */
+            await expect(dialog.getByRole('status')).toHaveText('Handed off');
+            expect((await handoffRequests(app)).handOff.map((request) => request.choices)).toEqual([
+                {schedulesOnVm: false},
+            ]);
+        });
+
+        test('ticked, the hand-off carries the choice to run the schedules on the VM', async ({page, app, home}) => {
+            /* Given */
+            await setHostStub(app, 'vmSchedules', schedulesAt(scheduleLocation(home, 'mac', 2)));
+            await openProjectPage(page, P.acmeApi);
+            await projectPage(page, P.acmeApi).getByRole('button', {name: 'Hand off to…'}).click();
+            const dialog = handOffDialog(page);
+            await expect(dialog.getByRole('checkbox', {name: SCHEDULES_CHOICE, exact: true})).toBeChecked();
+
+            /* When */
+            await dialog.getByRole('button', {name: 'Hand off', exact: true}).click();
+
+            /* Then */
+            await expect(dialog.getByRole('status')).toHaveText('Handed off');
+            expect((await handoffRequests(app)).handOff.map((request) => request.choices)).toEqual([
+                {schedulesOnVm: true},
+            ]);
+        });
+
+        test('without schedules there is no checkbox, and the hand-off carries no choice', async ({
+            page,
+            app,
+            home,
+        }) => {
+            /* Given */
+            await openProjectPage(page, P.acmeApi);
+
+            /* When */
+            await projectPage(page, P.acmeApi).getByRole('button', {name: 'Hand off to…'}).click();
+
+            /* Then */
+            const dialog = handOffDialog(page);
+            await expect(dialog.getByRole('listitem').first()).toHaveText('Branch main');
+            await expect
+                .poll(async () => (await vmSchedulesRequests(app)).where)
+                .toContain(home.projectPath(P.acmeApi));
+            await expect(dialog.getByRole('checkbox', {name: SCHEDULES_CHOICE})).toHaveCount(0);
+
+            /* When */
+            await dialog.getByRole('button', {name: 'Hand off', exact: true}).click();
+
+            /* Then */
+            await expect(dialog.getByRole('status')).toHaveText('Handed off');
+            expect((await handoffRequests(app)).handOff.map((request) => request.choices)).toEqual([{}]);
+        });
+    });
+
+    test.describe('tasks on VM projects', () => {
+        test.use({
+            fixture: vmFixture(),
+            stubs: {projectOverview: {'apps/web': {...acmeOverview(), projectPath: VM_PATH, worktrees: []}}},
+        });
+
+        test('a VM project’s page lists the task linked to it, and an agentless remote’s has no Tasks section', async ({
+            page,
+            home,
+        }) => {
+            /* Given */
+            const blaakTasks = await fakeBlaakTasks();
+            try {
+                writeBlaakTasksConfig(home, blaakTasks.url);
+                await switchBlaakTasksOn(page, blaakTasks.url);
+                const linkTo = (projectPath: string) =>
+                    page.evaluate(({task, projectPath}) => window.api.setTaskRepo(task, projectPath), {
+                        task: TASK,
+                        projectPath,
+                    });
+                await linkTo(VM_PATH);
+
+                /* When */
+                await openProjectPage(page, REMOTE_LABEL.vm);
+
+                /* Then */
+                const tasks = projectPage(page, REMOTE_LABEL.vm).getByRole('region', {name: 'Tasks'});
+                await expect(tasks.locator(`[data-task-id="${TASK}"]`)).toContainText(TITLE);
+
+                /* When */
+                // A task has one repo: moved to the agentless remote, it leaves the VM project.
+                await linkTo(SSH_PATH);
+                await page.keyboard.press('Escape');
+                await openProjectPage(page, REMOTE_LABEL.ssh);
+
+                /* Then */
+                const ssh = projectPage(page, REMOTE_LABEL.ssh);
+                await expect(ssh.getByRole('region', {name: 'Sessions'})).toBeVisible();
+                await expect(ssh.getByRole('region', {name: 'Tasks'})).toHaveCount(0);
+            } finally {
+                await blaakTasks.close();
+            }
+        });
+    });
+
+    test.describe('files dropped on a VM terminal', () => {
+        test.use({fixture: vmTranscriptFixture()});
+
+        /** Two files on disk, one with a quote in its name, as `File`s the app resolves the paths of. */
+        async function filesToDrop(page: Page, home: FixtureHome): Promise<string[]> {
+            const dir = path.join(home.home, 'Drop zone');
+            fs.mkdirSync(dir, {recursive: true});
+            const files = [path.join(dir, "Bob's notes.txt"), path.join(dir, 'plain.txt')];
+            for (const file of files) fs.writeFileSync(file, 'x');
+            await page.evaluate(() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.multiple = true;
+                input.id = 'e2e-drop-files';
+                input.style.display = 'none';
+                document.body.appendChild(input);
+            });
+            await page.setInputFiles('#e2e-drop-files', files);
+            return files;
+        }
+
+        /** Drop the picked files on the session's terminal, as Finder does. */
+        async function dropOn(page: Page, sessionId: string): Promise<void> {
+            await expect.poll(() => hasTerminal(page, sessionId)).toBe(true);
+            const point = await cellPoint(page, sessionId, 10, 5);
+            await page.evaluate(
+                ([x, y]) => {
+                    const target = document.elementFromPoint(x, y)!;
+                    for (const type of ['dragenter', 'drop']) {
+                        const transfer = new DataTransfer();
+                        if (type === 'drop') {
+                            for (const file of (document.getElementById('e2e-drop-files') as HTMLInputElement).files!)
+                                transfer.items.add(file);
+                        }
+                        target.dispatchEvent(
+                            new DragEvent(type, {dataTransfer: transfer, bubbles: true, cancelable: true}),
+                        );
+                    }
+                },
+                [point.x, point.y],
+            );
+        }
+
+        const VM_DROPS = ["/home/joris/.switchboard/drops/Bob's notes.txt", '/home/joris/.switchboard/drops/plain.txt'];
+
+        test('a VM session uploads the dropped files, says so while it does, and types their paths on the VM', async ({
+            page,
+            app,
+            home,
+        }) => {
+            /* Given */
+            await stubOpenTerminal(app);
+            await setHostStub(app, 'droppedFiles', {result: {ok: true, paths: VM_DROPS}, delayMs: 500});
+            const files = await filesToDrop(page, home);
+            await sessionItem(page, S.vmWeb).click();
+
+            /* When */
+            await dropOn(page, S.vmWeb);
+
+            /* Then */
+            const toast = page.getByTestId('drop-upload');
+            await expect(toast).toHaveText('Uploading 2 files to the VM…');
+            await expect(toast).toHaveCount(0);
+            await expect.poll(() => terminalInput(app, S.vmWeb)).toBe(VM_DROPS.map(posixQuote).join(' '));
+            expect(await droppedFilesRequests(app)).toEqual([{sessionId: S.vmWeb, localPaths: files}]);
+        });
+
+        test('a failed upload shows why and types nothing', async ({page, app, home}) => {
+            /* Given */
+            await stubOpenTerminal(app);
+            await setHostStub(app, 'droppedFiles', {result: {ok: false, error: 'No space left on the VM'}});
+            await filesToDrop(page, home);
+            await sessionItem(page, S.vmWeb).click();
+
+            /* When */
+            await dropOn(page, S.vmWeb);
+
+            /* Then */
+            const toast = page.getByTestId('drop-upload');
+            await expect(toast).toHaveAttribute('role', 'alert');
+            await expect(toast).toContainText('Couldn’t upload to the VM: No space left on the VM');
+            expect(await droppedFilesRequests(app)).toHaveLength(1);
+            expect(await terminalInput(app, S.vmWeb)).toBe('');
+        });
+
+        test('a local session still types the dropped files’ own paths, and uploads nothing', async ({
+            page,
+            app,
+            home,
+        }) => {
+            /* Given */
+            await stubOpenTerminal(app);
+            const files = await filesToDrop(page, home);
+            await sessionRow(page, LABEL.loginFix).first().click();
+
+            /* When */
+            await dropOn(page, S.loginFix);
+
+            /* Then */
+            await expect.poll(() => terminalInput(app, S.loginFix)).toBe(files.map(posixQuote).join(' '));
+            expect(await droppedFilesRequests(app)).toEqual([]);
+            await expect(page.getByTestId('drop-upload')).toHaveCount(0);
+        });
     });
 });
 
