@@ -7,6 +7,7 @@ import {expandHome} from '../../domain/project/folder-check';
 import {normalizeRemoteDir, remoteProjectPath, validateRemoteInput} from '../../domain/project/remote-target';
 import {uuidGenerator} from '../../application/ports/ids';
 import type {RemoteProjectSetting} from '../../domain/settings/settings';
+import {forgetRemoteProject} from '../forget-remote-project';
 import type {Container} from '../composition-root';
 import type {IpcRegistrar} from './support/registrar';
 
@@ -106,19 +107,7 @@ export function registerProjectHandlers(ipc: IpcRegistrar, app: Container): void
      * this is a local forget, not a remote teardown.
      */
     ipc.handle(INVOKE.removeRemoteProject, (projectPath: string) => {
-        app.settings.removeRemoteProject(projectPath);
-
-        for (const [sessionId, session] of app.registry.snapshot()) {
-            if (session.projectPath !== projectPath) continue;
-            app.remote.markDisconnected(session);
-            if (session.exited) {
-                app.lifecycle.retire(sessionId, session, 0);
-            } else {
-                app.lifecycle.stop(sessionId, session);
-            }
-        }
-
-        app.renderer.projectsChanged();
+        forgetRemoteProject(app, projectPath);
         return {ok: true};
     });
 }

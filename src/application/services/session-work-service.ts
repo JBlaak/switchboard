@@ -45,7 +45,7 @@ import type {GitHubCli, PlanReads, ProjectReads} from '../ports/github-cli';
 import type {GitRemotes} from '../ports/git-remotes';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
-import type {TranscriptStore} from '../ports/transcript-store';
+import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
 
 /** How long git's watchers have to be quiet before the page is rebuilt. */
 export const WATCH_DEBOUNCE_MS = 300;
@@ -66,7 +66,8 @@ export interface SessionWorkTarget {
 export interface SessionWorkServiceDeps {
     /** Where a session lives, or null when no session goes by that id. */
     locate(sessionId: string): SessionWorkTarget | null;
-    transcripts: Pick<TranscriptStore, 'locations' | 'issueMentions' | 'readSession'>;
+    /** Answered now for a local session, later for a VM one (#276 stage 4). */
+    transcripts: Pick<AwaitableTranscriptStore, 'locations' | 'issueMentions' | 'readSession'>;
     git: GitWorkspace;
     /** Reads only: the page writes nothing to GitHub; your review is the review service's, plans the plan service's. */
     github: Omit<
@@ -85,6 +86,13 @@ export interface SessionWorkServiceDeps {
     clock: Clock;
     timers: Timers;
     log: Logger;
+    /**
+     * Whether a path is on a remote with no Switchboard agent, which has no
+     * page: its checkout is out of git's reach. A VM session's git answers
+     * from the VM, so it goes through. Without it, every remote is turned away,
+     * as before #276 stage 4.
+     */
+    agentlessRemote?: (path: string) => boolean;
 }
 
 /** What `gh` said, kept between rebuilds so a commit does not cost a GitHub round trip. */
@@ -385,7 +393,7 @@ export class SessionWorkService implements WorkPageSource {
 
     private async projectRoot(sessionId: string): Promise<{target: SessionWorkTarget; root: string} | null> {
         const target = this.deps.locate(sessionId);
-        if (!target || isRemoteProjectPath(target.projectPath)) return null;
+        if (!target || (this.deps.agentlessRemote ?? isRemoteProjectPath)(target.projectPath)) return null;
         const root = await this.deps.git.worktreeRoot(target.projectPath);
         return root ? {target, root} : null;
     }
@@ -433,9 +441,9 @@ export class SessionWorkService implements WorkPageSource {
         this.syncWatchers(page, locations);
 
         const pullRequests: SessionPullRequest[] = folder
-            ? (transcripts.readSession(folder, page.sessionId, projectPath)?.pullRequests ?? [])
+            ? ((await transcripts.readSession(folder, page.sessionId, projectPath))?.pullRequests ?? [])
             : [];
-        const mentions = folder ? transcripts.issueMentions(folder, page.sessionId, repository) : [];
+        const mentions = folder ? await transcripts.issueMentions(folder, page.sessionId, repository) : [];
 
         // What git says about each worktree and branch the session was in.
         const worktrees = [...new Set(locations.map((location) => location.worktree))];
@@ -565,7 +573,7 @@ export class SessionWorkService implements WorkPageSource {
     private async locations(page: Page): Promise<WorkLocation[]> {
         const {folder} = page.target;
         if (!folder) return [];
-        const written = this.deps.transcripts.locations(folder, page.sessionId);
+        const written = await this.deps.transcripts.locations(folder, page.sessionId);
 
         const resolved: WorkLocation[] = [];
         for (const entry of written) {

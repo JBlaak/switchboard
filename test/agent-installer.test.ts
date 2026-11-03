@@ -169,14 +169,16 @@ test('a fresh host gets the full install sequence', async () => {
         'setup',
         'host-settings',
         'linger',
-        'start',
+        // A restart even on a fresh host: an agent left running by a broken
+        // install would otherwise go on serving the old code.
+        'restart',
     ]);
     assert.deepEqual(bundles.built, ['2.12.0/x64']);
     assert.deepEqual(provisioner.uploads, [
         {localPath: '/tmp/agent-2.12.0-x64.tar', remotePath: '$HOME/.switchboard/upload/agent-2.12.0-x64.tar'},
     ]);
     assert.ok(progress.includes('Installing Node 22.22.2…'));
-    assert.ok(progress.includes('Starting the agent…'));
+    assert.ok(progress.includes('Restarting the agent…'));
 });
 
 test('a fresh host is marked as an agent host, keeping its sessions', async () => {
@@ -302,7 +304,7 @@ test('lingering that needs sudo reports the command and still installs', async (
 
     /* Then */
     assert.deepEqual(result, {ok: true, lingerCommand: 'sudo loginctl enable-linger joris'});
-    assert.equal(provisioner.steps[provisioner.steps.length - 1], 'start');
+    assert.equal(provisioner.steps[provisioner.steps.length - 1], 'restart');
     assert.ok(progress.some((line) => line.includes('sudo loginctl enable-linger joris')));
 });
 
@@ -351,16 +353,37 @@ test('ssh failing to connect fails the host check step', async () => {
     assert.equal(result.error, 'Checking the host failed: Could not connect to joris@vm.local: Connection refused');
 });
 
-test('a project that is not a configured remote is refused', async () => {
+test('a path that names no SSH host is refused', async () => {
     /* Given */
-    const {installer} = setup();
+    const {installer, provisioner} = setup();
 
     /* When */
-    const result = await installer.install('ssh://someone@else');
+    const result = await installer.install('/Users/joris/site');
 
     /* Then */
     assert.equal(result.ok, false);
-    assert.match(result.error ?? '', /not a configured SSH remote/);
+    assert.match(result.error ?? '', /not an SSH host/);
+    assert.deepEqual(provisioner.steps, []);
+});
+
+test("an install on a VM's own path, with no folder, registers the VM and makes its remotes VM projects", async () => {
+    /* Given */
+    const {installer, settings, provisioner} = setup();
+    const hostPath = 'ssh://joris@vm.local';
+
+    /* When */
+    const result = await installer.install(hostPath);
+
+    /* Then */
+    assert.deepEqual(result, {ok: true});
+    assert.equal(provisioner.steps[0], 'check');
+    assert.deepEqual(settings.findVmHost(remote)?.agent, {
+        version: APP_VERSION,
+        installedAt: '2026-11-03T10:00:00.000Z',
+    });
+    assert.equal(settings.findRemoteProject(projectPath)?.agent?.version, APP_VERSION);
+    assert.equal(settings.findRemoteProject(hostPath), null, 'the VM itself is not made a project');
+    assert.deepEqual(await installer.status(hostPath), {installed: APP_VERSION, current: true, connected: false});
 });
 
 test('status answers from settings, without ssh', async () => {
@@ -410,9 +433,7 @@ test('markAgentInstalled marks every remote on the same host, and no other host'
     settings.markAgentInstalled(projectPath, '2.12.0', '2026-11-03T10:00:00Z');
 
     /* Then */
-    const versions = (settings.global().remoteProjects ?? []).map(
-        (r) => `${r.host}:${r.dir ?? ''}=${r.agent?.version ?? '-'}`,
-    );
+    const versions = settings.remoteProjects().map((r) => `${r.host}:${r.dir ?? ''}=${r.agent?.version ?? '-'}`);
     assert.deepEqual(versions.sort(), [
         `other-vm.local:${remote.dir ?? ''}=-`,
         `vm.local:${remote.dir ?? ''}=2.12.0`,
@@ -420,12 +441,12 @@ test('markAgentInstalled marks every remote on the same host, and no other host'
     ]);
 });
 
-test('markAgentInstalled answers false for a remote that is gone', () => {
+test('markAgentInstalled answers false for a path that names no host', () => {
     /* Given */
     const settings = new SettingsService(new MemoryStore());
 
     /* When */
-    const marked = settings.markAgentInstalled(projectPath, '2.12.0');
+    const marked = settings.markAgentInstalled('/Users/joris/site', '2.12.0');
 
     /* Then */
     assert.equal(marked, false);

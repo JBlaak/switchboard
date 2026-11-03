@@ -50,7 +50,8 @@ import {openSessions, sessionMap} from '../../state/session-store';
 import {remoteStatus} from '../../state/remote-status-store';
 import {TERMINAL_THEME} from '../terminal/terminal-themes';
 import {isAtBottom} from './write-buffer';
-import {posixQuote} from '../../../domain/shell/quoting';
+import {afterUpload, dropPlan} from './dropped-files';
+import {isVmRepositoryIn} from '../../ui/project-page/page-state';
 import {bangCommandKeys, findBangCommands, type BangCell} from '../../../domain/terminal/bang-command';
 
 // --- Terminal font ---
@@ -582,8 +583,37 @@ function setupDragAndDrop(container: HTMLElement, getSessionId: () => string | n
         container.classList.remove('drag-over');
         const files = e.dataTransfer?.files;
         if (!files || !files.length) return;
-        const paths = Array.from(files).map((f) => posixQuote(window.api.getPathForFile(f)));
         const sid = getSessionId();
-        if (sid) sendInput(sid, paths.join(' '));
+        if (!sid) return;
+        const session = sessionMap.get(sid) ?? openSessions.get(sid)?.session;
+        const vm = session?.type === 'remote' && isVmRepositoryIn(getState().agentHost, session.projectPath);
+        const plan = dropPlan(
+            Array.from(files).map((f) => window.api.getPathForFile(f)),
+            vm,
+        );
+        if (!plan) return;
+        if (plan.kind === 'paste') sendInput(sid, plan.text);
+        else void uploadDrop(sid, plan.localPaths, plan.note);
     });
+}
+
+// --- Files dropped on a VM session (#276 stage 5) ---
+// Uploaded to the VM first, with a note while they go; the paths there are
+// typed once they have. See `dropped-files`.
+
+let nextDropId = 1;
+
+async function uploadDrop(sessionId: string, localPaths: readonly string[], note: string): Promise<void> {
+    const id = nextDropId++;
+    dispatch({type: 'dropUploadStarted', id, text: note});
+    const answer: unknown = await window.api
+        .uploadDroppedFiles(sessionId, [...localPaths])
+        .catch((err: Error) => ({ok: false, error: err.message}));
+    const outcome = afterUpload(answer);
+    if (outcome.kind === 'error') {
+        dispatch({type: 'dropUploadFailed', id, error: outcome.message});
+        return;
+    }
+    dispatch({type: 'dropUploadFinished', id});
+    sendInput(sessionId, outcome.text);
 }

@@ -223,3 +223,111 @@
 .new-session-start-btn:hover {
     opacity: 0.88;
 }
+
+/* ---- Hand off to a VM (#276 stage 2): what goes over, the ignored files, the run ---- */
+.handoff-body {
+    outline: none;
+}
+
+.handoff-dialog h3 {
+    margin-bottom: 4px;
+}
+
+.handoff-project {
+    margin-bottom: 16px;
+    font: 12px var(--sb-font-mono);
+    color: var(--sb-text-muted);
+}
+
+.handoff-carried {
+    margin: 6px 0 0;
+    padding-left: 18px;
+    font-size: 12.5px;
+    line-height: 20px;
+    color: var(--sb-text);
+}
+
+.handoff-code {
+    font: 12px var(--sb-font-mono);
+    color: var(--sb-text-strong);
+}
+
+.handoff-files {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 6px;
+}
+
+.handoff-file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 26px;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.handoff-file-path {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--sb-font-mono);
+    color: var(--sb-text-strong);
+}
+
+.handoff-choice-label {
+    color: var(--sb-text-strong);
+}
+
+.handoff-file-size {
+    font-size: 11.5px;
+    color: var(--sb-text-faint);
+}
+
+.handoff-note,
+.handoff-quiet {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: var(--sb-text-muted);
+}
+
+.handoff-existing,
+.handoff-busy {
+    margin-bottom: 12px;
+}
+
+/* Session hand-off (#276 stage 3): where a failure leaves the session. */
+.handoff-error-note {
+    margin-top: 4px;
+    color: var(--sb-text-muted);
+}
+
+.handoff-log {
+    margin-top: 12px;
+}
+
+.handoff-error {
+    margin-top: 12px;
+    font-size: 12.5px;
+    line-height: 18px;
+    color: var(--sb-red);
+}
+
+.handoff-done {
+    margin-top: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--sb-green);
+}
+
+.handoff-dialog .new-session-actions {
+    margin-top: 16px;
+}
+
+.handoff-dialog button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}

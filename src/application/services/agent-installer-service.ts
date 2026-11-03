@@ -14,7 +14,12 @@
  * 6. write the host settings, only when the host has none yet
  * 7. turn lingering on (or hand the user the command when that needs sudo)
  * 8. start the service (restarting it on an upgrade) and wait for its socket
- * 9. mark the remote as an agent host in settings, keeping its sessions
+ * 9. mark the VM's registration with the version, registering it when it
+ *    wasn't yet; its remote projects keep their sessions
+ *
+ * A host is named by any `ssh://` path on it: the VM's own (`vmHostPath`, as
+ * Settings → VMs calls it) or one of its projects' (as an agentless remote's
+ * page does). Nothing here needs a remote project to exist.
  *
  * The agent is always installed at the app's own version, so the Mac and the
  * VM never disagree about the protocol.
@@ -41,8 +46,10 @@ import {
 import type {HostCheck} from '../../domain/agent/install-script';
 import {writeStdinToFileScript} from '../../domain/agent/ssh-provision';
 import {SETUP_SCRIPT_FILE, setupScript} from '../../domain/agent/setup-script';
+import {parseRemoteProjectPath} from '../../domain/project/remote-target';
 import type {RemoteConfig} from '../../domain/project/remote-target';
-import type {RemoteProjectSetting} from '../../domain/settings/settings';
+import type {VmHostSetting} from '../../domain/settings/settings';
+import type {HostAddress} from '../../domain/settings/vm-hosts';
 import type {RemoteRun, SshProvisioner} from '../ports/ssh-provisioner';
 import type {Clock} from '../ports/clock';
 import type {Logger} from '../ports/logger';
@@ -55,8 +62,8 @@ export interface AgentBundles {
 
 /** The part of `SettingsService` the installer uses. */
 export interface AgentInstallerSettings {
-    findRemoteProject(projectPath: string): RemoteProjectSetting | null;
-    markAgentInstalled(projectPath: string, version: string, installedAt?: string): boolean;
+    findVmHost(address: HostAddress): VmHostSetting | null;
+    markAgentInstalled(path: string, version: string, installedAt?: string): boolean;
 }
 
 export interface AgentInstallerDeps {
@@ -95,19 +102,17 @@ export class AgentInstallerService {
      * a key (1Password's prompt) for nothing. `connected` is the live link's to
      * answer, so it is false here and the façade fills it in.
      */
-    public status(projectPath: string): Promise<AgentHostStatus> {
-        const installed = this.deps.settings.findRemoteProject(projectPath)?.agent?.version ?? null;
+    public status(path: string): Promise<AgentHostStatus> {
+        const host = parseRemoteProjectPath(path);
+        const installed = (host && this.deps.settings.findVmHost(host)?.agent?.version) || null;
         return Promise.resolve({installed, current: installed === this.deps.appVersion, connected: false});
     }
 
     /** Install, upgrade, or just make sure the agent runs. Never rejects; a failure names its step. */
-    public async install(
-        projectPath: string,
-        onProgress: (line: string) => void = () => {},
-    ): Promise<AgentInstallResult> {
-        const remote = this.deps.settings.findRemoteProject(projectPath);
-        if (!remote) return {ok: false, error: `${projectPath} is not a configured SSH remote.`};
-        const host: RemoteConfig = {user: remote.user, host: remote.host, port: remote.port};
+    public async install(path: string, onProgress: (line: string) => void = () => {}): Promise<AgentInstallResult> {
+        const parsed = parseRemoteProjectPath(path);
+        if (!parsed) return {ok: false, error: `${path} is not an SSH host.`};
+        const host: RemoteConfig = {user: parsed.user, host: parsed.host, port: parsed.port};
         const version = this.deps.appVersion;
         const progress = (line: string) => {
             this.deps.log.info(`[agent-install] ${host.user}@${host.host}: ${line}`);
@@ -134,7 +139,7 @@ export class AgentInstallerService {
             } else {
                 manualLinger = (await this.fullInstall(host, check, progress)).lingerCommand;
             }
-            this.mark(projectPath, progress);
+            this.mark(path, progress);
             return manualLinger ? {ok: true, lingerCommand: manualLinger} : {ok: true};
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
@@ -214,8 +219,10 @@ export class AgentInstallerService {
             }
         });
 
-        await this.step(progress, check.agentVersion ? 'Restarting the agent' : 'Starting the agent', () =>
-            this.run(host, startServiceScript({restart: !!check.agentVersion}), 'Starting the agent'),
+        await this.step(progress, 'Restarting the agent', () =>
+            // Always a restart after a full install: an agent still running from a
+            // broken or half-removed install would otherwise go on serving.
+            this.run(host, startServiceScript({restart: true}), 'Starting the agent'),
         );
         return manualLinger ? {lingerCommand: manualLinger} : {};
     }
@@ -244,9 +251,9 @@ export class AgentInstallerService {
         return r;
     }
 
-    private mark(projectPath: string, progress: (line: string) => void): void {
+    private mark(path: string, progress: (line: string) => void): void {
         const at = new Date(this.deps.clock.now()).toISOString();
-        this.deps.settings.markAgentInstalled(projectPath, this.deps.appVersion, at);
+        this.deps.settings.markAgentInstalled(path, this.deps.appVersion, at);
         progress(`The agent ${this.deps.appVersion} is running.`);
     }
 }

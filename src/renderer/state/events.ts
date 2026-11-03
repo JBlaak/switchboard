@@ -36,6 +36,11 @@ import type {PhoneAccessEvent} from './phone-access-slice';
 import type {SessionTaskEvent} from './session-task-slice';
 import type {ArchiveUndoEvent} from './archive-undo-slice';
 import type {AgentHostEvent} from './agent-host-slice';
+import type {VmsEvent} from './vms-slice';
+import type {HandoffEvent} from './handoff-slice';
+import type {SessionHandoffEvent} from './session-handoff-slice';
+import type {DropUploadEvent} from './drop-upload-slice';
+import type {SessionHandoffPhase} from '../../application/services/session-handoff';
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
 import type {QuestionView} from './answers-slice';
@@ -48,6 +53,8 @@ import type {TasksUpdate} from '../../domain/tasks/surface';
 // ── Pushed by the main process ──
 
 export type PushEvent =
+    /** The registered VMs changed (#307); the VM list is read again. */
+    | {type: 'vmHostsChanged'}
     | {type: 'processExited'; sessionId: string; exitCode: number}
     | {type: 'sessionForked'; oldId: string; newId: string}
     | {type: 'cliBusyState'; sessionId: string; busy: boolean}
@@ -80,8 +87,14 @@ export type PushEvent =
     | {type: 'tasksChanged'; update: TasksUpdate}
     /** A session's task changed: a task id when linked, null when unlinked. */
     | {type: 'sessionTaskChanged'; sessionId: string; taskId: string | null}
-    /** One line of an agent install's progress (#276), for the project whose host it is. */
-    | {type: 'agentInstallProgress'; projectPath: string; line: string};
+    /** One line of an agent install's progress (#276), for the VM it installs on (its `user@host:port` key). */
+    | {type: 'agentInstallProgress'; hostKey: string; line: string}
+    /** One line of a project hand-off's progress (#276), for the local project. */
+    | {type: 'handoffProgress'; localPath: string; line: string}
+    /** One line of a Bring back's progress, for the copy. */
+    | {type: 'bringBackProgress'; copyPath: string; line: string}
+    /** Where a session's hand-off to a VM stands (#276 stage 3). */
+    | {type: 'sessionHandoffPhase'; sessionId: string; phase: SessionHandoffPhase};
 
 // ── From the renderer itself: user actions and timers ──
 
@@ -330,7 +343,11 @@ export type RendererEvent =
     | SessionTaskEvent
     | TasksPageEvent
     | ArchiveUndoEvent
-    | AgentHostEvent;
+    | AgentHostEvent
+    | VmsEvent
+    | HandoffEvent
+    | SessionHandoffEvent
+    | DropUploadEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

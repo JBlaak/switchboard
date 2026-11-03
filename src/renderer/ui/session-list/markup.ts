@@ -16,6 +16,9 @@ const SVG = {
     mergedCheck:
         '<svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6.5l2.8 2.8L10 3.5"/></svg>',
     moon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.6A8.5 8.5 0 1 1 9.4 4a6.8 6.8 0 0 0 10.6 10.6z"/></svg>',
+    /** Hand off to… (#276 stage 3): out of the box, up and away. */
+    handOff:
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
     terminal:
         '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
 } as const;
@@ -28,6 +31,7 @@ export const HTML = {
     mergedCheck: {__html: SVG.mergedCheck},
     terminal: {__html: SVG.terminal},
     moon: {__html: SVG.moon},
+    handOff: {__html: SVG.handOff},
     archive16: {__html: ICONS.archive(16)},
     archive14: {__html: ICONS.archive(14)},
     unarchive16: {__html: ICONS.unarchive(16)},

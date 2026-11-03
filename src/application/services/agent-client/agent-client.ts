@@ -74,6 +74,7 @@ export class AgentClient {
     private readonly ptys = new Map<string, AgentPty>();
     private readonly connectedListeners: ((connection: AgentConnection) => void)[] = [];
     private readonly reinstallListeners: ((host: RemoteConfig, reason: string) => void)[] = [];
+    private readonly disconnectedListeners: ((connection: AgentConnection) => void)[] = [];
     private shutDown = false;
 
     constructor(private readonly deps: AgentClientDeps) {}
@@ -185,6 +186,37 @@ export class AgentClient {
     }
 
     /**
+     * Let go of a session the Mac no longer holds (its project was forgotten
+     * here), leaving it running on its VM: its output stops reaching the
+     * stand-in, and the next reconnect does not reattach it. Opening it again
+     * later (the project added back) reattaches as any open of a live id does.
+     */
+    public release(pty: AgentPty): void {
+        this.forget(pty);
+    }
+
+    /**
+     * Close the host's link for good and forget it, without telling the agent
+     * anything: for a VM taken out of Settings → VMs. Its agent and sessions
+     * keep running there, and the Mac lets go of every stand-in it held on the
+     * host. A later `connection` for the host makes a fresh link, so
+     * registering the VM again picks its sessions back up.
+     */
+    public disconnect(host: Pick<RemoteConfig, 'user' | 'host' | 'port'>): void {
+        const key = agentHostKey(host);
+        for (const pty of [...this.ptys.values()]) if (pty.hostKey === key) this.forget(pty);
+        const connection = this.connections.get(key);
+        if (!connection) return;
+        this.connections.delete(key);
+        connection.close();
+    }
+
+    /** A host's link dropped or was closed; the Settings → VMs list follows its "connected". */
+    public onDisconnected(listener: (connection: AgentConnection) => void): void {
+        this.disconnectedListeners.push(listener);
+    }
+
+    /**
      * Close every link, leaving every session running on its VM. For the app
      * quitting: call it before the lifecycle signals its sessions, so the
      * signals meant for local processes never reach a VM.
@@ -236,6 +268,8 @@ export class AgentClient {
             this.reattachAll(key, connection);
             this.connectedListeners.forEach((l) => l(connection));
         });
+
+        connection.onDisconnected(() => this.disconnectedListeners.forEach((l) => l(connection)));
     }
 
     /**

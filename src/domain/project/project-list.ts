@@ -50,6 +50,18 @@ export interface ProjectListInputs {
     pinnedPlans: Iterable<PlanPin>;
     pinnedIssuePlans: Iterable<IssuePlanPin>;
     showArchived: boolean;
+    /**
+     * sessionId → a VM session's transcript as last fetched from its host
+     * (#276 stage 3). A VM Claude row takes its title, first prompt, PR links
+     * and activity from it; without an entry it stays "Remote Claude".
+     */
+    vmTranscripts?: ReadonlyMap<string, CachedSession>;
+    /**
+     * Sessions handed off to a VM, by id. Their transcript on the Mac stays on
+     * disk, but their local row is left out: the VM row stands for them, so one
+     * conversation has one row.
+     */
+    handedOffSessions?: ReadonlySet<string>;
 }
 
 /** A row for a session that exists only in memory. */
@@ -63,6 +75,26 @@ function syntheticRow(
         archived: 0,
         messageCount: 0,
         ...fields,
+    };
+}
+
+/**
+ * What a VM Claude row takes from its transcript (#276 stage 3): what a local
+ * row takes from its cache row. Its activity is whichever is later, the last
+ * message or the last time the Mac opened it, so opening a quiet session
+ * still brings it to the top as it did before there was a transcript.
+ */
+function fromVmTranscript(transcript: CachedSession, opened: string): Partial<SessionRow> {
+    const modified =
+        new Date(transcript.modified).getTime() > new Date(opened).getTime() ? transcript.modified : opened;
+    return {
+        summary: transcript.summary,
+        firstPrompt: transcript.firstPrompt,
+        modified,
+        messageCount: transcript.messageCount,
+        slug: transcript.slug || null,
+        aiTitle: transcript.aiTitle || null,
+        pullRequests: transcript.pullRequests ?? [],
     };
 }
 
@@ -94,6 +126,7 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
     for (const row of inputs.cached) {
         if (!row.projectPath) continue;
         if (inputs.hiddenProjects.has(row.projectPath)) continue;
+        if (inputs.handedOffSessions?.has(row.sessionId)) continue;
         const session = toSessionRow(row, inputs.meta.get(row.sessionId));
         if (!inputs.showArchived && session.archived) continue;
         upsert(row.projectPath)?.sessions.push(session);
@@ -137,13 +170,16 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
         for (const record of remote.sessions || []) {
             const meta = inputs.meta.get(record.sessionId);
             if (!inputs.showArchived && meta?.archived) continue;
+            const opened = record.lastOpened || record.created;
+            const transcript = record.kind === 'shell' ? undefined : inputs.vmTranscripts?.get(record.sessionId);
             project.sessions.push(
                 syntheticRow({
                     sessionId: record.sessionId,
                     projectPath,
                     summary: record.kind === 'shell' ? 'Remote terminal' : 'Remote Claude',
                     created: record.created,
-                    modified: record.lastOpened || record.created,
+                    modified: opened,
+                    ...(transcript ? fromVmTranscript(transcript, opened) : {}),
                     name: meta?.name || null,
                     starred: meta?.starred || 0,
                     archived: meta?.archived || 0,

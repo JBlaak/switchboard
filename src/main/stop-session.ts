@@ -69,6 +69,18 @@ export function stopSession(app: SessionStopper, sessionId: string): StopResult 
     return {ok: true};
 }
 
+/** What `sessionArchiver` answers. */
+export interface SessionArchiver {
+    /** Stop the session, then archive its row; `ok: false` when it could not be stopped. */
+    archive(sessionId: string): {ok: boolean};
+    /**
+     * Archive the row of a session that already stopped elsewhere: a VM session
+     * that archived itself while the Mac was away (#308). The same row,
+     * window, worktree cleanup and task steps as `archive`, without the stop.
+     */
+    archiveStopped(sessionId: string): void;
+}
+
 /**
  * A phone's archive, as the renderer's (`archiveSessionRow`): stopped first,
  * then the row archived, then the window told, so it closes the session as
@@ -84,16 +96,21 @@ export function sessionArchiver(
         worktreeCleanup: Pick<WorktreeCleanupService, 'afterArchive'>;
         tasks?: Pick<TasksService, 'archived'>;
     },
-): {archive(sessionId: string): {ok: boolean}} {
+): SessionArchiver {
+    /** Everything an archive does once nothing runs under the id any more. */
+    const archiveRow = (sessionId: string): void => {
+        app.repository.setArchived(sessionId, true);
+        app.renderer.sessionArchived(sessionId);
+        void app.worktreeCleanup.afterArchive(sessionId);
+        void app.tasks?.archived(sessionId, {byUser: false});
+    };
     return {
         archive(sessionId) {
             const stopped = stopSession(app, sessionId);
             if (!stopped.ok) return {ok: false};
-            app.repository.setArchived(sessionId, true);
-            app.renderer.sessionArchived(sessionId);
-            void app.worktreeCleanup.afterArchive(sessionId);
-            void app.tasks?.archived(sessionId, {byUser: false});
+            archiveRow(sessionId);
             return {ok: true};
         },
+        archiveStopped: archiveRow,
     };
 }

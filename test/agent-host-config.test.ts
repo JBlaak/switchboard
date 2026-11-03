@@ -181,6 +181,79 @@ test('a settings save that fails still changes the settings for this run', () =>
     assert.equal(h.received[0]?.type, 'host-settings');
 });
 
+// ── Schedule folders (stage 5) ──
+
+test('schedule folders are saved, answered and read back after a restart', () => {
+    /* Given */
+    const h = harness();
+
+    /* When */
+    h.pair.mac.send({
+        type: 'set-host-settings',
+        requestId: 's1',
+        settings: {scheduleDirs: ['~/projects/app/', '/srv/work//api', '~/projects/app']},
+    });
+
+    /* Then */
+    const expected = {...DEFAULTS, scheduleDirs: ['~/projects/app', '/srv/work/api']};
+    assert.deepEqual(h.received, [{type: 'host-settings', requestId: 's1', settings: expected}]);
+    assert.deepEqual(JSON.parse(h.file.text ?? ''), expected);
+    assert.deepEqual(harness({file: h.file.text}).part.current(), expected);
+});
+
+test('an empty schedule folder list is saved as none', () => {
+    /* Given */
+    const h = harness({file: JSON.stringify({scheduleDirs: ['~/projects/app']})});
+
+    /* When */
+    h.pair.mac.send({type: 'set-host-settings', requestId: 's2', settings: {scheduleDirs: []}});
+
+    /* Then */
+    assert.deepEqual(h.part.current().scheduleDirs, []);
+});
+
+for (const bad of ['', '   ', 'projects/app', '~', '/', '~/projects/../.ssh', '/srv/\0x', '~user/app']) {
+    test(`a schedule folder list holding ${JSON.stringify(bad)} is refused whole`, () => {
+        /* Given */
+        const h = harness({file: JSON.stringify({scheduleDirs: ['~/projects/app']})});
+
+        /* When */
+        h.pair.mac.send({
+            type: 'set-host-settings',
+            requestId: 's3',
+            settings: {scheduleDirs: ['~/projects/other', bad], copyConfig: false},
+        });
+
+        /* Then */
+        const settings = h.part.current();
+        assert.deepEqual(settings.scheduleDirs, ['~/projects/app']);
+        assert.equal(settings.copyConfig, false);
+        assert.deepEqual(h.received[0], {type: 'host-settings', requestId: 's3', settings});
+    });
+}
+
+test('bad schedule folders in the file are ignored', () => {
+    /* Given */
+    const h = harness({file: JSON.stringify({scheduleDirs: ['relative/path']})});
+
+    /* When */
+    const settings = h.part.current();
+
+    /* Then */
+    assert.equal(settings.scheduleDirs, undefined);
+});
+
+test('the settings handed out are copies, so a caller cannot change the schedule folders', () => {
+    /* Given */
+    const h = harness({file: JSON.stringify({scheduleDirs: ['~/projects/app']})});
+
+    /* When */
+    h.part.current().scheduleDirs?.push('~/projects/sneaky');
+
+    /* Then */
+    assert.deepEqual(h.part.current().scheduleDirs, ['~/projects/app']);
+});
+
 // ── Tool checks ──
 
 test('the tool checks report versions, logins and sudo', async () => {

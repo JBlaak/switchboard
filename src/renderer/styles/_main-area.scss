@@ -264,6 +264,12 @@
     background: var(--sb-text-dimmest);
 }
 
+/* Hand off to… for the session on screen (#276 stage 3). */
+#terminal-handoff-btn {
+    height: 26px;
+    padding: 0 10px;
+}
+
 #terminal-stop-btn {
     cursor: pointer;
     background: none;
