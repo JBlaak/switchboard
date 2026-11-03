@@ -13,6 +13,7 @@ import {handoffReducer, initialHandoffState} from './handoff-slice';
 import {initialSessionHandoffState, rekeySessionHandoff, sessionHandoffReducer} from './session-handoff-slice';
 import {activityReducer, initialActivityState, rekeyActivity} from './activity-slice';
 import {archiveUndoReducer, initialArchiveUndoState, rekeyArchiveUndo} from './archive-undo-slice';
+import {dropUploadReducer, initialDropUploadState} from './drop-upload-slice';
 import {askReducer, initialAskState} from './ask-slice';
 import {answersReducer, followPending, initialAnswersState} from './answers-slice';
 import {ciStatusReducer, initialCiStatusState, rekeyCiStatus} from './ci-status-slice';
@@ -40,6 +41,7 @@ import type {AnswersState} from './answers-slice';
 import type {AgentHostState} from './agent-host-slice';
 import type {HandoffState} from './handoff-slice';
 import type {SessionHandoffState} from './session-handoff-slice';
+import type {DropUploadState} from './drop-upload-slice';
 import type {ArchiveUndoState} from './archive-undo-slice';
 import type {AskState} from './ask-slice';
 import type {CiStatusState} from './ci-status-slice';
@@ -92,6 +94,7 @@ export interface RendererState {
     readonly agentHost: AgentHostState;
     readonly handoff: HandoffState;
     readonly sessionHandoff: SessionHandoffState;
+    readonly dropUpload: DropUploadState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -123,6 +126,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         agentHost: initialAgentHostState,
         handoff: initialHandoffState,
         sessionHandoff: initialSessionHandoffState,
+        dropUpload: initialDropUploadState,
     };
 }
 
@@ -162,6 +166,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const agentHost = agentHostReducer(state.agentHost, event);
     const handoff = handoffReducer(state.handoff, event);
     const sessionHandoff = sessionHandoffReducer(state.sessionHandoff, event);
+    const dropUpload = dropUploadReducer(state.dropUpload, event);
 
     return settle(state, {
         view,
@@ -191,6 +196,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         agentHost,
         handoff,
         sessionHandoff,
+        dropUpload,
     });
 }
 
@@ -249,6 +255,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         handoff: state.handoff,
         // A session handed off keeps its hand-off under its new id.
         sessionHandoff: rekeySessionHandoff(state.sessionHandoff, oldId, newId),
+        // Names no session: the note is for whichever terminal the files were dropped on.
+        dropUpload: state.dropUpload,
     });
 }
 

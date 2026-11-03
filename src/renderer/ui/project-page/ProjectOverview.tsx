@@ -35,7 +35,7 @@ import {WorktreesSection} from './WorktreesSection';
 import {TasksSection} from './TasksSection';
 import {GitHubMessage, RemoteNote, StaleLine} from './EdgeStates';
 import {InstallAgentCard, SetupSection} from './AgentHostSections';
-import {CopiesSection, CopySection} from './HandoffSections';
+import {CopiesSection, CopySection, SchedulesLine} from './HandoffSections';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import {
     closeProject,
@@ -84,7 +84,7 @@ function currentRows(projectPath: string): PageRow[] {
     const answered = page.overview?.projectPath === projectPath ? page.overview : null;
     const vm = isVmProjectIn(state.agentHost, projectPath);
     const worktrees = answered && showsWorktrees(answered, projectPath, vm) ? worktreesView(answered, page.filter) : [];
-    const tasks = state.tasks.enabled && showsTasks(projectPath) ? tasksViewOf(page, projectPath) : null;
+    const tasks = state.tasks.enabled && showsTasks(projectPath, vm) ? tasksViewOf(page, projectPath) : null;
     return pageRows({
         plans: plans ? planRows(plans) : [],
         pullRequests: pullRequests ? pullRequestRows(pullRequests) : [],
@@ -315,15 +315,20 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
 
 /**
  * Under Worktrees: on a VM copy (#276) its Bring back and Remove copy, and
- * the VM's setup checks; on a local project, its copies on VMs.
+ * the VM's setup checks; on a local project, its copies on VMs. Under either,
+ * where the schedules run (stage 5).
  */
 function ProjectCopies({projectPath, vm}: {projectPath: string; vm: boolean}): JSX.Element {
     return vm ? (
         <>
             <CopySection projectPath={projectPath} />
+            <SchedulesLine projectPath={projectPath} />
             <SetupSection projectPath={projectPath} />
         </>
     ) : (
-        <CopiesSection projectPath={projectPath} />
+        <>
+            <CopiesSection projectPath={projectPath} />
+            <SchedulesLine projectPath={projectPath} />
+        </>
     );
 }
