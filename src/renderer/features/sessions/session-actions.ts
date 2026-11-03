@@ -21,7 +21,8 @@ import {
     sessionMap,
     view,
 } from '../../state/session-store';
-import {dispatch} from '../../state/app-store';
+import {dispatch, getState} from '../../state/app-store';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 import {sidebarContent} from '../../lib/dom';
 import {bump} from '../../lib/motion/reflow';
 import {createTerminalEntry, destroySession, showSession} from '../terminal/terminal-manager';
@@ -70,6 +71,27 @@ export function trackStartedElsewhere(sessionId: string, projectPath: string): v
     if (sessionMap.has(sessionId) || pendingSessions.has(sessionId)) return;
     trackPending(newSessionRow(projectPath, {sessionId}));
     void pollActiveSessions();
+}
+
+/**
+ * The setup terminal main started on a VM's host (#276): a shell row for it,
+ * opened in the terminal area the way any session is, by its id. Opening it
+ * attaches to the shell already running on the agent.
+ */
+export async function openSetupTerminal(sessionId: string, projectPath: string): Promise<void> {
+    const existing = sessionMap.get(sessionId) ?? pendingSessions.get(sessionId)?.session;
+    if (existing) {
+        await openSession(existing);
+        return;
+    }
+    const session = newSessionRow(projectPath, {
+        sessionId,
+        summary: 'Setup terminal',
+        type: 'remote',
+        remoteKind: 'shell',
+    });
+    trackPending(session, true);
+    await openSession(session);
 }
 
 /**
@@ -152,10 +174,15 @@ export async function openSession(session: SessionRow, options?: SessionOptions)
     }
 
     // Remote sessions ignore local launch options — the main process reconnects
-    // from its stored session record.
+    // from its stored session record. A VM's Claude session (#276) resumes with
+    // them, as a local one does, when Resume with config gives some.
+    const remote: SessionOptions = {type: 'remote', remoteKind: session.remoteKind};
+    const vm = session.type === 'remote' && isVmProjectIn(getState().agentHost, session.projectPath);
     const resumeOptions: SessionOptions =
         session.type === 'remote'
-            ? {type: 'remote', remoteKind: session.remoteKind}
+            ? vm && options
+                ? {...options, ...remote}
+                : remote
             : (options ?? (await resolveDefaultSessionOptions(session.projectPath)));
 
     await spawn(session, {isNew: false, options: resumeOptions});
@@ -203,8 +230,10 @@ async function spawn(
 
 /** Stop a session, after asking — it is destructive and cannot be undone. */
 export async function confirmAndStopSession(sessionId: string): Promise<void> {
-    const isRemote = sessionMap.get(sessionId)?.type === 'remote';
-    const prompt = isRemote ? 'Disconnect? The session keeps running on the remote machine.' : 'Stop this session?';
+    const session = sessionMap.get(sessionId);
+    // A session on a VM (#276) stops, as a local one does; an ssh one only disconnects.
+    const disconnects = session?.type === 'remote' && !isVmProjectIn(getState().agentHost, session.projectPath);
+    const prompt = disconnects ? 'Disconnect? The session keeps running on the remote machine.' : 'Stop this session?';
     if (!confirm(prompt)) return;
 
     await window.api.stopSession(sessionId);

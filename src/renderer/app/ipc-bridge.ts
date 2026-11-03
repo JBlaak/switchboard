@@ -57,6 +57,7 @@ export function installIpcBridge(
         api.onSessionArchived((sessionId) => send({type: 'sessionArchived', sessionId})),
         api.onTasksChanged((update) => send({type: 'tasksChanged', update})),
         api.onSessionTaskChanged((sessionId, taskId) => send({type: 'sessionTaskChanged', sessionId, taskId})),
+        api.onAgentInstallProgress((projectPath, line) => send({type: 'agentInstallProgress', projectPath, line})),
     ];
     return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
 }

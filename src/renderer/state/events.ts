@@ -35,6 +35,7 @@ import type {TasksPageEvent} from './tasks-slice';
 import type {PhoneAccessEvent} from './phone-access-slice';
 import type {SessionTaskEvent} from './session-task-slice';
 import type {ArchiveUndoEvent} from './archive-undo-slice';
+import type {AgentHostEvent} from './agent-host-slice';
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
 import type {QuestionView} from './answers-slice';
@@ -78,7 +79,9 @@ export type PushEvent =
     /** A watched task list after a poll or a change (#248): its rows, or that BlaakTasks is down, off or not set up. */
     | {type: 'tasksChanged'; update: TasksUpdate}
     /** A session's task changed: a task id when linked, null when unlinked. */
-    | {type: 'sessionTaskChanged'; sessionId: string; taskId: string | null};
+    | {type: 'sessionTaskChanged'; sessionId: string; taskId: string | null}
+    /** One line of an agent install's progress (#276), for the project whose host it is. */
+    | {type: 'agentInstallProgress'; projectPath: string; line: string};
 
 // ── From the renderer itself: user actions and timers ──
 
@@ -326,7 +329,8 @@ export type RendererEvent =
     | PhoneAccessEvent
     | SessionTaskEvent
     | TasksPageEvent
-    | ArchiveUndoEvent;
+    | ArchiveUndoEvent
+    | AgentHostEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

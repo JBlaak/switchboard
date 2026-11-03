@@ -117,6 +117,7 @@ import type {GlobalHotkey, QuickAskPanel} from '../application/ports/quick-ask-p
 import type {McpServers} from '../application/ports/mcp-servers';
 import type {MainWindowHost} from '../application/ports/main-window';
 import type {SwitchboardDatabase} from '../infrastructure/sqlite/database';
+import type {AgentHosts} from '../application/services/agent-hosts';
 
 /** Everything the IPC layer and the app lifecycle reach for. */
 export interface Container {
@@ -163,6 +164,11 @@ export interface Container {
     readonly mcpServers: McpServers;
     /** BlaakTasks (#248): its services exist only while a URL is set in Settings. */
     readonly tasks: TasksService;
+    /**
+     * VM hosts (#276): status, install, setup checks, host settings and the setup
+     * terminal. Optional only until `buildContainer` builds it.
+     */
+    readonly agentHosts?: AgentHosts;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */

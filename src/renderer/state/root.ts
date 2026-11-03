@@ -8,6 +8,7 @@
  * The one exception is a re-key, which every slice keyed by session id has to
  * follow at once (see `rekeyState`).
  */
+import {agentHostReducer, initialAgentHostState} from './agent-host-slice';
 import {activityReducer, initialActivityState, rekeyActivity} from './activity-slice';
 import {archiveUndoReducer, initialArchiveUndoState, rekeyArchiveUndo} from './archive-undo-slice';
 import {askReducer, initialAskState} from './ask-slice';
@@ -34,6 +35,7 @@ import {initialUsageState, usageReducer} from './usage-slice';
 import {initialViewState, rekeyView, viewReducer} from './view-slice';
 import type {ActivityState} from './activity-slice';
 import type {AnswersState} from './answers-slice';
+import type {AgentHostState} from './agent-host-slice';
 import type {ArchiveUndoState} from './archive-undo-slice';
 import type {AskState} from './ask-slice';
 import type {CiStatusState} from './ci-status-slice';
@@ -83,6 +85,7 @@ export interface RendererState {
     readonly phoneAccess: PhoneAccessSliceState;
     readonly sessionTask: SessionTaskState;
     readonly archiveUndo: ArchiveUndoState;
+    readonly agentHost: AgentHostState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -111,6 +114,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         phoneAccess: initialPhoneAccessState,
         sessionTask: initialSessionTaskState,
         archiveUndo: initialArchiveUndoState,
+        agentHost: initialAgentHostState,
     };
 }
 
@@ -147,6 +151,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     // Link task… follows the BlaakTasks switch as this event left it.
     const sessionTask = sessionTaskReducer(state.sessionTask, event, tasks.enabled);
     const archiveUndo = archiveUndoReducer(state.archiveUndo, event);
+    const agentHost = agentHostReducer(state.agentHost, event);
 
     return settle(state, {
         view,
@@ -173,6 +178,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         phoneAccess,
         sessionTask,
         archiveUndo,
+        agentHost,
     });
 }
 
@@ -225,6 +231,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         sessionTask: rekeySessionTask(state.sessionTask, oldId, newId),
         // An archive taken back brings the session back under its new id.
         archiveUndo: rekeyArchiveUndo(state.archiveUndo, oldId, newId),
+        // Keyed by project path, which a re-key leaves alone.
+        agentHost: state.agentHost,
     });
 }
 

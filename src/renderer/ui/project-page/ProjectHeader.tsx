@@ -14,6 +14,8 @@ import {projectLabel} from '../../features/sessions/project-label';
 import {useStore} from '../use-store';
 import {formatDate} from '../../lib/format';
 import {remoteHost} from './page-state';
+import {remoteBadge} from '../../features/sessions/remote-badge';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 import {closeProject, isRemoteProject, openProjectOnGitHub, openProjectSettings, startProjectSession} from './actions';
 
 /** The repository on GitHub, as a link, and the branch the main checkout is on. */
@@ -74,6 +76,18 @@ function UpdatedAt({projectPath}: {projectPath: string}): JSX.Element | null {
     );
 }
 
+/** VM (#276), as the Projects modal badges the project; an ssh project's header stays as it was. */
+function HostBadge({projectPath}: {projectPath: string}): JSX.Element | null {
+    const agent = useStore((state) => isVmProjectIn(state.agentHost, projectPath));
+    const badge = remoteBadge({projectPath, remote: true, agent});
+    if (!badge || !agent) return null;
+    return (
+        <span className="remote-badge is-vm pp-host-badge" title={badge.title}>
+            {badge.label}
+        </span>
+    );
+}
+
 export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element {
     const remote = isRemoteProject(projectPath);
     // Until the first answer the button shows: most projects are on GitHub.
@@ -112,6 +126,7 @@ export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element
                     </div>
                 </div>
                 <div className="pp-header-actions">
+                    {remote && <HostBadge projectPath={projectPath} />}
                     {remote && <span className="pp-host">{remoteHost(projectPath)}</span>}
                     {!remote && !noGitHub && (
                         <button type="button" className="sw-btn" onClick={() => openProjectOnGitHub(projectPath)}>

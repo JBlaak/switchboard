@@ -7,7 +7,7 @@
 import type {JSX} from 'react';
 import {useStore} from '../use-store';
 import type {GitHubUnavailableReason} from '../../../domain/project/overview';
-import {staleLine, unavailableMessage} from './page-state';
+import {remoteNote, staleLine, unavailableMessage} from './page-state';
 import {copyAuthCommand, reloadProjectOverview} from './actions';
 
 /** One message in place of Plans & issues and Pull requests, with Try again (and Copy command). */
@@ -58,6 +58,6 @@ export function StaleLine({fetchedAt}: {fetchedAt: number}): JSX.Element {
 }
 
 /** Under a remote project's sessions: what the page does not read there. */
-export function RemoteNote(): JSX.Element {
-    return <div className="pp-remote-note">Plans and worktrees aren’t read over ssh.</div>;
+export function RemoteNote({vm}: {vm: boolean}): JSX.Element {
+    return <div className="pp-remote-note">{remoteNote(vm)}</div>;
 }

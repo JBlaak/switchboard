@@ -187,16 +187,20 @@ export interface RowButtons {
  *
  * A remote session has no local transcript to relaunch from; archive still
  * works — it is keyed on the session id alone — and doubles as "forget this
- * one". A plain terminal has nothing to archive or resume either. Stop is
+ * one". A session on a VM (`vm`, #276) is the exception: it has one, on the
+ * agent. A plain terminal has nothing to archive or resume either. Stop is
  * always there; the stylesheet shows it only while something runs.
  */
-export function rowButtons(session: SessionRow): RowButtons {
-    const remote = session.type === 'remote';
+export function rowButtons(session: SessionRow, {vm = false}: {vm?: boolean} = {}): RowButtons {
+    // A session on a VM (#276) runs on the agent as a local one does: stopping
+    // it stops it, and a Claude session there resumes like one here.
+    const disconnects = session.type === 'remote' && !vm;
+    const shell = session.type === 'terminal' || (session.type === 'remote' && session.remoteKind === 'shell');
     return {
-        stop: remote ? 'Disconnect (keeps running on the remote)' : 'Stop session',
+        stop: disconnects ? 'Disconnect (keeps running on the remote)' : 'Stop session',
         archive: session.type === 'terminal' ? null : session.archived ? 'Unarchive' : 'Archive',
         snooze: session.type !== 'terminal' && !session.archived,
-        resume: !remote && session.type !== 'terminal',
+        resume: !disconnects && !shell,
     };
 }
 

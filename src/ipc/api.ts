@@ -40,6 +40,10 @@ import type {
     TaskUpdateResult,
     TasksUpdate,
 } from '../domain/tasks/surface';
+import type {AgentHostStatus, AgentHostsResult} from '../application/services/agent-hosts';
+import type {HostSettings, ToolCheck} from '../domain/agent/protocol';
+
+export type {AgentHostStatus, AgentHostsResult};
 
 /** Removes the listener an `on*` subscription added. */
 export type Unsubscribe = () => void;
@@ -306,6 +310,25 @@ export interface SwitchboardApi {
     /** Use here: make the Mac the active device for the session and resize it back. */
     useTerminalHere(sessionId: string): Promise<IpcResult>;
 
+    // ── VM hosts: the Switchboard agent (#276) ──
+    // A host is named by any project path on it (`ssh://user@host[:port]/dir`).
+    /** Whether the host has an agent, whether it is the app's version, and whether a link is open. */
+    agentStatus(projectPath: string): Promise<AgentHostStatus>;
+    /**
+     * Install (or upgrade) the agent on the project's host. Its progress lines
+     * arrive on `onAgentInstallProgress`; on success the project becomes a VM
+     * project and `onProjectsChanged` fires.
+     */
+    installAgent(projectPath: string): Promise<AgentHostsResult>;
+    /** The setup checks: each tool installed and signed in, and sudo. Null when the host can't be reached. */
+    checkAgentTools(projectPath: string): Promise<{tools: ToolCheck[]; sudo: boolean} | null>;
+    /** The host's settings, stored on the agent. Null when the host can't be reached. */
+    agentHostSettings(projectPath: string): Promise<HostSettings | null>;
+    /** Change some of the host's settings; answers all of them, or null when the host can't be reached. */
+    setAgentHostSettings(projectPath: string, settings: Partial<HostSettings>): Promise<HostSettings | null>;
+    /** Start the setup terminal on the host, answering its session id to open. */
+    openAgentSetupTerminal(projectPath: string): Promise<{ok: true; sessionId: string} | {ok: false; error: string}>;
+
     // ── Events from main ──
     // Each answers its unsubscribe, so a listener can be removed again (StrictMode
     // mounts twice; a hot reload re-installs the bridge).
@@ -342,6 +365,8 @@ export interface SwitchboardApi {
     onTasksChanged(cb: (update: TasksUpdate) => void): Unsubscribe;
     /** A session's task changed: a task id when it was linked, null when unlinked. */
     onSessionTaskChanged(cb: (sessionId: string, taskId: string | null) => void): Unsubscribe;
+    /** One line of an agent install's progress, for the project whose host it is. */
+    onAgentInstallProgress(cb: (projectPath: string, line: string) => void): Unsubscribe;
 
     // ── Host facts the renderer needs synchronously ──
     /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

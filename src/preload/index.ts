@@ -117,6 +117,14 @@ const api: SwitchboardApi = {
     sessionWorkReview: (request) => ipcRenderer.invoke(INVOKE.sessionWorkReview, request),
     getCheckLog: (request) => ipcRenderer.invoke(INVOKE.sessionWorkCheckLog, request),
 
+    // ── VM hosts (#276) ──
+    agentStatus: (projectPath) => ipcRenderer.invoke(INVOKE.agentStatus, projectPath),
+    installAgent: (projectPath) => ipcRenderer.invoke(INVOKE.agentInstall, projectPath),
+    checkAgentTools: (projectPath) => ipcRenderer.invoke(INVOKE.agentCheckTools, projectPath),
+    agentHostSettings: (projectPath) => ipcRenderer.invoke(INVOKE.agentHostSettings, projectPath),
+    setAgentHostSettings: (projectPath, settings) =>
+        ipcRenderer.invoke(INVOKE.agentSetHostSettings, projectPath, settings),
+    openAgentSetupTerminal: (projectPath) => ipcRenderer.invoke(INVOKE.agentOpenSetupTerminal, projectPath),
     // ── Plan: sessions on a plan's issues (#125) ──
     issueSessions: (repository) => ipcRenderer.invoke(INVOKE.planIssueSessions, repository),
     prepareIssueWorktree: (request) => ipcRenderer.invoke(INVOKE.planPrepareIssueWorktree, request),
@@ -185,6 +193,8 @@ const api: SwitchboardApi = {
     onSessionArchived: (cb) => subscribe(EVENT.sessionArchived, (_e, sessionId) => cb(sessionId)),
     onTasksChanged: (cb) => subscribe(EVENT.tasksChanged, (_e, update) => cb(update)),
     onSessionTaskChanged: (cb) => subscribe(EVENT.sessionTaskChanged, (_e, sessionId, taskId) => cb(sessionId, taskId)),
+    onAgentInstallProgress: (cb) =>
+        subscribe(EVENT.agentInstallProgress, (_e, projectPath, line) => cb(projectPath, line)),
 
     // ── Host facts ──
     getPathForFile: (file) => webUtils.getPathForFile(file),
