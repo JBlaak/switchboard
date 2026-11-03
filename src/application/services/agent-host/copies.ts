@@ -19,6 +19,13 @@
  * the VM's: the marker records what that hand-off left, and the next one
  * discards exactly that and nothing else.
  *
+ * A file dropped on a VM session's terminal (stage 5) comes as an upload too,
+ * and `place-upload` moves it to `~/.switchboard/drops/<random>/<name>`, the
+ * path the Mac then types into the session. Each drop gets its own random
+ * folder, so two files of one name never meet, and a drop older than
+ * DROP_MAX_AGE_MS is removed whenever another is placed: they are for the
+ * session that was handed them, not an archive.
+ *
  * Everything a copy does runs through two small ports below (commands and
  * files) with Node adapters in `src/infrastructure/agent/`, and operations on
  * one copy's folder run one at a time, so a status read or a removal can never
@@ -31,6 +38,7 @@ import type {
     HandoffDoneMessage,
     HandoffMessage,
     HostSettings,
+    PlaceUploadMessage,
     PushBranchMessage,
     RemoveCopyMessage,
 } from '../../../domain/agent/protocol';
@@ -85,7 +93,39 @@ export interface CopiesFiles {
     realpath(path: string): string | null;
 }
 
+/** A folder's name and when it last changed, epoch ms. */
+export interface DropFolder {
+    name: string;
+    mtimeMs: number;
+}
+
+/** The file work of placing dropped files, on absolute paths. */
+export interface DropFiles {
+    /** The folders directly in `dir`; [] when it does not exist or can't be read. */
+    listFolders(dir: string): DropFolder[];
+    /**
+     * Move a file to `to`, making every missing folder on the way 0700, and
+     * leave it with `mode`. Never replaces a file already at `to`: throws
+     * instead. Works across filesystems (an upload's temp folder may be a
+     * tmpfs). May throw.
+     */
+    place(from: string, to: string, mode: number): void;
+    /** `rm -rf`; a missing path is fine; never throws. */
+    removeTree(path: string): void;
+    /** Delete a file; a missing one is fine; never throws. */
+    remove(path: string): void;
+}
+
 // ── Limits ──
+
+/** Where dropped files go, under the VM user's home. */
+export const DROPS_DIR = '~/.switchboard/drops';
+
+/** How long a dropped file is kept: a day, then the next drop removes it. */
+export const DROP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** The longest file name a drop keeps; ext4 allows 255 bytes per name. */
+export const DROP_NAME_MAX_BYTES = 255;
 
 /** How long a clone, fetch or push may take. A big repository over a slow link takes a while. */
 export const NETWORK_TIMEOUT_MS = 30 * 60 * 1000;
@@ -125,6 +165,8 @@ const NO_PROMPTS: Record<string, string> = {
 export interface CopiesDeps {
     commands: CopyCommandRunner;
     files: CopiesFiles;
+    /** Where `place-upload` puts dropped files. */
+    drops: DropFiles;
     /** The host's settings now, for the base folder. */
     hostSettings: () => HostSettings;
     /** The VM user's home folder, for `~`. */
@@ -203,12 +245,54 @@ export class Copies implements CopiesPart {
             case 'remove-copy':
                 void this.removeCopy(client, message);
                 return;
+            case 'place-upload':
+                return this.placeUpload(client, message);
         }
     }
 
     /** How many uploads are held, for tests. */
     public get uploadCount(): number {
         return this.uploads.count;
+    }
+
+    // ── place-upload ──
+
+    /**
+     * Move a finished upload to `~/.switchboard/drops/<random>/<name>` (0600,
+     * its folders 0700) and answer the path. A name that is not one safe
+     * segment is refused before the upload is touched, so nothing can be
+     * written outside its drop folder.
+     */
+    private placeUpload(client: ClientLink, message: PlaceUploadMessage): void {
+        const {requestId, uploadId, name} = message;
+        const answer = (placed: {ok: true; path: string} | {ok: false; error: string}) => {
+            if (!client.closed) client.send({type: 'placed', requestId, ...placed});
+        };
+        if (!isSafeDropName(name)) return answer({ok: false, error: `not a file name a drop can have: ${name}`});
+
+        const root = expandHome(DROPS_DIR, this.deps.home);
+        this.removeOldDrops(root);
+
+        const taken = this.uploads.take(uploadId);
+        if ('error' in taken) return answer({ok: false, error: taken.error});
+        const target = `${root}/${this.deps.ids.newId()}/${name}`;
+        try {
+            this.deps.drops.place(taken.file, target, 0o600);
+        } catch (err) {
+            this.deps.drops.remove(taken.file);
+            this.deps.log.warn(`[copies] could not place ${name}: ${errorText(err)}`);
+            return answer({ok: false, error: `could not place the file: ${errorText(err)}`});
+        }
+        this.deps.log.info(`[copies] placed a dropped file at ${target}`);
+        answer({ok: true, path: target});
+    }
+
+    /** Remove every drop folder older than DROP_MAX_AGE_MS. */
+    private removeOldDrops(root: string): void {
+        const cutoff = this.deps.clock.now() - DROP_MAX_AGE_MS;
+        for (const folder of this.deps.drops.listFolders(root)) {
+            if (folder.mtimeMs < cutoff) this.deps.drops.removeTree(`${root}/${folder.name}`);
+        }
     }
 
     // ── handoff ──
@@ -899,6 +983,16 @@ function refuseHandoff(message: HandoffMessage): string | null {
 }
 
 /** One safe path segment: what `<baseFolder>/<name>` may add, and nothing more. */
+/**
+ * Whether `name` is one path segment a dropped file may be given: not empty,
+ * not `.` or `..`, no `/` or NUL, and at most DROP_NAME_MAX_BYTES of UTF-8.
+ */
+export function isSafeDropName(name: string): boolean {
+    if (!name || name === '.' || name === '..') return false;
+    if (name.includes('/') || name.includes('\0')) return false;
+    return Buffer.byteLength(name, 'utf8') <= DROP_NAME_MAX_BYTES;
+}
+
 export function isSafeFolderName(name: string): boolean {
     return isSafeRepoPath(name) && !name.includes('/') && !name.startsWith('-');
 }

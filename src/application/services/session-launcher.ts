@@ -20,6 +20,7 @@ import {
 import {encodeProjectPath} from '../../domain/project/project-path';
 import {ActiveSession} from '../model/active-session';
 import type {RemoteConnectionState} from '../model/active-session';
+import type {RemoteConfig} from '../../domain/project/remote-target';
 import type {SessionOptions} from '../../domain/launch/session-options';
 import type {ShellProfile} from '../../domain/shell/shell-profile';
 import type {SessionRegistry} from '../model/session-registry';
@@ -87,8 +88,17 @@ export interface SessionLauncherDeps {
      * opens its sessions there; without this, or without `agent`, a remote is
      * the legacy ssh+tmux kind.
      */
-    agents?: Pick<AgentClient, 'startSession' | 'sessionShown'>;
+    agents?: LauncherAgents;
 }
+
+/**
+ * What the launcher asks of the agent client: start and show a session, and,
+ * optionally, a host's link for its VM home (stage 5), which places a new VM
+ * worktree under a `~` project.
+ */
+export type LauncherAgents = Pick<AgentClient, 'startSession' | 'sessionShown'> & {
+    connection?(host: RemoteConfig): {readonly home: string | null};
+};
 
 export class SessionLauncher {
     constructor(private readonly deps: SessionLauncherDeps) {}
@@ -133,7 +143,7 @@ export class SessionLauncher {
         if (!isRemote && !this.deps.fileExists(projectPath)) {
             return {ok: false, error: `project directory no longer exists: ${projectPath}`};
         }
-        if (isRemote && this.deps.agents && this.deps.settings.findRemoteProject(projectPath)?.agent) {
+        if (isRemote && this.deps.agents && this.agentProject(projectPath, this.deps.agents)) {
             return this.spawnOnAgent(request, this.deps.agents);
         }
 
@@ -205,10 +215,7 @@ export class SessionLauncher {
      * serves transcripts (stage 3), and the remote session record is kept so
      * the row persists as a legacy remote's does.
      */
-    private async spawnOnAgent(
-        request: OpenSessionRequest,
-        agents: Pick<AgentClient, 'startSession' | 'sessionShown'>,
-    ): Promise<OpenSessionResult> {
+    private async spawnOnAgent(request: OpenSessionRequest, agents: LauncherAgents): Promise<OpenSessionResult> {
         const {projectPath, sessionId, isNew, options} = request;
         const {settings, renderer, registry, lifecycle, clock} = this.deps;
 
@@ -252,6 +259,25 @@ export class SessionLauncher {
             return {ok: false, error: result.error};
         }
         return {ok: true, reattached: false};
+    }
+
+    /**
+     * Whether `projectPath` opens on its host's agent (#276).
+     *
+     * A VM project the user added or a hand-off made has a record with
+     * `agent`. Since stage 5 so does any other folder on a host with an agent:
+     * an issue or task session starts in a worktree made on the VM, a folder
+     * no record names, and `ensureRemoteProject` records it (as a copy of
+     * whatever its parent project is a copy of) before the launch. A folder
+     * on an agentless host gets no record, and goes the legacy way as before.
+     *
+     * The VM's home, while its link is up, lets a worktree's absolute path be
+     * matched to a parent project stored as `~/…`.
+     */
+    private agentProject(projectPath: string, agents: LauncherAgents): boolean {
+        const config = parseRemoteProjectPath(projectPath);
+        const home = config && agents.connection ? agents.connection(config).home : null;
+        return !!this.deps.settings.ensureRemoteProject(projectPath, home)?.agent;
     }
 
     /** Which shell to launch in. */

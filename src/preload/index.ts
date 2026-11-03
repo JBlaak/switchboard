@@ -117,6 +117,12 @@ const api: SwitchboardApi = {
     sessionWorkReview: (request) => ipcRenderer.invoke(INVOKE.sessionWorkReview, request),
     getCheckLog: (request) => ipcRenderer.invoke(INVOKE.sessionWorkCheckLog, request),
 
+    // ── Settings → VMs (#276, #307) ──
+    vmHosts: () => ipcRenderer.invoke(INVOKE.vmRegistryList),
+    addVmHost: (input) => ipcRenderer.invoke(INVOKE.vmRegistryAdd, input),
+    renameVmHost: (key, name) => ipcRenderer.invoke(INVOKE.vmRegistryRename, key, name),
+    removeVmHost: (key) => ipcRenderer.invoke(INVOKE.vmRegistryRemove, key),
+    onVmHostsChanged: (cb) => subscribe(EVENT.vmHostsChanged, () => cb()),
     // ── VM hosts (#276) ──
     agentStatus: (projectPath) => ipcRenderer.invoke(INVOKE.agentStatus, projectPath),
     installAgent: (projectPath) => ipcRenderer.invoke(INVOKE.agentInstall, projectPath),
@@ -128,7 +134,8 @@ const api: SwitchboardApi = {
     // ── Project hand-off (#276 stage 2) ──
     handoffHosts: () => ipcRenderer.invoke(INVOKE.handoffHosts),
     previewHandoff: (localPath) => ipcRenderer.invoke(INVOKE.handoffPreview, localPath),
-    handOffProject: (localPath, hostKey, ticked) => ipcRenderer.invoke(INVOKE.handoffRun, localPath, hostKey, ticked),
+    handOffProject: (localPath, hostKey, ticked, choices) =>
+        ipcRenderer.invoke(INVOKE.handoffRun, localPath, hostKey, ticked, choices),
     projectCopies: (localPath) => ipcRenderer.invoke(INVOKE.handoffCopiesOf, localPath),
     copyOrigin: (copyPath) => ipcRenderer.invoke(INVOKE.handoffOriginOf, copyPath),
     copyStatus: (copyPath) => ipcRenderer.invoke(INVOKE.handoffCopyStatus, copyPath),
@@ -138,6 +145,11 @@ const api: SwitchboardApi = {
     handOffSession: (sessionId, hostKey, ticked) =>
         ipcRenderer.invoke(INVOKE.sessionHandoffRun, sessionId, hostKey, ticked),
     cancelSessionHandoff: (sessionId) => ipcRenderer.invoke(INVOKE.sessionHandoffCancel, sessionId),
+    // ── Stage 5 (#276): where schedules run, files dropped on a VM terminal ──
+    schedulesWhere: (projectPath) => ipcRenderer.invoke(INVOKE.vmSchedulesWhere, projectPath),
+    runSchedulesOn: (localPath, copyPath) => ipcRenderer.invoke(INVOKE.vmSchedulesRunOn, localPath, copyPath),
+    uploadDroppedFiles: (sessionId, localPaths) =>
+        ipcRenderer.invoke(INVOKE.droppedFilesToSession, sessionId, localPaths),
     // ── Plan: sessions on a plan's issues (#125) ──
     issueSessions: (repository) => ipcRenderer.invoke(INVOKE.planIssueSessions, repository),
     prepareIssueWorktree: (request) => ipcRenderer.invoke(INVOKE.planPrepareIssueWorktree, request),

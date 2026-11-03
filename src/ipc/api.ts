@@ -47,12 +47,15 @@ import type {
     CopyStatus,
     HandoffHost,
     HandoffPreview,
+    HandoffChoices,
     HandoffResult,
     ProjectCopy,
 } from '../application/services/project-handoff';
 import type {SessionHandoffPhase, SessionHandoffPreview} from '../application/services/session-handoff';
+import type {ScheduleLocation} from '../application/services/vm-schedules';
+import type {VmHostView} from '../application/services/vm-registry';
 
-export type {AgentHostStatus, AgentHostsResult};
+export type {AgentHostStatus, AgentHostsResult, VmHostView};
 
 /** Removes the listener an `on*` subscription added. */
 export type Unsubscribe = () => void;
@@ -319,8 +322,31 @@ export interface SwitchboardApi {
     /** Use here: make the Mac the active device for the session and resize it back. */
     useTerminalHere(sessionId: string): Promise<IpcResult>;
 
+    // ── Settings → VMs: VMs registered on their own (#276, #307) ──
+    /** The registered VMs, with each one's agent, link and projects. Never dials a VM. */
+    vmHosts(): Promise<VmHostView[]>;
+    /**
+     * Register a VM by `user@host[:port]` and an optional name. Installs
+     * nothing; refused (with the message to show) for a bad address or one
+     * already registered. Its `key` names it in the other calls, and
+     * `vmHostPath` of it is what the `agent*` calls below take.
+     */
+    addVmHost(input: {
+        user: string;
+        host: string;
+        port?: number;
+        name?: string;
+    }): Promise<{ok: true; key: string} | {ok: false; error: string}>;
+    /** Name a VM; an empty name goes back to `user@host`. False for an unknown key. */
+    renameVmHost(key: string, name: string): Promise<boolean>;
+    /** Forget a VM and its projects here; the agent and its sessions keep running on the VM. */
+    removeVmHost(key: string): Promise<{ok: true} | {ok: false; error: string}>;
+    /** The VM list changed: added, renamed, removed, an install finished, or a link came up or dropped. */
+    onVmHostsChanged(cb: () => void): Unsubscribe;
+
     // ── VM hosts: the Switchboard agent (#276) ──
-    // A host is named by any project path on it (`ssh://user@host[:port]/dir`).
+    // A host is named by any `ssh://` path on it: the VM's own (`vmHostPath`,
+    // no folder) or a project's (`ssh://user@host[:port]/dir`).
     /** Whether the host has an agent, whether it is the app's version, and whether a link is open. */
     agentStatus(projectPath: string): Promise<AgentHostStatus>;
     /**
@@ -344,11 +370,17 @@ export interface SwitchboardApi {
     /** What handing a local project off would carry, or why it can't be handed off. */
     previewHandoff(localPath: string): Promise<HandoffPreview | {error: string}>;
     /**
-     * Hand a local project off to a host, carrying the ticked ignored files.
+     * Hand a local project off to a host, carrying the ticked ignored files and
+     * the dialog's other choices (stage 5: whether the schedules move along).
      * Progress lines arrive on `onHandoffProgress`; on success the copy is a
      * project of its own and `onProjectsChanged` fires.
      */
-    handOffProject(localPath: string, hostKey: string, ticked: string[]): Promise<HandoffResult>;
+    handOffProject(
+        localPath: string,
+        hostKey: string,
+        ticked: string[],
+        choices?: HandoffChoices,
+    ): Promise<HandoffResult>;
     /** A local project's copies on VMs. */
     projectCopies(localPath: string): Promise<ProjectCopy[]>;
     /** The local project a copy was made from; null for a remote that isn't a copy. */
@@ -371,6 +403,17 @@ export interface SwitchboardApi {
     handOffSession(sessionId: string, hostKey: string, ticked: string[]): Promise<SessionHandoffPhase>;
     /** Cancel a hand-off still waiting for its turn to end; false once it is running. */
     cancelSessionHandoff(sessionId: string): Promise<boolean>;
+
+    // ── Stage 5 (#276) ──
+    /** Where a local project's (or its copy's) schedules run; null with neither schedules nor copies. */
+    schedulesWhere(projectPath: string): Promise<ScheduleLocation | null>;
+    /** Run a local project's schedules in that copy on its VM, or (null) back on the Mac. */
+    runSchedulesOn(localPath: string, copyPath: string | null): Promise<ScheduleLocation | {error: string}>;
+    /** Upload files dropped on a VM session's terminal; answers their paths on the VM, in order. */
+    uploadDroppedFiles(
+        sessionId: string,
+        localPaths: string[],
+    ): Promise<{ok: true; paths: string[]} | {ok: false; error: string}>;
 
     // ── Events from main ──
     // Each answers its unsubscribe, so a listener can be removed again (StrictMode

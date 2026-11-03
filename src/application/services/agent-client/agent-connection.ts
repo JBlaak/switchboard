@@ -44,10 +44,14 @@ import type {
     MacMessage,
     OpenedMessage,
     OpenSessionMessage,
+    PlacedMessage,
+    SelfArchivedMessage,
+    SelfArchivedSession,
     TerminalOutput,
     ToolCheck,
     ToolResultMessage,
     TranscriptAnswerMessage,
+    TranscriptListMessage,
     TranscriptMessage,
     TranscriptQueryMethod,
     TranscriptTailReply,
@@ -505,6 +509,42 @@ export class AgentConnection {
         }));
     }
 
+    // ── Dropped files (stage 5) ──
+
+    /**
+     * Put a file uploaded first (`upload`) in the agent's drop folder on the
+     * VM under `name` (one safe segment), and answer the agent's `placed`:
+     * with the file's absolute path there, or the agent's refusal.
+     */
+    public async placeUpload(uploadId: string, name: string): Promise<PlacedMessage> {
+        return this.request<PlacedMessage>('placed', (requestId) => ({
+            type: 'place-upload',
+            requestId,
+            uploadId,
+            name,
+        }));
+    }
+
+    // ── Sessions that archived themselves while the Mac was away (#308) ──
+
+    /** The sessions on this host that archived themselves while no Mac was connected. */
+    public async listSelfArchived(): Promise<SelfArchivedSession[]> {
+        const reply = await this.request<SelfArchivedMessage>('self-archived', (requestId) => ({
+            type: 'list-self-archived',
+            requestId,
+        }));
+        return reply.sessions;
+    }
+
+    /** Drop these sessions from the agent's self-archive record, once handled. */
+    public async forgetSelfArchived(sessionIds: string[]): Promise<DoneMessage> {
+        return this.request<DoneMessage>('done', (requestId) => ({
+            type: 'forget-self-archived',
+            requestId,
+            sessionIds,
+        }));
+    }
+
     // ── The pages' git and files (stage 4) ──
 
     /**
@@ -598,6 +638,23 @@ export class AgentConnection {
     }
 
     /**
+     * The sessions whose transcripts sit in `dirs` on the VM (as project paths
+     * name them, `~` kept), or below one, newest first; only those modified
+     * after `since` (epoch ms, the VM's clock) when given. How the Mac learns of
+     * sessions it did not start, such as a schedule's run on the VM (stage 5).
+     */
+    public async listTranscripts(dirs: readonly string[], since?: number): Promise<TranscriptListMessage['sessions']> {
+        const reply = await this.request<TranscriptListMessage>('transcript-list', (requestId) => ({
+            type: 'list-transcripts',
+            requestId,
+            dirs: [...dirs],
+            // The agent checks for an integer; an mtime may carry a fraction.
+            ...(since === undefined ? {} : {since: Math.floor(since)}),
+        }));
+        return reply.sessions;
+    }
+
+    /**
      * Send a request once connected and wait for its answer.
      *
      * Rejects when the link cannot be had, when it drops before the answer, or
@@ -629,8 +686,11 @@ export class AgentConnection {
             this.pending.set(requestId, {
                 resolve: (message) => {
                     this.progress.delete(requestId);
-                    if (message.type !== expect) reject(new Error(`expected ${expect}, got ${message.type}`));
-                    else resolve(message as T);
+                    // An older agent answers a request it does not know with a
+                    // refused `done`; its reason (update the agent) is the error.
+                    if (message.type === expect) resolve(message as T);
+                    else if (message.type === 'done' && !message.ok && message.error) reject(new Error(message.error));
+                    else reject(new Error(`expected ${expect}, got ${message.type}`));
                 },
                 reject: (error) => {
                     this.progress.delete(requestId);

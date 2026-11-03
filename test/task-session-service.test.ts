@@ -155,7 +155,10 @@ test('a remote project is refused', async () => {
     const result = await service.prepare(task, {projectPath: 'ssh://box/code/app'});
 
     /* Then */
-    assert.deepEqual(result, {kind: 'failed', reason: 'A session on a task can only start in a local project'});
+    assert.deepEqual(result, {
+        kind: 'failed',
+        reason: 'A session on a task can only start in a local project or on a VM',
+    });
     assert.deepEqual(git.writes, []);
 });
 

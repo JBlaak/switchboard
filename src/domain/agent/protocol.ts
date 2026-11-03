@@ -74,6 +74,12 @@ export interface HostSettings {
     copyConfig: boolean;
     /** Where project copies go, e.g. `~/projects`. */
     baseFolder: string;
+    /**
+     * Stage 5: the copies whose `schedule-*.md` run here rather than on the Mac,
+     * as their folders (`~` kept). Stored on the VM, so they keep running while
+     * the Mac is away. Absent means none.
+     */
+    scheduleDirs?: string[];
 }
 
 /** The tools the setup terminal installs and signs in to. */
@@ -494,6 +500,56 @@ export type TranscriptQueryMethod = (typeof TRANSCRIPT_QUERY_METHODS)[number];
 /** The most a `tool-result`'s stdout or a `file-content` may carry, raw. */
 export const TOOL_OUTPUT_CAP_BYTES = 8 * 1024 * 1024;
 
+// ── Mac → agent: schedules, uploads to paste (stage 5) ──
+
+/**
+ * The sessions whose transcripts sit in these folders on the VM, newest first;
+ * answered with `transcript-list`. How the Mac learns of runs it did not start,
+ * such as a schedule's on the VM.
+ */
+export interface ListTranscriptsMessage {
+    type: 'list-transcripts';
+    requestId: string;
+    /** As project paths name them (`~` kept); a session counts when it ran in one, or below one. */
+    dirs: string[];
+    /** Only sessions modified since then, epoch ms; absent for all. */
+    since?: number;
+}
+
+/**
+ * Put a finished upload where a session on the VM can read it, a file dropped
+ * on its terminal: `~/.switchboard/drops/<random>/<name>`. Answered with `placed`.
+ */
+export interface PlaceUploadMessage {
+    type: 'place-upload';
+    requestId: string;
+    uploadId: string;
+    /** The file's own name, one safe segment. */
+    name: string;
+}
+
+// ── Mac → agent: sessions that archived themselves while the Mac was away (#308) ──
+
+/**
+ * Which sessions archived themselves (`archive_session`) while no Mac was
+ * connected; answered with `self-archived`. The Mac asks on every connect,
+ * archives the rows it knows, then sends `forget-self-archived`.
+ */
+export interface ListSelfArchivedMessage {
+    type: 'list-self-archived';
+    requestId: string;
+}
+
+/**
+ * Drop these sessions from the agent's self-archive record, once the Mac has
+ * handled them (or found it does not know them). Answered with `done`.
+ */
+export interface ForgetSelfArchivedMessage {
+    type: 'forget-self-archived';
+    requestId: string;
+    sessionIds: string[];
+}
+
 export type MacMessage =
     | HelloMessage
     | OpenSessionMessage
@@ -524,6 +580,10 @@ export type MacMessage =
     | WatchDirMessage
     | UnwatchDirMessage
     | TranscriptQueryMessage
+    | ListTranscriptsMessage
+    | PlaceUploadMessage
+    | ListSelfArchivedMessage
+    | ForgetSelfArchivedMessage
     | ByeMessage;
 
 // ── Agent → Mac ──
@@ -757,6 +817,38 @@ export interface TranscriptAnswerMessage {
     error?: string;
 }
 
+// ── Agent → Mac (stage 5) ──
+
+export interface TranscriptListMessage {
+    type: 'transcript-list';
+    requestId: string;
+    sessions: {sessionId: string; dir: string; mtimeMs: number}[];
+}
+
+export interface PlacedMessage {
+    type: 'placed';
+    requestId: string;
+    ok: boolean;
+    /** Absolute on the VM. */
+    path?: string;
+    error?: string;
+}
+
+// ── Agent → Mac (#308) ──
+
+/** One session that archived itself on the VM while no Mac was connected. */
+export interface SelfArchivedSession {
+    sessionId: string;
+    /** When the agent stopped it, epoch ms. */
+    archivedAt: number;
+}
+
+export interface SelfArchivedMessage {
+    type: 'self-archived';
+    requestId: string;
+    sessions: SelfArchivedSession[];
+}
+
 export type AgentMessage =
     | WelcomeMessage
     | OpenedMessage
@@ -783,6 +875,9 @@ export type AgentMessage =
     | FileStatsMessage
     | DirChangedMessage
     | TranscriptAnswerMessage
+    | TranscriptListMessage
+    | PlacedMessage
+    | SelfArchivedMessage
     | ByeMessage;
 
 // ── Either way ──

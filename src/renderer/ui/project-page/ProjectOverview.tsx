@@ -34,8 +34,8 @@ import {PullRequestsSection} from './PullRequestsSection';
 import {WorktreesSection} from './WorktreesSection';
 import {TasksSection} from './TasksSection';
 import {GitHubMessage, RemoteNote, StaleLine} from './EdgeStates';
-import {InstallAgentCard, SetupSection} from './AgentHostSections';
-import {CopiesSection, CopySection} from './HandoffSections';
+import {RegisterVmCard, useHostLink} from './VmLink';
+import {CopiesSection, CopySection, SchedulesLine} from './HandoffSections';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import {
     closeProject,
@@ -84,7 +84,7 @@ function currentRows(projectPath: string): PageRow[] {
     const answered = page.overview?.projectPath === projectPath ? page.overview : null;
     const vm = isVmProjectIn(state.agentHost, projectPath);
     const worktrees = answered && showsWorktrees(answered, projectPath, vm) ? worktreesView(answered, page.filter) : [];
-    const tasks = state.tasks.enabled && showsTasks(projectPath) ? tasksViewOf(page, projectPath) : null;
+    const tasks = state.tasks.enabled && showsTasks(projectPath, vm) ? tasksViewOf(page, projectPath) : null;
     return pageRows({
         plans: plans ? planRows(plans) : [],
         pullRequests: pullRequests ? pullRequestRows(pullRequests) : [],
@@ -277,7 +277,7 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
                         <SessionsSection projectPath={projectPath} />
                         {github.kind === 'remote' ? (
                             <>
-                                <InstallAgentCard projectPath={projectPath} />
+                                <RegisterHost projectPath={projectPath} />
                                 <RemoteNote />
                             </>
                         ) : (
@@ -313,17 +313,27 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
     );
 }
 
+/** On an agentless remote whose host isn't registered (#307): Register this host as a VM. */
+function RegisterHost({projectPath}: {projectPath: string}): JSX.Element | null {
+    const link = useHostLink(projectPath);
+    return link?.kind === 'register' ? <RegisterVmCard link={link} /> : null;
+}
+
 /**
- * Under Worktrees: on a VM copy (#276) its Bring back and Remove copy, and
- * the VM's setup checks; on a local project, its copies on VMs.
+ * Under Worktrees: on a VM copy (#276) its Bring back and Remove copy; on a
+ * local project, its copies on VMs. Under either, where the schedules run
+ * (stage 5). The VM's setup is in Settings → VMs (#307).
  */
 function ProjectCopies({projectPath, vm}: {projectPath: string; vm: boolean}): JSX.Element {
     return vm ? (
         <>
             <CopySection projectPath={projectPath} />
-            <SetupSection projectPath={projectPath} />
+            <SchedulesLine projectPath={projectPath} />
         </>
     ) : (
-        <CopiesSection projectPath={projectPath} />
+        <>
+            <CopiesSection projectPath={projectPath} />
+            <SchedulesLine projectPath={projectPath} />
+        </>
     );
 }

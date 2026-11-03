@@ -17,7 +17,14 @@
 import {AGENT_CLOSE, TRANSCRIPT_QUERY_METHODS, type AgentCloseCode, type MacMessage} from './protocol';
 
 /** What `parseMacMessage` found: the message, or why it is not one. */
-export type ParsedMacMessage = {ok: true; message: MacMessage} | {ok: false; reason: string};
+export type ParsedMacMessage =
+    | {ok: true; message: MacMessage}
+    /**
+     * `unknown` is set for a well-formed message of a type this agent does not
+     * know, carrying its request id when it has one: a newer Mac asking an older
+     * agent something it learnt later, which is answered rather than fatal.
+     */
+    | {ok: false; reason: string; unknown?: {type: string; requestId?: string}};
 
 type Fields = Record<string, unknown>;
 
@@ -73,6 +80,7 @@ const hostSettingsPatch = shape({
     instructions: optional(string),
     copyConfig: optional(boolean),
     baseFolder: optional(string),
+    scheduleDirs: optional(arrayOf(nonEmptyString)),
 });
 
 /**
@@ -134,6 +142,10 @@ const MESSAGE_FIELDS: Record<MacMessage['type'], Record<string, Check>> = {
         method: oneOf(...TRANSCRIPT_QUERY_METHODS),
         args: arrayOf((v) => (v === undefined ? 'must not be undefined' : null)),
     },
+    'list-transcripts': {requestId: nonEmptyString, dirs: arrayOf(nonEmptyString), since: optional(integer)},
+    'place-upload': {requestId: nonEmptyString, uploadId: nonEmptyString, name: nonEmptyString},
+    'list-self-archived': {requestId: nonEmptyString},
+    'forget-self-archived': {requestId: nonEmptyString, sessionIds: arrayOf(nonEmptyString)},
     'get-transcript': {requestId: nonEmptyString, sessionId: nonEmptyString},
     'transcript-tail': {requestId: nonEmptyString, sessionId: nonEmptyString, bytes: integer},
     'import-transcript': {
@@ -161,7 +173,10 @@ export function parseMacMessage(value: unknown): ParsedMacMessage {
     if (!isObject(value)) return {ok: false, reason: 'a message must be a JSON object'};
     const type = value.type;
     if (typeof type !== 'string') return {ok: false, reason: 'a message must have a string type'};
-    if (!isKnownType(type)) return {ok: false, reason: `unknown message type: ${type}`};
+    if (!isKnownType(type)) {
+        const requestId = typeof value.requestId === 'string' && value.requestId ? value.requestId : undefined;
+        return {ok: false, reason: `unknown message type: ${type}`, unknown: {type, ...(requestId ? {requestId} : {})}};
+    }
     const wrong = shape(MESSAGE_FIELDS[type])(value);
     if (wrong) return {ok: false, reason: `malformed ${type}: ${wrong.replace(/^\./, '')}`};
     return {ok: true, message: value as unknown as MacMessage};

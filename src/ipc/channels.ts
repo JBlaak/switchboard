@@ -152,6 +152,17 @@ export const INVOKE = {
     sessionHandoffPreview: 'session-handoff:preview',
     sessionHandoffRun: 'session-handoff:hand-off',
     sessionHandoffCancel: 'session-handoff:cancel',
+
+    // Stage 5 (#276): where schedules run, and files dropped on a VM session's terminal
+    vmSchedulesWhere: 'vm-schedules:where',
+    vmSchedulesRunOn: 'vm-schedules:run-on',
+    droppedFilesToSession: 'dropped-files:to-session',
+
+    // Settings → VMs: VMs registered on their own, as phones are (#276, #307)
+    vmRegistryList: 'vm-registry:list',
+    vmRegistryAdd: 'vm-registry:add',
+    vmRegistryRename: 'vm-registry:rename',
+    vmRegistryRemove: 'vm-registry:remove',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -199,6 +210,7 @@ export const EVENT = {
     handoffProgress: 'handoff:progress',
     bringBackProgress: 'handoff:bring-back-progress',
     sessionHandoffPhase: 'session-handoff:phase',
+    vmHostsChanged: 'vm-registry:changed',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */

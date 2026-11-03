@@ -10,6 +10,7 @@
  * store, and nothing but the terminal it belongs to cares about it, so it goes
  * straight to the terminal manager.
  */
+import {hostKeyOfPath} from '../ui/vms/vm-hosts';
 import type {RendererEvent} from '../state/events';
 import type {SwitchboardApi} from '../../ipc/api';
 
@@ -57,8 +58,12 @@ export function installIpcBridge(
         api.onSessionArchived((sessionId) => send({type: 'sessionArchived', sessionId})),
         api.onTasksChanged((update) => send({type: 'tasksChanged', update})),
         api.onSessionTaskChanged((sessionId, taskId) => send({type: 'sessionTaskChanged', sessionId, taskId})),
-        api.onAgentInstallProgress((projectPath, line) => send({type: 'agentInstallProgress', projectPath, line})),
+        // Main names the host by the path the install was asked with; the store keys VMs by `user@host:port`.
+        api.onAgentInstallProgress((path, line) =>
+            send({type: 'agentInstallProgress', hostKey: hostKeyOfPath(path) ?? path, line}),
+        ),
         api.onHandoffProgress((localPath, line) => send({type: 'handoffProgress', localPath, line})),
+        api.onVmHostsChanged(() => send({type: 'vmHostsChanged'})),
         api.onBringBackProgress((copyPath, line) => send({type: 'bringBackProgress', copyPath, line})),
         api.onSessionHandoffPhase((sessionId, phase) => send({type: 'sessionHandoffPhase', sessionId, phase})),
     ];

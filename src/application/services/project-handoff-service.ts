@@ -32,7 +32,8 @@ import {
 import {parseRemoteProjectPath, remoteProjectPath} from '../../domain/project/remote-target';
 import type {RemoteConfig} from '../../domain/project/remote-target';
 import {gitHubRepository} from '../../domain/project/repo-url';
-import type {RemoteProjectSetting} from '../../domain/settings/settings';
+import type {RemoteProjectSetting, VmHostSetting} from '../../domain/settings/settings';
+import {vmHostLabel} from '../../domain/settings/vm-hosts';
 import type {Timers} from '../ports/clock';
 import type {HandoffGit} from '../ports/handoff-git';
 import type {Logger} from '../ports/logger';
@@ -41,6 +42,7 @@ import {agentHostKey} from './agent-client/agent-client';
 import type {AgentClient} from './agent-client/agent-client';
 import type {AgentConnection} from './agent-client/agent-connection';
 import {HOST_REACH_TIMEOUT_MS} from './agent-hosts-service';
+import type {HandoffChoices} from './project-handoff';
 import type {
     BringBackResult,
     CopyStatus,
@@ -65,7 +67,12 @@ export interface ProjectHandoffServiceDeps {
     git: HandoffGit;
     settings: Pick<
         SettingsService,
-        'remoteProjects' | 'findRemoteProject' | 'saveRemoteProject' | 'handoffFiles' | 'rememberHandoffFiles'
+        | 'vmHosts'
+        | 'remoteProjects'
+        | 'findRemoteProject'
+        | 'saveRemoteProject'
+        | 'handoffFiles'
+        | 'rememberHandoffFiles'
     >;
     renderer: Pick<RendererGateway, 'projectsChanged'>;
     /**
@@ -78,6 +85,13 @@ export interface ProjectHandoffServiceDeps {
     log: Logger;
     /** How long a question waits for the host's link to come up; HOST_REACH_TIMEOUT_MS by default. */
     reachTimeoutMs?: number;
+    /**
+     * After a successful hand-off, with what the dialog chose (stage 5: where
+     * the schedules run, `VmSchedules`). Kept as a hook so the hand-off need not
+     * know about schedules; a failure is logged and does not fail the hand-off,
+     * whose copy is made by then.
+     */
+    afterHandoff?(localPath: string, copyPath: string, choices: HandoffChoices): Promise<void> | void;
 }
 
 /**
@@ -95,7 +109,7 @@ export interface WorktreeHandoff {
 }
 
 /** What else a hand-off may be asked to do, beyond the `ProjectHandoff` façade. */
-export interface HandoffOptions {
+export interface HandoffOptions extends HandoffChoices {
     worktree?: WorktreeHandoff;
 }
 
@@ -120,9 +134,9 @@ export class ProjectHandoffService implements ProjectHandoff {
     constructor(private readonly deps: ProjectHandoffServiceDeps) {}
 
     public hosts(): HandoffHost[] {
-        return [...this.agentHosts().values()].map((remote) => ({
-            key: agentHostKey(remote),
-            label: hostLabel(remote),
+        return [...this.agentHosts().values()].map((vm) => ({
+            key: agentHostKey(vm),
+            label: vmHostLabel(vm),
         }));
     }
 
@@ -176,7 +190,7 @@ export class ProjectHandoffService implements ProjectHandoff {
         // lands in the same copy as the project's own hand-off would.
         const projectRoot = worktree ? await git.repositoryRoot(localPath) : root;
         if (!projectRoot) return {ok: false, error: `${localPath} is not a git repository.`};
-        const label = hostLabel(host);
+        const label = vmHostLabel(host);
 
         // The files first: a refused or unreadable one fails before anything is uploaded.
         const chosen = [...new Set(ticked)];
@@ -239,7 +253,6 @@ export class ProjectHandoffService implements ProjectHandoff {
             host: host.host,
             port: host.port,
             dir: done.dir || copyDirOf(copyDir(connection.settings?.baseFolder, name), worktree),
-            ...(host.agent ? {agent: host.agent} : {}),
             copyOf: localPath,
         };
         const copyPath = remoteProjectPath(copy);
@@ -247,6 +260,11 @@ export class ProjectHandoffService implements ProjectHandoff {
         settings.rememberHandoffFiles(localPath, chosen);
         renderer.projectsChanged();
         log.info(`[handoff] ${localPath} → ${copyPath}${done.reused ? ' (updated)' : ''}`);
+        try {
+            await this.deps.afterHandoff?.(localPath, copyPath, options);
+        } catch (err) {
+            log.warn(`[handoff] after the hand-off of ${localPath}: ${(err as Error).message}`);
+        }
         return {ok: true, copyPath, reused: done.reused === true};
     }
 
@@ -330,13 +348,17 @@ export class ProjectHandoffService implements ProjectHandoff {
 
     // ── Helpers ──
 
-    /** One remote with an agent per host, by `agentHostKey`: the hosts there are to hand off to. */
-    private agentHosts(): Map<string, RemoteProjectSetting> {
-        const hosts = new Map<string, RemoteProjectSetting>();
-        for (const remote of this.deps.settings.remoteProjects()) {
-            if (!remote.agent) continue;
-            const key = agentHostKey(remote);
-            if (!hosts.has(key)) hosts.set(key, remote);
+    /**
+     * The registered VMs with an agent, by `agentHostKey`: the hosts there are
+     * to hand off to. From the registry (#307), so a VM registered and
+     * installed in Settings is offered before it has any project.
+     */
+    private agentHosts(): Map<string, VmHostSetting> {
+        const hosts = new Map<string, VmHostSetting>();
+        for (const vm of this.deps.settings.vmHosts()) {
+            if (!vm.agent) continue;
+            const host = {...vm, port: Number(vm.port) || 22};
+            hosts.set(agentHostKey(host), host);
         }
         return hosts;
     }

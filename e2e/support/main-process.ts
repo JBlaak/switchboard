@@ -33,14 +33,17 @@ import type {SessionPlans} from '../../src/application/services/plan-service';
 import type {ProjectOverview} from '../../src/domain/project/overview';
 import type {AgentHostStatus, AgentHostsResult} from '../../src/application/services/agent-hosts';
 import type {HostSettings, ToolCheck} from '../../src/domain/agent/protocol';
+import type {VmHostView} from '../../src/application/services/vm-registry';
 import type {
     BringBackResult,
     CopyStatus,
     HandoffHost,
     HandoffPreview,
+    HandoffChoices,
     HandoffResult,
     ProjectCopy,
 } from '../../src/application/services/project-handoff';
+import type {ScheduleLocation} from '../../src/application/services/vm-schedules';
 import type {SessionHandoffPhase, SessionHandoffPreview} from '../../src/application/services/session-handoff';
 
 /**
@@ -122,6 +125,18 @@ export interface HostStubs {
      */
     agent: AgentStub;
     /**
+     * Settings → VMs' registry (#307), kept in memory in place of the one in
+     * settings; null (the default) leaves the real `vm-registry:*` handlers,
+     * which touch no host: the fixture's agent remotes are registered by the
+     * migration on first read, and a VM's `connected` is read without dialling.
+     *
+     * Needed only where the real one can't follow: a stubbed install never
+     * records its agent there. Here a successful `agent:install` gives its VM
+     * the version `agent.status` names, and each change pushes
+     * `vm-registry:changed`, as main does. A VM's `projects` stay as given.
+     */
+    vmRegistry: VmRegistryStub | null;
+    /**
      * Project hand-off's back end (#276 stage 2), standing in for the ssh and
      * git a hand-off, a Bring back and a removal run against a VM: every
      * `handoff:*` channel answers from here, so no test can reach a VM. Each
@@ -138,6 +153,48 @@ export interface HostStubs {
      * only once `handoff` has hosts, so the default is never reached.
      */
     sessionHandoff: SessionHandoffStub;
+    /**
+     * Where schedules run (#276 stage 5), standing in for the agent a move
+     * tells: every `vm-schedules:*` channel answers from here, so no test can
+     * reach a VM. Each request is recorded (see `vmSchedulesRequests`). The
+     * default knows of no schedules, so no page shows a Schedules line and the
+     * hand-off dialog no checkbox.
+     */
+    vmSchedules: VmSchedulesStub;
+    /**
+     * Files dropped on a VM session's terminal (#276 stage 5), standing in for
+     * the upload over ssh: `dropped-files:to-session` answers from here. Each
+     * request is recorded (see `droppedFilesRequests`). The default answers an
+     * error, so nothing is typed.
+     */
+    droppedFiles: DroppedFilesStub;
+}
+
+/** What the `vm-schedules:*` channels answer. */
+export interface VmSchedulesStub {
+    /** What `where` answers, by the project's path (a local one's absolute path, or a copy's); a path not here answers null. */
+    where: Record<string, ScheduleLocation>;
+    /** What `runOn` answers: the new location, or why the VM couldn't be told. */
+    runOn: ScheduleLocation | {error: string};
+}
+
+/** What the renderer asked the `vm-schedules:*` stubs, in order. */
+export interface VmSchedulesRequests {
+    where: string[];
+    runOn: {localPath: string; copyPath: string | null}[];
+}
+
+/** What `dropped-files:to-session` answers, for every session alike. */
+export interface DroppedFilesStub {
+    result: {ok: true; paths: string[]} | {ok: false; error: string};
+    /** How long the upload takes to answer, so its note can be seen. */
+    delayMs?: number;
+}
+
+/** One upload the renderer asked for. */
+export interface DroppedFilesRequest {
+    sessionId: string;
+    localPaths: string[];
 }
 
 /** What the `session-handoff:*` channels answer. */
@@ -228,7 +285,7 @@ export interface HandoffStub {
 /** What the renderer asked the `handoff:*` stubs, in order. */
 export interface HandoffRequests {
     preview: string[];
-    handOff: {localPath: string; hostKey: string; ticked: string[]}[];
+    handOff: {localPath: string; hostKey: string; ticked: string[]; choices: HandoffChoices}[];
     copyStatus: string[];
     bringBack: string[];
     removeCopy: string[];
@@ -264,6 +321,28 @@ export const STUB_HANDOFF: HandoffStub = {
     bringBackResult: {ok: true, worktree: '/nowhere/acme-api/.claude/worktrees/from-vm', branch: 'from-vm'},
     removeResult: {ok: true},
 };
+
+/** What the `vm-registry:*` channels answer, while stubbed. */
+export interface VmRegistryStub {
+    /** The registered VMs, in order; Add a VM appends one with no agent yet. */
+    hosts: VmHostView[];
+}
+
+/** A registered VM as `vm-registry:list` answers it: no name, no agent yet, no projects. */
+export function stubVmHost(user: string, host: string, port = 22, change: Partial<VmHostView> = {}): VmHostView {
+    return {
+        key: `${user}@${host}:${port}`,
+        user,
+        host,
+        port,
+        label: `${user}@${host}${port === 22 ? '' : ':' + port}`,
+        agent: null,
+        current: false,
+        connected: false,
+        projects: [],
+        ...change,
+    };
+}
 
 /** What the `agent:*` channels answer, for every host alike. */
 export interface AgentStub {
@@ -398,6 +477,18 @@ interface StubState extends HostStubs {
     handoffRequests: HandoffRequests;
     /** What the renderer asked the session hand-off stubs. */
     sessionHandoffRequests: SessionHandoffRequests;
+    /** What the renderer asked the schedules stubs. */
+    vmSchedulesRequests: VmSchedulesRequests;
+    /** Every upload of dropped files the renderer asked for, in order. */
+    droppedFilesRequests: DroppedFilesRequest[];
+    /** Everything the renderer sent a terminal as input, in order. */
+    terminalInputs: TerminalInput[];
+}
+
+/** One `sendInput`: what the renderer typed into a session's terminal. */
+export interface TerminalInput {
+    sessionId: string;
+    data: string;
 }
 
 /** A comment added to the pending review, or the review finished. */
@@ -427,8 +518,11 @@ export const DEFAULT_STUBS: HostStubs = {
     plans: null,
     projectOverview: null,
     agent: STUB_AGENT,
+    vmRegistry: null,
     handoff: {...STUB_HANDOFF, hosts: []},
     sessionHandoff: STUB_SESSION_HANDOFF,
+    vmSchedules: {where: {}, runOn: {error: 'No VM in the harness'}},
+    droppedFiles: {result: {ok: false, error: 'No VM in the harness'}},
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
@@ -448,8 +542,16 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 agentRequests: {install: [], setHostSettings: [], openSetupTerminal: []},
                 handoffRequests: {preview: [], handOff: [], copyStatus: [], bringBack: [], removeCopy: []},
                 sessionHandoffRequests: {preview: [], handOff: [], cancel: []},
+                vmSchedulesRequests: {where: [], runOn: []},
+                droppedFilesRequests: [],
+                terminalInputs: [],
             };
             (globalThis as WithStubs).__switchboardE2E = state;
+
+            // Heard beside the real handler, which writes it to the session's PTY (if it has one).
+            ipcMain.on(send.terminalInput, (_event, sessionId, data) => {
+                state.terminalInputs.push({sessionId: String(sessionId), data: String(data)});
+            });
 
             // Heard beside the real handler, which ignores a close for a page it never opened.
             ipcMain.on(send.sessionWorkClose, (_event, sessionId) => {
@@ -697,6 +799,19 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                     await new Promise((resolve) => setTimeout(resolve, state.agent.installLineDelayMs));
                     event.sender.send(events.agentInstallProgress, path, line);
                 }
+                // A stubbed registry learns of the agent as main's would on a real install.
+                const hostOf = /^ssh:\/\/([^@/]+)@([^:/]+)(?::(\d+))?/.exec(path);
+                const vm = hostOf
+                    ? state.vmRegistry?.hosts.find(
+                          (host) => host.key === `${hostOf[1]}@${hostOf[2]}:${hostOf[3] ?? '22'}`,
+                      )
+                    : undefined;
+                if (state.agent.installResult.ok && vm) {
+                    vm.agent = state.agent.status.installed;
+                    vm.current = state.agent.status.current;
+                    vm.connected = state.agent.status.connected;
+                    event.sender.send(events.vmHostsChanged);
+                }
                 return state.agent.installResult;
             });
             replace(channels.agentCheckTools, () => state.agent.tools);
@@ -718,6 +833,58 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 return state.agent.setupTerminal;
             });
 
+            // Settings → VMs (#307), only when stubbed: in memory, read at each call so
+            // `setHostStub(app, 'vmRegistry', …)` applies. Each change is pushed, as main does.
+            if (state.vmRegistry) {
+                const registry = (): VmRegistryStub => state.vmRegistry ?? {hosts: []};
+                const changed = (event: {sender: {send(channel: string): void}}): void =>
+                    event.sender.send(events.vmHostsChanged);
+                ipcMain.removeHandler(channels.vmRegistryList);
+                ipcMain.handle(channels.vmRegistryList, () => registry().hosts);
+                ipcMain.removeHandler(channels.vmRegistryAdd);
+                ipcMain.handle(
+                    channels.vmRegistryAdd,
+                    (event, input: {user: string; host: string; port?: number; name?: string}) => {
+                        const port = Number(input.port) || 22;
+                        const key = `${input.user}@${input.host}:${port}`;
+                        const address = `${input.user}@${input.host}${port === 22 ? '' : ':' + port}`;
+                        if (registry().hosts.some((vm) => vm.key === key)) {
+                            return {ok: false, error: `${address} is already registered.`};
+                        }
+                        registry().hosts.push({
+                            key,
+                            user: input.user,
+                            host: input.host,
+                            port,
+                            label: input.name || address,
+                            agent: null,
+                            current: false,
+                            connected: false,
+                            projects: [],
+                        });
+                        changed(event);
+                        return {ok: true, key};
+                    },
+                );
+                ipcMain.removeHandler(channels.vmRegistryRename);
+                ipcMain.handle(channels.vmRegistryRename, (event, key, name) => {
+                    const vm = registry().hosts.find((host) => host.key === key);
+                    if (!vm) return false;
+                    vm.label = String(name) || `${vm.user}@${vm.host}${vm.port === 22 ? '' : ':' + vm.port}`;
+                    changed(event);
+                    return true;
+                });
+                ipcMain.removeHandler(channels.vmRegistryRemove);
+                ipcMain.handle(channels.vmRegistryRemove, (event, key) => {
+                    const hosts = registry().hosts;
+                    const at = hosts.findIndex((host) => host.key === key);
+                    if (at < 0) return {ok: false, error: `${String(key)} is not a registered VM.`};
+                    hosts.splice(at, 1);
+                    changed(event);
+                    return {ok: true};
+                });
+            }
+
             // Project hand-off (#276 stage 2). The real handlers run ssh and git against
             // the VM; these answer from `state.handoff`, read at each call.
             const pause = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, state.handoff.lineDelayMs));
@@ -727,12 +894,13 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 return state.handoff.preview;
             });
             ipcMain.removeHandler(channels.handoffRun);
-            ipcMain.handle(channels.handoffRun, async (event, path, hostKey, ticked) => {
+            ipcMain.handle(channels.handoffRun, async (event, path, hostKey, ticked, choices) => {
                 const localPath = String(path);
                 state.handoffRequests.handOff.push({
                     localPath,
                     hostKey: String(hostKey),
                     ticked: Array.isArray(ticked) ? ticked.map(String) : [],
+                    choices: choices && typeof choices === 'object' ? {...(choices as HandoffChoices)} : {},
                 });
                 for (const line of state.handoff.lines) {
                     await pause();
@@ -759,6 +927,29 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
             replace(channels.handoffRemoveCopy, (path) => {
                 state.handoffRequests.removeCopy.push(String(path));
                 return state.handoff.removeResult;
+            });
+
+            // Where schedules run, and files dropped on a VM terminal (#276 stage 5).
+            // The real handlers tell the agent over ssh, and upload over it; these
+            // answer from `state.vmSchedules` and `state.droppedFiles`, read at each call.
+            replace(channels.vmSchedulesWhere, (path) => {
+                state.vmSchedulesRequests.where.push(String(path));
+                return state.vmSchedules.where[String(path)] ?? null;
+            });
+            replace(channels.vmSchedulesRunOn, (localPath, copyPath) => {
+                state.vmSchedulesRequests.runOn.push({
+                    localPath: String(localPath),
+                    copyPath: copyPath === null ? null : String(copyPath),
+                });
+                return state.vmSchedules.runOn;
+            });
+            replace(channels.droppedFilesToSession, (sessionId, localPaths) => {
+                state.droppedFilesRequests.push({
+                    sessionId: String(sessionId),
+                    localPaths: Array.isArray(localPaths) ? localPaths.map(String) : [],
+                });
+                const {result, delayMs = 0} = state.droppedFiles;
+                return new Promise((resolve) => setTimeout(() => resolve(result), delayMs));
             });
 
             // Session hand-off (#276 stage 3). The real handlers wait on the session's
@@ -841,7 +1032,11 @@ export async function handoffRequests(app: ElectronApplication): Promise<Handoff
         const requests = (globalThis as WithStubs).__switchboardE2E.handoffRequests;
         return {
             preview: [...requests.preview],
-            handOff: requests.handOff.map((request) => ({...request, ticked: [...request.ticked]})),
+            handOff: requests.handOff.map((request) => ({
+                ...request,
+                ticked: [...request.ticked],
+                choices: {...request.choices},
+            })),
             copyStatus: [...requests.copyStatus],
             bringBack: [...requests.bringBack],
             removeCopy: [...requests.removeCopy],
@@ -859,6 +1054,36 @@ export async function sessionHandoffRequests(app: ElectronApplication): Promise<
             cancel: [...requests.cancel],
         };
     });
+}
+
+/** What the renderer asked the schedules stubs since the app launched. */
+export async function vmSchedulesRequests(app: ElectronApplication): Promise<VmSchedulesRequests> {
+    return await app.evaluate(() => {
+        const requests = (globalThis as WithStubs).__switchboardE2E.vmSchedulesRequests;
+        return {where: [...requests.where], runOn: requests.runOn.map((request) => ({...request}))};
+    });
+}
+
+/** Every upload of dropped files the renderer asked for since the app launched. */
+export async function droppedFilesRequests(app: ElectronApplication): Promise<DroppedFilesRequest[]> {
+    return await app.evaluate(() =>
+        (globalThis as WithStubs).__switchboardE2E.droppedFilesRequests.map((request) => ({
+            ...request,
+            localPaths: [...request.localPaths],
+        })),
+    );
+}
+
+/** Everything the renderer typed into `sessionId`'s terminal since the app launched, joined. */
+export async function terminalInput(app: ElectronApplication, sessionId: string): Promise<string> {
+    return await app.evaluate(
+        (_electron, sessionId) =>
+            (globalThis as WithStubs).__switchboardE2E.terminalInputs
+                .filter((input) => input.sessionId === sessionId)
+                .map((input) => input.data)
+                .join(''),
+        sessionId,
+    );
 }
 
 /** The sessions whose Session work page the renderer told main it closed, in order. */

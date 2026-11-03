@@ -85,3 +85,20 @@
         outline-offset: 1px;
     }
 }
+
+/* ========== A DROP ON A VM TERMINAL (#276 stage 5) ========== */
+
+/* "Uploading 2 files to the VM…", in the Undo toast's card. */
+.drop-upload {
+    padding: 8px 14px;
+}
+
+.drop-upload.is-error {
+    padding-right: 8px;
+    color: var(--sb-red);
+}
+
+.drop-upload-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}

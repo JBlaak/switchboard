@@ -8,6 +8,8 @@
  */
 import type {ClientLink} from '../../ports/agent-link';
 import type {
+    ListTranscriptsMessage,
+    PlaceUploadMessage,
     ReadFileMessage,
     RunToolMessage,
     StatFilesMessage,
@@ -18,6 +20,8 @@ import type {
     ImportTranscriptMessage,
     TranscriptTailMessage,
     ArchiveReplyMessage,
+    ForgetSelfArchivedMessage,
+    ListSelfArchivedMessage,
     CopyStatusMessage,
     HandoffMessage,
     PushBranchMessage,
@@ -57,10 +61,13 @@ export interface SessionHostPart extends ClientAware {
     terminateAll(): void;
 }
 
-export type HookForwarderMessage = AskReplyMessage | ArchiveReplyMessage;
+export type HookForwarderMessage =
+    AskReplyMessage | ArchiveReplyMessage | ListSelfArchivedMessage | ForgetSelfArchivedMessage;
 
 /**
- * The agent's question hook and archive tool, forwarding to the Mac.
+ * The agent's question hook and archive tool, forwarding to the Mac. With no
+ * Mac connected, the archive tool archives on the VM itself and keeps a record
+ * the Mac reads and clears on its next connect (#308).
  *
  * It is also what a launch asks for the hook settings and MCP tools of a
  * session, pointed at the agent's own hook server on 127.0.0.1.
@@ -89,7 +96,8 @@ export type CopiesMessage =
     | HandoffMessage
     | CopyStatusMessage
     | PushBranchMessage
-    | RemoveCopyMessage;
+    | RemoveCopyMessage
+    | PlaceUploadMessage;
 
 /**
  * The VM's project copies (#276 stage 2): chunked uploads, making or updating
@@ -99,7 +107,8 @@ export interface CopiesPart extends ClientAware {
     handle(client: ClientLink, message: CopiesMessage): void;
 }
 
-export type TranscriptsMessage = GetTranscriptMessage | TranscriptTailMessage | ImportTranscriptMessage;
+export type TranscriptsMessage =
+    GetTranscriptMessage | TranscriptTailMessage | ImportTranscriptMessage | ListTranscriptsMessage;
 
 /**
  * The VM's transcripts (#276 stage 3): parsed for the Mac's rows and search,

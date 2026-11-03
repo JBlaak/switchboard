@@ -8,6 +8,10 @@
  * closing the dialog while it runs and opening it again shows the same run,
  * not a second Hand off button. Bring back and removal are kept per copy.
  *
+ * Stage 5 adds where a project's schedules run (Q18), kept per project page
+ * (the local project's, or a copy's), and the dialog's "Run this project's
+ * schedules on the VM", on by default.
+ *
  * The events are declared here rather than in `events.ts`, like the agent
  * host ones; `events.ts` folds them into the union. The progress lines are
  * main's pushes and live there.
@@ -21,6 +25,7 @@ import type {
     HandoffResult,
     ProjectCopy,
 } from '../../application/services/project-handoff';
+import type {ScheduleLocation} from '../../application/services/vm-schedules';
 import type {IdRecord} from './records';
 import type {RendererEvent} from './events';
 
@@ -47,7 +52,14 @@ export type HandoffEvent =
     /** The removal was called off: the confirm, or the list of work left, was answered no. */
     | {type: 'copyRemoveCancelled'; copyPath: string}
     | {type: 'copyRemoving'; copyPath: string}
-    | {type: 'copyRemoveFinished'; copyPath: string; result: {ok: true} | {ok: false; error: string}};
+    | {type: 'copyRemoveFinished'; copyPath: string; result: {ok: true} | {ok: false; error: string}}
+    /** Where the schedules of this page's project run; null with neither schedules nor copies. */
+    | {type: 'schedulesLoaded'; projectPath: string; location: ScheduleLocation | null}
+    /** The Schedules line's switch was moved: main is told. */
+    | {type: 'schedulesMoving'; projectPath: string}
+    | {type: 'schedulesMoved'; projectPath: string; answer: ScheduleLocation | {error: string}}
+    /** The dialog's "Run this project's schedules on the VM" was ticked or unticked. */
+    | {type: 'handoffSchedulesToggled'};
 
 export type PreviewState =
     | {readonly phase: 'loading'}
@@ -60,6 +72,17 @@ export interface HandoffDialogView {
     readonly preview: PreviewState;
     /** The ignored files that go along, as ticked now. */
     readonly ticked: readonly string[];
+    /** Run the project's schedules in the copy on the VM from now on; on by default (Q18). */
+    readonly schedulesOnVm: boolean;
+}
+
+/** Where a page's project runs its schedules, and the switch's own state. */
+export interface SchedulesState {
+    /** Null: main hasn't said, or the project has neither schedules nor copies. */
+    readonly location: ScheduleLocation | null;
+    readonly moving: boolean;
+    /** Why the last move failed, e.g. "Couldn't reach the VM". */
+    readonly error: string | null;
 }
 
 export type RunState =
@@ -112,6 +135,8 @@ export interface HandoffState {
     readonly bringBacks: IdRecord<BringBackState>;
     /** copyPath → its removal. */
     readonly removals: IdRecord<RemoveState>;
+    /** projectPath (local or copy) → where its schedules run. */
+    readonly schedules: IdRecord<SchedulesState>;
 }
 
 export const initialHandoffState: HandoffState = {
@@ -122,11 +147,13 @@ export const initialHandoffState: HandoffState = {
     runs: {},
     bringBacks: {},
     removals: {},
+    schedules: {},
 };
 
 const IDLE_RUN: RunState = {phase: 'idle'};
 const IDLE_BRING_BACK: BringBackState = {phase: 'idle'};
 const IDLE_REMOVE: RemoveState = {phase: 'idle'};
+const NO_SCHEDULES: SchedulesState = {location: null, moving: false, error: null};
 
 /** How many progress lines are kept; a hand-off prints a few dozen. */
 const MAX_LINES = 200;
@@ -146,7 +173,13 @@ export function handoffReducer(state: HandoffState, event: RendererEvent): Hando
             const run = state.runs[event.localPath] ?? IDLE_RUN;
             return {
                 ...state,
-                dialog: {localPath: event.localPath, host: event.host, preview: {phase: 'loading'}, ticked: []},
+                dialog: {
+                    localPath: event.localPath,
+                    host: event.host,
+                    preview: {phase: 'loading'},
+                    ticked: [],
+                    schedulesOnVm: true,
+                },
                 // A run still going stays on screen; one that ended is forgotten.
                 runs: run.phase === 'running' ? state.runs : withoutEntry(state.runs, event.localPath),
             };
@@ -169,6 +202,12 @@ export function handoffReducer(state: HandoffState, event: RendererEvent): Hando
                 ? dialog.ticked.filter((path) => path !== event.path)
                 : [...dialog.ticked, event.path];
             return {...state, dialog: {...dialog, ticked}};
+        }
+
+        case 'handoffSchedulesToggled': {
+            const dialog = state.dialog;
+            if (!dialog) return state;
+            return {...state, dialog: {...dialog, schedulesOnVm: !dialog.schedulesOnVm}};
         }
 
         case 'handoffDialogClosed':
@@ -266,9 +305,42 @@ export function handoffReducer(state: HandoffState, event: RendererEvent): Hando
             };
         }
 
+        case 'schedulesLoaded': {
+            const current = state.schedules[event.projectPath] ?? NO_SCHEDULES;
+            return withSchedules(state, event.projectPath, {...current, location: event.location});
+        }
+
+        case 'schedulesMoving': {
+            const current = state.schedules[event.projectPath] ?? NO_SCHEDULES;
+            return withSchedules(state, event.projectPath, {...current, moving: true, error: null});
+        }
+
+        case 'schedulesMoved': {
+            const current = state.schedules[event.projectPath] ?? NO_SCHEDULES;
+            const answer = event.answer;
+            if ('error' in answer) {
+                return withSchedules(state, event.projectPath, {
+                    ...current,
+                    moving: false,
+                    error: answer.error || 'The schedules couldn’t be moved',
+                });
+            }
+            // The other page of the same project (the local one, or a copy's) follows.
+            const schedules: Record<string, SchedulesState> = {};
+            for (const [path, entry] of Object.entries(state.schedules)) {
+                schedules[path] = entry.location?.localPath === answer.localPath ? {...entry, location: answer} : entry;
+            }
+            schedules[event.projectPath] = {location: answer, moving: false, error: null};
+            return {...state, schedules};
+        }
+
         default:
             return state;
     }
+}
+
+function withSchedules(state: HandoffState, projectPath: string, next: SchedulesState): HandoffState {
+    return {...state, schedules: withEntry(state.schedules, projectPath, next)};
 }
 
 function withRemoval(state: HandoffState, copyPath: string, next: RemoveState): HandoffState {
@@ -308,4 +380,8 @@ export function bringBackIn(state: HandoffState, copyPath: string): BringBackSta
 
 export function removalIn(state: HandoffState, copyPath: string): RemoveState {
     return state.removals[copyPath] ?? IDLE_REMOVE;
+}
+
+export function schedulesIn(state: HandoffState, projectPath: string): SchedulesState {
+    return state.schedules[projectPath] ?? NO_SCHEDULES;
 }

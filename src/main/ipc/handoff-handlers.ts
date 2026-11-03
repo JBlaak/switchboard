@@ -13,7 +13,7 @@
  */
 import {EVENT, INVOKE} from '../../ipc/channels';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
-import type {ProjectHandoff} from '../../application/services/project-handoff';
+import type {HandoffChoices, ProjectHandoff} from '../../application/services/project-handoff';
 import type {Container} from '../composition-root';
 import type {IpcRegistrar} from './support/registrar';
 
@@ -40,6 +40,13 @@ function tickedPaths(input: unknown): string[] {
     return Array.isArray(input) ? input.filter((path): path is string => typeof path === 'string') : [];
 }
 
+/** The dialog's choices beyond the files, and nothing else the renderer sent. */
+export function handoffChoices(input: unknown): HandoffChoices {
+    if (!input || typeof input !== 'object') return {};
+    const schedulesOnVm = (input as {schedulesOnVm?: unknown}).schedulesOnVm;
+    return typeof schedulesOnVm === 'boolean' ? {schedulesOnVm} : {};
+}
+
 export function registerHandoffHandlers(ipc: IpcRegistrar, app: Container): void {
     const push = (channel: string, key: string, line: string): void => {
         const window = app.getWindow();
@@ -50,11 +57,15 @@ export function registerHandoffHandlers(ipc: IpcRegistrar, app: Container): void
 
     ipc.handle(INVOKE.handoffPreview, (path: string) => handoffOf(app).preview(localPath(path)));
 
-    ipc.handle(INVOKE.handoffRun, async (path: string, hostKey: string, ticked: unknown) => {
+    ipc.handle(INVOKE.handoffRun, async (path: string, hostKey: string, ticked: unknown, choices: unknown) => {
         const local = localPath(path);
         if (typeof hostKey !== 'string' || !hostKey) throw new Error('No host to hand off to');
-        const result = await handoffOf(app).handOff(local, hostKey, tickedPaths(ticked), (line) =>
-            push(EVENT.handoffProgress, local, line),
+        const result = await handoffOf(app).handOff(
+            local,
+            hostKey,
+            tickedPaths(ticked),
+            (line) => push(EVENT.handoffProgress, local, line),
+            handoffChoices(choices),
         );
         if (result.ok) app.renderer.projectsChanged();
         return result;

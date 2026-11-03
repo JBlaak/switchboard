@@ -26,6 +26,7 @@ import {TerminalHeaderControls, TerminalHeaderInfo} from './terminal/TerminalHea
 import {PairConfirmDialog} from './phone-access/PairConfirmDialog';
 import {MarkDoneOffer} from './session-task/MarkDoneOffer';
 import {ArchiveUndoToast} from './archive-undo/ArchiveUndoToast';
+import {DropUploadToast} from './terminal/DropUploadToast';
 import type {JSX} from 'react';
 import type {Root as ReactRoot} from 'react-dom/client';
 
@@ -73,9 +74,10 @@ export function Root(): JSX.Element | null {
             <Portal target="sidebar-content">
                 <SessionList />
             </Portal>
-            {/* What an archive brings, stacked at the foot of the main area: Undo above the Mark done offer. */}
+            {/* At the foot of the main area: a drop's upload note, then what an archive brings (Undo above the Mark done offer). */}
             <Portal target="main">
                 <div className="main-floats">
+                    <DropUploadToast />
                     <ArchiveUndoToast />
                     <MarkDoneOffer />
                 </div>

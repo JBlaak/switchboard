@@ -12,7 +12,7 @@ export function registerHostHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.openExternal, (url: string) => app.system.openExternal(url));
     // A VM project's origin is read on the VM (#276 stage 4); an agentless remote's is out of reach.
     ipc.handle(INVOKE.openRepository, async (projectPath: string) => {
-        if (typeof projectPath !== 'string' || isAgentlessRemote(projectPath, app.settings.remoteProjects())) {
+        if (typeof projectPath !== 'string' || isAgentlessRemote(projectPath, app.settings.vmHosts())) {
             return false;
         }
         const remote = await app.git.originUrl(projectPath);

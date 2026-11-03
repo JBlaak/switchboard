@@ -74,6 +74,8 @@ const OWNER: Record<Exclude<MacMessage['type'], 'hello' | 'bye'>, Owner> = {
     'list-sessions': 'sessions',
     'ask-reply': 'hooks',
     'archive-reply': 'hooks',
+    'list-self-archived': 'hooks',
+    'forget-self-archived': 'hooks',
     'get-host-settings': 'config',
     'set-host-settings': 'config',
     'check-tools': 'config',
@@ -94,6 +96,8 @@ const OWNER: Record<Exclude<MacMessage['type'], 'hello' | 'bye'>, Owner> = {
     'watch-dir': 'tools',
     'unwatch-dir': 'tools',
     'transcript-query': 'tools',
+    'list-transcripts': 'transcripts',
+    'place-upload': 'copies',
 };
 
 /** Where one client's link is: waiting for `hello`, handed to the parts, or ended. */
@@ -123,6 +127,23 @@ export class AgentHost {
         client.onMessage((raw: unknown) => {
             if (state === 'closed' || client.closed) return;
             const parsed = parseMacMessage(raw);
+            // After the handshake, a message this agent does not know is a newer
+            // Mac asking an older agent something new (messages are added without
+            // a protocol bump): answer the request as refused and keep the link,
+            // rather than dropping every session's connection over it.
+            if (!parsed.ok && parsed.unknown && state === 'connected') {
+                const {type, requestId} = parsed.unknown;
+                this.deps.log.warn(`agent: ${type} is not something this agent knows; update the agent`);
+                if (requestId) {
+                    client.send({
+                        type: 'done',
+                        requestId,
+                        ok: false,
+                        error: `this agent does not know ${type}; update the agent`,
+                    });
+                }
+                return;
+            }
             if (!parsed.ok) return this.refuse(client, AGENT_CLOSE.protocolError, parsed.reason);
             const message = parsed.message;
 

@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import {AgentConnection} from '../src/application/services/agent-client/agent-connection';
 import {ProjectHandoffService} from '../src/application/services/project-handoff-service';
 import {SettingsService} from '../src/application/services/settings-service';
+import {addRemotesRegisteringVms} from './support/vm-registry';
 import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
 import {scriptedAgent, settle} from './support/scripted-agent';
 import type {GitWrite} from '../src/application/ports/git-workspace';
@@ -163,7 +164,7 @@ function harness({
         return connection;
     };
     const settings = new SettingsService(new MemoryStore());
-    for (const remote of remotes) settings.addRemoteProject(remote);
+    addRemotesRegisteringVms(settings, remotes);
     const renderer = fakeRenderer();
     const forgotten: string[] = [];
     const service = new ProjectHandoffService({
