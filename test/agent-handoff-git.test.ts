@@ -249,25 +249,24 @@ test('a carried file keeps its bytes and its mode, and nothing outside the check
     assert.equal(linked, null);
 });
 
-test('Bring back fetches a branch and checks it out in a worktree tracking it', async () => {
+test('Bring back fetches a branch straight from the copy and checks it out in a worktree, pushing nothing', async () => {
     /* Given */
     const local = path.join(tmp, 'bring-back');
     run(tmp, 'clone', '-q', origin, local);
     run(pusher, 'checkout', '-q', '-b', 'from-vm');
     commit(pusher, 'vm.txt', 'from the VM\n', 'Work on the VM');
-    run(pusher, 'push', '-q', 'origin', 'from-vm');
     const vmHead = run(pusher, 'rev-parse', 'HEAD').trim();
     const worktree = path.join(local, '.claude/worktrees/from-vm');
 
     /* When */
-    const fetched = await git.fetch(local, 'from-vm');
-    const added = await git.addWorktree(local, worktree, 'from-vm', 'from-vm');
+    const fetched = await git.fetchFromCopy(local, 'vm-test', pusher, 'from-vm');
+    const added = await git.addWorktree(local, worktree, 'from-vm', 'vm-test/from-vm');
 
     /* Then */
     assert.deepEqual(fetched, {ok: true});
     assert.deepEqual(added, {ok: true});
     assert.equal(run(worktree, 'rev-parse', 'HEAD').trim(), vmHead);
-    assert.equal(run(worktree, 'rev-parse', '--abbrev-ref', '@{upstream}').trim(), 'origin/from-vm');
+    assert.equal(run(origin, 'branch', '--list', 'from-vm').trim(), '');
 });
 
 test('a second Bring back to the same worktree fast-forwards it', async () => {
@@ -275,11 +274,10 @@ test('a second Bring back to the same worktree fast-forwards it', async () => {
     const local = path.join(tmp, 'bring-back');
     const worktree = path.join(local, '.claude/worktrees/from-vm');
     commit(pusher, 'vm2.txt', 'more\n', 'More work on the VM');
-    run(pusher, 'push', '-q', 'origin', 'from-vm');
-    await git.fetch(local, 'from-vm');
+    await git.fetchFromCopy(local, 'vm-test', pusher, 'from-vm');
 
     /* When */
-    const added = await git.addWorktree(local, worktree, 'from-vm', 'from-vm');
+    const added = await git.addWorktree(local, worktree, 'from-vm', 'vm-test/from-vm');
 
     /* Then */
     assert.deepEqual(added, {ok: true});
@@ -289,10 +287,10 @@ test('a second Bring back to the same worktree fast-forwards it', async () => {
 test('a branch checked out in another checkout is taken, so another name can be tried', async () => {
     /* Given */
     const local = path.join(tmp, 'bring-back');
-    await git.fetch(local, 'main');
+    await git.fetchFromCopy(local, 'vm-test', pusher, 'main');
 
     /* When */
-    const added = await git.addWorktree(local, path.join(local, '.claude/worktrees/main'), 'main', 'main');
+    const added = await git.addWorktree(local, path.join(local, '.claude/worktrees/main'), 'main', 'vm-test/main');
 
     /* Then */
     assert.equal(added.ok, false);

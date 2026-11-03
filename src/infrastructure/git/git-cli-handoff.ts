@@ -246,20 +246,30 @@ export class GitCliHandoff implements HandoffGit {
         }
     }
 
-    public fetch(root: string, branch: string): Promise<GitWrite> {
-        return this.workspace.fetchBranch(root, branch);
+    public async fetchFromCopy(root: string, remote: string, url: string, branch: string): Promise<GitWrite> {
+        if (!isSafeRef(branch) || !/^[A-Za-z0-9._-]+$/.test(remote) || url.startsWith('-')) {
+            return {ok: false, reason: `Cannot fetch ${branch} from ${url}`};
+        }
+        const env = await this.toolEnv();
+        const added = await run(root, ['remote', 'add', remote, url], env);
+        if (added.code !== 0) {
+            const reset = await run(root, ['remote', 'set-url', remote, url], env);
+            if (reset.code !== 0) return {ok: false, reason: reasonOf(reset)};
+        }
+        const fetched = await run(
+            root,
+            ['fetch', '--quiet', '--no-tags', remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`],
+            env,
+            CHECKOUT_TIMEOUT_MS,
+        );
+        return fetched.code === 0 ? {ok: true} : {ok: false, reason: reasonOf(fetched)};
     }
 
-    public async addWorktree(
-        root: string,
-        target: string,
-        branch: string,
-        upstream: string,
-    ): Promise<BringBackWorktree> {
-        if (!isSafeRef(branch) || !isSafeRef(upstream))
+    public async addWorktree(root: string, target: string, branch: string, base: string): Promise<BringBackWorktree> {
+        if (!isSafeRef(branch) || !isSafeRef(base))
             return {ok: false, reason: 'Not a branch name: ' + branch, taken: false};
         const env = await this.toolEnv();
-        const remote = `origin/${upstream}`;
+        const remote = base;
         const fail = (result: GitRun, taken = false): BringBackWorktree => ({
             ok: false,
             reason: reasonOf(result),
@@ -272,7 +282,7 @@ export class GitCliHandoff implements HandoffGit {
         if (!(await this.workspace.branchExists(root, branch))) {
             const added = await run(
                 root,
-                ['worktree', 'add', '--quiet', '--track', '-b', branch, target, remote],
+                ['worktree', 'add', '--quiet', '--no-track', '-b', branch, target, remote],
                 env,
                 CHECKOUT_TIMEOUT_MS,
             );
@@ -281,7 +291,7 @@ export class GitCliHandoff implements HandoffGit {
 
         const behind = await run(root, ['merge-base', '--is-ancestor', `refs/heads/${branch}`, remote], env);
         if (behind.code !== 0)
-            return {ok: false, reason: `${branch} has commits here that origin/${upstream} does not`, taken: true};
+            return {ok: false, reason: `${branch} has commits here that ${remote} does not`, taken: true};
 
         const checkedOut = await this.checkedOutAt(root, branch, env);
         if (checkedOut && path.resolve(checkedOut) === path.resolve(target)) {

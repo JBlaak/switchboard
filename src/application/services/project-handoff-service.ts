@@ -249,34 +249,22 @@ export class ProjectHandoffService implements ProjectHandoff {
             };
         }
 
-        const unpushed = state.unpushed ?? [];
-        // Without an upstream origin may not have the branch at all, whatever the count says.
-        if (unpushed.length > 0 || !state.upstream) {
-            onProgress(
-                unpushed.length > 0
-                    ? `Pushing ${plural(unpushed.length, 'commit')} on ${branch} from the VM`
-                    : `Pushing ${branch} from the VM`,
-            );
-            const pushed = await this.ask(copyPath, (connection, dir) => connection.pushBranch(dir, branch));
-            if (!pushed.reached) return {ok: false, error: pushed.error};
-            if (!pushed.answer.ok) {
-                return {
-                    ok: false,
-                    error: `Could not push ${branch} from the VM: ${pushed.answer.error || 'git refused'}`,
-                };
-            }
-        }
-
-        onProgress(`Fetching ${branch}`);
-        const fetched = await git.fetch(root, branch);
-        if (!fetched.ok) return {ok: false, error: `Could not fetch ${branch}: ${fetched.reason}`};
+        // Straight from the copy over ssh, never through origin: pushing from the
+        // VM would publish the user's unpushed work (theirs from the Mac too,
+        // which went over as a bundle) without their say.
+        const copy = parseRemoteProjectPath(copyPath);
+        if (!copy) return {ok: false, error: `Not a copy's project path: ${copyPath}`};
+        const remote = copyRemoteName(copy);
+        onProgress(`Fetching ${branch} from the VM`);
+        const fetched = await git.fetchFromCopy(root, remote, copyFetchUrl({...copy, dir: copy.dir ?? '~'}), branch);
+        if (!fetched.ok) return {ok: false, error: `Could not fetch ${branch} from the VM: ${fetched.reason}`};
 
         let lastReason = '';
         for (const suffix of BRING_BACK_SUFFIXES) {
             const local = branch + suffix;
             const worktree = root.replace(/\/+$/, '') + WORKTREES_DIR + local;
             onProgress(`Checking ${local} out in ${worktree}`);
-            const added = await git.addWorktree(root, worktree, local, branch);
+            const added = await git.addWorktree(root, worktree, local, `${remote}/${branch}`);
             if (added.ok) return {ok: true, worktree, branch: local};
             lastReason = added.reason;
             if (!added.taken) break;
@@ -409,10 +397,6 @@ function hostLabel(host: Pick<RemoteConfig, 'user' | 'host' | 'port'>): string {
     return `${host.user}@${host.host}${port === 22 ? '' : `:${port}`}`;
 }
 
-function plural(count: number, noun: string): string {
-    return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
-
 function namePaths(paths: readonly string[]): string {
     const named = paths.slice(0, NAMED_PATHS).join(', ');
     return paths.length > NAMED_PATHS ? `${named} and ${paths.length - NAMED_PATHS} more` : named;
@@ -438,4 +422,17 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timers: Timers): Promis
             },
         );
     });
+}
+
+/** The git remote a VM copy is fetched from on the Mac: one per host, e.g. `vm-buildbox`. */
+export function copyRemoteName(copy: {user: string; host: string; port: number}): string {
+    const host = copy.host.replace(/[^A-Za-z0-9._-]+/g, '-');
+    return copy.port === 22 ? `vm-${host}` : `vm-${host}-${copy.port}`;
+}
+
+/** The copy as git reaches it over ssh: `ssh://user@host[:port]/<dir>`, where a `~` dir stays `~`. */
+export function copyFetchUrl(copy: {user: string; host: string; port: number; dir: string}): string {
+    const port = copy.port === 22 ? '' : `:${copy.port}`;
+    const dir = copy.dir.startsWith('/') ? copy.dir : `/${copy.dir}`;
+    return `ssh://${copy.user}@${copy.host}${port}${dir}`;
 }

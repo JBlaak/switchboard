@@ -65,12 +65,12 @@ function fakeGit(over: Partial<HandoffGit> = {}) {
         fileSizes: async (_root, paths) =>
             new Map(paths.filter((p) => p in files).map((p) => [p, Buffer.byteLength(files[p])])),
         readFile: async (_root, p) => (p in files ? {bytes: Buffer.from(files[p]), mode: 0o600} : null),
-        fetch: async (root, branch): Promise<GitWrite> => {
-            calls.push(`fetch ${root} ${branch}`);
+        fetchFromCopy: async (root, remote, url, branch): Promise<GitWrite> => {
+            calls.push(`fetch ${root} ${remote} ${url} ${branch}`);
             return {ok: true};
         },
-        addWorktree: async (root, worktree, branch, upstream): Promise<BringBackWorktree> => {
-            calls.push(`worktree ${worktree} ${branch} ${upstream}`);
+        addWorktree: async (root, worktree, branch, base): Promise<BringBackWorktree> => {
+            calls.push(`worktree ${worktree} ${branch} ${base}`);
             return {ok: true};
         },
         ...over,
@@ -479,20 +479,20 @@ test('Bring back pushes unpushed commits from the VM, then fetches and adds a wo
     /* Then */
     const worktree = `${LOCAL}/.claude/worktrees/feature`;
     assert.deepEqual(result, {ok: true, worktree, branch: 'feature'});
-    assert.deepEqual(
-        h.agent.sent('push-branch').map((m) => [m.dir, m.branch]),
-        [['~/projects/site', 'feature']],
-    );
-    assert.deepEqual(git.calls, [`fetch ${LOCAL} feature`, `worktree ${worktree} feature feature`]);
+    // Fetched straight from the copy: nothing is pushed, so unpushed work stays unpublished.
+    assert.equal(h.agent.sent('push-branch').length, 0);
+    assert.deepEqual(git.calls, [
+        `fetch ${LOCAL} vm-vm.local ssh://dev@vm.local/~/projects/site feature`,
+        `worktree ${worktree} feature vm-vm.local/feature`,
+    ]);
     assert.deepEqual(lines, [
         'Checking the copy on the VM',
-        'Pushing 1 commit on feature from the VM',
-        'Fetching feature',
+        'Fetching feature from the VM',
         `Checking feature out in ${worktree}`,
     ]);
 });
 
-test('Bring back with nothing unpushed only fetches', async () => {
+test('Bring back with nothing unpushed fetches the same way, and pushes nothing', async () => {
     /* Given */
     const h = harness({remotes: [VM_HOME, copySetting()]});
 
@@ -547,18 +547,16 @@ test('Bring back refuses a detached copy, and one with uncommitted changes, nami
     assert.deepEqual(dirty.git.calls, []);
 });
 
-test('Bring back stops when the push from the VM fails', async () => {
+test('Bring back stops when the fetch from the VM fails', async () => {
     /* Given */
-    const h = harness({remotes: [VM_HOME, copySetting()]});
-    h.script.copyState = {...h.script.copyState, unpushed: [{oid: 'def456', subject: 'Fix it'}]};
-    h.script.pushOk = false;
+    const git = fakeGit({fetchFromCopy: async () => ({ok: false, reason: 'Permission denied (publickey)'})});
+    const h = harness({remotes: [VM_HOME, copySetting()], git});
 
     /* When */
     const result = await h.service.bringBack(COPY);
 
     /* Then */
-    assert.equal(result.ok, false);
-    assert.deepEqual(h.git.calls, []);
+    assert.deepEqual(result, {ok: false, error: 'Could not fetch feature from the VM: Permission denied (publickey)'});
 });
 
 // ── Removing a copy ──

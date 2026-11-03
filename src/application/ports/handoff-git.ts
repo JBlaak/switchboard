@@ -83,15 +83,22 @@ export interface HandoffGit {
     /** A regular file under `root`, never through a symlink; null otherwise. */
     readFile(root: string, path: string): Promise<HandoffFileBytes | null>;
 
-    /** Fetch `branch` from origin into `origin/<branch>`. */
-    fetch(root: string, branch: string): Promise<GitWrite>;
+    /**
+     * Fetch `branch` straight from a VM copy, over the user's own ssh, into
+     * `refs/remotes/<remote>/<branch>`. `remote` is added to the repository
+     * (or pointed at `url` again) first. Nothing is pushed anywhere: Bring
+     * back must not publish work the user has not pushed themselves.
+     */
+    fetchFromCopy(root: string, remote: string, url: string, branch: string): Promise<GitWrite>;
 
     /**
-     * A worktree at `path` on the local branch `branch`, brought to
-     * `origin/<upstream>`: created there (tracking it) when the branch does
-     * not exist, fast-forwarded when it is behind and checked out nowhere, or
-     * fast-forwarded in place when it is already checked out at `path`. A
-     * branch checked out elsewhere, or with commits origin lacks, is `taken`.
+     * A worktree at `path` on the local branch `branch`, brought to `base` (a
+     * remote-tracking ref such as `vm-buildbox/main`): created there when the
+     * branch does not exist, fast-forwarded when it is behind and checked out
+     * nowhere, or fast-forwarded in place when it is already checked out at
+     * `path`. A branch checked out elsewhere, or with commits `base` lacks, is
+     * `taken`. The branch gets no upstream; its first `git push -u origin`
+     * gives it one.
      */
-    addWorktree(root: string, path: string, branch: string, upstream: string): Promise<BringBackWorktree>;
+    addWorktree(root: string, path: string, branch: string, base: string): Promise<BringBackWorktree>;
 }
