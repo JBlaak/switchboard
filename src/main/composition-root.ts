@@ -23,6 +23,11 @@ import {AgentAwareTerminals} from '../application/services/agent-client/agent-aw
 import {AgentClient} from '../application/services/agent-client/agent-client';
 import {ConfigCopyService, manifestStoreOn} from '../application/services/config-copy-service';
 import {SshAgentDialer} from '../infrastructure/agent/ssh-agent-dialer';
+import {AgentHostsService} from '../application/services/agent-hosts-service';
+import {AgentInstallerService} from '../application/services/agent-installer-service';
+import {setupTerminalCommand} from '../domain/agent/setup-script';
+import {AgentBundleBuilder, agentBundleSources} from '../infrastructure/ssh/agent-bundle';
+import {OpenSshProvisioner} from '../infrastructure/ssh/ssh-provisioner';
 import {NodeClaudeConfigSource} from '../infrastructure/fs/claude-config-source';
 import {QuestionService} from '../application/services/question-service';
 import {ProjectListService} from '../application/services/project-list-service';
@@ -97,7 +102,7 @@ import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner} from '../infrastructure/github/gh-cli';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {encodeProjectPath} from '../domain/project/project-path';
-import {isRemoteProjectPath} from '../domain/project/remote-target';
+import {isRemoteProjectPath, remoteProjectPath} from '../domain/project/remote-target';
 import {routeCandidates} from '../domain/ask/route';
 import {resolveBlaakTasksUrl} from '../domain/settings/settings';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
@@ -175,7 +180,7 @@ export interface Container {
      * VM hosts (#276): status, install, setup checks, host settings and the setup
      * terminal. Optional only until `buildContainer` builds it.
      */
-    readonly agentHosts?: AgentHosts;
+    readonly agentHosts: AgentHosts;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
@@ -382,6 +387,55 @@ export function buildContainer(): Container {
         git: workspace,
         fileExists: (target) => fs.exists(target),
         agents,
+    });
+
+    // Installing the agent on a VM (#281) and answering the UI's questions about
+    // its hosts (#282), joined in one façade.
+    const agentInstaller = new AgentInstallerService({
+        provisioner: new OpenSshProvisioner(toolEnv, log),
+        settings,
+        bundles: new AgentBundleBuilder(
+            agentBundleSources({
+                isPackaged: app.isPackaged,
+                resourcesPath: process.resourcesPath,
+                appRoot: app.getAppPath(),
+                tmpDir: os.tmpdir(),
+            }),
+        ),
+        appVersion: app.getVersion(),
+        log,
+        clock,
+    });
+    const agentHosts = new AgentHostsService({
+        agents,
+        installer: {
+            installedVersion: async (projectPath) => (await agentInstaller.status(projectPath)).installed,
+            install: (projectPath, onProgress) => agentInstaller.install(projectPath, onProgress),
+        },
+        launcher,
+        setupCommand: setupTerminalCommand(),
+        appVersion: app.getVersion(),
+        ids,
+        log,
+    });
+    // An agent at another version (an app update, or an older install) is
+    // upgraded in place, then dialled again. One attempt per host at a time.
+    const reinstalling = new Set<string>();
+    agents.onNeedsReinstall((host, reason) => {
+        const onHost = settings
+            .remoteProjects()
+            .find((r) => r.user === host.user && r.host === host.host && r.port === host.port && r.agent);
+        const key = `${host.user}@${host.host}:${host.port}`;
+        if (!onHost || reinstalling.has(key)) return;
+        reinstalling.add(key);
+        log.info(`[agent] ${key} needs a reinstall: ${reason}`);
+        void agentInstaller
+            .install(remoteProjectPath(onHost))
+            .then((result) => {
+                if (result.ok) agents.connection(host).retryNow();
+                else log.warn(`[agent] reinstall on ${key} failed: ${result.error}`);
+            })
+            .finally(() => reinstalling.delete(key));
     });
 
     const transitions = new SessionTransitionDetector({
@@ -815,6 +869,7 @@ export function buildContainer(): Container {
         registry,
         terminals,
         agents,
+        agentHosts,
         shells,
         lifecycle,
         remote,

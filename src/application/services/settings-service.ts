@@ -195,9 +195,16 @@ export class SettingsService {
      */
     public markAgentInstalled(projectPath: string, version: string, installedAt = new Date().toISOString()): boolean {
         return this.updateGlobal((settings) => {
-            const project = (settings.remoteProjects || []).find((r) => remoteProjectPath(r) === projectPath);
+            const remotes = settings.remoteProjects || [];
+            const project = remotes.find((r) => remoteProjectPath(r) === projectPath);
             if (!project) return false;
-            project.agent = {version, installedAt};
+            // The agent serves the whole host, so every remote on it (another
+            // folder on the same VM) becomes a VM project with it.
+            for (const remote of remotes) {
+                if (remote.user === project.user && remote.host === project.host && remote.port === project.port) {
+                    remote.agent = {version, installedAt};
+                }
+            }
             return true;
         });
     }

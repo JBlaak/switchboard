@@ -399,6 +399,27 @@ test('markAgentInstalled keeps the remote sessions and connection info', () => {
     });
 });
 
+test('markAgentInstalled marks every remote on the same host, and no other host', () => {
+    /* Given */
+    const settings = new SettingsService(new MemoryStore());
+    settings.addRemoteProject(remote);
+    settings.addRemoteProject({...remote, dir: '~/apps/other'});
+    settings.addRemoteProject({...remote, host: 'other-vm.local'});
+
+    /* When */
+    settings.markAgentInstalled(projectPath, '2.12.0', '2026-11-03T10:00:00Z');
+
+    /* Then */
+    const versions = (settings.global().remoteProjects ?? []).map(
+        (r) => `${r.host}:${r.dir ?? ''}=${r.agent?.version ?? '-'}`,
+    );
+    assert.deepEqual(versions.sort(), [
+        `other-vm.local:${remote.dir ?? ''}=-`,
+        `vm.local:${remote.dir ?? ''}=2.12.0`,
+        'vm.local:~/apps/other=2.12.0',
+    ]);
+});
+
 test('markAgentInstalled answers false for a remote that is gone', () => {
     /* Given */
     const settings = new SettingsService(new MemoryStore());

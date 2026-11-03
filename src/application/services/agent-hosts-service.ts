@@ -20,7 +20,11 @@ import type {OpenSessionRequest, OpenSessionResult} from './session-launcher';
 export interface AgentInstaller {
     /** The agent version on the host, or null when there is none (or it cannot be asked). */
     installedVersion(projectPath: string): Promise<string | null>;
-    install(projectPath: string, onProgress?: (line: string) => void): Promise<AgentHostsResult>;
+    /** `lingerCommand`: lingering needs a command the user must run with sudo (it could not be done without). */
+    install(
+        projectPath: string,
+        onProgress?: (line: string) => void,
+    ): Promise<AgentHostsResult & {lingerCommand?: string}>;
 }
 
 export interface AgentHostsServiceDeps {
@@ -50,7 +54,14 @@ export class AgentHostsService implements AgentHosts {
     }
 
     public async install(projectPath: string, onProgress?: (line: string) => void): Promise<AgentHostsResult> {
-        const result = await this.deps.installer.install(projectPath, onProgress);
+        const {lingerCommand, ...result} = await this.deps.installer.install(projectPath, onProgress);
+        // Without lingering the agent stops when the last login session on the
+        // VM ends; the command is the user's to run, in the setup terminal.
+        if (lingerCommand) {
+            onProgress?.(
+                `To keep the agent running while you are logged out, run this in the setup terminal: ${lingerCommand}`,
+            );
+        }
         // A link that gave up on the old agent (or found none) tries the new one.
         if (result.ok) this.deps.agents.connectionFor(projectPath)?.retryNow();
         return result;
