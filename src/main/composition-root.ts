@@ -107,6 +107,11 @@ import {PmsetBatteryGauge} from '../infrastructure/system/pmset-battery-gauge';
 import {BundleInstaller} from '../infrastructure/system/bundle-installer';
 import {GitHubReleaseFeed} from '../infrastructure/github/github-release-feed';
 import {GitCliRemotes} from '../infrastructure/git/git-cli-remotes';
+import {RoutingGitRemotes, RoutingGitWorkspace} from '../infrastructure/git/routing-git';
+import type {VmGitRouting} from '../infrastructure/git/routing-git';
+import {agentlessRemoteGuard} from '../domain/project/agentless-remote';
+import {RoutingTranscriptStore} from '../infrastructure/agent/routing-transcript-store';
+import {locateVmSession} from '../application/services/vm-session-location';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner} from '../infrastructure/github/gh-cli';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
@@ -393,7 +398,10 @@ export function buildContainer(): Container {
     // `gh`, and the filters a git checkout runs (`git-lfs`), need the login
     // shell's PATH: launched from the Finder, the app's own has no Homebrew in it.
     const toolEnv = loginShellEnv(() => shells.resolve(shellProfileId()).path, terminals.baseEnv, log);
-    const workspace = new GitCliWorkspace(toolEnv);
+    // The Mac's own git. The pages get `workspace` below, which routes a VM
+    // project's paths (#276 stage 4) through its agent; the launcher only ever
+    // asks about local folders, so it keeps this one.
+    const localWorkspace = new GitCliWorkspace(toolEnv);
     const launcher = new SessionLauncher({
         registry,
         terminals,
@@ -408,7 +416,7 @@ export function buildContainer(): Container {
         clock,
         timers,
         log,
-        git: workspace,
+        git: localWorkspace,
         fileExists: (target) => fs.exists(target),
         agents,
     });
@@ -641,8 +649,30 @@ export function buildContainer(): Container {
     // Beside the window icon: build/ is packaged next to app/.
     const appIcon = new ElectronAppIconGateway(path.join(appDir(), '..', 'build', 'dock'), log);
     const sleep = new PmsetSleepControl(log);
-    const git = new GitCliRemotes();
-    const projectFolders = new ProjectFolderService({fs, git: workspace, remotes: git});
+    // Git for the pages, routed by path: a VM project's (`ssh://user@host//abs`)
+    // goes through its host's agent, everything else to the Mac's own git.
+    const vmGit: VmGitRouting = {
+        isAgentHost: (host) =>
+            settings
+                .remoteProjects()
+                .some((r) => r.user === host.user && r.host === host.host && r.port === host.port && !!r.agent),
+        tools: (host) => agents.connection(host),
+    };
+    const workspace = new RoutingGitWorkspace(localWorkspace, vmGit);
+    const git = new RoutingGitRemotes(new GitCliRemotes(), vmGit);
+    const projectFolders = new ProjectFolderService({fs, git: localWorkspace, remotes: new GitCliRemotes()});
+    // Only agentless remotes are turned away now; a VM project's pages are served.
+    const agentlessRemote = agentlessRemoteGuard(() => settings.remoteProjects());
+    // Transcripts for the pages: a VM session's folder (`vm:…`) is asked of its
+    // VM; it never dials, so an offline VM answers empty.
+    const routedTranscripts = new RoutingTranscriptStore({
+        local: transcripts,
+        link: (host) => {
+            const connection = agents.connection({...host});
+            return connection.connected ? connection : null;
+        },
+        log,
+    });
 
     const github = new GhCli({run: async (args) => defaultGhRunner(await toolEnv())(args)});
     // The page and its actions need each other: the actions read the page's
@@ -655,9 +685,19 @@ export function buildContainer(): Container {
         clock,
         log,
     });
+    const vmLocation = {
+        live: (id: string) => {
+            const session = registry.find(id)?.session;
+            return session ? {projectPath: session.projectPath, onAgent: isAgentPty(session.pty)} : null;
+        },
+        remoteProjects: () => settings.remoteProjects(),
+        vmCwd: (id: string) => vmTranscripts.cwd(id),
+    };
     const locateSession = (sessionId: string): {folder: string | null; projectPath: string} | null => {
         const cached = repository.getCachedSession(sessionId);
         if (cached) return {folder: cached.folder, projectPath: cached.projectPath};
+        const onVm = locateVmSession(vmLocation, sessionId);
+        if (onVm) return onVm;
         // Running but not indexed yet: its folder is the one the CLI writes to.
         const live = registry.find(sessionId)?.session;
         if (!live) return null;
@@ -666,7 +706,8 @@ export function buildContainer(): Container {
     };
     const sessionWork = new SessionWorkService({
         locate: locateSession,
-        transcripts,
+        transcripts: routedTranscripts,
+        agentlessRemote,
         git: workspace,
         github,
         remotes: git,
@@ -679,7 +720,15 @@ export function buildContainer(): Container {
     sessionActions.attach(sessionWork);
     const review = new ReviewService({github, page: sessionWork, actions: sessionActions, log});
     // The Plan tab (#121): reads only, each answer kept for 30 s.
-    const plans = new PlanService({locate: locateSession, transcripts, git: workspace, remotes: git, github, clock});
+    const plans = new PlanService({
+        locate: locateSession,
+        transcripts: routedTranscripts,
+        agentlessRemote,
+        git: workspace,
+        remotes: git,
+        github,
+        clock,
+    });
 
     // Always on, page or no page (W1): the running Claude sessions' PRs, as
     // their transcripts linked them. Remote sessions are out of scope.
@@ -751,7 +800,9 @@ export function buildContainer(): Container {
                 candidates.set(sessionId, {
                     sessionId,
                     projectPath: live.projectPath,
-                    folder: live.projectFolder ?? encodeProjectPath(live.projectPath),
+                    folder: isAgentPty(live.pty)
+                        ? (locateVmSession(vmLocation, sessionId)?.folder ?? null)
+                        : (live.projectFolder ?? encodeProjectPath(live.projectPath)),
                     activeAt: live.openedAt,
                     pullRequests: [],
                 });
@@ -761,7 +812,8 @@ export function buildContainer(): Container {
     };
     const issueSessions = new IssueSessionService({
         sessions: sessionCandidates,
-        transcripts,
+        transcripts: routedTranscripts,
+        agentlessRemote,
         git: workspace,
         remotes: git,
         github,
@@ -773,7 +825,8 @@ export function buildContainer(): Container {
     const worktreeCleanup = new WorktreeCleanupService({
         enabled: () => settings.removeWorktreeOnArchive(),
         locate: locateSession,
-        transcripts,
+        transcripts: routedTranscripts,
+        agentlessRemote,
         git: workspace,
         otherSessionPaths: (sessionId) => {
             const meta = repository.getAllMeta();
@@ -802,6 +855,7 @@ export function buildContainer(): Container {
         remotes: git,
         github,
         clock,
+        agentlessRemote,
     });
 
     // BlaakTasks (#248): built only while a URL is set, and again when it changes.

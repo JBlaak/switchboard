@@ -105,6 +105,18 @@ test('a matching hello is welcomed with the host settings and every part hears o
     assert.equal(pair.agent.closed, false);
 });
 
+test("the welcome names the VM user's home, so the Mac can resolve ~ paths", () => {
+    /* Given */
+    const pair = linkPair();
+    new AgentHost({parts: fakeParts([]), agentVersion: VERSION, home: '/home/dev', log: quietLog}).accept(pair.agent);
+
+    /* When */
+    pair.mac.send(HELLO);
+
+    /* Then */
+    assert.equal((pair.sentByAgent[0] as {home?: string}).home, '/home/dev');
+});
+
 test('a hello from another app version on the same protocol is welcomed, naming the agent version', () => {
     /* Given */
     const {pair} = setUp();

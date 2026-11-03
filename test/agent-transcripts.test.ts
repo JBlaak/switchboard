@@ -356,9 +356,13 @@ test('the real folder watcher hears an append', async () => {
     );
 
     /* When */
-    fs.appendFileSync(file, '{}\n');
-    const deadline = Date.now() + 5000;
-    while (heard === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+    // A watch that has only just started can miss the very first write (macOS
+    // starts FSEvents asynchronously), so keep appending until one is heard.
+    const deadline = Date.now() + 10_000;
+    while (heard === 0 && Date.now() < deadline) {
+        fs.appendFileSync(file, '{}\n');
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
     watch?.close();
 
     /* Then */

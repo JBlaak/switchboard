@@ -12,6 +12,7 @@
  * (signals, `process.exit`, the real parts), so tests start it against a temp
  * socket with fake parts.
  */
+import os from 'node:os';
 import type {Logger} from '../application/ports/logger';
 import {AgentHost, type AgentParts} from '../application/services/agent-host/agent-host';
 import {AGENT_CLOSE} from '../domain/agent/protocol';
@@ -41,7 +42,7 @@ export interface RunningAgent {
 /** Listen on `socketPath` and route every client through the parts. */
 export async function startAgent(options: StartAgentOptions): Promise<RunningAgent> {
     const {parts, socketPath, agentVersion, log} = options;
-    const host = new AgentHost({parts, agentVersion, log});
+    const host = new AgentHost({parts, agentVersion, home: os.homedir(), log});
     const server = await listenOnUnixSocket({socketPath, log, onClient: (client) => host.accept(client)});
     let stopping: Promise<void> | null = null;
     return {

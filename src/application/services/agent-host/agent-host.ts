@@ -53,6 +53,8 @@ export interface AgentHostDeps {
     parts: AgentParts;
     /** This agent's own version, sent in `welcome` so the client can see it is behind. */
     agentVersion: string;
+    /** The VM user's home, sent in `welcome` so the Mac can turn `~` paths into absolute ones (stage 4). */
+    home?: string;
     log: Logger;
 }
 
@@ -175,6 +177,7 @@ export class AgentHost {
             protocol: AGENT_PROTOCOL_VERSION,
             agentVersion,
             settings: this.deps.parts.config.current(),
+            ...(this.deps.home ? {home: this.deps.home} : {}),
         });
         this.deps.log.info(`agent: client connected (app ${hello.appVersion})`);
         return true;
