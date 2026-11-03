@@ -24,6 +24,9 @@ import {AgentClient} from '../application/services/agent-client/agent-client';
 import {ConfigCopyService, manifestStoreOn} from '../application/services/config-copy-service';
 import {SshAgentDialer} from '../infrastructure/agent/ssh-agent-dialer';
 import {AgentHostsService} from '../application/services/agent-hosts-service';
+import {ProjectHandoffService} from '../application/services/project-handoff-service';
+import {GitCliHandoff} from '../infrastructure/git/git-cli-handoff';
+import {forgetRemoteProject} from './forget-remote-project';
 import {AgentUpgrades} from '../application/services/agent-upgrades';
 import {AgentInstallerService} from '../application/services/agent-installer-service';
 import {setupTerminalCommand} from '../domain/agent/setup-script';
@@ -187,7 +190,7 @@ export interface Container {
      * Project hand-off to a VM (#276 stage 2): copies, Bring back and removing a
      * copy. Optional only until `buildContainer` builds it.
      */
-    readonly projectHandoff?: ProjectHandoff;
+    readonly projectHandoff: ProjectHandoff;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
@@ -440,6 +443,19 @@ export function buildContainer(): Container {
     });
     agents.onNeedsReinstall((host, reason) => void agentUpgrades.protocolMismatch(host, reason));
     agents.onConnected((connection) => void agentUpgrades.connected(connection));
+
+    // Handing projects off to VMs (#276 stage 2). Forgetting a removed copy
+    // reaches back into the container, which exists by the time anyone removes one.
+    let forgetRemote: (projectPath: string) => void = () => {};
+    const projectHandoff = new ProjectHandoffService({
+        agents,
+        git: new GitCliHandoff(toolEnv),
+        settings,
+        renderer,
+        forgetRemoteProject: (projectPath) => forgetRemote(projectPath),
+        timers,
+        log,
+    });
 
     const transitions = new SessionTransitionDetector({
         registry,
@@ -861,7 +877,7 @@ export function buildContainer(): Container {
         },
     });
 
-    return {
+    const container: Container = {
         log,
         paths,
         settings,
@@ -873,6 +889,7 @@ export function buildContainer(): Container {
         terminals,
         agents,
         agentHosts,
+        projectHandoff,
         shells,
         lifecycle,
         remote,
@@ -939,6 +956,8 @@ export function buildContainer(): Container {
             database.close();
         },
     };
+    forgetRemote = (projectPath) => forgetRemoteProject(container, projectPath);
+    return container;
 }
 
 /**
