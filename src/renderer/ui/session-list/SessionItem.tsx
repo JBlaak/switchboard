@@ -18,6 +18,7 @@ import {isVmProjectIn} from '../../state/agent-host-slice';
 import {HTML} from './markup';
 import {RenameInput} from './RenameInput';
 import {RowMeta, useCanOpenWork} from './RowMeta';
+import {workOffReason} from './work-trigger';
 import {openRow, resumeWithConfig, snoozeRow, startRename, stopRow, toggleArchive, togglePin} from './actions';
 import {isLeaving} from './leave';
 import {SnoozeMenu, snoozeTime} from './SnoozeMenu';
@@ -184,9 +185,8 @@ interface RowActionsProps {
 function RowActions({row, onOpenWork, onStop, onArchive, onSnooze, onResume}: RowActionsProps): JSX.Element {
     const {session} = row;
     const path = row.projectPath || session.projectPath;
-    const remote = session.type === 'remote' || !!path?.startsWith('ssh://');
-    const canOpenWork = useCanOpenWork(session.sessionId, remote);
     const vm = useStore((state) => isVmProjectIn(state.agentHost, path));
+    const canOpenWork = useCanOpenWork(session.sessionId, workOffReason(session, path, vm) !== null);
     const hosts = useStore((state) => state.handoff.hosts) ?? NO_HOSTS;
     const buttons = rowButtons(session, {vm, hosts: hosts.length});
     const snooze = useRef<HTMLButtonElement>(null);
