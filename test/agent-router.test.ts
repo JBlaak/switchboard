@@ -5,6 +5,8 @@ import {AgentHost} from '../src/application/services/agent-host/agent-host';
 import type {
     CopiesMessage,
     CopiesPart,
+    TranscriptsMessage,
+    TranscriptsPart,
     HookForwarderMessage,
     HookForwarderPart,
     HostConfigMessage,
@@ -55,7 +57,11 @@ function fakeParts(calls: Calls) {
         ...aware('copies'),
         handle: (_client, message: CopiesMessage) => void calls.push(`copies.handle:${message.type}`),
     };
-    return {sessions, hooks, config, copies};
+    const transcripts: TranscriptsPart = {
+        ...aware('transcripts'),
+        handle: (_client, message: TranscriptsMessage) => void calls.push(`transcripts.handle:${message.type}`),
+    };
+    return {sessions, hooks, config, copies, transcripts};
 }
 
 const quietLog: Logger = {debug() {}, info() {}, warn() {}, error() {}};
@@ -82,7 +88,13 @@ test('a matching hello is welcomed with the host settings and every part hears o
     assert.deepEqual(pair.sentByAgent, [
         {type: 'welcome', protocol: AGENT_PROTOCOL_VERSION, agentVersion: VERSION, settings: SETTINGS},
     ]);
-    assert.deepEqual(calls, ['sessions.connected', 'hooks.connected', 'config.connected', 'copies.connected']);
+    assert.deepEqual(calls, [
+        'sessions.connected',
+        'hooks.connected',
+        'config.connected',
+        'copies.connected',
+        'transcripts.connected',
+    ]);
     assert.equal(pair.agent.closed, false);
 });
 
@@ -216,7 +228,7 @@ test('a dropped link tells every part the client is gone, once', () => {
     pair.agent.close();
 
     /* Then */
-    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone']);
+    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone', 'transcripts.gone']);
 });
 
 test('a client that never finished its handshake is not reported gone', () => {
@@ -242,7 +254,7 @@ test('a bye from the client closes the link without an answer', () => {
     /* Then */
     assert.equal(pair.sentByAgent.length, 1); // only the welcome
     assert.equal(pair.agent.closed, true);
-    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone']);
+    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone', 'transcripts.gone']);
 });
 
 test('closeAll says bye shutting-down to every client', () => {

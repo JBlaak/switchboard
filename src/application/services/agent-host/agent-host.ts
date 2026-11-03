@@ -27,6 +27,8 @@ import {parseMacMessage} from '../../../domain/agent/validate';
 import type {
     CopiesMessage,
     CopiesPart,
+    TranscriptsMessage,
+    TranscriptsPart,
     HookForwarderMessage,
     HookForwarderPart,
     HostConfigMessage,
@@ -41,6 +43,7 @@ export interface AgentParts {
     hooks: HookForwarderPart;
     config: HostConfigPart;
     copies: CopiesPart;
+    transcripts: TranscriptsPart;
 }
 
 export interface AgentHostDeps {
@@ -51,7 +54,7 @@ export interface AgentHostDeps {
 }
 
 /** Which part owns each message type. `hello` and `bye` are the router's own. */
-type Owner = 'sessions' | 'hooks' | 'config' | 'copies';
+type Owner = 'sessions' | 'hooks' | 'config' | 'copies' | 'transcripts';
 
 /**
  * Keyed by every routed type, so a message added to `handlers.ts` without a
@@ -77,6 +80,9 @@ const OWNER: Record<Exclude<MacMessage['type'], 'hello' | 'bye'>, Owner> = {
     'copy-status': 'copies',
     'push-branch': 'copies',
     'remove-copy': 'copies',
+    'get-transcript': 'transcripts',
+    'transcript-tail': 'transcripts',
+    'import-transcript': 'transcripts',
 };
 
 /** Where one client's link is: waiting for `hello`, handed to the parts, or ended. */
@@ -178,7 +184,7 @@ export class AgentHost {
             this.refuse(client, AGENT_CLOSE.protocolError, 'hello after the handshake');
             return;
         }
-        const {sessions, hooks, config, copies} = this.deps.parts;
+        const {sessions, hooks, config, copies, transcripts} = this.deps.parts;
         // A part that throws has a bug, not a bad client: log it and keep the
         // link, so one broken request does not cost the Mac every session.
         try {
@@ -191,6 +197,8 @@ export class AgentHost {
                     return config.handle(client, message as HostConfigMessage);
                 case 'copies':
                     return copies.handle(client, message as CopiesMessage);
+                case 'transcripts':
+                    return transcripts.handle(client, message as TranscriptsMessage);
             }
         } catch (err) {
             this.deps.log.error(`agent: ${message.type} failed`, err);
@@ -207,11 +215,11 @@ export class AgentHost {
 
     /** Tell every part something, so one part's failure does not keep it from the others. */
     private eachPart(
-        call: (part: SessionHostPart | HookForwarderPart | HostConfigPart | CopiesPart) => void,
+        call: (part: SessionHostPart | HookForwarderPart | HostConfigPart | CopiesPart | TranscriptsPart) => void,
         what: string,
     ): void {
-        const {sessions, hooks, config, copies} = this.deps.parts;
-        for (const part of [sessions, hooks, config, copies]) {
+        const {sessions, hooks, config, copies, transcripts} = this.deps.parts;
+        for (const part of [sessions, hooks, config, copies, transcripts]) {
             try {
                 call(part);
             } catch (err) {

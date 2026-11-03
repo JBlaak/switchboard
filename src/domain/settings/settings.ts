@@ -22,6 +22,13 @@ import type {WeatherLocation} from '../weather/weather';
 export interface GlobalSettings {
     hiddenProjects?: string[];
     remoteProjects?: RemoteProjectSetting[];
+    /**
+     * Sessions handed off to a VM (#276 stage 3), by id: the copy's project
+     * path they continue in. Their transcript on the Mac stays on disk, and
+     * this keeps its local row out of the list, so one conversation has one
+     * row: the VM's.
+     */
+    handedOffSessions?: Record<string, {copyPath: string; at: string}>;
     windowBounds?: WindowBounds;
     /**
      * Global only, never per project: it is one window's colour scheme. Read it

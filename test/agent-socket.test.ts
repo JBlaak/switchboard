@@ -230,6 +230,7 @@ function idleParts(): AgentParts {
     return {
         sessions: {...aware, handle() {}, terminateAll() {}},
         copies: {...aware, handle() {}},
+        transcripts: {...aware, handle() {}},
         hooks: {...aware, handle() {}, settingsFor: () => null, toolsFor: () => null},
         config: {
             ...aware,

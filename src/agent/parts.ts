@@ -31,6 +31,7 @@ import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {systemTimers} from '../infrastructure/system/timers';
 import type {Logger} from '../application/ports/logger';
 import type {AgentParts} from '../application/services/agent-host/agent-host';
+import type {TranscriptsPart} from '../application/services/agent-host/handlers';
 
 /** What the entry hands the wiring. */
 export interface PartsContext {
@@ -103,5 +104,23 @@ export async function createParts({log}: PartsContext): Promise<AgentParts> {
 
     // The hook server needs no stop of its own: it lives as long as the
     // process, which exits right after the sessions are terminated.
-    return {sessions, hooks, config, copies};
+    return {sessions, hooks, config, copies, transcripts: notYetTranscripts()};
+}
+
+/** Until the transcripts part lands (#276 stage 3): nothing is found, and imports are refused. */
+function notYetTranscripts(): TranscriptsPart {
+    return {
+        clientConnected() {},
+        clientGone() {},
+        handle(client, message) {
+            if (message.type === 'get-transcript') {
+                client.send({type: 'transcript', requestId: message.requestId, transcript: null});
+            } else if (message.type === 'transcript-tail') {
+                client.send({type: 'transcript-tail', requestId: message.requestId, lines: []});
+            } else {
+                const error = 'transcript import is not supported by this agent yet';
+                client.send({type: 'done', requestId: message.requestId, ok: false, error});
+            }
+        },
+    };
 }

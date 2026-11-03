@@ -24,6 +24,7 @@
  * and reinstalls.
  */
 import type {SessionOptions} from '../launch/session-options';
+import type {Session} from '../session/session';
 import type {AskedQuestions, Question} from '../questions/question';
 import type {ArchiveToolOutcome} from '../session/archive-tool';
 
@@ -120,6 +121,9 @@ export function isSafeRepoPath(path: string): boolean {
     if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) return false;
     return segments[0] !== '.git';
 }
+
+/** The most of a VM transcript's text that goes to the Mac's search index. */
+export const TRANSCRIPT_TEXT_CAP_CHARS = 1_000_000;
 
 /** How long an upload waits for the hand-off that uses it. */
 export const UPLOAD_TTL_MS = 10 * 60 * 1000;
@@ -328,6 +332,14 @@ export interface HandoffMessage {
     headOid: string;
     /** The commits origin does not have yet, as a git bundle; absent when there are none. */
     bundleUploadId?: string;
+    /**
+     * Stage 3, a session's hand-off: the name of the worktree the session
+     * worked in on the Mac. The copy then gets a worktree of that name on
+     * `branch` at `<copy>/.claude/worktrees/<name>`, and everything below
+     * (bundle, checkout, patch, files) happens in that worktree. Absent for a
+     * hand-off of the project's own checkout.
+     */
+    worktree?: string;
     /** The uncommitted changes as `git diff --binary`; absent when the tree is clean. */
     patchUploadId?: string;
     files: HandoffFile[];
@@ -359,6 +371,42 @@ export interface RemoveCopyMessage {
     dir: string;
 }
 
+// ── Mac → agent: transcripts and session hand-off (stage 3) ──
+
+/**
+ * One session's transcript, parsed on the VM; answered with `transcript`. The
+ * agent watches that file from now on and sends `transcripts-changed` when it
+ * grows, so the Mac asks again only when something happened.
+ */
+export interface GetTranscriptMessage {
+    type: 'get-transcript';
+    requestId: string;
+    sessionId: string;
+}
+
+/** The last `bytes` of a session's transcript, as lines; answered with `transcript-tail`. */
+export interface TranscriptTailMessage {
+    type: 'transcript-tail';
+    requestId: string;
+    sessionId: string;
+    bytes: number;
+}
+
+/**
+ * Put a session's transcript (uploaded first) where `claude --resume` on the
+ * VM finds it: `~/.claude/projects/<encoded dir>/<sessionId>.jsonl`, `dir`
+ * expanded. Refused when a transcript of that id is already there. Answered
+ * with `done`.
+ */
+export interface ImportTranscriptMessage {
+    type: 'import-transcript';
+    requestId: string;
+    sessionId: string;
+    /** The folder the session resumes in, as a project path names it (may start with `~`). */
+    dir: string;
+    uploadId: string;
+}
+
 export type MacMessage =
     | HelloMessage
     | OpenSessionMessage
@@ -380,6 +428,9 @@ export type MacMessage =
     | CopyStatusMessage
     | PushBranchMessage
     | RemoveCopyMessage
+    | GetTranscriptMessage
+    | TranscriptTailMessage
+    | ImportTranscriptMessage
     | ByeMessage;
 
 // ── Agent → Mac ──
@@ -534,6 +585,37 @@ export interface CopyStateMessage {
     uncommitted?: string[];
 }
 
+// ── Agent → Mac: transcripts (stage 3) ──
+
+/** A session's transcript as the Mac lists and searches it. */
+export interface AgentTranscript {
+    /** The folder the session ran in, absolute on the VM. */
+    cwd: string;
+    /** The transcript file's mtime, epoch ms. */
+    mtimeMs: number;
+    /** `parseTranscript`'s answer; `textContent` capped at TRANSCRIPT_TEXT_CAP_CHARS. */
+    session: Session;
+}
+
+export interface TranscriptMessage {
+    type: 'transcript';
+    requestId: string;
+    /** Null when the VM has no transcript of that id (yet), or none worth listing. */
+    transcript: AgentTranscript | null;
+}
+
+export interface TranscriptTailReply {
+    type: 'transcript-tail';
+    requestId: string;
+    lines: string[];
+}
+
+/** Transcripts the Mac asked for before have changed on disk; it asks again. */
+export interface TranscriptsChangedMessage {
+    type: 'transcripts-changed';
+    sessionIds: string[];
+}
+
 export type AgentMessage =
     | WelcomeMessage
     | OpenedMessage
@@ -552,6 +634,9 @@ export type AgentMessage =
     | HandoffProgressMessage
     | HandoffDoneMessage
     | CopyStateMessage
+    | TranscriptMessage
+    | TranscriptTailReply
+    | TranscriptsChangedMessage
     | ByeMessage;
 
 // ── Either way ──

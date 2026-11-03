@@ -8,6 +8,9 @@
  */
 import type {ClientLink} from '../../ports/agent-link';
 import type {
+    GetTranscriptMessage,
+    ImportTranscriptMessage,
+    TranscriptTailMessage,
     ArchiveReplyMessage,
     CopyStatusMessage,
     HandoffMessage,
@@ -88,4 +91,16 @@ export type CopiesMessage =
  */
 export interface CopiesPart extends ClientAware {
     handle(client: ClientLink, message: CopiesMessage): void;
+}
+
+export type TranscriptsMessage = GetTranscriptMessage | TranscriptTailMessage | ImportTranscriptMessage;
+
+/**
+ * The VM's transcripts (#276 stage 3): parsed for the Mac's rows and search,
+ * watched for changes once asked about, tailed for task detection, and
+ * imported for a session's hand-off. Import takes its file from the uploads
+ * the copies part holds, by id.
+ */
+export interface TranscriptsPart extends ClientAware {
+    handle(client: ClientLink, message: TranscriptsMessage): void;
 }
