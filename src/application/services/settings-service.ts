@@ -230,6 +230,37 @@ export class SettingsService {
         });
     }
 
+    // ── Where schedules run ──
+    // Per local project, the copy on a VM its `schedule-*.md` run in (#276
+    // stage 5, Q18); absent means this Mac. Beside it, what the VMs still have
+    // to be told, so a change made while a VM was away reaches it on its next
+    // connect, and how far each VM's runs have been read. One blob under its
+    // own key, like the hand-off's files: nobody edits it in the settings panel.
+
+    /** The whole of it, defaults filled in; a copy, safe to change and pass to `saveVmSchedules`. */
+    public vmSchedules(): VmScheduleState {
+        const stored = this.store.get<Partial<VmScheduleState>>(VM_SCHEDULES_KEY) ?? {};
+        return {
+            choices: {...stored.choices},
+            pendingMoves: {...stored.pendingMoves},
+            pendingRemovals: {...stored.pendingRemovals},
+            runsSince: {...stored.runsSince},
+        };
+    }
+
+    /** Read it, let the caller change it, write it back, as `updateGlobal` does for the global blob. */
+    public updateVmSchedules<T>(mutate: (state: VmScheduleState) => T): T {
+        const state = this.vmSchedules();
+        const result = mutate(state);
+        this.store.set(VM_SCHEDULES_KEY, state);
+        return result;
+    }
+
+    /** The copy `localPath`'s schedules run in, or null when they run on this Mac. */
+    public scheduleChoice(localPath: string): ScheduleChoice | null {
+        return this.vmSchedules().choices[localPath] ?? null;
+    }
+
     /**
      * Record that the Switchboard agent is installed on this remote's host at
      * `version` (#276), which makes it a VM project.
@@ -262,4 +293,38 @@ export class SettingsService {
 /** The settings-store key the hand-off's ticked files of a local project are kept under. */
 export function handoffFilesKey(localPath: string): string {
     return 'handoff-files:' + localPath;
+}
+
+/** The settings-store key where-schedules-run is kept under. */
+export const VM_SCHEDULES_KEY = 'vm-schedules';
+
+/** A local project's schedules running in one of its copies on a VM. */
+export interface ScheduleChoice {
+    /** The copy's project path, `ssh://user@host[:port]/dir`. */
+    copyPath: string;
+    /** When the VM confirmed it, ISO-8601: the first runs worth listing are after it. */
+    at: string;
+}
+
+/**
+ * Where every local project's schedules run, and what the VMs have yet to be
+ * told. Kept so that no schedule runs in two places for longer than it takes
+ * the VM that is behind to reconnect.
+ */
+export interface VmScheduleState {
+    /** By local project path; a project absent here runs its schedules on this Mac. */
+    choices: Record<string, ScheduleChoice>;
+    /**
+     * By local project path: a move to that copy the VM could not be told of.
+     * Tried again when its host connects; the choice is stored once it confirms.
+     */
+    pendingMoves: Record<string, string>;
+    /**
+     * By `agentHostKey`: copy folders (`~` kept) that host must drop from its
+     * `scheduleDirs`, and has not yet, because it could not be reached when
+     * their schedules moved away.
+     */
+    pendingRemovals: Record<string, string[]>;
+    /** By `agentHostKey`: the newest run already read from that host, epoch ms on the VM's clock. */
+    runsSince: Record<string, number>;
 }
