@@ -234,3 +234,57 @@ test('deleting an existing branch names what goes with it', () => {
     assert.equal(without, 'Delete its branch, then start again from scratch? Anything not pushed is gone for good.');
     assert.equal(existingLine(existingBranch()), 'Its branch exists already, in a worktree with no work on it yet.');
 });
+
+test('the header marks a plan with a Claude session running on this Mac, and only then', () => {
+    /* Given */
+    const owners = {'acme/app#11': 'worker', 'acme/app#12': 'stopped'};
+
+    /* When */
+    const live = renderToStaticMarkup(
+        createElement(PlanViewContent, {plan: diamond(), live: {owners, running: new Set(['worker'])}}),
+    );
+    const quiet = renderToStaticMarkup(
+        createElement(PlanViewContent, {plan: diamond(), live: {owners, running: new Set(['elsewhere'])}}),
+    );
+    const unknown = renderToStaticMarkup(createElement(PlanViewContent, {plan: diamond()}));
+
+    /* Then */
+    assert.match(live, /title="1 Claude session running on this Mac"[^>]*data-testid="plan-live"/);
+    assert.match(live, /1 running/);
+    assert.doesNotMatch(quiet, /plan-live|running on this Mac/);
+    assert.doesNotMatch(unknown, /plan-live|running on this Mac/);
+});
+
+test('the switcher and the other plans mark each plan that has a running session', () => {
+    /* Given */
+    const second = plan([issue(20)], {number: 2, title: 'Second'});
+    const summary = (number: number) => ({
+        repository: 'acme/app',
+        number,
+        title: 'Plan ' + number,
+        state: 'open' as const,
+        updatedAt: '',
+        open: 1,
+        total: 1,
+        current: 1,
+        levels: 1,
+    });
+    const live = {owners: {'acme/app#20': 'worker', 'acme/app#5': 'planner'}, running: new Set(['worker', 'planner'])};
+
+    /* When */
+    const switcher = renderToStaticMarkup(
+        createElement(PlanViewContent, {sessionPlans: {plans: [diamond(), second], others: []}, live}),
+    );
+    const others = renderToStaticMarkup(
+        createElement(PlanViewContent, {sessionPlans: {plans: [], others: [summary(4), summary(5)]}, live}),
+    );
+
+    /* Then */
+    const segments = [...switcher.matchAll(/<button[^>]*class="pv-seg[^"]*"[^>]*>(.*?)<\/button>/g)].map((m) => m[1]);
+    assert.equal(segments.length, 2);
+    assert.doesNotMatch(segments[0], /pv-live/);
+    assert.match(segments[1], /class="pv-live is-dot"[^>]*aria-label="1 Claude session running on this Mac"/);
+    const rows = [...others.matchAll(/<li>(.*?)<\/li>/g)].map((m) => m[1]);
+    assert.doesNotMatch(rows[0], /pv-live/);
+    assert.match(rows[1], /1 running/);
+});

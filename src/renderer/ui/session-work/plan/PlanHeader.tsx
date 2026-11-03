@@ -10,7 +10,8 @@ import type {Plan, PlanLayout} from '../../../../domain/plan/model';
 import {closedCount, hereLabel, issueUrl, linkedPrCount, planLevelBullets, shortRef} from './describe';
 import {LevelBullets} from './LevelBullets';
 import {HTML} from '../../session-list/markup';
-import type {PlanHandlers, PlanPinControl, PlanRefresh} from './types';
+import type {PlanHandlers, PlanLiveSessions, PlanPinControl, PlanRefresh} from './types';
+import {PlanLiveMark} from './PlanLiveMark';
 
 export function PlanHeader({
     plan,
@@ -18,12 +19,14 @@ export function PlanHeader({
     on,
     pin,
     refresh = null,
+    live = null,
 }: {
     plan: Plan;
     layout: PlanLayout;
     on: PlanHandlers;
     pin?: PlanPinControl;
     refresh?: PlanRefresh | null;
+    live?: PlanLiveSessions | null;
 }): JSX.Element {
     const bullets = planLevelBullets(layout);
     return (
@@ -79,6 +82,7 @@ export function PlanHeader({
                         />
                     )}
                     <h2 className="pv-title">{plan.title}</h2>
+                    <PlanLiveMark plan={plan} live={live} />
                 </div>
             </div>
             <div className="pv-stats">
