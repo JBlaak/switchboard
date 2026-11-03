@@ -55,3 +55,14 @@ export function splitVmFolder(folder: string): {host: VmHost; encoded: string} |
     const m = VM_FOLDER.exec(folder);
     return m ? {host: {user: m[1], host: m[2], port: Number(m[3])}, encoded: m[4]} : null;
 }
+
+/** A VM's own address as the per-host calls take it: `ssh://user@host[:port]`, no folder. */
+export function vmHostPath(host: VmHost): string {
+    return remoteProjectPath({...host, dir: null});
+}
+
+/** The host a `user@host:port` key names; null for anything else. */
+export function parseVmHostKey(key: string): VmHost | null {
+    const m = /^([^@:]+)@([^:]+):(\d+)$/.exec(key);
+    return m ? {user: m[1], host: m[2], port: Number(m[3])} : null;
+}

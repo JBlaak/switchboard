@@ -7,6 +7,7 @@ import {ProjectHandoffService} from '../src/application/services/project-handoff
 import {SessionHandoffService} from '../src/application/services/session-handoff-service';
 import type {HandoffSessionView, TranscriptCarrier} from '../src/application/services/session-handoff-service';
 import {SettingsService} from '../src/application/services/settings-service';
+import {addRemotesRegisteringVms} from './support/vm-registry';
 import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
 import {scriptedAgent, settle} from './support/scripted-agent';
 import type {Disposable} from '../src/application/ports/git-workspace';
@@ -188,7 +189,7 @@ function harness({live = liveSession(), busy = false, cwd = LOCAL, folder = FOLD
 
     const store = new MemoryStore();
     const real = new SettingsService(store);
-    real.addRemoteProject(VM_HOME);
+    addRemotesRegisteringVms(real, [VM_HOME]);
     const settings = {
         effective: (projectPath: string | null | undefined) => real.effective(projectPath),
         handedOffSession: (sessionId: string) => real.handedOffSession(sessionId),

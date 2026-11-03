@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {AgentConnection} from '../src/application/services/agent-client/agent-connection';
 import {ProjectHandoffService} from '../src/application/services/project-handoff-service';
 import {SettingsService} from '../src/application/services/settings-service';
+import {addRemotesRegisteringVms} from './support/vm-registry';
 import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
 import {scriptedAgent} from './support/scripted-agent';
 import type {HandoffGit} from '../src/application/ports/handoff-git';
@@ -67,7 +68,7 @@ function harness(afterHandoff: (localPath: string, copyPath: string, choices: Ha
     };
     let connection: AgentConnection | null = null;
     const settings = new SettingsService(new MemoryStore());
-    settings.addRemoteProject({user: 'dev', host: 'vm.local', port: 22, dir: null, agent: AGENT});
+    addRemotesRegisteringVms(settings, [{user: 'dev', host: 'vm.local', port: 22, dir: null, agent: AGENT}]);
     const service = new ProjectHandoffService({
         agents: {
             connection: (host) =>

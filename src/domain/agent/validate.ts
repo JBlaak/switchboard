@@ -144,6 +144,8 @@ const MESSAGE_FIELDS: Record<MacMessage['type'], Record<string, Check>> = {
     },
     'list-transcripts': {requestId: nonEmptyString, dirs: arrayOf(nonEmptyString), since: optional(integer)},
     'place-upload': {requestId: nonEmptyString, uploadId: nonEmptyString, name: nonEmptyString},
+    'list-self-archived': {requestId: nonEmptyString},
+    'forget-self-archived': {requestId: nonEmptyString, sessionIds: arrayOf(nonEmptyString)},
     'get-transcript': {requestId: nonEmptyString, sessionId: nonEmptyString},
     'transcript-tail': {requestId: nonEmptyString, sessionId: nonEmptyString, bytes: integer},
     'import-transcript': {

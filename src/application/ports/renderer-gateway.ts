@@ -45,6 +45,12 @@ export interface RendererGateway {
 
     // ── Lists and chrome ──
     projectsChanged(): void;
+    /**
+     * Settings → VMs should read its list again (#276): a VM was added,
+     * renamed or removed, an install finished, or a link came up or dropped.
+     * No payload: the list is asked for, as the project list is.
+     */
+    vmHostsChanged(): void;
     statusUpdate(text: string, type: string): void;
     fullscreenChanged(isFullscreen: boolean): void;
     /** A newer release was found. */
