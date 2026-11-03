@@ -110,6 +110,26 @@ export function isSafeConfigPath(path: string): boolean {
     return !NEVER_COPIED.some((never) => path === never || path.startsWith(never + '/'));
 }
 
+/**
+ * Whether `path` may be written inside a project copy by a hand-off: relative,
+ * `/`-separated, no `.`/`..`/empty segment, and never inside `.git`.
+ */
+export function isSafeRepoPath(path: string): boolean {
+    if (!path || path.startsWith('/') || path.includes('\\') || path.includes('\0')) return false;
+    const segments = path.split('/');
+    if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) return false;
+    return segments[0] !== '.git';
+}
+
+/** How long an upload waits for the hand-off that uses it. */
+export const UPLOAD_TTL_MS = 10 * 60 * 1000;
+
+/** The most a hand-off's inline files may add up to, raw. */
+export const HANDOFF_FILES_CAP_BYTES = 4 * 1024 * 1024;
+
+/** The marker the agent leaves in a copy's `.git`, so it only ever removes copies it made. */
+export const COPY_MARKER = 'switchboard-copy';
+
 /** What the config copy never writes, whatever the Mac sends. */
 export const NEVER_COPIED: readonly string[] = [
     '.credentials.json',
@@ -246,6 +266,99 @@ export interface CopyConfigMessage {
     removed: string[];
 }
 
+// ── Mac → agent: project copies (stage 2) ──
+
+/**
+ * A file too large for one frame (a git bundle) goes up in chunks. `begin`
+ * names it and says how big it will be; `chunk`s follow in order; `end` asks
+ * the agent to check it and is answered with `done`. An upload not used by a
+ * `handoff` within UPLOAD_TTL_MS is thrown away.
+ */
+export interface UploadBeginMessage {
+    type: 'upload-begin';
+    uploadId: string;
+    size: number;
+}
+
+export interface UploadChunkMessage {
+    type: 'upload-chunk';
+    uploadId: string;
+    dataBase64: string;
+}
+
+export interface UploadEndMessage {
+    type: 'upload-end';
+    requestId: string;
+    uploadId: string;
+    /** Hex SHA-256 of the whole file; a mismatch answers `done ok:false`. */
+    sha256: string;
+}
+
+/** One ignored config file the user ticked, carried inline (they are small). */
+export interface HandoffFile {
+    /** Relative to the repository root, `/`-separated; checked with `isSafeRepoPath`. */
+    path: string;
+    contentBase64: string;
+    mode: number;
+}
+
+/**
+ * Make or update the VM's copy of a project (#276 stage 2).
+ *
+ * The agent clones `repo` into `<baseFolder>/<repo.name>` with its own
+ * credentials (`gh repo clone` for a GitHub repository, else `git clone`), or
+ * fetches when that copy exists already. It then fetches the bundle's commits,
+ * checks `branch` out at `headOid`, applies the patch of uncommitted changes
+ * to the working tree (unstaged), and writes the ticked files. Progress goes
+ * out as `handoff-progress`; the answer is `handoff-done`.
+ */
+export interface HandoffMessage {
+    type: 'handoff';
+    requestId: string;
+    repo: {
+        /** The folder name the copy gets, e.g. `switchboard`. */
+        name: string;
+        /** The Mac's origin URL. */
+        origin: string;
+        /** `owner/repo` when origin is on GitHub, so the agent can `gh repo clone` it. */
+        github?: string;
+    };
+    branch: string;
+    /** The Mac's HEAD, which the copy ends up on. */
+    headOid: string;
+    /** The commits origin does not have yet, as a git bundle; absent when there are none. */
+    bundleUploadId?: string;
+    /** The uncommitted changes as `git diff --binary`; absent when the tree is clean. */
+    patchUploadId?: string;
+    files: HandoffFile[];
+}
+
+/** Where a copy stands, for Bring back and for removing it; answered with `copy-state`. */
+export interface CopyStatusMessage {
+    type: 'copy-status';
+    requestId: string;
+    /** The copy's folder as its project path names it (may start with `~`). */
+    dir: string;
+}
+
+/** Push a copy's branch to origin, so the Mac can fetch it; answered with `done`. */
+export interface PushBranchMessage {
+    type: 'push-branch';
+    requestId: string;
+    dir: string;
+    branch: string;
+}
+
+/**
+ * Delete a copy's folder; answered with `done`. The agent refuses anything
+ * that is not a copy it made (the marker in `.git`) under the base folder.
+ */
+export interface RemoveCopyMessage {
+    type: 'remove-copy';
+    requestId: string;
+    dir: string;
+}
+
 export type MacMessage =
     | HelloMessage
     | OpenSessionMessage
@@ -260,6 +373,13 @@ export type MacMessage =
     | SetHostSettingsMessage
     | CheckToolsMessage
     | CopyConfigMessage
+    | UploadBeginMessage
+    | UploadChunkMessage
+    | UploadEndMessage
+    | HandoffMessage
+    | CopyStatusMessage
+    | PushBranchMessage
+    | RemoveCopyMessage
     | ByeMessage;
 
 // ── Agent → Mac ──
@@ -371,6 +491,49 @@ export interface DoneMessage {
     error?: string;
 }
 
+// ── Agent → Mac: project copies (stage 2) ──
+
+/** One line of a running hand-off, for the progress list. */
+export interface HandoffProgressMessage {
+    type: 'handoff-progress';
+    requestId: string;
+    line: string;
+}
+
+export interface HandoffDoneMessage {
+    type: 'handoff-done';
+    requestId: string;
+    ok: boolean;
+    /** Which step failed, as the progress named it. */
+    error?: string;
+    /** The copy's folder in the form a project path takes: `<baseFolder>/<name>`, `~` kept. */
+    dir?: string;
+    /** True when an existing copy was updated rather than cloned. */
+    reused?: boolean;
+}
+
+/** A commit on the copy that origin does not have. */
+export interface CopyCommit {
+    oid: string;
+    subject: string;
+}
+
+export interface CopyStateMessage {
+    type: 'copy-state';
+    requestId: string;
+    ok: boolean;
+    error?: string;
+    /** The branch checked out; null on a detached HEAD. */
+    branch?: string | null;
+    headOid?: string;
+    /** The branch's upstream (`origin/x`), or null when it has none yet. */
+    upstream?: string | null;
+    /** Commits not on the upstream (or, without one, not on any origin branch), newest first. */
+    unpushed?: CopyCommit[];
+    /** Paths with uncommitted changes, including untracked files that are not ignored. */
+    uncommitted?: string[];
+}
+
 export type AgentMessage =
     | WelcomeMessage
     | OpenedMessage
@@ -386,6 +549,9 @@ export type AgentMessage =
     | HostSettingsMessage
     | ToolsMessage
     | DoneMessage
+    | HandoffProgressMessage
+    | HandoffDoneMessage
+    | CopyStateMessage
     | ByeMessage;
 
 // ── Either way ──

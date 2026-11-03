@@ -229,6 +229,7 @@ function idleParts(): AgentParts {
     const aware = {clientConnected() {}, clientGone() {}};
     return {
         sessions: {...aware, handle() {}, terminateAll() {}},
+        copies: {...aware, handle() {}},
         hooks: {...aware, handle() {}, settingsFor: () => null, toolsFor: () => null},
         config: {
             ...aware,

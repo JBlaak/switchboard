@@ -104,6 +104,21 @@ const MESSAGE_FIELDS: Record<MacMessage['type'], Record<string, Check>> = {
     'set-host-settings': {requestId: nonEmptyString, settings: hostSettingsPatch},
     'check-tools': {requestId: nonEmptyString},
     'copy-config': {requestId: nonEmptyString, files: arrayOf(configFile), removed: arrayOf(string)},
+    'upload-begin': {uploadId: nonEmptyString, size: integer},
+    'upload-chunk': {uploadId: nonEmptyString, dataBase64: string},
+    'upload-end': {requestId: nonEmptyString, uploadId: nonEmptyString, sha256: nonEmptyString},
+    handoff: {
+        requestId: nonEmptyString,
+        repo: shape({name: nonEmptyString, origin: nonEmptyString, github: optional(string)}),
+        branch: nonEmptyString,
+        headOid: nonEmptyString,
+        bundleUploadId: optional(string),
+        patchUploadId: optional(string),
+        files: arrayOf(shape({path: nonEmptyString, contentBase64: string, mode: integer})),
+    },
+    'copy-status': {requestId: nonEmptyString, dir: nonEmptyString},
+    'push-branch': {requestId: nonEmptyString, dir: nonEmptyString, branch: nonEmptyString},
+    'remove-copy': {requestId: nonEmptyString, dir: nonEmptyString},
     bye: {code: oneOf(...closeCodes), reason: optional(string)},
 };
 

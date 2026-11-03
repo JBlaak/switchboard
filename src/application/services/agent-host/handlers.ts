@@ -9,6 +9,13 @@
 import type {ClientLink} from '../../ports/agent-link';
 import type {
     ArchiveReplyMessage,
+    CopyStatusMessage,
+    HandoffMessage,
+    PushBranchMessage,
+    RemoveCopyMessage,
+    UploadBeginMessage,
+    UploadChunkMessage,
+    UploadEndMessage,
     AskReplyMessage,
     AttachMessage,
     CheckToolsMessage,
@@ -64,4 +71,21 @@ export interface HostConfigPart extends ClientAware {
     handle(client: ClientLink, message: HostConfigMessage): void;
     /** The settings now, as a launch reads them. */
     current(): HostSettings;
+}
+
+export type CopiesMessage =
+    | UploadBeginMessage
+    | UploadChunkMessage
+    | UploadEndMessage
+    | HandoffMessage
+    | CopyStatusMessage
+    | PushBranchMessage
+    | RemoveCopyMessage;
+
+/**
+ * The VM's project copies (#276 stage 2): chunked uploads, making or updating
+ * a copy, where a copy stands, pushing its branch and removing it.
+ */
+export interface CopiesPart extends ClientAware {
+    handle(client: ClientLink, message: CopiesMessage): void;
 }

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {isSafeConfigPath} from '../src/domain/agent/protocol';
+import {isSafeConfigPath, isSafeRepoPath} from '../src/domain/agent/protocol';
 
 /** Which paths the global config copy may write under `~/.claude` on a VM. */
 
@@ -42,4 +42,15 @@ test('credentials, transcripts and local settings are never written', () => {
         verdicts,
         paths.map(() => false),
     );
+});
+
+test('a hand-off may write config files in the repository but never inside .git', () => {
+    /* Given */
+    const paths = ['.env', 'apps/web/.env.local', '.git/config', '../outside', '/abs', 'a//b'];
+
+    /* When */
+    const verdicts = paths.map(isSafeRepoPath);
+
+    /* Then */
+    assert.deepEqual(verdicts, [true, true, false, false, false, false]);
 });

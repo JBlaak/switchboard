@@ -72,6 +72,11 @@ export interface RemoteProjectSetting extends RemoteConfig {
      * then run on the agent instead of in tmux. Absent on an agentless remote.
      */
     agent?: {version: string; installedAt: string};
+    /**
+     * For a project copy a hand-off made (#276 stage 2): the local project it is
+     * a copy of. The local project's page lists its copies by this.
+     */
+    copyOf?: string;
 }
 
 /** Persisted window geometry. */

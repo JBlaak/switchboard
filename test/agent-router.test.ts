@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {AgentHost} from '../src/application/services/agent-host/agent-host';
 import type {
+    CopiesMessage,
+    CopiesPart,
     HookForwarderMessage,
     HookForwarderPart,
     HostConfigMessage,
@@ -49,7 +51,11 @@ function fakeParts(calls: Calls) {
         handle: (_client, message: HostConfigMessage) => void calls.push(`config.handle:${message.type}`),
         current: () => SETTINGS,
     };
-    return {sessions, hooks, config};
+    const copies: CopiesPart = {
+        ...aware('copies'),
+        handle: (_client, message: CopiesMessage) => void calls.push(`copies.handle:${message.type}`),
+    };
+    return {sessions, hooks, config, copies};
 }
 
 const quietLog: Logger = {debug() {}, info() {}, warn() {}, error() {}};
@@ -76,7 +82,7 @@ test('a matching hello is welcomed with the host settings and every part hears o
     assert.deepEqual(pair.sentByAgent, [
         {type: 'welcome', protocol: AGENT_PROTOCOL_VERSION, agentVersion: VERSION, settings: SETTINGS},
     ]);
-    assert.deepEqual(calls, ['sessions.connected', 'hooks.connected', 'config.connected']);
+    assert.deepEqual(calls, ['sessions.connected', 'hooks.connected', 'config.connected', 'copies.connected']);
     assert.equal(pair.agent.closed, false);
 });
 
@@ -210,7 +216,7 @@ test('a dropped link tells every part the client is gone, once', () => {
     pair.agent.close();
 
     /* Then */
-    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone']);
+    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone']);
 });
 
 test('a client that never finished its handshake is not reported gone', () => {
@@ -236,7 +242,7 @@ test('a bye from the client closes the link without an answer', () => {
     /* Then */
     assert.equal(pair.sentByAgent.length, 1); // only the welcome
     assert.equal(pair.agent.closed, true);
-    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone']);
+    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone']);
 });
 
 test('closeAll says bye shutting-down to every client', () => {

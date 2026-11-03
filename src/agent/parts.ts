@@ -27,6 +27,7 @@ import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {systemTimers} from '../infrastructure/system/timers';
 import type {Logger} from '../application/ports/logger';
 import type {AgentParts} from '../application/services/agent-host/agent-host';
+import type {CopiesPart} from '../application/services/agent-host/handlers';
 
 /** What the entry hands the wiring. */
 export interface PartsContext {
@@ -88,5 +89,23 @@ export async function createParts({log}: PartsContext): Promise<AgentParts> {
 
     // The hook server needs no stop of its own: it lives as long as the
     // process, which exits right after the sessions are terminated.
-    return {sessions, hooks, config};
+    return {sessions, hooks, config, copies: notYetCopies(log)};
+}
+
+/** Until the copies part lands (#276 stage 2): every request answers that copies are not supported yet. */
+function notYetCopies(log: Logger): CopiesPart {
+    return {
+        clientConnected() {},
+        clientGone() {},
+        handle(client, message) {
+            if (!('requestId' in message)) return;
+            log.warn(`[agent] ${message.type}: project copies are not supported by this agent yet`);
+            const error = 'project copies are not supported by this agent yet';
+            if (message.type === 'handoff')
+                client.send({type: 'handoff-done', requestId: message.requestId, ok: false, error});
+            else if (message.type === 'copy-status')
+                client.send({type: 'copy-state', requestId: message.requestId, ok: false, error});
+            else client.send({type: 'done', requestId: message.requestId, ok: false, error});
+        },
+    };
 }
