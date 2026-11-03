@@ -1,6 +1,7 @@
 // Builds every bundle the app ships: the main process, the preload, the project
-// scanner worker, the renderer, and the stylesheet; and the Quick Ask pop-up's
-// own preload, renderer and stylesheet. Output lands in app/, which
+// scanner worker, the renderer, and the stylesheet; the Quick Ask pop-up's
+// own preload, renderer and stylesheet; and the headless agent that runs on a
+// VM, with its connect bridge (#276). Output lands in app/, which
 // is what package.json's `main` and electron-builder's `files` point at.
 //
 //   node scripts/build.mjs           one-shot build
@@ -39,6 +40,26 @@ const common = {
     // Electron 41 ships Chromium 138 / Node 22; nothing here needs downleveling
     // past what that understands.
     target: 'es2022',
+};
+
+const {version} = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+
+/**
+ * The headless agent's bundles (#276), for a Linux VM's plain Node, not
+ * Electron: so `node22`, which is the Node the provisioner installs there
+ * (AGENT_NODE in src/domain/agent/layout.ts). The app's version is stamped in
+ * as `__AGENT_VERSION__` (src/agent/version.ts), which is what lets the Mac's
+ * `hello` and the agent's version be compared at all. node-pty stays external:
+ * it is a native addon, shipped beside the bundle per architecture.
+ * @type {import('esbuild').BuildOptions}
+ */
+const agentCommon = {
+    ...common,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node22',
+    external: ['node-pty'],
+    define: {__AGENT_VERSION__: JSON.stringify(version)},
 };
 
 const targets = [
@@ -121,6 +142,21 @@ const targets = [
         jsx: 'automatic',
         define: {'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : 'production')},
         loader: {'.ttf': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl'},
+    },
+    {
+        // The agent itself, what the VM's systemd user service runs.
+        name: 'agent',
+        ...agentCommon,
+        entryPoints: [path.join(root, 'src/agent/main.ts')],
+        outfile: path.join(out, 'agent/agent.js'),
+    },
+    {
+        // `switchboard-agent connect`, started by every ssh connect from the
+        // Mac: it imports node:net and little else, so it must stay a few KB.
+        name: 'agent-connect',
+        ...agentCommon,
+        entryPoints: [path.join(root, 'src/agent/connect.ts')],
+        outfile: path.join(out, 'agent/connect.js'),
     },
 ];
 
