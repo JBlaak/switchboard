@@ -178,7 +178,7 @@ test('a fresh host gets the full install sequence', async () => {
         {localPath: '/tmp/agent-2.12.0-x64.tar', remotePath: '$HOME/.switchboard/upload/agent-2.12.0-x64.tar'},
     ]);
     assert.ok(progress.includes('Installing Node 22.22.2…'));
-    assert.ok(progress.includes('Starting the agent…'));
+    assert.ok(progress.includes('Restarting the agent…'));
 });
 
 test('a fresh host is marked as an agent host, keeping its sessions', async () => {
