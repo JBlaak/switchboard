@@ -60,6 +60,7 @@ export function installIpcBridge(
         api.onAgentInstallProgress((projectPath, line) => send({type: 'agentInstallProgress', projectPath, line})),
         api.onHandoffProgress((localPath, line) => send({type: 'handoffProgress', localPath, line})),
         api.onBringBackProgress((copyPath, line) => send({type: 'bringBackProgress', copyPath, line})),
+        api.onSessionHandoffPhase((sessionId, phase) => send({type: 'sessionHandoffPhase', sessionId, phase})),
     ];
     return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
 }

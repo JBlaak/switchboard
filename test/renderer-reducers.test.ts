@@ -90,6 +90,7 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
     agentInstallProgress: {type: 'agentInstallProgress', projectPath: 'ssh://me@vm/app', line: 'Checking systemd'},
     handoffProgress: {type: 'handoffProgress', localPath: '/code/app', line: 'Cloning'},
     bringBackProgress: {type: 'bringBackProgress', copyPath: 'ssh://me@vm/app', line: 'Pushing'},
+    sessionHandoffPhase: {type: 'sessionHandoffPhase', sessionId: 's1', phase: {kind: 'waiting'}},
     tasksChanged: {
         type: 'tasksChanged',
         update: {watchId: 'w1', query: {view: 'today'}, state: 'ok', rows: [], fetchedAt: 5},

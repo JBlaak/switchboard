@@ -30,7 +30,7 @@ export interface CarriedLine {
 }
 
 /** What goes over: the branch, then the commits and the changes that only this Mac has. */
-export function carriedLines(preview: HandoffPreview): CarriedLine[] {
+export function carriedLines(preview: Pick<HandoffPreview, 'branch' | 'unpushed' | 'uncommitted'>): CarriedLine[] {
     const lines: CarriedLine[] = [{text: 'Branch ', code: preview.branch}];
     if (preview.unpushed > 0) lines.push({text: count(preview.unpushed, 'commit') + ' not on origin'});
     if (preview.uncommitted > 0) lines.push({text: count(preview.uncommitted, 'uncommitted change')});

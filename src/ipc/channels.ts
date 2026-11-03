@@ -147,6 +147,11 @@ export const INVOKE = {
     handoffCopyStatus: 'handoff:copy-status',
     handoffBringBack: 'handoff:bring-back',
     handoffRemoveCopy: 'handoff:remove-copy',
+
+    // Session hand-off to a VM (#276 stage 3)
+    sessionHandoffPreview: 'session-handoff:preview',
+    sessionHandoffRun: 'session-handoff:hand-off',
+    sessionHandoffCancel: 'session-handoff:cancel',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -193,6 +198,7 @@ export const EVENT = {
     agentInstallProgress: 'agent:install-progress',
     handoffProgress: 'handoff:progress',
     bringBackProgress: 'handoff:bring-back-progress',
+    sessionHandoffPhase: 'session-handoff:phase',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */
