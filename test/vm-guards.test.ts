@@ -376,7 +376,7 @@ function openRepository(remotesNow: RemoteHostRecord[]) {
     const opened: string[] = [];
     const ipc: IpcRegistrar = {handle: (channel, handler) => handlers.set(channel, handler), on() {}};
     const app = {
-        settings: {remoteProjects: () => remotesNow},
+        settings: {vmHosts: () => remotesNow},
         git: remotes,
         system: {openExternal: async (url: string) => void opened.push(url)},
     } as unknown as Container;

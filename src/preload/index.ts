@@ -117,6 +117,12 @@ const api: SwitchboardApi = {
     sessionWorkReview: (request) => ipcRenderer.invoke(INVOKE.sessionWorkReview, request),
     getCheckLog: (request) => ipcRenderer.invoke(INVOKE.sessionWorkCheckLog, request),
 
+    // ── Settings → VMs (#276, #307) ──
+    vmHosts: () => ipcRenderer.invoke(INVOKE.vmRegistryList),
+    addVmHost: (input) => ipcRenderer.invoke(INVOKE.vmRegistryAdd, input),
+    renameVmHost: (key, name) => ipcRenderer.invoke(INVOKE.vmRegistryRename, key, name),
+    removeVmHost: (key) => ipcRenderer.invoke(INVOKE.vmRegistryRemove, key),
+    onVmHostsChanged: (cb) => subscribe(EVENT.vmHostsChanged, () => cb()),
     // ── VM hosts (#276) ──
     agentStatus: (projectPath) => ipcRenderer.invoke(INVOKE.agentStatus, projectPath),
     installAgent: (projectPath) => ipcRenderer.invoke(INVOKE.agentInstall, projectPath),

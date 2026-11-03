@@ -12,10 +12,14 @@
  * meet is often not a project's own path (a worktree under it, a `cwd` from a
  * transcript, the absolute form of a `~` project), but it is always on the
  * host of one, and the agent is installed per host.
+ *
+ * The records asked are the VM registry's (`GlobalSettings.vmHosts`, #307),
+ * which have the same shape: a registered VM with an agent and no projects
+ * yet still lets its paths through.
  */
 import {parseRemoteProjectPath, type RemoteConfig} from './remote-target';
 
-/** A remote as the settings record it: its host, and whether an agent is installed there. */
+/** A host as the settings record it (a VM's registration, or a remote): whether an agent is installed there. */
 export type RemoteHostRecord = Pick<RemoteConfig, 'user' | 'host' | 'port'> & {agent?: unknown};
 
 /** `user@host:port` of a remote; the port defaults to ssh's 22, as everywhere a host is keyed. */
@@ -40,6 +44,6 @@ export function isAgentlessRemote(path: string, remotes: readonly RemoteHostReco
  * composition root injects into each service as its guard, so installing an
  * agent lifts the guards without a restart.
  */
-export function agentlessRemoteGuard(remotes: () => readonly RemoteHostRecord[]): (path: string) => boolean {
-    return (path) => isAgentlessRemote(path, remotes());
+export function agentlessRemoteGuard(hosts: () => readonly RemoteHostRecord[]): (path: string) => boolean {
+    return (path) => isAgentlessRemote(path, hosts());
 }
