@@ -1018,6 +1018,37 @@ export async function stubReconnectRemote(app: ElectronApplication, result: {ok:
     );
 }
 
+/**
+ * Answer every "open terminal" request as opened, without launching anything,
+ * and remember which sessions asked. For a VM session (#276), whose real launch
+ * waits on its host's agent over ssh: a test that only needs it on screen
+ * (Session work's trigger puts it there first) must not dial a host.
+ */
+export async function stubOpenTerminal(app: ElectronApplication): Promise<void> {
+    await app.evaluate(
+        ({ipcMain}, {channel}) => {
+            const state = (globalThis as typeof globalThis & {__switchboardE2E: {terminalsOpened?: string[]}})
+                .__switchboardE2E;
+            state.terminalsOpened = [];
+            ipcMain.removeHandler(channel);
+            ipcMain.handle(channel, (_event, sessionId) => {
+                state.terminalsOpened!.push(String(sessionId));
+                return {ok: true, reattached: false};
+            });
+        },
+        {channel: INVOKE.openTerminal},
+    );
+}
+
+/** The sessions the renderer asked to open a terminal for since `stubOpenTerminal`. */
+export async function terminalsOpened(app: ElectronApplication): Promise<string[]> {
+    return await app.evaluate(() => {
+        const state = (globalThis as typeof globalThis & {__switchboardE2E: {terminalsOpened?: string[]}})
+            .__switchboardE2E;
+        return [...(state.terminalsOpened ?? [])];
+    });
+}
+
 /** The sessions the renderer asked to reconnect since `stubReconnectRemote`. */
 export async function reconnectRequests(app: ElectronApplication): Promise<string[]> {
     return await app.evaluate(() => {

@@ -31,6 +31,14 @@
  *
  * VM transcripts (#276 stage 3): a VM session's row takes its title from the
  * `vm_transcripts` cache, seeded by `vmTranscriptFixture`.
+ *
+ * VM project pages (#276 stage 4): a VM project's page shows the GitHub
+ * sections, plans and worktrees from a stubbed `projectOverview`, and its
+ * GitHub button and ⌘-click ask to open the repository; a VM Claude session's
+ * meta line opens Session work from the `sessionWork` stub, while a VM shell
+ * and an agentless remote's rows say why not. Nothing here reads git or `gh`
+ * on a VM. Which parts show is unit tested in test/project-page-vm.test.ts and
+ * test/session-list-work-trigger.test.ts.
  */
 import {test, expect, forEachAppearance} from '../support/test';
 import {
@@ -39,12 +47,14 @@ import {
     openRemoteSession,
     openSession,
     sessionRow,
+    sidebar,
     terminalHeader,
     terminalStatus,
 } from '../support/app';
 import {
     agentRequests,
     handoffRequests,
+    openedExternally,
     pushRemoteStatus,
     reconnectRequests,
     sessionHandoffRequests,
@@ -54,7 +64,9 @@ import {
     STUB_HANDOFF_HOST,
     STUB_SESSION_HANDOFF,
     STUB_SESSION_PREVIEW,
+    stubOpenTerminal,
     stubReconnectRemote,
+    terminalsOpened,
 } from '../support/main-process';
 import {redraw, sessionItem} from '../support/session-list';
 import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
@@ -71,8 +83,14 @@ import {
     vmFixture,
     vmTranscriptFixture,
 } from '../fixtures/standard';
-import type {FixtureHome} from '../support/fixture-home';
-import type {HandoffStub} from '../support/main-process';
+import {acmeOverview} from '../fixtures/plans';
+import {LOGIN_FIX_WORK} from '../fixtures/session-work';
+import {hoursAgo, sessionId} from '../support/fixture-home';
+import {REMOTE_REASON, VM_SHELL_REASON} from '../../src/renderer/ui/session-list/work-trigger';
+import {REMOTE_NOTE} from '../../src/renderer/ui/project-page/page-state';
+import type {FixtureHome, FixtureSpec} from '../support/fixture-home';
+import type {HandoffStub, SessionWorkStub} from '../support/main-process';
+import type {ProjectOverview} from '../../src/domain/project/overview';
 import type {Locator, Page} from '@playwright/test';
 
 const TARGET = `${REMOTE.user}@${REMOTE.host}:${REMOTE.dir}`;
@@ -829,6 +847,141 @@ test.describe('VM transcripts', () => {
         await expect(sessionItem(page, S.vmWeb)).toContainText(LABEL.vmWeb);
         await expect(sessionItem(page, S.vmWeb)).not.toContainText(LABEL.remoteApi);
         await expect(sessionItem(page, S.remoteApi)).toContainText(LABEL.remoteApi);
+    });
+});
+
+test.describe('VM project pages', () => {
+    /** A shell on the VM host, beside its Claude session. */
+    const VM_SHELL = sessionId('vm-shell');
+
+    /** `vmTranscriptFixture` with a shell on the VM host too. */
+    function vmShellFixture(): FixtureSpec {
+        const spec = vmTranscriptFixture();
+        return {
+            ...spec,
+            remotes: (spec.remotes ?? []).map((remote) =>
+                remote.host === VM_REMOTE.host
+                    ? {
+                          ...remote,
+                          sessions: [
+                              ...(remote.sessions ?? []),
+                              {id: VM_SHELL, kind: 'shell' as const, created: hoursAgo(8), lastOpened: hoursAgo(7)},
+                          ],
+                      }
+                    : remote,
+            ),
+        };
+    }
+
+    /** acme-api's overview, as main would answer it for the VM project: read on the VM. */
+    function vmOverview(): ProjectOverview {
+        const acme = acmeOverview();
+        return {
+            ...acme,
+            projectPath: VM_PATH,
+            worktrees: acme.worktrees.map((worktree) => ({
+                ...worktree,
+                path: worktree.path.replace(P.acmeApi, VM_REMOTE.dir),
+                running: [],
+            })),
+        };
+    }
+
+    /** Main says every remote row can open, so only the renderer keeps the shell and the agentless one off. */
+    function vmWorkStub(): SessionWorkStub {
+        return {
+            canOpen: [S.vmWeb, VM_SHELL, S.remoteApi],
+            snapshots: {[S.vmWeb]: {...LOGIN_FIX_WORK, sessionId: S.vmWeb}},
+        };
+    }
+
+    test.use({
+        fixture: vmShellFixture(),
+        stubs: {projectOverview: {'apps/web': vmOverview()}, sessionWork: vmWorkStub()},
+    });
+
+    test('a VM project’s page shows its pull requests, plans and worktrees and the GitHub button, and an agentless remote’s shows only sessions and the remote note', async ({
+        page,
+        app,
+    }) => {
+        /* When */
+        await openProjectPage(page, REMOTE_LABEL.vm);
+
+        /* Then */
+        const vm = projectPage(page, REMOTE_LABEL.vm);
+        await expect(vm.getByText('VM', {exact: true})).toBeVisible();
+        await expect(vm.getByRole('region', {name: 'Pull requests'}).locator('.pp-pr-title')).toHaveText([
+            'Stop the login redirect loop',
+            'Try a token-bucket rate limiter',
+            'Bump express to 5.1',
+        ]);
+        await expect(
+            vm.getByRole('region', {name: 'Plans & issues'}).getByRole('button', {name: 'Expand plan Login rework'}),
+        ).toBeVisible();
+        await expect(vm.getByRole('region', {name: 'Worktrees'}).locator('.pp-worktree-branch')).toHaveText([
+            'main',
+            'fix/1320',
+            'rate-limiter',
+            'cookie-store',
+        ]);
+        await expect(vm.getByText(REMOTE_NOTE, {exact: true})).toHaveCount(0);
+
+        /* When */
+        await vm.getByRole('button', {name: 'GitHub'}).click();
+
+        /* Then */
+        await expect.poll(() => openedExternally(app)).toEqual(['repository:' + VM_PATH]);
+
+        /* When */
+        await page.keyboard.press('Escape');
+        await openProjectPage(page, REMOTE_LABEL.ssh);
+
+        /* Then */
+        const ssh = projectPage(page, REMOTE_LABEL.ssh);
+        await expect(ssh.getByRole('region', {name: 'Sessions'})).toBeVisible();
+        await expect(ssh.getByText(REMOTE_NOTE, {exact: true})).toBeVisible();
+        await expect(ssh.getByRole('region', {name: 'Pull requests'})).toHaveCount(0);
+        await expect(ssh.getByRole('region', {name: 'Plans & issues'})).toHaveCount(0);
+        await expect(ssh.getByRole('region', {name: 'Worktrees'})).toHaveCount(0);
+        await expect(ssh.getByRole('button', {name: 'GitHub'})).toHaveCount(0);
+    });
+
+    test('a VM Claude session’s meta line opens Session work, while a VM shell’s and an agentless remote’s say why not', async ({
+        page,
+        app,
+    }) => {
+        /* Given */
+        await stubOpenTerminal(app);
+        const trigger = sidebar(page).getByRole('button', {name: 'Open session work for ' + LABEL.vmWeb, exact: true});
+        await expect(trigger).toHaveAttribute('title', 'Open session work · ⌘G');
+
+        /* Then */
+        await expect(sessionItem(page, VM_SHELL).getByRole('button', {name: /^Open session work for /})).toHaveCount(0);
+        await expect(sessionItem(page, VM_SHELL).locator('.session-meta')).toHaveAttribute('title', VM_SHELL_REASON);
+        await expect(sessionItem(page, S.remoteApi).getByRole('button', {name: /^Open session work for /})).toHaveCount(
+            0,
+        );
+        await expect(sessionItem(page, S.remoteApi).locator('.session-meta')).toHaveAttribute('title', REMOTE_REASON);
+
+        /* When */
+        await trigger.click();
+
+        /* Then */
+        const work = page.getByRole('region', {name: /^Session work for /});
+        await expect(work.getByRole('heading', {level: 1})).toHaveText('Work · ' + LABEL.vmWeb);
+        await expect(sessionItem(page, S.vmWeb)).toHaveClass(/\bactive\b/);
+        expect(await terminalsOpened(app)).toEqual([S.vmWeb]);
+    });
+
+    test('⌘-click on a VM project’s name asks to open its repository', async ({page, app}) => {
+        /* When */
+        await sessionItem(page, S.vmWeb)
+            .getByTestId('project-link')
+            .click({modifiers: ['Meta']});
+
+        /* Then */
+        await expect.poll(() => openedExternally(app)).toEqual(['repository:' + VM_PATH]);
+        await expect(projectPage(page, REMOTE_LABEL.vm)).toHaveCount(0);
     });
 });
 
