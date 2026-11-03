@@ -7,7 +7,8 @@
  * worktree is dimmed and marked safe to remove; the page never removes one.
  *
  * Reads the overview, so it shimmers until the first answer. Left out for a
- * project with no checkouts (not a git repository) and for a remote one.
+ * project with no checkouts (not a git repository) and for an agentless
+ * remote one; a VM project's (#276) are read on the VM.
  */
 import type {JSX} from 'react';
 import {useStore} from '../use-store';
@@ -15,10 +16,12 @@ import {cursorId, worktreesView} from './page-rows';
 import {showsWorktrees} from './page-state';
 import {startWorktreeSession} from './actions';
 import {SectionSkeleton} from './SectionSkeleton';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 
 export function WorktreesSection({projectPath}: {projectPath: string}): JSX.Element | null {
     const page = useStore((state) => state.projectPage);
-    if (!showsWorktrees(page.overview, projectPath)) return null;
+    const vm = useStore((state) => isVmProjectIn(state.agentHost, projectPath));
+    if (!showsWorktrees(page.overview, projectPath, vm)) return null;
     const answered = page.overview?.projectPath === projectPath ? page.overview : null;
     const rows = answered ? worktreesView(answered, page.filter) : null;
     const start = page.worktreeStart;

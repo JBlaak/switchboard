@@ -11,7 +11,7 @@
 import {isRemoteProjectPath} from '../../../domain/project/remote-target';
 import type {ExistingBranch, ExistingBranchChoice} from '../../../domain/project/branch-worktree';
 import type {GitWorkspace, GitWorktrees} from '../../ports/git-workspace';
-import type {TranscriptStore} from '../../ports/transcript-store';
+import type {AwaitableTranscriptStore} from '../../ports/transcript-queries';
 
 /** Where a new session's worktree goes, under the repository's main checkout. */
 export const WORKTREES_DIR = '/.claude/worktrees/';
@@ -28,9 +28,17 @@ export interface BranchSessionCandidate {
 
 export interface BranchWorktreesDeps<S extends BranchSessionCandidate = BranchSessionCandidate> {
     sessions(): S[];
-    transcripts: Pick<TranscriptStore, 'locations'>;
+    /** Answered now for a local session, later for a VM one (#276 stage 4). */
+    transcripts: Pick<AwaitableTranscriptStore, 'locations'>;
     git: Pick<GitWorkspace, 'currentBranch' | 'defaultBranch' | 'commitSha' | 'branchExists' | 'worktrees'> &
         GitWorktrees;
+    /**
+     * Whether a path is on a remote with no Switchboard agent. Such a session
+     * is never the one a branch was worked on in: its transcripts and checkout
+     * are out of reach. A VM session's are not, so it may be. Without it, every
+     * remote session is passed over, as before #276 stage 4.
+     */
+    agentlessRemote?: (path: string) => boolean;
 }
 
 /**
@@ -124,7 +132,7 @@ export class BranchWorktrees<S extends BranchSessionCandidate = BranchSessionCan
     public async branchesOf(session: S): Promise<string[]> {
         const known = this.branches.get(session.sessionId);
         if (known && known.activeAt === session.activeAt && known.branches.length > 0) return known.branches;
-        const written = session.folder ? this.deps.transcripts.locations(session.folder, session.sessionId) : [];
+        const written = session.folder ? await this.deps.transcripts.locations(session.folder, session.sessionId) : [];
         let branches = [...new Set(written.map((location) => location.branch).filter(Boolean))];
         if (branches.length === 0) {
             const current = await this.deps.git.currentBranch(session.projectPath);
@@ -141,7 +149,8 @@ export class BranchWorktrees<S extends BranchSessionCandidate = BranchSessionCan
      */
     private async existingBranch(root: string, branch: string): Promise<ExistingBranch> {
         const checkout = (await this.deps.git.worktrees(root)).find((worktree) => worktree.branch === branch) ?? null;
-        const local = this.deps.sessions().filter((session) => !isRemoteProjectPath(session.projectPath));
+        const agentless = this.deps.agentlessRemote ?? isRemoteProjectPath;
+        const reachable = this.deps.sessions().filter((session) => !agentless(session.projectPath));
         const newest = (sessions: S[]) =>
             sessions.reduce<S | null>(
                 (best, session) => (!best || session.activeAt > best.activeAt ? session : best),
@@ -150,11 +159,11 @@ export class BranchWorktrees<S extends BranchSessionCandidate = BranchSessionCan
 
         let session =
             checkout && !checkout.main
-                ? newest(local.filter((candidate) => isUnder(candidate.projectPath, checkout.path)))
+                ? newest(reachable.filter((candidate) => isUnder(candidate.projectPath, checkout.path)))
                 : null;
         if (!session) {
             const onBranch: S[] = [];
-            for (const candidate of local) {
+            for (const candidate of reachable) {
                 if (!isUnder(candidate.projectPath, root)) continue;
                 if ((await this.branchesOf(candidate)).includes(branch)) onBranch.push(candidate);
             }

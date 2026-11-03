@@ -21,6 +21,8 @@
  * idle ones, which is where the sidebar files it too.
  */
 import {routeCandidates, folderName} from '../../domain/ask/route';
+import {parseRemoteProjectPath} from '../../domain/project/remote-target';
+import {isAgentPty} from './agent-client/agent-pty';
 import {defaultSessionOptions} from '../../domain/launch/session-options';
 import {MAC, NO_OWNERSHIP, acceptsInput, applyOwnership, ownerOf} from '../../domain/phone/ownership';
 import {sessionTier, TIER_ATTENTION, TIER_RUNNING} from '../../domain/session/tiers';
@@ -634,7 +636,7 @@ export class PhoneSessionsService {
                     name: displayName(row, session),
                     project: folderName(session.projectPath),
                     projectPath: session.projectPath,
-                    remote: session.remote?.target ?? null,
+                    remote: remoteLabel(session),
                     state: tier === TIER_ATTENTION ? 'needs-you' : busy ? 'busy' : 'idle',
                     waiting: questionsWaiting ? 'questions' : terminal ? 'terminal' : null,
                     owner: this.wireOwner(ownerOf(this.ownership, sessionId)),
@@ -662,6 +664,19 @@ export class PhoneSessionsService {
         if (device === MAC) return {kind: 'mac'};
         return {kind: 'device', deviceId: device, name: this.names.get(device) ?? 'Phone'};
     }
+}
+
+/**
+ * Where a session runs, as the phone's row labels it: a legacy ssh+tmux
+ * session's connection target, a VM session's host (`user@host`, #276 story
+ * 82), or null for a local one. A VM session has no `remote` state (its link
+ * is the agent client's), so its host comes from its project path.
+ */
+function remoteLabel(session: Pick<ActiveSession, 'remote' | 'pty' | 'projectPath'>): string | null {
+    if (session.remote) return session.remote.target;
+    if (!isAgentPty(session.pty)) return null;
+    const parsed = parseRemoteProjectPath(session.projectPath);
+    return parsed ? `${parsed.user}@${parsed.host}` : null;
 }
 
 /** Both or neither, as the protocol says. */

@@ -85,6 +85,21 @@ export interface FixtureRemoteSession {
     name?: string;
     pinned?: boolean;
     archived?: boolean;
+    /**
+     * On a VM remote (#276 stage 3): the transcript the Mac last fetched from
+     * the host's agent, seeded into the `vm_transcripts` cache the row takes
+     * its title from. Nothing in the harness dials the host to fetch one.
+     */
+    vmTranscript?: FixtureVmTranscript;
+}
+
+/** A VM session's cached transcript; the rest of it is filled in plainly. */
+export interface FixtureVmTranscript {
+    summary: string;
+    firstPrompt?: string;
+    /** Epoch ms; defaults to the session's `lastOpened`. */
+    modified?: number;
+    messages?: number;
 }
 
 export interface FixtureRemote {
@@ -291,6 +306,8 @@ export function encodeProjectPath(projectPath: string): string {
 interface SeedFile {
     settings: Record<string, unknown>;
     meta: {sessionId: string; name?: string; starred?: boolean; archived?: boolean}[];
+    /** Rows of the `vm_transcripts` table, as the app's store writes them. */
+    vmTranscripts: {session_id: string; host_key: string; cwd: string; mtime_ms: number; transcript: string}[];
 }
 
 function seedDatabase(
@@ -299,7 +316,7 @@ function seedDatabase(
     spec: FixtureSpec,
     projectPath: (relative: string) => string,
 ): void {
-    const seed: SeedFile = {settings: {}, meta: []};
+    const seed: SeedFile = {settings: {}, meta: [], vmTranscripts: []};
 
     const remoteProjects = (spec.remotes ?? []).map((remote) => ({
         user: remote.user,
@@ -339,6 +356,12 @@ function seedDatabase(
         });
     }
 
+    for (const remote of spec.remotes ?? []) {
+        for (const session of remote.sessions ?? []) {
+            if (session.vmTranscript) seed.vmTranscripts.push(vmTranscriptRow(remote, session, session.vmTranscript));
+        }
+    }
+
     const seedPath = path.join(root, 'seed.json');
     fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2));
 
@@ -349,6 +372,39 @@ function seedDatabase(
     if (result.status !== 0) {
         throw new Error(`seeding the fixture database failed (did you run \`npm run build\`?):\n${result.stderr}`);
     }
+}
+
+/**
+ * A `vm_transcripts` row: keyed by the session, under the host's
+ * `agentHostKey` (`user@host:port`), with the parsed transcript as JSON.
+ */
+function vmTranscriptRow(
+    remote: FixtureRemote,
+    session: FixtureRemoteSession,
+    transcript: FixtureVmTranscript,
+): SeedFile['vmTranscripts'][number] {
+    const cwd = (remote.dir ?? '~').replace(/^~/, '/home/' + remote.user);
+    const modified = new Date(transcript.modified ?? session.lastOpened ?? session.created).toISOString();
+    return {
+        session_id: session.id,
+        host_key: `${remote.user}@${remote.host}:${remote.port ?? 22}`,
+        cwd,
+        mtime_ms: Date.parse(modified),
+        transcript: JSON.stringify({
+            sessionId: session.id,
+            folder: encodeProjectPath(cwd),
+            projectPath: cwd,
+            summary: transcript.summary,
+            firstPrompt: transcript.firstPrompt ?? transcript.summary,
+            created: new Date(session.created).toISOString(),
+            modified,
+            fileMtime: modified,
+            messageCount: transcript.messages ?? 1,
+            slug: null,
+            aiTitle: null,
+            pullRequests: [],
+        }),
+    };
 }
 
 /** Under plain Node, `require('electron')` is the path to the binary. */

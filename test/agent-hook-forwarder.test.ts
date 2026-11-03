@@ -1,15 +1,21 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import {HookForwarder} from '../src/application/services/agent-host/hook-forwarder';
 import {ArchiveToolService} from '../src/application/services/archive-tool-service';
 import {QuestionService} from '../src/application/services/question-service';
 import {SessionRegistry} from '../src/application/model/session-registry';
+import type {ActiveSession} from '../src/application/model/active-session';
+import {NodeSelfArchivedFile} from '../src/infrastructure/agent/node-self-archived-file';
 import type {QuestionHookEndpoint} from '../src/application/ports/question-hook';
 import type {AgentMessage} from '../src/domain/agent/protocol';
 import type {AskedQuestions} from '../src/domain/questions/question';
 import {QUESTION_HOOK_TOKEN_HEADER} from '../src/domain/questions/question';
 import {QuestionHookServer} from '../src/infrastructure/http/question-hook-server';
+import {SELF_ARCHIVE_OUTCOME, type SelfArchivedFile} from '../src/application/services/agent-host/hook-forwarder';
 import {linkPair, type LinkPair} from './support/agent-link';
 import {fakeRenderer, fakeTimers, silentLog, type FakeTimers} from './support/fakes';
 
@@ -28,6 +34,10 @@ const asked: AskedQuestions = {
 interface Harness {
     forwarder: HookForwarder;
     timers: FakeTimers;
+    /** The sessions the forwarder stopped, by launch id. */
+    stopped: string[];
+    /** The self-archive record's text, as the VM's file would hold it. */
+    file: MemoryFile;
     endpoint: {url: string | null; token: string};
     /** Connect a client the way the agent's router does: handshake done, replies routed, close reported. */
     connect(): Client;
@@ -39,26 +49,51 @@ interface Client {
     received: AgentMessage[];
 }
 
-function harness(): Harness {
+/** The self-archive record in memory, shared by forwarders made over it (an agent restart). */
+interface MemoryFile extends SelfArchivedFile {
+    text: string | null;
+}
+
+function memoryFile(text: string | null = null): MemoryFile {
+    const file: MemoryFile = {
+        text,
+        read: () => file.text,
+        write: (next) => void (file.text = next),
+    };
+    return file;
+}
+
+function harness({file = memoryFile(), now = 1_000}: {file?: MemoryFile; now?: number} = {}): Harness {
     const timers = fakeTimers();
     let next = 0;
+    const stopped: string[] = [];
     const endpoint = {url: 'http://127.0.0.1:4100' as string | null, token: 'tok'};
     const forwarder = new HookForwarder({
         endpoint,
         timers,
         ids: {newId: () => `hook-${++next}`},
         log: silentLog,
+        stop: (launchId) => void stopped.push(launchId),
+        selfArchived: file,
+        clock: {now: () => now},
     });
     return {
         forwarder,
         timers,
+        stopped,
+        file,
         endpoint,
         connect() {
             const pair = linkPair();
             const received: AgentMessage[] = [];
             pair.mac.onMessage((message) => received.push(message));
             pair.agent.onMessage((message) => {
-                if (message.type === 'ask-reply' || message.type === 'archive-reply')
+                if (
+                    message.type === 'ask-reply' ||
+                    message.type === 'archive-reply' ||
+                    message.type === 'list-self-archived' ||
+                    message.type === 'forget-self-archived'
+                )
                     forwarder.handle(pair.agent, message);
             });
             pair.agent.onClose(() => forwarder.clientGone(pair.agent));
@@ -225,19 +260,7 @@ test("an archive call is answered with the Mac's outcome", async () => {
     assert.equal(h.timers.pending, 0);
 });
 
-test('an archive call with no client says the Mac is not connected', async () => {
-    /* Given */
-    const h = harness();
-
-    /* When */
-    const outcome = await h.forwarder.archiveTool.request('launch-1');
-
-    /* Then */
-    assert.equal(outcome.ok, false);
-    assert.match(outcome.message, /isn't connected/);
-});
-
-test('an archive call the Mac never answers times out as not archived', async () => {
+test('an archive call the Mac never answers is taken on by the agent', async () => {
     /* Given */
     const h = harness();
     const mac = h.connect();
@@ -248,12 +271,10 @@ test('an archive call the Mac never answers times out as not archived', async ()
     mac.pair.mac.send({type: 'archive-reply', hookId: 'hook-1', outcome: {ok: true, message: 'too late'}});
 
     /* Then */
-    const settled = await outcome;
-    assert.equal(settled.ok, false);
-    assert.match(settled.message, /didn't answer in time/);
+    assert.deepEqual(await outcome, SELF_ARCHIVE_OUTCOME);
 });
 
-test('an archive call is answered as not archived when its client goes away', async () => {
+test('an archive call whose client goes away before answering is taken on by the agent', async () => {
     /* Given */
     const h = harness();
     const mac = h.connect();
@@ -263,9 +284,7 @@ test('an archive call is answered as not archived when its client goes away', as
     mac.pair.drop();
 
     /* Then */
-    const settled = await outcome;
-    assert.equal(settled.ok, false);
-    assert.match(settled.message, /closed before it answered/);
+    assert.deepEqual(await outcome, SELF_ARCHIVE_OUTCOME);
     assert.equal(h.timers.pending, 0);
 });
 
@@ -329,6 +348,9 @@ test("over real sockets, the agent's hook server waits for the Mac's archive and
         timers: fakeTimers(),
         ids: {newId: () => `hook-${++next}`},
         log: silentLog,
+        stop: () => {},
+        selfArchived: memoryFile(),
+        clock: {now: () => 0},
     });
     const server = new QuestionHookServer({
         receiver: forwarder.receiver,
@@ -401,4 +423,187 @@ test("over real sockets, the agent's hook server waits for the Mac's archive and
         pair.sentByAgent.map((m) => ('type' in m ? m.type : 'output')),
         ['archive-request', 'ask'],
     );
+});
+
+// ── Archiving while the Mac is away (#308) ──
+
+test('with no client, an archive call is accepted, and on turn end the session is stopped and recorded', async () => {
+    /* Given */
+    const h = harness({now: 1_700_000_000_000});
+
+    /* When */
+    const outcome = await h.forwarder.archiveTool.request('launch-1');
+    const stoppedBeforeTurnEnd = [...h.stopped];
+    h.forwarder.archiveTool.turnEnded('launch-1');
+
+    /* Then */
+    assert.deepEqual(outcome, {ok: true, message: 'This session will be archived when this turn ends.'});
+    assert.deepEqual(stoppedBeforeTurnEnd, []);
+    assert.deepEqual(h.stopped, ['launch-1']);
+    assert.deepEqual(JSON.parse(h.file.text ?? 'null'), [{sessionId: 'launch-1', archivedAt: 1_700_000_000_000}]);
+});
+
+test('a turn end with no self-archive pending stops nothing and records nothing', () => {
+    /* Given */
+    const h = harness();
+
+    /* When */
+    h.forwarder.archiveTool.turnEnded('launch-1');
+
+    /* Then */
+    assert.deepEqual(h.stopped, []);
+    assert.equal(h.file.text, null);
+});
+
+test('with a client, an archive call and its turn end go to the Mac as before, and nothing is stopped here', async () => {
+    /* Given */
+    const h = harness();
+    const mac = h.connect();
+    const outcome = h.forwarder.archiveTool.request('launch-1');
+    mac.pair.mac.send({type: 'archive-reply', hookId: 'hook-1', outcome: {ok: true, message: 'queued'}});
+    await outcome;
+
+    /* When */
+    h.forwarder.archiveTool.turnEnded('launch-1');
+
+    /* Then */
+    assert.deepEqual(mac.received, [
+        {type: 'archive-request', hookId: 'hook-1', launchId: 'launch-1'},
+        {type: 'turn-ended', launchId: 'launch-1'},
+    ]);
+    assert.deepEqual(h.stopped, []);
+    assert.equal(h.file.text, null);
+});
+
+test('a client that arrives before the turn end is handed the missed archive call, then the turn end', async () => {
+    /* Given */
+    const h = harness();
+    await h.forwarder.archiveTool.request('launch-1');
+    const mac = h.connect();
+
+    /* When */
+    h.forwarder.archiveTool.turnEnded('launch-1');
+
+    /* Then */
+    assert.deepEqual(mac.received, [
+        {type: 'archive-request', hookId: 'hook-1', launchId: 'launch-1'},
+        {type: 'turn-ended', launchId: 'launch-1'},
+    ]);
+    assert.deepEqual(h.stopped, []);
+    assert.equal(h.file.text, null);
+});
+
+test('a client that arrives before the turn end lets the Mac archive it, through its own archive tool', async () => {
+    /* Given */
+    const h = harness();
+    const archived: string[] = [];
+    const registry = new SessionRegistry();
+    registry.add('launch-1', {realSessionId: null} as unknown as ActiveSession);
+    const tool = new ArchiveToolService({
+        registry,
+        endpoint: h.endpoint,
+        log: silentLog,
+        archiver: {archive: (id) => (archived.push(id), {ok: true})},
+    });
+    await h.forwarder.archiveTool.request('launch-1');
+    const mac = h.connect();
+    // The Mac's hook relay, as it answers a VM session's archive tool.
+    mac.pair.mac.onMessage((message) => {
+        if (message.type === 'archive-request')
+            mac.pair.mac.send({type: 'archive-reply', hookId: message.hookId, outcome: tool.request(message.launchId)});
+        if (message.type === 'turn-ended') tool.turnEnded(message.launchId);
+    });
+
+    /* When */
+    h.forwarder.archiveTool.turnEnded('launch-1');
+
+    /* Then */
+    assert.deepEqual(archived, ['launch-1']);
+    assert.deepEqual(h.stopped, []);
+});
+
+test('the Mac lists the self-archived sessions, then forgets the ones it names', () => {
+    /* Given */
+    const h = harness({
+        file: memoryFile(
+            JSON.stringify([
+                {sessionId: 's1', archivedAt: 1},
+                {sessionId: 's2', archivedAt: 2},
+                {sessionId: 's3', archivedAt: 3},
+            ]),
+        ),
+    });
+    const mac = h.connect();
+
+    /* When */
+    mac.pair.mac.send({type: 'list-self-archived', requestId: 'r1'});
+    mac.pair.mac.send({type: 'forget-self-archived', requestId: 'r2', sessionIds: ['s1', 's3', 'never-there']});
+    mac.pair.mac.send({type: 'list-self-archived', requestId: 'r3'});
+
+    /* Then */
+    assert.deepEqual(mac.received, [
+        {
+            type: 'self-archived',
+            requestId: 'r1',
+            sessions: [
+                {sessionId: 's1', archivedAt: 1},
+                {sessionId: 's2', archivedAt: 2},
+                {sessionId: 's3', archivedAt: 3},
+            ],
+        },
+        {type: 'done', requestId: 'r2', ok: true},
+        {type: 'self-archived', requestId: 'r3', sessions: [{sessionId: 's2', archivedAt: 2}]},
+    ]);
+});
+
+test('a missing or malformed record lists as empty', () => {
+    /* Given */
+    const missing = harness();
+    const garbled = harness({file: memoryFile('{not json')});
+    const missingMac = missing.connect();
+    const garbledMac = garbled.connect();
+
+    /* When */
+    missingMac.pair.mac.send({type: 'list-self-archived', requestId: 'r1'});
+    garbledMac.pair.mac.send({type: 'list-self-archived', requestId: 'r1'});
+
+    /* Then */
+    assert.deepEqual(missingMac.received, [{type: 'self-archived', requestId: 'r1', sessions: []}]);
+    assert.deepEqual(garbledMac.received, [{type: 'self-archived', requestId: 'r1', sessions: []}]);
+});
+
+test('the record survives a new forwarder, as it does an agent restart', async () => {
+    /* Given */
+    const file = memoryFile();
+    const before = harness({file, now: 42});
+    await before.forwarder.archiveTool.request('launch-1');
+    before.forwarder.archiveTool.turnEnded('launch-1');
+
+    /* When */
+    const after = harness({file});
+    const mac = after.connect();
+    mac.pair.mac.send({type: 'list-self-archived', requestId: 'r1'});
+
+    /* Then */
+    assert.deepEqual(mac.received, [
+        {type: 'self-archived', requestId: 'r1', sessions: [{sessionId: 'launch-1', archivedAt: 42}]},
+    ]);
+});
+
+test('the record on disk is mode 0600 and replaced whole', (t) => {
+    /* Given */
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'self-archived-'));
+    t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+    const file = new NodeSelfArchivedFile(path.join(dir, 'nested', 'self-archived.json'));
+    const missing = file.read();
+
+    /* When */
+    file.write('[1]');
+    file.write('[2]');
+
+    /* Then */
+    assert.equal(missing, null);
+    assert.equal(file.read(), '[2]');
+    assert.equal(fs.statSync(path.join(dir, 'nested', 'self-archived.json')).mode & 0o777, 0o600);
+    assert.deepEqual(fs.readdirSync(path.join(dir, 'nested')), ['self-archived.json']);
 });

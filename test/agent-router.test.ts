@@ -5,6 +5,10 @@ import {AgentHost} from '../src/application/services/agent-host/agent-host';
 import type {
     CopiesMessage,
     CopiesPart,
+    TranscriptsMessage,
+    TranscriptsPart,
+    ToolsMessage,
+    ToolsPart,
     HookForwarderMessage,
     HookForwarderPart,
     HostConfigMessage,
@@ -55,7 +59,15 @@ function fakeParts(calls: Calls) {
         ...aware('copies'),
         handle: (_client, message: CopiesMessage) => void calls.push(`copies.handle:${message.type}`),
     };
-    return {sessions, hooks, config, copies};
+    const transcripts: TranscriptsPart = {
+        ...aware('transcripts'),
+        handle: (_client, message: TranscriptsMessage) => void calls.push(`transcripts.handle:${message.type}`),
+    };
+    const tools: ToolsPart = {
+        ...aware('tools'),
+        handle: (_client, message: ToolsMessage) => void calls.push(`tools.handle:${message.type}`),
+    };
+    return {sessions, hooks, config, copies, transcripts, tools};
 }
 
 const quietLog: Logger = {debug() {}, info() {}, warn() {}, error() {}};
@@ -82,8 +94,27 @@ test('a matching hello is welcomed with the host settings and every part hears o
     assert.deepEqual(pair.sentByAgent, [
         {type: 'welcome', protocol: AGENT_PROTOCOL_VERSION, agentVersion: VERSION, settings: SETTINGS},
     ]);
-    assert.deepEqual(calls, ['sessions.connected', 'hooks.connected', 'config.connected', 'copies.connected']);
+    assert.deepEqual(calls, [
+        'sessions.connected',
+        'hooks.connected',
+        'config.connected',
+        'copies.connected',
+        'transcripts.connected',
+        'tools.connected',
+    ]);
     assert.equal(pair.agent.closed, false);
+});
+
+test("the welcome names the VM user's home, so the Mac can resolve ~ paths", () => {
+    /* Given */
+    const pair = linkPair();
+    new AgentHost({parts: fakeParts([]), agentVersion: VERSION, home: '/home/dev', log: quietLog}).accept(pair.agent);
+
+    /* When */
+    pair.mac.send(HELLO);
+
+    /* Then */
+    assert.equal((pair.sentByAgent[0] as {home?: string}).home, '/home/dev');
 });
 
 test('a hello from another app version on the same protocol is welcomed, naming the agent version', () => {
@@ -126,7 +157,6 @@ test('a message before hello gets bye protocol-error', () => {
 });
 
 for (const [what, value] of [
-    ['an unknown type', {type: 'launch-missiles'}],
     ['a message without a type', {requestId: 'r1'}],
     ['a message that is not an object', ['hello']],
     ['a known type with a missing field', {type: 'input', sessionId: 's1'}],
@@ -216,7 +246,14 @@ test('a dropped link tells every part the client is gone, once', () => {
     pair.agent.close();
 
     /* Then */
-    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone']);
+    assert.deepEqual(calls, [
+        'sessions.gone',
+        'hooks.gone',
+        'config.gone',
+        'copies.gone',
+        'transcripts.gone',
+        'tools.gone',
+    ]);
 });
 
 test('a client that never finished its handshake is not reported gone', () => {
@@ -242,7 +279,14 @@ test('a bye from the client closes the link without an answer', () => {
     /* Then */
     assert.equal(pair.sentByAgent.length, 1); // only the welcome
     assert.equal(pair.agent.closed, true);
-    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone']);
+    assert.deepEqual(calls, [
+        'sessions.gone',
+        'hooks.gone',
+        'config.gone',
+        'copies.gone',
+        'transcripts.gone',
+        'tools.gone',
+    ]);
 });
 
 test('closeAll says bye shutting-down to every client', () => {
@@ -290,4 +334,48 @@ test('the validator accepts an optional field added later and rejects a bad enum
 
     /* Then */
     assert.deepEqual(results, [true, false]);
+});
+
+test('a request this agent does not know is answered as refused, and the link stays up', () => {
+    /* Given */
+    const {pair} = setUp();
+    pair.mac.send(HELLO);
+
+    /* When */
+    sendRaw(pair, {type: 'list-something-new', requestId: 'r9'});
+
+    /* Then */
+    assert.deepEqual(pair.sentByAgent.at(-1), {
+        type: 'done',
+        requestId: 'r9',
+        ok: false,
+        error: 'this agent does not know list-something-new; update the agent',
+    });
+    assert.equal(pair.agent.closed, false);
+});
+
+test('an unknown message before the handshake still closes the link', () => {
+    /* Given */
+    const {pair} = setUp();
+
+    /* When */
+    sendRaw(pair, {type: 'list-something-new', requestId: 'r9'});
+
+    /* Then */
+    assert.equal((pair.sentByAgent[0] as {code?: string}).code, 'protocol-error');
+    assert.equal(pair.agent.closed, true);
+});
+
+test('an unknown notice without a request id is ignored, and the link stays up', () => {
+    /* Given */
+    const {pair} = setUp();
+    pair.mac.send(HELLO);
+    const before = pair.sentByAgent.length;
+
+    /* When */
+    sendRaw(pair, {type: 'launch-missiles'});
+
+    /* Then */
+    assert.equal(pair.sentByAgent.length, before);
+    assert.equal(pair.agent.closed, false);
 });

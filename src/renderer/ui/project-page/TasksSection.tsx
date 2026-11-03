@@ -7,8 +7,10 @@
  * and its sidebar row pulses; ↵ shows its detail under the row.
  *
  * Left out while BlaakTasks is off, before the first answer, and when no open
- * task is linked to the repo. A start's answer, the detail and a key's notice
- * are the Tasks page's (`tasks` slice), drawn here under the row.
+ * task is linked to the repo. A VM project (#276 stage 5) shows it as a local
+ * one does; an agentless remote never does. A start's answer,
+ * the detail and a key's notice are the Tasks page's (`tasks` slice), drawn
+ * here under the row.
  */
 import type {JSX} from 'react';
 import {dispatch} from '../../state/app-store';
@@ -18,6 +20,7 @@ import {StartPanel} from '../tasks-page/StartPanel';
 import {TaskDetailPane} from '../tasks-page/TaskDetailPane';
 import {cursorId, tasksViewOf} from './page-rows';
 import {openProjectTaskDetail} from './project-tasks';
+import {isVmRepositoryIn, showsTasks} from './page-state';
 
 export function TasksSection({projectPath}: {projectPath: string}): JSX.Element | null {
     const enabled = useStore((state) => state.tasks.enabled);
@@ -25,6 +28,8 @@ export function TasksSection({projectPath}: {projectPath: string}): JSX.Element 
     const start = useStore((state) => state.tasks.start);
     const detail = useStore((state) => state.tasks.detail);
     const notice = useStore((state) => state.tasks.notice);
+    const vm = useStore((state) => isVmRepositoryIn(state.agentHost, projectPath));
+    if (!showsTasks(projectPath, vm)) return null;
     const rows = enabled ? tasksViewOf(page, projectPath) : null;
     if (!rows || !page.tasks) return null;
     const {sessions} = page.tasks;

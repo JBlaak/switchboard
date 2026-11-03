@@ -167,6 +167,29 @@ test('with nothing unpushed there is no bundle', async () => {
     assert.equal(patch, null);
 });
 
+test("the patch leaves out Switchboard's worktrees and nested repositories when .claude is not ignored", async () => {
+    /* Given */
+    const local = path.join(tmp, 'nested');
+    run(tmp, 'clone', '-q', origin, local);
+    fs.writeFileSync(path.join(local, 'real.txt'), 'a real change\n');
+    run(local, 'worktree', 'add', '-q', '-b', 'wt-nested', path.join(local, '.claude/worktrees/wt1'));
+    const embedded = path.join(local, 'vendor/lib');
+    fs.mkdirSync(embedded, {recursive: true});
+    run(embedded, 'init', '-q');
+    commit(embedded, 'x.txt', 'x\n', 'embedded');
+
+    /* When */
+    const patch = await git.patch(local);
+    const uncommitted = await git.uncommittedPaths(local);
+
+    /* Then */
+    const text = patch ? Buffer.from(patch.bytes).toString('utf8') : '';
+    assert.match(text, /real\.txt/);
+    assert.doesNotMatch(text, /\.claude\/worktrees/);
+    assert.doesNotMatch(text, /Subproject commit|vendor\/lib/);
+    assert.ok(uncommitted.every((p) => !p.startsWith('.claude/worktrees')));
+});
+
 test('the patch applied to origin plus the bundle rebuilds the working tree', async () => {
     /* Given */
     const head = run(repo, 'rev-parse', 'HEAD').trim();

@@ -27,6 +27,10 @@ import {parseMacMessage} from '../../../domain/agent/validate';
 import type {
     CopiesMessage,
     CopiesPart,
+    TranscriptsMessage,
+    TranscriptsPart,
+    ToolsMessage,
+    ToolsPart,
     HookForwarderMessage,
     HookForwarderPart,
     HostConfigMessage,
@@ -41,17 +45,21 @@ export interface AgentParts {
     hooks: HookForwarderPart;
     config: HostConfigPart;
     copies: CopiesPart;
+    transcripts: TranscriptsPart;
+    tools: ToolsPart;
 }
 
 export interface AgentHostDeps {
     parts: AgentParts;
     /** This agent's own version, sent in `welcome` so the client can see it is behind. */
     agentVersion: string;
+    /** The VM user's home, sent in `welcome` so the Mac can turn `~` paths into absolute ones (stage 4). */
+    home?: string;
     log: Logger;
 }
 
 /** Which part owns each message type. `hello` and `bye` are the router's own. */
-type Owner = 'sessions' | 'hooks' | 'config' | 'copies';
+type Owner = 'sessions' | 'hooks' | 'config' | 'copies' | 'transcripts' | 'tools';
 
 /**
  * Keyed by every routed type, so a message added to `handlers.ts` without a
@@ -66,6 +74,8 @@ const OWNER: Record<Exclude<MacMessage['type'], 'hello' | 'bye'>, Owner> = {
     'list-sessions': 'sessions',
     'ask-reply': 'hooks',
     'archive-reply': 'hooks',
+    'list-self-archived': 'hooks',
+    'forget-self-archived': 'hooks',
     'get-host-settings': 'config',
     'set-host-settings': 'config',
     'check-tools': 'config',
@@ -77,6 +87,17 @@ const OWNER: Record<Exclude<MacMessage['type'], 'hello' | 'bye'>, Owner> = {
     'copy-status': 'copies',
     'push-branch': 'copies',
     'remove-copy': 'copies',
+    'get-transcript': 'transcripts',
+    'transcript-tail': 'transcripts',
+    'import-transcript': 'transcripts',
+    'run-tool': 'tools',
+    'read-file': 'tools',
+    'stat-files': 'tools',
+    'watch-dir': 'tools',
+    'unwatch-dir': 'tools',
+    'transcript-query': 'tools',
+    'list-transcripts': 'transcripts',
+    'place-upload': 'copies',
 };
 
 /** Where one client's link is: waiting for `hello`, handed to the parts, or ended. */
@@ -106,6 +127,23 @@ export class AgentHost {
         client.onMessage((raw: unknown) => {
             if (state === 'closed' || client.closed) return;
             const parsed = parseMacMessage(raw);
+            // After the handshake, a message this agent does not know is a newer
+            // Mac asking an older agent something new (messages are added without
+            // a protocol bump): answer the request as refused and keep the link,
+            // rather than dropping every session's connection over it.
+            if (!parsed.ok && parsed.unknown && state === 'connected') {
+                const {type, requestId} = parsed.unknown;
+                this.deps.log.warn(`agent: ${type} is not something this agent knows; update the agent`);
+                if (requestId) {
+                    client.send({
+                        type: 'done',
+                        requestId,
+                        ok: false,
+                        error: `this agent does not know ${type}; update the agent`,
+                    });
+                }
+                return;
+            }
             if (!parsed.ok) return this.refuse(client, AGENT_CLOSE.protocolError, parsed.reason);
             const message = parsed.message;
 
@@ -160,6 +198,7 @@ export class AgentHost {
             protocol: AGENT_PROTOCOL_VERSION,
             agentVersion,
             settings: this.deps.parts.config.current(),
+            ...(this.deps.home ? {home: this.deps.home} : {}),
         });
         this.deps.log.info(`agent: client connected (app ${hello.appVersion})`);
         return true;
@@ -178,7 +217,7 @@ export class AgentHost {
             this.refuse(client, AGENT_CLOSE.protocolError, 'hello after the handshake');
             return;
         }
-        const {sessions, hooks, config, copies} = this.deps.parts;
+        const {sessions, hooks, config, copies, transcripts, tools} = this.deps.parts;
         // A part that throws has a bug, not a bad client: log it and keep the
         // link, so one broken request does not cost the Mac every session.
         try {
@@ -191,6 +230,10 @@ export class AgentHost {
                     return config.handle(client, message as HostConfigMessage);
                 case 'copies':
                     return copies.handle(client, message as CopiesMessage);
+                case 'transcripts':
+                    return transcripts.handle(client, message as TranscriptsMessage);
+                case 'tools':
+                    return tools.handle(client, message as ToolsMessage);
             }
         } catch (err) {
             this.deps.log.error(`agent: ${message.type} failed`, err);
@@ -207,11 +250,13 @@ export class AgentHost {
 
     /** Tell every part something, so one part's failure does not keep it from the others. */
     private eachPart(
-        call: (part: SessionHostPart | HookForwarderPart | HostConfigPart | CopiesPart) => void,
+        call: (
+            part: SessionHostPart | HookForwarderPart | HostConfigPart | CopiesPart | TranscriptsPart | ToolsPart,
+        ) => void,
         what: string,
     ): void {
-        const {sessions, hooks, config, copies} = this.deps.parts;
-        for (const part of [sessions, hooks, config, copies]) {
+        const {sessions, hooks, config, copies, transcripts, tools} = this.deps.parts;
+        for (const part of [sessions, hooks, config, copies, transcripts, tools]) {
             try {
                 call(part);
             } catch (err) {

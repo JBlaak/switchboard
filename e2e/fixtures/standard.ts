@@ -39,6 +39,8 @@ export const S = {
     bumpDeps: sessionId('bump-deps'),
     /** The remote project's one session. */
     remoteApi: sessionId('remote-api'),
+    /** A Claude session on the VM host, with a cached transcript. Only in `vmTranscriptFixture`. */
+    vmWeb: sessionId('vm-web'),
 } as const;
 
 /** What each session's row is labelled. */
@@ -54,6 +56,8 @@ export const LABEL = {
     flakyE2e: 'Investigate the flaky checkout e2e test',
     bumpDeps: 'Bump dependencies and fix the fallout',
     remoteApi: 'Remote Claude',
+    /** The title the VM session's cached transcript gives it. */
+    vmWeb: 'Wire the dashboard to the new metrics API',
 } as const;
 
 /** Project paths, relative to the fixture home. */
@@ -202,6 +206,34 @@ export function handoffFixture(): FixtureSpec {
                 copyOf: P.acmeApi,
             },
         ],
+    };
+}
+
+/**
+ * `vmFixture` with one Claude session on the VM host, whose transcript the
+ * Mac fetched from the agent before (#276 stage 3): it is in the
+ * `vm_transcripts` cache, so the row has a title without dialling the host.
+ */
+export function vmTranscriptFixture(): FixtureSpec {
+    const vm = vmFixture();
+    return {
+        ...vm,
+        remotes: (vm.remotes ?? []).map((remote) =>
+            remote.host === VM_REMOTE.host
+                ? {
+                      ...remote,
+                      sessions: [
+                          {
+                              id: S.vmWeb,
+                              kind: 'claude' as const,
+                              created: hoursAgo(6),
+                              lastOpened: hoursAgo(4),
+                              vmTranscript: {summary: LABEL.vmWeb, messages: 8},
+                          },
+                      ],
+                  }
+                : remote,
+        ),
     };
 }
 

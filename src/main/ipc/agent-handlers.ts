@@ -3,9 +3,11 @@
  * terminal, and the host settings in a VM project's settings.
  *
  * Every call goes to the `AgentHosts` façade, which names a host by any
- * project path on it. Install's progress lines are pushed to the window as
- * they come, and a finished install has the project list read again, so the
- * project turns into a VM project there.
+ * `ssh://` path on it: a project's, or the VM's own from Settings → VMs
+ * (`vmHostPath`). Install's progress lines are pushed to the window as they
+ * come, and a finished install has the project list and the VM list read
+ * again, so the host's projects turn into VM projects and its VM shows the
+ * version.
  */
 import {EVENT, INVOKE} from '../../ipc/channels';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
@@ -20,7 +22,7 @@ function agentHostsOf(app: Container): AgentHosts {
     return app.agentHosts;
 }
 
-/** Only an ssh:// project names a host. */
+/** Only an ssh:// path names a host: a project's, or the VM's own (no folder). */
 function hostPath(projectPath: unknown): string {
     if (typeof projectPath !== 'string' || !isRemoteProjectPath(projectPath)) {
         throw new Error('Not a remote project');
@@ -48,7 +50,10 @@ export function registerAgentHandlers(ipc: IpcRegistrar, app: Container): void {
             const window = app.getWindow();
             if (window && !window.isDestroyed()) window.webContents.send(EVENT.agentInstallProgress, path, line);
         });
-        if (result.ok) app.renderer.projectsChanged();
+        if (result.ok) {
+            app.renderer.projectsChanged();
+            app.renderer.vmHostsChanged();
+        }
         return result;
     });
 

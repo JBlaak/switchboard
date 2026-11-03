@@ -22,6 +22,15 @@ import type {WeatherLocation} from '../weather/weather';
 export interface GlobalSettings {
     hiddenProjects?: string[];
     remoteProjects?: RemoteProjectSetting[];
+    /** The registered VMs (Settings → VMs). */
+    vmHosts?: VmHostSetting[];
+    /**
+     * Sessions handed off to a VM (#276 stage 3), by id: the copy's project
+     * path they continue in. Their transcript on the Mac stays on disk, and
+     * this keeps its local row out of the list, so one conversation has one
+     * row: the VM's.
+     */
+    handedOffSessions?: Record<string, {copyPath: string; at: string}>;
     windowBounds?: WindowBounds;
     /**
      * Global only, never per project: it is one window's colour scheme. Read it
@@ -64,12 +73,34 @@ export interface GlobalSettings {
     [key: string]: unknown;
 }
 
+/**
+ * A VM registered in Settings → VMs (#276, after stage 5), as a paired phone
+ * is in Settings → Phone access: the host itself, with no folder. It is the
+ * source of truth for which hosts run a Switchboard agent; a remote project
+ * on a registered host with an agent is a VM project.
+ */
+export interface VmHostSetting {
+    user: string;
+    host: string;
+    port: number;
+    /** What the VM is called in the UI; the `user@host` label when absent. */
+    name?: string;
+    /** When it was registered, ISO. */
+    addedAt: string;
+    /** The agent installed on it; absent until an install finished. */
+    agent?: {version: string; installedAt: string};
+}
+
 /** A remote project as stored in the `global` settings blob. */
 export interface RemoteProjectSetting extends RemoteConfig {
     sessions?: RemoteSessionRecord[];
     /**
-     * Set once a Switchboard agent is installed on the host (#276): its sessions
-     * then run on the agent instead of in tmux. Absent on an agentless remote.
+     * The agent on this project's host (#276): its sessions then run on the
+     * agent instead of in tmux. Absent on an agentless remote.
+     *
+     * Since VMs are registered on their own (`vmHosts`), this is derived: the
+     * settings service fills it in from the host's registration when it reads
+     * remote projects, and a stored value is only what older builds wrote.
      */
     agent?: {version: string; installedAt: string};
     /**

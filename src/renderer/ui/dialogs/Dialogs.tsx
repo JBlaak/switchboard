@@ -25,5 +25,7 @@ export function Dialogs(): JSX.Element | null {
             return <ResumeSessionDialog key={seq} session={open.session} settings={open.settings} onClose={onClose} />;
         case 'handOff':
             return <HandOffDialog key={seq} localPath={open.localPath} host={open.host} onClose={onClose} />;
+        case 'handOffSession':
+            return <HandOffDialog key={seq} sessionId={open.sessionId} host={open.host} onClose={onClose} />;
     }
 }

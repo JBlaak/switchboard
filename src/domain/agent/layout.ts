@@ -36,6 +36,13 @@ export const AGENT_BIN = `${AGENT_HOME}/bin/switchboard-agent`;
 /** The host settings, as JSON. */
 export const HOST_SETTINGS_FILE = `${AGENT_HOME}/host-settings.json`;
 
+/**
+ * The sessions that archived themselves while no Mac was connected (#308), as
+ * JSON: `[{sessionId, archivedAt}]`. Mode 0600, written atomically; the Mac
+ * reads and clears it on every connect.
+ */
+export const SELF_ARCHIVED_FILE = `${AGENT_HOME}/self-archived.json`;
+
 /** The systemd user unit's name and file. */
 export const AGENT_UNIT = 'switchboard-agent.service';
 export const AGENT_UNIT_FILE = `$HOME/.config/systemd/user/${AGENT_UNIT}`;

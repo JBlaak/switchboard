@@ -9,14 +9,16 @@
  * locked as well, since nothing here forces a removal.
  *
  * It runs after the archive and on its own: a worktree that stays or a git
- * that refuses is logged, and the archive stands either way. Remote sessions
- * are left alone; their worktrees are on another machine.
+ * that refuses is logged, and the archive stands either way. Sessions on a
+ * remote without an agent are left alone: their worktrees are on a machine
+ * git cannot reach. A VM session's are cleaned on the VM, through the git
+ * that its VM-named paths route there (#276 stage 4).
  */
-import {isRemoteProjectPath} from '../../domain/project/remote-target';
+import {isRemoteProjectPath, parseRemoteProjectPath} from '../../domain/project/remote-target';
 import {worktreeVerdicts} from '../../domain/session-work/worktree-cleanup';
 import type {GitWorkspace, GitWorktrees} from '../ports/git-workspace';
 import type {Logger} from '../ports/logger';
-import type {TranscriptStore} from '../ports/transcript-store';
+import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
 import type {SessionWorkTarget} from './session-work-service';
 
 export interface WorktreeCleanupDeps {
@@ -24,11 +26,19 @@ export interface WorktreeCleanupDeps {
     enabled(): boolean;
     /** Where a session lives, or null when no session goes by that id. */
     locate(sessionId: string): SessionWorkTarget | null;
-    transcripts: Pick<TranscriptStore, 'locations'>;
+    /** Answered now for a local session, later for a VM one (#276 stage 4). */
+    transcripts: Pick<AwaitableTranscriptStore, 'locations'>;
     git: Pick<GitWorkspace, 'worktreeRoot' | 'worktrees'> & Pick<GitWorktrees, 'mainCheckout' | 'removeWorktree'>;
     /** The directories every session but this one works in: running, or listed and not archived. */
     otherSessionPaths(sessionId: string): string[];
     log: Logger;
+    /**
+     * Whether a path is on a remote with no Switchboard agent, whose worktrees
+     * are left alone: out of git's reach. A VM session's git runs on the VM, so
+     * its worktrees are cleaned there. Without it, every remote is left alone,
+     * as before #276 stage 4.
+     */
+    agentlessRemote?: (path: string) => boolean;
 }
 
 export class WorktreeCleanupService {
@@ -46,11 +56,11 @@ export class WorktreeCleanupService {
 
     private async clean(sessionId: string): Promise<void> {
         const target = this.deps.locate(sessionId);
-        if (!target || isRemoteProjectPath(target.projectPath)) return;
+        if (!target || (this.deps.agentlessRemote ?? isRemoteProjectPath)(target.projectPath)) return;
 
         const cwds = [target.projectPath];
         if (target.folder)
-            cwds.push(...this.deps.transcripts.locations(target.folder, sessionId).map((entry) => entry.cwd));
+            cwds.push(...(await this.deps.transcripts.locations(target.folder, sessionId)).map((entry) => entry.cwd));
 
         // Each worktree under the repository it belongs to, which is where git lists it.
         const byRepository = new Map<string, Set<string>>();
@@ -64,7 +74,7 @@ export class WorktreeCleanupService {
         }
         if (byRepository.size === 0) return;
 
-        const inUse = this.deps.otherSessionPaths(sessionId);
+        const inUse = await this.inUse(sessionId, target.projectPath);
         for (const [repository, worked] of byRepository) {
             const checkouts = await this.deps.git.worktrees(repository);
             for (const verdict of worktreeVerdicts([...worked], checkouts, inUse)) {
@@ -83,5 +93,24 @@ export class WorktreeCleanupService {
                 );
             }
         }
+    }
+
+    /**
+     * The directories the other sessions work in. On a VM, one directory has
+     * two names: a project added as `~/projects/site` and the absolute
+     * `/home/dev/projects/site` git answers with. So for a VM session, each
+     * other session's directory on the same host is also named as git names
+     * its worktree, or a worktree another session works in would look free.
+     */
+    private async inUse(sessionId: string, projectPath: string): Promise<string[]> {
+        const paths = this.deps.otherSessionPaths(sessionId);
+        const host = parseRemoteProjectPath(projectPath);
+        if (!host) return paths;
+        const sameHost = paths.filter((path) => {
+            const other = parseRemoteProjectPath(path);
+            return other !== null && other.user === host.user && other.host === host.host && other.port === host.port;
+        });
+        const roots = await Promise.all([...new Set(sameHost)].map((path) => this.deps.git.worktreeRoot(path)));
+        return [...paths, ...roots.filter((root): root is string => root !== null)];
     }
 }

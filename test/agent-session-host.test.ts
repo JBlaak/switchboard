@@ -458,6 +458,24 @@ test('signal falls back to the process alone when the tree cannot be reached', a
     assert.deepEqual(ptys[0].kills, ['SIGTERM']);
 });
 
+test('stop sends SIGTERM to a live session tree, for an archive made with no Mac (#308)', async () => {
+    /* Given */
+    const {host, terminals, ptys, client} = harness();
+    const mac = client();
+    await mac.send(open({sessionId: 'a'}));
+    await mac.send(open({sessionId: 'b'}));
+    ptys[1].emitExit(0);
+
+    /* When */
+    const stoppedLive = host.stop('a');
+    const stoppedEnded = host.stop('b');
+    const stoppedUnknown = host.stop('nope');
+
+    /* Then */
+    assert.deepEqual([stoppedLive, stoppedEnded, stoppedUnknown], [true, false, false]);
+    assert.deepEqual(terminals.signals, [[1, 'SIGTERM']]);
+});
+
 // ── list-sessions and terminateAll ──
 
 test('list-sessions answers every live and remembered ended session with its last seq', async () => {

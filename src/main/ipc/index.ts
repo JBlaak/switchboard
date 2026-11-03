@@ -26,6 +26,10 @@ import {registerPhoneAccessHandlers} from './phone-access-handlers';
 import {registerTasksHandlers} from './tasks-handlers';
 import {registerAgentHandlers} from './agent-handlers';
 import {registerHandoffHandlers} from './handoff-handlers';
+import {registerSessionHandoffHandlers} from './session-handoff-handlers';
+import {registerVmSchedulesHandlers} from './vm-schedules-handlers';
+import {registerDroppedFilesHandlers} from './dropped-files-handlers';
+import {registerVmRegistryHandlers} from './vm-registry-handlers';
 import type {Container} from '../composition-root';
 
 export function registerIpcHandlers(app: Container): void {
@@ -50,4 +54,8 @@ export function registerIpcHandlers(app: Container): void {
     registerTasksHandlers(ipc, app);
     registerAgentHandlers(ipc, app);
     registerHandoffHandlers(ipc, app);
+    registerSessionHandoffHandlers(ipc, app);
+    registerVmSchedulesHandlers(ipc, app);
+    registerDroppedFilesHandlers(ipc, app);
+    registerVmRegistryHandlers(ipc, app);
 }

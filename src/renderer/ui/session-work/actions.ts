@@ -22,6 +22,8 @@ import {
     workTabsFor,
 } from '../../state/session-work-slice';
 import {taskIdOf} from '../../state/session-task-slice';
+import {isVmProjectIn} from '../../state/agent-host-slice';
+import {workOffReason} from '../session-list/work-trigger';
 import type {DiffMode, ReviewKind, WorkTab} from '../../state/session-work-slice';
 import type {DiffSide} from '../../../domain/session-work/model';
 import type {ReviewMode, ReviewResult} from '../../../domain/session-work/review';
@@ -34,11 +36,16 @@ import type {Background, View} from './image-compare/types';
 /** Sessions whose eligibility is being asked right now, so a row asks once. */
 const asking = new Map<string, Promise<boolean>>();
 
-/** Is this session remote? Then the page cannot open, and main need not be asked. */
-export function isRemoteSession(sessionId: string, projectPath?: string | null): boolean {
+/**
+ * Is the page off for this session without asking main: one on an agentless
+ * remote, or a shell on a VM (see `workOffReason`)? A VM's Claude session
+ * (#276 stage 4) is asked of main, as a local one is.
+ */
+export function isSessionWorkOff(sessionId: string, projectPath?: string | null): boolean {
     const session = sessionMap.get(sessionId);
     const path = projectPath ?? session?.projectPath ?? '';
-    return session?.type === 'remote' || path.startsWith('ssh://');
+    const vm = isVmProjectIn(getState().agentHost, path);
+    return workOffReason(session ?? {}, path, vm) !== null;
 }
 
 /**
@@ -48,7 +55,7 @@ export function isRemoteSession(sessionId: string, projectPath?: string | null):
  * renders; `fresh` asks again even so (Cmd+G, on a "no" that may be stale).
  */
 export function canOpenSessionWork(sessionId: string, {fresh = false} = {}): Promise<boolean> {
-    if (isRemoteSession(sessionId)) return Promise.resolve(false);
+    if (isSessionWorkOff(sessionId)) return Promise.resolve(false);
     const cached = getState().sessionWork.canOpen;
     if (!fresh && hasEntry(cached, sessionId)) return Promise.resolve(cached[sessionId]);
     const pending = asking.get(sessionId);

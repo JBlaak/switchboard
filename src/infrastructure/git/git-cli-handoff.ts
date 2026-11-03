@@ -101,6 +101,9 @@ function inside(root: string, relative: string): string | null {
     return full.startsWith(path.resolve(root) + path.sep) ? full : null;
 }
 
+/** Where Switchboard (and `claude --worktree`) keeps a checkout's own worktrees, as a pathspec. */
+const LOCAL_WORKTREES = '.claude/worktrees';
+
 export class GitCliHandoff implements HandoffGit {
     private readonly workspace: GitCliWorkspace;
 
@@ -115,6 +118,15 @@ export class GitCliHandoff implements HandoffGit {
 
     public repositoryRoot(cwd: string): Promise<string | null> {
         return this.workspace.worktreeRoot(cwd);
+    }
+
+    public async commonDir(cwd: string): Promise<string | null> {
+        const result = await run(
+            cwd,
+            ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+            await this.toolEnv(),
+        );
+        return result.code === 0 ? result.stdout.toString('utf8').trim() || null : null;
     }
 
     public currentBranch(root: string): Promise<string | null> {
@@ -171,8 +183,15 @@ export class GitCliHandoff implements HandoffGit {
             // Without an index yet (nothing ever staged) git starts an empty one.
             if (fs.existsSync(indexPath)) fs.copyFileSync(indexPath, tempIndex);
             const withIndex = {...env, GIT_INDEX_FILE: tempIndex};
-            const added = await run(root, ['add', '-A'], withIndex);
+            // Switchboard's own worktrees live inside the checkout; in a repository
+            // that does not ignore `.claude/` they would go over as embedded repos,
+            // and the empty folders they leave on the VM block its worktrees.
+            const added = await run(root, ['add', '-A', '--', '.', `:(exclude)${LOCAL_WORKTREES}`], withIndex);
             if (added.code !== 0) return null;
+            // Any other repository nested in the checkout (not a submodule HEAD
+            // already has) is left out the same way: a patch cannot carry it.
+            const dropped = await this.dropNewGitlinks(root, withIndex);
+            if (!dropped) return null;
             // The explicit prefixes beat a user's `diff.noprefix` or
             // `diff.mnemonicPrefix`, either of which would break `git apply` on the VM.
             const diff = await run(
@@ -200,7 +219,16 @@ export class GitCliHandoff implements HandoffGit {
     public async uncommittedPaths(root: string): Promise<string[]> {
         const result = await run(
             root,
-            ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--no-renames'],
+            [
+                'status',
+                '--porcelain=v1',
+                '-z',
+                '--untracked-files=all',
+                '--no-renames',
+                '--',
+                '.',
+                `:(exclude)${LOCAL_WORKTREES}`,
+            ],
             await this.toolEnv(),
         );
         if (result.code !== 0) return [];
@@ -306,6 +334,31 @@ export class GitCliHandoff implements HandoffGit {
         if (moved.code !== 0) return fail(moved);
         const added = await run(root, ['worktree', 'add', '--quiet', target, branch], env, CHECKOUT_TIMEOUT_MS);
         return added.code === 0 ? {ok: true} : fail(added);
+    }
+
+    /**
+     * Unstage, in the temp index, every gitlink (a nested repository) that
+     * HEAD does not have: `git add -A` stages one for each embedded repo.
+     */
+    private async dropNewGitlinks(root: string, withIndex: Env): Promise<boolean> {
+        const staged = await run(root, ['ls-files', '-s', '-z'], withIndex);
+        if (staged.code !== 0) return false;
+        const links = nulList(staged.stdout)
+            .filter((entry) => entry.startsWith('160000 '))
+            .map((entry) => entry.slice(entry.indexOf('\t') + 1));
+        if (links.length === 0) return true;
+        const inHead = await run(root, ['ls-tree', '-r', '-z', 'HEAD', '--', ...links], withIndex);
+        const known = new Set(
+            inHead.code === 0
+                ? nulList(inHead.stdout)
+                      .filter((entry) => entry.startsWith('160000 '))
+                      .map((entry) => entry.slice(entry.indexOf('\t') + 1))
+                : [],
+        );
+        const fresh = links.filter((link) => !known.has(link));
+        if (fresh.length === 0) return true;
+        const removed = await run(root, ['update-index', '--force-remove', '--', ...fresh], withIndex);
+        return removed.code === 0;
     }
 
     /** Where `branch` is checked out among the repository's worktrees; null when nowhere. */

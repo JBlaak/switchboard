@@ -278,6 +278,10 @@
     color: var(--sb-text-strong);
 }
 
+.handoff-choice-label {
+    color: var(--sb-text-strong);
+}
+
 .handoff-file-size {
     font-size: 11.5px;
     color: var(--sb-text-faint);
@@ -290,8 +294,15 @@
     color: var(--sb-text-muted);
 }
 
-.handoff-existing {
+.handoff-existing,
+.handoff-busy {
     margin-bottom: 12px;
+}
+
+/* Session hand-off (#276 stage 3): where a failure leaves the session. */
+.handoff-error-note {
+    margin-top: 4px;
+    color: var(--sb-text-muted);
 }
 
 .handoff-log {

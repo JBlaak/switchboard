@@ -19,6 +19,13 @@
  * the VM's: the marker records what that hand-off left, and the next one
  * discards exactly that and nothing else.
  *
+ * A file dropped on a VM session's terminal (stage 5) comes as an upload too,
+ * and `place-upload` moves it to `~/.switchboard/drops/<random>/<name>`, the
+ * path the Mac then types into the session. Each drop gets its own random
+ * folder, so two files of one name never meet, and a drop older than
+ * DROP_MAX_AGE_MS is removed whenever another is placed: they are for the
+ * session that was handed them, not an archive.
+ *
  * Everything a copy does runs through two small ports below (commands and
  * files) with Node adapters in `src/infrastructure/agent/`, and operations on
  * one copy's folder run one at a time, so a status read or a removal can never
@@ -31,6 +38,7 @@ import type {
     HandoffDoneMessage,
     HandoffMessage,
     HostSettings,
+    PlaceUploadMessage,
     PushBranchMessage,
     RemoveCopyMessage,
 } from '../../../domain/agent/protocol';
@@ -85,7 +93,39 @@ export interface CopiesFiles {
     realpath(path: string): string | null;
 }
 
+/** A folder's name and when it last changed, epoch ms. */
+export interface DropFolder {
+    name: string;
+    mtimeMs: number;
+}
+
+/** The file work of placing dropped files, on absolute paths. */
+export interface DropFiles {
+    /** The folders directly in `dir`; [] when it does not exist or can't be read. */
+    listFolders(dir: string): DropFolder[];
+    /**
+     * Move a file to `to`, making every missing folder on the way 0700, and
+     * leave it with `mode`. Never replaces a file already at `to`: throws
+     * instead. Works across filesystems (an upload's temp folder may be a
+     * tmpfs). May throw.
+     */
+    place(from: string, to: string, mode: number): void;
+    /** `rm -rf`; a missing path is fine; never throws. */
+    removeTree(path: string): void;
+    /** Delete a file; a missing one is fine; never throws. */
+    remove(path: string): void;
+}
+
 // ── Limits ──
+
+/** Where dropped files go, under the VM user's home. */
+export const DROPS_DIR = '~/.switchboard/drops';
+
+/** How long a dropped file is kept: a day, then the next drop removes it. */
+export const DROP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** The longest file name a drop keeps; ext4 allows 255 bytes per name. */
+export const DROP_NAME_MAX_BYTES = 255;
 
 /** How long a clone, fetch or push may take. A big repository over a slow link takes a while. */
 export const NETWORK_TIMEOUT_MS = 30 * 60 * 1000;
@@ -101,6 +141,12 @@ const MAX_ERROR_CHARS = 1200;
 
 /** Only these bits of a file's mode are kept: never setuid, setgid or sticky. */
 const MODE_MASK = 0o777;
+
+/**
+ * Where a session's worktree lives inside a copy, as `claude --worktree`
+ * makes them on the Mac, so the session's paths still make sense on the VM.
+ */
+export const WORKTREES_FOLDER = '.claude/worktrees';
 
 /** Where a bundle's refs are fetched to, out of the way of branches and tags. */
 const HANDOFF_REFS = 'refs/switchboard/handoff/';
@@ -119,6 +165,8 @@ const NO_PROMPTS: Record<string, string> = {
 export interface CopiesDeps {
     commands: CopyCommandRunner;
     files: CopiesFiles;
+    /** Where `place-upload` puts dropped files. */
+    drops: DropFiles;
     /** The host's settings now, for the base folder. */
     hostSettings: () => HostSettings;
     /** The VM user's home folder, for `~`. */
@@ -129,6 +177,18 @@ export interface CopiesDeps {
     log: Logger;
     /** Overrides MAX_UPLOAD_BYTES, for tests. */
     maxUploadBytes?: number;
+}
+
+/**
+ * A checkout a hand-off lands in: the copy's main folder, or one of its
+ * worktrees. `gitDir` is where its index and its record (the marker) live:
+ * `<copy>/.git` for the main folder, `<copy>/.git/worktrees/<n>` for a
+ * worktree, so each checkout has its own record and the main folder's is
+ * never rewritten by a worktree hand-off.
+ */
+interface Checkout {
+    abs: string;
+    gitDir: string;
 }
 
 /** A failed step: what the progress called it, and what went wrong. */
@@ -142,7 +202,8 @@ class StepFailed extends Error {
 }
 
 export class Copies implements CopiesPart {
-    private readonly uploads: Uploads;
+    /** Shared with the transcripts part, which takes a session hand-off's transcript from them. */
+    public readonly uploads: Uploads;
     /** The tail of each folder's queue of operations, keyed by its absolute path. */
     private readonly locks = new Map<string, Promise<void>>();
 
@@ -184,12 +245,54 @@ export class Copies implements CopiesPart {
             case 'remove-copy':
                 void this.removeCopy(client, message);
                 return;
+            case 'place-upload':
+                return this.placeUpload(client, message);
         }
     }
 
     /** How many uploads are held, for tests. */
     public get uploadCount(): number {
         return this.uploads.count;
+    }
+
+    // ── place-upload ──
+
+    /**
+     * Move a finished upload to `~/.switchboard/drops/<random>/<name>` (0600,
+     * its folders 0700) and answer the path. A name that is not one safe
+     * segment is refused before the upload is touched, so nothing can be
+     * written outside its drop folder.
+     */
+    private placeUpload(client: ClientLink, message: PlaceUploadMessage): void {
+        const {requestId, uploadId, name} = message;
+        const answer = (placed: {ok: true; path: string} | {ok: false; error: string}) => {
+            if (!client.closed) client.send({type: 'placed', requestId, ...placed});
+        };
+        if (!isSafeDropName(name)) return answer({ok: false, error: `not a file name a drop can have: ${name}`});
+
+        const root = expandHome(DROPS_DIR, this.deps.home);
+        this.removeOldDrops(root);
+
+        const taken = this.uploads.take(uploadId);
+        if ('error' in taken) return answer({ok: false, error: taken.error});
+        const target = `${root}/${this.deps.ids.newId()}/${name}`;
+        try {
+            this.deps.drops.place(taken.file, target, 0o600);
+        } catch (err) {
+            this.deps.drops.remove(taken.file);
+            this.deps.log.warn(`[copies] could not place ${name}: ${errorText(err)}`);
+            return answer({ok: false, error: `could not place the file: ${errorText(err)}`});
+        }
+        this.deps.log.info(`[copies] placed a dropped file at ${target}`);
+        answer({ok: true, path: target});
+    }
+
+    /** Remove every drop folder older than DROP_MAX_AGE_MS. */
+    private removeOldDrops(root: string): void {
+        const cutoff = this.deps.clock.now() - DROP_MAX_AGE_MS;
+        for (const folder of this.deps.drops.listFolders(root)) {
+            if (folder.mtimeMs < cutoff) this.deps.drops.removeTree(`${root}/${folder.name}`);
+        }
     }
 
     // ── handoff ──
@@ -210,6 +313,9 @@ export class Copies implements CopiesPart {
 
             const dir = joinDir(this.deps.hostSettings().baseFolder, message.repo.name);
             const abs = expandHome(dir, this.deps.home);
+            // A worktree hand-off answers with the worktree, the folder its session resumes in.
+            const answerDir =
+                message.worktree === undefined ? dir : joinDir(joinDir(dir, WORKTREES_FOLDER), message.worktree);
             const bundle = message.bundleUploadId ? this.uploads.fileOf(message.bundleUploadId) : null;
             if (bundle && 'error' in bundle) return answer({ok: false, error: bundle.error});
             const patch = message.patchUploadId ? this.uploads.fileOf(message.patchUploadId) : null;
@@ -222,7 +328,7 @@ export class Copies implements CopiesPart {
                         patch: patch && patch.size > 0 ? patch.file : null,
                     });
                     progress('Done');
-                    answer({ok: true, dir, reused});
+                    answer({ok: true, dir: answerDir, reused});
                 } catch (err) {
                     const error = err instanceof StepFailed ? err.message : `hand-off failed: ${errorText(err)}`;
                     this.deps.log.warn(`[copies] hand-off into ${abs}: ${error}`);
@@ -234,7 +340,17 @@ export class Copies implements CopiesPart {
         }
     }
 
-    /** The hand-off's steps, in order; true when an existing copy was updated. Throws StepFailed. */
+    /**
+     * The hand-off's steps, in order; true when an existing checkout (the
+     * copy's main folder, or the worktree for a worktree hand-off) was updated
+     * rather than made. Throws StepFailed.
+     *
+     * A worktree hand-off (`message.worktree`) clones or fetches the copy as
+     * usual but leaves its main folder's checkout alone: the session's work
+     * lands in `<copy>/.claude/worktrees/<name>` instead, with its own record,
+     * so a project hand-off and a session's worktree hand-off into the same
+     * copy never discard each other's changes.
+     */
     private async makeCopy(
         message: HandoffMessage,
         dir: string,
@@ -242,49 +358,12 @@ export class Copies implements CopiesPart {
         progress: (line: string) => void,
         uploads: {bundle: string | null; patch: string | null},
     ): Promise<boolean> {
-        const {repo, branch, headOid} = message;
-        const reused = this.deps.files.exists(abs);
+        const {repo, branch, headOid, worktree} = message;
+        const copyReused = await this.cloneOrFetch(message, dir, abs, progress, worktree === undefined);
+        const fetched = await this.fetchBundle(abs, uploads.bundle, progress);
 
-        if (reused) {
-            const step = `Checking the copy at ${dir}`;
-            progress(step);
-            if (!this.deps.files.exists(markerPath(abs))) {
-                throw new StepFailed(
-                    step,
-                    `${dir} already exists and is not a copy Switchboard made; move it away or change the base folder`,
-                );
-            }
-            await this.clearOwnChanges(step, abs);
-            const fetchStep = 'Fetching origin';
-            progress(fetchStep);
-            await this.must(fetchStep, abs, ['fetch', '--prune', 'origin'], NETWORK_TIMEOUT_MS);
-        } else {
-            const step = repo.github ? `Cloning ${repo.github} into ${dir}` : `Cloning ${repo.origin} into ${dir}`;
-            progress(step);
-            // gh clones with the VM's own login and preferred protocol; a
-            // repository not on GitHub falls back to plain git and whatever
-            // credentials the VM has for its host.
-            if (repo.github)
-                await this.run(step, 'gh', ['repo', 'clone', repo.github, abs], undefined, NETWORK_TIMEOUT_MS);
-            else await this.must(step, undefined, ['clone', '--', repo.origin, abs], NETWORK_TIMEOUT_MS);
-            // Marked straight away, so a hand-off that fails further on still
-            // leaves a copy the next one may reuse and Remove may delete.
-            this.writeMarker(step, abs, repo.origin);
-        }
-
-        const fetched: string[] = [];
-        if (uploads.bundle) {
-            const step = 'Fetching your unpushed commits';
-            progress(step);
-            await this.must(step, abs, ['bundle', 'verify', uploads.bundle]);
-            const heads = parseBundleHeads(await this.must(step, abs, ['bundle', 'list-heads', uploads.bundle]));
-            if (!heads.length) throw new StepFailed(step, 'the bundle holds no refs');
-            const refspecs = heads.map((ref) => `+${ref}:${handoffRef(ref)}`);
-            await this.must(step, abs, ['fetch', '--no-tags', uploads.bundle, ...refspecs]);
-            fetched.push(...heads.map(handoffRef));
-        }
-
-        const checkoutStep = `Checking out ${branch}`;
+        const checkoutStep =
+            worktree === undefined ? `Checking out ${branch}` : `Checking out ${branch} in ${worktree}`;
         progress(checkoutStep);
         const hasHead = await this.git(abs, ['cat-file', '-e', `${headOid}^{commit}`]);
         if (hasHead.exitCode !== 0) {
@@ -293,8 +372,17 @@ export class Copies implements CopiesPart {
                 `commit ${headOid.slice(0, 12)} is not on origin or in the bundle; push it, or hand off again`,
             );
         }
-        if (reused) await this.refuseLosingCommits(checkoutStep, abs, branch, headOid);
-        await this.must(checkoutStep, abs, ['checkout', '--no-track', '-B', branch, headOid]);
+
+        let target: Checkout;
+        let reused: boolean;
+        if (worktree === undefined) {
+            target = {abs, gitDir: `${abs.replace(/\/+$/, '')}/.git`};
+            reused = copyReused;
+            if (reused) await this.refuseLosingCommits(checkoutStep, abs, branch, headOid);
+            await this.must(checkoutStep, abs, ['checkout', '--no-track', '-B', branch, headOid]);
+        } else {
+            ({target, reused} = await this.checkOutWorktree(checkoutStep, message, dir, abs, worktree));
+        }
         for (const ref of fetched) await this.git(abs, ['update-ref', '-d', ref]);
         const remoteBranch = `refs/remotes/origin/${branch}`;
         if ((await this.git(abs, ['rev-parse', '--verify', '--quiet', remoteBranch])).exitCode === 0) {
@@ -306,7 +394,7 @@ export class Copies implements CopiesPart {
             progress(step);
             // Working tree only, unstaged, as it was on the Mac before the
             // hand-off took its snapshot.
-            await this.must(step, abs, ['apply', '--binary', '--whitespace=nowarn', uploads.patch]);
+            await this.must(step, target.abs, ['apply', '--binary', '--whitespace=nowarn', uploads.patch]);
         }
 
         if (message.files.length) {
@@ -315,7 +403,7 @@ export class Copies implements CopiesPart {
             for (const file of message.files) {
                 try {
                     this.deps.files.writeInside(
-                        abs,
+                        target.abs,
                         file.path,
                         Buffer.from(file.contentBase64, 'base64'),
                         file.mode & MODE_MASK || 0o644,
@@ -329,11 +417,184 @@ export class Copies implements CopiesPart {
         const recordStep = 'Recording the copy';
         const state = await this.copyState(
             recordStep,
-            abs,
+            target,
             message.files.map((file) => file.path),
         );
-        this.writeMarker(recordStep, abs, repo.origin, state);
+        this.writeMarker(recordStep, markerIn(target.gitDir), repo.origin, state);
         return reused;
+    }
+
+    /**
+     * Make the copy's repository at `abs`, or bring an existing one up to date
+     * with origin; true when it existed. A folder there without the marker is
+     * someone else's and refused. `clearMain` says whether the main folder's
+     * own leftovers are checked and cleared: only a hand-off onto the main
+     * folder does that, as a worktree hand-off never changes its checkout.
+     */
+    private async cloneOrFetch(
+        message: HandoffMessage,
+        dir: string,
+        abs: string,
+        progress: (line: string) => void,
+        clearMain: boolean,
+    ): Promise<boolean> {
+        const {repo} = message;
+        if (this.deps.files.exists(abs)) {
+            const step = `Checking the copy at ${dir}`;
+            progress(step);
+            if (!this.deps.files.exists(markerPath(abs))) {
+                throw new StepFailed(
+                    step,
+                    `${dir} already exists and is not a copy Switchboard made; move it away or change the base folder`,
+                );
+            }
+            if (clearMain) await this.clearOwnChanges(step, {abs, gitDir: `${abs.replace(/\/+$/, '')}/.git`});
+            const fetchStep = 'Fetching origin';
+            progress(fetchStep);
+            await this.must(fetchStep, abs, ['fetch', '--prune', 'origin'], NETWORK_TIMEOUT_MS);
+            return true;
+        }
+        const step = repo.github ? `Cloning ${repo.github} into ${dir}` : `Cloning ${repo.origin} into ${dir}`;
+        progress(step);
+        // gh clones with the VM's own login and preferred protocol; a
+        // repository not on GitHub falls back to plain git and whatever
+        // credentials the VM has for its host.
+        if (repo.github) await this.run(step, 'gh', ['repo', 'clone', repo.github, abs], undefined, NETWORK_TIMEOUT_MS);
+        else await this.must(step, undefined, ['clone', '--', repo.origin, abs], NETWORK_TIMEOUT_MS);
+        // Marked straight away, so a hand-off that fails further on still
+        // leaves a copy the next one may reuse and Remove may delete.
+        this.writeMarker(step, markerPath(abs), repo.origin);
+        return false;
+    }
+
+    /**
+     * Fetch the bundle's refs into the copy's repository, under HANDOFF_REFS;
+     * the refs fetched, for the caller to delete once the checkout has them.
+     * One repository serves the main folder and every worktree, so this is the
+     * same for both kinds of hand-off.
+     */
+    private async fetchBundle(abs: string, bundle: string | null, progress: (line: string) => void): Promise<string[]> {
+        if (!bundle) return [];
+        const step = 'Fetching your unpushed commits';
+        progress(step);
+        await this.must(step, abs, ['bundle', 'verify', bundle]);
+        const heads = parseBundleHeads(await this.must(step, abs, ['bundle', 'list-heads', bundle]));
+        if (!heads.length) throw new StepFailed(step, 'the bundle holds no refs');
+        const refspecs = heads.map((ref) => `+${ref}:${handoffRef(ref)}`);
+        await this.must(step, abs, ['fetch', '--no-tags', bundle, ...refspecs]);
+        return heads.map(handoffRef);
+    }
+
+    /**
+     * Put the worktree `<copy>/.claude/worktrees/<name>` on `branch` at
+     * `headOid`, making it when missing; the checkout to patch and record, and
+     * whether the worktree existed.
+     *
+     * A worktree that exists gets the same rules as a re-hand-off onto the
+     * main folder, inside it: its own record (in its own git dir) decides
+     * which changes are this agent's leftovers to discard, and commits only
+     * the VM has on the branch are never moved off. A folder at that place
+     * that is not one of this copy's worktrees is someone else's and refused.
+     *
+     * Git lets a branch be checked out in only one worktree, and `-B` on a
+     * branch checked out elsewhere would fail with git's own words, or worse,
+     * be the main folder's branch the user is working on; it is refused up
+     * front, naming where it is checked out.
+     */
+    private async checkOutWorktree(
+        step: string,
+        message: HandoffMessage,
+        dir: string,
+        abs: string,
+        name: string,
+    ): Promise<{target: Checkout; reused: boolean}> {
+        const {files} = this.deps;
+        const {branch, headOid} = message;
+        const copyRoot = abs.replace(/\/+$/, '');
+        const wtAbs = `${copyRoot}/${WORKTREES_FOLDER}/${name}`;
+        const wtDir = `${dir.replace(/\/+$/, '')}/${WORKTREES_FOLDER}/${name}`;
+        const copyReal = files.realpath(copyRoot) ?? copyRoot;
+
+        // The worktrees folder comes from the repository's own tree when it
+        // tracks `.claude/`; a symlink there must not put a worktree, and the
+        // patch and files with it, outside the copy.
+        for (const folder of [`${copyRoot}/.claude`, `${copyRoot}/${WORKTREES_FOLDER}`, wtAbs]) {
+            const real = files.realpath(folder);
+            if (real !== null && real !== `${copyReal}${folder.slice(copyRoot.length)}`) {
+                throw new StepFailed(step, `${folder.slice(copyRoot.length + 1)} in the copy is a symlink`);
+            }
+        }
+
+        // A worktree deleted by hand stays registered until pruned, and then
+        // blocks `worktree add` at its path.
+        await this.must(step, abs, ['worktree', 'prune']);
+        const worktrees = parseWorktreeList(await this.must(step, abs, ['worktree', 'list', '--porcelain']));
+        const realOf = (path: string) => files.realpath(path) ?? path.replace(/\/+$/, '');
+        const wtReal = realOf(wtAbs);
+        const elsewhere = worktrees.find((entry) => entry.branch === branch && realOf(entry.path) !== wtReal);
+        if (elsewhere) {
+            const where = realOf(elsewhere.path);
+            const named =
+                where === copyReal
+                    ? `the copy's main folder ${dir}`
+                    : where.startsWith(copyReal + '/')
+                      ? `${dir.replace(/\/+$/, '')}${where.slice(copyReal.length)}`
+                      : where;
+            throw new StepFailed(
+                step,
+                `${branch} is checked out in ${named}; switch that one to another branch first, or hand off from another branch`,
+            );
+        }
+
+        const reused = files.exists(wtAbs);
+        if (reused) {
+            const own = worktrees.some((entry) => entry.path !== worktrees[0]?.path && realOf(entry.path) === wtReal);
+            if (!own) {
+                throw new StepFailed(
+                    step,
+                    `${wtDir} already exists and is not a worktree of the copy; move it away on the VM first`,
+                );
+            }
+            const target = {abs: wtAbs, gitDir: await this.gitDirOf(step, wtAbs)};
+            await this.clearOwnChanges(`Checking the worktree at ${wtDir}`, target);
+            await this.refuseLosingCommits(step, abs, branch, headOid);
+            await this.must(step, wtAbs, ['checkout', '--no-track', '-B', branch, headOid]);
+            return {target, reused};
+        }
+
+        await this.refuseLosingCommits(step, abs, branch, headOid);
+        this.excludeWorktrees(step, copyRoot);
+        await this.must(step, abs, ['worktree', 'add', '--quiet', '--no-track', '-B', branch, wtAbs, headOid]);
+        const target = {abs: wtAbs, gitDir: await this.gitDirOf(step, wtAbs)};
+        // Marked straight away, as a fresh clone is, so a hand-off that fails
+        // further on leaves a worktree the next one may reuse.
+        this.writeMarker(step, markerIn(target.gitDir), message.repo.origin);
+        return {target, reused};
+    }
+
+    /** A worktree's own git dir, `<copy>/.git/worktrees/<n>`: where its index and record live. */
+    private async gitDirOf(step: string, wtAbs: string): Promise<string> {
+        return (await this.must(step, wtAbs, ['rev-parse', '--absolute-git-dir'])).trim();
+    }
+
+    /**
+     * Keep the worktrees folder out of the main folder's status. It sits
+     * inside the main checkout, so without this every worktree would show
+     * there as an untracked `.claude/`, the main folder's next hand-off would
+     * read that as work of the VM's and refuse, and `copy-status` would list
+     * it as uncommitted. `.git/info/exclude` is the copy's own, never pushed.
+     */
+    private excludeWorktrees(step: string, copyRoot: string): void {
+        const exclude = `${copyRoot}/.git/info/exclude`;
+        const line = `/${WORKTREES_FOLDER}/`;
+        const text = this.deps.files.readText(exclude) ?? '';
+        if (text.split('\n').some((existing) => existing.trim() === line)) return;
+        const next = `${text}${text && !text.endsWith('\n') ? '\n' : ''}${line}\n`;
+        try {
+            this.deps.files.writeFileAtomic(exclude, Buffer.from(next, 'utf8'), 0o644);
+        } catch (err) {
+            throw new StepFailed(step, `could not exclude ${WORKTREES_FOLDER} from the copy: ${errorText(err)}`);
+        }
     }
 
     /**
@@ -345,8 +606,9 @@ export class Copies implements CopiesPart {
      * else is work done on the VM, which is never discarded: refused, naming
      * what changed.
      */
-    private async clearOwnChanges(step: string, abs: string): Promise<void> {
-        const recorded = parseMarkerState(this.deps.files.readText(markerPath(abs)));
+    private async clearOwnChanges(step: string, target: Checkout): Promise<void> {
+        const {abs} = target;
+        const recorded = parseMarkerState(this.deps.files.readText(markerIn(target.gitDir)));
         const refuse = (changed: string[]) =>
             new StepFailed(
                 step,
@@ -367,7 +629,7 @@ export class Copies implements CopiesPart {
         if (!dirty.length) return;
         if (!recorded) throw refuse(dirty);
         const head = (await this.must(step, abs, ['rev-parse', 'HEAD'])).trim();
-        const tree = await this.workingTree(step, abs);
+        const tree = await this.workingTree(step, target);
         if (head !== recorded.head) throw refuse(dirty);
         if (tree !== recorded.tree) {
             // Name only what changed since the hand-off, not what it brought.
@@ -383,9 +645,10 @@ export class Copies implements CopiesPart {
     }
 
     /** HEAD, the working tree and the ticked files' blobs, as the marker records them. */
-    private async copyState(step: string, abs: string, files: string[]): Promise<CopyRecord> {
+    private async copyState(step: string, target: Checkout, files: string[]): Promise<CopyRecord> {
+        const {abs} = target;
         const head = (await this.must(step, abs, ['rev-parse', 'HEAD'])).trim();
-        const tree = await this.workingTree(step, abs);
+        const tree = await this.workingTree(step, target);
         const blobs = await this.blobHashes(abs, files);
         return {
             head,
@@ -398,10 +661,12 @@ export class Copies implements CopiesPart {
      * The tree the working tree would commit as, untracked files included and
      * ignored ones not, without touching the real index: a copy of it (so
      * unchanged files are not hashed again) in a temp index, `add -A`, then
-     * `write-tree`.
+     * `write-tree`. A worktree's index is in its own git dir, so the copy of
+     * it goes there too.
      */
-    private async workingTree(step: string, abs: string): Promise<string> {
-        const gitDir = `${abs.replace(/\/+$/, '')}/.git`;
+    private async workingTree(step: string, target: Checkout): Promise<string> {
+        const {abs} = target;
+        const gitDir = target.gitDir.replace(/\/+$/, '');
         const index = `${gitDir}/switchboard-${this.deps.ids.newId()}.index`;
         try {
             if (this.deps.files.exists(`${gitDir}/index`)) this.deps.files.copyFile(`${gitDir}/index`, index);
@@ -463,11 +728,12 @@ export class Copies implements CopiesPart {
         }
     }
 
-    private writeMarker(step: string, abs: string, origin: string, state?: CopyRecord): void {
+    /** Write a marker file: the main folder's in `.git`, a worktree's in its own git dir. */
+    private writeMarker(step: string, file: string, origin: string, state?: CopyRecord): void {
         const handedOffAt = new Date(this.deps.clock.now()).toISOString();
         const content = JSON.stringify(state ? {handedOffAt, origin, state} : {handedOffAt, origin}) + '\n';
         try {
-            this.deps.files.writeFileAtomic(markerPath(abs), Buffer.from(content, 'utf8'), 0o644);
+            this.deps.files.writeFileAtomic(file, Buffer.from(content, 'utf8'), 0o644);
         } catch (err) {
             throw new StepFailed(step, `could not mark the copy: ${errorText(err)}`);
         }
@@ -550,10 +816,27 @@ export class Copies implements CopiesPart {
         const abs = expandHome(message.dir, this.deps.home);
         await this.exclusive(abs, async () => {
             const checked = this.checkRemoval(message.dir, abs);
-            if ('error' in checked) {
+            if (checked.error !== undefined) {
                 this.deps.log.warn(`[copies] refused to remove ${message.dir}: ${checked.error}`);
                 return answer(checked.error);
             }
+            if (checked.copy !== undefined) {
+                // Only this worktree goes, through git, so the copy's
+                // worktree list forgets it too; `--force` because the Mac
+                // has listed its uncommitted changes before asking.
+                const step = `Removing ${message.dir}`;
+                try {
+                    await this.must(step, checked.copy, ['worktree', 'remove', '--force', checked.real]);
+                    await this.git(checked.copy, ['worktree', 'prune']);
+                    this.deps.log.info(`[copies] removed the worktree ${message.dir}`);
+                    answer();
+                } catch (err) {
+                    answer(err instanceof StepFailed ? err.message : errorText(err));
+                }
+                return;
+            }
+            // A copy's worktrees live inside it, so they go with it; nothing
+            // is left registered anywhere, as the repository goes too.
             try {
                 this.deps.files.removeTree(checked.real);
                 this.deps.log.info(`[copies] removed ${message.dir}`);
@@ -569,8 +852,13 @@ export class Copies implements CopiesPart {
      * it must resolve to a folder strictly inside the base folder (resolved
      * too) and hold the marker only a hand-off leaves. The resolved path is
      * the one removed, so a symlink can't point the removal anywhere else.
+     *
+     * A worktree of a copy, `<copy>/.claude/worktrees/<name>` resolved, has no
+     * marker of its own in its folder (its `.git` is a file); it may be
+     * removed when its copy holds the marker, and then `copy` names the copy
+     * whose git removes it.
      */
-    private checkRemoval(dir: string, abs: string): {real: string} | {error: string} {
+    private checkRemoval(dir: string, abs: string): {real: string; copy?: string; error?: undefined} | {error: string} {
         const {files} = this.deps;
         const baseFolder = this.deps.hostSettings().baseFolder;
         const base = files.realpath(expandHome(baseFolder, this.deps.home));
@@ -579,6 +867,12 @@ export class Copies implements CopiesPart {
         if (real === null) return {error: `${dir} does not exist`};
         if (real === base || !real.startsWith(base.replace(/\/+$/, '') + '/')) {
             return {error: `${dir} is not inside the base folder ${baseFolder}`};
+        }
+        const worktree = /^(.+)\/\.claude\/worktrees\/([^/]+)$/.exec(real.slice(base.replace(/\/+$/, '').length));
+        if (worktree && isSafeWorktreeName(worktree[2])) {
+            const copy = base.replace(/\/+$/, '') + worktree[1];
+            if (!files.exists(markerPath(copy))) return {error: `${dir} is not in a copy Switchboard made`};
+            return {real, copy};
         }
         if (!files.exists(markerPath(real))) return {error: `${dir} is not a copy Switchboard made`};
         return {real};
@@ -591,7 +885,7 @@ export class Copies implements CopiesPart {
      * two hand-offs, or a hand-off and a removal, never interleave.
      */
     private async exclusive(abs: string, work: () => Promise<void>): Promise<void> {
-        const key = abs.replace(/\/+$/, '');
+        const key = lockKeyOf(abs);
         const before = this.locks.get(key) ?? Promise.resolve();
         const mine = before.then(work, work).catch((err: unknown) => {
             this.deps.log.error(`[copies] ${key}: ${errorText(err)}`);
@@ -675,6 +969,9 @@ function refuseHandoff(message: HandoffMessage): string | null {
     }
     if (repo.github === undefined && repo.origin.startsWith('-')) return `"${repo.origin}" is not a repository URL`;
     if (!isPlausibleBranch(branch)) return `"${branch}" is not a branch name`;
+    if (message.worktree !== undefined && !isSafeWorktreeName(message.worktree)) {
+        return `"${message.worktree}" is not a worktree name`;
+    }
     if (!/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(headOid)) return `"${headOid}" is not a commit id`;
     const unsafe = files.filter((file) => !isSafeRepoPath(file.path)).map((file) => file.path);
     if (unsafe.length) return `refused to write files outside the repository: ${unsafe.join(', ')}`;
@@ -686,8 +983,27 @@ function refuseHandoff(message: HandoffMessage): string | null {
 }
 
 /** One safe path segment: what `<baseFolder>/<name>` may add, and nothing more. */
+/**
+ * Whether `name` is one path segment a dropped file may be given: not empty,
+ * not `.` or `..`, no `/` or NUL, and at most DROP_NAME_MAX_BYTES of UTF-8.
+ */
+export function isSafeDropName(name: string): boolean {
+    if (!name || name === '.' || name === '..') return false;
+    if (name.includes('/') || name.includes('\0')) return false;
+    return Buffer.byteLength(name, 'utf8') <= DROP_NAME_MAX_BYTES;
+}
+
 export function isSafeFolderName(name: string): boolean {
     return isSafeRepoPath(name) && !name.includes('/') && !name.startsWith('-');
+}
+
+/**
+ * One safe segment under `.claude/worktrees/`, and not a hidden one: a name
+ * like `.git` or `..` must never steer the worktree, or its removal, anywhere
+ * else, and `-x` must never read as an option.
+ */
+export function isSafeWorktreeName(name: string): boolean {
+    return isSafeFolderName(name) && !name.startsWith('.');
 }
 
 /**
@@ -711,8 +1027,48 @@ export function joinDir(baseFolder: string, name: string): string {
     return `${base || '/'}${base ? '/' : ''}${name}`;
 }
 
+/** The main folder's marker, in the copy's `.git`. */
 function markerPath(abs: string): string {
-    return `${abs.replace(/\/+$/, '')}/.git/${COPY_MARKER}`;
+    return markerIn(`${abs.replace(/\/+$/, '')}/.git`);
+}
+
+/** The marker in a git dir: the copy's `.git`, or a worktree's `.git/worktrees/<n>`. */
+function markerIn(gitDir: string): string {
+    return `${gitDir.replace(/\/+$/, '')}/${COPY_MARKER}`;
+}
+
+/**
+ * The folder whose operations a path's queue with: a worktree's are its
+ * copy's, as they share one repository (its refs, its worktree list), so a
+ * removal of a worktree can never land in the middle of a hand-off into the
+ * same copy.
+ */
+export function lockKeyOf(abs: string): string {
+    const trimmed = abs.replace(/\/+$/, '');
+    const match = /^(.+)\/\.claude\/worktrees\/[^/]+$/.exec(trimmed);
+    return match ? match[1] : trimmed;
+}
+
+/** One entry of `git worktree list --porcelain`: its path and its branch's short name, if any. */
+export interface WorktreeEntry {
+    path: string;
+    branch: string | null;
+}
+
+/**
+ * The entries of `git worktree list --porcelain`: blank-line separated
+ * blocks of `worktree <path>`, `HEAD <oid>` and `branch refs/heads/<b>` (or
+ * `detached`). The main folder comes first.
+ */
+export function parseWorktreeList(stdout: string): WorktreeEntry[] {
+    const entries: WorktreeEntry[] = [];
+    for (const line of stdout.split('\n')) {
+        if (line.startsWith('worktree ')) entries.push({path: line.slice('worktree '.length), branch: null});
+        else if (line.startsWith('branch refs/heads/') && entries.length) {
+            entries[entries.length - 1].branch = line.slice('branch refs/heads/'.length);
+        }
+    }
+    return entries;
 }
 
 /** Where a bundle's ref is fetched to: `HEAD` and `refs/heads/x` land under HANDOFF_REFS. */

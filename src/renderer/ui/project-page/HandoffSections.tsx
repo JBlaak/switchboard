@@ -9,13 +9,16 @@
  *   progress, then the branch it checked out with a link to the local
  *   project. Remove copy lists the work only the copy has, offering Bring
  *   back first or Remove anyway; a clean copy is confirmed natively.
+ * - On both (stage 5), once there are schedules and somewhere to move them:
+ *   the Schedules line, with where they run picked to move them.
  *
  * What each part says is `handoff-view`; what it does is `handoff-actions`.
  */
 import {useEffect, useRef, useState} from 'react';
 import type {JSX, KeyboardEvent} from 'react';
 import {useStore} from '../use-store';
-import {bringBackIn, copiesIn, originIn, removalIn} from '../../state/handoff-slice';
+import {bringBackIn, copiesIn, originIn, removalIn, schedulesIn} from '../../state/handoff-slice';
+import {schedulesSwitch} from './schedules-view';
 import {
     bringBackView,
     copyLinks,
@@ -38,6 +41,7 @@ import {
     removeCopyAnyway,
 } from './handoff-actions';
 import {openProjectPage} from './actions';
+import {loadSchedules, moveSchedules} from './schedules-actions';
 import type {Capped} from './handoff-view';
 
 /** Hand off to…, in a local project's header. */
@@ -239,6 +243,52 @@ export function CopySection({projectPath}: {projectPath: string}): JSX.Element |
                                   ? 'Removing…'
                                   : 'Remove copy'}
                         </button>
+                    </div>
+                )}
+            </div>
+        </section>
+    );
+}
+
+/**
+ * Schedules: where the project's schedules run, picked to move them. On a
+ * local project, "Run on this Mac" or "Run on <host> (copy)"; on a copy, "Run
+ * here" or "Run on the Mac". Hidden with no schedules.
+ */
+export function SchedulesLine({projectPath}: {projectPath: string}): JSX.Element | null {
+    const schedules = useStore((state) => schedulesIn(state.handoff, projectPath));
+    const copies = useStore((state) => copiesIn(state.handoff, projectPath));
+
+    useEffect(() => {
+        void loadSchedules(projectPath);
+    }, [projectPath]);
+
+    const line = schedulesSwitch(projectPath, schedules.location, copies);
+    if (!line) return null;
+    return (
+        <section className="pp-section pp-schedules" aria-label="Schedules">
+            <div className="pp-card pp-schedules-card">
+                <div className="pp-schedules-row">
+                    <span className="pp-schedules-text">
+                        <span className="pp-row-title">Schedules</span>
+                        <span className="pp-row-meta">{line.count}</span>
+                    </span>
+                    <select
+                        className="settings-select pp-schedules-select"
+                        aria-label="Where the schedules run"
+                        value={line.selected}
+                        disabled={schedules.moving}
+                        onChange={(e) => void moveSchedules(projectPath, line.localPath, e.target.value)}>
+                        {line.options.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                {schedules.error && (
+                    <div className="pp-agent-error" role="alert">
+                        {schedules.error}
                     </div>
                 )}
             </div>

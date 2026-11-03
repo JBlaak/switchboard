@@ -12,6 +12,7 @@
  * (signals, `process.exit`, the real parts), so tests start it against a temp
  * socket with fake parts.
  */
+import os from 'node:os';
 import type {Logger} from '../application/ports/logger';
 import {AgentHost, type AgentParts} from '../application/services/agent-host/agent-host';
 import {AGENT_CLOSE} from '../domain/agent/protocol';
@@ -41,7 +42,7 @@ export interface RunningAgent {
 /** Listen on `socketPath` and route every client through the parts. */
 export async function startAgent(options: StartAgentOptions): Promise<RunningAgent> {
     const {parts, socketPath, agentVersion, log} = options;
-    const host = new AgentHost({parts, agentVersion, log});
+    const host = new AgentHost({parts, agentVersion, home: os.homedir(), log});
     const server = await listenOnUnixSocket({socketPath, log, onClient: (client) => host.accept(client)});
     let stopping: Promise<void> | null = null;
     return {
@@ -66,12 +67,16 @@ export async function main(): Promise<void> {
     log.info(`agent: switchboard-agent ${AGENT_VERSION} starting (node ${process.version})`);
     const parts = await createParts({agentVersion: AGENT_VERSION, log});
     const agent = await startAgent({parts, socketPath: agentSocketPath(), agentVersion: AGENT_VERSION, log});
+    // The copies in the host's schedule folders run their schedules from the next minute on.
+    const stopSchedules = parts.schedules.start();
 
     let shuttingDown = false;
     const shutdown = (signal: NodeJS.Signals) => {
         if (shuttingDown) return;
         shuttingDown = true;
         log.info(`agent: ${signal}, shutting down`);
+        // No new runs; one already going is its own process and ends with the unit.
+        stopSchedules();
         parts.sessions.terminateAll();
         agent.stop().then(
             () => process.exit(0),

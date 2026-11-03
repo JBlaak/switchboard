@@ -763,6 +763,7 @@
 .session-stop-btn,
 .session-launch-config-btn,
 .session-snooze-btn,
+.session-handoff-btn,
 .session-archive-btn {
     cursor: pointer;
     background: none;
@@ -792,6 +793,32 @@
 
 .session-snooze-btn {
     color: var(--sb-text-faint);
+}
+
+/* ---- A session's hand-off in flight (#276 stage 3), in its row and the terminal header ---- */
+.session-handoff-marker {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 5px;
+    padding: 0 6px;
+    border-radius: 99px;
+    vertical-align: middle;
+    position: relative;
+    top: -1px;
+    background: var(--sb-lav);
+    color: var(--sb-lav-ink);
+    font: 700 10.5px/16px var(--sb-font-head);
+}
+
+/* Hand off to… (#276 stage 3). */
+.session-handoff-btn {
+    color: var(--sb-accent-dim);
+}
+
+.session-handoff-btn:hover,
+.session-handoff-btn[aria-expanded='true'] {
+    color: var(--sb-accent);
+    background: rgba(var(--sb-accent-rgb), 0.1);
 }
 
 .session-snooze-btn:hover,

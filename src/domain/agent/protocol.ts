@@ -24,6 +24,7 @@
  * and reinstalls.
  */
 import type {SessionOptions} from '../launch/session-options';
+import type {Session} from '../session/session';
 import type {AskedQuestions, Question} from '../questions/question';
 import type {ArchiveToolOutcome} from '../session/archive-tool';
 
@@ -73,6 +74,12 @@ export interface HostSettings {
     copyConfig: boolean;
     /** Where project copies go, e.g. `~/projects`. */
     baseFolder: string;
+    /**
+     * Stage 5: the copies whose `schedule-*.md` run here rather than on the Mac,
+     * as their folders (`~` kept). Stored on the VM, so they keep running while
+     * the Mac is away. Absent means none.
+     */
+    scheduleDirs?: string[];
 }
 
 /** The tools the setup terminal installs and signs in to. */
@@ -120,6 +127,9 @@ export function isSafeRepoPath(path: string): boolean {
     if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) return false;
     return segments[0] !== '.git';
 }
+
+/** The most of a VM transcript's text that goes to the Mac's search index. */
+export const TRANSCRIPT_TEXT_CAP_CHARS = 1_000_000;
 
 /** How long an upload waits for the hand-off that uses it. */
 export const UPLOAD_TTL_MS = 10 * 60 * 1000;
@@ -328,6 +338,14 @@ export interface HandoffMessage {
     headOid: string;
     /** The commits origin does not have yet, as a git bundle; absent when there are none. */
     bundleUploadId?: string;
+    /**
+     * Stage 3, a session's hand-off: the name of the worktree the session
+     * worked in on the Mac. The copy then gets a worktree of that name on
+     * `branch` at `<copy>/.claude/worktrees/<name>`, and everything below
+     * (bundle, checkout, patch, files) happens in that worktree. Absent for a
+     * hand-off of the project's own checkout.
+     */
+    worktree?: string;
     /** The uncommitted changes as `git diff --binary`; absent when the tree is clean. */
     patchUploadId?: string;
     files: HandoffFile[];
@@ -359,6 +377,179 @@ export interface RemoveCopyMessage {
     dir: string;
 }
 
+// ── Mac → agent: transcripts and session hand-off (stage 3) ──
+
+/**
+ * One session's transcript, parsed on the VM; answered with `transcript`. The
+ * agent watches that file from now on and sends `transcripts-changed` when it
+ * grows, so the Mac asks again only when something happened.
+ */
+export interface GetTranscriptMessage {
+    type: 'get-transcript';
+    requestId: string;
+    sessionId: string;
+}
+
+/** The last `bytes` of a session's transcript, as lines; answered with `transcript-tail`. */
+export interface TranscriptTailMessage {
+    type: 'transcript-tail';
+    requestId: string;
+    sessionId: string;
+    bytes: number;
+}
+
+/**
+ * Put a session's transcript (uploaded first) where `claude --resume` on the
+ * VM finds it: `~/.claude/projects/<encoded dir>/<sessionId>.jsonl`, `dir`
+ * expanded. Refused when a transcript of that id is already there. Answered
+ * with `done`.
+ */
+export interface ImportTranscriptMessage {
+    type: 'import-transcript';
+    requestId: string;
+    sessionId: string;
+    /** The folder the session resumes in, as a project path names it (may start with `~`). */
+    dir: string;
+    uploadId: string;
+}
+
+// ── Mac → agent: the project page, session work and Plan tab (stage 4) ──
+//
+// These pages stay on the Mac: their GitHub half already runs there (the
+// Mac's own `gh`), and only their git state and transcripts are on the VM. So
+// the agent answers the few things the Mac's git and transcript adapters ask
+// of a folder, and those adapters route a VM path (`ssh://user@host//abs`,
+// see `domain/agent/vm-paths`) here instead of to the Mac's disk.
+
+/** The tools a `run-tool` may run, always as argv (never a shell), with prompts disabled. */
+export type AgentToolName = 'git' | 'gh';
+
+/** Run `git` or `gh` in a folder; answered with `tool-result`. */
+export interface RunToolMessage {
+    type: 'run-tool';
+    requestId: string;
+    tool: AgentToolName;
+    /** Absolute on the VM. `git` runs as `git -C <cwd> …args`, `gh` with that cwd. */
+    cwd: string;
+    args: string[];
+    /** Bytes for stdin, base64. */
+    stdinBase64?: string;
+    timeoutMs: number;
+}
+
+/** Read a file the working tree holds (image compare's "after"); answered with `file-content`. */
+export interface ReadFileMessage {
+    type: 'read-file';
+    requestId: string;
+    /** Absolute on the VM. */
+    path: string;
+    maxBytes: number;
+}
+
+/** The sizes of regular files (never through a symlink); answered with `file-stats`. */
+export interface StatFilesMessage {
+    type: 'stat-files';
+    requestId: string;
+    /** Absolute on the VM. */
+    paths: string[];
+}
+
+/**
+ * Watch a working tree for changes, as the Mac's GitWorkspace.watch does for a
+ * local one; the agent pushes `dir-changed` (debounced) until `unwatch-dir`
+ * or the link closes.
+ */
+export interface WatchDirMessage {
+    type: 'watch-dir';
+    watchId: string;
+    /** Absolute on the VM. */
+    dir: string;
+}
+
+export interface UnwatchDirMessage {
+    type: 'unwatch-dir';
+    watchId: string;
+}
+
+/**
+ * Ask the VM's own transcript store (the same FileTranscriptStore the Mac
+ * uses, over the VM's `~/.claude/projects`). Only the read methods named in
+ * TRANSCRIPT_QUERY_METHODS; answered with `transcript-answer`, whose result is
+ * that method's return value as JSON.
+ */
+export interface TranscriptQueryMessage {
+    type: 'transcript-query';
+    requestId: string;
+    method: TranscriptQueryMethod;
+    args: unknown[];
+}
+
+/** The TranscriptStore read methods a `transcript-query` may call. */
+export const TRANSCRIPT_QUERY_METHODS = [
+    'locations',
+    'readSession',
+    'issueMentions',
+    'resolveProjectPath',
+    'readHeadLines',
+    'readTail',
+    'sessionMtimeMs',
+] as const;
+
+export type TranscriptQueryMethod = (typeof TRANSCRIPT_QUERY_METHODS)[number];
+
+/** The most a `tool-result`'s stdout or a `file-content` may carry, raw. */
+export const TOOL_OUTPUT_CAP_BYTES = 8 * 1024 * 1024;
+
+// ── Mac → agent: schedules, uploads to paste (stage 5) ──
+
+/**
+ * The sessions whose transcripts sit in these folders on the VM, newest first;
+ * answered with `transcript-list`. How the Mac learns of runs it did not start,
+ * such as a schedule's on the VM.
+ */
+export interface ListTranscriptsMessage {
+    type: 'list-transcripts';
+    requestId: string;
+    /** As project paths name them (`~` kept); a session counts when it ran in one, or below one. */
+    dirs: string[];
+    /** Only sessions modified since then, epoch ms; absent for all. */
+    since?: number;
+}
+
+/**
+ * Put a finished upload where a session on the VM can read it, a file dropped
+ * on its terminal: `~/.switchboard/drops/<random>/<name>`. Answered with `placed`.
+ */
+export interface PlaceUploadMessage {
+    type: 'place-upload';
+    requestId: string;
+    uploadId: string;
+    /** The file's own name, one safe segment. */
+    name: string;
+}
+
+// ── Mac → agent: sessions that archived themselves while the Mac was away (#308) ──
+
+/**
+ * Which sessions archived themselves (`archive_session`) while no Mac was
+ * connected; answered with `self-archived`. The Mac asks on every connect,
+ * archives the rows it knows, then sends `forget-self-archived`.
+ */
+export interface ListSelfArchivedMessage {
+    type: 'list-self-archived';
+    requestId: string;
+}
+
+/**
+ * Drop these sessions from the agent's self-archive record, once the Mac has
+ * handled them (or found it does not know them). Answered with `done`.
+ */
+export interface ForgetSelfArchivedMessage {
+    type: 'forget-self-archived';
+    requestId: string;
+    sessionIds: string[];
+}
+
 export type MacMessage =
     | HelloMessage
     | OpenSessionMessage
@@ -380,6 +571,19 @@ export type MacMessage =
     | CopyStatusMessage
     | PushBranchMessage
     | RemoveCopyMessage
+    | GetTranscriptMessage
+    | TranscriptTailMessage
+    | ImportTranscriptMessage
+    | RunToolMessage
+    | ReadFileMessage
+    | StatFilesMessage
+    | WatchDirMessage
+    | UnwatchDirMessage
+    | TranscriptQueryMessage
+    | ListTranscriptsMessage
+    | PlaceUploadMessage
+    | ListSelfArchivedMessage
+    | ForgetSelfArchivedMessage
     | ByeMessage;
 
 // ── Agent → Mac ──
@@ -389,6 +593,13 @@ export interface WelcomeMessage {
     protocol: number;
     agentVersion: string;
     settings: HostSettings;
+    /**
+     * The agent user's home folder on the VM (stage 4). A project's own path may
+     * be `~/…`, and `run-tool`, `read-file`, `stat-files` and `watch-dir` take
+     * absolute paths, so the Mac expands a leading `~` with this. Absent from
+     * an agent older than stage 4.
+     */
+    home?: string;
 }
 
 export interface OpenedMessage {
@@ -534,6 +745,110 @@ export interface CopyStateMessage {
     uncommitted?: string[];
 }
 
+// ── Agent → Mac: transcripts (stage 3) ──
+
+/** A session's transcript as the Mac lists and searches it. */
+export interface AgentTranscript {
+    /** The folder the session ran in, absolute on the VM. */
+    cwd: string;
+    /** The transcript file's mtime, epoch ms. */
+    mtimeMs: number;
+    /** `parseTranscript`'s answer; `textContent` capped at TRANSCRIPT_TEXT_CAP_CHARS. */
+    session: Session;
+}
+
+export interface TranscriptMessage {
+    type: 'transcript';
+    requestId: string;
+    /** Null when the VM has no transcript of that id (yet), or none worth listing. */
+    transcript: AgentTranscript | null;
+}
+
+export interface TranscriptTailReply {
+    type: 'transcript-tail';
+    requestId: string;
+    lines: string[];
+}
+
+/** Transcripts the Mac asked for before have changed on disk; it asks again. */
+export interface TranscriptsChangedMessage {
+    type: 'transcripts-changed';
+    sessionIds: string[];
+}
+
+// ── Agent → Mac: answers for the pages (stage 4) ──
+
+export interface ToolResultMessage {
+    type: 'tool-result';
+    requestId: string;
+    /** The exit code; -1 when the tool could not start or timed out. */
+    code: number;
+    stdoutBase64: string;
+    /** The last part of stderr, for error messages. */
+    stderr: string;
+    /** True when stdout passed TOOL_OUTPUT_CAP_BYTES and was cut. */
+    truncated?: boolean;
+}
+
+export interface FileContentMessage {
+    type: 'file-content';
+    requestId: string;
+    found: boolean;
+    contentBase64?: string;
+}
+
+export interface FileStatsMessage {
+    type: 'file-stats';
+    requestId: string;
+    /** Path → size in bytes, for the paths that are regular files. */
+    sizes: Record<string, number>;
+}
+
+export interface DirChangedMessage {
+    type: 'dir-changed';
+    watchId: string;
+}
+
+export interface TranscriptAnswerMessage {
+    type: 'transcript-answer';
+    requestId: string;
+    ok: boolean;
+    result?: unknown;
+    error?: string;
+}
+
+// ── Agent → Mac (stage 5) ──
+
+export interface TranscriptListMessage {
+    type: 'transcript-list';
+    requestId: string;
+    sessions: {sessionId: string; dir: string; mtimeMs: number}[];
+}
+
+export interface PlacedMessage {
+    type: 'placed';
+    requestId: string;
+    ok: boolean;
+    /** Absolute on the VM. */
+    path?: string;
+    error?: string;
+}
+
+// ── Agent → Mac (#308) ──
+
+/** One session that archived itself on the VM while no Mac was connected. */
+export interface SelfArchivedSession {
+    sessionId: string;
+    /** When the agent stopped it, epoch ms. */
+    archivedAt: number;
+}
+
+export interface SelfArchivedMessage {
+    type: 'self-archived';
+    requestId: string;
+    sessions: SelfArchivedSession[];
+}
+
 export type AgentMessage =
     | WelcomeMessage
     | OpenedMessage
@@ -552,6 +867,17 @@ export type AgentMessage =
     | HandoffProgressMessage
     | HandoffDoneMessage
     | CopyStateMessage
+    | TranscriptMessage
+    | TranscriptTailReply
+    | TranscriptsChangedMessage
+    | ToolResultMessage
+    | FileContentMessage
+    | FileStatsMessage
+    | DirChangedMessage
+    | TranscriptAnswerMessage
+    | TranscriptListMessage
+    | PlacedMessage
+    | SelfArchivedMessage
     | ByeMessage;
 
 // ── Either way ──

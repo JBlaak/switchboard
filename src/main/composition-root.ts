@@ -14,6 +14,8 @@
 import log from 'electron-log';
 import {app, safeStorage} from 'electron';
 import {randomBytes} from 'node:crypto';
+import {createHash} from 'node:crypto';
+import nodeFs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -21,16 +23,27 @@ import {systemClock} from '../application/ports/clock';
 import {uuidGenerator} from '../application/ports/ids';
 import {AgentAwareTerminals} from '../application/services/agent-client/agent-aware-terminals';
 import {AgentClient} from '../application/services/agent-client/agent-client';
+import {isAgentPty} from '../application/services/agent-client/agent-pty';
 import {ConfigCopyService, manifestStoreOn} from '../application/services/config-copy-service';
 import {SshAgentDialer} from '../infrastructure/agent/ssh-agent-dialer';
 import {AgentHostsService} from '../application/services/agent-hosts-service';
 import {ProjectHandoffService} from '../application/services/project-handoff-service';
+import {SessionHandoffService} from '../application/services/session-handoff-service';
+import {VmTranscripts} from '../application/services/vm-transcripts';
+import {VmSchedulesService} from '../application/services/vm-schedules-service';
+import {VmRegistryService} from '../application/services/vm-registry-service';
+import type {VmRegistry} from '../application/services/vm-registry';
+import {DroppedFilesService} from '../application/services/dropped-files-service';
+import {isVmFolder, vmHostPath} from '../domain/agent/vm-paths';
+import type {VmSchedules} from '../application/services/vm-schedules';
+import type {DroppedFiles} from '../application/services/dropped-files';
+import {SqliteVmTranscriptStore} from '../infrastructure/sqlite/vm-transcript-store';
 import {GitCliHandoff} from '../infrastructure/git/git-cli-handoff';
 import {forgetRemoteProject} from './forget-remote-project';
 import {AgentUpgrades} from '../application/services/agent-upgrades';
 import {AgentInstallerService} from '../application/services/agent-installer-service';
 import {setupTerminalCommand} from '../domain/agent/setup-script';
-import {AgentBundleBuilder, agentBundleSources} from '../infrastructure/ssh/agent-bundle';
+import {AgentBundleBuilder, agentBundleSources, bundledAgentVersion} from '../infrastructure/ssh/agent-bundle';
 import {OpenSshProvisioner} from '../infrastructure/ssh/ssh-provisioner';
 import {NodeClaudeConfigSource} from '../infrastructure/fs/claude-config-source';
 import {QuestionService} from '../application/services/question-service';
@@ -102,11 +115,17 @@ import {PmsetBatteryGauge} from '../infrastructure/system/pmset-battery-gauge';
 import {BundleInstaller} from '../infrastructure/system/bundle-installer';
 import {GitHubReleaseFeed} from '../infrastructure/github/github-release-feed';
 import {GitCliRemotes} from '../infrastructure/git/git-cli-remotes';
+import {RoutingGitRemotes, RoutingGitWorkspace} from '../infrastructure/git/routing-git';
+import type {VmGitRouting} from '../infrastructure/git/routing-git';
+import {agentlessRemoteGuard} from '../domain/project/agentless-remote';
+import {RoutingTranscriptStore} from '../infrastructure/agent/routing-transcript-store';
+import {locateVmSession} from '../application/services/vm-session-location';
+import {SelfArchiveCatchUp} from '../application/services/self-archive-catch-up';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner} from '../infrastructure/github/gh-cli';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {encodeProjectPath} from '../domain/project/project-path';
-import {isRemoteProjectPath, remoteProjectPath} from '../domain/project/remote-target';
+import {isRemoteProjectPath} from '../domain/project/remote-target';
 import {routeCandidates} from '../domain/ask/route';
 import {resolveBlaakTasksUrl} from '../domain/settings/settings';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
@@ -119,7 +138,7 @@ import {WhisperModelStore} from '../infrastructure/voice/whisper-model-store';
 import {SqliteDeviceRegistry} from '../infrastructure/sqlite/device-registry';
 import {bonjourHostName, computerName} from '../infrastructure/system/computer-name';
 import {PhoneEventTee, buildPhoneAccess} from './phone-access';
-import {sessionArchiver} from './stop-session';
+import {sessionArchiver, stopSession} from './stop-session';
 import type {PhoneAccessService} from '../application/services/phone-access-service';
 import type {PhoneSessionsService} from '../application/services/phone-sessions-service';
 import type {DeviceRegistry, ServiceAdvertiser} from '../application/ports/phone-access';
@@ -133,6 +152,7 @@ import type {MainWindowHost} from '../application/ports/main-window';
 import type {SwitchboardDatabase} from '../infrastructure/sqlite/database';
 import type {AgentHosts} from '../application/services/agent-hosts';
 import type {ProjectHandoff} from '../application/services/project-handoff';
+import type {SessionHandoff} from '../application/services/session-handoff';
 
 /** Everything the IPC layer and the app lifecycle reach for. */
 export interface Container {
@@ -191,6 +211,29 @@ export interface Container {
      * copy. Optional only until `buildContainer` builds it.
      */
     readonly projectHandoff: ProjectHandoff;
+    /**
+     * Session hand-off to a VM (#276 stage 3): a running session moved to a
+     * host, waiting for its turn to end first. Optional only until
+     * `buildContainer` builds it.
+     */
+    readonly sessionHandoff: SessionHandoff;
+    /** VM sessions' transcripts, parsed on their VMs (#276 stage 3). */
+    readonly vmTranscripts: VmTranscripts;
+    /**
+     * Where a project's schedules run, on the Mac or in a copy on its VM (#276
+     * stage 5). Optional only until `buildContainer` builds it.
+     */
+    readonly vmSchedules: VmSchedules;
+    /**
+     * Files dropped on a VM session's terminal, uploaded to its VM (#276 stage
+     * 5). Optional only until `buildContainer` builds it.
+     */
+    readonly droppedFiles: DroppedFiles;
+    /**
+     * Settings → VMs (#307): the registered VMs, adding, renaming and removing
+     * them. Optional only until `buildContainer` builds it.
+     */
+    readonly vmRegistry: VmRegistry;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
@@ -339,6 +382,15 @@ export function buildContainer(): Container {
 
     // VM hosts (#276). The agent's question hook forwards here, so the Mac's own
     // QuestionService and archive tool answer a VM session as they answer a local one.
+    // The agent this app ships, and its build stamp (#276): a VM's agent is
+    // current when it reports exactly this, not merely the app's version.
+    const agentSources = agentBundleSources({
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appRoot: app.getAppPath(),
+        tmpDir: os.tmpdir(),
+    });
+    const agentVersion = bundledAgentVersion(agentSources, app.getVersion());
     const agents = new AgentClient({
         dialer: new SshAgentDialer({
             shell: () => shells.resolve(shellProfileId()).path,
@@ -346,7 +398,7 @@ export function buildContainer(): Container {
             cwd: paths.homeDir,
             log,
         }),
-        appVersion: app.getVersion(),
+        appVersion: agentVersion,
         registry,
         renderer,
         questions,
@@ -379,7 +431,10 @@ export function buildContainer(): Container {
     // `gh`, and the filters a git checkout runs (`git-lfs`), need the login
     // shell's PATH: launched from the Finder, the app's own has no Homebrew in it.
     const toolEnv = loginShellEnv(() => shells.resolve(shellProfileId()).path, terminals.baseEnv, log);
-    const workspace = new GitCliWorkspace(toolEnv);
+    // The Mac's own git. The pages get `workspace` below, which routes a VM
+    // project's paths (#276 stage 4) through its agent; the launcher only ever
+    // asks about local folders, so it keeps this one.
+    const localWorkspace = new GitCliWorkspace(toolEnv);
     const launcher = new SessionLauncher({
         registry,
         terminals,
@@ -394,7 +449,7 @@ export function buildContainer(): Container {
         clock,
         timers,
         log,
-        git: workspace,
+        git: localWorkspace,
         fileExists: (target) => fs.exists(target),
         agents,
     });
@@ -404,15 +459,8 @@ export function buildContainer(): Container {
     const agentInstaller = new AgentInstallerService({
         provisioner: new OpenSshProvisioner(toolEnv, log),
         settings,
-        bundles: new AgentBundleBuilder(
-            agentBundleSources({
-                isPackaged: app.isPackaged,
-                resourcesPath: process.resourcesPath,
-                appRoot: app.getAppPath(),
-                tmpDir: os.tmpdir(),
-            }),
-        ),
-        appVersion: app.getVersion(),
+        bundles: new AgentBundleBuilder(agentSources),
+        appVersion: agentVersion,
         log,
         clock,
     });
@@ -424,32 +472,50 @@ export function buildContainer(): Container {
         },
         launcher,
         setupCommand: setupTerminalCommand(),
-        appVersion: app.getVersion(),
+        appVersion: agentVersion,
         ids,
         log,
     });
     // When a VM's agent is upgraded on its own: see AgentUpgrades.
     const agentUpgrades = new AgentUpgrades({
-        appVersion: app.getVersion(),
-        agentProjectOn: (host) => {
-            const onHost = settings
-                .remoteProjects()
-                .find((r) => r.user === host.user && r.host === host.host && r.port === host.port && r.agent);
-            return onHost ? remoteProjectPath(onHost) : null;
-        },
+        appVersion: agentVersion,
+        // The VM's own path: the installer needs no project on the host.
+        agentProjectOn: (host) => (settings.findVmHost(host)?.agent ? vmHostPath(host) : null),
         install: (projectPath) => agentInstaller.install(projectPath),
         redial: (host) => agents.connection(host).retryNow(),
         log,
     });
     agents.onNeedsReinstall((host, reason) => void agentUpgrades.protocolMismatch(host, reason));
+
     agents.onConnected((connection) => void agentUpgrades.connected(connection));
 
     // Handing projects off to VMs (#276 stage 2). Forgetting a removed copy
     // reaches back into the container, which exists by the time anyone removes one.
     let forgetRemote: (projectPath: string) => void = () => {};
-    const projectHandoff = new ProjectHandoffService({
+    // Settings → VMs (#307): VMs registered on their own. Removing one forgets
+    // its projects as the Projects list's Remove does, which reaches back into
+    // the container, so it goes through `forgetRemote` (set once it exists).
+    const vmRegistry = new VmRegistryService({
+        settings,
         agents,
-        git: new GitCliHandoff(toolEnv),
+        forgetRemoteProject: (projectPath) => forgetRemote(projectPath),
+        renderer,
+        appVersion: agentVersion,
+        clock,
+        log,
+    });
+    // The list shows whether each link is up, so it follows them.
+    agents.onConnected(() => renderer.vmHostsChanged());
+    agents.onDisconnected(() => renderer.vmHostsChanged());
+    // Where each project's schedules run (#276 stage 5): on this Mac, or in one
+    // copy on its VM, kept in step with the VM's host settings on every connect.
+    const vmSchedules = new VmSchedulesService({agents, settings, fs, renderer, clock, timers, log});
+    vmSchedules.start();
+    const handoffGit = new GitCliHandoff(toolEnv);
+    const projectHandoff = new ProjectHandoffService({
+        afterHandoff: (localPath, copyPath, choices) => vmSchedules.afterHandoff(localPath, copyPath, choices),
+        agents,
+        git: handoffGit,
         settings,
         renderer,
         forgetRemoteProject: (projectPath) => forgetRemote(projectPath),
@@ -481,7 +547,36 @@ export function buildContainer(): Container {
         log,
     });
 
-    const projects = new ProjectListService({repository, transcripts, settings, registry});
+    // VM sessions' titles, PR links and search text, from the transcripts their
+    // VMs parse (#276 stage 3). Built before any host connects: it listens for them.
+    const vmTranscripts = new VmTranscripts({
+        agents,
+        remoteProjects: () => settings.remoteProjects(),
+        store: new SqliteVmTranscriptStore(database.db),
+        searchIndex,
+        names: repository,
+        renderer,
+        log,
+    });
+    const projects = new ProjectListService({repository, transcripts, settings, registry, vmTranscripts});
+    // Moving a running conversation to a VM (#276 stage 3).
+    const sessionHandoff = new SessionHandoffService({
+        registry,
+        sessions: repository,
+        transcripts,
+        git: handoffGit,
+        projects: projectHandoff,
+        agents,
+        prompter,
+        stop: (sessionId) => stopSession({registry, remote, lifecycle, terminals}, sessionId),
+        launcher,
+        settings,
+        renderer,
+        sha256: (bytes) => createHash('sha256').update(bytes).digest('hex'),
+        clock,
+        timers,
+        log,
+    });
 
     // ── Feature services ──
     const usage = new OAuthUsageService(log);
@@ -512,6 +607,8 @@ export function buildContainer(): Container {
         log,
         commandsDir: paths.commandsDir,
         runner: new ClaudeCommandRunner({shells, terminals, log, shellProfileId}),
+        // A project whose schedules run on a VM is paused here (#276 stage 5).
+        runsHere: (projectPath) => vmSchedules.macRunsSchedulesOf(projectPath),
     });
     // Ask Patch (#135): one Haiku call per request typed on the empty screen.
     const claudeCaller = new ShellClaudeCaller({
@@ -597,8 +694,27 @@ export function buildContainer(): Container {
     // Beside the window icon: build/ is packaged next to app/.
     const appIcon = new ElectronAppIconGateway(path.join(appDir(), '..', 'build', 'dock'), log);
     const sleep = new PmsetSleepControl(log);
-    const git = new GitCliRemotes();
-    const projectFolders = new ProjectFolderService({fs, git: workspace, remotes: git});
+    // Git for the pages, routed by path: a VM project's (`ssh://user@host//abs`)
+    // goes through its host's agent, everything else to the Mac's own git.
+    const vmGit: VmGitRouting = {
+        isAgentHost: (host) => !!settings.findVmHost(host)?.agent,
+        tools: (host) => agents.connection(host),
+    };
+    const workspace = new RoutingGitWorkspace(localWorkspace, vmGit);
+    const git = new RoutingGitRemotes(new GitCliRemotes(), vmGit);
+    const projectFolders = new ProjectFolderService({fs, git: localWorkspace, remotes: new GitCliRemotes()});
+    // Only agentless remotes are turned away now; a VM project's pages are served.
+    const agentlessRemote = agentlessRemoteGuard(() => settings.vmHosts());
+    // Transcripts for the pages: a VM session's folder (`vm:…`) is asked of its
+    // VM; it never dials, so an offline VM answers empty.
+    const routedTranscripts = new RoutingTranscriptStore({
+        local: transcripts,
+        link: (host) => {
+            const connection = agents.connection({...host});
+            return connection.connected ? connection : null;
+        },
+        log,
+    });
 
     const github = new GhCli({run: async (args) => defaultGhRunner(await toolEnv())(args)});
     // The page and its actions need each other: the actions read the page's
@@ -611,9 +727,19 @@ export function buildContainer(): Container {
         clock,
         log,
     });
+    const vmLocation = {
+        live: (id: string) => {
+            const session = registry.find(id)?.session;
+            return session ? {projectPath: session.projectPath, onAgent: isAgentPty(session.pty)} : null;
+        },
+        remoteProjects: () => settings.remoteProjects(),
+        vmCwd: (id: string) => vmTranscripts.cwd(id),
+    };
     const locateSession = (sessionId: string): {folder: string | null; projectPath: string} | null => {
         const cached = repository.getCachedSession(sessionId);
         if (cached) return {folder: cached.folder, projectPath: cached.projectPath};
+        const onVm = locateVmSession(vmLocation, sessionId);
+        if (onVm) return onVm;
         // Running but not indexed yet: its folder is the one the CLI writes to.
         const live = registry.find(sessionId)?.session;
         if (!live) return null;
@@ -622,7 +748,8 @@ export function buildContainer(): Container {
     };
     const sessionWork = new SessionWorkService({
         locate: locateSession,
-        transcripts,
+        transcripts: routedTranscripts,
+        agentlessRemote,
         git: workspace,
         github,
         remotes: git,
@@ -635,7 +762,15 @@ export function buildContainer(): Container {
     sessionActions.attach(sessionWork);
     const review = new ReviewService({github, page: sessionWork, actions: sessionActions, log});
     // The Plan tab (#121): reads only, each answer kept for 30 s.
-    const plans = new PlanService({locate: locateSession, transcripts, git: workspace, remotes: git, github, clock});
+    const plans = new PlanService({
+        locate: locateSession,
+        transcripts: routedTranscripts,
+        agentlessRemote,
+        git: workspace,
+        remotes: git,
+        github,
+        clock,
+    });
 
     // Always on, page or no page (W1): the running Claude sessions' PRs, as
     // their transcripts linked them. Remote sessions are out of scope.
@@ -643,11 +778,24 @@ export function buildContainer(): Container {
         sessions: () =>
             registry
                 .snapshot()
+                // Local sessions, and VM sessions (#276 stage 3), whose PR links come
+                // from the transcripts their VMs parse. A session on an agentless
+                // remote has no transcript here at all.
                 .filter(
                     ([, session]) =>
-                        !session.exited && !session.isPlainTerminal && !isRemoteProjectPath(session.projectPath),
+                        !session.exited &&
+                        !session.isPlainTerminal &&
+                        (!isRemoteProjectPath(session.projectPath) || isAgentPty(session.pty)),
                 )
                 .map(([sessionId, session]) => {
+                    if (isAgentPty(session.pty)) {
+                        return {
+                            sessionId,
+                            projectPath: session.projectPath,
+                            folder: null,
+                            pullRequests: vmTranscripts.pullRequests(sessionId),
+                        };
+                    }
                     const cached = repository.getCachedSession(sessionId);
                     return {
                         sessionId,
@@ -694,7 +842,9 @@ export function buildContainer(): Container {
                 candidates.set(sessionId, {
                     sessionId,
                     projectPath: live.projectPath,
-                    folder: live.projectFolder ?? encodeProjectPath(live.projectPath),
+                    folder: isAgentPty(live.pty)
+                        ? (locateVmSession(vmLocation, sessionId)?.folder ?? null)
+                        : (live.projectFolder ?? encodeProjectPath(live.projectPath)),
                     activeAt: live.openedAt,
                     pullRequests: [],
                 });
@@ -704,7 +854,8 @@ export function buildContainer(): Container {
     };
     const issueSessions = new IssueSessionService({
         sessions: sessionCandidates,
-        transcripts,
+        transcripts: routedTranscripts,
+        agentlessRemote,
         git: workspace,
         remotes: git,
         github,
@@ -716,7 +867,8 @@ export function buildContainer(): Container {
     const worktreeCleanup = new WorktreeCleanupService({
         enabled: () => settings.removeWorktreeOnArchive(),
         locate: locateSession,
-        transcripts,
+        transcripts: routedTranscripts,
+        agentlessRemote,
         git: workspace,
         otherSessionPaths: (sessionId) => {
             const meta = repository.getAllMeta();
@@ -745,6 +897,7 @@ export function buildContainer(): Container {
         remotes: git,
         github,
         clock,
+        agentlessRemote,
     });
 
     // BlaakTasks (#248): built only while a URL is set, and again when it changes.
@@ -758,7 +911,8 @@ export function buildContainer(): Container {
             const links = new TaskLinkService({store: taskLinkStore, sessions: sessionCandidates, clock});
             const starts = new TaskSessionService({
                 sessions: sessionCandidates,
-                transcripts,
+                transcripts: routedTranscripts,
+                agentlessRemote,
                 git: workspace,
                 repoOf: (taskId) => links.repoOf(taskId),
                 candidates: () => routeCandidates(projects.list(false)),
@@ -777,14 +931,29 @@ export function buildContainer(): Container {
         sessionsIn: (folder) =>
             registry
                 .snapshot()
+                // Local sessions, and VM sessions by their VM transcript folder (#276 stage 5).
                 .filter(
                     ([, session]) =>
-                        !session.exited && !session.isPlainTerminal && !isRemoteProjectPath(session.projectPath),
+                        !session.exited &&
+                        !session.isPlainTerminal &&
+                        (!isRemoteProjectPath(session.projectPath) || isAgentPty(session.pty)),
                 )
-                .filter(([, session]) => (session.projectFolder ?? encodeProjectPath(session.projectPath)) === folder)
+                .filter(
+                    ([sessionId, session]) =>
+                        (isAgentPty(session.pty)
+                            ? locateVmSession(vmLocation, sessionId)?.folder
+                            : (session.projectFolder ?? encodeProjectPath(session.projectPath))) === folder,
+                )
                 .map(([sessionId, session]) => ({sessionId, projectPath: session.projectPath})),
-        transcript: (folder, sessionId) => transcripts.readTail(folder, sessionId, TASK_SCAN_BYTES).split('\n'),
-        modifiedAt: (folder, sessionId) => transcripts.sessionMtimeMs(folder, sessionId),
+        transcript: (folder, sessionId) =>
+            isVmFolder(folder)
+                ? vmTranscripts.tail(sessionId, TASK_SCAN_BYTES)
+                : transcripts.readTail(folder, sessionId, TASK_SCAN_BYTES).split('\n'),
+        modifiedAt: (folder, sessionId) => {
+            if (!isVmFolder(folder)) return transcripts.sessionMtimeMs(folder, sessionId);
+            const at = Date.parse(vmTranscripts.get(sessionId)?.modified ?? '');
+            return Number.isNaN(at) ? null : at;
+        },
         pullRequests: (sessionId) => repository.getCachedSession(sessionId)?.pullRequests ?? [],
         archived: (sessionId) => Boolean(repository.getAllMeta().get(sessionId)?.archived),
         sessionProject: (sessionId) => locateSession(sessionId)?.projectPath ?? null,
@@ -877,6 +1046,51 @@ export function buildContainer(): Container {
         },
     });
 
+    // A VM session's transcript changed: its task detection runs, as a local one's
+    // does on the projects watcher (#276 stage 5).
+    agents.onConnected((connection) =>
+        connection.onMessage((message) => {
+            if (message.type !== 'transcripts-changed') return;
+            for (const sessionId of message.sessionIds) {
+                const folder = locateVmSession(vmLocation, sessionId)?.folder;
+                if (folder) void tasks.transcriptsChanged(folder);
+            }
+        }),
+    );
+    // VM sessions that archived themselves while the Mac was away (#308): their
+    // rows are archived on every connect, as the archive tool would have, minus the stop.
+    const selfArchiveCatchUp = new SelfArchiveCatchUp({
+        appVersion: agentVersion,
+        remoteProjects: () => settings.remoteProjects(),
+        archiver: sessionArchiver({
+            registry,
+            remote,
+            lifecycle,
+            terminals,
+            repository,
+            renderer,
+            worktreeCleanup,
+            tasks,
+        }),
+        log,
+    });
+    agents.onConnected((connection) => void selfArchiveCatchUp.connected(connection));
+    // Files dropped on a VM session's terminal go up to its VM (#276 stage 5).
+    const droppedFiles = new DroppedFilesService({
+        registry,
+        agents,
+        files: {
+            stat: (file) => {
+                const stat = nodeFs.statSync(file, {throwIfNoEntry: false});
+                return stat ? {isFile: stat.isFile(), size: stat.size} : null;
+            },
+            read: (file) => nodeFs.readFileSync(file),
+            basename: (file) => path.basename(file),
+        },
+        sha256: (bytes) => createHash('sha256').update(bytes).digest('hex'),
+        log,
+    });
+
     const container: Container = {
         log,
         paths,
@@ -890,6 +1104,11 @@ export function buildContainer(): Container {
         agents,
         agentHosts,
         projectHandoff,
+        sessionHandoff,
+        vmTranscripts,
+        vmSchedules,
+        droppedFiles,
+        vmRegistry,
         shells,
         lifecycle,
         remote,

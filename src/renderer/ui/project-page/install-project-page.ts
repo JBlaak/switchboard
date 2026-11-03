@@ -26,6 +26,7 @@ import {
 } from '../../state/project-page-slice';
 import type {RendererState} from '../../state/root';
 import {STORAGE_KEYS, readStored, writeStored} from '../../state/storage';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 import {isStorable, parseStoredOverviews, storedOverviewFor, storedOverviewsWith} from '../../state/stored-overviews';
 import {issueKeyString} from '../../../domain/plan/model';
 import {loadProjectOverview, reloadProjectOverview} from './actions';
@@ -123,7 +124,7 @@ export function installProjectPage(): () => void {
             event.type === 'projectOverviewAnswered' &&
             event.plans &&
             state.projectPage.overview === event.overview &&
-            isStorable(event.overview)
+            isStorable(event.overview, isVmProjectIn(state.agentHost, event.overview.projectPath))
         ) {
             const stored = parseStoredOverviews(readStored('localStorage', STORAGE_KEYS.projectOverviews));
             const entry = {overview: event.overview, closed: event.closed, merged: event.merged};
