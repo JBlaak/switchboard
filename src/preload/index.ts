@@ -125,6 +125,15 @@ const api: SwitchboardApi = {
     setAgentHostSettings: (projectPath, settings) =>
         ipcRenderer.invoke(INVOKE.agentSetHostSettings, projectPath, settings),
     openAgentSetupTerminal: (projectPath) => ipcRenderer.invoke(INVOKE.agentOpenSetupTerminal, projectPath),
+    // ── Project hand-off (#276 stage 2) ──
+    handoffHosts: () => ipcRenderer.invoke(INVOKE.handoffHosts),
+    previewHandoff: (localPath) => ipcRenderer.invoke(INVOKE.handoffPreview, localPath),
+    handOffProject: (localPath, hostKey, ticked) => ipcRenderer.invoke(INVOKE.handoffRun, localPath, hostKey, ticked),
+    projectCopies: (localPath) => ipcRenderer.invoke(INVOKE.handoffCopiesOf, localPath),
+    copyOrigin: (copyPath) => ipcRenderer.invoke(INVOKE.handoffOriginOf, copyPath),
+    copyStatus: (copyPath) => ipcRenderer.invoke(INVOKE.handoffCopyStatus, copyPath),
+    bringBackCopy: (copyPath) => ipcRenderer.invoke(INVOKE.handoffBringBack, copyPath),
+    removeCopy: (copyPath) => ipcRenderer.invoke(INVOKE.handoffRemoveCopy, copyPath),
     // ── Plan: sessions on a plan's issues (#125) ──
     issueSessions: (repository) => ipcRenderer.invoke(INVOKE.planIssueSessions, repository),
     prepareIssueWorktree: (request) => ipcRenderer.invoke(INVOKE.planPrepareIssueWorktree, request),
@@ -195,6 +204,8 @@ const api: SwitchboardApi = {
     onSessionTaskChanged: (cb) => subscribe(EVENT.sessionTaskChanged, (_e, sessionId, taskId) => cb(sessionId, taskId)),
     onAgentInstallProgress: (cb) =>
         subscribe(EVENT.agentInstallProgress, (_e, projectPath, line) => cb(projectPath, line)),
+    onHandoffProgress: (cb) => subscribe(EVENT.handoffProgress, (_e, localPath, line) => cb(localPath, line)),
+    onBringBackProgress: (cb) => subscribe(EVENT.bringBackProgress, (_e, copyPath, line) => cb(copyPath, line)),
 
     // ── Host facts ──
     getPathForFile: (file) => webUtils.getPathForFile(file),

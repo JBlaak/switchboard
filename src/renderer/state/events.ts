@@ -36,6 +36,7 @@ import type {PhoneAccessEvent} from './phone-access-slice';
 import type {SessionTaskEvent} from './session-task-slice';
 import type {ArchiveUndoEvent} from './archive-undo-slice';
 import type {AgentHostEvent} from './agent-host-slice';
+import type {HandoffEvent} from './handoff-slice';
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
 import type {QuestionView} from './answers-slice';
@@ -81,7 +82,11 @@ export type PushEvent =
     /** A session's task changed: a task id when linked, null when unlinked. */
     | {type: 'sessionTaskChanged'; sessionId: string; taskId: string | null}
     /** One line of an agent install's progress (#276), for the project whose host it is. */
-    | {type: 'agentInstallProgress'; projectPath: string; line: string};
+    | {type: 'agentInstallProgress'; projectPath: string; line: string}
+    /** One line of a project hand-off's progress (#276), for the local project. */
+    | {type: 'handoffProgress'; localPath: string; line: string}
+    /** One line of a Bring back's progress, for the copy. */
+    | {type: 'bringBackProgress'; copyPath: string; line: string};
 
 // ── From the renderer itself: user actions and timers ──
 
@@ -330,7 +335,8 @@ export type RendererEvent =
     | SessionTaskEvent
     | TasksPageEvent
     | ArchiveUndoEvent
-    | AgentHostEvent;
+    | AgentHostEvent
+    | HandoffEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

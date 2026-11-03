@@ -10,6 +10,7 @@ import {useStore} from '../use-store';
 import {closeDialog} from './actions';
 import {ProjectsModal} from './ProjectsModal';
 import {ResumeSessionDialog} from './ResumeSessionDialog';
+import {HandOffDialog} from './HandOffDialog';
 import type {JSX} from 'react';
 
 export function Dialogs(): JSX.Element | null {
@@ -22,5 +23,7 @@ export function Dialogs(): JSX.Element | null {
             return <ProjectsModal key={seq} onClose={onClose} initialPrompt={open.initialPrompt} />;
         case 'resumeSession':
             return <ResumeSessionDialog key={seq} session={open.session} settings={open.settings} onClose={onClose} />;
+        case 'handOff':
+            return <HandOffDialog key={seq} localPath={open.localPath} host={open.host} onClose={onClose} />;
     }
 }
