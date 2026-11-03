@@ -686,8 +686,11 @@ export class AgentConnection {
             this.pending.set(requestId, {
                 resolve: (message) => {
                     this.progress.delete(requestId);
-                    if (message.type !== expect) reject(new Error(`expected ${expect}, got ${message.type}`));
-                    else resolve(message as T);
+                    // An older agent answers a request it does not know with a
+                    // refused `done`; its reason (update the agent) is the error.
+                    if (message.type === expect) resolve(message as T);
+                    else if (message.type === 'done' && !message.ok && message.error) reject(new Error(message.error));
+                    else reject(new Error(`expected ${expect}, got ${message.type}`));
                 },
                 reject: (error) => {
                     this.progress.delete(requestId);
