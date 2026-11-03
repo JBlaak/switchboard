@@ -1,13 +1,13 @@
 /**
  * VM projects in the sidebar (#276): the badge a remote project carries, the
- * buttons a session row on a VM offers, and the reason Session work isn't
- * there for it yet.
+ * buttons a session row on a VM offers, and whether Session work is asked
+ * for it (#276 stage 4).
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {rowButtons} from '../src/renderer/state/session-list-layout';
 import {remoteBadge} from '../src/renderer/features/sessions/remote-badge';
-import {REMOTE_REASON, VM_REASON, workTrigger} from '../src/renderer/ui/session-list/work-trigger';
+import {REMOTE_REASON, VM_SHELL_REASON, workOffReason, workTrigger} from '../src/renderer/ui/session-list/work-trigger';
 import type {SessionRow} from '../src/domain/session/session';
 
 function session(extra: Partial<SessionRow> = {}): SessionRow {
@@ -108,18 +108,56 @@ test('a local Claude session is unchanged', () => {
 
 // ── Session work ──
 
-test('Session work on a VM row says it is not there on a VM yet', () => {
+test('Session work on a VM Claude row is asked of main, and opens when main says it can', () => {
     /* When */
-    const trigger = workTrigger(true, undefined, {vm: true});
+    const off = workOffReason(VM_CLAUDE, VM_CLAUDE.projectPath, true);
+    const trigger = workTrigger(off, true);
 
     /* Then */
-    assert.deepEqual(trigger, {button: false, reason: VM_REASON});
+    assert.equal(off, null);
+    assert.deepEqual(trigger, {button: true});
+});
+
+test('Session work on a VM Claude row waits for main, then says why when main says no', () => {
+    /* When */
+    const asking = workTrigger(workOffReason(VM_CLAUDE, VM_CLAUDE.projectPath, true), undefined);
+    const refused = workTrigger(workOffReason(VM_CLAUDE, VM_CLAUDE.projectPath, true), false);
+
+    /* Then */
+    assert.deepEqual(asking, {button: false, reason: undefined});
+    assert.deepEqual(refused, {button: false, reason: 'Not a git repository'});
+});
+
+test('Session work on a shell on a VM stays off, and says so', () => {
+    /* Given */
+    const shell = session({projectPath: 'ssh://me@vm/app', type: 'remote', remoteKind: 'shell'});
+
+    /* When */
+    const off = workOffReason(shell, shell.projectPath, true);
+    const trigger = workTrigger(off, true);
+
+    /* Then */
+    assert.equal(off, VM_SHELL_REASON);
+    assert.deepEqual(trigger, {button: false, reason: VM_SHELL_REASON});
 });
 
 test('Session work on an agentless remote row keeps its reason', () => {
+    /* Given */
+    const remote = session({projectPath: 'ssh://me@box/app', type: 'remote', remoteKind: 'claude'});
+
     /* When */
-    const trigger = workTrigger(true, undefined);
+    const off = workOffReason(remote, remote.projectPath, false);
+    const trigger = workTrigger(off, true);
 
     /* Then */
+    assert.equal(off, REMOTE_REASON);
     assert.deepEqual(trigger, {button: false, reason: REMOTE_REASON});
+});
+
+test('Session work on a local row is asked of main, as before', () => {
+    /* When */
+    const off = [workOffReason(session(), '/repo', false), workOffReason({type: 'terminal'}, '/repo', false)];
+
+    /* Then */
+    assert.deepEqual(off, [null, null]);
 });

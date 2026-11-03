@@ -1,10 +1,19 @@
 /**
  * The project page on a remote project (#276): what the page shows on a VM
- * project, the Install agent card's states, and the Setup section's checks.
+ * project (stage 4: what a local one does, Tasks aside) and an agentless one, the Install agent card's states, and the Setup section's checks.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {githubPart, remoteNote, showsWorktrees} from '../src/renderer/ui/project-page/page-state';
+import {
+    githubPart,
+    isVmRepositoryIn,
+    opensGitHub,
+    projectLinkTitle,
+    REMOTE_NOTE,
+    showsTasks,
+    showsWorktrees,
+    VM_TASKS_NOTE,
+} from '../src/renderer/ui/project-page/page-state';
 import {
     installView,
     offersUpdate,
@@ -12,29 +21,137 @@ import {
     toolLine,
     toolLines,
 } from '../src/renderer/ui/project-page/agent-host-view';
-import {NO_HOST} from '../src/renderer/state/agent-host-slice';
+import {initialAgentHostState, NO_HOST} from '../src/renderer/state/agent-host-slice';
+import {groupOverview} from '../src/domain/plan/project-overview';
+import type {ProjectIssue, ProjectOverview, ProjectPullRequest} from '../src/domain/project/overview';
 
 const VM = 'ssh://me@vm/app';
+const SSH = 'ssh://me@box/app';
+
+/** A VM project's full answer, as main reads it on the VM. */
+function overview(fields: Partial<ProjectOverview> = {}): ProjectOverview {
+    const groups = groupOverview<ProjectIssue, ProjectPullRequest>({
+        repository: 'me/app',
+        plans: [],
+        issues: [],
+        pullRequests: [],
+        sessions: {owners: {}, running: new Set()},
+    });
+    return {
+        projectPath: VM,
+        remote: false,
+        repository: 'me/app',
+        github: {ok: true, fetchedAt: 1_000, stale: false, plansPending: false, ...groups},
+        worktrees: [
+            {
+                path: '/home/me/app',
+                branch: 'main',
+                main: true,
+                locked: false,
+                changedFiles: 0,
+                ahead: 0,
+                merged: false,
+                lastCommitAt: null,
+                running: [],
+            },
+        ],
+        running: [],
+        ...fields,
+    };
+}
 
 // ── Page state ──
 
-test('a VM project is remote, says so, and still shows no worktrees', () => {
+test('a VM project takes a local project’s kinds, even when its overview still says remote', () => {
+    /* Given */
+    const repo = overview({remote: true});
+    const noGitHub = overview({remote: true, repository: null, github: null});
+
     /* When */
-    const part = githubPart(null, VM, true);
+    const loading = githubPart(null, VM, true);
+    const ok = githubPart(repo, VM, true);
+    const none = githubPart(noGitHub, VM, true);
 
     /* Then */
-    assert.deepEqual(part, {kind: 'remote', host: 'me@vm:22', vm: true});
-    assert.equal(showsWorktrees(null, VM), false);
+    assert.deepEqual(loading, {kind: 'loading'});
+    assert.deepEqual(ok, {kind: 'ok', stale: false, fetchedAt: 1_000});
+    assert.deepEqual(none, {kind: 'none'});
 });
 
-test('the note under a VM project says plans and worktrees come later', () => {
+test('a VM project shows its worktrees, an agentless remote still none, a local project as before', () => {
+    /* Given */
+    const vm = overview();
+    const local = overview({projectPath: '/repo'});
+
     /* When */
-    const vm = remoteNote(true);
-    const ssh = remoteNote(false);
+    const shown = [
+        showsWorktrees(vm, VM, true),
+        showsWorktrees(null, VM, true),
+        showsWorktrees(null, SSH),
+        showsWorktrees(local, '/repo'),
+    ];
 
     /* Then */
-    assert.equal(vm, 'Plans and worktrees aren’t available on a VM yet.');
-    assert.equal(ssh, 'Plans and worktrees aren’t read over ssh.');
+    assert.deepEqual(shown, [true, true, false, true]);
+});
+
+test('an agentless remote stays remote, naming its host', () => {
+    /* When */
+    const part = githubPart(overview({projectPath: SSH, remote: true}), SSH);
+
+    /* Then */
+    assert.deepEqual(part, {kind: 'remote', host: 'me@box:22'});
+});
+
+test('the note under an agentless remote says plans and worktrees aren’t read over ssh', () => {
+    /* Then */
+    assert.equal(REMOTE_NOTE, 'Plans and worktrees aren’t read over ssh.');
+});
+
+test('Tasks stay off on a VM project, with a note saying so, and show for a local one', () => {
+    /* When */
+    const shown = [showsTasks(VM), showsTasks(SSH), showsTasks('/repo')];
+
+    /* Then */
+    assert.deepEqual(shown, [false, false, true]);
+    assert.equal(VM_TASKS_NOTE, 'Tasks aren’t linked to projects on a VM yet.');
+});
+
+// ── GitHub ──
+
+test('⌘-click and the GitHub button open GitHub for a VM project and a local one, not an agentless remote', () => {
+    /* When */
+    const opens = [opensGitHub(VM, true), opensGitHub('/repo', false), opensGitHub(SSH, false)];
+
+    /* Then */
+    assert.deepEqual(opens, [true, true, false]);
+});
+
+test('a project name’s tooltip offers ⌘-click on a VM project, not on an agentless remote', () => {
+    /* When */
+    const vm = projectLinkTitle(VM, true);
+    const ssh = projectLinkTitle(SSH);
+    const local = projectLinkTitle('/repo');
+
+    /* Then */
+    assert.equal(vm, 'Open me@vm/app\n⌘-click opens GitHub');
+    assert.equal(ssh, 'Open me@box/app');
+    assert.equal(local, 'Open repo\n⌘-click opens GitHub');
+});
+
+test('a worktree of a VM project counts as on the VM', () => {
+    /* Given */
+    const agentHost = {...initialAgentHostState, vmProjects: {[VM]: true as const}};
+
+    /* When */
+    const verdicts = [
+        isVmRepositoryIn(agentHost, VM),
+        isVmRepositoryIn(agentHost, VM + '/.claude/worktrees/fix'),
+        isVmRepositoryIn(agentHost, SSH),
+    ];
+
+    /* Then */
+    assert.deepEqual(verdicts, [true, true, false]);
 });
 
 // ── Install agent ──

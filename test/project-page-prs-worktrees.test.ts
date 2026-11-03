@@ -567,7 +567,7 @@ test('no GitHub remote: no GitHub part, and the worktrees still show when there 
     assert.equal(showsWorktrees(notGit, APP), false);
 });
 
-test('an ssh project is remote at once, names its host, and shows no worktrees', () => {
+test('an agentless ssh project is remote at once, names its host, and shows no worktrees', () => {
     /* Given */
     const path = 'ssh://joris@build.movelab/srv/deploy';
 
@@ -575,7 +575,7 @@ test('an ssh project is remote at once, names its host, and shows no worktrees',
     const part = githubPart(null, path);
 
     /* Then */
-    assert.deepEqual(part, {kind: 'remote', host: 'joris@build.movelab:22', vm: false});
+    assert.deepEqual(part, {kind: 'remote', host: 'joris@build.movelab:22'});
     assert.equal(remoteHost('ssh://ci@runner:2222'), 'ci@runner:2222');
     assert.equal(showsWorktrees(null, path), false);
 });

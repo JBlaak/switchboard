@@ -3,9 +3,9 @@
  * overview's answer: what the GitHub part has to say, and so which sections
  * show, which are left out, and what stands in their place.
  *
- * - `remote`: an ssh project. Sessions and settings only, with the host named;
- *   `vm` when its host runs a Switchboard agent (#276), whose GitHub, plans and
- *   worktrees parts come in a later stage.
+ * - `remote`: an ssh project whose host runs no Switchboard agent. Sessions
+ *   and settings only, with the host named. A VM project (#276 stage 4), whose
+ *   host runs one, is read on the VM and takes the kinds a local project does.
  * - `loading`: no answer yet. The local Sessions show at once; the sections
  *   that wait for the answer shimmer.
  * - `none`: no GitHub remote. The GitHub sections and button are left out.
@@ -19,9 +19,12 @@
  */
 import {isRemoteProjectPath, parseRemoteProjectPath} from '../../../domain/project/remote-target';
 import type {GitHubUnavailableReason, ProjectOverview} from '../../../domain/project/overview';
+import {projectLabel, repositoryRoot} from '../../features/sessions/project-label';
+import {isVmProjectIn} from '../../state/agent-host-slice';
+import type {AgentHostState} from '../../state/agent-host-slice';
 
 export type GitHubPart =
-    | {readonly kind: 'remote'; readonly host: string; readonly vm: boolean}
+    | {readonly kind: 'remote'; readonly host: string}
     | {readonly kind: 'loading'}
     | {readonly kind: 'none'}
     | {readonly kind: 'unavailable'; readonly reason: GitHubUnavailableReason}
@@ -29,10 +32,11 @@ export type GitHubPart =
 
 /**
  * What the page shows of GitHub for `projectPath`, given the overview it holds
- * (for any project), and whether the project is a VM project.
+ * (for any project), and whether the project is a VM project. Being one is
+ * decisive: its overview may still say `remote`.
  */
 export function githubPart(overview: ProjectOverview | null, projectPath: string, vm = false): GitHubPart {
-    if (isRemoteProjectPath(projectPath)) return {kind: 'remote', host: remoteHost(projectPath), vm};
+    if (isRemoteProjectPath(projectPath) && !vm) return {kind: 'remote', host: remoteHost(projectPath)};
     const answer = overview?.projectPath === projectPath ? overview : null;
     if (!answer) return {kind: 'loading'};
     const github = answer.github;
@@ -41,9 +45,13 @@ export function githubPart(overview: ProjectOverview | null, projectPath: string
     return {kind: 'ok', stale: github.stale, fetchedAt: github.fetchedAt};
 }
 
-/** Whether the Worktrees section shows: not for a remote project, nor for one with no checkouts (not a git repository). */
-export function showsWorktrees(overview: ProjectOverview | null, projectPath: string): boolean {
-    if (isRemoteProjectPath(projectPath)) return false;
+/**
+ * Whether the Worktrees section shows: not for an agentless remote project,
+ * nor for one with no checkouts (not a git repository). A VM project's
+ * (`vm`) are read on the VM.
+ */
+export function showsWorktrees(overview: ProjectOverview | null, projectPath: string, vm = false): boolean {
+    if (isRemoteProjectPath(projectPath) && !vm) return false;
     const answer = overview?.projectPath === projectPath ? overview : null;
     return !answer || answer.worktrees.length > 0;
 }
@@ -54,9 +62,38 @@ export function remoteHost(projectPath: string): string {
     return remote ? `${remote.user}@${remote.host}:${remote.port}` : projectPath.replace(/^ssh:\/\//, '');
 }
 
-/** Under a remote project's sessions: what the page does not read there, and why. */
-export function remoteNote(vm: boolean): string {
-    return vm ? 'Plans and worktrees aren’t available on a VM yet.' : 'Plans and worktrees aren’t read over ssh.';
+/** Under an agentless remote project's sessions: what the page does not read there, and why. */
+export const REMOTE_NOTE = 'Plans and worktrees aren’t read over ssh.';
+
+/**
+ * Whether the Tasks section shows: not for a remote project, VM or not.
+ * BlaakTasks on a VM comes in a later stage (#276); `VM_TASKS_NOTE` says so.
+ */
+export function showsTasks(projectPath: string): boolean {
+    return !isRemoteProjectPath(projectPath);
+}
+
+/** On a VM project's page, while BlaakTasks is on, where the Tasks section would be. */
+export const VM_TASKS_NOTE = 'Tasks aren’t linked to projects on a VM yet.';
+
+/**
+ * Whether ⌘-click and the GitHub button can open the project's repository: a
+ * local project's, and (#276 stage 4) a VM project's (`vm`), which main reads
+ * on the VM. An agentless remote has no GitHub link.
+ */
+export function opensGitHub(projectPath: string, vm: boolean): boolean {
+    return !isRemoteProjectPath(projectPath) || vm;
+}
+
+/** Whether the project, or the repository a worktree of it is in, is on a VM (#276). */
+export function isVmRepositoryIn(agentHost: AgentHostState, projectPath: string): boolean {
+    return isVmProjectIn(agentHost, projectPath) || isVmProjectIn(agentHost, repositoryRoot(projectPath));
+}
+
+/** A project name's tooltip: what a click does, and what ⌘-click does where there is a GitHub to open (`vm`: on a VM). */
+export function projectLinkTitle(path: string, vm = false): string {
+    const open = 'Open ' + projectLabel(repositoryRoot(path));
+    return opensGitHub(path, vm) ? open + '\n⌘-click opens GitHub' : open;
 }
 
 /** The command that signs `gh` in, which the message shows and Copy command copies. */

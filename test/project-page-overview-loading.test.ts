@@ -411,7 +411,7 @@ test('a record that is not ours reads as empty', () => {
     assert.deepEqual(read, [[], [], [], [], [], []]);
 });
 
-test('only a full, fresh answer for a local project is stored', () => {
+test('only a full, fresh answer for a local project is stored, not an agentless remote’s', () => {
     /* Given */
     const fresh = overview();
     const github = fresh.github;
@@ -425,8 +425,23 @@ test('only a full, fresh answer for a local project is stored', () => {
         {...fresh, github: null},
         {...fresh, github: {ok: false as const, reason: 'unreachable' as const}},
         {...fresh, projectPath: 'ssh://me@host:22/app', remote: true},
-    ].map(isStorable);
+    ].map((answer) => isStorable(answer));
 
     /* Then */
     assert.deepEqual(storable, [true, false, false, true, false, false]);
+});
+
+test('a VM project’s full, fresh answer is stored, even one that still says remote', () => {
+    /* Given */
+    const fresh = overview(true, {projectPath: 'ssh://me@vm:22/app', remote: true});
+    const github = fresh.github;
+    assert.ok(github?.ok);
+
+    /* When */
+    const storable = [fresh, {...fresh, remote: false}, {...fresh, github: {...github, stale: true}}].map((answer) =>
+        isStorable(answer, true),
+    );
+
+    /* Then */
+    assert.deepEqual(storable, [true, true, false]);
 });

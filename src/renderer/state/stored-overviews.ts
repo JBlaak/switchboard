@@ -70,9 +70,14 @@ export function storedOverviewFor(
     return found ? {...found, overview: withoutRunning(found.overview)} : null;
 }
 
-/** Whether `overview` is one to keep: a full, fresh answer for a local project. */
-export function isStorable(overview: ProjectOverview): boolean {
-    if (overview.remote || isRemoteProjectPath(overview.projectPath)) return false;
+/**
+ * Whether `overview` is one to keep: a full, fresh answer for a local project,
+ * or (#276 stage 4) for a VM project (`vm`), whose page then opens as fast.
+ * Being a VM project is decisive: its overview may still say `remote`. An
+ * agentless remote's has nothing to keep.
+ */
+export function isStorable(overview: ProjectOverview, vm = false): boolean {
+    if (!vm && (overview.remote || isRemoteProjectPath(overview.projectPath))) return false;
     const github = overview.github;
     return github === null || (github.ok && !github.stale && !github.plansPending);
 }
