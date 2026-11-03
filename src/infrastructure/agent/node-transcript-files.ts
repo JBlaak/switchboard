@@ -52,6 +52,10 @@ export class NodeTranscriptFiles implements TranscriptFiles {
         }
     }
 
+    public writeText(file: string, text: string): void {
+        fs.writeFileSync(file, text, 'utf8');
+    }
+
     public readSlice(file: string, start: number, length: number): Uint8Array | null {
         let fd: number | null = null;
         try {

@@ -105,13 +105,11 @@ export async function createParts({log}: PartsContext): Promise<AgentParts> {
         log,
     });
 
-    // The copies part owns the uploads and an import takes its transcript from
-    // them. `uploads` is still private on Copies, which this stage does not
-    // edit; the bracket reads it type-checked until it is made public.
+    // The copies part owns the uploads, and an import takes its transcript from them.
     const transcripts = new Transcripts({
         files: new NodeTranscriptFiles(),
         watcher: new NodeFolderWatcher(),
-        uploads: copies['uploads'],
+        uploads: copies.uploads,
         home: os.homedir(),
         projectsDir: path.join(os.homedir(), '.claude', 'projects'),
         timers: systemTimers,

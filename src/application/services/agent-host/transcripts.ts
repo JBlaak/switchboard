@@ -47,6 +47,7 @@
  * connected. When the last of them goes, so do its timers and, if nothing
  * else needs them, the folder watches.
  */
+import {rewriteTranscriptCwd} from '../../../domain/agent/session-handoff';
 import {TRANSCRIPT_TEXT_CAP_CHARS} from '../../../domain/agent/protocol';
 import type {
     AgentTranscript,
@@ -82,6 +83,8 @@ export interface TranscriptFiles {
     stat(file: string): TranscriptFileStat | null;
     /** The whole file as UTF-8; null when it can't be read. */
     readText(file: string): string | null;
+    /** Replace a file's contents; may throw. */
+    writeText(file: string, text: string): void;
     /** `length` bytes from `start`; null when the file can't be read. */
     readSlice(file: string, start: number, length: number): Uint8Array | null;
     /** Whether `path` is a folder. */
@@ -453,6 +456,13 @@ export class Transcripts implements TranscriptsPart {
 
         const target = `${this.deps.projectsDir}/${encodeProjectPath(dir)}/${sessionId}.jsonl`;
         try {
+            // The Mac cannot know this machine's home, so a handed-off
+            // transcript's `cwd` lines say `~/…`; here they become absolute, as
+            // every transcript Claude writes itself has them.
+            const text = this.deps.files.readText(taken.file);
+            if (text !== null && text.includes('"cwd":"~')) {
+                this.deps.files.writeText(taken.file, rewriteTranscriptCwd(text, '~', this.deps.home));
+            }
             this.deps.files.moveNoClobber(taken.file, target, 0o600);
         } catch (err) {
             this.deps.files.remove(taken.file);

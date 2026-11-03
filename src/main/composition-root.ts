@@ -14,6 +14,7 @@
 import log from 'electron-log';
 import {app, safeStorage} from 'electron';
 import {randomBytes} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -21,10 +22,14 @@ import {systemClock} from '../application/ports/clock';
 import {uuidGenerator} from '../application/ports/ids';
 import {AgentAwareTerminals} from '../application/services/agent-client/agent-aware-terminals';
 import {AgentClient} from '../application/services/agent-client/agent-client';
+import {isAgentPty} from '../application/services/agent-client/agent-pty';
 import {ConfigCopyService, manifestStoreOn} from '../application/services/config-copy-service';
 import {SshAgentDialer} from '../infrastructure/agent/ssh-agent-dialer';
 import {AgentHostsService} from '../application/services/agent-hosts-service';
 import {ProjectHandoffService} from '../application/services/project-handoff-service';
+import {SessionHandoffService} from '../application/services/session-handoff-service';
+import {VmTranscripts} from '../application/services/vm-transcripts';
+import {SqliteVmTranscriptStore} from '../infrastructure/sqlite/vm-transcript-store';
 import {GitCliHandoff} from '../infrastructure/git/git-cli-handoff';
 import {forgetRemoteProject} from './forget-remote-project';
 import {AgentUpgrades} from '../application/services/agent-upgrades';
@@ -119,7 +124,7 @@ import {WhisperModelStore} from '../infrastructure/voice/whisper-model-store';
 import {SqliteDeviceRegistry} from '../infrastructure/sqlite/device-registry';
 import {bonjourHostName, computerName} from '../infrastructure/system/computer-name';
 import {PhoneEventTee, buildPhoneAccess} from './phone-access';
-import {sessionArchiver} from './stop-session';
+import {sessionArchiver, stopSession} from './stop-session';
 import type {PhoneAccessService} from '../application/services/phone-access-service';
 import type {PhoneSessionsService} from '../application/services/phone-sessions-service';
 import type {DeviceRegistry, ServiceAdvertiser} from '../application/ports/phone-access';
@@ -197,7 +202,9 @@ export interface Container {
      * host, waiting for its turn to end first. Optional only until
      * `buildContainer` builds it.
      */
-    readonly sessionHandoff?: SessionHandoff;
+    readonly sessionHandoff: SessionHandoff;
+    /** VM sessions' transcripts, parsed on their VMs (#276 stage 3). */
+    readonly vmTranscripts: VmTranscripts;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
@@ -454,9 +461,10 @@ export function buildContainer(): Container {
     // Handing projects off to VMs (#276 stage 2). Forgetting a removed copy
     // reaches back into the container, which exists by the time anyone removes one.
     let forgetRemote: (projectPath: string) => void = () => {};
+    const handoffGit = new GitCliHandoff(toolEnv);
     const projectHandoff = new ProjectHandoffService({
         agents,
-        git: new GitCliHandoff(toolEnv),
+        git: handoffGit,
         settings,
         renderer,
         forgetRemoteProject: (projectPath) => forgetRemote(projectPath),
@@ -488,7 +496,36 @@ export function buildContainer(): Container {
         log,
     });
 
-    const projects = new ProjectListService({repository, transcripts, settings, registry});
+    // VM sessions' titles, PR links and search text, from the transcripts their
+    // VMs parse (#276 stage 3). Built before any host connects: it listens for them.
+    const vmTranscripts = new VmTranscripts({
+        agents,
+        remoteProjects: () => settings.remoteProjects(),
+        store: new SqliteVmTranscriptStore(database.db),
+        searchIndex,
+        names: repository,
+        renderer,
+        log,
+    });
+    const projects = new ProjectListService({repository, transcripts, settings, registry, vmTranscripts});
+    // Moving a running conversation to a VM (#276 stage 3).
+    const sessionHandoff = new SessionHandoffService({
+        registry,
+        sessions: repository,
+        transcripts,
+        git: handoffGit,
+        projects: projectHandoff,
+        agents,
+        prompter,
+        stop: (sessionId) => stopSession({registry, remote, lifecycle, terminals}, sessionId),
+        launcher,
+        settings,
+        renderer,
+        sha256: (bytes) => createHash('sha256').update(bytes).digest('hex'),
+        clock,
+        timers,
+        log,
+    });
 
     // ── Feature services ──
     const usage = new OAuthUsageService(log);
@@ -650,11 +687,24 @@ export function buildContainer(): Container {
         sessions: () =>
             registry
                 .snapshot()
+                // Local sessions, and VM sessions (#276 stage 3), whose PR links come
+                // from the transcripts their VMs parse. A session on an agentless
+                // remote has no transcript here at all.
                 .filter(
                     ([, session]) =>
-                        !session.exited && !session.isPlainTerminal && !isRemoteProjectPath(session.projectPath),
+                        !session.exited &&
+                        !session.isPlainTerminal &&
+                        (!isRemoteProjectPath(session.projectPath) || isAgentPty(session.pty)),
                 )
                 .map(([sessionId, session]) => {
+                    if (isAgentPty(session.pty)) {
+                        return {
+                            sessionId,
+                            projectPath: session.projectPath,
+                            folder: null,
+                            pullRequests: vmTranscripts.pullRequests(sessionId),
+                        };
+                    }
                     const cached = repository.getCachedSession(sessionId);
                     return {
                         sessionId,
@@ -897,6 +947,8 @@ export function buildContainer(): Container {
         agents,
         agentHosts,
         projectHandoff,
+        sessionHandoff,
+        vmTranscripts,
         shells,
         lifecycle,
         remote,

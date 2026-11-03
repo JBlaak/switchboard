@@ -160,7 +160,8 @@ class StepFailed extends Error {
 }
 
 export class Copies implements CopiesPart {
-    private readonly uploads: Uploads;
+    /** Shared with the transcripts part, which takes a session hand-off's transcript from them. */
+    public readonly uploads: Uploads;
     /** The tail of each folder's queue of operations, keyed by its absolute path. */
     private readonly locks = new Map<string, Promise<void>>();
 

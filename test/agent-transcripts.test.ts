@@ -418,6 +418,23 @@ test('an import places the upload at the encoded path, 0600', async () => {
     assert.equal(h.uploads.count, 0);
 });
 
+test("an import turns a handed-off transcript's ~ cwd into this machine's home, and leaves the rest", async () => {
+    /* Given */
+    const h = harness();
+    const body = Buffer.from(user('hi', '2026-11-01T10:00:00.000Z', '~/projects/site') + '\n');
+    const uploadId = await upload(h, body);
+    const dir = path.join(h.home, 'projects', 'site');
+    fs.mkdirSync(dir, {recursive: true});
+
+    /* When */
+    h.send({type: 'import-transcript', requestId: 'r1', sessionId: SESSION, dir: '~/projects/site', uploadId});
+
+    /* Then */
+    const target = path.join(h.projects, encodeProjectPath(dir), `${SESSION}.jsonl`);
+    const written = fs.readFileSync(target, 'utf8');
+    assert.equal(written, body.toString('utf8').replace('"cwd":"~/projects/site"', `"cwd":"${dir}"`));
+});
+
 test('an import is refused when the id is already on the host', async () => {
     /* Given */
     const h = harness();
