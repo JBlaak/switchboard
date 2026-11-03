@@ -79,6 +79,13 @@ export interface ProjectHandoffServiceDeps {
     log: Logger;
     /** How long a question waits for the host's link to come up; HOST_REACH_TIMEOUT_MS by default. */
     reachTimeoutMs?: number;
+    /**
+     * After a successful hand-off, with what the dialog chose (stage 5: where
+     * the schedules run, `VmSchedules`). Kept as a hook so the hand-off need not
+     * know about schedules; a failure is logged and does not fail the hand-off,
+     * whose copy is made by then.
+     */
+    afterHandoff?(localPath: string, copyPath: string, choices: HandoffChoices): Promise<void> | void;
 }
 
 /**
@@ -248,6 +255,11 @@ export class ProjectHandoffService implements ProjectHandoff {
         settings.rememberHandoffFiles(localPath, chosen);
         renderer.projectsChanged();
         log.info(`[handoff] ${localPath} → ${copyPath}${done.reused ? ' (updated)' : ''}`);
+        try {
+            await this.deps.afterHandoff?.(localPath, copyPath, options);
+        } catch (err) {
+            log.warn(`[handoff] after the hand-off of ${localPath}: ${(err as Error).message}`);
+        }
         return {ok: true, copyPath, reused: done.reused === true};
     }
 
