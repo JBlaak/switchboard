@@ -20,6 +20,7 @@
  * tested in node with a plain record.
  */
 import {byMostRecentlyModified} from '../../domain/session/session';
+import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {isSnoozed} from '../../domain/session/snooze';
 import {cleanDisplayName} from '../../domain/session/title';
 import {TIER_ORDER, TIER_REST, TIER_RUNNING, itemTier, rowSurvivesTruncation} from '../../domain/session/tiers';
@@ -180,6 +181,19 @@ export interface RowButtons {
     /** Snoozing is keyed on the session id, like archiving; an archived row has nothing to snooze. */
     readonly snooze: boolean;
     readonly resume: boolean;
+    /** Hand off to… (#276 stage 3): a local Claude session, once there is a VM host. */
+    readonly handOff: boolean;
+}
+
+/**
+ * Whether a session can be handed off to a VM: a local Claude session, never
+ * a terminal or a session already on a remote or a VM, and only once there is
+ * a host to hand it to.
+ */
+export function canHandOffSession(session: SessionRow, hosts: number): boolean {
+    if (hosts <= 0) return false;
+    if (session.type === 'terminal' || session.type === 'remote') return false;
+    return !isRemoteProjectPath(session.projectPath);
 }
 
 /**
@@ -187,16 +201,25 @@ export interface RowButtons {
  *
  * A remote session has no local transcript to relaunch from; archive still
  * works — it is keyed on the session id alone — and doubles as "forget this
- * one". A plain terminal has nothing to archive or resume either. Stop is
- * always there; the stylesheet shows it only while something runs.
+ * one". A session on a VM (`vm`, #276) is the exception: it has one, on the
+ * agent. A plain terminal has nothing to archive or resume either. Stop is
+ * always there; the stylesheet shows it only while something runs. Hand off
+ * to… is there for a local Claude session once there are `hosts` to hand it to.
  */
-export function rowButtons(session: SessionRow): RowButtons {
-    const remote = session.type === 'remote';
+export function rowButtons(
+    session: SessionRow,
+    {vm = false, hosts = 0}: {vm?: boolean; hosts?: number} = {},
+): RowButtons {
+    // A session on a VM (#276) runs on the agent as a local one does: stopping
+    // it stops it, and a Claude session there resumes like one here.
+    const disconnects = session.type === 'remote' && !vm;
+    const shell = session.type === 'terminal' || (session.type === 'remote' && session.remoteKind === 'shell');
     return {
-        stop: remote ? 'Disconnect (keeps running on the remote)' : 'Stop session',
+        stop: disconnects ? 'Disconnect (keeps running on the remote)' : 'Stop session',
         archive: session.type === 'terminal' ? null : session.archived ? 'Unarchive' : 'Archive',
         snooze: session.type !== 'terminal' && !session.archived,
-        resume: !remote && session.type !== 'terminal',
+        resume: !disconnects && !shell,
+        handOff: canHandOffSession(session, hosts),
     };
 }
 

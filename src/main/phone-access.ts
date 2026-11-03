@@ -149,6 +149,11 @@ export class PhoneEventTee implements RendererGateway {
         this.inner.pickerRequested(initialPrompt, reason);
     }
 
+    /** The phones have no Settings → VMs; only the window hears it. */
+    public vmHostsChanged(): void {
+        this.inner.vmHostsChanged();
+    }
+
     public phoneAccessChanged(state: PhoneAccessState): void {
         this.inner.phoneAccessChanged(state);
     }

@@ -20,7 +20,7 @@ export interface RouteCandidate {
 export interface RouteRequest {
     /** Exactly what the user typed. */
     text: string;
-    /** Local projects only: no remotes, no worktrees (R2). */
+    /** Local and VM projects: no agentless remotes, no worktrees (R2, `routeCandidates`). */
     candidates: RouteCandidate[];
     /** The skills the request may name; Quick Ask only (#142). */
     skills?: RouteSkills;

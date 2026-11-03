@@ -1,20 +1,26 @@
 /**
  * Opening a session.
  *
- * One entry point, four outcomes: reattach to a session already running, dial a
- * remote host, start a plain shell, or start a Claude session. They share the
- * shell resolution and the bookkeeping that makes fork detection possible, and
- * differ in what they actually spawn — which is why they are branches of one
- * method rather than four use cases with three-quarters of their bodies in
- * common.
+ * One entry point, five outcomes: reattach to a session already running, open
+ * one on a VM host's agent, dial a legacy remote host (ssh+tmux), start a plain
+ * shell, or start a Claude session. They share the shell resolution and the
+ * bookkeeping that makes fork detection possible, and differ in what they
+ * actually spawn — which is why they are branches of one method rather than
+ * five use cases with three-quarters of their bodies in common.
  */
 import {buildClaudeCommand, PLAIN_TERMINAL_CLAUDE_SHIM} from '../../domain/launch/claude-command';
 import {claudeSessionEnv, plainTerminalEnv} from '../../domain/launch/terminal-env';
 import {shellArgs} from '../../domain/shell/quoting';
-import {isRemoteProjectPath, parseRemoteProjectPath, remoteTargetLabel} from '../../domain/project/remote-target';
+import {
+    isRemoteProjectPath,
+    normalizeRemoteDir,
+    parseRemoteProjectPath,
+    remoteTargetLabel,
+} from '../../domain/project/remote-target';
 import {encodeProjectPath} from '../../domain/project/project-path';
 import {ActiveSession} from '../model/active-session';
 import type {RemoteConnectionState} from '../model/active-session';
+import type {RemoteConfig} from '../../domain/project/remote-target';
 import type {SessionOptions} from '../../domain/launch/session-options';
 import type {ShellProfile} from '../../domain/shell/shell-profile';
 import type {SessionRegistry} from '../model/session-registry';
@@ -30,6 +36,8 @@ import type {SessionLifecycle} from './session-lifecycle';
 import type {QuestionService} from './question-service';
 import type {ArchiveToolService} from './archive-tool-service';
 import type {SettingsService} from './settings-service';
+import type {AgentClient} from './agent-client/agent-client';
+import {isAgentPty} from './agent-client/agent-pty';
 
 /** The spawn geometry before the renderer reports its real terminal size. */
 const SPAWN_COLS = 120;
@@ -75,7 +83,22 @@ export interface SessionLauncherDeps {
     timers: Timers;
     log: Logger;
     fileExists(path: string): boolean;
+    /**
+     * The Mac's client for VM hosts (#276). A remote whose setting has `agent`
+     * opens its sessions there; without this, or without `agent`, a remote is
+     * the legacy ssh+tmux kind.
+     */
+    agents?: LauncherAgents;
 }
+
+/**
+ * What the launcher asks of the agent client: start and show a session, and,
+ * optionally, a host's link for its VM home (stage 5), which places a new VM
+ * worktree under a `~` project.
+ */
+export type LauncherAgents = Pick<AgentClient, 'startSession' | 'sessionShown'> & {
+    connection?(host: RemoteConfig): {readonly home: string | null};
+};
 
 export class SessionLauncher {
     constructor(private readonly deps: SessionLauncherDeps) {}
@@ -106,6 +129,8 @@ export class SessionLauncher {
         this.deps.lifecycle.replayTo(sessionId, session);
 
         if (redial) this.deps.remote.redialNow(sessionId);
+        // A VM session's card follows its host's link, which the agent client keeps.
+        if (isAgentPty(session.pty)) this.deps.agents?.sessionShown(sessionId, session.pty);
 
         return {ok: true, reattached: true};
     }
@@ -117,6 +142,9 @@ export class SessionLauncher {
         const isRemote = isRemoteProjectPath(projectPath);
         if (!isRemote && !this.deps.fileExists(projectPath)) {
             return {ok: false, error: `project directory no longer exists: ${projectPath}`};
+        }
+        if (isRemote && this.deps.agents && this.agentProject(projectPath, this.deps.agents)) {
+            return this.spawnOnAgent(request, this.deps.agents);
         }
 
         const isPlainTerminal = !isRemote && options?.type === 'terminal';
@@ -170,6 +198,86 @@ export class SessionLauncher {
         }
 
         return {ok: true, reattached: false};
+    }
+
+    /**
+     * Open a session on a VM host's agent (#276).
+     *
+     * The agent spawns it and builds its command; here it becomes an ordinary
+     * ActiveSession whose PTY is the agent client's stand-in, wired through the
+     * lifecycle like any other, so status, notifications, questions and the
+     * phone work unchanged. It is not `remote` in the tmux sense: the link and
+     * its reconnects are the host's, kept by the agent client.
+     *
+     * The session is registered before the agent answers, so its card can show
+     * the host's link coming up; a refusal takes it out again quietly and is
+     * reported as the result. Transcript bookkeeping is skipped until the agent
+     * serves transcripts (stage 3), and the remote session record is kept so
+     * the row persists as a legacy remote's does.
+     */
+    private async spawnOnAgent(request: OpenSessionRequest, agents: LauncherAgents): Promise<OpenSessionResult> {
+        const {projectPath, sessionId, isNew, options} = request;
+        const {settings, renderer, registry, lifecycle, clock} = this.deps;
+
+        const config = parseRemoteProjectPath(projectPath);
+        if (!config) return {ok: false, error: `invalid remote project: ${projectPath}`};
+
+        const kind = options?.remoteKind === 'shell' ? 'shell' : 'claude';
+        const record = settings.touchRemoteSession(projectPath, sessionId, kind, new Date(clock.now()).toISOString());
+        if (!record) return {ok: false, error: `remote project no longer exists: ${projectPath}`};
+        renderer.projectsChanged();
+
+        const {pty, opened} = agents.startSession({
+            sessionId,
+            host: config,
+            kind,
+            dir: normalizeRemoteDir(config.dir) ?? '',
+            isNew,
+            options,
+            ...(typeof options?.agentCommand === 'string' ? {command: options.agentCommand} : {}),
+            cols: SPAWN_COLS,
+            rows: SPAWN_ROWS,
+        });
+
+        const session = new ActiveSession({
+            pty,
+            projectPath,
+            projectFolder: null,
+            knownTranscriptIds: null,
+            sessionSlug: null,
+            isPlainTerminal: false,
+            remote: null,
+            openedAt: clock.now(),
+        });
+        registry.add(sessionId, session);
+        lifecycle.wire(sessionId, session);
+        agents.sessionShown(sessionId, pty);
+
+        const result = await opened;
+        if (!result.ok) {
+            if (registry.get(sessionId) === session) registry.delete(sessionId);
+            return {ok: false, error: result.error};
+        }
+        return {ok: true, reattached: false};
+    }
+
+    /**
+     * Whether `projectPath` opens on its host's agent (#276).
+     *
+     * A VM project the user added or a hand-off made has a record with
+     * `agent`. Since stage 5 so does any other folder on a host with an agent:
+     * an issue or task session starts in a worktree made on the VM, a folder
+     * no record names, and `ensureRemoteProject` records it (as a copy of
+     * whatever its parent project is a copy of) before the launch. A folder
+     * on an agentless host gets no record, and goes the legacy way as before.
+     *
+     * The VM's home, while its link is up, lets a worktree's absolute path be
+     * matched to a parent project stored as `~/…`.
+     */
+    private agentProject(projectPath: string, agents: LauncherAgents): boolean {
+        const config = parseRemoteProjectPath(projectPath);
+        const home = config && agents.connection ? agents.connection(config).home : null;
+        return !!this.deps.settings.ensureRemoteProject(projectPath, home)?.agent;
     }
 
     /** Which shell to launch in. */

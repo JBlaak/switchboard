@@ -567,7 +567,7 @@ test('no GitHub remote: no GitHub part, and the worktrees still show when there 
     assert.equal(showsWorktrees(notGit, APP), false);
 });
 
-test('an ssh project is remote at once, names its host, and shows no worktrees', () => {
+test('an agentless ssh project is remote at once, names its host, and shows no worktrees', () => {
     /* Given */
     const path = 'ssh://joris@build.movelab/srv/deploy';
 

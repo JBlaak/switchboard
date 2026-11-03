@@ -77,6 +77,8 @@ function main(): void {
             .catch((err: Error) => container.log.warn('[phone] shutdown failed:', err.message));
         container.projectsWatcher.stop();
         container.questionHook.stop();
+        // Close the VM links first: their sessions keep running on the VM.
+        container.agents.shutdown();
         container.lifecycle.terminateAll();
     });
 

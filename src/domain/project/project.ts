@@ -9,6 +9,8 @@ export interface Project {
     sessions: SessionRow[];
     /** True for ssh:// projects, whose sessions live on the far host. */
     remote?: boolean;
+    /** True for a remote whose host runs a Switchboard agent (#276): shown as VM, not SSH. */
+    agent?: boolean;
     /** The slugs of the plans pinned to the top of the session list. */
     pinnedPlans?: string[];
     /** The GitHub plans pinned to the top of the session list from their page. */

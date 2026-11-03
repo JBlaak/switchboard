@@ -21,7 +21,8 @@ import {
     sessionMap,
     view,
 } from '../../state/session-store';
-import {dispatch} from '../../state/app-store';
+import {dispatch, getState} from '../../state/app-store';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 import {sidebarContent} from '../../lib/dom';
 import {bump} from '../../lib/motion/reflow';
 import {createTerminalEntry, destroySession, showSession} from '../terminal/terminal-manager';
@@ -73,16 +74,68 @@ export function trackStartedElsewhere(sessionId: string, projectPath: string): v
 }
 
 /**
+ * A session handed off to a VM (#276 stage 3) now runs there under the same
+ * id; the local one has exited.
+ *
+ * The row is the same row, now a Claude session on the copy, until the next
+ * project reload rebuilds it from the agent. Its terminal still holds the
+ * local run with an exit banner, and is marked closed, so a click would
+ * relaunch it as the local session it no longer is. So it goes: on screen it
+ * is reopened at once, which attaches to the session on the VM; off screen
+ * the next click does that.
+ */
+export function continueOnVm(sessionId: string, copyPath: string): void {
+    const row = sessionMap.get(sessionId) ?? pendingSessions.get(sessionId)?.session;
+    if (!row) return;
+    row.projectPath = copyPath;
+    row.type = 'remote';
+    row.remoteKind = 'claude';
+    if (openSessions.has(sessionId)) {
+        const onScreen = getState().terminal.onScreen === sessionId;
+        destroySession(sessionId);
+        if (onScreen) void openSession(row);
+    }
+    relayoutSessionList();
+}
+
+/**
+ * The setup terminal main started on a VM's host (#276): a shell row for it,
+ * opened in the terminal area the way any session is, by its id. Opening it
+ * attaches to the shell already running on the agent.
+ */
+export async function openSetupTerminal(sessionId: string, projectPath: string): Promise<void> {
+    const existing = sessionMap.get(sessionId) ?? pendingSessions.get(sessionId)?.session;
+    if (existing) {
+        await openSession(existing);
+        return;
+    }
+    const session = newSessionRow(projectPath, {
+        sessionId,
+        summary: 'Setup terminal',
+        type: 'remote',
+        remoteKind: 'shell',
+    });
+    trackPending(session, true);
+    await openSession(session);
+}
+
+/**
  * A Claude session with the project's default options, local or remote.
  *
  * `initialPrompt` is what a local session starts on (#135); the options it is
- * launched with are otherwise exactly the defaults. A remote session does not
- * take one yet.
+ * launched with are otherwise exactly the defaults. A session on a VM agent
+ * (#276) gets both, as a local one does; one on an agentless remote takes
+ * neither, because tmux starts a bare `claude`.
  */
 export async function launchClaudeSession(
     project: Project,
     {initialPrompt}: {initialPrompt?: string} = {},
 ): Promise<void> {
+    if (project.remote && project.agent) {
+        const options = await resolveDefaultSessionOptions(project.projectPath);
+        await launchRemoteSession(project, initialPrompt ? {...options, initialPrompt} : options);
+        return;
+    }
     if (project.remote) {
         await launchRemoteSession(project);
         return;
@@ -124,14 +177,14 @@ async function launchTerminalSession(project: Project): Promise<void> {
  * disconnect — or an app restart — clicking it re-attaches to the session still
  * running on the far end.
  */
-async function launchRemoteSession(project: Project): Promise<void> {
+async function launchRemoteSession(project: Project, options: SessionOptions = {}): Promise<void> {
     const session = newSessionRow(project.projectPath, {
-        summary: 'Remote Claude',
+        summary: project.agent ? 'Claude on VM' : 'Remote Claude',
         type: 'remote',
         remoteKind: 'claude',
     });
     trackPending(session, true);
-    await spawn(session, {isNew: true, options: {type: 'remote', remoteKind: 'claude'}});
+    await spawn(session, {isNew: true, options: {...options, type: 'remote', remoteKind: 'claude'}});
 }
 
 /** Open an existing session, or bring it forward if it is already open. */
@@ -151,11 +204,17 @@ export async function openSession(session: SessionRow, options?: SessionOptions)
         }
     }
 
-    // Remote sessions ignore local launch options — the main process reconnects
-    // from its stored session record.
+    // Sessions on an agentless remote ignore local launch options — the main
+    // process reconnects from its stored session record. A VM's Claude session
+    // (#276) resumes with them, as a local one does: Resume with config's, or
+    // else the project's defaults.
+    const remote: SessionOptions = {type: 'remote', remoteKind: session.remoteKind};
+    const vm = session.type === 'remote' && isVmProjectIn(getState().agentHost, session.projectPath);
     const resumeOptions: SessionOptions =
         session.type === 'remote'
-            ? {type: 'remote', remoteKind: session.remoteKind}
+            ? vm && session.remoteKind !== 'shell'
+                ? {...(options ?? (await resolveDefaultSessionOptions(session.projectPath))), ...remote}
+                : remote
             : (options ?? (await resolveDefaultSessionOptions(session.projectPath)));
 
     await spawn(session, {isNew: false, options: resumeOptions});
@@ -203,8 +262,10 @@ async function spawn(
 
 /** Stop a session, after asking — it is destructive and cannot be undone. */
 export async function confirmAndStopSession(sessionId: string): Promise<void> {
-    const isRemote = sessionMap.get(sessionId)?.type === 'remote';
-    const prompt = isRemote ? 'Disconnect? The session keeps running on the remote machine.' : 'Stop this session?';
+    const session = sessionMap.get(sessionId);
+    // A session on a VM (#276) stops, as a local one does; an ssh one only disconnects.
+    const disconnects = session?.type === 'remote' && !isVmProjectIn(getState().agentHost, session.projectPath);
+    const prompt = disconnects ? 'Disconnect? The session keeps running on the remote machine.' : 'Stop this session?';
     if (!confirm(prompt)) return;
 
     await window.api.stopSession(sessionId);

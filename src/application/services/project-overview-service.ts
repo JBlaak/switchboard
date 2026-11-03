@@ -15,7 +15,10 @@
  * could not be reached.
  *
  * A project without a GitHub remote answers only its local parts. An ssh
- * project answers its running sessions only: no git and no `gh` reads.
+ * project on a host without a Switchboard agent answers its running sessions
+ * only: no git and no `gh` reads. A VM project (its host has an agent, #276
+ * stage 4) is read like a local one, through the git and `gh` its VM-named
+ * paths route to the VM, and answers `remote: true` all the same.
  *
  * Asked with `plans: false`, it answers without the plans, the slow part:
  * the issues and PRs grouped without them and `plansPending` set, kept under
@@ -62,6 +65,11 @@ export interface ProjectOverviewServiceDeps {
     remotes: GitRemotes;
     github: Pick<GitHubCli, 'available' | ProjectReads>;
     clock: Clock;
+    /**
+     * Whether a path is on a remote with no Switchboard agent, which gets the
+     * sessions-only answer. Without it, every remote does, as before #276 stage 4.
+     */
+    agentlessRemote?: (path: string) => boolean;
 }
 
 /** What `gh` answered for a repository, before it is grouped. */
@@ -104,7 +112,7 @@ export class ProjectOverviewService {
     public async overview(projectPath: string, options: ProjectOverviewOptions = {}): Promise<ProjectOverview> {
         const running = this.deps.running();
 
-        if (isRemoteProjectPath(projectPath)) {
+        if ((this.deps.agentlessRemote ?? isRemoteProjectPath)(projectPath)) {
             return {
                 projectPath,
                 remote: true,
@@ -132,7 +140,8 @@ export class ProjectOverviewService {
             ...worktrees.flatMap((worktree) => worktree.running),
             ...running.filter((session) => inProject(session.projectPath)).map((session) => session.sessionId),
         ]);
-        return {projectPath, remote: false, repository, github, worktrees, running: [...projectRunning]};
+        const remote = isRemoteProjectPath(projectPath);
+        return {projectPath, remote, repository, github, worktrees, running: [...projectRunning]};
     }
 
     private async github(

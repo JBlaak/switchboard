@@ -14,18 +14,23 @@ import {rowActivity} from '../../state/row-activity';
 import {rowButtons, sessionDisplayName, showsTerminalBadge} from '../../state/session-list-layout';
 import {shallowEqual} from '../../state/store';
 import {useStore} from '../use-store';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 import {HTML} from './markup';
 import {RenameInput} from './RenameInput';
 import {RowMeta, useCanOpenWork} from './RowMeta';
+import {workOffReason} from './work-trigger';
 import {openRow, resumeWithConfig, snoozeRow, startRename, stopRow, toggleArchive, togglePin} from './actions';
 import {isLeaving} from './leave';
 import {SnoozeMenu, snoozeTime} from './SnoozeMenu';
 import {openSessionWorkFromRow} from '../session-work/actions';
 import {highlightedSession} from '../../state/main-area-slice';
 import {TaskMarker} from '../session-task/TaskMarker';
+import {HandoffMarker} from '../session-handoff/HandoffMarker';
+import {HandOffSessionButton} from '../session-handoff/HandOffSessionButton';
 import type {JSX, MouseEvent} from 'react';
 import type {SessionListRow} from '../../state/session-list-layout';
 import type {WorkingAgent} from '../../../domain/terminal/program-status-children';
+import type {HandoffHost} from '../../../application/services/project-handoff';
 
 export interface SessionItemProps {
     row: SessionListRow;
@@ -136,6 +141,7 @@ export function SessionItem({row, groupId}: SessionItemProps): JSX.Element {
                                 />
                             )}
                             <TaskMarker sessionId={sessionId} />
+                            <HandoffMarker sessionId={sessionId} />
                             {sessionDisplayName(session)}
                         </div>
                     )}
@@ -159,6 +165,8 @@ export function SessionItem({row, groupId}: SessionItemProps): JSX.Element {
     );
 }
 
+const NO_HOSTS: readonly HandoffHost[] = [];
+
 interface RowActionsProps {
     row: SessionListRow;
     onOpenWork: (e: MouseEvent<HTMLElement>) => void;
@@ -177,16 +185,18 @@ interface RowActionsProps {
 function RowActions({row, onOpenWork, onStop, onArchive, onSnooze, onResume}: RowActionsProps): JSX.Element {
     const {session} = row;
     const path = row.projectPath || session.projectPath;
-    const remote = session.type === 'remote' || !!path?.startsWith('ssh://');
-    const canOpenWork = useCanOpenWork(session.sessionId, remote);
-    const buttons = rowButtons(session);
+    const vm = useStore((state) => isVmProjectIn(state.agentHost, path));
+    const canOpenWork = useCanOpenWork(session.sessionId, workOffReason(session, path, vm) !== null);
+    const hosts = useStore((state) => state.handoff.hosts) ?? NO_HOSTS;
+    const buttons = rowButtons(session, {vm, hosts: hosts.length});
     const snooze = useRef<HTMLButtonElement>(null);
     const [snoozing, setSnoozing] = useState(false);
+    const [pickingHost, setPickingHost] = useState(false);
     const closeSnooze = useCallback(() => setSnoozing(false), []);
     const snoozedUntil =
         session.snoozedUntil && Date.parse(session.snoozedUntil) > Date.now() ? session.snoozedUntil : null;
     return (
-        <div className={'session-actions' + (snoozing ? ' menu-open' : '')}>
+        <div className={'session-actions' + (snoozing || pickingHost ? ' menu-open' : '')}>
             {canOpenWork === true && (
                 <button
                     className="session-work-btn"
@@ -233,6 +243,15 @@ function RowActions({row, onOpenWork, onStop, onArchive, onSnooze, onResume}: Ro
                         const moon = snooze.current?.querySelector<HTMLElement>('.snooze-moon');
                         if (moon) onSnooze(moon, until);
                     }}
+                />
+            )}
+            {buttons.handOff && (
+                <HandOffSessionButton
+                    sessionId={session.sessionId}
+                    hosts={hosts}
+                    className="session-handoff-btn"
+                    html={HTML.handOff}
+                    onMenu={setPickingHost}
                 />
             )}
             {buttons.resume && (

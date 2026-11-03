@@ -3,18 +3,20 @@
  * message count, the agents badge and the PR chips.
  *
  * The whole line is one button that opens the session's Session work page
- * (D2), unless the page cannot open for it — a remote session, or one outside
- * a git repository (D14) — when it is plain text whose tooltip says why. The
- * project label inside it keeps its own click, which opens the project page
- * (#173); the PR chips are display only.
+ * (D2), unless the page cannot open for it — a session on an agentless
+ * remote, a shell on a VM, or one outside a git repository (D14) — when it
+ * is plain text whose tooltip says why. The project label inside it keeps its
+ * own click, which opens the project page (#173); the PR chips are display
+ * only.
  */
 import {useEffect} from 'react';
 import {pullRequestChips, pullRequestLabel} from '../../../domain/session/pull-requests';
 import {projectLabel} from '../../features/sessions/project-label';
 import {agentsTitle, askingLabel, sessionDisplayName, sessionTimeLabel} from '../../state/session-list-layout';
 import {useStore} from '../use-store';
+import {isVmProjectIn} from '../../state/agent-host-slice';
 import {canOpenSessionWork} from '../session-work/actions';
-import {isRemoteRow, workTrigger} from './work-trigger';
+import {workOffReason, workTrigger} from './work-trigger';
 import {agentsBadgeHtml, HTML} from './markup';
 import {ProjectLink} from '../project-page/ProjectLink';
 import type {JSX, MouseEvent} from 'react';
@@ -36,8 +38,9 @@ export interface RowMetaProps {
 export function RowMeta({row, asking, agents, now, onOpenWork}: RowMetaProps): JSX.Element {
     const {session} = row;
     const path = row.projectPath || session.projectPath;
-    const remote = isRemoteRow(session, path);
-    const trigger = workTrigger(remote, useCanOpenWork(session.sessionId, remote));
+    const vm = useStore((state) => isVmProjectIn(state.agentHost, path));
+    const offReason = workOffReason(session, path, vm);
+    const trigger = workTrigger(offReason, useCanOpenWork(session.sessionId, offReason !== null));
 
     const content = (
         <span className="session-meta-left">
@@ -70,15 +73,15 @@ export function RowMeta({row, asking, agents, now, onOpenWork}: RowMetaProps): J
 }
 
 /**
- * Whether the page can open for this row's session: false at once for a
- * remote one, otherwise main's answer, asked once and kept in the store;
- * undefined while it is being asked.
+ * Whether the page can open for this row's session: false at once when it is
+ * `off` (see `workOffReason`), otherwise main's answer, asked once and kept in
+ * the store; undefined while it is being asked.
  */
-export function useCanOpenWork(sessionId: string, remote: boolean): boolean | undefined {
-    const known = useStore((state) => (remote ? false : state.sessionWork.canOpen[sessionId]));
+export function useCanOpenWork(sessionId: string, off: boolean): boolean | undefined {
+    const known = useStore((state) => (off ? false : state.sessionWork.canOpen[sessionId]));
     useEffect(() => {
-        if (!remote && known === undefined) void canOpenSessionWork(sessionId);
-    }, [sessionId, remote, known]);
+        if (!off && known === undefined) void canOpenSessionWork(sessionId);
+    }, [sessionId, off, known]);
     return known;
 }
 

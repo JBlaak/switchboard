@@ -31,6 +31,11 @@ export interface SessionOptions {
      * that asks for it is the only one it applies to.
      */
     initialPrompt?: string;
+    /**
+     * For a shell on an agent host only (#276): a command the agent types into
+     * the shell once it is up, as the setup terminal runs its setup script.
+     */
+    agentCommand?: string;
     [key: string]: unknown;
 }
 

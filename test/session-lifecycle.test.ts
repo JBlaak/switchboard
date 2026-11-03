@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {ActiveSession} from '../src/application/model/active-session';
 import {SessionRegistry} from '../src/application/model/session-registry';
+import {AgentPty} from '../src/application/services/agent-client/agent-pty';
 import {SessionLifecycle} from '../src/application/services/session-lifecycle';
 import {PROGRAM_STATUS_REPLY} from '../src/domain/terminal/osc';
 import {fakePty, fakeRenderer, fakeTerminals, fakeTimers, silentLog} from './support/fakes';
@@ -425,4 +426,28 @@ test('output is buffered for the next renderer that attaches', () => {
         h.renderer.only('terminalData').map(([, , data]) => data),
         ['hello ', 'world', '\x1b[?25l'],
     );
+});
+
+test('quitting forgets a VM session without signalling it, and still stops a local one', () => {
+    /* Given */
+    const {registry, terminals, lifecycle, addSession} = harness();
+    const sent: string[] = [];
+    const vmPty = new AgentPty({
+        sessionId: 'vm-1',
+        hostKey: 'dev@vm:22',
+        kind: 'claude',
+        cols: 80,
+        rows: 24,
+        sink: {input() {}, resize() {}, signal: (id, signal) => void sent.push(`${id} ${signal}`)},
+    });
+    addSession('local-1');
+    addSession('vm-1', {pty: vmPty});
+
+    /* When */
+    lifecycle.terminateAll();
+
+    /* Then */
+    assert.deepEqual(sent, []);
+    assert.equal(terminals.signals.length, 1);
+    assert.equal(registry.snapshot().length, 0);
 });
