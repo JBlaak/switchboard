@@ -52,7 +52,7 @@ function usageAt(session: number, week: number): Usage {
 
 /** A gauge, by its tooltip: the full label, the percentage and the reset. */
 function gauge(page: Page, tooltip: string): Locator {
-    return sidebarFooter(page).getByTitle(tooltip, {exact: true});
+    return sidebarFooter(page).locator(`[data-tooltip="${tooltip}"]`);
 }
 
 function noticeButton(page: Page, name: string): Locator {
@@ -149,7 +149,37 @@ test.describe('quota gauges', () => {
         await expect(session).toBeHidden();
         await expect(sidebarFooter(page).getByText(/%$/)).toHaveCount(0);
     });
+
+    test('show when each window resets while hovered, and nothing otherwise', async ({page}) => {
+        for (const tooltip of [
+            'Current session: 42% — resets 6pm (UTC)',
+            'Week (all models): 67% — resets Jun 12 at 9am (UTC)',
+        ]) {
+            /* Given */
+            const hovered = gauge(page, tooltip);
+            await page.mouse.move(0, 0);
+            expect(await hoverLabel(hovered)).toBeNull();
+
+            /* When */
+            await hovered.hover();
+
+            /* Then */
+            expect(await hoverLabel(hovered)).toBe(tooltip);
+        }
+    });
 });
+
+/**
+ * The label a gauge paints on hover, or null while none shows. It is a
+ * pseudo-element, so it is read from the computed style rather than the DOM.
+ */
+async function hoverLabel(gauge: Locator): Promise<string | null> {
+    return gauge.evaluate((el) => {
+        const after = getComputedStyle(el, '::after');
+        if (after.content === 'none' || after.display === 'none') return null;
+        return JSON.parse(after.content) as string;
+    });
+}
 
 test.describe('update notice', () => {
     test('links to the release page when main announces one the app cannot install', async ({page, app}) => {
