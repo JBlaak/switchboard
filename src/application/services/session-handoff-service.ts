@@ -312,12 +312,20 @@ export class SessionHandoffService implements SessionHandoff {
         const projectPath = live?.session.projectPath ?? cached?.projectPath ?? null;
         if (!projectPath) return {error: 'Switchboard does not know this session.'};
         if (isRemoteProjectPath(projectPath)) return {error: 'This session already runs on another machine.'};
-        const folder = live?.session.projectFolder ?? cached?.folder ?? null;
-        if (!folder) return {error: 'This session has no transcript on this Mac yet.'};
-
-        const written = transcripts.locations(folder, id).filter((location) => !location.fromSubagent);
-        const cwd = written.length ? written[written.length - 1].cwd : null;
-        if (!cwd) return {error: 'This session has no transcript on this Mac yet.'};
+        // A running session's folder is the one it was launched in. Claude moves
+        // the transcript to the worktree's folder when the session enters a
+        // worktree, so the index's folder, found by scanning, is tried after it.
+        const folders = [live?.session.projectFolder, cached?.folder].filter((f): f is string => !!f);
+        let transcript: {folder: string; cwd: string} | null = null;
+        for (const folder of new Set(folders)) {
+            const written = transcripts.locations(folder, id).filter((location) => !location.fromSubagent);
+            if (written.length) {
+                transcript = {folder, cwd: written[written.length - 1].cwd};
+                break;
+            }
+        }
+        if (!transcript) return {error: 'This session has no transcript on this Mac yet.'};
+        const {folder, cwd} = transcript;
 
         const [toplevel, commonDir] = await Promise.all([git.repositoryRoot(cwd), git.commonDir(cwd)]);
         if (!toplevel || !commonDir) {
