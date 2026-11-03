@@ -24,6 +24,7 @@
         "build:mac:arm64": "npm run build && electron-builder --mac --arm64 && node scripts/postinstall.js",
         "release": "npm run build && electron-builder --publish always",
         "postinstall": "node scripts/postinstall.js",
+        "fetch:omnidiff": "node scripts/fetch-omnidiff.mjs",
         "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,css,scss,md,html,yml}\"",
         "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,css,scss,md,html,yml}\"",
         "lint": "eslint -c ./eslint.json \"./{src,test,e2e}/**/*.{ts,tsx,js,mjs}\"",
@@ -107,6 +108,21 @@
             "artifactName": "${productName}-${version}-${arch}.${ext}",
             "entitlements": "build/entitlements.mac.plist",
             "entitlementsInherit": "build/entitlements.mac.plist",
+            "extraResources": [
+                {
+                    "from": "vendor/omnidiff/${arch}/omnidiff",
+                    "to": "omnidiff/omnidiff"
+                },
+                {
+                    "from": "vendor/omnidiff",
+                    "to": "omnidiff",
+                    "filter": [
+                        "LICENSE",
+                        "THIRD-PARTY-NOTICES.md",
+                        "SOURCE.md"
+                    ]
+                }
+            ],
             "hardenedRuntime": true,
             "gatekeeperAssess": false,
             "notarize": true

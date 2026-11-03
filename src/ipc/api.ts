@@ -17,6 +17,7 @@ import type {Appearance} from '../domain/settings/appearance';
 import type {Answers, PendingQuestions, QuestionsSettled} from '../domain/questions/question';
 import type {ShellProfile} from '../domain/shell/shell-profile';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../domain/session-work/model';
+import type {FileRefinement} from '../domain/session-work/refinement';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {ActionRequest, ActionResult, CancelResult} from '../domain/session-work/actions';
 import type {CommentRequest, ReviewRequest, ReviewResult} from '../domain/session-work/review';
@@ -183,6 +184,13 @@ export interface SwitchboardApi {
         path: string;
         side: 'before' | 'after';
     }): Promise<Uint8Array | null>;
+    /**
+     * OmniDiff's finer reading of one modified file in an item's local diff;
+     * null when there is none (no differ, a GitHub diff, an added, deleted,
+     * binary or oversized file, or OmniDiff failed). Only a file in the diff
+     * the item last answered with can be named, read at that diff's commits.
+     */
+    sessionWorkRefinement(request: {sessionId: string; itemId: string; path: string}): Promise<FileRefinement | null>;
     /**
      * Hand an item of the open page to Claude: its prompt is queued and typed
      * into the session's terminal once it is idle. Refused, with the reason,

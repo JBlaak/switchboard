@@ -19,6 +19,7 @@ import path from 'node:path';
 
 import {systemClock} from '../application/ports/clock';
 import {uuidGenerator} from '../application/ports/ids';
+import {noStructuralDiffer} from '../application/ports/structural-differ';
 import {QuestionService} from '../application/services/question-service';
 import {ProjectListService} from '../application/services/project-list-service';
 import {ProjectFolderService} from '../application/services/project-folder-service';
@@ -88,6 +89,8 @@ import {PmsetBatteryGauge} from '../infrastructure/system/pmset-battery-gauge';
 import {BundleInstaller} from '../infrastructure/system/bundle-installer';
 import {GitHubReleaseFeed} from '../infrastructure/github/github-release-feed';
 import {GitCliRemotes} from '../infrastructure/git/git-cli-remotes';
+import {OmnidiffDiffer} from '../infrastructure/omnidiff/omnidiff-differ';
+import {locateOmnidiff} from '../infrastructure/omnidiff/locate-omnidiff';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner} from '../infrastructure/github/gh-cli';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
@@ -491,6 +494,13 @@ export function buildContainer(): Container {
         const remote = isRemoteProjectPath(live.projectPath);
         return {folder: remote ? null : encodeProjectPath(live.projectPath), projectPath: live.projectPath};
     };
+    // OmniDiff's finer marks inside changed lines, when the binary is bundled (or fetched into vendor/).
+    const omnidiff = locateOmnidiff({
+        packaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appPath: app.getAppPath(),
+        arch: process.arch,
+    });
     const sessionWork = new SessionWorkService({
         locate: locateSession,
         transcripts,
@@ -498,6 +508,7 @@ export function buildContainer(): Container {
         github,
         remotes: git,
         activities: sessionActions,
+        differ: omnidiff ? new OmnidiffDiffer({binary: omnidiff, log}) : noStructuralDiffer,
         renderer,
         clock,
         timers,

@@ -38,6 +38,14 @@ if (fs.existsSync(spawnHelperGlob)) {
     } catch {}
 }
 
+// Fetch the OmniDiff binaries the app bundles (vendor/omnidiff). Switchboard works without them,
+// so a failed download only warns: run `npm run fetch:omnidiff` to try again.
+try {
+    execSync(`node "${path.join(__dirname, 'fetch-omnidiff.mjs')}"`, {stdio: 'inherit'});
+} catch (err) {
+    console.warn('Warning: fetching OmniDiff failed, so diffs will not be refined:', err.message);
+}
+
 function findFiles(dir, suffix) {
     const results = [];
     try {

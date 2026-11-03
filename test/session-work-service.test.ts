@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
     GITHUB_REFRESH_MS,
     LOCAL_DIFFERS,
+    REFINE_MAX_BYTES,
     SHIP_REFRESH_MS,
     SessionWorkService,
     WATCH_DEBOUNCE_MS,
@@ -13,6 +14,7 @@ import type {SessionActivities} from '../src/application/services/session-action
 import {canComment} from '../src/domain/session-work/review';
 import type {Timers} from '../src/application/ports/clock';
 import type {GitWorkspace} from '../src/application/ports/git-workspace';
+import type {StructuralDiffer} from '../src/application/ports/structural-differ';
 import type {GitHubAvailability, GitHubCli, PlanReads, ProjectReads} from '../src/application/ports/github-cli';
 import type {TranscriptLocation} from '../src/application/ports/transcript-store';
 import type {Session, SessionPullRequest} from '../src/domain/session/session';
@@ -126,8 +128,8 @@ interface World {
     activities: SessionActivities;
     /** The merge-base of any branch and base. */
     mergeBase: string | null;
-    /** Committed file contents, by `revision:path`. */
-    blobs: Map<string, string>;
+    /** Committed file contents, by `revision:path`: text, or raw bytes. */
+    blobs: Map<string, string | Uint8Array>;
     /** Working-tree file contents, by `worktree:path`. */
     files: Map<string, string>;
 }
@@ -180,10 +182,19 @@ function setup(overrides: Partial<World> = {}) {
     };
     /** Every file read for its bytes, as `revision:path` or `worktree:path`. */
     const reads: string[] = [];
-    const bytes = (text: string | undefined) => (text === undefined ? null : new TextEncoder().encode(text));
-    const sizes = (contents: Map<string, string>, prefix: string, paths: readonly string[]) =>
+    const bytes = (text: string | Uint8Array | undefined) =>
+        text === undefined ? null : typeof text === 'string' ? new TextEncoder().encode(text) : text;
+    const sizes = (contents: Map<string, string | Uint8Array>, prefix: string, paths: readonly string[]) =>
         new Map(paths.filter((p) => contents.has(prefix + p)).map((p) => [p, contents.get(prefix + p)!.length]));
     const watchers: Array<{worktree: string; onChange: () => void; disposed: boolean}> = [];
+    /** Every file handed to the differ, with both of its texts. */
+    const refined: Array<{path: string; before: string; after: string}> = [];
+    const differ: StructuralDiffer = {
+        async refine(path, before, after) {
+            refined.push({path, before, after});
+            return {summary: null, before: {}, after: {1: [{start: 0, end: after.length, kind: 'update'}]}};
+        },
+    };
 
     const git: GitWorkspace = {
         async worktreeRoot(cwd) {
@@ -313,6 +324,7 @@ function setup(overrides: Partial<World> = {}) {
         clock: {now: () => (now += 1000)},
         timers,
         log: silentLog,
+        differ,
     });
 
     return {
@@ -323,6 +335,7 @@ function setup(overrides: Partial<World> = {}) {
         calls,
         watchers,
         reads,
+        refined,
         live: () => watchers.filter((watcher) => !watcher.disposed),
         last: () => snapshots[snapshots.length - 1],
     };
@@ -1539,4 +1552,250 @@ test("image answers nothing once the item's diff comes from GitHub instead", asy
     assert.equal(fromGitHub.source, 'github');
     assert.equal(bytes, null);
     assert.deepEqual(reads, []);
+});
+
+// ── OmniDiff refinements ──
+
+const REFINE_DIFF = [
+    'diff --git a/src/cart.ts b/src/cart.ts',
+    'index 1111111..2222222 100644',
+    '--- a/src/cart.ts',
+    '+++ b/src/cart.ts',
+    '@@ -1 +1 @@',
+    '-sum += item.price;',
+    '+sum += item.price * item.quantity;',
+    'diff --git a/src/old.ts b/src/new.ts',
+    'similarity index 90%',
+    'rename from src/old.ts',
+    'rename to src/new.ts',
+    'index 3333333..4444444 100644',
+    '--- a/src/old.ts',
+    '+++ b/src/new.ts',
+    '@@ -1 +1 @@',
+    '-let a = 1;',
+    '+const a = 1;',
+    'diff --git a/src/added.ts b/src/added.ts',
+    'new file mode 100644',
+    'index 0000000..5555555',
+    '--- /dev/null',
+    '+++ b/src/added.ts',
+    '@@ -0,0 +1 @@',
+    '+export {};',
+    'diff --git a/src/gone.ts b/src/gone.ts',
+    'deleted file mode 100644',
+    'index 6666666..0000000',
+    '--- a/src/gone.ts',
+    '+++ /dev/null',
+    '@@ -1 +0,0 @@',
+    '-export {};',
+    'diff --git a/data.bin b/data.bin',
+    'index 7777777..8888888 100644',
+    'Binary files a/data.bin and b/data.bin differ',
+    'diff --git a/icon.svg b/icon.svg',
+    'index 9999999..aaaaaaa 100644',
+    '--- a/icon.svg',
+    '+++ b/icon.svg',
+    '@@ -1 +1 @@',
+    '-<svg/>',
+    '+<svg></svg>',
+    '',
+].join('\n');
+
+const CART_BEFORE = 'sum += item.price;\n';
+const CART_AFTER = 'sum += item.price * item.quantity;\n';
+
+/** A branch whose diff has every kind of file, and both sides of each in the repository. */
+function refineBranch() {
+    return setup({
+        locations: [{cwd: ROOT, branch: 'feat/x', fromSubagent: false}],
+        branches: new Set(['main', 'feat/x']),
+        ahead: new Map([['feat/x', 1]]),
+        branchDiff: REFINE_DIFF,
+        blobs: new Map([
+            ['merge-base-1:src/cart.ts', CART_BEFORE],
+            ['sha-feat/x:src/cart.ts', CART_AFTER],
+            ['merge-base-1:src/old.ts', 'let a = 1;\n'],
+            ['sha-feat/x:src/new.ts', 'const a = 1;\n'],
+            ['sha-feat/x:src/added.ts', 'export {};\n'],
+            ['merge-base-1:src/gone.ts', 'export {};\n'],
+            ['merge-base-1:data.bin', 'a'],
+            ['sha-feat/x:data.bin', 'b'],
+            ['merge-base-1:icon.svg', '<svg/>'],
+            ['sha-feat/x:icon.svg', '<svg></svg>'],
+        ]),
+    });
+}
+
+/** The same files uncommitted in the main checkout: before at HEAD, after on disk. */
+function refineChanges() {
+    const harness = setup({
+        workingDiff: REFINE_DIFF,
+        shas: new Map([
+            ['origin/main', 'base-1'],
+            ['HEAD', 'head-1'],
+        ]),
+        blobs: new Map([['head-1:src/cart.ts', CART_BEFORE]]),
+        files: new Map([[ROOT + ':src/cart.ts', CART_AFTER]]),
+    });
+    harness.world.status.set(ROOT, [{path: 'src/cart.ts', status: 'modified'}]);
+    return harness;
+}
+
+test('a modified file on a branch is refined from the merge-base and the head commit', async () => {
+    /* Given */
+    const {service, reads, refined} = refineBranch();
+    const id = (await service.open('s1'))!.items[0].id;
+    await service.diff('s1', id);
+
+    /* When */
+    const refinement = await service.refinement('s1', id, 'src/cart.ts');
+
+    /* Then */
+    assert.deepEqual(refinement?.after[1], [{start: 0, end: CART_AFTER.length, kind: 'update'}]);
+    assert.deepEqual(reads, ['merge-base-1:src/cart.ts', 'sha-feat/x:src/cart.ts']);
+    assert.deepEqual(refined, [{path: 'src/cart.ts', before: CART_BEFORE, after: CART_AFTER}]);
+});
+
+test('a renamed file is refined from its old path before and its new path after', async () => {
+    /* Given */
+    const {service, reads, refined} = refineBranch();
+    const id = (await service.open('s1'))!.items[0].id;
+    await service.diff('s1', id);
+
+    /* When */
+    await service.refinement('s1', id, 'src/new.ts');
+
+    /* Then */
+    assert.deepEqual(reads, ['merge-base-1:src/old.ts', 'sha-feat/x:src/new.ts']);
+    assert.deepEqual(refined, [{path: 'src/new.ts', before: 'let a = 1;\n', after: 'const a = 1;\n'}]);
+});
+
+test('an uncommitted file is refined from HEAD before and the working tree after', async () => {
+    /* Given */
+    const {service, reads, refined} = refineChanges();
+    const id = (await service.open('s1'))!.items[0].id;
+    await service.diff('s1', id);
+
+    /* When */
+    await service.refinement('s1', id, 'src/cart.ts');
+
+    /* Then */
+    assert.deepEqual(reads, ['head-1:src/cart.ts', ROOT + ':src/cart.ts']);
+    assert.equal(refined.length, 1);
+});
+
+test('a refinement between two commits is kept; one of the working tree is made again', async () => {
+    /* Given */
+    const branch = refineBranch();
+    const branchId = (await branch.service.open('s1'))!.items[0].id;
+    await branch.service.diff('s1', branchId);
+    const changes = refineChanges();
+    const changesId = (await changes.service.open('s1'))!.items[0].id;
+    await changes.service.diff('s1', changesId);
+
+    /* When */
+    await branch.service.refinement('s1', branchId, 'src/cart.ts');
+    await branch.service.refinement('s1', branchId, 'src/cart.ts');
+    await changes.service.refinement('s1', changesId, 'src/cart.ts');
+    await changes.service.refinement('s1', changesId, 'src/cart.ts');
+
+    /* Then */
+    assert.equal(branch.refined.length, 1, 'between commits: once');
+    assert.equal(changes.refined.length, 2, 'the working tree: each time');
+});
+
+test('added, deleted, binary and image files are not refined', async () => {
+    /* Given */
+    const {service, reads, refined} = refineBranch();
+    const id = (await service.open('s1'))!.items[0].id;
+    await service.diff('s1', id);
+
+    /* When */
+    const answers = await Promise.all(
+        ['src/added.ts', 'src/gone.ts', 'data.bin', 'icon.svg'].map((path) => service.refinement('s1', id, path)),
+    );
+
+    /* Then */
+    assert.deepEqual(answers, [null, null, null, null]);
+    assert.deepEqual(reads, []);
+    assert.deepEqual(refined, []);
+});
+
+test('a side over 1 MB, with a NUL in it, or not UTF-8 is not refined', async () => {
+    /* Given */
+    // Latin-1 é: a byte UTF-8 has no character for.
+    const sides = ['x'.repeat(REFINE_MAX_BYTES + 1), 'a\0b', new Uint8Array([0x63, 0x61, 0x66, 0xe9])];
+    const harnesses = await Promise.all(
+        sides.map(async (after) => {
+            const harness = refineBranch();
+            harness.world.blobs.set('sha-feat/x:src/cart.ts', after);
+            const id = (await harness.service.open('s1'))!.items[0].id;
+            await harness.service.diff('s1', id);
+            return {...harness, id};
+        }),
+    );
+
+    /* When */
+    const answers = await Promise.all(harnesses.map(({service, id}) => service.refinement('s1', id, 'src/cart.ts')));
+
+    /* Then */
+    assert.deepEqual(answers, [null, null, null]);
+    assert.deepEqual(
+        harnesses.flatMap(({refined}) => refined),
+        [],
+    );
+});
+
+test("refinement refuses anything but a file in the item's own local diff", async () => {
+    /* Given */
+    const {service, world, reads} = refineBranch();
+    world.blobs.set('merge-base-1:secret.ts', 'not in the diff');
+    const id = (await service.open('s1'))!.items[0].id;
+    await service.diff('s1', id);
+
+    /* When */
+    const refused = await Promise.all([
+        service.refinement('s1', id, 'secret.ts'),
+        service.refinement('s1', id, '../src/cart.ts'),
+        service.refinement('s1', id, 'src/old.ts'),
+        service.refinement('s1', 'unknown-item', 'src/cart.ts'),
+        service.refinement('s2', id, 'src/cart.ts'),
+    ]);
+
+    /* Then */
+    assert.deepEqual(refused, [null, null, null, null, null]);
+    assert.deepEqual(reads, []);
+});
+
+test('refinement answers nothing for an item whose diff has not been asked for', async () => {
+    /* Given */
+    const {service, reads} = refineBranch();
+    const id = (await service.open('s1'))!.items[0].id;
+
+    /* When */
+    const refinement = await service.refinement('s1', id, 'src/cart.ts');
+
+    /* Then */
+    assert.equal(refinement, null);
+    assert.deepEqual(reads, []);
+});
+
+test('a diff from GitHub is not refined', async () => {
+    /* Given */
+    const {service, reads, refined} = setup({
+        pullRequests: [prLink(9)],
+        prs: [prStatus(9, {headRef: 'feat/gone'})],
+        prDiff: REFINE_DIFF,
+    });
+    const id = (await service.open('s1'))!.items[0].id;
+    const diff = await service.diff('s1', id);
+
+    /* When */
+    const refinement = await service.refinement('s1', id, 'src/cart.ts');
+
+    /* Then */
+    assert.equal(diff.source, 'github');
+    assert.equal(refinement, null);
+    assert.deepEqual(reads, []);
+    assert.deepEqual(refined, []);
 });
