@@ -37,6 +37,8 @@ import type {SessionTaskEvent} from './session-task-slice';
 import type {ArchiveUndoEvent} from './archive-undo-slice';
 import type {AgentHostEvent} from './agent-host-slice';
 import type {HandoffEvent} from './handoff-slice';
+import type {SessionHandoffEvent} from './session-handoff-slice';
+import type {SessionHandoffPhase} from '../../application/services/session-handoff';
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
 import type {QuestionView} from './answers-slice';
@@ -86,7 +88,9 @@ export type PushEvent =
     /** One line of a project hand-off's progress (#276), for the local project. */
     | {type: 'handoffProgress'; localPath: string; line: string}
     /** One line of a Bring back's progress, for the copy. */
-    | {type: 'bringBackProgress'; copyPath: string; line: string};
+    | {type: 'bringBackProgress'; copyPath: string; line: string}
+    /** Where a session's hand-off to a VM stands (#276 stage 3). */
+    | {type: 'sessionHandoffPhase'; sessionId: string; phase: SessionHandoffPhase};
 
 // ── From the renderer itself: user actions and timers ──
 
@@ -336,7 +340,8 @@ export type RendererEvent =
     | TasksPageEvent
     | ArchiveUndoEvent
     | AgentHostEvent
-    | HandoffEvent;
+    | HandoffEvent
+    | SessionHandoffEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

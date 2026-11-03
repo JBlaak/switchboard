@@ -10,6 +10,7 @@
  */
 import {agentHostReducer, initialAgentHostState} from './agent-host-slice';
 import {handoffReducer, initialHandoffState} from './handoff-slice';
+import {initialSessionHandoffState, rekeySessionHandoff, sessionHandoffReducer} from './session-handoff-slice';
 import {activityReducer, initialActivityState, rekeyActivity} from './activity-slice';
 import {archiveUndoReducer, initialArchiveUndoState, rekeyArchiveUndo} from './archive-undo-slice';
 import {askReducer, initialAskState} from './ask-slice';
@@ -38,6 +39,7 @@ import type {ActivityState} from './activity-slice';
 import type {AnswersState} from './answers-slice';
 import type {AgentHostState} from './agent-host-slice';
 import type {HandoffState} from './handoff-slice';
+import type {SessionHandoffState} from './session-handoff-slice';
 import type {ArchiveUndoState} from './archive-undo-slice';
 import type {AskState} from './ask-slice';
 import type {CiStatusState} from './ci-status-slice';
@@ -89,6 +91,7 @@ export interface RendererState {
     readonly archiveUndo: ArchiveUndoState;
     readonly agentHost: AgentHostState;
     readonly handoff: HandoffState;
+    readonly sessionHandoff: SessionHandoffState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -119,6 +122,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         archiveUndo: initialArchiveUndoState,
         agentHost: initialAgentHostState,
         handoff: initialHandoffState,
+        sessionHandoff: initialSessionHandoffState,
     };
 }
 
@@ -157,6 +161,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const archiveUndo = archiveUndoReducer(state.archiveUndo, event);
     const agentHost = agentHostReducer(state.agentHost, event);
     const handoff = handoffReducer(state.handoff, event);
+    const sessionHandoff = sessionHandoffReducer(state.sessionHandoff, event);
 
     return settle(state, {
         view,
@@ -185,6 +190,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         archiveUndo,
         agentHost,
         handoff,
+        sessionHandoff,
     });
 }
 
@@ -241,6 +247,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         agentHost: state.agentHost,
         // Keyed by project path, which a re-key leaves alone.
         handoff: state.handoff,
+        // A session handed off keeps its hand-off under its new id.
+        sessionHandoff: rekeySessionHandoff(state.sessionHandoff, oldId, newId),
     });
 }
 

@@ -18,7 +18,9 @@ import {relayoutSessionList} from '../ui/session-list/relayout';
 import {celebrateArchivedRow} from '../ui/session-list/leave';
 import {closeArchivedSession, dropPendingSession, writeExitBanner} from '../features/sessions/session-actions';
 import {pollActiveSessions} from '../features/sessions/session-poller';
-import {launchClaudeSession, trackStartedElsewhere} from '../features/sessions/session-actions';
+import {continueOnVm, launchClaudeSession, trackStartedElsewhere} from '../features/sessions/session-actions';
+import {loadHandoffHosts} from '../ui/project-page/handoff-actions';
+import {sessionRunIn} from '../state/session-handoff-slice';
 import {projectAt} from '../ui/ask/actions';
 import {openDialog} from '../ui/dialogs/actions';
 import {setHeaderIdentity} from '../features/sessions/terminal-header';
@@ -71,6 +73,13 @@ export function installIpcListeners(): void {
     });
     // Phone access (#194): a session a phone started is in the sidebar at once.
     onEvent('sessionStarted', ({sessionId, projectPath}) => trackStartedElsewhere(sessionId, projectPath));
+    // A session handed off to a VM (#276 stage 3) continues in its own row and terminal.
+    onEvent('sessionHandoffPhase', ({sessionId}, state, previous) => onHandedOff(sessionId, state, previous));
+    onEvent('sessionHandoffFinished', ({sessionId}, state, previous) => onHandedOff(sessionId, state, previous));
+    // Hand off to… on a row needs the VM hosts; an install or a removal changes which projects are on one.
+    onEvent('agentProjectsLoaded', (_event, state, previous) => {
+        if (state.handoff.hosts === null || state.agentHost !== previous.agentHost) void loadHandoffHosts();
+    });
     // A phone archived a session, or the session archived itself: it leaves the
     // window as ⌘E would take it, confetti and all, then the list refetches.
     onEvent('sessionArchived', ({sessionId}) => {
@@ -139,6 +148,14 @@ function onProcessExited(sessionId: string, exitCode: number): void {
     if (pending && !pending.exitedAt) pending.exitedAt = Date.now();
 
     void pollActiveSessions();
+}
+
+/** The hand-off of `sessionId` just finished: its row and terminal follow it to the VM, once. */
+function onHandedOff(sessionId: string, state: RendererState, previous: RendererState): void {
+    const run = sessionRunIn(state.sessionHandoff, sessionId);
+    if (run.phase !== 'done' || sessionRunIn(previous.sessionHandoff, sessionId).phase === 'done') return;
+    continueOnVm(sessionId, run.copyPath);
+    onProjectsChanged();
 }
 
 /** The transcripts on disk changed. */

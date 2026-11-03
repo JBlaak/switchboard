@@ -133,6 +133,7 @@ import type {MainWindowHost} from '../application/ports/main-window';
 import type {SwitchboardDatabase} from '../infrastructure/sqlite/database';
 import type {AgentHosts} from '../application/services/agent-hosts';
 import type {ProjectHandoff} from '../application/services/project-handoff';
+import type {SessionHandoff} from '../application/services/session-handoff';
 
 /** Everything the IPC layer and the app lifecycle reach for. */
 export interface Container {
@@ -191,6 +192,12 @@ export interface Container {
      * copy. Optional only until `buildContainer` builds it.
      */
     readonly projectHandoff: ProjectHandoff;
+    /**
+     * Session hand-off to a VM (#276 stage 3): a running session moved to a
+     * host, waiting for its turn to end first. Optional only until
+     * `buildContainer` builds it.
+     */
+    readonly sessionHandoff?: SessionHandoff;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */

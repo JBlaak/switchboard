@@ -74,6 +74,31 @@ export function trackStartedElsewhere(sessionId: string, projectPath: string): v
 }
 
 /**
+ * A session handed off to a VM (#276 stage 3) now runs there under the same
+ * id; the local one has exited.
+ *
+ * The row is the same row, now a Claude session on the copy, until the next
+ * project reload rebuilds it from the agent. Its terminal still holds the
+ * local run with an exit banner, and is marked closed, so a click would
+ * relaunch it as the local session it no longer is. So it goes: on screen it
+ * is reopened at once, which attaches to the session on the VM; off screen
+ * the next click does that.
+ */
+export function continueOnVm(sessionId: string, copyPath: string): void {
+    const row = sessionMap.get(sessionId) ?? pendingSessions.get(sessionId)?.session;
+    if (!row) return;
+    row.projectPath = copyPath;
+    row.type = 'remote';
+    row.remoteKind = 'claude';
+    if (openSessions.has(sessionId)) {
+        const onScreen = getState().terminal.onScreen === sessionId;
+        destroySession(sessionId);
+        if (onScreen) void openSession(row);
+    }
+    relayoutSessionList();
+}
+
+/**
  * The setup terminal main started on a VM's host (#276): a shell row for it,
  * opened in the terminal area the way any session is, by its id. Opening it
  * attaches to the shell already running on the agent.

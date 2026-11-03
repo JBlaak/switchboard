@@ -50,6 +50,7 @@ import type {
     HandoffResult,
     ProjectCopy,
 } from '../application/services/project-handoff';
+import type {SessionHandoffPhase, SessionHandoffPreview} from '../application/services/session-handoff';
 
 export type {AgentHostStatus, AgentHostsResult};
 
@@ -359,6 +360,18 @@ export interface SwitchboardApi {
     /** Delete the copy on its VM and forget it; the local project is left alone. */
     removeCopy(copyPath: string): Promise<{ok: true} | {ok: false; error: string}>;
 
+    // ── Session hand-off to a VM (#276 stage 3) ──
+    /** What handing a session off would carry, or why it can't be handed off. */
+    previewSessionHandoff(sessionId: string): Promise<SessionHandoffPreview | {error: string}>;
+    /**
+     * Hand a session off to a host, carrying the ticked ignored files. Answers
+     * the last phase (done, failed or cancelled); every phase also arrives on
+     * `onSessionHandoffPhase`. On done the same row continues on the VM.
+     */
+    handOffSession(sessionId: string, hostKey: string, ticked: string[]): Promise<SessionHandoffPhase>;
+    /** Cancel a hand-off still waiting for its turn to end; false once it is running. */
+    cancelSessionHandoff(sessionId: string): Promise<boolean>;
+
     // ── Events from main ──
     // Each answers its unsubscribe, so a listener can be removed again (StrictMode
     // mounts twice; a hot reload re-installs the bridge).
@@ -401,6 +414,8 @@ export interface SwitchboardApi {
     onHandoffProgress(cb: (localPath: string, line: string) => void): Unsubscribe;
     /** One line of a Bring back's progress, for the copy it brings back from. */
     onBringBackProgress(cb: (copyPath: string, line: string) => void): Unsubscribe;
+    /** Where a session's hand-off stands: waiting, a progress line, done, failed or cancelled. */
+    onSessionHandoffPhase(cb: (sessionId: string, phase: SessionHandoffPhase) => void): Unsubscribe;
 
     // ── Host facts the renderer needs synchronously ──
     /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

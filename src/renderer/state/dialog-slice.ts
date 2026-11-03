@@ -37,7 +37,13 @@ export type DialogRequest =
      * Hand a local project off to a VM (#276): what goes over, the ignored files
      * to carry, and the run. What it shows lives in the hand-off slice.
      */
-    | {readonly kind: 'handOff'; readonly localPath: string; readonly host: HandoffHost};
+    | {readonly kind: 'handOff'; readonly localPath: string; readonly host: HandoffHost}
+    /**
+     * Hand a session off to a VM (#276 stage 3): the same dialog in session
+     * mode. What it shows lives in the session hand-off slice; a hand-off
+     * cancelled while it waited closes it.
+     */
+    | {readonly kind: 'handOffSession'; readonly sessionId: string; readonly host: HandoffHost};
 
 export interface DialogState {
     readonly open: DialogRequest | null;
@@ -57,6 +63,13 @@ export function dialogReducer(state: DialogState, event: RendererEvent): DialogS
             return {open: event.request, seq: state.seq + 1};
         case 'dialogClosed':
             return state.open && event.seq === state.seq ? {...state, open: null} : state;
+        case 'sessionHandoffPhase':
+        case 'sessionHandoffFinished':
+            return event.phase.kind === 'cancelled' &&
+                state.open?.kind === 'handOffSession' &&
+                state.open.sessionId === event.sessionId
+                ? {...state, open: null}
+                : state;
         default:
             return state;
     }

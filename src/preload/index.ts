@@ -134,6 +134,10 @@ const api: SwitchboardApi = {
     copyStatus: (copyPath) => ipcRenderer.invoke(INVOKE.handoffCopyStatus, copyPath),
     bringBackCopy: (copyPath) => ipcRenderer.invoke(INVOKE.handoffBringBack, copyPath),
     removeCopy: (copyPath) => ipcRenderer.invoke(INVOKE.handoffRemoveCopy, copyPath),
+    previewSessionHandoff: (sessionId) => ipcRenderer.invoke(INVOKE.sessionHandoffPreview, sessionId),
+    handOffSession: (sessionId, hostKey, ticked) =>
+        ipcRenderer.invoke(INVOKE.sessionHandoffRun, sessionId, hostKey, ticked),
+    cancelSessionHandoff: (sessionId) => ipcRenderer.invoke(INVOKE.sessionHandoffCancel, sessionId),
     // ── Plan: sessions on a plan's issues (#125) ──
     issueSessions: (repository) => ipcRenderer.invoke(INVOKE.planIssueSessions, repository),
     prepareIssueWorktree: (request) => ipcRenderer.invoke(INVOKE.planPrepareIssueWorktree, request),
@@ -206,6 +210,7 @@ const api: SwitchboardApi = {
         subscribe(EVENT.agentInstallProgress, (_e, projectPath, line) => cb(projectPath, line)),
     onHandoffProgress: (cb) => subscribe(EVENT.handoffProgress, (_e, localPath, line) => cb(localPath, line)),
     onBringBackProgress: (cb) => subscribe(EVENT.bringBackProgress, (_e, copyPath, line) => cb(copyPath, line)),
+    onSessionHandoffPhase: (cb) => subscribe(EVENT.sessionHandoffPhase, (_e, sessionId, phase) => cb(sessionId, phase)),
 
     // ── Host facts ──
     getPathForFile: (file) => webUtils.getPathForFile(file),
