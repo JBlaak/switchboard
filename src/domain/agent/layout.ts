@@ -44,14 +44,16 @@ export const AGENT_UNIT_FILE = `$HOME/.config/systemd/user/${AGENT_UNIT}`;
  * The Node the agent runs on, downloaded on the VM from nodejs.org and checked
  * against these SHA-256 sums before it is unpacked (the packaging decision on
  * #276: the app ships no Node of its own). The sums are of the official
- * `node-v<version>-linux-<arch>.tar.xz` files and change together with the
- * version.
+ * `node-v<version>-linux-<arch>.tar.xz` files, copied from
+ * https://nodejs.org/dist/v22.22.2/SHASUMS256.txt, and change together with the
+ * version: bumping it means copying the two new lines from that version's
+ * SHASUMS256.txt.
  */
 export const AGENT_NODE = {
     version: '22.22.2',
     sha256: {
-        x64: 'TO_BE_FILLED_BY_PROVISIONING_TICKET',
-        arm64: 'TO_BE_FILLED_BY_PROVISIONING_TICKET',
+        x64: '88fd1ce767091fd8d4a99fdb2356e98c819f93f3b1f8663853a2dee9b438068a',
+        arm64: 'e9e1930fd321a470e29bb68f30318bf58e3ecb4acb4f1533fb19c58328a091fe',
     },
 } as const;
 

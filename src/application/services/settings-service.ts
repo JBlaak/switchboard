@@ -180,4 +180,25 @@ export class SettingsService {
             return record;
         });
     }
+
+    /**
+     * Record that the Switchboard agent is installed on this remote's host at
+     * `version` (#276), which makes it a VM project.
+     *
+     * Only the `agent` field changes: the remote's sessions and connection info
+     * stay as they were, so installing the agent on a remote already in use
+     * costs nothing (user story 13). Only the named project is marked, even
+     * when other remote projects point at the same host; whether those follow
+     * is the caller's decision.
+     *
+     * Returns false when the remote project is no longer configured.
+     */
+    public markAgentInstalled(projectPath: string, version: string, installedAt = new Date().toISOString()): boolean {
+        return this.updateGlobal((settings) => {
+            const project = (settings.remoteProjects || []).find((r) => remoteProjectPath(r) === projectPath);
+            if (!project) return false;
+            project.agent = {version, installedAt};
+            return true;
+        });
+    }
 }
