@@ -117,6 +117,15 @@ export class GitCliHandoff implements HandoffGit {
         return this.workspace.worktreeRoot(cwd);
     }
 
+    public async commonDir(cwd: string): Promise<string | null> {
+        const result = await run(
+            cwd,
+            ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+            await this.toolEnv(),
+        );
+        return result.code === 0 ? result.stdout.toString('utf8').trim() || null : null;
+    }
+
     public currentBranch(root: string): Promise<string | null> {
         return this.workspace.currentBranch(root);
     }

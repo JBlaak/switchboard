@@ -214,6 +214,22 @@ export class SettingsService {
         this.store.set(handoffFilesKey(localPath), [...paths]);
     }
 
+    // ── Handed-off sessions ──
+    // A session handed off to a VM (#276 stage 3) by id, with the copy it
+    // continues in. Its transcript stays on the Mac; this is what keeps its
+    // local row out of the list, so one conversation has one row, the VM's.
+
+    /** Where `sessionId` was handed off to, or null for a session that never was. */
+    public handedOffSession(sessionId: string): {copyPath: string; at: string} | null {
+        return this.global().handedOffSessions?.[sessionId] ?? null;
+    }
+
+    public recordHandedOffSession(sessionId: string, copyPath: string, at: string): void {
+        this.updateGlobal((settings) => {
+            settings.handedOffSessions = {...settings.handedOffSessions, [sessionId]: {copyPath, at}};
+        });
+    }
+
     /**
      * Record that the Switchboard agent is installed on this remote's host at
      * `version` (#276), which makes it a VM project.

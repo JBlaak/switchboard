@@ -39,6 +39,14 @@ export interface HandoffGit {
     /** The top of the checkout `cwd` is in; null outside a repository. */
     repositoryRoot(cwd: string): Promise<string | null>;
 
+    /**
+     * `git rev-parse --git-common-dir` in `cwd`, absolute: the main checkout's
+     * `.git` for a linked worktree as much as for the main checkout itself.
+     * A session hand-off (#276 stage 3) tells a worktree from the project's
+     * own checkout by it. Null outside a repository.
+     */
+    commonDir(cwd: string): Promise<string | null>;
+
     /** The branch checked out; null on a detached HEAD. */
     currentBranch(root: string): Promise<string | null>;
 

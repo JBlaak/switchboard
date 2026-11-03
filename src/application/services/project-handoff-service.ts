@@ -80,6 +80,31 @@ export interface ProjectHandoffServiceDeps {
     reachTimeoutMs?: number;
 }
 
+/**
+ * A hand-off of one of the project's linked worktrees rather than its own
+ * checkout (#276 stage 3, a session's hand-off). The bundle, the patch, the
+ * branch and the ignored files come from `checkout`; the copy is still the
+ * project's (`<base>/<repo>`, named from the main checkout), and the agent
+ * adds a worktree called `name` to it on that branch.
+ */
+export interface WorktreeHandoff {
+    /** The worktree's name, which the VM gives its own: `<copy>/.claude/worktrees/<name>`. */
+    name: string;
+    /** The worktree's top folder on the Mac. */
+    checkout: string;
+}
+
+/** What else a hand-off may be asked to do, beyond the `ProjectHandoff` façade. */
+export interface HandoffOptions {
+    worktree?: WorktreeHandoff;
+}
+
+/** What else a preview may be asked about: a linked worktree's checkout, for a session's hand-off. */
+export interface PreviewOptions {
+    /** The checkout to count and offer files from; the project's own when absent. */
+    checkout?: string;
+}
+
 /** An agent's answer, or why the agent could not be asked (kept apart: some answers carry an `error` of their own). */
 type Asked<T> = {reached: true; answer: T} | {reached: false; error: string};
 
@@ -101,8 +126,13 @@ export class ProjectHandoffService implements ProjectHandoff {
         }));
     }
 
-    public async preview(localPath: string): Promise<HandoffPreview | {error: string}> {
-        const repository = await this.localRepository(localPath);
+    /**
+     * With `options.checkout`, the counts and the offered files are that
+     * checkout's (a worktree's), while the remembered ticks and the existing
+     * copies stay the project's.
+     */
+    public async preview(localPath: string, options: PreviewOptions = {}): Promise<HandoffPreview | {error: string}> {
+        const repository = await this.localRepository(options.checkout ?? localPath);
         if ('error' in repository) return repository;
         const {git, settings} = this.deps;
         const [unpushed, uncommitted, offered] = await Promise.all([
@@ -121,18 +151,31 @@ export class ProjectHandoffService implements ProjectHandoff {
         return {branch: repository.branch, unpushed, uncommitted: uncommitted.length, candidates, existing};
     }
 
+    /**
+     * With `options.worktree`, the worktree's checkout is what goes (its
+     * commits, changes, branch and ticked files), `handoff.worktree` names it,
+     * and the copy gets a worktree of that name. The answer's `copyPath` is
+     * then that worktree's folder on the VM (`handoff-done.dir`), saved as a
+     * VM project of its own whose `copyOf` is still `localPath`.
+     */
     public async handOff(
         localPath: string,
         hostKey: string,
         ticked: string[],
         onProgress: (line: string) => void = () => {},
+        options: HandoffOptions = {},
     ): Promise<HandoffResult> {
         const {git, settings, renderer, log} = this.deps;
         const host = this.agentHosts().get(hostKey);
         if (!host) return {ok: false, error: `${hostKey} is not a VM with the Switchboard agent.`};
-        const repository = await this.localRepository(localPath);
+        const {worktree} = options;
+        const repository = await this.localRepository(worktree?.checkout ?? localPath);
         if ('error' in repository) return {ok: false, error: repository.error};
         const {root} = repository;
+        // The copy is named after the project's main checkout, so a worktree
+        // lands in the same copy as the project's own hand-off would.
+        const projectRoot = worktree ? await git.repositoryRoot(localPath) : root;
+        if (!projectRoot) return {ok: false, error: `${localPath} is not a git repository.`};
         const label = hostLabel(host);
 
         // The files first: a refused or unreadable one fails before anything is uploaded.
@@ -147,7 +190,7 @@ export class ProjectHandoffService implements ProjectHandoff {
         } catch (err) {
             return {ok: false, error: `Could not reach ${label}: ${(err as Error).message}`};
         }
-        const name = copyFolderName(root);
+        const name = copyFolderName(projectRoot);
 
         let bundleUploadId: string | undefined;
         let patchUploadId: string | undefined;
@@ -180,6 +223,7 @@ export class ProjectHandoffService implements ProjectHandoff {
                     branch: repository.branch,
                     headOid: repository.headOid,
                     ...(bundleUploadId ? {bundleUploadId} : {}),
+                    ...(worktree ? {worktree: worktree.name} : {}),
                     ...(patchUploadId ? {patchUploadId} : {}),
                     files: files.files,
                 },
@@ -194,7 +238,7 @@ export class ProjectHandoffService implements ProjectHandoff {
             user: host.user,
             host: host.host,
             port: host.port,
-            dir: done.dir || copyDir(connection.settings?.baseFolder, name),
+            dir: done.dir || copyDirOf(copyDir(connection.settings?.baseFolder, name), worktree),
             ...(host.agent ? {agent: host.agent} : {}),
             copyOf: localPath,
         };
@@ -391,6 +435,11 @@ export class ProjectHandoffService implements ProjectHandoff {
     }
 }
 
+/** Where a copy's checkout is when the agent did not say: the copy, or its worktree of that name. */
+function copyDirOf(copy: string, worktree: WorktreeHandoff | undefined): string {
+    return worktree ? copy.replace(/\/+$/, '') + WORKTREES_DIR + worktree.name : copy;
+}
+
 /** What the picker calls a host: `user@host`, with the port when it is not 22. */
 function hostLabel(host: Pick<RemoteConfig, 'user' | 'host' | 'port'>): string {
     const port = Number(host.port) || 22;
@@ -408,7 +457,8 @@ function formatBytes(bytes: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, timers: Timers): Promise<T> {
+/** `promise`, or a rejection once `ms` have passed on `timers`. Shared with the session hand-off. */
+export function withTimeout<T>(promise: Promise<T>, ms: number, timers: Timers): Promise<T> {
     return new Promise((resolve, reject) => {
         const timer = timers.setTimeout(() => reject(new Error(`no answer in ${Math.round(ms / 1000)}s`)), ms);
         promise.then(
