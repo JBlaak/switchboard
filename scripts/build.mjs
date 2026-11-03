@@ -11,6 +11,7 @@ import * as sass from 'sass';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
+import {execFileSync} from 'node:child_process';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'app');
@@ -45,6 +46,30 @@ const common = {
 const {version} = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 /**
+ * The agent's build stamp: the app's version plus the commit it was built from,
+ * and a per-build suffix when the tree had uncommitted changes. Two builds of
+ * one app version are different agents (a development build, a release made
+ * again), so the Mac compares this, not the app's version, to decide whether a
+ * VM's agent is current; with the version alone a VM could keep an older build
+ * that does not know the newer messages. Written beside the bundle as
+ * `app/agent/VERSION`, which is how the Mac reads the stamp of the agent it ships.
+ */
+function agentBuildStamp() {
+    const git = (args) => {
+        try {
+            return execFileSync('git', args, {cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']}).trim();
+        } catch {
+            return '';
+        }
+    };
+    const sha = git(['rev-parse', '--short=12', 'HEAD']);
+    if (!sha) return version;
+    const dirty = git(['status', '--porcelain', '--untracked-files=no']) !== '';
+    return `${version}+${sha}${dirty ? '.' + Date.now().toString(36) : ''}`;
+}
+const agentStamp = agentBuildStamp();
+
+/**
  * The headless agent's bundles (#276), for a Linux VM's plain Node, not
  * Electron: so `node22`, which is the Node the provisioner installs there
  * (AGENT_NODE in src/domain/agent/layout.ts). The app's version is stamped in
@@ -59,7 +84,7 @@ const agentCommon = {
     format: 'cjs',
     target: 'node22',
     external: ['node-pty'],
-    define: {__AGENT_VERSION__: JSON.stringify(version)},
+    define: {__AGENT_VERSION__: JSON.stringify(agentStamp)},
 };
 
 const targets = [
@@ -197,8 +222,17 @@ function copyHtml() {
     }
 }
 
+/** The agent's build stamp beside its bundle, which the Mac reads as the version it ships. */
+function writeAgentStamp() {
+    const dir = path.join(out, 'agent');
+    fs.mkdirSync(dir, {recursive: true});
+    fs.writeFileSync(path.join(dir, 'VERSION'), agentStamp + '\n');
+    console.log(`  stamp   app/agent/VERSION  ${agentStamp}`);
+}
+
 async function main() {
     fs.rmSync(out, {recursive: true, force: true});
+    writeAgentStamp();
 
     if (watch) {
         for (const {name, ...opts} of targets) {

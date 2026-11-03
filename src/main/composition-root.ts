@@ -41,7 +41,7 @@ import {forgetRemoteProject} from './forget-remote-project';
 import {AgentUpgrades} from '../application/services/agent-upgrades';
 import {AgentInstallerService} from '../application/services/agent-installer-service';
 import {setupTerminalCommand} from '../domain/agent/setup-script';
-import {AgentBundleBuilder, agentBundleSources} from '../infrastructure/ssh/agent-bundle';
+import {AgentBundleBuilder, agentBundleSources, bundledAgentVersion} from '../infrastructure/ssh/agent-bundle';
 import {OpenSshProvisioner} from '../infrastructure/ssh/ssh-provisioner';
 import {NodeClaudeConfigSource} from '../infrastructure/fs/claude-config-source';
 import {QuestionService} from '../application/services/question-service';
@@ -374,6 +374,15 @@ export function buildContainer(): Container {
 
     // VM hosts (#276). The agent's question hook forwards here, so the Mac's own
     // QuestionService and archive tool answer a VM session as they answer a local one.
+    // The agent this app ships, and its build stamp (#276): a VM's agent is
+    // current when it reports exactly this, not merely the app's version.
+    const agentSources = agentBundleSources({
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appRoot: app.getAppPath(),
+        tmpDir: os.tmpdir(),
+    });
+    const agentVersion = bundledAgentVersion(agentSources, app.getVersion());
     const agents = new AgentClient({
         dialer: new SshAgentDialer({
             shell: () => shells.resolve(shellProfileId()).path,
@@ -381,7 +390,7 @@ export function buildContainer(): Container {
             cwd: paths.homeDir,
             log,
         }),
-        appVersion: app.getVersion(),
+        appVersion: agentVersion,
         registry,
         renderer,
         questions,
@@ -442,15 +451,8 @@ export function buildContainer(): Container {
     const agentInstaller = new AgentInstallerService({
         provisioner: new OpenSshProvisioner(toolEnv, log),
         settings,
-        bundles: new AgentBundleBuilder(
-            agentBundleSources({
-                isPackaged: app.isPackaged,
-                resourcesPath: process.resourcesPath,
-                appRoot: app.getAppPath(),
-                tmpDir: os.tmpdir(),
-            }),
-        ),
-        appVersion: app.getVersion(),
+        bundles: new AgentBundleBuilder(agentSources),
+        appVersion: agentVersion,
         log,
         clock,
     });
@@ -462,13 +464,13 @@ export function buildContainer(): Container {
         },
         launcher,
         setupCommand: setupTerminalCommand(),
-        appVersion: app.getVersion(),
+        appVersion: agentVersion,
         ids,
         log,
     });
     // When a VM's agent is upgraded on its own: see AgentUpgrades.
     const agentUpgrades = new AgentUpgrades({
-        appVersion: app.getVersion(),
+        appVersion: agentVersion,
         agentProjectOn: (host) => {
             const onHost = settings
                 .remoteProjects()

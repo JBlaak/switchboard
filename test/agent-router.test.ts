@@ -157,7 +157,6 @@ test('a message before hello gets bye protocol-error', () => {
 });
 
 for (const [what, value] of [
-    ['an unknown type', {type: 'launch-missiles'}],
     ['a message without a type', {requestId: 'r1'}],
     ['a message that is not an object', ['hello']],
     ['a known type with a missing field', {type: 'input', sessionId: 's1'}],
@@ -335,4 +334,48 @@ test('the validator accepts an optional field added later and rejects a bad enum
 
     /* Then */
     assert.deepEqual(results, [true, false]);
+});
+
+test('a request this agent does not know is answered as refused, and the link stays up', () => {
+    /* Given */
+    const {pair} = setUp();
+    pair.mac.send(HELLO);
+
+    /* When */
+    sendRaw(pair, {type: 'list-something-new', requestId: 'r9'});
+
+    /* Then */
+    assert.deepEqual(pair.sentByAgent.at(-1), {
+        type: 'done',
+        requestId: 'r9',
+        ok: false,
+        error: 'this agent does not know list-something-new; update the agent',
+    });
+    assert.equal(pair.agent.closed, false);
+});
+
+test('an unknown message before the handshake still closes the link', () => {
+    /* Given */
+    const {pair} = setUp();
+
+    /* When */
+    sendRaw(pair, {type: 'list-something-new', requestId: 'r9'});
+
+    /* Then */
+    assert.equal((pair.sentByAgent[0] as {code?: string}).code, 'protocol-error');
+    assert.equal(pair.agent.closed, true);
+});
+
+test('an unknown notice without a request id is ignored, and the link stays up', () => {
+    /* Given */
+    const {pair} = setUp();
+    pair.mac.send(HELLO);
+    const before = pair.sentByAgent.length;
+
+    /* When */
+    sendRaw(pair, {type: 'launch-missiles'});
+
+    /* Then */
+    assert.equal(pair.sentByAgent.length, before);
+    assert.equal(pair.agent.closed, false);
 });
