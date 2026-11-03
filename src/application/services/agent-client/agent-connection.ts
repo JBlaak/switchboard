@@ -44,6 +44,7 @@ import type {
     MacMessage,
     OpenedMessage,
     OpenSessionMessage,
+    PlacedMessage,
     TerminalOutput,
     ToolCheck,
     ToolResultMessage,
@@ -502,6 +503,22 @@ export class AgentConnection {
             sessionId,
             dir,
             uploadId,
+        }));
+    }
+
+    // ── Dropped files (stage 5) ──
+
+    /**
+     * Put a file uploaded first (`upload`) in the agent's drop folder on the
+     * VM under `name` (one safe segment), and answer the agent's `placed`:
+     * with the file's absolute path there, or the agent's refusal.
+     */
+    public async placeUpload(uploadId: string, name: string): Promise<PlacedMessage> {
+        return this.request<PlacedMessage>('placed', (requestId) => ({
+            type: 'place-upload',
+            requestId,
+            uploadId,
+            name,
         }));
     }
 

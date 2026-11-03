@@ -31,6 +31,7 @@ import type {
     TasksUpdate,
 } from '../../domain/tasks/surface';
 import type {BlaakTasks} from '../ports/blaak-tasks';
+import type {Awaitable} from '../ports/transcript-queries';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
@@ -62,11 +63,23 @@ export interface TasksServiceDeps {
     /** Build the services for this URL; called only with a URL set. */
     build(url: string): TaskServices;
     renderer: Pick<RendererGateway, 'tasksChanged' | 'sessionTaskChanged'>;
-    /** The running Claude sessions whose transcripts are in this folder. */
+    /**
+     * The running Claude sessions whose transcripts are in this folder: a
+     * local folder under `~/.claude/projects`, or a VM session's `vm:…` folder
+     * (#276 stage 5), named as `locateSession` names it.
+     */
     sessionsIn(folder: string): TranscriptSession[];
-    /** A transcript's latest lines, enough to find its latest BlaakTasks call. */
-    transcript(folder: string, sessionId: string): string[];
-    /** When the transcript was last written, epoch ms; null when it has none. */
+    /**
+     * A transcript's latest lines, enough to find its latest BlaakTasks call.
+     * Read from the Mac's disk at once for a local session; a VM session's
+     * comes over its host's link (`VmTranscripts.tail`), hence the promise.
+     */
+    transcript(folder: string, sessionId: string): Awaitable<string[]>;
+    /**
+     * When the transcript was last written, epoch ms; null when it has none.
+     * For a VM session, as its cached transcript says, so an unchanged one
+     * costs no round trip.
+     */
     modifiedAt(folder: string, sessionId: string): number | null;
     /** The PRs a session opened, from its transcript's `pr-link` lines. */
     pullRequests(sessionId: string): readonly SessionPullRequest[];
@@ -383,7 +396,7 @@ export class TasksService {
         const at = this.deps.modifiedAt(folder, session.sessionId);
         if (at === null || this.scanned.get(session.sessionId) === at) return;
         this.scanned.set(session.sessionId, at);
-        const lines = this.deps.transcript(folder, session.sessionId);
+        const lines = await this.deps.transcript(folder, session.sessionId);
         const projectPath = await this.deps.repoRoot(session.projectPath);
         const link = services.links.scan(session.sessionId, lines, projectPath);
         if (link) this.deps.renderer.sessionTaskChanged(session.sessionId, link.taskId);

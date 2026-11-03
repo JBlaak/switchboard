@@ -16,7 +16,7 @@ import {
     resolveWeatherEnabled,
     resolveWeatherLocation,
 } from '../../domain/settings/settings';
-import {remoteProjectPath} from '../../domain/project/remote-target';
+import {normalizeRemoteDir, parseRemoteProjectPath, remoteProjectPath} from '../../domain/project/remote-target';
 import type {EffectiveSettings, GlobalSettings, RemoteProjectSetting} from '../../domain/settings/settings';
 import type {RemoteSessionRecord} from '../../domain/session/session';
 import type {WeatherLocation} from '../../domain/weather/weather';
@@ -161,6 +161,56 @@ export class SettingsService {
         });
     }
 
+    /**
+     * The remote project at `projectPath`, recorded first when it is a folder
+     * on a VM host that no record names yet (#276 stage 5).
+     *
+     * An issue or task session starts in a new worktree made on the VM
+     * (`ssh://u@h//home/u/projects/site/.claude/worktrees/fix-42`). That
+     * folder is nobody's project, but its sessions need a record: it is what
+     * the launcher opens on the agent, what `touchRemoteSession` keeps the row
+     * in, and what brings the row back after a restart. It is recorded as
+     * the hand-off records a project's copy (stage 3's worktree copies):
+     * `agent` copied from the host, and `copyOf` from the project the folder
+     * lies under (its parent copy), when that one is a copy of a local
+     * project, so the local project's page lists it with its other copies.
+     *
+     * Nothing is recorded for a host with no agent: an agentless remote keeps
+     * needing a project the user added, exactly as before. `home` is the VM
+     * user's home folder (the agent's `welcome`), which lets a `~/…` project
+     * be found as the parent of the absolute paths git answers; without it,
+     * only a parent named in the same form is found.
+     *
+     * Answers the stored record, the new one, or null when there is none.
+     */
+    public ensureRemoteProject(projectPath: string, home?: string | null): RemoteProjectSetting | null {
+        const found = this.findRemoteProject(projectPath);
+        if (found) return found;
+        const parsed = parseRemoteProjectPath(projectPath);
+        if (!parsed) return null;
+        const onHost = this.remoteProjects().filter(
+            (r) => r.user === parsed.user && r.host === parsed.host && (Number(r.port) || 22) === parsed.port,
+        );
+        const withAgent = onHost.find((r) => r.agent);
+        if (!withAgent?.agent) return null;
+
+        const parent = parentProject(onHost, parsed.dir, home ?? null);
+        const agent = parent?.agent ?? withAgent.agent;
+        const record: RemoteProjectSetting = {
+            user: parsed.user,
+            host: parsed.host,
+            port: parsed.port,
+            dir: parsed.dir,
+            agent: {...agent},
+            ...(parent?.copyOf ? {copyOf: parent.copyOf} : {}),
+        };
+        // A path that does not round-trip (a trailing slash, say) would be
+        // stored under another name than the one asked for: record nothing.
+        if (remoteProjectPath(record) !== projectPath) return null;
+        this.addRemoteProject(record);
+        return this.findRemoteProject(projectPath);
+    }
+
     public removeRemoteProject(projectPath: string): void {
         this.updateGlobal((settings) => {
             settings.remoteProjects = (settings.remoteProjects || []).filter(
@@ -257,6 +307,42 @@ export class SettingsService {
             return true;
         });
     }
+}
+
+/**
+ * The deepest of `remotes` whose folder is `dir` or holds it: the project a
+ * new VM folder (a worktree) lies under. Folders are compared as written and,
+ * when the VM's home is known, with `~` expanded, since a project may be
+ * stored as `~/projects/site` while git names its worktrees absolutely.
+ */
+function parentProject(
+    remotes: readonly RemoteProjectSetting[],
+    dir: string | null,
+    home: string | null,
+): RemoteProjectSetting | null {
+    const forms = (d: string | null | undefined): string[] => {
+        const raw = normalizeRemoteDir(d) ?? '~';
+        const expanded = home ? expandVmHome(raw, home) : null;
+        return expanded && expanded !== raw ? [raw, expanded] : [raw];
+    };
+    const targets = forms(dir);
+    let best: {remote: RemoteProjectSetting; depth: number} | null = null;
+    for (const remote of remotes) {
+        for (const base of forms(remote.dir)) {
+            if (!targets.some((target) => target === base || target.startsWith(base + '/'))) continue;
+            if (!best || base.length > best.depth) best = {remote, depth: base.length};
+        }
+    }
+    return best?.remote ?? null;
+}
+
+/** A VM folder with `~` (or a bare relative folder) anchored at the VM user's home. */
+function expandVmHome(dir: string, home: string): string {
+    const root = home.replace(/\/+$/, '');
+    if (dir === '~') return root;
+    if (dir.startsWith('~/')) return root + dir.slice(1);
+    if (dir.startsWith('/')) return dir;
+    return root + '/' + dir;
 }
 
 /** The settings-store key the hand-off's ticked files of a local project are kept under. */
