@@ -21,20 +21,42 @@
  * `handoff` stub, so nothing here runs ssh or git against a VM. What the parts
  * say is unit tested in test/handoff-view.test.ts and the slice behind them in
  * test/handoff-slice.test.ts.
+ *
+ * Session hand-off (#276 stage 3): Hand off to… on a local Claude session's
+ * row and in the terminal header, the dialog in session mode, the wait for
+ * the turn to end with Cancel, the row's marker while it runs, and a failure.
+ * The `session-handoff:*` channels answer from the `sessionHandoff` stub, so
+ * nothing here waits on a real turn or runs ssh or git. What the parts say is
+ * unit tested in test/session-handoff-view.test.ts and the slice behind them.
+ *
+ * VM transcripts (#276 stage 3): a VM session's row takes its title from the
+ * `vm_transcripts` cache, seeded by `vmTranscriptFixture`.
  */
 import {test, expect, forEachAppearance} from '../support/test';
-import {dialog, expectScreen, openRemoteSession, sessionRow, terminalStatus} from '../support/app';
+import {
+    dialog,
+    expectScreen,
+    openRemoteSession,
+    openSession,
+    sessionRow,
+    terminalHeader,
+    terminalStatus,
+} from '../support/app';
 import {
     agentRequests,
     handoffRequests,
     pushRemoteStatus,
     reconnectRequests,
+    sessionHandoffRequests,
     setHostStub,
     STUB_AGENT,
     STUB_HANDOFF,
     STUB_HANDOFF_HOST,
+    STUB_SESSION_HANDOFF,
+    STUB_SESSION_PREVIEW,
     stubReconnectRemote,
 } from '../support/main-process';
+import {redraw, sessionItem} from '../support/session-list';
 import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
 import {expectTerminalText, hasTerminal} from '../support/terminal';
 import {
@@ -47,6 +69,7 @@ import {
     S,
     VM_REMOTE,
     vmFixture,
+    vmTranscriptFixture,
 } from '../fixtures/standard';
 import type {FixtureHome} from '../support/fixture-home';
 import type {HandoffStub} from '../support/main-process';
@@ -635,6 +658,177 @@ test.describe('project hand-off', () => {
         expect((await handoffRequests(app)).copyStatus).toEqual([COPY_PATH]);
         expect((await handoffRequests(app)).removeCopy).toEqual([]);
         await expect(projectPage(page, REMOTE_LABEL.copy)).toBeVisible();
+    });
+});
+
+test.describe('session hand-off', () => {
+    test.use({fixture: handoffFixture(), stubs: {handoff: STUB_HANDOFF}});
+
+    function handOffDialog(page: Page): Locator {
+        return page.getByRole('dialog', {name: 'Hand off to ' + STUB_HANDOFF_HOST.label});
+    }
+
+    /** Hand off to… on a row; the row's buttons show while the pointer is over it. */
+    async function handOffButton(page: Page, sessionId: string): Promise<Locator> {
+        const row = sessionItem(page, sessionId);
+        await row.hover();
+        return row.getByRole('button', {name: 'Hand off to…', exact: true});
+    }
+
+    /** A plain terminal, started as main starts one, in a project. */
+    async function startPlainTerminal(page: Page, projectPath: string): Promise<string> {
+        return await page.evaluate(async (projectPath) => {
+            const id = crypto.randomUUID();
+            await window.api.openTerminal(id, projectPath, true, {type: 'terminal'});
+            return id;
+        }, projectPath);
+    }
+
+    test('Hand off to… is on a local Claude session’s row and in its terminal header, never on a remote or terminal row', async ({
+        page,
+        app,
+        home,
+    }) => {
+        /* Given */
+        const terminal = await startPlainTerminal(page, home.projectPath(P.notes));
+        await redraw(page, app, S.bumpDeps);
+        await expect(sessionItem(page, terminal)).toBeVisible();
+
+        /* Then */
+        await expect(await handOffButton(page, S.loginFix)).toBeVisible();
+        await expect(await handOffButton(page, S.remoteApi)).toHaveCount(0);
+        await expect(await handOffButton(page, terminal)).toHaveCount(0);
+
+        /* When */
+        await openSession(page, home, LABEL.loginFix, S.loginFix);
+        await terminalHeader(page).getByRole('button', {name: 'Hand off to…', exact: true}).click();
+
+        /* Then */
+        const dialog = handOffDialog(page);
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toContainText(LABEL.loginFix);
+    });
+
+    test.describe('without a VM host', () => {
+        test.use({stubs: {}});
+
+        test('no row and no terminal header offers Hand off to…', async ({page, home}) => {
+            /* When */
+            await openSession(page, home, LABEL.loginFix, S.loginFix);
+            await sessionItem(page, S.loginFix).hover();
+
+            /* Then */
+            await expect(sessionItem(page, S.loginFix).getByRole('button', {name: 'Stop session'})).toBeVisible();
+            await expect(page.getByRole('button', {name: 'Hand off to…', includeHidden: true})).toHaveCount(0);
+        });
+    });
+
+    test('a busy session waits for its turn with Cancel, shows Waiting… and Handing off… on its row, then continues on the VM', async ({
+        page,
+        app,
+    }) => {
+        /* Given */
+        await setHostStub(app, 'sessionHandoff', {...STUB_SESSION_HANDOFF, phaseDelayMs: 700, waitingMs: 1500});
+        await (await handOffButton(page, S.loginFix)).click();
+        const dialog = handOffDialog(page);
+
+        /* Then */
+        await expect(dialog.getByRole('listitem')).toHaveText([
+            'The conversation, resumed on the VM',
+            'Branch session-cookie',
+            'In worktree session-cookie',
+            '2 commits not on origin',
+            '1 uncommitted change',
+        ]);
+        await expect(dialog).toContainText('Claude is mid-turn. The hand-off starts when this turn ends.');
+
+        /* When */
+        await dialog.getByRole('checkbox', {name: '.env.local 4.1 KB', exact: true}).check();
+        await dialog.getByRole('button', {name: 'Hand off', exact: true}).click();
+
+        /* Then */
+        await expect(dialog.getByRole('status')).toHaveText('Waiting for the turn to end…');
+        await expect(dialog.getByRole('button', {name: 'Cancel', exact: true})).toBeEnabled();
+        await expect(dialog.getByRole('button', {name: 'Waiting…'})).toBeDisabled();
+        await expect(dialog).not.toContainText('Claude is mid-turn.');
+        expect((await sessionHandoffRequests(app)).handOff).toEqual([
+            {sessionId: S.loginFix, hostKey: STUB_HANDOFF_HOST.key, ticked: ['.env', '.env.local']},
+        ]);
+
+        /* When */
+        await page.keyboard.press('Escape');
+
+        /* Then */
+        await expect(dialog).toHaveCount(0);
+        const marker = sessionItem(page, S.loginFix).getByText('Waiting…', {exact: true});
+        await expect(marker).toHaveAttribute('title', `Hands off to ${STUB_HANDOFF_HOST.label} when this turn ends`);
+        await expect(sessionItem(page, S.loginFix).getByText('Handing off…', {exact: true})).toBeVisible();
+
+        /* When */
+        await (await handOffButton(page, S.loginFix)).click();
+
+        /* Then */
+        await expect(dialog).toContainText('Handing off the checkout…');
+        await expect(dialog).toContainText('Copying the transcript…');
+        await expect(dialog.getByRole('status')).toHaveText('Continues on ' + STUB_HANDOFF_HOST.label);
+        await expect(dialog.getByRole('button', {name: 'Close', exact: true})).toBeVisible();
+        await expect(sessionItem(page, S.loginFix).getByText(/^(Waiting|Handing off)…$/)).toHaveCount(0);
+        expect((await sessionHandoffRequests(app)).handOff).toHaveLength(1);
+    });
+
+    test('Cancel while it waits for the turn closes the dialog, and nothing more is asked', async ({page, app}) => {
+        /* Given */
+        await setHostStub(app, 'sessionHandoff', {...STUB_SESSION_HANDOFF, waitingMs: 60_000});
+        await (await handOffButton(page, S.loginFix)).click();
+        const dialog = handOffDialog(page);
+        await dialog.getByRole('button', {name: 'Hand off', exact: true}).click();
+        await expect(dialog.getByRole('status')).toHaveText('Waiting for the turn to end…');
+
+        /* When */
+        await dialog.getByRole('button', {name: 'Cancel', exact: true}).click();
+
+        /* Then */
+        await expect(dialog).toHaveCount(0);
+        await expect(sessionItem(page, S.loginFix).getByText(/^(Waiting|Handing off)…$/)).toHaveCount(0);
+        const requests = await sessionHandoffRequests(app);
+        expect(requests.cancel).toEqual([S.loginFix]);
+        expect(requests.handOff).toHaveLength(1);
+    });
+
+    test('a failed hand-off shows why and that the session wasn’t moved, and offers Retry', async ({page, app}) => {
+        /* Given */
+        await setHostStub(app, 'sessionHandoff', {
+            ...STUB_SESSION_HANDOFF,
+            preview: {...STUB_SESSION_PREVIEW, busy: false},
+            phases: [
+                {kind: 'running', line: 'Handing off the checkout…'},
+                {kind: 'failed', error: 'Couldn’t reach joris@devbox.local'},
+            ],
+        });
+        await (await handOffButton(page, S.loginFix)).click();
+        const dialog = handOffDialog(page);
+        await expect(dialog).not.toContainText('Claude is mid-turn.');
+
+        /* When */
+        await dialog.getByRole('button', {name: 'Hand off', exact: true}).click();
+
+        /* Then */
+        const alert = dialog.getByRole('alert');
+        await expect(alert).toContainText('Couldn’t reach joris@devbox.local');
+        await expect(alert).toContainText('The session wasn’t moved.');
+        await expect(dialog).toContainText('Handing off the checkout…');
+        await expect(dialog.getByRole('button', {name: 'Retry'})).toBeEnabled();
+    });
+});
+
+test.describe('VM transcripts', () => {
+    test.use({fixture: vmTranscriptFixture()});
+
+    test('a VM session’s row takes its title from the cached transcript, not “Remote Claude”', async ({page}) => {
+        /* Then */
+        await expect(sessionItem(page, S.vmWeb)).toContainText(LABEL.vmWeb);
+        await expect(sessionItem(page, S.vmWeb)).not.toContainText(LABEL.remoteApi);
+        await expect(sessionItem(page, S.remoteApi)).toContainText(LABEL.remoteApi);
     });
 });
 

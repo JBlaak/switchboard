@@ -41,6 +41,7 @@ import type {
     HandoffResult,
     ProjectCopy,
 } from '../../src/application/services/project-handoff';
+import type {SessionHandoffPhase, SessionHandoffPreview} from '../../src/application/services/session-handoff';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -129,7 +130,76 @@ export interface HostStubs {
      * Hand off to…; `STUB_HANDOFF` has one.
      */
     handoff: HandoffStub;
+    /**
+     * Session hand-off's back end (#276 stage 3), standing in for the ssh and
+     * git that move a running session to a VM: every `session-handoff:*`
+     * channel answers from here, so no test can reach a VM. Each request is
+     * recorded (see `sessionHandoffRequests`). Hand off to… on a row shows
+     * only once `handoff` has hosts, so the default is never reached.
+     */
+    sessionHandoff: SessionHandoffStub;
 }
+
+/** What the `session-handoff:*` channels answer. */
+export interface SessionHandoffStub {
+    /** What the dialog's preview answers, for every session alike. */
+    preview: SessionHandoffPreview | {error: string};
+    /**
+     * The phases Hand off pushes on `session-handoff:phase`, one at a time,
+     * `phaseDelayMs` apart; it answers the last one. On `done` it also tells
+     * the window the session started on the copy and the projects changed, as
+     * the real handler does.
+     */
+    phases: SessionHandoffPhase[];
+    phaseDelayMs: number;
+    /**
+     * How long a `waiting` phase holds before the next one comes, standing in
+     * for the turn that has to end. Cancel meanwhile ends the hand-off
+     * `cancelled`, and nothing after it is pushed.
+     */
+    waitingMs: number;
+}
+
+/** What the renderer asked the `session-handoff:*` stubs, in order. */
+export interface SessionHandoffRequests {
+    preview: string[];
+    handOff: {sessionId: string; hostKey: string; ticked: string[]}[];
+    cancel: string[];
+}
+
+/**
+ * A busy session in the `session-cookie` worktree of acme-api on its own
+ * branch, with work only this Mac has and the two ignored config files of
+ * `STUB_HANDOFF`.
+ */
+export const STUB_SESSION_PREVIEW: SessionHandoffPreview = {
+    localPath: '/nowhere/acme-api',
+    worktree: 'session-cookie',
+    branch: 'session-cookie',
+    unpushed: 2,
+    uncommitted: 1,
+    candidates: [
+        {path: '.env', size: 312, ticked: true},
+        {path: '.env.local', size: 4200, ticked: false},
+    ],
+    busy: true,
+};
+
+/**
+ * `STUB_SESSION_PREVIEW`, and a hand-off that waits for the turn, runs two
+ * steps and continues on the copy of `handoffFixture`.
+ */
+export const STUB_SESSION_HANDOFF: SessionHandoffStub = {
+    preview: STUB_SESSION_PREVIEW,
+    phases: [
+        {kind: 'waiting'},
+        {kind: 'running', line: 'Handing off the checkout…'},
+        {kind: 'running', line: 'Copying the transcript…'},
+        {kind: 'done', copyPath: 'ssh://joris@devbox.local/~/projects/acme-api'},
+    ],
+    phaseDelayMs: 0,
+    waitingMs: 0,
+};
 
 /** What the `handoff:*` channels answer. */
 export interface HandoffStub {
@@ -326,6 +396,8 @@ interface StubState extends HostStubs {
     agentRequests: AgentRequests;
     /** What the renderer asked the hand-off stubs. */
     handoffRequests: HandoffRequests;
+    /** What the renderer asked the session hand-off stubs. */
+    sessionHandoffRequests: SessionHandoffRequests;
 }
 
 /** A comment added to the pending review, or the review finished. */
@@ -356,6 +428,7 @@ export const DEFAULT_STUBS: HostStubs = {
     projectOverview: null,
     agent: STUB_AGENT,
     handoff: {...STUB_HANDOFF, hosts: []},
+    sessionHandoff: STUB_SESSION_HANDOFF,
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
@@ -374,6 +447,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 sessionWorkReviews: [],
                 agentRequests: {install: [], setHostSettings: [], openSetupTerminal: []},
                 handoffRequests: {preview: [], handOff: [], copyStatus: [], bringBack: [], removeCopy: []},
+                sessionHandoffRequests: {preview: [], handOff: [], cancel: []},
             };
             (globalThis as WithStubs).__switchboardE2E = state;
 
@@ -686,6 +760,64 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 state.handoffRequests.removeCopy.push(String(path));
                 return state.handoff.removeResult;
             });
+
+            // Session hand-off (#276 stage 3). The real handlers wait on the session's
+            // turn and run ssh and git against the VM; these answer from
+            // `state.sessionHandoff`, read at each call. A hand-off holding in its
+            // `waiting` phase is kept here, by session, for Cancel to end.
+            const waiting = new Map<string, () => void>();
+            replace(channels.sessionHandoffPreview, (sessionId) => {
+                state.sessionHandoffRequests.preview.push(String(sessionId));
+                return state.sessionHandoff.preview;
+            });
+            ipcMain.removeHandler(channels.sessionHandoffRun);
+            ipcMain.handle(channels.sessionHandoffRun, async (event, sessionId, hostKey, ticked) => {
+                const id = String(sessionId);
+                state.sessionHandoffRequests.handOff.push({
+                    sessionId: id,
+                    hostKey: String(hostKey),
+                    ticked: Array.isArray(ticked) ? ticked.map(String) : [],
+                });
+                const stub = state.sessionHandoff;
+                const push = (phase: SessionHandoffPhase): void =>
+                    event.sender.send(events.sessionHandoffPhase, id, phase);
+                let last: SessionHandoffPhase = {kind: 'failed', error: 'The stub has no phases'};
+                for (const phase of stub.phases) {
+                    await new Promise((resolve) => setTimeout(resolve, stub.phaseDelayMs));
+                    push(phase);
+                    last = phase;
+                    if (phase.kind !== 'waiting') continue;
+                    const cancelled = await new Promise<boolean>((resolve) => {
+                        const timer = setTimeout(() => {
+                            waiting.delete(id);
+                            resolve(false);
+                        }, stub.waitingMs);
+                        waiting.set(id, () => {
+                            clearTimeout(timer);
+                            waiting.delete(id);
+                            resolve(true);
+                        });
+                    });
+                    if (cancelled) {
+                        last = {kind: 'cancelled'};
+                        push(last);
+                        return last;
+                    }
+                }
+                if (last.kind === 'done') {
+                    event.sender.send(events.sessionStarted, id, last.copyPath);
+                    event.sender.send(events.projectsChanged);
+                }
+                return last;
+            });
+            replace(channels.sessionHandoffCancel, (sessionId) => {
+                const id = String(sessionId);
+                state.sessionHandoffRequests.cancel.push(id);
+                const cancel = waiting.get(id);
+                if (!cancel) return false;
+                cancel();
+                return true;
+            });
         },
         {stubs, channels: INVOKE, send: SEND, events: EVENT},
     );
@@ -713,6 +845,18 @@ export async function handoffRequests(app: ElectronApplication): Promise<Handoff
             copyStatus: [...requests.copyStatus],
             bringBack: [...requests.bringBack],
             removeCopy: [...requests.removeCopy],
+        };
+    });
+}
+
+/** What the renderer asked the session hand-off stubs since the app launched. */
+export async function sessionHandoffRequests(app: ElectronApplication): Promise<SessionHandoffRequests> {
+    return await app.evaluate(() => {
+        const requests = (globalThis as WithStubs).__switchboardE2E.sessionHandoffRequests;
+        return {
+            preview: [...requests.preview],
+            handOff: requests.handOff.map((request) => ({...request, ticked: [...request.ticked]})),
+            cancel: [...requests.cancel],
         };
     });
 }
