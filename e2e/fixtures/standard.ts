@@ -66,6 +66,15 @@ export const P = {
 
 export const REMOTE = {user: 'joris', host: 'buildbox.local', dir: '~/apps/api'} as const;
 
+/** A host with a Switchboard agent on it (#276): a VM project. Only in `vmFixture`. */
+export const VM_REMOTE = {user: 'joris', host: 'devbox.local', dir: '~/apps/web'} as const;
+
+/** How the Projects modal and the project page name each remote project. */
+export const REMOTE_LABEL = {
+    ssh: `${REMOTE.user}@${REMOTE.host}/api`,
+    vm: `${VM_REMOTE.user}@${VM_REMOTE.host}/web`,
+} as const;
+
 export function standardFixture(): FixtureSpec {
     return {
         projects: [
@@ -151,6 +160,23 @@ export function standardFixture(): FixtureSpec {
                 ...REMOTE,
                 sessions: [{id: S.remoteApi, kind: 'claude', created: daysAgo(2), lastOpened: hoursAgo(3)}],
             },
+        ],
+    };
+}
+
+/**
+ * The standard fixture with a second remote, on a VM host, beside the
+ * agentless one. It has no sessions, so the sidebar is the standard one; it is
+ * kept out of `standardFixture` because it adds a row to the Projects modal,
+ * which other specs count and screenshot.
+ */
+export function vmFixture(): FixtureSpec {
+    const standard = standardFixture();
+    return {
+        ...standard,
+        remotes: [
+            ...(standard.remotes ?? []),
+            {...VM_REMOTE, agent: {version: '0.0.0-e2e', installedAt: new Date(daysAgo(1)).toISOString()}},
         ],
     };
 }

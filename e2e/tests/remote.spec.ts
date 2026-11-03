@@ -7,14 +7,62 @@
  * test/remote-status-render.test.ts, and what each status writes into the
  * scrollback in test/remote-connection-log.test.ts; these tests drive main's
  * real reconnect loop through the fake ssh.
+ *
+ * VM hosts (#276): a remote whose host has a Switchboard agent is badged VM,
+ * an agentless one's page offers Install agent, and a VM's page and settings
+ * show its setup checks and host settings. The agent channels answer from the
+ * `agent` stub, so nothing here dials a host. What the parts say is unit
+ * tested in test/agent-host-view.test.ts and the slice behind them in
+ * test/agent-host-slice.test.ts.
  */
 import {test, expect, forEachAppearance} from '../support/test';
-import {expectScreen, openRemoteSession, sessionRow, terminalStatus} from '../support/app';
-import {pushRemoteStatus, reconnectRequests, stubReconnectRemote} from '../support/main-process';
+import {dialog, expectScreen, openRemoteSession, sessionRow, terminalStatus} from '../support/app';
+import {
+    agentRequests,
+    pushRemoteStatus,
+    reconnectRequests,
+    setHostStub,
+    STUB_AGENT,
+    stubReconnectRemote,
+} from '../support/main-process';
 import {expectTerminalText, hasTerminal} from '../support/terminal';
-import {LABEL, REMOTE, S} from '../fixtures/standard';
+import {LABEL, REMOTE, REMOTE_LABEL, S, VM_REMOTE, vmFixture} from '../fixtures/standard';
+import type {Locator, Page} from '@playwright/test';
 
 const TARGET = `${REMOTE.user}@${REMOTE.host}:${REMOTE.dir}`;
+const SSH_PATH = `ssh://${REMOTE.user}@${REMOTE.host}/${REMOTE.dir}`;
+const VM_PATH = `ssh://${VM_REMOTE.user}@${VM_REMOTE.host}/${VM_REMOTE.dir}`;
+
+function projectsModal(page: Page): Locator {
+    return dialog(page, 'Projects');
+}
+
+/** A remote's name in the Projects modal, which its badge follows. */
+function nameIn(label: string): RegExp {
+    return new RegExp('^' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+}
+
+/** A remote's name in the Projects modal, with its badge inside it. */
+function pickerName(page: Page, label: string): Locator {
+    return projectsModal(page).getByText(nameIn(label));
+}
+
+async function openProjects(page: Page): Promise<void> {
+    await page.getByRole('button', {name: 'Projects', exact: true}).click();
+    await expect(projectsModal(page)).toBeVisible();
+}
+
+function projectPage(page: Page, label: string): Locator {
+    return page.getByRole('region', {name: 'Project ' + label});
+}
+
+/** A project's page, through the Projects modal: filtered to it, then →. */
+async function openProjectPage(page: Page, label: string): Promise<void> {
+    await openProjects(page);
+    await projectsModal(page).getByLabel('Filter projects').fill(label);
+    await page.keyboard.press('ArrowRight');
+    await expect(projectPage(page, label)).toBeVisible();
+}
 
 test.describe('connecting', () => {
     test("dials the host over ssh into tmux, connects on the far end's output, and is reopened by a reload", async ({
@@ -142,6 +190,174 @@ test.describe('buttons', () => {
 
         /* Then */
         await ssh.waitForLaunchCount(2);
+    });
+});
+
+test.describe('VM hosts', () => {
+    test.use({fixture: vmFixture()});
+
+    test('a host with an agent is badged VM in the Projects modal and on its page, and an agentless one keeps SSH', async ({
+        page,
+    }) => {
+        /* When */
+        await openProjects(page);
+
+        /* Then */
+        await expect(pickerName(page, REMOTE_LABEL.vm).getByText('VM', {exact: true})).toBeVisible();
+        await expect(pickerName(page, REMOTE_LABEL.vm).getByText('SSH', {exact: true})).toHaveCount(0);
+        await expect(pickerName(page, REMOTE_LABEL.ssh).getByText('SSH', {exact: true})).toBeVisible();
+        await expect(pickerName(page, REMOTE_LABEL.ssh).getByText('VM', {exact: true})).toHaveCount(0);
+
+        /* When */
+        await projectsModal(page).getByLabel('Filter projects').fill(REMOTE_LABEL.vm);
+        await page.keyboard.press('ArrowRight');
+
+        /* Then */
+        const vm = projectPage(page, REMOTE_LABEL.vm);
+        await expect(vm.getByRole('heading', {level: 1})).toHaveText(REMOTE_LABEL.vm);
+        await expect(vm.getByText('VM', {exact: true})).toHaveAttribute(
+            'title',
+            `Runs on a Switchboard agent on ${VM_REMOTE.user}@${VM_REMOTE.host}`,
+        );
+        await expect(vm.getByRole('region', {name: 'Setup'})).toBeVisible();
+        await expect(vm.getByRole('button', {name: 'Install agent'})).toHaveCount(0);
+
+        /* When */
+        await page.keyboard.press('Escape');
+        await openProjectPage(page, REMOTE_LABEL.ssh);
+
+        /* Then */
+        const ssh = projectPage(page, REMOTE_LABEL.ssh);
+        await expect(ssh.getByText('VM', {exact: true})).toHaveCount(0);
+        await expect(ssh.getByRole('button', {name: 'Install agent'})).toBeVisible();
+        await expect(ssh.getByRole('region', {name: 'Setup'})).toHaveCount(0);
+    });
+
+    test('Install agent streams its progress lines, then the page turns into a VM page', async ({page, app}) => {
+        /* Given */
+        await setHostStub(app, 'agent', {
+            ...STUB_AGENT,
+            installLines: ['Checking the host…', 'Copying the agent (0.0.0-e2e)…', 'Starting the service…'],
+            installLineDelayMs: 150,
+        });
+        await openProjectPage(page, REMOTE_LABEL.ssh);
+        const ssh = projectPage(page, REMOTE_LABEL.ssh);
+
+        /* When */
+        await ssh.getByRole('button', {name: 'Install agent'}).click();
+
+        /* Then */
+        await expect(ssh.getByRole('button', {name: 'Installing…'})).toBeDisabled();
+        await expect(ssh.getByRole('region', {name: 'Switchboard agent'})).toContainText('Checking the host…');
+        const setup = ssh.getByRole('region', {name: 'Setup'});
+        await expect(setup).toBeVisible();
+        for (const line of ['Checking the host…', 'Copying the agent (0.0.0-e2e)…', 'Starting the service…']) {
+            await expect(setup).toContainText(line);
+        }
+        await expect(setup.getByText('Ready', {exact: true})).toBeVisible();
+        await expect(ssh.getByRole('region', {name: 'Switchboard agent'})).toHaveCount(0);
+        await expect(ssh.getByText('VM', {exact: true})).toBeVisible();
+        expect((await agentRequests(app)).install).toEqual([SSH_PATH]);
+    });
+
+    test('a failed install shows why and offers Retry, which installs again', async ({page, app}) => {
+        /* Given */
+        await setHostStub(app, 'agent', {
+            ...STUB_AGENT,
+            installLines: ['Checking the host…'],
+            installResult: {ok: false, error: 'The host isn’t Linux (it runs Darwin)'},
+        });
+        await openProjectPage(page, REMOTE_LABEL.ssh);
+        const card = projectPage(page, REMOTE_LABEL.ssh).getByRole('region', {name: 'Switchboard agent'});
+
+        /* When */
+        await card.getByRole('button', {name: 'Install agent'}).click();
+
+        /* Then */
+        await expect(card.getByRole('alert')).toHaveText('The host isn’t Linux (it runs Darwin)');
+        await expect(card).toContainText('Checking the host…');
+        await expect(card.getByRole('button', {name: 'Retry'})).toBeEnabled();
+
+        /* When */
+        await setHostStub(app, 'agent', {...STUB_AGENT, installLines: ['Starting the service…']});
+        await card.getByRole('button', {name: 'Retry'}).click();
+
+        /* Then */
+        await expect(projectPage(page, REMOTE_LABEL.ssh).getByRole('region', {name: 'Setup'})).toBeVisible();
+        expect((await agentRequests(app)).install).toEqual([SSH_PATH, SSH_PATH]);
+    });
+
+    test('a VM’s page shows its tool checks, and its settings show the host settings and save a change', async ({
+        page,
+        app,
+    }) => {
+        /* Given */
+        await setHostStub(app, 'agent', {
+            ...STUB_AGENT,
+            tools: {
+                tools: [
+                    {tool: 'claude', installed: true, version: '2.1.0', loggedIn: true},
+                    {tool: 'gh', installed: true, version: '2.60.1', loggedIn: false},
+                ],
+                sudo: false,
+            },
+        });
+
+        /* When */
+        await openProjectPage(page, REMOTE_LABEL.vm);
+
+        /* Then */
+        const setup = projectPage(page, REMOTE_LABEL.vm).getByRole('region', {name: 'Setup'});
+        await expect(setup.getByText('Installed, 2.1.0 · signed in', {exact: true})).toBeVisible();
+        await expect(setup.getByText('Installed, 2.60.1 · not signed in', {exact: true})).toBeVisible();
+        await expect(setup.getByText('Not installed', {exact: true})).toBeVisible();
+        await expect(setup.getByText('Ready', {exact: true})).toHaveCount(0);
+
+        /* When */
+        await setup.getByRole('button', {name: 'Open setup terminal'}).click();
+
+        /* Then */
+        await expect(setup.getByRole('alert')).toHaveText('No setup terminal in the harness');
+        expect((await agentRequests(app)).openSetupTerminal).toEqual([VM_PATH]);
+
+        /* When */
+        await projectPage(page, REMOTE_LABEL.vm).getByRole('button', {name: 'Settings', exact: true}).click();
+
+        /* Then */
+        const thisVm = page
+            .getByRole('region', {name: 'Settings for ' + REMOTE_LABEL.vm})
+            .getByRole('region', {name: 'This VM'});
+        await expect(thisVm.getByLabel('Host instructions')).toHaveValue(STUB_AGENT.hostSettings!.instructions);
+        await expect(thisVm.getByRole('switch', {name: 'Copy my Claude config to this VM'})).toHaveAttribute(
+            'aria-checked',
+            'false',
+        );
+        await expect(thisVm.getByLabel('Base folder for copies')).toHaveValue('~/projects');
+
+        /* When */
+        await thisVm.getByLabel('Base folder for copies').fill('~/work');
+        await thisVm.getByLabel('Base folder for copies').press('Enter');
+
+        /* Then */
+        await expect
+            .poll(async () => (await agentRequests(app)).setHostSettings)
+            .toEqual([{projectPath: VM_PATH, change: {baseFolder: '~/work'}}]);
+        await expect(thisVm.getByLabel('Base folder for copies')).toHaveValue('~/work');
+
+        /* When */
+        await thisVm.getByRole('switch', {name: 'Copy my Claude config to this VM'}).click();
+
+        /* Then */
+        await expect(thisVm.getByRole('switch', {name: 'Copy my Claude config to this VM'})).toHaveAttribute(
+            'aria-checked',
+            'true',
+        );
+        await expect
+            .poll(async () => (await agentRequests(app)).setHostSettings)
+            .toEqual([
+                {projectPath: VM_PATH, change: {baseFolder: '~/work'}},
+                {projectPath: VM_PATH, change: {copyConfig: true}},
+            ]);
     });
 });
 

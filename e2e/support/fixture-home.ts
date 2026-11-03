@@ -92,6 +92,8 @@ export interface FixtureRemote {
     host: string;
     port?: number;
     dir?: string;
+    /** Set on a host with a Switchboard agent (#276): a VM project, not an SSH one. */
+    agent?: {version: string; installedAt: string};
     sessions?: readonly FixtureRemoteSession[];
 }
 
@@ -302,6 +304,7 @@ function seedDatabase(
         host: remote.host,
         port: remote.port ?? 22,
         dir: remote.dir ?? null,
+        ...(remote.agent ? {agent: remote.agent} : {}),
         sessions: (remote.sessions ?? []).map((session) => ({
             sessionId: session.id,
             kind: session.kind ?? 'claude',

@@ -31,6 +31,8 @@ import type {Weather, WeatherLocation} from '../../src/domain/weather/weather';
 import type {Plan, PlanSummary} from '../../src/domain/plan/model';
 import type {SessionPlans} from '../../src/application/services/plan-service';
 import type {ProjectOverview} from '../../src/domain/project/overview';
+import type {AgentHostStatus, AgentHostsResult} from '../../src/application/services/agent-hosts';
+import type {HostSettings, ToolCheck} from '../../src/domain/agent/protocol';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -104,7 +106,59 @@ export interface HostStubs {
      * asked without them (`plans: false`), and an answered GitHub part is dated the moment it is asked.
      */
     projectOverview: Record<string, ProjectOverview> | null;
+    /**
+     * The VM hosts' back end (#276), standing in for the agent and the ssh it
+     * is reached over: every `agent:*` channel answers from here, so no test
+     * can dial a host. Each request is recorded (see `agentRequests`).
+     */
+    agent: AgentStub;
 }
+
+/** What the `agent:*` channels answer, for every host alike. */
+export interface AgentStub {
+    /** What `agentStatus` answers. */
+    status: AgentHostStatus;
+    /** The progress lines Install agent pushes, one at a time, before it answers. */
+    installLines: string[];
+    /** How long each progress line takes to arrive, so the running install can be seen. */
+    installLineDelayMs: number;
+    /** What Install agent answers once its lines are out. */
+    installResult: AgentHostsResult;
+    /** What the setup checks answer; null is a VM that can't be reached. */
+    tools: {tools: ToolCheck[]; sudo: boolean} | null;
+    /**
+     * The host settings on the agent, kept in memory: a change is merged in and
+     * the result answered. Null is a VM that can't be reached, for both.
+     */
+    hostSettings: HostSettings | null;
+    /** What Open setup terminal answers. */
+    setupTerminal: {ok: true; sessionId: string} | {ok: false; error: string};
+}
+
+/** What the renderer asked the `agent:*` stubs, by project path, in order. */
+export interface AgentRequests {
+    install: string[];
+    setHostSettings: {projectPath: string; change: Partial<HostSettings>}[];
+    openSetupTerminal: string[];
+}
+
+/** A VM where the agent is installed and answers, with every tool ready. */
+export const STUB_AGENT: AgentStub = {
+    status: {installed: '0.0.0-e2e', current: true, connected: true},
+    installLines: [],
+    installLineDelayMs: 0,
+    installResult: {ok: true},
+    tools: {
+        tools: [
+            {tool: 'claude', installed: true, version: '2.1.0', loggedIn: true},
+            {tool: 'gh', installed: true, version: '2.60.1', loggedIn: true},
+            {tool: 'git', installed: true, version: '2.43.0'},
+        ],
+        sudo: true,
+    },
+    hostSettings: {instructions: 'You are on a self-contained Linux VM.', copyConfig: false, baseFolder: '~/projects'},
+    setupTerminal: {ok: false, error: 'No setup terminal in the harness'},
+};
 
 /** What the plan channels answer: a session's plans, one plan by its issue, and the sessions that own issues. */
 export interface PlansStub {
@@ -187,6 +241,8 @@ interface StubState extends HostStubs {
     sessionWorkCancels: string[];
     /** Every write to your review the page asked main for, in order. */
     sessionWorkReviews: ReviewWrite[];
+    /** What the renderer asked the agent stubs. */
+    agentRequests: AgentRequests;
 }
 
 /** A comment added to the pending review, or the review finished. */
@@ -215,12 +271,13 @@ export const DEFAULT_STUBS: HostStubs = {
     sessionWork: null,
     plans: null,
     projectOverview: null,
+    agent: STUB_AGENT,
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
 export async function installHostStubs(app: ElectronApplication, stubs: HostStubs): Promise<void> {
     await app.evaluate(
-        ({ipcMain}, {stubs, channels, send}) => {
+        ({ipcMain}, {stubs, channels, send, events}) => {
             const state: StubState = {
                 ...stubs,
                 opened: [],
@@ -231,6 +288,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 sessionWorkActions: [],
                 sessionWorkCancels: [],
                 sessionWorkReviews: [],
+                agentRequests: {install: [], setHostSettings: [], openSetupTerminal: []},
             };
             (globalThis as WithStubs).__switchboardE2E = state;
 
@@ -468,9 +526,53 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 state.opened.push('repository:' + String(projectPath));
                 return true;
             });
+
+            // VM hosts (#276). The real handlers dial the agent over ssh; these answer
+            // from `state.agent`, read at each call so `setHostStub(app, 'agent', …)` applies.
+            replace(channels.agentStatus, () => state.agent.status);
+            ipcMain.removeHandler(channels.agentInstall);
+            ipcMain.handle(channels.agentInstall, async (event, projectPath) => {
+                const path = String(projectPath);
+                state.agentRequests.install.push(path);
+                for (const line of state.agent.installLines) {
+                    await new Promise((resolve) => setTimeout(resolve, state.agent.installLineDelayMs));
+                    event.sender.send(events.agentInstallProgress, path, line);
+                }
+                return state.agent.installResult;
+            });
+            replace(channels.agentCheckTools, () => state.agent.tools);
+            replace(channels.agentHostSettings, () => state.agent.hostSettings);
+            replace(channels.agentSetHostSettings, (projectPath, change) => {
+                state.agentRequests.setHostSettings.push({
+                    projectPath: String(projectPath),
+                    change: change as Partial<HostSettings>,
+                });
+                if (!state.agent.hostSettings) return null;
+                state.agent = {
+                    ...state.agent,
+                    hostSettings: {...state.agent.hostSettings, ...(change as Partial<HostSettings>)},
+                };
+                return state.agent.hostSettings;
+            });
+            replace(channels.agentOpenSetupTerminal, (projectPath) => {
+                state.agentRequests.openSetupTerminal.push(String(projectPath));
+                return state.agent.setupTerminal;
+            });
         },
-        {stubs, channels: INVOKE, send: SEND},
+        {stubs, channels: INVOKE, send: SEND, events: EVENT},
     );
+}
+
+/** What the renderer asked the VM hosts' stubs since the app launched. */
+export async function agentRequests(app: ElectronApplication): Promise<AgentRequests> {
+    return await app.evaluate(() => {
+        const requests = (globalThis as WithStubs).__switchboardE2E.agentRequests;
+        return {
+            install: [...requests.install],
+            setHostSettings: [...requests.setHostSettings],
+            openSetupTerminal: [...requests.openSetupTerminal],
+        };
+    });
 }
 
 /** The sessions whose Session work page the renderer told main it closed, in order. */
