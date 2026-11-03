@@ -100,6 +100,7 @@ test('a matching hello is welcomed with the host settings and every part hears o
         'config.connected',
         'copies.connected',
         'transcripts.connected',
+        'tools.connected',
     ]);
     assert.equal(pair.agent.closed, false);
 });
