@@ -1,6 +1,9 @@
 /**
- * The project page on a remote project (#276): what the page shows on a VM
- * project (stage 4: what a local one does; stage 5: Tasks too) and an agentless one, the Install agent card's states, and the Setup section's checks.
+ * The project page on a remote project (#276, #307): what the page shows on
+ * a VM project (stage 4: what a local one does; stage 5: Tasks too) and an
+ * agentless one, and how it points to its VM in Settings, or offers to
+ * register the host as one. The VM's controls are tested in
+ * `vm-controls.test.ts`.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,16 +16,11 @@ import {
     showsTasks,
     showsWorktrees,
 } from '../src/renderer/ui/project-page/page-state';
-import {
-    installView,
-    offersUpdate,
-    setupDone,
-    toolLine,
-    toolLines,
-} from '../src/renderer/ui/project-page/agent-host-view';
-import {initialAgentHostState, NO_HOST} from '../src/renderer/state/agent-host-slice';
+import {hostLinkOf} from '../src/renderer/ui/vms/vm-hosts';
+import {initialAgentHostState} from '../src/renderer/state/agent-host-slice';
 import {groupOverview} from '../src/domain/plan/project-overview';
 import type {ProjectIssue, ProjectOverview, ProjectPullRequest} from '../src/domain/project/overview';
+import type {VmHostView} from '../src/application/services/vm-registry';
 
 const VM = 'ssh://me@vm/app';
 const SSH = 'ssh://me@box/app';
@@ -159,101 +157,65 @@ test('a worktree of a VM project counts as on the VM', () => {
     assert.deepEqual(verdicts, [true, true, false]);
 });
 
-// ── Install agent ──
+// ── Its VM ──
 
-test('before an install the button says Install agent', () => {
+/** A registered VM, as main lists it. */
+function vmHost(fields: Partial<VmHostView> = {}): VmHostView {
+    return {
+        key: 'me@vm:22',
+        user: 'me',
+        host: 'vm',
+        port: 22,
+        label: 'Dev VM',
+        agent: '2.11.9',
+        current: true,
+        connected: true,
+        projects: [VM],
+        ...fields,
+    };
+}
+
+test('a VM project links to its VM in Settings by the VM’s name, with no Register', () => {
     /* When */
-    const view = installView({phase: 'idle'});
+    const link = hostLinkOf(VM, true, [vmHost()]);
 
     /* Then */
-    assert.deepEqual(view, {label: 'Install agent', disabled: false, lines: [], error: null});
+    assert.deepEqual(link, {kind: 'vm', key: 'me@vm:22', label: 'Dev VM'});
 });
 
-test('while it installs the button waits and the lines show', () => {
+test('a VM project the list hasn’t named yet links to its VM by its address', () => {
     /* When */
-    const view = installView({phase: 'running', lines: ['Checking systemd']});
+    const unread = hostLinkOf(VM, true, null);
+    const onPort = hostLinkOf('ssh://me@vm:2222/app', true, []);
 
     /* Then */
-    assert.deepEqual(view, {label: 'Installing…', disabled: true, lines: ['Checking systemd'], error: null});
+    assert.deepEqual(unread, {kind: 'vm', key: 'me@vm:22', label: 'me@vm'});
+    assert.deepEqual(onPort, {kind: 'vm', key: 'me@vm:2222', label: 'me@vm:2222'});
 });
 
-test('a failed install shows why, and the button says Retry', () => {
+test('an agentless remote on a host that isn’t registered offers Register, with its user, host and port', () => {
     /* When */
-    const view = installView({phase: 'failed', lines: ['Checking systemd'], error: 'No systemd.'});
+    const link = hostLinkOf('ssh://me@box:2222/app', false, [vmHost()]);
 
     /* Then */
-    assert.deepEqual(view, {label: 'Retry', disabled: false, lines: ['Checking systemd'], error: 'No systemd.'});
+    assert.deepEqual(link, {kind: 'register', user: 'me', host: 'box', port: 2222});
 });
 
-test('an update in progress says Updating…', () => {
-    /* When */
-    const view = installView({phase: 'running', lines: []}, 'Update agent');
-
-    /* Then */
-    assert.equal(view.label, 'Updating…');
-});
-
-test('Update agent is offered only while the agent is not the app’s version', () => {
-    /* When */
-    const old = offersUpdate({...NO_HOST, status: {installed: '2.11.0', current: false, connected: true}});
-    const current = offersUpdate({...NO_HOST, status: {installed: '2.12.0', current: true, connected: true}});
-    const unknown = offersUpdate(NO_HOST);
-
-    /* Then */
-    assert.deepEqual([old, current, unknown], [true, false, false]);
-});
-
-// ── Setup checks ──
-
-test('a signed-in tool is ready, with its version', () => {
-    /* When */
-    const line = toolLine({tool: 'gh', installed: true, version: '2.60.1', loggedIn: true});
-
-    /* Then */
-    assert.deepEqual(line, {tool: 'gh', state: 'ready', text: 'Installed, 2.60.1 · signed in'});
-});
-
-test('an installed tool that is signed out says so', () => {
-    /* When */
-    const line = toolLine({tool: 'claude', installed: true, version: '2.1.220', loggedIn: false});
-
-    /* Then */
-    assert.deepEqual(line, {tool: 'claude', state: 'signed-out', text: 'Installed, 2.1.220 · not signed in'});
-});
-
-test('git has no login, so it is ready once installed', () => {
-    /* When */
-    const line = toolLine({tool: 'git', installed: true, version: '2.43.0'});
-
-    /* Then */
-    assert.deepEqual(line, {tool: 'git', state: 'ready', text: 'Installed, 2.43.0'});
-});
-
-test('the checks list every tool in setup’s order, a missing answer as not installed', () => {
-    /* When */
-    const lines = toolLines([{tool: 'git', installed: true}]);
-
-    /* Then */
-    assert.deepEqual(lines, [
-        {tool: 'claude', state: 'missing', text: 'Not installed'},
-        {tool: 'gh', state: 'missing', text: 'Not installed'},
-        {tool: 'git', state: 'ready', text: 'Installed'},
-    ]);
-});
-
-test('setup is done only when every tool is ready', () => {
+test('an agentless remote on a registered host links to that VM instead of offering Register', () => {
     /* Given */
-    const ready = [
-        {tool: 'claude' as const, installed: true, loggedIn: true},
-        {tool: 'gh' as const, installed: true, loggedIn: true},
-        {tool: 'git' as const, installed: true},
-    ];
+    const noAgentYet = vmHost({key: 'me@box:22', host: 'box', label: 'me@box', agent: null, current: false});
 
     /* When */
-    const done = setupDone(ready);
-    const signedOut = setupDone([...ready.slice(0, 1), {tool: 'gh', installed: true, loggedIn: false}, ready[2]]);
+    const link = hostLinkOf(SSH, false, [noAgentYet]);
 
     /* Then */
-    assert.equal(done, true);
-    assert.equal(signedOut, false);
+    assert.deepEqual(link, {kind: 'vm', key: 'me@box:22', label: 'me@box'});
+});
+
+test('a local project has no host to link to', () => {
+    /* When */
+    const link = hostLinkOf('/repo', false, [vmHost()]);
+
+    /* Then */
+    assert.equal(link, null);
 });

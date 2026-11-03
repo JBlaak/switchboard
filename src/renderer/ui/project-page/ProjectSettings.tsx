@@ -11,12 +11,12 @@
  * field when it loses focus, on Enter, or when the view closes with an edit
  * in it. Esc closes the page, back to the session it covered.
  *
- * A VM project (#276) has a This VM group too: the host's instructions, the
- * config copy switch and the base folder for copies. They are the host's, kept
- * on its agent, and saved there the same way; a host that can't be reached
- * says so in place of the form.
+ * A VM project (#276) has a This VM group too, which points to the VM in
+ * Settings → VMs (#307): the host's instructions, the config copy switch and
+ * the base folder are the VM's, shared by every project on it, so they are
+ * set there.
  */
-import {useEffect, useLayoutEffect, useRef, useState} from 'react';
+import {useLayoutEffect, useRef} from 'react';
 import type {JSX, KeyboardEvent, ReactNode} from 'react';
 import {useStore} from '../use-store';
 import {projectLabel} from '../../features/sessions/project-label';
@@ -28,8 +28,10 @@ import {
 } from '../../../domain/settings/project-overrides';
 import {backToProject, closeProject, isRemoteProject} from './actions';
 import {changeProjectSetting, hideProjectFromPage, resetProjectSettings} from './settings-actions';
-import {loadHostSettings, saveHostSettings} from './agent-actions';
-import {hostViewIn, isVmProjectIn} from '../../state/agent-host-slice';
+import {isVmProjectIn} from '../../state/agent-host-slice';
+import {CommitText} from '../settings/CommitInputs';
+import {hostLinkOf} from '../vms/vm-hosts';
+import {openVmSettings} from '../vms/open-settings';
 import type {ProjectFieldState, ProjectSettingField} from '../../../domain/settings/project-overrides';
 
 export function ProjectSettings({projectPath}: {projectPath: string}): JSX.Element {
@@ -275,91 +277,29 @@ function SettingsFields({projectPath, fields, canReset}: FieldsProps): JSX.Eleme
     );
 }
 
-/** The host's own settings, on its agent: what every launch there is told, the config copy and where copies go. */
-function ThisVmSection({projectPath}: {projectPath: string}): JSX.Element {
-    const settings = useStore((state) => hostViewIn(state.agentHost, projectPath).settings);
-
-    useEffect(() => {
-        void loadHostSettings(projectPath);
-    }, [projectPath]);
-
+/** This VM: its settings are the VM's, in Settings → VMs. */
+function ThisVmSection({projectPath}: {projectPath: string}): JSX.Element | null {
+    const link = useStore((state) => hostLinkOf(projectPath, true, state.vms.hosts));
+    if (link?.kind !== 'vm') return null;
     return (
         <section className="ps-section" aria-labelledby="ps-vm">
             <h2 className="ps-section-title" id="ps-vm">
                 This VM
             </h2>
-            {(!settings || settings.phase === 'loading') && (
-                <div className="ps-group">
-                    <div className="ps-field ps-vm-note">Reading the VM’s settings…</div>
+            <div className="ps-group">
+                <div className="ps-field">
+                    <div className="ps-field-text">
+                        <span className="ps-label">On {link.label}</span>
+                        <div className="ps-help">
+                            Its host instructions, config copy and base folder are the VM’s, shared by every project on
+                            it. They are in Settings.
+                        </div>
+                    </div>
+                    <button type="button" className="sw-btn" onClick={() => void openVmSettings(link.key)}>
+                        Manage in Settings
+                    </button>
                 </div>
-            )}
-            {settings?.phase === 'unreachable' && (
-                <div className="ps-group">
-                    <div className="ps-field ps-vm-note" role="status">
-                        <div className="ps-field-text">
-                            <span className="ps-label">Couldn’t reach the VM</span>
-                            <div className="ps-help">
-                                Its settings are kept on the VM, so they show once it answers.
-                            </div>
-                        </div>
-                        <button type="button" className="sw-btn" onClick={() => void loadHostSettings(projectPath)}>
-                            Try again
-                        </button>
-                    </div>
-                </div>
-            )}
-            {settings?.phase === 'ok' && (
-                <div className="ps-group">
-                    <div className="ps-field ps-field-stacked">
-                        <div className="ps-field-text">
-                            <label className="ps-label" htmlFor="ps-vm-instructions">
-                                Host instructions
-                            </label>
-                            <div className="ps-help">
-                                Every Claude session on this VM is told this, after the project’s own instructions.
-                            </div>
-                        </div>
-                        <TextAreaSetting
-                            id="ps-vm-instructions"
-                            value={settings.settings.instructions}
-                            onCommit={(instructions) => void saveHostSettings(projectPath, {instructions})}
-                        />
-                    </div>
-                    <div className="ps-field">
-                        <div className="ps-field-text">
-                            <span className="ps-label">Copy my Claude config to this VM</span>
-                            <div className="ps-help">
-                                Your CLAUDE.md, skills, commands, agents and plugins, on every connect. Never your
-                                credentials.
-                            </div>
-                        </div>
-                        <Switch
-                            label="Copy my Claude config to this VM"
-                            on={settings.settings.copyConfig}
-                            onChange={(copyConfig) => void saveHostSettings(projectPath, {copyConfig})}
-                        />
-                    </div>
-                    <div className="ps-field">
-                        <div className="ps-field-text">
-                            <label className="ps-label" htmlFor="ps-vm-base-folder">
-                                Base folder for copies
-                            </label>
-                            <div className="ps-help">Where projects handed off to this VM are put.</div>
-                        </div>
-                        <TextSetting
-                            id="ps-vm-base-folder"
-                            value={settings.settings.baseFolder}
-                            placeholder="~/projects"
-                            onCommit={(baseFolder) => void saveHostSettings(projectPath, {baseFolder})}
-                        />
-                    </div>
-                    {settings.saveError && (
-                        <div className="ps-field ps-vm-error" role="alert">
-                            {settings.saveError}
-                        </div>
-                    )}
-                </div>
-            )}
+            </div>
         </section>
     );
 }
@@ -421,86 +361,7 @@ interface TextSettingProps {
     onCommit(value: string): void;
 }
 
-/**
- * A text setting, stored when it loses focus, on Enter, or when the view
- * closes with an edit in it — not on every key, so a half-typed command is
- * never what a session launches with.
- */
-function TextSetting({id, value, placeholder, onCommit}: TextSettingProps): JSX.Element {
-    const [draft, setDraft] = useState(value);
-    const latest = useRef({draft, value, onCommit});
-    latest.current = {draft, value, onCommit};
-
-    // A reset, or the read landing, puts the stored value back in the box.
-    useEffect(() => setDraft(value), [value]);
-
-    useEffect(
-        () => () => {
-            const {draft: pending, value: stored, onCommit: commit} = latest.current;
-            if (pending.trim() !== stored.trim()) commit(pending);
-        },
-        [],
-    );
-
-    const commit = (): void => {
-        if (draft.trim() !== value.trim()) onCommit(draft);
-    };
-
-    return (
-        <input
-            id={id}
-            type="text"
-            className="ps-input"
-            value={draft}
-            placeholder={placeholder}
-            spellCheck={false}
-            onChange={(e) => setDraft(e.currentTarget.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') commit();
-            }}
-        />
-    );
-}
-
-/**
- * A long text setting, stored when it loses focus or when the view closes
- * with an edit in it. Enter is a new line here, not a save.
- */
-function TextAreaSetting({
-    id,
-    value,
-    onCommit,
-}: {
-    id: string;
-    value: string;
-    onCommit(value: string): void;
-}): JSX.Element {
-    const [draft, setDraft] = useState(value);
-    const latest = useRef({draft, value, onCommit});
-    latest.current = {draft, value, onCommit};
-
-    useEffect(() => setDraft(value), [value]);
-
-    useEffect(
-        () => () => {
-            const {draft: pending, value: stored, onCommit: commit} = latest.current;
-            if (pending !== stored) commit(pending);
-        },
-        [],
-    );
-
-    return (
-        <textarea
-            id={id}
-            className="ps-input ps-textarea"
-            value={draft}
-            rows={6}
-            spellCheck={false}
-            onChange={(e) => setDraft(e.currentTarget.value)}
-            onBlur={() => {
-                if (draft !== value) onCommit(draft);
-            }}
-        />
-    );
+/** A text setting, stored as it is left (`CommitText`). */
+function TextSetting(props: TextSettingProps): JSX.Element {
+    return <CommitText className="ps-input" {...props} />;
 }

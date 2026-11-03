@@ -1,0 +1,226 @@
+/* ========== VMS (#307) ==========
+   Settings → VMs: the registered VMs, each opening to its controls, and Add a
+   VM; and a VM project's "On <VM> · Manage in Settings" in its page's header.
+   Drawn from the settings viewer's and Phone access's own pieces (`pa-btn`,
+   `pa-error`, `pa-connected`) and the project page's tool rows and install
+   log; only what they lack is here, and every colour is a token. */
+
+/* --- The list: one row each, hairline-separated, like the paired phones --- */
+.vm-list-field {
+    align-items: flex-start;
+}
+
+.vm-empty {
+    margin-top: 6px;
+}
+
+.vm-list {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+}
+
+.vm-row + .vm-row {
+    border-top: 1px solid var(--sb-line);
+}
+
+.vm-row-head {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.vm-row-head:hover .vm-row-name {
+    color: var(--sb-accent);
+}
+
+.vm-row-icon {
+    display: inline-flex;
+    color: var(--sb-text-dim);
+}
+
+.vm-row-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.vm-row-name {
+    font: 700 14px var(--sb-font-head);
+    color: var(--sb-text-strong);
+    transition: color 0.15s;
+}
+
+.vm-row-line {
+    font-family: var(--sb-font-body);
+    font-size: 12.5px;
+    color: var(--sb-text-muted);
+}
+
+.vm-row-address {
+    font-family: var(--sb-font-mono);
+    font-size: 12px;
+}
+
+.vm-agent.is-update {
+    color: var(--sb-warning-text);
+}
+.vm-agent.is-none {
+    color: var(--sb-text-faint);
+}
+.vm-agent.is-busy {
+    color: var(--sb-accent);
+}
+
+.vm-offline {
+    color: var(--sb-text-faint);
+}
+
+.vm-row-chevron {
+    width: 16px;
+    color: var(--sb-text-faint);
+    text-align: center;
+}
+
+/* --- A VM's controls, under its row, set in from the icon --- */
+.vm-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 0 0 12px 34px;
+    padding: 4px 16px 8px;
+    border-radius: var(--sb-r-row);
+    background: rgba(var(--sb-overlay-rgb), 0.04);
+}
+
+.vm-controls .pa-error {
+    margin: 4px 0 8px;
+}
+
+.vm-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 8px;
+}
+
+.vm-setup {
+    align-items: flex-start;
+}
+
+.vm-ready {
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 9px;
+    background: var(--sb-mint);
+    color: var(--sb-accent);
+    font: 700 11px var(--sb-font-head);
+}
+
+.vm-tools {
+    margin: 6px 0 8px;
+}
+
+.vm-actions,
+.vm-add-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.vm-textarea {
+    height: auto;
+    margin-top: 8px;
+    line-height: 18px;
+    resize: vertical;
+}
+
+.vm-input {
+    width: 220px;
+}
+
+/* The one filled button: Install agent, and Add VM. */
+.pa-btn.vm-btn-primary {
+    box-shadow: none;
+    background: var(--sb-action);
+    color: var(--sb-action-text);
+}
+
+.pa-btn.vm-btn-primary:hover {
+    background: var(--sb-action);
+    color: var(--sb-action-text);
+    opacity: 0.88;
+}
+
+/* --- Add a VM: user @ host, port and name in one row --- */
+.settings-field.vm-add {
+    align-items: flex-start;
+}
+
+.vm-add-fields {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 12px;
+}
+
+.vm-add-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 120px;
+    font: 600 11.5px var(--sb-font-body);
+    color: var(--sb-text-muted);
+
+    &.is-host {
+        width: 180px;
+    }
+
+    &.is-port {
+        width: 72px;
+    }
+
+    &.is-name {
+        width: 160px;
+    }
+}
+
+.vm-add-at {
+    padding-bottom: 9px;
+    font: 13px var(--sb-font-mono);
+    color: var(--sb-text-faint);
+}
+
+/* --- A VM project's header: On <VM> · Manage in Settings --- */
+.pp-vm-link {
+    align-self: center;
+    padding: 0;
+    border: none;
+    background: transparent;
+    font: 11.5px var(--sb-font-body);
+    color: var(--sb-text-faint);
+    cursor: pointer;
+}
+
+.pp-vm-link-name {
+    color: var(--sb-text-dim);
+    font-weight: 700;
+}
+
+.pp-vm-link-manage {
+    color: var(--sb-accent);
+}
+
+.pp-vm-link:hover .pp-vm-link-manage {
+    text-decoration: underline;
+}
