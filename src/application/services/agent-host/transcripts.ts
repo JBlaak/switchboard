@@ -460,7 +460,7 @@ export class Transcripts implements TranscriptsPart {
             // transcript's `cwd` lines say `~/…`; here they become absolute, as
             // every transcript Claude writes itself has them.
             const text = this.deps.files.readText(taken.file);
-            if (text !== null && text.includes('"cwd":"~')) {
+            if (text !== null && text.includes('~')) {
                 this.deps.files.writeText(taken.file, rewriteTranscriptCwd(text, '~', this.deps.home));
             }
             this.deps.files.moveNoClobber(taken.file, target, 0o600);

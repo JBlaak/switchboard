@@ -215,7 +215,9 @@ export class AgentInstallerService {
         });
 
         await this.step(progress, check.agentVersion ? 'Restarting the agent' : 'Starting the agent', () =>
-            this.run(host, startServiceScript({restart: !!check.agentVersion}), 'Starting the agent'),
+            // Always a restart after a full install: an agent still running from a
+            // broken or half-removed install would otherwise go on serving.
+            this.run(host, startServiceScript({restart: true}), 'Starting the agent'),
         );
         return manualLinger ? {lingerCommand: manualLinger} : {};
     }

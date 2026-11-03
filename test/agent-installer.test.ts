@@ -169,7 +169,9 @@ test('a fresh host gets the full install sequence', async () => {
         'setup',
         'host-settings',
         'linger',
-        'start',
+        // A restart even on a fresh host: an agent left running by a broken
+        // install would otherwise go on serving the old code.
+        'restart',
     ]);
     assert.deepEqual(bundles.built, ['2.12.0/x64']);
     assert.deepEqual(provisioner.uploads, [
@@ -302,7 +304,7 @@ test('lingering that needs sudo reports the command and still installs', async (
 
     /* Then */
     assert.deepEqual(result, {ok: true, lingerCommand: 'sudo loginctl enable-linger joris'});
-    assert.equal(provisioner.steps[provisioner.steps.length - 1], 'start');
+    assert.equal(provisioner.steps[provisioner.steps.length - 1], 'restart');
     assert.ok(progress.some((line) => line.includes('sudo loginctl enable-linger joris')));
 });
 

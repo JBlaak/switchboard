@@ -435,6 +435,25 @@ test("an import turns a handed-off transcript's ~ cwd into this machine's home, 
     assert.equal(written, body.toString('utf8').replace('"cwd":"~/projects/site"', `"cwd":"${dir}"`));
 });
 
+test('an import makes a ~ cwd absolute however the JSON is spaced', async () => {
+    /* Given */
+    const h = harness();
+    const line = JSON.stringify(JSON.parse(user('hi', '2026-11-01T10:00:00.000Z', '~/projects/site')), null, 1).replace(
+        /\n/g,
+        ' ',
+    );
+    const uploadId = await upload(h, Buffer.from(line + '\n'));
+    const dir = path.join(h.home, 'projects', 'site');
+    fs.mkdirSync(dir, {recursive: true});
+
+    /* When */
+    h.send({type: 'import-transcript', requestId: 'r1', sessionId: SESSION, dir: '~/projects/site', uploadId});
+
+    /* Then */
+    const target = path.join(h.projects, encodeProjectPath(dir), `${SESSION}.jsonl`);
+    assert.equal((JSON.parse(fs.readFileSync(target, 'utf8')) as {cwd: string}).cwd, dir);
+});
+
 test('an import is refused when the id is already on the host', async () => {
     /* Given */
     const h = harness();
