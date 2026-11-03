@@ -15,6 +15,10 @@
  * with uncommitted changes of its own is refused too, naming the files: a
  * re-hand-off must never discard work done on the VM.
  *
+ * A copy left dirty by the previous hand-off alone (its patch) is not work of
+ * the VM's: the marker records what that hand-off left, and the next one
+ * discards exactly that and nothing else.
+ *
  * Everything a copy does runs through two small ports below (commands and
  * files) with Node adapters in `src/infrastructure/agent/`, and operations on
  * one copy's folder run one at a time, so a status read or a removal can never
@@ -73,6 +77,10 @@ export interface CopiesFiles {
     /** `rm -rf`; a missing path is fine; may throw. */
     removeTree(path: string): void;
     exists(path: string): boolean;
+    /** The file's text, or null when it cannot be read. */
+    readText(path: string): string | null;
+    /** Copy a file over another; may throw. */
+    copyFile(from: string, to: string): void;
     /** The path with every symlink resolved, or null when it does not exist. */
     realpath(path: string): string | null;
 }
@@ -246,13 +254,7 @@ export class Copies implements CopiesPart {
                     `${dir} already exists and is not a copy Switchboard made; move it away or change the base folder`,
                 );
             }
-            const dirty = parsePorcelainZ(await this.must(step, abs, ['status', '--porcelain=v1', '-z']));
-            if (dirty.length) {
-                throw new StepFailed(
-                    step,
-                    `the copy has uncommitted changes of its own: ${listed(dirty)}. Commit, push or discard them on the VM first`,
-                );
-            }
+            await this.clearOwnChanges(step, abs);
             const fetchStep = 'Fetching origin';
             progress(fetchStep);
             await this.must(fetchStep, abs, ['fetch', '--prune', 'origin'], NETWORK_TIMEOUT_MS);
@@ -324,8 +326,113 @@ export class Copies implements CopiesPart {
             }
         }
 
-        if (reused) this.writeMarker('Marking the copy', abs, repo.origin);
+        const recordStep = 'Recording the copy';
+        const state = await this.copyState(
+            recordStep,
+            abs,
+            message.files.map((file) => file.path),
+        );
+        this.writeMarker(recordStep, abs, repo.origin, state);
         return reused;
+    }
+
+    /**
+     * Make a reused copy clean, or refuse. A copy left dirty by the previous
+     * hand-off itself (its patch, its ticked files) is the usual case, and its
+     * changes are the Mac's, which this hand-off brings again: when HEAD, the
+     * working tree and the ticked files are exactly as that hand-off recorded
+     * them, nobody worked in the copy since, and they are discarded. Anything
+     * else is work done on the VM, which is never discarded: refused, naming
+     * what changed.
+     */
+    private async clearOwnChanges(step: string, abs: string): Promise<void> {
+        const recorded = parseMarkerState(this.deps.files.readText(markerPath(abs)));
+        const refuse = (changed: string[]) =>
+            new StepFailed(
+                step,
+                `the copy has uncommitted changes of its own: ${listed(changed)}. ` +
+                    'Commit, push or discard them on the VM first',
+            );
+
+        if (recorded && recorded.files.length) {
+            const now = await this.blobHashes(
+                abs,
+                recorded.files.map((file) => file.path),
+            );
+            const changed = recorded.files.filter((file) => now.get(file.path) !== file.blob).map((file) => file.path);
+            if (changed.length) throw refuse(changed);
+        }
+
+        const dirty = parsePorcelainZ(await this.must(step, abs, ['status', '--porcelain=v1', '-z']));
+        if (!dirty.length) return;
+        if (!recorded) throw refuse(dirty);
+        const head = (await this.must(step, abs, ['rev-parse', 'HEAD'])).trim();
+        const tree = await this.workingTree(step, abs);
+        if (head !== recorded.head) throw refuse(dirty);
+        if (tree !== recorded.tree) {
+            // Name only what changed since the hand-off, not what it brought.
+            const diff = await this.git(abs, ['diff', '--name-only', '-z', recorded.tree, tree]);
+            const changed = diff.exitCode === 0 ? diff.stdout.split('\0').filter(Boolean) : [];
+            throw refuse(changed.length ? changed : dirty);
+        }
+        // Untracked files the patch made go with `clean -fd`; never `-x`,
+        // which would take the ignored ticked files and the VM's own build
+        // output and dependencies with it.
+        await this.must(step, abs, ['reset', '--hard', '--quiet']);
+        await this.must(step, abs, ['clean', '-fd', '--quiet']);
+    }
+
+    /** HEAD, the working tree and the ticked files' blobs, as the marker records them. */
+    private async copyState(step: string, abs: string, files: string[]): Promise<CopyRecord> {
+        const head = (await this.must(step, abs, ['rev-parse', 'HEAD'])).trim();
+        const tree = await this.workingTree(step, abs);
+        const blobs = await this.blobHashes(abs, files);
+        return {
+            head,
+            tree,
+            files: files.flatMap((path) => (blobs.has(path) ? [{path, blob: blobs.get(path) as string}] : [])),
+        };
+    }
+
+    /**
+     * The tree the working tree would commit as, untracked files included and
+     * ignored ones not, without touching the real index: a copy of it (so
+     * unchanged files are not hashed again) in a temp index, `add -A`, then
+     * `write-tree`.
+     */
+    private async workingTree(step: string, abs: string): Promise<string> {
+        const gitDir = `${abs.replace(/\/+$/, '')}/.git`;
+        const index = `${gitDir}/switchboard-${this.deps.ids.newId()}.index`;
+        try {
+            if (this.deps.files.exists(`${gitDir}/index`)) this.deps.files.copyFile(`${gitDir}/index`, index);
+            const env = {GIT_INDEX_FILE: index};
+            await this.must(step, abs, ['add', '-A'], LOCAL_TIMEOUT_MS, env);
+            return (await this.must(step, abs, ['write-tree'], LOCAL_TIMEOUT_MS, env)).trim();
+        } catch (err) {
+            if (err instanceof StepFailed) throw err;
+            throw new StepFailed(step, `could not read the working tree: ${errorText(err)}`);
+        } finally {
+            try {
+                this.deps.files.removeTree(index);
+            } catch {
+                // A stray temp index in .git harms nothing.
+            }
+        }
+    }
+
+    /** The git blob hash of each of `paths` that exists in the copy. */
+    private async blobHashes(abs: string, paths: string[]): Promise<Map<string, string>> {
+        const root = abs.replace(/\/+$/, '');
+        const present = paths.filter((path) => isSafeRepoPath(path) && this.deps.files.exists(`${root}/${path}`));
+        const hashes = new Map<string, string>();
+        if (!present.length) return hashes;
+        const result = await this.git(abs, ['hash-object', '--', ...present]);
+        if (result.exitCode !== 0) return hashes;
+        const lines = result.stdout.split('\n').filter(Boolean);
+        present.forEach((path, i) => {
+            if (lines[i]) hashes.set(path, lines[i].trim());
+        });
+        return hashes;
     }
 
     /**
@@ -356,8 +463,9 @@ export class Copies implements CopiesPart {
         }
     }
 
-    private writeMarker(step: string, abs: string, origin: string): void {
-        const content = JSON.stringify({handedOffAt: new Date(this.deps.clock.now()).toISOString(), origin}) + '\n';
+    private writeMarker(step: string, abs: string, origin: string, state?: CopyRecord): void {
+        const handedOffAt = new Date(this.deps.clock.now()).toISOString();
+        const content = JSON.stringify(state ? {handedOffAt, origin, state} : {handedOffAt, origin}) + '\n';
         try {
             this.deps.files.writeFileAtomic(markerPath(abs), Buffer.from(content, 'utf8'), 0o644);
         } catch (err) {
@@ -499,8 +607,14 @@ export class Copies implements CopiesPart {
     }
 
     /** A git command that must succeed; its stdout, or StepFailed naming `step`. */
-    private must(step: string, cwd: string | undefined, args: string[], timeoutMs = LOCAL_TIMEOUT_MS): Promise<string> {
-        return this.run(step, 'git', args, cwd, timeoutMs);
+    private must(
+        step: string,
+        cwd: string | undefined,
+        args: string[],
+        timeoutMs = LOCAL_TIMEOUT_MS,
+        env: Record<string, string> = {},
+    ): Promise<string> {
+        return this.run(step, 'git', args, cwd, timeoutMs, env);
     }
 
     private async run(
@@ -509,14 +623,48 @@ export class Copies implements CopiesPart {
         args: string[],
         cwd: string | undefined,
         timeoutMs: number,
+        env: Record<string, string> = {},
     ): Promise<string> {
-        const result = await this.deps.commands.run(command, args, {cwd, env: NO_PROMPTS, timeoutMs});
+        const result = await this.deps.commands.run(command, args, {cwd, env: {...NO_PROMPTS, ...env}, timeoutMs});
         if (result.exitCode === 0) return result.stdout;
         throw new StepFailed(step, failureText(command, result));
     }
 }
 
 // ── Rules ──
+
+/**
+ * What a hand-off left a copy as, kept in its marker: HEAD, the working
+ * tree's hash (untracked included, ignored not), and the ticked files' blob
+ * hashes, since those are usually ignored and so not in the tree. The next
+ * hand-off compares against it to tell its own leftovers from work done on
+ * the VM.
+ */
+export interface CopyRecord {
+    head: string;
+    tree: string;
+    files: {path: string; blob: string}[];
+}
+
+/** The record in a marker's text, or null for an older marker, or one that is not ours. */
+export function parseMarkerState(text: string | null): CopyRecord | null {
+    if (text === null) return null;
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(text);
+    } catch {
+        return null;
+    }
+    const state = (parsed as {state?: unknown} | null)?.state as Partial<CopyRecord> | undefined;
+    if (!state || typeof state.head !== 'string' || typeof state.tree !== 'string' || !Array.isArray(state.files)) {
+        return null;
+    }
+    const files = state.files.filter(
+        (file): file is {path: string; blob: string} =>
+            typeof file === 'object' && file !== null && typeof file.path === 'string' && typeof file.blob === 'string',
+    );
+    return {head: state.head, tree: state.tree, files};
+}
 
 /** Why a hand-off is refused before anything runs, or null. */
 function refuseHandoff(message: HandoffMessage): string | null {

@@ -208,7 +208,12 @@ test('a hand-off clones origin and lands the Mac commits, branch, working tree, 
     assert.equal(fs.readFileSync(path.join(copy, '.env'), 'utf8'), 'SECRET=1\n');
     assert.equal(fs.statSync(path.join(copy, '.env')).mode & 0o777, 0o600);
     const marker = JSON.parse(fs.readFileSync(path.join(copy, '.git', COPY_MARKER), 'utf8'));
-    assert.deepEqual(marker, {handedOffAt: '2026-11-03T12:00:00.000Z', origin: w.origin});
+    assert.equal(marker.handedOffAt, '2026-11-03T12:00:00.000Z');
+    assert.equal(marker.origin, w.origin);
+    assert.equal(marker.state.head, payload.headOid);
+    assert.match(marker.state.tree, /^[0-9a-f]{40}$/);
+    assert.deepEqual(marker.state.files, [{path: '.env', blob: git(copy, ['hash-object', '.env']).trim()}]);
+    assert.equal(git(copy, ['diff', '--cached', '--name-only']), '', 'the real index is untouched');
     assert.equal(git(copy, ['for-each-ref', 'refs/switchboard']), '', 'the bundle refs are cleaned up');
     const lines = h.received.filter((m) => m.type === 'handoff-progress').map((m) => m.line);
     assert.deepEqual(lines, [
@@ -222,27 +227,32 @@ test('a hand-off clones origin and lands the Mac commits, branch, working tree, 
     assert.equal(h.part.uploadCount, 0, 'the uploads used are deleted');
 });
 
-test('a second hand-off reuses the copy and moves it to the Mac new HEAD', async () => {
+test('a second hand-off reuses a copy the first one left dirty and ends at the Mac new state', async () => {
     /* Given */
     const w = world();
     const h = harness(w.home);
     await handOff(h, w.mac, w.root);
-    git(copyOf(w.home), ['checkout', '-q', '--', '.']);
-    git(copyOf(w.home), ['clean', '-q', '-fd']);
     git(w.mac, ['add', '-A']);
     git(w.mac, ['commit', '-q', '-m', 'more work']);
+    write(path.join(w.mac, 'a.txt'), 'one, edited\n');
+    write(path.join(w.mac, 'c.txt'), 'three\n');
 
     /* When */
-    const {done, payload} = await handOff(h, w.mac, w.root, {patchUploadId: undefined});
+    const {done, payload} = await handOff(h, w.mac, w.root);
 
     /* Then */
     assert.equal(done.ok, true, done.error ?? '');
     assert.equal(done.reused, true);
-    assert.equal(git(copyOf(w.home), ['rev-parse', 'HEAD']).trim(), payload.headOid);
-    assert.equal(git(copyOf(w.home), ['log', '-1', '--format=%s']).trim(), 'more work');
+    const copy = copyOf(w.home);
+    assert.equal(git(copy, ['rev-parse', 'HEAD']).trim(), payload.headOid);
+    assert.equal(git(copy, ['log', '-1', '--format=%s']).trim(), 'more work');
+    assert.equal(fs.readFileSync(path.join(copy, 'a.txt'), 'utf8'), 'one, edited\n');
+    assert.equal(fs.readFileSync(path.join(copy, 'c.txt'), 'utf8'), 'three\n');
+    assert.deepEqual(parsePorcelainZ(git(copy, ['status', '--porcelain=v1', '-z'])).sort(), ['a.txt', 'c.txt']);
+    assert.equal(fs.readFileSync(path.join(copy, '.env'), 'utf8'), 'SECRET=1\n');
 });
 
-test('a hand-off onto a copy with uncommitted changes of its own is refused, naming them', async () => {
+test('a hand-off onto a copy edited on the VM since is refused, naming only the VM change', async () => {
     /* Given */
     const w = world();
     const h = harness(w.home);
@@ -256,8 +266,40 @@ test('a hand-off onto a copy with uncommitted changes of its own is refused, nam
     assert.equal(done.ok, false);
     assert.match(done.error ?? '', /^Checking the copy at ~\/projects\/proj failed: .*uncommitted changes/);
     assert.match(done.error ?? '', /vm-only\.txt/);
-    assert.match(done.error ?? '', /README\.md/);
+    assert.doesNotMatch(done.error ?? '', /README\.md/);
     assert.equal(fs.readFileSync(path.join(copyOf(w.home), 'vm-only.txt'), 'utf8'), 'made on the VM\n');
+    assert.equal(fs.readFileSync(path.join(copyOf(w.home), 'README.md'), 'utf8'), 'hello, edited\n');
+});
+
+test('a hand-off onto a copy whose ticked file changed on the VM is refused, naming it', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    await handOff(h, w.mac, w.root);
+    write(path.join(copyOf(w.home), '.env'), 'SECRET=changed-on-vm\n');
+
+    /* When */
+    const {done} = await handOff(h, w.mac, w.root);
+
+    /* Then */
+    assert.equal(done.ok, false);
+    assert.match(done.error ?? '', /uncommitted changes of its own: \.env\./);
+    assert.equal(fs.readFileSync(path.join(copyOf(w.home), '.env'), 'utf8'), 'SECRET=changed-on-vm\n');
+});
+
+test('a hand-off onto a dirty copy with no record of its own is refused', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    await handOff(h, w.mac, w.root);
+    write(path.join(copyOf(w.home), '.git', COPY_MARKER), JSON.stringify({handedOffAt: 'x', origin: w.origin}));
+
+    /* When */
+    const {done} = await handOff(h, w.mac, w.root);
+
+    /* Then */
+    assert.equal(done.ok, false);
+    assert.match(done.error ?? '', /uncommitted changes of its own: .*README\.md/);
 });
 
 test('a hand-off refuses to move a branch off commits only the copy has', async () => {

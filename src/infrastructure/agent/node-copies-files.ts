@@ -72,6 +72,18 @@ export class NodeCopiesFiles implements CopiesFiles {
         return fs.existsSync(target);
     }
 
+    public readText(file: string): string | null {
+        try {
+            return fs.readFileSync(file, 'utf8');
+        } catch {
+            return null;
+        }
+    }
+
+    public copyFile(from: string, to: string): void {
+        fs.copyFileSync(from, to);
+    }
+
     public realpath(target: string): string | null {
         try {
             return fs.realpathSync(target);
