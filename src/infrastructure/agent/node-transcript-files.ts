@@ -29,6 +29,17 @@ export class NodeTranscriptFiles implements TranscriptFiles {
         }
     }
 
+    public listFiles(dir: string): string[] {
+        try {
+            return fs
+                .readdirSync(dir, {withFileTypes: true})
+                .filter((entry) => entry.isFile())
+                .map((entry) => entry.name);
+        } catch {
+            return [];
+        }
+    }
+
     public stat(file: string): TranscriptFileStat | null {
         try {
             const stat = fs.statSync(file);

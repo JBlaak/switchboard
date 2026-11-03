@@ -12,6 +12,12 @@
  * runs a command with a timeout, because a CLI waiting on a TTY or the network
  * would otherwise hang the reply, and every check runs at once.
  *
+ * The schedule folders (stage 5) are the copies whose `schedule-*.md` run on
+ * this machine. They are checked here, not only on the Mac: a list with a
+ * relative path, `..` or an empty entry is refused whole and the folders stay
+ * as they were, because running another folder's schedules (or none, or
+ * twice) is worse than an answer the Mac can see did not take.
+ *
  * The config copy writes what the Mac sends under `~/.claude`, one way only.
  * Every path is checked again with `isSafeConfigPath` here, whatever the Mac
  * already checked: the agent is the last line before the VM's disk, and a path
@@ -23,6 +29,7 @@
 import {DEFAULT_BASE_FOLDER, defaultHostInstructions} from '../../../domain/agent/host-instructions';
 import {expandClaudeDirPlaceholder, PLACEHOLDER_FILES} from '../../../domain/agent/config-copy';
 import {isSafeConfigPath} from '../../../domain/agent/protocol';
+import {isValidScheduleDir, normalScheduleDir} from '../../../domain/agent/schedule-dirs';
 import type {
     ConfigFile,
     AgentTool,
@@ -113,7 +120,7 @@ export class HostConfig implements HostConfigPart {
     /** The settings now: read once from the file, then kept as they are changed. */
     public current(): HostSettings {
         this.settings ??= parseHostSettings(this.deps.settingsFile.read());
-        return {...this.settings};
+        return copyOf(this.settings);
     }
 
     public handle(client: ClientLink, message: HostConfigMessage): void {
@@ -139,8 +146,15 @@ export class HostConfig implements HostConfigPart {
      * Merge the known, well-typed fields over the current settings and save.
      * A save that fails still changes the settings for this run, and is
      * logged: the reply holds what launches will now use.
+     *
+     * Schedule folders with a bad entry are left out of the merge (and
+     * logged), so the reply shows the folders still in force.
      */
     private update(message: SetHostSettingsMessage): HostSettings {
+        const sent: unknown = message.settings.scheduleDirs;
+        if (sent !== undefined && scheduleDirsOf(sent) === null) {
+            this.deps.log.warn(`[host-config] refused schedule folders: ${JSON.stringify(sent)}`);
+        }
         const next = {...this.current(), ...knownSettings(message.settings)};
         this.settings = next;
         try {
@@ -148,7 +162,7 @@ export class HostConfig implements HostConfigPart {
         } catch (err) {
             this.deps.log.error('[host-config] could not save the host settings:', err);
         }
-        return {...next};
+        return copyOf(next);
     }
 
     private async checkTools(): Promise<{tools: ToolCheck[]; sudo: boolean}> {
@@ -259,7 +273,32 @@ export function parseHostSettings(text: string | null): HostSettings {
     return {...defaultHostSettings(), ...knownSettings(parsed)};
 }
 
-/** Only the fields HostSettings has, and only with the right type; an empty base folder is no base folder. */
+/** A copy the caller may change without touching the settings held here. */
+function copyOf(settings: HostSettings): HostSettings {
+    return settings.scheduleDirs ? {...settings, scheduleDirs: [...settings.scheduleDirs]} : {...settings};
+}
+
+/**
+ * Schedule folders as they are kept: each one valid (`isValidScheduleDir`),
+ * folded and listed once. Null when `value` is not such a list, which refuses
+ * it whole.
+ */
+export function scheduleDirsOf(value: unknown): string[] | null {
+    if (!Array.isArray(value)) return null;
+    const dirs: string[] = [];
+    for (const entry of value) {
+        if (typeof entry !== 'string' || !isValidScheduleDir(entry)) return null;
+        const dir = normalScheduleDir(entry);
+        if (!dirs.includes(dir)) dirs.push(dir);
+    }
+    return dirs;
+}
+
+/**
+ * Only the fields HostSettings has, and only with the right type; an empty
+ * base folder is no base folder, and schedule folders with a bad entry are no
+ * schedule folders.
+ */
 function knownSettings(value: unknown): Partial<HostSettings> {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
     const record = value as Record<string, unknown>;
@@ -267,6 +306,8 @@ function knownSettings(value: unknown): Partial<HostSettings> {
     if (typeof record.instructions === 'string') known.instructions = record.instructions;
     if (typeof record.copyConfig === 'boolean') known.copyConfig = record.copyConfig;
     if (typeof record.baseFolder === 'string' && record.baseFolder.trim()) known.baseFolder = record.baseFolder.trim();
+    const scheduleDirs = record.scheduleDirs === undefined ? null : scheduleDirsOf(record.scheduleDirs);
+    if (scheduleDirs) known.scheduleDirs = scheduleDirs;
     return known;
 }
 

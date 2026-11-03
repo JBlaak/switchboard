@@ -8,7 +8,9 @@ import path from 'node:path';
 
 import {
     Copies,
+    DROP_NAME_MAX_BYTES,
     isPlausibleBranch,
+    isSafeDropName,
     isSafeFolderName,
     isSafeWorktreeName,
     joinDir,
@@ -22,6 +24,7 @@ import type {CopiesMessage} from '../src/application/services/agent-host/handler
 import {COPY_MARKER, type AgentMessage, type HandoffMessage} from '../src/domain/agent/protocol';
 import {NodeCopiesFiles} from '../src/infrastructure/agent/node-copies-files';
 import {NodeCopyCommandRunner} from '../src/infrastructure/agent/node-copy-command-runner';
+import {NodeDropFiles} from '../src/infrastructure/agent/node-drop-files';
 import {linkPair} from './support/agent-link';
 import {fakeTimers, silentLog, type FakeTimers} from './support/fakes';
 
@@ -114,6 +117,7 @@ function harness(
     const part = new Copies({
         commands: options.commands ?? new NodeCopyCommandRunner({env: {...process.env, ...GIT_ENV}}),
         files: new NodeCopiesFiles(tempRoot),
+        drops: new NodeDropFiles(),
         hostSettings: () => ({instructions: '', copyConfig: true, baseFolder: options.baseFolder ?? '~/projects'}),
         home,
         clock: {now: () => Date.UTC(2026, 10, 3, 12, 0, 0)},
@@ -964,4 +968,118 @@ test('worktree list --porcelain gives each path with its branch, detached ones w
         {path: '/c/.claude/worktrees/wt', branch: 'feature/x'},
         {path: '/c/.claude/worktrees/d', branch: null},
     ]);
+});
+
+// ── place-upload (stage 5) ──
+
+/** A VM home with nothing in it, and a harness on it. */
+function dropWorld() {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-drops-')));
+    const home = path.join(root, 'home');
+    fs.mkdirSync(home);
+    return {root, home, drops: path.join(home, '.switchboard', 'drops'), h: harness(home)};
+}
+
+test('a dropped file is placed in its own private drop folder and its path answered', async () => {
+    /* Given */
+    const {h, drops} = dropWorld();
+    assert.equal((await upload(h, 'shot', Buffer.from('png bytes'))).ok, true);
+
+    /* When */
+    h.send({type: 'place-upload', requestId: 'p1', uploadId: 'shot', name: 'Screen Shot 1.png'});
+    const placed = await answer(h, 'placed', 'p1');
+
+    /* Then */
+    assert.equal(placed.ok, true);
+    assert.ok(placed.path);
+    assert.equal(path.dirname(path.dirname(placed.path)), drops);
+    assert.equal(path.basename(placed.path), 'Screen Shot 1.png');
+    assert.equal(fs.readFileSync(placed.path, 'utf8'), 'png bytes');
+    assert.equal(fs.statSync(placed.path).mode & 0o777, 0o600);
+    assert.equal(fs.statSync(path.dirname(placed.path)).mode & 0o777, 0o700);
+    assert.equal(fs.statSync(drops).mode & 0o777, 0o700);
+    assert.equal(h.part.uploadCount, 0);
+});
+
+test('two drops of one name land in different folders', async () => {
+    /* Given */
+    const {h} = dropWorld();
+    await upload(h, 'a', Buffer.from('first'));
+    await upload(h, 'b', Buffer.from('second'));
+    h.send({type: 'place-upload', requestId: 'p1', uploadId: 'a', name: 'notes.txt'});
+    const first = await answer(h, 'placed', 'p1');
+
+    /* When */
+    h.send({type: 'place-upload', requestId: 'p2', uploadId: 'b', name: 'notes.txt'});
+    const second = await answer(h, 'placed', 'p2');
+
+    /* Then */
+    assert.notEqual(first.path, second.path);
+    assert.equal(fs.readFileSync(first.path ?? '', 'utf8'), 'first');
+    assert.equal(fs.readFileSync(second.path ?? '', 'utf8'), 'second');
+});
+
+for (const name of ['../escape.txt', 'a/b.txt', '.', '..', 'nul\0name', 'x'.repeat(DROP_NAME_MAX_BYTES + 1)]) {
+    test(`a drop named ${JSON.stringify(name.slice(0, 20))} is refused and the upload kept`, async () => {
+        /* Given */
+        const {h, home} = dropWorld();
+        await upload(h, 'u', Buffer.from('data'));
+
+        /* When */
+        h.send({type: 'place-upload', requestId: 'p', uploadId: 'u', name});
+        const placed = await answer(h, 'placed', 'p');
+
+        /* Then */
+        assert.equal(placed.ok, false);
+        assert.match(placed.error ?? '', /not a file name/);
+        assert.equal(placed.path, undefined);
+        assert.equal(fs.existsSync(path.join(home, '.switchboard')), false);
+        assert.equal(h.part.uploadCount, 1);
+    });
+}
+
+test('placing an upload that never finished is refused', async () => {
+    /* Given */
+    const {h} = dropWorld();
+    h.send({type: 'upload-begin', uploadId: 'half', size: 10});
+
+    /* When */
+    h.send({type: 'place-upload', requestId: 'p', uploadId: 'half', name: 'x.txt'});
+    const placed = await answer(h, 'placed', 'p');
+
+    /* Then */
+    assert.equal(placed.ok, false);
+    assert.match(placed.error ?? '', /has not ended/);
+});
+
+test('placing a drop removes the drops older than a day and keeps the recent ones', async () => {
+    /* Given */
+    const {h, drops} = dropWorld();
+    // The harness's clock is 2026-11-03 12:00 UTC.
+    const old = path.join(drops, 'old');
+    const recent = path.join(drops, 'recent');
+    for (const folder of [old, recent]) {
+        fs.mkdirSync(folder, {recursive: true});
+        fs.writeFileSync(path.join(folder, 'f.txt'), 'x');
+    }
+    fs.utimesSync(old, new Date(Date.UTC(2026, 10, 2, 11, 0)), new Date(Date.UTC(2026, 10, 2, 11, 0)));
+    fs.utimesSync(recent, new Date(Date.UTC(2026, 10, 2, 13, 0)), new Date(Date.UTC(2026, 10, 2, 13, 0)));
+    await upload(h, 'u', Buffer.from('data'));
+
+    /* When */
+    h.send({type: 'place-upload', requestId: 'p', uploadId: 'u', name: 'new.txt'});
+    const placed = await answer(h, 'placed', 'p');
+
+    /* Then */
+    assert.equal(placed.ok, true);
+    assert.equal(fs.existsSync(old), false);
+    assert.equal(fs.existsSync(recent), true);
+});
+
+test('a drop name is one safe segment', () => {
+    /* When */
+    const verdicts = ['report.pdf', 'Ünïcödé ✓.txt', '.hidden', '', '.', '..', 'a/b', 'a\0b'].map(isSafeDropName);
+
+    /* Then */
+    assert.deepEqual(verdicts, [true, true, true, false, false, false, false, false]);
 });

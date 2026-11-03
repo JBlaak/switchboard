@@ -67,12 +67,16 @@ export async function main(): Promise<void> {
     log.info(`agent: switchboard-agent ${AGENT_VERSION} starting (node ${process.version})`);
     const parts = await createParts({agentVersion: AGENT_VERSION, log});
     const agent = await startAgent({parts, socketPath: agentSocketPath(), agentVersion: AGENT_VERSION, log});
+    // The copies in the host's schedule folders run their schedules from the next minute on.
+    const stopSchedules = parts.schedules.start();
 
     let shuttingDown = false;
     const shutdown = (signal: NodeJS.Signals) => {
         if (shuttingDown) return;
         shuttingDown = true;
         log.info(`agent: ${signal}, shutting down`);
+        // No new runs; one already going is its own process and ends with the unit.
+        stopSchedules();
         parts.sessions.terminateAll();
         agent.stop().then(
             () => process.exit(0),
