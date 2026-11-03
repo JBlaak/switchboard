@@ -74,6 +74,8 @@ const OWNER: Record<Exclude<MacMessage['type'], 'hello' | 'bye'>, Owner> = {
     'list-sessions': 'sessions',
     'ask-reply': 'hooks',
     'archive-reply': 'hooks',
+    'list-self-archived': 'hooks',
+    'forget-self-archived': 'hooks',
     'get-host-settings': 'config',
     'set-host-settings': 'config',
     'check-tools': 'config',

@@ -528,6 +528,28 @@ export interface PlaceUploadMessage {
     name: string;
 }
 
+// ── Mac → agent: sessions that archived themselves while the Mac was away (#308) ──
+
+/**
+ * Which sessions archived themselves (`archive_session`) while no Mac was
+ * connected; answered with `self-archived`. The Mac asks on every connect,
+ * archives the rows it knows, then sends `forget-self-archived`.
+ */
+export interface ListSelfArchivedMessage {
+    type: 'list-self-archived';
+    requestId: string;
+}
+
+/**
+ * Drop these sessions from the agent's self-archive record, once the Mac has
+ * handled them (or found it does not know them). Answered with `done`.
+ */
+export interface ForgetSelfArchivedMessage {
+    type: 'forget-self-archived';
+    requestId: string;
+    sessionIds: string[];
+}
+
 export type MacMessage =
     | HelloMessage
     | OpenSessionMessage
@@ -560,6 +582,8 @@ export type MacMessage =
     | TranscriptQueryMessage
     | ListTranscriptsMessage
     | PlaceUploadMessage
+    | ListSelfArchivedMessage
+    | ForgetSelfArchivedMessage
     | ByeMessage;
 
 // ── Agent → Mac ──
@@ -810,6 +834,21 @@ export interface PlacedMessage {
     error?: string;
 }
 
+// ── Agent → Mac (#308) ──
+
+/** One session that archived itself on the VM while no Mac was connected. */
+export interface SelfArchivedSession {
+    sessionId: string;
+    /** When the agent stopped it, epoch ms. */
+    archivedAt: number;
+}
+
+export interface SelfArchivedMessage {
+    type: 'self-archived';
+    requestId: string;
+    sessions: SelfArchivedSession[];
+}
+
 export type AgentMessage =
     | WelcomeMessage
     | OpenedMessage
@@ -838,6 +877,7 @@ export type AgentMessage =
     | TranscriptAnswerMessage
     | TranscriptListMessage
     | PlacedMessage
+    | SelfArchivedMessage
     | ByeMessage;
 
 // ── Either way ──

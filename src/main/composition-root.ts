@@ -120,6 +120,7 @@ import type {VmGitRouting} from '../infrastructure/git/routing-git';
 import {agentlessRemoteGuard} from '../domain/project/agentless-remote';
 import {RoutingTranscriptStore} from '../infrastructure/agent/routing-transcript-store';
 import {locateVmSession} from '../application/services/vm-session-location';
+import {SelfArchiveCatchUp} from '../application/services/self-archive-catch-up';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner} from '../infrastructure/github/gh-cli';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
@@ -1054,6 +1055,24 @@ export function buildContainer(): Container {
             }
         }),
     );
+    // VM sessions that archived themselves while the Mac was away (#308): their
+    // rows are archived on every connect, as the archive tool would have, minus the stop.
+    const selfArchiveCatchUp = new SelfArchiveCatchUp({
+        appVersion: app.getVersion(),
+        remoteProjects: () => settings.remoteProjects(),
+        archiver: sessionArchiver({
+            registry,
+            remote,
+            lifecycle,
+            terminals,
+            repository,
+            renderer,
+            worktreeCleanup,
+            tasks,
+        }),
+        log,
+    });
+    agents.onConnected((connection) => void selfArchiveCatchUp.connected(connection));
     // Files dropped on a VM session's terminal go up to its VM (#276 stage 5).
     const droppedFiles = new DroppedFilesService({
         registry,
