@@ -5,7 +5,8 @@
  * user's: its PATH is systemd's short default, without `~/.local/bin` where
  * Claude's installer puts `claude`. So the login shell is asked for its
  * environment once, at start, and everything that runs a tool (the PTYs, git,
- * the tool checks, the project copies' git and gh) inherits that.
+ * the tool checks, the project copies' git and gh, the pages' git and gh)
+ * inherits that.
  *
  * The hook server is started, and awaited, before the parts are handed back:
  * a launch asks it for its address, and one made before it listens would get
@@ -20,14 +21,20 @@ import {Copies} from '../application/services/agent-host/copies';
 import {HookForwarder} from '../application/services/agent-host/hook-forwarder';
 import {HostConfig} from '../application/services/agent-host/host-config';
 import {SessionHost} from '../application/services/agent-host/session-host';
+import {Tools} from '../application/services/agent-host/tools';
 import {Transcripts} from '../application/services/agent-host/transcripts';
 import {NodeClaudeConfigDir} from '../infrastructure/agent/node-claude-config-dir';
 import {NodeCommandRunner} from '../infrastructure/agent/node-command-runner';
 import {NodeCopiesFiles} from '../infrastructure/agent/node-copies-files';
 import {NodeCopyCommandRunner} from '../infrastructure/agent/node-copy-command-runner';
 import {NodeFolderWatcher} from '../infrastructure/agent/node-folder-watcher';
+import {NodeGitTreeWatcher} from '../infrastructure/agent/node-git-tree-watcher';
 import {NodeHostSettingsFile} from '../infrastructure/agent/node-host-settings-file';
+import {NodeToolRunner} from '../infrastructure/agent/node-tool-runner';
 import {NodeTranscriptFiles} from '../infrastructure/agent/node-transcript-files';
+import {NodeWorkingFiles} from '../infrastructure/agent/node-working-files';
+import {NodeFileSystem} from '../infrastructure/fs/node-file-system';
+import {FileTranscriptStore} from '../infrastructure/fs/transcript-store';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
 import {cleanChildEnv, NodePtyGateway} from '../infrastructure/pty/node-pty-gateway';
@@ -35,7 +42,6 @@ import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {systemTimers} from '../infrastructure/system/timers';
 import type {Logger} from '../application/ports/logger';
 import type {AgentParts} from '../application/services/agent-host/agent-host';
-import type {ToolsPart} from '../application/services/agent-host/handlers';
 
 /** What the entry hands the wiring. */
 export interface PartsContext {
@@ -117,36 +123,19 @@ export async function createParts({log}: PartsContext): Promise<AgentParts> {
         log,
     });
 
+    // The Mac's git and transcript adapters, for a VM project's pages: git and gh
+    // in the same login-shell environment, and the VM's own transcript store.
+    const tools = new Tools({
+        runner: new NodeToolRunner({env}),
+        files: new NodeWorkingFiles(),
+        watcher: new NodeGitTreeWatcher(),
+        transcripts: new FileTranscriptStore(new NodeFileSystem(), path.join(os.homedir(), '.claude', 'projects')),
+        home: os.homedir(),
+        timers: systemTimers,
+        log,
+    });
+
     // The hook server needs no stop of its own: it lives as long as the
     // process, which exits right after the sessions are terminated.
-    return {sessions, hooks, config, copies, transcripts, tools: notYetTools()};
-}
-
-/** Until the tools part lands (#276 stage 4): every request answers that it is not supported yet. */
-function notYetTools(): ToolsPart {
-    const error = 'this agent does not serve the project pages yet';
-    return {
-        clientConnected() {},
-        clientGone() {},
-        handle(client, message) {
-            switch (message.type) {
-                case 'run-tool':
-                    return client.send({
-                        type: 'tool-result',
-                        requestId: message.requestId,
-                        code: -1,
-                        stdoutBase64: '',
-                        stderr: error,
-                    });
-                case 'read-file':
-                    return client.send({type: 'file-content', requestId: message.requestId, found: false});
-                case 'stat-files':
-                    return client.send({type: 'file-stats', requestId: message.requestId, sizes: {}});
-                case 'transcript-query':
-                    return client.send({type: 'transcript-answer', requestId: message.requestId, ok: false, error});
-                default:
-                    return;
-            }
-        },
-    };
+    return {sessions, hooks, config, copies, transcripts, tools};
 }
