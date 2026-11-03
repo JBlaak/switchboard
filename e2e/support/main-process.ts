@@ -33,6 +33,7 @@ import type {SessionPlans} from '../../src/application/services/plan-service';
 import type {ProjectOverview} from '../../src/domain/project/overview';
 import type {AgentHostStatus, AgentHostsResult} from '../../src/application/services/agent-hosts';
 import type {HostSettings, ToolCheck} from '../../src/domain/agent/protocol';
+import type {VmHostView} from '../../src/application/services/vm-registry';
 import type {
     BringBackResult,
     CopyStatus,
@@ -123,6 +124,18 @@ export interface HostStubs {
      * can dial a host. Each request is recorded (see `agentRequests`).
      */
     agent: AgentStub;
+    /**
+     * Settings → VMs' registry (#307), kept in memory in place of the one in
+     * settings; null (the default) leaves the real `vm-registry:*` handlers,
+     * which touch no host: the fixture's agent remotes are registered by the
+     * migration on first read, and a VM's `connected` is read without dialling.
+     *
+     * Needed only where the real one can't follow: a stubbed install never
+     * records its agent there. Here a successful `agent:install` gives its VM
+     * the version `agent.status` names, and each change pushes
+     * `vm-registry:changed`, as main does. A VM's `projects` stay as given.
+     */
+    vmRegistry: VmRegistryStub | null;
     /**
      * Project hand-off's back end (#276 stage 2), standing in for the ssh and
      * git a hand-off, a Bring back and a removal run against a VM: every
@@ -309,6 +322,28 @@ export const STUB_HANDOFF: HandoffStub = {
     removeResult: {ok: true},
 };
 
+/** What the `vm-registry:*` channels answer, while stubbed. */
+export interface VmRegistryStub {
+    /** The registered VMs, in order; Add a VM appends one with no agent yet. */
+    hosts: VmHostView[];
+}
+
+/** A registered VM as `vm-registry:list` answers it: no name, no agent yet, no projects. */
+export function stubVmHost(user: string, host: string, port = 22, change: Partial<VmHostView> = {}): VmHostView {
+    return {
+        key: `${user}@${host}:${port}`,
+        user,
+        host,
+        port,
+        label: `${user}@${host}${port === 22 ? '' : ':' + port}`,
+        agent: null,
+        current: false,
+        connected: false,
+        projects: [],
+        ...change,
+    };
+}
+
 /** What the `agent:*` channels answer, for every host alike. */
 export interface AgentStub {
     /** What `agentStatus` answers. */
@@ -483,6 +518,7 @@ export const DEFAULT_STUBS: HostStubs = {
     plans: null,
     projectOverview: null,
     agent: STUB_AGENT,
+    vmRegistry: null,
     handoff: {...STUB_HANDOFF, hosts: []},
     sessionHandoff: STUB_SESSION_HANDOFF,
     vmSchedules: {where: {}, runOn: {error: 'No VM in the harness'}},
@@ -763,6 +799,19 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                     await new Promise((resolve) => setTimeout(resolve, state.agent.installLineDelayMs));
                     event.sender.send(events.agentInstallProgress, path, line);
                 }
+                // A stubbed registry learns of the agent as main's would on a real install.
+                const hostOf = /^ssh:\/\/([^@/]+)@([^:/]+)(?::(\d+))?/.exec(path);
+                const vm = hostOf
+                    ? state.vmRegistry?.hosts.find(
+                          (host) => host.key === `${hostOf[1]}@${hostOf[2]}:${hostOf[3] ?? '22'}`,
+                      )
+                    : undefined;
+                if (state.agent.installResult.ok && vm) {
+                    vm.agent = state.agent.status.installed;
+                    vm.current = state.agent.status.current;
+                    vm.connected = state.agent.status.connected;
+                    event.sender.send(events.vmHostsChanged);
+                }
                 return state.agent.installResult;
             });
             replace(channels.agentCheckTools, () => state.agent.tools);
@@ -783,6 +832,58 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 state.agentRequests.openSetupTerminal.push(String(projectPath));
                 return state.agent.setupTerminal;
             });
+
+            // Settings → VMs (#307), only when stubbed: in memory, read at each call so
+            // `setHostStub(app, 'vmRegistry', …)` applies. Each change is pushed, as main does.
+            if (state.vmRegistry) {
+                const registry = (): VmRegistryStub => state.vmRegistry ?? {hosts: []};
+                const changed = (event: {sender: {send(channel: string): void}}): void =>
+                    event.sender.send(events.vmHostsChanged);
+                ipcMain.removeHandler(channels.vmRegistryList);
+                ipcMain.handle(channels.vmRegistryList, () => registry().hosts);
+                ipcMain.removeHandler(channels.vmRegistryAdd);
+                ipcMain.handle(
+                    channels.vmRegistryAdd,
+                    (event, input: {user: string; host: string; port?: number; name?: string}) => {
+                        const port = Number(input.port) || 22;
+                        const key = `${input.user}@${input.host}:${port}`;
+                        const address = `${input.user}@${input.host}${port === 22 ? '' : ':' + port}`;
+                        if (registry().hosts.some((vm) => vm.key === key)) {
+                            return {ok: false, error: `${address} is already registered.`};
+                        }
+                        registry().hosts.push({
+                            key,
+                            user: input.user,
+                            host: input.host,
+                            port,
+                            label: input.name || address,
+                            agent: null,
+                            current: false,
+                            connected: false,
+                            projects: [],
+                        });
+                        changed(event);
+                        return {ok: true, key};
+                    },
+                );
+                ipcMain.removeHandler(channels.vmRegistryRename);
+                ipcMain.handle(channels.vmRegistryRename, (event, key, name) => {
+                    const vm = registry().hosts.find((host) => host.key === key);
+                    if (!vm) return false;
+                    vm.label = String(name) || `${vm.user}@${vm.host}${vm.port === 22 ? '' : ':' + vm.port}`;
+                    changed(event);
+                    return true;
+                });
+                ipcMain.removeHandler(channels.vmRegistryRemove);
+                ipcMain.handle(channels.vmRegistryRemove, (event, key) => {
+                    const hosts = registry().hosts;
+                    const at = hosts.findIndex((host) => host.key === key);
+                    if (at < 0) return {ok: false, error: `${String(key)} is not a registered VM.`};
+                    hosts.splice(at, 1);
+                    changed(event);
+                    return {ok: true};
+                });
+            }
 
             // Project hand-off (#276 stage 2). The real handlers run ssh and git against
             // the VM; these answer from `state.handoff`, read at each call.

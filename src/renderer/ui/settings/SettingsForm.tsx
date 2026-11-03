@@ -32,6 +32,7 @@ import {AppField, LaunchField} from './SettingsField';
 import {useWeatherCity} from './use-weather-city';
 import {useBlaakTasksUrl} from './use-blaak-tasks-url';
 import {PhoneAccessSection} from '../phone-access/PhoneAccessSection';
+import {VmsSection} from '../vms/VmsSection';
 import type {JSX} from 'react';
 import type {SettingsPanel} from '../../state/settings-slice';
 
@@ -462,6 +463,8 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
             </div>
 
             <PhoneAccessSection />
+
+            <VmsSection />
 
             <div className="settings-section">
                 <div className="settings-section-title">App Icon</div>

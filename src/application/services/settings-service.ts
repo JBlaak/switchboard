@@ -17,7 +17,14 @@ import {
     resolveWeatherLocation,
 } from '../../domain/settings/settings';
 import {normalizeRemoteDir, parseRemoteProjectPath, remoteProjectPath} from '../../domain/project/remote-target';
-import type {EffectiveSettings, GlobalSettings, RemoteProjectSetting} from '../../domain/settings/settings';
+import type {
+    EffectiveSettings,
+    GlobalSettings,
+    RemoteProjectSetting,
+    VmHostSetting,
+} from '../../domain/settings/settings';
+import {findVmHostIn, migrateVmHosts, sameHost, withDerivedAgent} from '../../domain/settings/vm-hosts';
+import type {HostAddress} from '../../domain/settings/vm-hosts';
 import type {RemoteSessionRecord} from '../../domain/session/session';
 import type {WeatherLocation} from '../../domain/weather/weather';
 import type {SettingsStore} from '../ports/settings-store';
@@ -119,15 +126,94 @@ export class SettingsService {
         });
     }
 
+    // ── VMs ──
+    // Registered on their own (#276, Settings → VMs), as phones are paired: the
+    // one answer to which hosts run a Switchboard agent. Remote projects take
+    // their `agent` from here (see `remoteProjects`).
+
+    /**
+     * The registered VMs. The first read on an install from before the
+     * registry existed fills it in from the remotes that carried `agent`, and
+     * stores it, so that happens once: after that an empty list means none.
+     */
+    public vmHosts(): VmHostSetting[] {
+        const stored = this.global().vmHosts;
+        if (stored) return stored;
+        return this.updateGlobal((settings) => {
+            settings.vmHosts ??= migrateVmHosts(settings.remoteProjects);
+            return settings.vmHosts;
+        });
+    }
+
+    /** The registration of `address`'s host, or null when it isn't a registered VM. */
+    public findVmHost(address: HostAddress): VmHostSetting | null {
+        return findVmHostIn(this.vmHosts(), address);
+    }
+
+    /**
+     * Register a VM, with nothing installed yet. False when it is already
+     * registered; the caller has validated the address.
+     */
+    public addVmHost(
+        vm: {user: string; host: string; port: number; name?: string},
+        addedAt = new Date().toISOString(),
+    ): boolean {
+        this.vmHosts();
+        return this.updateGlobal((settings) => {
+            const hosts = settings.vmHosts ?? [];
+            if (findVmHostIn(hosts, vm)) return false;
+            const name = vm.name?.trim();
+            hosts.push({user: vm.user, host: vm.host, port: vm.port, ...(name ? {name} : {}), addedAt});
+            settings.vmHosts = hosts;
+            return true;
+        });
+    }
+
+    /** Name a VM; an empty name goes back to the `user@host` label. False when it isn't registered. */
+    public renameVmHost(address: HostAddress, name: string): boolean {
+        this.vmHosts();
+        return this.updateGlobal((settings) => {
+            const vm = findVmHostIn(settings.vmHosts ?? [], address);
+            if (!vm) return false;
+            const trimmed = name.trim();
+            if (trimmed) vm.name = trimmed;
+            else delete vm.name;
+            return true;
+        });
+    }
+
+    /**
+     * Take a VM out of the registry, and only that: its remote projects are
+     * the caller's to forget (they then stop being VM projects, since their
+     * `agent` came from here). False when it wasn't registered.
+     */
+    public removeVmHost(address: HostAddress): boolean {
+        this.vmHosts();
+        return this.updateGlobal((settings) => {
+            const hosts = settings.vmHosts ?? [];
+            const kept = hosts.filter((vm) => !sameHost(vm, address));
+            settings.vmHosts = kept;
+            return kept.length !== hosts.length;
+        });
+    }
+
     // ── Remote projects ──
     // Stored in settings rather than derived from the transcript directory: the
     // session history lives on the remote host, so the only local state is the
     // connection info and which tmux sessions we created.
 
+    /**
+     * Every remote project, with `agent` derived from its host's registration
+     * (`withDerivedAgent`): set when the host is a registered VM with an agent,
+     * absent otherwise, whatever the stored record says. Copies: change a
+     * remote through the methods below, not by editing these.
+     */
     public remoteProjects(): RemoteProjectSetting[] {
-        return this.global().remoteProjects || [];
+        const hosts = this.vmHosts();
+        return (this.global().remoteProjects || []).map((remote) => withDerivedAgent(remote, hosts));
     }
 
+    /** The remote project at `projectPath`, its `agent` derived as `remoteProjects` does. */
     public findRemoteProject(projectPath: string): RemoteProjectSetting | null {
         return this.remoteProjects().find((r) => remoteProjectPath(r) === projectPath) ?? null;
     }
@@ -170,13 +256,17 @@ export class SettingsService {
      * folder is nobody's project, but its sessions need a record: it is what
      * the launcher opens on the agent, what `touchRemoteSession` keeps the row
      * in, and what brings the row back after a restart. It is recorded as
-     * the hand-off records a project's copy (stage 3's worktree copies):
-     * `agent` copied from the host, and `copyOf` from the project the folder
+     * the hand-off records a project's copy (stage 3's worktree copies), with
+     * `copyOf` from the project the folder
      * lies under (its parent copy), when that one is a copy of a local
      * project, so the local project's page lists it with its other copies.
      *
-     * Nothing is recorded for a host with no agent: an agentless remote keeps
-     * needing a project the user added, exactly as before. `home` is the VM
+     * Nothing is recorded for a host that isn't a registered VM with an agent:
+     * an agentless remote keeps needing a project the user added, exactly as
+     * before. The VM's home itself (`ssh://user@host`, no folder: the setup
+     * terminal opened from Settings → VMs) is recorded like any other folder,
+     * so it is listed as the VM's home project, which is what keeps that
+     * terminal's row, and lets it be reattached after a restart. `home` is the VM
      * user's home folder (the agent's `welcome`), which lets a `~/…` project
      * be found as the parent of the absolute paths git answers; without it,
      * only a parent named in the same form is found.
@@ -188,20 +278,16 @@ export class SettingsService {
         if (found) return found;
         const parsed = parseRemoteProjectPath(projectPath);
         if (!parsed) return null;
-        const onHost = this.remoteProjects().filter(
-            (r) => r.user === parsed.user && r.host === parsed.host && (Number(r.port) || 22) === parsed.port,
-        );
-        const withAgent = onHost.find((r) => r.agent);
-        if (!withAgent?.agent) return null;
+        if (!this.findVmHost(parsed)?.agent) return null;
+        const onHost = this.remoteProjects().filter((r) => sameHost(r, parsed));
 
+        // No `agent` stored: it is the registration's, read back derived.
         const parent = parentProject(onHost, parsed.dir, home ?? null);
-        const agent = parent?.agent ?? withAgent.agent;
         const record: RemoteProjectSetting = {
             user: parsed.user,
             host: parsed.host,
             port: parsed.port,
             dir: parsed.dir,
-            agent: {...agent},
             ...(parent?.copyOf ? {copyOf: parent.copyOf} : {}),
         };
         // A path that does not round-trip (a trailing slash, say) would be
@@ -312,31 +398,31 @@ export class SettingsService {
     }
 
     /**
-     * Record that the Switchboard agent is installed on this remote's host at
-     * `version` (#276), which makes it a VM project.
+     * Record that the Switchboard agent is installed at `version` on the host
+     * `path` is on (#276): any `ssh://` path there, a project's or the VM's own
+     * (`vmHostPath`). The record is the VM's registration, made first when the
+     * host isn't registered yet (installing from an agentless remote's page
+     * registers it); every remote project on the host then reads as a VM
+     * project, with its sessions and connection info as they were (user story
+     * 13).
      *
-     * Only the `agent` field changes: the remote's sessions and connection info
-     * stay as they were, so installing the agent on a remote already in use
-     * costs nothing (user story 13). Only the named project is marked, even
-     * when other remote projects point at the same host; whether those follow
-     * is the caller's decision.
-     *
-     * Returns false when the remote project is no longer configured.
+     * Returns false for a path that names no host.
      */
-    public markAgentInstalled(projectPath: string, version: string, installedAt = new Date().toISOString()): boolean {
-        return this.updateGlobal((settings) => {
-            const remotes = settings.remoteProjects || [];
-            const project = remotes.find((r) => remoteProjectPath(r) === projectPath);
-            if (!project) return false;
-            // The agent serves the whole host, so every remote on it (another
-            // folder on the same VM) becomes a VM project with it.
-            for (const remote of remotes) {
-                if (remote.user === project.user && remote.host === project.host && remote.port === project.port) {
-                    remote.agent = {version, installedAt};
-                }
+    public markAgentInstalled(path: string, version: string, installedAt = new Date().toISOString()): boolean {
+        const parsed = parseRemoteProjectPath(path);
+        if (!parsed) return false;
+        this.vmHosts();
+        this.updateGlobal((settings) => {
+            const hosts = settings.vmHosts ?? [];
+            let vm = findVmHostIn(hosts, parsed);
+            if (!vm) {
+                vm = {user: parsed.user, host: parsed.host, port: parsed.port, addedAt: installedAt};
+                hosts.push(vm);
             }
-            return true;
+            vm.agent = {version, installedAt};
+            settings.vmHosts = hosts;
         });
+        return true;
     }
 }
 

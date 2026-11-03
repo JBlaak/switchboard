@@ -1,7 +1,15 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {isVmFolder, splitVmFolder, splitVmPath, vmFolder, vmPath} from '../src/domain/agent/vm-paths';
+import {
+    isVmFolder,
+    parseVmHostKey,
+    splitVmFolder,
+    splitVmPath,
+    vmFolder,
+    vmHostPath,
+    vmPath,
+} from '../src/domain/agent/vm-paths';
 
 /** A VM's folders and transcript folders, named so the Mac's services can pass them along. */
 
@@ -45,4 +53,18 @@ test('a VM transcript folder names its host and encoded folder', () => {
     assert.deepEqual(back, {host: HOST, encoded: '-home-dev-projects-site'});
     assert.equal(isVmFolder(folder), true);
     assert.equal(isVmFolder('-Users-me-site'), false);
+});
+
+test("a VM's host path has no folder, and its key parses back", () => {
+    /* Given */
+    const host = {user: 'dev', host: 'vm.local', port: 2222};
+
+    /* When */
+    const path = vmHostPath(host);
+    const parsed = parseVmHostKey('dev@vm.local:2222');
+
+    /* Then */
+    assert.equal(path, 'ssh://dev@vm.local:2222');
+    assert.deepEqual(parsed, host);
+    assert.equal(parseVmHostKey('not a key'), null);
 });

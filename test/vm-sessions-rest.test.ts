@@ -10,6 +10,7 @@ import {RemoteConnectionSupervisor} from '../src/application/services/remote-con
 import {SessionLauncher} from '../src/application/services/session-launcher';
 import {SessionLifecycle} from '../src/application/services/session-lifecycle';
 import {SettingsService} from '../src/application/services/settings-service';
+import {addRemotesRegisteringVms} from './support/vm-registry';
 import {TaskLinkService} from '../src/application/services/task-link-service';
 import {TaskSessionService} from '../src/application/services/task-session-service';
 import {TasksService, type TaskServices} from '../src/application/services/tasks-service';
@@ -140,7 +141,7 @@ function harness({remotes = [vmSite()]}: {remotes?: RemoteProjectSetting[]} = {}
         log: silentLog,
     });
     const settings = new SettingsService(new MemoryStore());
-    for (const r of remotes) settings.addRemoteProject(structuredClone(r));
+    addRemotesRegisteringVms(settings, remotes);
 
     const launcher = new SessionLauncher({
         registry,
@@ -164,7 +165,7 @@ function harness({remotes = [vmSite()]}: {remotes?: RemoteProjectSetting[]} = {}
         launcher.open({sessionId, projectPath, isNew: true, options});
     /** Bring the host's link up, as the git that made a worktree there has. */
     const connect = () => client.connection(HOST).whenConnected();
-    const agentlessRemote = agentlessRemoteGuard(() => settings.remoteProjects());
+    const agentlessRemote = agentlessRemoteGuard(() => settings.vmHosts());
 
     return {...vm, registry, renderer, local, client, settings, launcher, open, connect, agentlessRemote, clock};
 }

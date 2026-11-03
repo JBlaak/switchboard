@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {agentHostKey} from '../src/application/services/agent-client/agent-client';
 import {AgentConnection} from '../src/application/services/agent-client/agent-connection';
 import {SettingsService} from '../src/application/services/settings-service';
+import {addRemotesRegisteringVms} from './support/vm-registry';
 import {VmSchedulesService} from '../src/application/services/vm-schedules-service';
 import {AGENT_PROTOCOL_VERSION} from '../src/domain/agent/protocol';
 import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
@@ -154,7 +155,10 @@ function harness({
     };
 
     const settings = new SettingsService(new MemoryStore());
-    for (const copyPath of copies) settings.addRemoteProject(copy(copyPath));
+    addRemotesRegisteringVms(
+        settings,
+        copies.map((copyPath) => copy(copyPath)),
+    );
     const renderer = fakeRenderer();
     const timers = fakeTimers();
     const service = new VmSchedulesService({

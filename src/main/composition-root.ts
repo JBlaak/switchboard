@@ -31,8 +31,10 @@ import {ProjectHandoffService} from '../application/services/project-handoff-ser
 import {SessionHandoffService} from '../application/services/session-handoff-service';
 import {VmTranscripts} from '../application/services/vm-transcripts';
 import {VmSchedulesService} from '../application/services/vm-schedules-service';
+import {VmRegistryService} from '../application/services/vm-registry-service';
+import type {VmRegistry} from '../application/services/vm-registry';
 import {DroppedFilesService} from '../application/services/dropped-files-service';
-import {isVmFolder} from '../domain/agent/vm-paths';
+import {isVmFolder, vmHostPath} from '../domain/agent/vm-paths';
 import type {VmSchedules} from '../application/services/vm-schedules';
 import type {DroppedFiles} from '../application/services/dropped-files';
 import {SqliteVmTranscriptStore} from '../infrastructure/sqlite/vm-transcript-store';
@@ -122,7 +124,7 @@ import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner} from '../infrastructure/github/gh-cli';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {encodeProjectPath} from '../domain/project/project-path';
-import {isRemoteProjectPath, remoteProjectPath} from '../domain/project/remote-target';
+import {isRemoteProjectPath} from '../domain/project/remote-target';
 import {routeCandidates} from '../domain/ask/route';
 import {resolveBlaakTasksUrl} from '../domain/settings/settings';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
@@ -226,6 +228,11 @@ export interface Container {
      * 5). Optional only until `buildContainer` builds it.
      */
     readonly droppedFiles: DroppedFiles;
+    /**
+     * Settings → VMs (#307): the registered VMs, adding, renaming and removing
+     * them. Optional only until `buildContainer` builds it.
+     */
+    readonly vmRegistry: VmRegistry;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
@@ -469,22 +476,34 @@ export function buildContainer(): Container {
     // When a VM's agent is upgraded on its own: see AgentUpgrades.
     const agentUpgrades = new AgentUpgrades({
         appVersion: app.getVersion(),
-        agentProjectOn: (host) => {
-            const onHost = settings
-                .remoteProjects()
-                .find((r) => r.user === host.user && r.host === host.host && r.port === host.port && r.agent);
-            return onHost ? remoteProjectPath(onHost) : null;
-        },
+        // The VM's own path: the installer needs no project on the host.
+        agentProjectOn: (host) => (settings.findVmHost(host)?.agent ? vmHostPath(host) : null),
         install: (projectPath) => agentInstaller.install(projectPath),
         redial: (host) => agents.connection(host).retryNow(),
         log,
     });
     agents.onNeedsReinstall((host, reason) => void agentUpgrades.protocolMismatch(host, reason));
+
     agents.onConnected((connection) => void agentUpgrades.connected(connection));
 
     // Handing projects off to VMs (#276 stage 2). Forgetting a removed copy
     // reaches back into the container, which exists by the time anyone removes one.
     let forgetRemote: (projectPath: string) => void = () => {};
+    // Settings → VMs (#307): VMs registered on their own. Removing one forgets
+    // its projects as the Projects list's Remove does, which reaches back into
+    // the container, so it goes through `forgetRemote` (set once it exists).
+    const vmRegistry = new VmRegistryService({
+        settings,
+        agents,
+        forgetRemoteProject: (projectPath) => forgetRemote(projectPath),
+        renderer,
+        appVersion: app.getVersion(),
+        clock,
+        log,
+    });
+    // The list shows whether each link is up, so it follows them.
+    agents.onConnected(() => renderer.vmHostsChanged());
+    agents.onDisconnected(() => renderer.vmHostsChanged());
     // Where each project's schedules run (#276 stage 5): on this Mac, or in one
     // copy on its VM, kept in step with the VM's host settings on every connect.
     const vmSchedules = new VmSchedulesService({agents, settings, fs, renderer, clock, timers, log});
@@ -675,17 +694,14 @@ export function buildContainer(): Container {
     // Git for the pages, routed by path: a VM project's (`ssh://user@host//abs`)
     // goes through its host's agent, everything else to the Mac's own git.
     const vmGit: VmGitRouting = {
-        isAgentHost: (host) =>
-            settings
-                .remoteProjects()
-                .some((r) => r.user === host.user && r.host === host.host && r.port === host.port && !!r.agent),
+        isAgentHost: (host) => !!settings.findVmHost(host)?.agent,
         tools: (host) => agents.connection(host),
     };
     const workspace = new RoutingGitWorkspace(localWorkspace, vmGit);
     const git = new RoutingGitRemotes(new GitCliRemotes(), vmGit);
     const projectFolders = new ProjectFolderService({fs, git: localWorkspace, remotes: new GitCliRemotes()});
     // Only agentless remotes are turned away now; a VM project's pages are served.
-    const agentlessRemote = agentlessRemoteGuard(() => settings.remoteProjects());
+    const agentlessRemote = agentlessRemoteGuard(() => settings.vmHosts());
     // Transcripts for the pages: a VM session's folder (`vm:…`) is asked of its
     // VM; it never dials, so an offline VM answers empty.
     const routedTranscripts = new RoutingTranscriptStore({
@@ -1071,6 +1087,7 @@ export function buildContainer(): Container {
         vmTranscripts,
         vmSchedules,
         droppedFiles,
+        vmRegistry,
         shells,
         lifecycle,
         remote,

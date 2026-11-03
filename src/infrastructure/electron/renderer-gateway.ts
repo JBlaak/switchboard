@@ -101,6 +101,10 @@ export class ElectronRendererGateway implements RendererGateway {
         this.send(EVENT.projectsChanged);
     }
 
+    public vmHostsChanged(): void {
+        this.send(EVENT.vmHostsChanged);
+    }
+
     public statusUpdate(text: string, type: string): void {
         this.send(EVENT.statusUpdate, text, type);
     }
