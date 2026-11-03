@@ -35,6 +35,7 @@ import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {systemTimers} from '../infrastructure/system/timers';
 import type {Logger} from '../application/ports/logger';
 import type {AgentParts} from '../application/services/agent-host/agent-host';
+import type {ToolsPart} from '../application/services/agent-host/handlers';
 
 /** What the entry hands the wiring. */
 export interface PartsContext {
@@ -118,5 +119,34 @@ export async function createParts({log}: PartsContext): Promise<AgentParts> {
 
     // The hook server needs no stop of its own: it lives as long as the
     // process, which exits right after the sessions are terminated.
-    return {sessions, hooks, config, copies, transcripts};
+    return {sessions, hooks, config, copies, transcripts, tools: notYetTools()};
+}
+
+/** Until the tools part lands (#276 stage 4): every request answers that it is not supported yet. */
+function notYetTools(): ToolsPart {
+    const error = 'this agent does not serve the project pages yet';
+    return {
+        clientConnected() {},
+        clientGone() {},
+        handle(client, message) {
+            switch (message.type) {
+                case 'run-tool':
+                    return client.send({
+                        type: 'tool-result',
+                        requestId: message.requestId,
+                        code: -1,
+                        stdoutBase64: '',
+                        stderr: error,
+                    });
+                case 'read-file':
+                    return client.send({type: 'file-content', requestId: message.requestId, found: false});
+                case 'stat-files':
+                    return client.send({type: 'file-stats', requestId: message.requestId, sizes: {}});
+                case 'transcript-query':
+                    return client.send({type: 'transcript-answer', requestId: message.requestId, ok: false, error});
+                default:
+                    return;
+            }
+        },
+    };
 }

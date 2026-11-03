@@ -7,6 +7,8 @@ import type {
     CopiesPart,
     TranscriptsMessage,
     TranscriptsPart,
+    ToolsMessage,
+    ToolsPart,
     HookForwarderMessage,
     HookForwarderPart,
     HostConfigMessage,
@@ -61,7 +63,11 @@ function fakeParts(calls: Calls) {
         ...aware('transcripts'),
         handle: (_client, message: TranscriptsMessage) => void calls.push(`transcripts.handle:${message.type}`),
     };
-    return {sessions, hooks, config, copies, transcripts};
+    const tools: ToolsPart = {
+        ...aware('tools'),
+        handle: (_client, message: ToolsMessage) => void calls.push(`tools.handle:${message.type}`),
+    };
+    return {sessions, hooks, config, copies, transcripts, tools};
 }
 
 const quietLog: Logger = {debug() {}, info() {}, warn() {}, error() {}};
@@ -228,7 +234,14 @@ test('a dropped link tells every part the client is gone, once', () => {
     pair.agent.close();
 
     /* Then */
-    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone', 'transcripts.gone']);
+    assert.deepEqual(calls, [
+        'sessions.gone',
+        'hooks.gone',
+        'config.gone',
+        'copies.gone',
+        'transcripts.gone',
+        'tools.gone',
+    ]);
 });
 
 test('a client that never finished its handshake is not reported gone', () => {
@@ -254,7 +267,14 @@ test('a bye from the client closes the link without an answer', () => {
     /* Then */
     assert.equal(pair.sentByAgent.length, 1); // only the welcome
     assert.equal(pair.agent.closed, true);
-    assert.deepEqual(calls, ['sessions.gone', 'hooks.gone', 'config.gone', 'copies.gone', 'transcripts.gone']);
+    assert.deepEqual(calls, [
+        'sessions.gone',
+        'hooks.gone',
+        'config.gone',
+        'copies.gone',
+        'transcripts.gone',
+        'tools.gone',
+    ]);
 });
 
 test('closeAll says bye shutting-down to every client', () => {

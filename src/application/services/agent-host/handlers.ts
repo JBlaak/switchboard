@@ -8,6 +8,12 @@
  */
 import type {ClientLink} from '../../ports/agent-link';
 import type {
+    ReadFileMessage,
+    RunToolMessage,
+    StatFilesMessage,
+    TranscriptQueryMessage,
+    UnwatchDirMessage,
+    WatchDirMessage,
     GetTranscriptMessage,
     ImportTranscriptMessage,
     TranscriptTailMessage,
@@ -103,4 +109,16 @@ export type TranscriptsMessage = GetTranscriptMessage | TranscriptTailMessage | 
  */
 export interface TranscriptsPart extends ClientAware {
     handle(client: ClientLink, message: TranscriptsMessage): void;
+}
+
+export type ToolsMessage =
+    RunToolMessage | ReadFileMessage | StatFilesMessage | WatchDirMessage | UnwatchDirMessage | TranscriptQueryMessage;
+
+/**
+ * What the Mac's git and transcript adapters ask of the VM (#276 stage 4):
+ * `git`/`gh` runs, working-tree file reads and sizes, folder watches, and
+ * read-only questions to the VM's own transcript store.
+ */
+export interface ToolsPart extends ClientAware {
+    handle(client: ClientLink, message: ToolsMessage): void;
 }

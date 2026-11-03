@@ -14,7 +14,7 @@
  * numbers, enums) is checked exactly, and unknown extra fields are allowed, so
  * an optional field added later without a protocol bump still passes.
  */
-import {AGENT_CLOSE, type AgentCloseCode, type MacMessage} from './protocol';
+import {AGENT_CLOSE, TRANSCRIPT_QUERY_METHODS, type AgentCloseCode, type MacMessage} from './protocol';
 
 /** What `parseMacMessage` found: the message, or why it is not one. */
 export type ParsedMacMessage = {ok: true; message: MacMessage} | {ok: false; reason: string};
@@ -116,6 +116,23 @@ const MESSAGE_FIELDS: Record<MacMessage['type'], Record<string, Check>> = {
         patchUploadId: optional(string),
         files: arrayOf(shape({path: nonEmptyString, contentBase64: string, mode: integer})),
         worktree: optional(nonEmptyString),
+    },
+    'run-tool': {
+        requestId: nonEmptyString,
+        tool: oneOf('git', 'gh'),
+        cwd: nonEmptyString,
+        args: arrayOf(string),
+        stdinBase64: optional(string),
+        timeoutMs: integer,
+    },
+    'read-file': {requestId: nonEmptyString, path: nonEmptyString, maxBytes: integer},
+    'stat-files': {requestId: nonEmptyString, paths: arrayOf(nonEmptyString)},
+    'watch-dir': {watchId: nonEmptyString, dir: nonEmptyString},
+    'unwatch-dir': {watchId: nonEmptyString},
+    'transcript-query': {
+        requestId: nonEmptyString,
+        method: oneOf(...TRANSCRIPT_QUERY_METHODS),
+        args: arrayOf((v) => (v === undefined ? 'must not be undefined' : null)),
     },
     'get-transcript': {requestId: nonEmptyString, sessionId: nonEmptyString},
     'transcript-tail': {requestId: nonEmptyString, sessionId: nonEmptyString, bytes: integer},

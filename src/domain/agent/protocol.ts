@@ -407,6 +407,93 @@ export interface ImportTranscriptMessage {
     uploadId: string;
 }
 
+// ── Mac → agent: the project page, session work and Plan tab (stage 4) ──
+//
+// These pages stay on the Mac: their GitHub half already runs there (the
+// Mac's own `gh`), and only their git state and transcripts are on the VM. So
+// the agent answers the few things the Mac's git and transcript adapters ask
+// of a folder, and those adapters route a VM path (`ssh://user@host//abs`,
+// see `domain/agent/vm-paths`) here instead of to the Mac's disk.
+
+/** The tools a `run-tool` may run, always as argv (never a shell), with prompts disabled. */
+export type AgentToolName = 'git' | 'gh';
+
+/** Run `git` or `gh` in a folder; answered with `tool-result`. */
+export interface RunToolMessage {
+    type: 'run-tool';
+    requestId: string;
+    tool: AgentToolName;
+    /** Absolute on the VM. `git` runs as `git -C <cwd> …args`, `gh` with that cwd. */
+    cwd: string;
+    args: string[];
+    /** Bytes for stdin, base64. */
+    stdinBase64?: string;
+    timeoutMs: number;
+}
+
+/** Read a file the working tree holds (image compare's "after"); answered with `file-content`. */
+export interface ReadFileMessage {
+    type: 'read-file';
+    requestId: string;
+    /** Absolute on the VM. */
+    path: string;
+    maxBytes: number;
+}
+
+/** The sizes of regular files (never through a symlink); answered with `file-stats`. */
+export interface StatFilesMessage {
+    type: 'stat-files';
+    requestId: string;
+    /** Absolute on the VM. */
+    paths: string[];
+}
+
+/**
+ * Watch a working tree for changes, as the Mac's GitWorkspace.watch does for a
+ * local one; the agent pushes `dir-changed` (debounced) until `unwatch-dir`
+ * or the link closes.
+ */
+export interface WatchDirMessage {
+    type: 'watch-dir';
+    watchId: string;
+    /** Absolute on the VM. */
+    dir: string;
+}
+
+export interface UnwatchDirMessage {
+    type: 'unwatch-dir';
+    watchId: string;
+}
+
+/**
+ * Ask the VM's own transcript store (the same FileTranscriptStore the Mac
+ * uses, over the VM's `~/.claude/projects`). Only the read methods named in
+ * TRANSCRIPT_QUERY_METHODS; answered with `transcript-answer`, whose result is
+ * that method's return value as JSON.
+ */
+export interface TranscriptQueryMessage {
+    type: 'transcript-query';
+    requestId: string;
+    method: TranscriptQueryMethod;
+    args: unknown[];
+}
+
+/** The TranscriptStore read methods a `transcript-query` may call. */
+export const TRANSCRIPT_QUERY_METHODS = [
+    'locations',
+    'readSession',
+    'issueMentions',
+    'resolveProjectPath',
+    'readHeadLines',
+    'readTail',
+    'sessionMtimeMs',
+] as const;
+
+export type TranscriptQueryMethod = (typeof TRANSCRIPT_QUERY_METHODS)[number];
+
+/** The most a `tool-result`'s stdout or a `file-content` may carry, raw. */
+export const TOOL_OUTPUT_CAP_BYTES = 8 * 1024 * 1024;
+
 export type MacMessage =
     | HelloMessage
     | OpenSessionMessage
@@ -431,6 +518,12 @@ export type MacMessage =
     | GetTranscriptMessage
     | TranscriptTailMessage
     | ImportTranscriptMessage
+    | RunToolMessage
+    | ReadFileMessage
+    | StatFilesMessage
+    | WatchDirMessage
+    | UnwatchDirMessage
+    | TranscriptQueryMessage
     | ByeMessage;
 
 // ── Agent → Mac ──
@@ -616,6 +709,47 @@ export interface TranscriptsChangedMessage {
     sessionIds: string[];
 }
 
+// ── Agent → Mac: answers for the pages (stage 4) ──
+
+export interface ToolResultMessage {
+    type: 'tool-result';
+    requestId: string;
+    /** The exit code; -1 when the tool could not start or timed out. */
+    code: number;
+    stdoutBase64: string;
+    /** The last part of stderr, for error messages. */
+    stderr: string;
+    /** True when stdout passed TOOL_OUTPUT_CAP_BYTES and was cut. */
+    truncated?: boolean;
+}
+
+export interface FileContentMessage {
+    type: 'file-content';
+    requestId: string;
+    found: boolean;
+    contentBase64?: string;
+}
+
+export interface FileStatsMessage {
+    type: 'file-stats';
+    requestId: string;
+    /** Path → size in bytes, for the paths that are regular files. */
+    sizes: Record<string, number>;
+}
+
+export interface DirChangedMessage {
+    type: 'dir-changed';
+    watchId: string;
+}
+
+export interface TranscriptAnswerMessage {
+    type: 'transcript-answer';
+    requestId: string;
+    ok: boolean;
+    result?: unknown;
+    error?: string;
+}
+
 export type AgentMessage =
     | WelcomeMessage
     | OpenedMessage
@@ -637,6 +771,11 @@ export type AgentMessage =
     | TranscriptMessage
     | TranscriptTailReply
     | TranscriptsChangedMessage
+    | ToolResultMessage
+    | FileContentMessage
+    | FileStatsMessage
+    | DirChangedMessage
+    | TranscriptAnswerMessage
     | ByeMessage;
 
 // ── Either way ──
