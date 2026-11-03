@@ -26,11 +26,10 @@ import crypto from 'node:crypto';
 import type {AddressInfo} from 'node:net';
 
 import {parseGrillRound} from '../../domain/questions/grill';
-import {archiveToolReply} from '../../domain/session/archive-tool';
+import {archiveToolReply, type ArchiveToolOutcome} from '../../domain/session/archive-tool';
 import {parseQuestionHookInput, parseStopHookInput, QUESTION_HOOK_TOKEN_HEADER} from '../../domain/questions/question';
 import type {Logger} from '../../application/ports/logger';
 import type {QuestionHookEndpoint} from '../../application/ports/question-hook';
-import type {ArchiveToolService} from '../../application/services/archive-tool-service';
 import type {QuestionService} from '../../application/services/question-service';
 
 /** Far more than any question set; a body this big is not from the CLI. */
@@ -46,8 +45,15 @@ export interface QuestionHookServerDeps {
      * the server before the service that reads its address.
      */
     receiver: Pick<QuestionService, 'receive' | 'receiveRound' | 'promptSubmitted'>;
-    /** Where the archive tool's calls, and the ends of turns, go. */
-    archiveTool?: Pick<ArchiveToolService, 'request' | 'turnEnded'>;
+    /**
+     * Where the archive tool's calls, and the ends of turns, go. On the Mac,
+     * ArchiveToolService answers at once; on the agent the call is forwarded to
+     * the Mac and answered later, so a promise is allowed too.
+     */
+    archiveTool?: {
+        request(launchId: string): ArchiveToolOutcome | Promise<ArchiveToolOutcome>;
+        turnEnded(launchId: string): void;
+    };
     log: Logger;
 }
 
@@ -184,7 +190,29 @@ export class QuestionHookServer implements QuestionHookEndpoint {
     private mcp(launchId: string, body: unknown, res: http.ServerResponse): void {
         const {archiveTool} = this.deps;
         if (!archiveTool) return this.end(res, 404);
-        const reply = archiveToolReply(body, () => archiveTool.request(launchId));
+        // archiveToolReply is synchronous and pure. When the outcome is only a
+        // promise, the call is made once here, and the reply is built again
+        // around the settled outcome; a synchronous outcome replies at once,
+        // exactly as before.
+        const call: {pending?: Promise<ArchiveToolOutcome>} = {};
+        const reply = archiveToolReply(body, () => {
+            const outcome = archiveTool.request(launchId);
+            if (!(outcome instanceof Promise)) return outcome;
+            call.pending = outcome;
+            return {ok: false, message: ''};
+        });
+        if (call.pending) {
+            void call.pending
+                .catch((err: unknown): ArchiveToolOutcome => {
+                    this.deps.log.error('[archive-tool] request failed:', err);
+                    return {ok: false, message: 'Switchboard could not archive this session.'};
+                })
+                .then((outcome) => {
+                    const settled = archiveToolReply(body, () => outcome);
+                    if (settled) this.json(res, settled);
+                });
+            return;
+        }
         if (reply) this.json(res, reply);
         else this.end(res, 202);
     }
