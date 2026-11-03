@@ -6,6 +6,10 @@
  * project-path mapping is read from the index rather than by re-parsing a
  * transcript per directory on every render, and a folder the indexer has not
  * seen yet is resolved once and written back so later renders stay pure reads.
+ *
+ * VM sessions (#276 stage 3) take their titles from `VmTranscripts`' cache,
+ * and a session handed off to a VM has its local row left out, by the ids
+ * `handedOffSessions` in the global settings names.
  */
 import {buildProjectList} from '../../domain/project/project-list';
 import type {Project} from '../../domain/project/project';
@@ -14,29 +18,35 @@ import type {SessionRegistry} from '../model/session-registry';
 import type {SessionRepository} from '../ports/session-repository';
 import type {TranscriptStore} from '../ports/transcript-store';
 import type {SettingsService} from './settings-service';
+import type {VmTranscripts} from './vm-transcripts';
 
 export interface ProjectListDeps {
     repository: SessionRepository;
     transcripts: TranscriptStore;
     settings: SettingsService;
     registry: SessionRegistry;
+    /** VM sessions' transcripts (#276 stage 3); without it VM rows stay "Remote Claude". */
+    vmTranscripts?: Pick<VmTranscripts, 'forList'>;
 }
 
 export class ProjectListService {
     constructor(private readonly deps: ProjectListDeps) {}
 
     public list(showArchived: boolean): Project[] {
-        const {repository, settings, registry} = this.deps;
+        const {repository, settings, registry, vmTranscripts} = this.deps;
+        const remoteProjects = settings.remoteProjects();
         return buildProjectList({
             cached: repository.getAllCached(),
             meta: repository.getAllMeta(),
             hiddenProjects: settings.hiddenProjects(),
             knownProjectPaths: this.knownProjectPaths(),
             activeTerminals: this.activeTerminals(registry),
-            remoteProjects: settings.remoteProjects(),
+            remoteProjects,
             pinnedPlans: repository.getPinnedPlans(),
             pinnedIssuePlans: repository.getPinnedIssuePlans(),
             showArchived,
+            vmTranscripts: vmTranscripts?.forList(remoteProjects),
+            handedOffSessions: new Set(Object.keys(settings.global().handedOffSessions ?? {})),
         });
     }
 

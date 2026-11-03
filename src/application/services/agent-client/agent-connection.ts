@@ -31,6 +31,7 @@ import {
 import type {
     AgentMessage,
     AgentSessionInfo,
+    AgentTranscript,
     ConfigFile,
     CopyStateMessage,
     DoneMessage,
@@ -42,6 +43,8 @@ import type {
     OpenSessionMessage,
     TerminalOutput,
     ToolCheck,
+    TranscriptMessage,
+    TranscriptTailReply,
     WelcomeMessage,
 } from '../../../domain/agent/protocol';
 import type {RemoteConfig} from '../../../domain/project/remote-target';
@@ -407,6 +410,54 @@ export class AgentConnection {
     /** Delete a copy's folder on the VM; the agent refuses a folder it did not make. */
     public async removeCopy(dir: string): Promise<DoneMessage> {
         return this.request<DoneMessage>('done', (requestId) => ({type: 'remove-copy', requestId, dir}));
+    }
+
+    // ── Transcripts (stage 3) ──
+
+    /**
+     * A session's transcript as the VM parsed it: what its row is titled,
+     * dated and searched by. Null when the VM has no transcript of that id yet,
+     * or none worth listing. Asking also makes the agent watch that file, and
+     * send `transcripts-changed` (through `onMessage`) when it changes.
+     */
+    public async getTranscript(sessionId: string): Promise<AgentTranscript | null> {
+        const reply = await this.request<TranscriptMessage>('transcript', (requestId) => ({
+            type: 'get-transcript',
+            requestId,
+            sessionId,
+        }));
+        return reply.transcript;
+    }
+
+    /**
+     * The last `bytes` of a session's transcript, as lines: what PR watch and
+     * task detection read a local transcript's tail for. Empty when the VM has
+     * no transcript of that id.
+     */
+    public async transcriptTail(sessionId: string, bytes: number): Promise<string[]> {
+        const reply = await this.request<TranscriptTailReply>('transcript-tail', (requestId) => ({
+            type: 'transcript-tail',
+            requestId,
+            sessionId,
+            bytes,
+        }));
+        return reply.lines;
+    }
+
+    /**
+     * Put a transcript uploaded first (`upload`) where `claude --resume` on the
+     * VM finds it, for a session handed off from the Mac. `dir` is the folder it
+     * resumes in, as a project path names it. The agent refuses (`ok: false`)
+     * when a transcript of that id is already there.
+     */
+    public async importTranscript(sessionId: string, dir: string, uploadId: string): Promise<DoneMessage> {
+        return this.request<DoneMessage>('done', (requestId) => ({
+            type: 'import-transcript',
+            requestId,
+            sessionId,
+            dir,
+            uploadId,
+        }));
     }
 
     /**

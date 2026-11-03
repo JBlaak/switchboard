@@ -137,6 +137,17 @@ const TABLES = [
     session_id TEXT PRIMARY KEY,
     unlinked_at INTEGER NOT NULL
   )`,
+    // What the Mac last heard of each VM session's transcript (#276 stage 3), so
+    // a VM row keeps its title across a restart and while its host is off. The
+    // parsed transcript is JSON, read and written whole; mtime_ms is epoch ms
+    // on the VM.
+    `CREATE TABLE IF NOT EXISTS vm_transcripts (
+    session_id TEXT PRIMARY KEY,
+    host_key TEXT NOT NULL,
+    cwd TEXT NOT NULL,
+    mtime_ms REAL NOT NULL,
+    transcript TEXT NOT NULL
+  )`,
 ];
 
 const INDEXES = [
