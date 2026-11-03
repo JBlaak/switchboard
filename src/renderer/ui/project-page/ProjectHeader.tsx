@@ -8,6 +8,9 @@
  * answer stored from an earlier visit, with main asked again. A remote project, which has no GitHub, shows
  * no GitHub button but names its host (#175); nor does a project the overview
  * answers has no GitHub remote.
+ *
+ * Hand-off (#276 stage 2): a local project offers Hand off to… once there is
+ * a VM host, and a copy on a VM says which local project it is a copy of.
  */
 import type {JSX} from 'react';
 import {projectLabel} from '../../features/sessions/project-label';
@@ -16,6 +19,7 @@ import {formatDate} from '../../lib/format';
 import {remoteHost} from './page-state';
 import {remoteBadge} from '../../features/sessions/remote-badge';
 import {isVmProjectIn} from '../../state/agent-host-slice';
+import {CopyOriginLink, HandOffButton} from './HandoffSections';
 import {closeProject, isRemoteProject, openProjectOnGitHub, openProjectSettings, startProjectSession} from './actions';
 
 /** The repository on GitHub, as a link, and the branch the main checkout is on. */
@@ -120,6 +124,7 @@ export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element
                 <div className="sw-heading">
                     <h1 className="sw-title pp-title">{projectLabel(projectPath)}</h1>
                     <div className="sw-subline pp-subline">
+                        {remote && <CopyOriginLink projectPath={projectPath} />}
                         <HeaderFacts projectPath={projectPath} />
                         <span className="pp-path">{projectPath}</span>
                         <UpdatedAt projectPath={projectPath} />
@@ -144,6 +149,7 @@ export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element
                             GitHub
                         </button>
                     )}
+                    {!remote && <HandOffButton projectPath={projectPath} />}
                     <button type="button" className="sw-btn" onClick={() => openProjectSettings(projectPath)}>
                         <svg
                             width="14"

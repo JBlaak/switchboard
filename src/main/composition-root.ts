@@ -129,6 +129,7 @@ import type {McpServers} from '../application/ports/mcp-servers';
 import type {MainWindowHost} from '../application/ports/main-window';
 import type {SwitchboardDatabase} from '../infrastructure/sqlite/database';
 import type {AgentHosts} from '../application/services/agent-hosts';
+import type {ProjectHandoff} from '../application/services/project-handoff';
 
 /** Everything the IPC layer and the app lifecycle reach for. */
 export interface Container {
@@ -182,6 +183,11 @@ export interface Container {
      * terminal. Optional only until `buildContainer` builds it.
      */
     readonly agentHosts: AgentHosts;
+    /**
+     * Project hand-off to a VM (#276 stage 2): copies, Bring back and removing a
+     * copy. Optional only until `buildContainer` builds it.
+     */
+    readonly projectHandoff?: ProjectHandoff;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */

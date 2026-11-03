@@ -34,6 +34,7 @@ import {WorktreesSection} from './WorktreesSection';
 import {TasksSection} from './TasksSection';
 import {GitHubMessage, RemoteNote, StaleLine} from './EdgeStates';
 import {InstallAgentCard, SetupSection} from './AgentHostSections';
+import {CopiesSection, CopySection} from './HandoffSections';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import {
     closeProject,
@@ -278,14 +279,20 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
                         {github.kind === 'remote' ? (
                             <>
                                 {github.vm ? (
-                                    <SetupSection projectPath={projectPath} />
+                                    <>
+                                        <CopySection projectPath={projectPath} />
+                                        <SetupSection projectPath={projectPath} />
+                                    </>
                                 ) : (
                                     <InstallAgentCard projectPath={projectPath} />
                                 )}
                                 <RemoteNote vm={github.vm} />
                             </>
                         ) : (
-                            <WorktreesSection projectPath={projectPath} />
+                            <>
+                                <WorktreesSection projectPath={projectPath} />
+                                <CopiesSection projectPath={projectPath} />
+                            </>
                         )}
                     </div>
                 </div>
@@ -306,6 +313,7 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
                     <div className="pp-column pp-side">
                         <SessionsSection projectPath={projectPath} />
                         <WorktreesSection projectPath={projectPath} />
+                        <CopiesSection projectPath={projectPath} />
                     </div>
                 </div>
             )}

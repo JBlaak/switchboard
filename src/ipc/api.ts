@@ -42,6 +42,14 @@ import type {
 } from '../domain/tasks/surface';
 import type {AgentHostStatus, AgentHostsResult} from '../application/services/agent-hosts';
 import type {HostSettings, ToolCheck} from '../domain/agent/protocol';
+import type {
+    BringBackResult,
+    CopyStatus,
+    HandoffHost,
+    HandoffPreview,
+    HandoffResult,
+    ProjectCopy,
+} from '../application/services/project-handoff';
 
 export type {AgentHostStatus, AgentHostsResult};
 
@@ -329,6 +337,28 @@ export interface SwitchboardApi {
     /** Start the setup terminal on the host, answering its session id to open. */
     openAgentSetupTerminal(projectPath: string): Promise<{ok: true; sessionId: string} | {ok: false; error: string}>;
 
+    // ── Project hand-off to a VM (#276 stage 2) ──
+    /** The VM hosts a project can be handed off to; empty when there are none. */
+    handoffHosts(): Promise<HandoffHost[]>;
+    /** What handing a local project off would carry, or why it can't be handed off. */
+    previewHandoff(localPath: string): Promise<HandoffPreview | {error: string}>;
+    /**
+     * Hand a local project off to a host, carrying the ticked ignored files.
+     * Progress lines arrive on `onHandoffProgress`; on success the copy is a
+     * project of its own and `onProjectsChanged` fires.
+     */
+    handOffProject(localPath: string, hostKey: string, ticked: string[]): Promise<HandoffResult>;
+    /** A local project's copies on VMs. */
+    projectCopies(localPath: string): Promise<ProjectCopy[]>;
+    /** The local project a copy was made from; null for a remote that isn't a copy. */
+    copyOrigin(copyPath: string): Promise<string | null>;
+    /** Where a copy stands on its VM; null when the VM can't be reached. */
+    copyStatus(copyPath: string): Promise<CopyStatus | null>;
+    /** Bring the copy's branch back into a new local worktree; progress on `onBringBackProgress`. */
+    bringBackCopy(copyPath: string): Promise<BringBackResult>;
+    /** Delete the copy on its VM and forget it; the local project is left alone. */
+    removeCopy(copyPath: string): Promise<{ok: true} | {ok: false; error: string}>;
+
     // ── Events from main ──
     // Each answers its unsubscribe, so a listener can be removed again (StrictMode
     // mounts twice; a hot reload re-installs the bridge).
@@ -367,6 +397,10 @@ export interface SwitchboardApi {
     onSessionTaskChanged(cb: (sessionId: string, taskId: string | null) => void): Unsubscribe;
     /** One line of an agent install's progress, for the project whose host it is. */
     onAgentInstallProgress(cb: (projectPath: string, line: string) => void): Unsubscribe;
+    /** One line of a hand-off's progress, for the local project being handed off. */
+    onHandoffProgress(cb: (localPath: string, line: string) => void): Unsubscribe;
+    /** One line of a Bring back's progress, for the copy it brings back from. */
+    onBringBackProgress(cb: (copyPath: string, line: string) => void): Unsubscribe;
 
     // ── Host facts the renderer needs synchronously ──
     /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

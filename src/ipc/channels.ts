@@ -137,6 +137,16 @@ export const INVOKE = {
     agentHostSettings: 'agent:host-settings',
     agentSetHostSettings: 'agent:set-host-settings',
     agentOpenSetupTerminal: 'agent:open-setup-terminal',
+
+    // Project hand-off to a VM (#276 stage 2)
+    handoffHosts: 'handoff:hosts',
+    handoffPreview: 'handoff:preview',
+    handoffRun: 'handoff:hand-off',
+    handoffCopiesOf: 'handoff:copies-of',
+    handoffOriginOf: 'handoff:origin-of',
+    handoffCopyStatus: 'handoff:copy-status',
+    handoffBringBack: 'handoff:bring-back',
+    handoffRemoveCopy: 'handoff:remove-copy',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -181,6 +191,8 @@ export const EVENT = {
     tasksChanged: 'tasks:changed',
     sessionTaskChanged: 'tasks:session-task-changed',
     agentInstallProgress: 'agent:install-progress',
+    handoffProgress: 'handoff:progress',
+    bringBackProgress: 'handoff:bring-back-progress',
 } as const;
 
 /** Main tells the Quick Ask pop-up, unprompted; it is a window of its own (#142). */

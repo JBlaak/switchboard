@@ -58,6 +58,8 @@ export function installIpcBridge(
         api.onTasksChanged((update) => send({type: 'tasksChanged', update})),
         api.onSessionTaskChanged((sessionId, taskId) => send({type: 'sessionTaskChanged', sessionId, taskId})),
         api.onAgentInstallProgress((projectPath, line) => send({type: 'agentInstallProgress', projectPath, line})),
+        api.onHandoffProgress((localPath, line) => send({type: 'handoffProgress', localPath, line})),
+        api.onBringBackProgress((copyPath, line) => send({type: 'bringBackProgress', copyPath, line})),
     ];
     return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
 }

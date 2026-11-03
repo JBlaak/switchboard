@@ -14,6 +14,7 @@
 import type {EffectiveSettings} from '../../domain/settings/settings';
 import type {RendererEvent} from './events';
 import type {SessionRow} from '../../domain/session/session';
+import type {HandoffHost} from '../../application/services/project-handoff';
 
 export type DialogRequest =
     /**
@@ -31,7 +32,12 @@ export type DialogRequest =
      * submitting must not strand the dialog on a row it can no longer find.
      * The settings are fetched before opening, so the form is drawn filled in.
      */
-    | {readonly kind: 'resumeSession'; readonly session: SessionRow; readonly settings: EffectiveSettings};
+    | {readonly kind: 'resumeSession'; readonly session: SessionRow; readonly settings: EffectiveSettings}
+    /**
+     * Hand a local project off to a VM (#276): what goes over, the ignored files
+     * to carry, and the run. What it shows lives in the hand-off slice.
+     */
+    | {readonly kind: 'handOff'; readonly localPath: string; readonly host: HandoffHost};
 
 export interface DialogState {
     readonly open: DialogRequest | null;
