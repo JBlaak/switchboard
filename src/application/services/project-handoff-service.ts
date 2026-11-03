@@ -41,6 +41,7 @@ import {agentHostKey} from './agent-client/agent-client';
 import type {AgentClient} from './agent-client/agent-client';
 import type {AgentConnection} from './agent-client/agent-connection';
 import {HOST_REACH_TIMEOUT_MS} from './agent-hosts-service';
+import type {HandoffChoices} from './project-handoff';
 import type {
     BringBackResult,
     CopyStatus,
@@ -95,7 +96,7 @@ export interface WorktreeHandoff {
 }
 
 /** What else a hand-off may be asked to do, beyond the `ProjectHandoff` façade. */
-export interface HandoffOptions {
+export interface HandoffOptions extends HandoffChoices {
     worktree?: WorktreeHandoff;
 }
 

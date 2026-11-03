@@ -73,6 +73,7 @@ const hostSettingsPatch = shape({
     instructions: optional(string),
     copyConfig: optional(boolean),
     baseFolder: optional(string),
+    scheduleDirs: optional(arrayOf(nonEmptyString)),
 });
 
 /**
@@ -134,6 +135,8 @@ const MESSAGE_FIELDS: Record<MacMessage['type'], Record<string, Check>> = {
         method: oneOf(...TRANSCRIPT_QUERY_METHODS),
         args: arrayOf((v) => (v === undefined ? 'must not be undefined' : null)),
     },
+    'list-transcripts': {requestId: nonEmptyString, dirs: arrayOf(nonEmptyString), since: optional(integer)},
+    'place-upload': {requestId: nonEmptyString, uploadId: nonEmptyString, name: nonEmptyString},
     'get-transcript': {requestId: nonEmptyString, sessionId: nonEmptyString},
     'transcript-tail': {requestId: nonEmptyString, sessionId: nonEmptyString, bytes: integer},
     'import-transcript': {

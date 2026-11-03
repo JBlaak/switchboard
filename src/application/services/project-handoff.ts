@@ -41,6 +41,12 @@ export interface HandoffPreview {
     existing: Record<string, string>;
 }
 
+/** What the user chose in the hand-off dialog beyond the files (stage 5). */
+export interface HandoffChoices {
+    /** Run the project's schedules in the copy on the VM from now on (Q18; the dialog defaults to yes). */
+    schedulesOnVm?: boolean;
+}
+
 /** A local project's copy on a VM. */
 export interface ProjectCopy {
     /** The copy's own project path, `ssh://user@host[:port]/dir`. */
@@ -74,6 +80,7 @@ export interface ProjectHandoff {
         hostKey: string,
         ticked: string[],
         onProgress?: (line: string) => void,
+        options?: HandoffChoices,
     ): Promise<HandoffResult>;
     /** The local project's copies. */
     copiesOf(localPath: string): ProjectCopy[];

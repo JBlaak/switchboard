@@ -94,6 +94,8 @@ const OWNER: Record<Exclude<MacMessage['type'], 'hello' | 'bye'>, Owner> = {
     'watch-dir': 'tools',
     'unwatch-dir': 'tools',
     'transcript-query': 'tools',
+    'list-transcripts': 'transcripts',
+    'place-upload': 'copies',
 };
 
 /** Where one client's link is: waiting for `hello`, handed to the parts, or ended. */

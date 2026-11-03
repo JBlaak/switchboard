@@ -8,6 +8,8 @@
  */
 import type {ClientLink} from '../../ports/agent-link';
 import type {
+    ListTranscriptsMessage,
+    PlaceUploadMessage,
     ReadFileMessage,
     RunToolMessage,
     StatFilesMessage,
@@ -89,7 +91,8 @@ export type CopiesMessage =
     | HandoffMessage
     | CopyStatusMessage
     | PushBranchMessage
-    | RemoveCopyMessage;
+    | RemoveCopyMessage
+    | PlaceUploadMessage;
 
 /**
  * The VM's project copies (#276 stage 2): chunked uploads, making or updating
@@ -99,7 +102,8 @@ export interface CopiesPart extends ClientAware {
     handle(client: ClientLink, message: CopiesMessage): void;
 }
 
-export type TranscriptsMessage = GetTranscriptMessage | TranscriptTailMessage | ImportTranscriptMessage;
+export type TranscriptsMessage =
+    GetTranscriptMessage | TranscriptTailMessage | ImportTranscriptMessage | ListTranscriptsMessage;
 
 /**
  * The VM's transcripts (#276 stage 3): parsed for the Mac's rows and search,
