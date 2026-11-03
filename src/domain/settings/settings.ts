@@ -67,6 +67,11 @@ export interface GlobalSettings {
 /** A remote project as stored in the `global` settings blob. */
 export interface RemoteProjectSetting extends RemoteConfig {
     sessions?: RemoteSessionRecord[];
+    /**
+     * Set once a Switchboard agent is installed on the host (#276): its sessions
+     * then run on the agent instead of in tmux. Absent on an agentless remote.
+     */
+    agent?: {version: string; installedAt: string};
 }
 
 /** Persisted window geometry. */
