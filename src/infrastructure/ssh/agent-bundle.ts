@@ -17,6 +17,7 @@
  * builds there, and electron-builder's `extraResources` ships both.
  */
 import {mkdir, readFile, readdir, stat, writeFile} from 'node:fs/promises';
+import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import type {AgentArch} from '../../domain/agent/layout';
 import {safeVersion} from '../../domain/agent/install-script';
@@ -117,5 +118,18 @@ async function isFile(p: string): Promise<boolean> {
         return (await stat(p)).isFile();
     } catch {
         return false;
+    }
+}
+
+/**
+ * The build stamp of the agent this app ships (`<agentDir>/VERSION`, written
+ * by the build): what a VM's agent must report to count as current. The app's
+ * own version stands in when the file is missing, as in a test harness.
+ */
+export function bundledAgentVersion(sources: Pick<AgentBundleSources, 'agentDir'>, fallback: string): string {
+    try {
+        return readFileSync(path.join(sources.agentDir, 'VERSION'), 'utf8').trim() || fallback;
+    } catch {
+        return fallback;
     }
 }

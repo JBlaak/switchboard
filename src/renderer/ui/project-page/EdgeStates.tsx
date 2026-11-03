@@ -2,12 +2,13 @@
  * What the project page shows in place of its GitHub sections when it has
  * nothing to show in them (#175, artboard 5): the one message when `gh` is
  * missing, signed out or GitHub unreachable, the line over stale data, and the
- * note on a remote project. Which state the page is in is `page-state`.
+ * note on an agentless remote project, and the one in place of Tasks on a VM
+ * project. Which state the page is in is `page-state`.
  */
 import type {JSX} from 'react';
 import {useStore} from '../use-store';
 import type {GitHubUnavailableReason} from '../../../domain/project/overview';
-import {remoteNote, staleLine, unavailableMessage} from './page-state';
+import {REMOTE_NOTE, staleLine, unavailableMessage} from './page-state';
 import {copyAuthCommand, reloadProjectOverview} from './actions';
 
 /** One message in place of Plans & issues and Pull requests, with Try again (and Copy command). */
@@ -57,7 +58,7 @@ export function StaleLine({fetchedAt}: {fetchedAt: number}): JSX.Element {
     );
 }
 
-/** Under a remote project's sessions: what the page does not read there. */
-export function RemoteNote({vm}: {vm: boolean}): JSX.Element {
-    return <div className="pp-remote-note">{remoteNote(vm)}</div>;
+/** Under an agentless remote project's sessions: what the page does not read there. */
+export function RemoteNote(): JSX.Element {
+    return <div className="pp-remote-note">{REMOTE_NOTE}</div>;
 }

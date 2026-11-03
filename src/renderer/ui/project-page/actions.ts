@@ -22,9 +22,9 @@ import {openPlanPage} from '../plan-page/actions';
 import {startIssueSession} from '../session-work/plan/actions';
 import {pulseSessionRow} from '../session-list/pulse';
 import {cursorId} from './page-rows';
-import {AUTH_COMMAND} from './page-state';
+import {AUTH_COMMAND, isVmRepositoryIn, opensGitHub} from './page-state';
 
-/** True for an ssh:// project: no GitHub link, nothing local to read. */
+/** True for an ssh:// project, VM or not: nothing on the Mac to read. */
 export function isRemoteProject(projectPath: string): boolean {
     return projectPath.startsWith('ssh://');
 }
@@ -49,15 +49,16 @@ export function closeProject(): void {
     dispatch({type: 'projectClosed'});
 }
 
-/** The project's repository on GitHub, in the browser. Nothing for a remote project. */
+/** The project's repository on GitHub, in the browser. Nothing for an agentless remote project. */
 export function openProjectOnGitHub(projectPath: string): void {
-    if (isRemoteProject(projectPath)) return;
+    if (!opensGitHub(projectPath, isVmRepositoryIn(getState().agentHost, projectPath))) return;
     void window.api.openRepository(projectPath);
 }
 
 /**
  * A click on a project's name, wherever it is shown: the page, or GitHub
- * with ⌘ held (nothing for a remote project, which has no GitHub link).
+ * with ⌘ held (nothing for an agentless remote project, which has no GitHub
+ * link).
  */
 export function clickProjectName(projectPath: string, withCommand: boolean): void {
     if (withCommand) openProjectOnGitHub(projectPath);

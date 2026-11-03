@@ -37,6 +37,7 @@ import {installTasksPage} from '../ui/tasks-page/install-tasks-page';
 import {followBlaakTasksSwitch} from '../ui/tasks-page/actions';
 import {installMainArea} from '../ui/main-area/install-main-area';
 import {installPhoneAccess} from '../ui/phone-access/install-phone-access';
+import {installVms} from '../ui/vms/install-vms';
 import {installSessionTask} from '../ui/session-task/install-session-task';
 import type {GlobalSettings} from '../../domain/settings/settings';
 
@@ -62,6 +63,7 @@ export function bootstrap(): void {
     installProjectPage();
     installTasksPage();
     installPhoneAccess();
+    installVms();
     installSessionTask();
     followColorSchemeInTerminals();
     installTerminalProbe();

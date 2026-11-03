@@ -25,7 +25,7 @@ import type {GitWorkspace, GitWorktrees} from '../ports/git-workspace';
 import type {GitHubCli} from '../ports/github-cli';
 import type {GitRemotes} from '../ports/git-remotes';
 import type {Logger} from '../ports/logger';
-import type {TranscriptStore} from '../ports/transcript-store';
+import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
 import {BranchWorktrees, WORKTREES_DIR, type ChosenBase} from './support/branch-worktrees';
 
 /** How long a PR's closing references are trusted before `gh` is asked again. */
@@ -46,13 +46,21 @@ export interface IssueSessionCandidate {
 
 export interface IssueSessionServiceDeps {
     sessions(): IssueSessionCandidate[];
-    transcripts: Pick<TranscriptStore, 'locations'>;
+    /** Answered now for a local session, later for a VM one (#276 stage 4). */
+    transcripts: Pick<AwaitableTranscriptStore, 'locations'>;
     git: Pick<GitWorkspace, 'currentBranch' | 'defaultBranch' | 'branchExists' | 'commitSha' | 'worktrees'> &
         GitWorktrees;
     remotes: GitRemotes;
     github: Pick<GitHubCli, 'available' | 'closingIssues'>;
     clock: Clock;
     log: Logger;
+    /**
+     * Whether a path is on a remote with no Switchboard agent: its sessions own
+     * no issue and no session starts there, its checkout being out of git's
+     * reach. A VM project's git answers from the VM, so it goes through.
+     * Without it, every remote is turned away, as before #276 stage 4.
+     */
+    agentlessRemote?: (path: string) => boolean;
 }
 
 export class IssueSessionService {
@@ -73,7 +81,7 @@ export class IssueSessionService {
     public async issueSessions(repository: string): Promise<Record<string, string>> {
         const candidates: {session: IssueSessionCandidate; branches: string[]}[] = [];
         for (const session of this.deps.sessions()) {
-            if (session.archived || isRemoteProjectPath(session.projectPath)) continue;
+            if (session.archived || this.agentless(session.projectPath)) continue;
             if ((await this.repositoryOf(session.projectPath)) !== repository) continue;
             candidates.push({session, branches: await this.worktrees.branchesOf(session)});
         }
@@ -149,6 +157,10 @@ export class IssueSessionService {
         return repository;
     }
 
+    private agentless(path: string): boolean {
+        return (this.deps.agentlessRemote ?? isRemoteProjectPath)(path);
+    }
+
     // ── Starting a session on an issue (A2, A3) ──
 
     /**
@@ -167,7 +179,9 @@ export class IssueSessionService {
         existing,
     }: IssueWorktreeRequest): Promise<IssueWorktreeResult> {
         const {git} = this.deps;
-        if (isRemoteProjectPath(projectPath)) return fail('A session on an issue can only start in a local project');
+        if (this.agentless(projectPath)) {
+            return fail('A session on an issue can only start in a local project or on a VM');
+        }
         const root = await git.mainCheckout(projectPath);
         if (!root) return fail('Not a git repository: ' + projectPath);
         const origin = await this.deps.remotes.originUrl(root);

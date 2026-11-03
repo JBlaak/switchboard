@@ -9,10 +9,12 @@
  * follow at once (see `rekeyState`).
  */
 import {agentHostReducer, initialAgentHostState} from './agent-host-slice';
+import {initialVmsState, vmsReducer} from './vms-slice';
 import {handoffReducer, initialHandoffState} from './handoff-slice';
 import {initialSessionHandoffState, rekeySessionHandoff, sessionHandoffReducer} from './session-handoff-slice';
 import {activityReducer, initialActivityState, rekeyActivity} from './activity-slice';
 import {archiveUndoReducer, initialArchiveUndoState, rekeyArchiveUndo} from './archive-undo-slice';
+import {dropUploadReducer, initialDropUploadState} from './drop-upload-slice';
 import {askReducer, initialAskState} from './ask-slice';
 import {answersReducer, followPending, initialAnswersState} from './answers-slice';
 import {ciStatusReducer, initialCiStatusState, rekeyCiStatus} from './ci-status-slice';
@@ -38,8 +40,10 @@ import {initialViewState, rekeyView, viewReducer} from './view-slice';
 import type {ActivityState} from './activity-slice';
 import type {AnswersState} from './answers-slice';
 import type {AgentHostState} from './agent-host-slice';
+import type {VmsState} from './vms-slice';
 import type {HandoffState} from './handoff-slice';
 import type {SessionHandoffState} from './session-handoff-slice';
+import type {DropUploadState} from './drop-upload-slice';
 import type {ArchiveUndoState} from './archive-undo-slice';
 import type {AskState} from './ask-slice';
 import type {CiStatusState} from './ci-status-slice';
@@ -90,8 +94,10 @@ export interface RendererState {
     readonly sessionTask: SessionTaskState;
     readonly archiveUndo: ArchiveUndoState;
     readonly agentHost: AgentHostState;
+    readonly vms: VmsState;
     readonly handoff: HandoffState;
     readonly sessionHandoff: SessionHandoffState;
+    readonly dropUpload: DropUploadState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -121,8 +127,10 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         sessionTask: initialSessionTaskState,
         archiveUndo: initialArchiveUndoState,
         agentHost: initialAgentHostState,
+        vms: initialVmsState,
         handoff: initialHandoffState,
         sessionHandoff: initialSessionHandoffState,
+        dropUpload: initialDropUploadState,
     };
 }
 
@@ -160,8 +168,10 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const sessionTask = sessionTaskReducer(state.sessionTask, event, tasks.enabled);
     const archiveUndo = archiveUndoReducer(state.archiveUndo, event);
     const agentHost = agentHostReducer(state.agentHost, event);
+    const vms = vmsReducer(state.vms, event);
     const handoff = handoffReducer(state.handoff, event);
     const sessionHandoff = sessionHandoffReducer(state.sessionHandoff, event);
+    const dropUpload = dropUploadReducer(state.dropUpload, event);
 
     return settle(state, {
         view,
@@ -189,8 +199,10 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         sessionTask,
         archiveUndo,
         agentHost,
+        vms,
         handoff,
         sessionHandoff,
+        dropUpload,
     });
 }
 
@@ -243,12 +255,16 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         sessionTask: rekeySessionTask(state.sessionTask, oldId, newId),
         // An archive taken back brings the session back under its new id.
         archiveUndo: rekeyArchiveUndo(state.archiveUndo, oldId, newId),
-        // Keyed by project path, which a re-key leaves alone.
+        // Keyed by project path and VM key, which a re-key leaves alone.
         agentHost: state.agentHost,
+        // Names no session.
+        vms: state.vms,
         // Keyed by project path, which a re-key leaves alone.
         handoff: state.handoff,
         // A session handed off keeps its hand-off under its new id.
         sessionHandoff: rekeySessionHandoff(state.sessionHandoff, oldId, newId),
+        // Names no session: the note is for whichever terminal the files were dropped on.
+        dropUpload: state.dropUpload,
     });
 }
 

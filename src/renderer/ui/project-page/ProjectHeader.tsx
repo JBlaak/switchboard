@@ -5,9 +5,12 @@
  * The subline has the GitHub repository and the current branch, as the
  * project overview (#172) answers them (#174), then the path, then how fresh
  * GitHub's part of the page is, and "Updating…" while what shows is the
- * answer stored from an earlier visit, with main asked again. A remote project, which has no GitHub, shows
- * no GitHub button but names its host (#175); nor does a project the overview
- * answers has no GitHub remote.
+ * answer stored from an earlier visit, with main asked again. A remote
+ * project names its host (#175). An agentless one, which has no GitHub, shows
+ * no GitHub button; nor does a project the overview answers has no GitHub
+ * remote. A VM project (#276 stage 4) has its VM badge and the GitHub button.
+ * A project on a registered VM (#307) says which, "On <VM> · Manage in
+ * Settings", in place of the host's address.
  *
  * Hand-off (#276 stage 2): a local project offers Hand off to… once there is
  * a VM host, and a copy on a VM says which local project it is a copy of.
@@ -16,10 +19,11 @@ import type {JSX} from 'react';
 import {projectLabel} from '../../features/sessions/project-label';
 import {useStore} from '../use-store';
 import {formatDate} from '../../lib/format';
-import {remoteHost} from './page-state';
+import {opensGitHub, remoteHost} from './page-state';
 import {remoteBadge} from '../../features/sessions/remote-badge';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import {CopyOriginLink, HandOffButton} from './HandoffSections';
+import {useHostLink, VmLink} from './VmLink';
 import {closeProject, isRemoteProject, openProjectOnGitHub, openProjectSettings, startProjectSession} from './actions';
 
 /** The repository on GitHub, as a link, and the branch the main checkout is on. */
@@ -94,6 +98,8 @@ function HostBadge({projectPath}: {projectPath: string}): JSX.Element | null {
 
 export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element {
     const remote = isRemoteProject(projectPath);
+    const vm = useStore((state) => isVmProjectIn(state.agentHost, projectPath));
+    const link = useHostLink(projectPath);
     // Until the first answer the button shows: most projects are on GitHub.
     const noGitHub = useStore(
         (state) =>
@@ -132,8 +138,12 @@ export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element
                 </div>
                 <div className="pp-header-actions">
                     {remote && <HostBadge projectPath={projectPath} />}
-                    {remote && <span className="pp-host">{remoteHost(projectPath)}</span>}
-                    {!remote && !noGitHub && (
+                    {link?.kind === 'vm' ? (
+                        <VmLink link={link} />
+                    ) : (
+                        remote && <span className="pp-host">{remoteHost(projectPath)}</span>
+                    )}
+                    {opensGitHub(projectPath, vm) && !noGitHub && (
                         <button type="button" className="sw-btn" onClick={() => openProjectOnGitHub(projectPath)}>
                             <svg
                                 width="14"

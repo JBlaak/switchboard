@@ -7,6 +7,8 @@ import path from 'node:path';
 
 import {Uploads} from '../src/application/services/agent-host/copies-uploads';
 import {
+    CWD_HEAD_BYTES,
+    LIST_MAX_SESSIONS,
     TAIL_MAX_BYTES,
     Transcripts,
     type FolderWatch,
@@ -356,9 +358,13 @@ test('the real folder watcher hears an append', async () => {
     );
 
     /* When */
-    fs.appendFileSync(file, '{}\n');
-    const deadline = Date.now() + 5000;
-    while (heard === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+    // A watch that has only just started can miss the very first write (macOS
+    // starts FSEvents asynchronously), so keep appending until one is heard.
+    const deadline = Date.now() + 10_000;
+    while (heard === 0 && Date.now() < deadline) {
+        fs.appendFileSync(file, '{}\n');
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
     watch?.close();
 
     /* Then */
@@ -498,4 +504,122 @@ test('an import a client waits on is pushed to it', async () => {
     /* Then */
     assert.equal(reply(h.received, 'done', 'r2').ok, true);
     assert.deepEqual(changes(h.received), [[SESSION]]);
+});
+
+// ── list-transcripts (stage 5) ──
+
+/** A session id that differs by `n`, for many sessions at once. */
+function sessionIdOf(n: number): string {
+    return `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+}
+
+/** Write a session started in `cwd`, with its file's mtime at `mtimeMs`. */
+function session(h: Harness, cwd: string, sessionId: string, mtimeMs: number): string {
+    const file = writeTranscript(h, encodeProjectPath(cwd), [user('Hi', '2026-11-01T10:00:00.000Z', cwd)], sessionId);
+    fs.utimesSync(file, mtimeMs / 1000, mtimeMs / 1000);
+    return file;
+}
+
+test('the sessions in a folder and below it are listed newest first, in ~ form', () => {
+    /* Given */
+    const h = harness();
+    const app = path.join(h.home, 'projects', 'app');
+    session(h, app, sessionIdOf(1), 1_000_000);
+    session(h, path.join(app, '.claude', 'worktrees', 'fix'), sessionIdOf(2), 3_000_000);
+    session(h, path.join(app, 'packages', 'web'), sessionIdOf(3), 2_000_000);
+    session(h, path.join(h.home, 'projects', 'app-two'), sessionIdOf(4), 4_000_000);
+    session(h, path.join(h.home, 'projects', 'other'), sessionIdOf(5), 5_000_000);
+
+    /* When */
+    h.send({type: 'list-transcripts', requestId: 'l1', dirs: ['~/projects/app']});
+
+    /* Then */
+    assert.deepEqual(reply(h.received, 'transcript-list', 'l1').sessions, [
+        {sessionId: sessionIdOf(2), dir: '~/projects/app/.claude/worktrees/fix', mtimeMs: 3_000_000},
+        {sessionId: sessionIdOf(3), dir: '~/projects/app/packages/web', mtimeMs: 2_000_000},
+        {sessionId: sessionIdOf(1), dir: '~/projects/app', mtimeMs: 1_000_000},
+    ]);
+});
+
+test('a folder outside home is matched and answered as it is', () => {
+    /* Given */
+    const h = harness();
+    const srv = path.join(path.dirname(h.home), 'srv', 'api');
+    session(h, srv, sessionIdOf(1), 1_000_000);
+
+    /* When */
+    h.send({type: 'list-transcripts', requestId: 'l2', dirs: [srv]});
+
+    /* Then */
+    assert.deepEqual(reply(h.received, 'transcript-list', 'l2').sessions, [
+        {sessionId: sessionIdOf(1), dir: srv, mtimeMs: 1_000_000},
+    ]);
+});
+
+test('only sessions modified since the given time are listed', () => {
+    /* Given */
+    const h = harness();
+    const app = path.join(h.home, 'projects', 'app');
+    session(h, app, sessionIdOf(1), 1_000_000);
+    session(h, app, sessionIdOf(2), 2_000_000);
+    session(h, app, sessionIdOf(3), 3_000_000);
+
+    /* When */
+    h.send({type: 'list-transcripts', requestId: 'l3', dirs: ['~/projects/app'], since: 2_000_000});
+
+    /* Then */
+    assert.deepEqual(
+        reply(h.received, 'transcript-list', 'l3').sessions.map((s) => s.sessionId),
+        [sessionIdOf(3), sessionIdOf(2)],
+    );
+});
+
+test('the list holds at most the newest LIST_MAX_SESSIONS sessions', () => {
+    /* Given */
+    const h = harness();
+    const app = path.join(h.home, 'projects', 'app');
+    const count = LIST_MAX_SESSIONS + 25;
+    for (let n = 1; n <= count; n++) session(h, app, sessionIdOf(n), n * 1000);
+
+    /* When */
+    h.send({type: 'list-transcripts', requestId: 'l4', dirs: ['~/projects/app']});
+
+    /* Then */
+    const sessions = reply(h.received, 'transcript-list', 'l4').sessions;
+    assert.equal(sessions.length, LIST_MAX_SESSIONS);
+    assert.equal(sessions[0]?.sessionId, sessionIdOf(count));
+    assert.equal(sessions.at(-1)?.sessionId, sessionIdOf(count - LIST_MAX_SESSIONS + 1));
+});
+
+test('a session whose cwd is past a large opening line is still listed', () => {
+    /* Given */
+    const h = harness();
+    const app = path.join(h.home, 'projects', 'app');
+    const snapshot = JSON.stringify({type: 'file-history-snapshot', blob: 'x'.repeat(CWD_HEAD_BYTES * 2)});
+    const file = writeTranscript(
+        h,
+        encodeProjectPath(app),
+        [snapshot, user('Hi', '2026-11-01T10:00:00.000Z', app)],
+        sessionIdOf(1),
+    );
+    fs.utimesSync(file, 1000, 1000);
+
+    /* When */
+    h.send({type: 'list-transcripts', requestId: 'l5', dirs: ['~/projects/app']});
+
+    /* Then */
+    assert.deepEqual(reply(h.received, 'transcript-list', 'l5').sessions, [
+        {sessionId: sessionIdOf(1), dir: '~/projects/app', mtimeMs: 1_000_000},
+    ]);
+});
+
+test('a folder with no sessions answers an empty list', () => {
+    /* Given */
+    const h = harness();
+
+    /* When */
+    h.send({type: 'list-transcripts', requestId: 'l6', dirs: ['~/projects/none']});
+
+    /* Then */
+    assert.deepEqual(reply(h.received, 'transcript-list', 'l6').sessions, []);
 });

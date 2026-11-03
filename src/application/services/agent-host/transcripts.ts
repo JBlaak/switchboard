@@ -1,7 +1,8 @@
 /**
  * The VM's transcripts (#276 stage 3, #290): parsed for the Mac's rows and
  * search, watched for changes once asked about, tailed for task detection, and
- * imported for a session's hand-off.
+ * imported for a session's hand-off, and listed by folder for the runs the
+ * Mac did not start (stage 5).
  *
  * The Mac never scans the VM's `~/.claude/projects`. It knows its VM sessions
  * by id and asks for each one (`get-transcript`); the agent parses it here,
@@ -46,6 +47,17 @@
  * A session is watched for as long as some client that asked about it is
  * connected. When the last of them goes, so do its timers and, if nothing
  * else needs them, the folder watches.
+ *
+ * ## Listing by folder
+ *
+ * A schedule on the VM starts sessions the Mac never asked for, so the Mac
+ * asks which sessions ran in a copy's folder (`list-transcripts`) and then
+ * fetches each one it lacks by id. The listing has to stay cheap however many
+ * transcripts the VM holds: a project folder's name is its path encoded
+ * character by character, so only folders whose name starts as an asked
+ * folder's would are looked into; each file is stat'ed first and dropped on
+ * `since` before any is read; and a file's cwd is read from its head, once,
+ * and remembered by file, since a transcript's cwd never changes.
  */
 import {rewriteTranscriptCwd} from '../../../domain/agent/session-handoff';
 import {TRANSCRIPT_TEXT_CAP_CHARS} from '../../../domain/agent/protocol';
@@ -53,8 +65,11 @@ import type {
     AgentTranscript,
     GetTranscriptMessage,
     ImportTranscriptMessage,
+    ListTranscriptsMessage,
+    TranscriptListMessage,
     TranscriptTailMessage,
 } from '../../../domain/agent/protocol';
+import {absoluteDir, homeForm, isAtOrBelow} from '../../../domain/agent/schedule-dirs';
 import {encodeProjectPath, worktreeParentPath} from '../../../domain/project/project-path';
 import {cwdFromTranscript, parseTranscript} from '../../../domain/session/transcript';
 import type {ClientLink} from '../../ports/agent-link';
@@ -79,6 +94,8 @@ export interface TranscriptFileStat {
 export interface TranscriptFiles {
     /** The names of the folders directly in `dir`; [] when it does not exist or can't be read. */
     listFolders(dir: string): string[];
+    /** The names of the regular files directly in `dir`; [] when it does not exist or can't be read. */
+    listFiles(dir: string): string[];
     /** A regular file's stat; null when it is missing or not a file. */
     stat(file: string): TranscriptFileStat | null;
     /** The whole file as UTF-8; null when it can't be read. */
@@ -136,6 +153,21 @@ export const SWEEP_EVERY = 15;
 /** The most a `transcript-tail` reads: task detection needs the last few turns, not the file. */
 export const TAIL_MAX_BYTES = 1024 * 1024;
 
+/** The most sessions one `transcript-list` holds, the newest. */
+export const LIST_MAX_SESSIONS = 200;
+
+/** How much of a transcript's head is read for its cwd, as the Mac's store reads it. */
+export const CWD_HEAD_BYTES = 64 * 1024;
+
+/** Past this, a transcript whose head had no cwd is not read further: it is given none. */
+export const CWD_WHOLE_MAX_BYTES = 4 * 1024 * 1024;
+
+/** How many files' cwds are remembered before the memory starts again. */
+const CWD_MEMORY_MAX = 10_000;
+
+/** Claude shortens a project folder's name past this many characters, and adds a hash. */
+const FOLDER_NAME_MAX = 200;
+
 /**
  * What a session id may look like before it goes into a path. Claude's are
  * UUIDs; this is looser, but has no `/` and no `.`, so `..` and friends can
@@ -187,6 +219,8 @@ export class Transcripts implements TranscriptsPart {
     private readonly folders = new Map<string, FolderWatch | null>();
     private pollTimer: TimerHandle = null;
     private polls = 0;
+    /** Each transcript's cwd, by file: it is written once, at the session's start. */
+    private readonly cwds = new Map<string, string>();
 
     constructor(private readonly deps: TranscriptsDeps) {}
 
@@ -211,6 +245,8 @@ export class Transcripts implements TranscriptsPart {
                 return this.tail(client, message);
             case 'import-transcript':
                 return this.importTranscript(client, message);
+            case 'list-transcripts':
+                return this.listTranscripts(client, message);
         }
     }
 
@@ -429,6 +465,83 @@ export class Transcripts implements TranscriptsPart {
             body = slice.subarray(newline + 1);
         }
         answer(new TextDecoder().decode(body).split('\n').filter(Boolean));
+    }
+
+    // ── list-transcripts ──
+
+    /**
+     * The sessions whose cwd is one of `dirs` or below it, newest first, at
+     * most LIST_MAX_SESSIONS, each with its cwd in `~` form, as the Mac names
+     * a copy's folder. See the module comment for what keeps it cheap.
+     */
+    private listTranscripts(client: ClientLink, message: ListTranscriptsMessage): void {
+        const {files, projectsDir, home} = this.deps;
+        const dirs = message.dirs.map((dir) => absoluteDir(dir, home));
+        const prefixes = dirs.map((dir) => encodeProjectPath(dir).slice(0, FOLDER_NAME_MAX));
+        const since = message.since ?? null;
+
+        const candidates: {sessionId: string; file: string; mtimeMs: number}[] = [];
+        for (const folder of files.listFolders(projectsDir)) {
+            if (NOT_A_PROJECT.has(folder)) continue;
+            if (!prefixes.some((prefix) => folder.startsWith(prefix))) continue;
+            const dir = `${projectsDir}/${folder}`;
+            for (const name of files.listFiles(dir)) {
+                if (!name.endsWith('.jsonl')) continue;
+                const sessionId = name.slice(0, -'.jsonl'.length);
+                if (!SESSION_ID.test(sessionId)) continue;
+                const file = `${dir}/${name}`;
+                const stat = files.stat(file);
+                if (!stat || (since !== null && stat.mtimeMs < since)) continue;
+                candidates.push({sessionId, file, mtimeMs: stat.mtimeMs});
+            }
+        }
+        candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+        // Newest first, so the cap is reached reading as few heads as it can.
+        const sessions: TranscriptListMessage['sessions'] = [];
+        const listed = new Set<string>();
+        for (const candidate of candidates) {
+            if (sessions.length >= LIST_MAX_SESSIONS) break;
+            // A session resumed in another folder leaves its old file: the newest one counts.
+            if (listed.has(candidate.sessionId)) continue;
+            const cwd = this.cwdOf(candidate.file);
+            if (!cwd) continue;
+            const absolute = absoluteDir(cwd, home);
+            if (!dirs.some((dir) => isAtOrBelow(absolute, dir))) continue;
+            listed.add(candidate.sessionId);
+            sessions.push({sessionId: candidate.sessionId, dir: homeForm(absolute, home), mtimeMs: candidate.mtimeMs});
+        }
+        if (!client.closed) client.send({type: 'transcript-list', requestId: message.requestId, sessions});
+    }
+
+    /**
+     * A transcript's cwd: from its head, or from the whole file when the head
+     * had none and the file is not huge (a session can open with a large
+     * file-history snapshot). Remembered by file.
+     */
+    private cwdOf(file: string): string | null {
+        const known = this.cwds.get(file);
+        if (known) return known;
+        const {files} = this.deps;
+        let cwd: string | null = null;
+        const head = files.readSlice(file, 0, CWD_HEAD_BYTES);
+        if (head) {
+            const lines = new TextDecoder().decode(head).split('\n');
+            // The last line may be cut off: it only counts when the head is the whole file.
+            if (head.length === CWD_HEAD_BYTES) lines.pop();
+            cwd = cwdFromTranscript(lines.filter(Boolean));
+            if (!cwd && head.length === CWD_HEAD_BYTES) {
+                const size = files.stat(file)?.size ?? 0;
+                const text = size <= CWD_WHOLE_MAX_BYTES ? files.readText(file) : null;
+                if (text !== null) cwd = cwdFromTranscript(text.split('\n').filter(Boolean));
+            }
+        }
+        // Not remembered while it has none: the session may not have written its first line yet.
+        if (cwd) {
+            if (this.cwds.size >= CWD_MEMORY_MAX) this.cwds.clear();
+            this.cwds.set(file, cwd);
+        }
+        return cwd;
     }
 
     // ── import-transcript ──

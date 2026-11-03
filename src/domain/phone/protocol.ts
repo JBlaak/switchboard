@@ -57,7 +57,7 @@ export interface PhoneSession {
     /** The project's folder name, e.g. "switchboard". */
     project: string;
     projectPath: string;
-    /** "user@host" for an SSH session, else null. */
+    /** "user@host" for an SSH or VM session, else null. */
     remote: string | null;
     /** busy: a turn is running; needs-you: blocked on the user; idle: waiting for a prompt. */
     state: 'busy' | 'idle' | 'needs-you';

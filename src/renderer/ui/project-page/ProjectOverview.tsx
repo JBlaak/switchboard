@@ -10,8 +10,9 @@
  * `page-keys`; the rows it walks are `page-rows`.
  *
  * The body follows the GitHub part's state (#175, `page-state`): a project
- * with no GitHub remote, or a remote one, has a single column of what is
- * local; when GitHub could not be asked, one message takes the place of Pull
+ * with no GitHub remote, or an agentless remote one, has a single column of
+ * what is local; a VM project (#276) is read on the VM, as a local one is;
+ * when GitHub could not be asked, one message takes the place of Pull
  * requests and Plans; stale data is dimmed under a line saying how old it is.
  * Pull requests come first: checking one out is what the page is opened for
  * most, and they are answered before the plans.
@@ -33,8 +34,8 @@ import {PullRequestsSection} from './PullRequestsSection';
 import {WorktreesSection} from './WorktreesSection';
 import {TasksSection} from './TasksSection';
 import {GitHubMessage, RemoteNote, StaleLine} from './EdgeStates';
-import {InstallAgentCard, SetupSection} from './AgentHostSections';
-import {CopiesSection, CopySection} from './HandoffSections';
+import {RegisterVmCard, useHostLink} from './VmLink';
+import {CopiesSection, CopySection, SchedulesLine} from './HandoffSections';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import {
     closeProject,
@@ -60,7 +61,7 @@ import {
     worktreesView,
     type PageRow,
 } from './page-rows';
-import {githubPart, showsWorktrees} from './page-state';
+import {githubPart, showsTasks, showsWorktrees} from './page-state';
 import {pageKeyAction, type PageKeyAction} from './page-keys';
 import {
     closeProjectList,
@@ -81,11 +82,9 @@ function currentRows(projectPath: string): PageRow[] {
     const pullRequests = pullRequestsViewOf(page, projectPath);
     const sessions = sessionsShown(projectPath, state.view.activePtyIds, page.filter);
     const answered = page.overview?.projectPath === projectPath ? page.overview : null;
-    const worktrees = answered && showsWorktrees(answered, projectPath) ? worktreesView(answered, page.filter) : [];
-    const tasks =
-        state.tasks.enabled && githubPart(page.overview, projectPath).kind !== 'remote'
-            ? tasksViewOf(page, projectPath)
-            : null;
+    const vm = isVmProjectIn(state.agentHost, projectPath);
+    const worktrees = answered && showsWorktrees(answered, projectPath, vm) ? worktreesView(answered, page.filter) : [];
+    const tasks = state.tasks.enabled && showsTasks(projectPath, vm) ? tasksViewOf(page, projectPath) : null;
     return pageRows({
         plans: plans ? planRows(plans) : [],
         pullRequests: pullRequests ? pullRequestRows(pullRequests) : [],
@@ -278,20 +277,13 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
                         <SessionsSection projectPath={projectPath} />
                         {github.kind === 'remote' ? (
                             <>
-                                {github.vm ? (
-                                    <>
-                                        <CopySection projectPath={projectPath} />
-                                        <SetupSection projectPath={projectPath} />
-                                    </>
-                                ) : (
-                                    <InstallAgentCard projectPath={projectPath} />
-                                )}
-                                <RemoteNote vm={github.vm} />
+                                <RegisterHost projectPath={projectPath} />
+                                <RemoteNote />
                             </>
                         ) : (
                             <>
                                 <WorktreesSection projectPath={projectPath} />
-                                <CopiesSection projectPath={projectPath} />
+                                <ProjectCopies projectPath={projectPath} vm={vm} />
                             </>
                         )}
                     </div>
@@ -313,10 +305,35 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
                     <div className="pp-column pp-side">
                         <SessionsSection projectPath={projectPath} />
                         <WorktreesSection projectPath={projectPath} />
-                        <CopiesSection projectPath={projectPath} />
+                        <ProjectCopies projectPath={projectPath} vm={vm} />
                     </div>
                 </div>
             )}
         </div>
+    );
+}
+
+/** On an agentless remote whose host isn't registered (#307): Register this host as a VM. */
+function RegisterHost({projectPath}: {projectPath: string}): JSX.Element | null {
+    const link = useHostLink(projectPath);
+    return link?.kind === 'register' ? <RegisterVmCard link={link} /> : null;
+}
+
+/**
+ * Under Worktrees: on a VM copy (#276) its Bring back and Remove copy; on a
+ * local project, its copies on VMs. Under either, where the schedules run
+ * (stage 5). The VM's setup is in Settings → VMs (#307).
+ */
+function ProjectCopies({projectPath, vm}: {projectPath: string; vm: boolean}): JSX.Element {
+    return vm ? (
+        <>
+            <CopySection projectPath={projectPath} />
+            <SchedulesLine projectPath={projectPath} />
+        </>
+    ) : (
+        <>
+            <CopiesSection projectPath={projectPath} />
+            <SchedulesLine projectPath={projectPath} />
+        </>
     );
 }
