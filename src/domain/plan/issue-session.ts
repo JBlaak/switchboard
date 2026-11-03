@@ -125,3 +125,23 @@ export function issueOwners(candidates: readonly IssueOwnerCandidate[], reposito
     for (const [key, owner] of owners) record[key] = owner.sessionId;
     return record;
 }
+
+/**
+ * The sessions running on this Mac that own a plan or any of its issues (S1),
+ * each once, in the order the plan lists them: the plan's own owner first,
+ * then its issues'. `owners` is `issueOwners`' answer; `running` the ids of
+ * the sessions whose terminal is alive. A plan known only by its summary has
+ * no issues to look through, so only its own owner counts.
+ */
+export function runningOnPlan(
+    plan: IssueKey & {readonly issues?: readonly IssueKey[]},
+    owners: Readonly<Record<string, string>>,
+    running: ReadonlySet<string>,
+): string[] {
+    const found: string[] = [];
+    for (const issue of [plan, ...(plan.issues ?? [])]) {
+        const owner = owners[issueKeyString(issue)];
+        if (owner && running.has(owner) && !found.includes(owner)) found.push(owner);
+    }
+    return found;
+}

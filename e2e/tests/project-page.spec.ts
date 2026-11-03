@@ -18,7 +18,8 @@
  * test/main-area-slice.test.ts.
  */
 import {test, expect, forEachAppearance} from '../support/test';
-import {expectScreen, openSession, sidebar, terminalHeader} from '../support/app';
+import {expectScreen, openSession, rowButton, sessionRow, sidebar, terminalHeader} from '../support/app';
+import {answerDialogs} from '../support/native-dialogs';
 import {clipboardWrites, openedExternally, setHostStub} from '../support/main-process';
 import {sessionItem} from '../support/session-list';
 import {LABEL, P, S} from '../fixtures/standard';
@@ -204,6 +205,40 @@ test.describe('plans and issues', () => {
 
         /* Then: the plan viewed last comes back expanded */
         await expect(plansSection(page).getByRole('button', {name: 'Collapse plan Login rework'})).toBeVisible();
+    });
+
+    test('a plan’s page marks it while a Claude session that owns one of its issues runs here, and not once it stops', async ({
+        page,
+        home,
+    }) => {
+        /* Given: Fix login flow owns #1302 of Login rework, and its terminal is live */
+        const planPage = page.getByRole('region', {name: /^Plan in /});
+        await openSession(page, home, LABEL.loginFix, S.loginFix);
+        await rowProjectLink(page, S.loginFix).click();
+        await expect(plansSection(page).getByText('Login rework', {exact: true})).toBeVisible();
+
+        /* When */
+        await cursorToFirstPlan(page);
+        await page.keyboard.press('Enter');
+
+        /* Then */
+        await expect(planPage.getByRole('heading', {name: 'Login rework'})).toBeVisible();
+        await expect(planPage.getByTestId('plan-live')).toHaveText('1 running');
+        await expect(planPage.getByTestId('plan-live')).toHaveAttribute(
+            'title',
+            '1 Claude session running on this Mac',
+        );
+
+        /* When */
+        await answerDialogs(page, true);
+        const login = sessionRow(page, LABEL.loginFix);
+        await login.hover();
+        await rowButton(login, 'Stop session').click();
+
+        /* Then */
+        await expect(sessionItem(page, S.loginFix)).not.toHaveClass(/\bhas-running-pty\b/);
+        await expect(planPage.getByRole('heading', {name: 'Login rework'})).toBeVisible();
+        await expect(planPage.getByTestId('plan-live')).toHaveCount(0);
     });
 
     test('the pin on a plan’s page puts it under Pinned plans, as a row that opens the page and unpins it', async ({

@@ -14,7 +14,15 @@ import {PlanDiagram, PlanLegend} from './PlanDiagram';
 import {IssueDetail} from './IssueDetail';
 import {LevelStart} from './LevelStart';
 import {NO_HANDLERS, NO_PLAN_UI} from './types';
-import type {IssueActions, PlanData, PlanHandlers, PlanPinControl, PlanRefresh, PlanUi} from './types';
+import type {
+    IssueActions,
+    PlanData,
+    PlanHandlers,
+    PlanLiveSessions,
+    PlanPinControl,
+    PlanRefresh,
+    PlanUi,
+} from './types';
 
 export type PlanViewProps = PlanData & {readonly issueActions?: IssueActions; readonly pin?: PlanPinControl};
 
@@ -26,6 +34,8 @@ export function PlanViewContent(
         readonly arriving?: readonly IssueKey[];
         /** Showing a stored copy while main is asked again, or after it could not answer (`planRefresh`). */
         readonly refresh?: PlanRefresh | null;
+        /** Which sessions own which issues and run on this Mac; absent, no plan is marked. */
+        readonly live?: PlanLiveSessions | null;
     },
 ): JSX.Element {
     const ui = props.ui ?? NO_PLAN_UI;
@@ -38,7 +48,7 @@ export function PlanViewContent(
         const others = 'sessionPlans' in props ? props.sessionPlans.others : [];
         return (
             <div className="pv">
-                <OtherPlans others={others} on={on} />
+                <OtherPlans others={others} on={on} live={props.live} />
             </div>
         );
     }
@@ -55,12 +65,19 @@ export function PlanViewContent(
                         </button>
                     )}
                     <span className="pv-bar-gap" />
-                    {plans.length > 1 && <PlanSwitcher plans={plans} shown={plan} on={on} />}
+                    {plans.length > 1 && <PlanSwitcher plans={plans} shown={plan} on={on} live={props.live} />}
                 </div>
             )}
             <div className="pv-body">
                 <div className="pv-scroll" data-testid="plan-scroll">
-                    <PlanHeader plan={plan} layout={layout} on={on} pin={props.pin} refresh={props.refresh ?? null} />
+                    <PlanHeader
+                        plan={plan}
+                        layout={layout}
+                        on={on}
+                        pin={props.pin}
+                        refresh={props.refresh ?? null}
+                        live={props.live ?? null}
+                    />
                     <PlanWarnings plan={plan} layout={layout} />
                     <LevelStart plan={plan} issueActions={props.issueActions} />
                     {plan.issues.length ? (

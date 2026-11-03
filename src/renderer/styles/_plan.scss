@@ -166,6 +166,39 @@ a.pv-num:hover {
     }
 }
 
+/* A Claude session running on this Mac owns the plan or one of its issues: green, like the project page's running pill. */
+.pv-live {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 7px;
+    background: rgba(var(--sb-green-rgb), 0.12);
+    color: var(--sb-green);
+    font: 600 11.5px var(--sb-font-body);
+    white-space: nowrap;
+    align-self: center;
+
+    &.is-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        padding: 0;
+        margin-left: 6px;
+        border-radius: 50%;
+        background: var(--sb-green);
+        vertical-align: middle;
+    }
+}
+
+.pv-live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
 /* ---- No plan: the repository's others ---- */
 .pv-others {
     max-width: 640px;

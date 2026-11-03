@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {issueOwners, startBase, type IssueOwnerCandidate} from '../src/domain/plan/issue-session';
+import {issueOwners, runningOnPlan, startBase, type IssueOwnerCandidate} from '../src/domain/plan/issue-session';
 import type {IssueKey, Plan, PlanIssue, PlanPullRequest} from '../src/domain/plan/model';
 
 const REPO = 'JBlaak/switchboard';
@@ -160,4 +160,66 @@ test('when two sessions own an issue the most recently active one wins', () => {
 
     /* Then */
     assert.equal(owners[REPO + '#114'], 'newer');
+});
+
+test('a plan has a running session when a live session owns the plan or one of its issues', () => {
+    /* Given */
+    const plan = {
+        repository: 'acme/app',
+        number: 1,
+        issues: [
+            {repository: 'acme/app', number: 2},
+            {repository: 'acme/app', number: 3},
+        ],
+    };
+    const owners = {'acme/app#1': 'planner', 'acme/app#2': 'worker', 'acme/app#3': 'idle'};
+
+    /* When */
+    const running = runningOnPlan(plan, owners, new Set(['worker', 'planner', 'elsewhere']));
+
+    /* Then */
+    assert.deepEqual(running, ['planner', 'worker']);
+});
+
+test('a plan whose owners have all stopped has no running session', () => {
+    /* Given */
+    const plan = {repository: 'acme/app', number: 1, issues: [{repository: 'acme/app', number: 2}]};
+    const owners = {'acme/app#2': 'stopped'};
+
+    /* When */
+    const running = runningOnPlan(plan, owners, new Set(['someone-else']));
+
+    /* Then */
+    assert.deepEqual(running, []);
+});
+
+test("one live session owning several of a plan's issues counts once", () => {
+    /* Given */
+    const plan = {
+        repository: 'acme/app',
+        number: 1,
+        issues: [
+            {repository: 'acme/app', number: 2},
+            {repository: 'acme/app', number: 3},
+        ],
+    };
+    const owners = {'acme/app#2': 'level', 'acme/app#3': 'level'};
+
+    /* When */
+    const running = runningOnPlan(plan, owners, new Set(['level']));
+
+    /* Then */
+    assert.deepEqual(running, ['level']);
+});
+
+test('a plan known by its summary alone counts only its own owner', () => {
+    /* Given */
+    const summary = {repository: 'acme/app', number: 1};
+    const owners = {'acme/app#1': 'planner', 'acme/app#2': 'worker'};
+
+    /* When */
+    const running = runningOnPlan(summary, owners, new Set(['planner', 'worker']));
+
+    /* Then */
+    assert.deepEqual(running, ['planner']);
 });

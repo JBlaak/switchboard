@@ -15,6 +15,17 @@ export interface PlanPinControl {
 /** Where a stored copy on screen is: being refreshed, or main could not answer (`planRefresh`). */
 export type PlanRefresh = 'refreshing' | 'failed';
 
+/**
+ * Which sessions own which issues (S1) and which of them run on this Mac now,
+ * for the mark on each plan that has one (`runningOnPlan`).
+ */
+export interface PlanLiveSessions {
+    /** `owner/repo#n` → the session that owns it. */
+    readonly owners: Readonly<Record<string, string>>;
+    /** The ids of the sessions whose terminal is alive. */
+    readonly running: ReadonlySet<string>;
+}
+
 /** A session's plans (W2), or one plan given directly (F2). */
 export type PlanData = {readonly sessionPlans: SessionPlansAnswer} | {readonly plan: Plan};
 

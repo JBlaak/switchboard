@@ -6,16 +6,19 @@ import type {JSX} from 'react';
 import {sameIssue} from '../../../../domain/plan/model';
 import type {IssueKey, Plan, PlanSummary} from '../../../../domain/plan/model';
 import {shortTitle, summaryLine} from './describe';
-import type {PlanHandlers} from './types';
+import type {PlanHandlers, PlanLiveSessions} from './types';
+import {PlanLiveMark} from './PlanLiveMark';
 
 export function PlanSwitcher({
     plans,
     shown,
     on,
+    live,
 }: {
     plans: readonly Plan[];
     shown: IssueKey;
     on: PlanHandlers;
+    live?: PlanLiveSessions | null;
 }): JSX.Element {
     return (
         <div className="pv-switcher" role="group" aria-label="Plan">
@@ -30,6 +33,7 @@ export function PlanSwitcher({
                         title={plan.title}
                         onClick={() => on.choose(plan)}>
                         {'#' + plan.number + ' ' + shortTitle(plan.title, 24)}
+                        <PlanLiveMark plan={plan} live={live} compact />
                     </button>
                 );
             })}
@@ -38,7 +42,15 @@ export function PlanSwitcher({
 }
 
 /** No plan for this session: the repository's open plans (W2, W3). */
-export function OtherPlans({others, on}: {others: readonly PlanSummary[]; on: PlanHandlers}): JSX.Element {
+export function OtherPlans({
+    others,
+    on,
+    live,
+}: {
+    others: readonly PlanSummary[];
+    on: PlanHandlers;
+    live?: PlanLiveSessions | null;
+}): JSX.Element {
     return (
         <div className="pv-others">
             <h2 className="pv-others-title">No plan for this session</h2>
@@ -58,6 +70,7 @@ export function OtherPlans({others, on}: {others: readonly PlanSummary[]; on: Pl
                                 disabled={!on.pickOther}>
                                 <span className="pv-num">{'#' + summary.number}</span>
                                 <span className="pv-other-title">{summary.title}</span>
+                                <PlanLiveMark plan={summary} live={live} />
                                 <span className="pv-other-line">{summaryLine(summary)}</span>
                             </button>
                         </li>
