@@ -80,21 +80,18 @@ test('a matching hello is welcomed with the host settings and every part hears o
     assert.equal(pair.agent.closed, false);
 });
 
-test('a hello from another app version gets bye version-mismatch and the link closes', () => {
+test('a hello from another app version on the same protocol is welcomed, naming the agent version', () => {
     /* Given */
-    const {calls, pair} = setUp();
+    const {pair} = setUp();
 
     /* When */
-    pair.mac.send({type: 'hello', protocol: AGENT_PROTOCOL_VERSION, appVersion: '2.11.0'});
+    pair.mac.send({type: 'hello', protocol: AGENT_PROTOCOL_VERSION, appVersion: '2.13.0'});
 
     /* Then */
-    assert.equal(pair.sentByAgent.length, 1);
-    const bye = pair.sentByAgent[0] as {type: string; code: string; reason: string};
-    assert.equal(bye.type, 'bye');
-    assert.equal(bye.code, 'version-mismatch');
-    assert.match(bye.reason, /2\.11\.0/);
-    assert.equal(pair.agent.closed, true);
-    assert.deepEqual(calls, []);
+    const welcome = pair.sentByAgent[0] as {type: string; agentVersion: string};
+    assert.equal(welcome.type, 'welcome');
+    assert.equal(welcome.agentVersion, VERSION);
+    assert.equal(pair.agent.closed, false);
 });
 
 test('a hello on another protocol version gets bye version-mismatch', () => {

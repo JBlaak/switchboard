@@ -33,6 +33,16 @@ export async function installAgent(projectPath: string): Promise<void> {
     }
 }
 
+/**
+ * Update the agent on a VM, after saying what it costs: the agent restarts,
+ * and every session running on that VM ends with it.
+ */
+export async function updateAgent(projectPath: string): Promise<void> {
+    const message = 'Update the agent on this VM?\n\nThe agent restarts, which ends every session running on the VM.';
+    if (!confirm(message)) return;
+    await installAgent(projectPath);
+}
+
 /** The setup checks, asked again. */
 export async function refreshAgentTools(projectPath: string): Promise<void> {
     dispatch({type: 'agentToolsRequested', projectPath});

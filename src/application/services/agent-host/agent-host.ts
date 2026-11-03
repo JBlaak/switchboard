@@ -42,7 +42,7 @@ export interface AgentParts {
 
 export interface AgentHostDeps {
     parts: AgentParts;
-    /** This agent's own version, which a client's `hello.appVersion` must equal. */
+    /** This agent's own version, sent in `welcome` so the client can see it is behind. */
     agentVersion: string;
     log: Logger;
 }
@@ -126,10 +126,17 @@ export class AgentHost {
         return this.clients.size;
     }
 
-    /** Answer `hello`: `welcome` when the versions match, else `bye` and close. */
+    /**
+     * Answer `hello`: `welcome` when the protocols match, else `bye` and close.
+     *
+     * Only the protocol must match, not the app version. An app update would
+     * otherwise refuse every agent it finds, and the reinstall that follows
+     * restarts the agent and ends every session running on the VM. The client
+     * reads `welcome.agentVersion` and upgrades when nothing is running (#276).
+     */
     private handshake(client: ClientLink, hello: HelloMessage): boolean {
         const {agentVersion} = this.deps;
-        if (hello.protocol !== AGENT_PROTOCOL_VERSION || hello.appVersion !== agentVersion) {
+        if (hello.protocol !== AGENT_PROTOCOL_VERSION) {
             this.refuse(
                 client,
                 AGENT_CLOSE.versionMismatch,

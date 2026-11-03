@@ -17,7 +17,7 @@ import type {JSX} from 'react';
 import {useStore} from '../use-store';
 import {hostViewIn} from '../../state/agent-host-slice';
 import {INSTALL_HELP, installView, offersUpdate, setupDone, toolLines} from './agent-host-view';
-import {installAgent, loadAgentStatus, openAgentSetupTerminal, refreshAgentTools} from './agent-actions';
+import {installAgent, loadAgentStatus, openAgentSetupTerminal, refreshAgentTools, updateAgent} from './agent-actions';
 import type {InstallView} from './agent-host-view';
 
 /** Install agent on an ssh project. */
@@ -95,7 +95,9 @@ export function SetupSection({projectPath}: {projectPath: string}): JSX.Element 
                             type="button"
                             className="sw-btn"
                             disabled={update.disabled}
-                            onClick={() => void installAgent(projectPath)}>
+                            onClick={() =>
+                                void (phase === 'failed' ? installAgent(projectPath) : updateAgent(projectPath))
+                            }>
                             {update.label}
                         </button>
                     )}

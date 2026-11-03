@@ -24,6 +24,7 @@ import {AgentClient} from '../application/services/agent-client/agent-client';
 import {ConfigCopyService, manifestStoreOn} from '../application/services/config-copy-service';
 import {SshAgentDialer} from '../infrastructure/agent/ssh-agent-dialer';
 import {AgentHostsService} from '../application/services/agent-hosts-service';
+import {AgentUpgrades} from '../application/services/agent-upgrades';
 import {AgentInstallerService} from '../application/services/agent-installer-service';
 import {setupTerminalCommand} from '../domain/agent/setup-script';
 import {AgentBundleBuilder, agentBundleSources} from '../infrastructure/ssh/agent-bundle';
@@ -418,25 +419,21 @@ export function buildContainer(): Container {
         ids,
         log,
     });
-    // An agent at another version (an app update, or an older install) is
-    // upgraded in place, then dialled again. One attempt per host at a time.
-    const reinstalling = new Set<string>();
-    agents.onNeedsReinstall((host, reason) => {
-        const onHost = settings
-            .remoteProjects()
-            .find((r) => r.user === host.user && r.host === host.host && r.port === host.port && r.agent);
-        const key = `${host.user}@${host.host}:${host.port}`;
-        if (!onHost || reinstalling.has(key)) return;
-        reinstalling.add(key);
-        log.info(`[agent] ${key} needs a reinstall: ${reason}`);
-        void agentInstaller
-            .install(remoteProjectPath(onHost))
-            .then((result) => {
-                if (result.ok) agents.connection(host).retryNow();
-                else log.warn(`[agent] reinstall on ${key} failed: ${result.error}`);
-            })
-            .finally(() => reinstalling.delete(key));
+    // When a VM's agent is upgraded on its own: see AgentUpgrades.
+    const agentUpgrades = new AgentUpgrades({
+        appVersion: app.getVersion(),
+        agentProjectOn: (host) => {
+            const onHost = settings
+                .remoteProjects()
+                .find((r) => r.user === host.user && r.host === host.host && r.port === host.port && r.agent);
+            return onHost ? remoteProjectPath(onHost) : null;
+        },
+        install: (projectPath) => agentInstaller.install(projectPath),
+        redial: (host) => agents.connection(host).retryNow(),
+        log,
     });
+    agents.onNeedsReinstall((host, reason) => void agentUpgrades.protocolMismatch(host, reason));
+    agents.onConnected((connection) => void agentUpgrades.connected(connection));
 
     const transitions = new SessionTransitionDetector({
         registry,

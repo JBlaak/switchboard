@@ -111,6 +111,7 @@ interface Waiter {
 export class AgentConnection {
     /** `user@host`: what the card says it is connecting to. */
     public readonly target: string;
+    private remoteAgentVersion: string | null = null;
 
     private phase: AgentConnectionPhase = 'idle';
     private link: AgentLink | null = null;
@@ -154,6 +155,11 @@ export class AgentConnection {
     }
 
     /** The host settings the last `welcome` (or settings reply) carried; null before the first. */
+    /** The version of the agent on the other end, from the last `welcome`; null before one. */
+    public get agentVersion(): string | null {
+        return this.remoteAgentVersion;
+    }
+
     public get settings(): HostSettings | null {
         return this.hostSettings;
     }
@@ -438,6 +444,7 @@ export class AgentConnection {
         this.handshakeTimer = null;
         this.phase = 'connected';
         this.hostSettings = welcome.settings;
+        this.remoteAgentVersion = welcome.agentVersion;
         this.everConnected = true;
         this.connectedAt = clock.now();
         this.lastReason = '';
