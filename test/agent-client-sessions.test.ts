@@ -56,15 +56,17 @@ function harness({agentHost = true}: {agentHost?: boolean} = {}) {
     });
 
     const touched: [string, string, string][] = [];
+    const project = () => ({
+        user: 'joris',
+        host: 'vm.local',
+        port: 22,
+        dir: 'proj',
+        ...(agentHost ? {agent: {version: '2.12.0', installedAt: '2026-11-03T00:00:00Z'}} : {}),
+    });
     const settings = {
         shellProfileId: () => null,
-        findRemoteProject: () => ({
-            user: 'joris',
-            host: 'vm.local',
-            port: 22,
-            dir: 'proj',
-            ...(agentHost ? {agent: {version: '2.12.0', installedAt: '2026-11-03T00:00:00Z'}} : {}),
-        }),
+        findRemoteProject: project,
+        ensureRemoteProject: project,
         touchRemoteSession: (projectPath: string, sessionId: string, kind: string) => {
             touched.push([projectPath, sessionId, kind]);
             return {id: sessionId, kind};

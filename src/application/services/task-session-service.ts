@@ -63,7 +63,11 @@ export class TaskSessionService {
             project = routed.projectPath;
         }
 
-        if (isRemoteProjectPath(project)) return failed('A session on a task can only start in a local project');
+        // A VM project's git answers from the VM (#276 stage 5), so its worktree
+        // is made there; an agentless remote's checkout is out of git's reach.
+        if ((this.deps.agentlessRemote ?? isRemoteProjectPath)(project)) {
+            return failed('A session on a task can only start in a local project or on a VM');
+        }
         const root = await this.deps.git.mainCheckout(project);
         if (!root) return failed('Not a git repository: ' + project);
 
