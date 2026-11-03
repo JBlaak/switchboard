@@ -31,10 +31,13 @@ import {
 import type {
     AgentMessage,
     AgentSessionInfo,
+    AgentToolName,
     AgentTranscript,
     ConfigFile,
     CopyStateMessage,
     DoneMessage,
+    FileContentMessage,
+    FileStatsMessage,
     HandoffDoneMessage,
     HandoffMessage,
     HostSettings,
@@ -43,13 +46,17 @@ import type {
     OpenSessionMessage,
     TerminalOutput,
     ToolCheck,
+    ToolResultMessage,
+    TranscriptAnswerMessage,
     TranscriptMessage,
+    TranscriptQueryMethod,
     TranscriptTailReply,
     WelcomeMessage,
 } from '../../../domain/agent/protocol';
 import type {RemoteConfig} from '../../../domain/project/remote-target';
 import type {RemoteStatusPayload} from '../../../domain/remote/remote-status';
 import type {AgentDialer, AgentLink} from '../../ports/agent-link';
+import type {Disposable} from '../../ports/git-workspace';
 import type {Clock, TimerHandle, Timers} from '../../ports/clock';
 import type {Logger} from '../../ports/logger';
 
@@ -125,6 +132,29 @@ export type HandoffSpec = Omit<HandoffMessage, 'type' | 'requestId'>;
 /** Messages the agent sends unasked, which the connection hands on. */
 export type UnaskedMessage = Exclude<AgentMessage, {requestId: string} | WelcomeMessage | {type: 'bye'}>;
 
+/**
+ * How much longer than its own timeout a `run-tool` may wait for its answer:
+ * the agent kills the tool at `timeoutMs` and still has to say so.
+ */
+export const RUN_TOOL_GRACE_MS = 5_000;
+
+/** What a `run-tool` produced, decoded. */
+export interface ToolRun {
+    /** The exit code; -1 when the tool could not start or timed out. */
+    code: number;
+    stdout: Buffer;
+    /** The last part of stderr. */
+    stderr: string;
+    /** stdout passed TOOL_OUTPUT_CAP_BYTES and was cut. */
+    truncated: boolean;
+}
+
+/** A live `watch-dir`, kept so a reconnect can ask for it again. */
+interface DirWatch {
+    dir: string;
+    onChange: () => void;
+}
+
 interface Pending {
     resolve(message: AgentMessage): void;
     reject(error: Error): void;
@@ -154,6 +184,13 @@ export class AgentConnection {
     private lastStatus: RemoteStatusPayload | null = null;
     private nextRequest = 0;
     private nextUpload = 0;
+    private nextWatch = 0;
+    private agentHome: string | null = null;
+    /**
+     * The folder watches asked for and not disposed, by watch id. The agent
+     * forgets its watches with the link, so every (re)connect asks again.
+     */
+    private readonly watches = new Map<string, DirWatch>();
     /** The progress listeners of running requests (`handoff`), by request id. */
     private readonly progress = new Map<string, (line: string) => void>();
 
@@ -189,6 +226,14 @@ export class AgentConnection {
     /** The version of the agent on the other end, from the last `welcome`; null before one. */
     public get agentVersion(): string | null {
         return this.remoteAgentVersion;
+    }
+
+    /**
+     * The agent user's home folder, from the last `welcome`; null before one,
+     * or from an agent older than stage 4. What a `~` path on the VM means.
+     */
+    public get home(): string | null {
+        return this.agentHome;
     }
 
     public get settings(): HostSettings | null {
@@ -460,6 +505,98 @@ export class AgentConnection {
         }));
     }
 
+    // ── The pages' git and files (stage 4) ──
+
+    /**
+     * Run `git` (as `git -C <cwd> …args`) or `gh` (in `cwd`) on the VM. `cwd`
+     * is absolute there. Waits the tool's own `timeoutMs` plus a grace for the
+     * answer. Rejects only when the link fails; a tool that fails answers its
+     * code.
+     */
+    public async runTool(
+        tool: AgentToolName,
+        cwd: string,
+        args: readonly string[],
+        {stdin, timeoutMs}: {stdin?: string | Uint8Array; timeoutMs: number},
+    ): Promise<ToolRun> {
+        const reply = await this.request<ToolResultMessage>(
+            'tool-result',
+            (requestId) => ({
+                type: 'run-tool',
+                requestId,
+                tool,
+                cwd,
+                args: [...args],
+                ...(stdin !== undefined ? {stdinBase64: Buffer.from(stdin).toString('base64')} : {}),
+                timeoutMs,
+            }),
+            timeoutMs + RUN_TOOL_GRACE_MS,
+        );
+        return {
+            code: reply.code,
+            stdout: Buffer.from(reply.stdoutBase64, 'base64'),
+            stderr: reply.stderr,
+            truncated: reply.truncated === true,
+        };
+    }
+
+    /** A file's bytes on the VM (`path` absolute there); null when it is not there or is larger than `maxBytes`. */
+    public async readFile(path: string, maxBytes: number): Promise<Buffer | null> {
+        const reply = await this.request<FileContentMessage>('file-content', (requestId) => ({
+            type: 'read-file',
+            requestId,
+            path,
+            maxBytes,
+        }));
+        return reply.found ? Buffer.from(reply.contentBase64 ?? '', 'base64') : null;
+    }
+
+    /** The sizes of those paths on the VM that are regular files (never through a symlink). */
+    public async statFiles(paths: readonly string[]): Promise<Map<string, number>> {
+        const reply = await this.request<FileStatsMessage>('file-stats', (requestId) => ({
+            type: 'stat-files',
+            requestId,
+            paths: [...paths],
+        }));
+        return new Map(Object.entries(reply.sizes));
+    }
+
+    /**
+     * Watch a folder on the VM (`dir` absolute there): `onChange` on every
+     * `dir-changed` the agent pushes for it, until disposed. Asked for at once
+     * when connected, and again after every reconnect, since the agent drops its
+     * watches with the link; a watch made while the link is down waits for it.
+     * Never dials by itself: a page watching a host that is down should not
+     * keep redialling it.
+     */
+    public watchDir(dir: string, onChange: () => void): Disposable {
+        const watchId = `w${++this.nextWatch}`;
+        this.watches.set(watchId, {dir, onChange});
+        this.send({type: 'watch-dir', watchId, dir});
+        return {
+            dispose: () => {
+                if (!this.watches.delete(watchId)) return;
+                this.send({type: 'unwatch-dir', watchId});
+            },
+        };
+    }
+
+    /**
+     * Ask the VM's transcript store one of its read methods; answers that
+     * method's return value as the agent sent it (JSON). Rejects with the
+     * agent's error when it refused or failed.
+     */
+    public async transcriptQuery(method: TranscriptQueryMethod, args: readonly unknown[]): Promise<unknown> {
+        const reply = await this.request<TranscriptAnswerMessage>('transcript-answer', (requestId) => ({
+            type: 'transcript-query',
+            requestId,
+            method,
+            args: [...args],
+        }));
+        if (!reply.ok) throw new Error(reply.error || `the agent could not answer ${method}`);
+        return reply.result;
+    }
+
     /**
      * Send a request once connected and wait for its answer.
      *
@@ -600,6 +737,11 @@ export class AgentConnection {
             return;
         }
         if (message.type === 'welcome') return;
+        if (message.type === 'dir-changed') {
+            // A watch disposed while this was on the way has nobody to tell.
+            this.watches.get(message.watchId)?.onChange();
+            return;
+        }
         this.messageListeners.forEach((l) => l(message));
     }
 
@@ -610,11 +752,14 @@ export class AgentConnection {
         this.phase = 'connected';
         this.hostSettings = welcome.settings;
         this.remoteAgentVersion = welcome.agentVersion;
+        this.agentHome = welcome.home ?? null;
         this.everConnected = true;
         this.connectedAt = clock.now();
         this.lastReason = '';
         log.info(`[agent] ${this.target} connected, agent ${welcome.agentVersion}`);
         this.setStatus({phase: 'connected', target: this.target});
+        // The agent kept no watches of the last link's; ask for them again.
+        for (const [watchId, {dir}] of this.watches) this.send({type: 'watch-dir', watchId, dir});
 
         const waiters = this.waiters;
         this.waiters = [];
