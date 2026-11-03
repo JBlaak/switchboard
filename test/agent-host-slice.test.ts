@@ -1,7 +1,7 @@
 /**
- * VM hosts in the renderer's store (#276): which projects are VM projects, an
- * install's progress, failure and retry, the setup checks, and the host
- * settings with a host that can't be reached.
+ * VM hosts in the renderer's store (#276, #307): which projects are VM
+ * projects, and per VM (by its key) an install's progress, failure and retry,
+ * the setup checks, and the host settings with a host that can't be reached.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +11,7 @@ import type {RendererEvent} from '../src/renderer/state/events';
 import type {RendererState} from '../src/renderer/state/root';
 import type {HostSettings} from '../src/domain/agent/protocol';
 
-const BOX = 'ssh://me@box/app';
+const BOX = 'me@box:22';
 const SETTINGS: HostSettings = {instructions: 'Install what you need.', copyConfig: true, baseFolder: '~/projects'};
 
 function run(state: RendererState, ...events: RendererEvent[]): RendererState {
@@ -50,9 +50,9 @@ test('an install runs with its progress lines, in order', () => {
     /* When */
     const state = run(
         initialRendererState(),
-        {type: 'agentInstallStarted', projectPath: BOX},
-        {type: 'agentInstallProgress', projectPath: BOX, line: 'Checking systemd'},
-        {type: 'agentInstallProgress', projectPath: BOX, line: 'Uploading the agent'},
+        {type: 'agentInstallStarted', hostKey: BOX},
+        {type: 'agentInstallProgress', hostKey: BOX, line: 'Checking systemd'},
+        {type: 'agentInstallProgress', hostKey: BOX, line: 'Uploading the agent'},
     );
 
     /* Then */
@@ -64,7 +64,7 @@ test('progress for a project that is not installing is left out', () => {
     const before = initialRendererState();
 
     /* When */
-    const after = run(before, {type: 'agentInstallProgress', projectPath: BOX, line: 'stray'});
+    const after = run(before, {type: 'agentInstallProgress', hostKey: BOX, line: 'stray'});
 
     /* Then */
     assert.equal(after, before);
@@ -74,9 +74,9 @@ test('a failed install keeps its lines and says why', () => {
     /* When */
     const state = run(
         initialRendererState(),
-        {type: 'agentInstallStarted', projectPath: BOX},
-        {type: 'agentInstallProgress', projectPath: BOX, line: 'Checking systemd'},
-        {type: 'agentInstallFinished', projectPath: BOX, ok: false, error: 'This host has no systemd.'},
+        {type: 'agentInstallStarted', hostKey: BOX},
+        {type: 'agentInstallProgress', hostKey: BOX, line: 'Checking systemd'},
+        {type: 'agentInstallFinished', hostKey: BOX, ok: false, error: 'This host has no systemd.'},
     );
 
     /* Then */
@@ -92,33 +92,32 @@ test('Retry starts the install again with no lines', () => {
     /* Given */
     const failed = run(
         initialRendererState(),
-        {type: 'agentInstallStarted', projectPath: BOX},
-        {type: 'agentInstallProgress', projectPath: BOX, line: 'Checking systemd'},
-        {type: 'agentInstallFinished', projectPath: BOX, ok: false, error: 'No systemd.'},
+        {type: 'agentInstallStarted', hostKey: BOX},
+        {type: 'agentInstallProgress', hostKey: BOX, line: 'Checking systemd'},
+        {type: 'agentInstallFinished', hostKey: BOX, ok: false, error: 'No systemd.'},
     );
 
     /* When */
-    const state = run(failed, {type: 'agentInstallStarted', projectPath: BOX});
+    const state = run(failed, {type: 'agentInstallStarted', hostKey: BOX});
 
     /* Then */
     assert.deepEqual(host(state).install, {phase: 'running', lines: []});
 });
 
-test('a finished install makes the project a VM project, and the next list keeps it one', () => {
+test('a finished install is done, and leaves which projects are VM projects to the list', () => {
     /* Given */
-    const installed = run(
-        initialRendererState(),
-        {type: 'agentInstallStarted', projectPath: BOX},
-        {type: 'agentInstallFinished', projectPath: BOX, ok: true},
-    );
+    const before = run(initialRendererState(), {type: 'agentProjectsLoaded', projectPaths: ['ssh://me@vm/app']});
 
     /* When */
-    const reloaded = run(installed, {type: 'agentProjectsLoaded', projectPaths: []});
+    const installed = run(
+        before,
+        {type: 'agentInstallStarted', hostKey: BOX},
+        {type: 'agentInstallFinished', hostKey: BOX, ok: true},
+    );
 
     /* Then */
     assert.equal(host(installed).install.phase, 'done');
-    assert.equal(isVmProjectIn(installed.agentHost, BOX), true);
-    assert.equal(isVmProjectIn(reloaded.agentHost, BOX), true);
+    assert.equal(installed.agentHost.vmProjects, before.agentHost.vmProjects);
 });
 
 // ── Setup checks ──
@@ -128,12 +127,12 @@ test('the checks load, and a refresh keeps them on screen until the answer', () 
     const tools = [{tool: 'git' as const, installed: true, version: '2.43.0'}];
     const loaded = run(
         initialRendererState(),
-        {type: 'agentToolsRequested', projectPath: BOX},
-        {type: 'agentToolsLoaded', projectPath: BOX, answer: {tools, sudo: true}},
+        {type: 'agentToolsRequested', hostKey: BOX},
+        {type: 'agentToolsLoaded', hostKey: BOX, answer: {tools, sudo: true}},
     );
 
     /* When */
-    const refreshing = run(loaded, {type: 'agentToolsRequested', projectPath: BOX});
+    const refreshing = run(loaded, {type: 'agentToolsRequested', hostKey: BOX});
 
     /* Then */
     assert.deepEqual(host(refreshing).tools, {phase: 'ok', tools, sudo: true});
@@ -143,8 +142,8 @@ test('checks a host could not answer are unreachable', () => {
     /* When */
     const state = run(
         initialRendererState(),
-        {type: 'agentToolsRequested', projectPath: BOX},
-        {type: 'agentToolsLoaded', projectPath: BOX, answer: null},
+        {type: 'agentToolsRequested', hostKey: BOX},
+        {type: 'agentToolsLoaded', hostKey: BOX, answer: null},
     );
 
     /* Then */
@@ -155,12 +154,12 @@ test('a setup terminal that did not open says why, until it is asked for again',
     /* Given */
     const failed = run(initialRendererState(), {
         type: 'agentSetupTerminalFailed',
-        projectPath: BOX,
+        hostKey: BOX,
         message: 'No link',
     });
 
     /* When */
-    const again = run(failed, {type: 'agentSetupTerminalOpening', projectPath: BOX});
+    const again = run(failed, {type: 'agentSetupTerminalOpening', hostKey: BOX});
 
     /* Then */
     assert.equal(host(failed).setupError, 'No link');
@@ -173,8 +172,8 @@ test('host settings load from the host', () => {
     /* When */
     const state = run(
         initialRendererState(),
-        {type: 'agentHostSettingsRequested', projectPath: BOX},
-        {type: 'agentHostSettingsLoaded', projectPath: BOX, settings: SETTINGS},
+        {type: 'agentHostSettingsRequested', hostKey: BOX},
+        {type: 'agentHostSettingsLoaded', hostKey: BOX, settings: SETTINGS},
     );
 
     /* Then */
@@ -185,8 +184,8 @@ test('host settings a host could not answer are unreachable, not an empty form',
     /* When */
     const state = run(
         initialRendererState(),
-        {type: 'agentHostSettingsRequested', projectPath: BOX},
-        {type: 'agentHostSettingsLoaded', projectPath: BOX, settings: null},
+        {type: 'agentHostSettingsRequested', hostKey: BOX},
+        {type: 'agentHostSettingsLoaded', hostKey: BOX, settings: null},
     );
 
     /* Then */
@@ -195,10 +194,10 @@ test('host settings a host could not answer are unreachable, not an empty form',
 
 test('a save that did not land keeps what the host said, with the message', () => {
     /* Given */
-    const loaded = run(initialRendererState(), {type: 'agentHostSettingsLoaded', projectPath: BOX, settings: SETTINGS});
+    const loaded = run(initialRendererState(), {type: 'agentHostSettingsLoaded', hostKey: BOX, settings: SETTINGS});
 
     /* When */
-    const state = run(loaded, {type: 'agentHostSettingsSaveFailed', projectPath: BOX, message: 'Couldn’t save.'});
+    const state = run(loaded, {type: 'agentHostSettingsSaveFailed', hostKey: BOX, message: 'Couldn’t save.'});
 
     /* Then */
     assert.deepEqual(host(state).settings, {phase: 'ok', settings: SETTINGS, saveError: 'Couldn’t save.'});
@@ -208,14 +207,14 @@ test('a save that lands shows the settings the host answered and clears the mess
     /* Given */
     const failed = run(
         initialRendererState(),
-        {type: 'agentHostSettingsLoaded', projectPath: BOX, settings: SETTINGS},
-        {type: 'agentHostSettingsSaveFailed', projectPath: BOX, message: 'Couldn’t save.'},
+        {type: 'agentHostSettingsLoaded', hostKey: BOX, settings: SETTINGS},
+        {type: 'agentHostSettingsSaveFailed', hostKey: BOX, message: 'Couldn’t save.'},
     );
 
     /* When */
     const state = run(failed, {
         type: 'agentHostSettingsLoaded',
-        projectPath: BOX,
+        hostKey: BOX,
         settings: {...SETTINGS, copyConfig: false},
     });
 

@@ -1,12 +1,13 @@
 /**
- * What the project page's VM parts say (#276), from the agent host slice:
- * the Install agent card on an ssh project, and the Setup section's checks
- * and Update agent on a VM project.
+ * What a VM's controls in Settings → VMs say (#276, #307), from the agent
+ * host slice: Install agent or Update agent with its progress, and the setup
+ * checks.
  *
  * Pure, so it is tested in node.
  */
 import type {AgentTool, ToolCheck} from '../../../domain/agent/protocol';
-import type {AgentHostView, InstallState} from '../../state/agent-host-slice';
+import type {VmHostView} from '../../../application/services/vm-registry';
+import type {InstallState} from '../../state/agent-host-slice';
 
 export const INSTALL_HELP = 'Runs this host’s sessions with every Switchboard feature. Needs Linux with systemd.';
 
@@ -39,12 +40,12 @@ export function installView(install: InstallState, idle = 'Install agent'): Inst
     }
 }
 
-/** Whether a VM's Setup section offers Update agent: the agent there isn't the app's version. */
-export function offersUpdate(host: AgentHostView): boolean {
-    return host.status !== null && host.status.installed !== null && !host.status.current;
+/** Whether a VM offers Update agent: it has an agent, and it isn't the app's version. */
+export function offersUpdate(vm: Pick<VmHostView, 'agent' | 'current'>): boolean {
+    return vm.agent !== null && !vm.current;
 }
 
-/** One tool's row in the Setup section. */
+/** One tool's row in the setup checks. */
 export interface ToolLine {
     readonly tool: AgentTool;
     /** `ready` gets the green check. */
@@ -68,7 +69,7 @@ export function toolLine(check: ToolCheck): ToolLine {
     return {tool: check.tool, state: 'ready', text: installed};
 }
 
-/** Whether every tool is ready, so the section can say setup is done. */
+/** Whether every tool is ready, so the checks can say setup is done. */
 export function setupDone(tools: readonly ToolCheck[]): boolean {
     return toolLines(tools).every((line) => line.state === 'ready');
 }

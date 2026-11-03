@@ -36,6 +36,7 @@ import type {PhoneAccessEvent} from './phone-access-slice';
 import type {SessionTaskEvent} from './session-task-slice';
 import type {ArchiveUndoEvent} from './archive-undo-slice';
 import type {AgentHostEvent} from './agent-host-slice';
+import type {VmsEvent} from './vms-slice';
 import type {HandoffEvent} from './handoff-slice';
 import type {SessionHandoffEvent} from './session-handoff-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
@@ -84,8 +85,8 @@ export type PushEvent =
     | {type: 'tasksChanged'; update: TasksUpdate}
     /** A session's task changed: a task id when linked, null when unlinked. */
     | {type: 'sessionTaskChanged'; sessionId: string; taskId: string | null}
-    /** One line of an agent install's progress (#276), for the project whose host it is. */
-    | {type: 'agentInstallProgress'; projectPath: string; line: string}
+    /** One line of an agent install's progress (#276), for the VM it installs on (its `user@host:port` key). */
+    | {type: 'agentInstallProgress'; hostKey: string; line: string}
     /** One line of a project hand-off's progress (#276), for the local project. */
     | {type: 'handoffProgress'; localPath: string; line: string}
     /** One line of a Bring back's progress, for the copy. */
@@ -341,6 +342,7 @@ export type RendererEvent =
     | TasksPageEvent
     | ArchiveUndoEvent
     | AgentHostEvent
+    | VmsEvent
     | HandoffEvent
     | SessionHandoffEvent
     | DropUploadEvent;
