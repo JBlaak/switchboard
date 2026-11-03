@@ -144,6 +144,23 @@ export class SettingsService {
         });
     }
 
+    /**
+     * Add a remote, or update the one already at its project path (#276 stage
+     * 2: handing a project off again lands on the same copy). An update takes
+     * the connection info, `agent` and `copyOf` from `remote` and keeps the
+     * sessions the stored one has, so a second hand-off forgets nothing.
+     */
+    public saveRemoteProject(remote: RemoteProjectSetting): void {
+        const projectPath = remoteProjectPath(remote);
+        this.updateGlobal((settings) => {
+            const list = settings.remoteProjects || [];
+            const index = list.findIndex((r) => remoteProjectPath(r) === projectPath);
+            if (index < 0) list.push(remote);
+            else list[index] = {...list[index], ...remote, sessions: remote.sessions ?? list[index].sessions};
+            settings.remoteProjects = list;
+        });
+    }
+
     public removeRemoteProject(projectPath: string): void {
         this.updateGlobal((settings) => {
             settings.remoteProjects = (settings.remoteProjects || []).filter(
@@ -181,6 +198,22 @@ export class SettingsService {
         });
     }
 
+    // ── Hand-off ──
+    // The ignored files the user carried on the last hand-off of a project
+    // (#276 stage 2), so the next one starts with the same ones ticked. Kept
+    // apart from the project's settings blob: it is not a setting anybody
+    // edits, and the settings panel need not know about it.
+
+    /** The paths ticked on the last hand-off of `localPath`; null before its first. */
+    public handoffFiles(localPath: string): string[] | null {
+        const stored = this.store.get<unknown>(handoffFilesKey(localPath));
+        return Array.isArray(stored) ? stored.filter((p): p is string => typeof p === 'string') : null;
+    }
+
+    public rememberHandoffFiles(localPath: string, paths: readonly string[]): void {
+        this.store.set(handoffFilesKey(localPath), [...paths]);
+    }
+
     /**
      * Record that the Switchboard agent is installed on this remote's host at
      * `version` (#276), which makes it a VM project.
@@ -208,4 +241,9 @@ export class SettingsService {
             return true;
         });
     }
+}
+
+/** The settings-store key the hand-off's ticked files of a local project are kept under. */
+export function handoffFilesKey(localPath: string): string {
+    return 'handoff-files:' + localPath;
 }

@@ -32,7 +32,10 @@ import type {
     AgentMessage,
     AgentSessionInfo,
     ConfigFile,
+    CopyStateMessage,
     DoneMessage,
+    HandoffDoneMessage,
+    HandoffMessage,
     HostSettings,
     MacMessage,
     OpenedMessage,
@@ -49,6 +52,25 @@ import type {Logger} from '../../ports/logger';
 
 /** How long a request may wait for its answer once sent. */
 export const AGENT_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * How long a `handoff` may run (#276 stage 2). A clone of a large repository
+ * over the VM's own network, then the bundle, the patch and the files, takes
+ * minutes, not seconds; the progress lines show it is alive meanwhile.
+ */
+export const AGENT_HANDOFF_TIMEOUT_MS = 20 * 60_000;
+
+/** How long an upload's `upload-end` may wait: the agent checks the whole file's hash first. */
+export const AGENT_UPLOAD_TIMEOUT_MS = 2 * 60_000;
+
+/** How long a `push-branch` may take: a push over the VM's network, hooks and all. */
+export const AGENT_PUSH_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * The raw bytes one `upload-chunk` carries. Base64 makes that a third larger
+ * (about 5.3 MB), comfortably under the 16 MB frame cap with the JSON around it.
+ */
+export const UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
 
 /**
  * How long the handshake may take once ssh is running. Generous: it includes
@@ -94,6 +116,9 @@ export interface AgentConnectionDeps {
 /** An `open` as the session side asks for it; the request id is the connection's business. */
 export type OpenSpec = Omit<OpenSessionMessage, 'type' | 'requestId'>;
 
+/** A `handoff` as the service asks for it; the request id is the connection's business. */
+export type HandoffSpec = Omit<HandoffMessage, 'type' | 'requestId'>;
+
 /** Messages the agent sends unasked, which the connection hands on. */
 export type UnaskedMessage = Exclude<AgentMessage, {requestId: string} | WelcomeMessage | {type: 'bye'}>;
 
@@ -125,6 +150,9 @@ export class AgentConnection {
     private lastReason = '';
     private lastStatus: RemoteStatusPayload | null = null;
     private nextRequest = 0;
+    private nextUpload = 0;
+    /** The progress listeners of running requests (`handoff`), by request id. */
+    private readonly progress = new Map<string, (line: string) => void>();
 
     private readonly pending = new Map<string, Pending>();
     private waiters: Waiter[] = [];
@@ -312,33 +340,114 @@ export class AgentConnection {
         return this.request<DoneMessage>('done', (requestId) => ({type: 'copy-config', requestId, files, removed}));
     }
 
+    // ── Project copies (stage 2) ──
+
+    /**
+     * Upload a file too large for one frame (a git bundle, a patch): `upload-begin`,
+     * the bytes in `chunkBytes` chunks, then `upload-end` with its SHA-256, which
+     * the agent checks before it answers `done`. Answers the upload id for a
+     * `handoff` to name; rejects when the agent refuses it or the link drops.
+     *
+     * The hash comes from the caller (`HandoffGit` computes it as it reads the
+     * file), so this layer needs no crypto of its own.
+     */
+    public async upload(
+        bytes: Uint8Array,
+        {sha256, chunkBytes = UPLOAD_CHUNK_BYTES}: {sha256: string; chunkBytes?: number},
+    ): Promise<string> {
+        await this.whenConnected();
+        // Unique across app restarts too: an agent keeps an unused upload for a while.
+        const uploadId = `u${this.deps.clock.now().toString(36)}-${++this.nextUpload}`;
+        const step = Math.max(1, Math.floor(chunkBytes));
+        const sent = (message: MacMessage) => {
+            if (!this.send(message)) throw new Error('the agent link dropped during the upload');
+        };
+        sent({type: 'upload-begin', uploadId, size: bytes.length});
+        for (let at = 0; at < bytes.length; at += step) {
+            const chunk = bytes.subarray(at, Math.min(at + step, bytes.length));
+            sent({type: 'upload-chunk', uploadId, dataBase64: Buffer.from(chunk).toString('base64')});
+        }
+        const done = await this.request<DoneMessage>(
+            'done',
+            (requestId) => ({type: 'upload-end', requestId, uploadId, sha256}),
+            AGENT_UPLOAD_TIMEOUT_MS,
+        );
+        if (!done.ok) throw new Error(done.error || 'the agent refused the upload');
+        return uploadId;
+    }
+
+    /**
+     * Make or update a project's copy: send `handoff`, hand each of its
+     * `handoff-progress` lines to `onProgress`, and answer its `handoff-done`.
+     * Waits up to AGENT_HANDOFF_TIMEOUT_MS, since a clone is slow.
+     */
+    public async handoff(spec: HandoffSpec, onProgress?: (line: string) => void): Promise<HandoffDoneMessage> {
+        return this.request<HandoffDoneMessage>(
+            'handoff-done',
+            (requestId) => ({type: 'handoff', requestId, ...spec}),
+            AGENT_HANDOFF_TIMEOUT_MS,
+            onProgress,
+        );
+    }
+
+    /** Where a copy stands: its branch, unpushed commits and uncommitted paths. */
+    public async copyStatus(dir: string): Promise<CopyStateMessage> {
+        return this.request<CopyStateMessage>('copy-state', (requestId) => ({type: 'copy-status', requestId, dir}));
+    }
+
+    /** Push a copy's branch to origin from the VM. */
+    public async pushBranch(dir: string, branch: string): Promise<DoneMessage> {
+        return this.request<DoneMessage>(
+            'done',
+            (requestId) => ({type: 'push-branch', requestId, dir, branch}),
+            AGENT_PUSH_TIMEOUT_MS,
+        );
+    }
+
+    /** Delete a copy's folder on the VM; the agent refuses a folder it did not make. */
+    public async removeCopy(dir: string): Promise<DoneMessage> {
+        return this.request<DoneMessage>('done', (requestId) => ({type: 'remove-copy', requestId, dir}));
+    }
+
     /**
      * Send a request once connected and wait for its answer.
      *
      * Rejects when the link cannot be had, when it drops before the answer, or
      * when the answer takes longer than the timeout. A reply of another type
-     * than expected is a protocol slip and rejects too.
+     * than expected is a protocol slip and rejects too. `longTimeoutMs` gives a
+     * slow request (a clone, a push) more time than the usual bound;
+     * `onProgress` receives the request's `handoff-progress` lines until its
+     * answer comes.
      */
     private async request<T extends AgentMessage>(
         expect: T['type'],
         build: (requestId: string) => MacMessage,
+        longTimeoutMs?: number,
+        onProgress?: (line: string) => void,
     ): Promise<T> {
         await this.whenConnected();
         const link = this.link;
         if (!link) throw new Error('the agent link dropped');
         const requestId = `r${++this.nextRequest}`;
-        const timeoutMs = this.deps.requestTimeoutMs ?? AGENT_REQUEST_TIMEOUT_MS;
+        // A slow request (a clone, a push) gets its own, longer, bound.
+        const timeoutMs = Math.max(this.deps.requestTimeoutMs ?? AGENT_REQUEST_TIMEOUT_MS, longTimeoutMs ?? 0);
+        if (onProgress) this.progress.set(requestId, onProgress);
         return new Promise<T>((resolve, reject) => {
             const timer = this.deps.timers.setTimeout(() => {
                 this.pending.delete(requestId);
+                this.progress.delete(requestId);
                 reject(new Error(`the agent did not answer within ${Math.round(timeoutMs / 1000)}s`));
             }, timeoutMs);
             this.pending.set(requestId, {
                 resolve: (message) => {
+                    this.progress.delete(requestId);
                     if (message.type !== expect) reject(new Error(`expected ${expect}, got ${message.type}`));
                     else resolve(message as T);
                 },
-                reject,
+                reject: (error) => {
+                    this.progress.delete(requestId);
+                    reject(error);
+                },
                 timer,
             });
             link.send(build(requestId));
@@ -424,6 +533,11 @@ export class AgentConnection {
                 `[agent] ${this.target} said bye: ${message.code}${message.reason ? ` (${message.reason})` : ''}`,
             );
             if (message.code === AGENT_CLOSE.versionMismatch) this.needsReinstall(message.reason || message.code);
+            return;
+        }
+        if (message.type === 'handoff-progress') {
+            // A line of a running request, not its answer: the request stays pending.
+            this.progress.get(message.requestId)?.(message.line);
             return;
         }
         if ('requestId' in message) {
