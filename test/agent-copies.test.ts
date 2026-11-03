@@ -10,8 +10,11 @@ import {
     Copies,
     isPlausibleBranch,
     isSafeFolderName,
+    isSafeWorktreeName,
     joinDir,
+    lockKeyOf,
     parsePorcelainZ,
+    parseWorktreeList,
     type CopyCommandRunner,
 } from '../src/application/services/agent-host/copies';
 import type {CommandResult} from '../src/application/services/agent-host/host-config';
@@ -185,6 +188,9 @@ async function handOff(h: Harness, mac: string, root: string, extra: Partial<Han
 }
 
 const copyOf = (home: string) => path.join(home, 'projects', 'proj');
+
+/** The worktree `name` of the copy, where a session's worktree hand-off lands. */
+const worktreeOf = (home: string, name = 'wt') => path.join(copyOf(home), '.claude', 'worktrees', name);
 
 // ── Hand-off ──
 
@@ -428,6 +434,263 @@ test('a GitHub repository is cloned with gh, with the VM own login', async () =>
     assert.ok(fs.existsSync(path.join(abs, '.git', COPY_MARKER)));
 });
 
+// ── Worktree hand-off ──
+
+test('a worktree hand-off lands the Mac commits, patch and files in the worktree and leaves the main folder alone', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+
+    /* When */
+    const {done, payload, requestId} = await handOff(h, w.mac, w.root, {worktree: 'wt'});
+
+    /* Then */
+    assert.deepEqual(done, {
+        type: 'handoff-done',
+        requestId,
+        ok: true,
+        dir: '~/projects/proj/.claude/worktrees/wt',
+        reused: false,
+    });
+    const copy = copyOf(w.home);
+    const wt = worktreeOf(w.home);
+    assert.equal(git(copy, ['symbolic-ref', '--short', 'HEAD']).trim(), 'main', 'the main folder stays on main');
+    assert.equal(fs.readFileSync(path.join(copy, 'README.md'), 'utf8'), 'hello\n');
+    assert.equal(fs.existsSync(path.join(copy, '.env')), false);
+    assert.equal(git(copy, ['status', '--porcelain=v1', '-z']), '', 'the main folder does not see the worktrees');
+    assert.equal(git(wt, ['rev-parse', 'HEAD']).trim(), payload.headOid);
+    assert.equal(git(wt, ['symbolic-ref', '--short', 'HEAD']).trim(), 'feature');
+    assert.equal(fs.readFileSync(path.join(wt, 'README.md'), 'utf8'), 'hello, edited\n');
+    assert.equal(fs.readFileSync(path.join(wt, 'notes/new.txt'), 'utf8'), 'untracked\n');
+    assert.equal(fs.readFileSync(path.join(wt, '.env'), 'utf8'), 'SECRET=1\n');
+    assert.equal(git(wt, ['diff', '--cached', '--name-only']), '', 'nothing is staged');
+    const mainMarker = JSON.parse(fs.readFileSync(path.join(copy, '.git', COPY_MARKER), 'utf8'));
+    assert.equal(mainMarker.state, undefined, 'the main folder has no record of a hand-off onto it');
+    const wtMarker = JSON.parse(fs.readFileSync(path.join(copy, '.git', 'worktrees', 'wt', COPY_MARKER), 'utf8'));
+    assert.equal(wtMarker.state.head, payload.headOid);
+    assert.deepEqual(wtMarker.state.files, [{path: '.env', blob: git(wt, ['hash-object', '.env']).trim()}]);
+    assert.match(fs.readFileSync(path.join(copy, '.git', 'info', 'exclude'), 'utf8'), /^\/\.claude\/worktrees\/$/m);
+    assert.equal(git(copy, ['for-each-ref', 'refs/switchboard']), '', 'the bundle refs are cleaned up');
+});
+
+test('a worktree hand-off into an existing copy keeps the main folder checkout, changes and record', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    await handOff(h, w.mac, w.root);
+    const copy = copyOf(w.home);
+    const markerBefore = fs.readFileSync(path.join(copy, '.git', COPY_MARKER), 'utf8');
+    const statusBefore = parsePorcelainZ(git(copy, ['status', '--porcelain=v1', '-z'])).sort();
+    git(w.mac, ['checkout', '-q', '-b', 'session']);
+
+    /* When */
+    const {done} = await handOff(h, w.mac, w.root, {worktree: 'wt'});
+
+    /* Then */
+    assert.equal(done.ok, true, done.error ?? '');
+    assert.equal(done.reused, false, 'the worktree is new, though the copy is not');
+    assert.equal(git(copy, ['symbolic-ref', '--short', 'HEAD']).trim(), 'feature');
+    assert.equal(fs.readFileSync(path.join(copy, '.git', COPY_MARKER), 'utf8'), markerBefore);
+    assert.deepEqual(parsePorcelainZ(git(copy, ['status', '--porcelain=v1', '-z'])).sort(), statusBefore);
+    assert.equal(git(worktreeOf(w.home), ['symbolic-ref', '--short', 'HEAD']).trim(), 'session');
+    git(w.mac, ['checkout', '-q', 'feature']);
+    const again = await handOff(h, w.mac, w.root);
+    assert.equal(again.done.ok, true, `the main folder's own re-hand-off still works: ${again.done.error ?? ''}`);
+    assert.equal(again.done.reused, true);
+});
+
+test('a second worktree hand-off reuses the worktree it left dirty and ends at the Mac new state', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    await handOff(h, w.mac, w.root, {worktree: 'wt'});
+    git(w.mac, ['add', '-A']);
+    git(w.mac, ['commit', '-q', '-m', 'more work']);
+    write(path.join(w.mac, 'c.txt'), 'three\n');
+
+    /* When */
+    const {done, payload} = await handOff(h, w.mac, w.root, {worktree: 'wt'});
+
+    /* Then */
+    assert.equal(done.ok, true, done.error ?? '');
+    assert.equal(done.reused, true);
+    assert.equal(done.dir, '~/projects/proj/.claude/worktrees/wt');
+    const wt = worktreeOf(w.home);
+    assert.equal(git(wt, ['rev-parse', 'HEAD']).trim(), payload.headOid);
+    assert.equal(git(wt, ['log', '-1', '--format=%s']).trim(), 'more work');
+    assert.deepEqual(parsePorcelainZ(git(wt, ['status', '--porcelain=v1', '-z'])), ['c.txt']);
+    assert.equal(git(copyOf(w.home), ['symbolic-ref', '--short', 'HEAD']).trim(), 'main');
+});
+
+test('a worktree hand-off onto a worktree edited on the VM since is refused, naming only the VM change', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    await handOff(h, w.mac, w.root, {worktree: 'wt'});
+    write(path.join(worktreeOf(w.home), 'vm-only.txt'), 'made on the VM\n');
+
+    /* When */
+    const {done} = await handOff(h, w.mac, w.root, {worktree: 'wt'});
+
+    /* Then */
+    assert.equal(done.ok, false);
+    assert.match(
+        done.error ?? '',
+        /^Checking the worktree at ~\/projects\/proj\/\.claude\/worktrees\/wt failed: .*uncommitted changes/,
+    );
+    assert.match(done.error ?? '', /vm-only\.txt/);
+    assert.doesNotMatch(done.error ?? '', /README\.md/);
+    assert.equal(fs.readFileSync(path.join(worktreeOf(w.home), 'vm-only.txt'), 'utf8'), 'made on the VM\n');
+});
+
+test('a worktree hand-off refuses to move the worktree branch off commits only the VM has', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    await handOff(h, w.mac, w.root, {worktree: 'wt'});
+    const wt = worktreeOf(w.home);
+    git(wt, ['add', '-A']);
+    git(wt, ['commit', '-q', '-m', 'vm work']);
+
+    /* When */
+    const {done} = await handOff(h, w.mac, w.root, {worktree: 'wt', patchUploadId: undefined});
+
+    /* Then */
+    assert.equal(done.ok, false);
+    assert.match(done.error ?? '', /^Checking out feature in wt failed: .*vm work/);
+    assert.equal(git(wt, ['log', '-1', '--format=%s']).trim(), 'vm work');
+});
+
+test('a worktree hand-off on a branch checked out elsewhere in the copy is refused, naming where', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    await handOff(h, w.mac, w.root);
+    git(w.mac, ['checkout', '-q', '-b', 'session']);
+    await handOff(h, w.mac, w.root, {worktree: 'one'});
+
+    /* When */
+    git(w.mac, ['checkout', '-q', 'feature']);
+    const inMain = (await handOff(h, w.mac, w.root, {worktree: 'two'})).done;
+    git(w.mac, ['checkout', '-q', 'session']);
+    const inOther = (await handOff(h, w.mac, w.root, {worktree: 'two'})).done;
+
+    /* Then */
+    assert.equal(inMain.ok, false);
+    assert.match(inMain.error ?? '', /feature is checked out in the copy's main folder ~\/projects\/proj;/);
+    assert.equal(inOther.ok, false);
+    assert.match(inOther.error ?? '', /session is checked out in ~\/projects\/proj\/\.claude\/worktrees\/one;/);
+    assert.equal(fs.existsSync(worktreeOf(w.home, 'two')), false);
+});
+
+test('a worktree hand-off onto a folder that is not a worktree of the copy is refused and the folder left alone', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    await handOff(h, w.mac, w.root, {worktree: 'wt'});
+    const stray = worktreeOf(w.home, 'stray');
+    write(path.join(stray, 'mine.txt'), 'keep\n');
+
+    /* When */
+    git(w.mac, ['checkout', '-q', '-b', 'other']);
+    const {done} = await handOff(h, w.mac, w.root, {worktree: 'stray'});
+
+    /* Then */
+    assert.equal(done.ok, false);
+    assert.match(done.error ?? '', /\.claude\/worktrees\/stray already exists and is not a worktree of the copy/);
+    assert.deepEqual(fs.readdirSync(stray), ['mine.txt']);
+});
+
+test('a hand-off with an unsafe worktree name is refused before anything runs', async () => {
+    /* Given */
+    const ran: string[] = [];
+    const commands: CopyCommandRunner = {
+        run: (command, args) => {
+            ran.push([command, ...args].join(' '));
+            return Promise.resolve({exitCode: 0, stdout: '', stderr: ''});
+        },
+    };
+    const h = harness('/home/dev', {commands});
+    const base = {repo: {name: 'proj', origin: 'https://x/y.git'}, branch: 'main', headOid: 'a'.repeat(40), files: []};
+
+    /* When */
+    ['../x', '.hidden', '-x', 'a/b', ''].forEach((worktree, i) =>
+        h.send({type: 'handoff', requestId: `r${i}`, ...base, worktree}),
+    );
+
+    /* Then */
+    for (let i = 0; i < 5; i++) {
+        assert.match((await answer(h, 'handoff-done', `r${i}`)).error ?? '', /is not a worktree name/);
+    }
+    assert.deepEqual(ran, []);
+});
+
+test('copy-status of a worktree lists its own unpushed commits and uncommitted paths', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    const {payload} = await handOff(h, w.mac, w.root, {worktree: 'wt'});
+
+    /* When */
+    h.send({type: 'copy-status', requestId: 's1', dir: '~/projects/proj/.claude/worktrees/wt'});
+    h.send({type: 'copy-status', requestId: 's2', dir: '~/projects/proj'});
+    const state = await answer(h, 'copy-state', 's1');
+    const main = await answer(h, 'copy-state', 's2');
+
+    /* Then */
+    assert.equal(state.ok, true, state.error ?? '');
+    assert.equal(state.branch, 'feature');
+    assert.equal(state.headOid, payload.headOid);
+    assert.deepEqual(
+        state.unpushed?.map((c) => c.subject),
+        ['add b', 'add a'],
+    );
+    assert.deepEqual([...(state.uncommitted ?? [])].sort(), ['README.md', 'logo.bin', 'notes/']);
+    assert.equal(main.branch, 'main');
+    assert.deepEqual(main.uncommitted, [], 'the main folder does not count the worktrees folder as uncommitted');
+});
+
+test('remove-copy of a worktree removes only that worktree, and of the copy removes its worktrees too', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    await handOff(h, w.mac, w.root, {worktree: 'wt'});
+    git(w.mac, ['checkout', '-q', '-b', 'other']);
+    await handOff(h, w.mac, w.root, {worktree: 'keep'});
+
+    /* When */
+    h.send({type: 'remove-copy', requestId: 'x1', dir: '~/projects/proj/.claude/worktrees/wt'});
+    const one = await answer(h, 'done', 'x1');
+
+    /* Then */
+    assert.deepEqual(one, {type: 'done', requestId: 'x1', ok: true});
+    const copy = copyOf(w.home);
+    assert.equal(fs.existsSync(worktreeOf(w.home)), false);
+    assert.equal(fs.existsSync(worktreeOf(w.home, 'keep')), true);
+    assert.equal(fs.existsSync(path.join(copy, '.git', COPY_MARKER)), true);
+    const listed = parseWorktreeList(git(copy, ['worktree', 'list', '--porcelain'])).map((e) => e.branch);
+    assert.deepEqual(listed, ['main', 'other']);
+    h.send({type: 'remove-copy', requestId: 'x2', dir: '~/projects/proj'});
+    assert.equal((await answer(h, 'done', 'x2')).ok, true);
+    assert.equal(fs.existsSync(copy), false);
+});
+
+test('remove-copy refuses a worktree folder in a copy Switchboard did not make', async () => {
+    /* Given */
+    const w = world();
+    const h = harness(w.home);
+    const theirs = path.join(w.home, 'projects', 'theirs');
+    git(w.root, ['init', '-q', theirs]);
+    write(path.join(theirs, '.claude', 'worktrees', 'wt', 'file.txt'), 'keep\n');
+
+    /* When */
+    h.send({type: 'remove-copy', requestId: 'x1', dir: '~/projects/theirs/.claude/worktrees/wt'});
+
+    /* Then */
+    assert.match((await answer(h, 'done', 'x1')).error ?? '', /not in a copy Switchboard made/);
+    assert.ok(fs.existsSync(path.join(theirs, '.claude', 'worktrees', 'wt', 'file.txt')));
+});
+
 // ── copy-status and push-branch ──
 
 test('copy-status lists the unpushed commits and uncommitted paths', async () => {
@@ -666,4 +929,39 @@ test('a copy folder is one safe segment under the base folder, ~ kept', () => {
     assert.equal(joinDir('~/projects/', 'proj'), '~/projects/proj');
     assert.equal(isSafeFolderName('proj'), true);
     for (const bad of ['', '.', '..', 'a/b', '.git', '-rf']) assert.equal(isSafeFolderName(bad), false, bad);
+});
+
+test('a worktree name is one safe, visible segment', () => {
+    /* Then */
+    for (const ok of ['wt', 'feature-x', 'a.b']) assert.equal(isSafeWorktreeName(ok), true, ok);
+    for (const bad of ['', '.', '..', '.hidden', 'a/b', '-rf', '.git'])
+        assert.equal(isSafeWorktreeName(bad), false, bad);
+});
+
+test('a worktree queues with its copy, and anything else with itself', () => {
+    /* Then */
+    assert.equal(lockKeyOf('/home/dev/projects/proj/.claude/worktrees/wt'), '/home/dev/projects/proj');
+    assert.equal(lockKeyOf('/home/dev/projects/proj/'), '/home/dev/projects/proj');
+    assert.equal(
+        lockKeyOf('/home/dev/projects/proj/.claude/worktrees/a/b'),
+        '/home/dev/projects/proj/.claude/worktrees/a/b',
+    );
+});
+
+test('worktree list --porcelain gives each path with its branch, detached ones without', () => {
+    /* Given */
+    const stdout =
+        'worktree /c\nHEAD 1111\nbranch refs/heads/main\n\n' +
+        'worktree /c/.claude/worktrees/wt\nHEAD 2222\nbranch refs/heads/feature/x\n\n' +
+        'worktree /c/.claude/worktrees/d\nHEAD 3333\ndetached\n\n';
+
+    /* When */
+    const entries = parseWorktreeList(stdout);
+
+    /* Then */
+    assert.deepEqual(entries, [
+        {path: '/c', branch: 'main'},
+        {path: '/c/.claude/worktrees/wt', branch: 'feature/x'},
+        {path: '/c/.claude/worktrees/d', branch: null},
+    ]);
 });
