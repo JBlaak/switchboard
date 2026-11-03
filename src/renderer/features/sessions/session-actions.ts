@@ -98,13 +98,19 @@ export async function openSetupTerminal(sessionId: string, projectPath: string):
  * A Claude session with the project's default options, local or remote.
  *
  * `initialPrompt` is what a local session starts on (#135); the options it is
- * launched with are otherwise exactly the defaults. A remote session does not
- * take one yet.
+ * launched with are otherwise exactly the defaults. A session on a VM agent
+ * (#276) gets both, as a local one does; one on an agentless remote takes
+ * neither, because tmux starts a bare `claude`.
  */
 export async function launchClaudeSession(
     project: Project,
     {initialPrompt}: {initialPrompt?: string} = {},
 ): Promise<void> {
+    if (project.remote && project.agent) {
+        const options = await resolveDefaultSessionOptions(project.projectPath);
+        await launchRemoteSession(project, initialPrompt ? {...options, initialPrompt} : options);
+        return;
+    }
     if (project.remote) {
         await launchRemoteSession(project);
         return;
@@ -146,14 +152,14 @@ async function launchTerminalSession(project: Project): Promise<void> {
  * disconnect — or an app restart — clicking it re-attaches to the session still
  * running on the far end.
  */
-async function launchRemoteSession(project: Project): Promise<void> {
+async function launchRemoteSession(project: Project, options: SessionOptions = {}): Promise<void> {
     const session = newSessionRow(project.projectPath, {
-        summary: 'Remote Claude',
+        summary: project.agent ? 'Claude on VM' : 'Remote Claude',
         type: 'remote',
         remoteKind: 'claude',
     });
     trackPending(session, true);
-    await spawn(session, {isNew: true, options: {type: 'remote', remoteKind: 'claude'}});
+    await spawn(session, {isNew: true, options: {...options, type: 'remote', remoteKind: 'claude'}});
 }
 
 /** Open an existing session, or bring it forward if it is already open. */

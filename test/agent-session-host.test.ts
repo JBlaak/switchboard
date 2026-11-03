@@ -214,7 +214,9 @@ test('a shell session is a login shell that types its command once it is up', as
     const spec = terminals.spawns[0];
     assert.equal(spec.file, SHELL);
     assert.deepEqual(spec.args, ['-l', '-i']);
-    assert.equal(spec.env.CLAUDECODE, '1');
+    // No `claude` shim on a VM: the setup script installs and runs the real one.
+    assert.equal(spec.env.BASH_ENV, undefined);
+    assert.equal(spec.env.CLAUDECODE, undefined);
     assert.deepEqual(before, []);
     assert.deepEqual(ptys[0].writes, ['bash ~/.switchboard/setup.sh\n']);
     assert.ok(SHELL_COMMAND_DELAY_MS > 0);

@@ -19,6 +19,11 @@ import path from 'node:path';
 
 import {systemClock} from '../application/ports/clock';
 import {uuidGenerator} from '../application/ports/ids';
+import {AgentAwareTerminals} from '../application/services/agent-client/agent-aware-terminals';
+import {AgentClient} from '../application/services/agent-client/agent-client';
+import {ConfigCopyService, manifestStoreOn} from '../application/services/config-copy-service';
+import {SshAgentDialer} from '../infrastructure/agent/ssh-agent-dialer';
+import {NodeClaudeConfigSource} from '../infrastructure/fs/claude-config-source';
 import {QuestionService} from '../application/services/question-service';
 import {ProjectListService} from '../application/services/project-list-service';
 import {ProjectFolderService} from '../application/services/project-folder-service';
@@ -131,7 +136,9 @@ export interface Container {
     readonly fs: NodeFileSystem;
 
     readonly registry: SessionRegistry;
-    readonly terminals: NodePtyGateway;
+    readonly terminals: AgentAwareTerminals<NodePtyGateway>;
+    /** Links to VM agents (#276): one per host, and the stand-ins for their sessions. */
+    readonly agents: AgentClient;
     readonly shells: SystemShellProfileProvider;
     readonly lifecycle: SessionLifecycle;
     readonly remote: RemoteConnectionSupervisor;
@@ -234,12 +241,15 @@ export function buildContainer(): Container {
     const database: SwitchboardDatabase = openDatabase();
     const repository = new SqliteSessionRepository(database.db);
     const searchIndex = new SqliteSearchIndex(database.db, database.searchFtsRecreated);
-    const settings = new SettingsService(new SqliteSettingsStore(database.db));
+    const settingsStore = new SqliteSettingsStore(database.db);
+    const settings = new SettingsService(settingsStore);
     const transcripts = new FileTranscriptStore(fs, paths.projectsDir);
 
     // ── Session machinery ──
     const registry = new SessionRegistry();
-    const terminals = new NodePtyGateway();
+    // Every PTY handle goes through this, so a VM session's stand-in (#276) is
+    // signalled and checked over its link, and everything else by node-pty.
+    const terminals = new AgentAwareTerminals(new NodePtyGateway());
     const shells = new SystemShellProfileProvider();
     // Types the Session work actions into a session, and hears it go idle from the lifecycle.
     const prompter = new PtySessionPrompter({sessions: registry, timers, log});
@@ -312,6 +322,45 @@ export function buildContainer(): Container {
         },
     });
 
+    // VM hosts (#276). The agent's question hook forwards here, so the Mac's own
+    // QuestionService and archive tool answer a VM session as they answer a local one.
+    const agents = new AgentClient({
+        dialer: new SshAgentDialer({
+            shell: () => shells.resolve(shellProfileId()).path,
+            env: terminals.baseEnv,
+            cwd: paths.homeDir,
+            log,
+        }),
+        appVersion: app.getVersion(),
+        registry,
+        renderer,
+        questions,
+        archiveTool,
+        timers,
+        clock,
+        log,
+    });
+    // The global config copy (#283), on every (re)connect to a host that wants it.
+    const configCopy = new ConfigCopyService({
+        source: new NodeClaudeConfigSource(path.join(os.homedir(), '.claude'), os.homedir()),
+        manifests: manifestStoreOn(settingsStore),
+        logger: log,
+    });
+    agents.onConnected((connection) => {
+        const hostSettings = connection.settings;
+        if (!hostSettings) return;
+        void configCopy.copyTo(
+            connection.host,
+            {
+                copyConfig: async ({files, removed}) => {
+                    const done = await connection.copyConfig(files, removed);
+                    return {ok: done.ok, ...(done.error ? {error: done.error} : {})};
+                },
+            },
+            hostSettings,
+        );
+    });
+
     // `gh`, and the filters a git checkout runs (`git-lfs`), need the login
     // shell's PATH: launched from the Finder, the app's own has no Homebrew in it.
     const toolEnv = loginShellEnv(() => shells.resolve(shellProfileId()).path, terminals.baseEnv, log);
@@ -332,6 +381,7 @@ export function buildContainer(): Container {
         log,
         git: workspace,
         fileExists: (target) => fs.exists(target),
+        agents,
     });
 
     const transitions = new SessionTransitionDetector({
@@ -764,6 +814,7 @@ export function buildContainer(): Container {
         fs,
         registry,
         terminals,
+        agents,
         shells,
         lifecycle,
         remote,

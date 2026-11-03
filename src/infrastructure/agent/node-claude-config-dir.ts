@@ -17,7 +17,7 @@ import {claudeConfigDir} from '../claude-cli/support/credentials';
 import {writeFileAtomic} from './atomic-write';
 
 export class NodeClaudeConfigDir implements ClaudeConfigDir {
-    private readonly root: string;
+    public readonly root: string;
 
     constructor(root: string = claudeConfigDir()) {
         this.root = path.resolve(root);

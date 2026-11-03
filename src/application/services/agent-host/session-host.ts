@@ -12,7 +12,7 @@
  * going away only stops what is sent to it.
  */
 import {buildClaudeCommand} from '../../../domain/launch/claude-command';
-import {claudeSessionEnv, plainTerminalEnv} from '../../../domain/launch/terminal-env';
+import {claudeSessionEnv} from '../../../domain/launch/terminal-env';
 import {withHostInstructions} from '../../../domain/agent/host-instructions';
 import {shellArgs} from '../../../domain/shell/quoting';
 import {Scrollback} from './scrollback';
@@ -253,7 +253,10 @@ export class SessionHost implements SessionHostPart {
             cwd,
             cols: message.cols,
             rows: message.rows,
-            env: plainTerminalEnv(terminals.baseEnv),
+            // Not plainTerminalEnv: its `claude` shim (through ENV/BASH_ENV) is
+            // for the Mac's terminals, and here it would shadow the real
+            // `claude` the setup script installs and signs in to.
+            env: claudeSessionEnv(terminals.baseEnv),
         });
 
         const command = message.command;

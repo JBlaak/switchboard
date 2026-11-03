@@ -15,6 +15,7 @@
  */
 import {ENTER_ALT_SCREEN, HIDE_CURSOR} from '../../domain/terminal/ansi';
 import {PROGRAM_STATUS_REPLY, parseTerminalEvents} from '../../domain/terminal/osc';
+import {isAgentPty} from './agent-client/agent-pty';
 import type {CliStateChange} from '../../domain/terminal/osc';
 import type {ActiveSession} from '../model/active-session';
 import type {SessionRegistry} from '../model/session-registry';
@@ -265,7 +266,10 @@ export class SessionLifecycle {
             remote.markDisconnected(session);
             // SIGTERM to the group rather than SIGHUP to the shell: the shell is only
             // a wrapper, and the `claude` underneath it would otherwise be orphaned.
-            if (!session.exited) terminals.signalTree(session.pty, 'SIGTERM');
+            // A session on a VM agent (#276) is only forgotten here, never signalled:
+            // outliving the Mac app is the point of running it there, and opening
+            // its row again reattaches to it.
+            if (!session.exited && !isAgentPty(session.pty)) terminals.signalTree(session.pty, 'SIGTERM');
             registry.delete(sessionId);
         }
     }

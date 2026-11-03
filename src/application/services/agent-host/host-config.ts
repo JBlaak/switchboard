@@ -21,8 +21,10 @@
  * `src/infrastructure/agent/`.
  */
 import {DEFAULT_BASE_FOLDER, defaultHostInstructions} from '../../../domain/agent/host-instructions';
+import {expandClaudeDirPlaceholder, PLACEHOLDER_FILES} from '../../../domain/agent/config-copy';
 import {isSafeConfigPath} from '../../../domain/agent/protocol';
 import type {
+    ConfigFile,
     AgentTool,
     CopyConfigMessage,
     HostSettings,
@@ -63,6 +65,8 @@ export interface CommandRunner {
  * `isSafeConfigPath`.
  */
 export interface ClaudeConfigDir {
+    /** The folder's absolute path on this machine, which the plugin records name (#283). */
+    readonly root: string;
     exists(relativePath: string): boolean;
     /** Create the folders, write `<file>.tmp`, then rename over the file; may throw. */
     write(relativePath: string, content: Uint8Array, mode: number): void;
@@ -188,6 +192,17 @@ export class HostConfig implements HostConfigPart {
      * a failure so one bad file does not leave the rest of the config behind.
      * Anything skipped or failed is listed in the error.
      */
+    /**
+     * A file's bytes as they are written here. The plugin records name their
+     * folders by absolute path, which the Mac cannot know for this machine, so
+     * it sends a placeholder in those files that becomes this `~/.claude`.
+     */
+    private contentOf(file: ConfigFile): Uint8Array {
+        const bytes = Buffer.from(file.contentBase64, 'base64');
+        if (!PLACEHOLDER_FILES.includes(file.path)) return bytes;
+        return Buffer.from(expandClaudeDirPlaceholder(bytes.toString('utf8'), this.deps.claudeDir.root), 'utf8');
+    }
+
     private copyConfig(message: CopyConfigMessage): {ok: boolean; error?: string} {
         const unsafe: string[] = [];
         const failed: string[] = [];
@@ -198,11 +213,7 @@ export class HostConfig implements HostConfigPart {
                 continue;
             }
             try {
-                this.deps.claudeDir.write(
-                    file.path,
-                    Buffer.from(file.contentBase64, 'base64'),
-                    file.mode & MODE_MASK || 0o644,
-                );
+                this.deps.claudeDir.write(file.path, this.contentOf(file), file.mode & MODE_MASK || 0o644);
             } catch (err) {
                 failed.push(`${file.path} (${errorText(err)})`);
             }

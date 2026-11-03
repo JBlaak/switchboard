@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {CLAUDE_DIR_PLACEHOLDER} from '../src/domain/agent/config-copy';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -66,6 +67,7 @@ function memoryClaudeDir(
 ): ClaudeConfigDir & {files: Map<string, {text: string; mode: number}>} {
     const files = new Map(Object.entries(initial).map(([p, text]) => [p, {text, mode: 0o600}]));
     return {
+        root: '/home/dev/.claude',
         files,
         exists: (p) => files.has(p),
         write: (p, content, mode) => void files.set(p, {text: Buffer.from(content).toString('utf8'), mode}),
@@ -284,6 +286,27 @@ test('the config copy writes safe files with their mode and removes stale ones',
     assert.deepEqual(h.claudeDir.files.get('CLAUDE.md'), {text: '# Me', mode: 0o644});
     assert.deepEqual(h.claudeDir.files.get('skills/x/run.sh'), {text: 'echo', mode: 0o755});
     assert.equal(h.claudeDir.files.has('commands/old.md'), false);
+});
+
+test("the plugin records' placeholder becomes this machine's ~/.claude, and other files are left as sent", () => {
+    /* Given */
+    const h = harness();
+    const record = `{"installPath": "${CLAUDE_DIR_PLACEHOLDER}/plugins/cache/mkt/tool/1.0"}`;
+
+    /* When */
+    h.pair.mac.send({
+        type: 'copy-config',
+        requestId: 'r10',
+        files: [file('plugins/installed_plugins.json', record), file('CLAUDE.md', CLAUDE_DIR_PLACEHOLDER)],
+        removed: [],
+    });
+
+    /* Then */
+    assert.equal(
+        h.claudeDir.files.get('plugins/installed_plugins.json')?.text,
+        '{"installPath": "/home/dev/.claude/plugins/cache/mkt/tool/1.0"}',
+    );
+    assert.equal(h.claudeDir.files.get('CLAUDE.md')?.text, CLAUDE_DIR_PLACEHOLDER);
 });
 
 test('unsafe paths are skipped, listed, and never touched', () => {

@@ -60,6 +60,8 @@ export interface AgentSessionSpec {
     dir: string;
     isNew: boolean;
     options?: SessionOptions;
+    /** For a shell: what the agent types into it once it is up (the setup terminal's script). */
+    command?: string;
     cols: number;
     rows: number;
 }
@@ -143,6 +145,7 @@ export class AgentClient {
                 dir: spec.dir,
                 isNew: spec.isNew,
                 ...(spec.options ? {options: spec.options} : {}),
+                ...(spec.command ? {command: spec.command} : {}),
                 cols: spec.cols,
                 rows: spec.rows,
             })

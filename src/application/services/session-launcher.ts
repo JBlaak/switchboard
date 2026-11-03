@@ -227,6 +227,7 @@ export class SessionLauncher {
             dir: normalizeRemoteDir(config.dir) ?? '',
             isNew,
             options,
+            ...(typeof options?.agentCommand === 'string' ? {command: options.agentCommand} : {}),
             cols: SPAWN_COLS,
             rows: SPAWN_ROWS,
         });
