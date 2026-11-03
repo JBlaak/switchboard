@@ -53,6 +53,8 @@ import type {TasksUpdate} from '../../domain/tasks/surface';
 // ── Pushed by the main process ──
 
 export type PushEvent =
+    /** The registered VMs changed (#307); the VM list is read again. */
+    | {type: 'vmHostsChanged'}
     | {type: 'processExited'; sessionId: string; exitCode: number}
     | {type: 'sessionForked'; oldId: string; newId: string}
     | {type: 'cliBusyState'; sessionId: string; busy: boolean}

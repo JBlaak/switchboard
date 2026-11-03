@@ -63,6 +63,7 @@ export function installIpcBridge(
             send({type: 'agentInstallProgress', hostKey: hostKeyOfPath(path) ?? path, line}),
         ),
         api.onHandoffProgress((localPath, line) => send({type: 'handoffProgress', localPath, line})),
+        api.onVmHostsChanged(() => send({type: 'vmHostsChanged'})),
         api.onBringBackProgress((copyPath, line) => send({type: 'bringBackProgress', copyPath, line})),
         api.onSessionHandoffPhase((sessionId, phase) => send({type: 'sessionHandoffPhase', sessionId, phase})),
     ];

@@ -11,23 +11,18 @@
  * registry only through `vmApi()`.
  */
 import type {VmHostView} from '../../../application/services/vm-registry';
-import type {Unsubscribe} from '../../../ipc/api';
 
 export type {VmHostView};
 
 export type AddVmHostResult = {ok: true; key: string} | {ok: false; error: string};
 
 /** The preload's VM registry methods, as the main side adds them. */
-export interface VmHostsApi {
-    vmHosts(): Promise<VmHostView[]>;
-    addVmHost(input: {user: string; host: string; port?: number; name?: string}): Promise<AddVmHostResult>;
-    /** Answers whether the name was kept; a refusal may also come as `{ok: false, error}`. */
-    renameVmHost(key: string, name: string): Promise<unknown>;
-    removeVmHost(key: string): Promise<{ok: true} | {ok: false; error: string}>;
-    /** Main's push on every change; it may carry the new list, or nothing and the list is read again. */
-    onVmHostsChanged(cb: (hosts?: VmHostView[]) => void): Unsubscribe;
-}
+/** The VM registry's calls, as the preload exposes them (#307). */
+export type VmHostsApi = Pick<
+    typeof window.api,
+    'vmHosts' | 'addVmHost' | 'renameVmHost' | 'removeVmHost' | 'onVmHostsChanged'
+>;
 
 export function vmApi(): VmHostsApi {
-    return window.api as unknown as VmHostsApi;
+    return window.api;
 }

@@ -2,17 +2,14 @@
  * Settings → VMs' launch-time work (#307): read the list, read it again
  * whenever the settings open, and follow main's push.
  */
-import {dispatch, onEvent} from '../../state/app-store';
+import {onEvent} from '../../state/app-store';
 import {loadVmHosts} from './actions';
-import {vmApi} from './vm-api';
 
 export function installVms(): void {
     // The list can have moved on while nobody looked; a missed push would show here.
     onEvent('settingsOpened', () => void loadVmHosts());
-    vmApi().onVmHostsChanged?.((hosts) => {
-        if (Array.isArray(hosts)) dispatch({type: 'vmHostsLoaded', hosts});
-        else void loadVmHosts();
-    });
+    // Main's push carries no list; it says to read it again (the bridge turns it into this event).
+    onEvent('vmHostsChanged', () => void loadVmHosts());
 
     void loadVmHosts();
 }
