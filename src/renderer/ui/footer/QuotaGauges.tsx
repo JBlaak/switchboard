@@ -29,7 +29,10 @@ export function QuotaGauges(): JSX.Element {
 function QuotaGauge({row}: {row: UsageLimit}): JSX.Element {
     const gauge = quotaGaugeView(row);
     return (
-        <span className="quota-item" title={gauge.tooltip}>
+        // Painted by the stylesheet off data-tooltip rather than a native title:
+        // the native tooltip comes late or not at all in the frameless window,
+        // and the reset time is the one thing here worth hovering for.
+        <span className="quota-item" data-tooltip={gauge.tooltip}>
             <span className="quota-label">{gauge.label}</span>
             <span className="quota-track">
                 <span className={gauge.fillClass} data-testid="quota-fill" style={{width: gauge.width}} />
