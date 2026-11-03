@@ -12,6 +12,7 @@
  * no question hook.
  */
 import os from 'node:os';
+import path from 'node:path';
 
 import {systemClock} from '../application/ports/clock';
 import {uuidGenerator} from '../application/ports/ids';
@@ -19,11 +20,14 @@ import {Copies} from '../application/services/agent-host/copies';
 import {HookForwarder} from '../application/services/agent-host/hook-forwarder';
 import {HostConfig} from '../application/services/agent-host/host-config';
 import {SessionHost} from '../application/services/agent-host/session-host';
+import {Transcripts} from '../application/services/agent-host/transcripts';
 import {NodeClaudeConfigDir} from '../infrastructure/agent/node-claude-config-dir';
 import {NodeCommandRunner} from '../infrastructure/agent/node-command-runner';
 import {NodeCopiesFiles} from '../infrastructure/agent/node-copies-files';
 import {NodeCopyCommandRunner} from '../infrastructure/agent/node-copy-command-runner';
+import {NodeFolderWatcher} from '../infrastructure/agent/node-folder-watcher';
 import {NodeHostSettingsFile} from '../infrastructure/agent/node-host-settings-file';
+import {NodeTranscriptFiles} from '../infrastructure/agent/node-transcript-files';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
 import {cleanChildEnv, NodePtyGateway} from '../infrastructure/pty/node-pty-gateway';
@@ -31,7 +35,6 @@ import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {systemTimers} from '../infrastructure/system/timers';
 import type {Logger} from '../application/ports/logger';
 import type {AgentParts} from '../application/services/agent-host/agent-host';
-import type {TranscriptsPart} from '../application/services/agent-host/handlers';
 
 /** What the entry hands the wiring. */
 export interface PartsContext {
@@ -102,25 +105,20 @@ export async function createParts({log}: PartsContext): Promise<AgentParts> {
         log,
     });
 
+    // The copies part owns the uploads and an import takes its transcript from
+    // them. `uploads` is still private on Copies, which this stage does not
+    // edit; the bracket reads it type-checked until it is made public.
+    const transcripts = new Transcripts({
+        files: new NodeTranscriptFiles(),
+        watcher: new NodeFolderWatcher(),
+        uploads: copies['uploads'],
+        home: os.homedir(),
+        projectsDir: path.join(os.homedir(), '.claude', 'projects'),
+        timers: systemTimers,
+        log,
+    });
+
     // The hook server needs no stop of its own: it lives as long as the
     // process, which exits right after the sessions are terminated.
-    return {sessions, hooks, config, copies, transcripts: notYetTranscripts()};
-}
-
-/** Until the transcripts part lands (#276 stage 3): nothing is found, and imports are refused. */
-function notYetTranscripts(): TranscriptsPart {
-    return {
-        clientConnected() {},
-        clientGone() {},
-        handle(client, message) {
-            if (message.type === 'get-transcript') {
-                client.send({type: 'transcript', requestId: message.requestId, transcript: null});
-            } else if (message.type === 'transcript-tail') {
-                client.send({type: 'transcript-tail', requestId: message.requestId, lines: []});
-            } else {
-                const error = 'transcript import is not supported by this agent yet';
-                client.send({type: 'done', requestId: message.requestId, ok: false, error});
-            }
-        },
-    };
+    return {sessions, hooks, config, copies, transcripts};
 }

@@ -173,6 +173,19 @@ export class Uploads {
         return {file: upload.file, size: upload.size};
     }
 
+    /**
+     * Hand over a finished, checked upload's file for good, for a transcript
+     * import (#276 stage 3): the uploads forget it, so it never expires or is
+     * deleted under the taker, who now owns the file and moves or deletes it.
+     * An error naming the problem otherwise, and the upload is left as it was.
+     */
+    public take(uploadId: string): {file: string; size: number} | {error: string} {
+        const found = this.fileOf(uploadId);
+        if ('error' in found) return found;
+        this.uploads.delete(uploadId);
+        return found;
+    }
+
     /** Forget an upload and delete its file. */
     public drop(uploadId: string): void {
         const upload = this.uploads.get(uploadId);
