@@ -15,6 +15,7 @@ import log from 'electron-log';
 import {app, safeStorage} from 'electron';
 import {randomBytes} from 'node:crypto';
 import {createHash} from 'node:crypto';
+import nodeFs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -29,6 +30,9 @@ import {AgentHostsService} from '../application/services/agent-hosts-service';
 import {ProjectHandoffService} from '../application/services/project-handoff-service';
 import {SessionHandoffService} from '../application/services/session-handoff-service';
 import {VmTranscripts} from '../application/services/vm-transcripts';
+import {VmSchedulesService} from '../application/services/vm-schedules-service';
+import {DroppedFilesService} from '../application/services/dropped-files-service';
+import {isVmFolder} from '../domain/agent/vm-paths';
 import type {VmSchedules} from '../application/services/vm-schedules';
 import type {DroppedFiles} from '../application/services/dropped-files';
 import {SqliteVmTranscriptStore} from '../infrastructure/sqlite/vm-transcript-store';
@@ -216,12 +220,12 @@ export interface Container {
      * Where a project's schedules run, on the Mac or in a copy on its VM (#276
      * stage 5). Optional only until `buildContainer` builds it.
      */
-    readonly vmSchedules?: VmSchedules;
+    readonly vmSchedules: VmSchedules;
     /**
      * Files dropped on a VM session's terminal, uploaded to its VM (#276 stage
      * 5). Optional only until `buildContainer` builds it.
      */
-    readonly droppedFiles?: DroppedFiles;
+    readonly droppedFiles: DroppedFiles;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */
@@ -481,8 +485,13 @@ export function buildContainer(): Container {
     // Handing projects off to VMs (#276 stage 2). Forgetting a removed copy
     // reaches back into the container, which exists by the time anyone removes one.
     let forgetRemote: (projectPath: string) => void = () => {};
+    // Where each project's schedules run (#276 stage 5): on this Mac, or in one
+    // copy on its VM, kept in step with the VM's host settings on every connect.
+    const vmSchedules = new VmSchedulesService({agents, settings, fs, renderer, clock, timers, log});
+    vmSchedules.start();
     const handoffGit = new GitCliHandoff(toolEnv);
     const projectHandoff = new ProjectHandoffService({
+        afterHandoff: (localPath, copyPath, choices) => vmSchedules.afterHandoff(localPath, copyPath, choices),
         agents,
         git: handoffGit,
         settings,
@@ -576,6 +585,8 @@ export function buildContainer(): Container {
         log,
         commandsDir: paths.commandsDir,
         runner: new ClaudeCommandRunner({shells, terminals, log, shellProfileId}),
+        // A project whose schedules run on a VM is paused here (#276 stage 5).
+        runsHere: (projectPath) => vmSchedules.macRunsSchedulesOf(projectPath),
     });
     // Ask Patch (#135): one Haiku call per request typed on the empty screen.
     const claudeCaller = new ShellClaudeCaller({
@@ -881,7 +892,8 @@ export function buildContainer(): Container {
             const links = new TaskLinkService({store: taskLinkStore, sessions: sessionCandidates, clock});
             const starts = new TaskSessionService({
                 sessions: sessionCandidates,
-                transcripts,
+                transcripts: routedTranscripts,
+                agentlessRemote,
                 git: workspace,
                 repoOf: (taskId) => links.repoOf(taskId),
                 candidates: () => routeCandidates(projects.list(false)),
@@ -900,14 +912,29 @@ export function buildContainer(): Container {
         sessionsIn: (folder) =>
             registry
                 .snapshot()
+                // Local sessions, and VM sessions by their VM transcript folder (#276 stage 5).
                 .filter(
                     ([, session]) =>
-                        !session.exited && !session.isPlainTerminal && !isRemoteProjectPath(session.projectPath),
+                        !session.exited &&
+                        !session.isPlainTerminal &&
+                        (!isRemoteProjectPath(session.projectPath) || isAgentPty(session.pty)),
                 )
-                .filter(([, session]) => (session.projectFolder ?? encodeProjectPath(session.projectPath)) === folder)
+                .filter(
+                    ([sessionId, session]) =>
+                        (isAgentPty(session.pty)
+                            ? locateVmSession(vmLocation, sessionId)?.folder
+                            : (session.projectFolder ?? encodeProjectPath(session.projectPath))) === folder,
+                )
                 .map(([sessionId, session]) => ({sessionId, projectPath: session.projectPath})),
-        transcript: (folder, sessionId) => transcripts.readTail(folder, sessionId, TASK_SCAN_BYTES).split('\n'),
-        modifiedAt: (folder, sessionId) => transcripts.sessionMtimeMs(folder, sessionId),
+        transcript: (folder, sessionId) =>
+            isVmFolder(folder)
+                ? vmTranscripts.tail(sessionId, TASK_SCAN_BYTES)
+                : transcripts.readTail(folder, sessionId, TASK_SCAN_BYTES).split('\n'),
+        modifiedAt: (folder, sessionId) => {
+            if (!isVmFolder(folder)) return transcripts.sessionMtimeMs(folder, sessionId);
+            const at = Date.parse(vmTranscripts.get(sessionId)?.modified ?? '');
+            return Number.isNaN(at) ? null : at;
+        },
         pullRequests: (sessionId) => repository.getCachedSession(sessionId)?.pullRequests ?? [],
         archived: (sessionId) => Boolean(repository.getAllMeta().get(sessionId)?.archived),
         sessionProject: (sessionId) => locateSession(sessionId)?.projectPath ?? null,
@@ -1000,6 +1027,33 @@ export function buildContainer(): Container {
         },
     });
 
+    // A VM session's transcript changed: its task detection runs, as a local one's
+    // does on the projects watcher (#276 stage 5).
+    agents.onConnected((connection) =>
+        connection.onMessage((message) => {
+            if (message.type !== 'transcripts-changed') return;
+            for (const sessionId of message.sessionIds) {
+                const folder = locateVmSession(vmLocation, sessionId)?.folder;
+                if (folder) void tasks.transcriptsChanged(folder);
+            }
+        }),
+    );
+    // Files dropped on a VM session's terminal go up to its VM (#276 stage 5).
+    const droppedFiles = new DroppedFilesService({
+        registry,
+        agents,
+        files: {
+            stat: (file) => {
+                const stat = nodeFs.statSync(file, {throwIfNoEntry: false});
+                return stat ? {isFile: stat.isFile(), size: stat.size} : null;
+            },
+            read: (file) => nodeFs.readFileSync(file),
+            basename: (file) => path.basename(file),
+        },
+        sha256: (bytes) => createHash('sha256').update(bytes).digest('hex'),
+        log,
+    });
+
     const container: Container = {
         log,
         paths,
@@ -1015,6 +1069,8 @@ export function buildContainer(): Container {
         projectHandoff,
         sessionHandoff,
         vmTranscripts,
+        vmSchedules,
+        droppedFiles,
         shells,
         lifecycle,
         remote,
