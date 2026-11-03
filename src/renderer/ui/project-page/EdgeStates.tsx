@@ -8,7 +8,7 @@
 import type {JSX} from 'react';
 import {useStore} from '../use-store';
 import type {GitHubUnavailableReason} from '../../../domain/project/overview';
-import {REMOTE_NOTE, VM_TASKS_NOTE, staleLine, unavailableMessage} from './page-state';
+import {REMOTE_NOTE, staleLine, unavailableMessage} from './page-state';
 import {copyAuthCommand, reloadProjectOverview} from './actions';
 
 /** One message in place of Plans & issues and Pull requests, with Try again (and Copy command). */
@@ -61,9 +61,4 @@ export function StaleLine({fetchedAt}: {fetchedAt: number}): JSX.Element {
 /** Under an agentless remote project's sessions: what the page does not read there. */
 export function RemoteNote(): JSX.Element {
     return <div className="pp-remote-note">{REMOTE_NOTE}</div>;
-}
-
-/** On a VM project's page, in place of Tasks: BlaakTasks isn't read there yet. */
-export function VmTasksNote(): JSX.Element {
-    return <div className="pp-remote-note">{VM_TASKS_NOTE}</div>;
 }

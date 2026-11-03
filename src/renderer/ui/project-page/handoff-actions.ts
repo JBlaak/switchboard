@@ -1,7 +1,8 @@
 /**
  * What project hand-off does on the project page (#276 stage 2): asking for
  * the hosts, a project's copies and a copy's local project, the Hand off
- * dialog's preview and run, Bring back, and Remove copy. The components call
+ * dialog's preview and run (with, stage 5, its schedules choice), Bring
+ * back, and Remove copy. The components call
  * these, never `window.api` or the store.
  *
  * A failed call is answered by main as `{ ok: false, error }` in place of
@@ -12,9 +13,11 @@ import {removeDecision} from '../../state/handoff-slice';
 import {openDialog} from '../dialogs/actions';
 import {closeProject, openProjectPage} from './actions';
 import {removeConfirm} from './handoff-view';
+import {loadSchedules} from './schedules-actions';
 import type {
     BringBackResult,
     CopyStatus,
+    HandoffChoices,
     HandoffHost,
     HandoffPreview,
     HandoffResult,
@@ -43,8 +46,16 @@ export async function loadCopyOrigin(copyPath: string): Promise<void> {
 export async function openHandOffDialog(localPath: string, host: HandoffHost): Promise<void> {
     dispatch({type: 'handoffDialogOpened', localPath, host});
     openDialog({kind: 'handOff', localPath, host});
+    // Whether the project has schedules, for the dialog's "Run this project's schedules on the VM".
+    const schedules = loadSchedules(localPath);
     const answer: unknown = await window.api.previewHandoff(localPath).catch((err: Error) => ({error: err.message}));
     dispatch({type: 'handoffPreviewLoaded', localPath, answer: previewAnswer(answer)});
+    await schedules;
+}
+
+/** The dialog's "Run this project's schedules on the VM". */
+export function toggleHandoffSchedules(): void {
+    dispatch({type: 'handoffSchedulesToggled'});
 }
 
 export function toggleHandoffFile(path: string): void {
@@ -61,13 +72,21 @@ export function closeHandOffDialog(close: () => void): void {
  * as main pushes them; on success the copy is a project, and the page's On
  * VMs section is asked again.
  */
-export async function runHandOff(localPath: string, hostKey: string, ticked: readonly string[]): Promise<void> {
+export async function runHandOff(
+    localPath: string,
+    hostKey: string,
+    ticked: readonly string[],
+    choices: HandoffChoices = {},
+): Promise<void> {
     dispatch({type: 'handoffStarted', localPath, hostKey});
     const result: unknown = await window.api
-        .handOffProject(localPath, hostKey, [...ticked])
+        .handOffProject(localPath, hostKey, [...ticked], choices)
         .catch((err: Error) => ({ok: false, error: err.message}));
     dispatch({type: 'handoffFinished', localPath, result: handoffResult(result)});
-    if (isOk(result)) void loadProjectCopies(localPath);
+    if (!isOk(result)) return;
+    void loadProjectCopies(localPath);
+    // The schedules may have moved to the copy.
+    if (choices.schedulesOnVm !== undefined) void loadSchedules(localPath);
 }
 
 /** Open the copy: its project page, in place of the local one. */

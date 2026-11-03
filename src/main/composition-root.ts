@@ -29,6 +29,8 @@ import {AgentHostsService} from '../application/services/agent-hosts-service';
 import {ProjectHandoffService} from '../application/services/project-handoff-service';
 import {SessionHandoffService} from '../application/services/session-handoff-service';
 import {VmTranscripts} from '../application/services/vm-transcripts';
+import type {VmSchedules} from '../application/services/vm-schedules';
+import type {DroppedFiles} from '../application/services/dropped-files';
 import {SqliteVmTranscriptStore} from '../infrastructure/sqlite/vm-transcript-store';
 import {GitCliHandoff} from '../infrastructure/git/git-cli-handoff';
 import {forgetRemoteProject} from './forget-remote-project';
@@ -210,6 +212,16 @@ export interface Container {
     readonly sessionHandoff: SessionHandoff;
     /** VM sessions' transcripts, parsed on their VMs (#276 stage 3). */
     readonly vmTranscripts: VmTranscripts;
+    /**
+     * Where a project's schedules run, on the Mac or in a copy on its VM (#276
+     * stage 5). Optional only until `buildContainer` builds it.
+     */
+    readonly vmSchedules?: VmSchedules;
+    /**
+     * Files dropped on a VM session's terminal, uploaded to its VM (#276 stage
+     * 5). Optional only until `buildContainer` builds it.
+     */
+    readonly droppedFiles?: DroppedFiles;
     /** The pop-up's window, once one exists. */
     quickAskWindow(): QuickAskWindow | null;
     /** Make the pop-up's window now, hidden, so the first press shows it at once (B1). */

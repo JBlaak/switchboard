@@ -1,6 +1,6 @@
 /**
  * The project page on a remote project (#276): what the page shows on a VM
- * project (stage 4: what a local one does, Tasks aside) and an agentless one, the Install agent card's states, and the Setup section's checks.
+ * project (stage 4: what a local one does; stage 5: Tasks too) and an agentless one, the Install agent card's states, and the Setup section's checks.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +12,6 @@ import {
     REMOTE_NOTE,
     showsTasks,
     showsWorktrees,
-    VM_TASKS_NOTE,
 } from '../src/renderer/ui/project-page/page-state';
 import {
     installView,
@@ -108,13 +107,19 @@ test('the note under an agentless remote says plans and worktrees aren’t read 
     assert.equal(REMOTE_NOTE, 'Plans and worktrees aren’t read over ssh.');
 });
 
-test('Tasks stay off on a VM project, with a note saying so, and show for a local one', () => {
+test('Tasks show on a VM project as on a local one, and stay off on an agentless remote', () => {
+    /* Given */
+    const projects: [string, boolean][] = [
+        [VM, true],
+        [SSH, false],
+        ['/repo', false],
+    ];
+
     /* When */
-    const shown = [showsTasks(VM), showsTasks(SSH), showsTasks('/repo')];
+    const shown = projects.map(([path, vm]) => showsTasks(path, vm));
 
     /* Then */
-    assert.deepEqual(shown, [false, false, true]);
-    assert.equal(VM_TASKS_NOTE, 'Tasks aren’t linked to projects on a VM yet.');
+    assert.deepEqual(shown, [true, false, true]);
 });
 
 // ── GitHub ──

@@ -8,6 +8,8 @@
  * - The form: the branch, the commits not on origin and the uncommitted
  *   changes; the ignored files that look like config, each with its size and
  *   ticked as last time; and "Updates the copy on …" when there is one.
+ * - Stage 5: when the project has schedules, "Run this project’s schedules
+ *   on the VM", ticked by default, saying so when a copy runs them already.
  * - Hand off runs it, with its progress lines under the form. On success
  *   "Handed off" and Open the copy, which goes to the copy's page; on an
  *   error its message and Retry.
@@ -29,11 +31,18 @@ import {useEffect, useRef} from 'react';
 import type {JSX} from 'react';
 import {useStore} from '../use-store';
 import {projectLabel} from '../../features/sessions/project-label';
-import {runIn} from '../../state/handoff-slice';
+import {copiesIn, runIn, schedulesIn} from '../../state/handoff-slice';
 import {sessionRunIn} from '../../state/session-handoff-slice';
 import {DialogShell} from './DialogShell';
 import {carriedLines, existingNote, FILES_NOTE, fileSize, runView} from '../project-page/handoff-view';
-import {closeHandOffDialog, openCopy, runHandOff, toggleHandoffFile} from '../project-page/handoff-actions';
+import {
+    closeHandOffDialog,
+    openCopy,
+    runHandOff,
+    toggleHandoffFile,
+    toggleHandoffSchedules,
+} from '../project-page/handoff-actions';
+import {handoffChoices, schedulesChoice} from '../project-page/schedules-view';
 import {busyNote, sessionCarriedLines, sessionRunView} from './session-handoff-view';
 import {
     cancelSessionHandOff,
@@ -73,6 +82,13 @@ interface DialogModel {
     readonly ticked: readonly string[];
     readonly editable: boolean;
     toggle(path: string): void;
+    /** A choice under the files (project mode: the schedules' checkbox), or none. */
+    readonly choice: {
+        readonly label: string;
+        readonly note: string;
+        readonly checked: boolean;
+        toggle(): void;
+    } | null;
     /** "Waiting for the turn to end…". */
     readonly status: string | null;
     readonly lines: readonly string[];
@@ -92,10 +108,15 @@ function ProjectHandOff({localPath, host, onClose}: {localPath: string; host: Ha
     const ticked = dialog?.ticked ?? [];
     const close = (): void => closeHandOffDialog(onClose);
     const existing = preview.phase === 'ok' ? existingNote(preview.preview, host) : null;
+    const location = useStore((state) => schedulesIn(state.handoff, localPath).location);
+    const copies = useStore((state) => copiesIn(state.handoff, localPath));
+    const choice = schedulesChoice(location, host, preview.phase === 'ok' ? preview.preview : null, copies);
+    const schedulesOnVm = dialog?.schedulesOnVm ?? true;
 
     const press = (): void => {
         if (view.copyPath) openCopy(view.copyPath, close);
-        else if (preview.phase === 'ok' && !view.disabled) void runHandOff(localPath, host.key, ticked);
+        else if (preview.phase === 'ok' && !view.disabled)
+            void runHandOff(localPath, host.key, ticked, handoffChoices(choice, schedulesOnVm));
     };
 
     const model: DialogModel = {
@@ -115,6 +136,7 @@ function ProjectHandOff({localPath, host, onClose}: {localPath: string; host: Ha
         ticked,
         editable: preview.phase === 'ok' && run.phase !== 'running' && run.phase !== 'done',
         toggle: toggleHandoffFile,
+        choice: choice && {...choice, checked: schedulesOnVm, toggle: toggleHandoffSchedules},
         status: null,
         lines: view.lines,
         error: view.error,
@@ -165,6 +187,7 @@ function SessionHandOff({sessionId, host, onClose}: {sessionId: string; host: Ha
         ticked,
         editable: preview.phase === 'ok' && view.editable,
         toggle: toggleSessionHandoffFile,
+        choice: null,
         status: view.status,
         lines: view.lines,
         error: view.error,
@@ -258,6 +281,20 @@ function HandOffLayout({model}: {model: DialogModel}): JSX.Element {
                                     ))}
                                 </div>
                                 <div className="handoff-note">{FILES_NOTE}</div>
+                            </div>
+                        )}
+                        {model.choice && (
+                            <div className="settings-field">
+                                <label className="handoff-file handoff-choice">
+                                    <input
+                                        type="checkbox"
+                                        checked={model.choice.checked}
+                                        disabled={!model.editable}
+                                        onChange={model.choice.toggle}
+                                    />
+                                    <span className="handoff-choice-label">{model.choice.label}</span>
+                                </label>
+                                <div className="handoff-note">{model.choice.note}</div>
                             </div>
                         )}
                         {preview.notes.map((note) => (

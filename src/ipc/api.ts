@@ -47,10 +47,12 @@ import type {
     CopyStatus,
     HandoffHost,
     HandoffPreview,
+    HandoffChoices,
     HandoffResult,
     ProjectCopy,
 } from '../application/services/project-handoff';
 import type {SessionHandoffPhase, SessionHandoffPreview} from '../application/services/session-handoff';
+import type {ScheduleLocation} from '../application/services/vm-schedules';
 
 export type {AgentHostStatus, AgentHostsResult};
 
@@ -344,11 +346,17 @@ export interface SwitchboardApi {
     /** What handing a local project off would carry, or why it can't be handed off. */
     previewHandoff(localPath: string): Promise<HandoffPreview | {error: string}>;
     /**
-     * Hand a local project off to a host, carrying the ticked ignored files.
+     * Hand a local project off to a host, carrying the ticked ignored files and
+     * the dialog's other choices (stage 5: whether the schedules move along).
      * Progress lines arrive on `onHandoffProgress`; on success the copy is a
      * project of its own and `onProjectsChanged` fires.
      */
-    handOffProject(localPath: string, hostKey: string, ticked: string[]): Promise<HandoffResult>;
+    handOffProject(
+        localPath: string,
+        hostKey: string,
+        ticked: string[],
+        choices?: HandoffChoices,
+    ): Promise<HandoffResult>;
     /** A local project's copies on VMs. */
     projectCopies(localPath: string): Promise<ProjectCopy[]>;
     /** The local project a copy was made from; null for a remote that isn't a copy. */
@@ -371,6 +379,17 @@ export interface SwitchboardApi {
     handOffSession(sessionId: string, hostKey: string, ticked: string[]): Promise<SessionHandoffPhase>;
     /** Cancel a hand-off still waiting for its turn to end; false once it is running. */
     cancelSessionHandoff(sessionId: string): Promise<boolean>;
+
+    // ── Stage 5 (#276) ──
+    /** Where a local project's (or its copy's) schedules run; null with neither schedules nor copies. */
+    schedulesWhere(projectPath: string): Promise<ScheduleLocation | null>;
+    /** Run a local project's schedules in that copy on its VM, or (null) back on the Mac. */
+    runSchedulesOn(localPath: string, copyPath: string | null): Promise<ScheduleLocation | {error: string}>;
+    /** Upload files dropped on a VM session's terminal; answers their paths on the VM, in order. */
+    uploadDroppedFiles(
+        sessionId: string,
+        localPaths: string[],
+    ): Promise<{ok: true; paths: string[]} | {ok: false; error: string}>;
 
     // ── Events from main ──
     // Each answers its unsubscribe, so a listener can be removed again (StrictMode

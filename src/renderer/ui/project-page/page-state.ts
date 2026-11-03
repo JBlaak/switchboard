@@ -66,15 +66,13 @@ export function remoteHost(projectPath: string): string {
 export const REMOTE_NOTE = 'Plans and worktrees aren’t read over ssh.';
 
 /**
- * Whether the Tasks section shows: not for a remote project, VM or not.
- * BlaakTasks on a VM comes in a later stage (#276); `VM_TASKS_NOTE` says so.
+ * Whether the Tasks section shows: for a local project, and (#276 stage 5) a
+ * VM project (`vm`), whose tasks are linked as a local one's are. An
+ * agentless remote has none.
  */
-export function showsTasks(projectPath: string): boolean {
-    return !isRemoteProjectPath(projectPath);
+export function showsTasks(projectPath: string, vm: boolean): boolean {
+    return !isRemoteProjectPath(projectPath) || vm;
 }
-
-/** On a VM project's page, while BlaakTasks is on, where the Tasks section would be. */
-export const VM_TASKS_NOTE = 'Tasks aren’t linked to projects on a VM yet.';
 
 /**
  * Whether ⌘-click and the GitHub button can open the project's repository: a

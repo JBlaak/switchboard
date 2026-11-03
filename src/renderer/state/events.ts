@@ -38,6 +38,7 @@ import type {ArchiveUndoEvent} from './archive-undo-slice';
 import type {AgentHostEvent} from './agent-host-slice';
 import type {HandoffEvent} from './handoff-slice';
 import type {SessionHandoffEvent} from './session-handoff-slice';
+import type {DropUploadEvent} from './drop-upload-slice';
 import type {SessionHandoffPhase} from '../../application/services/session-handoff';
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
@@ -341,7 +342,8 @@ export type RendererEvent =
     | ArchiveUndoEvent
     | AgentHostEvent
     | HandoffEvent
-    | SessionHandoffEvent;
+    | SessionHandoffEvent
+    | DropUploadEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

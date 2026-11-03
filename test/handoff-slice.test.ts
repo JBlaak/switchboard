@@ -2,12 +2,22 @@
  * Project hand-off in the renderer's store (#276 stage 2): the hosts, a
  * project's copies and a copy's origin, the dialog's preview and ticks, a
  * hand-off's progress, success and failure, Bring back, and the decision
- * Remove copy makes from the copy's status.
+ * Remove copy makes from the copy's status. Stage 5: the dialog's schedules
+ * checkbox and where each page's schedules run.
  */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {initialRendererState, rootReducer} from '../src/renderer/state/root';
-import {bringBackIn, copiesIn, originIn, removalIn, removeDecision, runIn} from '../src/renderer/state/handoff-slice';
+import {
+    bringBackIn,
+    copiesIn,
+    originIn,
+    removalIn,
+    removeDecision,
+    runIn,
+    schedulesIn,
+} from '../src/renderer/state/handoff-slice';
+import type {ScheduleLocation} from '../src/application/services/vm-schedules';
 import type {RendererEvent} from '../src/renderer/state/events';
 import type {RendererState} from '../src/renderer/state/root';
 import type {CopyStatus, HandoffHost, HandoffPreview} from '../src/application/services/project-handoff';
@@ -82,7 +92,13 @@ test('the dialog waits for the preview as it opens', () => {
     const state = run(initialRendererState(), {type: 'handoffDialogOpened', localPath: LOCAL, host: HOST});
 
     /* Then */
-    assert.deepEqual(state.handoff.dialog, {localPath: LOCAL, host: HOST, preview: {phase: 'loading'}, ticked: []});
+    assert.deepEqual(state.handoff.dialog, {
+        localPath: LOCAL,
+        host: HOST,
+        preview: {phase: 'loading'},
+        ticked: [],
+        schedulesOnVm: true,
+    });
 });
 
 test('the preview ticks the files that were ticked last time', () => {
@@ -409,4 +425,84 @@ test('Bring back first clears the list, so Remove asks again afterwards', () => 
     /* Then */
     assert.deepEqual(removalIn(next.handoff, COPY), {phase: 'idle'});
     assert.equal(bringBackIn(next.handoff, COPY).phase, 'running');
+});
+
+// ── Schedules (stage 5) ──
+
+const ON_MAC: ScheduleLocation = {localPath: LOCAL, runsOn: {kind: 'mac'}, count: 2};
+const ON_COPY: ScheduleLocation = {localPath: LOCAL, runsOn: {kind: 'vm', copyPath: COPY}, count: 2};
+
+test('the dialog opens with the schedules ticked to run on the VM', () => {
+    /* When */
+    const state = opened();
+
+    /* Then */
+    assert.equal(state.handoff.dialog?.schedulesOnVm, true);
+});
+
+test('the schedules checkbox unticks and ticks again', () => {
+    /* When */
+    const unticked = run(opened(), {type: 'handoffSchedulesToggled'});
+    const ticked = run(unticked, {type: 'handoffSchedulesToggled'});
+
+    /* Then */
+    assert.equal(unticked.handoff.dialog?.schedulesOnVm, false);
+    assert.equal(ticked.handoff.dialog?.schedulesOnVm, true);
+});
+
+test('opening the dialog again starts it ticked again', () => {
+    /* Given */
+    const unticked = run(opened(), {type: 'handoffSchedulesToggled'}, {type: 'handoffDialogClosed'});
+
+    /* When */
+    const state = run(unticked, {type: 'handoffDialogOpened', localPath: LOCAL, host: HOST});
+
+    /* Then */
+    assert.equal(state.handoff.dialog?.schedulesOnVm, true);
+});
+
+test('each page knows where its project’s schedules run once main says', () => {
+    /* When */
+    const state = run(initialRendererState(), {type: 'schedulesLoaded', projectPath: LOCAL, location: ON_MAC});
+
+    /* Then */
+    assert.deepEqual(schedulesIn(state.handoff, LOCAL), {location: ON_MAC, moving: false, error: null});
+    assert.deepEqual(schedulesIn(state.handoff, COPY), {location: null, moving: false, error: null});
+});
+
+test('a move that fails keeps them where they were and says why', () => {
+    /* Given */
+    const state = run(initialRendererState(), {type: 'schedulesLoaded', projectPath: LOCAL, location: ON_MAC});
+
+    /* When */
+    const moving = run(state, {type: 'schedulesMoving', projectPath: LOCAL});
+    const failed = run(moving, {
+        type: 'schedulesMoved',
+        projectPath: LOCAL,
+        answer: {error: 'Couldn’t reach the VM'},
+    });
+
+    /* Then */
+    assert.equal(schedulesIn(moving.handoff, LOCAL).moving, true);
+    assert.deepEqual(schedulesIn(failed.handoff, LOCAL), {
+        location: ON_MAC,
+        moving: false,
+        error: 'Couldn’t reach the VM',
+    });
+});
+
+test('a move from one page shows on the other page of the same project too', () => {
+    /* Given */
+    const state = run(
+        initialRendererState(),
+        {type: 'schedulesLoaded', projectPath: LOCAL, location: ON_MAC},
+        {type: 'schedulesLoaded', projectPath: COPY, location: ON_MAC},
+    );
+
+    /* When */
+    const moved = run(state, {type: 'schedulesMoved', projectPath: COPY, answer: ON_COPY});
+
+    /* Then */
+    assert.deepEqual(schedulesIn(moved.handoff, COPY), {location: ON_COPY, moving: false, error: null});
+    assert.deepEqual(schedulesIn(moved.handoff, LOCAL).location, ON_COPY);
 });

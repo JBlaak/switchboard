@@ -152,6 +152,11 @@ export const INVOKE = {
     sessionHandoffPreview: 'session-handoff:preview',
     sessionHandoffRun: 'session-handoff:hand-off',
     sessionHandoffCancel: 'session-handoff:cancel',
+
+    // Stage 5 (#276): where schedules run, and files dropped on a VM session's terminal
+    vmSchedulesWhere: 'vm-schedules:where',
+    vmSchedulesRunOn: 'vm-schedules:run-on',
+    droppedFilesToSession: 'dropped-files:to-session',
 } as const;
 
 /** Renderer tells main; no answer expected. */
