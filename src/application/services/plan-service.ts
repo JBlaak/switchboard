@@ -22,7 +22,7 @@ import type {Clock} from '../ports/clock';
 import type {GitWorkspace} from '../ports/git-workspace';
 import type {GitHubCli} from '../ports/github-cli';
 import type {GitRemotes} from '../ports/git-remotes';
-import type {TranscriptStore} from '../ports/transcript-store';
+import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
 
 /** How long an answer is reused. */
 export const PLAN_CACHE_MS = 30_000;
@@ -44,11 +44,19 @@ export interface PlanSessionTarget {
 export interface PlanServiceDeps {
     /** Where a session lives, or null when no session goes by that id. */
     locate(sessionId: string): PlanSessionTarget | null;
-    transcripts: Pick<TranscriptStore, 'locations' | 'readSession'>;
+    /** Answered now for a local session, later for a VM one (#276 stage 4). */
+    transcripts: Pick<AwaitableTranscriptStore, 'locations' | 'readSession'>;
     git: Pick<GitWorkspace, 'worktreeRoot'>;
     remotes: GitRemotes;
     github: Pick<GitHubCli, 'plan' | 'plansIn' | 'plansOf' | 'closingIssues'>;
     clock: Clock;
+    /**
+     * Whether a path is on a remote with no Switchboard agent, which has no
+     * plans: its checkout is out of git's reach. A VM project's git answers
+     * from the VM, so it goes through. Without it, every remote is turned away,
+     * as before #276 stage 4.
+     */
+    agentlessRemote?: (path: string) => boolean;
 }
 
 interface Cached<T> {
@@ -120,12 +128,13 @@ export class PlanService {
             owned.set(issueKeyString(issue), {repository: issue.repository, number: issue.number});
         if (!target.folder) return [];
 
-        for (const location of transcripts.locations(target.folder, sessionId)) {
+        for (const location of await transcripts.locations(target.folder, sessionId)) {
             const issue = issueFromBranch(location.branch, repository);
             if (issue) add(issue);
         }
 
-        const pullRequests = transcripts.readSession(target.folder, sessionId, target.projectPath)?.pullRequests ?? [];
+        const pullRequests =
+            (await transcripts.readSession(target.folder, sessionId, target.projectPath))?.pullRequests ?? [];
         const byRepository = new Map<string, number[]>();
         for (const pr of pullRequests) {
             const repo = pr.repository || repository;
@@ -149,7 +158,7 @@ export class PlanService {
 
     /** `owner/repo` of the project's origin remote; null when it is not a GitHub repository. */
     private async repositoryOf(projectPath: string): Promise<string | null> {
-        if (isRemoteProjectPath(projectPath)) return null;
+        if ((this.deps.agentlessRemote ?? isRemoteProjectPath)(projectPath)) return null;
         const root = await this.deps.git.worktreeRoot(projectPath);
         if (!root) return null;
         const origin = await this.deps.remotes.originUrl(root);
