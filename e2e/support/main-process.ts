@@ -33,6 +33,14 @@ import type {SessionPlans} from '../../src/application/services/plan-service';
 import type {ProjectOverview} from '../../src/domain/project/overview';
 import type {AgentHostStatus, AgentHostsResult} from '../../src/application/services/agent-hosts';
 import type {HostSettings, ToolCheck} from '../../src/domain/agent/protocol';
+import type {
+    BringBackResult,
+    CopyStatus,
+    HandoffHost,
+    HandoffPreview,
+    HandoffResult,
+    ProjectCopy,
+} from '../../src/application/services/project-handoff';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -112,7 +120,80 @@ export interface HostStubs {
      * can dial a host. Each request is recorded (see `agentRequests`).
      */
     agent: AgentStub;
+    /**
+     * Project hand-off's back end (#276 stage 2), standing in for the ssh and
+     * git a hand-off, a Bring back and a removal run against a VM: every
+     * `handoff:*` channel answers from here, so no test can reach a VM. Each
+     * request is recorded (see `handoffRequests`). The default has no hosts,
+     * as the standard fixture has no VM, so a local project page shows no
+     * Hand off to…; `STUB_HANDOFF` has one.
+     */
+    handoff: HandoffStub;
 }
+
+/** What the `handoff:*` channels answer. */
+export interface HandoffStub {
+    /** What `handoffHosts` answers: the VM hosts a local project can be handed off to. */
+    hosts: HandoffHost[];
+    /** What the dialog's preview answers, for every local project alike. */
+    preview: HandoffPreview | {error: string};
+    /** The progress lines Hand off pushes, one at a time, before it answers. */
+    lines: string[];
+    /** How long each progress line (Hand off's and Bring back's) takes to arrive. */
+    lineDelayMs: number;
+    /** What Hand off answers once its lines are out. */
+    result: HandoffResult;
+    /** A local project's copies, by its absolute path; a project not here has none. */
+    copies: Record<string, ProjectCopy[]>;
+    /** A copy's local project, by the copy's path; a remote not here isn't a copy. */
+    origins: Record<string, string>;
+    /** Where every copy stands; null is a VM that can't be reached. */
+    copyStatus: CopyStatus | null;
+    /** The progress lines Bring back pushes before it answers. */
+    bringBackLines: string[];
+    bringBackResult: BringBackResult;
+    removeResult: {ok: true} | {ok: false; error: string};
+}
+
+/** What the renderer asked the `handoff:*` stubs, in order. */
+export interface HandoffRequests {
+    preview: string[];
+    handOff: {localPath: string; hostKey: string; ticked: string[]}[];
+    copyStatus: string[];
+    bringBack: string[];
+    removeCopy: string[];
+}
+
+/** The VM host of `vmFixture`, as hand-off names it. */
+export const STUB_HANDOFF_HOST: HandoffHost = {key: 'joris@devbox.local:22', label: 'joris@devbox.local'};
+
+/**
+ * One VM host; a project on `main` with work only this Mac has and two
+ * ignored config files, the first ticked; a hand-off that makes a new copy,
+ * a clean copy, and a Bring back and a removal that work.
+ */
+export const STUB_HANDOFF: HandoffStub = {
+    hosts: [STUB_HANDOFF_HOST],
+    preview: {
+        branch: 'main',
+        unpushed: 2,
+        uncommitted: 1,
+        candidates: [
+            {path: '.env', size: 312, ticked: true},
+            {path: '.env.local', size: 4200, ticked: false},
+        ],
+        existing: {},
+    },
+    lines: [],
+    lineDelayMs: 0,
+    result: {ok: true, copyPath: 'ssh://joris@devbox.local/~/projects/acme-api', reused: false},
+    copies: {},
+    origins: {},
+    copyStatus: {branch: 'main', unpushed: [], uncommitted: []},
+    bringBackLines: [],
+    bringBackResult: {ok: true, worktree: '/nowhere/acme-api/.claude/worktrees/from-vm', branch: 'from-vm'},
+    removeResult: {ok: true},
+};
 
 /** What the `agent:*` channels answer, for every host alike. */
 export interface AgentStub {
@@ -243,6 +324,8 @@ interface StubState extends HostStubs {
     sessionWorkReviews: ReviewWrite[];
     /** What the renderer asked the agent stubs. */
     agentRequests: AgentRequests;
+    /** What the renderer asked the hand-off stubs. */
+    handoffRequests: HandoffRequests;
 }
 
 /** A comment added to the pending review, or the review finished. */
@@ -272,6 +355,7 @@ export const DEFAULT_STUBS: HostStubs = {
     plans: null,
     projectOverview: null,
     agent: STUB_AGENT,
+    handoff: {...STUB_HANDOFF, hosts: []},
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
@@ -289,6 +373,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 sessionWorkCancels: [],
                 sessionWorkReviews: [],
                 agentRequests: {install: [], setHostSettings: [], openSetupTerminal: []},
+                handoffRequests: {preview: [], handOff: [], copyStatus: [], bringBack: [], removeCopy: []},
             };
             (globalThis as WithStubs).__switchboardE2E = state;
 
@@ -558,6 +643,49 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 state.agentRequests.openSetupTerminal.push(String(projectPath));
                 return state.agent.setupTerminal;
             });
+
+            // Project hand-off (#276 stage 2). The real handlers run ssh and git against
+            // the VM; these answer from `state.handoff`, read at each call.
+            const pause = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, state.handoff.lineDelayMs));
+            replace(channels.handoffHosts, () => state.handoff.hosts);
+            replace(channels.handoffPreview, (path) => {
+                state.handoffRequests.preview.push(String(path));
+                return state.handoff.preview;
+            });
+            ipcMain.removeHandler(channels.handoffRun);
+            ipcMain.handle(channels.handoffRun, async (event, path, hostKey, ticked) => {
+                const localPath = String(path);
+                state.handoffRequests.handOff.push({
+                    localPath,
+                    hostKey: String(hostKey),
+                    ticked: Array.isArray(ticked) ? ticked.map(String) : [],
+                });
+                for (const line of state.handoff.lines) {
+                    await pause();
+                    event.sender.send(events.handoffProgress, localPath, line);
+                }
+                return state.handoff.result;
+            });
+            replace(channels.handoffCopiesOf, (path) => state.handoff.copies[String(path)] ?? []);
+            replace(channels.handoffOriginOf, (path) => state.handoff.origins[String(path)] ?? null);
+            replace(channels.handoffCopyStatus, (path) => {
+                state.handoffRequests.copyStatus.push(String(path));
+                return state.handoff.copyStatus;
+            });
+            ipcMain.removeHandler(channels.handoffBringBack);
+            ipcMain.handle(channels.handoffBringBack, async (event, path) => {
+                const copyPath = String(path);
+                state.handoffRequests.bringBack.push(copyPath);
+                for (const line of state.handoff.bringBackLines) {
+                    await pause();
+                    event.sender.send(events.bringBackProgress, copyPath, line);
+                }
+                return state.handoff.bringBackResult;
+            });
+            replace(channels.handoffRemoveCopy, (path) => {
+                state.handoffRequests.removeCopy.push(String(path));
+                return state.handoff.removeResult;
+            });
         },
         {stubs, channels: INVOKE, send: SEND, events: EVENT},
     );
@@ -571,6 +699,20 @@ export async function agentRequests(app: ElectronApplication): Promise<AgentRequ
             install: [...requests.install],
             setHostSettings: [...requests.setHostSettings],
             openSetupTerminal: [...requests.openSetupTerminal],
+        };
+    });
+}
+
+/** What the renderer asked the hand-off stubs since the app launched. */
+export async function handoffRequests(app: ElectronApplication): Promise<HandoffRequests> {
+    return await app.evaluate(() => {
+        const requests = (globalThis as WithStubs).__switchboardE2E.handoffRequests;
+        return {
+            preview: [...requests.preview],
+            handOff: requests.handOff.map((request) => ({...request, ticked: [...request.ticked]})),
+            copyStatus: [...requests.copyStatus],
+            bringBack: [...requests.bringBack],
+            removeCopy: [...requests.removeCopy],
         };
     });
 }

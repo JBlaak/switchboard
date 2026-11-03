@@ -94,6 +94,8 @@ export interface FixtureRemote {
     dir?: string;
     /** Set on a host with a Switchboard agent (#276): a VM project, not an SSH one. */
     agent?: {version: string; installedAt: string};
+    /** Set on a copy made by a hand-off (#276 stage 2): its local project, relative to home. */
+    copyOf?: string;
     sessions?: readonly FixtureRemoteSession[];
 }
 
@@ -305,6 +307,7 @@ function seedDatabase(
         port: remote.port ?? 22,
         dir: remote.dir ?? null,
         ...(remote.agent ? {agent: remote.agent} : {}),
+        ...(remote.copyOf ? {copyOf: projectPath(remote.copyOf)} : {}),
         sessions: (remote.sessions ?? []).map((session) => ({
             sessionId: session.id,
             kind: session.kind ?? 'claude',

@@ -69,10 +69,14 @@ export const REMOTE = {user: 'joris', host: 'buildbox.local', dir: '~/apps/api'}
 /** A host with a Switchboard agent on it (#276): a VM project. Only in `vmFixture`. */
 export const VM_REMOTE = {user: 'joris', host: 'devbox.local', dir: '~/apps/web'} as const;
 
+/** acme-api's copy on the VM host, made by a hand-off (#276 stage 2). Only in `handoffFixture`. */
+export const COPY_REMOTE = {user: VM_REMOTE.user, host: VM_REMOTE.host, dir: '~/projects/acme-api'} as const;
+
 /** How the Projects modal and the project page name each remote project. */
 export const REMOTE_LABEL = {
     ssh: `${REMOTE.user}@${REMOTE.host}/api`,
     vm: `${VM_REMOTE.user}@${VM_REMOTE.host}/web`,
+    copy: `${COPY_REMOTE.user}@${COPY_REMOTE.host}/acme-api`,
 } as const;
 
 export function standardFixture(): FixtureSpec {
@@ -177,6 +181,26 @@ export function vmFixture(): FixtureSpec {
         remotes: [
             ...(standard.remotes ?? []),
             {...VM_REMOTE, agent: {version: '0.0.0-e2e', installedAt: new Date(daysAgo(1)).toISOString()}},
+        ],
+    };
+}
+
+/**
+ * `vmFixture` with a copy of acme-api on the VM host: a VM remote whose
+ * `copyOf` is acme-api, as a hand-off leaves it. Kept out of `vmFixture` for
+ * the same reason that is kept out of `standardFixture`.
+ */
+export function handoffFixture(): FixtureSpec {
+    const vm = vmFixture();
+    return {
+        ...vm,
+        remotes: [
+            ...(vm.remotes ?? []),
+            {
+                ...COPY_REMOTE,
+                agent: {version: '0.0.0-e2e', installedAt: new Date(daysAgo(1)).toISOString()},
+                copyOf: P.acmeApi,
+            },
         ],
     };
 }

@@ -14,24 +14,48 @@
  * `agent` stub, so nothing here dials a host. What the parts say is unit
  * tested in test/agent-host-view.test.ts and the slice behind them in
  * test/agent-host-slice.test.ts.
+ *
+ * Project hand-off (#276 stage 2): Hand off to… on a local project's page,
+ * the copies it lists under On VMs and the copy's link back, and a copy's
+ * Bring back and Remove copy. The `handoff:*` channels answer from the
+ * `handoff` stub, so nothing here runs ssh or git against a VM. What the parts
+ * say is unit tested in test/handoff-view.test.ts and the slice behind them in
+ * test/handoff-slice.test.ts.
  */
 import {test, expect, forEachAppearance} from '../support/test';
 import {dialog, expectScreen, openRemoteSession, sessionRow, terminalStatus} from '../support/app';
 import {
     agentRequests,
+    handoffRequests,
     pushRemoteStatus,
     reconnectRequests,
     setHostStub,
     STUB_AGENT,
+    STUB_HANDOFF,
+    STUB_HANDOFF_HOST,
     stubReconnectRemote,
 } from '../support/main-process';
+import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
 import {expectTerminalText, hasTerminal} from '../support/terminal';
-import {LABEL, REMOTE, REMOTE_LABEL, S, VM_REMOTE, vmFixture} from '../fixtures/standard';
+import {
+    COPY_REMOTE,
+    handoffFixture,
+    LABEL,
+    P,
+    REMOTE,
+    REMOTE_LABEL,
+    S,
+    VM_REMOTE,
+    vmFixture,
+} from '../fixtures/standard';
+import type {FixtureHome} from '../support/fixture-home';
+import type {HandoffStub} from '../support/main-process';
 import type {Locator, Page} from '@playwright/test';
 
 const TARGET = `${REMOTE.user}@${REMOTE.host}:${REMOTE.dir}`;
 const SSH_PATH = `ssh://${REMOTE.user}@${REMOTE.host}/${REMOTE.dir}`;
 const VM_PATH = `ssh://${VM_REMOTE.user}@${VM_REMOTE.host}/${VM_REMOTE.dir}`;
+const COPY_PATH = `ssh://${COPY_REMOTE.user}@${COPY_REMOTE.host}/${COPY_REMOTE.dir}`;
 
 function projectsModal(page: Page): Locator {
     return dialog(page, 'Projects');
@@ -358,6 +382,259 @@ test.describe('VM hosts', () => {
                 {projectPath: VM_PATH, change: {baseFolder: '~/work'}},
                 {projectPath: VM_PATH, change: {copyConfig: true}},
             ]);
+    });
+});
+
+test.describe('project hand-off', () => {
+    test.use({fixture: handoffFixture(), stubs: {handoff: STUB_HANDOFF}});
+
+    function handOffDialog(page: Page): Locator {
+        return page.getByRole('dialog', {name: 'Hand off to ' + STUB_HANDOFF_HOST.label});
+    }
+
+    function thisCopy(page: Page): Locator {
+        return projectPage(page, REMOTE_LABEL.copy).getByRole('region', {name: 'This copy'});
+    }
+
+    /** The hand-off stub, with acme-api's copy linked both ways. */
+    function linkedCopy(home: FixtureHome, change: Partial<HandoffStub> = {}): HandoffStub {
+        const local = home.projectPath(P.acmeApi);
+        return {
+            ...STUB_HANDOFF,
+            copies: {
+                [local]: [{copyPath: COPY_PATH, hostKey: STUB_HANDOFF_HOST.key, hostLabel: STUB_HANDOFF_HOST.label}],
+            },
+            origins: {[COPY_PATH]: local},
+            ...change,
+        };
+    }
+
+    test('Hand off to… shows what goes over and the ignored files, hands off the ticked ones with its progress, and opens the copy', async ({
+        page,
+        app,
+        home,
+    }) => {
+        /* Given */
+        const lines = ['Bundling 2 commits…', 'Cloning on joris@devbox.local…', 'Copying 1 file…'];
+        await setHostStub(app, 'handoff', {...STUB_HANDOFF, lines, lineDelayMs: 150});
+        await openProjectPage(page, P.acmeApi);
+
+        /* When */
+        await projectPage(page, P.acmeApi).getByRole('button', {name: 'Hand off to…'}).click();
+
+        /* Then */
+        const dialog = handOffDialog(page);
+        await expect(dialog).toBeVisible();
+        await expect(dialog.getByRole('listitem')).toHaveText([
+            'Branch main',
+            '2 commits not on origin',
+            '1 uncommitted change',
+        ]);
+        const env = dialog.getByRole('checkbox', {name: '.env 312 B', exact: true});
+        const envLocal = dialog.getByRole('checkbox', {name: '.env.local 4.1 KB', exact: true});
+        await expect(env).toBeChecked();
+        await expect(envLocal).not.toBeChecked();
+        await expect(dialog).toContainText('Ticked files are copied to the VM as they are.');
+
+        /* When */
+        await env.uncheck();
+        await envLocal.check();
+        await dialog.getByRole('button', {name: 'Hand off', exact: true}).click();
+
+        /* Then */
+        await expect(dialog.getByRole('button', {name: 'Handing off…'})).toBeDisabled();
+        await expect(envLocal).toBeDisabled();
+        for (const line of lines) await expect(dialog).toContainText(line);
+        await expect(dialog.getByRole('status')).toHaveText('Handed off');
+        await expect(dialog.getByRole('button', {name: 'Close', exact: true})).toBeVisible();
+        expect((await handoffRequests(app)).handOff).toEqual([
+            {localPath: home.projectPath(P.acmeApi), hostKey: STUB_HANDOFF_HOST.key, ticked: ['.env.local']},
+        ]);
+
+        /* When */
+        await dialog.getByRole('button', {name: 'Open the copy'}).click();
+
+        /* Then */
+        await expect(dialog).toHaveCount(0);
+        await expect(projectPage(page, REMOTE_LABEL.copy)).toBeVisible();
+    });
+
+    test('a failed hand-off shows why and offers Retry, which hands off again', async ({page, app}) => {
+        /* Given */
+        await setHostStub(app, 'handoff', {
+            ...STUB_HANDOFF,
+            lines: ['Bundling 2 commits…'],
+            result: {ok: false, error: 'Couldn’t reach joris@devbox.local'},
+        });
+        await openProjectPage(page, P.acmeApi);
+        await projectPage(page, P.acmeApi).getByRole('button', {name: 'Hand off to…'}).click();
+        const dialog = handOffDialog(page);
+
+        /* When */
+        await dialog.getByRole('button', {name: 'Hand off', exact: true}).click();
+
+        /* Then */
+        await expect(dialog.getByRole('alert')).toHaveText('Couldn’t reach joris@devbox.local');
+        await expect(dialog).toContainText('Bundling 2 commits…');
+        await expect(dialog.getByRole('button', {name: 'Retry'})).toBeEnabled();
+
+        /* When */
+        await setHostStub(app, 'handoff', STUB_HANDOFF);
+        await dialog.getByRole('button', {name: 'Retry'}).click();
+
+        /* Then */
+        await expect(dialog.getByRole('status')).toHaveText('Handed off');
+        await expect(dialog.getByRole('alert')).toHaveCount(0);
+        expect((await handoffRequests(app)).handOff).toHaveLength(2);
+    });
+
+    test('a local project lists its copy under On VMs, and the copy’s page links back with Copy of …', async ({
+        page,
+        app,
+        home,
+    }) => {
+        /* Given */
+        await setHostStub(app, 'handoff', linkedCopy(home));
+
+        /* When */
+        await openProjectPage(page, P.acmeApi);
+
+        /* Then */
+        const onVms = projectPage(page, P.acmeApi).getByRole('region', {name: 'On VMs'});
+        const copy = onVms.getByRole('button', {name: new RegExp('^' + REMOTE_LABEL.copy)});
+        await expect(copy).toContainText(STUB_HANDOFF_HOST.label);
+        await expect(copy.getByText('VM', {exact: true})).toBeVisible();
+
+        /* When */
+        await copy.click();
+
+        /* Then */
+        const back = projectPage(page, REMOTE_LABEL.copy).getByRole('button', {name: 'Copy of ' + P.acmeApi});
+        await expect(back).toBeVisible();
+        await expect(thisCopy(page).getByRole('button', {name: 'Bring back'})).toBeVisible();
+
+        /* When */
+        await back.click();
+
+        /* Then */
+        await expect(projectPage(page, P.acmeApi)).toBeVisible();
+    });
+
+    test('Bring back on a copy’s page streams its progress, then names the branch in the new worktree', async ({
+        page,
+        app,
+        home,
+    }) => {
+        /* Given */
+        const lines = ['Fetching from the copy…', 'Adding a worktree for from-vm…'];
+        await setHostStub(app, 'handoff', linkedCopy(home, {bringBackLines: lines, lineDelayMs: 150}));
+        await openProjectPage(page, REMOTE_LABEL.copy);
+
+        /* When */
+        await thisCopy(page).getByRole('button', {name: 'Bring back'}).click();
+
+        /* Then */
+        await expect(thisCopy(page).getByRole('button', {name: 'Bringing back…'})).toBeDisabled();
+        await expect(thisCopy(page).getByRole('button', {name: 'Remove copy'})).toBeDisabled();
+        for (const line of lines) await expect(thisCopy(page)).toContainText(line);
+        await expect(thisCopy(page).getByRole('status')).toHaveText(
+            'Checked out from-vm in a new worktree. Open the local project',
+        );
+        await expect(thisCopy(page).getByRole('button', {name: 'Open the local project'})).toBeVisible();
+        expect((await handoffRequests(app)).bringBack).toEqual([COPY_PATH]);
+    });
+
+    test('Remove copy on a copy with work only it has lists the work, offers Bring back first, and Remove anyway removes it', async ({
+        page,
+        app,
+        home,
+    }) => {
+        /* Given */
+        await setHostStub(
+            app,
+            'handoff',
+            linkedCopy(home, {
+                copyStatus: {
+                    branch: 'main',
+                    unpushed: [{oid: 'abc1234', subject: 'Fix the flaky login test'}],
+                    uncommitted: ['src/login.ts'],
+                },
+            }),
+        );
+        await openProjectPage(page, REMOTE_LABEL.copy);
+        await answerDialogs(page, true);
+
+        /* When */
+        await thisCopy(page).getByRole('button', {name: 'Remove copy'}).click();
+
+        /* Then */
+        const work = thisCopy(page).getByRole('alert');
+        await expect(work).toContainText('This copy has work that isn’t anywhere else.');
+        await expect(work).toContainText('1 commit not on origin');
+        await expect(work).toContainText('Fix the flaky login test');
+        await expect(work).toContainText('1 uncommitted change');
+        await expect(work).toContainText('src/login.ts');
+        await expect(work.getByRole('button', {name: 'Bring back first'})).toBeVisible();
+        expect(await dialogsAsked(page)).toEqual([]);
+        expect((await handoffRequests(app)).removeCopy).toEqual([]);
+
+        /* When */
+        await work.getByRole('button', {name: 'Remove anyway'}).click();
+
+        /* Then */
+        await expect(projectPage(page, P.acmeApi)).toBeVisible();
+        expect((await handoffRequests(app)).removeCopy).toEqual([COPY_PATH]);
+        expect(await dialogsAsked(page)).toEqual([]);
+    });
+
+    test('Remove copy on a clean copy asks to confirm, and removes it only once confirmed', async ({
+        page,
+        app,
+        home,
+    }) => {
+        /* Given */
+        await setHostStub(app, 'handoff', linkedCopy(home));
+        await openProjectPage(page, REMOTE_LABEL.copy);
+        await answerDialogs(page, false);
+
+        /* When */
+        await thisCopy(page).getByRole('button', {name: 'Remove copy'}).click();
+
+        /* Then */
+        await expect
+            .poll(() => dialogsAsked(page))
+            .toEqual([
+                `Remove the copy ${REMOTE_LABEL.copy}?\n\nIts folder on the VM is deleted. The local project stays as it is.`,
+            ]);
+        await expect(thisCopy(page).getByRole('button', {name: 'Remove copy'})).toBeEnabled();
+        expect((await handoffRequests(app)).removeCopy).toEqual([]);
+
+        /* When */
+        await answerDialogs(page, true);
+        await thisCopy(page).getByRole('button', {name: 'Remove copy'}).click();
+
+        /* Then */
+        await expect(projectPage(page, P.acmeApi)).toBeVisible();
+        expect((await handoffRequests(app)).removeCopy).toEqual([COPY_PATH]);
+    });
+
+    test('Remove copy when the VM can’t be reached says so and removes nothing', async ({page, app, home}) => {
+        /* Given */
+        await setHostStub(app, 'handoff', linkedCopy(home, {copyStatus: null}));
+        await openProjectPage(page, REMOTE_LABEL.copy);
+        await answerDialogs(page, true);
+
+        /* When */
+        await thisCopy(page).getByRole('button', {name: 'Remove copy'}).click();
+
+        /* Then */
+        await expect(thisCopy(page).getByRole('alert')).toHaveText(
+            'Couldn’t reach the VM, so the copy wasn’t removed.',
+        );
+        expect(await dialogsAsked(page)).toEqual([]);
+        expect((await handoffRequests(app)).copyStatus).toEqual([COPY_PATH]);
+        expect((await handoffRequests(app)).removeCopy).toEqual([]);
+        await expect(projectPage(page, REMOTE_LABEL.copy)).toBeVisible();
     });
 });
 
