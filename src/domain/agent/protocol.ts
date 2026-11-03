@@ -533,6 +533,13 @@ export interface WelcomeMessage {
     protocol: number;
     agentVersion: string;
     settings: HostSettings;
+    /**
+     * The agent user's home folder on the VM (stage 4). A project's own path may
+     * be `~/…`, and `run-tool`, `read-file`, `stat-files` and `watch-dir` take
+     * absolute paths, so the Mac expands a leading `~` with this. Absent from
+     * an agent older than stage 4.
+     */
+    home?: string;
 }
 
 export interface OpenedMessage {
