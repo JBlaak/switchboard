@@ -547,6 +547,27 @@ test("a session in a worktree sends the worktree's name and resumes in the VM's 
     assert.equal(h.opened[0].projectPath, WORKTREE_COPY);
 });
 
+test('a session that entered a worktree is found in the folder its transcript moved to', async () => {
+    /* Given: launched in the project, so its own folder is the project's, but
+       Claude moved the transcript to the worktree's folder, where the index found it */
+    const h = harness({
+        cwd: WORKTREE,
+        folder: WORKTREE_FOLDER,
+        live: liveSession({projectFolder: FOLDER}),
+    });
+    h.script.handoffDone = {ok: true, dir: '~/projects/site/.claude/worktrees/fix-login'};
+
+    /* When */
+    const preview = await h.service.preview('s1');
+    const result = await h.service.handOff('s1', HOST, []);
+
+    /* Then */
+    assert.ok(!('error' in preview));
+    assert.equal(preview.worktree, 'fix-login');
+    assert.deepEqual(result, {kind: 'done', copyPath: WORKTREE_COPY});
+    assert.match(h.importedTranscript(), /"cwd":"~\/projects\/site\/\.claude\/worktrees\/fix-login"/);
+});
+
 test('an ended session is handed off without a stop', async () => {
     /* Given */
     const h = harness({live: null});
