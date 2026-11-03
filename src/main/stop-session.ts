@@ -4,11 +4,18 @@
  */
 import type {RendererGateway} from '../application/ports/renderer-gateway';
 import type {SessionRepository} from '../application/ports/session-repository';
+import type {TerminalGateway} from '../application/ports/terminal-gateway';
 import type {WorktreeCleanupService} from '../application/services/worktree-cleanup-service';
 import type {TasksService} from '../application/services/tasks-service';
 import type {Container} from './composition-root';
 
-export type SessionStopper = Pick<Container, 'registry' | 'remote' | 'lifecycle' | 'terminals'>;
+/**
+ * What stopping needs. `terminals` is only asked whether a process is alive,
+ * so any gateway does, the agent-aware one (#276) included.
+ */
+export type SessionStopper = Pick<Container, 'registry' | 'remote' | 'lifecycle'> & {
+    terminals: Pick<TerminalGateway, 'isAlive'>;
+};
 
 export interface StopResult {
     ok: boolean;
@@ -17,6 +24,15 @@ export interface StopResult {
 
 /**
  * Stop a session.
+ *
+ * A legacy remote session (ssh+tmux) is only disconnected: its tmux session
+ * keeps running on the host. A VM session (#276) is really stopped: it has no
+ * `remote` record, and its PTY is the agent client's stand-in, so it takes the
+ * same path as a local one and the lifecycle's SIGTERM, SIGKILL, give-up
+ * escalation goes to its process tree on the VM through the agent. That needs
+ * `app.terminals` to be the agent-aware gateway, which answers `isAlive` and
+ * `signalTree` for a stand-in. A stop made while the host's link is down is
+ * delivered when it comes back.
  *
  * `ok` means nothing is running under that id any more — either it never was,
  * or it has been retired, or a kill is on its way that will retire it.
@@ -28,7 +44,7 @@ export function stopSession(app: SessionStopper, sessionId: string): StopResult 
     if (!found) return {ok: true, alreadyStopped: true};
     const {key, session} = found;
 
-    // Remote sessions: stop reconnecting first, or killing the PTY (or the
+    // Legacy remote sessions: stop reconnecting first, or killing the PTY (or the
     // retry already on a timer) would just dial straight back out.
     if (session.remote) {
         const wasWaiting = session.exited;
@@ -53,6 +69,18 @@ export function stopSession(app: SessionStopper, sessionId: string): StopResult 
     return {ok: true};
 }
 
+/** What `sessionArchiver` answers. */
+export interface SessionArchiver {
+    /** Stop the session, then archive its row; `ok: false` when it could not be stopped. */
+    archive(sessionId: string): {ok: boolean};
+    /**
+     * Archive the row of a session that already stopped elsewhere: a VM session
+     * that archived itself while the Mac was away (#308). The same row,
+     * window, worktree cleanup and task steps as `archive`, without the stop.
+     */
+    archiveStopped(sessionId: string): void;
+}
+
 /**
  * A phone's archive, as the renderer's (`archiveSessionRow`): stopped first,
  * then the row archived, then the window told, so it closes the session as
@@ -68,16 +96,21 @@ export function sessionArchiver(
         worktreeCleanup: Pick<WorktreeCleanupService, 'afterArchive'>;
         tasks?: Pick<TasksService, 'archived'>;
     },
-): {archive(sessionId: string): {ok: boolean}} {
+): SessionArchiver {
+    /** Everything an archive does once nothing runs under the id any more. */
+    const archiveRow = (sessionId: string): void => {
+        app.repository.setArchived(sessionId, true);
+        app.renderer.sessionArchived(sessionId);
+        void app.worktreeCleanup.afterArchive(sessionId);
+        void app.tasks?.archived(sessionId, {byUser: false});
+    };
     return {
         archive(sessionId) {
             const stopped = stopSession(app, sessionId);
             if (!stopped.ok) return {ok: false};
-            app.repository.setArchived(sessionId, true);
-            app.renderer.sessionArchived(sessionId);
-            void app.worktreeCleanup.afterArchive(sessionId);
-            void app.tasks?.archived(sessionId, {byUser: false});
+            archiveRow(sessionId);
             return {ok: true};
         },
+        archiveStopped: archiveRow,
     };
 }

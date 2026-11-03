@@ -22,6 +22,9 @@ import {sessionMap} from '../../state/session-store';
 import {projectLabel} from '../../features/sessions/project-label';
 import {ProjectLink} from '../project-page/ProjectLink';
 import {TaskChip} from '../session-task/TaskChip';
+import {canHandOffSession} from '../../state/session-list-layout';
+import {HandOffSessionButton} from '../session-handoff/HandOffSessionButton';
+import {HandoffMarker} from '../session-handoff/HandoffMarker';
 
 /**
  * The session's name, its project (a way into the project page, #173), its
@@ -70,16 +73,20 @@ export function TerminalHeaderInfo(): JSX.Element {
 }
 
 /**
- * Running or stopped, and the Stop button while it is running.
+ * Running or stopped, Hand off to… for a local Claude session once there is a
+ * VM host (#276 stage 3) with its marker while one is in flight, and the Stop
+ * button while it is running.
  *
  * A remote session mid-connect is neither running nor stopped, and saying
  * either is misleading — so a connection label takes precedence when there is
  * one. Its countdown re-renders off the shared remote tick.
  */
 export function TerminalHeaderControls(): JSX.Element {
-    const {running, remote} = useStore((state) => {
+    const {onScreen, hosts, running, remote} = useStore((state) => {
         const id = state.terminal.onScreen;
         return {
+            onScreen: id,
+            hosts: state.handoff.hosts,
             running: !!id && state.view.activePtyIds.has(id),
             remote: id ? state.remote.statuses[id] : undefined,
             // Selected only so each tick re-renders the countdown.
@@ -90,9 +97,21 @@ export function TerminalHeaderControls(): JSX.Element {
     const connecting = remoteStatusLabel(remote);
     const status = connecting ? 'connecting' : running ? 'running' : 'stopped';
     const label = connecting ?? (running ? 'Running' : 'Stopped');
+    // The row is shared; a hand-off that finished makes it a VM session, and the reopened terminal re-renders this.
+    const row = onScreen ? sessionMap.get(onScreen) : undefined;
+    const handOff = !!onScreen && !!row && !!hosts && canHandOffSession(row, hosts.length);
 
     return (
         <>
+            {onScreen && <HandoffMarker sessionId={onScreen} />}
+            {handOff && hosts && (
+                <HandOffSessionButton
+                    sessionId={onScreen}
+                    hosts={hosts}
+                    id="terminal-handoff-btn"
+                    className="sw-btn terminal-handoff-btn"
+                />
+            )}
             <span id="terminal-header-status" className={status}>
                 {label}
             </span>

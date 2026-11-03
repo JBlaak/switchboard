@@ -1,7 +1,7 @@
 /**
  * The rules for asking Claude where a typed request belongs (#135).
  *
- * One `claude -p` call with Haiku does the routing: it gets the local projects
+ * One `claude -p` call with Haiku does the routing: it gets the projects
  * and what the user typed, and answers with a project and the session's first
  * prompt in a fixed JSON shape. Everything about that call that is a decision rather than
  * plumbing lives here: which projects are offered, the command line, the
@@ -25,14 +25,17 @@ const WORKTREE_PATH = /\/\.claude\/worktrees\//;
 // ── Candidates ──
 
 /**
- * The projects Haiku may route to: local ones only (R2).
+ * The projects Haiku may route to: local ones and VM ones (R2, #276 story 33).
  *
- * Remote projects can't start with a prompt yet, and a worktree is a copy of a
- * project that is already on the list — offering both would split the vote.
+ * A VM project's session opens on its host's agent, which starts Claude with
+ * the first prompt as a local launch does, so it is offered like a local
+ * project. An agentless remote is not: its ssh+tmux session can't be handed a
+ * prompt. A worktree, local or on a VM, is a copy of a project that is
+ * already on the list — offering both would split the vote.
  */
 export function routeCandidates(projects: Project[]): RouteCandidate[] {
     return projects
-        .filter((project) => !project.remote && !WORKTREE_PATH.test(project.projectPath))
+        .filter((project) => (!project.remote || project.agent) && !WORKTREE_PATH.test(project.projectPath))
         .map((project) => ({
             projectPath: project.projectPath,
             folder: project.folder,

@@ -1008,3 +1008,200 @@
         color: var(--sb-red);
     }
 }
+
+/* ---- VM hosts (#276, #307): the install log and the tool rows, here and in Settings → VMs ---- */
+.pp-agent-log {
+    max-height: 180px;
+    margin: 0;
+    padding: 8px 10px;
+    overflow: auto;
+    border-radius: var(--sb-r-control);
+    background: var(--sb-bg-base);
+    color: var(--sb-text-muted);
+    font: 11.5px/17px var(--sb-font-mono);
+    white-space: pre-wrap;
+}
+
+.pp-agent-error {
+    padding: 0 4px;
+    font-size: 12px;
+    line-height: 17px;
+    color: var(--sb-red);
+}
+
+.pp-tool {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 32px;
+    padding: 4px 10px;
+    font-size: 12.5px;
+
+    &.is-ready .pp-tool-mark {
+        color: var(--sb-green);
+    }
+
+    &.is-signed-out .pp-tool-mark {
+        color: var(--sb-yellow);
+    }
+
+    &.is-missing .pp-tool-mark {
+        color: var(--sb-text-dimmest);
+    }
+}
+
+.pp-tool-mark {
+    width: 12px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.pp-tool-name {
+    width: 48px;
+    color: var(--sb-text-strong);
+}
+
+.pp-tool-text {
+    color: var(--sb-text-muted);
+}
+
+/* The VM badge in the header, beside the host it names. */
+.pp-host-badge {
+    align-self: center;
+    margin-left: 0;
+}
+
+/* ---- Hand-off (#276 stage 2): Hand off to…, On VMs, and a copy's Bring back and Remove ---- */
+.pp-handoff {
+    position: relative;
+}
+
+.pp-handoff-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 180px;
+    padding: 4px;
+    border-radius: var(--sb-r-card);
+    background: var(--sb-bg-raised);
+    box-shadow: var(--sb-edge), var(--sb-lift);
+}
+
+.pp-handoff-item {
+    appearance: none;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: var(--sb-r-control);
+    background: none;
+    color: var(--sb-text);
+    font: 12.5px var(--sb-font-mono);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+        background: rgba(var(--sb-overlay-rgb), 0.06);
+        color: var(--sb-text-strong);
+        outline: none;
+    }
+}
+
+.pp-copy .remote-badge {
+    margin-left: auto;
+}
+
+/* ---- Where the schedules run (#276 stage 5) ---- */
+.pp-schedules-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pp-schedules-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 4px 4px 8px;
+}
+
+.pp-schedules-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.pp-schedules-select {
+    flex: none;
+    max-width: 60%;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-size: 12.5px;
+}
+
+.pp-copy-actions .pp-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pp-copy-actions .sw-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.pp-copy-done {
+    padding: 0 4px;
+    font-size: 12.5px;
+    color: var(--sb-text);
+}
+
+.pp-inline-link {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--sb-accent);
+    font: inherit;
+    cursor: pointer;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.pp-copy-dirty {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px;
+}
+
+.pp-copy-list {
+    font-size: 12px;
+    color: var(--sb-text-muted);
+
+    ul {
+        margin: 4px 0 0;
+        padding-left: 18px;
+    }
+
+    li {
+        line-height: 18px;
+        color: var(--sb-text);
+    }
+}
+
+.pp-copy-list-title {
+    font-weight: 700;
+    color: var(--sb-text-strong);
+}
+
+.pp-copy-more {
+    list-style: none;
+    margin-left: -18px;
+    color: var(--sb-text-faint) !important;
+}

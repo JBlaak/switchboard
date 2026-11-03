@@ -10,8 +10,13 @@
  * Each change is stored as it is made: a switch or a mode on click, a text
  * field when it loses focus, on Enter, or when the view closes with an edit
  * in it. Esc closes the page, back to the session it covered.
+ *
+ * A VM project (#276) has a This VM group too, which points to the VM in
+ * Settings → VMs (#307): the host's instructions, the config copy switch and
+ * the base folder are the VM's, shared by every project on it, so they are
+ * set there.
  */
-import {useEffect, useLayoutEffect, useRef, useState} from 'react';
+import {useLayoutEffect, useRef} from 'react';
 import type {JSX, KeyboardEvent, ReactNode} from 'react';
 import {useStore} from '../use-store';
 import {projectLabel} from '../../features/sessions/project-label';
@@ -23,6 +28,10 @@ import {
 } from '../../../domain/settings/project-overrides';
 import {backToProject, closeProject, isRemoteProject} from './actions';
 import {changeProjectSetting, hideProjectFromPage, resetProjectSettings} from './settings-actions';
+import {isVmProjectIn} from '../../state/agent-host-slice';
+import {CommitText} from '../settings/CommitInputs';
+import {hostLinkOf} from '../vms/vm-hosts';
+import {openVmSettings} from '../vms/open-settings';
 import type {ProjectFieldState, ProjectSettingField} from '../../../domain/settings/project-overrides';
 
 export function ProjectSettings({projectPath}: {projectPath: string}): JSX.Element {
@@ -132,6 +141,7 @@ function SettingsFields({projectPath, fields, canReset}: FieldsProps): JSX.Eleme
     const change = (field: ProjectSettingField) => (value: unknown) =>
         void changeProjectSetting(projectPath, field, value);
     const mode = fields.permissionMode;
+    const vm = useStore((state) => isVmProjectIn(state.agentHost, projectPath));
     return (
         <div className="ps-form">
             <section className="ps-section" aria-labelledby="ps-starting">
@@ -237,6 +247,8 @@ function SettingsFields({projectPath, fields, canReset}: FieldsProps): JSX.Eleme
                 </div>
             </section>
 
+            {vm && <ThisVmSection projectPath={projectPath} />}
+
             {!isRemoteProject(projectPath) && (
                 <section className="ps-section" aria-labelledby="ps-project">
                     <h2 className="ps-section-title" id="ps-project">
@@ -262,6 +274,33 @@ function SettingsFields({projectPath, fields, canReset}: FieldsProps): JSX.Eleme
                 </section>
             )}
         </div>
+    );
+}
+
+/** This VM: its settings are the VM's, in Settings → VMs. */
+function ThisVmSection({projectPath}: {projectPath: string}): JSX.Element | null {
+    const link = useStore((state) => hostLinkOf(projectPath, true, state.vms.hosts));
+    if (link?.kind !== 'vm') return null;
+    return (
+        <section className="ps-section" aria-labelledby="ps-vm">
+            <h2 className="ps-section-title" id="ps-vm">
+                This VM
+            </h2>
+            <div className="ps-group">
+                <div className="ps-field">
+                    <div className="ps-field-text">
+                        <span className="ps-label">On {link.label}</span>
+                        <div className="ps-help">
+                            Its host instructions, config copy and base folder are the VM’s, shared by every project on
+                            it. They are in Settings.
+                        </div>
+                    </div>
+                    <button type="button" className="sw-btn" onClick={() => void openVmSettings(link.key)}>
+                        Manage in Settings
+                    </button>
+                </div>
+            </div>
+        </section>
     );
 }
 
@@ -322,44 +361,7 @@ interface TextSettingProps {
     onCommit(value: string): void;
 }
 
-/**
- * A text setting, stored when it loses focus, on Enter, or when the view
- * closes with an edit in it — not on every key, so a half-typed command is
- * never what a session launches with.
- */
-function TextSetting({id, value, placeholder, onCommit}: TextSettingProps): JSX.Element {
-    const [draft, setDraft] = useState(value);
-    const latest = useRef({draft, value, onCommit});
-    latest.current = {draft, value, onCommit};
-
-    // A reset, or the read landing, puts the stored value back in the box.
-    useEffect(() => setDraft(value), [value]);
-
-    useEffect(
-        () => () => {
-            const {draft: pending, value: stored, onCommit: commit} = latest.current;
-            if (pending.trim() !== stored.trim()) commit(pending);
-        },
-        [],
-    );
-
-    const commit = (): void => {
-        if (draft.trim() !== value.trim()) onCommit(draft);
-    };
-
-    return (
-        <input
-            id={id}
-            type="text"
-            className="ps-input"
-            value={draft}
-            placeholder={placeholder}
-            spellCheck={false}
-            onChange={(e) => setDraft(e.currentTarget.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') commit();
-            }}
-        />
-    );
+/** A text setting, stored as it is left (`CommitText`). */
+function TextSetting(props: TextSettingProps): JSX.Element {
+    return <CommitText className="ps-input" {...props} />;
 }

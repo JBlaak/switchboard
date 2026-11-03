@@ -1,7 +1,8 @@
 /**
  * A project's name as a way into its page (#173): a click opens the project
- * page, ⌘-click the repository on GitHub (nothing for a remote project).
- * Hovering tints and underlines it, and the tooltip names both.
+ * page, ⌘-click the repository on GitHub (nothing for an agentless remote
+ * project; a VM project's, #276, opens). Hovering tints and underlines it,
+ * and the tooltip names both.
  *
  * The same everywhere a project is named: a sidebar row's label, a slug
  * group's, and the terminal header's. A row's label sits inside its Session
@@ -9,8 +10,9 @@
  * link or a button, which a button cannot hold.
  */
 import type {JSX, MouseEvent, ReactNode} from 'react';
-import {projectLabel, repositoryRoot} from '../../features/sessions/project-label';
-import {clickProjectName, isRemoteProject} from './actions';
+import {clickProjectName} from './actions';
+import {isVmRepositoryIn, projectLinkTitle} from './page-state';
+import {useStore} from '../use-store';
 
 export interface ProjectLinkProps {
     /** The project the name stands for; a worktree opens its repository's page. */
@@ -21,6 +23,7 @@ export interface ProjectLinkProps {
 }
 
 export function ProjectLink({path, className, id, children}: ProjectLinkProps): JSX.Element {
+    const vm = useStore((state) => isVmRepositoryIn(state.agentHost, path));
     const onClick = (e: MouseEvent<HTMLElement>): void => {
         e.stopPropagation();
         e.preventDefault();
@@ -32,15 +35,9 @@ export function ProjectLink({path, className, id, children}: ProjectLinkProps): 
             className={'project-link' + (className ? ' ' + className : '')}
             data-testid="project-link"
             data-project-path={path}
-            title={projectLinkTitle(path)}
+            title={projectLinkTitle(path, vm)}
             onClick={onClick}>
             {children}
         </span>
     );
-}
-
-/** The tooltip: what a click does, and what ⌘-click does where there is a GitHub to open. */
-export function projectLinkTitle(path: string): string {
-    const open = 'Open ' + projectLabel(repositoryRoot(path));
-    return isRemoteProject(path) ? open : open + '\n⌘-click opens GitHub';
 }

@@ -5,15 +5,15 @@ import {isRemoteRow, NO_REPO_REASON, REMOTE_REASON, workTrigger} from '../src/re
 
 test('a row main says can open is the Session work button', () => {
     /* When */
-    const trigger = workTrigger(false, true);
+    const trigger = workTrigger(null, true);
 
     /* Then */
     assert.deepEqual(trigger, {button: true});
 });
 
-test('a remote row is text that says Session work is not there for remote sessions yet', () => {
+test('a row that is off says why, whatever main would answer', () => {
     /* When */
-    const trigger = workTrigger(true, false);
+    const trigger = workTrigger(REMOTE_REASON, true);
 
     /* Then */
     assert.deepEqual(trigger, {button: false, reason: REMOTE_REASON});
@@ -21,7 +21,7 @@ test('a remote row is text that says Session work is not there for remote sessio
 
 test('a row outside a repository is text that says so', () => {
     /* When */
-    const trigger = workTrigger(false, false);
+    const trigger = workTrigger(null, false);
 
     /* Then */
     assert.deepEqual(trigger, {button: false, reason: NO_REPO_REASON});
@@ -29,7 +29,7 @@ test('a row outside a repository is text that says so', () => {
 
 test('while main is asked the line is text without a reason', () => {
     /* When */
-    const trigger = workTrigger(false, undefined);
+    const trigger = workTrigger(null, undefined);
 
     /* Then */
     assert.deepEqual(trigger, {button: false, reason: undefined});

@@ -210,6 +210,7 @@ export function fakeRenderer(): FakeRenderer {
         questionsAsked: record('questionsAsked') as (pending: PendingQuestions) => void,
         questionsSettled: record('questionsSettled') as (settled: QuestionsSettled) => void,
         projectsChanged: record('projectsChanged'),
+        vmHostsChanged: record('vmHostsChanged'),
         statusUpdate: record('statusUpdate'),
         fullscreenChanged: record('fullscreenChanged'),
         updateAvailable: record('updateAvailable'),

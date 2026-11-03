@@ -518,9 +518,23 @@ function rowMenu(project: Project, on: {close(): void; changed(): void}): MenuIt
         run: () => redrawIfChanged(archiveAllSessions(project)),
     };
 
-    // A remote project has no local settings or GitHub page; it is removed rather than hidden.
+    // A remote project is removed rather than hidden. An agentless one has no
+    // settings or GitHub page either; a VM's (#276) settings hold its host's,
+    // and main reads its GitHub repository on the VM.
     if (project.remote) {
         return [
+            ...(project.agent
+                ? [
+                      {
+                          label: 'Project settings',
+                          run: () => {
+                              on.close();
+                              openProjectSettings(project.projectPath);
+                          },
+                      },
+                      {label: 'Open on GitHub', run: () => openProjectOnGitHub(project)},
+                  ]
+                : []),
             archive,
             {label: 'Remove project', danger: true, run: () => redrawIfChanged(removeRemoteProject(project))},
         ];

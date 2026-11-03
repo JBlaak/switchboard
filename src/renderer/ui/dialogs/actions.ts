@@ -48,11 +48,11 @@ export async function openResumeDialog(session: SessionRow): Promise<void> {
  * carrying, if any (#135, O3).
  *
  * Once that session has started, the box the prompt came from is told it has
- * done its job. A remote project does not take a starting prompt yet, so the
- * box keeps its text for another try.
+ * done its job. A project on an agentless remote does not take a starting
+ * prompt, so the box keeps its text for another try; a VM project (#276) does.
  */
 export async function launchFromPicker(project: Project, initialPrompt?: string): Promise<void> {
-    const carried = initialPrompt !== undefined && !project.remote;
+    const carried = initialPrompt !== undefined && (!project.remote || !!project.agent);
     await launchClaudeSession(project, carried ? {initialPrompt} : {});
     if (carried) dispatch({type: 'pickerPromptLaunched'});
 }

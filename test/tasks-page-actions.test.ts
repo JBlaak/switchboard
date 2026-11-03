@@ -449,6 +449,22 @@ test('the project list offers each local repository once, never a remote one', (
     );
 });
 
+test('the project list offers a VM project too, once, but never its worktrees or an agentless remote', () => {
+    /* Given */
+    const vm = (projectPath: string): Project => ({...project(projectPath, true), agent: true});
+
+    /* When */
+    const offered = taskProjects([
+        project('/dev/app'),
+        vm('ssh://dev@buildbox/home/dev/app'),
+        vm('ssh://dev@buildbox/home/dev/app/.claude/worktrees/x'),
+        project('ssh://me@box/srv', true),
+    ]);
+
+    /* Then */
+    assert.deepEqual(offered, ['/dev/app', 'ssh://dev@buildbox/home/dev/app']);
+});
+
 test('every key acts on the row under the cursor, or the first while it is on none', () => {
     /* Given */
     const rows = [task('a'), task('b')];

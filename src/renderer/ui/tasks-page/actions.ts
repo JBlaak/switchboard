@@ -72,10 +72,13 @@ export function toggleTasksPage(): void {
 
 // ── What Switchboard links to tasks ──
 
-/** The local repositories a task can be linked to: no remote project, no worktree, each once. */
+/**
+ * The repositories a task can be linked to: local ones and (#276 stage 5) VM
+ * projects, never an agentless remote or a worktree, each once.
+ */
 export function taskProjects(projects: readonly Project[]): string[] {
     const roots = projects
-        .filter((project) => !project.remote && !project.projectPath.startsWith('ssh://'))
+        .filter((project) => project.agent === true || (!project.remote && !project.projectPath.startsWith('ssh://')))
         .map((project) => repositoryRoot(project.projectPath))
         .filter((path) => !isWorktreeProject(path));
     return [...new Set(roots)];
@@ -316,7 +319,7 @@ export async function changeTaskRepo(taskId: string, projectPath: string): Promi
     await loadTaskLinks();
 }
 
-/** The local projects the list offers, as the sidebar has them. */
+/** The projects the list offers (local and VM ones), as the sidebar has them. */
 export function pickableProjects(): string[] {
     return taskProjects(effects.projects());
 }
