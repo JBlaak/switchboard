@@ -54,6 +54,7 @@ function fakeGit(over: Partial<HandoffGit> = {}) {
     };
     const git: HandoffGit = {
         repositoryRoot: async (cwd) => (cwd === LOCAL ? LOCAL : null),
+        commonDir: async (cwd) => (cwd === LOCAL ? `${LOCAL}/.git` : null),
         currentBranch: async () => 'feature',
         headOid: async () => 'abc123',
         originUrl: async () => 'git@github.com:joris/site.git',
@@ -604,4 +605,65 @@ test('an unreachable copy is not forgotten', async () => {
     assert.equal(result.ok, false);
     assert.deepEqual(h.forgotten, []);
     assert.ok(h.settings.findRemoteProject(COPY));
+});
+
+// ── A worktree's hand-off (#276 stage 3) ──
+
+const WORKTREE = `${LOCAL}/.claude/worktrees/fix-login`;
+const WORKTREE_COPY = 'ssh://dev@vm.local/~/projects/site/.claude/worktrees/fix-login';
+
+/** The fake repository with a linked worktree on its own branch and HEAD. */
+function worktreeGit() {
+    return fakeGit({
+        repositoryRoot: async (cwd) => (cwd === LOCAL ? LOCAL : cwd === WORKTREE ? WORKTREE : null),
+        currentBranch: async (root) => (root === WORKTREE ? 'fix-login' : 'feature'),
+        headOid: async (root) => (root === WORKTREE ? 'wt999' : 'abc123'),
+    });
+}
+
+test("a worktree's hand-off sends its name, branch and HEAD into the project's copy", async () => {
+    /* Given */
+    const h = harness({git: worktreeGit()});
+    h.script.handoffDone = {ok: true, dir: '~/projects/site/.claude/worktrees/fix-login', reused: true};
+
+    /* When */
+    const result = await h.service.handOff(LOCAL, 'dev@vm.local:22', [], undefined, {
+        worktree: {name: 'fix-login', checkout: WORKTREE},
+    });
+
+    /* Then */
+    assert.deepEqual(result, {ok: true, copyPath: WORKTREE_COPY, reused: true});
+    const [handoff] = h.agent.sent('handoff');
+    assert.equal(handoff.repo.name, 'site');
+    assert.equal(handoff.worktree, 'fix-login');
+    assert.equal(handoff.branch, 'fix-login');
+    assert.equal(handoff.headOid, 'wt999');
+    assert.equal(h.settings.findRemoteProject(WORKTREE_COPY)?.copyOf, LOCAL);
+});
+
+test("a worktree's copy falls back to <copy>/.claude/worktrees/<name> when the agent names no folder", async () => {
+    /* Given */
+    const h = harness({git: worktreeGit()});
+    h.script.handoffDone = {ok: true};
+
+    /* When */
+    const result = await h.service.handOff(LOCAL, 'dev@vm.local:22', [], undefined, {
+        worktree: {name: 'fix-login', checkout: WORKTREE},
+    });
+
+    /* Then */
+    assert.deepEqual(result, {ok: true, copyPath: WORKTREE_COPY, reused: false});
+});
+
+test("a worktree's preview counts the worktree's checkout but keeps the project's copies", async () => {
+    /* Given */
+    const h = harness({remotes: [VM_HOME, copySetting()], git: worktreeGit()});
+
+    /* When */
+    const preview = await h.service.preview(LOCAL, {checkout: WORKTREE});
+
+    /* Then */
+    assert.ok(!('error' in preview));
+    assert.equal(preview.branch, 'fix-login');
+    assert.deepEqual(preview.existing, {'dev@vm.local:22': COPY});
 });
