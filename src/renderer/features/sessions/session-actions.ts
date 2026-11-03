@@ -179,15 +179,16 @@ export async function openSession(session: SessionRow, options?: SessionOptions)
         }
     }
 
-    // Remote sessions ignore local launch options — the main process reconnects
-    // from its stored session record. A VM's Claude session (#276) resumes with
-    // them, as a local one does, when Resume with config gives some.
+    // Sessions on an agentless remote ignore local launch options — the main
+    // process reconnects from its stored session record. A VM's Claude session
+    // (#276) resumes with them, as a local one does: Resume with config's, or
+    // else the project's defaults.
     const remote: SessionOptions = {type: 'remote', remoteKind: session.remoteKind};
     const vm = session.type === 'remote' && isVmProjectIn(getState().agentHost, session.projectPath);
     const resumeOptions: SessionOptions =
         session.type === 'remote'
-            ? vm && options
-                ? {...options, ...remote}
+            ? vm && session.remoteKind !== 'shell'
+                ? {...(options ?? (await resolveDefaultSessionOptions(session.projectPath))), ...remote}
                 : remote
             : (options ?? (await resolveDefaultSessionOptions(session.projectPath)));
 
