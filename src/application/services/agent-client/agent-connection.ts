@@ -45,6 +45,8 @@ import type {
     OpenedMessage,
     OpenSessionMessage,
     PlacedMessage,
+    SelfArchivedMessage,
+    SelfArchivedSession,
     TerminalOutput,
     ToolCheck,
     ToolResultMessage,
@@ -520,6 +522,26 @@ export class AgentConnection {
             requestId,
             uploadId,
             name,
+        }));
+    }
+
+    // ── Sessions that archived themselves while the Mac was away (#308) ──
+
+    /** The sessions on this host that archived themselves while no Mac was connected. */
+    public async listSelfArchived(): Promise<SelfArchivedSession[]> {
+        const reply = await this.request<SelfArchivedMessage>('self-archived', (requestId) => ({
+            type: 'list-self-archived',
+            requestId,
+        }));
+        return reply.sessions;
+    }
+
+    /** Drop these sessions from the agent's self-archive record, once handled. */
+    public async forgetSelfArchived(sessionIds: string[]): Promise<DoneMessage> {
+        return this.request<DoneMessage>('done', (requestId) => ({
+            type: 'forget-self-archived',
+            requestId,
+            sessionIds,
         }));
     }
 

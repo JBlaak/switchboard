@@ -35,6 +35,7 @@ import {NodeFolderWatcher} from '../infrastructure/agent/node-folder-watcher';
 import {NodeGitTreeWatcher} from '../infrastructure/agent/node-git-tree-watcher';
 import {NodeDropFiles} from '../infrastructure/agent/node-drop-files';
 import {NodeHostSettingsFile} from '../infrastructure/agent/node-host-settings-file';
+import {NodeSelfArchivedFile} from '../infrastructure/agent/node-self-archived-file';
 import {NodeScheduleRunner} from '../infrastructure/agent/node-schedule-runner';
 import {NodeToolRunner} from '../infrastructure/agent/node-tool-runner';
 import {NodeTranscriptFiles} from '../infrastructure/agent/node-transcript-files';
@@ -92,6 +93,11 @@ export async function createParts({log}: PartsContext): Promise<AgentWiring> {
         timers: systemTimers,
         ids: uuidGenerator,
         log,
+        // An archive made with no Mac connected stops the session here (#308).
+        // `sessions` is made below; this only runs once a turn has ended.
+        stop: (launchId) => void sessions.stop(launchId),
+        selfArchived: new NodeSelfArchivedFile(),
+        clock: systemClock,
     });
     hookServer = new QuestionHookServer({receiver: hooks.receiver, archiveTool: hooks.archiveTool, log});
     await hookServer.start();

@@ -20,6 +20,8 @@ import type {
     ImportTranscriptMessage,
     TranscriptTailMessage,
     ArchiveReplyMessage,
+    ForgetSelfArchivedMessage,
+    ListSelfArchivedMessage,
     CopyStatusMessage,
     HandoffMessage,
     PushBranchMessage,
@@ -59,10 +61,13 @@ export interface SessionHostPart extends ClientAware {
     terminateAll(): void;
 }
 
-export type HookForwarderMessage = AskReplyMessage | ArchiveReplyMessage;
+export type HookForwarderMessage =
+    AskReplyMessage | ArchiveReplyMessage | ListSelfArchivedMessage | ForgetSelfArchivedMessage;
 
 /**
- * The agent's question hook and archive tool, forwarding to the Mac.
+ * The agent's question hook and archive tool, forwarding to the Mac. With no
+ * Mac connected, the archive tool archives on the VM itself and keeps a record
+ * the Mac reads and clears on its next connect (#308).
  *
  * It is also what a launch asks for the hook settings and MCP tools of a
  * session, pointed at the agent's own hook server on 127.0.0.1.

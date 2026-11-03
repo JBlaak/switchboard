@@ -121,3 +121,20 @@ test('a phone’s or a session’s own archive writes the task line, and never a
         'task line for s1, by the user: false',
     ]);
 });
+
+test('archiving a session that already stopped elsewhere archives its row without stopping anything', () => {
+    /* Given */
+    const h = harness({withTasks: true});
+    h.addSession('s1');
+
+    /* When */
+    h.archiver.archiveStopped('s1');
+
+    /* Then */
+    assert.deepEqual(h.steps, [
+        'archived s1 true',
+        'told the window s1',
+        'cleaned up s1',
+        'task line for s1, by the user: false',
+    ]);
+});

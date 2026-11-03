@@ -131,6 +131,18 @@ export class SessionHost implements SessionHostPart {
         }
     }
 
+    /**
+     * Stop one session as the Mac's stop does: SIGTERM to its whole tree. For an
+     * archive the session asked for while no Mac was connected (#308). Answers
+     * whether a live session by that id was there to stop.
+     */
+    public stop(sessionId: string): boolean {
+        const session = this.liveSession(sessionId);
+        if (!session) return false;
+        this.signalSession(session, 'SIGTERM');
+        return true;
+    }
+
     /** Signal every live session, for an orderly shutdown. */
     public terminateAll(): void {
         for (const session of this.sessions.values()) {
