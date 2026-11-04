@@ -1,6 +1,6 @@
 /**
  * A row's compact meta line: what it is asking, the project, the time and
- * message count, the agents badge and the PR chips.
+ * message count, the agents badge, the PR chips and the merge queue's pill (#315).
  *
  * The whole line is one button that opens the session's Session work page
  * (D2), unless the page cannot open for it — a session on an agentless
@@ -19,6 +19,7 @@ import {canOpenSessionWork} from '../session-work/actions';
 import {workOffReason, workTrigger} from './work-trigger';
 import {agentsBadgeHtml, HTML} from './markup';
 import {ProjectLink} from '../project-page/ProjectLink';
+import {QueueMark} from '../queue-elsewhere/QueueMark';
 import type {JSX, MouseEvent} from 'react';
 import type {SessionListRow} from '../../state/session-list-layout';
 import type {WorkingAgent} from '../../../domain/terminal/program-status-children';
@@ -50,6 +51,7 @@ export function RowMeta({row, asking, agents, now, onOpenWork}: RowMetaProps): J
             <span className="session-time">{sessionTimeLabel(session, now)}</span>
             {agents.length > 0 && <AgentsBadge agents={agents} />}
             <PullRequests row={row} />
+            <QueueMark session={session} />
         </span>
     );
 

@@ -28,6 +28,7 @@ import {PairConfirmDialog} from './phone-access/PairConfirmDialog';
 import {MarkDoneOffer} from './session-task/MarkDoneOffer';
 import {ArchiveUndoToast} from './archive-undo/ArchiveUndoToast';
 import {DropUploadToast} from './terminal/DropUploadToast';
+import {QueueFailurePanel} from './queue-elsewhere/QueueFailurePanel';
 import type {JSX} from 'react';
 import type {Root as ReactRoot} from 'react-dom/client';
 
@@ -65,6 +66,9 @@ export function Root(): JSX.Element | null {
             <Portal target="terminals">
                 <ReadingPage />
                 <Questions />
+            </Portal>
+            <Portal target="terminal-queue-panel">
+                <QueueFailurePanel />
             </Portal>
             <Portal target="terminal-header-questions">
                 <QuestionsHeaderButton />

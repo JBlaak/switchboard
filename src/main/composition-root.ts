@@ -59,6 +59,7 @@ import {SessionWorkService} from '../application/services/session-work-service';
 import {IssueSessionService, type IssueSessionCandidate} from '../application/services/issue-session-service';
 import {PlanService} from '../application/services/plan-service';
 import {ProjectOverviewService} from '../application/services/project-overview-service';
+import {MergeQueueWatchService} from '../application/services/merge-queue-watch-service';
 import {ReviewService} from '../application/services/review-service';
 import {SessionActionService} from '../application/services/session-action-service';
 import {PrWatchService} from '../application/services/pr-watch-service';
@@ -199,6 +200,8 @@ export interface Container {
     readonly worktreeCleanup: WorktreeCleanupService;
     readonly plans: PlanService;
     readonly projectOverview: ProjectOverviewService;
+    /** The merge queue outside the project page (#315): the sidebar's pills, the header panel, the notifications. */
+    readonly mergeQueueWatch: MergeQueueWatchService;
     readonly askRoute: AskRouteService;
     readonly quickAskHotkey: QuickAskHotkey;
     readonly quickAskPanel: QuickAskPanel;
@@ -934,6 +937,22 @@ export function buildContainer(): Container {
         agentlessRemote,
     });
 
+    // The merge queue of every running session's repository (#315), page or no
+    // page, on the CI watch's cadence. Every session's PRs, running or not, are
+    // the user's own for its notifications.
+    const mergeQueueWatch = new MergeQueueWatchService({
+        sessions: runningClaudeSessions,
+        ownPullRequests: () => [
+            ...repository.getAllCached().flatMap((cached) => cached.pullRequests ?? []),
+            ...runningClaudeSessions().flatMap((session) => session.pullRequests),
+        ],
+        overview: projectOverview,
+        errands: queueErrands,
+        renderer,
+        timers,
+        log,
+    });
+
     // BlaakTasks (#248): built only while a URL is set, and again when it changes.
     // Starting from a task routes with its own Ask Patch, never cancelling the
     // empty screen's request; the writes read a PR's state as the CI watch heard it.
@@ -1166,6 +1185,7 @@ export function buildContainer(): Container {
         worktreeCleanup,
         plans,
         projectOverview,
+        mergeQueueWatch,
         askRoute,
         quickAskHotkey,
         quickAskPanel,
@@ -1203,6 +1223,7 @@ export function buildContainer(): Container {
         close: () => {
             projectsWatcher.stop();
             prWatch.stop();
+            mergeQueueWatch.stop();
             sessionWork.closeAll();
             claudeCaller.close();
             // A capture cut short by quitting never reaches its `finally`.

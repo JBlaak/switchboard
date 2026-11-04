@@ -22,6 +22,7 @@ import type {UpdateNotice} from '../../domain/update/release';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
 import type {SessionWorkSnapshot} from '../../domain/session-work/model';
 import type {PullRequestStatusChange} from '../../domain/session-work/status';
+import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
 import type {RendererGateway} from '../../application/ports/renderer-gateway';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {TasksUpdate} from '../../domain/tasks/surface';
@@ -130,6 +131,10 @@ export class ElectronRendererGateway implements RendererGateway {
 
     public prStatusChanged(change: PullRequestStatusChange): void {
         this.send(EVENT.prStatusChanged, change);
+    }
+
+    public mergeQueueChanged(change: MergeQueueChange): void {
+        this.send(EVENT.mergeQueueChanged, change);
     }
 
     // ── Quick Ask ──

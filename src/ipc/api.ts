@@ -18,6 +18,7 @@ import type {Answers, PendingQuestions, QuestionsSettled} from '../domain/questi
 import type {ShellProfile} from '../domain/shell/shell-profile';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../domain/session-work/model';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
+import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
 import type {ActionRequest, ActionResult, CancelResult} from '../domain/session-work/actions';
 import type {CommentRequest, ReviewRequest, ReviewResult} from '../domain/session-work/review';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
@@ -477,6 +478,8 @@ export interface SwitchboardApi {
     onSessionWorkSnapshot(cb: (snapshot: SessionWorkSnapshot) => void): Unsubscribe;
     /** A running session's PR chips changed colour (W4). */
     onPrStatusChanged(cb: (change: PullRequestStatusChange) => void): Unsubscribe;
+    /** A repository's merge queue or its errands changed (#315). */
+    onMergeQueueChanged(cb: (change: MergeQueueChange) => void): Unsubscribe;
     /** Quick Ask: start a Claude session there on this prompt (R3). */
     onLaunchRequested(cb: (projectPath: string, initialPrompt: string) => void): Unsubscribe;
     /** Quick Ask: open the New Session picker holding this prompt; `reason` is Patch's line. */

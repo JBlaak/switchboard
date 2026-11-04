@@ -218,6 +218,7 @@ const api: SwitchboardApi = {
     onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
     onSessionWorkSnapshot: (cb) => subscribe(EVENT.sessionWorkSnapshot, (_e, snapshot) => cb(snapshot)),
     onPrStatusChanged: (cb) => subscribe(EVENT.prStatusChanged, (_e, change) => cb(change)),
+    onMergeQueueChanged: (cb) => subscribe(EVENT.mergeQueueChanged, (_e, change) => cb(change)),
     onLaunchRequested: (cb) =>
         subscribe(EVENT.launchRequested, (_e, projectPath, initialPrompt) => cb(projectPath, initialPrompt)),
     onPickerRequested: (cb) =>
