@@ -51,7 +51,10 @@ export interface HeadStep {
     readonly progress: number;
 }
 
-/** Rebased on the trunk → Pushed → Required checks done of total → Merge, from where the head is. */
+/**
+ * Rebased on the trunk → Pushed → Checks done of total → Merge, from where the
+ * head is. Every check run counts, optional ones too, so it says Checks.
+ */
 export function headSteps(stage: HeadStage): HeadStep[] {
     const at = stage.kind === 'rebasing' ? 0 : stage.kind === 'checks' ? 2 : 3;
     const state = (index: number): HeadStep['state'] => (index < at ? 'done' : index === at ? 'active' : 'todo');
@@ -65,11 +68,11 @@ export function headSteps(stage: HeadStage): HeadStep[] {
         stage.kind === 'checks'
             ? step(
                   2,
-                  `Required checks ${stage.done} of ${stage.total}`,
+                  `Checks ${stage.done} of ${stage.total}`,
                   stage.running ?? (stage.waitsForCiOn !== null ? `waits for CI on #${stage.waitsForCiOn}` : null),
                   stage.total ? stage.done / stage.total : 0,
               )
-            : step(2, 'Required checks');
+            : step(2, 'Checks');
     return [step(0, 'Rebased on the trunk'), step(1, 'Pushed'), checks, step(3, 'Merge')];
 }
 

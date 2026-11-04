@@ -447,7 +447,7 @@ test.describe('merge queue', () => {
         await expect(head).toContainText('Stop the login redirect loop');
         await expect(head).toContainText('approved by ana');
         await expect(head).toContainText('merges in ~9 min');
-        await expect(head).toContainText('Required checks 3 of 5');
+        await expect(head).toContainText('Checks 3 of 5');
         await expect(head).toContainText('Integration tests');
         await expect(head.getByRole('button', {name: 'session “' + LABEL.loginFix + '”'})).toBeVisible();
         const behind = queue.locator('.pp-mq-rail .pp-mq-entry');

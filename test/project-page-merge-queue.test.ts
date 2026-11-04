@@ -323,7 +323,7 @@ test('the head’s steps while it rebases: the first is under way', () => {
         [
             ['Rebased on the trunk', 'active'],
             ['Pushed', 'todo'],
-            ['Required checks', 'todo'],
+            ['Checks', 'todo'],
             ['Merge', 'todo'],
         ],
     );
@@ -338,7 +338,7 @@ test('the head’s steps while its checks run: rebased and pushed, checks done o
         steps.map((step) => step.state),
         ['done', 'done', 'active', 'todo'],
     );
-    assert.equal(steps[2].label, 'Required checks 3 of 5');
+    assert.equal(steps[2].label, 'Checks 3 of 5');
     assert.equal(steps[2].detail, 'Instrumented tests');
     assert.equal(steps[2].progress, 0.6);
 });
