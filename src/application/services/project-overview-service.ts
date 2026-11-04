@@ -275,6 +275,13 @@ export class ProjectOverviewService {
     /**
      * The merge queue's reads, from the open PRs: null when none of them shows
      * the queue, and otherwise the trunk and the CI run durations besides.
+     *
+     * Only the open PRs `pullRequestsIn` read count: the 50 most recently
+     * updated (PULL_REQUESTS_PER_REPOSITORY). In a repository with more open
+     * PRs than that, a queued PR nobody has touched for a while is not seen:
+     * the queue shows without it, and a stack whose lower member was cut off
+     * starts at the lowest member that was read. The queue itself still works
+     * on every PR; only what the page shows is cut off.
      */
     private async queueReads(
         root: string,
