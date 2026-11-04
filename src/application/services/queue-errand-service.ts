@@ -29,6 +29,7 @@ import {
     errandState,
     fixAction,
     fixPrompt,
+    isGitHubLogin,
     nudgeMessage,
     nudgePrompt,
     type ErrandPullRequest,
@@ -136,6 +137,10 @@ export class QueueErrandService {
 
     /** Remember the nudge and answer its session's first prompt; refused while one for the request stands. */
     public nudge({repository, pr, reviewer, message}: NudgeRequest): NudgeResult {
+        // It goes into the prompt and a `gh api` path: a login, or nothing is sent.
+        if (!isGitHubLogin(reviewer)) {
+            return {ok: false, reason: `${JSON.stringify(reviewer)} is not a GitHub login; nothing was sent`};
+        }
         if (message !== nudgeMessage(pr, reviewer)) {
             return {ok: false, reason: 'That is not the message Switchboard would send; nothing was sent'};
         }

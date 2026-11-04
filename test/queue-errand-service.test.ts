@@ -247,6 +247,20 @@ test('a message other than the one the confirm showed is refused', () => {
     assert.deepEqual(store.rows, []);
 });
 
+test('a reviewer that is not a plain GitHub login is refused, and nothing is remembered', () => {
+    /* Given */
+    const {service, store} = harness();
+
+    /* When */
+    const team = service.nudge(nudgeRequest('acme/web-team'));
+    const spliced = service.nudge(nudgeRequest('ann --jq .token'));
+
+    /* Then */
+    assert.deepEqual(team, {ok: false, reason: '"acme/web-team" is not a GitHub login; nothing was sent'});
+    assert.equal(spliced.ok, false);
+    assert.deepEqual(store.rows, []);
+});
+
 test('once the review request changes, the reviewer may be nudged again', () => {
     /* Given */
     const {service} = harness();
@@ -316,10 +330,12 @@ test("a fix goes to the running owner session's action queue, in the worktree it
         [{sessionId: 's1', itemKey: 'pr:' + PR.url, action: 'fix-ci', details: {checkName: 'test'}}],
     );
     const prompt = prompter.sent[0]?.prompt ?? '';
-    assert.match(prompt, /out of the queue: Required check test failed/);
+    assert.match(prompt, /out of the queue\. [^]*\nRequired check test failed\n/);
     assert.match(
         prompt,
-        new RegExp(`test failed on abc123\\. Log tail:\\nError: expected 2, got 3\\nFix it in ${worktree} and push\\.`),
+        new RegExp(
+            `test failed on abc123\\. Log tail:\\n<<<SWITCHBOARD-CI-LOG-BEGIN>>>\\nError: expected 2, got 3\\n<<<SWITCHBOARD-CI-LOG-END>>>\\nFix it in ${worktree} and push\\.`,
+        ),
     );
     assert.ok(!prompt.includes(ARCHIVE_TOOL_QUALIFIED_NAME));
     assert.deepEqual(logRequests, [`o/app ${RUN_URL} 80`]);
@@ -340,8 +356,11 @@ test('with no running owner, a fix prepares a worktree on the PR branch with the
     assert.equal(result.worktreePath, worktree);
     assert.equal(result.branch, 'faster-sync');
     assert.deepEqual(git.writes, ['fetch faster-sync', `worktree add -b faster-sync ${worktree} origin/faster-sync`]);
-    assert.match(result.prompt, /out of the queue: Required check test failed/);
-    assert.match(result.prompt, /test failed on abc123\. Log tail:\nError: expected 2, got 3\n/);
+    assert.match(result.prompt, /out of the queue\. [^]*\nRequired check test failed\n/);
+    assert.match(
+        result.prompt,
+        /test failed on abc123\. Log tail:\n<<<SWITCHBOARD-CI-LOG-BEGIN>>>\nError: expected 2, got 3\n/,
+    );
     assert.match(result.prompt, /Push to faster-sync only/);
     assert.ok(result.prompt.includes(ARCHIVE_TOOL_QUALIFIED_NAME));
     assert.deepEqual(
