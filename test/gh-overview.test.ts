@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {GhCli, type GhResult, type GhRunner} from '../src/infrastructure/github/gh-cli';
+import {toCiRunDurations, toQueueCheckRun} from '../src/infrastructure/github/gh-overview';
 
 /** A runner that answers from a script and records what it was asked. */
 function scripted(answer: (args: readonly string[]) => Partial<GhResult>): GhRunner & {calls: string[][]} {
@@ -23,6 +24,17 @@ const signedOut = (): Partial<GhResult> => ({
 const unreachable = (): Partial<GhResult> => ({
     code: 1,
     stderr: 'error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com\n',
+});
+
+/** What the merge queue reads of a PR whose node carries none of its fields. */
+const noQueue = (number: number) => ({
+    url: `https://github.com/JBlaak/switchboard/pull/${number}`,
+    baseRef: '',
+    labels: [],
+    automerge: null,
+    requestedReviewers: [],
+    approvedBy: [],
+    checks: [],
 });
 
 /** The GraphQL query text of a recorded `gh api graphql` call. */
@@ -335,6 +347,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
                 {repository: 'JBlaak/switchboard', number: 169},
                 {repository: 'JBlaak/planning', number: 12},
             ],
+            queue: noQueue(180),
         },
         {
             repository: 'JBlaak/switchboard',
@@ -347,6 +360,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             checks: {state: 'running', failing: 0},
             review: 'review_required',
             closes: [{repository: 'JBlaak/switchboard', number: 170}],
+            queue: noQueue(181),
         },
         {
             repository: 'JBlaak/switchboard',
@@ -359,6 +373,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             checks: {state: 'none', failing: 0},
             review: 'approved',
             closes: [],
+            queue: noQueue(182),
         },
         {
             repository: 'JBlaak/switchboard',
@@ -371,6 +386,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             checks: {state: 'passing', failing: 0},
             review: null,
             closes: [],
+            queue: noQueue(166),
         },
     ]);
 });
@@ -386,6 +402,361 @@ test('one failed check makes the rollup failing while others still run', async (
 
     /* Then */
     assert.deepEqual(prs?.find((pr) => pr.number === 181)?.checks, {state: 'failing', failing: 1});
+});
+
+// ── What the merge queue reads (#315) ──
+
+/** A PR node as the queue's fields come back, hand-made after GitHub's schema. */
+function queueNode() {
+    return {
+        number: 210,
+        title: 'Rate limiter',
+        state: 'OPEN',
+        isDraft: false,
+        headRefName: 'rate-limiter',
+        baseRefName: 'main',
+        url: 'https://github.com/JBlaak/switchboard/pull/210',
+        updatedAt: '2026-11-01T10:00:00Z',
+        reviewDecision: 'APPROVED',
+        repository: SWITCHBOARD,
+        statusCheckRollup: {
+            ...rollup('PENDING', {IN_PROGRESS: 1, SUCCESS: 1}, {PENDING: 1}),
+            contexts: {
+                ...rollup('PENDING', {IN_PROGRESS: 1, SUCCESS: 1}, {PENDING: 1}).contexts,
+                nodes: [
+                    {name: 'lint', status: 'COMPLETED', conclusion: 'SUCCESS', startedAt: '2026-11-01T10:00:00Z'},
+                    {name: 'test', status: 'IN_PROGRESS', conclusion: null, startedAt: '2026-11-01T10:01:00Z'},
+                    {},
+                ],
+            },
+        },
+        closingIssuesReferences: {nodes: []},
+        labels: {nodes: [{name: 'automerge:opt-in'}, {name: 'bot: first in queue'}]},
+        commits: {
+            nodes: [
+                {
+                    commit: {
+                        status: {
+                            context: {state: 'PENDING', description: 'First in the merge queue; merges once CI passes'},
+                        },
+                    },
+                },
+            ],
+        },
+        reviewRequests: {nodes: [{requestedReviewer: {login: 'sam'}}, {requestedReviewer: {}}]},
+        latestReviews: {
+            nodes: [
+                {state: 'APPROVED', author: {login: 'kim'}},
+                {state: 'COMMENTED', author: {login: 'lee'}},
+                {state: 'APPROVED', author: {login: 'ana'}},
+            ],
+        },
+    };
+}
+
+const withNode = (node: unknown) => ({data: {repository: {pullRequests: {nodes: [node]}}}});
+
+test('the pull request read asks, in the same request, for what the merge queue reads of each PR', async () => {
+    /* Given */
+    const run = answering(recordedPullRequests);
+
+    /* When */
+    await new GhCli({run}).pullRequestsIn('JBlaak/switchboard', {merged: false});
+
+    /* Then */
+    assert.equal(run.calls.length, 1);
+    const query = queryOf(run.calls[0]);
+    assert.match(query, /baseRefName url/);
+    assert.match(query, /labels\(first: 20\) \{ nodes \{ name \} \}/);
+    assert.match(query, /status \{ context\(name: "automerge"\) \{ state description \} \}/);
+    assert.match(
+        query,
+        /reviewRequests\(first: 20\) \{ nodes \{ requestedReviewer \{ \.\.\. on User \{ login \} \} \} \}/,
+    );
+    assert.match(query, /latestReviews\(first: 20\) \{ nodes \{ state author \{ login \} \} \}/);
+    assert.match(query, /nodes \{ \.\.\. on CheckRun \{ name status conclusion startedAt \} \}/);
+    assert.doesNotMatch(query, /Team/);
+});
+
+test("a PR's queue reads map from its node: base, labels, the automerge status, reviewers, approvals and check runs", async () => {
+    /* Given */
+    const gh = new GhCli({run: answering(withNode(queueNode()))});
+
+    /* When */
+    const prs = await gh.pullRequestsIn('JBlaak/switchboard', {merged: false});
+
+    /* Then */
+    assert.deepEqual(prs?.[0].queue, {
+        url: 'https://github.com/JBlaak/switchboard/pull/210',
+        baseRef: 'main',
+        labels: ['automerge:opt-in', 'bot: first in queue'],
+        automerge: {state: 'pending', description: 'First in the merge queue; merges once CI passes'},
+        requestedReviewers: ['sam'],
+        approvedBy: ['kim', 'ana'],
+        checks: [
+            {name: 'lint', state: 'passed', startedAt: Date.parse('2026-11-01T10:00:00Z')},
+            {name: 'test', state: 'running', startedAt: Date.parse('2026-11-01T10:01:00Z')},
+        ],
+    });
+    assert.deepEqual(prs?.[0].checks, {state: 'running', failing: 0});
+});
+
+for (const [state, expected] of [
+    ['SUCCESS', 'success'],
+    ['FAILURE', 'failure'],
+    ['ERROR', 'error'],
+    ['PENDING', 'pending'],
+    ['EXPECTED', 'pending'],
+] as const) {
+    test(`an automerge status of ${state} reads as ${expected}`, async () => {
+        /* Given */
+        const node = queueNode();
+        node.commits.nodes[0].commit.status.context.state = state;
+        const gh = new GhCli({run: answering(withNode(node))});
+
+        /* When */
+        const prs = await gh.pullRequestsIn('JBlaak/switchboard', {merged: false});
+
+        /* Then */
+        assert.equal(prs?.[0].queue.automerge?.state, expected);
+    });
+}
+
+test('a head commit without an automerge status reads as none', async () => {
+    /* Given */
+    const node = {...queueNode(), commits: {nodes: [{commit: {status: null}}]}};
+    const gh = new GhCli({run: answering(withNode(node))});
+
+    /* When */
+    const prs = await gh.pullRequestsIn('JBlaak/switchboard', {merged: false});
+
+    /* Then */
+    assert.equal(prs?.[0].queue.automerge, null);
+});
+
+for (const [status, conclusion, expected] of [
+    ['QUEUED', null, 'queued'],
+    ['WAITING', null, 'queued'],
+    ['PENDING', null, 'queued'],
+    ['IN_PROGRESS', null, 'running'],
+    ['COMPLETED', 'SUCCESS', 'passed'],
+    ['COMPLETED', 'NEUTRAL', 'passed'],
+    ['COMPLETED', 'SKIPPED', 'skipped'],
+    ['COMPLETED', 'CANCELLED', 'cancelled'],
+    ['COMPLETED', 'FAILURE', 'failed'],
+    ['COMPLETED', 'TIMED_OUT', 'failed'],
+    ['COMPLETED', 'ACTION_REQUIRED', 'failed'],
+    ['COMPLETED', 'STARTUP_FAILURE', 'failed'],
+] as const) {
+    test(`a check run ${status}${conclusion ? ' ' + conclusion : ''} reads as ${expected}`, () => {
+        /* Given */
+        const check = {name: 'test', status, conclusion, startedAt: '2026-11-01T10:01:00Z'};
+
+        /* When */
+        const read = toQueueCheckRun(check);
+
+        /* Then */
+        assert.equal(read.state, expected);
+        assert.equal(read.startedAt, expected === 'queued' ? null : Date.parse('2026-11-01T10:01:00Z'));
+    });
+}
+
+// ── CI run durations (#315) ──
+
+/** A green run as `gh run list --json` answers it, lasting `minutes` from its start. */
+function greenRun(workflowName: string, minutes: number, event = 'pull_request') {
+    const startedAt = '2026-11-01T10:00:00Z';
+    return {
+        workflowName,
+        event,
+        createdAt: '2026-11-01T09:59:00Z',
+        startedAt,
+        updatedAt: new Date(Date.parse(startedAt) + minutes * 60_000).toISOString(),
+    };
+}
+
+test("a repository's CI run durations are one gh run list of its green runs", async () => {
+    /* Given */
+    const run = scripted(() => ({stdout: JSON.stringify([greenRun('CI', 10)])}));
+
+    /* When */
+    await new GhCli({run}).ciRunDurations('JBlaak/switchboard');
+
+    /* Then */
+    assert.deepEqual(run.calls, [
+        [
+            'run',
+            'list',
+            '--repo',
+            'JBlaak/switchboard',
+            '--status',
+            'success',
+            '--limit',
+            '100',
+            '--json',
+            'workflowName,event,createdAt,startedAt,updatedAt',
+        ],
+    ]);
+});
+
+test('the CI workflow is the slowest one run for pull requests, and each run lasts from its start to its last update', () => {
+    /* Given */
+    const runs = [
+        greenRun('Lint', 1),
+        greenRun('CI', 10),
+        greenRun('Lint', 2),
+        greenRun('CI', 12),
+        greenRun('Lint', 1),
+        greenRun('CI', 11),
+        greenRun('Nightly', 90, 'schedule'),
+    ];
+
+    /* When */
+    const durations = toCiRunDurations(runs);
+
+    /* Then */
+    assert.deepEqual(durations, [10 * 60_000, 12 * 60_000, 11 * 60_000]);
+});
+
+test('only the latest 20 green runs of the CI workflow count', () => {
+    /* Given */
+    const runs = Array.from({length: 30}, (_, at) => greenRun('CI', at + 1));
+
+    /* When */
+    const durations = toCiRunDurations(runs);
+
+    /* Then */
+    assert.equal(durations?.length, 20);
+    assert.equal(durations?.[0], 60_000);
+    assert.equal(durations?.[19], 20 * 60_000);
+});
+
+test('a slow workflow with too few runs for an estimate loses to one that has enough', () => {
+    /* Given */
+    const runs = [greenRun('Deploy preview', 30), greenRun('CI', 10), greenRun('CI', 10), greenRun('CI', 10)];
+
+    /* When */
+    const durations = toCiRunDurations(runs);
+
+    /* Then */
+    assert.deepEqual(durations, [10 * 60_000, 10 * 60_000, 10 * 60_000]);
+});
+
+test('without pull request runs every workflow counts, and a run without a start time counts from its creation', () => {
+    /* Given */
+    const run = {...greenRun('CI', 5, 'push'), startedAt: undefined};
+
+    /* When */
+    const durations = toCiRunDurations([run]);
+
+    /* Then */
+    assert.deepEqual(durations, [6 * 60_000]);
+});
+
+test('no green runs answer none, and an answer that is not a list answers null', () => {
+    /* Given */
+    const empty: unknown[] = [];
+
+    /* When */
+    const none = toCiRunDurations(empty);
+    const garbled = toCiRunDurations({message: 'Not Found'});
+
+    /* Then */
+    assert.deepEqual(none, []);
+    assert.equal(garbled, null);
+});
+
+for (const [why, result] of [
+    ['missing', missing],
+    ['signed out', signedOut],
+    ['unreachable', unreachable],
+] as const) {
+    test(`CI run durations answer null when gh is ${why}`, async () => {
+        /* Given */
+        const gh = new GhCli({run: scripted(result)});
+
+        /* When */
+        const durations = await gh.ciRunDurations('JBlaak/switchboard');
+
+        /* Then */
+        assert.equal(durations, null);
+    });
+}
+
+// ── The merge queue's labels (#315) ──
+
+test('adding a label posts it to the PR’s labels', async () => {
+    /* Given */
+    const run = scripted(() => ({stdout: '[]'}));
+
+    /* When */
+    const answer = await new GhCli({run}).addLabel('JBlaak/switchboard', 210, 'automerge:opt-in');
+
+    /* Then */
+    assert.deepEqual(answer, {ok: true});
+    assert.deepEqual(run.calls, [
+        ['api', '--method', 'POST', 'repos/JBlaak/switchboard/issues/210/labels', '-f', 'labels[]=automerge:opt-in'],
+    ]);
+});
+
+test('removing a label deletes it from the PR, its name escaped in the path', async () => {
+    /* Given */
+    const run = scripted(() => ({stdout: '[]'}));
+
+    /* When */
+    const answer = await new GhCli({run}).removeLabel('JBlaak/switchboard', 210, 'automerge:failed');
+
+    /* Then */
+    assert.deepEqual(answer, {ok: true});
+    assert.deepEqual(run.calls, [
+        ['api', '--method', 'DELETE', 'repos/JBlaak/switchboard/issues/210/labels/automerge%3Afailed'],
+    ]);
+});
+
+test("a label write GitHub refuses answers GitHub's reason", async () => {
+    /* Given */
+    const run = scripted(() => ({
+        code: 1,
+        stdout: JSON.stringify({message: 'Label does not exist', status: '404'}),
+        stderr: 'gh: Label does not exist (HTTP 404)\n',
+    }));
+
+    /* When */
+    const answer = await new GhCli({run}).removeLabel('JBlaak/switchboard', 210, 'automerge:failed');
+
+    /* Then */
+    assert.deepEqual(answer, {ok: false, reason: 'Label does not exist'});
+});
+
+test('a label write says why when gh is missing or signed out', async () => {
+    /* Given */
+    const absent = new GhCli({run: scripted(missing)});
+    const out = new GhCli({run: scripted(signedOut)});
+
+    /* When */
+    const added = await absent.addLabel('JBlaak/switchboard', 210, 'automerge:opt-in');
+    const removed = await out.removeLabel('JBlaak/switchboard', 210, 'automerge:failed');
+
+    /* Then */
+    assert.deepEqual(added, {ok: false, reason: 'gh is not installed'});
+    assert.deepEqual(removed, {ok: false, reason: 'gh is not signed in to github.com'});
+});
+
+test('a label write to something that is not a repository and PR is never sent to gh', async () => {
+    /* Given */
+    const run = scripted(() => ({stdout: '[]'}));
+    const gh = new GhCli({run});
+
+    /* When */
+    const answers = [
+        await gh.addLabel('acme', 210, 'automerge:opt-in'),
+        await gh.addLabel('JBlaak/switchboard', 0, 'automerge:opt-in'),
+        await gh.removeLabel('JBlaak/switchboard', 210, ''),
+    ];
+
+    /* Then */
+    assert.ok(answers.every((answer) => !answer.ok));
+    assert.equal(run.calls.length, 0);
 });
 
 // ── When gh cannot answer ──

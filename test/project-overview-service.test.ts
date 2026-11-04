@@ -7,6 +7,7 @@ import type {GitHubAvailability} from '../src/application/ports/github-cli';
 import type {Plan, PlanIssue, PlanSummary} from '../src/domain/plan/model';
 import type {
     ProjectGitHubOverview,
+    PullRequestQueueReads,
     RepositoryIssue,
     RepositoryPullRequest,
     WorktreeSummary,
@@ -64,7 +65,12 @@ function issue(number: number, overrides: Partial<RepositoryIssue> = {}): Reposi
     };
 }
 
-function pullRequest(number: number, closes: number[], state: 'open' | 'merged' = 'open'): RepositoryPullRequest {
+function pullRequest(
+    number: number,
+    closes: number[],
+    state: 'open' | 'merged' = 'open',
+    queue: Partial<PullRequestQueueReads> = {},
+): RepositoryPullRequest {
     return {
         repository: REPO,
         number,
@@ -76,7 +82,25 @@ function pullRequest(number: number, closes: number[], state: 'open' | 'merged' 
         checks: {state: 'passing', failing: 0},
         review: null,
         closes: closes.map((n) => ({repository: REPO, number: n})),
+        queue: {
+            url: `https://github.com/${REPO}/pull/${number}`,
+            baseRef: 'main',
+            labels: [],
+            automerge: null,
+            requestedReviewers: [],
+            approvedBy: [],
+            checks: [],
+            ...queue,
+        },
     };
+}
+
+/** An open PR the merge queue has placed: labelled, with the queue's status saying where. */
+function queued(number: number, description: string): RepositoryPullRequest {
+    return pullRequest(number, [], 'open', {
+        labels: ['automerge:opt-in'],
+        automerge: {state: 'pending', description},
+    });
 }
 
 function checkout(path: string, main = false): WorktreeSummary {
@@ -99,6 +123,10 @@ interface World {
     summaries: PlanSummary[];
     issues: RepositoryIssue[];
     pullRequests: RepositoryPullRequest[];
+    /** The CI run durations `gh` answers, ms; null as when they could not be read. */
+    runDurations: number[] | null;
+    /** The repository's default branch, as git says. */
+    defaultBranch: string;
     worktrees: WorktreeSummary[];
     owners: Record<string, string>;
     running: RunningSession[];
@@ -115,6 +143,8 @@ function setUp(overrides: Partial<World> = {}) {
         summaries: [],
         issues: [],
         pullRequests: [],
+        runDurations: [],
+        defaultBranch: 'main',
         worktrees: [checkout(PROJECT, true)],
         owners: {},
         running: [],
@@ -143,6 +173,11 @@ function setUp(overrides: Partial<World> = {}) {
             projectReads.pullRequests = world.gh ? world.pullRequests : null;
             return projectReads.pullRequestsIn(repo, options);
         },
+        async ciRunDurations(repo: string) {
+            calls.push('ciRunDurations');
+            projectReads.runDurations = world.gh ? world.runDurations : null;
+            return projectReads.ciRunDurations(repo);
+        },
         async plan(repo: string, number: number) {
             calls.push('plan #' + number);
             if (!world.gh) return null;
@@ -165,6 +200,7 @@ function setUp(overrides: Partial<World> = {}) {
 
     const git = {
         worktreeRoot: async (cwd: string) => (world.isRepository ? cwd : null),
+        defaultBranch: async () => world.defaultBranch,
         ...fakeWorktrees(),
     };
     git.byRepository.set(PROJECT, world.worktrees);
@@ -588,4 +624,173 @@ test('a parent in another repository leaves the issue loose in this one', async 
         [[150, null]],
     );
     assert.deepEqual(github.plans, []);
+});
+
+// ── The merge queue (#315) ──
+
+const MINUTE = 60_000;
+
+test('a repository whose PRs show the merge queue answers the queue, with estimates from its CI runs', async () => {
+    /* Given */
+    const {service, calls} = setUp({
+        pullRequests: [
+            queued(201, 'First in the merge queue; merges once CI passes'),
+            queued(202, 'Number 2 in the merge queue'),
+            pullRequest(203, []),
+        ],
+        runDurations: [10 * MINUTE, 12 * MINUTE, 14 * MINUTE],
+        defaultBranch: 'trunk',
+    });
+
+    /* When */
+    const github = answered((await service.overview(PROJECT)).github);
+
+    /* Then */
+    const queue = github.mergeQueue;
+    assert.ok(queue, 'expected a merge queue');
+    assert.equal(queue.head?.number, 201);
+    assert.deepEqual(
+        queue.entries.map((entry) => [entry.number, entry.position]),
+        [[202, 2]],
+    );
+    assert.equal(queue.runMs, 12 * MINUTE);
+    assert.equal(queue.clearsInMs, 24 * MINUTE);
+    assert.equal(calls.filter((call) => call === 'ciRunDurations').length, 1);
+    assert.deepEqual(
+        github.pullRequests.map((row) => 'queue' in row.pullRequest),
+        [false, false, false],
+    );
+});
+
+test('the queue reads its trunk from git: a stack ends at it', async () => {
+    /* Given */
+    const base = queued(202, 'Number 2 in the merge queue');
+    base.queue.baseRef = 'develop';
+    base.headRef = 'feature';
+    const top = queued(203, 'Number 3 in the merge queue');
+    top.queue.baseRef = 'feature';
+    const {service} = setUp({pullRequests: [base, top], defaultBranch: 'develop'});
+
+    /* When */
+    const queue = answered((await service.overview(PROJECT)).github).mergeQueue;
+
+    /* Then */
+    assert.deepEqual(
+        queue?.entries.map((entry) => [entry.number, entry.members.map((member) => member.number)]),
+        [
+            [202, [202]],
+            [203, [202, 203]],
+        ],
+    );
+});
+
+test('a repository that does not use the merge queue answers none, and its CI runs are never read', async () => {
+    /* Given */
+    const {service, calls} = setUp({pullRequests: [pullRequest(119, [])], runDurations: [MINUTE, MINUTE, MINUTE]});
+
+    /* When */
+    const github = answered((await service.overview(PROJECT)).github);
+
+    /* Then */
+    assert.equal(github.mergeQueue, null);
+    assert.ok(!calls.includes('ciRunDurations'));
+});
+
+test('a merged PR that carried a queue label does not make the repository a queue one', async () => {
+    /* Given */
+    const merged = pullRequest(95, [], 'merged', {labels: ['automerge:opt-in']});
+    const {service, calls} = setUp({pullRequests: [merged]});
+
+    /* When */
+    const github = answered((await service.overview(PROJECT, {merged: true})).github);
+
+    /* Then */
+    assert.equal(github.mergeQueue, null);
+    assert.ok(!calls.includes('ciRunDurations'));
+});
+
+test('the merge queue is cached with the rest: a second call within 30 s reads nothing, and its estimates count down', async () => {
+    /* Given */
+    const head = queued(201, 'First in the merge queue; merges once CI passes');
+    head.queue.checks = [{name: 'test', state: 'running', startedAt: 1_000_000}];
+    const {service, calls, advance} = setUp({
+        pullRequests: [head],
+        runDurations: [10 * MINUTE, 10 * MINUTE, 10 * MINUTE],
+    });
+    const first = answered((await service.overview(PROJECT)).github).mergeQueue;
+    calls.length = 0;
+
+    /* When */
+    advance(20_000);
+    const second = answered((await service.overview(PROJECT)).github).mergeQueue;
+
+    /* Then */
+    assert.deepEqual(calls, []);
+    assert.equal(first?.head?.estimateMs, 10 * MINUTE);
+    assert.equal(second?.head?.estimateMs, 10 * MINUTE - 20_000);
+});
+
+test('after a failed refresh the merge queue is served stale with the rest', async () => {
+    /* Given */
+    const {world, service, advance} = setUp({
+        pullRequests: [queued(201, 'First in the merge queue; merges once CI passes')],
+    });
+    await service.overview(PROJECT);
+    world.gh = false;
+
+    /* When */
+    advance(45_000);
+    const github = answered((await service.overview(PROJECT)).github);
+
+    /* Then */
+    assert.equal(github.stale, true);
+    assert.equal(github.mergeQueue?.head?.number, 201);
+});
+
+test('CI run durations that could not be read leave the queue without estimates, not the page without an answer', async () => {
+    /* Given */
+    const {service} = setUp({
+        pullRequests: [queued(201, 'First in the merge queue; merges once CI passes')],
+        runDurations: null,
+    });
+
+    /* When */
+    const answer = answered((await service.overview(PROJECT)).github);
+
+    /* Then */
+    assert.equal(answer.stale, false);
+    assert.equal(answer.mergeQueue?.head?.number, 201);
+    assert.equal(answer.mergeQueue?.runMs, null);
+});
+
+test('asked without plans, the answer carries the merge queue too', async () => {
+    /* Given */
+    const {service, calls} = setUp({
+        pullRequests: [queued(201, 'First in the merge queue; merges once CI passes')],
+        runDurations: [MINUTE * 5, MINUTE * 5, MINUTE * 5],
+    });
+
+    /* When */
+    const github = answered((await service.overview(PROJECT, {plans: false})).github);
+
+    /* Then */
+    assert.equal(github.plansPending, true);
+    assert.equal(github.mergeQueue?.head?.number, 201);
+    assert.equal(github.mergeQueue?.runMs, 5 * MINUTE);
+    assert.deepEqual([...calls].sort(), ['ciRunDurations', 'issuesIn', 'pullRequestsIn']);
+});
+
+test('asked with and without plans at once, the CI runs are read once for both', async () => {
+    /* Given */
+    const {service, calls} = setUp({
+        pullRequests: [queued(201, 'First in the merge queue; merges once CI passes')],
+    });
+
+    /* When */
+    const [quick, full] = await Promise.all([service.overview(PROJECT, {plans: false}), service.overview(PROJECT)]);
+
+    /* Then */
+    assert.equal(answered(quick.github).mergeQueue?.head?.number, 201);
+    assert.equal(answered(full.github).mergeQueue?.head?.number, 201);
+    assert.equal(calls.filter((call) => call === 'ciRunDurations').length, 1);
 });

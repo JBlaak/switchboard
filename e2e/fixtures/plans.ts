@@ -239,7 +239,7 @@ export function acmeOverview(): ProjectOverview {
         projectPath: P.acmeApi,
         remote: false,
         repository: REPO,
-        github: {ok: true, fetchedAt: 0, stale: false, plansPending: false, ...groups},
+        github: {ok: true, fetchedAt: 0, stale: false, plansPending: false, mergeQueue: null, ...groups},
         worktrees: [
             worktree(P.acmeApi + '/.claude/worktrees/cookie-store', {
                 branch: 'cookie-store',

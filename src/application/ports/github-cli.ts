@@ -1,9 +1,10 @@
 /**
  * What GitHub says about a session's PRs and issues, through the user's own `gh`.
  *
- * Reads, plus the one kind of GitHub write Switchboard makes: your own review
- * (C3), because those are your words. Switchboard holds no token; `gh` signs
- * every request as the user.
+ * Reads, plus the two kinds of GitHub write Switchboard makes: your own review
+ * (C3), because those are your words, and the merge queue's own labels on a PR
+ * (#315), because you asked to queue or retry it. Switchboard holds no token;
+ * `gh` signs every request as the user.
  *
  * `gh` may be missing or signed out (D9), and the network may be down, so no
  * method throws. Each read answers null when it could not ask, and
@@ -90,13 +91,29 @@ export interface GitHubCli {
 
     /**
      * The pull requests in `repo`, each with its checks taken together, its
-     * review decision and the issues it closes. Open ones only, and merged ones
-     * too when `merged` is set. The 50 most recently updated, newest first. Null
-     * when unavailable.
+     * review decision and the issues it closes, and what the merge queue reads
+     * of it (#315: base, labels, `automerge` status, reviewers, check runs).
+     * Open ones only, and merged ones too when `merged` is set. The 50 most
+     * recently updated, newest first. Null when unavailable.
      */
     pullRequestsIn(repo: string, options: {merged: boolean}): Promise<RepositoryPullRequest[] | null>;
 
-    // ── Your review (C3): the only writes Switchboard makes to GitHub ──
+    /**
+     * How long the last 20 green runs of `repo`'s CI workflow took, ms, newest
+     * first: one CI run in the merge queue's estimates (#315). Empty when it
+     * has none; null when unavailable.
+     */
+    ciRunDurations(repo: string): Promise<number[] | null>;
+
+    // ── The merge queue's labels (#315): only `automerge:opt-in` added, `automerge:failed` removed ──
+
+    /** Add `label` to PR (or issue) `number` in `repo`. */
+    addLabel(repo: string, number: number, label: string): Promise<GitHubWrite>;
+
+    /** Remove `label` from PR (or issue) `number` in `repo`. */
+    removeLabel(repo: string, number: number, label: string): Promise<GitHubWrite>;
+
+    // ── Your review (C3): with the queue's labels, the only writes Switchboard makes to GitHub ──
 
     /** Start a pending review on a PR (by its GraphQL id), answering the review's id. */
     startPendingReview(pullRequestId: string): Promise<GitHubWrite<{reviewId: string}>>;
@@ -115,7 +132,10 @@ export interface GitHubCli {
 export type PlanReads = 'plan' | 'plansIn' | 'plansOf' | 'closingIssues';
 
 /** The reads the project page makes. */
-export type ProjectReads = 'issuesIn' | 'pullRequestsIn';
+export type ProjectReads = 'issuesIn' | 'pullRequestsIn' | 'ciRunDurations';
+
+/** The merge queue's label writes (#315). */
+export type QueueLabelWrites = 'addLabel' | 'removeLabel';
 
 /** A PR and the issues it closes. */
 export interface PullRequestCloses {

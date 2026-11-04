@@ -235,7 +235,9 @@ export interface FakeProjectGitHub extends Pick<GitHubCli, ProjectReads> {
     issues: RepositoryIssue[] | null;
     /** What `pullRequestsIn` answers; null as when `gh` could not be asked. */
     pullRequests: RepositoryPullRequest[] | null;
-    /** Every read it was asked for, as `issuesIn owner/repo` or `pullRequestsIn owner/repo`. */
+    /** What `ciRunDurations` answers; null as when `gh` could not be asked. */
+    runDurations: number[] | null;
+    /** Every read it was asked for, as `issuesIn owner/repo`, `pullRequestsIn owner/repo` or `ciRunDurations owner/repo`. */
     readonly calls: string[];
 }
 
@@ -250,6 +252,7 @@ export function fakeProjectGitHub(
     const fake: FakeProjectGitHub = {
         issues,
         pullRequests,
+        runDurations: [],
         calls: [],
         async issuesIn(repo, options) {
             fake.calls.push('issuesIn ' + repo);
@@ -258,6 +261,10 @@ export function fakeProjectGitHub(
         async pullRequestsIn(repo, options) {
             fake.calls.push('pullRequestsIn ' + repo);
             return fake.pullRequests && fake.pullRequests.filter((pr) => options.merged || pr.state === 'open');
+        },
+        async ciRunDurations(repo) {
+            fake.calls.push('ciRunDurations ' + repo);
+            return fake.runDurations;
         },
     };
     return fake;

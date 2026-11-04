@@ -127,7 +127,7 @@ function overview(looseCount = 3): ProjectOverview {
         repository: REPO,
         running: ['session-a'],
         worktrees: [],
-        github: {ok: true, fetchedAt: 1, stale: false, plansPending: false, ...groups},
+        github: {ok: true, fetchedAt: 1, stale: false, plansPending: false, mergeQueue: null, ...groups},
     };
 }
 
