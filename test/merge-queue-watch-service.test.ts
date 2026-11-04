@@ -1,7 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {MergeQueueWatchService, type QueueWatchedSession} from '../src/application/services/merge-queue-watch-service';
+import {
+    MergeQueueWatchService,
+    QUEUE_RECHECK_MS,
+    type QueueWatchedSession,
+} from '../src/application/services/merge-queue-watch-service';
 import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
 import {errand, failed, head, MIN, NOW, prUrl, queued, queueOf, REPO} from './support/merge-queue-fixtures';
 import type {MergeQueue} from '../src/domain/project/merge-queue';
@@ -55,6 +59,7 @@ function setup(sessions: QueueWatchedSession[]) {
     let errands: QueueErrandView[] = [];
     const renderer = fakeRenderer();
     const timers = fakeTimers();
+    const now = {value: NOW};
     const watch = new MergeQueueWatchService({
         sessions: () => sessions,
         overview: {
@@ -67,6 +72,7 @@ function setup(sessions: QueueWatchedSession[]) {
         errands: {errands: (repository) => errands.filter((candidate) => candidate.repository === repository)},
         renderer,
         timers,
+        clock: {now: () => now.value},
         log: silentLog,
     });
     const pushes = () => renderer.only('mergeQueueChanged').map((event) => event[1] as MergeQueueChange);
@@ -76,6 +82,7 @@ function setup(sessions: QueueWatchedSession[]) {
         asked,
         renderer,
         timers,
+        now,
         pushes,
         setErrands: (next: QueueErrandView[]) => {
             errands = next;
@@ -160,6 +167,28 @@ test('a repository without the queue, without GitHub, or unreachable is never pu
 
     /* Then */
     assert.deepEqual(pushes(), []);
+});
+
+test('a repository without the queue is read again only every quarter of an hour; one with it, every poll', async () => {
+    /* Given */
+    const {watch, repos, asked, now} = setup([session('s1', OTHER), session('s2', ROOT)]);
+    repos.set('o/other', {queue: null});
+    repos.set(REPO, {queue: queueOf([head(1)])});
+    await watch.poll();
+    asked.length = 0;
+
+    /* When */
+    now.value += MIN;
+    await watch.poll();
+    const aMinuteOn = asked.map(([path]) => path);
+    asked.length = 0;
+    now.value = NOW + QUEUE_RECHECK_MS;
+    await watch.poll();
+    const aQuarterOn = asked.map(([path]) => path);
+
+    /* Then */
+    assert.deepEqual(aMinuteOn, [ROOT]);
+    assert.deepEqual(aQuarterOn, [OTHER, ROOT]);
 });
 
 test('a repository that stops using the queue, or that nothing runs in any more, is pushed once as null', async () => {
@@ -250,6 +279,7 @@ test('the PRs of sessions no longer running are mine too, when the own-PR source
         errands: {errands: () => []},
         renderer,
         timers: fakeTimers(),
+        clock: {now: () => NOW},
         log: silentLog,
     });
     await watch.poll();

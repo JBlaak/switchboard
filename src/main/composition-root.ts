@@ -950,6 +950,7 @@ export function buildContainer(): Container {
         errands: queueErrands,
         renderer,
         timers,
+        clock,
         log,
     });
 

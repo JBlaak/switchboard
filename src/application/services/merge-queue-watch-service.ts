@@ -13,6 +13,12 @@
  * outside the page shows them). A repository that stops using the queue, or
  * that no running session is in any more, is pushed once as `queue: null`.
  *
+ * Every read is a GraphQL request, and most repositories have no queue:
+ * before the watch, nothing outside an open project page read them. So a
+ * repository whose open PRs showed no queue is asked again only every
+ * `QUEUE_RECHECK_MS`, not every minute; one that starts using the queue shows
+ * up within that.
+ *
  * Between two readings of a repository's queue it notifies about the user's
  * own PRs (the ones their sessions linked): merged, up next, failed as the
  * head (`queueNotices`). The first reading after launch notifies nothing.
@@ -27,11 +33,18 @@ import {
 } from '../../domain/project/queue-elsewhere';
 import type {MergeQueue} from '../../domain/project/merge-queue';
 import type {SessionPullRequest} from '../../domain/session/session';
-import type {TimerHandle, Timers} from '../ports/clock';
+import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
 import type {ProjectOverviewService} from './project-overview-service';
 import type {QueueErrandService} from './queue-errand-service';
+
+/**
+ * How often a repository whose open PRs showed no queue is read again. A
+ * quarter of an hour: a repository rarely starts using the queue, and the
+ * pills of the one that does can wait that long.
+ */
+export const QUEUE_RECHECK_MS = 15 * 60_000;
 
 /** A running session, as the queue watch needs it. */
 export interface QueueWatchedSession {
@@ -56,6 +69,7 @@ export interface MergeQueueWatchServiceDeps {
         'mergeQueueChanged' | 'statusUpdate' | 'terminalNotification' | 'sessionNeedsAttention'
     >;
     timers: Timers;
+    clock: Clock;
     log: Logger;
 }
 
@@ -70,6 +84,8 @@ export class MergeQueueWatchService {
     private readonly published = new Map<string, string>();
     /** The last queue read per repository, for the notifications. */
     private readonly last = new Map<string, MergeQueue>();
+    /** Repositories whose open PRs showed no queue, by when (epoch ms): read again after QUEUE_RECHECK_MS. */
+    private readonly withoutQueue = new Map<string, number>();
 
     constructor(private readonly deps: MergeQueueWatchServiceDeps) {}
 
@@ -116,6 +132,10 @@ export class MergeQueueWatchService {
             // A repository is read once a poll, through the first of its paths.
             const known = this.repositoryOf.get(path);
             if (known !== undefined && (known === null || seen.has(known))) continue;
+            if (known && this.recentlyWithoutQueue(known)) {
+                seen.add(known);
+                continue;
+            }
             try {
                 const answer = await this.deps.overview.overview(path, {plans: false});
                 this.repositoryOf.set(path, answer.repository);
@@ -124,6 +144,8 @@ export class MergeQueueWatchService {
                 seen.add(repository);
                 // Unavailable: what was pushed last stands.
                 if (!answer.github?.ok) continue;
+                if (answer.github.mergeQueue) this.withoutQueue.delete(repository);
+                else this.withoutQueue.set(repository, this.deps.clock.now());
                 const open = new Set(
                     answer.github.pullRequests
                         .filter((row) => row.pullRequest.state === 'open')
@@ -139,6 +161,12 @@ export class MergeQueueWatchService {
         for (const repository of [...this.published.keys()]) {
             if (!seen.has(repository)) this.take(repository, null, new Set(), sessions);
         }
+    }
+
+    /** Did the repository's open PRs show no queue less than QUEUE_RECHECK_MS ago? */
+    private recentlyWithoutQueue(repository: string): boolean {
+        const at = this.withoutQueue.get(repository);
+        return at !== undefined && this.deps.clock.now() - at < QUEUE_RECHECK_MS;
     }
 
     /** One repository's fresh queue: notify, and push it when it changed. */
