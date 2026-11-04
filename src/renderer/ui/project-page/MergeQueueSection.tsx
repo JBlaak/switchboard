@@ -29,7 +29,7 @@ import type {
     QueuedEntry,
     UnknownEntry,
 } from '../../../domain/project/merge-queue';
-import type {QueueErrandView} from '../../../domain/project/queue-errands';
+import {nudgePullRequest, reviewerOf, type QueueErrandView} from '../../../domain/project/queue-errands';
 import type {IssueKey} from '../../../domain/plan/model';
 import {cursorId} from './page-rows';
 import {openProjectSession, openPullRequestOnGitHub} from './actions';
@@ -45,9 +45,7 @@ import {
     isEmptyQueue,
     mergeQueueOf,
     minutesOf,
-    nudgePullRequest,
     nudgeStatus,
-    reviewerOf,
 } from './merge-queue-view';
 import {pullRequestSession} from './project-sessions';
 

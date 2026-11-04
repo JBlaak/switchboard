@@ -7,7 +7,7 @@ import {
     type QueueWatchedSession,
 } from '../src/application/services/merge-queue-watch-service';
 import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
-import {errand, failed, head, MIN, NOW, prUrl, queued, queueOf, REPO} from './support/merge-queue-fixtures';
+import {errand, failed, head, held, MIN, NOW, prUrl, queued, queueOf, REPO} from './support/merge-queue-fixtures';
 import type {MergeQueue} from '../src/domain/project/merge-queue';
 import type {ProjectOverview, ProjectOverviewOptions} from '../src/domain/project/overview';
 import type {QueueErrandView} from '../src/domain/project/queue-errands';
@@ -57,6 +57,7 @@ function setup(sessions: QueueWatchedSession[]) {
     const repositoryOf: Record<string, string> = {[ROOT]: REPO, [WORKTREE]: REPO, [OTHER]: 'o/other'};
     const asked: Array<[string, ProjectOverviewOptions | undefined]> = [];
     let errands: QueueErrandView[] = [];
+    const settled: Array<[string, {number: number; reviewer: string}[]]> = [];
     const renderer = fakeRenderer();
     const timers = fakeTimers();
     const now = {value: NOW};
@@ -69,7 +70,20 @@ function setup(sessions: QueueWatchedSession[]) {
                 return overviewOf(path, repository, repository ? repos.get(repository) : undefined);
             },
         },
-        errands: {errands: (repository) => errands.filter((candidate) => candidate.repository === repository)},
+        errands: {
+            errands: (repository) => errands.filter((candidate) => candidate.repository === repository),
+            // As the errand service does: a nudge no held entry waits on any more is settled.
+            settleNudges: (repository, entries) => {
+                settled.push([repository, [...entries]]);
+                errands = errands.map((view) =>
+                    view.kind === 'nudge' &&
+                    view.repository === repository &&
+                    !entries.some((entry) => entry.number === view.number && entry.reviewer === view.reviewer)
+                        ? {...view, settledAt: NOW}
+                        : view,
+                );
+            },
+        },
         renderer,
         timers,
         clock: {now: () => now.value},
@@ -83,6 +97,7 @@ function setup(sessions: QueueWatchedSession[]) {
         renderer,
         timers,
         now,
+        settled,
         pushes,
         setErrands: (next: QueueErrandView[]) => {
             errands = next;
@@ -153,6 +168,26 @@ test('the queue moving, or an errand changing, is pushed again', async () => {
             [2, ['needs-you']],
         ],
     );
+});
+
+test('each reading of a queue settles its nudges against the held entries, before its errands are read', async () => {
+    /* Given */
+    const {watch, repos, settled, setErrands, pushes} = setup([session('s1', ROOT), session('s2', OTHER)]);
+    repos.set(REPO, {queue: queueOf([head(1), held(3, 'sam')])});
+    repos.set('o/other', {queue: null});
+    await watch.poll();
+
+    /* When */
+    repos.set(REPO, {queue: queueOf([head(1), held(3, 'anna')])});
+    setErrands([errand('s9', {kind: 'nudge', number: 3, reviewer: 'sam', state: 'done'})]);
+    await watch.poll();
+
+    /* Then */
+    assert.deepEqual(settled, [
+        [REPO, [{number: 3, reviewer: 'sam'}]],
+        [REPO, [{number: 3, reviewer: 'anna'}]],
+    ]);
+    assert.equal(pushes().at(-1)?.errands[0]?.settledAt, NOW);
 });
 
 test('a repository without the queue, without GitHub, or unreachable is never pushed', async () => {
@@ -276,7 +311,7 @@ test('the PRs of sessions no longer running are mine too, when the own-PR source
         sessions: () => [session('s1', ROOT)],
         ownPullRequests: () => [{number: 2, url: prUrl(2), repository: ''}],
         overview: {overview: async (path) => overviewOf(path, REPO, {queue})},
-        errands: {errands: () => []},
+        errands: {errands: () => [], settleNudges: () => {}},
         renderer,
         timers: fakeTimers(),
         clock: {now: () => NOW},

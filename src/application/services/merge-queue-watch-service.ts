@@ -19,6 +19,10 @@
  * `QUEUE_RECHECK_MS`, not every minute; one that starts using the queue shows
  * up within that.
  *
+ * Each reading of a queue also settles its nudges (`settleNudges`): a nudge
+ * whose review request is no longer among the held entries may go again, so
+ * a re-requested review offers Nudge again without the project page open.
+ *
  * Between two readings of a repository's queue it notifies about the user's
  * own PRs (the ones their sessions linked): merged, up next, failed as the
  * head (`queueNotices`). The first reading after launch notifies nothing.
@@ -32,6 +36,7 @@ import {
     type QueueNotice,
 } from '../../domain/project/queue-elsewhere';
 import type {MergeQueue} from '../../domain/project/merge-queue';
+import {heldForReview} from '../../domain/project/queue-errands';
 import type {SessionPullRequest} from '../../domain/session/session';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {Logger} from '../ports/logger';
@@ -63,7 +68,7 @@ export interface MergeQueueWatchServiceDeps {
      */
     ownPullRequests?(): readonly SessionPullRequest[];
     overview: Pick<ProjectOverviewService, 'overview'>;
-    errands: Pick<QueueErrandService, 'errands'>;
+    errands: Pick<QueueErrandService, 'errands' | 'settleNudges'>;
     renderer: Pick<
         RendererGateway,
         'mergeQueueChanged' | 'statusUpdate' | 'terminalNotification' | 'sessionNeedsAttention'
@@ -185,6 +190,8 @@ export class MergeQueueWatchService {
         if (queue) this.last.set(repository, queue);
         else this.last.delete(repository);
 
+        // Before its errands are read, so a nudge whose request changed is pushed settled.
+        if (queue) this.deps.errands.settleNudges(repository, heldForReview(queue));
         const errands = queue ? this.deps.errands.errands(repository) : [];
         const signature = queueChangeSignature(queue, errands);
         const pushed = this.published.get(repository);

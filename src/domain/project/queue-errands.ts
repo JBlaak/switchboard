@@ -26,7 +26,7 @@
 import {ARCHIVE_TOOL_QUALIFIED_NAME} from '../session/archive-tool';
 import {renderPrompt} from '../session-work/prompts';
 import type {ReviewThread, WorkAction} from '../session-work/model';
-import type {FailureKind} from './merge-queue';
+import type {FailureKind, MergeQueue, QueuedEntry} from './merge-queue';
 import type {ExistingBranch} from './branch-worktree';
 
 /** What the sidebar says of an errand's session. */
@@ -177,6 +177,39 @@ export function isGitHubLogin(login: string): boolean {
 /** The Slack message a nudge sends, shown word for word in the confirm first. */
 export function nudgeMessage(pr: ErrandPullRequest, reviewer: string): string {
     return `Hey ${reviewer}, could you review #${pr.number} ${pr.title}? It's waiting on your review to get through the merge queue. ${pr.url}`;
+}
+
+/**
+ * Who a held entry's Nudge would go to: the user it waits on for a review.
+ * Null for one that is queued, waits for any approval, or waits on a team,
+ * which nobody can be nudged as.
+ */
+export function reviewerOf(entry: QueuedEntry): string | null {
+    const {state} = entry;
+    return state.kind === 'held' && state.waitsFor.kind === 'review' && !state.waitsFor.team
+        ? state.waitsFor.reviewer
+        : null;
+}
+
+/**
+ * The PR a held entry's Nudge is about: the stack member the review is asked
+ * on, when the queue named one, else the entry's own PR.
+ */
+export function nudgePullRequest(entry: QueuedEntry): {number: number; title: string; url: string} {
+    const member = entry.state.kind === 'held' ? entry.state.member : null;
+    const pr = entry.members.find((candidate) => candidate.number === member) ?? entry;
+    return {number: pr.number, title: pr.title, url: pr.url};
+}
+
+/**
+ * The held entries waiting for a review, by the PR a nudge is about: what
+ * `settleNudges` is told, by the project page and by the queue watch.
+ */
+export function heldForReview(queue: MergeQueue): {number: number; reviewer: string}[] {
+    return queue.entries.flatMap((entry) => {
+        const reviewer = reviewerOf(entry);
+        return reviewer ? [{number: nudgePullRequest(entry).number, reviewer}] : [];
+    });
 }
 
 /** The first prompt of a nudge's session; `reviewer` is a checked login (`isGitHubLogin`). */
