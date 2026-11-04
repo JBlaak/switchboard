@@ -6,7 +6,7 @@ import {dispatch} from '../../state/app-store';
 import {startClaudeSessionIn} from '../../features/sessions/session-actions';
 import {resolveDefaultSessionOptions} from '../../features/dialogs/launch-options';
 import {fixInSessionWith, type FixInSessionSteps} from './fix-in-session';
-import {failedPullRequest, type SessionQueueFailure} from '../../../domain/project/queue-elsewhere';
+import {failedPullRequest, retriedPullRequest, type SessionQueueFailure} from '../../../domain/project/queue-elsewhere';
 
 const steps: FixInSessionSteps = {
     fix: (request) => window.api.queueFix(request),
@@ -28,12 +28,12 @@ export async function fixInSession(
     dispatch({type: 'queuePanelActionFinished', repository, number, action: 'fix', ...outcome});
 }
 
-/** Put the PR back in the queue: removes `automerge:failed`. */
+/** Put the PR back in the queue: removes `automerge:failed` from the PR carrying it (a stack's top). */
 export async function retryInQueue(failure: SessionQueueFailure): Promise<void> {
     const {repository, number} = failure;
     dispatch({type: 'queuePanelActionStarted', repository, number, action: 'retry'});
     const result = await window.api
-        .queueRetry(repository, number)
+        .queueRetry(repository, retriedPullRequest(failure))
         .catch((err: Error) => ({ok: false as const, reason: err.message || 'Could not retry'}));
     dispatch({
         type: 'queuePanelActionFinished',

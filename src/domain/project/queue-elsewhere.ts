@@ -177,7 +177,7 @@ export function sessionQueueFailure(
     return null;
 }
 
-/** The PR the panel's buttons act on: a stack's failed member, or the entry's own PR. */
+/** The PR Fix in session and Open the run act on: a stack's failed member, or the entry's own PR. */
 export function failedPullRequest(failure: SessionQueueFailure): {
     number: number;
     title: string;
@@ -189,6 +189,14 @@ export function failedPullRequest(failure: SessionQueueFailure): {
     return member
         ? {number: member.number, title: member.title, url: member.url, headRef: member.headRef}
         : {number: entry.number, title: entry.title, url: entry.url, headRef: entry.headRef};
+}
+
+/**
+ * The PR Retry takes `automerge:failed` off: the one carrying it, the
+ * entry's labelled PR, also when the failure is on a stack member below it.
+ */
+export function retriedPullRequest(failure: SessionQueueFailure): number {
+    return failure.entry.number;
 }
 
 // ── Notifications ──

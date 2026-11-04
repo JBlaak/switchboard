@@ -6,12 +6,26 @@ import {
     NO_QUEUE_MARK,
     queueChangeSignature,
     queueNotices,
+    retriedPullRequest,
     sessionQueueFailure,
     sessionQueueMark,
 } from '../src/domain/project/queue-elsewhere';
 import {ERRAND_LABEL} from '../src/domain/project/queue-errands';
 import type {SessionPullRequest} from '../src/domain/session/session';
-import {errand, failed, head, held, MIN, NOW, prUrl, queued, queueOf, REPO} from './support/merge-queue-fixtures';
+import {
+    errand,
+    failed,
+    head,
+    held,
+    MIN,
+    NOW,
+    prUrl,
+    queued,
+    queueOf,
+    queuePr,
+    REPO,
+} from './support/merge-queue-fixtures';
+import {QUEUE_LABELS} from '../src/domain/project/merge-queue';
 
 const link = (number: number, repository = REPO): SessionPullRequest => ({
     number,
@@ -105,6 +119,28 @@ test('the header panel shows when the session’s own PR is out of the queue, na
     assert.equal(failure.heading, '#4 left the queue');
     assert.equal(failure.summary, 'Unit tests failed as the head of the queue');
     assert.deepEqual(failedPullRequest(failure), {number: 4, title: 'PR 4', url: prUrl(4), headRef: 'branch-4'});
+});
+
+test('a stack failed on a member is fixed on the member, and retried on the labelled PR that carries automerge:failed', () => {
+    /* Given */
+    const bottom = queuePr(10, {headRef: 'a', labels: [QUEUE_LABELS.withStack]});
+    const top = queuePr(12, {
+        headRef: 'c',
+        baseRef: 'a',
+        labels: [QUEUE_LABELS.optIn, QUEUE_LABELS.failed],
+        automerge: {state: 'failure', description: '#10: CI failed: Unit tests'},
+    });
+    const failure = sessionQueueFailure([link(10)], {[REPO]: queueOf([bottom, top])});
+    assert.ok(failure);
+
+    /* When */
+    const fixed = failedPullRequest(failure).number;
+    const retried = retriedPullRequest(failure);
+
+    /* Then */
+    assert.equal(failure.number, 10);
+    assert.equal(fixed, 10);
+    assert.equal(retried, 12);
 });
 
 test('no panel for a session whose PRs are queued, held, merging or unknown, or without a queue read', () => {
