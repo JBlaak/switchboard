@@ -200,6 +200,7 @@ const api: SwitchboardApi = {
     onRemoteStatus: (cb) => subscribe(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status)),
     onQuestionsAsked: (cb) => subscribe(EVENT.questionsAsked, (_e, pending) => cb(pending)),
     onQuestionsSettled: (cb) => subscribe(EVENT.questionsSettled, (_e, settled) => cb(settled)),
+    onPageShown: (cb) => subscribe(EVENT.pageShown, (_e, page) => cb(page)),
     onProjectsChanged: (cb) => subscribe(EVENT.projectsChanged, () => cb()),
     onStatusUpdate: (cb) => subscribe(EVENT.statusUpdate, (_e, text, type) => cb(text, type)),
     onFullscreenChanged: (cb) => subscribe(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen)),

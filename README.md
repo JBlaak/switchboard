@@ -66,6 +66,9 @@ Claude in, local or remote. `⌘N` starts a quick session in a scratch folder of
   Switchboard, Ghostty, Tokyo Night, Catppuccin, Dracula, Nord and Solarized.
 - **Claude, your way.** Font, size and line height apply live. `Shift+Enter` makes a newline,
   holding `Space` works for voice input, and dropping a file pastes its path.
+- **Pages to read.** Ask Claude to "make this readable" and it shows the text as an article over
+  its terminal, typeset with an outline. `Esc` puts it away; the header's _Page_ button brings it
+  back.
 - **Scheduled tasks.** `.claude/commands/schedule-*.md` files with a cron line run on their own.
 
 ## Phone access

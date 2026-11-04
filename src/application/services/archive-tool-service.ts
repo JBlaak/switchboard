@@ -11,6 +11,7 @@ import {
     archiveToolMcpConfig,
     type ArchiveToolOutcome,
 } from '../../domain/session/archive-tool';
+import {PAGE_TOOL_QUALIFIED_NAME} from '../../domain/session/page-tool';
 import {QUESTION_HOOK_TOKEN_HEADER} from '../../domain/questions/question';
 import type {ActiveSession} from '../model/active-session';
 import type {SessionRegistry} from '../model/session-registry';
@@ -20,7 +21,7 @@ import type {QuestionHookEndpoint} from '../ports/question-hook';
 /** What a launch adds to give a session the tool. */
 export interface ArchiveToolLaunch {
     mcpConfig: string;
-    /** Pre-approved, so asking for the archive doesn't stop on a permission prompt. */
+    /** Pre-approved, so asking for the archive or showing a page doesn't stop on a permission prompt. */
     allowedTools: string[];
 }
 
@@ -46,7 +47,8 @@ export class ArchiveToolService {
             mcpConfig: archiveToolMcpConfig(`${url}/mcp/${encodeURIComponent(sessionId)}`, {
                 [QUESTION_HOOK_TOKEN_HEADER]: token,
             }),
-            allowedTools: [ARCHIVE_TOOL_QUALIFIED_NAME],
+            // The Mac's server offers `show_page` beside the archive (composition root).
+            allowedTools: [ARCHIVE_TOOL_QUALIFIED_NAME, PAGE_TOOL_QUALIFIED_NAME],
         };
     }
 

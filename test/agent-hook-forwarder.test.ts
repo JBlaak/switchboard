@@ -7,6 +7,7 @@ import path from 'node:path';
 import {HookForwarder} from '../src/application/services/agent-host/hook-forwarder';
 import {ArchiveToolService} from '../src/application/services/archive-tool-service';
 import {QuestionService} from '../src/application/services/question-service';
+import {PAGE_TOOL_QUALIFIED_NAME} from '../src/domain/session/page-tool';
 import {SessionRegistry} from '../src/application/model/session-registry';
 import type {ActiveSession} from '../src/application/model/active-session';
 import {NodeSelfArchivedFile} from '../src/infrastructure/agent/node-self-archived-file';
@@ -314,7 +315,12 @@ test("settings and tools point at the agent's own server, as a local launch's do
 
     /* Then */
     assert.equal(settings, questions.settingsFor('launch/1'));
-    assert.deepEqual(tools, archive.launchFor('launch/1'));
+    // The same server, but without `show_page`: the agent does not forward its calls to the Mac yet.
+    const local = archive.launchFor('launch/1');
+    assert.deepEqual(tools, {
+        mcpConfig: local?.mcpConfig,
+        allowedTools: local?.allowedTools.filter((name) => name !== PAGE_TOOL_QUALIFIED_NAME),
+    });
     assert.match(settings ?? '', /http:\/\/127\.0\.0\.1:4100\/ask\/launch%2F1/);
 });
 

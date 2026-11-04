@@ -192,6 +192,7 @@ export const EVENT = {
     remoteStatus: 'remote-status',
     questionsAsked: 'questions-asked',
     questionsSettled: 'questions-settled',
+    pageShown: 'page:shown',
     projectsChanged: 'projects-changed',
     statusUpdate: 'status-update',
     fullscreenChanged: 'fullscreen-changed',

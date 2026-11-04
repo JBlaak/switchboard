@@ -25,6 +25,7 @@ import type {PullRequestStatusChange} from '../../domain/session-work/status';
 import type {RendererGateway} from '../../application/ports/renderer-gateway';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {TasksUpdate} from '../../domain/tasks/surface';
+import type {ShownPage} from '../../domain/session/page-tool';
 
 export class ElectronRendererGateway implements RendererGateway {
     /** The window whose renderer said it is ready, while it is the current one. */
@@ -94,6 +95,11 @@ export class ElectronRendererGateway implements RendererGateway {
 
     public questionsSettled(settled: QuestionsSettled): void {
         this.send(EVENT.questionsSettled, settled);
+    }
+
+    // ── Pages ──
+    public pageShown(page: ShownPage): void {
+        this.send(EVENT.pageShown, page);
     }
 
     // ── Lists and chrome ──

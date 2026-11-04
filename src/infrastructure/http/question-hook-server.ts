@@ -15,7 +15,7 @@
  * is archived.
  *
  * And `POST /mcp/<launchId>` serves the session Switchboard's own MCP server,
- * with its one tool, `archive_session`.
+ * with `archive_session` and, where a page tool is given, `show_page`.
  *
  * Loopback only, on a random port, behind a per-run secret: any local process
  * can reach 127.0.0.1, and without the token one could answer a session's
@@ -26,7 +26,8 @@ import crypto from 'node:crypto';
 import type {AddressInfo} from 'node:net';
 
 import {parseGrillRound} from '../../domain/questions/grill';
-import {archiveToolReply, type ArchiveToolOutcome} from '../../domain/session/archive-tool';
+import {archiveToolReply, type ArchiveToolOutcome, type McpTool} from '../../domain/session/archive-tool';
+import {pageTool, type PageInput} from '../../domain/session/page-tool';
 import {parseQuestionHookInput, parseStopHookInput, QUESTION_HOOK_TOKEN_HEADER} from '../../domain/questions/question';
 import type {Logger} from '../../application/ports/logger';
 import type {QuestionHookEndpoint} from '../../application/ports/question-hook';
@@ -54,6 +55,11 @@ export interface QuestionHookServerDeps {
         request(launchId: string): ArchiveToolOutcome | Promise<ArchiveToolOutcome>;
         turnEnded(launchId: string): void;
     };
+    /**
+     * Where `show_page` calls go, with a valid page. Without one (the agent on a
+     * VM) the tool is not offered.
+     */
+    pageTool?: {show(launchId: string, page: PageInput): ArchiveToolOutcome};
     log: Logger;
 }
 
@@ -194,13 +200,19 @@ export class QuestionHookServer implements QuestionHookEndpoint {
         // promise, the call is made once here, and the reply is built again
         // around the settled outcome; a synchronous outcome replies at once,
         // exactly as before.
+        const page = this.deps.pageTool;
+        const extra: McpTool[] = page ? [pageTool((input) => page.show(launchId, input))] : [];
         const call: {pending?: Promise<ArchiveToolOutcome>} = {};
-        const reply = archiveToolReply(body, () => {
-            const outcome = archiveTool.request(launchId);
-            if (!(outcome instanceof Promise)) return outcome;
-            call.pending = outcome;
-            return {ok: false, message: ''};
-        });
+        const reply = archiveToolReply(
+            body,
+            () => {
+                const outcome = archiveTool.request(launchId);
+                if (!(outcome instanceof Promise)) return outcome;
+                call.pending = outcome;
+                return {ok: false, message: ''};
+            },
+            extra,
+        );
         if (call.pending) {
             void call.pending
                 .catch((err: unknown): ArchiveToolOutcome => {
@@ -208,7 +220,8 @@ export class QuestionHookServer implements QuestionHookEndpoint {
                     return {ok: false, message: 'Switchboard could not archive this session.'};
                 })
                 .then((outcome) => {
-                    const settled = archiveToolReply(body, () => outcome);
+                    // Only an archive call is ever pending, so the page tool is not called again.
+                    const settled = archiveToolReply(body, () => outcome, extra);
                     if (settled) this.json(res, settled);
                 });
             return;

@@ -19,6 +19,7 @@ import {TasksPage} from './tasks-page/TasksPage';
 import {EmptyScreenPatch} from './patch/EmptyScreenPatch';
 import {AskBox} from './ask/AskBox';
 import {Questions} from './questions/Questions';
+import {ReadingPage} from './reading-page/ReadingPage';
 import {QuestionsHeaderButton} from './questions/QuestionsHeaderButton';
 import {SessionList} from './session-list/SessionList';
 import {TerminalHost} from './terminal/TerminalHost';
@@ -62,6 +63,7 @@ export function Root(): JSX.Element | null {
                 <TerminalHeaderControls />
             </Portal>
             <Portal target="terminals">
+                <ReadingPage />
                 <Questions />
             </Portal>
             <Portal target="terminal-header-questions">
