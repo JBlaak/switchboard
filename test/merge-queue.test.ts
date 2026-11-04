@@ -305,6 +305,23 @@ test('the head needs what is left of a median run, and at least a minute', () =>
     assert.equal(overstaying.head?.estimateMs, MIN);
 });
 
+test('a head whose checks have all finished is merging, a failed optional one included', () => {
+    /* Given */
+    const finished = {
+        ...HEAD,
+        checks: [check('Tests', 'passed'), check('Optional lint', 'failed'), check('Preview', 'cancelled')],
+    };
+    const oneQueued = {...HEAD, checks: [check('Optional lint', 'failed'), check('Tests', 'queued')]};
+
+    /* When */
+    const merging = mergeQueue(input([finished])).head?.stage;
+    const checking = mergeQueue(input([oneQueued])).head?.stage;
+
+    /* Then */
+    assert.deepEqual(merging, {kind: 'merging'});
+    assert.deepEqual(checking, {kind: 'checks', done: 1, total: 2, running: null, waitsForCiOn: null});
+});
+
 test('a head with every check green is merging, and one without checks is being rebased', () => {
     /* Given */
     const green = {...HEAD, checks: [check('Tests', 'passed')]};

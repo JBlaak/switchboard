@@ -168,6 +168,12 @@ export interface QueueEntry {
     approvedBy: readonly string[];
 }
 
+/**
+ * Where the head is. `checks` counts every check run on its members, optional
+ * ones included: `done` are the finished ones, whatever they finished as. Once
+ * none is running or queued it is `merging`, since a failed optional check
+ * holds nothing up (a failed required one fails the entry instead).
+ */
 export type HeadStage =
     | {kind: 'rebasing'}
     | {kind: 'checks'; done: number; total: number; running: string | null; waitsForCiOn: number | null}
@@ -430,7 +436,7 @@ function headOf(
     runMs: number | null,
 ): QueueHead {
     const checks = entry.members.flatMap((member) => byNumber.get(member.number)?.checks ?? []);
-    const done = checks.filter((check) => check.state === 'passed' || check.state === 'skipped').length;
+    const done = checks.filter((check) => check.state !== 'running' && check.state !== 'queued').length;
     const running = checks.find((check) => check.state === 'running') ?? null;
     const starts = checks
         .filter((check) => check.state === 'running' || check.state === 'queued')
@@ -440,7 +446,8 @@ function headOf(
 
     let stage: HeadStage;
     if (checks.length === 0) stage = {kind: 'rebasing'};
-    else if (done === checks.length) stage = {kind: 'merging'};
+    else if (done === checks.length)
+        stage = {kind: 'merging'}; // none running or queued
     else stage = {kind: 'checks', done, total: checks.length, running: running?.name ?? null, waitsForCiOn};
 
     let estimateMs: number | null = null;
