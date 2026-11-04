@@ -85,13 +85,15 @@ export interface DeviceLinkHandlers {
     disconnected(connection: DeviceConnection): void;
 }
 
-/** The TLS 1.3 + WebSocket listener on the Mac's LAN interfaces. */
+/** The TLS 1.3 + WebSocket listener on the Mac's LAN and VPN interfaces. */
 export interface DeviceLink {
     /** Starts listening; resolves with the port. Port 0 picks one. */
     start(identity: ServerIdentity, port: number, handlers: DeviceLinkHandlers): Promise<number>;
     /** Closes every connection with `code` and stops listening. */
     stop(code: number, reason: string): Promise<void>;
     readonly listening: boolean;
+    /** The addresses it listens on, all on the one port; empty when it isn't listening. */
+    readonly addresses: readonly string[];
 }
 
 // ── Discovery ──
