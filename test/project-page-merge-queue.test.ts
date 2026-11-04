@@ -24,6 +24,7 @@ import {
     isEmptyQueue,
     mergeQueueOf,
     nudgeStatus,
+    reviewerOf,
 } from '../src/renderer/ui/project-page/merge-queue-view';
 import {
     fixInSession,
@@ -383,6 +384,31 @@ test('the held entries waiting for a review are what main settles the nudges aga
 
     /* Then */
     assert.deepEqual(held, [{number: 3, reviewer: 'sam'}]);
+});
+
+test('a held entry waiting on a team offers no Nudge, and is left out of the settle', () => {
+    /* Given */
+    const q = mergeQueue({
+        trunk: 'main',
+        pullRequests: [
+            pr(7, 'Team review', {
+                labels: ['automerge:opt-in'],
+                review: 'review_required',
+                automerge: pending('Waits for a review by @acme/web-team'),
+            }),
+        ],
+        ciRunDurationsMs: [],
+        now: NOW,
+    });
+
+    /* When */
+    const reviewer = reviewerOf(q.entries[0]);
+    const held = heldForReview(q);
+
+    /* Then */
+    assert.equal(reviewer, null);
+    assert.deepEqual(held, []);
+    assert.match(q.entries[0].sentence, /until @acme\/web-team reviews/);
 });
 
 test('a nudge’s state: none, at work, needing you, then sent until its request changes', () => {

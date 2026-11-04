@@ -78,9 +78,16 @@ export function approvedText(entry: QueueEntry): string | null {
     return entry.approvedBy.length ? 'approved by ' + entry.approvedBy.join(', ') : null;
 }
 
-/** Who a held entry waits on for a review; null for one that is queued, or waits for any approval. */
+/**
+ * Who a held entry's Nudge would go to: the user it waits on for a review.
+ * Null for one that is queued, waits for any approval, or waits on a team,
+ * which nobody can be nudged as.
+ */
 export function reviewerOf(entry: QueuedEntry): string | null {
-    return entry.state.kind === 'held' && entry.state.waitsFor.kind === 'review' ? entry.state.waitsFor.reviewer : null;
+    const {state} = entry;
+    return state.kind === 'held' && state.waitsFor.kind === 'review' && !state.waitsFor.team
+        ? state.waitsFor.reviewer
+        : null;
 }
 
 /** The held entries waiting for a review, for `queueSettleNudges`. */
