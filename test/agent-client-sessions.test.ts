@@ -8,6 +8,7 @@ import {RemoteConnectionSupervisor} from '../src/application/services/remote-con
 import {SessionLauncher} from '../src/application/services/session-launcher';
 import {SessionLifecycle} from '../src/application/services/session-lifecycle';
 import {buildSshArgv, buildSshSpawn} from '../src/domain/remote/ssh-command';
+import {reconnectSession} from '../src/main/reconnect-session';
 import {stopSession} from '../src/main/stop-session';
 import {fakeRenderer, fakeTerminals, fakeTimers, silentLog} from './support/fakes';
 import {scriptedAgent, settle} from './support/scripted-agent';
@@ -399,4 +400,58 @@ test('opening a session on a host whose link gave up dials it again', async () =
     assert.match(first.error ?? '', /could not reach the agent on joris@vm.local: .*Permission denied/);
     assert.deepEqual(second, {ok: true, reattached: false});
     assert.equal(h.agent.dialledHosts.length, 2);
+});
+
+test('Retry now on a VM session whose host link gave up dials the host again, and the session comes back', async () => {
+    /* Given */
+    const h = harness();
+    await h.open('s1');
+    h.agent.failNextDial = 'joris@vm.local: Permission denied (publickey).';
+    h.agent.current().drop('Timeout, server vm.local not responding.');
+    h.timers.tick();
+    await settle();
+    const gaveUp = h.renderer.only('remoteStatus').at(-1);
+    assert.equal((gaveUp?.[2] as {phase: string}).phase, 'failed');
+    const dialsBefore = h.agent.dialledHosts.length;
+
+    /* When */
+    const result = reconnectSession({...h, agents: h.client}, 's1');
+    await settle();
+
+    /* Then */
+    assert.deepEqual(result, {ok: true});
+    assert.equal(h.agent.dialledHosts.length, dialsBefore + 1);
+    assert.deepEqual(h.renderer.only('remoteStatus').at(-1), [
+        'remoteStatus',
+        's1',
+        {phase: 'connected', target: 'joris@vm.local'},
+    ]);
+    assert.deepEqual(h.lifecycle.runningSessionIds(), ['s1']);
+});
+
+test('Retry now on a VM session whose host link is up dials nothing', async () => {
+    /* Given */
+    const h = harness();
+    await h.open('s1');
+    const dialsBefore = h.agent.dialledHosts.length;
+
+    /* When */
+    const result = reconnectSession({...h, agents: h.client}, 's1');
+
+    /* Then */
+    assert.deepEqual(result, {ok: true, alreadyConnected: true});
+    assert.equal(h.agent.dialledHosts.length, dialsBefore);
+});
+
+test('Retry now on a legacy remote session still goes to its ssh supervisor', async () => {
+    /* Given */
+    const h = harness({agentHost: false});
+    await h.open('s1', {remoteKind: 'claude'});
+
+    /* When */
+    const result = reconnectSession({...h, agents: h.client}, 's1');
+
+    /* Then */
+    assert.deepEqual(result, {ok: true, alreadyConnected: true});
+    assert.equal(h.agent.dials.length, 0, 'no agent dialled');
 });
