@@ -25,6 +25,7 @@ import {TaskChip} from '../session-task/TaskChip';
 import {canHandOffSession} from '../../state/session-list-layout';
 import {HandOffSessionButton} from '../session-handoff/HandOffSessionButton';
 import {HandoffMarker} from '../session-handoff/HandoffMarker';
+import {PageHeaderButton} from '../reading-page/PageHeaderButton';
 
 /**
  * The session's name, its project (a way into the project page, #173), its
@@ -104,6 +105,7 @@ export function TerminalHeaderControls(): JSX.Element {
     return (
         <>
             {onScreen && <HandoffMarker sessionId={onScreen} />}
+            {onScreen && <PageHeaderButton sessionId={onScreen} />}
             {handOff && hosts && (
                 <HandOffSessionButton
                     sessionId={onScreen}

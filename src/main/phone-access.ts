@@ -27,6 +27,7 @@ import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
 import type {UpdateNotice} from '../domain/update/release';
 import type {TasksUpdate} from '../domain/tasks/surface';
+import type {ShownPage} from '../domain/session/page-tool';
 import type {BatteryGauge} from '../application/ports/battery';
 import type {Clock, Timers} from '../application/ports/clock';
 import type {ClaudeCaller} from '../application/ports/claude-cli';
@@ -113,6 +114,11 @@ export class PhoneEventTee implements RendererGateway {
     public questionsSettled(settled: QuestionsSettled): void {
         this.inner.questionsSettled(settled);
         this.phones()?.questionsSettled(settled);
+    }
+
+    /** The window only: a phone has no room for a page. */
+    public pageShown(page: ShownPage): void {
+        this.inner.pageShown(page);
     }
 
     /** A session started, ended, was renamed or got its title: the phones' list follows. */

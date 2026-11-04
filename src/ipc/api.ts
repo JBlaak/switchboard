@@ -54,6 +54,7 @@ import type {
 import type {SessionHandoffPhase, SessionHandoffPreview} from '../application/services/session-handoff';
 import type {ScheduleLocation} from '../application/services/vm-schedules';
 import type {VmHostView} from '../application/services/vm-registry';
+import type {ShownPage} from '../domain/session/page-tool';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
 
@@ -428,6 +429,8 @@ export interface SwitchboardApi {
     onRemoteStatus(cb: (sessionId: string, status: RemoteStatusPayload) => void): Unsubscribe;
     onQuestionsAsked(cb: (pending: PendingQuestions) => void): Unsubscribe;
     onQuestionsSettled(cb: (settled: QuestionsSettled) => void): Unsubscribe;
+    /** A session showed the user a page (`show_page`). */
+    onPageShown(cb: (page: ShownPage) => void): Unsubscribe;
     onProjectsChanged(cb: () => void): Unsubscribe;
     onStatusUpdate(cb: (text: string, type: string) => void): Unsubscribe;
     onFullscreenChanged(cb: (isFullscreen: boolean) => void): Unsubscribe;

@@ -8,6 +8,7 @@ import {QuestionService} from '../src/application/services/question-service';
 import {buildClaudeArgs} from '../src/domain/launch/claude-command';
 import {QUESTION_HOOK_TOKEN_HEADER} from '../src/domain/questions/question';
 import {ARCHIVE_TOOL_QUALIFIED_NAME, archiveToolMcpConfig, archiveToolReply} from '../src/domain/session/archive-tool';
+import {PAGE_TOOL_QUALIFIED_NAME} from '../src/domain/session/page-tool';
 import {QuestionHookServer} from '../src/infrastructure/http/question-hook-server';
 import {fakePty, fakeRenderer, silentLog} from './support/fakes';
 
@@ -151,7 +152,7 @@ test('a launch gets the server at its own path, with the token, and the tool pre
     /* Then */
     assert.deepEqual(launch, {
         mcpConfig: archiveToolMcpConfig('http://127.0.0.1:4321/mcp/abc', {[QUESTION_HOOK_TOKEN_HEADER]: 'tok'}),
-        allowedTools: [ARCHIVE_TOOL_QUALIFIED_NAME],
+        allowedTools: [ARCHIVE_TOOL_QUALIFIED_NAME, PAGE_TOOL_QUALIFIED_NAME],
     });
     assert.equal(ARCHIVE_TOOL_QUALIFIED_NAME, 'mcp__switchboard__archive_session');
 });

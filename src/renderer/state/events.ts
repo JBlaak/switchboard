@@ -40,6 +40,7 @@ import type {VmsEvent} from './vms-slice';
 import type {HandoffEvent} from './handoff-slice';
 import type {SessionHandoffEvent} from './session-handoff-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
+import type {PagesEvent} from './pages-slice';
 import type {SessionHandoffPhase} from '../../application/services/session-handoff';
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
@@ -49,6 +50,7 @@ import type {SettingsRecord} from './settings-slice';
 import type {ShellProfile} from '../../domain/shell/shell-profile';
 import type {RouteResult} from '../../domain/ask/model';
 import type {TasksUpdate} from '../../domain/tasks/surface';
+import type {ShownPage} from '../../domain/session/page-tool';
 
 // ── Pushed by the main process ──
 
@@ -65,6 +67,8 @@ export type PushEvent =
     | {type: 'remoteStatus'; sessionId: string; status: RemoteStatusPayload; receivedAt: number}
     | {type: 'questionsAsked'; pending: PendingQuestions}
     | {type: 'questionsSettled'; settled: QuestionsSettled}
+    /** A session showed the user a page (`show_page`). */
+    | {type: 'pageShown'; page: ShownPage}
     | {type: 'projectsChanged'}
     | {type: 'statusUpdate'; text: string; kind: string}
     | {type: 'fullscreenChanged'; isFullscreen: boolean}
@@ -347,7 +351,8 @@ export type RendererEvent =
     | VmsEvent
     | HandoffEvent
     | SessionHandoffEvent
-    | DropUploadEvent;
+    | DropUploadEvent
+    | PagesEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

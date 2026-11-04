@@ -130,6 +130,7 @@ import {routeCandidates} from '../domain/ask/route';
 import {resolveBlaakTasksUrl} from '../domain/settings/settings';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
 import {ArchiveToolService} from '../application/services/archive-tool-service';
+import {PageToolService} from '../application/services/page-tool-service';
 import {OpensslIdentityStore} from '../infrastructure/phone/identity-store';
 import {DnsSdAdvertiser} from '../infrastructure/phone/dns-sd-advertiser';
 import {LanWatcher} from '../infrastructure/phone/lan-watcher';
@@ -348,6 +349,8 @@ export function buildContainer(): Container {
             request: (...args) => archiveTool.request(...args),
             turnEnded: (...args) => archiveTool.turnEnded(...args),
         },
+        // A session showing the user a page (`show_page`), over its terminal.
+        pageTool: new PageToolService({registry, renderer, clock, log}),
         log,
     });
     const questions = new QuestionService({

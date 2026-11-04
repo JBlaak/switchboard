@@ -15,6 +15,7 @@ import type {SessionWorkSnapshot} from '../../domain/session-work/model';
 import type {PullRequestStatusChange} from '../../domain/session-work/status';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {TasksUpdate} from '../../domain/tasks/surface';
+import type {ShownPage} from '../../domain/session/page-tool';
 
 export interface RendererGateway {
     /** True while there is a window listening; every send is a no-op without one. */
@@ -42,6 +43,10 @@ export interface RendererGateway {
     questionsAsked(pending: PendingQuestions): void;
     /** Those questions were answered here, or withdrawn (the CLI asks in the terminal). */
     questionsSettled(settled: QuestionsSettled): void;
+
+    // ── Pages ──
+    /** A session showed the user a page (`show_page`): lay it over that session's terminal. */
+    pageShown(page: ShownPage): void;
 
     // ── Lists and chrome ──
     projectsChanged(): void;
