@@ -45,6 +45,7 @@ import {
     isEmptyQueue,
     mergeQueueOf,
     minutesOf,
+    nudgePullRequest,
     nudgeStatus,
     reviewerOf,
 } from './merge-queue-view';
@@ -299,11 +300,11 @@ function EntryRow({entry, context}: {entry: QueuedEntry; context: Context}): JSX
                 )}
                 {entry.stack && <StackMembers members={entry.members} />}
                 <span className="pp-mq-sentence">{entry.sentence}</span>
-                {reviewer && <NudgeLine entry={entry} reviewer={reviewer} context={context} />}
+                {reviewer && <NudgeLine pr={nudgePullRequest(entry)} reviewer={reviewer} context={context} />}
             </span>
             <span className="pp-mq-side">
                 {reviewer ? (
-                    <NudgeButton entry={entry} reviewer={reviewer} context={context} />
+                    <NudgeButton pr={nudgePullRequest(entry)} reviewer={reviewer} context={context} />
                 ) : (
                     estimate && <span className="pp-mq-estimate">{estimate}</span>
                 )}
@@ -312,18 +313,13 @@ function EntryRow({entry, context}: {entry: QueuedEntry; context: Context}): JSX
     );
 }
 
+/** The PR a held entry's nudge is about: in a stack, the member the review is asked on. */
+type NudgedPr = ReturnType<typeof nudgePullRequest>;
+
 /** Under a held entry's sentence: how its nudge is going, when there is one. */
-function NudgeLine({
-    entry,
-    reviewer,
-    context,
-}: {
-    entry: QueuedEntry;
-    reviewer: string;
-    context: Context;
-}): JSX.Element | null {
-    const status = nudgeStatus(context.errands, entry.number, reviewer);
-    const action = context.actions[queueActionKey('nudge', entry.number, reviewer)];
+function NudgeLine({pr, reviewer, context}: {pr: NudgedPr; reviewer: string; context: Context}): JSX.Element | null {
+    const status = nudgeStatus(context.errands, pr.number, reviewer);
+    const action = context.actions[queueActionKey('nudge', pr.number, reviewer)];
     if (action?.phase === 'failed') return <span className="pp-mq-note is-failed">{action.reason}</span>;
     switch (status.kind) {
         case 'running':
@@ -341,17 +337,9 @@ function NudgeLine({
     }
 }
 
-function NudgeButton({
-    entry,
-    reviewer,
-    context,
-}: {
-    entry: QueuedEntry;
-    reviewer: string;
-    context: Context;
-}): JSX.Element {
-    const status = nudgeStatus(context.errands, entry.number, reviewer);
-    const busy = context.actions[queueActionKey('nudge', entry.number, reviewer)]?.phase === 'busy';
+function NudgeButton({pr, reviewer, context}: {pr: NudgedPr; reviewer: string; context: Context}): JSX.Element {
+    const status = nudgeStatus(context.errands, pr.number, reviewer);
+    const busy = context.actions[queueActionKey('nudge', pr.number, reviewer)]?.phase === 'busy';
     switch (status.kind) {
         case 'running':
             return <span className="pp-pill is-queue-running">running</span>;
@@ -369,14 +357,7 @@ function NudgeButton({
             return (
                 <RowButton
                     disabled={busy}
-                    onClick={() =>
-                        void nudgeReviewer(
-                            context.projectPath,
-                            context.repository,
-                            {number: entry.number, title: entry.title, url: entry.url},
-                            reviewer,
-                        )
-                    }>
+                    onClick={() => void nudgeReviewer(context.projectPath, context.repository, pr, reviewer)}>
                     {busy ? 'Nudging…' : 'Nudge ' + reviewer}
                 </RowButton>
             );

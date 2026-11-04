@@ -90,11 +90,21 @@ export function reviewerOf(entry: QueuedEntry): string | null {
         : null;
 }
 
-/** The held entries waiting for a review, for `queueSettleNudges`. */
+/**
+ * The PR a held entry's Nudge is about: the stack member the review is asked
+ * on, when the queue named one, else the entry's own PR.
+ */
+export function nudgePullRequest(entry: QueuedEntry): {number: number; title: string; url: string} {
+    const member = entry.state.kind === 'held' ? entry.state.member : null;
+    const pr = entry.members.find((candidate) => candidate.number === member) ?? entry;
+    return {number: pr.number, title: pr.title, url: pr.url};
+}
+
+/** The held entries waiting for a review (by the PR a nudge is about), for `queueSettleNudges`. */
 export function heldForReview(queue: MergeQueue): {number: number; reviewer: string}[] {
     return queue.entries.flatMap((entry) => {
         const reviewer = reviewerOf(entry);
-        return reviewer ? [{number: entry.number, reviewer}] : [];
+        return reviewer ? [{number: nudgePullRequest(entry).number, reviewer}] : [];
     });
 }
 

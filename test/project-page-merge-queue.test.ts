@@ -23,6 +23,7 @@ import {
     heldForReview,
     isEmptyQueue,
     mergeQueueOf,
+    nudgePullRequest,
     nudgeStatus,
     reviewerOf,
 } from '../src/renderer/ui/project-page/merge-queue-view';
@@ -384,6 +385,32 @@ test('the held entries waiting for a review are what main settles the nudges aga
 
     /* Then */
     assert.deepEqual(held, [{number: 3, reviewer: 'sam'}]);
+});
+
+test('a stack held on a member is nudged, and settled, about that member', () => {
+    /* Given */
+    const q = mergeQueue({
+        trunk: 'main',
+        pullRequests: [
+            pr(10, 'Bottom', {headRef: 'a', labels: ['bot: merges with stack'], review: 'review_required'}),
+            pr(12, 'Top', {
+                headRef: 'c',
+                baseRef: 'a',
+                labels: ['automerge:opt-in'],
+                automerge: pending('#10: Waits for a review by @sam'),
+            }),
+        ],
+        ciRunDurationsMs: [],
+        now: NOW,
+    });
+
+    /* When */
+    const nudged = nudgePullRequest(q.entries[0]);
+    const held = heldForReview(q);
+
+    /* Then */
+    assert.deepEqual(nudged, {number: 10, title: 'Bottom', url: `https://github.com/${REPO}/pull/10`});
+    assert.deepEqual(held, [{number: 10, reviewer: 'sam'}]);
 });
 
 test('a held entry waiting on a team offers no Nudge, and is left out of the settle', () => {
