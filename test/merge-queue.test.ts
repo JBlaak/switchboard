@@ -72,7 +72,14 @@ test('each of the queue status texts reads as its state', () => {
         [pending('First in the merge queue; waits for CI on #12'), {kind: 'head', waitsForCiOn: 12}],
         [pending('Number 3 in the merge queue'), {kind: 'queued', position: 3}],
         [pending('Waits for an approval'), {kind: 'held', waitsFor: {kind: 'approval'}}],
-        [pending('Waits for a review by @some-one'), {kind: 'held', waitsFor: {kind: 'review', reviewer: 'some-one'}}],
+        [
+            pending('Waits for a review by @some-one'),
+            {kind: 'held', waitsFor: {kind: 'review', reviewer: 'some-one', team: false}},
+        ],
+        [
+            pending('Waits for a review by @acme/web-team'),
+            {kind: 'held', waitsFor: {kind: 'review', reviewer: 'acme/web-team', team: true}},
+        ],
         [pending('A draft is not queued'), {kind: 'outside', why: {kind: 'draft'}}],
         [pending('Waits until `feature/a` merges'), {kind: 'outside', why: {kind: 'base', base: 'feature/a'}}],
         [pending('Waits until #9 is ready for review'), {kind: 'outside', why: {kind: 'stack-draft', member: 9}}],
@@ -187,7 +194,7 @@ test('a held entry comes after the numbered ones, says whom it waits for, and ge
     const last = queue.entries.at(-1)!;
     assert.equal(last.number, 4);
     assert.equal(last.position, 3);
-    assert.deepEqual(last.state, {kind: 'held', waitsFor: {kind: 'review', reviewer: 'sam'}});
+    assert.deepEqual(last.state, {kind: 'held', waitsFor: {kind: 'review', reviewer: 'sam', team: false}});
     assert.match(last.sentence, /until @sam reviews/);
     assert.equal(last.estimateMs, null);
     assert.equal(queue.counts.held, 1);

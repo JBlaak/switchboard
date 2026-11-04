@@ -92,7 +92,12 @@ export type ParsedStatus =
     | {kind: 'failed'; reason: string}
     | {kind: 'unknown'; text: string};
 
-export type HeldReason = {kind: 'approval'} | {kind: 'review'; reviewer: string};
+/**
+ * Whom a held entry waits for. A review can be asked of a team (`@org/team`):
+ * `team` is then true and `reviewer` is the team's `org/slug`, which no one can
+ * be nudged as.
+ */
+export type HeldReason = {kind: 'approval'} | {kind: 'review'; reviewer: string; team: boolean};
 
 export type OutsideReason =
     {kind: 'draft'} | {kind: 'base'; base: string} | {kind: 'stack-draft'; member: number} | {kind: 'not-opted-in'};
@@ -122,8 +127,8 @@ function parseText(state: AutomergeStatus['state'], text: string): ParsedStatus 
     if (/^First in the merge queue/i.test(text)) return {kind: 'head', waitsForCiOn: null};
     if ((match = /^Number (\d+) in the merge queue/i.exec(text))) return {kind: 'queued', position: Number(match[1])};
     if (/^Waits for an approval/i.test(text)) return {kind: 'held', waitsFor: {kind: 'approval'}};
-    if ((match = /^Waits for a review by @([\w-]+)/i.exec(text))) {
-        return {kind: 'held', waitsFor: {kind: 'review', reviewer: match[1]}};
+    if ((match = /^Waits for a review by @([\w-]+(?:\/[\w.-]+)?)/i.exec(text))) {
+        return {kind: 'held', waitsFor: {kind: 'review', reviewer: match[1], team: match[1].includes('/')}};
     }
     if (/^A draft is not queued/i.test(text)) return {kind: 'outside', why: {kind: 'draft'}};
     if ((match = /^Waits until #(\d+) is ready for review/i.exec(text))) {
