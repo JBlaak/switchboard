@@ -15,6 +15,7 @@ class SharedPreferencesPairingStore(private val preferences: SharedPreferences) 
                 host = preferences.getString(HOST, null) ?: return null,
                 port = preferences.getInt(PORT, 0).takeIf { it in 1..65535 } ?: return null,
             ),
+            knownHosts = preferences.getString(KNOWN_HOSTS, null)?.split(' ')?.filter { it.isNotEmpty() }.orEmpty(),
         )
     }
 
@@ -25,6 +26,7 @@ class SharedPreferencesPairingStore(private val preferences: SharedPreferences) 
             .putString(MAC_NAME, pairing.macName)
             .putString(HOST, pairing.lastAddress.host)
             .putInt(PORT, pairing.lastAddress.port)
+            .putString(KNOWN_HOSTS, pairing.knownHosts.joinToString(" "))
             .apply()
     }
 
@@ -38,5 +40,6 @@ class SharedPreferencesPairingStore(private val preferences: SharedPreferences) 
         const val MAC_NAME = "macName"
         const val HOST = "host"
         const val PORT = "port"
+        const val KNOWN_HOSTS = "knownHosts"
     }
 }

@@ -26,7 +26,7 @@ export function isCompatibleProtocol(peer: number, ours: number = PROTOCOL_VERSI
 export function helloReply(
     peerProtocol: number,
     grant: HelloGrant,
-    mac: {name: string; version: string},
+    mac: {name: string; version: string; addresses: readonly string[]},
     ours: number = PROTOCOL_VERSION,
 ): HelloReply {
     if (!isCompatibleProtocol(peerProtocol, ours)) {
@@ -38,5 +38,9 @@ export function helloReply(
     if (grant.kind === 'pairing') {
         return {message: {type: 'pairing', protocol: ours, macName: mac.name}, close: null};
     }
-    return {message: {type: 'welcome', protocol: ours, macName: mac.name, deviceId: grant.deviceId}, close: null};
+    const addresses = mac.addresses.filter((address) => !address.includes('%'));
+    return {
+        message: {type: 'welcome', protocol: ours, macName: mac.name, deviceId: grant.deviceId, addresses},
+        close: null,
+    };
 }

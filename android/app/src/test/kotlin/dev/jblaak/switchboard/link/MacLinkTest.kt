@@ -130,6 +130,69 @@ class MacLinkTest {
     }
 
     @Test
+    fun `a welcome stores the addresses the Mac listens on`() = runTest {
+        /* Given */
+        val link = newLink()
+        link.start()
+        runCurrent()
+
+        /* When */
+        transport.last.macSays(WELCOME_WITH_ADDRESSES)
+        runCurrent()
+
+        /* Then */
+        assertEquals(listOf("192.168.1.20", "10.8.0.3"), store.pairing?.knownHosts)
+    }
+
+    @Test
+    fun `a known address is tried before discovery when the last address does not answer`() = runTest {
+        /* Given */
+        val vpn = MacAddress("10.8.0.3", lastAddress.port)
+        store.pairing = storedPairing().copy(knownHosts = listOf("192.168.1.20", "10.8.0.3"))
+        transport.firstEvent = { address ->
+            if (address == vpn) TransportEvent.Opened else TransportEvent.Failed(TransportFailure.Unreachable)
+        }
+        val link = newLink()
+
+        /* When */
+        link.start()
+        runCurrent()
+        transport.last.macSays(WELCOME)
+        runCurrent()
+
+        /* Then */
+        assertEquals(LinkState.Connected(deviceId = "d-7", macName = "Studio"), link.state.value)
+        assertEquals(listOf(lastAddress, vpn), transport.connections.map { it.address })
+        assertEquals(0, discovery.lookups)
+        assertEquals(vpn, store.pairing?.lastAddress)
+    }
+
+    @Test
+    fun `discovery still runs when no known address answers`() = runTest {
+        /* Given */
+        val moved = MacAddress("192.168.1.31", 52840)
+        store.pairing = storedPairing().copy(knownHosts = listOf("10.8.0.3"))
+        discovery.found = listOf(moved)
+        transport.firstEvent = { address ->
+            if (address == moved) TransportEvent.Opened else TransportEvent.Failed(TransportFailure.Unreachable)
+        }
+        val link = newLink()
+
+        /* When */
+        link.start()
+        runCurrent()
+        transport.last.macSays(WELCOME)
+        runCurrent()
+
+        /* Then */
+        assertEquals(LinkState.Connected(deviceId = "d-7", macName = "Studio"), link.state.value)
+        assertEquals(
+            listOf(lastAddress, MacAddress("10.8.0.3", 52840), moved),
+            transport.connections.map { it.address },
+        )
+    }
+
+    @Test
     fun `close 4001 asks for an app update`() = runTest {
         /* Given */
         val link = connectedLink()

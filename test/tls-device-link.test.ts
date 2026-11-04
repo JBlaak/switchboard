@@ -15,7 +15,7 @@ import type {
     DeviceLinkHandlers,
     ServerIdentity,
 } from '../src/application/ports/phone-access';
-import {TlsDeviceLink, lanAddresses} from '../src/infrastructure/phone/tls-device-link';
+import {TlsDeviceLink, listenAddresses} from '../src/infrastructure/phone/tls-device-link';
 import {silentLog} from './support/fakes';
 
 /**
@@ -199,7 +199,7 @@ test('an authorised client exchanges text both ways and receives terminal frames
     ws.send(JSON.stringify({type: 'hello', protocol: 1, appVersion: '1.0'}));
     await until(() => h.messages.length === 1);
     const text = nextMessage(ws);
-    connection.send({type: 'welcome', protocol: 1, macName: 'Mac', deviceId: 'd1'});
+    connection.send({type: 'welcome', protocol: 1, macName: 'Mac', deviceId: 'd1', addresses: ['127.0.0.1']});
     const welcome = await text;
     const binary = nextMessage(ws);
     connection.sendTerminal('s1', 'héllo');
@@ -215,6 +215,7 @@ test('an authorised client exchanges text both ways and receives terminal frames
         protocol: 1,
         macName: 'Mac',
         deviceId: 'd1',
+        addresses: ['127.0.0.1'],
     });
     assert.equal(frame.isBinary, true);
     assert.deepEqual(frame.data, Buffer.from(encodeTerminalFrame('s1', 'héllo')));
@@ -272,6 +273,19 @@ test('stop closes every connection with its code and stops listening', async () 
     await until(() => h.disconnected.length === 2);
 });
 
+test('the link reports the addresses it listens on, and none once stopped', async () => {
+    /* Given */
+    const h = await harness();
+    const listening = [...h.link.addresses];
+
+    /* When */
+    await h.link.stop(CLOSE.turnedOff, 'Phone access was turned off');
+
+    /* Then */
+    assert.deepEqual(listening, ['127.0.0.1']);
+    assert.deepEqual(h.link.addresses, []);
+});
+
 test('a peer that stops answering pings is dropped', async (t) => {
     /* Given */
     const h = await harness({keepaliveMs: 20});
@@ -290,7 +304,7 @@ test('a peer that stops answering pings is dropped', async (t) => {
     answering.close();
 });
 
-test('the LAN addresses leave out loopback, tunnels, VPNs and CGNAT', () => {
+test('the listen addresses are the LAN and VPN ones, without loopback, AirDrop, bridges or tunnel link-local', () => {
     /* Given */
     const v4 = (address: string, internal = false) => ({
         address,
@@ -312,18 +326,27 @@ test('the LAN addresses leave out loopback, tunnels, VPNs and CGNAT', () => {
     const interfaces = {
         lo0: [v4('127.0.0.1', true)],
         en0: [v4('192.168.1.20'), v6('fe80::1c2b:3a4d'), v6('2a02:a45::5')],
-        en7: [v4('100.72.1.2')],
-        utun4: [v4('10.8.0.2')],
+        utun0: [v6('fe80::ce81:b1c')],
+        utun4: [v4('10.8.0.2'), v6('fe80::42')],
+        utun6: [v4('100.72.1.2'), v6('fd7a:115c:a1e0::1')],
         ipsec0: [v4('10.9.0.2')],
         awdl0: [v6('fe80::99')],
         bridge100: [v4('192.168.2.1')],
     };
 
     /* When */
-    const addresses = lanAddresses(interfaces);
+    const addresses = listenAddresses(interfaces);
 
     /* Then */
-    assert.deepEqual(addresses, ['192.168.1.20', 'fe80::1c2b:3a4d%en0', '2a02:a45::5']);
+    assert.deepEqual(addresses, [
+        '192.168.1.20',
+        'fe80::1c2b:3a4d%en0',
+        '2a02:a45::5',
+        '10.8.0.2',
+        '100.72.1.2',
+        'fd7a:115c:a1e0::1',
+        '10.9.0.2',
+    ]);
 });
 
 test('starting with nowhere to listen fails', async () => {
