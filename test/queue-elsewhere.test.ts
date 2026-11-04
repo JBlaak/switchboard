@@ -209,6 +209,21 @@ test('my head that is no longer open and did not fail is reported merged', () =>
     );
 });
 
+test('a head missing from open PRs that may not be all of them is not reported merged', () => {
+    /* Given */
+    const before = queueOf([head(1), queued(2, 2)]);
+    const after = queueOf([head(2)]);
+
+    /* When */
+    const notices = queueNotices(REPO, before, after, new Set([1, 2]), null);
+
+    /* Then */
+    assert.deepEqual(
+        notices.map((notice) => notice.kind),
+        ['head'],
+    );
+});
+
 test('my head that is still open but out of the queue failed as the head', () => {
     /* Given */
     const before = queueOf([head(1), queued(2, 2)]);

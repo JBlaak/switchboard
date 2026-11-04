@@ -221,19 +221,22 @@ export interface QueueNotice {
  * a PR go by merging it or by failing it, so a head that is no longer open
  * and is not in `failed` is taken to have merged. (A head closed by hand in
  * the minute between two reads would be reported merged too; the overview's
- * open PRs cannot tell the two apart.)
+ * open PRs cannot tell the two apart.) `openNumbers` is null when the open
+ * PRs read may not be all of them (the read stops at a limit): a head missing
+ * from them may just be cut off, so no merge is inferred at all.
  */
 export function queueNotices(
     repository: string,
     before: MergeQueue,
     after: MergeQueue,
     mine: ReadonlySet<number>,
-    openNumbers: ReadonlySet<number>,
+    openNumbers: ReadonlySet<number> | null,
 ): QueueNotice[] {
     const merged = new Set<number>();
     const wasHead = before.head;
     if (
         wasHead &&
+        openNumbers !== null &&
         !openNumbers.has(wasHead.number) &&
         !after.failed.some((entry) => hasMember(entry, wasHead.number))
     ) {

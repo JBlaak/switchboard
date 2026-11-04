@@ -18,6 +18,12 @@ import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
 export type {GitHubAvailability};
 
+/**
+ * Pull requests `pullRequestsIn` reads per repository: the 50 most recently
+ * updated, unpaged. A repository that answers this many may have more.
+ */
+export const PULL_REQUESTS_PER_REPOSITORY = 50;
+
 export interface GitHubCli {
     available(): Promise<GitHubAvailability>;
 

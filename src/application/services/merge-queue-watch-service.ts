@@ -26,6 +26,10 @@
  * Between two readings of a repository's queue it notifies about the user's
  * own PRs (the ones their sessions linked): merged, up next, failed as the
  * head (`queueNotices`). The first reading after launch notifies nothing.
+ * A merge is inferred from the head no longer being open, so only when the
+ * open PRs read are all of them: fewer than PULL_REQUESTS_PER_REPOSITORY. In
+ * a repository with more, a head outside the read would look merged, so its
+ * merge is not notified.
  */
 import {PR_WATCH_INTERVAL_MS} from './pr-watch-service';
 import {
@@ -39,6 +43,7 @@ import type {MergeQueue} from '../../domain/project/merge-queue';
 import {heldForReview} from '../../domain/project/queue-errands';
 import type {SessionPullRequest} from '../../domain/session/session';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
+import {PULL_REQUESTS_PER_REPOSITORY} from '../ports/github-cli';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
 import type {ProjectOverviewService} from './project-overview-service';
@@ -151,11 +156,12 @@ export class MergeQueueWatchService {
                 if (!answer.github?.ok) continue;
                 if (answer.github.mergeQueue) this.withoutQueue.delete(repository);
                 else this.withoutQueue.set(repository, this.deps.clock.now());
-                const open = new Set(
-                    answer.github.pullRequests
-                        .filter((row) => row.pullRequest.state === 'open')
-                        .map((row) => row.pullRequest.number),
-                );
+                const openRows = answer.github.pullRequests.filter((row) => row.pullRequest.state === 'open');
+                // As many as the read takes: there may be more, and the head among them.
+                const open =
+                    openRows.length < PULL_REQUESTS_PER_REPOSITORY
+                        ? new Set(openRows.map((row) => row.pullRequest.number))
+                        : null;
                 this.take(repository, answer.github.mergeQueue, open, sessions);
             } catch (err) {
                 this.deps.log.error(`[merge-queue] reading ${path} failed:`, (err as Error).message);
@@ -178,7 +184,8 @@ export class MergeQueueWatchService {
     private take(
         repository: string,
         queue: MergeQueue | null,
-        open: ReadonlySet<number>,
+        /** The open PRs, when they are all of them; null when the read may have stopped short. */
+        open: ReadonlySet<number> | null,
         sessions: readonly QueueWatchedSession[],
     ): void {
         const before = this.last.get(repository);

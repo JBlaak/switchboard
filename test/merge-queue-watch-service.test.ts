@@ -8,6 +8,7 @@ import {
 } from '../src/application/services/merge-queue-watch-service';
 import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
 import {errand, failed, head, held, MIN, NOW, prUrl, queued, queueOf, REPO} from './support/merge-queue-fixtures';
+import {PULL_REQUESTS_PER_REPOSITORY} from '../src/application/ports/github-cli';
 import type {MergeQueue} from '../src/domain/project/merge-queue';
 import type {ProjectOverview, ProjectOverviewOptions} from '../src/domain/project/overview';
 import type {QueueErrandView} from '../src/domain/project/queue-errands';
@@ -301,6 +302,24 @@ test('my head failing flags its session as needing me; my next head merging is n
         ],
     );
     assert.deepEqual(renderer.only('sessionNeedsAttention'), [['sessionNeedsAttention', 's1']]);
+});
+
+test('with as many open PRs as the read takes, a head gone from them is not taken to have merged', async () => {
+    /* Given */
+    const {watch, repos, renderer} = setup([session('s1', ROOT, [1, 2])]);
+    const others = Array.from({length: PULL_REQUESTS_PER_REPOSITORY - 1}, (_, i) => 100 + i);
+    repos.set(REPO, {queue: queueOf([head(1), queued(2, 2)]), open: [1, 2, ...others]});
+    await watch.poll();
+
+    /* When */
+    repos.set(REPO, {queue: queueOf([head(2)]), open: [2, ...others]});
+    await watch.poll();
+
+    /* Then */
+    assert.deepEqual(
+        renderer.only('statusUpdate').map((event) => event[1]),
+        ['Your PR is up next · #2 PR 2'],
+    );
 });
 
 test('the PRs of sessions no longer running are mine too, when the own-PR source says so', async () => {
