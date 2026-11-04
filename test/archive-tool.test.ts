@@ -223,6 +223,30 @@ test('a turn ending in a session that never asked archives nothing', () => {
     assert.deepEqual(archived, []);
 });
 
+test('a turn ending is heard with every id of the session, and whether it asked to be archived', () => {
+    /* Given */
+    const {registry, tool} = service();
+    const session = newSession();
+    registry.add('launch-id', session);
+    registry.rekey('launch-id', 'real-id');
+    const heard: Array<[string[], boolean]> = [];
+    tool.onTurnEnded((ids, archiving) => heard.push([ids, archiving]));
+
+    /* When */
+    tool.turnEnded('launch-id');
+    tool.request('launch-id');
+    const requested = tool.hasRequested('real-id');
+    tool.turnEnded('launch-id');
+
+    /* Then */
+    assert.deepEqual(heard, [
+        [['launch-id', 'real-id'], false],
+        [['launch-id', 'real-id'], true],
+    ]);
+    assert.equal(requested, true);
+    assert.equal(tool.hasRequested('launch-id'), false, 'archived: the request is spent');
+});
+
 test('a session re-keyed after asking is archived under its current id', () => {
     /* Given */
     const {registry, archived, tool} = service();

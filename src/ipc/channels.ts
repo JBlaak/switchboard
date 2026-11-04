@@ -102,6 +102,16 @@ export const INVOKE = {
     planProjectPlans: 'plan:project-plans',
     // The project page (#172)
     projectOverview: 'project:overview',
+    // The merge queue's buttons and errands (#315)
+    queueNudge: 'queue:nudge',
+    queueForgetNudge: 'queue:forget-nudge',
+    queueSettleNudges: 'queue:settle-nudges',
+    queueFix: 'queue:fix',
+    queueRetry: 'queue:retry',
+    queueOptIn: 'queue:opt-in',
+    queueErrandStarted: 'queue:errand-started',
+    queueErrandAbandoned: 'queue:errand-abandoned',
+    queueErrands: 'queue:errands',
 
     // Tasks: BlaakTasks in Switchboard (#248)
     tasksList: 'tasks:list',

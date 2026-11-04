@@ -768,3 +768,52 @@ test('giving up is settled once the check is green again', () => {
     assert.equal(after.service.forSession('s1').byItem.get(PR12), undefined);
     assert.equal(store.rows[0].phase, 'done');
 });
+
+// ── A prompt rendered elsewhere (the merge queue's Fix in session, #315) ──
+
+test('a prompt rendered by its caller is queued on the item, without the page, and typed in when idle', () => {
+    /* Given */
+    const {service, prompter, store} = setup();
+    prompter.goBusy('s1');
+
+    /* When */
+    const result = service.queuePrompt('s1', {
+        itemKey: 'pr:https://github.com/o/app/pull/99',
+        action: 'rebase',
+        repository: REPO,
+        prompt: 'Rebase it for the queue.',
+    });
+    const twice = service.queuePrompt('s1', {
+        itemKey: 'pr:https://github.com/o/app/pull/99',
+        action: 'rebase',
+        repository: REPO,
+        prompt: 'Rebase it for the queue.',
+    });
+    const sentWhileBusy = prompter.sent.length;
+    prompter.goIdle('s1');
+
+    /* Then */
+    assert.deepEqual(result, {ok: true, activityId: 'a1'});
+    assert.deepEqual(twice, {ok: false, reason: 'Already queued'});
+    assert.equal(sentWhileBusy, 0);
+    assert.deepEqual(prompter.sent, [{sessionId: 's1', prompt: 'Rebase it for the queue.'}]);
+    assert.equal(store.rows[0].itemKey, 'pr:https://github.com/o/app/pull/99');
+    assert.equal(service.forSession('s1').byItem.get('pr:https://github.com/o/app/pull/99')?.action, 'rebase');
+});
+
+test('a prompt for a session that is not running is refused', () => {
+    /* Given */
+    const {service, store} = setup();
+
+    /* When */
+    const result = service.queuePrompt('stopped', {
+        itemKey: 'pr:x',
+        action: 'fix-ci',
+        repository: REPO,
+        prompt: 'Fix it.',
+    });
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: NOT_RUNNING_REASON});
+    assert.deepEqual(store.rows, []);
+});

@@ -71,6 +71,7 @@ import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/qui
 import {QuickAskService, quickRouteCall} from '../application/services/quick-ask-service';
 import {TaskLinkService} from '../application/services/task-link-service';
 import {TaskSessionService} from '../application/services/task-session-service';
+import {QueueErrandService, type ErrandOwnerCandidate} from '../application/services/queue-errand-service';
 import {TaskWritesService} from '../application/services/task-writes-service';
 import {TasksService} from '../application/services/tasks-service';
 import {SessionRegistry} from '../application/model/session-registry';
@@ -105,6 +106,7 @@ import {SqliteSettingsStore} from '../infrastructure/sqlite/settings-store';
 import {SqliteActivityStore} from '../infrastructure/sqlite/activity-store';
 import {SqliteAutoFixHistory} from '../infrastructure/sqlite/auto-fix-history';
 import {SqliteTaskLinkStore} from '../infrastructure/sqlite/task-link-store';
+import {SqliteQueueErrandStore} from '../infrastructure/sqlite/queue-errand-store';
 import {McpBlaakTasks} from '../infrastructure/blaaktasks/mcp-blaak-tasks';
 import {openDatabase} from '../infrastructure/sqlite/database';
 import {resolveClaudePaths} from '../infrastructure/fs/claude-paths';
@@ -122,7 +124,8 @@ import {RoutingTranscriptStore} from '../infrastructure/agent/routing-transcript
 import {locateVmSession} from '../application/services/vm-session-location';
 import {SelfArchiveCatchUp} from '../application/services/self-archive-catch-up';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
-import {GhCli, defaultGhRunner} from '../infrastructure/github/gh-cli';
+import {GhCli, defaultGhRunner, type GhRunner} from '../infrastructure/github/gh-cli';
+import {ghQueueLabels} from './gh-queue-labels';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {encodeProjectPath} from '../domain/project/project-path';
 import {isRemoteProjectPath} from '../domain/project/remote-target';
@@ -191,6 +194,8 @@ export interface Container {
     readonly review: ReviewService;
     readonly prWatch: PrWatchService;
     readonly issueSessions: IssueSessionService;
+    /** The merge queue's buttons (#315): Nudge, Fix in session, Retry, Opt in, and their errands. */
+    readonly queueErrands: QueueErrandService;
     /** Removes an archived session's worktrees, when Settings says to. */
     readonly worktreeCleanup: WorktreeCleanupService;
     readonly plans: PlanService;
@@ -719,7 +724,8 @@ export function buildContainer(): Container {
         log,
     });
 
-    const github = new GhCli({run: async (args) => defaultGhRunner(await toolEnv())(args)});
+    const ghRun: GhRunner = async (args) => defaultGhRunner(await toolEnv())(args);
+    const github = new GhCli({run: ghRun});
     // The page and its actions need each other: the actions read the page's
     // items, and the page shows each item's action. Closed with `attach`.
     const sessionActions = new SessionActionService({
@@ -775,38 +781,40 @@ export function buildContainer(): Container {
         clock,
     });
 
-    // Always on, page or no page (W1): the running Claude sessions' PRs, as
-    // their transcripts linked them. Remote sessions are out of scope.
-    const prWatch = new PrWatchService({
-        sessions: () =>
-            registry
-                .snapshot()
-                // Local sessions, and VM sessions (#276 stage 3), whose PR links come
-                // from the transcripts their VMs parse. A session on an agentless
-                // remote has no transcript here at all.
-                .filter(
-                    ([, session]) =>
-                        !session.exited &&
-                        !session.isPlainTerminal &&
-                        (!isRemoteProjectPath(session.projectPath) || isAgentPty(session.pty)),
-                )
-                .map(([sessionId, session]) => {
-                    if (isAgentPty(session.pty)) {
-                        return {
-                            sessionId,
-                            projectPath: session.projectPath,
-                            folder: null,
-                            pullRequests: vmTranscripts.pullRequests(sessionId),
-                        };
-                    }
-                    const cached = repository.getCachedSession(sessionId);
+    // The running Claude sessions' PRs, as their transcripts linked them: what the
+    // CI watch watches, always on, page or no page (W1), and which session owns a
+    // PR for the merge queue's Fix in session. Remote sessions are out of scope.
+    const runningClaudeSessions = (): ErrandOwnerCandidate[] =>
+        registry
+            .snapshot()
+            // Local sessions, and VM sessions (#276 stage 3), whose PR links come
+            // from the transcripts their VMs parse. A session on an agentless
+            // remote has no transcript here at all.
+            .filter(
+                ([, session]) =>
+                    !session.exited &&
+                    !session.isPlainTerminal &&
+                    (!isRemoteProjectPath(session.projectPath) || isAgentPty(session.pty)),
+            )
+            .map(([sessionId, session]) => {
+                if (isAgentPty(session.pty)) {
                     return {
                         sessionId,
                         projectPath: session.projectPath,
-                        folder: cached?.folder ?? encodeProjectPath(session.projectPath),
-                        pullRequests: cached?.pullRequests ?? [],
+                        folder: null,
+                        pullRequests: vmTranscripts.pullRequests(sessionId),
                     };
-                }),
+                }
+                const cached = repository.getCachedSession(sessionId);
+                return {
+                    sessionId,
+                    projectPath: session.projectPath,
+                    folder: cached?.folder ?? encodeProjectPath(session.projectPath),
+                    pullRequests: cached?.pullRequests ?? [],
+                };
+            });
+    const prWatch = new PrWatchService({
+        sessions: runningClaudeSessions,
         github,
         history: new SqliteAutoFixHistory(database.db),
         actions: sessionActions,
@@ -865,6 +873,29 @@ export function buildContainer(): Container {
         clock,
         log,
     });
+
+    // The merge queue's buttons (#315). A session the PR's own transcript linked
+    // gets a fix as a queued action; anything else is an errand the renderer
+    // starts, kept in the database so it stays one across a restart.
+    const queueErrands = new QueueErrandService({
+        running: runningClaudeSessions,
+        sessions: sessionCandidates,
+        store: new SqliteQueueErrandStore(database.db),
+        actions: sessionActions,
+        github,
+        // `gh pr edit` for now; `github` itself once GitHubCli has addLabel/removeLabel.
+        labels: ghQueueLabels(ghRun),
+        git: workspace,
+        transcripts: routedTranscripts,
+        prompter,
+        archiveRequested: (sessionId) => archiveTool.hasRequested(sessionId),
+        archived: (sessionId) => Boolean(repository.getMeta(sessionId)?.archived),
+        ids,
+        clock,
+        log,
+        agentlessRemote,
+    });
+    archiveTool.onTurnEnded((sessionIds, archiving) => queueErrands.turnEnded(sessionIds, archiving));
 
     // Archiving removes the session's worktrees, when Settings says to.
     const worktreeCleanup = new WorktreeCleanupService({
@@ -1131,6 +1162,7 @@ export function buildContainer(): Container {
         prWatch,
         review,
         issueSessions,
+        queueErrands,
         worktreeCleanup,
         plans,
         projectOverview,
