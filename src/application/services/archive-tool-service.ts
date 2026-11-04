@@ -37,15 +37,16 @@ export interface ArchiveToolServiceDeps {
 export class ArchiveToolService {
     private readonly requested = new WeakSet<ActiveSession>();
     /** Others that hear every turn end (the merge queue's errands, for "Needs you"). */
-    private readonly turnFollowers: Array<(sessionIds: string[], archiving: boolean) => void> = [];
+    private readonly turnFollowers: Array<(sessionIds: string[], archiving: boolean, currentId: string) => void> = [];
 
     constructor(private readonly deps: ArchiveToolServiceDeps) {}
 
     /**
-     * Hear each turn end of a running session: every id it has gone by, and
-     * whether it asked to be archived (it is archived right after).
+     * Hear each turn end of a running session: every id it has gone by,
+     * whether it asked to be archived (it is archived right after), and the id
+     * it goes by now, the one it is archived under.
      */
-    public onTurnEnded(fn: (sessionIds: string[], archiving: boolean) => void): void {
+    public onTurnEnded(fn: (sessionIds: string[], archiving: boolean, currentId: string) => void): void {
         this.turnFollowers.push(fn);
     }
 
@@ -87,16 +88,17 @@ export class ArchiveToolService {
         if (!found) return;
         const archiving = this.requested.has(found.session);
         const ids = sessionIds(launchId, found.session, found.key);
+        const current = currentId(found.session, found.key);
         for (const fn of this.turnFollowers) {
             try {
-                fn(ids, archiving);
+                fn(ids, archiving, current);
             } catch (err) {
                 this.deps.log.error('[archive-tool] a turn follower failed:', (err as Error).message);
             }
         }
         if (!archiving) return;
         this.requested.delete(found.session);
-        const sessionId = currentId(found.session, found.key);
+        const sessionId = current;
         const {ok} = this.deps.archiver.archive(sessionId);
         this.deps.log.info(
             `[archive-tool] session=${sessionId} ${ok ? 'archived' : 'could not be stopped; left as it is'}`,

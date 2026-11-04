@@ -229,8 +229,8 @@ test('a turn ending is heard with every id of the session, and whether it asked 
     const session = newSession();
     registry.add('launch-id', session);
     registry.rekey('launch-id', 'real-id');
-    const heard: Array<[string[], boolean]> = [];
-    tool.onTurnEnded((ids, archiving) => heard.push([ids, archiving]));
+    const heard: Array<[string[], boolean, string]> = [];
+    tool.onTurnEnded((ids, archiving, current) => heard.push([ids, archiving, current]));
 
     /* When */
     tool.turnEnded('launch-id');
@@ -240,8 +240,8 @@ test('a turn ending is heard with every id of the session, and whether it asked 
 
     /* Then */
     assert.deepEqual(heard, [
-        [['launch-id', 'real-id'], false],
-        [['launch-id', 'real-id'], true],
+        [['launch-id', 'real-id'], false, 'real-id'],
+        [['launch-id', 'real-id'], true, 'real-id'],
     ]);
     assert.equal(requested, true);
     assert.equal(tool.hasRequested('launch-id'), false, 'archived: the request is spent');

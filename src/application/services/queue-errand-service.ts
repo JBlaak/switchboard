@@ -22,6 +22,11 @@
  * errands across a restart, and `errands` says how far each got: an errand
  * "needs you" once a turn of it ends without it having asked to be archived,
  * and it is at its prompt (or it ended without being archived).
+ *
+ * A fork or plan-accept re-keys an errand's session, and it is archived under
+ * the id it goes by then. So the store follows the session: whenever the
+ * errand is seen running under a new id, and at the end of each turn (just
+ * before an archive), its session id is written over with the current one.
  */
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {QUEUE_LABELS} from '../../domain/project/merge-queue';
@@ -355,10 +360,12 @@ export class QueueErrandService {
     /**
      * A turn of a running session ended (the Stop hook), under any of the ids
      * it has gone by: an errand that did not ask to be archived needs you.
+     * `currentId`, the id it goes by now, is kept as the errand's session.
      */
-    public turnEnded(sessionIds: readonly string[], archiving: boolean): void {
+    public turnEnded(sessionIds: readonly string[], archiving: boolean, currentId?: string): void {
         for (const errand of this.deps.store.all()) {
             if (!errand.sessionId || !sessionIds.includes(errand.sessionId)) continue;
+            if (currentId && currentId !== errand.sessionId) this.deps.store.setSession(errand.id, currentId);
             if (archiving) this.stopped.delete(errand.id);
             else this.stopped.add(errand.id);
         }
@@ -374,14 +381,20 @@ export class QueueErrandService {
         const {prompter} = this.deps;
         return this.liveErrands().map((errand) => {
             const stored = errand.sessionId;
-            const current = stored ? (prompter.runningId(stored) ?? stored) : null;
-            const running = stored !== null && prompter.runningId(stored) !== null;
+            const runningId = stored ? prompter.runningId(stored) : null;
+            // Re-keyed since it was stored: keep the new id, which it is archived under.
+            if (runningId !== null && runningId !== stored) this.deps.store.setSession(errand.id, runningId);
+            const current = runningId ?? stored;
+            const running = runningId !== null;
             const state = errandState({
-                started: stored !== null,
-                archived: stored !== null && (this.deps.archived(stored) || this.deps.archived(current ?? stored)),
+                started: current !== null,
+                archived:
+                    current !== null &&
+                    (this.deps.archived(current) ||
+                        (stored !== null && stored !== current && this.deps.archived(stored))),
                 running,
-                busy: running && prompter.isBusy(stored),
-                archiveRequested: running && this.deps.archiveRequested(stored),
+                busy: running && prompter.isBusy(runningId),
+                archiveRequested: running && this.deps.archiveRequested(runningId),
                 stoppedWithoutArchive: this.stopped.has(errand.id),
             });
             return {...errand, sessionId: current, state};

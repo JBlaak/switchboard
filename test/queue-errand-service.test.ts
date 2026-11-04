@@ -511,6 +511,49 @@ test('an errand reports the id its session goes by now', () => {
     assert.equal(errand.message, nudgeMessage(PR, 'ann'));
 });
 
+test('an errand re-keyed and then archived under its new id is done', () => {
+    /* Given */
+    const {service, prompter, store, archived} = harness();
+    const nudged = service.nudge(nudgeRequest());
+    assert.ok(nudged.ok);
+    service.started(nudged.errandId, 'launch-id');
+    prompter.running.add('forked-id');
+    prompter.moved.set('launch-id', 'forked-id');
+
+    /* When */
+    service.turnEnded(['launch-id', 'forked-id'], true, 'forked-id');
+    prompter.running.delete('forked-id');
+    prompter.moved.clear();
+    archived.add('forked-id');
+    const [errand] = service.errands();
+
+    /* Then */
+    assert.equal(store.rows[0].sessionId, 'forked-id', 'the store follows the re-key');
+    assert.equal(errand.sessionId, 'forked-id');
+    assert.equal(errand.state, 'done');
+});
+
+test('an errand seen running under a new id keeps that id once it has stopped', () => {
+    /* Given */
+    const {service, prompter, store, archived} = harness();
+    const nudged = service.nudge(nudgeRequest());
+    assert.ok(nudged.ok);
+    service.started(nudged.errandId, 'launch-id');
+    prompter.running.add('forked-id');
+    prompter.moved.set('launch-id', 'forked-id');
+
+    /* When */
+    const whileRunning = service.errands()[0].state;
+    prompter.running.delete('forked-id');
+    prompter.moved.clear();
+    archived.add('forked-id');
+    const afterwards = service.errands()[0].state;
+
+    /* Then */
+    assert.equal(store.rows[0].sessionId, 'forked-id');
+    assert.deepEqual([whileRunning, afterwards], ['running', 'done']);
+});
+
 test("another repository's errands are left out", () => {
     /* Given */
     const {service} = harness();

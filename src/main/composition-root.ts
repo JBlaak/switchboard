@@ -893,7 +893,9 @@ export function buildContainer(): Container {
         log,
         agentlessRemote,
     });
-    archiveTool.onTurnEnded((sessionIds, archiving) => queueErrands.turnEnded(sessionIds, archiving));
+    archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
+        queueErrands.turnEnded(sessionIds, archiving, currentId),
+    );
 
     // Archiving removes the session's worktrees, when Settings says to.
     const worktreeCleanup = new WorktreeCleanupService({
