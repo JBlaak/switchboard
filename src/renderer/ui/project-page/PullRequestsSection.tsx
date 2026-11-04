@@ -4,6 +4,9 @@
  * then an "in #n" chip when it closes an issue in a plan (a click expands that
  * plan), its checks and where its review stands. Drafts are dimmed. Show
  * merged adds the merged ones after them. A click, or ↵, opens it on GitHub.
+ * In a repository with a merge queue (#315), an open PR's row carries its
+ * queue pill ("merging · 1st", "queued · 2nd", "queue failed", "kept
+ * rebased"), and an approved one that isn't queued offers + Queue.
  *
  * Which rows are on screen is `page-rows`, shared with the page's keys. Until
  * the first answer the section shimmers; when GitHub had nothing to say it is
@@ -16,6 +19,9 @@ import type {IssueKey} from '../../../domain/plan/model';
 import {checksPill, cursorId, pullRequestsViewOf, reviewText} from './page-rows';
 import {openPullRequestOnGitHub, revealPlan} from './actions';
 import {SectionSkeleton} from './SectionSkeleton';
+import {optInToQueue} from './merge-queue-actions';
+import {queueActionKey} from '../../state/project-page-slice';
+import type {QueuePill} from '../../../domain/project/merge-queue';
 
 export function PullRequestsSection({projectPath}: {projectPath: string}): JSX.Element | null {
     const page = useStore((state) => state.projectPage);
@@ -52,6 +58,7 @@ export function PullRequestsSection({projectPath}: {projectPath: string}): JSX.E
                     const id = cursorId.pullRequest(key);
                     const state = pr.state === 'merged' ? 'merged' : pr.draft ? 'draft' : 'open';
                     const checks = pr.state === 'merged' ? null : checksPill(pr.checks);
+                    const queuePill = pr.state === 'open' ? (github?.mergeQueue?.pills[pr.number] ?? null) : null;
                     const reveal = (e: MouseEvent): void => {
                         e.stopPropagation();
                         if (plan) revealPlan(plan);
@@ -80,6 +87,7 @@ export function PullRequestsSection({projectPath}: {projectPath: string}): JSX.E
                                         in #{plan.number}
                                     </button>
                                 )}
+                                {queuePill && <QueuePillOf pill={queuePill} pr={key} />}
                                 {checks && <span className={'pp-pill is-checks-' + checks.tone}>{checks.text}</span>}
                                 <span className="pp-review">{reviewText(pr)}</span>
                             </span>
@@ -88,6 +96,31 @@ export function PullRequestsSection({projectPath}: {projectPath: string}): JSX.E
                 })}
             </div>
         </section>
+    );
+}
+
+/** A PR's place in the merge queue (#315); + Queue on an approved one that isn't in it. */
+function QueuePillOf({pill, pr}: {pill: QueuePill; pr: IssueKey}): JSX.Element {
+    const action = useStore((state) => state.projectPage.queueActions[queueActionKey('opt-in', pr.number)]);
+    if (pill.kind !== 'queueable') {
+        return (
+            <span className={'pp-pill is-queue-' + pill.kind} title={pill.title}>
+                {pill.text}
+            </span>
+        );
+    }
+    return (
+        <button
+            type="button"
+            className="pp-pill pp-chip is-queue-queueable"
+            title={action?.phase === 'failed' ? action.reason : pill.title}
+            disabled={action?.phase === 'busy'}
+            onClick={(e: MouseEvent) => {
+                e.stopPropagation();
+                void optInToQueue(pr.repository, pr.number);
+            }}>
+            {action?.phase === 'busy' ? 'Queuing…' : pill.text}
+        </button>
     );
 }
 

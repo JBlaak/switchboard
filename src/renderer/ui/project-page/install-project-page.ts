@@ -14,6 +14,11 @@
  * The project's open tasks (#251) are read the same way, only while
  * BlaakTasks is on: as the overview comes on screen, every 60 s, and soon
  * after a session's task or the tasks' links change (a start, Change repo).
+ *
+ * The merge queue's errands (#315) have no push: they are read again with
+ * each full overview whose repository has a queue, after main is told which
+ * held entries wait for a review now. The section's effects are handed in
+ * here too.
  */
 import {dispatch, store} from '../../state/app-store';
 import {projectRoute} from '../../state/main-area-slice';
@@ -30,6 +35,10 @@ import {isVmProjectIn} from '../../state/agent-host-slice';
 import {isStorable, parseStoredOverviews, storedOverviewFor, storedOverviewsWith} from '../../state/stored-overviews';
 import {issueKeyString} from '../../../domain/plan/model';
 import {loadProjectOverview, reloadProjectOverview} from './actions';
+import {followQueueErrands, setMergeQueueEffects} from './merge-queue-actions';
+import {resolveDefaultSessionOptions} from '../../features/dialogs/launch-options';
+import {startClaudeSessionIn} from '../../features/sessions/session-actions';
+import {pulseSessionRow} from '../session-list/pulse';
 import {loadProjectTasks, tasksRequest} from './project-tasks';
 import {recentPlansIn, withRecentPlan} from './recent-plans';
 
@@ -41,6 +50,25 @@ export const TASKS_SETTLE_MS = 250;
 
 /** Start following the route. Answers a teardown. */
 export function installProjectPage(): () => void {
+    setMergeQueueEffects({
+        confirm: (message) => confirm(message),
+        launch: async (directory, projectPath, prompt) => {
+            try {
+                // In the project, or in its worktree already: `--worktree` would make another.
+                const {
+                    worktree: _worktree,
+                    worktreeName: _worktreeName,
+                    ...options
+                } = await resolveDefaultSessionOptions(projectPath);
+                return await startClaudeSessionIn(directory, {...options, initialPrompt: prompt}, {show: false});
+            } catch (err) {
+                return {ok: false, reason: (err as Error).message || 'Could not start the session'};
+            }
+        },
+        pulse: pulseSessionRow,
+        reload: reloadProjectOverview,
+    });
+
     let polling: string | null = null;
     let poll: ReturnType<typeof setInterval> | null = null;
     let tasksFor: string | null = null;
@@ -129,6 +157,12 @@ export function installProjectPage(): () => void {
             const stored = parseStoredOverviews(readStored('localStorage', STORAGE_KEYS.projectOverviews));
             const entry = {overview: event.overview, closed: event.closed, merged: event.merged};
             writeStored('localStorage', STORAGE_KEYS.projectOverviews, storedOverviewsWith(stored, entry));
+        }
+
+        // A full answer with a merge queue: its errands, read again (#315).
+        if (event.type === 'projectOverviewAnswered' && event.plans && state.projectPage.overview === event.overview) {
+            const {repository, github} = event.overview;
+            if (repository && github?.ok && github.mergeQueue) void followQueueErrands(repository, github.mergeQueue);
         }
 
         const page = state.projectPage;

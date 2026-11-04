@@ -10,6 +10,8 @@
  * as `data-cursor-id`. The Pull requests and Worktrees sections (#175) add
  * theirs: a PR (↵ opens it on GitHub) and a worktree (S starts a session there).
  * The Tasks section (#251) adds a task, with the Tasks page's keys on it.
+ * The Merge queue section (#315), over Pull requests, adds its entries as
+ * PRs of their own (↵ opens one on GitHub), under ids of their own.
  *
  * Pure, so it is tested in node.
  */
@@ -31,6 +33,7 @@ import type {
     WorktreeOverview,
 } from '../../../domain/project/overview';
 import type {ProjectPageState} from '../../state/project-page-slice';
+import type {MergeQueue} from '../../../domain/project/merge-queue';
 import type {BlaakTasksResult, TaskDetail, TaskRow} from '../../../domain/tasks/model';
 
 /** How many issues "Not in a plan" lists before "Show N more". */
@@ -61,6 +64,7 @@ export const cursorId = {
     moreLoose: 'loose:more',
     session: (sessionId: string): string => 'session:' + sessionId,
     pullRequest: (pr: IssueKey): string => 'pr:' + issueKeyString(pr),
+    queueEntry: (pr: IssueKey): string => 'queue:' + issueKeyString(pr),
     worktree: (path: string): string => 'worktree:' + path,
     task: (taskId: string): string => 'task:' + taskId,
 };
@@ -193,11 +197,13 @@ export function sessionRows(sessionIds: readonly string[]): PageRow[] {
 
 /**
  * Every row on the page, in the order ↑/↓ walk them: the left column's
- * sections, then the right column's. Pull requests come first, over Plans &
+ * sections, then the right column's. The Merge queue (#315) comes first,
+ * then Pull requests, over Plans &
  * issues, as the page shows them; #251 passes its Tasks rows under Plans &
  * issues, or at the top of the one column of a page without GitHub.
  */
 export function pageRows(sections: {
+    readonly mergeQueue?: readonly PageRow[];
     readonly plans: readonly PageRow[];
     readonly pullRequests?: readonly PageRow[];
     readonly tasks?: readonly PageRow[];
@@ -205,6 +211,7 @@ export function pageRows(sections: {
     readonly worktrees?: readonly PageRow[];
 }): PageRow[] {
     return [
+        ...(sections.mergeQueue ?? []),
         ...(sections.pullRequests ?? []),
         ...sections.plans,
         ...(sections.tasks ?? []),
@@ -283,6 +290,27 @@ export function reviewText(pr: ProjectPullRequest): string {
         default:
             return 'no review yet';
     }
+}
+
+// ── The merge queue (#315) ──
+
+/**
+ * The Merge queue section's cursor rows, in the order it shows them: the
+ * head, the entries behind it, the ones out of the queue, then those whose
+ * status it could not read. Each is its labelled PR; the "Not queued yet"
+ * chips are not rows.
+ */
+export function mergeQueueRows(repository: string, queue: MergeQueue): PageRow[] {
+    const numbers = [
+        ...(queue.head ? [queue.head.number] : []),
+        ...queue.entries.map((entry) => entry.number),
+        ...queue.failed.map((entry) => entry.number),
+        ...queue.unknown.map((entry) => entry.number),
+    ];
+    return numbers.map((number) => {
+        const key: IssueKey = {repository, number};
+        return {kind: 'pull-request', id: cursorId.queueEntry(key), pullRequest: key};
+    });
 }
 
 // ── Worktrees (#175) ──

@@ -56,3 +56,28 @@ function modifiedAt(session: SessionRow): number {
     const at = Date.parse(session.modified);
     return Number.isNaN(at) ? 0 : at;
 }
+
+/**
+ * The session that owns one of `numbers` (a PR, or a stack's members) in
+ * `repository` (`owner/repo`), as far as the cache knows: the newest
+ * unarchived one among the repository's sessions whose transcript linked it
+ * (#315, the merge queue's head). Null when none did.
+ */
+export function pullRequestSession(
+    projects: readonly Project[],
+    repositoryPath: string,
+    repository: string,
+    numbers: readonly number[],
+): SessionRow | null {
+    const owners = repositoryProjects(projects, repositoryPath)
+        .flatMap((project) => project.sessions)
+        .filter(
+            (session) =>
+                !session.archived &&
+                (session.pullRequests ?? []).some(
+                    (pr) => numbers.includes(pr.number) && (pr.repository === '' || pr.repository === repository),
+                ),
+        );
+    owners.sort((a, b) => modifiedAt(b) - modifiedAt(a));
+    return owners[0] ?? null;
+}

@@ -145,7 +145,7 @@ function overviewIssue(
 }
 
 /** A pull request of acme/api, open and passing unless `fields` says otherwise. */
-function overviewPullRequest(
+export function overviewPullRequest(
     number: number,
     title: string,
     headRef: string,

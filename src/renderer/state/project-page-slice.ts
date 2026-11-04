@@ -27,6 +27,11 @@
  * which of its views (`main-area-slice`), and the sessions come from the
  * cached projects.
  *
+ * So is the merge queue's side of the page (#315): the errands Nudge and Fix
+ * in session started in the repository, read again with each overview, and
+ * how each of the queue's buttons is getting on (`queueActions`, by
+ * `queueActionKey`). The queue itself is the overview's.
+ *
  * The events are declared here rather than in `events.ts`, like the session
  * list's, so the page's vocabulary stays in one file.
  */
@@ -37,6 +42,7 @@ import type {ProjectOverview} from '../../domain/project/overview';
 import type {IssueSessionStart} from '../../domain/plan/issue-session';
 import type {TaskRow} from '../../domain/tasks/model';
 import type {StoredOverview} from './stored-overviews';
+import type {QueueErrandView} from '../../domain/project/queue-errands';
 
 export type ProjectPageEvent =
     /** The page opened on `projectPath`, with what it remembered of it. */
@@ -89,7 +95,38 @@ export type ProjectPageEvent =
           projectPath: string;
           rows: readonly TaskRow[];
           sessions: Readonly<Record<string, number>>;
-      };
+      }
+    /** The merge queue's errands in `repository` (#315), as main last answered them. */
+    | {type: 'projectQueueErrandsAnswered'; repository: string; errands: readonly QueueErrandView[]}
+    /** One of the merge queue's buttons was pressed (#315), by `queueActionKey`; and how it went. */
+    | {type: 'projectQueueActionAsked'; key: string}
+    | {type: 'projectQueueActionAnswered'; key: string; outcome: QueueActionOutcome};
+
+/**
+ * How a merge queue button's job ended: done (nothing more to show), handed
+ * to a running session (Fix in session, to the PR's own), done with a note,
+ * or why not.
+ */
+export type QueueActionOutcome =
+    | {readonly phase: 'done'}
+    | {readonly phase: 'sent'; readonly sessionId: string}
+    | {readonly phase: 'note'; readonly text: string}
+    | {readonly phase: 'failed'; readonly reason: string};
+
+/** A merge queue button's state: its job running, or how it ended (anything but plain done). */
+export type QueueActionState = {readonly phase: 'busy'} | Exclude<QueueActionOutcome, {phase: 'done'}>;
+
+/** The merge queue's errands (#315) for one repository. */
+export interface ProjectQueueErrands {
+    readonly repository: string;
+    /** Oldest first, as main answers them. */
+    readonly errands: readonly QueueErrandView[];
+}
+
+/** Which button a `queueActions` entry is: one per job and PR (and reviewer, for a nudge). */
+export function queueActionKey(job: 'nudge' | 'fix' | 'retry' | 'opt-in', number: number, reviewer?: string): string {
+    return job + ':' + number + (reviewer ? ':' + reviewer : '');
+}
 
 /** The project's open tasks (#251), as last read for it. */
 export interface ProjectTasks {
@@ -127,6 +164,10 @@ export interface ProjectPageState extends ProjectPageMemory {
     readonly worktreeStart: ProjectWorktreeStart | null;
     /** The project's open tasks (#251); null until read, and while BlaakTasks is off. */
     readonly tasks: ProjectTasks | null;
+    /** The merge queue's errands in the project's repository (#315); null until read. */
+    readonly queueErrands: ProjectQueueErrands | null;
+    /** The merge queue's buttons that are busy or have something to say, by `queueActionKey`. */
+    readonly queueActions: Readonly<Record<string, QueueActionState>>;
 }
 
 export interface OverviewFrom {
@@ -158,6 +199,8 @@ export const initialProjectPageState: ProjectPageState = {
     showMerged: false,
     worktreeStart: null,
     tasks: null,
+    queueErrands: null,
+    queueActions: {},
 };
 
 export function projectPageReducer(state: ProjectPageState, event: RendererEvent): ProjectPageState {
@@ -183,6 +226,8 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
                 showMerged: false,
                 worktreeStart: null,
                 tasks: state.tasks?.projectPath === event.projectPath ? state.tasks : null,
+                queueErrands: state.projectPath === event.projectPath ? state.queueErrands : null,
+                queueActions: {},
             };
         }
 
@@ -275,6 +320,23 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
             return {...state, cursor, tasks: {...tasks, rows}};
         }
 
+        case 'projectQueueErrandsAnswered':
+            if (state.projectPath === null) return state;
+            return {...state, queueErrands: {repository: event.repository, errands: event.errands}};
+
+        case 'projectQueueActionAsked':
+            if (state.projectPath === null) return state;
+            return {...state, queueActions: {...state.queueActions, [event.key]: {phase: 'busy'}}};
+
+        case 'projectQueueActionAnswered': {
+            if (!(event.key in state.queueActions)) return state;
+            const {[event.key]: _was, ...others} = state.queueActions;
+            return {
+                ...state,
+                queueActions: event.outcome.phase === 'done' ? others : {...others, [event.key]: event.outcome},
+            };
+        }
+
         case 'blaakTasksSwitched':
             return !event.on && state.tasks ? {...state, tasks: null} : state;
 
@@ -288,9 +350,10 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
  * without plans never takes a full one's place: over the full answer to the
  * same options it is dropped, and over the stored answer, or a full one asked
  * before Show closed or Show merged flipped, it brings its fresh parts (pull
- * requests, loose issues, worktrees, running sessions) and leaves the plans,
- * so they never fall back to a skeleton. When GitHub could not be asked, the
- * stored answer's GitHub part stays, marked stale, rather than the message.
+ * requests, loose issues, the merge queue, worktrees, running sessions) and
+ * leaves the plans, so they never fall back to a skeleton. When GitHub could
+ * not be asked, the stored answer's GitHub part stays, marked stale, rather
+ * than the message.
  */
 function overviewAnswered(
     state: ProjectPageState,
@@ -315,7 +378,12 @@ function overviewAnswered(
 function withFreshParts(held: ProjectOverview, answer: ProjectOverview): ProjectOverview {
     const github =
         held.github?.ok && answer.github?.ok
-            ? {...held.github, loose: answer.github.loose, pullRequests: answer.github.pullRequests}
+            ? {
+                  ...held.github,
+                  loose: answer.github.loose,
+                  pullRequests: answer.github.pullRequests,
+                  mergeQueue: answer.github.mergeQueue,
+              }
             : held.github;
     return {...held, worktrees: answer.worktrees, running: answer.running, github};
 }
