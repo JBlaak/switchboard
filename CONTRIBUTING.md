@@ -37,10 +37,35 @@ pixel comparisons. CI does that: the baselines are rendered on a developer's
 Mac, and a runner's macOS version and GPU draw text differently enough to fail
 them. Run the screenshots locally before you push.
 
-**Baselines** live in `e2e/tests/__screenshots__/<spec>/<name>-<light|dark>-darwin.png`,
-one per surface and colour scheme. Update them only for an intended visual
-change, look at every changed image before committing it, and say in the PR
-why it changed. A port that needs a baseline updated has changed the UI.
+**On Linux** the suite runs too, for developing on a Linux box (tested on
+Ubuntu 24.04). Electron needs its GTK and NSS libraries, and the windows need a
+display, which Xvfb gives without putting them on yours:
+
+```bash
+sudo apt install xvfb libgtk-3-0t64 libgbm1 libxss1 libnss3 libasound2t64 \
+    libatk-bridge2.0-0t64 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+    libxrandr2 libpango-1.0-0 libcups2t64 zsh
+npm run build
+xvfb-run -a -s "-screen 0 1920x1080x24" npx playwright test --config e2e/playwright.config.ts
+```
+
+The harness shows the main window there (without focus; nobody sees Xvfb's
+screen), because a window that was never mapped gets no frames on Linux and its
+transitions never finish, and it lets Chromium draw WebGL in software so the
+terminals use the same renderer as on a Mac. Run `npm run build` yourself
+after changing `src/`; `npm run test:e2e` does that and then passes its
+arguments on, so `xvfb-run -a -s "-screen 0 1920x1080x24" npm run test:e2e`
+works as well.
+
+**Baselines** live in `e2e/tests/__screenshots__/<spec>/<name>-<light|dark>-<platform>.png`,
+one per surface and colour scheme and per platform: `-darwin` from a Mac,
+`-linux` from Xvfb. A run only compares against its own platform's, so a
+visual change needs both updated, each on its own platform; if you can only
+render one, say so in the PR. The Linux ones are drawn with the fonts the
+packages above bring in (DejaVu for the terminal); a box with more fonts
+installed may draw a stray glyph differently. Update them only for an intended
+visual change, look at every changed image before committing it, and say in
+the PR why it changed. A port that needs a baseline updated has changed the UI.
 
 **Fixture sessions** are built in code, not committed as JSONL.
 `e2e/fixtures/standard.ts` is the shared fixture: add a session there as one
