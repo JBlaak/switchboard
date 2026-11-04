@@ -123,6 +123,19 @@ test('failure reasons are sorted into kinds', () => {
     assert.equal(failureKind('Something else'), 'other');
 });
 
+test('a reason is about CI only when it says so in whole words', () => {
+    /* Given */
+    const refused = 'GitHub refused the merge: insufficient permissions';
+    const decision = 'The review decision on the latest commit is missing';
+    const cancelled = 'A required check was cancelled';
+
+    /* When */
+    const kinds = [failureKind(refused), failureKind(decision), failureKind(cancelled)];
+
+    /* Then */
+    assert.deepEqual(kinds, ['merge-refused', 'other', 'ci']);
+});
+
 // ── Whether a repository uses it ──
 
 test('a repository uses the queue when a PR carries a queue label or status', () => {

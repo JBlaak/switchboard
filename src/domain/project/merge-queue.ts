@@ -468,7 +468,8 @@ export function failureKind(reason: string): FailureKind {
     if (/conflict/i.test(reason)) return 'conflict';
     if (/changes? requested|requests? changes/i.test(reason)) return 'changes-requested';
     if (/thread/i.test(reason)) return 'unresolved-thread';
-    if (/CI|check|test|cancel|timed? ?out/i.test(reason)) return 'ci';
+    // Whole words only: "insufficient", "decision" and "latest" are not about CI.
+    if (/\bCI\b|\bchecks?\b|\btests?\b|\bcancel(l?ed)?\b|\btimed? ?out\b/i.test(reason)) return 'ci';
     if (/refus|merge/i.test(reason)) return 'merge-refused';
     return 'other';
 }
