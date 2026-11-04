@@ -184,7 +184,11 @@ export interface QueueHead extends QueueEntry {
 export interface QueuedEntry extends QueueEntry {
     /** 2 and up, as shown: the queue's own number, then the held entries after them. */
     position: number;
-    state: {kind: 'queued'} | {kind: 'held'; waitsFor: HeldReason};
+    /**
+     * A held entry's `member` is the stack member it waits on (the queue's
+     * `#N: …`); null when it is the labelled PR itself.
+     */
+    state: {kind: 'queued'} | {kind: 'held'; waitsFor: HeldReason; member: number | null};
     /** One sentence on why it is where it is. */
     sentence: string;
     /** Ms until it merges; null when held, or without estimates. */
@@ -318,7 +322,7 @@ export function mergeQueue(input: MergeQueueInput): MergeQueue {
 
     let head: QueueHead | null = null;
     const queued: {entry: QueueEntry; position: number}[] = [];
-    const held: {entry: QueueEntry; waitsFor: HeldReason}[] = [];
+    const held: {entry: QueueEntry; waitsFor: HeldReason; member: number | null}[] = [];
     const failed: FailedEntry[] = [];
     const outside: OutsideEntry[] = [];
     const unknown: UnknownEntry[] = [];
@@ -336,7 +340,7 @@ export function mergeQueue(input: MergeQueueInput): MergeQueue {
         }
         if (!status) {
             // Labelled, but no pass has written its status yet: it waits in the queue's order.
-            held.push({entry, waitsFor: {kind: 'approval'}});
+            held.push({entry, waitsFor: {kind: 'approval'}, member: null});
             continue;
         }
         switch (status.kind) {
@@ -347,7 +351,7 @@ export function mergeQueue(input: MergeQueueInput): MergeQueue {
                 queued.push({entry, position: status.position});
                 break;
             case 'held':
-                held.push({entry, waitsFor: status.waitsFor});
+                held.push({entry, waitsFor: status.waitsFor, member: parsed?.member ?? null});
                 break;
             case 'outside':
                 outside.push(outsideEntry(pr, status.why));
@@ -386,12 +390,12 @@ export function mergeQueue(input: MergeQueueInput): MergeQueue {
             estimateMs: runMs === null ? null : elapsed,
         });
     }
-    for (const {entry, waitsFor} of held.sort((a, b) => a.entry.number - b.entry.number)) {
+    for (const {entry, waitsFor, member} of held.sort((a, b) => a.entry.number - b.entry.number)) {
         entries.push({
             ...entry,
             position: position++,
-            state: {kind: 'held', waitsFor},
-            sentence: heldSentence(waitsFor),
+            state: {kind: 'held', waitsFor, member},
+            sentence: heldSentence(waitsFor, member),
             estimateMs: null,
         });
     }
@@ -494,10 +498,11 @@ function queuedSentence(entry: QueueEntry): string {
     return 'Approved · its CI is paused until it is the head, so it costs no run now';
 }
 
-function heldSentence(waitsFor: HeldReason): string {
+function heldSentence(waitsFor: HeldReason, member: number | null): string {
+    const on = member === null ? '' : ` #${member}`;
     return waitsFor.kind === 'review'
-        ? `Held — keeps its place, passed over until @${waitsFor.reviewer} reviews`
-        : 'Held — keeps its place, passed over until it is approved';
+        ? `Held — keeps its place, passed over until @${waitsFor.reviewer} reviews${on}`
+        : `Held — keeps its place, passed over until${on || ' it'} is approved`;
 }
 
 function outsideEntry(pr: QueuePullRequest, why: OutsideReason): OutsideEntry {

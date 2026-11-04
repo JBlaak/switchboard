@@ -194,10 +194,38 @@ test('a held entry comes after the numbered ones, says whom it waits for, and ge
     const last = queue.entries.at(-1)!;
     assert.equal(last.number, 4);
     assert.equal(last.position, 3);
-    assert.deepEqual(last.state, {kind: 'held', waitsFor: {kind: 'review', reviewer: 'sam', team: false}});
+    assert.deepEqual(last.state, {
+        kind: 'held',
+        waitsFor: {kind: 'review', reviewer: 'sam', team: false},
+        member: null,
+    });
     assert.match(last.sentence, /until @sam reviews/);
     assert.equal(last.estimateMs, null);
     assert.equal(queue.counts.held, 1);
+});
+
+test('a stack held on one of its members names that member', () => {
+    /* Given */
+    const bottom = pr(10, {headRef: 'a', labels: [QUEUE_LABELS.withStack], review: 'review_required'});
+    const top = pr(12, {
+        headRef: 'c',
+        baseRef: 'a',
+        labels: [QUEUE_LABELS.optIn],
+        automerge: pending('#10: Waits for a review by @sam'),
+    });
+
+    /* When */
+    const queue = mergeQueue(input([HEAD, top, bottom]));
+
+    /* Then */
+    const entry = queue.entries[0];
+    assert.equal(entry.number, 12);
+    assert.deepEqual(entry.state, {
+        kind: 'held',
+        waitsFor: {kind: 'review', reviewer: 'sam', team: false},
+        member: 10,
+    });
+    assert.match(entry.sentence, /until @sam reviews #10/);
 });
 
 test('automerge:next shows on its entry', () => {
