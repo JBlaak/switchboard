@@ -49,6 +49,7 @@ import type {SessionCheckout} from '../../domain/agent/session-handoff';
 import {isRemoteProjectPath, parseRemoteProjectPath} from '../../domain/project/remote-target';
 import type {RemoteConfig} from '../../domain/project/remote-target';
 import type {Session} from '../../domain/session/session';
+import {parseTranscriptLine} from '../../domain/session/transcript';
 import type {Clock, Timers} from '../ports/clock';
 import type {Disposable} from '../ports/git-workspace';
 import type {HandoffGit} from '../ports/handoff-git';
@@ -76,6 +77,19 @@ export const STOP_WAIT_MS = STOP_ESCALATE_MS + STOP_GIVE_UP_MS + 2000;
 
 /** The most of a transcript one hand-off carries; past it, the upload would not be the right tool. */
 export const TRANSCRIPT_CAP_BYTES = 256 * 1024 * 1024;
+
+/** How much of a transcript's end is read for its `cwd` when no line carries a branch. */
+const CWD_TAIL_BYTES = 1024 * 1024;
+
+/** The `cwd` of the last line that names one; a line cut off by the tail read parses as nothing. */
+function lastCwd(raw: string): string | null {
+    const lines = raw.split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+        const entry = parseTranscriptLine(lines[i]) as {cwd?: unknown} | null;
+        if (entry && typeof entry.cwd === 'string' && entry.cwd) return entry.cwd;
+    }
+    return null;
+}
 
 /** A running session, as far as the hand-off reads it. */
 export interface HandoffSessionView {
@@ -323,6 +337,14 @@ export class SessionHandoffService implements SessionHandoff {
                 transcript = {folder, cwd: written[written.length - 1].cwd};
                 break;
             }
+        }
+        // Locations leave out lines written on a detached HEAD, so a session
+        // that has only worked on one has none. Its lines still name the
+        // checkout, and git below says whether it is on a branch by now.
+        for (const folder of new Set(folders)) {
+            if (transcript) break;
+            const cwd = lastCwd(transcripts.readTail(folder, id, CWD_TAIL_BYTES));
+            if (cwd) transcript = {folder, cwd};
         }
         if (!transcript) return {error: 'This session has no transcript on this Mac yet.'};
         const {folder, cwd} = transcript;

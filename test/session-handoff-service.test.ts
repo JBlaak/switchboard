@@ -58,12 +58,12 @@ function artifact(text: string) {
 }
 
 /** A repository at LOCAL with a Claude worktree, both clean but for one unpushed commit. */
-function fakeGit(): HandoffGit {
+function fakeGit(localBranch: string | null = 'main'): HandoffGit {
     const tops: Record<string, string> = {[LOCAL]: LOCAL, [WORKTREE]: WORKTREE, [`${WORKTREE}/src`]: WORKTREE};
     return {
         repositoryRoot: async (cwd) => tops[cwd] ?? null,
         commonDir: async (cwd) => (tops[cwd] ? `${LOCAL}/.git` : null),
-        currentBranch: async (root) => (root === WORKTREE ? 'fix-login' : 'main'),
+        currentBranch: async (root) => (root === WORKTREE ? 'fix-login' : localBranch),
         headOid: async (root) => (root === WORKTREE ? 'wt999' : 'abc123'),
         originUrl: async () => 'git@github.com:joris/site.git',
         unpushedCount: async () => 1,
@@ -107,9 +107,20 @@ interface HarnessOptions {
     busy?: boolean;
     cwd?: string;
     folder?: string;
+    /** False for a transcript written only on a detached HEAD, which names no location. */
+    located?: boolean;
+    /** The branch LOCAL's checkout is on now; null for a detached HEAD. */
+    localBranch?: string | null;
 }
 
-function harness({live = liveSession(), busy = false, cwd = LOCAL, folder = FOLDER}: HarnessOptions = {}) {
+function harness({
+    live = liveSession(),
+    busy = false,
+    cwd = LOCAL,
+    folder = FOLDER,
+    located = true,
+    localBranch = 'main',
+}: HarnessOptions = {}) {
     const order: string[] = [];
     const agent = scriptedAgent();
     const script = {
@@ -203,7 +214,7 @@ function harness({live = liveSession(), busy = false, cwd = LOCAL, folder = FOLD
         },
     };
 
-    const git = fakeGit();
+    const git = fakeGit(localBranch);
     const projects = new ProjectHandoffService({
         agents: {connection: connectionFor},
         git,
@@ -241,7 +252,7 @@ function harness({live = liveSession(), busy = false, cwd = LOCAL, folder = FOLD
 
     const opened: OpenSessionRequest[] = [];
     const renderer = fakeRenderer();
-    const locations: TranscriptLocation[] = [{cwd, branch: 'main', fromSubagent: false}];
+    const locations: TranscriptLocation[] = located ? [{cwd, branch: 'main', fromSubagent: false}] : [];
     const service = new SessionHandoffService({
         registry: {
             find: (id) => {
@@ -317,6 +328,30 @@ test('a preview of an idle session gives its checkout, counts and candidates', a
         candidates: [{path: '.env', size: 9, ticked: true}],
         busy: false,
     });
+});
+
+test('a session written on a detached HEAD previews once its checkout is on a branch', async () => {
+    /* Given */
+    const h = harness({located: false});
+
+    /* When */
+    const preview = await h.service.preview('s1');
+
+    /* Then */
+    assert.ok(!('error' in preview));
+    assert.equal(preview.localPath, LOCAL);
+    assert.equal(preview.branch, 'main');
+});
+
+test('a session whose checkout is still on a detached HEAD is told to check out a branch', async () => {
+    /* Given */
+    const h = harness({located: false, localBranch: null});
+
+    /* When */
+    const preview = await h.service.preview('s1');
+
+    /* Then */
+    assert.deepEqual(preview, {error: 'This repository is on a detached HEAD; check out a branch first.'});
 });
 
 test('a preview of a busy session in a worktree names the worktree and says it would wait', async () => {
