@@ -21,7 +21,11 @@
  * - **Off screen.** The window is created hidden and the app never takes
  *   focus, so a run leaves the desktop usable. Native confirm/alert boxes
  *   would still pop up, so they are stubbed too (native-dialogs.ts). SB_E2E_HEADED=1 shows the
- *   windows, for watching a test.
+ *   windows, for watching a test. On Linux the main window is shown all the
+ *   same, without focus: a window that was never mapped gets no frames there,
+ *   so its CSS transitions and animations never run and every test that waits
+ *   on one hangs. The suite runs under xvfb-run on Linux, whose display nobody
+ *   sees, and the app still behaves as hidden (it shows and focuses nothing).
  * - **The shell.** SHELL is pinned to zsh so the profile that puts the fakes
  *   on PATH is the one that runs, whatever the host's login shell is.
  */
@@ -38,6 +42,13 @@ const REPO_ROOT = path.join(__dirname, '..', '..');
 
 /** The renderer's viewport. Matches HARNESS_SETTINGS.windowBounds. */
 export const WINDOW_SIZE = {width: 1280, height: 800} as const;
+
+/**
+ * Chromium switches a Linux run needs. Under Xvfb there is no GPU, and without
+ * one Chromium refuses WebGL unless told to draw it in software (SwiftShader),
+ * so the terminals would fall back to the DOM renderer a Mac never uses.
+ */
+const LINUX_ARGS = process.platform === 'linux' ? ['--enable-unsafe-swiftshader'] : [];
 
 /** Variables from the runner's environment that must not reach the app. */
 const STRIPPED_ENV = [
@@ -87,6 +98,7 @@ export async function launchApp(
         args: [
             '--force-device-scale-factor=1',
             '--force-prefers-reduced-motion',
+            ...LINUX_ARGS,
             path.join(REPO_ROOT, 'app', 'main.js'),
         ],
         cwd: REPO_ROOT,
@@ -161,11 +173,25 @@ async function quit(app: ElectronApplication): Promise<void> {
 /** Wait until no window's page is still loading. */
 async function waitForWindowsLoaded(app: ElectronApplication): Promise<void> {
     const deadline = Date.now() + QUIT_TIMEOUT_MS;
-    while (
-        await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows().some((w) => w.webContents.isLoading()))
-    ) {
+    while (await anyWindowLoading(app)) {
         if (Date.now() > deadline) throw new Error('a window never finished loading');
         await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+}
+
+/**
+ * Whether a window's page is still loading. Asked this early, just after
+ * launch, Playwright now and then loses the answer ("Resulting promise was
+ * garbage collected"); that counts as still loading, so it is asked again.
+ */
+async function anyWindowLoading(app: ElectronApplication): Promise<boolean> {
+    try {
+        return await app.evaluate(({BrowserWindow}) =>
+            BrowserWindow.getAllWindows().some((w) => w.webContents.isLoading()),
+        );
+    } catch (err) {
+        if (err instanceof Error && err.message.includes('promise was garbage collected')) return true;
+        throw err;
     }
 }
 
@@ -193,6 +219,7 @@ async function settleWindow(app: ElectronApplication, page: Page, fakeTimers: bo
         const window = BrowserWindow.getAllWindows().find((w) => !w.webContents.getURL().includes('/quick-ask/'))!;
         window.setContentSize(size.width, size.height);
         window.center();
+        if (process.platform === 'linux' && !window.isVisible()) window.showInactive();
     }, WINDOW_SIZE);
 
     await page.context().addInitScript(stubNativeDialogs);
