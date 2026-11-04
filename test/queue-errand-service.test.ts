@@ -86,9 +86,10 @@ function harness({
     const logRequests: string[] = [];
     const archiveRequested = new Set<string>();
     const archived = new Set<string>();
+    const labelAnswer: {value: GitHubWrite} = {value: {ok: true}};
     const write = async (what: string): Promise<GitHubWrite> => {
         labelWrites.push(what);
-        return {ok: true};
+        return labelAnswer.value;
     };
     const service = new QueueErrandService({
         running: () => running,
@@ -115,7 +116,19 @@ function harness({
         clock: {now: () => now.value},
         log: silentLog,
     });
-    return {service, store, prompter, git, now, actionStore, labelWrites, logRequests, archiveRequested, archived};
+    return {
+        service,
+        store,
+        prompter,
+        git,
+        now,
+        actionStore,
+        labelWrites,
+        labelAnswer,
+        logRequests,
+        archiveRequested,
+        archived,
+    };
 }
 
 function nudgeRequest(reviewer = 'ann') {
@@ -154,6 +167,30 @@ test('Retry removes automerge:failed and Opt in adds automerge:opt-in, and nothi
     /* Then */
     assert.deepEqual([retried, optedIn], [{ok: true}, {ok: true}]);
     assert.deepEqual(labelWrites, ['remove o/app#2270 automerge:failed', 'add o/app#2271 automerge:opt-in']);
+});
+
+test('Retry on a PR the queue already took automerge:failed off is fine', async () => {
+    /* Given */
+    const {service, labelAnswer} = harness();
+    labelAnswer.value = {ok: false, reason: 'Label does not exist'};
+
+    /* When */
+    const retried = await service.retry(REPO, 2270);
+
+    /* Then */
+    assert.deepEqual(retried, {ok: true});
+});
+
+test('Retry reports any other failure to write the label', async () => {
+    /* Given */
+    const {service, labelAnswer} = harness();
+    labelAnswer.value = {ok: false, reason: 'gh is not signed in'};
+
+    /* When */
+    const retried = await service.retry(REPO, 2270);
+
+    /* Then */
+    assert.deepEqual(retried, {ok: false, reason: 'gh is not signed in'});
 });
 
 // ── Nudge ──

@@ -125,7 +125,6 @@ import {locateVmSession} from '../application/services/vm-session-location';
 import {SelfArchiveCatchUp} from '../application/services/self-archive-catch-up';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner, type GhRunner} from '../infrastructure/github/gh-cli';
-import {ghQueueLabels} from './gh-queue-labels';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {encodeProjectPath} from '../domain/project/project-path';
 import {isRemoteProjectPath} from '../domain/project/remote-target';
@@ -883,8 +882,7 @@ export function buildContainer(): Container {
         store: new SqliteQueueErrandStore(database.db),
         actions: sessionActions,
         github,
-        // `gh pr edit` for now; `github` itself once GitHubCli has addLabel/removeLabel.
-        labels: ghQueueLabels(ghRun),
+        labels: github,
         git: workspace,
         transcripts: routedTranscripts,
         prompter,

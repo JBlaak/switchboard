@@ -117,9 +117,14 @@ export class QueueErrandService {
 
     // ── Retry and Opt in: the only labels ever written ──
 
-    /** Retry: take `automerge:failed` off, so the queue takes the PR back. */
-    public retry(repository: string, number: number): Promise<GitHubWrite> {
-        return this.deps.labels.removeLabel(repository, number, QUEUE_LABELS.failed);
+    /**
+     * Retry: take `automerge:failed` off, so the queue takes the PR back. A
+     * label that is already gone (the queue took it off itself) is not a failure.
+     */
+    public async retry(repository: string, number: number): Promise<GitHubWrite> {
+        const written = await this.deps.labels.removeLabel(repository, number, QUEUE_LABELS.failed);
+        if (!written.ok && /label does not exist/i.test(written.reason)) return {ok: true};
+        return written;
     }
 
     /** Opt in: put `automerge:opt-in` on, so the queue takes the PR. */
