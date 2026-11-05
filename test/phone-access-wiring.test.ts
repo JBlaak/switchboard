@@ -429,6 +429,7 @@ test('a phone pairs with the code on the Mac, is confirmed, and reconnects enrol
         protocol: PROTOCOL_VERSION,
         macName: 'Joris’s MacBook Pro',
         deviceId: accepted.deviceId,
+        addresses: ['127.0.0.1'],
     });
     assert.deepEqual(
         list.sessions.map((session) => [session.id, session.owner]),

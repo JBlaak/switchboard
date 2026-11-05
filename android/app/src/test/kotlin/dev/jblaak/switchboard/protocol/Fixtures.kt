@@ -58,7 +58,12 @@ private const val SWITCHBOARD_PATH = "/Users/joris/Development/switchboard"
 private val pixel = TerminalOwner.Device(deviceId = "d-7", name = "Pixel 9")
 
 internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
-    "welcome" to ServerMessage.Welcome(protocol = 1, macName = "Joris MacBook Pro", deviceId = "d-7"),
+    "welcome" to ServerMessage.Welcome(
+        protocol = 1,
+        macName = "Joris MacBook Pro",
+        deviceId = "d-7",
+        addresses = listOf("192.168.1.20", "10.8.0.3"),
+    ),
     "pairing" to ServerMessage.Pairing(protocol = 1, macName = "Joris MacBook Pro"),
     "pair-pending" to ServerMessage.PairPending,
     "pair-accepted" to ServerMessage.PairAccepted(deviceId = "d-7"),
