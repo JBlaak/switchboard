@@ -117,6 +117,7 @@ function overview(plans = true, fields: Partial<ProjectOverview> = {}): ProjectO
             fetchedAt: 1_000,
             stale: false,
             plansPending: !plans,
+            mergeQueue: null,
             ...groups,
             plans: plans ? groups.plans : [],
         },

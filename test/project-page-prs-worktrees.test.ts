@@ -180,7 +180,7 @@ function overview(fields: Partial<ProjectOverview> = {}): ProjectOverview {
         projectPath: APP,
         remote: false,
         repository: REPO,
-        github: {ok: true, fetchedAt: 0, stale: false, plansPending: false, ...groups},
+        github: {ok: true, fetchedAt: 0, stale: false, plansPending: false, mergeQueue: null, ...groups},
         worktrees: WORKTREES,
         running: ['s1'],
         ...fields,

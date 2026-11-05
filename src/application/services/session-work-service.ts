@@ -41,7 +41,7 @@ import type {
 import type {ActionContext, SessionActivities, WorkPageSource} from './session-action-service';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {Disposable, GitWorkspace} from '../ports/git-workspace';
-import type {GitHubCli, PlanReads, ProjectReads} from '../ports/github-cli';
+import type {GitHubCli, PlanReads, ProjectReads, QueueLabelWrites} from '../ports/github-cli';
 import type {GitRemotes} from '../ports/git-remotes';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
@@ -76,6 +76,7 @@ export interface SessionWorkServiceDeps {
         | 'addPendingComment'
         | 'deletePendingReview'
         | 'submitPendingReview'
+        | QueueLabelWrites
         | PlanReads
         | ProjectReads
     >;

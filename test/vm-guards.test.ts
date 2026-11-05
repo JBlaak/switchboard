@@ -53,6 +53,10 @@ function vmGit(calls: string[]) {
             calls.push('worktrees ' + root);
             return [];
         },
+        async defaultBranch(root: string) {
+            calls.push('defaultBranch ' + root);
+            return 'main';
+        },
     };
 }
 
@@ -131,6 +135,7 @@ function overview(calls: string[]) {
             available: async () => 'ok',
             issuesIn: async () => [],
             pullRequestsIn: async () => [],
+            ciRunDurations: async () => [],
         },
         clock,
         agentlessRemote: agentless,

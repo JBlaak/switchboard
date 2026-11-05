@@ -25,10 +25,20 @@
  * its own key. The page asks that and the full answer at once, so its pull
  * requests show before its plans. The two share their `gh` and git reads
  * while both are in flight, so asking both costs no second read.
+ *
+ * The merge queue (#315) is read with the rest and kept with it: the open
+ * PRs' queue reads come in the same `gh` request as the PRs, and only a
+ * repository whose PRs show the queue has its CI run durations read (one
+ * more `gh` call) and its default branch asked of git. The queue itself is
+ * worked out per answer, against the clock, so its estimates count down
+ * while the reads are cached. It is on the `plans: false` answer too. Run
+ * durations that could not be read leave the queue without estimates rather
+ * than failing the answer.
  */
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {gitHubRepository} from '../../domain/project/repo-url';
 import {groupOverview, type OverviewPlanSource} from '../../domain/plan/project-overview';
+import {mergeQueue, usesMergeQueue, type QueuePullRequest} from '../../domain/project/merge-queue';
 import type {Plan} from '../../domain/plan/model';
 import type {
     GitHubUnavailableReason,
@@ -61,7 +71,7 @@ export interface ProjectOverviewServiceDeps {
     owners: Pick<IssueSessionService, 'issueSessions'>;
     /** The Claude sessions running now; plain terminals are not sessions. */
     running(): RunningSession[];
-    git: Pick<GitWorkspace, 'worktreeRoot' | 'worktrees'>;
+    git: Pick<GitWorkspace, 'worktreeRoot' | 'worktrees' | 'defaultBranch'>;
     remotes: GitRemotes;
     github: Pick<GitHubCli, 'available' | ProjectReads>;
     clock: Clock;
@@ -79,6 +89,15 @@ interface GitHubReads {
     issues: ProjectIssue[];
     /** Open ones, and merged ones when asked for. */
     pullRequests: ProjectPullRequest[];
+    /** What the merge queue is worked out from; null when the repository does not use one. */
+    queue: QueueReads | null;
+}
+
+/** A merge queue's reads: everything `mergeQueue` takes but the time. */
+interface QueueReads {
+    trunk: string;
+    pullRequests: QueuePullRequest[];
+    ciRunDurationsMs: number[];
 }
 
 export class ProjectOverviewService {
@@ -97,10 +116,12 @@ export class ProjectOverviewService {
                 available: () => github.available(),
                 issuesIn: inFlightShared((repository, options) => github.issuesIn(repository, options)),
                 pullRequestsIn: inFlightShared((repository, options) => github.pullRequestsIn(repository, options)),
+                ciRunDurations: inFlightShared((repository) => github.ciRunDurations(repository)),
             },
             git: {
                 worktreeRoot: (cwd) => git.worktreeRoot(cwd),
                 worktrees: inFlightShared((root) => git.worktrees(root)),
+                defaultBranch: inFlightShared((root) => git.defaultBranch(root)),
             },
         };
     }
@@ -131,7 +152,7 @@ export class ProjectOverviewService {
 
         const [checkouts, github] = await Promise.all([
             root ? this.deps.git.worktrees(root) : Promise.resolve<WorktreeSummary[]>([]),
-            repository ? this.github(projectPath, repository, running, options) : Promise.resolve(null),
+            root && repository ? this.github(projectPath, root, repository, running, options) : Promise.resolve(null),
         ]);
 
         const worktrees = sessionsByWorktree(checkouts, running);
@@ -146,6 +167,7 @@ export class ProjectOverviewService {
 
     private async github(
         projectPath: string,
+        root: string,
         repository: string,
         running: RunningSession[],
         options: ProjectOverviewOptions,
@@ -159,7 +181,9 @@ export class ProjectOverviewService {
             : `${repository}:no-plans:${merged ? 'merged' : 'open'}`;
 
         const fresh = await this.reads(key, () =>
-            withPlans ? this.read(projectPath, repository, closed, merged) : this.readWithoutPlans(repository, merged),
+            withPlans
+                ? this.read(projectPath, root, repository, closed, merged)
+                : this.readWithoutPlans(root, repository, merged),
         );
         if (fresh) this.last.set(key, fresh);
         const reads = fresh ?? this.last.get(key);
@@ -179,6 +203,7 @@ export class ProjectOverviewService {
             fetchedAt: reads.fetchedAt,
             stale: fresh === null,
             plansPending: !withPlans,
+            mergeQueue: reads.queue ? mergeQueue({...reads.queue, now: this.deps.clock.now()}) : null,
             ...groups,
             // Grouped without plans, an issue with sub-issues stands as an unlevelled plan: not shown until the plans are read.
             plans: withPlans ? groups.plans : [],
@@ -188,6 +213,7 @@ export class ProjectOverviewService {
     /** Everything `gh` is asked for one answer; null when any of it could not be read. */
     private async read(
         projectPath: string,
+        root: string,
         repository: string,
         closed: boolean,
         merged: boolean,
@@ -197,7 +223,7 @@ export class ProjectOverviewService {
         const [summaries, issues, pullRequests] = await Promise.all([
             plans.projectPlans(projectPath, {closed}),
             github.issuesIn(repository, {closed: false}),
-            github.pullRequestsIn(repository, {merged}),
+            this.pullRequestsWithQueue(root, repository, merged),
         ]);
         if (!summaries || !issues || !pullRequests) return null;
 
@@ -213,25 +239,62 @@ export class ProjectOverviewService {
             fetchedAt,
             plans: sources,
             issues: issues.map((issue) => projectIssue(issue, repository)),
-            pullRequests: pullRequests.map((pr) => projectPullRequest(pr, repository)),
+            pullRequests: pullRequests.prs.map((pr) => projectPullRequest(pr, repository)),
+            queue: pullRequests.queue,
         };
     }
 
     /** The issues and PRs alone, for an answer without plans; null when either could not be read. */
-    private async readWithoutPlans(repository: string, merged: boolean): Promise<GitHubReads | null> {
+    private async readWithoutPlans(root: string, repository: string, merged: boolean): Promise<GitHubReads | null> {
         const {github, clock} = this.deps;
         const fetchedAt = clock.now();
         const [issues, pullRequests] = await Promise.all([
             github.issuesIn(repository, {closed: false}),
-            github.pullRequestsIn(repository, {merged}),
+            this.pullRequestsWithQueue(root, repository, merged),
         ]);
         if (!issues || !pullRequests) return null;
         return {
             fetchedAt,
             plans: [],
             issues: issues.map((issue) => projectIssue(issue, repository)),
-            pullRequests: pullRequests.map((pr) => projectPullRequest(pr, repository)),
+            pullRequests: pullRequests.prs.map((pr) => projectPullRequest(pr, repository)),
+            queue: pullRequests.queue,
         };
+    }
+
+    /** The PRs, and the merge queue's reads once they are in; null when the PRs could not be read. */
+    private async pullRequestsWithQueue(
+        root: string,
+        repository: string,
+        merged: boolean,
+    ): Promise<{prs: RepositoryPullRequest[]; queue: QueueReads | null} | null> {
+        const prs = await this.deps.github.pullRequestsIn(repository, {merged});
+        return prs ? {prs, queue: await this.queueReads(root, repository, prs)} : null;
+    }
+
+    /**
+     * The merge queue's reads, from the open PRs: null when none of them shows
+     * the queue, and otherwise the trunk and the CI run durations besides.
+     *
+     * Only the open PRs `pullRequestsIn` read count: the 50 most recently
+     * updated (PULL_REQUESTS_PER_REPOSITORY). In a repository with more open
+     * PRs than that, a queued PR nobody has touched for a while is not seen:
+     * the queue shows without it, and a stack whose lower member was cut off
+     * starts at the lowest member that was read. The queue itself still works
+     * on every PR; only what the page shows is cut off.
+     */
+    private async queueReads(
+        root: string,
+        repository: string,
+        pullRequests: RepositoryPullRequest[],
+    ): Promise<QueueReads | null> {
+        const open = pullRequests.filter((pr) => pr.state === 'open').map(queuePullRequest);
+        if (!usesMergeQueue(open)) return null;
+        const [trunk, durations] = await Promise.all([
+            this.deps.git.defaultBranch(root),
+            this.deps.github.ciRunDurations(repository).catch(() => null),
+        ]);
+        return {trunk, pullRequests: open, ciRunDurationsMs: durations ?? []};
     }
 
     /** Why `gh` could not answer: it is missing, signed out, or GitHub was not reached. */
@@ -284,7 +347,16 @@ function projectIssue(issue: RepositoryIssue, repository: string): ProjectIssue 
 }
 
 function projectPullRequest(pr: RepositoryPullRequest, repository: string): ProjectPullRequest {
-    return {...pr, closes: pr.closes.filter((issue) => issue.repository === repository).map((issue) => issue.number)};
+    const {queue: _queue, ...rest} = pr;
+    return {
+        ...rest,
+        closes: pr.closes.filter((issue) => issue.repository === repository).map((issue) => issue.number),
+    };
+}
+
+function queuePullRequest(pr: RepositoryPullRequest): QueuePullRequest {
+    const {number, title, headRef, draft, review} = pr;
+    return {number, title, headRef, draft, review, ...pr.queue};
 }
 
 /**
