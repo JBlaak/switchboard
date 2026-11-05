@@ -10,8 +10,7 @@
  * is there and when it merges; a stack lists its members bottom-up, and a
  * held entry waiting for a review offers Nudge <reviewer>. Out of the queue,
  * in red, the failed entries with the queue's reason, Fix in session and
- * Retry; then the PRs the queue could not be read for, in its own words; and
- * a strip of what is not queued yet, with Opt in on the approved ones.
+ * Retry; then the PRs the queue could not be read for, in its own words.
  *
  * Each entry is a cursor row (↵, or a click, opens it on GitHub). What it
  * says is `merge-queue-view`; what its buttons do, `merge-queue-actions`.
@@ -24,7 +23,6 @@ import {queueActionKey, type QueueActionState} from '../../state/project-page-sl
 import type {
     EntryMember,
     FailedEntry,
-    MergeQueue,
     QueueHead,
     QueuedEntry,
     UnknownEntry,
@@ -33,7 +31,7 @@ import type {QueueErrandView} from '../../../domain/project/queue-errands';
 import type {IssueKey} from '../../../domain/plan/model';
 import {cursorId} from './page-rows';
 import {openProjectSession, openPullRequestOnGitHub} from './actions';
-import {fixInSession, nudgeReviewer, optInToQueue, retryQueueEntry} from './merge-queue-actions';
+import {fixInSession, nudgeReviewer, retryQueueEntry} from './merge-queue-actions';
 import {
     approvedText,
     clockTime,
@@ -118,7 +116,6 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
                         </div>
                     </>
                 )}
-                {queue.outside.length > 0 && <OutsideStrip queue={queue} context={context} />}
             </div>
         </section>
     );
@@ -441,41 +438,6 @@ function UnknownRow({entry, context}: {entry: UnknownEntry; context: Context}): 
                 <TitleLine title={entry.title} number={entry.number} />
                 <span className="pp-mq-sentence">{entry.text}</span>
             </span>
-        </div>
-    );
-}
-
-/** Not queued yet: a chip for each PR (a click opens it), and Opt in on the approved ones. */
-function OutsideStrip({queue, context}: {queue: MergeQueue; context: Context}): JSX.Element {
-    return (
-        <div className="pp-mq-outside">
-            <span>Not queued yet:</span>
-            {queue.outside.map((entry) => {
-                const optIn = context.actions[queueActionKey('opt-in', entry.number)];
-                return (
-                    <span key={entry.number} className="pp-mq-chip">
-                        <button
-                            type="button"
-                            className="pp-pill pp-chip"
-                            title={entry.title}
-                            onClick={() =>
-                                openPullRequestOnGitHub({repository: context.repository, number: entry.number})
-                            }>
-                            {entry.text}
-                        </button>
-                        {entry.why.kind === 'not-opted-in' && (
-                            <button
-                                type="button"
-                                className="pp-inline-link"
-                                disabled={optIn?.phase === 'busy'}
-                                title={optIn?.phase === 'failed' ? optIn.reason : 'Add automerge:opt-in'}
-                                onClick={() => void optInToQueue(context.repository, entry.number)}>
-                                {optIn?.phase === 'busy' ? 'Opting in…' : 'Opt in'}
-                            </button>
-                        )}
-                    </span>
-                );
-            })}
         </div>
     );
 }

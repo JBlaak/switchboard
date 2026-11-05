@@ -464,11 +464,7 @@ test.describe('merge queue', () => {
         await expect(failed).toContainText('Unit tests');
         await expect(failed.getByRole('button', {name: 'Fix in session'})).toBeVisible();
         await expect(queue.locator('.pp-mq-entry.is-unknown')).toContainText('Paused by an admin until Friday');
-        await expect(queue.locator('.pp-mq-outside .pp-pill')).toHaveText([
-            '#1330 draft',
-            '#1371 waits until fix/1320 merges',
-            '#1370 approved, not queued',
-        ]);
+        await expect(queue.locator('.pp-mq-outside')).toHaveCount(0);
         await expect(prs.locator('.pp-pr').filter({hasText: 'Stop the login redirect loop'})).toContainText(
             'merging · 1st',
         );

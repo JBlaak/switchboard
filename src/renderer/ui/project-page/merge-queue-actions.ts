@@ -1,9 +1,9 @@
 /**
  * What the project page's Merge queue section does (#315): its buttons
- * (Nudge, Fix in session, Retry, Opt in and a PR row's + Queue), and reading
+ * (Nudge, Fix in session, Retry and a PR row's + Queue), and reading
  * the queue's errands again with each overview.
  *
- * Switchboard never moves a PR itself: Retry and Opt in only remove or add
+ * Switchboard never moves a PR itself: Retry and + Queue only remove or add
  * the queue's own labels, through main. Nudge and a new Fix answer a first
  * prompt; the session is started here, as an issue's is (a row is the
  * renderer's to make), and main is told which one it is, or that none
@@ -206,7 +206,7 @@ export function retryQueueEntry(repository: string, number: number): Promise<voi
     return labelWrite(queueActionKey('retry', number), () => window.api.queueRetry(repository, number));
 }
 
-/** Opt in (Not queued yet) and + Queue (a PR row): `automerge:opt-in` added. */
+/** + Queue (a PR row): `automerge:opt-in` added. */
 export function optInToQueue(repository: string, number: number): Promise<void> {
     return labelWrite(queueActionKey('opt-in', number), () => window.api.queueOptIn(repository, number));
 }
