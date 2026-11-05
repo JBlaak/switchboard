@@ -182,8 +182,13 @@ export type ClientMessage =
 // ── Mac → Phone ──
 
 export type ServerMessage =
-    /** The answer to `hello` on an enrolled connection; the full state follows. */
-    | {type: 'welcome'; protocol: number; macName: string; deviceId: string}
+    /**
+     * The answer to `hello` on an enrolled connection; the full state follows.
+     * `addresses` are the hosts the Mac listens on (LAN and VPN, no link-local),
+     * all on the port this connection came in on: what the phone dials when its
+     * last address and Bonjour both fail, e.g. over a VPN Bonjour can't cross.
+     */
+    | {type: 'welcome'; protocol: number; macName: string; deviceId: string; addresses: string[]}
     /** The answer to `hello` on a pairing connection. */
     | {type: 'pairing'; protocol: number; macName: string}
     /** The code was right; the Mac is showing the confirm dialog. */
