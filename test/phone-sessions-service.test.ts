@@ -570,6 +570,70 @@ test('the active phone types and resizes; the Mac does neither', () => {
     assert.equal(h.service.macInputAllowed('s1'), false);
 });
 
+test('the active phone attaching again at its size nudges the PTY, so the TUI repaints over the replay', () => {
+    /* Given */
+    const h = harness();
+    const pty = h.addSession('s1');
+    const phone = h.connect();
+    h.send(phone, {type: 'attach', sessionId: 's1', cols: 40, rows: 20});
+    h.send(phone, {type: 'use-here', sessionId: 's1'});
+    h.timers.tick();
+    h.timers.tick();
+    h.send(phone, {type: 'detach', sessionId: 's1'});
+    pty.resizes.length = 0;
+
+    /* When */
+    h.send(phone, {type: 'attach', sessionId: 's1', cols: 40, rows: 20});
+    h.timers.tick();
+    h.timers.tick();
+
+    /* Then */
+    assert.deepEqual(pty.resizes, [
+        [41, 20],
+        [40, 20],
+    ]);
+});
+
+test('the active phone attaching at a new size takes it, nudged', () => {
+    /* Given */
+    const h = harness();
+    const pty = h.addSession('s1');
+    const phone = h.connect();
+    h.send(phone, {type: 'attach', sessionId: 's1', cols: 40, rows: 20});
+    h.send(phone, {type: 'use-here', sessionId: 's1'});
+    h.timers.tick();
+    h.timers.tick();
+    pty.resizes.length = 0;
+
+    /* When */
+    h.send(phone, {type: 'attach', sessionId: 's1', cols: 90, rows: 30});
+    h.timers.tick();
+    h.timers.tick();
+
+    /* Then */
+    assert.deepEqual(pty.resizes, [
+        [90, 30],
+        [91, 30],
+        [90, 30],
+    ]);
+});
+
+test('a phone attaching to a session the Mac owns leaves the PTY alone', () => {
+    /* Given */
+    const h = harness();
+    const pty = h.addSession('s1');
+    h.service.macResized('s1', 120, 40);
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'attach', sessionId: 's1', cols: 40, rows: 20});
+    h.timers.tick();
+    h.timers.tick();
+
+    /* Then */
+    assert.deepEqual(pty.resizes, []);
+});
+
 test('a phone that disconnects keeps the session until use here on the Mac, which takes the Mac’s size', () => {
     /* Given */
     const h = harness();
