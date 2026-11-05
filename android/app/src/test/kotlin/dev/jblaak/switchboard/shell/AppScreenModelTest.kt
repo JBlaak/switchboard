@@ -454,6 +454,22 @@ class AppScreenModelTest {
     }
 
     @Test
+    fun `unlocking after a long time away while reconnecting shows the connected screens`() {
+        /* Given */
+        val model = unlockedModel()
+        model.linkChanged(LinkState.Connected(deviceId = "d1", macName = "joris-mbp"))
+        model.backgrounded(at = 10.minutes)
+        model.linkChanged(LinkState.Reconnecting)
+        model.foregrounded(at = 16.minutes)
+
+        /* When */
+        model.unlocked()
+
+        /* Then */
+        assertEquals(AppScreen.Connected, model.screen.value)
+    }
+
+    @Test
     fun `coming back sooner stays unlocked`() {
         /* Given */
         val model = unlockedModel()

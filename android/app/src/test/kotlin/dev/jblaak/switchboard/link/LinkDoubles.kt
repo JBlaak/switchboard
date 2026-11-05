@@ -93,6 +93,8 @@ internal class FakeConnection(val address: MacAddress, val macFingerprint: Strin
 
     override val events = Channel<TransportEvent>(Channel.UNLIMITED)
 
+    override var localAddress: String? = PHONE_ADDRESS
+
     val sentText = mutableListOf<String>()
     var closedByPhone = false
 
@@ -118,7 +120,24 @@ internal class FakeConnection(val address: MacAddress, val macFingerprint: Strin
     }
 }
 
-internal const val MAC_FINGERPRINT = "aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11"
+/** The phone's own address on the Wi-Fi, the one every [FakeConnection] goes out from. */
+internal const val PHONE_ADDRESS = "192.168.1.50"
+
+/** Keeps every line the link logs, to look at when a test fails. */
+internal class RecordingLinkLogger : LinkLogger {
+
+    val lines = mutableListOf<String>()
+
+    override fun info(message: String) {
+        lines += message
+    }
+
+    override fun warn(message: String) {
+        lines += "warn: $message"
+    }
+}
+
+internal const val MAC_FINGERPRINT ="aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11aa11"
 
 internal val lastAddress = MacAddress("192.168.1.20", 52840)
 
