@@ -20,6 +20,14 @@ sealed interface ServerMessage {
         val addresses: List<String> = emptyList(),
     ) : ServerMessage
 
+    /**
+     * The Mac's addresses changed while connected (a VPN came up, a new Wi-Fi): what [Welcome.addresses] would hold
+     * now, for the next time the phone has to find the Mac.
+     */
+    @Serializable
+    @SerialName("addresses")
+    data class Addresses(val addresses: List<String>) : ServerMessage
+
     /** The answer to `hello` on a pairing connection. */
     @Serializable
     @SerialName("pairing")

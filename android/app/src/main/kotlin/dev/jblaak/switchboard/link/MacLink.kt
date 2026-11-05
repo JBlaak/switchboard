@@ -301,6 +301,10 @@ class MacLink(
                             mutableLastConnected.value = now
                             show(now)
                         }
+                        is ServerMessage.Addresses -> pairingStore.loadOrNull()?.let { stored ->
+                            logger.info("The Mac now listens on ${message.addresses}")
+                            pairingStore.save(stored.copy(knownHosts = message.addresses))
+                        }
                         is ServerMessage.Pairing -> return SessionEnd.Final(LinkState.NotPaired)
                         ServerMessage.Revoked -> revoked = true
                         is ServerMessage.UpdateRequired -> return SessionEnd.Final(LinkState.UpdateRequired(message.macVersion))
@@ -358,10 +362,16 @@ class MacLink(
     private suspend fun dialInvited(invite: PairingInvite, key: DeviceKey): Dial {
         val invited = MacAddress(invite.host, invite.port)
         show(LinkState.Connecting)
-        val direct = dial(listOf(invited), key, invite.fingerprint, source = "invite")
+        val named = dial(listOf(invited), key, invite.fingerprint, source = "invite")
+        if (named is Dial.Opened) return named
+        val listed = invite.addresses.map { MacAddress(it, invite.port) } - invited
+        val direct = when {
+            listed.isEmpty() -> named
+            else -> dial(listed, key, invite.fingerprint, source = "invite address").orFailures(named)
+        }
         if (direct is Dial.Opened) return direct
         show(LinkState.Searching)
-        val found = discovery.discover() - invited
+        val found = discovery.discover() - invited - listed.toSet()
         if (found.isEmpty()) return direct
         show(LinkState.Connecting)
         return dial(found, key, invite.fingerprint, source = "Bonjour").orFailures(direct)
@@ -403,7 +413,7 @@ class MacLink(
                     ServerMessage.PairPending -> show(LinkState.PairPending(macName))
                     is ServerMessage.PairAccepted -> {
                         accepted = true
-                        pairingStore.save(StoredPairing(invite.fingerprint, message.deviceId, macName, dial.address))
+                        pairingStore.save(StoredPairing(invite.fingerprint, message.deviceId, macName, dial.address, invite.addresses))
                     }
                     is ServerMessage.PairRejected -> return PairingEnd.Failed(PairFailure.Rejected(message.reason))
                     is ServerMessage.Welcome -> {

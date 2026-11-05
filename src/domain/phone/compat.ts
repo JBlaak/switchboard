@@ -38,9 +38,14 @@ export function helloReply(
     if (grant.kind === 'pairing') {
         return {message: {type: 'pairing', protocol: ours, macName: mac.name}, close: null};
     }
-    const addresses = mac.addresses.filter((address) => !address.includes('%'));
+    const addresses = dialableAddresses(mac.addresses);
     return {
         message: {type: 'welcome', protocol: ours, macName: mac.name, deviceId: grant.deviceId, addresses},
         close: null,
     };
+}
+
+/** The addresses a phone can dial: link-local ones need a scope it can't use. */
+export function dialableAddresses(addresses: readonly string[]): string[] {
+    return addresses.filter((address) => !address.includes('%'));
 }

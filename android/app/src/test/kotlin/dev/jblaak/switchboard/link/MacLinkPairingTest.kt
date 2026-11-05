@@ -187,6 +187,42 @@ class MacLinkPairingTest {
     }
 
     @Test
+    fun `the invite's IP addresses are dialled before discovery when its name does not resolve`() = runTest {
+        /* Given */
+        val listed = MacAddress("192.168.3.117", 52840)
+        discovery.found = listOf(MacAddress("192.168.1.20", 52840))
+        transport.firstEvent = { address ->
+            if (address == listed) TransportEvent.Opened else TransportEvent.Failed(TransportFailure.Unreachable)
+        }
+        val link = newLink()
+
+        /* When */
+        link.pair(invite.copy(addresses = listOf("10.8.0.3", "192.168.3.117")))
+        runCurrent()
+
+        /* Then */
+        assertEquals(listed, transport.last.address)
+        assertEquals(0, discovery.lookups)
+    }
+
+    @Test
+    fun `an accepted pairing keeps the invite's IP addresses as known hosts`() = runTest {
+        /* Given */
+        val link = newLink()
+        link.pair(invite.copy(addresses = listOf("192.168.3.117", "10.8.0.3")))
+        runCurrent()
+        transport.last.macSays("""{"type":"pairing","protocol":1,"macName":"Studio"}""")
+        runCurrent()
+
+        /* When */
+        transport.last.macSays("""{"type":"pair-accepted","deviceId":"dev-1"}""")
+        runCurrent()
+
+        /* Then */
+        assertEquals(listOf("192.168.3.117", "10.8.0.3"), store.loadOrNull()?.knownHosts)
+    }
+
+    @Test
     fun `a Mac that refuses the new key has no pairing code live`() = runTest {
         /* Given */
         transport.firstEvent = { TransportEvent.Failed(TransportFailure.Refused) }

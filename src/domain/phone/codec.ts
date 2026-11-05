@@ -192,6 +192,10 @@ const INVITE_PREFIX = 'switchboard://pair?';
 const FINGERPRINT = /^[0-9a-f]{64}$/;
 /** A DNS name or an IPv4 address; no brackets, so no IPv6 literals, which Bonjour names never are. */
 const HOST = /^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$/;
+/** An IPv4 address or an unscoped IPv6 one: what an invite's `addrs` may hold. */
+const ADDRESS = /^(?:\d{1,3}(?:\.\d{1,3}){3}|[0-9A-Fa-f:]{2,39})$/;
+/** More than any Mac has interfaces; keeps the QR code small. */
+const MAX_INVITE_ADDRESSES = 8;
 
 export function encodeInvite(invite: PairingInvite): string {
     const query = new URLSearchParams({
@@ -201,6 +205,8 @@ export function encodeInvite(invite: PairingInvite): string {
         host: invite.host,
         port: String(invite.port),
     });
+    const addresses = (invite.addresses ?? []).filter((address) => ADDRESS.test(address));
+    if (addresses.length > 0) query.set('addrs', addresses.join(','));
     return INVITE_PREFIX + query.toString();
 }
 
@@ -225,7 +231,12 @@ export function parseInvite(text: string): PairingInvite | null {
     if (!FINGERPRINT.test(fingerprint)) return null;
     if (!code || code.length > MAX_CODE) return null;
     if (!HOST.test(host)) return null;
-    return {protocol, fingerprint, code, host, port};
+    if (query.getAll('addrs').length > 1) return null;
+    const addrs = query.get('addrs');
+    if (addrs === null) return {protocol, fingerprint, code, host, port};
+    const addresses = addrs.split(',');
+    if (addresses.length > MAX_INVITE_ADDRESSES || !addresses.every((address) => ADDRESS.test(address))) return null;
+    return {protocol, fingerprint, code, host, port, addresses};
 }
 
 // ── Field checks ──

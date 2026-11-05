@@ -145,6 +145,24 @@ class MacLinkTest {
     }
 
     @Test
+    fun `addresses the Mac sends while connected replace the known hosts`() = runTest {
+        /* Given */
+        val link = newLink()
+        link.start()
+        runCurrent()
+        transport.last.macSays(WELCOME_WITH_ADDRESSES)
+        runCurrent()
+
+        /* When */
+        transport.last.macSays("""{"type":"addresses","addresses":["192.168.1.20","10.8.0.3","100.72.1.2"]}""")
+        runCurrent()
+
+        /* Then */
+        assertEquals(listOf("192.168.1.20", "10.8.0.3", "100.72.1.2"), store.pairing?.knownHosts)
+        assertEquals(LinkState.Connected(deviceId = "d-7", macName = "Studio"), link.state.value)
+    }
+
+    @Test
     fun `a known address is tried before discovery when the last address does not answer`() = runTest {
         /* Given */
         val vpn = MacAddress("10.8.0.3", lastAddress.port)

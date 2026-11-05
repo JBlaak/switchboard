@@ -19,7 +19,7 @@
 import {CLOSE, PROTOCOL_VERSION} from '../../domain/phone/protocol';
 import type {ClientMessage} from '../../domain/phone/protocol';
 import {encodeInvite} from '../../domain/phone/codec';
-import {helloReply} from '../../domain/phone/compat';
+import {dialableAddresses, helloReply} from '../../domain/phone/compat';
 import {
     PAIRING_CODE_LENGTH,
     PAIRING_IDLE,
@@ -172,6 +172,7 @@ export class PhoneAccessService {
                             ` (added: ${added.join(', ') || 'none'}; removed: ${removed.join(', ') || 'none'})`,
                     );
                     this.host = advertiser.hostName();
+                    if (added.length > 0 || removed.length > 0) this.tellAddresses();
                     this.changed();
                     return;
                 }
@@ -211,6 +212,8 @@ export class PhoneAccessService {
             code: this.pairing.code,
             host: this.host ?? advertiser.hostName(),
             port: this.port,
+            // For networks where the `.local` name doesn't resolve; link-local needs a scope a phone can't use.
+            addresses: dialableAddresses(this.deps.link.addresses),
         });
         timers.clearTimeout(this.expiry);
         this.expiry = timers.setTimeout(() => {
@@ -263,6 +266,17 @@ export class PhoneAccessService {
         }
         this.changed();
         return this.state();
+    }
+
+    /**
+     * Tells every connected phone where the Mac listens now, so one that
+     * connected before a VPN came up can still reach it over the VPN later.
+     */
+    private tellAddresses(): void {
+        const addresses = dialableAddresses(this.deps.link.addresses);
+        for (const {connection, greeted} of this.links.values()) {
+            if (greeted && connection.grant.kind === 'device') connection.send({type: 'addresses', addresses});
+        }
     }
 
     // ── Devices ──

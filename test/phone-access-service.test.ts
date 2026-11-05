@@ -507,6 +507,22 @@ test('a phone greeted after an address change hears the addresses as they are no
     assert.deepEqual(welcome.type === 'welcome' ? welcome.addresses : null, ['192.168.1.20', '10.8.0.3', '100.72.1.2']);
 });
 
+test('a connected phone is told the new addresses when a VPN comes up', async () => {
+    /* Given */
+    const h = harness({enabled: true, devices: [PIXEL]});
+    h.link.now = ['192.168.1.20', 'fe80::1c2b:3a4d%en0'];
+    await h.service.start();
+    const phone = h.link.connect(PIXEL.fingerprint, '192.168.1.20')!;
+    h.link.send(phone, {type: 'hello', protocol: PROTOCOL_VERSION, appVersion: '1.0'});
+    h.link.now = ['192.168.1.20', 'fe80::1c2b:3a4d%en0', '10.8.0.3'];
+
+    /* When */
+    await h.service.restart();
+
+    /* Then */
+    assert.deepEqual(phone.sent.at(-1), {type: 'addresses', addresses: ['192.168.1.20', '10.8.0.3']});
+});
+
 test('an address change that leaves no address brings the listener down and up again', async () => {
     /* Given */
     const h = harness({enabled: true});
@@ -659,7 +675,7 @@ test('an enrolled connection that disconnects is reported to the sessions handle
 
 // ── Pairing ──
 
-test('startPairing shows an invite with the fingerprint, host, port and code', async () => {
+test("startPairing shows an invite with the fingerprint, host, port, code and the Mac's IP addresses", async () => {
     /* Given */
     const h = harness({enabled: true});
     await h.service.start();
@@ -674,6 +690,7 @@ test('startPairing shows an invite with the fingerprint, host, port and code', a
         code: CODE,
         host: 'joris-mbp.local',
         port: 52000,
+        addresses: ['192.168.1.20', '10.8.0.3'],
     });
     assert.equal(state.pairing!.expiresAt, 1_000 + PAIRING_CODE_TTL_MS);
 });
