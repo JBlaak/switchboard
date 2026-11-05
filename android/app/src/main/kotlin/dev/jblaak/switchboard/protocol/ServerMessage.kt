@@ -7,10 +7,18 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface ServerMessage {
 
-    /** The answer to `hello` on an enrolled connection; the full state follows. */
+    /**
+     * The answer to `hello` on an enrolled connection; the full state follows. [addresses] are the hosts the Mac
+     * listens on (LAN and VPN), all on the port this connection came in on; an older Mac leaves them out.
+     */
     @Serializable
     @SerialName("welcome")
-    data class Welcome(val protocol: Int, val macName: String, val deviceId: String) : ServerMessage
+    data class Welcome(
+        val protocol: Int,
+        val macName: String,
+        val deviceId: String,
+        val addresses: List<String> = emptyList(),
+    ) : ServerMessage
 
     /** The answer to `hello` on a pairing connection. */
     @Serializable

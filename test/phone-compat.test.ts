@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import {helloReply, isCompatibleProtocol} from '../src/domain/phone/compat';
 import {CLOSE, PROTOCOL_VERSION} from '../src/domain/phone/protocol';
 
-const MAC = {name: 'Joris MacBook', version: '2.9.0'};
+const MAC = {name: 'Joris MacBook', version: '2.9.0', addresses: ['192.168.1.20', '10.8.0.3']};
 
 test('an enrolled device on the same protocol is welcomed with its id', () => {
     /* When */
@@ -11,9 +11,29 @@ test('an enrolled device on the same protocol is welcomed with its id', () => {
 
     /* Then */
     assert.deepStrictEqual(reply, {
-        message: {type: 'welcome', protocol: PROTOCOL_VERSION, macName: 'Joris MacBook', deviceId: 'dev-1'},
+        message: {
+            type: 'welcome',
+            protocol: PROTOCOL_VERSION,
+            macName: 'Joris MacBook',
+            deviceId: 'dev-1',
+            addresses: ['192.168.1.20', '10.8.0.3'],
+        },
         close: null,
     });
+});
+
+test('the welcome leaves out link-local addresses, which only mean something on the Mac', () => {
+    /* Given */
+    const mac = {...MAC, addresses: ['192.168.1.20', 'fe80::1c2b:3a4d%en0', '10.8.0.3', '2a02:a45::5']};
+
+    /* When */
+    const reply = helloReply(PROTOCOL_VERSION, {kind: 'device', deviceId: 'dev-1'}, mac);
+
+    /* Then */
+    assert.deepStrictEqual(
+        reply.message.type === 'welcome' && reply.message.addresses,
+        ['192.168.1.20', '10.8.0.3', '2a02:a45::5'],
+    );
 });
 
 test('a pairing connection on the same protocol gets pairing', () => {

@@ -3,6 +3,7 @@
  */
 import {INVOKE} from '../../ipc/channels';
 import {searchTitleFor} from '../../domain/session/title';
+import {reconnectSession} from '../reconnect-session';
 import {stopSession} from '../stop-session';
 import type {Container} from '../composition-root';
 import type {IpcRegistrar} from './support/registrar';
@@ -22,13 +23,8 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
 
     ipc.handle(INVOKE.stopSession, (sessionId: string) => stopSession(app, sessionId));
 
-    /**
-     * "Retry now" on a connecting card: skip the rest of the backoff.
-     *
-     * Safe at any time — it no-ops unless the session is remote, still held, and
-     * actually between connections.
-     */
-    ipc.handle(INVOKE.reconnectRemote, (sessionId: string) => app.remote.retryNow(sessionId));
+    /** "Retry now" on a session's connection card; see `reconnectSession`. */
+    ipc.handle(INVOKE.reconnectRemote, (sessionId: string) => reconnectSession(app, sessionId));
 
     ipc.handle(INVOKE.toggleStar, (sessionId: string) => ({
         starred: app.repository.toggleStar(sessionId),
