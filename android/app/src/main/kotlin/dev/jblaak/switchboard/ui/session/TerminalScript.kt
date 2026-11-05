@@ -1,5 +1,6 @@
 package dev.jblaak.switchboard.ui.session
 
+import java.net.URI
 import java.util.Base64
 
 /** What the terminal page says, from `assets/terminal/terminal.js`. */
@@ -11,12 +12,18 @@ sealed interface TerminalEvent {
 
     /** Bytes for the PTY the page made itself: a scroll on the alternate screen. */
     data class Input(val data: String) : TerminalEvent
+
+    /** A tapped link, for the phone's browser: only ever an http or https URL. */
+    data class Open(val url: String) : TerminalEvent
 }
 
-/** "ready 48 30", "size 48 30" or "input <base64 of UTF-8 bytes>"; null for anything else. */
+/**
+ * "ready 48 30", "size 48 30", "input <base64 of UTF-8 bytes>" or "open <http(s) url>"; null for anything else.
+ */
 fun terminalEventOrNull(message: String): TerminalEvent? {
     val parts = message.trim().split(' ')
     if (parts.size == 2 && parts[0] == "input") return inputOrNull(parts[1])
+    if (parts.size == 2 && parts[0] == "open") return openOrNull(parts[1])
     if (parts.size != 3) return null
     val cols = parts[1].toIntOrNull()?.takeIf { it > 0 } ?: return null
     val rows = parts[2].toIntOrNull()?.takeIf { it > 0 } ?: return null
@@ -30,6 +37,12 @@ fun terminalEventOrNull(message: String): TerminalEvent? {
 private fun inputOrNull(base64: String): TerminalEvent.Input? {
     val bytes = runCatching { Base64.getDecoder().decode(base64) }.getOrNull() ?: return null
     return bytes.takeIf { it.isNotEmpty() }?.let { TerminalEvent.Input(String(it, Charsets.UTF_8)) }
+}
+
+private fun openOrNull(url: String): TerminalEvent.Open? {
+    val uri = runCatching { URI(url) }.getOrNull() ?: return null
+    val web = uri.scheme?.lowercase() in setOf("http", "https") && !uri.host.isNullOrEmpty()
+    return if (web) TerminalEvent.Open(url) else null
 }
 
 /**

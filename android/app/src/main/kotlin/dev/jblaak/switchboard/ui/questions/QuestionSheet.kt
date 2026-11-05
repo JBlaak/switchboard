@@ -46,6 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jblaak.switchboard.R
+import dev.jblaak.switchboard.components.rememberLinkified
 import dev.jblaak.switchboard.protocol.AnsweredOn
 import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.protocol.Question
@@ -190,7 +191,7 @@ private fun ColumnScope.AskQuestion(question: Question, draft: Draft, actions: Q
 @Composable
 private fun QuestionTitle(text: String) {
     Text(
-        text = text,
+        text = rememberLinkified(text),
         style = MaterialTheme.typography.headlineSmall.copy(fontSize = 21.sp, lineHeight = 28.sp),
         color = SwitchboardTheme.colors.textStrong,
         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 6.dp),
@@ -248,7 +249,7 @@ private fun OptionRow(option: QuestionOption, picked: Boolean, multiSelect: Bool
                 if (isRecommended(option.label)) RecommendedBadge()
             }
             if (option.description.isNotEmpty()) {
-                Text(option.description, style = MaterialTheme.typography.bodySmall, color = colors.textMuted)
+                Text(rememberLinkified(option.description), style = MaterialTheme.typography.bodySmall, color = colors.textMuted)
             }
         }
     }
@@ -334,7 +335,7 @@ private fun ColumnScope.GrillQuestion(question: Question, draft: Draft, actions:
         QuestionTitle(question.question)
         question.detail?.let {
             Text(
-                text = it,
+                text = rememberLinkified(it),
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 23.sp),
                 color = colors.textDim,
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
@@ -355,7 +356,7 @@ private fun ColumnScope.GrillQuestion(question: Question, draft: Draft, actions:
                     style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.6.sp),
                     color = colors.accent,
                 )
-                Text(recommendation.description, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp), color = colors.textStrong)
+                Text(rememberLinkified(recommendation.description), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp), color = colors.textStrong)
             }
         }
         Column(
