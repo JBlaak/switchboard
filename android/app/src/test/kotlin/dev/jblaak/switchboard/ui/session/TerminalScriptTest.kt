@@ -84,6 +84,30 @@ class TerminalScriptTest {
     }
 
     @Test
+    fun `a tapped web link is opened`() {
+        /* Given */
+        val message = "open https://github.com/JBlaak/switchboard/pull/326?tab=files#diff"
+
+        /* When */
+        val event = terminalEventOrNull(message)
+
+        /* Then */
+        assertEquals(TerminalEvent.Open("https://github.com/JBlaak/switchboard/pull/326?tab=files#diff"), event)
+    }
+
+    @Test
+    fun `links that are not http or https are never opened`() {
+        /* Given */
+        val messages = listOf("open javascript:alert(1)", "open file:///etc/hosts", "open intent://x#Intent;end", "open https://", "open")
+
+        /* When */
+        val events = messages.map(::terminalEventOrNull)
+
+        /* Then */
+        assertEquals(listOf(null, null, null, null, null), events)
+    }
+
+    @Test
     fun `anything else from the page is ignored`() {
         /* Given */
         val message = "size 0 30"

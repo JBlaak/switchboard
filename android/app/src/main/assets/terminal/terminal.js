@@ -6,6 +6,8 @@
  * `switchboard` object the app injects. Typing never goes into xterm: the app's prompt box and key bar are
  * the input, so stdin is off and the hidden textarea can't take focus or raise the keyboard. The one input the
  * page makes itself is a scroll on the alternate screen, which it sends as "input <base64 of UTF-8 bytes>".
+ * A tap on a link, typed out or an OSC 8 hyperlink, asks the app to open it as "open <url>": the WebView itself
+ * never navigates.
  */
 (function () {
     'use strict';
@@ -146,6 +148,18 @@
         );
     }
 
+    /* Only web links leave the terminal; the app opens them in the phone's browser. */
+    function openLink(_event, uri) {
+        var url;
+        try {
+            url = new URL(uri);
+        } catch (e) {
+            return;
+        }
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+        post('open ' + url.href);
+    }
+
     function start() {
         term = new Terminal({
             fontFamily: '"JetBrains Mono", monospace',
@@ -156,9 +170,11 @@
             convertEol: true,
             cursorBlink: false,
             disableStdin: true,
+            linkHandler: {activate: openLink, allowNonHttpProtocols: false},
         });
         fit = new FitAddon.FitAddon();
         term.loadAddon(fit);
+        term.loadAddon(new WebLinksAddon.WebLinksAddon(openLink));
         term.open(element);
         lockInput(term.textarea);
         scrollByTouch();

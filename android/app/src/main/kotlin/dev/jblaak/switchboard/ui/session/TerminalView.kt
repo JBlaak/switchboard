@@ -21,6 +21,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewCompat
@@ -35,7 +36,7 @@ val TerminalBackground = Color(0xFF141517)
  * A session's terminal: xterm.js from the APK's assets in a WebView that loads nothing else. [writes] are fed to
  * it a frame at a time; [onOpened] comes each time the page has loaded and fitted itself (an empty terminal to
  * replay into), [onResized] whenever the fit changes. The terminal takes no typing of its own; [onInput] is
- * what a scroll on the alternate screen sends the program.
+ * what a scroll on the alternate screen sends the program. A tapped web link opens in the phone's browser.
  */
 @Composable
 fun TerminalView(
@@ -52,12 +53,14 @@ fun TerminalView(
     val opened = rememberUpdatedState(onOpened)
     val resized = rememberUpdatedState(onResized)
     val input = rememberUpdatedState(onInput)
+    val uriHandler = rememberUpdatedState(LocalUriHandler.current)
     val bridge = remember {
         TerminalBridge { event ->
             when (event) {
                 is TerminalEvent.Ready -> opened.value(event.size)
                 is TerminalEvent.Resized -> resized.value(event.size)
                 is TerminalEvent.Input -> input.value(event.data)
+                is TerminalEvent.Open -> runCatching { uriHandler.value.openUri(event.url) }
             }
         }
     }
