@@ -25,10 +25,16 @@
  * its own key. The page asks that and the full answer at once, so its pull
  * requests show before its plans. The two share their `gh` and git reads
  * while both are in flight, so asking both costs no second read.
+ *
+ * Its one write is the Worktrees section's Clean: removing the worktrees
+ * `superfluousWorktrees` names, then `git worktree prune`. Never forced, so
+ * git still refuses a dirty one, and their branches are kept. Not for an ssh
+ * project, VM or not.
  */
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {gitHubRepository} from '../../domain/project/repo-url';
 import {groupOverview, type OverviewPlanSource} from '../../domain/plan/project-overview';
+import {superfluousWorktrees} from '../../domain/project/superfluous-worktrees';
 import type {Plan} from '../../domain/plan/model';
 import type {
     GitHubUnavailableReason,
@@ -39,11 +45,12 @@ import type {
     ProjectPullRequest,
     RepositoryIssue,
     RepositoryPullRequest,
+    WorktreeCleanResult,
     WorktreeOverview,
     WorktreeSummary,
 } from '../../domain/project/overview';
 import type {Clock} from '../ports/clock';
-import type {GitWorkspace} from '../ports/git-workspace';
+import type {GitWorkspace, GitWorktrees} from '../ports/git-workspace';
 import type {GitHubCli, ProjectReads} from '../ports/github-cli';
 import type {GitRemotes} from '../ports/git-remotes';
 import type {IssueSessionService} from './issue-session-service';
@@ -62,6 +69,8 @@ export interface ProjectOverviewServiceDeps {
     /** The Claude sessions running now; plain terminals are not sessions. */
     running(): RunningSession[];
     git: Pick<GitWorkspace, 'worktreeRoot' | 'worktrees'>;
+    /** Clean's writes: the worktrees removed, and pruned after. */
+    worktreeWrites: Pick<GitWorktrees, 'mainCheckout' | 'removeWorktree' | 'pruneWorktrees'>;
     remotes: GitRemotes;
     github: Pick<GitHubCli, 'available' | ProjectReads>;
     clock: Clock;
@@ -142,6 +151,28 @@ export class ProjectOverviewService {
         ]);
         const remote = isRemoteProjectPath(projectPath);
         return {projectPath, remote, repository, github, worktrees, running: [...projectRunning]};
+    }
+
+    /**
+     * Clean: remove the project's superfluous worktrees, as git lists them now
+     * rather than as the page last showed them, one at a time, then prune.
+     * What git refuses is answered with its reason; the rest still go.
+     */
+    public async cleanWorktrees(projectPath: string): Promise<WorktreeCleanResult> {
+        const result: WorktreeCleanResult = {removed: [], failed: []};
+        if (isRemoteProjectPath(projectPath)) return result;
+        const root = await this.deps.git.worktreeRoot(projectPath);
+        if (!root) return result;
+        const repository = (await this.deps.worktreeWrites.mainCheckout(root)) ?? root;
+
+        const worktrees = sessionsByWorktree(await this.deps.git.worktrees(root), this.deps.running());
+        for (const worktree of superfluousWorktrees(worktrees)) {
+            const removed = await this.deps.worktreeWrites.removeWorktree(repository, worktree.path);
+            if (removed.ok) result.removed.push(worktree.path);
+            else result.failed.push({path: worktree.path, reason: removed.reason});
+        }
+        if (result.removed.length > 0) await this.deps.worktreeWrites.pruneWorktrees(repository);
+        return result;
     }
 
     private async github(

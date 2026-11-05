@@ -102,6 +102,7 @@ export const INVOKE = {
     planProjectPlans: 'plan:project-plans',
     // The project page (#172)
     projectOverview: 'project:overview',
+    projectCleanWorktrees: 'project:clean-worktrees',
 
     // Tasks: BlaakTasks in Switchboard (#248)
     tasksList: 'tasks:list',

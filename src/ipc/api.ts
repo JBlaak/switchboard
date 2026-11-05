@@ -27,7 +27,7 @@ import type {Weather, WeatherLocation} from '../domain/weather/weather';
 import type {CaptureTarget, RouteRequest, RouteResult} from '../domain/ask/model';
 import type {IssueWorktreeRequest, IssueWorktreeResult} from '../domain/plan/issue-session';
 import type {Plan, PlanSummary} from '../domain/plan/model';
-import type {ProjectOverview, ProjectOverviewOptions} from '../domain/project/overview';
+import type {ProjectOverview, ProjectOverviewOptions, WorktreeCleanResult} from '../domain/project/overview';
 import type {PhoneAccessState, TerminalOwner} from '../domain/phone/state';
 import type {BlaakTasksResult, TaskDetail, TaskRow} from '../domain/tasks/model';
 import type {
@@ -242,6 +242,12 @@ export interface SwitchboardApi {
      * plans at all (`plansPending`), which answers in a fraction of the time.
      */
     projectOverview(projectPath: string, options?: ProjectOverviewOptions): Promise<ProjectOverview>;
+    /**
+     * Clean: remove the project's merged, clean, unlocked linked worktrees
+     * with no session running in them, then prune. Never forced; branches are
+     * kept. Nothing for an ssh project.
+     */
+    projectCleanWorktrees(projectPath: string): Promise<WorktreeCleanResult>;
 
     // ── Tasks: BlaakTasks in Switchboard (#248) ──
     // While no BlaakTasks URL is set, the BlaakTasks calls answer `{ kind: 'off' }`

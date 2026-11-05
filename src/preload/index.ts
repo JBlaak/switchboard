@@ -159,6 +159,7 @@ const api: SwitchboardApi = {
     projectPlans: (projectPath, options) => ipcRenderer.invoke(INVOKE.planProjectPlans, projectPath, options),
     // ── The project page (#172) ──
     projectOverview: (projectPath, options) => ipcRenderer.invoke(INVOKE.projectOverview, projectPath, options),
+    projectCleanWorktrees: (projectPath) => ipcRenderer.invoke(INVOKE.projectCleanWorktrees, projectPath),
 
     // ── Tasks (#248) ──
     listTasks: (query) => ipcRenderer.invoke(INVOKE.tasksList, query),

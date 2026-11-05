@@ -116,6 +116,7 @@ export interface HostStubs {
      * which finds no repository in the fixture home. A project not listed has no
      * GitHub remote. Closed plans and merged PRs are left out unless asked for, all plans when
      * asked without them (`plans: false`), and an answered GitHub part is dated the moment it is asked.
+     * Clean takes the answer's superfluous worktrees out of it.
      */
     projectOverview: Record<string, ProjectOverview> | null;
     /**
@@ -735,6 +736,25 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                         return {...overview, projectPath: path, github};
                     },
                 );
+                // Clean takes the superfluous worktrees out of the stubbed answer, so the next poll lists them gone.
+                ipcMain.removeHandler(channels.projectCleanWorktrees);
+                ipcMain.handle(channels.projectCleanWorktrees, (_event, projectPath) => {
+                    const path = String(projectPath);
+                    const found = Object.entries(state.projectOverview ?? {}).find(([end]) => path.endsWith('/' + end));
+                    if (!found) return {removed: [], failed: []};
+                    const [end, overview] = found;
+                    const superfluous = (worktree: ProjectOverview['worktrees'][number]): boolean =>
+                        !worktree.main &&
+                        !worktree.locked &&
+                        worktree.changedFiles === 0 &&
+                        worktree.merged &&
+                        worktree.running.length === 0;
+                    state.projectOverview = {
+                        ...state.projectOverview,
+                        [end]: {...overview, worktrees: overview.worktrees.filter((w) => !superfluous(w))},
+                    };
+                    return {removed: overview.worktrees.filter(superfluous).map((w) => w.path), failed: []};
+                });
             }
 
             const replace = (channel: string, handler: (...args: unknown[]) => unknown): void => {

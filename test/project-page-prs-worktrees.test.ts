@@ -27,6 +27,8 @@ import {pageKeyAction} from '../src/renderer/ui/project-page/page-keys';
 import {
     AUTH_COMMAND,
     ageInWords,
+    cleanConfirm,
+    cleanableWorktrees,
     githubPart,
     remoteHost,
     showsWorktrees,
@@ -272,6 +274,80 @@ test('starting a session in a worktree shows it starting, then clears, or says w
     assert.equal(started.projectPage.worktreeStart, null);
     assert.deepEqual(failed.projectPage.worktreeStart, {path, phase: 'failed', reason: 'No claude'});
     assert.equal(other.projectPage, asked.projectPage);
+});
+
+test('Clean shows it is cleaning, then clears, or keeps the worktrees git would not remove with why', () => {
+    /* Given */
+    const path = APP + '/.claude/worktrees/old';
+    const asked = run(opened(), {type: 'projectWorktreesCleanAsked'});
+
+    /* When */
+    const cleaned = run(asked, {
+        type: 'projectWorktreesCleanAnswered',
+        projectPath: APP,
+        result: {removed: [path], failed: []},
+    });
+    const refused = run(asked, {
+        type: 'projectWorktreesCleanAnswered',
+        projectPath: APP,
+        result: {removed: [], failed: [{path, reason: 'contains modified or untracked files'}]},
+    });
+    const other = run(asked, {
+        type: 'projectWorktreesCleanAnswered',
+        projectPath: '/dev/other',
+        result: {removed: [], failed: [{path, reason: 'no'}]},
+    });
+
+    /* Then */
+    assert.deepEqual(asked.projectPage.worktreeClean, {phase: 'cleaning'});
+    assert.equal(cleaned.projectPage.worktreeClean, null);
+    assert.deepEqual(refused.projectPage.worktreeClean, {
+        phase: 'failed',
+        failed: [{path, reason: 'contains modified or untracked files'}],
+    });
+    assert.equal(other.projectPage, asked.projectPage);
+    assert.equal(
+        run(refused, {type: 'projectPageRestored', projectPath: APP, memory: NO_MEMORY}).projectPage.worktreeClean,
+        null,
+    );
+});
+
+test('Clean offers the merged worktrees with no changes and no session running, and asks with how many', () => {
+    /* Given */
+    const o = overview({
+        worktrees: [
+            ...WORKTREES,
+            worktree(APP + '/.claude/worktrees/done', {branch: 'done', merged: true}),
+            worktree(APP + '/.claude/worktrees/dirty', {branch: 'dirty', merged: true, changedFiles: 1}),
+            worktree(APP + '/.claude/worktrees/locked', {branch: 'locked', merged: true, locked: true}),
+        ],
+    });
+
+    /* When */
+    const cleanable = cleanableWorktrees(o, APP);
+
+    /* Then */
+    assert.deepEqual(
+        cleanable.map((w) => w.path),
+        [APP + '/.claude/worktrees/old', APP + '/.claude/worktrees/done'],
+    );
+    assert.match(cleanConfirm(2), /^Remove 2 merged worktrees /);
+    assert.match(cleanConfirm(1), /^Remove 1 merged worktree /);
+});
+
+test('no Clean before the answer, for another project’s answer, or for an ssh project', () => {
+    /* Given */
+    const vm = 'ssh://dev@vm.local:2222/home/dev/app';
+
+    /* When */
+    const answers = [
+        cleanableWorktrees(null, APP),
+        cleanableWorktrees(overview(), '/dev/other'),
+        cleanableWorktrees({...overview(), projectPath: vm, remote: true}, vm),
+    ];
+
+    /* Then */
+    assert.deepEqual(answers, [[], [], []]);
 });
 
 // ── Pull requests ──

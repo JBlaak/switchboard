@@ -64,6 +64,7 @@ test('a page opens on what its project remembered, with no cursor and no filter'
         start: null,
         showMerged: false,
         worktreeStart: null,
+        worktreeClean: null,
         tasks: null,
     });
 });

@@ -126,6 +126,11 @@ function overview(calls: string[]) {
         owners: {issueSessions: async () => ({})},
         running: () => [{sessionId: 's1', projectPath: VM_PROJECT}],
         git: vmGit(calls),
+        worktreeWrites: {
+            ...vmGit(calls),
+            removeWorktree: async () => ({ok: true}),
+            pruneWorktrees: async () => ({ok: true}),
+        },
         remotes,
         github: {
             available: async () => 'ok',
