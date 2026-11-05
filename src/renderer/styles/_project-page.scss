@@ -1205,3 +1205,418 @@
     margin-left: -18px;
     color: var(--sb-text-faint) !important;
 }
+
+/* ---- The merge queue (#315): the head's card, the rail behind it, what left it, what is not in it ----
+   The head and queued entries in the accent, held in yellow, failed in red,
+   "next" in purple, the rest neutral. */
+.pp-mq-clears {
+    font-size: 12px;
+    color: var(--sb-text-dim);
+
+    strong {
+        color: var(--sb-text-strong);
+    }
+}
+
+.pp-mq-card {
+    padding: 0;
+    overflow: hidden;
+
+    > .pp-quiet {
+        padding: 16px;
+    }
+}
+
+.pp-mq-head,
+.pp-mq-entry {
+    cursor: pointer;
+}
+
+.pp-mq-head {
+    padding: 16px 16px 14px;
+    background: rgba(var(--sb-accent-rgb), 0.06);
+    box-shadow: inset 0 -1px 0 var(--sb-line);
+
+    &:hover {
+        background: rgba(var(--sb-accent-rgb), 0.09);
+    }
+}
+
+.pp-mq-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.pp-mq-badge {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--sb-accent);
+    color: var(--sb-bg-base);
+    font: 800 13px var(--sb-font-head);
+}
+
+.pp-mq-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+}
+
+.pp-mq-title-line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.pp-mq-title {
+    min-width: 0;
+    font-weight: 700;
+    color: var(--sb-text-strong);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    .pp-mq-head & {
+        font: 700 14px var(--sb-font-head);
+    }
+}
+
+.pp-mq-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--sb-text-muted);
+}
+
+.pp-mq-session {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--sb-blue);
+}
+
+.pp-mq-session-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--sb-green);
+}
+
+.pp-mq-eta {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 2px;
+    text-align: right;
+}
+
+.pp-mq-merges {
+    font: 800 15px var(--sb-font-head);
+    color: var(--sb-accent);
+}
+
+.pp-mq-since {
+    font-size: 11.5px;
+    color: var(--sb-text-faint);
+}
+
+/* The head's four steps, under its text. */
+.pp-mq-steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    margin: 14px 0 0 40px;
+    padding: 0;
+    list-style: none;
+}
+
+.pp-mq-step {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--sb-text-dim);
+
+    &.is-active {
+        color: var(--sb-text-strong);
+    }
+    &.is-todo {
+        color: var(--sb-text-faint);
+    }
+}
+
+.pp-mq-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--sb-line);
+    overflow: hidden;
+
+    > span {
+        display: block;
+        height: 100%;
+        background: var(--sb-green);
+    }
+    .is-active > & > span {
+        background: var(--sb-yellow);
+    }
+}
+
+.pp-mq-tick {
+    color: var(--sb-green);
+}
+
+.pp-mq-step-detail {
+    font-size: 11px;
+    color: var(--sb-text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Behind the head: a rail down the position circles. */
+.pp-mq-rail {
+    position: relative;
+    padding: 6px;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 14px;
+        bottom: 14px;
+        left: 28px;
+        width: 2px;
+        border-radius: 1px;
+        background: var(--sb-line);
+    }
+}
+
+.pp-mq-group {
+    padding: 0 6px 6px;
+}
+
+.pp-mq-entry {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 6px 10px;
+    border-radius: var(--sb-r-control);
+
+    &:hover {
+        background: rgba(var(--sb-overlay-rgb), 0.04);
+    }
+    &.is-failed {
+        background: rgba(var(--sb-red-rgb), 0.07);
+    }
+    & + & {
+        margin-top: 2px;
+    }
+}
+
+.pp-mq-pos {
+    position: relative;
+    flex-shrink: 0;
+    align-self: flex-start;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    margin-top: 2px;
+    border-radius: 50%;
+    background: var(--sb-bg-panel);
+    box-shadow: 0 0 0 2px var(--sb-accent-dim);
+    color: var(--sb-accent);
+    font: 800 12px var(--sb-font-head);
+
+    .is-held > & {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-yellow) 45%, transparent);
+        color: var(--sb-yellow);
+    }
+    .is-failed > & {
+        background: rgba(var(--sb-red-rgb), 0.16);
+        box-shadow: none;
+        color: var(--sb-red);
+    }
+    .is-unknown > & {
+        background: rgba(var(--sb-overlay-rgb), 0.06);
+        box-shadow: none;
+        color: var(--sb-text-faint);
+    }
+}
+
+.pp-mq-sentence,
+.pp-mq-reason,
+.pp-mq-note {
+    font-size: 12px;
+    color: var(--sb-text-muted);
+
+    .is-held > .pp-mq-text > & {
+        color: var(--sb-yellow);
+    }
+}
+
+.pp-mq-reason {
+    color: var(--sb-text);
+}
+
+.pp-mq-failure {
+    color: var(--sb-red);
+}
+
+.pp-mq-rejoins {
+    font-size: 11.5px;
+    color: var(--sb-text-faint);
+}
+
+.pp-mq-note {
+    &.is-running {
+        color: var(--sb-blue);
+    }
+    &.is-needs-you {
+        color: var(--sb-yellow);
+    }
+    &.is-failed {
+        color: var(--sb-red);
+    }
+    .is-held > .pp-mq-text > &.is-running {
+        color: var(--sb-blue);
+    }
+}
+
+.pp-mq-side {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.pp-mq-estimate {
+    font-size: 12px;
+    color: var(--sb-text-dim);
+}
+
+/* Fix in session and Open session: the accent's quiet button. */
+.sw-btn.pp-mq-accent {
+    background: rgba(var(--sb-accent-rgb), 0.14);
+    border-color: rgba(var(--sb-accent-rgb), 0.3);
+    color: var(--sb-accent);
+}
+
+.pp-mq-side .sw-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+/* A stack's members, top first. */
+.pp-mq-stack {
+    display: flex;
+    flex-direction: column;
+    margin: 4px 0 2px;
+    border-radius: 8px;
+    background: var(--sb-bg-base);
+    box-shadow: 0 0 0 1px var(--sb-line);
+    overflow: hidden;
+
+    .pp-mq-head & {
+        margin: 12px 0 0 40px;
+    }
+}
+
+.pp-mq-member {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+
+    & + & {
+        box-shadow: inset 0 1px 0 var(--sb-line);
+    }
+    &.is-running {
+        background: rgba(var(--sb-accent-rgb), 0.06);
+    }
+}
+
+.pp-mq-member-at {
+    width: 18px;
+    font-size: 11px;
+    color: var(--sb-text-faint);
+}
+
+.pp-mq-member-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 12.5px;
+    color: var(--sb-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pp-mq-subhead {
+    padding: 10px 16px 4px;
+    box-shadow: inset 0 1px 0 var(--sb-line);
+    font: 800 10px var(--sb-font-head);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sb-text-muted);
+
+    &.is-failed {
+        color: var(--sb-red);
+    }
+}
+
+/* The queue's pills: on its rows, and on each Pull requests row. */
+.pp-pill {
+    &.is-queue-merging {
+        background: var(--sb-accent);
+        color: var(--sb-bg-base);
+    }
+    &.is-queue-queued {
+        background: rgba(var(--sb-accent-rgb), 0.12);
+        color: var(--sb-accent);
+    }
+    &.is-queue-held {
+        background: color-mix(in srgb, var(--sb-yellow) 12%, transparent);
+        color: var(--sb-yellow);
+    }
+    &.is-queue-failed,
+    &.is-queue-rebase-conflict {
+        background: rgba(var(--sb-red-rgb), 0.12);
+        color: var(--sb-red);
+    }
+    &.is-queue-kept-rebased,
+    &.is-queue-running {
+        background: rgba(var(--sb-blue-rgb), 0.12);
+        color: var(--sb-blue);
+    }
+    &.is-queue-next {
+        background: color-mix(in srgb, var(--sb-purple) 14%, transparent);
+        color: var(--sb-purple);
+    }
+    &.is-queue-queueable {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.35);
+        color: var(--sb-accent);
+
+        &:hover {
+            background: rgba(var(--sb-accent-rgb), 0.1);
+            color: var(--sb-accent);
+        }
+        &:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+    }
+}

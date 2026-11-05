@@ -26,6 +26,7 @@ import type {ActionRequest} from '../../src/domain/session-work/actions';
 import type {CommentRequest, ReviewRequest} from '../../src/domain/session-work/review';
 import type {RemoteStatusPayload} from '../../src/domain/remote/remote-status';
 import type {UpdateNotice} from '../../src/domain/update/release';
+import type {ErrandResult, FixResult, NudgeResult, QueueErrandView} from '../../src/domain/project/queue-errands';
 import type {Usage} from '../../src/domain/usage/usage';
 import type {Weather, WeatherLocation} from '../../src/domain/weather/weather';
 import type {Plan, PlanSummary} from '../../src/domain/plan/model';
@@ -119,6 +120,13 @@ export interface HostStubs {
      */
     projectOverview: Record<string, ProjectOverview> | null;
     /**
+     * The merge queue's buttons and errands (#315), standing in for `gh` and
+     * the errand store: every `queue:*` channel answers from here, and each
+     * call is recorded (see `mergeQueueRequests`). Null leaves the real
+     * handlers, which reach `gh`.
+     */
+    mergeQueue: MergeQueueStub | null;
+    /**
      * The VM hosts' back end (#276), standing in for the agent and the ssh it
      * is reached over: every `agent:*` channel answers from here, so no test
      * can dial a host. Each request is recorded (see `agentRequests`).
@@ -168,6 +176,21 @@ export interface HostStubs {
      * error, so nothing is typed.
      */
     droppedFiles: DroppedFilesStub;
+}
+
+/** What the `queue:*` channels answer. */
+export interface MergeQueueStub {
+    errands: QueueErrandView[];
+    nudge: NudgeResult;
+    fix: FixResult;
+    retry: ErrandResult;
+    optIn: ErrandResult;
+}
+
+/** One call the renderer made on a `queue:*` channel: its method on `window.api`, and its arguments. */
+export interface MergeQueueRequest {
+    call: string;
+    args: unknown[];
 }
 
 /** What the `vm-schedules:*` channels answer. */
@@ -469,6 +492,8 @@ interface StubState extends HostStubs {
     sessionWorkActions: ActionRequest[];
     /** Every queued action the page asked main to cancel, by id. */
     sessionWorkCancels: string[];
+    /** Every call on a `queue:*` channel, in order. */
+    mergeQueueRequests: MergeQueueRequest[];
     /** Every write to your review the page asked main for, in order. */
     sessionWorkReviews: ReviewWrite[];
     /** What the renderer asked the agent stubs. */
@@ -517,6 +542,7 @@ export const DEFAULT_STUBS: HostStubs = {
     sessionWork: null,
     plans: null,
     projectOverview: null,
+    mergeQueue: null,
     agent: STUB_AGENT,
     vmRegistry: null,
     handoff: {...STUB_HANDOFF, hosts: []},
@@ -538,6 +564,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 sessionWorkClosed: [],
                 sessionWorkActions: [],
                 sessionWorkCancels: [],
+                mergeQueueRequests: [],
                 sessionWorkReviews: [],
                 agentRequests: {install: [], setHostSettings: [], openSetupTerminal: []},
                 handoffRequests: {preview: [], handOff: [], copyStatus: [], bringBack: [], removeCopy: []},
@@ -741,6 +768,52 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 ipcMain.removeHandler(channel);
                 ipcMain.handle(channel, (_event, ...args) => handler(...args));
             };
+
+            if (state.mergeQueue) {
+                // Read at each call, so `setHostStub(app, 'mergeQueue', …)` changes the next answer.
+                const queue =
+                    (call: string, answer: (stub: MergeQueueStub) => unknown) =>
+                    (...args: unknown[]) => {
+                        state.mergeQueueRequests.push({call, args});
+                        return state.mergeQueue ? answer(state.mergeQueue) : undefined;
+                    };
+                replace(
+                    channels.queueNudge,
+                    queue('queueNudge', (stub) => stub.nudge),
+                );
+                replace(
+                    channels.queueForgetNudge,
+                    queue('queueForgetNudge', () => undefined),
+                );
+                replace(
+                    channels.queueSettleNudges,
+                    queue('queueSettleNudges', () => undefined),
+                );
+                replace(
+                    channels.queueFix,
+                    queue('queueFix', (stub) => stub.fix),
+                );
+                replace(
+                    channels.queueRetry,
+                    queue('queueRetry', (stub) => stub.retry),
+                );
+                replace(
+                    channels.queueOptIn,
+                    queue('queueOptIn', (stub) => stub.optIn),
+                );
+                replace(
+                    channels.queueErrandStarted,
+                    queue('queueErrandStarted', () => ({ok: true})),
+                );
+                replace(
+                    channels.queueErrandAbandoned,
+                    queue('queueErrandAbandoned', () => ({ok: true})),
+                );
+                replace(
+                    channels.queueErrands,
+                    queue('queueErrands', (stub) => stub.errands),
+                );
+            }
 
             replace(channels.getUsage, () => {
                 state.calls.getUsage++;
@@ -1102,6 +1175,13 @@ export async function existingBranchAsks(app: ElectronApplication): Promise<(str
 export async function sessionWorkActions(app: ElectronApplication): Promise<ActionRequest[]> {
     return await app.evaluate(() => {
         return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkActions];
+    });
+}
+
+/** Every call the renderer made on a `queue:*` channel, in order (#315). */
+export async function mergeQueueRequests(app: ElectronApplication): Promise<MergeQueueRequest[]> {
+    return await app.evaluate(() => {
+        return [...(globalThis as WithStubs).__switchboardE2E.mergeQueueRequests];
     });
 }
 

@@ -15,7 +15,8 @@
  * when GitHub could not be asked, one message takes the place of Pull
  * requests and Plans; stale data is dimmed under a line saying how old it is.
  * Pull requests come first: checking one out is what the page is opened for
- * most, and they are answered before the plans.
+ * most, and they are answered before the plans. Over them, in a repository
+ * that merges through a merge queue, the Merge queue section (#315).
  *
  * While BlaakTasks is on, the Tasks section (#251) lists the repo's open
  * tasks under Plans & issues (at the top of the one column without GitHub),
@@ -31,6 +32,8 @@ import {ProjectHeader} from './ProjectHeader';
 import {PlansSection} from './PlansSection';
 import {SessionsSection, sessionsShown} from './SessionsSection';
 import {PullRequestsSection} from './PullRequestsSection';
+import {MergeQueueSection} from './MergeQueueSection';
+import {mergeQueueOf} from './merge-queue-view';
 import {WorktreesSection} from './WorktreesSection';
 import {TasksSection} from './TasksSection';
 import {GitHubMessage, RemoteNote, StaleLine} from './EdgeStates';
@@ -49,6 +52,7 @@ import {
 } from './actions';
 import {openProjectTaskDetail, startProjectTask} from './project-tasks';
 import {
+    mergeQueueRows,
     pageRows,
     planRows,
     plansViewOf,
@@ -85,7 +89,9 @@ function currentRows(projectPath: string): PageRow[] {
     const vm = isVmProjectIn(state.agentHost, projectPath);
     const worktrees = answered && showsWorktrees(answered, projectPath, vm) ? worktreesView(answered, page.filter) : [];
     const tasks = state.tasks.enabled && showsTasks(projectPath, vm) ? tasksViewOf(page, projectPath) : null;
+    const queue = mergeQueueOf(page, projectPath);
     return pageRows({
+        mergeQueue: queue && answered?.repository ? mergeQueueRows(answered.repository, queue) : [],
         plans: plans ? planRows(plans) : [],
         pullRequests: pullRequests ? pullRequestRows(pullRequests) : [],
         tasks: tasks ? taskRows(tasks) : [],
@@ -296,6 +302,7 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
                             <GitHubMessage reason={github.reason} />
                         ) : (
                             <>
+                                <MergeQueueSection projectPath={projectPath} />
                                 <PullRequestsSection projectPath={projectPath} />
                                 <PlansSection projectPath={projectPath} />
                             </>

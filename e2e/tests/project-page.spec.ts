@@ -8,7 +8,10 @@
  * requests show with their plan chip, which expands that plan, Show merged
  * adds the merged one, and ↵ opens one on GitHub; with `gh` signed out one
  * message stands in for the GitHub sections (#175). A project opened again
- * shows the answer stored from its last visit while main is asked.
+ * shows the answer stored from its last visit while main is asked. In a repo
+ * with a merge queue (#315), its section shows over Pull requests, its rows
+ * join the cursor, Retry and + Queue reach main, and Nudge asks first with
+ * the exact message.
  *
  * The page's own state (expanded plans, Show closed, cursor, filter, what is
  * remembered per project) and the Sessions section's choice are unit tested
@@ -19,11 +22,13 @@
  */
 import {test, expect, forEachAppearance} from '../support/test';
 import {expectScreen, openSession, rowButton, sessionRow, sidebar, terminalHeader} from '../support/app';
-import {answerDialogs} from '../support/native-dialogs';
-import {clipboardWrites, openedExternally, setHostStub} from '../support/main-process';
+import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
+import {clipboardWrites, mergeQueueRequests, openedExternally, setHostStub} from '../support/main-process';
 import {sessionItem} from '../support/session-list';
 import {LABEL, P, S} from '../fixtures/standard';
 import {acmeOverview, plansStub} from '../fixtures/plans';
+import {acmeQueueOverview, mergeQueueStub} from '../fixtures/merge-queue';
+import {nudgeMessage} from '../../src/domain/project/queue-errands';
 import type {Page} from '@playwright/test';
 
 function projectPage(page: Page) {
@@ -411,6 +416,116 @@ forEachAppearance(() => {
         // The fixture home is a fresh temporary directory each run.
         await expectScreen(page, 'project-page', {
             mask: [projectPage(page).getByText(home.projectPath(P.acmeApi), {exact: true})],
+        });
+    });
+});
+
+test.describe('merge queue', () => {
+    test.use({
+        stubs: {projectOverview: {[P.acmeApi]: acmeQueueOverview()}, plans: plansStub(), mergeQueue: mergeQueueStub()},
+    });
+
+    function queueSection(page: Page) {
+        return projectPage(page).getByRole('region', {name: 'Merge queue'});
+    }
+
+    test('the queue shows over Pull requests, its rows join the cursor, Retry and + Queue reach main, and Nudge asks first with the exact message', async ({
+        page,
+        app,
+    }) => {
+        /* Given */
+        await rowProjectLink(page, S.loginFix).click();
+        const queue = queueSection(page);
+        const prs = projectPage(page).getByRole('region', {name: 'Pull requests'});
+
+        /* Then */
+        await expect(projectPage(page).locator('.pp-section h2').nth(0)).toHaveText('Merge queue');
+        await expect(projectPage(page).locator('.pp-section h2').nth(1)).toHaveText('Pull requests');
+        await expect(queue.locator('.pp-section-head')).toContainText('3 queued · 1 held · 1 failed');
+        await expect(queue.locator('.pp-section-head')).toContainText('Clears in about 105 min');
+        const head = queue.locator('.pp-mq-head');
+        await expect(head).toContainText('Stop the login redirect loop');
+        await expect(head).toContainText('approved by ana');
+        await expect(head).toContainText('merges in ~9 min');
+        await expect(head).toContainText('Checks 3 of 5');
+        await expect(head).toContainText('Integration tests');
+        await expect(head.getByRole('button', {name: 'session “' + LABEL.loginFix + '”'})).toBeVisible();
+        const behind = queue.locator('.pp-mq-rail .pp-mq-entry');
+        await expect(behind).toHaveCount(3);
+        await expect(behind.nth(0)).toContainText('Bump express to 5.1');
+        await expect(behind.nth(0)).toContainText('next');
+        await expect(behind.nth(0)).toContainText('~33 min');
+        await expect(behind.nth(1).locator('.pp-mq-member-at')).toHaveText(['↑3', '↑2', '↑1']);
+        await expect(behind.nth(1)).toContainText('stack · 3 PRs · merges as one');
+        await expect(behind.nth(2)).toHaveClass(/\bis-held\b/);
+        await expect(behind.nth(2)).toContainText('passed over until @sam reviews');
+        const failed = queue.locator('.pp-mq-entry.is-failed');
+        await expect(failed).toContainText('CI failed');
+        await expect(failed).toContainText('Unit tests');
+        await expect(failed.getByRole('button', {name: 'Fix in session'})).toBeVisible();
+        await expect(queue.locator('.pp-mq-entry.is-unknown')).toContainText('Paused by an admin until Friday');
+        await expect(queue.locator('.pp-mq-outside')).toHaveCount(0);
+        await expect(prs.locator('.pp-pr').filter({hasText: 'Stop the login redirect loop'})).toContainText(
+            'merging · 1st',
+        );
+        await expect(prs.locator('.pp-pr').filter({hasText: 'Bump express to 5.1'})).toContainText('queued · 2nd');
+        await expect(prs.locator('.pp-pr').filter({hasText: 'Log the webhook retries'})).toContainText('queue failed');
+        await expect
+            .poll(async () => (await mergeQueueRequests(app)).find((request) => request.call === 'queueSettleNudges'))
+            .toEqual({call: 'queueSettleNudges', args: ['acme/api', [{number: 1350, reviewer: 'sam'}]]});
+
+        /* When */
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('Enter');
+
+        /* Then */
+        await expect(behind.nth(0)).toHaveClass(/\bis-cursor\b/);
+        await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1331');
+
+        /* When */
+        await failed.getByRole('button', {name: 'Retry'}).click();
+
+        /* Then */
+        await expect
+            .poll(async () => (await mergeQueueRequests(app)).filter((request) => request.call === 'queueRetry'))
+            .toEqual([{call: 'queueRetry', args: ['acme/api', 1360]}]);
+
+        /* When */
+        await prs
+            .locator('.pp-pr')
+            .filter({hasText: 'Add a health endpoint'})
+            .getByRole('button', {name: '+ Queue'})
+            .click();
+
+        /* Then */
+        await expect
+            .poll(async () => (await mergeQueueRequests(app)).filter((request) => request.call === 'queueOptIn'))
+            .toEqual([{call: 'queueOptIn', args: ['acme/api', 1370]}]);
+
+        /* When */
+        await answerDialogs(page, false);
+        await behind.nth(2).getByRole('button', {name: 'Nudge sam'}).click();
+
+        /* Then */
+        const message = nudgeMessage(
+            {number: 1350, title: 'Bump TypeScript to 5.9', url: 'https://github.com/acme/api/pull/1350'},
+            'sam',
+        );
+        await expect.poll(() => dialogsAsked(page)).toEqual([expect.stringContaining(message)]);
+        expect((await mergeQueueRequests(app)).filter((request) => request.call === 'queueNudge')).toEqual([]);
+    });
+
+    forEachAppearance(() => {
+        test('the merge queue section', async ({page, home}) => {
+            /* When */
+            await rowProjectLink(page, S.loginFix).click();
+
+            /* Then */
+            await expect(queueSection(page).locator('.pp-mq-head')).toContainText('merges in ~9 min');
+            await expectScreen(page, 'project-page-merge-queue', {
+                mask: [projectPage(page).getByText(home.projectPath(P.acmeApi), {exact: true})],
+            });
         });
     });
 });
