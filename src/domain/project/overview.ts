@@ -170,3 +170,12 @@ export interface ProjectOverviewOptions {
      */
     plans?: boolean;
 }
+
+/**
+ * What Clean on the project page did: the worktrees it removed, and the ones
+ * git refused to, with git's reason.
+ */
+export interface WorktreeCleanResult {
+    removed: string[];
+    failed: {path: string; reason: string}[];
+}

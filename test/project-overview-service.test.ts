@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {PlanService} from '../src/application/services/plan-service';
 import {ProjectOverviewService, type RunningSession} from '../src/application/services/project-overview-service';
 import type {GitHubAvailability} from '../src/application/ports/github-cli';
+import type {GitWrite} from '../src/application/ports/git-workspace';
 import type {Plan, PlanIssue, PlanSummary} from '../src/domain/plan/model';
 import type {
     ProjectGitHubOverview,
@@ -204,6 +205,21 @@ function setUp(overrides: Partial<World> = {}) {
         ...fakeWorktrees(),
     };
     git.byRepository.set(PROJECT, world.worktrees);
+    /** Clean's writes, in order; a path in `refused` is refused with git's reason. */
+    const writes: string[] = [];
+    const refused = new Map<string, string>();
+    const worktreeWrites = {
+        mainCheckout: async (cwd: string) => (world.isRepository ? PROJECT : cwd),
+        async removeWorktree(repository: string, path: string, options?: {force?: boolean}): Promise<GitWrite> {
+            writes.push(`${repository}: worktree remove ${options?.force ? '--force ' : ''}${path}`);
+            const reason = refused.get(path);
+            return reason ? {ok: false, reason} : {ok: true};
+        },
+        async pruneWorktrees(repository: string): Promise<GitWrite> {
+            writes.push(`${repository}: worktree prune`);
+            return {ok: true};
+        },
+    };
     const remotes = {originUrl: async () => world.origin};
 
     const plans = new PlanService({
@@ -219,6 +235,7 @@ function setUp(overrides: Partial<World> = {}) {
         owners: {issueSessions: async () => world.owners},
         running: () => world.running,
         git,
+        worktreeWrites,
         remotes,
         github,
         clock,
@@ -228,6 +245,8 @@ function setUp(overrides: Partial<World> = {}) {
         world,
         calls,
         git,
+        writes,
+        refused,
         service,
         advance: (ms: number) => {
             now += ms;
@@ -624,6 +643,78 @@ test('a parent in another repository leaves the issue loose in this one', async 
         [[150, null]],
     );
     assert.deepEqual(github.plans, []);
+});
+
+// ── Clean ──
+
+const MERGED = PROJECT + '/.claude/worktrees/113-done';
+
+test('Clean removes the merged, clean worktrees with no session running, without force, then prunes', async () => {
+    /* Given */
+    const {service, writes} = setUp({
+        worktrees: [
+            {...checkout(PROJECT, true), merged: false},
+            {...checkout(MERGED), merged: true},
+            {...checkout(WORKTREE), merged: true, changedFiles: 1},
+            {...checkout(PROJECT + '/.claude/worktrees/locked'), merged: true, locked: true},
+            {...checkout(PROJECT + '/.claude/worktrees/open'), ahead: 2},
+            {...checkout(PROJECT + '/.claude/worktrees/busy'), merged: true},
+        ],
+        running: [{sessionId: 'session-1', projectPath: PROJECT + '/.claude/worktrees/busy/src'}],
+    });
+
+    /* When */
+    const result = await service.cleanWorktrees(PROJECT);
+
+    /* Then */
+    assert.deepEqual(result, {removed: [MERGED], failed: []});
+    assert.deepEqual(writes, [`${PROJECT}: worktree remove ${MERGED}`, `${PROJECT}: worktree prune`]);
+});
+
+test('a worktree git refuses to remove is answered with its reason, and the others still go', async () => {
+    /* Given */
+    const other = PROJECT + '/.claude/worktrees/120-also-done';
+    const {service, writes, refused} = setUp({
+        worktrees: [checkout(PROJECT, true), {...checkout(MERGED), merged: true}, {...checkout(other), merged: true}],
+    });
+    refused.set(MERGED, "fatal: '" + MERGED + "' contains modified or untracked files, use --force to delete it");
+
+    /* When */
+    const result = await service.cleanWorktrees(PROJECT);
+
+    /* Then */
+    assert.deepEqual(result, {
+        removed: [other],
+        failed: [{path: MERGED, reason: refused.get(MERGED)}],
+    });
+    assert.deepEqual(writes.at(-1), `${PROJECT}: worktree prune`);
+});
+
+test('nothing superfluous: Clean writes nothing, not even a prune', async () => {
+    /* Given */
+    const {service, writes} = setUp({worktrees: [checkout(PROJECT, true), checkout(WORKTREE)]});
+
+    /* When */
+    const result = await service.cleanWorktrees(PROJECT);
+
+    /* Then */
+    assert.deepEqual(result, {removed: [], failed: []});
+    assert.deepEqual(writes, []);
+});
+
+test('Clean leaves an ssh project alone, and a folder that is no repository', async () => {
+    /* Given */
+    const {service, writes, git} = setUp({isRepository: false});
+
+    /* When */
+    const remote = await service.cleanWorktrees('ssh://joris@build-box/srv/app');
+    const local = await service.cleanWorktrees(PROJECT);
+
+    /* Then */
+    assert.deepEqual(remote, {removed: [], failed: []});
+    assert.deepEqual(local, {removed: [], failed: []});
+    assert.deepEqual(writes, []);
+    assert.deepEqual(git.calls, []);
 });
 
 // ── The merge queue (#315) ──

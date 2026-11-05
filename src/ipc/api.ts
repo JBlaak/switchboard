@@ -28,7 +28,7 @@ import type {Weather, WeatherLocation} from '../domain/weather/weather';
 import type {CaptureTarget, RouteRequest, RouteResult} from '../domain/ask/model';
 import type {IssueWorktreeRequest, IssueWorktreeResult} from '../domain/plan/issue-session';
 import type {Plan, PlanSummary} from '../domain/plan/model';
-import type {ProjectOverview, ProjectOverviewOptions} from '../domain/project/overview';
+import type {ProjectOverview, ProjectOverviewOptions, WorktreeCleanResult} from '../domain/project/overview';
 import type {
     ErrandResult,
     FixRequest,
@@ -251,6 +251,12 @@ export interface SwitchboardApi {
      * plans at all (`plansPending`), which answers in a fraction of the time.
      */
     projectOverview(projectPath: string, options?: ProjectOverviewOptions): Promise<ProjectOverview>;
+    /**
+     * Clean: remove the project's merged, clean, unlocked linked worktrees
+     * with no session running in them, then prune. Never forced; branches are
+     * kept. Nothing for an ssh project.
+     */
+    projectCleanWorktrees(projectPath: string): Promise<WorktreeCleanResult>;
 
     // ── The merge queue's buttons and errands (#315) ──
     // Nudge and a new Fix answer a first prompt; the renderer starts the session

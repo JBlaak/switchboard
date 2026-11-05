@@ -18,11 +18,12 @@ import type {Project} from '../../../domain/project/project';
 import {issueKeyString} from '../../../domain/plan/model';
 import type {IssueKey} from '../../../domain/plan/model';
 import type {IssueSessionStart} from '../../../domain/plan/issue-session';
+import type {WorktreeCleanResult} from '../../../domain/project/overview';
 import {openPlanPage} from '../plan-page/actions';
 import {startIssueSession} from '../session-work/plan/actions';
 import {pulseSessionRow} from '../session-list/pulse';
 import {cursorId} from './page-rows';
-import {AUTH_COMMAND, isVmRepositoryIn, opensGitHub} from './page-state';
+import {AUTH_COMMAND, cleanConfirm, cleanableWorktrees, isVmRepositoryIn, opensGitHub} from './page-state';
 
 /** True for an ssh:// project, VM or not: nothing on the Mac to read. */
 export function isRemoteProject(projectPath: string): boolean {
@@ -205,6 +206,29 @@ export async function startWorktreeSession(projectPath: string, path: string): P
     if (result.ok) pulseSessionRow(result.sessionId);
     dispatch({type: 'projectWorktreeStartAnswered', path, result});
     if (result.ok) reloadProjectOverview();
+}
+
+/**
+ * Clean: after a `confirm` naming how many, remove the project's merged
+ * worktrees with no changes and no session running (`cleanableWorktrees`),
+ * then ask for the overview again. Main reads them afresh and forces
+ * nothing; the ones git would not remove say so on their row.
+ */
+export async function cleanWorktrees(projectPath: string): Promise<void> {
+    const page = getState().projectPage;
+    if (page.worktreeClean?.phase === 'cleaning') return;
+    const cleanable = cleanableWorktrees(page.overview, projectPath);
+    if (cleanable.length === 0 || !confirm(cleanConfirm(cleanable.length))) return;
+    dispatch({type: 'projectWorktreesCleanAsked'});
+    let result: WorktreeCleanResult;
+    try {
+        result = await window.api.projectCleanWorktrees(projectPath);
+    } catch (err) {
+        const reason = (err as Error).message || 'Could not remove the worktree';
+        result = {removed: [], failed: cleanable.map((worktree) => ({path: worktree.path, reason}))};
+    }
+    dispatch({type: 'projectWorktreesCleanAnswered', projectPath, result});
+    reloadProjectOverview();
 }
 
 async function startOn(projectPath: string, issue: IssueKey, planKey: IssueKey): Promise<IssueSessionStart> {

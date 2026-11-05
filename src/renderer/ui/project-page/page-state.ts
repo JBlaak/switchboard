@@ -18,7 +18,8 @@
  * Pure, so it is tested in node.
  */
 import {isRemoteProjectPath, parseRemoteProjectPath} from '../../../domain/project/remote-target';
-import type {GitHubUnavailableReason, ProjectOverview} from '../../../domain/project/overview';
+import {superfluousWorktrees} from '../../../domain/project/superfluous-worktrees';
+import type {GitHubUnavailableReason, ProjectOverview, WorktreeOverview} from '../../../domain/project/overview';
 import {projectLabel, repositoryRoot} from '../../features/sessions/project-label';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import type {AgentHostState} from '../../state/agent-host-slice';
@@ -54,6 +55,22 @@ export function showsWorktrees(overview: ProjectOverview | null, projectPath: st
     if (isRemoteProjectPath(projectPath) && !vm) return false;
     const answer = overview?.projectPath === projectPath ? overview : null;
     return !answer || answer.worktrees.length > 0;
+}
+
+/**
+ * The worktrees the Worktrees section's Clean would remove, from the overview
+ * it holds for `projectPath`: none for an ssh project, VM or not, and none
+ * until it is answered.
+ */
+export function cleanableWorktrees(overview: ProjectOverview | null, projectPath: string): WorktreeOverview[] {
+    if (isRemoteProjectPath(projectPath)) return [];
+    const answer = overview?.projectPath === projectPath ? overview : null;
+    return answer ? superfluousWorktrees(answer.worktrees) : [];
+}
+
+/** Clean's question, before it removes anything. */
+export function cleanConfirm(count: number): string {
+    return `Remove ${count} merged worktree${count === 1 ? '' : 's'} with no changes and no session running? Their branches are kept.`;
 }
 
 /** `user@host:port`, as the header names a remote project's host. */

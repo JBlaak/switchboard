@@ -38,7 +38,7 @@
 import type {RendererEvent} from './events';
 import type {RendererState} from './root';
 import {projectRoute} from './main-area-slice';
-import type {ProjectOverview} from '../../domain/project/overview';
+import type {ProjectOverview, WorktreeCleanResult} from '../../domain/project/overview';
 import type {IssueSessionStart} from '../../domain/plan/issue-session';
 import type {TaskRow} from '../../domain/tasks/model';
 import type {StoredOverview} from './stored-overviews';
@@ -85,6 +85,9 @@ export type ProjectPageEvent =
           path: string;
           result: {ok: true; sessionId: string} | {ok: false; reason: string};
       }
+    /** Clean: the project's superfluous worktrees being removed, and what main answered. */
+    | {type: 'projectWorktreesCleanAsked'}
+    | {type: 'projectWorktreesCleanAnswered'; projectPath: string; result: WorktreeCleanResult}
     /** The keyboard cursor moved to a row (null: it is gone). */
     | {type: 'projectCursorMoved'; target: string | null}
     /** The text the page's rows are filtered by (`/`). */
@@ -162,6 +165,8 @@ export interface ProjectPageState extends ProjectPageMemory {
     readonly showMerged: boolean;
     /** A session starting in one of the project's worktrees, or why the last one did not (#175). */
     readonly worktreeStart: ProjectWorktreeStart | null;
+    /** Clean removing the superfluous worktrees, or the ones git would not remove last time, with why. */
+    readonly worktreeClean: ProjectWorktreeClean | null;
     /** The project's open tasks (#251); null until read, and while BlaakTasks is off. */
     readonly tasks: ProjectTasks | null;
     /** The merge queue's errands in the project's repository (#315); null until read. */
@@ -185,6 +190,10 @@ export type ProjectWorktreeStart =
     | {readonly path: string; readonly phase: 'starting'}
     | {readonly path: string; readonly phase: 'failed'; readonly reason: string};
 
+export type ProjectWorktreeClean =
+    | {readonly phase: 'cleaning'}
+    | {readonly phase: 'failed'; readonly failed: readonly {readonly path: string; readonly reason: string}[]};
+
 export const NO_MEMORY: ProjectPageMemory = {expandedPlans: [], showClosed: false};
 
 export const initialProjectPageState: ProjectPageState = {
@@ -198,6 +207,7 @@ export const initialProjectPageState: ProjectPageState = {
     start: null,
     showMerged: false,
     worktreeStart: null,
+    worktreeClean: null,
     tasks: null,
     queueErrands: null,
     queueActions: {},
@@ -225,6 +235,7 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
                 start: null,
                 showMerged: false,
                 worktreeStart: null,
+                worktreeClean: null,
                 tasks: state.tasks?.projectPath === event.projectPath ? state.tasks : null,
                 queueErrands: state.projectPath === event.projectPath ? state.queueErrands : null,
                 queueActions: {},
@@ -291,6 +302,16 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
                 worktreeStart: event.result.ok
                     ? null
                     : {path: event.path, phase: 'failed', reason: event.result.reason},
+            };
+
+        case 'projectWorktreesCleanAsked':
+            return state.projectPath === null ? state : {...state, worktreeClean: {phase: 'cleaning'}};
+
+        case 'projectWorktreesCleanAnswered':
+            if (event.projectPath !== state.projectPath || state.worktreeClean?.phase !== 'cleaning') return state;
+            return {
+                ...state,
+                worktreeClean: event.result.failed.length === 0 ? null : {phase: 'failed', failed: event.result.failed},
             };
 
         case 'projectCursorMoved':

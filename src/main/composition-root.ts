@@ -931,6 +931,7 @@ export function buildContainer(): Container {
                 .filter(([, session]) => !session.exited && !session.isPlainTerminal)
                 .map(([sessionId, session]) => ({sessionId, projectPath: session.projectPath})),
         git: workspace,
+        worktreeWrites: workspace,
         remotes: git,
         github,
         clock,

@@ -159,6 +159,7 @@ const api: SwitchboardApi = {
     projectPlans: (projectPath, options) => ipcRenderer.invoke(INVOKE.planProjectPlans, projectPath, options),
     // ── The project page (#172) ──
     projectOverview: (projectPath, options) => ipcRenderer.invoke(INVOKE.projectOverview, projectPath, options),
+    projectCleanWorktrees: (projectPath) => ipcRenderer.invoke(INVOKE.projectCleanWorktrees, projectPath),
     // ── The merge queue (#315) ──
     queueNudge: (request) => ipcRenderer.invoke(INVOKE.queueNudge, request),
     queueForgetNudge: (repository, number, reviewer) =>

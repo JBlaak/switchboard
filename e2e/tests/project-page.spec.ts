@@ -6,7 +6,8 @@
  * (#174), a plan expands to its issues with the keys, ↵ opens it inside the
  * page and coming back finds it expanded, and / filters the rows. The pull
  * requests show with their plan chip, which expands that plan, Show merged
- * adds the merged one, and ↵ opens one on GitHub; with `gh` signed out one
+ * adds the merged one, and ↵ opens one on GitHub; Clean removes the merged
+ * worktree after a confirm; with `gh` signed out one
  * message stands in for the GitHub sections (#175). A project opened again
  * shows the answer stored from its last visit while main is asked. In a repo
  * with a merge queue (#315), its section shows over Pull requests, its rows
@@ -359,6 +360,24 @@ test.describe('plans and issues', () => {
 
         /* Then */
         await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1331');
+    });
+
+    test('Clean by the Worktrees heading asks how many, then removes the merged worktree and lists it gone', async ({
+        page,
+    }) => {
+        /* Given */
+        await rowProjectLink(page, S.loginFix).click();
+        const worktrees = projectPage(page).getByRole('region', {name: 'Worktrees'});
+        await expect(worktrees.locator('.pp-worktree-branch')).toHaveCount(4);
+        await answerDialogs(page, true);
+
+        /* When */
+        await worktrees.getByRole('button', {name: 'Clean 1'}).click();
+
+        /* Then */
+        await expect.poll(() => dialogsAsked(page)).toEqual([expect.stringMatching(/^Remove 1 merged worktree /)]);
+        await expect(worktrees.locator('.pp-worktree-branch')).toHaveText(['main', 'fix/1320', 'rate-limiter']);
+        await expect(worktrees.getByRole('button', {name: /^Clean/})).toHaveCount(0);
     });
 
     test('a project opened again shows its last answer, stored, until main answers: unreachable, it stays, marked stale', async ({
