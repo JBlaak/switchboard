@@ -375,7 +375,14 @@ export class PhoneSessionsService {
             return;
         }
         const {key: sessionId, session} = found;
+        // The replay is drawn at whatever sizes the PTY has had: the spawn's, the
+        // Mac's, the other screen of a foldable. A session this phone owns is
+        // nudged after it, as a renderer's reattach is, so the TUI repaints at
+        // the phone's width even when the PTY has that size already.
+        const owns = ownerOf(this.ownership, sessionId) === phone.deviceId;
+        if (owns) session.firstResize = false;
         this.apply({type: 'size', sessionId, device: phone.deviceId, size});
+        if (owns && !session.exited && !session.isPlainTerminal) this.nudge(session, size);
         phone.connection.send({
             type: 'attached',
             sessionId,
@@ -465,6 +472,12 @@ export class PhoneSessionsService {
 
         if (!moved && !session.firstResize) return;
         session.firstResize = false;
+        this.nudge(session, {cols, rows});
+    }
+
+    /** Resize by a column and back, which makes a full-screen TUI repaint into the terminal it has. */
+    private nudge(session: ActiveSession, {cols, rows}: TerminalSize): void {
+        const {timers} = this.deps;
         timers.setTimeout(() => {
             try {
                 session.pty.resize(cols + 1, rows);
