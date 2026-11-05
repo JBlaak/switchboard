@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import {WebSocket} from 'ws';
@@ -115,21 +116,45 @@ function recordingHandlers(grant: (fingerprint: string) => ConnectionGrant) {
     return {handlers, asked, connections, messages, disconnected};
 }
 
-async function harness(options: {keepaliveMs?: number} = {}) {
+async function harness(options: {keepaliveMs?: number; addresses?: string[]; port?: number} = {}) {
+    let addresses = options.addresses ?? ['127.0.0.1'];
     const link = new TlsDeviceLink({
         parse,
         encodeTerminalFrame,
         log: silentLog,
-        addresses: () => ['127.0.0.1'],
-        ...options,
+        addresses: () => addresses,
+        ...(options.keepaliveMs ? {keepaliveMs: options.keepaliveMs} : {}),
     });
     const rec = recordingHandlers((fp) => (fp === phone.fingerprint ? {kind: 'device', deviceId: 'd1'} : null));
-    const port = await link.start(server, 0, rec.handlers);
-    return {link, port, ...rec};
+    const port = await link.start(server, options.port ?? 0, rec.handlers);
+    return {
+        link,
+        port,
+        ...rec,
+        /** The Mac's addresses from now on. */
+        setAddresses: (next: string[]) => {
+            addresses = next;
+        },
+    };
 }
 
-function connect(port: number, pair: Pair | null, extra: Record<string, unknown> = {}): WebSocket {
-    return new WebSocket(`wss://127.0.0.1:${port}`, {
+/** Holds `port` on `host` the way another app would; resolves with a closer. */
+function occupy(port: number, host: string): Promise<{port: number; close: () => Promise<void>}> {
+    return new Promise((resolve, reject) => {
+        const blocker = net.createServer();
+        blocker.once('error', reject);
+        blocker.listen(port, host, () =>
+            resolve({
+                port: (blocker.address() as net.AddressInfo).port,
+                close: () => new Promise((done) => blocker.close(() => done())),
+            }),
+        );
+    });
+}
+
+function connect(port: number, pair: Pair | null, extra: Record<string, unknown> = {}, host = '127.0.0.1'): WebSocket {
+    const authority = host.includes(':') ? `[${host}]` : host;
+    return new WebSocket(`wss://${authority}:${port}`, {
         rejectUnauthorized: false,
         ...(pair ? {key: pair.keyPem, cert: pair.certPem} : {}),
         ...extra,
@@ -359,4 +384,112 @@ test('starting with nowhere to listen fails', async () => {
     /* Then */
     await assert.rejects(started, /No local network interface/);
     assert.equal(link.listening, false);
+});
+
+// ── The port, and following the Mac's addresses ──
+
+test('starting on a given port listens on that port on every address', async (t) => {
+    /* Given */
+    const free = await occupy(0, '127.0.0.1');
+    await free.close();
+
+    /* When */
+    const h = await harness({addresses: ['127.0.0.1', '::1'], port: free.port});
+    t.after(() => h.link.stop(1001, 'test over'));
+
+    /* Then */
+    assert.equal(h.port, free.port);
+    assert.deepEqual(h.link.addresses, ['127.0.0.1', '::1']);
+    assert.equal(await outcome(connect(h.port, phone, {}, '::1')), 'open');
+});
+
+test('a port taken on every address is swapped for one the OS picks', async (t) => {
+    /* Given */
+    const taken = await occupy(0, '127.0.0.1');
+    t.after(() => taken.close());
+
+    /* When */
+    const h = await harness({port: taken.port});
+    t.after(() => h.link.stop(1001, 'test over'));
+
+    /* Then */
+    assert.notEqual(h.port, taken.port);
+    assert.ok(h.port > 0);
+    assert.equal(h.link.listening, true);
+    assert.equal(await outcome(connect(h.port, phone)), 'open');
+});
+
+test('a port taken on only one address is kept, and that address goes without', async (t) => {
+    /* Given */
+    const taken = await occupy(0, '::1');
+    t.after(() => taken.close());
+
+    /* When */
+    const h = await harness({addresses: ['127.0.0.1', '::1'], port: taken.port});
+    t.after(() => h.link.stop(1001, 'test over'));
+
+    /* Then */
+    assert.equal(h.port, taken.port);
+    assert.deepEqual(h.link.addresses, ['127.0.0.1']);
+});
+
+test('a new address is listened on at the same port and the open connections stay', async (t) => {
+    /* Given */
+    const h = await harness({addresses: ['127.0.0.1']});
+    t.after(() => h.link.stop(1001, 'test over'));
+    const existing = connect(h.port, phone);
+    assert.equal(await outcome(existing), 'open');
+    h.setAddresses(['127.0.0.1', '::1']);
+
+    /* When */
+    const change = await h.link.updateAddresses(1001, 'The Mac changed networks');
+
+    /* Then */
+    assert.deepEqual(change, {added: ['::1'], removed: []});
+    assert.deepEqual(h.link.addresses, ['127.0.0.1', '::1']);
+    assert.equal(await outcome(connect(h.port, phone, {}, '::1')), 'open');
+    assert.equal(existing.readyState, WebSocket.OPEN);
+    assert.deepEqual(h.disconnected, []);
+});
+
+test('an address that went away closes only the connections that came in on it', async (t) => {
+    /* Given */
+    const h = await harness({addresses: ['127.0.0.1', '::1']});
+    t.after(() => h.link.stop(1001, 'test over'));
+    const staying = connect(h.port, phone, {}, '127.0.0.1');
+    const leaving = connect(h.port, phone, {}, '::1');
+    assert.equal(await outcome(staying), 'open');
+    assert.equal(await outcome(leaving), 'open');
+    await until(() => h.connections.length === 2);
+    const code = closed(leaving);
+    h.setAddresses(['127.0.0.1']);
+
+    /* When */
+    const change = await h.link.updateAddresses(1001, 'The Mac changed networks');
+
+    /* Then */
+    assert.deepEqual(change, {added: [], removed: ['::1']});
+    assert.equal(await code, 1001);
+    assert.equal(staying.readyState, WebSocket.OPEN);
+    assert.deepEqual(h.link.addresses, ['127.0.0.1']);
+    assert.equal(await outcome(connect(h.port, phone, {}, '::1')), 'failed');
+    await until(() => h.disconnected.length === 1);
+});
+
+test('when every address went away the link stops', async () => {
+    /* Given */
+    const h = await harness({addresses: ['127.0.0.1']});
+    const ws = connect(h.port, phone);
+    assert.equal(await outcome(ws), 'open');
+    const code = closed(ws);
+    h.setAddresses([]);
+
+    /* When */
+    const change = await h.link.updateAddresses(1001, 'The Mac changed networks');
+
+    /* Then */
+    assert.deepEqual(change, {added: [], removed: ['127.0.0.1']});
+    assert.equal(await code, 1001);
+    assert.equal(h.link.listening, false);
+    assert.deepEqual(h.link.addresses, []);
 });

@@ -11,7 +11,8 @@
  * what decides.
  *
  * Bound to the LAN and VPN interfaces (see `listenAddresses`), one TLS server
- * per address, all on the same port, so a phone on the same VPN as the Mac
+ * per address, all on the same port (kept when the addresses change, see
+ * `updateAddresses`, and across launches by the caller passing it back), so a phone on the same VPN as the Mac
  * (WireGuard, Tailscale) reaches it too. Never loopback-only (a phone couldn't
  * reach it), and never the wildcard address, which would also listen on
  * AirDrop, Internet Sharing and virtual machine interfaces. A VPN peer gets no
@@ -33,6 +34,7 @@ import {CLOSE} from '../../domain/phone/protocol';
 import type {ClientMessage, ServerMessage} from '../../domain/phone/protocol';
 import type {Logger} from '../../application/ports/logger';
 import type {
+    AddressChange,
     ConnectionGrant,
     DeviceConnection,
     DeviceLink,
@@ -107,37 +109,64 @@ export interface TlsDeviceLinkDeps {
 interface Peer {
     fingerprint: string;
     grant: Exclude<ConnectionGrant, null>;
+    /** The address of the server the phone came in on. */
+    address: string;
 }
 
 interface Live {
     ws: WebSocket;
     connection: DeviceConnection;
     missedPings: number;
+    /** The address of the server it came in on: it closes when that address goes away. */
+    address: string;
 }
 
+/** One address's TLS server and the authorised sockets that arrived on it. */
+interface Listener {
+    server: tls.Server;
+    sockets: Set<tls.TLSSocket>;
+}
+
+/** What one round of binding left behind. */
+interface Binding {
+    port: number;
+    /** Why the addresses that didn't bind failed. */
+    failures: NodeJS.ErrnoException[];
+}
+
+/**
+ * How often a port the OS picked is tried again when it turns out to be taken
+ * on another address (the OS picks it free on the first address only).
+ */
+const PICK_ATTEMPTS = 5;
+
 export class TlsDeviceLink implements DeviceLink {
-    private servers: tls.Server[] = [];
-    private bound: string[] = [];
+    /** By address, one TLS server each, all on `port`. */
+    private readonly listeners = new Map<string, Listener>();
+    /** The addresses as last read, which is the order `addresses` reports them in. */
+    private order: string[] = [];
+    private port = 0;
+    private options: tls.TlsOptions | null = null;
+    private handlers: DeviceLinkHandlers | null = null;
     private http: http.Server | null = null;
     private wss: WebSocketServer | null = null;
     private keepalive: ReturnType<typeof setInterval> | null = null;
-    private readonly sockets = new Set<tls.TLSSocket>();
     private readonly peers = new WeakMap<Socket, Peer>();
     private readonly live = new Set<Live>();
 
     constructor(private readonly deps: TlsDeviceLinkDeps) {}
 
     public get listening(): boolean {
-        return this.servers.length > 0;
+        return this.listeners.size > 0;
     }
 
     public get addresses(): readonly string[] {
-        return this.bound;
+        return this.order.filter((address) => this.listeners.has(address));
     }
 
     public async start(identity: ServerIdentity, port: number, handlers: DeviceLinkHandlers): Promise<number> {
         if (this.listening) throw new Error('The device link is already listening');
-        const addresses = (this.deps.addresses ?? (() => listenAddresses(os.networkInterfaces())))();
+        const addresses = this.read();
         if (addresses.length === 0) throw new Error('No local network interface to listen on');
 
         // The HTTP server never listens: it only parses the upgrade request on
@@ -154,8 +183,9 @@ export class TlsDeviceLink implements DeviceLink {
         });
         this.http = httpServer;
         this.wss = wss;
-
-        const options: tls.TlsOptions = {
+        this.handlers = handlers;
+        this.order = addresses;
+        this.options = {
             key: identity.keyPem,
             cert: identity.certPem,
             minVersion: 'TLSv1.3',
@@ -164,58 +194,152 @@ export class TlsDeviceLink implements DeviceLink {
             handshakeTimeout: HANDSHAKE_TIMEOUT_MS,
         };
 
-        let bound = port;
-        for (const address of addresses) {
-            const server = tls.createServer(options, (socket) => this.secured(socket, handlers));
-            server.on('tlsClientError', (err) => this.deps.log.debug('[phone] TLS handshake failed:', err.message));
-            try {
-                bound = await listen(server, bound, address);
-                this.servers.push(server);
-                this.bound.push(address);
-                this.deps.log.info(`[phone] listening on ${address} port ${bound}`);
-            } catch (err) {
-                // One address that won't bind (it went away, it's taken) shouldn't
-                // keep the others closed; none binding at all is an error.
-                this.deps.log.warn(`[phone] could not listen on ${address}:`, (err as Error).message);
+        let binding: Binding;
+        if (port === 0) {
+            binding = await this.pick(addresses);
+        } else {
+            binding = await this.bindEach(addresses, port);
+            if (this.listeners.size === 0 && binding.failures.every(isAddressInUse)) {
+                // The port the phones know is gone (something else took it): a
+                // new one beats not listening at all.
+                this.deps.log.warn(`[phone] port ${port} is taken on every address; picking a new one`);
+                binding = await this.pick(addresses);
             }
         }
-        if (this.servers.length === 0) {
-            this.bound = [];
+        if (this.listeners.size === 0) {
             this.http = null;
             this.wss = null;
+            this.handlers = null;
+            this.options = null;
+            this.order = [];
             throw new Error(`Could not listen on any of ${addresses.join(', ')}`);
         }
 
+        this.port = binding.port;
         this.keepalive = setInterval(() => this.ping(), this.deps.keepaliveMs ?? 20_000);
         this.keepalive.unref();
-        return bound;
+        return this.port;
+    }
+
+    /**
+     * Follows the Mac's addresses without starting over: listens on the new
+     * ones on the same port, and closes the servers of the ones that went away
+     * along with the connections that came in on them (with `code`). Every
+     * other connection stays open. When no address is left it stops.
+     */
+    public async updateAddresses(code: number, reason: string): Promise<AddressChange> {
+        if (!this.listening) return {added: [], removed: []};
+        const now = this.read();
+        const removed = [...this.listeners.keys()].filter((address) => !now.includes(address));
+        const fresh = now.filter((address) => !this.listeners.has(address));
+        this.order = now;
+
+        await Promise.all(removed.map((address) => this.unbind(address, code, reason)));
+        if (removed.length > 0) this.deps.log.info(`[phone] stopped listening on ${removed.join(', ')}`);
+        const added: string[] = [];
+        for (const address of fresh) {
+            try {
+                await this.bind(address, this.port);
+                added.push(address);
+            } catch {
+                // Logged by bind; that address simply has no listener.
+            }
+        }
+        if (this.listeners.size === 0) await this.stop(code, reason);
+        return {added, removed};
     }
 
     public async stop(code: number, reason: string): Promise<void> {
-        const servers = this.servers;
-        if (servers.length === 0) return;
-        this.servers = [];
-        this.bound = [];
+        if (this.http === null && this.listeners.size === 0) return;
         if (this.keepalive) clearInterval(this.keepalive);
         this.keepalive = null;
 
         for (const {ws} of this.live) ws.close(code, reason);
-        const closed = Promise.all(
-            servers.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
-        );
-        const grace = setTimeout(() => {
-            for (const socket of this.sockets) socket.destroy();
-        }, STOP_GRACE_MS);
-        await closed;
-        clearTimeout(grace);
+        await Promise.all([...this.listeners.keys()].map((address) => this.unbind(address, code, reason)));
 
         this.wss?.close();
         this.http = null;
         this.wss = null;
+        this.handlers = null;
+        this.options = null;
+        this.order = [];
+    }
+
+    private read(): string[] {
+        return (this.deps.addresses ?? (() => listenAddresses(os.networkInterfaces())))();
+    }
+
+    /**
+     * Listens on every address on a port the OS picks. The OS only knows the
+     * port is free on the first address, so when another address has it taken
+     * everything is closed and picked again, a few times, rather than leaving
+     * that address without a listener.
+     */
+    private async pick(addresses: string[]): Promise<Binding> {
+        let binding = await this.bindEach(addresses, 0);
+        for (let attempt = 1; attempt < PICK_ATTEMPTS; attempt++) {
+            if (this.listeners.size === 0 || !binding.failures.some(isAddressInUse)) break;
+            this.deps.log.info(`[phone] port ${binding.port} is taken on another address; picking again`);
+            await Promise.all([...this.listeners.keys()].map((address) => this.unbind(address, 1001, 'Rebinding')));
+            binding = await this.bindEach(addresses, 0);
+        }
+        return binding;
+    }
+
+    /** Binds each address on `port`; with 0, the first that binds picks the port the rest use. */
+    private async bindEach(addresses: string[], port: number): Promise<Binding> {
+        const failures: NodeJS.ErrnoException[] = [];
+        let bound = port;
+        for (const address of addresses) {
+            try {
+                bound = await this.bind(address, bound);
+            } catch (err) {
+                // One address that won't bind (it went away, it's taken) shouldn't
+                // keep the others closed; none binding at all is the caller's call.
+                failures.push(err as NodeJS.ErrnoException);
+            }
+        }
+        return {port: bound, failures};
+    }
+
+    private async bind(address: string, port: number): Promise<number> {
+        const handlers = this.handlers;
+        const options = this.options;
+        if (!handlers || !options) throw new Error('The device link is not started');
+        const listener: Listener = {server: tls.createServer(options), sockets: new Set()};
+        listener.server.on('secureConnection', (socket: tls.TLSSocket) =>
+            this.secured(socket, address, listener, handlers),
+        );
+        listener.server.on('tlsClientError', (err) =>
+            this.deps.log.debug('[phone] TLS handshake failed:', err.message),
+        );
+        try {
+            const bound = await listen(listener.server, port, address);
+            this.listeners.set(address, listener);
+            this.deps.log.info(`[phone] listening on ${address} port ${bound}`);
+            return bound;
+        } catch (err) {
+            this.deps.log.warn(`[phone] could not listen on ${address} port ${port}:`, (err as Error).message);
+            throw err;
+        }
+    }
+
+    /** Closes one address's server and the connections that came in on it. */
+    private async unbind(address: string, code: number, reason: string): Promise<void> {
+        const listener = this.listeners.get(address);
+        if (!listener) return;
+        this.listeners.delete(address);
+        for (const live of this.live) if (live.address === address) live.ws.close(code, reason);
+        const closed = new Promise<void>((resolve) => listener.server.close(() => resolve()));
+        const grace = setTimeout(() => {
+            for (const socket of listener.sockets) socket.destroy();
+        }, STOP_GRACE_MS);
+        await closed;
+        clearTimeout(grace);
     }
 
     /** A completed TLS handshake: authorise it, or end it before any HTTP. */
-    private secured(socket: tls.TLSSocket, handlers: DeviceLinkHandlers): void {
+    private secured(socket: tls.TLSSocket, address: string, listener: Listener, handlers: DeviceLinkHandlers): void {
         const fingerprint = fingerprintOf(socket);
         const grant = fingerprint ? this.authorize(handlers, fingerprint) : null;
         if (!fingerprint || !grant) {
@@ -225,9 +349,9 @@ export class TlsDeviceLink implements DeviceLink {
             socket.destroy();
             return;
         }
-        this.sockets.add(socket);
-        socket.on('close', () => this.sockets.delete(socket));
-        this.peers.set(socket, {fingerprint, grant});
+        listener.sockets.add(socket);
+        socket.on('close', () => listener.sockets.delete(socket));
+        this.peers.set(socket, {fingerprint, grant, address});
         if (!this.http) {
             socket.destroy();
             return;
@@ -260,7 +384,7 @@ export class TlsDeviceLink implements DeviceLink {
                 ws.close(code, reason);
             },
         };
-        const live: Live = {ws, connection, missedPings: 0};
+        const live: Live = {ws, connection, missedPings: 0, address: peer.address};
         this.live.add(live);
 
         ws.on('pong', () => {
@@ -305,6 +429,10 @@ function rawText(data: Buffer | ArrayBuffer | Buffer[]): string {
     if (Array.isArray(data)) return Buffer.concat(data).toString('utf8');
     if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8');
     return data.toString('utf8');
+}
+
+function isAddressInUse(err: NodeJS.ErrnoException): boolean {
+    return err.code === 'EADDRINUSE';
 }
 
 function listen(server: tls.Server, port: number, host: string): Promise<number> {

@@ -1095,7 +1095,7 @@ export function buildContainer(): Container {
         timers,
         ...(e2e ? {addresses: () => ['127.0.0.1']} : {}),
         onChange: () => {
-            log.info('[phone] the LAN addresses changed; restarting the listener');
+            log.info('[phone] the LAN addresses changed; updating the listener');
             phone.access.restart().catch((err: Error) => log.error('[phone] restart failed:', err.message));
         },
     });
