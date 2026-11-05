@@ -362,8 +362,12 @@ export class PhoneAccessService {
 
     private hello(link: Link, protocol: number): void {
         const {connection} = link;
-        const {macName, appVersion, devices, sessions} = this.deps;
-        const reply = helloReply(protocol, connection.grant, {name: macName, version: appVersion});
+        const {macName, appVersion, devices, sessions, link: listener} = this.deps;
+        const reply = helloReply(protocol, connection.grant, {
+            name: macName,
+            version: appVersion,
+            addresses: listener.addresses,
+        });
         connection.send(reply.message);
         if (reply.close !== null) {
             connection.close(reply.close, 'Update required');

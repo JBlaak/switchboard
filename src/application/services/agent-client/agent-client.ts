@@ -186,6 +186,19 @@ export class AgentClient {
     }
 
     /**
+     * "Retry now" on a VM session's card: its host's link dials at once,
+     * skipping the rest of a backoff, or starting over after it gave up. The
+     * session needs nothing of its own: it reattaches when the link is back.
+     */
+    public retryHostOf(pty: AgentPty): {ok: boolean; alreadyConnected?: boolean; error?: string} {
+        const connection = this.connectionByKey(pty.hostKey);
+        if (!connection) return {ok: false, error: 'no link to its host'};
+        if (connection.state === 'connected') return {ok: true, alreadyConnected: true};
+        connection.retryNow();
+        return {ok: true};
+    }
+
+    /**
      * Let go of a session the Mac no longer holds (its project was forgotten
      * here), leaving it running on its VM: its output stops reaching the
      * stand-in, and the next reconnect does not reattach it. Opening it again

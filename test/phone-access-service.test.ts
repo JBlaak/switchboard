@@ -47,6 +47,7 @@ function fakeLink() {
     const live = new Set<FakeConnection>();
     const link = {
         listening: false,
+        addresses: [] as string[],
         starts: [] as {identity: ServerIdentity; port: number}[],
         stops: [] as number[],
         failStart: null as Error | null,
@@ -54,11 +55,13 @@ function fakeLink() {
             if (link.failStart) throw link.failStart;
             handlers = h;
             link.listening = true;
+            link.addresses = ['192.168.1.20', 'fe80::1c2b:3a4d%en0', '10.8.0.3'];
             link.starts.push({identity, port});
             return 52000;
         },
         async stop(code: number, reason: string) {
             link.listening = false;
+            link.addresses = [];
             link.stops.push(code);
             for (const connection of [...live]) connection.close(code, reason);
         },
@@ -420,7 +423,13 @@ test('hello on an enrolled connection is welcomed and handed to the sessions han
 
     /* Then */
     assert.deepEqual(phone.sent, [
-        {type: 'welcome', protocol: PROTOCOL_VERSION, macName: 'Joris MacBook', deviceId: PIXEL.id},
+        {
+            type: 'welcome',
+            protocol: PROTOCOL_VERSION,
+            macName: 'Joris MacBook',
+            deviceId: PIXEL.id,
+            addresses: ['192.168.1.20', '10.8.0.3'],
+        },
     ]);
     assert.deepEqual(h.sessions.events, [
         ['connected', phone.id, {id: PIXEL.id, name: PIXEL.name}],
