@@ -7,7 +7,7 @@
  * The queue itself is the domain's (`domain/project/merge-queue`); this only
  * words it. Pure, so it is tested in node.
  */
-import type {FailureKind, HeadStage, MergeQueue, QueueEntry, QueuedEntry} from '../../../domain/project/merge-queue';
+import type {FailureKind, HeadStage, MergeQueue, QueueEntry} from '../../../domain/project/merge-queue';
 import type {QueueErrandView} from '../../../domain/project/queue-errands';
 import type {ProjectPageState} from '../../state/project-page-slice';
 
@@ -79,36 +79,6 @@ export function headSteps(stage: HeadStage): HeadStep[] {
 /** "approved by ana, sam"; null when nobody has. */
 export function approvedText(entry: QueueEntry): string | null {
     return entry.approvedBy.length ? 'approved by ' + entry.approvedBy.join(', ') : null;
-}
-
-/**
- * Who a held entry's Nudge would go to: the user it waits on for a review.
- * Null for one that is queued, waits for any approval, or waits on a team,
- * which nobody can be nudged as.
- */
-export function reviewerOf(entry: QueuedEntry): string | null {
-    const {state} = entry;
-    return state.kind === 'held' && state.waitsFor.kind === 'review' && !state.waitsFor.team
-        ? state.waitsFor.reviewer
-        : null;
-}
-
-/**
- * The PR a held entry's Nudge is about: the stack member the review is asked
- * on, when the queue named one, else the entry's own PR.
- */
-export function nudgePullRequest(entry: QueuedEntry): {number: number; title: string; url: string} {
-    const member = entry.state.kind === 'held' ? entry.state.member : null;
-    const pr = entry.members.find((candidate) => candidate.number === member) ?? entry;
-    return {number: pr.number, title: pr.title, url: pr.url};
-}
-
-/** The held entries waiting for a review (by the PR a nudge is about), for `queueSettleNudges`. */
-export function heldForReview(queue: MergeQueue): {number: number; reviewer: string}[] {
-    return queue.entries.flatMap((entry) => {
-        const reviewer = reviewerOf(entry);
-        return reviewer ? [{number: nudgePullRequest(entry).number, reviewer}] : [];
-    });
 }
 
 /** A failure's kind in a few words, before the queue's own. */

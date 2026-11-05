@@ -13,6 +13,7 @@ import type {UpdateNotice} from '../../domain/update/release';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
 import type {SessionWorkSnapshot} from '../../domain/session-work/model';
 import type {PullRequestStatusChange} from '../../domain/session-work/status';
+import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {ShownPage} from '../../domain/session/page-tool';
@@ -66,6 +67,8 @@ export interface RendererGateway {
     sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void;
     /** A running session's PR chips changed colour, or whether one needs you. */
     prStatusChanged(change: PullRequestStatusChange): void;
+    /** A repository's merge queue or its errands changed (#315), for the sidebar and the session header. */
+    mergeQueueChanged(change: MergeQueueChange): void;
 
     // ── Quick Ask ──
     /**

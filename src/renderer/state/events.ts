@@ -26,6 +26,7 @@ import type {ImageMode} from '../ui/session-work/image-compare/modes/types';
 import type {Background, View} from '../ui/session-work/image-compare/types';
 import type {DiffSide} from '../../domain/session-work/model';
 import type {PullRequestStatusChange} from '../../domain/session-work/status';
+import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
 import type {UsageLimit} from '../../domain/usage/usage';
 import type {WorkingAgent} from '../../domain/terminal/program-status-children';
 import type {ToolbarEvent} from './toolbar-slice';
@@ -41,6 +42,7 @@ import type {HandoffEvent} from './handoff-slice';
 import type {SessionHandoffEvent} from './session-handoff-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
 import type {PagesEvent} from './pages-slice';
+import type {MergeQueueEvent} from './merge-queue-slice';
 import type {SessionHandoffPhase} from '../../application/services/session-handoff';
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
@@ -75,6 +77,8 @@ export type PushEvent =
     | {type: 'updateAvailable'; update: UpdateNotice}
     | {type: 'sessionWorkSnapshot'; snapshot: SessionWorkSnapshot}
     | {type: 'prStatusChanged'; change: PullRequestStatusChange}
+    /** A repository's merge queue or its errands changed (#315). */
+    | {type: 'mergeQueueChanged'; change: MergeQueueChange}
     /** Quick Ask (#142): start a Claude session there on this prompt (R3). */
     | {type: 'launchRequested'; projectPath: string; initialPrompt: string}
     /** Quick Ask: the New Session picker, holding this prompt; `reason` is Patch's line. */
@@ -352,7 +356,8 @@ export type RendererEvent =
     | HandoffEvent
     | SessionHandoffEvent
     | DropUploadEvent
-    | PagesEvent;
+    | PagesEvent
+    | MergeQueueEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

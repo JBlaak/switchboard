@@ -217,6 +217,7 @@ export function fakeRenderer(): FakeRenderer {
         updateAvailable: record('updateAvailable'),
         sessionWorkSnapshot: record('sessionWorkSnapshot'),
         prStatusChanged: record('prStatusChanged'),
+        mergeQueueChanged: record('mergeQueueChanged'),
         launchRequested: record('launchRequested'),
         pickerRequested: record('pickerRequested'),
         phoneAccessChanged: record('phoneAccessChanged'),

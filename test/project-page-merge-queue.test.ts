@@ -20,12 +20,9 @@ import {
     failureLabel,
     fixStatus,
     headSteps,
-    heldForReview,
     isEmptyQueue,
     mergeQueueOf,
-    nudgePullRequest,
     nudgeStatus,
-    reviewerOf,
 } from '../src/renderer/ui/project-page/merge-queue-view';
 import {
     fixInSession,
@@ -38,7 +35,13 @@ import {
 } from '../src/renderer/ui/project-page/merge-queue-actions';
 import {pullRequestSession} from '../src/renderer/ui/project-page/project-sessions';
 import {mergeQueue, type MergeQueue, type QueuePullRequest} from '../src/domain/project/merge-queue';
-import {nudgeMessage, type QueueErrandView} from '../src/domain/project/queue-errands';
+import {
+    heldForReview,
+    nudgeMessage,
+    nudgePullRequest,
+    reviewerOf,
+    type QueueErrandView,
+} from '../src/domain/project/queue-errands';
 import type {ProjectOverview} from '../src/domain/project/overview';
 import type {RendererEvent} from '../src/renderer/state/events';
 import type {RendererState} from '../src/renderer/state/root';

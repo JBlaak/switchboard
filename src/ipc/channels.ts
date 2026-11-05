@@ -209,6 +209,7 @@ export const EVENT = {
     updateAvailable: 'update-available',
     sessionWorkSnapshot: 'session-work:snapshot',
     prStatusChanged: 'pr-status:changed',
+    mergeQueueChanged: 'merge-queue:changed',
     launchRequested: 'quick-ask:launch-requested',
     pickerRequested: 'quick-ask:picker-requested',
     phoneAccessChanged: 'phone-access:changed',

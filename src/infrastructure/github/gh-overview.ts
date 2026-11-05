@@ -14,6 +14,7 @@
  * per PR. Only the durations of the repository's green CI runs are one more
  * read (`ciRunsArgs`, `toCiRunDurations`).
  */
+import {PULL_REQUESTS_PER_REPOSITORY} from '../../application/ports/github-cli';
 import type {IssueKey} from '../../domain/plan/model';
 import {
     AUTOMERGE_CONTEXT,
@@ -36,9 +37,6 @@ import type {
  * than that would not be read anyway.
  */
 export const ISSUES_PER_REPOSITORY = 100;
-
-/** Pull requests per repository: the 50 most recently updated, unpaged. */
-export const PULL_REQUESTS_PER_REPOSITORY = 50;
 
 const ORDER = '{ field: UPDATED_AT, direction: DESC }';
 

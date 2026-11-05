@@ -16,9 +16,8 @@
  */
 import {dispatch, getState} from '../../state/app-store';
 import {queueActionKey, type QueueActionOutcome} from '../../state/project-page-slice';
-import {nudgeMessage} from '../../../domain/project/queue-errands';
+import {heldForReview, nudgeMessage} from '../../../domain/project/queue-errands';
 import type {FailedEntry, MergeQueue} from '../../../domain/project/merge-queue';
-import {heldForReview} from './merge-queue-view';
 
 type Started = {ok: true; sessionId: string} | {ok: false; reason: string};
 
