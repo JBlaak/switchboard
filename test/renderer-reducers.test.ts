@@ -78,6 +78,7 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
         type: 'prStatusChanged',
         change: {sessionId: 's1', prs: [{number: 7, dot: 'red'}], needsYou: true},
     },
+    mergeQueueChanged: {type: 'mergeQueueChanged', change: {repository: 'o/app', queue: null, errands: []}},
     launchRequested: {type: 'launchRequested', projectPath: '/code/app', initialPrompt: 'Fix it.'},
     pickerRequested: {type: 'pickerRequested', initialPrompt: 'fix it', reason: 'No idea.'},
     phoneAccessChanged: {type: 'phoneAccessChanged', state: PHONE_ACCESS_OFF},

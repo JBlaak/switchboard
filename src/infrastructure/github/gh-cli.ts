@@ -11,9 +11,10 @@
  * the viewer is, because a review thread "needs you" when Claude — posting as
  * you — had the last word and left it open (C5).
  *
- * The only writes are your review's (C3): a pending review, its comments, and
+ * The writes are your review's (C3): a pending review, its comments, and
  * submitting or deleting it, each a GraphQL mutation whose values all travel
- * as variables.
+ * as variables; and the merge queue's labels on a PR (#315), added or removed
+ * through the REST API, the label in the request body or escaped in its path.
  *
  * Every command is `execFile('gh', argv)`, never a shell string. The runner is
  * injected so the tests can feed recorded responses without `gh` installed.
@@ -33,7 +34,14 @@ import {
     toPlanSummaries,
     toPlansOf,
 } from './gh-plans';
-import {issuesQuery, pullRequestsInQuery, toRepositoryIssues, toRepositoryPullRequests} from './gh-overview';
+import {
+    ciRunsArgs,
+    issuesQuery,
+    pullRequestsInQuery,
+    toCiRunDurations,
+    toRepositoryIssues,
+    toRepositoryPullRequests,
+} from './gh-overview';
 import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/overview';
 import type {ReviewEvent} from '../../domain/session-work/review';
 import type {
@@ -258,6 +266,48 @@ export class GhCli implements GitHubCli {
         return data ? toRepositoryPullRequests(data, repo) : null;
     }
 
+    public async ciRunDurations(repo: string): Promise<number[] | null> {
+        if (!REPO.test(repo)) return null;
+        const result = await this.run(ciRunsArgs(repo));
+        if (result.missing || result.code !== 0) return null;
+        try {
+            return toCiRunDurations(JSON.parse(result.stdout));
+        } catch {
+            return null;
+        }
+    }
+
+    // ── The merge queue's labels (#315) ──
+
+    public async addLabel(repo: string, number: number, label: string): Promise<GitHubWrite> {
+        const path = labelsPath(repo, number);
+        if (!path || !label) return {ok: false, reason: 'That label cannot be added'};
+        return this.rest(['api', '--method', 'POST', path, '-f', `labels[]=${label}`]);
+    }
+
+    public async removeLabel(repo: string, number: number, label: string): Promise<GitHubWrite> {
+        const path = labelsPath(repo, number);
+        if (!path || !label) return {ok: false, reason: 'That label cannot be removed'};
+        return this.rest(['api', '--method', 'DELETE', `${path}/${encodeURIComponent(label)}`]);
+    }
+
+    /** Run a REST write; whether it went through, or GitHub's reason it did not. */
+    private async rest(args: string[]): Promise<GitHubWrite> {
+        const result = await this.run(args);
+        if (result.missing) return {ok: false, reason: 'gh is not installed'};
+        if (isAuthFailure(result)) return {ok: false, reason: 'gh is not signed in to github.com'};
+        if (result.code === 0) return {ok: true};
+        let message: unknown = null;
+        try {
+            message = (JSON.parse(result.stdout) as {message?: unknown})?.message;
+        } catch {
+            message = null;
+        }
+        if (typeof message === 'string' && message) return {ok: false, reason: message};
+        const stderr = result.stderr.trim().split('\n').pop()?.replace(/^gh: /, '');
+        return {ok: false, reason: stderr || 'GitHub did not answer'};
+    }
+
     // ── Your review (C3) ──
     //
     // Every value goes in as a GraphQL variable, never into the query text: a
@@ -374,6 +424,12 @@ export const DELETE_REVIEW = `mutation($reviewId: ID!) {
 export const SUBMIT_REVIEW = `mutation($reviewId: ID!, $event: PullRequestReviewEvent!) {
   submitPullRequestReview(input: { pullRequestReviewId: $reviewId, event: $event }) { pullRequestReview { id state } }
 }`;
+
+/** The REST path of an issue's or PR's labels; null for a repository or number that is not one. */
+function labelsPath(repo: string, number: number): string | null {
+    if (!REPO.test(repo) || !Number.isSafeInteger(number) || number < 1) return null;
+    return `repos/${repo}/issues/${number}/labels`;
+}
 
 /** Positive integers only, once each: they are written into the query text. */
 function validNumbers(numbers: readonly number[]): number[] {

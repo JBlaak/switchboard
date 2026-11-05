@@ -73,6 +73,18 @@ export interface RequestOptions {
     threadIds?: readonly string[];
 }
 
+/** A prompt rendered by its caller, queued as an action on an item (`queuePrompt`). */
+export interface QueuedPrompt {
+    /** The item it acts on (`workItemKey`): `pr:<url>` for a PR. */
+    itemKey: string;
+    /** What the session's page shows it as. */
+    action: WorkAction;
+    /** `owner/repo`. */
+    repository: string;
+    prompt: string;
+    details?: ActivityDetails | null;
+}
+
 /** What a gave-up card shows: the check, and each attempt with what Claude pushed. */
 export type GaveUpDetails = Required<Pick<ActivityDetails, 'checkName' | 'attempts'>>;
 
@@ -187,19 +199,55 @@ export class SessionActionService {
         // The session may have ended while the CI log was fetched.
         if (!prompter.runningId(sessionId)) return {ok: false, reason: NOT_RUNNING_REASON};
 
-        const stored: StoredAction = {
-            id: this.deps.ids.newId(),
+        return this.enqueue({
             sessionId,
             repository: context.repository,
             itemKey: itemId,
             action,
             origin,
-            phase: 'queued',
             prompt: renderPrompt(request),
+            details: request.action === 'fix-ci' ? fixCiDetails(request.checkName, request.automaticAttempt) : null,
+        });
+    }
+
+    /**
+     * Queue a prompt someone else rendered, as an action on an item: the merge
+     * queue's Fix in session (#315), handing the queue's failure to the PR's own
+     * session with no page open. Refused like `request` when the session is not
+     * running or the same action on the item is waiting or with Claude already.
+     */
+    public queuePrompt(sessionId: string, queued: QueuedPrompt): ActionResult {
+        if (!this.deps.prompter.runningId(sessionId)) return {ok: false, reason: NOT_RUNNING_REASON};
+        const busy = this.storedForSession(sessionId).find(
+            (existing) =>
+                existing.itemKey === queued.itemKey &&
+                existing.action === queued.action &&
+                (existing.phase === 'queued' || existing.phase === 'sent'),
+        );
+        if (busy) return {ok: false, reason: busy.phase === 'queued' ? 'Already queued' : 'Claude is already on it'};
+        return this.enqueue({
+            sessionId,
+            repository: queued.repository,
+            itemKey: queued.itemKey,
+            action: queued.action,
+            origin: 'manual',
+            prompt: queued.prompt,
+            details: queued.details ?? null,
+        });
+    }
+
+    /** Store an action, queue it, and type it in now if the session is idle. */
+    private enqueue(
+        fields: Pick<StoredAction, 'sessionId' | 'repository' | 'itemKey' | 'action' | 'origin' | 'prompt' | 'details'>,
+    ): ActionResult {
+        const {sessionId} = fields;
+        const stored: StoredAction = {
+            ...fields,
+            id: this.deps.ids.newId(),
+            phase: 'queued',
             queuedAt: this.now(),
             sentAt: null,
             doneAt: null,
-            details: request.action === 'fix-ci' ? fixCiDetails(request.checkName, request.automaticAttempt) : null,
         };
         this.deps.store.add(stored);
         this.actions.push(stored);

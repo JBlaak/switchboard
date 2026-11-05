@@ -160,6 +160,17 @@ const api: SwitchboardApi = {
     // ── The project page (#172) ──
     projectOverview: (projectPath, options) => ipcRenderer.invoke(INVOKE.projectOverview, projectPath, options),
     projectCleanWorktrees: (projectPath) => ipcRenderer.invoke(INVOKE.projectCleanWorktrees, projectPath),
+    // ── The merge queue (#315) ──
+    queueNudge: (request) => ipcRenderer.invoke(INVOKE.queueNudge, request),
+    queueForgetNudge: (repository, number, reviewer) =>
+        ipcRenderer.invoke(INVOKE.queueForgetNudge, repository, number, reviewer),
+    queueSettleNudges: (repository, held) => ipcRenderer.invoke(INVOKE.queueSettleNudges, repository, held),
+    queueFix: (request) => ipcRenderer.invoke(INVOKE.queueFix, request),
+    queueRetry: (repository, number) => ipcRenderer.invoke(INVOKE.queueRetry, repository, number),
+    queueOptIn: (repository, number) => ipcRenderer.invoke(INVOKE.queueOptIn, repository, number),
+    queueErrandStarted: (errandId, sessionId) => ipcRenderer.invoke(INVOKE.queueErrandStarted, errandId, sessionId),
+    queueErrandAbandoned: (errandId) => ipcRenderer.invoke(INVOKE.queueErrandAbandoned, errandId),
+    queueErrands: (repository) => ipcRenderer.invoke(INVOKE.queueErrands, repository),
 
     // ── Tasks (#248) ──
     listTasks: (query) => ipcRenderer.invoke(INVOKE.tasksList, query),
@@ -208,6 +219,7 @@ const api: SwitchboardApi = {
     onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
     onSessionWorkSnapshot: (cb) => subscribe(EVENT.sessionWorkSnapshot, (_e, snapshot) => cb(snapshot)),
     onPrStatusChanged: (cb) => subscribe(EVENT.prStatusChanged, (_e, change) => cb(change)),
+    onMergeQueueChanged: (cb) => subscribe(EVENT.mergeQueueChanged, (_e, change) => cb(change)),
     onLaunchRequested: (cb) =>
         subscribe(EVENT.launchRequested, (_e, projectPath, initialPrompt) => cb(projectPath, initialPrompt)),
     onPickerRequested: (cb) =>

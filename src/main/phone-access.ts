@@ -24,6 +24,7 @@ import type {PendingQuestions, QuestionsSettled} from '../domain/questions/quest
 import type {RemoteStatusPayload} from '../domain/remote/remote-status';
 import type {SessionWorkSnapshot} from '../domain/session-work/model';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
+import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
 import type {UpdateNotice} from '../domain/update/release';
 import type {TasksUpdate} from '../domain/tasks/surface';
@@ -145,6 +146,10 @@ export class PhoneEventTee implements RendererGateway {
 
     public prStatusChanged(change: PullRequestStatusChange): void {
         this.inner.prStatusChanged(change);
+    }
+
+    public mergeQueueChanged(change: MergeQueueChange): void {
+        this.inner.mergeQueueChanged(change);
     }
 
     public launchRequested(projectPath: string, initialPrompt: string): void {

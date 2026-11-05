@@ -387,6 +387,9 @@ test.describe('quick ask', () => {
     });
 });
 
+/** A monospace font every machine of the platform has: Menlo ships with macOS, DejaVu with Ubuntu. */
+const INSTALLED_MONOSPACE = process.platform === 'darwin' ? 'Menlo' : 'DejaVu Sans Mono';
+
 test.describe('terminal font warning', () => {
     test('warns live when the font is not installed', async ({page}) => {
         /* Given */
@@ -402,7 +405,7 @@ test.describe('terminal font warning', () => {
         await expect(warning).toContainText('“No Such Font Xyz”');
 
         /* When */
-        await input.fill('Menlo');
+        await input.fill(INSTALLED_MONOSPACE);
 
         /* Then */
         await expect(warning).toHaveCount(0);

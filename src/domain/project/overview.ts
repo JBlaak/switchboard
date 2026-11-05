@@ -6,6 +6,7 @@
  */
 import type {IssueKey} from '../plan/model';
 import type {OverviewIssue, OverviewPullRequest, ProjectOverviewGroups} from '../plan/project-overview';
+import type {MergeQueue, QueuePullRequest} from './merge-queue';
 
 /** A label as GitHub shows it: its name and its colour, six hex digits without a `#`. */
 export interface IssueLabel {
@@ -52,7 +53,19 @@ export interface RepositoryPullRequest {
     review: ReviewDecision;
     /** The issues it closes, by GitHub's closing references. */
     closes: IssueKey[];
+    /** What the merge queue (#315) reads of it, beyond the fields above. */
+    queue: PullRequestQueueReads;
 }
+
+/**
+ * The parts of a merge queue's `QueuePullRequest` that the PR's row does not
+ * already carry: its link and base, its labels, the queue's `automerge`
+ * status, who reviews it and the check runs on its head commit.
+ */
+export type PullRequestQueueReads = Pick<
+    QueuePullRequest,
+    'url' | 'baseRef' | 'labels' | 'automerge' | 'requestedReviewers' | 'approvedBy' | 'checks'
+>;
 
 /** One checkout of a repository: the main one, or a linked worktree. */
 export interface WorktreeSummary {
@@ -88,9 +101,10 @@ export interface ProjectIssue extends Omit<RepositoryIssue, 'parent' | 'subIssue
 /**
  * A pull request as the overview lists it: the read PR, with the issues it
  * closes in this repository by number. Closing references into other
- * repositories are left out.
+ * repositories are left out, and so are its queue reads: the queue is
+ * answered whole, as `mergeQueue`.
  */
-export interface ProjectPullRequest extends Omit<RepositoryPullRequest, 'closes'>, OverviewPullRequest {}
+export interface ProjectPullRequest extends Omit<RepositoryPullRequest, 'closes' | 'queue'>, OverviewPullRequest {}
 
 /**
  * Why the GitHub part has never been answered: `gh` is not installed, it is
@@ -117,6 +131,8 @@ export type ProjectGitHubOverview =
            * still coming. False on a full answer.
            */
           plansPending: boolean;
+          /** The repository's merge queue (#315); null when it does not use one. */
+          mergeQueue: MergeQueue | null;
       } & ProjectOverviewGroups<ProjectIssue, ProjectPullRequest>)
     | {ok: false; reason: GitHubUnavailableReason};
 

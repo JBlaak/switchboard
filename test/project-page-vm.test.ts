@@ -38,7 +38,7 @@ function overview(fields: Partial<ProjectOverview> = {}): ProjectOverview {
         projectPath: VM,
         remote: false,
         repository: 'me/app',
-        github: {ok: true, fetchedAt: 1_000, stale: false, plansPending: false, ...groups},
+        github: {ok: true, fetchedAt: 1_000, stale: false, plansPending: false, mergeQueue: null, ...groups},
         worktrees: [
             {
                 path: '/home/me/app',

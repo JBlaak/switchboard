@@ -61,20 +61,30 @@ export async function waitForIndex(page: Page, app: ElectronApplication, home: F
  * The main process's log so far, for waiting on something it reports and for
  * debugging a failure.
  *
- * electron-log writes it under the fixture home (it follows HOME), in a folder
- * named after the app — "Electron" for an unpackaged run.
+ * electron-log writes it in a folder named after the app ("Electron" for an
+ * unpackaged run): on macOS under the fixture home's ~/Library/Logs (it follows
+ * HOME), on Linux under the app's userData, which SWITCHBOARD_DATA_DIR moves
+ * into the fixture's data dir (`<dataDir>/<folder>/logs/main.log`), with
+ * ~/.config as the fallback electron-log would use without it.
  */
 export function appLog(home: FixtureHome): string {
-    const logs = path.join(home.home, 'Library', 'Logs');
+    const candidates = [
+        ...logFiles(path.join(home.home, 'Library', 'Logs'), 'main.log'),
+        ...logFiles(home.dataDir, path.join('logs', 'main.log')),
+        ...logFiles(path.join(home.home, '.config'), path.join('logs', 'main.log')),
+    ];
+    return candidates
+        .filter((file) => fs.existsSync(file))
+        .map((file) => fs.readFileSync(file, 'utf8'))
+        .join('\n');
+}
+
+/** `<parent>/<each folder>/<file>`, or none when the parent does not exist. */
+function logFiles(parent: string, file: string): string[] {
     try {
-        return fs
-            .readdirSync(logs)
-            .map((dir) => path.join(logs, dir, 'main.log'))
-            .filter((file) => fs.existsSync(file))
-            .map((file) => fs.readFileSync(file, 'utf8'))
-            .join('\n');
+        return fs.readdirSync(parent).map((dir) => path.join(parent, dir, file));
     } catch {
-        return '';
+        return [];
     }
 }
 

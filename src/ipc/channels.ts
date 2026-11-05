@@ -103,6 +103,16 @@ export const INVOKE = {
     // The project page (#172)
     projectOverview: 'project:overview',
     projectCleanWorktrees: 'project:clean-worktrees',
+    // The merge queue's buttons and errands (#315)
+    queueNudge: 'queue:nudge',
+    queueForgetNudge: 'queue:forget-nudge',
+    queueSettleNudges: 'queue:settle-nudges',
+    queueFix: 'queue:fix',
+    queueRetry: 'queue:retry',
+    queueOptIn: 'queue:opt-in',
+    queueErrandStarted: 'queue:errand-started',
+    queueErrandAbandoned: 'queue:errand-abandoned',
+    queueErrands: 'queue:errands',
 
     // Tasks: BlaakTasks in Switchboard (#248)
     tasksList: 'tasks:list',
@@ -200,6 +210,7 @@ export const EVENT = {
     updateAvailable: 'update-available',
     sessionWorkSnapshot: 'session-work:snapshot',
     prStatusChanged: 'pr-status:changed',
+    mergeQueueChanged: 'merge-queue:changed',
     launchRequested: 'quick-ask:launch-requested',
     pickerRequested: 'quick-ask:picker-requested',
     phoneAccessChanged: 'phone-access:changed',

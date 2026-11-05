@@ -122,7 +122,11 @@ async function start(container: Container): Promise<void> {
     if (app.isPackaged) container.updates.start();
     // The CI watch asks the user's own `gh` about real PRs; the end-to-end suite
     // must never reach GitHub, and drives the dots and cards by pushing instead.
-    if (process.env.SWITCHBOARD_E2E !== '1') container.prWatch.start();
+    if (process.env.SWITCHBOARD_E2E !== '1') {
+        container.prWatch.start();
+        // The merge queue (#315) reads GitHub too; the suite pushes its queues instead.
+        container.mergeQueueWatch.start();
+    }
 
     // Phone access, if it was left on (#194). Its failures land in its own
     // state, which Settings shows; only a bug gets as far as this catch.
@@ -154,7 +158,10 @@ function openWindow(container: Container, {inactive = false} = {}): void {
             }),
         onFullscreenChanged: (isFullscreen) => container.renderer.fullscreenChanged(isFullscreen),
         // Back at the window: what CI did meanwhile shows now, not within the minute (W1).
-        onFocus: () => container.prWatch.focused(),
+        onFocus: () => {
+            container.prWatch.focused();
+            container.mergeQueueWatch.focused();
+        },
         onClosed: () => {
             // On macOS the app stays in the dock after its last window closes. Kill
             // the sessions anyway: orphaned `claude` processes would otherwise
