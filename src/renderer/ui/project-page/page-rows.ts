@@ -297,8 +297,7 @@ export function reviewText(pr: ProjectPullRequest): string {
 /**
  * The Merge queue section's cursor rows, in the order it shows them: the
  * head, the entries behind it, the ones out of the queue, then those whose
- * status it could not read. Each is its labelled PR; the "Not queued yet"
- * chips are not rows.
+ * status it could not read. Each is its labelled PR.
  */
 export function mergeQueueRows(repository: string, queue: MergeQueue): PageRow[] {
     const numbers = [
