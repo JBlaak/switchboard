@@ -167,11 +167,14 @@ class MacLink(
     private suspend fun dialPaired(pairing: StoredPairing, key: DeviceKey, reconnecting: Boolean): Dial {
         val last = dial(listOf(pairing.lastAddress), key, pairing.macFingerprint)
         if (last is Dial.Opened) return last
+        val known = pairing.knownHosts.map { MacAddress(it, pairing.lastAddress.port) } - pairing.lastAddress
+        val tried = if (known.isEmpty()) last else dial(known, key, pairing.macFingerprint).orFailures(last)
+        if (tried is Dial.Opened) return tried
         if (!reconnecting) show(LinkState.Searching)
-        val found = discovery.discover() - pairing.lastAddress
-        if (found.isEmpty()) return last
+        val found = discovery.discover() - pairing.lastAddress - known.toSet()
+        if (found.isEmpty()) return tried
         if (!reconnecting) show(LinkState.Connecting)
-        return dial(found, key, pairing.macFingerprint).orFailures(last)
+        return dial(found, key, pairing.macFingerprint).orFailures(tried)
     }
 
     private suspend fun pairedSession(dial: Dial.Opened, pairing: StoredPairing): SessionEnd {
@@ -201,7 +204,13 @@ class MacLink(
                     when (message) {
                         is ServerMessage.Welcome -> {
                             welcomed = true
-                            pairingStore.save(pairing.copy(macName = message.macName, lastAddress = dial.address))
+                            pairingStore.save(
+                                pairing.copy(
+                                    macName = message.macName,
+                                    lastAddress = dial.address,
+                                    knownHosts = message.addresses,
+                                ),
+                            )
                             connected.set(connection)
                             show(LinkState.Connected(message.deviceId, message.macName))
                         }
@@ -310,7 +319,9 @@ class MacLink(
                     }
                     is ServerMessage.PairRejected -> return PairingEnd.Failed(PairFailure.Rejected(message.reason))
                     is ServerMessage.Welcome -> {
-                        pairingStore.save(StoredPairing(invite.fingerprint, message.deviceId, message.macName, dial.address))
+                        pairingStore.save(
+                            StoredPairing(invite.fingerprint, message.deviceId, message.macName, dial.address, message.addresses),
+                        )
                         return PairingEnd.Accepted
                     }
                     is ServerMessage.UpdateRequired -> return PairingEnd.Final(LinkState.UpdateRequired(message.macVersion))
