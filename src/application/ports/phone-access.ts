@@ -85,10 +85,27 @@ export interface DeviceLinkHandlers {
     disconnected(connection: DeviceConnection): void;
 }
 
+/** What `updateAddresses` changed: the addresses it started and stopped listening on. */
+export interface AddressChange {
+    added: string[];
+    removed: string[];
+}
+
 /** The TLS 1.3 + WebSocket listener on the Mac's LAN and VPN interfaces. */
 export interface DeviceLink {
-    /** Starts listening; resolves with the port. Port 0 picks one. */
+    /**
+     * Starts listening on every address; resolves with the port. Port 0 picks
+     * one; a port that is taken on every address is swapped for a picked one,
+     * while one taken on only some addresses is kept (those go without).
+     */
     start(identity: ServerIdentity, port: number, handlers: DeviceLinkHandlers): Promise<number>;
+    /**
+     * Follows a change in the Mac's addresses on the same port: listens on the
+     * new ones, and stops listening on the ones that went away, closing only
+     * the connections that came in on those with `code`. Stops altogether when
+     * no address is left. A no-op when it isn't listening.
+     */
+    updateAddresses(code: number, reason: string): Promise<AddressChange>;
     /** Closes every connection with `code` and stops listening. */
     stop(code: number, reason: string): Promise<void>;
     readonly listening: boolean;

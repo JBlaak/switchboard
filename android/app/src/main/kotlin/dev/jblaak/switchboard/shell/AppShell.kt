@@ -33,6 +33,9 @@ import dev.jblaak.switchboard.theme.SwitchboardTheme
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 
+/** How long "Can't find your Mac" stays put before it tries again on its own: long enough to read, no more. */
+private val NOT_FOUND_RETRY_AFTER = 2.seconds
+
 /**
  * The app's one screen at a time, picked by [model] from the [link]'s state: pairing, the lock, the error states,
  * and, once connected, [connectedContent] with the link to talk over.
@@ -99,7 +102,7 @@ fun AppShell(
             is AppScreen.NotFound -> {
                 LaunchedEffect(current.isTrying) {
                     if (!current.isTrying) {
-                        delay(10.seconds)
+                        delay(NOT_FOUND_RETRY_AFTER)
                         link.retry()
                     }
                 }

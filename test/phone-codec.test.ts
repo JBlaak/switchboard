@@ -310,6 +310,31 @@ test('an invite round-trips through the QR code text', () => {
     assert.deepStrictEqual(parseInvite(text), INVITE);
 });
 
+test("an invite carries the Mac's IP addresses for networks where its .local name does not resolve", () => {
+    /* Given */
+    const invite: PairingInvite = {...INVITE, addresses: ['192.168.3.117', '10.8.0.3', '2a02:a46b::1']};
+
+    /* When */
+    const text = encodeInvite(invite);
+
+    /* Then */
+    assert.ok(text.endsWith('&addrs=192.168.3.117%2C10.8.0.3%2C2a02%3Aa46b%3A%3A1'));
+    assert.deepStrictEqual(parseInvite(text), invite);
+});
+
+test('an invite leaves out addresses it could not dial and rejects a malformed list', () => {
+    /* Given */
+    const scoped = encodeInvite({...INVITE, addresses: ['fe80::1%en0']});
+    const good = encodeInvite({...INVITE, addresses: ['192.168.3.117']});
+
+    /* When */
+    const malformed = [good.replace('192.168.3.117', 'evil.example'), `${good}&addrs=10.8.0.3`];
+
+    /* Then */
+    assert.deepStrictEqual(parseInvite(scoped), INVITE);
+    assert.deepStrictEqual(malformed.map(parseInvite), [null, null]);
+});
+
 test('an invite with any part missing or malformed is rejected', () => {
     /* Given */
     const good = encodeInvite(INVITE);

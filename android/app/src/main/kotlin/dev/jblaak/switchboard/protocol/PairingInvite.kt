@@ -4,7 +4,7 @@ import java.net.URLDecoder
 
 /**
  * What the pairing QR code on the Mac holds, read from
- * `switchboard://pair?v=<protocol>&fp=<fingerprint>&code=<code>&host=<host>&port=<port>`.
+ * `switchboard://pair?v=<protocol>&fp=<fingerprint>&code=<code>&host=<host>&port=<port>[&addrs=<ip>,<ip>]`.
  */
 data class PairingInvite(
     val protocol: Int,
@@ -15,10 +15,17 @@ data class PairingInvite(
     /** The Bonjour host name, e.g. "joris-mbp.local"; a hint, the fingerprint is what counts. */
     val host: String,
     val port: Int,
+    /**
+     * The Mac's IP addresses (LAN and VPN), all on [port]: dialled when [host] doesn't resolve, as `.local` names
+     * don't on networks that block multicast. Empty in invites from Macs that don't send them.
+     */
+    val addresses: List<String> = emptyList(),
 ) {
     companion object {
         private const val PREFIX = "switchboard://pair?"
         private val FINGERPRINT = Regex("[0-9a-f]{64}")
+        private val ADDRESS = Regex("""\d{1,3}(\.\d{1,3}){3}|[0-9A-Fa-f:]{2,39}""")
+        private const val MAX_ADDRESSES = 8
 
         /** Null for anything that is not a complete, well-formed invite. */
         fun parseOrNull(text: String): PairingInvite? {
@@ -32,7 +39,16 @@ data class PairingInvite(
                 code = parameters["code"]?.takeIf { it.isNotBlank() } ?: return null,
                 host = parameters["host"]?.takeIf { it.isNotBlank() } ?: return null,
                 port = parameters["port"]?.toIntOrNull()?.takeIf { it in 1..65535 } ?: return null,
+                addresses = addressesOrNull(parameters["addrs"]) ?: return null,
             )
+        }
+
+        /** The `addrs` list: empty when absent, null when it's there but malformed. */
+        private fun addressesOrNull(value: String?): List<String>? {
+            if (value == null) return emptyList()
+            val addresses = value.split(',')
+            if (addresses.size > MAX_ADDRESSES || !addresses.all { ADDRESS.matches(it) }) return null
+            return addresses
         }
 
         private fun queryParametersOrNull(query: String): Map<String, String>? {

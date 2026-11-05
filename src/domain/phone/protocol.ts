@@ -189,6 +189,12 @@ export type ServerMessage =
      * last address and Bonjour both fail, e.g. over a VPN Bonjour can't cross.
      */
     | {type: 'welcome'; protocol: number; macName: string; deviceId: string; addresses: string[]}
+    /**
+     * The Mac's addresses changed while this phone was connected (a VPN came
+     * up, a new Wi-Fi): the same list `welcome` would carry now. Older phones
+     * ignore it.
+     */
+    | {type: 'addresses'; addresses: string[]}
     /** The answer to `hello` on a pairing connection. */
     | {type: 'pairing'; protocol: number; macName: string}
     /** The code was right; the Mac is showing the confirm dialog. */
@@ -258,4 +264,11 @@ export interface PairingInvite {
     /** The Bonjour host name, e.g. "joris-mbp.local"; a hint, the fingerprint is what counts. */
     host: string;
     port: number;
+    /**
+     * The IP addresses the Mac listens on (LAN and VPN, no link-local), all on
+     * `port`: what the phone dials when `host` doesn't resolve, as `.local`
+     * names don't on networks that block multicast. Optional; older invites
+     * have none.
+     */
+    addresses?: string[];
 }

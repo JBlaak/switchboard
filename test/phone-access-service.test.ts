@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
     PHONE_ACCESS_ENABLED_KEY,
+    PHONE_ACCESS_PORT_KEY,
     PhoneAccessService,
     type PhoneSessionsHandler,
 } from '../src/application/services/phone-access-service';
@@ -12,6 +13,7 @@ import {parseInvite} from '../src/domain/phone/codec';
 import {PAIRING_CODE_TTL_MS, PAIRING_MAX_FAILURES} from '../src/domain/phone/pairing';
 import type {PhoneAccessState} from '../src/domain/phone/state';
 import type {
+    AddressChange,
     ConnectionGrant,
     DeviceConnection,
     DeviceLink,
@@ -44,29 +46,47 @@ interface FakeConnection extends DeviceConnection {
 function fakeLink() {
     let handlers: DeviceLinkHandlers | null = null;
     let seq = 0;
-    const live = new Set<FakeConnection>();
+    const live = new Map<FakeConnection, string>();
     const link = {
         listening: false,
         addresses: [] as string[],
+        /** The addresses the Mac has now, which start and updateAddresses listen on. */
+        now: ['192.168.1.20', 'fe80::1c2b:3a4d%en0', '10.8.0.3'],
+        /** Ports something else holds on every address: start picks `picked` instead. */
+        taken: new Set<number>(),
+        picked: 52000,
         starts: [] as {identity: ServerIdentity; port: number}[],
         stops: [] as number[],
+        updates: [] as {added: string[]; removed: string[]}[],
         failStart: null as Error | null,
-        async start(identity: ServerIdentity, port: number, h: DeviceLinkHandlers) {
+        async start(identity: ServerIdentity, port: number, h: DeviceLinkHandlers): Promise<number> {
             if (link.failStart) throw link.failStart;
             handlers = h;
             link.listening = true;
-            link.addresses = ['192.168.1.20', 'fe80::1c2b:3a4d%en0', '10.8.0.3'];
+            link.addresses = [...link.now];
             link.starts.push({identity, port});
-            return 52000;
+            return port === 0 || link.taken.has(port) ? link.picked : port;
         },
-        async stop(code: number, reason: string) {
+        async updateAddresses(code: number, reason: string): Promise<AddressChange> {
+            const added = link.now.filter((address: string) => !link.addresses.includes(address));
+            const removed = link.addresses.filter((address: string) => !link.now.includes(address));
+            link.addresses = [...link.now];
+            for (const [connection, address] of [...live]) {
+                if (removed.includes(address)) connection.close(code, reason);
+            }
+            if (link.addresses.length === 0) await link.stop(code, reason);
+            link.updates.push({added, removed});
+            return {added, removed};
+        },
+        async stop(code: number, reason: string): Promise<void> {
             link.listening = false;
             link.addresses = [];
             link.stops.push(code);
-            for (const connection of [...live]) connection.close(code, reason);
+            for (const connection of [...live.keys()]) connection.close(code, reason);
         },
-        /** A TLS handshake with `fingerprint`; null when the listener refused it. */
-        connect(fingerprint: string): FakeConnection | null {
+        /** A TLS handshake with `fingerprint` on `address`; null when the listener refused it. */
+        connect(fingerprint: string, on?: string): FakeConnection | null {
+            const address = on ?? link.addresses[0];
             const grant: ConnectionGrant = handlers!.authorize(fingerprint);
             if (!grant) return null;
             const connection: FakeConnection = {
@@ -86,7 +106,7 @@ function fakeLink() {
                     handlers!.disconnected(connection);
                 },
             };
-            live.add(connection);
+            live.set(connection, address);
             handlers!.connected(connection);
             return connection;
         },
@@ -178,7 +198,7 @@ const PIXEL: EnrolledDevice = {
     lastSeenAt: null,
 };
 
-function harness(opts: {enabled?: boolean; devices?: EnrolledDevice[]} = {}) {
+function harness(opts: {enabled?: boolean; devices?: EnrolledDevice[]; store?: Map<string, unknown>} = {}) {
     const link = fakeLink();
     const identity = fakeIdentityStore();
     const devices = fakeRegistry(opts.devices ?? []);
@@ -186,7 +206,7 @@ function harness(opts: {enabled?: boolean; devices?: EnrolledDevice[]} = {}) {
     const renderer = fakeRenderer();
     const sessions = fakeSessions();
     const timers = fakeTimers();
-    const store = new Map<string, unknown>();
+    const store = opts.store ?? new Map<string, unknown>();
     if (opts.enabled) store.set(PHONE_ACCESS_ENABLED_KEY, true);
     let now = 1_000;
     let id = 0;
@@ -361,20 +381,192 @@ test('on then off in quick succession ends off', async () => {
     assert.equal(h.link.listening, false);
 });
 
-test('restart starts the listener again and phones see it going away', async () => {
+test('the port the OS picked the first time is saved', async () => {
+    /* Given */
+    const h = harness({enabled: true});
+
+    /* When */
+    const state = await h.service.start();
+
+    /* Then */
+    assert.deepEqual(
+        h.link.starts.map((s) => s.port),
+        [0],
+    );
+    assert.equal(state.port, 52000);
+    assert.equal(h.store.get(PHONE_ACCESS_PORT_KEY), 52000);
+});
+
+test('the next launch listens on the saved port again', async () => {
+    /* Given */
+    const store = new Map<string, unknown>([[PHONE_ACCESS_PORT_KEY, 52000]]);
+    const h = harness({enabled: true, store});
+    h.link.picked = 60000;
+
+    /* When */
+    const state = await h.service.start();
+
+    /* Then */
+    assert.deepEqual(
+        h.link.starts.map((s) => s.port),
+        [52000],
+    );
+    assert.equal(state.port, 52000);
+    assert.equal(store.get(PHONE_ACCESS_PORT_KEY), 52000);
+});
+
+test('turning it off and on again keeps the port', async () => {
+    /* Given */
+    const h = harness({enabled: true});
+    await h.service.start();
+    await h.service.setEnabled(false);
+    h.link.picked = 60000;
+
+    /* When */
+    const state = await h.service.setEnabled(true);
+
+    /* Then */
+    assert.deepEqual(
+        h.link.starts.map((s) => s.port),
+        [0, 52000],
+    );
+    assert.equal(state.port, 52000);
+});
+
+test('a saved port the link had to swap for a new one is saved over', async () => {
+    /* Given */
+    const store = new Map<string, unknown>([[PHONE_ACCESS_PORT_KEY, 52000]]);
+    const h = harness({enabled: true, store});
+    h.link.taken.add(52000);
+    h.link.picked = 60000;
+
+    /* When */
+    const state = await h.service.start();
+
+    /* Then */
+    assert.equal(state.port, 60000);
+    assert.equal(store.get(PHONE_ACCESS_PORT_KEY), 60000);
+    assert.deepEqual(
+        h.advertiser.advertised.map((a) => a.port),
+        [60000],
+    );
+});
+
+test('an address change follows the addresses on the same port and keeps phones connected', async () => {
     /* Given */
     const h = harness({enabled: true, devices: [PIXEL]});
     await h.service.start();
-    const phone = h.link.connect(PIXEL.fingerprint)!;
+    const phone = h.link.connect(PIXEL.fingerprint, '192.168.1.20')!;
+    h.link.now = ['192.168.1.20', 'fe80::1c2b:3a4d%en0'];
 
     /* When */
     const state = await h.service.restart();
 
     /* Then */
-    assert.equal(phone.closed?.code, 1001);
-    assert.equal(h.link.starts.length, 2);
-    assert.equal(h.advertiser.advertised.length, 2);
+    assert.deepEqual(h.link.updates, [{added: [], removed: ['10.8.0.3']}]);
+    assert.equal(phone.closed, null);
+    assert.equal(h.link.starts.length, 1);
+    assert.deepEqual(h.link.stops, []);
+    assert.equal(h.advertiser.advertised.length, 1);
+    assert.equal(h.advertiser.withdrawn, 0);
     assert.equal(state.listening, true);
+    assert.equal(state.port, 52000);
+    assert.equal(state.devices[0].connected, true);
+});
+
+test('an address that went away closes only the phones that came in on it', async () => {
+    /* Given */
+    const h = harness({enabled: true, devices: [PIXEL]});
+    await h.service.start();
+    const onLan = h.link.connect(PIXEL.fingerprint, '192.168.1.20')!;
+    const onVpn = h.link.connect(PIXEL.fingerprint, '10.8.0.3')!;
+    h.link.now = ['192.168.1.20'];
+
+    /* When */
+    await h.service.restart();
+
+    /* Then */
+    assert.equal(onVpn.closed?.code, 1001);
+    assert.equal(onLan.closed, null);
+});
+
+test('a phone greeted after an address change hears the addresses as they are now', async () => {
+    /* Given */
+    const h = harness({enabled: true, devices: [PIXEL]});
+    await h.service.start();
+    h.link.now = ['192.168.1.20', '10.8.0.3', '100.72.1.2'];
+    await h.service.restart();
+
+    /* When */
+    const phone = h.link.connect(PIXEL.fingerprint)!;
+    h.link.send(phone, {type: 'hello', protocol: PROTOCOL_VERSION, appVersion: '1.0'});
+
+    /* Then */
+    const welcome = phone.sent[0];
+    assert.equal(welcome.type, 'welcome');
+    assert.deepEqual(welcome.type === 'welcome' ? welcome.addresses : null, ['192.168.1.20', '10.8.0.3', '100.72.1.2']);
+});
+
+test('a connected phone is told the new addresses when a VPN comes up', async () => {
+    /* Given */
+    const h = harness({enabled: true, devices: [PIXEL]});
+    h.link.now = ['192.168.1.20', 'fe80::1c2b:3a4d%en0'];
+    await h.service.start();
+    const phone = h.link.connect(PIXEL.fingerprint, '192.168.1.20')!;
+    h.link.send(phone, {type: 'hello', protocol: PROTOCOL_VERSION, appVersion: '1.0'});
+    h.link.now = ['192.168.1.20', 'fe80::1c2b:3a4d%en0', '10.8.0.3'];
+
+    /* When */
+    await h.service.restart();
+
+    /* Then */
+    assert.deepEqual(phone.sent.at(-1), {type: 'addresses', addresses: ['192.168.1.20', '10.8.0.3']});
+});
+
+test('an address change that leaves no address brings the listener down and up again', async () => {
+    /* Given */
+    const h = harness({enabled: true});
+    await h.service.start();
+    h.link.now = [];
+    h.link.failStart = new Error('No local network interface to listen on');
+
+    /* When */
+    const state = await h.service.restart();
+
+    /* Then */
+    assert.equal(state.listening, false);
+    assert.match(state.error ?? '', /No local network interface/);
+    assert.equal(h.advertiser.withdrawn, 1);
+});
+
+test('an address change brings up a listener that had failed to start', async () => {
+    /* Given */
+    const h = harness({enabled: true});
+    h.link.failStart = new Error('No local network interface to listen on');
+    await h.service.start();
+    h.link.failStart = null;
+
+    /* When */
+    const state = await h.service.restart();
+
+    /* Then */
+    assert.equal(h.link.starts.length, 1);
+    assert.deepEqual(h.link.updates, []);
+    assert.equal(state.listening, true);
+    assert.equal(state.error, null);
+});
+
+test('an address change is ignored while Phone access is off', async () => {
+    /* Given */
+    const h = harness();
+
+    /* When */
+    const state = await h.service.restart();
+
+    /* Then */
+    assert.equal(h.link.starts.length, 0);
+    assert.deepEqual(h.link.updates, []);
+    assert.equal(state.listening, false);
 });
 
 // ── Authorising ──
@@ -483,7 +675,7 @@ test('an enrolled connection that disconnects is reported to the sessions handle
 
 // ── Pairing ──
 
-test('startPairing shows an invite with the fingerprint, host, port and code', async () => {
+test("startPairing shows an invite with the fingerprint, host, port, code and the Mac's IP addresses", async () => {
     /* Given */
     const h = harness({enabled: true});
     await h.service.start();
@@ -498,6 +690,7 @@ test('startPairing shows an invite with the fingerprint, host, port and code', a
         code: CODE,
         host: 'joris-mbp.local',
         port: 52000,
+        addresses: ['192.168.1.20', '10.8.0.3'],
     });
     assert.equal(state.pairing!.expiresAt, 1_000 + PAIRING_CODE_TTL_MS);
 });

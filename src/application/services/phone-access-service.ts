@@ -19,7 +19,7 @@
 import {CLOSE, PROTOCOL_VERSION} from '../../domain/phone/protocol';
 import type {ClientMessage} from '../../domain/phone/protocol';
 import {encodeInvite} from '../../domain/phone/codec';
-import {helloReply} from '../../domain/phone/compat';
+import {dialableAddresses, helloReply} from '../../domain/phone/compat';
 import {
     PAIRING_CODE_LENGTH,
     PAIRING_IDLE,
@@ -48,6 +48,12 @@ import type {SettingsStore} from '../ports/settings-store';
 
 /** The settings key that keeps Phone access on across restarts. */
 export const PHONE_ACCESS_ENABLED_KEY = 'phoneAccessEnabled';
+
+/**
+ * The settings key that keeps the listener's port across restarts and network
+ * changes: phones remember host and port, so a port that moves strands them.
+ */
+export const PHONE_ACCESS_PORT_KEY = 'phoneAccessPort';
 
 /** WebSocket's "going away": the Mac is quitting or the listener restarts; the app reconnects. */
 const GOING_AWAY = 1001;
@@ -85,7 +91,10 @@ export interface PhoneAccessServiceDeps {
     macName: string;
     /** Switchboard's version, for `update-required`. */
     appVersion: string;
-    /** The port to listen on; 0 (the default) lets the OS pick, Bonjour tells the phones. */
+    /**
+     * The port to listen on, over the remembered one. Without it the listener
+     * reuses the port it had last time, and the first time lets the OS pick.
+     */
     port?: number;
     log: Logger;
 }
@@ -144,13 +153,31 @@ export class PhoneAccessService {
     }
 
     /**
-     * The listener binds the LAN addresses it finds at start, so when the Mac's
-     * network changes it has to start again to follow. Phones see "going away"
-     * and reconnect. A no-op while Phone access is off.
+     * The Mac's addresses changed (Wi-Fi, DHCP, a VPN up or down): the listener
+     * follows on the same port, so connections on addresses that stayed are
+     * kept, and only those on an address that went away see "going away" and
+     * reconnect. The advertisement and any pairing stay up. A listener that is
+     * down (it failed to start, or every address went) is brought up again.
+     * A no-op while Phone access is off.
      */
     public restart(): Promise<PhoneAccessState> {
         return this.serial(async () => {
             if (!this.enabled()) return;
+            const {link, advertiser, log} = this.deps;
+            if (this.listening && link.listening) {
+                const {added, removed} = await link.updateAddresses(GOING_AWAY, 'The Mac changed networks');
+                if (link.listening) {
+                    log.info(
+                        `[phone] the addresses changed; still on port ${this.port}` +
+                            ` (added: ${added.join(', ') || 'none'}; removed: ${removed.join(', ') || 'none'})`,
+                    );
+                    this.host = advertiser.hostName();
+                    if (added.length > 0 || removed.length > 0) this.tellAddresses();
+                    this.changed();
+                    return;
+                }
+                log.info('[phone] no address is left to listen on');
+            }
             await this.bringDown(GOING_AWAY, 'The Mac changed networks');
             await this.bringUp();
         });
@@ -185,6 +212,8 @@ export class PhoneAccessService {
             code: this.pairing.code,
             host: this.host ?? advertiser.hostName(),
             port: this.port,
+            // For networks where the `.local` name doesn't resolve; link-local needs a scope a phone can't use.
+            addresses: dialableAddresses(this.deps.link.addresses),
         });
         timers.clearTimeout(this.expiry);
         this.expiry = timers.setTimeout(() => {
@@ -237,6 +266,17 @@ export class PhoneAccessService {
         }
         this.changed();
         return this.state();
+    }
+
+    /**
+     * Tells every connected phone where the Mac listens now, so one that
+     * connected before a VPN came up can still reach it over the VPN later.
+     */
+    private tellAddresses(): void {
+        const addresses = dialableAddresses(this.deps.link.addresses);
+        for (const {connection, greeted} of this.links.values()) {
+            if (greeted && connection.grant.kind === 'device') connection.send({type: 'addresses', addresses});
+        }
     }
 
     // ── Devices ──
@@ -413,6 +453,12 @@ export class PhoneAccessService {
         return this.deps.settings.get<boolean>(PHONE_ACCESS_ENABLED_KEY) === true;
     }
 
+    /** The port the listener had last time, if one was saved. */
+    private rememberedPort(): number | null {
+        const port = this.deps.settings.get<number>(PHONE_ACCESS_PORT_KEY);
+        return typeof port === 'number' && Number.isInteger(port) && port > 0 && port < 65536 ? port : null;
+    }
+
     /** Load the identity (unless handed a fresh one), listen, advertise. Failures land in `error`. */
     private async bringUp(identity?: ServerIdentity): Promise<void> {
         const {link, advertiser, log} = this.deps;
@@ -428,14 +474,21 @@ export class PhoneAccessService {
             return;
         }
 
+        const remembered = this.rememberedPort();
         try {
-            this.port = await link.start(this.identity, this.deps.port ?? 0, this.handlers);
+            this.port = await link.start(this.identity, this.deps.port ?? remembered ?? 0, this.handlers);
         } catch (err) {
             log.error('[phone] listener failed to start:', (err as Error).message);
             this.error = `Could not start listening: ${(err as Error).message}`;
             this.port = null;
             this.changed();
             return;
+        }
+        if (this.port === remembered) {
+            log.info(`[phone] reusing port ${this.port}`);
+        } else {
+            log.info(`[phone] listening on new port ${this.port}${remembered === null ? '' : ` (was ${remembered})`}`);
+            this.deps.settings.set(PHONE_ACCESS_PORT_KEY, this.port);
         }
         this.host = advertiser.hostName();
         this.listening = true;

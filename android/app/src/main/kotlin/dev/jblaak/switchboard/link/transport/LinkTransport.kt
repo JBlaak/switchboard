@@ -15,6 +15,12 @@ interface LinkConnection {
 
     val events: ReceiveChannel<TransportEvent>
 
+    /**
+     * The phone's own address this socket went out from, as `InetAddress.hostAddress` without an IPv6 scope; null
+     * until the socket connected, or when it isn't known.
+     */
+    val localAddress: String?
+
     /** False when the socket is already closing or gone. */
     fun send(text: String): Boolean
 

@@ -24,6 +24,32 @@ class PairingInviteTest {
     }
 
     @Test
+    fun `an invite reads the Mac's IP addresses`() {
+        /* Given */
+        val text = "switchboard://pair?v=1&fp=$fingerprint&code=482913&host=joris-mbp.local&port=48211" +
+            "&addrs=192.168.3.117%2C10.8.0.3"
+
+        /* When */
+        val invite = PairingInvite.parseOrNull(text)
+
+        /* Then */
+        assertEquals(listOf("192.168.3.117", "10.8.0.3"), invite?.addresses)
+    }
+
+    @Test
+    fun `an invite with a malformed address list is rejected`() {
+        /* Given */
+        val text = "switchboard://pair?v=1&fp=$fingerprint&code=482913&host=joris-mbp.local&port=48211" +
+            "&addrs=192.168.3.117%2Cevil.example"
+
+        /* When */
+        val invite = PairingInvite.parseOrNull(text)
+
+        /* Then */
+        assertNull(invite)
+    }
+
+    @Test
     fun `the parameters may come in any order`() {
         /* Given */
         val text = "switchboard://pair?port=48211&host=joris-mbp.local&code=482913&fp=$fingerprint&v=1"
