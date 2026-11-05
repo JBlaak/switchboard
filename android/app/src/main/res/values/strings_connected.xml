@@ -3,6 +3,8 @@
     <string name="ask_another_project">Another project…</string>
     <string name="ask_back">Back</string>
     <string name="ask_box_hint">Patch picks the project and writes the first prompt</string>
+    <!-- The strip over the connected screens while the link is down: what they show may be out of date. -->
+    <string name="connected_reconnecting">Reconnecting to %1$s…</string>
     <string name="ask_cancel">Cancel</string>
     <string name="ask_close">Close</string>
     <string name="ask_filter">Filter projects</string>

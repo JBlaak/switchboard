@@ -1,5 +1,6 @@
 package dev.jblaak.switchboard.link.transport
 
+import dev.jblaak.switchboard.link.LinkLogger
 import dev.jblaak.switchboard.link.discovery.MacAddress
 import dev.jblaak.switchboard.link.identity.DeviceKey
 import dev.jblaak.switchboard.link.tls.DeviceKeyManager
@@ -10,7 +11,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.SSLContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import okhttp3.Call
+import okhttp3.Connection
 import okhttp3.ConnectionSpec
+import okhttp3.EventListener
 import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,25 +26,31 @@ import okio.ByteString
 
 /**
  * The [LinkTransport] over an OkHttp WebSocket. Each connection gets its own TLS context, as the key and the pin
- * belong to that attempt; [baseClient] contributes the dispatcher, connection pool and timeouts.
+ * belong to that attempt; [baseClient] contributes the dispatcher, connection pool and timeouts. Failures go to
+ * [logger] with OkHttp's own reason.
  */
-class OkHttpLinkTransport(private val baseClient: OkHttpClient) : LinkTransport {
+class OkHttpLinkTransport(
+    private val baseClient: OkHttpClient,
+    private val logger: LinkLogger = LinkLogger.Silent,
+) : LinkTransport {
 
     override fun open(address: MacAddress, key: DeviceKey, macFingerprint: String): LinkConnection {
         val trustManager = PinnedTrustManager(macFingerprint)
         val sslContext = SSLContext.getInstance("TLSv1.3").apply {
             init(arrayOf(DeviceKeyManager(key)), arrayOf(trustManager), null)
         }
+        val localAddress = LocalAddressListener()
         val client = baseClient.newBuilder()
+            .eventListener(localAddress)
             .sslSocketFactory(sslContext.socketFactory, trustManager)
             .connectionSpecs(listOf(ConnectionSpec.Builder(ConnectionSpec.RESTRICTED_TLS).tlsVersions(TlsVersion.TLS_1_3).build()))
             .hostnameVerifier { _, _ -> true }
             .retryOnConnectionFailure(false)
             .build()
         val url = HttpUrl.Builder().scheme("https").host(address.host).port(address.port).build()
-        val listener = ChannelListener(trustManager)
+        val listener = ChannelListener(trustManager, "${address.host}:${address.port}", logger)
         val webSocket = client.newWebSocket(Request.Builder().url(url).build(), listener)
-        return OkHttpLinkConnection(webSocket, listener.events)
+        return OkHttpLinkConnection(webSocket, listener.events, localAddress)
     }
 
     companion object {
@@ -57,7 +67,10 @@ class OkHttpLinkTransport(private val baseClient: OkHttpClient) : LinkTransport 
 private class OkHttpLinkConnection(
     private val webSocket: WebSocket,
     override val events: ReceiveChannel<TransportEvent>,
+    private val localAddressListener: LocalAddressListener,
 ) : LinkConnection {
+
+    override val localAddress: String? get() = localAddressListener.address
 
     override fun send(text: String): Boolean = webSocket.send(text)
 
@@ -66,7 +79,23 @@ private class OkHttpLinkConnection(
     }
 }
 
-private class ChannelListener(private val trustManager: PinnedTrustManager) : WebSocketListener() {
+/** Notes the phone-side address of the socket OkHttp connected, for [LinkConnection.localAddress]. */
+private class LocalAddressListener : EventListener() {
+
+    @Volatile
+    var address: String? = null
+        private set
+
+    override fun connectionAcquired(call: Call, connection: Connection) {
+        address = connection.socket().localAddress?.hostAddress?.substringBefore('%')
+    }
+}
+
+private class ChannelListener(
+    private val trustManager: PinnedTrustManager,
+    private val target: String,
+    private val logger: LinkLogger,
+) : WebSocketListener() {
 
     val events = Channel<TransportEvent>(Channel.UNLIMITED)
 
@@ -95,7 +124,10 @@ private class ChannelListener(private val trustManager: PinnedTrustManager) : We
     }
 
     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-        end(TransportEvent.Failed(failureOf(response)))
+        val failure = failureOf(response)
+        val status = response?.let { " (HTTP ${it.code})" }.orEmpty()
+        logger.warn("$target: $failure$status: ${t::class.java.simpleName}: ${t.message}")
+        end(TransportEvent.Failed(failure))
     }
 
     private fun failureOf(response: Response?): TransportFailure {

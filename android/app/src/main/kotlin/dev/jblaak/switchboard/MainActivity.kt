@@ -36,11 +36,11 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         super.onStart()
-        app.screens.foregrounded(at = SystemClock.elapsedRealtime().milliseconds)
+        app.foregrounded(at = SystemClock.elapsedRealtime().milliseconds)
     }
 
     override fun onStop() {
         super.onStop()
-        app.screens.backgrounded(at = SystemClock.elapsedRealtime().milliseconds)
+        app.backgrounded(at = SystemClock.elapsedRealtime().milliseconds)
     }
 }
