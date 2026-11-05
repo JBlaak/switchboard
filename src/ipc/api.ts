@@ -28,6 +28,14 @@ import type {CaptureTarget, RouteRequest, RouteResult} from '../domain/ask/model
 import type {IssueWorktreeRequest, IssueWorktreeResult} from '../domain/plan/issue-session';
 import type {Plan, PlanSummary} from '../domain/plan/model';
 import type {ProjectOverview, ProjectOverviewOptions} from '../domain/project/overview';
+import type {
+    ErrandResult,
+    FixRequest,
+    FixResult,
+    NudgeRequest,
+    NudgeResult,
+    QueueErrandView,
+} from '../domain/project/queue-errands';
 import type {PhoneAccessState, TerminalOwner} from '../domain/phone/state';
 import type {BlaakTasksResult, TaskDetail, TaskRow} from '../domain/tasks/model';
 import type {
@@ -242,6 +250,37 @@ export interface SwitchboardApi {
      * plans at all (`plansPending`), which answers in a fraction of the time.
      */
     projectOverview(projectPath: string, options?: ProjectOverviewOptions): Promise<ProjectOverview>;
+
+    // ── The merge queue's buttons and errands (#315) ──
+    // Nudge and a new Fix answer a first prompt; the renderer starts the session
+    // (a row is its to make), then says which (`queueErrandStarted`) or that it
+    // could not (`queueErrandAbandoned`). Those sessions are errands.
+    /**
+     * Nudge a held entry's reviewer, after the user said yes to `message`
+     * (`nudgeMessage`) in a confirm: the first prompt of a session to start in
+     * the project. Refused while a nudge for the same PR and reviewer stands.
+     */
+    queueNudge(request: NudgeRequest): Promise<NudgeResult>;
+    /** The review request a nudge was about changed: the reviewer may be nudged again. */
+    queueForgetNudge(repository: string, number: number, reviewer: string): Promise<void>;
+    /** These PRs of the repository wait for these reviewers now: every other standing nudge in it is forgotten. */
+    queueSettleNudges(repository: string, held: {number: number; reviewer: string}[]): Promise<void>;
+    /**
+     * Fix in session: queued in the PR's own running session (`kind: 'queued'`),
+     * or a worktree on its branch and the first prompt of a new session there
+     * (`kind: 'start'`).
+     */
+    queueFix(request: FixRequest): Promise<FixResult>;
+    /** Retry: remove `automerge:failed` from the PR. */
+    queueRetry(repository: string, number: number): Promise<ErrandResult>;
+    /** Opt in: add `automerge:opt-in` to the PR. */
+    queueOptIn(repository: string, number: number): Promise<ErrandResult>;
+    /** The errand's session started, as `sessionId`. */
+    queueErrandStarted(errandId: string, sessionId: string): Promise<ErrandResult>;
+    /** The errand's session could not be started: forget the errand (and its nudge). */
+    queueErrandAbandoned(errandId: string): Promise<ErrandResult>;
+    /** The repository's errands (every one without it), oldest first, with how far each got. */
+    queueErrands(repository?: string): Promise<QueueErrandView[]>;
 
     // ── Tasks: BlaakTasks in Switchboard (#248) ──
     // While no BlaakTasks URL is set, the BlaakTasks calls answer `{ kind: 'off' }`

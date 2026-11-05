@@ -148,6 +148,23 @@ const TABLES = [
     mtime_ms REAL NOT NULL,
     transcript TEXT NOT NULL
   )`,
+    // The merge queue's errands (#315): sessions started by Nudge or Fix in
+    // session, and the PR each is about. A nudge's row stands until its review
+    // request changes (settled_at), so a reviewer is not nudged twice about one.
+    // session_id is NULL until the renderer has started the session. Epoch ms.
+    `CREATE TABLE IF NOT EXISTS queue_errands (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    reviewer TEXT,
+    message TEXT,
+    session_id TEXT,
+    created_at INTEGER NOT NULL,
+    settled_at INTEGER
+  )`,
 ];
 
 const INDEXES = [
