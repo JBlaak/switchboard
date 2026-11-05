@@ -19,7 +19,7 @@ import type {StoredFontSettings} from '../terminal/terminal-input';
 import type {OpenSession} from '../../state/session-store';
 import type {SessionRow} from '../../../domain/session/session';
 import {Terminal} from '@xterm/xterm';
-import type {ILink, ILinkProvider} from '@xterm/xterm';
+import type {IBufferLine, ILink, ILinkProvider} from '@xterm/xterm';
 import {FitAddon} from '@xterm/addon-fit';
 import {WebLinksAddon} from '@xterm/addon-web-links';
 import {SearchAddon} from '@xterm/addon-search';
@@ -525,32 +525,47 @@ export function showSession(sessionId: string): void {
 /** The gap between the keys a command is typed as, so each lands before the next. */
 const BANG_KEY_GAP_MS = 150;
 
+/** How many lines either side of a hovered line a wrapped command may reach. */
+const BANG_WRAP_LINES = 8;
+
 function bangCommandLinks(terminal: Terminal, getSessionId: () => string): ILinkProvider {
     return {
         provideLinks(y, callback) {
-            const line = terminal.buffer.active.getLine(y - 1);
-            if (!line) {
-                callback(undefined);
-                return;
-            }
-            const cells: BangCell[] = [];
-            for (let x = 0; x < line.length; x++) {
-                const cell = line.getCell(x);
-                if (!cell) break;
-                cells.push({
-                    text: cell.getChars() || (cell.getWidth() === 0 ? '' : ' '),
-                    style: `${cell.getFgColorMode()}:${cell.getFgColor()}`,
-                    plain: cell.isFgDefault(),
-                });
-            }
-            const links = findBangCommands(cells).map(({start, end, command}): ILink => ({
-                range: {start: {x: start + 1, y}, end: {x: end + 1, y}},
-                text: command,
-                activate: () => runBangCommand(getSessionId(), command),
-            }));
+            const buffer = terminal.buffer.active;
+            const first = Math.max(0, y - 1 - BANG_WRAP_LINES);
+            const last = Math.min(buffer.length - 1, y - 1 + BANG_WRAP_LINES);
+            const lines: BangCell[][] = [];
+            for (let row = first; row <= last; row++) lines.push(bangCells(buffer.getLine(row)));
+            const links = findBangCommands(lines)
+                .map(({start, end, command}) => ({
+                    start: {x: start.col + 1, y: first + start.line + 1},
+                    end: {x: end.col + 1, y: first + end.line + 1},
+                    command,
+                }))
+                .filter(({start, end}) => start.y <= y && y <= end.y)
+                .map(({start, end, command}): ILink => ({
+                    range: {start, end},
+                    text: command,
+                    activate: () => runBangCommand(getSessionId(), command),
+                }));
             callback(links.length ? links : undefined);
         },
     };
+}
+
+function bangCells(line: IBufferLine | undefined): BangCell[] {
+    const cells: BangCell[] = [];
+    if (!line) return cells;
+    for (let x = 0; x < line.length; x++) {
+        const cell = line.getCell(x);
+        if (!cell) break;
+        cells.push({
+            text: cell.getChars() || (cell.getWidth() === 0 ? '' : ' '),
+            style: `${cell.getFgColorMode()}:${cell.getFgColor()}`,
+            plain: cell.isFgDefault(),
+        });
+    }
+    return cells;
 }
 
 function runBangCommand(sessionId: string, command: string): void {

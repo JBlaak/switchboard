@@ -130,3 +130,6 @@ internal fun storedPairing() = StoredPairing(
 )
 
 internal const val WELCOME = """{"type":"welcome","protocol":1,"macName":"Studio","deviceId":"d-7"}"""
+
+internal const val WELCOME_WITH_ADDRESSES =
+    """{"type":"welcome","protocol":1,"macName":"Studio","deviceId":"d-7","addresses":["192.168.1.20","10.8.0.3"]}"""

@@ -10,10 +10,12 @@
  * off because every certificate here is self-signed: pinning, not a CA, is
  * what decides.
  *
- * Bound to the LAN interfaces only (see `lanAddresses`), one TLS server per
- * address, all on the same port. Never loopback-only (a phone couldn't reach
- * it), and never the wildcard address, which would also listen on VPN and
- * tunnel interfaces.
+ * Bound to the LAN and VPN interfaces (see `listenAddresses`), one TLS server
+ * per address, all on the same port, so a phone on the same VPN as the Mac
+ * (WireGuard, Tailscale) reaches it too. Never loopback-only (a phone couldn't
+ * reach it), and never the wildcard address, which would also listen on
+ * AirDrop, Internet Sharing and virtual machine interfaces. A VPN peer gets no
+ * further than a LAN one: the certificate pinning below decides.
  *
  * Text frames are one JSON ClientMessage each; anything that doesn't parse,
  * and any binary frame from the phone, closes with CLOSE.protocolError.
@@ -51,33 +53,37 @@ const STOP_GRACE_MS = 1_000;
 const MISSED_PINGS_ALLOWED = 2;
 
 /**
- * Interface names that are tunnels, VPNs or point-to-point links rather than
- * the local network: macOS's utun (Tailscale, WireGuard apps, iCloud Private
- * Relay), ipsec and ppp (system VPNs), tun/tap/wg (third-party VPNs), gif/stf
- * (IPv6 tunnelling), awdl/llw (AirDrop's peer-to-peer Wi-Fi), anpi, and
- * bridge/vmenet (Internet Sharing and virtual machines).
+ * Interface names no phone reaches the Mac on: gif/stf (IPv6 tunnelling),
+ * awdl/llw (AirDrop's peer-to-peer Wi-Fi), anpi, and bridge/vmenet (Internet
+ * Sharing and virtual machines).
  */
-const NON_LAN_INTERFACE = /^(utun|ipsec|ppp|tun|tap|wg|gif|stf|awdl|llw|anpi|bridge|vmenet)/;
-
-/** 100.64.0.0/10, the carrier-grade NAT range Tailscale hands out, whatever the interface is called. */
-const CGNAT = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
+const UNREACHABLE_INTERFACE = /^(gif|stf|awdl|llw|anpi|bridge|vmenet)/;
 
 /**
- * The addresses to listen on: every non-internal IPv4 and IPv6 address of an
- * interface that isn't a tunnel or VPN (see NON_LAN_INTERFACE), and not in the
- * CGNAT range. IPv6 link-local addresses carry their interface as a scope
- * (`fe80::1%en0`), which is what binding to one needs.
+ * Tunnel and VPN interfaces: macOS's utun (WireGuard, Tailscale, iCloud Private
+ * Relay), ipsec and ppp (system VPNs), tun/tap/wg (third-party VPNs). A phone on
+ * the same VPN reaches their routable addresses; their link-local ones are the
+ * system's own (iCloud Private Relay's utun0–3 carry nothing else).
  */
-export function lanAddresses(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]>): string[] {
+const TUNNEL_INTERFACE = /^(utun|ipsec|ppp|tun|tap|wg)/;
+
+/**
+ * The addresses to listen on: every non-internal IPv4 and IPv6 address of the
+ * LAN and VPN interfaces, leaving out UNREACHABLE_INTERFACE and a tunnel's
+ * link-local addresses. IPv6 link-local addresses carry their interface as a
+ * scope (`fe80::1%en0`), which is what binding to one needs.
+ */
+export function listenAddresses(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]>): string[] {
     const addresses: string[] = [];
     for (const [name, infos] of Object.entries(interfaces)) {
-        if (!infos || NON_LAN_INTERFACE.test(name)) continue;
+        if (!infos || UNREACHABLE_INTERFACE.test(name)) continue;
+        const tunnel = TUNNEL_INTERFACE.test(name);
         for (const info of infos) {
             if (info.internal) continue;
             if (info.family === 'IPv4') {
-                if (!CGNAT.test(info.address)) addresses.push(info.address);
+                addresses.push(info.address);
             } else if (info.address.toLowerCase().startsWith('fe80:')) {
-                addresses.push(`${info.address.split('%')[0]}%${name}`);
+                if (!tunnel) addresses.push(`${info.address.split('%')[0]}%${name}`);
             } else {
                 addresses.push(info.address);
             }
@@ -92,7 +98,7 @@ export interface TlsDeviceLinkDeps {
     /** The domain codec's binary terminal frame (see protocol.ts). */
     encodeTerminalFrame(sessionId: string, data: string): Uint8Array;
     log: Logger;
-    /** Where to listen; the LAN addresses by default. Tests pass loopback. */
+    /** Where to listen; `listenAddresses` by default. Tests pass loopback. */
     addresses?: () => string[];
     /** The ping interval; 20 s by default. */
     keepaliveMs?: number;
@@ -111,6 +117,7 @@ interface Live {
 
 export class TlsDeviceLink implements DeviceLink {
     private servers: tls.Server[] = [];
+    private bound: string[] = [];
     private http: http.Server | null = null;
     private wss: WebSocketServer | null = null;
     private keepalive: ReturnType<typeof setInterval> | null = null;
@@ -124,9 +131,13 @@ export class TlsDeviceLink implements DeviceLink {
         return this.servers.length > 0;
     }
 
+    public get addresses(): readonly string[] {
+        return this.bound;
+    }
+
     public async start(identity: ServerIdentity, port: number, handlers: DeviceLinkHandlers): Promise<number> {
         if (this.listening) throw new Error('The device link is already listening');
-        const addresses = (this.deps.addresses ?? (() => lanAddresses(os.networkInterfaces())))();
+        const addresses = (this.deps.addresses ?? (() => listenAddresses(os.networkInterfaces())))();
         if (addresses.length === 0) throw new Error('No local network interface to listen on');
 
         // The HTTP server never listens: it only parses the upgrade request on
@@ -160,6 +171,7 @@ export class TlsDeviceLink implements DeviceLink {
             try {
                 bound = await listen(server, bound, address);
                 this.servers.push(server);
+                this.bound.push(address);
                 this.deps.log.info(`[phone] listening on ${address} port ${bound}`);
             } catch (err) {
                 // One address that won't bind (it went away, it's taken) shouldn't
@@ -168,6 +180,7 @@ export class TlsDeviceLink implements DeviceLink {
             }
         }
         if (this.servers.length === 0) {
+            this.bound = [];
             this.http = null;
             this.wss = null;
             throw new Error(`Could not listen on any of ${addresses.join(', ')}`);
@@ -182,6 +195,7 @@ export class TlsDeviceLink implements DeviceLink {
         const servers = this.servers;
         if (servers.length === 0) return;
         this.servers = [];
+        this.bound = [];
         if (this.keepalive) clearInterval(this.keepalive);
         this.keepalive = null;
 
