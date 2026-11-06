@@ -295,13 +295,24 @@ export function GrillingCard({screen, view: mainView, onShow}: GrillingCardProps
         void sheet.current?.offsetWidth;
         if (block.current) settle(block.current);
 
-        // Coming back from the terminal view takes the keyboard back; a round
-        // arriving leaves it with the terminal if the user is typing there.
-        const returned = prev.key === showKey && prev.view === 'terminal';
-        if (returned) {
+        // The card covers the terminal, so it takes the keyboard as it comes up,
+        // as the question panel does: keys left with the terminal underneath
+        // would type into a prompt nobody can see.
+        // The sheet only becomes visible as its rise starts, and a hidden
+        // element cannot take focus: keep trying for a few frames, unless the
+        // keyboard has gone somewhere else meanwhile.
+        const terminal = screen.open?.element;
+        const until = performance.now() + 400;
+        const take = (): void => {
+            const active = document.activeElement;
+            if (!live.current.up || active === sheet.current || sheet.current?.contains(active)) return;
+            const unclaimed = !active || active === document.body || !!terminal?.contains(active);
+            if (!unclaimed) return;
             sheet.current?.focus({preventScroll: true});
             focusInside();
-        }
+            if (performance.now() < until) requestAnimationFrame(take);
+        };
+        take();
 
         if (!shown.answering.greeted) {
             arriving.current = shown.pending.toolUseId;
