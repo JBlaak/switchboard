@@ -16,6 +16,7 @@ import {SettingsViewer} from './settings/SettingsViewer';
 import {SessionWorkPage} from './session-work/SessionWorkPage';
 import {ProjectPage} from './project-page/ProjectPage';
 import {TasksPage} from './tasks-page/TasksPage';
+import {EmptyScreenFamily} from './patch/EmptyScreenFamily';
 import {EmptyScreenPatch} from './patch/EmptyScreenPatch';
 import {AskBox} from './ask/AskBox';
 import {Questions} from './questions/Questions';
@@ -74,6 +75,7 @@ export function Root(): JSX.Element | null {
                 <QuestionsHeaderButton />
             </Portal>
             <Portal target="placeholder">
+                <EmptyScreenFamily />
                 <EmptyScreenPatch />
                 <AskBox />
             </Portal>

@@ -13,6 +13,46 @@
     justify-content: flex-end;
 }
 
+/* The Patch family (ui/patch/EmptyScreenFamily): the running sessions out on
+   an adventure, framed as a card above Patch. Patch stands in front of the
+   card's lower edge, so the pair reads as one picture; the space Patch keeps
+   free for its bubble lets clicks through to the members behind it. */
+.placeholder-family {
+    flex: none;
+    width: min(820px, calc(100% - 64px));
+    aspect-ratio: 12 / 5;
+    border-radius: var(--sb-r-panel);
+    overflow: hidden;
+    background: #0d0e11;
+    box-shadow:
+        var(--sb-edge),
+        var(--sb-lift);
+    font-family: var(--sb-font-head);
+}
+
+.placeholder-family + .placeholder-patch {
+    position: relative;
+    z-index: 1;
+    margin-top: -200px;
+    pointer-events: none;
+}
+
+.placeholder-family + .placeholder-patch .patch-art,
+.placeholder-family + .placeholder-patch .patch-bubble {
+    pointer-events: auto;
+}
+
+/* A short window keeps Patch and the box, and leaves the outing out. */
+@media (max-height: 720px) {
+    .placeholder-family {
+        display: none;
+    }
+
+    .placeholder-family + .placeholder-patch {
+        margin-top: 0;
+    }
+}
+
 #placeholder .patch {
     --patch-bubble-bg: var(--sb-bg-raised);
     --patch-bubble-text: var(--sb-text-strong);
