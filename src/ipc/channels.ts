@@ -74,6 +74,8 @@ export const INVOKE = {
     setAppearance: 'set-appearance',
     quickAskHotkeyStatus: 'quick-ask:hotkey-status',
     blaakTasksSetUp: 'blaak-tasks:set-up',
+    savedPrompts: 'saved-prompts:get',
+    setSavedPrompts: 'saved-prompts:set',
 
     // Quick Ask: the pop-up's own (#148)
     quickAskRoute: 'quick-ask:route',

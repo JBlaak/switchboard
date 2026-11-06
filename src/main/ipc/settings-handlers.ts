@@ -45,6 +45,12 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
             typeof url === 'string' && url.trim() !== '' && app.mcpServers.headersFor(blaakTasksEndpoint(url)) !== null,
     );
 
+    /** Saved prompts (#339): read both lists, or replace one, merged into its blob in main. */
+    ipc.handle(INVOKE.savedPrompts, (projectPath: unknown) => app.settings.savedPrompts(asProjectPath(projectPath)));
+    ipc.handle(INVOKE.setSavedPrompts, (projectPath: unknown, prompts: unknown) =>
+        app.settings.setSavedPrompts(asProjectPath(projectPath), prompts),
+    );
+
     ipc.handle(INVOKE.getEffectiveSettings, (projectPath: string | null) => app.settings.effective(projectPath));
 
     /**
@@ -69,4 +75,9 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
         app.appearance.apply(appearance);
         return {ok: true, appearance};
     });
+}
+
+/** A project path from the renderer: a non-empty string, else the global list. */
+function asProjectPath(value: unknown): string | null {
+    return typeof value === 'string' && value !== '' ? value : null;
 }
