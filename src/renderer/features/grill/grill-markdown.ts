@@ -14,10 +14,8 @@ export type Inline =
     | {kind: 'em'; text: string}
     | {kind: 'link'; text: string; href: string};
 
-export type Block =
-    /** Lines of one paragraph, each drawn on its own line. */
-    | {kind: 'paragraph'; lines: Inline[][]}
-    | {kind: 'list'; ordered: boolean; items: Inline[][]};
+/** A paragraph (its lines, each drawn on a line of its own) or a list. */
+export type Block = {kind: 'paragraph'; lines: Inline[][]} | {kind: 'list'; ordered: boolean; items: Inline[][]};
 
 const INLINE = /`([^`]+)`|\*\*(.+?)\*\*|__(.+?)__|\*([^*\s](?:[^*]*[^*\s])?)\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
 

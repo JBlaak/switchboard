@@ -109,7 +109,9 @@ export function grillReducer(state: GrillState, event: RendererEvent): GrillStat
             });
 
         case 'grillContextToggled':
-            return withUi(state, event, (ui) => (ui.contextOpen === event.open ? ui : {...ui, contextOpen: event.open}));
+            return withUi(state, event, (ui) =>
+                ui.contextOpen === event.open ? ui : {...ui, contextOpen: event.open},
+            );
 
         case 'grillBannerDismissed':
             return withUi(state, event, (ui) => {
@@ -143,7 +145,9 @@ export function grillReducer(state: GrillState, event: RendererEvent): GrillStat
             // Gone at once when it failed, or when main's view already shows it;
             // otherwise held until the next snapshot, which will.
             const drop = !event.ok || (view?.revision === entry.revision && sameAnswer(shown, entry.answer));
-            const next = drop ? list.filter((e) => e !== entry) : list.map((e) => (e === entry ? {...e, settled: true} : e));
+            const next = drop
+                ? list.filter((e) => e !== entry)
+                : list.map((e) => (e === entry ? {...e, settled: true} : e));
             return {...state, inFlight: putList(state.inFlight, event.sessionId, next)};
         }
 

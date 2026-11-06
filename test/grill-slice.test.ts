@@ -53,7 +53,12 @@ test('a round closing drops it with its working state and calls', () => {
 
 test('the start-up fetch does not bring back a round that closed meanwhile, nor replace a newer one', () => {
     /* Given */
-    const state = run(initialGrillState, changed(view(1)), changed(null), changed(view(1, {sessionId: 's2', roundId: 'r2', revision: 1}), 's2'));
+    const state = run(
+        initialGrillState,
+        changed(view(1)),
+        changed(null),
+        changed(view(1, {sessionId: 's2', roundId: 'r2', revision: 1}), 's2'),
+    );
 
     /* When */
     const loaded = run(state, {
@@ -112,11 +117,12 @@ test('the place, open fields and folded context survive further snapshots of the
 
 test('a field stays open with its text while the card looks at another question', () => {
     /* Given */
-    const state = run(
-        initialGrillState,
-        changed(view(3)),
-        {type: 'grillFieldOpened', ...at, place: 0, field: {kind: 'override', text: 'mine'}},
-    );
+    const state = run(initialGrillState, changed(view(3)), {
+        type: 'grillFieldOpened',
+        ...at,
+        place: 0,
+        field: {kind: 'override', text: 'mine'},
+    });
 
     /* When */
     const next = run(state, {type: 'grillNavigated', ...at, place: 2}, {type: 'grillNavigated', ...at, place: 0});
@@ -127,11 +133,12 @@ test('a field stays open with its text while the card looks at another question'
 
 test('closing a field drops it and its text', () => {
     /* Given */
-    const state = run(
-        initialGrillState,
-        changed(view(1)),
-        {type: 'grillFieldOpened', ...at, place: 0, field: {kind: 'ask', text: 'why'}},
-    );
+    const state = run(initialGrillState, changed(view(1)), {
+        type: 'grillFieldOpened',
+        ...at,
+        place: 0,
+        field: {kind: 'ask', text: 'why'},
+    });
 
     /* When */
     const next = run(state, {type: 'grillFieldClosed', ...at, place: 0});

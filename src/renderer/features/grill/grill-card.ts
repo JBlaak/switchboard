@@ -84,7 +84,9 @@ export interface PlacedAnswer {
  * included, takes the recommendation. Answered questions keep theirs.
  */
 export function acceptRest(view: Pick<GrillView, 'questions'>): PlacedAnswer[] {
-    return view.questions.flatMap((q, place) => (q.answer === null ? [{place, answer: {kind: 'accepted'} as const}] : []));
+    return view.questions.flatMap((q, place) =>
+        q.answer === null ? [{place, answer: {kind: 'accepted'} as const}] : [],
+    );
 }
 
 /**
@@ -107,7 +109,9 @@ export function reviewFlag(question: GrillQuestionView): string {
 export function revisionNote(question: GrillQuestionView): string | null {
     if (question.mark === 'new') return 'Claude added this question.';
     if (question.mark === 'changed')
-        return question.setAside ? 'Claude changed this question since you answered it.' : 'Claude changed this question.';
+        return question.setAside
+            ? 'Claude changed this question since you answered it.'
+            : 'Claude changed this question.';
     return null;
 }
 

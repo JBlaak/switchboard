@@ -58,7 +58,11 @@ test('a field opens on the answer it would edit', () => {
     const own = question(2, {answer: {kind: 'overridden', text: 'no'}});
 
     /* When */
-    const texts = [fieldText(noted, 'note', undefined), fieldText(own, 'override', undefined), fieldText(own, 'note', undefined)];
+    const texts = [
+        fieldText(noted, 'note', undefined),
+        fieldText(own, 'override', undefined),
+        fieldText(own, 'note', undefined),
+    ];
 
     /* Then */
     assert.deepEqual(texts, ['flag it', 'no', '']);

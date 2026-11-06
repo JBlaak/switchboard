@@ -93,12 +93,7 @@ test('an answer reads as accepted, accepted with its note, or the user own answe
     const labels = answers.map(answerLabel);
 
     /* Then */
-    assert.deepEqual(labels, [
-        'Not answered',
-        'Accepted',
-        'Accepted, note: behind a flag',
-        'Your answer: Use a table',
-    ]);
+    assert.deepEqual(labels, ['Not answered', 'Accepted', 'Accepted, note: behind a flag', 'Your answer: Use a table']);
 });
 
 test('answered counts only questions with a draft answer, not a set-aside one', () => {
