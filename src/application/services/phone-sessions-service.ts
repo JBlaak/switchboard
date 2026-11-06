@@ -40,6 +40,7 @@ import type {
 } from '../../domain/phone/protocol';
 import type {Project} from '../../domain/project/project';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
+import type {GrillChanged, GrillResult} from '../../domain/grill/model';
 import type {SessionRow} from '../../domain/session/session';
 import type {EffectiveSettings} from '../../domain/settings/settings';
 import type {ActiveSession} from '../model/active-session';
@@ -50,6 +51,7 @@ import type {Logger} from '../ports/logger';
 import type {DeviceConnection} from '../ports/phone-access';
 import type {RendererGateway} from '../ports/renderer-gateway';
 import type {QuestionService} from './question-service';
+import type {GrillService} from './grill-service';
 import type {BatteryService} from './battery-service';
 import type {VoiceService} from './voice-service';
 import type {OpenSessionRequest, OpenSessionResult} from './session-launcher';
@@ -86,6 +88,8 @@ export interface PhoneSessionsServiceDeps {
     /** Every project with its session rows (`ProjectListService`): names, and the local projects Ask Patch offers. */
     projects: {list(showArchived: boolean): Project[]};
     questions: Pick<QuestionService, 'pending' | 'answer'>;
+    /** The grilling card's rounds and drafts, which the phone edits as the Mac does. */
+    grill: Pick<GrillService, 'views' | 'answer' | 'ask' | 'send' | 'queue' | 'cancelQueue'>;
     /** A router of the phone's own, so two phones (or a phone and the Mac) never cancel each other. */
     router(): PhoneRouter;
     launcher: {open(request: OpenSessionRequest): Promise<OpenSessionResult>};
@@ -134,7 +138,10 @@ export class PhoneSessionsService {
 
     // ── The phones ──
 
-    /** An enrolled phone said hello and was welcomed: it gets the list, the questions, the voice status and the battery. */
+    /**
+     * An enrolled phone said hello and was welcomed: it gets the list, the
+     * questions, the grilling rounds, the voice status and the battery.
+     */
     public connected(connection: DeviceConnection, device: {id: string; name: string}): void {
         this.names.set(device.id, device.name);
         this.phones.set(connection.id, {
@@ -147,6 +154,7 @@ export class PhoneSessionsService {
         });
         connection.send({type: 'sessions', sessions: this.sessionList()});
         connection.send({type: 'questions', pending: this.deps.questions.pending()});
+        connection.send({type: 'grill', views: this.deps.grill.views()});
         this.deps.voice.connected(connection);
         this.deps.battery.connected(connection);
     }
@@ -180,6 +188,32 @@ export class PhoneSessionsService {
                 return this.input(phone, message.sessionId, message.data);
             case 'answer':
                 return this.answer(phone, message.sessionId, message.toolUseId, message.answers);
+            case 'grill-answer': {
+                const {sessionId, roundId, revision, place, answer} = message;
+                const result = this.deps.grill.answer(sessionId, roundId, revision, place, answer, 'phone');
+                return this.grillResult(phone, sessionId, roundId, result);
+            }
+            case 'grill-ask': {
+                const {sessionId, roundId, revision, place, text} = message;
+                const result = this.deps.grill.ask(sessionId, roundId, revision, place, text);
+                return this.grillResult(phone, sessionId, roundId, result);
+            }
+            case 'grill-send':
+                return this.grillSend(phone, message.sessionId, message.roundId);
+            case 'grill-queue':
+                return this.grillResult(
+                    phone,
+                    message.sessionId,
+                    message.roundId,
+                    this.deps.grill.queue(message.sessionId, message.roundId),
+                );
+            case 'grill-cancel-queue':
+                return this.grillResult(
+                    phone,
+                    message.sessionId,
+                    message.roundId,
+                    this.deps.grill.cancelQueue(message.sessionId, message.roundId),
+                );
             case 'ask':
                 void this.ask(phone, message.requestId, message.text, sizeOf(message));
                 return;
@@ -354,6 +388,12 @@ export class PhoneSessionsService {
         this.changed(sessionId);
     }
 
+    /** A grilling round opened, changed or closed: every phone gets every open round again. */
+    public grillChanged(changed: GrillChanged): void {
+        this.broadcast({type: 'grill', views: this.deps.grill.views()});
+        this.changed(changed.sessionId);
+    }
+
     /** The project list changed: a session started, ended, was renamed or got its title. */
     public sessionsChanged(): void {
         this.schedulePush();
@@ -409,6 +449,29 @@ export class PhoneSessionsService {
         if (!result.ok) return;
         const sessionId = this.currentId(requested);
         if (sessionId) this.apply({type: 'answered', sessionId, device: phone.deviceId});
+    }
+
+    /**
+     * Send a round's answers from this phone. Like an answer, it makes this
+     * phone the session's active device (#194).
+     */
+    private grillSend(phone: Phone, requested: string, roundId: string): void {
+        const result = this.deps.grill.send(requested, roundId, 'phone');
+        this.grillResult(phone, requested, roundId, result);
+        if (!result.ok) return;
+        const sessionId = this.currentId(requested);
+        if (sessionId) this.apply({type: 'answered', sessionId, device: phone.deviceId});
+    }
+
+    /** A grilling call that failed is told to the phone that made it; success shows in the next `grill`. */
+    private grillResult(phone: Phone, sessionId: string, roundId: string, result: GrillResult): void {
+        if (result.ok) return;
+        phone.connection.send({
+            type: 'grill-error',
+            sessionId,
+            roundId,
+            error: result.error ?? 'That did not work',
+        });
     }
 
     /**

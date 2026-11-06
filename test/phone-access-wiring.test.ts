@@ -174,7 +174,6 @@ async function mac() {
         registry,
         renderer,
         endpoint: {url: 'http://127.0.0.1:4000', token: 't'},
-        prompter: {send() {}, onExit: () => ({dispose() {}})},
         clock: {now: () => Date.now()},
         log: silentLog,
     });
@@ -230,6 +229,14 @@ async function mac() {
         },
         projects: {list: () => projects},
         questions,
+        grill: {
+            views: () => [],
+            answer: () => ({ok: true}),
+            ask: () => ({ok: true}),
+            send: () => ({ok: true}),
+            queue: () => ({ok: true}),
+            cancelQueue: () => ({ok: true}),
+        },
         router: () => ({route: async () => ({kind: 'cancelled' as const}), cancel() {}}),
         launcher,
         archiver: sessionArchiver({...stopper, repository, renderer, worktreeCleanup}),

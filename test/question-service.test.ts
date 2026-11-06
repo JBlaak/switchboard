@@ -6,7 +6,6 @@ import {SessionRegistry} from '../src/application/model/session-registry';
 import {QuestionService} from '../src/application/services/question-service';
 import {QUESTION_HOOK_TIMEOUT_SECONDS, questionHookResponse} from '../src/domain/questions/question';
 import {fakePty, fakeRenderer, silentLog} from './support/fakes';
-import {GRILL_YES_LABEL, WAIT_WHAT_LABEL} from '../src/domain/questions/grill';
 import type {AskedQuestions, PendingQuestions, Question, QuestionsSettled} from '../src/domain/questions/question';
 import type {QuestionHookEndpoint} from '../src/application/ports/question-hook';
 
@@ -27,13 +26,11 @@ function harness(endpoint: QuestionHookEndpoint = {url: 'http://127.0.0.1:4000',
             logged.push(message);
         },
     };
-    const prompter = fakePrompter();
     const service = new QuestionService({
         registry,
         renderer,
         endpoint,
         log,
-        prompter,
         clock: {now: () => now},
     });
 
@@ -67,7 +64,6 @@ function harness(endpoint: QuestionHookEndpoint = {url: 'http://127.0.0.1:4000',
         registry,
         renderer,
         service,
-        prompter,
         addSession,
         replies,
         logged,
@@ -77,53 +73,15 @@ function harness(endpoint: QuestionHookEndpoint = {url: 'http://127.0.0.1:4000',
     };
 }
 
-/** Records what is typed in, and lets a test end a session. */
-function fakePrompter() {
-    const sent: Array<[string, string]> = [];
-    const exits = new Map<string, Set<() => void>>();
-    return {
-        sent,
-        send(sessionId: string, prompt: string) {
-            sent.push([sessionId, prompt]);
-        },
-        onExit(sessionId: string, fn: () => void) {
-            const set = exits.get(sessionId) ?? new Set();
-            set.add(fn);
-            exits.set(sessionId, set);
-            return {
-                dispose: () => {
-                    set.delete(fn);
-                },
-            };
-        },
-        exit(sessionId: string) {
-            for (const fn of [...(exits.get(sessionId) ?? [])]) fn();
-        },
-        watching(sessionId: string) {
-            return exits.get(sessionId)?.size ?? 0;
-        },
-    };
-}
-
-/** A grilling round of two, as `parseGrillRound` would hand it over. */
+/** A grilling round's summary, as the GrillService hands it over. */
 const ROUND: Question[] = [
     {
         question: 'Keep the old API?',
         header: 'Q1',
         multiSelect: false,
         options: [
-            {label: GRILL_YES_LABEL, description: 'Keep it for a release'},
-            {label: WAIT_WHAT_LABEL, description: ''},
-        ],
-    },
-    {
-        question: 'Which store?',
-        header: 'Q2',
-        multiSelect: false,
-        options: [
-            {label: GRILL_YES_LABEL, description: 'SQLite'},
-            {label: 'A) SQLite', description: 'one file'},
-            {label: WAIT_WHAT_LABEL, description: ''},
+            {label: 'Yes (Recommended)', description: 'Keep it for a release'},
+            {label: 'Wait, what?', description: ''},
         ],
     },
 ];
@@ -484,20 +442,24 @@ test('no hook settings while the server is not listening', () => {
 
 // ── Grilling rounds ──
 
-test('a grilling round is shown with no deadline', () => {
+test('an open grilling round is shown as a set with no deadline', () => {
     /* Given */
     const h = harness();
     h.addSession('s1');
 
     /* When */
-    h.service.receiveRound('s1', ROUND);
+    h.service.openRound('s1', 'grill-b1', ROUND);
 
     /* Then */
     const pending = h.renderer.only('questionsAsked')[0][1] as PendingQuestions;
-    assert.equal(pending.source, 'grill');
-    assert.equal(pending.deadline, null);
-    assert.deepEqual(pending.questions, ROUND);
-    assert.match(pending.toolUseId, /^grill-/);
+    assert.deepEqual(pending, {
+        sessionId: 's1',
+        toolUseId: 'grill-b1',
+        source: 'grill',
+        questions: ROUND,
+        askedAt: 1_000,
+        deadline: null,
+    });
 });
 
 test('a grilling round for an unknown session is ignored', () => {
@@ -505,76 +467,91 @@ test('a grilling round for an unknown session is ignored', () => {
     const h = harness();
 
     /* When */
-    h.service.receiveRound('nobody', ROUND);
+    h.service.openRound('nobody', 'grill-b1', ROUND);
 
     /* Then */
     assert.deepEqual(h.renderer.events, []);
     assert.deepEqual(h.service.pending(), []);
 });
 
-test('answering a grilling round types the reply into the session', () => {
+test('a revision of the round updates its questions without settling it', () => {
     /* Given */
     const h = harness();
     h.addSession('s1');
-    h.service.receiveRound('s1', ROUND);
-    const {toolUseId} = h.service.pending()[0];
+    h.service.openRound('s1', 'grill-b1', ROUND);
+    const revised = [...ROUND, {...ROUND[0], question: 'Drop the cache?', header: 'Q2'}];
 
     /* When */
-    const result = h.service.answer('s1', toolUseId, {
-        'Keep the old API?': GRILL_YES_LABEL,
-        'Which store?': 'A) SQLite',
-    });
+    h.service.openRound('s1', 'grill-b1', revised);
 
     /* Then */
-    assert.deepEqual(result, {ok: true});
-    assert.deepEqual(h.prompter.sent, [['s1', 'Q1: yes\nQ2: A) SQLite — one file']]);
-    const settled = h.renderer.only('questionsSettled')[0][1] as QuestionsSettled;
-    assert.deepEqual(settled, {sessionId: 's1', toolUseId, outcome: 'answered', answeredOn: 'mac'});
-    assert.equal(h.prompter.watching('s1'), 0, 'stops watching for the exit');
+    assert.equal(h.renderer.only('questionsSettled').length, 0);
+    const asked = h.renderer.only('questionsAsked').map((e) => e[1] as PendingQuestions);
+    assert.deepEqual(
+        asked.map((p) => [p.toolUseId, p.questions.length, p.askedAt]),
+        [
+            ['grill-b1', 1, 1_000],
+            ['grill-b1', 2, 1_000],
+        ],
+    );
+    assert.equal(h.service.pending()[0].questions.length, 2);
 });
 
-test('a prompt typed in the terminal withdraws a grilling round', () => {
+test('a grilling round cannot be answered as a set', () => {
     /* Given */
     const h = harness();
     h.addSession('s1');
-    h.service.receiveRound('s1', ROUND);
-    const {toolUseId} = h.service.pending()[0];
+    h.service.openRound('s1', 'grill-b1', ROUND);
 
     /* When */
-    h.service.promptSubmitted('s1');
+    const result = h.service.answer('s1', 'grill-b1', {'Keep the old API?': 'Yes (Recommended)'});
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, error: 'Answer this round on the grilling card'});
+    assert.equal(h.service.pending().length, 1);
+});
+
+test('closing the round settles it, saying where it was sent from', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    h.service.openRound('s1', 'grill-b1', ROUND);
+
+    /* When */
+    h.service.closeRound('s1', 'answered', 'phone');
 
     /* Then */
     const settled = h.renderer.only('questionsSettled')[0][1] as QuestionsSettled;
-    assert.deepEqual(settled, {sessionId: 's1', toolUseId, outcome: 'withdrawn'});
-    assert.deepEqual(h.service.answer('s1', toolUseId, {}).ok, false);
+    assert.deepEqual(settled, {sessionId: 's1', toolUseId: 'grill-b1', outcome: 'answered', answeredOn: 'phone'});
+    assert.deepEqual(h.service.pending(), []);
 });
 
-test('a prompt does not withdraw a held AskUserQuestion', () => {
+test('closing the round of a session already gone from the registry still settles it', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    h.service.openRound('s1', 'grill-b1', ROUND);
+    h.registry.delete('s1');
+
+    /* When */
+    h.service.closeRound('s1', 'withdrawn');
+
+    /* Then */
+    const settled = h.renderer.only('questionsSettled')[0][1] as QuestionsSettled;
+    assert.deepEqual(settled, {sessionId: 's1', toolUseId: 'grill-b1', outcome: 'withdrawn'});
+});
+
+test('closing a round leaves a held AskUserQuestion alone', () => {
     /* Given */
     const h = harness();
     h.addSession('s1');
     h.service.receive('s1', asked(), h.replies().reply);
 
     /* When */
-    h.service.promptSubmitted('s1');
+    h.service.closeRound('s1', 'withdrawn');
 
     /* Then */
     assert.equal(h.service.pending().length, 1);
-});
-
-test('the session ending withdraws a grilling round', () => {
-    /* Given */
-    const h = harness();
-    h.addSession('s1');
-    h.service.receiveRound('s1', ROUND);
-
-    /* When */
-    h.prompter.exit('s1');
-
-    /* Then */
-    const settled = h.renderer.only('questionsSettled')[0][1] as QuestionsSettled;
-    assert.equal(settled.outcome, 'withdrawn');
-    assert.deepEqual(h.service.pending(), []);
 });
 
 test('a grilling round replaces a held question, releasing it with no decision', () => {
@@ -585,7 +562,7 @@ test('a grilling round replaces a held question, releasing it with no decision',
     h.service.receive('s1', asked(), r.reply);
 
     /* When */
-    h.service.receiveRound('s1', ROUND);
+    h.service.openRound('s1', 'grill-b1', ROUND);
 
     /* Then */
     assert.deepEqual(r.calls, [{}]);
@@ -595,19 +572,20 @@ test('a grilling round replaces a held question, releasing it with no decision',
     );
 });
 
-test('a new round replaces the last and stops watching for its exit', () => {
+test('another round replaces the last, withdrawing it', () => {
     /* Given */
     const h = harness();
     h.addSession('s1');
-    h.service.receiveRound('s1', ROUND);
-    const first = h.service.pending()[0].toolUseId;
+    h.service.openRound('s1', 'grill-b1', ROUND);
 
     /* When */
-    h.service.receiveRound('s1', ROUND);
+    h.service.openRound('s1', 'grill-b2', ROUND);
 
     /* Then */
-    const pending = h.service.pending();
-    assert.equal(pending.length, 1);
-    assert.notEqual(pending[0].toolUseId, first);
-    assert.equal(h.prompter.watching('s1'), 1);
+    assert.deepEqual(
+        h.service.pending().map((p) => p.toolUseId),
+        ['grill-b2'],
+    );
+    const settled = h.renderer.only('questionsSettled')[0][1] as QuestionsSettled;
+    assert.deepEqual(settled, {sessionId: 's1', toolUseId: 'grill-b1', outcome: 'withdrawn'});
 });

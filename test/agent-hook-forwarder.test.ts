@@ -304,7 +304,6 @@ test("settings and tools point at the agent's own server, as a local launch's do
         endpoint,
         log: silentLog,
         clock: {now: () => 0},
-        prompter: {send: () => {}, onExit: () => ({dispose() {}})},
     });
     const archive = new ArchiveToolService({
         registry,

@@ -5,7 +5,6 @@ import {ActiveSession} from '../src/application/model/active-session';
 import {SessionRegistry} from '../src/application/model/session-registry';
 import {ArchiveToolService} from '../src/application/services/archive-tool-service';
 import {QuestionService} from '../src/application/services/question-service';
-import {legacyGrillReceiver} from '../src/application/services/legacy-grill-receiver';
 import {buildClaudeArgs} from '../src/domain/launch/claude-command';
 import {QUESTION_HOOK_TOKEN_HEADER} from '../src/domain/questions/question';
 import {ARCHIVE_TOOL_QUALIFIED_NAME, archiveToolMcpConfig, archiveToolReply} from '../src/domain/session/archive-tool';
@@ -282,7 +281,12 @@ async function harness() {
     const registry = new SessionRegistry();
     const archived: string[] = [];
     const server = new QuestionHookServer({
-        receiver: legacyGrillReceiver(() => questions),
+        receiver: {
+            receive: (...args) => questions.receive(...args),
+            turnEnded() {},
+            promptSubmitted() {},
+            subagentChanged() {},
+        },
         archiveTool: {
             request: (...args) => tool.request(...args),
             turnEnded: (...args) => tool.turnEnded(...args),
@@ -295,7 +299,6 @@ async function harness() {
         endpoint: server,
         log: silentLog,
         clock: {now: () => 0},
-        prompter: {send: () => {}, onExit: () => ({dispose() {}})},
     });
     const tool = new ArchiveToolService({
         registry,
