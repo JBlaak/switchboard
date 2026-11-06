@@ -14,6 +14,7 @@ import type {SearchResult, SearchType} from '../domain/search/search';
 import type {SessionOptions} from '../domain/launch/session-options';
 import type {EffectiveSettings} from '../domain/settings/settings';
 import type {Appearance} from '../domain/settings/appearance';
+import type {SavedPrompt, SavedPromptLists} from '../domain/settings/saved-prompts';
 import type {Answers, PendingQuestions, QuestionsSettled} from '../domain/questions/question';
 import type {ShellProfile} from '../domain/shell/shell-profile';
 import type {GrillAnswer, GrillChanged, GrillResult, GrillView} from '../domain/grill/model';
@@ -208,6 +209,17 @@ export interface SwitchboardApi {
     quickAskHotkeyStatus(): Promise<{registered: boolean; missing: CaptureTarget[]}>;
     /** Whether a server in `~/.claude.json` has this BlaakTasks URL (#252). Never the token itself. */
     blaakTasksSetUp(url: string): Promise<boolean>;
+    /**
+     * The saved prompts (#339): the global list, and the project's when a path
+     * is given. Order them for the tray with `resolveSavedPrompts`.
+     */
+    savedPrompts(projectPath: string | null): Promise<SavedPromptLists>;
+    /**
+     * Replace one stored list of saved prompts: the global one for null, else
+     * the project's. Main merges it into the blob, so no other key is touched.
+     * Answers the list as stored (entries without an id or text dropped).
+     */
+    setSavedPrompts(projectPath: string | null, prompts: readonly SavedPrompt[]): Promise<SavedPrompt[]>;
 
     // ── Host ──
     openExternal(url: string): Promise<void>;
