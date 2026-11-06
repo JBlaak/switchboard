@@ -9,7 +9,7 @@
  * URL, and the number a branch is named after.
  */
 import {parseTranscriptLine} from '../session/transcript';
-import type {IssueRef} from './model';
+import type {IssueRef, IssueStatus} from './model';
 
 /**
  * `#123` or `owner/repo#123`, not preceded by anything that makes it part of a
@@ -126,4 +126,41 @@ export function standaloneIssues(mentions: readonly IssueRef[], claimed: readonl
         if (!isClaimed(issue)) addIssue(found, issue);
     }
     return [...found.values()];
+}
+
+/** Numbers grouped by repository, an unnamed one taken to be the session's own. */
+export function byRepository(refs: readonly IssueRef[], repository: string): Map<string, number[]> {
+    const grouped = new Map<string, number[]>();
+    for (const ref of refs) {
+        const repo = ref.repository || repository;
+        if (!repo) continue;
+        const numbers = grouped.get(repo) ?? [];
+        if (!numbers.includes(ref.number)) numbers.push(ref.number);
+        grouped.set(repo, numbers);
+    }
+    return grouped;
+}
+
+/**
+ * The mentions that are issues, with what `gh` knows about them. A mention
+ * `gh` left out is a PR or does not exist; where `gh` could not be asked, the
+ * mention stays as it was rather than vanish.
+ */
+export function confirmedIssues(
+    mentions: readonly IssueRef[],
+    answers: ReadonlyMap<string, IssueStatus[] | null>,
+    repository: string,
+): Array<IssueRef | IssueStatus> {
+    const confirmed: Array<IssueRef | IssueStatus> = [];
+    for (const mention of mentions) {
+        const repo = mention.repository || repository;
+        const answer = repo ? answers.get(repo) : undefined;
+        if (!answer) {
+            confirmed.push(mention);
+            continue;
+        }
+        const status = answer.find((issue) => issue.number === mention.number);
+        if (status) confirmed.push({...status, repository: mention.repository});
+    }
+    return confirmed;
 }

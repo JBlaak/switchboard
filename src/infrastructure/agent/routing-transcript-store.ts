@@ -37,7 +37,12 @@ import type {Session} from '../../domain/session/session';
 import type {IssueRef} from '../../domain/session-work/model';
 import type {Logger} from '../../application/ports/logger';
 import type {AwaitableTranscriptStore} from '../../application/ports/transcript-queries';
-import type {TranscriptLocation, TranscriptSeed, TranscriptStore} from '../../application/ports/transcript-store';
+import type {
+    TranscriptLocation,
+    TranscriptProducts,
+    TranscriptSeed,
+    TranscriptStore,
+} from '../../application/ports/transcript-store';
 
 /**
  * A host's link, as far as transcripts go: `AgentConnection.transcriptQuery`.
@@ -152,6 +157,10 @@ export class RoutingTranscriptStore implements AwaitableTranscriptStore {
         byteLimit: number,
     ): {text: string; size: number} | null {
         return splitVmFolder(folder) ? null : this.deps.local.readFrom(folder, sessionId, start, byteLimit);
+    }
+
+    public products(folder: string, sessionId: string): TranscriptProducts {
+        return splitVmFolder(folder) ? {artifacts: [], pages: []} : this.deps.local.products(folder, sessionId);
     }
 
     public readSlug(folder: string, sessionId: string): string | null {

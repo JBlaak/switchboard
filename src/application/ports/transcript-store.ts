@@ -11,6 +11,16 @@
  */
 import type {Session} from '../../domain/session/session';
 import type {IssueRef} from '../../domain/session-work/model';
+import type {ArtifactRef} from '../../domain/session/artifacts';
+import type {ShownPageRef} from '../../domain/session/page-tool';
+
+/** What a session made that only its transcript records (#340). */
+export interface TranscriptProducts {
+    /** The claude.ai artifacts it published or linked in a reply, first appearance first. */
+    artifacts: ArtifactRef[];
+    /** The pages it showed with `show_page`, in the order it showed them. */
+    pages: ShownPageRef[];
+}
 
 /**
  * A `cwd` + `gitBranch` a session's transcripts were written from.
@@ -92,6 +102,14 @@ export interface TranscriptStore {
      * `repository` (`owner/repo`, or '' when unknown).
      */
     issueMentions(folder: string, sessionId: string, repository: string): IssueRef[];
+
+    /**
+     * The artifacts and pages the session's main transcript and then its
+     * subagents' record, once each. Empty when the session has no transcript.
+     * Answered for the Mac's own transcripts only: a VM's agent does not
+     * answer it (not in TRANSCRIPT_QUERY_METHODS), so a VM session has none.
+     */
+    products(folder: string, sessionId: string): TranscriptProducts;
 
     /** The `slug` a session was started under, if it has one. */
     readSlug(folder: string, sessionId: string): string | null;
