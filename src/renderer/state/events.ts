@@ -43,6 +43,8 @@ import type {SessionHandoffEvent} from './session-handoff-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
 import type {PagesEvent} from './pages-slice';
 import type {MergeQueueEvent} from './merge-queue-slice';
+import type {GrillEvent} from './grill-slice';
+import type {GrillChanged} from '../../domain/grill/model';
 import type {SessionHandoffPhase} from '../../application/services/session-handoff';
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
@@ -69,6 +71,8 @@ export type PushEvent =
     | {type: 'remoteStatus'; sessionId: string; status: RemoteStatusPayload; receivedAt: number}
     | {type: 'questionsAsked'; pending: PendingQuestions}
     | {type: 'questionsSettled'; settled: QuestionsSettled}
+    /** A grilling round opened, changed or closed (`view` null). */
+    | {type: 'grillChanged'; changed: GrillChanged}
     /** A session showed the user a page (`show_page`). */
     | {type: 'pageShown'; page: ShownPage}
     | {type: 'projectsChanged'}
@@ -359,7 +363,8 @@ export type RendererEvent =
     | SessionHandoffEvent
     | DropUploadEvent
     | PagesEvent
-    | MergeQueueEvent;
+    | MergeQueueEvent
+    | GrillEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

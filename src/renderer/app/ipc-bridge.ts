@@ -42,6 +42,7 @@ export function installIpcBridge(
         ),
         api.onQuestionsAsked((pending) => send({type: 'questionsAsked', pending})),
         api.onQuestionsSettled((settled) => send({type: 'questionsSettled', settled})),
+        api.onGrillChanged((changed) => send({type: 'grillChanged', changed})),
         api.onPageShown((page) => send({type: 'pageShown', page})),
         api.onProjectsChanged(() => send({type: 'projectsChanged'})),
         api.onStatusUpdate((text, kind) => send({type: 'statusUpdate', text, kind})),
