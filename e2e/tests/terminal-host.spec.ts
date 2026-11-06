@@ -16,7 +16,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {test, expect, forEachAppearance} from '../support/test';
-import {expectScreen, openSession, sessionRow, sidebar, terminalHeader, terminalStatus} from '../support/app';
+import {
+    expectScreen,
+    openSession,
+    openSessionTray,
+    sessionRow,
+    sessionTray,
+    sidebar,
+    terminalHeader,
+    terminalStatus,
+} from '../support/app';
 import {clipboardWrites, openedExternally} from '../support/main-process';
 import {answerDialogs} from '../support/native-dialogs';
 import {
@@ -428,8 +437,8 @@ test.describe('terminal exit and stop', () => {
     test('an exited Claude session keeps its terminal until its row is clicked again', async ({page, home}) => {
         /* Given */
         const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
-        const stop = terminalHeader(page).getByRole('button', {name: 'Stop process', exact: true});
-        await expect(stop).toBeVisible();
+        const stop = (await openSessionTray(page)).getByRole('button', {name: 'Stop session', exact: true});
+        await expect(stop).toBeEnabled();
 
         /* When */
         await claude.exit(3);
@@ -437,7 +446,7 @@ test.describe('terminal exit and stop', () => {
         /* Then */
         await expectTerminalText(page, S.loginFix, 'session exited (code 3)');
         await expect(terminalStatus(page)).toHaveText('Stopped');
-        await expect(stop).toBeHidden();
+        await expect(stop).toBeDisabled();
         expect(await terminalState(page, S.loginFix)).toMatchObject({visible: true, closed: true});
 
         /* When */
@@ -454,10 +463,11 @@ test.describe('terminal exit and stop', () => {
     test('the Stop button asks first, and confirming stops the session and clears the screen', async ({page, home}) => {
         /* Given */
         await openSession(page, home, LABEL.loginFix, S.loginFix);
-        const stop = terminalHeader(page).getByRole('button', {name: 'Stop process', exact: true});
+        const stop = sessionTray(page).getByRole('button', {name: 'Stop session', exact: true});
 
         /* When */
         await answerDialogs(page, false);
+        await openSessionTray(page);
         await stop.click();
         await settle(page, 300);
 
@@ -467,6 +477,8 @@ test.describe('terminal exit and stop', () => {
 
         /* When */
         await answerDialogs(page, true);
+        await page.mouse.move(600, 600);
+        await openSessionTray(page);
         await stop.click();
 
         /* Then */
@@ -580,7 +592,7 @@ test.describe('terminal search', () => {
     });
 });
 
-test.describe('terminal header, shell profile', () => {
+test.describe('session tray, shell profile', () => {
     test.use({fixture: {...standardFixture(), projectSettings: {[P.acmeApi]: {shellProfile: 'bash'}}}});
 
     test('only a session in a non-default shell names it', async ({page, home}) => {
@@ -588,15 +600,17 @@ test.describe('terminal header, shell profile', () => {
         await openSession(page, home, LABEL.loginFix, S.loginFix);
 
         /* Then */
-        await expect(terminalHeader(page).getByText('Bash', {exact: true})).toBeVisible();
+        // On the tray's Session meta line (#343): shell · running time · messages.
+        await expect((await openSessionTray(page)).locator('.tray-meta')).toContainText(/^Bash · /);
 
         /* When */
         // Its project has no shell profile of its own.
+        await page.mouse.move(600, 600);
         await openSession(page, home, LABEL.chartsDarkMode, S.chartsDarkMode);
         await settle(page, 300);
 
         /* Then */
-        await expect(terminalHeader(page).getByText(/^(Auto|Zsh|Bash)$/)).toHaveCount(0);
+        await expect((await openSessionTray(page)).locator('.tray-meta')).not.toContainText(/Auto|Zsh|Bash/);
     });
 });
 

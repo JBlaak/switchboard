@@ -11,6 +11,7 @@ import {
     isSidebarToggleKey,
     isUndoArchiveKey,
     listCursorKey,
+    savedPromptKey,
     sessionNavDirection,
 } from '../src/renderer/lib/shortcut-keys';
 
@@ -299,4 +300,25 @@ test("in the list, any other key is not the list's", () => {
 
     /* Then */
     assert.deepEqual(actions, [null, null, null, null]);
+});
+
+// ── Cmd+1…9 ──
+
+test('Cmd+1 to Cmd+9 are the saved prompt keys, in the terminal too, but not in a text field', () => {
+    /* Given */
+    const presses = [
+        cmd('Digit1', '1'),
+        keydown({code: 'Digit9', key: '9', metaKey: true}, 'terminal'),
+        keydown({code: 'Digit3', key: '3', metaKey: true}, 'textField'),
+        cmd('Digit0', '0'),
+        keydown({code: 'Digit2', key: '2'}),
+        keydown({code: 'Digit2', key: '@', metaKey: true, shiftKey: true}),
+        keydown({code: 'Digit2', key: '2', metaKey: true, altKey: true}),
+    ];
+
+    /* When */
+    const results = presses.map(savedPromptKey);
+
+    /* Then */
+    assert.deepEqual(results, [1, 9, null, null, null, null, null]);
 });

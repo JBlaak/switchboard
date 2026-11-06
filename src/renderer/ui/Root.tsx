@@ -24,6 +24,7 @@ import {QuestionsHeaderButton} from './questions/QuestionsHeaderButton';
 import {SessionList} from './session-list/SessionList';
 import {TerminalHost} from './terminal/TerminalHost';
 import {TerminalHeaderControls, TerminalHeaderInfo} from './terminal/TerminalHeader';
+import {SessionTray} from './session-tray/SessionTray';
 import {PairConfirmDialog} from './phone-access/PairConfirmDialog';
 import {MarkDoneOffer} from './session-task/MarkDoneOffer';
 import {ArchiveUndoToast} from './archive-undo/ArchiveUndoToast';
@@ -62,6 +63,9 @@ export function Root(): JSX.Element | null {
             </Portal>
             <Portal target="terminal-header-controls">
                 <TerminalHeaderControls />
+            </Portal>
+            <Portal target="session-tray-host">
+                <SessionTray />
             </Portal>
             <Portal target="terminals">
                 <ReadingPage />
