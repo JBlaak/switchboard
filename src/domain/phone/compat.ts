@@ -8,7 +8,7 @@
  * The version check comes before pairing, so a mismatched app is never asked
  * for a code it might send in a shape the Mac misreads.
  */
-import {CLOSE, PROTOCOL_VERSION, type ServerMessage} from './protocol';
+import {CLOSE, FEATURES, PROTOCOL_VERSION, type ServerMessage} from './protocol';
 
 /** What the listener decided the connection may do; mirrors the port's ConnectionGrant. */
 export type HelloGrant = {kind: 'device'; deviceId: string} | {kind: 'pairing'};
@@ -40,7 +40,14 @@ export function helloReply(
     }
     const addresses = dialableAddresses(mac.addresses);
     return {
-        message: {type: 'welcome', protocol: ours, macName: mac.name, deviceId: grant.deviceId, addresses},
+        message: {
+            type: 'welcome',
+            protocol: ours,
+            macName: mac.name,
+            deviceId: grant.deviceId,
+            addresses,
+            features: Object.values(FEATURES),
+        },
         close: null,
     };
 }

@@ -256,6 +256,7 @@ async function mac() {
             },
         },
         battery: {read: async () => ({percent: 37, charging: true})},
+        transcripts: {readFrom: () => null},
         ids: {newId: () => `id-${++ids}`},
         clock: {now: () => Date.now()},
         timers: systemTimers,
@@ -430,6 +431,7 @@ test('a phone pairs with the code on the Mac, is confirmed, and reconnects enrol
         macName: 'Joris’s MacBook Pro',
         deviceId: accepted.deviceId,
         addresses: ['127.0.0.1'],
+        features: ['chat'],
     });
     assert.deepEqual(
         list.sessions.map((session) => [session.id, session.owner]),

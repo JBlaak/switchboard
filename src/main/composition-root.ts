@@ -1102,6 +1102,7 @@ export function buildContainer(): Container {
             cli: claudeCaller,
         },
         battery: e2e ? {read: async () => null} : new PmsetBatteryGauge(),
+        transcripts,
         ids,
         clock,
         timers,

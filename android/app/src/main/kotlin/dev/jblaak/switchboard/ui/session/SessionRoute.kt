@@ -3,6 +3,7 @@ package dev.jblaak.switchboard.ui.session
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +40,11 @@ fun SessionRoute(
         SessionModel(link, board, deviceId, sessionId, startedIn, scope)
     }
     val state by model.state.collectAsState()
+    val chat = rememberScopedModel(sessionId, onLeave = ChatModel::hide) { scope -> ChatModel(link, sessionId, scope) }
+    val chatState by chat.state.collectAsState()
+    val chatList = remember(sessionId) { LazyListState() }
+    val viewChoice = rememberSessionViewChoice()
+    val view by viewChoice.view.collectAsState()
     var prompt by rememberSaveable { mutableStateOf("") }
     val voice = rememberHoldToTalk(sessionId) { heard -> prompt = withDictated(prompt, heard) }
     var sheetSet by remember { mutableStateOf<PendingQuestions?>(null) }
@@ -53,6 +59,9 @@ fun SessionRoute(
     }
     LaunchedEffect(state.archivedElsewhere) {
         if (state.archivedElsewhere) onBack()
+    }
+    LaunchedEffect(view) {
+        if (view == SessionView.Chat) chat.show() else chat.hide()
     }
     BackHandler(onBack = onBack)
 
@@ -77,6 +86,8 @@ fun SessionRoute(
             }
         },
         onBack = onBack,
+        view = view,
+        onToggleView = viewChoice::toggle,
         terminal = { modifier ->
             TerminalView(
                 writes = model.terminalWrites,
@@ -86,6 +97,7 @@ fun SessionRoute(
                 modifier = modifier,
             )
         },
+        chat = { modifier -> ChatView(chatState, chatList, modifier) },
     )
     sheetSet?.let { set ->
         QuestionSheetRoute(link, set, state.name, onClose = { sheetSet = null })
