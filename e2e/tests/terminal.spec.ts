@@ -20,6 +20,9 @@ async function redrawSidebar(page: Page): Promise<void> {
     await sidebarFilter(page, 'pinned').click();
 }
 
+/** The session's name in the bar; its tooltip is what the process last called itself. */
+const headerName = (page: Page) => page.locator('#terminal-header-name');
+
 test.describe('smoke', () => {
     test('resumes a session with the question hook and shows its header', async ({page, home}) => {
         /* When */
@@ -32,16 +35,14 @@ test.describe('smoke', () => {
         expect(launch.settings?.hooks?.PreToolUse?.[0].matcher).toBe('AskUserQuestion');
         expect(launch.cwd).toBe(home.projectPath('Development/acme-api'));
         await expect(terminalHeader(page).getByText(LABEL.loginFix, {exact: true})).toBeVisible();
-        await expect(terminalHeader(page).getByText(S.loginFix, {exact: true})).toBeVisible();
         // The header is a window drag region whose controls opt out.
         const region = (locator: ReturnType<typeof terminalHeader>) =>
             locator.evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-app-region'));
         expect(await region(terminalHeader(page))).toBe('drag');
-        expect(await region(terminalHeader(page).getByRole('button', {name: 'Stop process', exact: true}))).toBe(
+        expect(await region(terminalHeader(page).getByRole('button', {name: 'Session tools', exact: true}))).toBe(
             'no-drag',
         );
         expect(await region(terminalHeader(page).getByText(LABEL.loginFix, {exact: true}))).toBe('no-drag');
-        expect(await region(terminalHeader(page).getByText(S.loginFix, {exact: true}))).toBe('no-drag');
     });
 
     test('OSC 0 titles set the header and drive working/ready, and a notification replaces the title', async ({
@@ -56,23 +57,21 @@ test.describe('smoke', () => {
 
         /* Then */
         await expect(sidebar(page).getByText('Working', {exact: true})).toBeVisible();
-        await expect(terminalHeader(page).getByText('⠋ Reading the redirect handler')).toBeVisible();
+        // The process title is the session name's tooltip (#343).
+        await expect(headerName(page)).toHaveAttribute('title', '⠋ Reading the redirect handler');
 
         /* When */
         await claude.idle('Claude Code');
 
         /* Then */
         await expect(sidebar(page).getByText('Your turn', {exact: true})).toBeVisible();
-        await expect(terminalHeader(page).getByText('✳ Claude Code', {exact: true})).toBeVisible();
+        await expect(headerName(page)).toHaveAttribute('title', '✳ Claude Code');
 
         /* When */
         await claude.notify('Claude needs your permission to use Bash');
 
         /* Then */
-        await expect(
-            terminalHeader(page).getByText('Claude needs your permission to use Bash', {exact: true}),
-        ).toBeVisible();
-        await expect(terminalHeader(page).getByText('✳ Claude Code', {exact: true})).toHaveCount(0);
+        await expect(headerName(page)).toHaveAttribute('title', 'Claude needs your permission to use Bash');
     });
 
     test('OSC 7501 program status overrides titles, and it or an OSC 9 notification flags a session off screen', async ({
@@ -143,7 +142,7 @@ test.describe('smoke', () => {
         await claude.fork(forkId, 'Forked: try a different redirect strategy');
 
         /* Then */
-        await expect(terminalHeader(page).getByText(forkId, {exact: true})).toBeVisible();
+        await expect(page.locator(`.session-item[data-session-id="${forkId}"]`)).toBeVisible();
         const after = await page.evaluate((id) => {
             const row = document.querySelector<HTMLElement>(`.session-item[data-session-id="${id}"]`);
             const term = document.querySelector<HTMLElement>('.terminal-container.visible');
@@ -155,7 +154,11 @@ test.describe('smoke', () => {
         }, forkId);
         expect(after).toMatchObject({rowTag: 'row', active: true, terminalTag: 'terminal'});
         // The fork's new turn may move the row to another section; it moves as itself.
-        await expect(terminalHeader(page).getByText('Forked: try a different redirect strategy')).toBeVisible();
+        await expect(
+            terminalHeader(page)
+                .getByText('Forked: try a different redirect strategy')
+                .or(page.locator('#terminal-header-name[title*="Forked: try a different redirect strategy"]')),
+        ).toBeVisible();
     });
 
     test('a new session from the picker launches with a fresh id', async ({page, home}) => {

@@ -1,0 +1,247 @@
+/**
+ * The session tray (#343, epic #338): session tools that drop over the top of
+ * the terminal when the bar above it is hovered.
+ *
+ * It lies over `#terminal-area` from a zero-height host under the header, so
+ * the terminal below never moves and xterm is never refitted for it. Hovering
+ * the bar or the tray drives the state machine in `session-tray-slice`; this
+ * sets the one timer it asks for, marks the bar (the mint edge while the
+ * pointer rests on it), and asks main for the session's prompts, links,
+ * stats and editor each time the tray opens.
+ *
+ * The keyboard: the bar's "hover for tools" button (and Tab on it) opens the
+ * tray and moves into it; focus landing anywhere in it opens it; Esc closes it
+ * and goes back to the bar. Keyboard focus inside keeps it up when the pointer
+ * wanders off.
+ */
+import {useCallback, useEffect, useRef, useState} from 'react';
+import type {JSX} from 'react';
+import {dispatch} from '../../state/app-store';
+import {shallowEqual} from '../../state/store';
+import {sessionMap} from '../../state/session-store';
+import {canHandOffSession} from '../../state/session-list-layout';
+import {sessionStatsIn, trayIsOpen} from '../../state/session-tray-slice';
+import {useStore} from '../use-store';
+import {stopSessionOnScreen} from '../terminal/actions';
+import {archiveActiveSession} from '../../features/sessions/sidebar-keyboard';
+import {openTaskTab} from '../session-task/actions';
+import {loadSavedPrompts} from './saved-prompts';
+import {factsFor, loadSessionLinks, loadSessionStats, projectOf, sendTrayPrompt} from './actions';
+import {openSavedPromptsSettings} from '../settings/open-saved-prompts';
+import {focusTray, focusTrayHint} from './focus';
+import {trayLinks} from './tray-view';
+import {SessionTrayContent} from './SessionTrayContent';
+import type {SessionTrayActions} from './SessionTrayContent';
+import type {ResolvedSavedPrompt} from '../../../domain/settings/saved-prompts';
+import type {SessionLink} from '../../../domain/session/links';
+import type {WorkspaceEditorInfo} from '../../../domain/workspace/model';
+
+/** What the tray asked main for, and whose it is. */
+interface TrayData {
+    sessionId: string | null;
+    prompts: readonly ResolvedSavedPrompt[];
+    links: readonly SessionLink[];
+    editor: WorkspaceEditorInfo | null;
+}
+
+const EMPTY: TrayData = {sessionId: null, prompts: [], links: [], editor: null};
+
+/** How long Copy session id says it copied. */
+const COPIED_MS = 1200;
+
+export function SessionTray(): JSX.Element | null {
+    const {sessionId, phase, deadline, sent, stats, running, hosts, kept} = useStore((state) => {
+        const id = state.terminal.onScreen;
+        const page = id ? state.pages.bySession[id] : undefined;
+        return {
+            sessionId: id,
+            phase: state.sessionTray.phase,
+            deadline: state.sessionTray.deadline,
+            sent: state.sessionTray.sent,
+            stats: sessionStatsIn(state.sessionTray, id),
+            running: !!id && state.view.activePtyIds.has(id),
+            hosts: state.handoff.hosts,
+            kept: page ?? null,
+        };
+    }, shallowEqual);
+    const open = trayIsOpen(phase);
+    const shown = phase !== 'closed';
+
+    const section = useRef<HTMLElement | null>(null);
+    const holding = useRef(false);
+    const [data, setData] = useState<TrayData>(EMPTY);
+    const [copied, setCopied] = useState(false);
+
+    // The one timer the state machine asks for.
+    useEffect(() => {
+        if (deadline === null) return;
+        const timer = window.setTimeout(
+            () => dispatch({type: 'trayTimerFired', deadline}),
+            Math.max(0, deadline - Date.now()),
+        );
+        return () => window.clearTimeout(timer);
+    }, [deadline]);
+
+    const leave = useCallback(() => {
+        // The host menu is up, or the keyboard is in the tray: the pointer wandering off does not close it.
+        if (holding.current || keyboardInside(section.current)) return;
+        dispatch({type: 'trayPointerLeft', at: Date.now()});
+    }, []);
+
+    // Hovering the bar counts as hovering the tray; the bar's edge glows while it does.
+    useEffect(() => {
+        const header = document.getElementById('terminal-header');
+        if (!header) return;
+        const enter = (): void => dispatch({type: 'trayPointerEntered', at: Date.now()});
+        const keydown = (e: KeyboardEvent): void => {
+            if (e.key === 'Escape') {
+                dispatch({type: 'trayClosed'});
+                return;
+            }
+            // Tab from the bar's tools button goes into the tray, opening it.
+            if (
+                e.key === 'Tab' &&
+                !e.shiftKey &&
+                (e.target as HTMLElement | null)?.id === 'terminal-header-tray-hint'
+            ) {
+                e.preventDefault();
+                dispatch({type: 'trayOpened'});
+                focusTray();
+            }
+        };
+        header.addEventListener('pointerenter', enter);
+        header.addEventListener('pointerleave', leave);
+        header.addEventListener('keydown', keydown);
+        return () => {
+            header.removeEventListener('pointerenter', enter);
+            header.removeEventListener('pointerleave', leave);
+            header.removeEventListener('keydown', keydown);
+        };
+    }, [leave]);
+
+    useEffect(() => {
+        const header = document.getElementById('terminal-header');
+        header?.classList.toggle('is-tray-intent', phase === 'intent');
+        header?.classList.toggle('is-tray-open', open);
+    }, [phase, open]);
+
+    // Prompts as soon as the session is on screen, so the first hover has them;
+    // links, stats and the editor are asked again on every open.
+    useEffect(() => {
+        if (!sessionId) return;
+        let live = true;
+        const update = (part: Partial<TrayData>): void => {
+            if (live) setData((now) => ({...(now.sessionId === sessionId ? now : {...EMPTY, sessionId}), ...part}));
+        };
+        void loadSavedPrompts(projectOf(sessionId))
+            .catch(() => [])
+            .then((prompts) => update({prompts}));
+        if (shown) {
+            void loadSessionLinks(sessionId).then((links) => update({links}));
+            void loadSessionStats(sessionId);
+            void window.api
+                .workspaceEditor({sessionId})
+                .catch((): WorkspaceEditorInfo => ({available: false, reason: 'Could not tell'}))
+                .then((editor) => update({editor}));
+        }
+        return () => {
+            live = false;
+        };
+    }, [sessionId, shown]);
+
+    useEffect(() => {
+        if (!copied) return;
+        const timer = window.setTimeout(() => setCopied(false), COPIED_MS);
+        return () => window.clearTimeout(timer);
+    }, [copied]);
+
+    if (!sessionId) return null;
+    const mine = data.sessionId === sessionId ? data : {...EMPTY, sessionId};
+    const row = sessionMap.get(sessionId);
+    const handOffHosts = row && hosts && canHandOffSession(row, hosts.length) ? hosts : null;
+    const close = (): void => dispatch({type: 'trayClosed'});
+
+    const actions: SessionTrayActions = {
+        sendPrompt: (prompt) => {
+            sendTrayPrompt(sessionId, prompt, factsFor(sessionId, mine.links, stats?.branch ?? null));
+        },
+        editPrompts: () => {
+            close();
+            void openSavedPromptsSettings();
+        },
+        openLink: (link) => {
+            close();
+            if (link.kind === 'page') dispatch({type: 'pageReopened', sessionId});
+            else if (link.kind === 'task') void openTaskTab(sessionId);
+            else void window.api.openExternal(link.url);
+        },
+        openInEditor: () => void window.api.openInEditor({sessionId}),
+        revealInFinder: () => void window.api.revealInFinder({sessionId}),
+        shellHere: () => void window.api.shellHere({sessionId}),
+        copySessionId: () => {
+            void window.api.writeClipboard(sessionId);
+            setCopied(true);
+        },
+        archive: () => {
+            close();
+            archiveActiveSession();
+        },
+        stop: () => {
+            close();
+            stopSessionOnScreen();
+        },
+        handOffMenu: (menuOpen) => {
+            holding.current = menuOpen;
+            if (!menuOpen) close();
+        },
+        handOffClicked: close,
+    };
+
+    return (
+        <div
+            ref={(el) => {
+                section.current = el?.querySelector('section') ?? null;
+            }}
+            className="session-tray-frame"
+            onPointerEnter={() => dispatch({type: 'trayPointerEntered', at: Date.now()})}
+            onPointerLeave={leave}
+            onFocus={() => {
+                if (!open) dispatch({type: 'trayOpened'});
+            }}
+            onBlur={(e) => {
+                const to = e.relatedTarget as Node | null;
+                // Switching apps is not leaving the tray; nor is the host menu.
+                if (!document.hasFocus() || holding.current) return;
+                if (to && (e.currentTarget.contains(to) || document.getElementById('terminal-header')?.contains(to)))
+                    return;
+                close();
+            }}
+            onKeyDown={(e) => {
+                if (e.key !== 'Escape') return;
+                e.stopPropagation();
+                close();
+                focusTrayHint();
+            }}>
+            <SessionTrayContent
+                sessionId={sessionId}
+                open={open}
+                sent={sent}
+                prompts={mine.prompts}
+                links={trayLinks(mine.links, kept)}
+                stats={stats}
+                editor={mine.editor}
+                handOffHosts={handOffHosts}
+                running={running}
+                copied={copied}
+                now={Date.now()}
+                actions={actions}
+            />
+        </div>
+    );
+}
+
+/** Whether the keyboard (not a click) has put the focus inside the tray. */
+function keyboardInside(section: HTMLElement | null): boolean {
+    const active = document.activeElement;
+    return !!section && !!active && section.contains(active) && active.matches(':focus-visible');
+}

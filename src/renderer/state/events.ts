@@ -44,6 +44,7 @@ import type {SessionHandoffEvent} from './session-handoff-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
 import type {PagesEvent} from './pages-slice';
 import type {MergeQueueEvent} from './merge-queue-slice';
+import type {SessionTrayEvent} from './session-tray-slice';
 import type {GrillEvent} from './grill-slice';
 import type {GrillChanged} from '../../domain/grill/model';
 import type {SessionHandoffPhase} from '../../application/services/session-handoff';
@@ -369,7 +370,8 @@ export type RendererEvent =
     | DropUploadEvent
     | PagesEvent
     | MergeQueueEvent
-    | GrillEvent;
+    | GrillEvent
+    | SessionTrayEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the
