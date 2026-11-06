@@ -27,6 +27,7 @@ import type {WorkingAgent} from '../domain/terminal/program-status-children';
 import type {BackgroundTask} from '../domain/session/background-tasks';
 import type {UpdateNotice} from '../domain/update/release';
 import type {Usage} from '../domain/usage/usage';
+import type {WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
 import type {Weather, WeatherLocation} from '../domain/weather/weather';
 import type {AskPatchResult, CaptureTarget, RouteRequest} from '../domain/ask/model';
 import type {IssueWorktreeRequest, IssueWorktreeResult} from '../domain/plan/issue-session';
@@ -69,6 +70,7 @@ import type {VmHostView} from '../application/services/vm-registry';
 import type {ShownPage} from '../domain/session/page-tool';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
+export type {Editor, WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
 
 /** Removes the listener an `on*` subscription added. */
 export type Unsubscribe = () => void;
@@ -215,6 +217,18 @@ export interface SwitchboardApi {
     /** Copy a PNG to the clipboard. */
     writeClipboardImage(png: Uint8Array): Promise<void>;
     getAppVersion(): Promise<string>;
+
+    // ── Workspace actions: the session tray's Workspace group (#342) ──
+    // Each takes `{sessionId}` (the session's working directory) or
+    // `{directory}`. A remote (ssh/VM) session answers `NOT_AVAILABLE_REMOTE`.
+    /** The IDE Open in editor would use, e.g. `app: 'PhpStorm'` for the button's label. */
+    workspaceEditor(target: WorkspaceTarget): Promise<WorkspaceEditorInfo>;
+    /** Open the folder in the IDE that matches the repo; a missing one falls back to Sublime Text, then Finder. */
+    openInEditor(target: WorkspaceTarget): Promise<WorkspaceActionResult>;
+    /** Open the folder in a Finder window. */
+    revealInFinder(target: WorkspaceTarget): Promise<WorkspaceActionResult>;
+    /** Open a shell in the folder: iTerm when installed, else Terminal. Not a Switchboard session. */
+    shellHere(target: WorkspaceTarget): Promise<WorkspaceActionResult>;
 
     // ── Session work ──
     /**

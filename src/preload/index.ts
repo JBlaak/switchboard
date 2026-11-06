@@ -116,6 +116,12 @@ const api: SwitchboardApi = {
     writeClipboardImage: (png) => ipcRenderer.invoke(INVOKE.writeClipboardImage, png),
     getAppVersion: () => ipcRenderer.invoke(INVOKE.getAppVersion),
 
+    // ── Workspace actions (#342) ──
+    workspaceEditor: (target) => ipcRenderer.invoke(INVOKE.workspaceEditor, target),
+    openInEditor: (target) => ipcRenderer.invoke(INVOKE.workspaceOpenInEditor, target),
+    revealInFinder: (target) => ipcRenderer.invoke(INVOKE.workspaceRevealInFinder, target),
+    shellHere: (target) => ipcRenderer.invoke(INVOKE.workspaceShellHere, target),
+
     // ── Session work ──
     openSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkOpen, sessionId),
     canOpenSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkCanOpen, sessionId),

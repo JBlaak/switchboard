@@ -92,6 +92,8 @@ import {
     ElectronSystemGateway,
 } from '../infrastructure/electron/desktop';
 import {ElectronRendererGateway} from '../infrastructure/electron/renderer-gateway';
+import {MacWorkspaceLauncher} from '../infrastructure/electron/workspace-launcher';
+import {WorkspaceActionService} from '../application/services/workspace-action-service';
 import {ElectronWindowDrag} from '../infrastructure/electron/window-drag';
 import {ElectronDockAttention} from '../infrastructure/electron/dock-attention';
 import {E2eGlobalHotkey, ElectronGlobalHotkey} from '../infrastructure/electron/global-hotkey';
@@ -207,6 +209,8 @@ export interface Container {
     readonly weather: WeatherService;
     readonly updates: UpdateService;
     readonly sessionWork: SessionWorkService;
+    /** The session tray's Workspace group (#342): Editor, Finder, Shell here. */
+    readonly workspace: WorkspaceActionService;
     readonly sessionActions: SessionActionService;
     readonly review: ReviewService;
     readonly prWatch: PrWatchService;
@@ -840,6 +844,15 @@ export function buildContainer(): Container {
         log,
     });
     sessionActions.attach(sessionWork);
+    // Local folders only: a remote session's actions answer "not available".
+    const workspaceActions = new WorkspaceActionService({
+        locate: locateSession,
+        transcripts,
+        git: localWorkspace,
+        fs,
+        launcher: new MacWorkspaceLauncher(log),
+        log,
+    });
     const review = new ReviewService({github, page: sessionWork, actions: sessionActions, log});
     // The Plan tab (#121): reads only, each answer kept for 30 s.
     const plans = new PlanService({
@@ -1257,6 +1270,7 @@ export function buildContainer(): Container {
         weather,
         updates,
         sessionWork,
+        workspace: workspaceActions,
         sessionActions,
         prWatch,
         review,
