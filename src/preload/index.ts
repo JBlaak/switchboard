@@ -56,6 +56,16 @@ const api: SwitchboardApi = {
     answerQuestions: (sessionId, toolUseId, answers) =>
         ipcRenderer.invoke(INVOKE.answerQuestions, sessionId, toolUseId, answers),
 
+    // ── Grilling rounds ──
+    grillViews: () => ipcRenderer.invoke(INVOKE.grillViews),
+    grillAnswer: (sessionId, roundId, revision, place, answer) =>
+        ipcRenderer.invoke(INVOKE.grillAnswer, sessionId, roundId, revision, place, answer),
+    grillAsk: (sessionId, roundId, revision, place, text) =>
+        ipcRenderer.invoke(INVOKE.grillAsk, sessionId, roundId, revision, place, text),
+    grillSend: (sessionId, roundId) => ipcRenderer.invoke(INVOKE.grillSend, sessionId, roundId),
+    grillQueue: (sessionId, roundId) => ipcRenderer.invoke(INVOKE.grillQueue, sessionId, roundId),
+    grillCancelQueue: (sessionId, roundId) => ipcRenderer.invoke(INVOKE.grillCancelQueue, sessionId, roundId),
+
     // ── Phone access (#194) ──
     getPhoneAccess: () => ipcRenderer.invoke(INVOKE.phoneAccessGet),
     setPhoneAccessEnabled: (enabled) => ipcRenderer.invoke(INVOKE.phoneAccessSetEnabled, enabled),
@@ -212,6 +222,7 @@ const api: SwitchboardApi = {
     onRemoteStatus: (cb) => subscribe(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status)),
     onQuestionsAsked: (cb) => subscribe(EVENT.questionsAsked, (_e, pending) => cb(pending)),
     onQuestionsSettled: (cb) => subscribe(EVENT.questionsSettled, (_e, settled) => cb(settled)),
+    onGrillChanged: (cb) => subscribe(EVENT.grillChanged, (_e, changed) => cb(changed)),
     onPageShown: (cb) => subscribe(EVENT.pageShown, (_e, page) => cb(page)),
     onProjectsChanged: (cb) => subscribe(EVENT.projectsChanged, () => cb()),
     onStatusUpdate: (cb) => subscribe(EVENT.statusUpdate, (_e, text, type) => cb(text, type)),
