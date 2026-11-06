@@ -56,6 +56,8 @@ const EVERY_MESSAGE: ClientMessage[] = [
     {type: 'grill-send', sessionId: 's1', roundId: 'b1'},
     {type: 'grill-queue', sessionId: 's1', roundId: 'b1'},
     {type: 'grill-cancel-queue', sessionId: 's1', roundId: 'b1'},
+    {type: 'chat-subscribe', sessionId: 's1'},
+    {type: 'chat-unsubscribe', sessionId: 's1'},
 ];
 
 const GRILL = {sessionId: 's1', roundId: 'b1'};
@@ -97,6 +99,8 @@ const MALFORMED: Record<string, unknown[]> = {
     ],
     'use-here': [{type: 'use-here'}, {type: 'use-here', sessionId: null}],
     archive: [{type: 'archive'}, {type: 'archive', sessionId: ''}, {type: 'archive', sessionId: 7}],
+    'chat-subscribe': [{type: 'chat-subscribe'}, {type: 'chat-subscribe', sessionId: ''}],
+    'chat-unsubscribe': [{type: 'chat-unsubscribe'}, {type: 'chat-unsubscribe', sessionId: 'x'.repeat(257)}],
     'voice-start': [
         {type: 'voice-start'},
         {type: 'voice-start', voiceId: ''},

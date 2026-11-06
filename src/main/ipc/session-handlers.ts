@@ -1,7 +1,7 @@
 /**
  * Session state: which are running, stopping one, and the per-session metadata.
  */
-import {INVOKE} from '../../ipc/channels';
+import {INVOKE, SEND} from '../../ipc/channels';
 import {searchTitleFor} from '../../domain/session/title';
 import {reconnectSession} from '../reconnect-session';
 import {stopSession} from '../stop-session';
@@ -10,6 +10,9 @@ import type {IpcRegistrar} from './support/registrar';
 
 export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.getActiveSessions, () => app.lifecycle.runningSessionIds());
+
+    /** The window is ready: the sessions a restart brought back can be marked now. */
+    ipc.on(SEND.rendererReady, () => app.sessionRestore.rendererReady());
 
     /** The plain terminals, so a reloaded renderer can restore them. */
     ipc.handle(INVOKE.getActiveTerminals, () => {

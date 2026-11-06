@@ -65,6 +65,8 @@ internal val clientFixtures: List<Pair<String, ClientMessage>> = listOf(
     "grill-send" to ClientMessage.GrillSend(sessionId = "s-1", roundId = "b-41"),
     "grill-queue" to ClientMessage.GrillQueue(sessionId = "s-1", roundId = "b-41"),
     "grill-cancel-queue" to ClientMessage.GrillCancelQueue(sessionId = "s-1", roundId = "b-41"),
+    "chat-subscribe" to ClientMessage.ChatSubscribe(sessionId = "s-1"),
+    "chat-unsubscribe" to ClientMessage.ChatUnsubscribe(sessionId = "s-1"),
 )
 
 private const val SWITCHBOARD_PATH = "/Users/joris/Development/switchboard"
@@ -286,4 +288,25 @@ internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
     ),
     "grill-none" to ServerMessage.Grill(views = emptyList()),
     "grill-error" to ServerMessage.GrillError(sessionId = "s-1", roundId = "b-41", error = "Claude is busy; send once it stops"),
+    "welcome-features" to ServerMessage.Welcome(
+        protocol = 1,
+        macName = "Joris MacBook Pro",
+        deviceId = "d-7",
+        addresses = listOf("192.168.1.20"),
+        features = listOf("chat"),
+    ),
+    "chat" to ServerMessage.Chat(
+        sessionId = "s-1",
+        available = true,
+        messages = listOf(
+            ChatMessage(id = "u1:0", role = ChatRole.User, text = "Fix the login"),
+            ChatMessage(id = "a1:0", role = ChatRole.Tool, text = "Ran: git status"),
+            ChatMessage(id = "a2:0", role = ChatRole.Assistant, text = "Fixed it."),
+        ),
+    ),
+    "chat-unavailable" to ServerMessage.Chat(sessionId = "s-1", available = false, messages = emptyList()),
+    "chat-append" to ServerMessage.ChatAppend(
+        sessionId = "s-1",
+        messages = listOf(ChatMessage(id = "a3:0", role = ChatRole.Assistant, text = "Pushed.")),
+    ),
 )

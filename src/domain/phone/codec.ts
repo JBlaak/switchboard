@@ -65,7 +65,9 @@ export function parseClientMessage(text: string): ClientMessage | null {
         }
         case 'detach':
         case 'use-here':
-        case 'archive': {
+        case 'archive':
+        case 'chat-subscribe':
+        case 'chat-unsubscribe': {
             if (!isText(raw.sessionId, MAX_ID)) return null;
             return {type: raw.type, sessionId: raw.sessionId};
         }

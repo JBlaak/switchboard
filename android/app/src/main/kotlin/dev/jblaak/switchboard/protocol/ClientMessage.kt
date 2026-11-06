@@ -147,4 +147,17 @@ sealed interface ClientMessage {
     @Serializable
     @SerialName("grill-cancel-queue")
     data class GrillCancelQueue(val sessionId: String, val roundId: String) : ClientMessage
+
+    /**
+     * Show the session as a chat: a [ServerMessage.Chat] with its messages so far, then [ServerMessage.ChatAppend]s
+     * as its transcript grows, until [ChatUnsubscribe] or the connection ends. Only to a Mac that named
+     * [MacFeatures.CHAT].
+     */
+    @Serializable
+    @SerialName("chat-subscribe")
+    data class ChatSubscribe(val sessionId: String) : ClientMessage
+
+    @Serializable
+    @SerialName("chat-unsubscribe")
+    data class ChatUnsubscribe(val sessionId: String) : ClientMessage
 }

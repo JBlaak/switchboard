@@ -41,6 +41,8 @@ export interface TransitionDetectorDeps {
     renderer: RendererGateway;
     clock: Clock;
     log: Logger;
+    /** Keeps the record of live sessions under the id a session goes by now. */
+    liveSessions?: {rekeyed(oldId: string, newId: string): void};
 }
 
 export class SessionTransitionDetector {
@@ -169,5 +171,6 @@ export class SessionTransitionDetector {
 
         registry.rekey(sessionId, newId);
         renderer.sessionForked(sessionId, newId);
+        this.deps.liveSessions?.rekeyed(sessionId, newId);
     }
 }
