@@ -162,6 +162,16 @@ export function overviewPullRequest(
         checks: {state: 'passing', failing: 0},
         review: null,
         closes: [],
+        wait: {
+            closedAt: null,
+            failedChecks: [],
+            cancelledChecks: [],
+            reviewRequestedFromYou: false,
+            reviewRequestedFromOthers: false,
+            unresolvedThreads: 0,
+            mergeable: 'mergeable',
+            behindBase: null,
+        },
         ...fields,
     };
 }

@@ -45,7 +45,8 @@ export interface RepositoryPullRequest {
     repository: string;
     number: number;
     title: string;
-    state: 'open' | 'merged';
+    /** Closed without merging is read only when it closed lately, for Merged or closed today. */
+    state: 'open' | 'merged' | 'closed';
     draft: boolean;
     headRef: string;
     updatedAt: string;
@@ -53,8 +54,32 @@ export interface RepositoryPullRequest {
     review: ReviewDecision;
     /** The issues it closes, by GitHub's closing references. */
     closes: IssueKey[];
+    /** What its group and open point (`pull-request-wait`) read of it, beyond the fields above. */
+    wait: PullRequestWaitReads;
     /** What the merge queue (#315) reads of it, beyond the fields above. */
     queue: PullRequestQueueReads;
+}
+
+/**
+ * What decides which group a PR waits in and its open point, beyond its
+ * state, draft, checks and review decision.
+ */
+export interface PullRequestWaitReads {
+    /** When it merged or closed; null while it is open. */
+    closedAt: string | null;
+    /** The check runs that failed on its head commit, cancelled ones included, by name. */
+    failedChecks: string[];
+    /** Those of `failedChecks` that were cancelled. */
+    cancelledChecks: string[];
+    /** A review is requested from the user `gh` signs in as. */
+    reviewRequestedFromYou: boolean;
+    /** A review is requested from another user (teams are not read). */
+    reviewRequestedFromOthers: boolean;
+    /** Unresolved review threads, an author's note nobody replied in not counted. */
+    unresolvedThreads: number;
+    mergeable: 'mergeable' | 'conflicting' | 'unknown';
+    /** The branch it merges into when it is behind it; null when it is not, or GitHub cannot say. */
+    behindBase: string | null;
 }
 
 /**

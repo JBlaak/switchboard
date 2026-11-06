@@ -1210,9 +1210,9 @@ test.describe('VM project pages', () => {
         const vm = projectPage(page, REMOTE_LABEL.vm);
         await expect(vm.getByText('VM', {exact: true})).toBeVisible();
         await expect(vm.getByRole('region', {name: 'Pull requests'}).locator('.pp-pr-title')).toHaveText([
-            'Stop the login redirect loop',
             'Try a token-bucket rate limiter',
             'Bump express to 5.1',
+            'Stop the login redirect loop',
         ]);
         await expect(
             vm.getByRole('region', {name: 'Plans & issues'}).getByRole('button', {name: 'Expand plan Login rework'}),
