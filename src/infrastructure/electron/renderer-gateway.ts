@@ -18,6 +18,7 @@ import {EVENT} from '../../ipc/channels';
 import type {BrowserWindow} from 'electron';
 import type {RemoteStatusPayload} from '../../domain/remote/remote-status';
 import type {WorkingAgent} from '../../domain/terminal/program-status-children';
+import type {BackgroundTask} from '../../domain/session/background-tasks';
 import type {UpdateNotice} from '../../domain/update/release';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
 import type {GrillChanged} from '../../domain/grill/model';
@@ -84,6 +85,10 @@ export class ElectronRendererGateway implements RendererGateway {
 
     public sessionAgents(sessionId: string, agents: WorkingAgent[]): void {
         this.send(EVENT.sessionAgents, sessionId, agents);
+    }
+
+    public sessionBackgroundTasks(sessionId: string, tasks: BackgroundTask[]): void {
+        this.send(EVENT.sessionBackgroundTasks, sessionId, tasks);
     }
 
     public remoteStatus(sessionId: string, status: RemoteStatusPayload): void {

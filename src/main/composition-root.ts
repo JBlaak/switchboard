@@ -136,6 +136,7 @@ import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner, type GhRunner} from '../infrastructure/github/gh-cli';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {encodeProjectPath} from '../domain/project/project-path';
+import {BackgroundTaskService} from '../application/services/background-task-service';
 import {isRemoteProjectPath} from '../domain/project/remote-target';
 import {routeCandidates} from '../domain/ask/route';
 import {resolveBlaakTasksUrl} from '../domain/settings/settings';
@@ -347,6 +348,9 @@ export function buildContainer(): Container {
         log,
         homeDir: paths.homeDir,
     });
+    // What a turn ended with still running in the background, for the sidebar's
+    // status tone; told every CLI state change after the Session work queue.
+    const backgroundTasks = new BackgroundTaskService({transcripts, renderer, log});
     const lifecycle = new SessionLifecycle({
         registry,
         terminals,
@@ -354,11 +358,15 @@ export function buildContainer(): Container {
         remote,
         timers,
         log,
-        // The prompter hears every busy/idle change; the restore record hears each end.
+        // The prompter and the background-task reader hear every busy/idle change; the restore record hears each end.
         cliState: {
-            cliStateChanged: (...args) => prompter.cliStateChanged(...args),
+            cliStateChanged: (sessionId, session, change) => {
+                prompter.cliStateChanged(sessionId, session, change);
+                backgroundTasks.cliStateChanged(sessionId, session, change);
+            },
             sessionEnded: (sessionId, session) => {
                 prompter.sessionEnded(sessionId, session);
+                backgroundTasks.sessionEnded(sessionId);
                 sessionRestore.ended(sessionId, session);
             },
         },

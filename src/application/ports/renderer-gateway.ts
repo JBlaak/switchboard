@@ -9,6 +9,7 @@
  */
 import type {RemoteStatusPayload} from '../../domain/remote/remote-status';
 import type {WorkingAgent} from '../../domain/terminal/program-status-children';
+import type {BackgroundTask} from '../../domain/session/background-tasks';
 import type {UpdateNotice} from '../../domain/update/release';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
 import type {GrillChanged} from '../../domain/grill/model';
@@ -38,6 +39,8 @@ export interface RendererGateway {
     sessionNeedsAttention(sessionId: string): void;
     /** The agents the session has working changed; an empty list means none. */
     sessionAgents(sessionId: string, agents: WorkingAgent[]): void;
+    /** The background tasks the session's last turn ended with still running; empty means none. */
+    sessionBackgroundTasks(sessionId: string, tasks: BackgroundTask[]): void;
     remoteStatus(sessionId: string, status: RemoteStatusPayload): void;
 
     // ── Questions ──

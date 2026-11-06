@@ -12,7 +12,10 @@
  * OSC 9 notifications are what the CLI sends when it actually needs someone.
  *
  * Alongside the state, which subagents the session has working (OSC 7501's
- * child records, de-duplicated in the main process like the busy state).
+ * child records, de-duplicated in the main process like the busy state), and
+ * the background tasks its last turn ended with still running (read off its
+ * transcript in main), which decide whether an ended turn is still working,
+ * the user's turn or merging (see `domain/session/status-tone`).
  *
  * Nothing here touches the DOM: each row of the session list reads its classes
  * from here (see `ui/session-list/SessionItem`).
@@ -21,6 +24,7 @@ import {hasEntry, movedEntry, withEntry, withoutEntry} from './records';
 import type {IdRecord} from './records';
 import type {RendererEvent} from './events';
 import type {WorkingAgent} from '../../domain/terminal/program-status-children';
+import type {BackgroundTask} from '../../domain/session/background-tasks';
 
 export interface ActivityState {
     /** Sessions blocked on the user, per OSC 9 or OSC 7501's `blocked`. */
@@ -31,6 +35,8 @@ export interface ActivityState {
     readonly busy: IdRecord<boolean>;
     /** sessionId → the subagents it has working. Absent means none. */
     readonly agents: IdRecord<readonly WorkingAgent[]>;
+    /** sessionId → the background tasks its last turn ended with still running. Absent means none. */
+    readonly background: IdRecord<readonly BackgroundTask[]>;
 }
 
 export const initialActivityState: ActivityState = {
@@ -38,6 +44,7 @@ export const initialActivityState: ActivityState = {
     ready: {},
     busy: {},
     agents: {},
+    background: {},
 };
 
 /** Notifications that mean the CLI is waiting for a person. */
@@ -89,13 +96,21 @@ export function activityReducer(
                         : withoutEntry(state.agents, event.sessionId),
             });
 
+        case 'sessionBackgroundTasks':
+            return patch(state, {
+                background:
+                    event.tasks.length > 0
+                        ? withEntry(state.background, event.sessionId, event.tasks)
+                        : withoutEntry(state.background, event.sessionId),
+            });
+
         case 'sessionViewed':
             return patch(state, {
                 ready: withoutEntry(state.ready, event.sessionId),
                 attention: withoutEntry(state.attention, event.sessionId),
             });
 
-        // Includes the agents: a CLI that died without its final `clear` would
+        // Includes the agents and background tasks: a CLI that died without its final `clear` would
         // otherwise leave them on the row for good.
         case 'activityCleared':
             return patch(state, {
@@ -103,6 +118,7 @@ export function activityReducer(
                 ready: withoutEntry(state.ready, event.sessionId),
                 busy: withoutEntry(state.busy, event.sessionId),
                 agents: withoutEntry(state.agents, event.sessionId),
+                background: withoutEntry(state.background, event.sessionId),
             });
 
         default:
@@ -154,13 +170,14 @@ function patch(state: ActivityState, fields: Partial<ActivityState>): ActivitySt
     return state;
 }
 
-/** A re-keyed session keeps all four marks; see `rekeyState` in `root`. */
+/** A re-keyed session keeps all its marks; see `rekeyState` in `root`. */
 export function rekeyActivity(state: ActivityState, oldId: string, newId: string): ActivityState {
     return patch(state, {
         attention: movedEntry(state.attention, oldId, newId),
         ready: movedEntry(state.ready, oldId, newId),
         busy: movedEntry(state.busy, oldId, newId),
         agents: movedEntry(state.agents, oldId, newId),
+        background: movedEntry(state.background, oldId, newId),
     });
 }
 

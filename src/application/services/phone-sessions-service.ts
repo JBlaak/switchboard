@@ -26,6 +26,7 @@ import {isAgentPty} from './agent-client/agent-pty';
 import {defaultSessionOptions} from '../../domain/launch/session-options';
 import {MAC, NO_OWNERSHIP, acceptsInput, applyOwnership, ownerOf} from '../../domain/phone/ownership';
 import {sessionTier, TIER_ATTENTION, TIER_RUNNING} from '../../domain/session/tiers';
+import {turnHolds, type BackgroundTask, type TurnHolds} from '../../domain/session/background-tasks';
 import {cleanDisplayName, resolveSessionName} from '../../domain/session/title';
 import {ENTER_ALT_SCREEN, HIDE_CURSOR} from '../../domain/terminal/ansi';
 import type {RouteCandidate, RouteRequest, RouteResult} from '../../domain/ask/model';
@@ -131,6 +132,8 @@ export class PhoneSessionsService {
     private readonly busy = new Set<string>();
     /** Sessions blocked on the user in the terminal, until their next turn starts. */
     private readonly attention = new Set<string>();
+    /** What each session's last turn left running in the background; absent is none. */
+    private readonly holds = new Map<string, TurnHolds>();
     /** When each session's state last changed, for the row's "2m". */
     private readonly changedAt = new Map<string, number>();
     /** The ids the phones were last sent, so an exit is told once and under the id they know. */
@@ -331,6 +334,7 @@ export class PhoneSessionsService {
         this.listed.delete(sessionId);
         this.busy.delete(sessionId);
         this.attention.delete(sessionId);
+        this.holds.delete(sessionId);
         this.changedAt.delete(sessionId);
         this.apply({type: 'ended', sessionId});
         if (known) this.broadcast({type: 'exited', sessionId, exitCode});
@@ -344,6 +348,9 @@ export class PhoneSessionsService {
         for (const phone of this.phones.values()) moveKey(phone.attached, oldId, newId);
         moveKey(this.busy, oldId, newId);
         moveKey(this.attention, oldId, newId);
+        const holds = this.holds.get(oldId);
+        this.holds.delete(oldId);
+        if (holds !== undefined) this.holds.set(newId, holds);
         const changedAt = this.changedAt.get(oldId);
         this.changedAt.delete(oldId);
         if (changedAt !== undefined) this.changedAt.set(newId, changedAt);
@@ -361,6 +368,19 @@ export class PhoneSessionsService {
         } else {
             this.busy.delete(sessionId);
         }
+        this.changed(sessionId);
+    }
+
+    /**
+     * What the session's turn ended with still running: work keeps it busy, only
+     * watches leave it idle (the user's turn). Merging is the sidebar's alone, as
+     * the phone has no state for it.
+     */
+    public sessionBackgroundTasks(sessionId: string, tasks: BackgroundTask[]): void {
+        const holds = turnHolds(tasks);
+        if (holds === (this.holds.get(sessionId) ?? 'none')) return;
+        if (holds === 'none') this.holds.delete(sessionId);
+        else this.holds.set(sessionId, holds);
         this.changed(sessionId);
     }
 
@@ -703,12 +723,14 @@ export class PhoneSessionsService {
             const busy = this.busy.has(sessionId);
             const terminal = this.attention.has(sessionId);
             const questionsWaiting = asking.has(sessionId);
+            const holds = this.holds.get(sessionId) ?? 'none';
             const tier = sessionTier({
                 needsAttention: terminal || questionsWaiting,
                 responseReady: false,
                 busy,
                 pending: !row,
                 hasLivePty: true,
+                holds,
             });
             const opened = new Date(session.openedAt).toISOString();
             const sortTime = Date.parse(tier === TIER_RUNNING ? (row?.created ?? opened) : (row?.modified ?? opened));
@@ -721,7 +743,7 @@ export class PhoneSessionsService {
                     project: folderName(session.projectPath),
                     projectPath: session.projectPath,
                     remote: remoteLabel(session),
-                    state: tier === TIER_ATTENTION ? 'needs-you' : busy ? 'busy' : 'idle',
+                    state: tier === TIER_ATTENTION ? 'needs-you' : busy || holds === 'work' ? 'busy' : 'idle',
                     waiting: questionsWaiting ? 'questions' : terminal ? 'terminal' : null,
                     owner: this.wireOwner(ownerOf(this.ownership, sessionId)),
                     changedAt: this.changedAt.get(sessionId) ?? session.openedAt,

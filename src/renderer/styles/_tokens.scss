@@ -65,7 +65,8 @@
     --sb-blue: #9cc5e8;
     --sb-red: #ee8b8b;
     --sb-yellow: #f0cf7e;
-    --sb-purple: #b79cf0; /* merged PR */
+    --sb-purple: #b79cf0; /* merged PR, a merging session */
+    --sb-purple-rgb: 183, 156, 240;
 
     /* The same status hues as bare channels, for tinted fills and borders. */
     --sb-green-rgb: 108, 196, 161;
@@ -175,6 +176,7 @@
         --sb-red: #b83a3a;
         --sb-yellow: #7a5a0c;
         --sb-purple: #7444c4;
+        --sb-purple-rgb: 116, 68, 196;
 
         --sb-green-rgb: 46, 138, 104;
         --sb-blue-rgb: 37, 95, 140;

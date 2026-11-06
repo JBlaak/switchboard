@@ -44,6 +44,8 @@ interface LiveRow {
     needsAttention: boolean;
     responseReady: boolean;
     busy: boolean;
+    backgroundWork: boolean;
+    merging: boolean;
     agents: readonly WorkingAgent[];
     asking: number;
     cursor: boolean;
@@ -52,15 +54,19 @@ interface LiveRow {
     now: number;
 }
 
-function useLiveRow(rowId: string, sessionId: string): LiveRow {
+function useLiveRow(row: SessionListRow): LiveRow {
+    const rowId = row.id;
+    const {sessionId, pullRequests} = row.session;
     return useStore((s): LiveRow => {
-        const activity = rowActivity(s, sessionId);
+        const activity = rowActivity(s, sessionId, pullRequests);
         return {
             running: s.view.activePtyIds.has(sessionId),
             active: highlightedSession(s.mainArea) === sessionId,
             needsAttention: activity.needsAttention,
             responseReady: activity.responseReady,
             busy: activity.busy,
+            backgroundWork: activity.backgroundWork,
+            merging: activity.merging,
             agents: activity.agents,
             asking: askingCountIn(s.questions, sessionId),
             cursor: s.sessionList.cursor === rowId,
@@ -79,17 +85,28 @@ function rowClass(row: SessionListRow, live: LiveRow): string {
     if (session.archived) classes.push('archived-item');
     if (live.running) classes.push('has-running-pty');
     if (live.needsAttention) classes.push('needs-attention');
-    if (live.responseReady) classes.push('response-ready');
+    // A turn that ended with work or merging still running is not the user's
+    // turn yet, read or not (see `domain/session/status-tone`).
+    if (live.responseReady && !live.backgroundWork && !live.merging) classes.push('response-ready');
     if (live.busy) classes.push('cli-busy');
+    if (live.backgroundWork) classes.push('background-work');
+    if (live.merging) classes.push('is-merging');
     if (live.active) classes.push('active');
     if (live.cursor) classes.push('kbd-cursor');
     return classes.join(' ');
 }
 
+/** The status dot's tooltip, for the two marks that need saying what they are. */
+function statusDotTitle(live: LiveRow): string | undefined {
+    if (live.merging) return 'Merging: only watching GitHub, and its pull requests land on their own';
+    if (live.backgroundWork) return 'Working in the background';
+    return undefined;
+}
+
 export function SessionItem({row, groupId}: SessionItemProps): JSX.Element {
     const {session} = row;
     const {sessionId} = session;
-    const live = useLiveRow(row.id, sessionId);
+    const live = useLiveRow(row);
     const item = useRef<HTMLDivElement>(null);
 
     /** A row action, which must not also open the session, and does nothing on a row already leaving. */
@@ -122,6 +139,7 @@ export function SessionItem({row, groupId}: SessionItemProps): JSX.Element {
                 <span
                     className={'session-status-dot' + (live.running ? ' running' : '')}
                     data-testid="session-status-dot"
+                    title={statusDotTitle(live)}
                 />
                 <div className="session-info">
                     {live.renaming ? (

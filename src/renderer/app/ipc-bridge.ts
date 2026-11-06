@@ -36,6 +36,7 @@ export function installIpcBridge(
         api.onTerminalNotification((sessionId, message) => send({type: 'terminalNotification', sessionId, message})),
         api.onSessionNeedsAttention((sessionId) => send({type: 'sessionNeedsAttention', sessionId})),
         api.onSessionAgents((sessionId, agents) => send({type: 'sessionAgents', sessionId, agents})),
+        api.onSessionBackgroundTasks((sessionId, tasks) => send({type: 'sessionBackgroundTasks', sessionId, tasks})),
         // Stamped on arrival: the countdowns are measured from when it got here.
         api.onRemoteStatus((sessionId, status) =>
             send({type: 'remoteStatus', sessionId, status, receivedAt: Date.now()}),

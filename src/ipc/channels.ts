@@ -210,6 +210,7 @@ export const EVENT = {
     terminalNotification: 'terminal-notification',
     sessionNeedsAttention: 'session-needs-attention',
     sessionAgents: 'session-agents',
+    sessionBackgroundTasks: 'session-background-tasks',
     remoteStatus: 'remote-status',
     questionsAsked: 'questions-asked',
     questionsSettled: 'questions-settled',

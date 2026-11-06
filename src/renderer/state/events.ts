@@ -29,6 +29,7 @@ import type {PullRequestStatusChange} from '../../domain/session-work/status';
 import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
 import type {UsageLimit} from '../../domain/usage/usage';
 import type {WorkingAgent} from '../../domain/terminal/program-status-children';
+import type {BackgroundTask} from '../../domain/session/background-tasks';
 import type {ToolbarEvent} from './toolbar-slice';
 import type {SessionListEvent} from './session-list-slice';
 import type {ProjectPageEvent} from './project-page-slice';
@@ -68,6 +69,7 @@ export type PushEvent =
     | {type: 'terminalNotification'; sessionId: string; message: string}
     | {type: 'sessionNeedsAttention'; sessionId: string}
     | {type: 'sessionAgents'; sessionId: string; agents: readonly WorkingAgent[]}
+    | {type: 'sessionBackgroundTasks'; sessionId: string; tasks: readonly BackgroundTask[]}
     /** `receivedAt` is stamped by the bridge, so the reducer stays pure. */
     | {type: 'remoteStatus'; sessionId: string; status: RemoteStatusPayload; receivedAt: number}
     | {type: 'questionsAsked'; pending: PendingQuestions}
