@@ -145,6 +145,16 @@ sealed interface ServerMessage {
     @SerialName("mac-battery")
     data class MacBatteryChanged(val battery: MacBattery?) : ServerMessage
 
+    /** Every session's open grilling round with its draft answers, on welcome and after every change. */
+    @Serializable
+    @SerialName("grill")
+    data class Grill(val views: List<GrillView>) : ServerMessage
+
+    /** A `grill-*` call from this phone failed; [error] is in words for the card ("Answer a question first"). */
+    @Serializable
+    @SerialName("grill-error")
+    data class GrillError(val sessionId: String, val roundId: String, val error: String) : ServerMessage
+
     /** Sent before [CloseReason.NotPaired] when the device is revoked or the Mac's identity is reset. */
     @Serializable
     @SerialName("revoked")
