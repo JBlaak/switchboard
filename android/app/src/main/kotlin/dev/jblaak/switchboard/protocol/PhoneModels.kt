@@ -194,3 +194,33 @@ enum class PairRejection {
     @SerialName("not-pairing")
     NotPairing,
 }
+
+/** One message of a session's chat view, as the Mac read it from the transcript. */
+@Serializable
+data class ChatMessage(
+    /** Stable across reads, for the list's keys. */
+    val id: String,
+    val role: ChatRole,
+    val text: String,
+)
+
+@Serializable
+enum class ChatRole {
+    /** A prompt. */
+    @SerialName("user")
+    User,
+
+    /** Claude's text. */
+    @SerialName("assistant")
+    Assistant,
+
+    /** One tool call, as one line, such as "Ran: git status". */
+    @SerialName("tool")
+    Tool,
+}
+
+/** What a Mac can do beyond the protocol version, named in [ServerMessage.Welcome.features]. */
+object MacFeatures {
+    /** [ClientMessage.ChatSubscribe], answered with [ServerMessage.Chat] and [ServerMessage.ChatAppend]. */
+    const val CHAT = "chat"
+}

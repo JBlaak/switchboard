@@ -67,12 +67,14 @@ import dev.jblaak.switchboard.theme.SwitchboardTheme
 import dev.jblaak.switchboard.theme.TerminalTextStyle
 import dev.jblaak.switchboard.ui.connected.ArchiveIcon
 import dev.jblaak.switchboard.ui.connected.BackIcon
+import dev.jblaak.switchboard.ui.connected.ChatIcon
 import dev.jblaak.switchboard.ui.connected.DownIcon
 import dev.jblaak.switchboard.ui.connected.EnterIcon
 import dev.jblaak.switchboard.ui.connected.LaptopTerminalIcon
 import dev.jblaak.switchboard.ui.connected.PhoneIcon
 import dev.jblaak.switchboard.ui.connected.ScreenTopBar
 import dev.jblaak.switchboard.ui.connected.SendIcon
+import dev.jblaak.switchboard.ui.connected.TerminalIcon
 import dev.jblaak.switchboard.ui.connected.UpIcon
 import dev.jblaak.switchboard.ui.connected.typingBoxMaxHeight
 import dev.jblaak.switchboard.ui.sessions.Dot
@@ -88,9 +90,10 @@ import dev.jblaak.switchboard.ui.voice.isBusy
 import dev.jblaak.switchboard.ui.voice.previewHoldToTalk
 
 /**
- * A session: its terminal with the key bar and prompt box while this phone is the active device, "Active on
- * other device" with Use here otherwise. The terminal stays laid out under the placeholder, so its size is the
- * one the PTY takes when this phone becomes active.
+ * A session: its terminal, or its chat ([view], switched in the header), with the key bar and prompt box while this
+ * phone is the active device, "Active on other device" with Use here otherwise. The terminal stays laid out under
+ * the chat and the placeholder, so its size is the one the PTY takes when this phone becomes active, and it keeps
+ * its scrollback while the chat is shown.
  */
 @Composable
 fun SessionScreen(
@@ -107,16 +110,20 @@ fun SessionScreen(
     /** With the middle of the Archive button, in window coordinates, for the confetti. */
     onArchive: (from: Offset) -> Unit,
     onBack: () -> Unit,
+    view: SessionView,
+    onToggleView: () -> Unit,
     terminal: @Composable (Modifier) -> Unit,
+    chat: @Composable (Modifier) -> Unit,
 ) {
     val colors = SwitchboardTheme.colors
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding()) {
-            SessionTopBar(state, onArchive, onBack)
+            SessionTopBar(state, view, onToggleView, onArchive, onBack)
             Box(Modifier.weight(1f)) {
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f)) {
                         terminal(Modifier.fillMaxSize())
+                        if (view == SessionView.Chat) chat(Modifier.fillMaxSize())
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
@@ -149,7 +156,13 @@ fun SessionScreen(
 }
 
 @Composable
-private fun SessionTopBar(state: SessionScreenState, onArchive: (from: Offset) -> Unit, onBack: () -> Unit) {
+private fun SessionTopBar(
+    state: SessionScreenState,
+    view: SessionView,
+    onToggleView: () -> Unit,
+    onArchive: (from: Offset) -> Unit,
+    onBack: () -> Unit,
+) {
     val colors = SwitchboardTheme.colors
     ScreenTopBar(
         title = state.name ?: stringResource(R.string.session_new),
@@ -171,9 +184,47 @@ private fun SessionTopBar(state: SessionScreenState, onArchive: (from: Offset) -
         },
         trailing = {
             AccessChip(state.access)
+            ViewSwitch(view, onToggleView)
             ArchiveButton(onArchive)
         },
     )
+}
+
+/** Chat and terminal side by side, the one shown lit; a tap anywhere switches to the other. */
+@Composable
+private fun ViewSwitch(view: SessionView, onToggle: () -> Unit) {
+    val colors = SwitchboardTheme.colors
+    val switchLabel = stringResource(R.string.session_view_switch)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .padding(start = 4.dp)
+            .height(30.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(colors.line)
+            .clickable(onClick = onToggle, onClickLabel = switchLabel)
+            .padding(2.dp),
+    ) {
+        for (option in SessionView.entries) {
+            val selected = option == view
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(width = 34.dp, height = 26.dp)
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(if (selected) colors.bgRaised else Color.Transparent),
+            ) {
+                Icon(
+                    imageVector = if (option == SessionView.Chat) ChatIcon else TerminalIcon,
+                    contentDescription = stringResource(
+                        if (option == SessionView.Chat) R.string.session_view_chat else R.string.session_view_terminal,
+                    ),
+                    tint = if (selected) colors.textStrong else colors.textFaint,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -566,7 +617,12 @@ private fun previewState(access: TerminalAccess, startedIn: String?, questions: 
 }
 
 @Composable
-private fun SessionScreenPreviewOf(state: SessionScreenState, prompt: String = "", voice: HoldToTalk? = null) {
+private fun SessionScreenPreviewOf(
+    state: SessionScreenState,
+    prompt: String = "",
+    voice: HoldToTalk? = null,
+    view: SessionView = SessionView.Terminal,
+) {
     SwitchboardTheme {
         SessionScreen(
             state = state,
@@ -580,7 +636,10 @@ private fun SessionScreenPreviewOf(state: SessionScreenState, prompt: String = "
             onStartedNoteDismissed = {},
             onArchive = {},
             onBack = {},
+            view = view,
+            onToggleView = {},
             terminal = { PreviewTerminal(it) },
+            chat = { ChatViewPreviewContent(it) },
         )
     }
 }
@@ -590,6 +649,16 @@ private fun SessionScreenPreviewOf(state: SessionScreenState, prompt: String = "
 @Composable
 internal fun SessionScreenHerePreview() {
     SessionScreenPreviewOf(previewState(TerminalAccess.Here, startedIn = null, questions = false, waitingInTerminal = false))
+}
+
+@Preview(name = "Chat dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Chat light", uiMode = Configuration.UI_MODE_NIGHT_NO)
+@Composable
+internal fun SessionScreenChatPreview() {
+    SessionScreenPreviewOf(
+        previewState(TerminalAccess.Here, startedIn = null, questions = false, waitingInTerminal = false),
+        view = SessionView.Chat,
+    )
 }
 
 @Preview(name = "Recording dark", uiMode = Configuration.UI_MODE_NIGHT_YES)

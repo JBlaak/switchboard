@@ -23,6 +23,7 @@ import type {BumpRequest, BumpResult, CiJobQueueAnswer} from '../domain/project/
 import type {ActionRequest, ActionResult, CancelResult} from '../domain/session-work/actions';
 import type {CommentRequest, ReviewRequest, ReviewResult} from '../domain/session-work/review';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
+import type {BackgroundTask} from '../domain/session/background-tasks';
 import type {UpdateNotice} from '../domain/update/release';
 import type {Usage} from '../domain/usage/usage';
 import type {Weather, WeatherLocation} from '../domain/weather/weather';
@@ -351,7 +352,7 @@ export interface SwitchboardApi {
     /** How far the pointer has come since the drag started, in screen points. */
     moveWindowDrag(dx: number, dy: number): void;
     endWindowDrag(): void;
-    /** How many sessions are in the Needs input block; the dock bounces when it rises. */
+    /** How many sessions are in the Blocked block; the dock bounces when it rises. */
     setNeedsInputCount(count: number): void;
     /**
      * The projects are loaded and the view restored: main may send what it held
@@ -480,6 +481,7 @@ export interface SwitchboardApi {
     onTerminalNotification(cb: (sessionId: string, message: string) => void): Unsubscribe;
     onSessionNeedsAttention(cb: (sessionId: string) => void): Unsubscribe;
     onSessionAgents(cb: (sessionId: string, agents: WorkingAgent[]) => void): Unsubscribe;
+    onSessionBackgroundTasks(cb: (sessionId: string, tasks: BackgroundTask[]) => void): Unsubscribe;
     onRemoteStatus(cb: (sessionId: string, status: RemoteStatusPayload) => void): Unsubscribe;
     onQuestionsAsked(cb: (pending: PendingQuestions) => void): Unsubscribe;
     onQuestionsSettled(cb: (settled: QuestionsSettled) => void): Unsubscribe;

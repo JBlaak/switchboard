@@ -818,7 +818,8 @@
     &:hover {
         background: rgba(var(--sb-overlay-rgb), 0.04);
     }
-    &.is-draft .pp-pr-title {
+    &.is-draft .pp-pr-title,
+    &.is-closed .pp-pr-title {
         color: var(--sb-text-faint);
     }
 }
@@ -849,6 +850,9 @@
     &.is-pr-merged {
         color: var(--sb-purple);
     }
+    &.is-pr-closed {
+        color: var(--sb-red);
+    }
 }
 
 .pp-chip {
@@ -878,12 +882,26 @@
     }
 }
 
-.pp-review {
-    width: 92px;
+/* Each group of PRs (by what it waits on) under its subhead, counted */
+.pp-pr-group-count {
+    margin-left: 4px;
+    font-weight: 600;
+    color: var(--sb-text-faint);
+}
+
+/* What still needs someone on a PR, in words */
+.pp-open-point {
+    max-width: 240px;
     font-size: 11.5px;
     text-align: right;
     color: var(--sb-text-faint);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &.is-needs-you {
+        color: var(--sb-red);
+    }
 }
 
 /* ---- Worktrees (#175): 44 px, in the right column ---- */

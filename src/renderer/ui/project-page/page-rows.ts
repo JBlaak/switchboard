@@ -33,7 +33,15 @@ import type {
     WorktreeOverview,
 } from '../../../domain/project/overview';
 import type {ProjectPageState} from '../../state/project-page-slice';
-import type {MergeQueue} from '../../../domain/project/merge-queue';
+import type {MergeQueue, QueuePill} from '../../../domain/project/merge-queue';
+import {
+    PULL_REQUEST_GROUP_TITLES,
+    PULL_REQUEST_GROUPS,
+    pullRequestWait,
+    type PullRequestGroup,
+    type PullRequestWait,
+    type PullRequestWaitFacts,
+} from '../../../domain/project/pull-request-wait';
 import type {BlaakTasksResult, TaskDetail, TaskRow} from '../../../domain/tasks/model';
 
 /** How many issues "Not in a plan" lists before "Show N more". */
@@ -228,36 +236,111 @@ type PullRequestRow = OverviewPullRequestRow<ProjectPullRequest>;
 export interface PullRequestsViewOptions {
     readonly showMerged: boolean;
     readonly filter: string;
+    /** Epoch ms, for which PRs merged or closed today. */
+    readonly now: number;
+}
+
+/** A PR as the section shows it: its row, and what it waits on. */
+export interface PullRequestOnScreen extends PullRequestRow {
+    readonly wait: PullRequestWait;
+}
+
+/** One of the section's groups, with its PRs; an empty group is left out. */
+export interface PullRequestGroupOnScreen {
+    readonly group: PullRequestGroup;
+    readonly title: string;
+    readonly rows: readonly PullRequestOnScreen[];
+}
+
+/** What the section reads of an answer: its PRs, its plans and issues for linked sessions, and the queue's pills. */
+type PullRequestsSource = ProjectOverviewGroups<ProjectIssue, ProjectPullRequest> & {
+    readonly mergeQueue?: MergeQueue | null;
+};
+
+/**
+ * The Pull requests section's groups (`pullRequestWait`), in the order it
+ * shows them, each PR in the overview's order within its group; narrowed by
+ * the filter, which finds a PR by number, title or head branch. A PR merged
+ * or closed today is listed; an older merged one only with Show merged, and
+ * an older closed one never.
+ */
+export function pullRequestsView(
+    github: PullRequestsSource,
+    worktrees: readonly WorktreeOverview[],
+    options: PullRequestsViewOptions,
+): PullRequestGroupOnScreen[] {
+    const today = localDay(new Date(options.now));
+    const shown = github.pullRequests
+        .filter(({pullRequest: pr}) => matchesFilter(issueText(pr) + ' ' + pr.headRef, options.filter))
+        .map((row): PullRequestOnScreen => {
+            const pr = row.pullRequest;
+            const closedAt = pr.wait.closedAt ? Date.parse(pr.wait.closedAt) : NaN;
+            const wait = pullRequestWait({
+                ...pr.wait,
+                state: pr.state,
+                closedToday: Number.isFinite(closedAt) && localDay(new Date(closedAt)) === today,
+                draft: pr.draft,
+                checks: pr.checks,
+                review: pr.review,
+                queue: queueStateOf(github.mergeQueue?.pills[pr.number]),
+                sessionWorking: linkedSessionRunning(row, github, worktrees),
+            });
+            return {...row, wait};
+        })
+        .filter(
+            ({pullRequest: pr, wait}) =>
+                wait.group !== 'merged-earlier' || (options.showMerged && pr.state === 'merged'),
+        );
+    return PULL_REQUEST_GROUPS.map((group) => ({
+        group,
+        title: PULL_REQUEST_GROUP_TITLES[group],
+        rows: shown.filter((row) => row.wait.group === group),
+    })).filter((group) => group.rows.length > 0);
+}
+
+/** Where a PR is in the merge queue, by its pill: on its way in, failed, or out of it. */
+function queueStateOf(pill: QueuePill | undefined): PullRequestWaitFacts['queue'] {
+    if (pill?.kind === 'merging' || pill?.kind === 'queued') return 'queued';
+    if (pill?.kind === 'failed') return 'failed';
+    return null;
 }
 
 /**
- * The Pull requests section's rows: the open ones, then (Show merged) the
- * merged ones, as the overview orders them; narrowed by the filter, which
- * finds a PR by number, title or head branch.
+ * Whether a session linked to the PR is running: one in the worktree whose
+ * branch is its head, or one that owns an issue it closes.
  */
-export function pullRequestsView(
-    groups: ProjectOverviewGroups<ProjectIssue, ProjectPullRequest>,
-    options: PullRequestsViewOptions,
-): PullRequestRow[] {
-    return groups.pullRequests.filter(
-        ({pullRequest: pr}) =>
-            (options.showMerged || pr.state !== 'merged') &&
-            matchesFilter(issueText(pr) + ' ' + pr.headRef, options.filter),
+function linkedSessionRunning(
+    row: PullRequestRow,
+    github: PullRequestsSource,
+    worktrees: readonly WorktreeOverview[],
+): boolean {
+    const head = row.pullRequest.headRef;
+    if (head && worktrees.some((worktree) => worktree.branch === head && worktree.running.length > 0)) return true;
+    const closes = new Set(row.closes.map(issueKeyString));
+    const issues = [...github.plans.flatMap((plan) => plan.issues), ...github.loose];
+    return issues.some((issue) => issue.status?.kind === 'running' && closes.has(issueKeyString(issue.issue)));
+}
+
+/** The section's groups for the page's state: null while there is no answer, and when GitHub had nothing to say. */
+export function pullRequestsViewOf(
+    page: ProjectPageState,
+    projectPath: string,
+    now: number,
+): PullRequestGroupOnScreen[] | null {
+    const overview = page.overview?.projectPath === projectPath ? page.overview : null;
+    return overview?.github?.ok
+        ? pullRequestsView(overview.github, overview.worktrees, {showMerged: page.showMerged, filter: page.filter, now})
+        : null;
+}
+
+/** The Pull requests section's cursor rows, group by group. */
+export function pullRequestRows(groups: readonly PullRequestGroupOnScreen[]): PageRow[] {
+    return groups.flatMap((group) =>
+        group.rows.map(({pullRequest: pr}): PageRow => {
+            const key: IssueKey = {repository: pr.repository, number: pr.number};
+            return {kind: 'pull-request', id: cursorId.pullRequest(key), pullRequest: key};
+        }),
     );
-}
-
-/** The section's rows for the page's state: null while there is no answer, and when GitHub had nothing to say. */
-export function pullRequestsViewOf(page: ProjectPageState, projectPath: string): PullRequestRow[] | null {
-    const github = page.overview?.projectPath === projectPath ? page.overview.github : null;
-    return github?.ok ? pullRequestsView(github, page) : null;
-}
-
-/** The Pull requests section's cursor rows. */
-export function pullRequestRows(rows: readonly PullRequestRow[]): PageRow[] {
-    return rows.map(({pullRequest: pr}) => {
-        const key: IssueKey = {repository: pr.repository, number: pr.number};
-        return {kind: 'pull-request', id: cursorId.pullRequest(key), pullRequest: key};
-    });
 }
 
 /** A PR's checks pill: passing, running, or how many fail; nothing when it has no checks. */
@@ -273,22 +356,6 @@ export function checksPill(
             return {tone: 'failing', text: '✕ ' + Math.max(1, checks.failing) + ' failing'};
         case 'none':
             return null;
-    }
-}
-
-/** Where a PR's review stands, in a few words: a draft or merged one says so instead. */
-export function reviewText(pr: ProjectPullRequest): string {
-    if (pr.state === 'merged') return 'merged';
-    if (pr.draft) return 'draft';
-    switch (pr.review) {
-        case 'approved':
-            return 'approved';
-        case 'changes_requested':
-            return 'changes requested';
-        case 'review_required':
-            return 'review requested';
-        default:
-            return 'no review yet';
     }
 }
 

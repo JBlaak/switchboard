@@ -110,6 +110,8 @@ export interface PullRequestStatus {
     /** Commits on the base branch the head does not have. */
     behindBy?: number;
     mergeable?: 'mergeable' | 'conflicting' | 'unknown';
+    /** GitHub's auto-merge is on: it merges once its checks pass. */
+    autoMerge?: true;
     threads?: ReviewThread[];
     pendingReview?: PendingComment[];
     /**

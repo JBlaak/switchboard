@@ -69,6 +69,13 @@ export interface TranscriptStore {
     /** The trailing bytes of a transcript, for the plan-handover check. */
     readTail(folder: string, sessionId: string, byteLimit: number): string;
 
+    /**
+     * Up to `byteLimit` bytes of a transcript from byte `start`, and its size
+     * now: how the phone's chat view follows a growing transcript without
+     * reading it whole each time. Null when there is no transcript.
+     */
+    readFrom(folder: string, sessionId: string, start: number, byteLimit: number): {text: string; size: number} | null;
+
     /** A transcript's own mtime in epoch ms, for the handover timing check. */
     sessionMtimeMs(folder: string, sessionId: string): number | null;
 

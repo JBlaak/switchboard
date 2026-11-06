@@ -83,7 +83,7 @@ function currentRows(projectPath: string): PageRow[] {
     const state = getState();
     const page = state.projectPage;
     const plans = plansViewOf(page, projectPath);
-    const pullRequests = pullRequestsViewOf(page, projectPath);
+    const pullRequests = pullRequestsViewOf(page, projectPath, state.sessionList.now || Date.now());
     const sessions = sessionsShown(projectPath, state.view.activePtyIds, page.filter);
     const answered = page.overview?.projectPath === projectPath ? page.overview : null;
     const vm = isVmProjectIn(state.agentHost, projectPath);

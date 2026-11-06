@@ -1,9 +1,11 @@
 /**
- * The project page's Pull requests section (#175), first, over Plans & issues: each
- * open PR as a two-line row with its state, title, number and head branch,
- * then an "in #n" chip when it closes an issue in a plan (a click expands that
- * plan), its checks and where its review stands. Drafts are dimmed. Show
- * merged adds the merged ones after them. A click, or ↵, opens it on GitHub.
+ * The project page's Pull requests section (#175), first, over Plans & issues:
+ * the PRs grouped by what they wait on (Needs you, Waiting on CI, Waiting on
+ * review, Ready to merge, Merged or closed today; `pull-request-wait`), each
+ * as a two-line row with its state, title, number and head branch, then an
+ * "in #n" chip when it closes an issue in a plan (a click expands that plan),
+ * its checks and its open point. Drafts are dimmed. Show merged adds the
+ * older merged ones last. A click, or ↵, opens it on GitHub.
  * In a repository with a merge queue (#315), an open PR's row carries its
  * queue pill ("merging · 1st", "queued · 2nd", "queue failed", "kept
  * rebased"), and an approved one that isn't queued offers + Queue.
@@ -16,7 +18,7 @@ import type {JSX, MouseEvent} from 'react';
 import {useStore} from '../use-store';
 import {dispatch} from '../../state/app-store';
 import type {IssueKey} from '../../../domain/plan/model';
-import {checksPill, cursorId, pullRequestsViewOf, reviewText} from './page-rows';
+import {checksPill, cursorId, pullRequestsViewOf, type PullRequestOnScreen} from './page-rows';
 import {openPullRequestOnGitHub, revealPlan} from './actions';
 import {SectionSkeleton} from './SectionSkeleton';
 import {optInToQueue} from './merge-queue-actions';
@@ -25,13 +27,15 @@ import type {QueuePill} from '../../../domain/project/merge-queue';
 
 export function PullRequestsSection({projectPath}: {projectPath: string}): JSX.Element | null {
     const page = useStore((state) => state.projectPage);
+    const now = useStore((state) => state.sessionList.now) || Date.now();
     const answered = page.overview?.projectPath === projectPath ? page.overview : null;
-    const rows = pullRequestsViewOf(page, projectPath);
-    if (answered && !rows) return null;
+    const groups = pullRequestsViewOf(page, projectPath, now);
+    if (answered && !groups) return null;
 
     const github = answered?.github?.ok ? answered.github : null;
     const open = github ? github.pullRequests.filter((row) => row.pullRequest.state === 'open').length : 0;
-    const merged = github && page.showMerged ? github.pullRequests.length - open : 0;
+    const merged =
+        github && page.showMerged ? github.pullRequests.filter((row) => row.pullRequest.state === 'merged').length : 0;
 
     return (
         <section className="pp-section pp-prs" aria-labelledby="pp-prs-heading">
@@ -46,56 +50,92 @@ export function PullRequestsSection({projectPath}: {projectPath: string}): JSX.E
                     {page.showMerged ? 'Hide merged' : 'Show merged'}
                 </button>
             </div>
-            <div className="pp-card" aria-busy={!rows}>
-                {!rows && <SectionSkeleton label="Loading pull requests" />}
-                {rows && rows.length === 0 && (
+            <div className="pp-card" aria-busy={!groups}>
+                {!groups && <SectionSkeleton label="Loading pull requests" />}
+                {groups && groups.length === 0 && (
                     <div className="pp-quiet">
                         {page.filter ? 'No pull request here matches.' : 'No open pull requests.'}
                     </div>
                 )}
-                {rows?.map(({pullRequest: pr, plan}) => {
-                    const key: IssueKey = {repository: pr.repository, number: pr.number};
-                    const id = cursorId.pullRequest(key);
-                    const state = pr.state === 'merged' ? 'merged' : pr.draft ? 'draft' : 'open';
-                    const checks = pr.state === 'merged' ? null : checksPill(pr.checks);
-                    const queuePill = pr.state === 'open' ? (github?.mergeQueue?.pills[pr.number] ?? null) : null;
-                    const reveal = (e: MouseEvent): void => {
-                        e.stopPropagation();
-                        if (plan) revealPlan(plan);
-                    };
-                    return (
-                        <div
-                            key={id}
-                            className={'pp-pr is-' + state + (page.cursor === id ? ' is-cursor' : '')}
-                            data-cursor-id={id}
-                            onClick={() => openPullRequestOnGitHub(key)}>
-                            <PullRequestIcon state={state} />
-                            <span className="pp-row-text">
-                                <span className="pp-pr-line">
-                                    <span className="pp-pr-title">{pr.title}</span>
-                                    <span className="pp-num">#{pr.number}</span>
-                                </span>
-                                <span className="pp-row-meta pp-mono">{pr.headRef}</span>
-                            </span>
-                            <span className="pp-right">
-                                {plan && (
-                                    <button
-                                        type="button"
-                                        className="pp-pill pp-chip"
-                                        title={'Show plan #' + plan.number}
-                                        onClick={reveal}>
-                                        in #{plan.number}
-                                    </button>
-                                )}
-                                {queuePill && <QueuePillOf pill={queuePill} pr={key} />}
-                                {checks && <span className={'pp-pill is-checks-' + checks.tone}>{checks.text}</span>}
-                                <span className="pp-review">{reviewText(pr)}</span>
-                            </span>
+                {groups?.map((group) => (
+                    <div
+                        key={group.group}
+                        className="pp-pr-group"
+                        role="group"
+                        aria-labelledby={'pp-prs-' + group.group}>
+                        <div className="pp-subhead" id={'pp-prs-' + group.group}>
+                            {group.title} <span className="pp-pr-group-count">{group.rows.length}</span>
                         </div>
-                    );
-                })}
+                        {group.rows.map((row) => (
+                            <PullRequestRow
+                                key={cursorId.pullRequest(row.pullRequest)}
+                                row={row}
+                                cursor={page.cursor}
+                                queuePill={
+                                    row.pullRequest.state === 'open'
+                                        ? (github?.mergeQueue?.pills[row.pullRequest.number] ?? null)
+                                        : null
+                                }
+                            />
+                        ))}
+                    </div>
+                ))}
             </div>
         </section>
+    );
+}
+
+/** One PR: its state, title, number and head branch; its plan chip, queue pill, checks and open point. */
+function PullRequestRow({
+    row,
+    cursor,
+    queuePill,
+}: {
+    row: PullRequestOnScreen;
+    cursor: string | null;
+    queuePill: QueuePill | null;
+}): JSX.Element {
+    const {pullRequest: pr, plan, wait} = row;
+    const key: IssueKey = {repository: pr.repository, number: pr.number};
+    const id = cursorId.pullRequest(key);
+    const state = pr.state !== 'open' ? pr.state : pr.draft ? 'draft' : 'open';
+    const checks = pr.state === 'open' ? checksPill(pr.checks) : null;
+    const reveal = (e: MouseEvent): void => {
+        e.stopPropagation();
+        if (plan) revealPlan(plan);
+    };
+    return (
+        <div
+            className={'pp-pr is-' + state + (cursor === id ? ' is-cursor' : '')}
+            data-cursor-id={id}
+            onClick={() => openPullRequestOnGitHub(key)}>
+            <PullRequestIcon state={state} />
+            <span className="pp-row-text">
+                <span className="pp-pr-line">
+                    <span className="pp-pr-title">{pr.title}</span>
+                    <span className="pp-num">#{pr.number}</span>
+                </span>
+                <span className="pp-row-meta pp-mono">{pr.headRef}</span>
+            </span>
+            <span className="pp-right">
+                {plan && (
+                    <button
+                        type="button"
+                        className="pp-pill pp-chip"
+                        title={'Show plan #' + plan.number}
+                        onClick={reveal}>
+                        in #{plan.number}
+                    </button>
+                )}
+                {queuePill && <QueuePillOf pill={queuePill} pr={key} />}
+                {checks && <span className={'pp-pill is-checks-' + checks.tone}>{checks.text}</span>}
+                {wait.openPoint && (
+                    <span className={'pp-open-point is-' + wait.group} title={wait.openPoint}>
+                        {wait.openPoint}
+                    </span>
+                )}
+            </span>
+        </div>
     );
 }
 
@@ -124,8 +164,8 @@ function QueuePillOf({pill, pr}: {pill: QueuePill; pr: IssueKey}): JSX.Element {
     );
 }
 
-function PullRequestIcon({state}: {state: 'open' | 'draft' | 'merged'}): JSX.Element {
-    const label = state === 'open' ? 'Open' : state === 'draft' ? 'Draft' : 'Merged';
+function PullRequestIcon({state}: {state: 'open' | 'draft' | 'merged' | 'closed'}): JSX.Element {
+    const label = {open: 'Open', draft: 'Draft', merged: 'Merged', closed: 'Closed'}[state];
     return (
         <svg
             className={'pp-state is-pr-' + state}

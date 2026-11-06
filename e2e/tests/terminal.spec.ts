@@ -13,7 +13,7 @@ import {LABEL, S} from '../fixtures/standard';
 
 /**
  * Flagging a session for attention marks its row in place; it moves to the
- * "Needs input" section on the next redraw, which toggling a filter forces.
+ * "Blocked" section on the next redraw, which toggling a filter forces.
  */
 async function redrawSidebar(page: Page): Promise<void> {
     await sidebarFilter(page, 'pinned').click();
@@ -62,7 +62,7 @@ test.describe('smoke', () => {
         await claude.idle('Claude Code');
 
         /* Then */
-        await expect(sidebar(page).getByText('Ready', {exact: true})).toBeVisible();
+        await expect(sidebar(page).getByText('Your turn', {exact: true})).toBeVisible();
         await expect(terminalHeader(page).getByText('✳ Claude Code', {exact: true})).toBeVisible();
 
         /* When */
@@ -102,7 +102,7 @@ test.describe('smoke', () => {
         await redrawSidebar(page);
 
         /* Then */
-        await expect(sidebar(page).getByText('Needs input', {exact: true})).toBeVisible();
+        await expect(sidebar(page).getByText('Blocked', {exact: true})).toBeVisible();
 
         /* When */
         // Looking at it settles the flag; a notification raises it again.
@@ -112,7 +112,7 @@ test.describe('smoke', () => {
         await redrawSidebar(page);
 
         /* Then */
-        await expect(sidebar(page).getByText('Needs input', {exact: true})).toHaveCount(0);
+        await expect(sidebar(page).getByText('Blocked', {exact: true})).toHaveCount(0);
 
         /* When */
         await claude.notify('Claude needs your permission to use Bash');
@@ -120,7 +120,7 @@ test.describe('smoke', () => {
         await redrawSidebar(page);
 
         /* Then */
-        await expect(sidebar(page).getByText('Needs input', {exact: true})).toBeVisible();
+        await expect(sidebar(page).getByText('Blocked', {exact: true})).toBeVisible();
     });
 
     test('a fork re-keys the running session, keeping the same row, highlighted, and the same terminal', async ({

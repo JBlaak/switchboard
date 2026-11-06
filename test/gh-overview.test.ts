@@ -37,6 +37,18 @@ const noQueue = (number: number) => ({
     checks: [],
 });
 
+/** What a PR's group and open point read of a node that carries none of their fields. */
+const noWait = () => ({
+    closedAt: null,
+    failedChecks: [],
+    cancelledChecks: [],
+    reviewRequestedFromYou: false,
+    reviewRequestedFromOthers: false,
+    unresolvedThreads: 0,
+    mergeable: 'unknown',
+    behindBase: null,
+});
+
 /** The GraphQL query text of a recorded `gh api graphql` call. */
 const queryOf = (args: readonly string[]) => args[args.indexOf('-f') + 1].replace(/^query=/, '');
 
@@ -347,6 +359,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
                 {repository: 'JBlaak/switchboard', number: 169},
                 {repository: 'JBlaak/planning', number: 12},
             ],
+            wait: noWait(),
             queue: noQueue(180),
         },
         {
@@ -360,6 +373,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             checks: {state: 'running', failing: 0},
             review: 'review_required',
             closes: [{repository: 'JBlaak/switchboard', number: 170}],
+            wait: noWait(),
             queue: noQueue(181),
         },
         {
@@ -373,6 +387,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             checks: {state: 'none', failing: 0},
             review: 'approved',
             closes: [],
+            wait: noWait(),
             queue: noQueue(182),
         },
         {
@@ -386,6 +401,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             checks: {state: 'passing', failing: 0},
             review: null,
             closes: [],
+            wait: noWait(),
             queue: noQueue(166),
         },
     ]);
@@ -402,6 +418,124 @@ test('one failed check makes the rollup failing while others still run', async (
 
     /* Then */
     assert.deepEqual(prs?.find((pr) => pr.number === 181)?.checks, {state: 'failing', failing: 1});
+});
+
+// ── What a PR waits on ──
+
+test('the pull request read asks, in the same request, for who you are, recently closed PRs and what each waits on', async () => {
+    /* Given */
+    const run = answering(recordedPullRequests);
+
+    /* When */
+    await new GhCli({run}).pullRequestsIn('JBlaak/switchboard', {merged: false});
+
+    /* Then */
+    assert.equal(run.calls.length, 1);
+    const query = queryOf(run.calls[0]);
+    assert.match(query, /viewer \{ login \}/);
+    assert.match(
+        query,
+        /recentlyClosed: pullRequests\(states: \[MERGED, CLOSED\], first: 20, orderBy: \{ field: UPDATED_AT, direction: DESC \}\)/,
+    );
+    assert.match(query, /closedAt reviewDecision mergeable mergeStateStatus/);
+    assert.match(
+        query,
+        /reviewThreads\(first: 50\) \{ nodes \{ isResolved comments\(first: 1\) \{ totalCount nodes \{ body \} \} \} \}/,
+    );
+});
+
+/** A review thread as GitHub answers it: resolved or not, its comment count and its first comment. */
+function thread(resolved: boolean, totalCount: number, body: string) {
+    return {isResolved: resolved, comments: {totalCount, nodes: [{body}]}};
+}
+
+const NOTE = "> 🤖 **Claude Code** · author's note explaining this change — not review feedback\n\nWhy.";
+
+test("a PR's wait reads map from its node: failed checks, reviews asked, unresolved threads, conflict and behind", async () => {
+    /* Given */
+    const node = {
+        ...queueNode(),
+        mergeable: 'CONFLICTING',
+        mergeStateStatus: 'BEHIND',
+        reviewRequests: {nodes: [{requestedReviewer: {login: 'sam'}}, {requestedReviewer: {login: 'JBlaak'}}]},
+        statusCheckRollup: {
+            ...rollup('FAILURE', {FAILURE: 1, CANCELLED: 1}),
+            contexts: {
+                ...rollup('FAILURE', {FAILURE: 1, CANCELLED: 1}).contexts,
+                nodes: [
+                    {name: 'test', status: 'COMPLETED', conclusion: 'FAILURE', startedAt: null},
+                    {name: 'e2e', status: 'COMPLETED', conclusion: 'CANCELLED', startedAt: null},
+                    {name: 'lint', status: 'COMPLETED', conclusion: 'SUCCESS', startedAt: null},
+                ],
+            },
+        },
+        reviewThreads: {
+            nodes: [
+                thread(false, 1, NOTE),
+                thread(false, 2, NOTE),
+                thread(false, 1, 'Please rename this.'),
+                thread(true, 1, 'Fixed.'),
+            ],
+        },
+    };
+    const gh = new GhCli({run: answering({data: {viewer: {login: 'JBlaak'}, ...withNode(node).data}})});
+
+    /* When */
+    const prs = await gh.pullRequestsIn('JBlaak/switchboard', {merged: false});
+
+    /* Then */
+    assert.deepEqual(prs?.[0].wait, {
+        closedAt: null,
+        failedChecks: ['test', 'e2e'],
+        cancelledChecks: ['e2e'],
+        reviewRequestedFromYou: true,
+        reviewRequestedFromOthers: true,
+        unresolvedThreads: 2,
+        mergeable: 'conflicting',
+        behindBase: 'main',
+    });
+});
+
+test('without a viewer, no review is taken to be asked of you', async () => {
+    /* Given */
+    const gh = new GhCli({run: answering(withNode(queueNode()))});
+
+    /* When */
+    const prs = await gh.pullRequestsIn('JBlaak/switchboard', {merged: false});
+
+    /* Then */
+    assert.equal(prs?.[0].wait.reviewRequestedFromYou, false);
+    assert.equal(prs?.[0].wait.reviewRequestedFromOthers, true);
+});
+
+test('recently closed PRs are listed with the rest, each once, a closed one as closed with when', async () => {
+    /* Given */
+    const open = queueNode();
+    const merged = {...queueNode(), number: 200, state: 'MERGED', closedAt: '2026-11-01T09:00:00Z'};
+    const closed = {
+        ...queueNode(),
+        number: 201,
+        state: 'CLOSED',
+        updatedAt: '2026-11-01T11:00:00Z',
+        closedAt: '2026-11-01T11:00:00Z',
+    };
+    const body = {
+        data: {repository: {pullRequests: {nodes: [open, merged]}, recentlyClosed: {nodes: [closed, merged]}}},
+    };
+    const gh = new GhCli({run: answering(body)});
+
+    /* When */
+    const prs = await gh.pullRequestsIn('JBlaak/switchboard', {merged: true});
+
+    /* Then */
+    assert.deepEqual(
+        prs?.map((pr) => [pr.number, pr.state, pr.wait.closedAt]),
+        [
+            [201, 'closed', '2026-11-01T11:00:00Z'],
+            [210, 'open', null],
+            [200, 'merged', '2026-11-01T09:00:00Z'],
+        ],
+    );
 });
 
 // ── What the merge queue reads (#315) ──

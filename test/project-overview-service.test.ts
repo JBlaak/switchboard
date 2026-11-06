@@ -69,7 +69,7 @@ function issue(number: number, overrides: Partial<RepositoryIssue> = {}): Reposi
 function pullRequest(
     number: number,
     closes: number[],
-    state: 'open' | 'merged' = 'open',
+    state: 'open' | 'merged' | 'closed' = 'open',
     queue: Partial<PullRequestQueueReads> = {},
 ): RepositoryPullRequest {
     return {
@@ -83,6 +83,16 @@ function pullRequest(
         checks: {state: 'passing', failing: 0},
         review: null,
         closes: closes.map((n) => ({repository: REPO, number: n})),
+        wait: {
+            closedAt: state === 'open' ? null : '2026-10-01T00:00:00Z',
+            failedChecks: [],
+            cancelledChecks: [],
+            reviewRequestedFromYou: false,
+            reviewRequestedFromOthers: false,
+            unresolvedThreads: 0,
+            mergeable: 'mergeable',
+            behindBase: null,
+        },
         queue: {
             url: `https://github.com/${REPO}/pull/${number}`,
             baseRef: 'main',
@@ -560,6 +570,27 @@ test("a merged PR never stands for an open issue's PR", async () => {
     assert.deepEqual(
         github.pullRequests.map((row) => row.pullRequest.number),
         [95],
+    );
+});
+
+test("a PR closed without merging is listed after the open ones, and never stands for an open issue's PR", async () => {
+    /* Given */
+    const {service} = setUp({
+        issues: [issue(150)],
+        pullRequests: [pullRequest(96, [150], 'closed'), pullRequest(119, [])],
+    });
+
+    /* When */
+    const github = answered((await service.overview(PROJECT, {merged: true})).github);
+
+    /* Then */
+    assert.equal(github.loose[0].pullRequest, null);
+    assert.deepEqual(
+        github.pullRequests.map((row) => [row.pullRequest.number, row.pullRequest.state]),
+        [
+            [119, 'open'],
+            [96, 'closed'],
+        ],
     );
 });
 

@@ -96,7 +96,7 @@ interface GitHubReads {
     fetchedAt: number;
     plans: OverviewPlanSource[];
     issues: ProjectIssue[];
-    /** Open ones, and merged ones when asked for. */
+    /** Open ones, merged ones when asked for, and the ones merged or closed most recently. */
     pullRequests: ProjectPullRequest[];
     /** What the merge queue is worked out from; null when the repository does not use one. */
     queue: QueueReads | null;
@@ -223,12 +223,12 @@ export class ProjectOverviewService {
         const owners = await this.deps.owners.issueSessions(repository).catch(() => ({}));
         const sessions = {owners, running: new Set(running.map((session) => session.sessionId))};
         const open = reads.pullRequests.filter((pr) => pr.state === 'open');
-        const mergedOnes = reads.pullRequests.filter((pr) => pr.state === 'merged');
+        const closedOnes = reads.pullRequests.filter((pr) => pr.state !== 'open');
         const input = {repository, plans: reads.plans, issues: reads.issues, sessions};
         const groups = groupOverview({...input, pullRequests: open});
-        // Merged PRs are listed with their issues and plan, but never stand for an open issue's PR.
-        if (mergedOnes.length > 0)
-            groups.pullRequests.push(...groupOverview({...input, pullRequests: mergedOnes}).pullRequests);
+        // Merged and closed PRs are listed with their issues and plan, but never stand for an open issue's PR.
+        if (closedOnes.length > 0)
+            groups.pullRequests.push(...groupOverview({...input, pullRequests: closedOnes}).pullRequests);
         return {
             ok: true,
             fetchedAt: reads.fetchedAt,

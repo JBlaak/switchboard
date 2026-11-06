@@ -240,9 +240,10 @@
     padding: 4px calc(var(--sb-sidebar-gutter) - var(--sb-scrollbar-width)) 10px var(--sb-sidebar-gutter);
 }
 
-/* Section headings for the flat list: Needs input / Ready / Working / Pinned /
-   Recent. The label sits on the shared text column, where the project name used
-   to be, so the list keeps one left rail. */
+/* Section headings for the flat list: Blocked / Your turn / Working / Merging /
+   Pinned / Recent (the tiers in `domain/session/tiers`). The label sits on the
+   shared text column, where the project name used to be, so the list keeps one
+   left rail. */
 .session-section-label {
     padding: 12px 6px 4px var(--sb-row-text);
     font-family: var(--sb-font-head);
@@ -254,14 +255,18 @@
     user-select: none;
 }
 
-.session-section-label#section-4 {
+.session-section-label#section-5 {
     color: var(--sb-orange);
 }
-.session-section-label#section-3 {
+.session-section-label#section-4 {
     color: var(--sb-blue);
 }
-.session-section-label#section-2 {
+.session-section-label#section-3 {
     color: var(--sb-green);
+}
+/* Merging needs nobody: the merged PR's purple, faded. */
+.session-section-label#section-2 {
+    color: rgba(var(--sb-purple-rgb), 0.75);
 }
 .session-section-label#section-1 {
     color: var(--sb-yellow);
@@ -588,6 +593,34 @@
     to {
         transform: rotate(360deg);
     }
+}
+
+/* ---- Background work: the turn ended, but a build, a test run or an agent it
+   started will wake it again. Still working, so the spinner, slower and without
+   the shimmer, since nothing is being written right now. ---- */
+.session-item.background-work .session-status-dot,
+.session-item.background-work .session-status-dot.running {
+    background: transparent;
+    border: 1.5px solid var(--sb-blue);
+    border-top-color: transparent;
+    animation: spin-dot 1.6s linear infinite;
+    box-shadow: none;
+}
+
+/* ---- Merging: only watches left, and its PRs land on their own. It needs
+   nobody, so a slow purple arc and a quieter row. ---- */
+.session-item.is-merging .session-status-dot,
+.session-item.is-merging .session-status-dot.running {
+    background: transparent;
+    border: 1.5px solid rgba(var(--sb-purple-rgb), 0.85);
+    border-right-color: transparent;
+    border-bottom-color: transparent;
+    animation: spin-dot 2.4s linear infinite;
+    box-shadow: none;
+}
+
+.session-item.is-merging:not(.active) .session-summary {
+    opacity: 0.6;
 }
 
 .session-item.cli-busy:not(.needs-attention) .session-summary {

@@ -107,6 +107,15 @@ test('a merged PR maps as merged with unknown mergeability', async () => {
     assert.equal(merged.mergeable, 'unknown');
 });
 
+test('auto-merge is on for a PR GitHub has an auto-merge request on, and unknown for one it has none on', async () => {
+    /* When */
+    const [open, draft] = await recordedPullRequests([12, 13]);
+
+    /* Then */
+    assert.equal(open.autoMerge, true);
+    assert.equal(draft.autoMerge, undefined);
+});
+
 test('the merge method is your default where the repository allows it, else the first it allows', async () => {
     /* When */
     const [open, draft, merged] = await recordedPullRequests([12, 13, 14]);
