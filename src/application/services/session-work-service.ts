@@ -20,6 +20,7 @@
  */
 import {parseUnifiedDiff} from '../../domain/session-work/diff';
 import {imageFormatOf, imagePaths, type ImageFormat} from '../../domain/session-work/image';
+import {byRepository, confirmedIssues} from '../../domain/session-work/issues';
 import {deriveWorkItems, workItemKey, type BranchFacts, type WorktreeChanges} from '../../domain/session-work/items';
 import {mergeWorkLocations} from '../../domain/session-work/locations';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
@@ -839,43 +840,6 @@ export class SessionWorkService implements WorkPageSource {
         page.watchers.clear();
         if (this.page === page) this.page = null;
     }
-}
-
-/** Numbers grouped by repository, an unnamed one taken to be the session's own. */
-function byRepository(refs: readonly IssueRef[], repository: string): Map<string, number[]> {
-    const grouped = new Map<string, number[]>();
-    for (const ref of refs) {
-        const repo = ref.repository || repository;
-        if (!repo) continue;
-        const numbers = grouped.get(repo) ?? [];
-        if (!numbers.includes(ref.number)) numbers.push(ref.number);
-        grouped.set(repo, numbers);
-    }
-    return grouped;
-}
-
-/**
- * The mentions that are issues, with what `gh` knows about them. A mention
- * `gh` left out is a PR or does not exist; where `gh` could not be asked, the
- * mention stays as it was rather than vanish.
- */
-function confirmedIssues(
-    mentions: readonly IssueRef[],
-    answers: ReadonlyMap<string, IssueStatus[] | null>,
-    repository: string,
-): Array<IssueRef | IssueStatus> {
-    const confirmed: Array<IssueRef | IssueStatus> = [];
-    for (const mention of mentions) {
-        const repo = mention.repository || repository;
-        const answer = repo ? answers.get(repo) : undefined;
-        if (!answer) {
-            confirmed.push(mention);
-            continue;
-        }
-        const status = answer.find((issue) => issue.number === mention.number);
-        if (status) confirmed.push({...status, repository: mention.repository});
-    }
-    return confirmed;
 }
 
 /** Why `gh` has nothing on this PR, when it was asked. */
