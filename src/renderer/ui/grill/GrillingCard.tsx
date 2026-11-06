@@ -296,23 +296,11 @@ export function GrillingCard({screen, view: mainView, onShow}: GrillingCardProps
         if (block.current) settle(block.current);
 
         // The card covers the terminal, so it takes the keyboard as it comes up,
-        // as the question panel does: keys left with the terminal underneath
-        // would type into a prompt nobody can see.
-        // The sheet only becomes visible as its rise starts, and a hidden
-        // element cannot take focus: keep trying for a few frames, unless the
-        // keyboard has gone somewhere else meanwhile.
-        const terminal = screen.open?.element;
-        const until = performance.now() + 400;
-        const take = (): void => {
-            const active = document.activeElement;
-            if (!live.current.up || active === sheet.current || sheet.current?.contains(active)) return;
-            const unclaimed = !active || active === document.body || !!terminal?.contains(active);
-            if (!unclaimed) return;
-            sheet.current?.focus({preventScroll: true});
-            focusInside();
-            if (performance.now() < until) requestAnimationFrame(take);
-        };
-        take();
+        // as the question panel does. The sheet only turns visible as its rise
+        // starts and a hidden element cannot take focus, so this may miss; the
+        // guard below catches the keyboard when it lands on the terminal.
+        sheet.current?.focus({preventScroll: true});
+        focusInside();
 
         if (!shown.answering.greeted) {
             arriving.current = shown.pending.toolUseId;
@@ -336,6 +324,38 @@ export function GrillingCard({screen, view: mainView, onShow}: GrillingCardProps
             current = false;
         };
     }, [screen.shown]);
+
+    // While the card is up, the terminal under it cannot keep the keyboard:
+    // keys there would type into a prompt nobody can see. Whatever focuses it
+    // (the session being shown, a late arrival, the round coming up before the
+    // sheet could take focus), the keyboard comes back to the card. Peeking and
+    // the terminal view are the ways to reach the terminal, and neither has the
+    // card up and unpeeked.
+    useEffect(() => {
+        if (!up || peeking) return;
+        const terminal = screen.open?.element;
+        if (!terminal) return;
+        let frame = 0;
+        const reclaim = (): void => {
+            cancelAnimationFrame(frame);
+            frame = 0;
+            if (!live.current.up || live.current.peeking) return;
+            if (!terminal.contains(document.activeElement)) return;
+            sheet.current?.focus({preventScroll: true});
+            focusInside();
+            // Still hidden this frame: try again on the next one.
+            if (terminal.contains(document.activeElement)) frame = requestAnimationFrame(reclaim);
+        };
+        const onFocusIn = (e: FocusEvent): void => {
+            if (terminal.contains(e.target as Node)) queueMicrotask(reclaim);
+        };
+        document.addEventListener('focusin', onFocusIn);
+        reclaim();
+        return () => {
+            document.removeEventListener('focusin', onFocusIn);
+            cancelAnimationFrame(frame);
+        };
+    }, [up, peeking, screen.open]);
 
     // Peeking keeps the keyboard on the sheet, so T or Esc can bring the card
     // back; coming back (from the pill, too) puts it where the cursor is.
