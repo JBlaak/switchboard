@@ -53,7 +53,8 @@ export function waitWhatPrompt(number: number): string {
 /** The question number a prompt asks about, when it is one of Switchboard's asks; null for anything else. */
 export function askedQuestionNumber(prompt: string): number | null {
     const text = prompt.trim();
-    const ask = /^Before I answer the round, about Q(\d+): /.exec(text);
+    // The prompt is trimmed, so an ask with nothing typed ends at its colon.
+    const ask = /^Before I answer the round, about Q(\d+):(?:\s|$)/.exec(text);
     if (ask) return Number(ask[1]);
     const wait = /^\/wait-what Q(\d+)$/.exec(text);
     if (wait) return Number(wait[1]);
