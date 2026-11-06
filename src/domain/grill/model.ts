@@ -56,10 +56,7 @@ export interface Round {
 }
 
 /** A draft answer to one question. */
-export type GrillAnswer =
-    | {kind: 'accepted'}
-    | {kind: 'noted'; note: string}
-    | {kind: 'overridden'; text: string};
+export type GrillAnswer = {kind: 'accepted'} | {kind: 'noted'; note: string} | {kind: 'overridden'; text: string};
 
 /** How a revision touched a question. */
 export type Mark = 'changed' | 'new';
