@@ -30,6 +30,7 @@ export const INVOKE = {
     renameSession: 'rename-session',
     archiveSession: 'archive-session',
     snoozeSession: 'snooze-session',
+    getSessionStats: 'get-session-stats',
 
     // Questions
     getPendingQuestions: 'get-pending-questions',
