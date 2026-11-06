@@ -70,4 +70,7 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
     ipc.handle(INVOKE.snoozeSession, (sessionId: string, until: string | null) => {
         app.repository.setSnoozedUntil(sessionId, until);
     });
+
+    /** The session tray's stats (#341), read fresh so a checkout shows on the next ask. */
+    ipc.handle(INVOKE.getSessionStats, (sessionId: string) => app.sessionStats.stats(sessionId));
 }
