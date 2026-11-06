@@ -69,8 +69,8 @@ import type {SessionHandoffPhase, SessionHandoffPreview} from '../application/se
 import type {ScheduleLocation} from '../application/services/vm-schedules';
 import type {VmHostView} from '../application/services/vm-registry';
 import type {ShownPage} from '../domain/session/page-tool';
-import type {SessionStats} from '../domain/session/stats';
 import type {SessionLink} from '../domain/session/links';
+import type {SessionStats} from '../domain/session/stats';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
 export type {Editor, WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';

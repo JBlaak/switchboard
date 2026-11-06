@@ -47,7 +47,7 @@ function group(...rows: SessionListRow[]): SessionListGroup {
 
 // ── The meta line ──
 
-test("the time label is relative to the list's clock, with the message count", () => {
+test("the time label is relative to the list's clock, without the message count", () => {
     /* Given */
     const row = session('a');
 
@@ -55,18 +55,7 @@ test("the time label is relative to the list's clock, with the message count", (
     const labels = [sessionTimeLabel(row, NOW), sessionTimeLabel(row, NOW + 5 * MINUTE)];
 
     /* Then */
-    assert.deepEqual(labels, ['20m ago · 12 msgs', '25m ago · 12 msgs']);
-});
-
-test('the time label leaves out a count of no messages', () => {
-    /* Given */
-    const row = session('a', {messageCount: 0, modified: new Date(NOW - 30_000).toISOString()});
-
-    /* When */
-    const label = sessionTimeLabel(row, NOW);
-
-    /* Then */
-    assert.equal(label, 'just now');
+    assert.deepEqual(labels, ['20m ago', '25m ago']);
 });
 
 test('the project label is the last two path segments, a worktree as "parent ⎇ branch"', () => {
