@@ -13,6 +13,7 @@ import {
     resolveShellProfileId,
     resolveQuickAskEnabled,
     resolveRemoveWorktreeOnArchive,
+    resolveRestoreSessions,
     resolveWeatherEnabled,
     resolveWeatherLocation,
 } from '../../domain/settings/settings';
@@ -101,6 +102,12 @@ export class SettingsService {
 
     public removeWorktreeOnArchive(): boolean {
         return resolveRemoveWorktreeOnArchive(this.global());
+    }
+
+    // ── Restore ──
+
+    public restoreSessions(): boolean {
+        return resolveRestoreSessions(this.global());
     }
 
     // ── Hidden projects ──

@@ -209,6 +209,8 @@ const api: SwitchboardApi = {
         subscribe(EVENT.terminalNotification, (_e, sessionId, message) => cb(sessionId, message)),
     onSessionNeedsAttention: (cb) => subscribe(EVENT.sessionNeedsAttention, (_e, sessionId) => cb(sessionId)),
     onSessionAgents: (cb) => subscribe(EVENT.sessionAgents, (_e, sessionId, agents) => cb(sessionId, agents)),
+    onSessionBackgroundTasks: (cb) =>
+        subscribe(EVENT.sessionBackgroundTasks, (_e, sessionId, tasks) => cb(sessionId, tasks)),
     onRemoteStatus: (cb) => subscribe(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status)),
     onQuestionsAsked: (cb) => subscribe(EVENT.questionsAsked, (_e, pending) => cb(pending)),
     onQuestionsSettled: (cb) => subscribe(EVENT.questionsSettled, (_e, settled) => cb(settled)),

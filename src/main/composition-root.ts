@@ -54,6 +54,8 @@ import {RemoteConnectionSupervisor} from '../application/services/remote-connect
 import {ScheduleService} from '../application/services/schedule-service';
 import {SessionIndex} from '../application/services/session-index';
 import {SessionLauncher} from '../application/services/session-launcher';
+import {SessionRestoreService} from '../application/services/session-restore-service';
+import {defaultSessionOptions} from '../domain/launch/session-options';
 import {SessionLifecycle} from '../application/services/session-lifecycle';
 import {SessionTransitionDetector} from '../application/services/session-transition-detector';
 import {SessionWorkService} from '../application/services/session-work-service';
@@ -131,6 +133,7 @@ import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner, type GhRunner} from '../infrastructure/github/gh-cli';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
 import {encodeProjectPath} from '../domain/project/project-path';
+import {BackgroundTaskService} from '../application/services/background-task-service';
 import {isRemoteProjectPath} from '../domain/project/remote-target';
 import {routeCandidates} from '../domain/ask/route';
 import {resolveBlaakTasksUrl} from '../domain/settings/settings';
@@ -180,6 +183,7 @@ export interface Container {
     readonly lifecycle: SessionLifecycle;
     readonly remote: RemoteConnectionSupervisor;
     readonly launcher: SessionLauncher;
+    readonly sessionRestore: SessionRestoreService;
     readonly transitions: SessionTransitionDetector;
     readonly questions: QuestionService;
     readonly questionHook: QuestionHookServer;
@@ -339,6 +343,9 @@ export function buildContainer(): Container {
         log,
         homeDir: paths.homeDir,
     });
+    // What a turn ended with still running in the background, for the sidebar's
+    // status tone; told every CLI state change after the Session work queue.
+    const backgroundTasks = new BackgroundTaskService({transcripts, renderer, log});
     const lifecycle = new SessionLifecycle({
         registry,
         terminals,
@@ -346,7 +353,18 @@ export function buildContainer(): Container {
         remote,
         timers,
         log,
-        cliState: prompter,
+        // The prompter and the background-task reader hear every busy/idle change; the restore record hears each end.
+        cliState: {
+            cliStateChanged: (sessionId, session, change) => {
+                prompter.cliStateChanged(sessionId, session, change);
+                backgroundTasks.cliStateChanged(sessionId, session, change);
+            },
+            sessionEnded: (sessionId, session) => {
+                prompter.sessionEnded(sessionId, session);
+                backgroundTasks.sessionEnded(sessionId);
+                sessionRestore.ended(sessionId, session);
+            },
+        },
     });
     remote.attach(lifecycle);
 
@@ -482,6 +500,21 @@ export function buildContainer(): Container {
         git: localWorkspace,
         fileExists: (target) => fs.exists(target),
         agents,
+        liveSessions: {started: (sessionId, projectPath) => sessionRestore.started(sessionId, projectPath)},
+    });
+    // The local sessions a restart or a reboot brings back.
+    const sessionRestore = new SessionRestoreService({
+        store: settingsStore,
+        enabled: () => settings.restoreSessions(),
+        optionsFor: (projectPath) => defaultSessionOptions(settings.effective(projectPath)),
+        launcher,
+        registry,
+        transcripts,
+        repository,
+        renderer,
+        fileExists: (target) => fs.exists(target),
+        clock,
+        log,
     });
 
     // Installing the agent on a VM (#281) and answering the UI's questions about
@@ -559,6 +592,7 @@ export function buildContainer(): Container {
         renderer,
         clock,
         log,
+        liveSessions: sessionRestore,
     });
 
     // ── Indexing ──
@@ -1102,6 +1136,7 @@ export function buildContainer(): Container {
             cli: claudeCaller,
         },
         battery: e2e ? {read: async () => null} : new PmsetBatteryGauge(),
+        transcripts,
         ids,
         clock,
         timers,
@@ -1188,6 +1223,7 @@ export function buildContainer(): Container {
         lifecycle,
         remote,
         launcher,
+        sessionRestore,
         transitions,
         questions,
         questionHook,

@@ -120,15 +120,15 @@ test.describe('order', () => {
         await redraw(page, app, S.bumpDeps);
 
         /* Then */
-        expect(await sectionOf(page, LABEL.loginFix)).toBe('Needs input');
-        expect(await sectionOf(page, LABEL.worktreeTry)).toBe('Ready');
+        expect(await sectionOf(page, LABEL.loginFix)).toBe('Blocked');
+        expect(await sectionOf(page, LABEL.worktreeTry)).toBe('Your turn');
         expect(await sectionOf(page, LABEL.chartsDarkMode)).toBe('Working');
         expect(await sectionOf(page, LABEL.releaseNotes)).toBe('Pinned');
         expect(await sectionOf(page, LABEL.billingGroup)).toBe('Recent');
         await expectInOrder(page, [
-            'Needs input',
+            'Blocked',
             LABEL.loginFix,
-            'Ready',
+            'Your turn',
             LABEL.worktreeTry,
             'Working',
             LABEL.chartsDarkMode,
@@ -150,7 +150,7 @@ test.describe('order', () => {
         await worktree.status({state: 'idle'});
 
         /* Then */
-        await expect.poll(() => sectionOf(page, LABEL.worktreeTry)).toBe('Ready');
+        await expect.poll(() => sectionOf(page, LABEL.worktreeTry)).toBe('Your turn');
     });
 });
 
@@ -472,7 +472,7 @@ test.describe('pin a plan', () => {
         await charts.status({state: 'working'});
         await login.status({state: 'blocked', kind: 'permission'});
         await redraw(page, app, S.bumpDeps);
-        expect(await sectionOf(page, LABEL.loginFix)).toBe('Needs input');
+        expect(await sectionOf(page, LABEL.loginFix)).toBe('Blocked');
         const header = sidebar(page).locator('.slug-group-header').filter({hasText: LABEL.billingGroup});
 
         /* When */
@@ -485,7 +485,7 @@ test.describe('pin a plan', () => {
         await expectInOrder(page, [
             'Pinned plans',
             LABEL.billingGroup,
-            'Needs input',
+            'Blocked',
             LABEL.loginFix,
             'Working',
             LABEL.chartsDarkMode,

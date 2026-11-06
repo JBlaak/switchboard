@@ -12,6 +12,7 @@ import {
     resolveBlaakTasksUrl,
     resolveQuickAskEnabled,
     resolveRemoveWorktreeOnArchive,
+    resolveRestoreSessions,
     resolveWeatherEnabled,
     resolveWeatherLocation,
 } from '../../../domain/settings/settings';
@@ -84,6 +85,7 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
     const weatherEnabled = useRef<HTMLInputElement>(null);
     const quickAsk = useRef<HTMLInputElement>(null);
     const removeWorktree = useRef<HTMLInputElement>(null);
+    const restoreSessions = useRef<HTMLInputElement>(null);
     const appIcon = useRef<HTMLSelectElement>(null);
 
     const readers: Record<LaunchOption, () => unknown> = {
@@ -100,6 +102,7 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
         settings.quickSessionPath = quickSessionPath.current!.value.trim();
         settings.quickAsk = quickAsk.current!.checked;
         settings.removeWorktreeOnArchive = removeWorktree.current!.checked;
+        settings.restoreSessions = restoreSessions.current!.checked;
         settings.appIcon = normaliseAppIcon(appIcon.current!.value);
         settings.blaakTasksUrl = blaakTasks.urlRef.current!.value.trim();
         settings.visibleSessionCount = parseInt(visibleCount.current!.value) || 25;
@@ -270,6 +273,20 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
                             id="sv-remove-worktree-on-archive"
                             ref={removeWorktree}
                             defaultChecked={resolveRemoveWorktreeOnArchive(current)}
+                        />
+                        <span className="settings-toggle-slider"></span>
+                    </label>
+                </AppField>
+
+                <AppField
+                    label="Bring Sessions Back After a Restart"
+                    description="Sessions that were running when Switchboard quit, crashed or the Mac restarted are resumed when it starts again. One cut off mid tool call waits for you; nothing is sent to it">
+                    <label className="settings-toggle">
+                        <input
+                            type="checkbox"
+                            id="sv-restore-sessions"
+                            ref={restoreSessions}
+                            defaultChecked={resolveRestoreSessions(current)}
                         />
                         <span className="settings-toggle-slider"></span>
                     </label>

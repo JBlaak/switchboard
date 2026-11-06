@@ -52,6 +52,12 @@ val LaptopTerminalIcon: ImageVector by lazy {
         "M8 12h6",
     )
 }
+val ChatIcon: ImageVector by lazy {
+    lineIcon("Chat", "M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9l-4 4v-4H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z")
+}
+val TerminalIcon: ImageVector by lazy {
+    lineIcon("Terminal", "M5 5h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "M8 10l3 2.5-3 2.5", "M13 15h3")
+}
 
 private fun lineIcon(name: String, vararg paths: String): ImageVector {
     val builder = ImageVector.Builder(

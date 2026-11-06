@@ -406,7 +406,15 @@ export class PrWatchService {
             let dot = statusDot(status, activity);
             // What `gh` last said is from before Claude finished: not red yet.
             if (dot === 'red' && this.settling.has(pr.link.url) && !needsYou(status, activity)) dot = 'amber';
-            prs.push({number: pr.link.number, dot});
+            prs.push({
+                number: pr.link.number,
+                dot,
+                // What the sidebar needs to tell a session whose PRs land on their own (merging).
+                ...(status.state === 'closed' ? {closed: true as const} : {}),
+                ...(status.autoMerge && (status.state === 'open' || status.state === 'draft')
+                    ? {autoMerge: true as const}
+                    : {}),
+            });
             if (needsYou(status, activity)) waiting = true;
         }
         const key = JSON.stringify({prs, waiting});

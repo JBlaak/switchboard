@@ -59,6 +59,13 @@ export interface GlobalSettings {
      */
     removeWorktreeOnArchive?: boolean;
     /**
+     * Global only. Whether the local sessions that were running when
+     * Switchboard quit, crashed or the Mac restarted are resumed when it starts
+     * again; read it through `resolveRestoreSessions`, which supplies the
+     * `true` default.
+     */
+    restoreSessions?: boolean;
+    /**
      * Global only. Which icon the running app shows in the Dock; read it through
      * `normaliseAppIcon`, which supplies 'switchboard'.
      */
@@ -220,6 +227,11 @@ export function resolveQuickAskEnabled(global: Record<string, unknown> | null | 
 /** Whether archiving a session removes its worktrees. Off unless switched on explicitly. */
 export function resolveRemoveWorktreeOnArchive(global: Record<string, unknown> | null | undefined): boolean {
     return global?.removeWorktreeOnArchive === true;
+}
+
+/** Whether to bring running sessions back after a restart. On unless switched off explicitly. */
+export function resolveRestoreSessions(global: Record<string, unknown> | null | undefined): boolean {
+    return global?.restoreSessions !== false;
 }
 
 /** The BlaakTasks address, trimmed; '' while BlaakTasks is off, which it is unless one is entered. */

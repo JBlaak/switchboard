@@ -5,44 +5,46 @@
  * keeps them in and hands them over, so these rules can be tested without a DOM
  * or a renderer state module.
  */
+import {statusTone} from './status-tone';
+import type {ToneSignals} from './status-tone';
 
 // Sort tiers, highest first. Pinned plans come first of all: the user put them
 // on top to keep them there, so they hold their place whatever their sessions
-// are doing. Then the active block, split by what the session wants from the
-// user: first the ones blocking on input, then the ones that finished and
-// haven't been read, then the ones still working. Those three always outrank
-// pinned and plain recent rows regardless of age.
-export const TIER_PINNED_PLAN = 5;
-export const TIER_ATTENTION = 4;
-export const TIER_READY = 3;
-export const TIER_RUNNING = 2;
+// are doing. Then the active block, split by the session's status tone (see
+// `status-tone`): first the blocked ones, then the ones whose turn it is for
+// the user, then the ones still working, then the merging ones, which need
+// nobody and keep out of the way. Those four always outrank pinned and plain
+// recent rows regardless of age.
+export const TIER_PINNED_PLAN = 6;
+export const TIER_ATTENTION = 5;
+export const TIER_READY = 4;
+export const TIER_RUNNING = 3;
+export const TIER_MERGING = 2;
 export const TIER_PINNED = 1;
 export const TIER_REST = 0;
 
-export const TIER_ORDER = [TIER_PINNED_PLAN, TIER_ATTENTION, TIER_READY, TIER_RUNNING, TIER_PINNED, TIER_REST];
+export const TIER_ORDER = [
+    TIER_PINNED_PLAN,
+    TIER_ATTENTION,
+    TIER_READY,
+    TIER_RUNNING,
+    TIER_MERGING,
+    TIER_PINNED,
+    TIER_REST,
+];
 
 export const TIER_LABELS: Record<number, string> = {
     [TIER_PINNED_PLAN]: 'Pinned plans',
-    [TIER_ATTENTION]: 'Needs input',
-    [TIER_READY]: 'Ready',
+    [TIER_ATTENTION]: 'Blocked',
+    [TIER_READY]: 'Your turn',
     [TIER_RUNNING]: 'Working',
+    [TIER_MERGING]: 'Merging',
     [TIER_PINNED]: 'Pinned',
     [TIER_REST]: 'Recent',
 };
 
 /** What is currently true of one session, as far as ranking cares. */
-export interface SessionSignals {
-    /** The CLI asked for the user (OSC 9). */
-    needsAttention: boolean;
-    /** Claude finished a turn the user hasn't looked at. */
-    responseReady: boolean;
-    /** A CLI turn is in flight, per the OSC 0 spinner. */
-    busy: boolean;
-    /** A row invented before Claude wrote its transcript. */
-    pending: boolean;
-    /** A PTY is running under this id, as of the last poll. */
-    hasLivePty: boolean;
-}
+export type SessionSignals = ToneSignals;
 
 /** A row as the truncation rules see it. */
 export interface TruncatableRow {
@@ -64,26 +66,20 @@ export interface TruncationCaps {
     isActive: boolean;
 }
 
-/**
- * The block a session belongs in.
- *
- * A live session that isn't spinning has finished its turn, whether or not the
- * user has read it yet — both count as ready. Only a session reported as busy
- * (or one still starting up) is working. Busy state comes from the OSC 0
- * spinner, so a session idle since before this window opened reads as ready,
- * which is what it is.
- */
+/** The block a session belongs in: its status tone's. */
 export function sessionTier(signals: SessionSignals): number {
-    if (signals.needsAttention) return TIER_ATTENTION;
-    if (signals.responseReady) return TIER_READY;
-    if (signals.busy) return TIER_RUNNING;
-    // A pending row counts as working only while a PTY is actually running under
-    // it. Once that's gone it is a placeholder awaiting cleanup, and filing it
-    // under Working both misreports it and — via rowSurvivesTruncation — makes it
-    // impossible to age out of the list.
-    if (signals.pending && signals.hasLivePty) return TIER_RUNNING;
-    if (signals.hasLivePty) return TIER_READY;
-    return TIER_REST;
+    switch (statusTone(signals)) {
+        case 'blocked':
+            return TIER_ATTENTION;
+        case 'your-turn':
+            return TIER_READY;
+        case 'working':
+            return TIER_RUNNING;
+        case 'merging':
+            return TIER_MERGING;
+        case null:
+            return TIER_REST;
+    }
 }
 
 /**
@@ -105,7 +101,7 @@ export function rowSurvivesTruncation(
     tier: number,
     {count, visibleSessionCount, ageCutoff, isActive}: TruncationCaps,
 ): boolean {
-    if (tier >= TIER_RUNNING || item.pinned || item.pinnedPlan || item.remote || isActive) return true;
+    if (tier >= TIER_MERGING || item.pinned || item.pinnedPlan || item.remote || isActive) return true;
     return count < visibleSessionCount && item.sortTime >= ageCutoff;
 }
 
@@ -115,7 +111,7 @@ export function rowSurvivesTruncation(
  */
 export function itemTier(item: TruncatableRow & {tier: number}): number {
     if (item.pinnedPlan) return TIER_PINNED_PLAN;
-    if (item.tier >= TIER_RUNNING) return item.tier;
+    if (item.tier >= TIER_MERGING) return item.tier;
     if (item.pinned) return TIER_PINNED;
     return TIER_REST;
 }

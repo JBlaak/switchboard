@@ -87,6 +87,8 @@ function harness() {
     let ids = 0;
     /** What the voice service was handed, as [call, connection id, message type]. */
     const voiceCalls: [string, string, string?][] = [];
+    /** What the chat service was handed, as [call, ...what it was told]. */
+    const chatCalls: string[][] = [];
 
     const addSession = (id: string, fields: {projectPath?: string; openedAt?: number; plain?: boolean} = {}): Pty => {
         const pty = resizingPty();
@@ -167,6 +169,17 @@ function harness() {
             },
         },
         battery: {connected() {}, disconnected() {}},
+        chat: {
+            message(connection, message) {
+                chatCalls.push(['message', connection.id, message.type, message.sessionId]);
+            },
+            disconnected(connection) {
+                chatCalls.push(['disconnected', connection.id]);
+            },
+            sessionForked(oldId, newId) {
+                chatCalls.push(['sessionForked', oldId, newId]);
+            },
+        },
         ids: {newId: () => `new-${++ids}`},
         clock: {now: () => 9_000},
         timers,
@@ -210,6 +223,7 @@ function harness() {
         send,
         ask,
         voiceCalls,
+        chatCalls,
         setProjects: (next: Project[]) => {
             projects = next;
         },
@@ -295,6 +309,27 @@ test('the list is in the sidebar order: needing you, then idle by recency, then 
     );
     assert.equal(list.sessions[0].waiting, 'terminal');
     assert.equal(list.sessions[0].changedAt, 9_000);
+});
+
+test('a turn that ended with background work shows as busy, one with only watches as idle', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('building');
+    h.addSession('watching');
+    const phone = h.connect();
+    phone.clear();
+
+    /* When */
+    h.service.sessionBackgroundTasks('building', [{id: 'b1', description: 'npm test', watch: false}]);
+    h.service.sessionBackgroundTasks('watching', [{id: 'b2', description: 'Watch CI', watch: true}]);
+    h.timers.tick();
+
+    /* Then */
+    const [list] = phone.of('sessions');
+    assert.deepEqual(Object.fromEntries(list.sessions.map((s) => [s.id, s.state])), {
+        building: 'busy',
+        watching: 'idle',
+    });
 });
 
 test('changes close together go out as one list', () => {
@@ -1040,6 +1075,29 @@ test('a phone is handed to the voice service on welcome, with its voice messages
         ['message', phone.id, 'voice-chunk'],
         ['message', phone.id, 'voice-end'],
         ['message', phone.id, 'voice-cancel'],
+        ['disconnected', phone.id],
+    ]);
+});
+
+// ── Chat ──
+
+test('chat subscriptions go to the chat service, which hears of re-keys and of the phone going', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('old');
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'chat-subscribe', sessionId: 'old'});
+    h.service.sessionForked('old', 'new');
+    h.send(phone, {type: 'chat-unsubscribe', sessionId: 'new'});
+    h.service.disconnected(phone);
+
+    /* Then */
+    assert.deepEqual(h.chatCalls, [
+        ['message', phone.id, 'chat-subscribe', 'old'],
+        ['sessionForked', 'old', 'new'],
+        ['message', phone.id, 'chat-unsubscribe', 'new'],
         ['disconnected', phone.id],
     ]);
 });

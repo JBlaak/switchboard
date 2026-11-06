@@ -11,8 +11,9 @@
  * its classes from the store itself (`ui/session-list/SessionItem`).
  */
 import {sessionTier} from '../../domain/session/tiers';
+import {turnSignalsIn} from './row-activity';
 import {dispatch, getState} from './app-store';
-import {pendingSessions, view} from './session-store';
+import {pendingSessions, sessionMap, view} from './session-store';
 import {askingCount} from './question-store';
 import {hasEntry} from './records';
 import type {SessionSignals} from '../../domain/session/tiers';
@@ -45,6 +46,7 @@ export function signalsFor(sessionId: string): SessionSignals {
         busy: sessionBusyState.get(sessionId) === true,
         pending: pendingSessions.has(sessionId),
         hasLivePty: view.activePtyIds.has(sessionId),
+        ...turnSignalsIn(getState(), sessionId, sessionMap.get(sessionId)?.pullRequests ?? []),
     };
 }
 

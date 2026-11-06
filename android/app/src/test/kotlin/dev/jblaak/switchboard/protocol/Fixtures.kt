@@ -52,6 +52,8 @@ internal val clientFixtures: List<Pair<String, ClientMessage>> = listOf(
     "voice-chunk" to ClientMessage.VoiceChunk(voiceId = "v-1", seq = 0, audio = "AAABAP//"),
     "voice-end" to ClientMessage.VoiceEnd(voiceId = "v-1"),
     "voice-cancel" to ClientMessage.VoiceCancel(voiceId = "v-1"),
+    "chat-subscribe" to ClientMessage.ChatSubscribe(sessionId = "s-1"),
+    "chat-unsubscribe" to ClientMessage.ChatUnsubscribe(sessionId = "s-1"),
 )
 
 private const val SWITCHBOARD_PATH = "/Users/joris/Development/switchboard"
@@ -216,4 +218,25 @@ internal val serverFixtures: List<Pair<String, ServerMessage>> = listOf(
         ),
     ),
     "revoked" to ServerMessage.Revoked,
+    "welcome-features" to ServerMessage.Welcome(
+        protocol = 1,
+        macName = "Joris MacBook Pro",
+        deviceId = "d-7",
+        addresses = listOf("192.168.1.20"),
+        features = listOf("chat"),
+    ),
+    "chat" to ServerMessage.Chat(
+        sessionId = "s-1",
+        available = true,
+        messages = listOf(
+            ChatMessage(id = "u1:0", role = ChatRole.User, text = "Fix the login"),
+            ChatMessage(id = "a1:0", role = ChatRole.Tool, text = "Ran: git status"),
+            ChatMessage(id = "a2:0", role = ChatRole.Assistant, text = "Fixed it."),
+        ),
+    ),
+    "chat-unavailable" to ServerMessage.Chat(sessionId = "s-1", available = false, messages = emptyList()),
+    "chat-append" to ServerMessage.ChatAppend(
+        sessionId = "s-1",
+        messages = listOf(ChatMessage(id = "a3:0", role = ChatRole.Assistant, text = "Pushed.")),
+    ),
 )

@@ -54,6 +54,10 @@ export function statusDot(pr: PullRequestStatus, activity: Activity | null | und
 export interface PullRequestDot {
     number: number;
     dot: StatusDot;
+    /** Open, with GitHub's auto-merge on: it lands once its checks pass. */
+    autoMerge?: true;
+    /** Closed without merging: nothing left to land. */
+    closed?: true;
 }
 
 /**

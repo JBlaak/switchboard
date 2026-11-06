@@ -269,7 +269,10 @@ export class SessionLifecycle {
             // A session on a VM agent (#276) is only forgotten here, never signalled:
             // outliving the Mac app is the point of running it there, and opening
             // its row again reattaches to it.
-            if (!session.exited && !isAgentPty(session.pty)) terminals.signalTree(session.pty, 'SIGTERM');
+            if (!session.exited && !isAgentPty(session.pty)) {
+                session.endedByApp = true;
+                terminals.signalTree(session.pty, 'SIGTERM');
+            }
             registry.delete(sessionId);
         }
     }
