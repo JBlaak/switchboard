@@ -50,11 +50,22 @@ const api: SwitchboardApi = {
     renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
     archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
     snoozeSession: (id, until) => ipcRenderer.invoke(INVOKE.snoozeSession, id, until),
+    getSessionStats: (id) => ipcRenderer.invoke(INVOKE.getSessionStats, id),
 
     // ── Questions ──
     getPendingQuestions: () => ipcRenderer.invoke(INVOKE.getPendingQuestions),
     answerQuestions: (sessionId, toolUseId, answers) =>
         ipcRenderer.invoke(INVOKE.answerQuestions, sessionId, toolUseId, answers),
+
+    // ── Grilling rounds ──
+    grillViews: () => ipcRenderer.invoke(INVOKE.grillViews),
+    grillAnswer: (sessionId, roundId, revision, place, answer) =>
+        ipcRenderer.invoke(INVOKE.grillAnswer, sessionId, roundId, revision, place, answer),
+    grillAsk: (sessionId, roundId, revision, place, text) =>
+        ipcRenderer.invoke(INVOKE.grillAsk, sessionId, roundId, revision, place, text),
+    grillSend: (sessionId, roundId) => ipcRenderer.invoke(INVOKE.grillSend, sessionId, roundId),
+    grillQueue: (sessionId, roundId) => ipcRenderer.invoke(INVOKE.grillQueue, sessionId, roundId),
+    grillCancelQueue: (sessionId, roundId) => ipcRenderer.invoke(INVOKE.grillCancelQueue, sessionId, roundId),
 
     // ── Phone access (#194) ──
     getPhoneAccess: () => ipcRenderer.invoke(INVOKE.phoneAccessGet),
@@ -98,6 +109,8 @@ const api: SwitchboardApi = {
     setAppearance: (mode) => ipcRenderer.invoke(INVOKE.setAppearance, mode),
     quickAskHotkeyStatus: () => ipcRenderer.invoke(INVOKE.quickAskHotkeyStatus),
     blaakTasksSetUp: (url) => ipcRenderer.invoke(INVOKE.blaakTasksSetUp, url),
+    savedPrompts: (projectPath) => ipcRenderer.invoke(INVOKE.savedPrompts, projectPath),
+    setSavedPrompts: (projectPath, prompts) => ipcRenderer.invoke(INVOKE.setSavedPrompts, projectPath, prompts),
 
     // ── Host ──
     openExternal: (url) => ipcRenderer.invoke(INVOKE.openExternal, url),
@@ -105,6 +118,12 @@ const api: SwitchboardApi = {
     writeClipboard: (text) => ipcRenderer.invoke(INVOKE.writeClipboard, text),
     writeClipboardImage: (png) => ipcRenderer.invoke(INVOKE.writeClipboardImage, png),
     getAppVersion: () => ipcRenderer.invoke(INVOKE.getAppVersion),
+
+    // ── Workspace actions (#342) ──
+    workspaceEditor: (target) => ipcRenderer.invoke(INVOKE.workspaceEditor, target),
+    openInEditor: (target) => ipcRenderer.invoke(INVOKE.workspaceOpenInEditor, target),
+    revealInFinder: (target) => ipcRenderer.invoke(INVOKE.workspaceRevealInFinder, target),
+    shellHere: (target) => ipcRenderer.invoke(INVOKE.workspaceShellHere, target),
 
     // ── Session work ──
     openSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkOpen, sessionId),
@@ -174,6 +193,8 @@ const api: SwitchboardApi = {
     queueErrandStarted: (errandId, sessionId) => ipcRenderer.invoke(INVOKE.queueErrandStarted, errandId, sessionId),
     queueErrandAbandoned: (errandId) => ipcRenderer.invoke(INVOKE.queueErrandAbandoned, errandId),
     queueErrands: (repository) => ipcRenderer.invoke(INVOKE.queueErrands, repository),
+    ciJobQueue: (repository) => ipcRenderer.invoke(INVOKE.ciJobQueue, repository),
+    ciJobBump: (request) => ipcRenderer.invoke(INVOKE.ciJobBump, request),
 
     // ── Tasks (#248) ──
     listTasks: (query) => ipcRenderer.invoke(INVOKE.tasksList, query),
@@ -217,6 +238,7 @@ const api: SwitchboardApi = {
     onRemoteStatus: (cb) => subscribe(EVENT.remoteStatus, (_e, sessionId, status) => cb(sessionId, status)),
     onQuestionsAsked: (cb) => subscribe(EVENT.questionsAsked, (_e, pending) => cb(pending)),
     onQuestionsSettled: (cb) => subscribe(EVENT.questionsSettled, (_e, settled) => cb(settled)),
+    onGrillChanged: (cb) => subscribe(EVENT.grillChanged, (_e, changed) => cb(changed)),
     onPageShown: (cb) => subscribe(EVENT.pageShown, (_e, page) => cb(page)),
     onProjectsChanged: (cb) => subscribe(EVENT.projectsChanged, () => cb()),
     onStatusUpdate: (cb) => subscribe(EVENT.statusUpdate, (_e, text, type) => cb(text, type)),

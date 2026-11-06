@@ -19,6 +19,7 @@ import {initialPagesState, pagesReducer, rekeyPages} from './pages-slice';
 import {initialMergeQueueState, mergeQueueReducer, rekeyMergeQueue} from './merge-queue-slice';
 import {askReducer, initialAskState} from './ask-slice';
 import {answersReducer, followPending, initialAnswersState} from './answers-slice';
+import {grillReducer, initialGrillState, rekeyGrill} from './grill-slice';
 import {ciStatusReducer, initialCiStatusState, rekeyCiStatus} from './ci-status-slice';
 import {dialogReducer, initialDialogState} from './dialog-slice';
 import {initialKeysState, keysReducer, rekeyKeys} from './keys-slice';
@@ -41,6 +42,7 @@ import {initialUsageState, usageReducer} from './usage-slice';
 import {initialViewState, rekeyView, viewReducer} from './view-slice';
 import type {ActivityState} from './activity-slice';
 import type {AnswersState} from './answers-slice';
+import type {GrillState} from './grill-slice';
 import type {AgentHostState} from './agent-host-slice';
 import type {VmsState} from './vms-slice';
 import type {HandoffState} from './handoff-slice';
@@ -77,6 +79,7 @@ export interface RendererState {
     readonly activity: ActivityState;
     readonly questions: QuestionsState;
     readonly answers: AnswersState;
+    readonly grill: GrillState;
     readonly remote: RemoteState;
     readonly usage: UsageState;
     readonly toolbar: ToolbarState;
@@ -112,6 +115,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         activity: initialActivityState,
         questions: initialQuestionsState,
         answers: initialAnswersState,
+        grill: initialGrillState,
         remote: initialRemoteState,
         usage: initialUsageState,
         toolbar: initialToolbarState,
@@ -153,6 +157,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const questions = questionsReducer(state.questions, event);
     // The sets as this event left them, so an entry comes and goes with its set.
     const answers = answersReducer(state.answers, event, questions);
+    const grill = grillReducer(state.grill, event);
     const remote = remoteReducer(state.remote, event);
     const usage = usageReducer(state.usage, event);
     const keys = keysReducer(state.keys, event);
@@ -188,6 +193,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         activity,
         questions,
         answers,
+        grill,
         remote,
         usage,
         keys,
@@ -239,6 +245,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         questions,
         // Keyed by tool-use id, so nothing moves; a set the re-key dropped loses its entry.
         answers: followPending(state.answers, questions),
+        // The open round, the card's working state and the answers in flight move with the session.
+        grill: rekeyGrill(state.grill, oldId, newId),
         remote: rekeyRemote(state.remote, oldId, newId),
         usage: state.usage,
         keys: rekeyKeys(state.keys, oldId, newId),

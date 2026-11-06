@@ -7,7 +7,14 @@
  * The queue itself is the domain's (`domain/project/merge-queue`); this only
  * words it. Pure, so it is tested in node.
  */
-import type {FailureKind, HeadStage, MergeQueue, QueueEntry} from '../../../domain/project/merge-queue';
+import {
+    expectedMinutes,
+    type FailureKind,
+    type HeadStage,
+    type MergeQueue,
+    type QueueEntry,
+} from '../../../domain/project/merge-queue';
+import {expectedWaitMs, jobOn, type JobPool, type JobQueueRow} from '../../../domain/project/ci-job-queue';
 import type {QueueErrandView} from '../../../domain/project/queue-errands';
 import type {ProjectPageState} from '../../state/project-page-slice';
 
@@ -26,6 +33,22 @@ export function minutesOf(ms: number): number {
 export function estimateText(ms: number | null): string | null {
     return ms === null ? null : '~' + minutesOf(ms) + ' min';
 }
+
+/** An expected merge time as it reads at its place: "~6 min", or rough ("~25 min", faded) from place 3 on. */
+export interface ExpectedText {
+    readonly text: string;
+    readonly rough: boolean;
+}
+
+/** The expected merge time of the entry at `place` (the head is 1); null without an estimate. */
+export function expectedText(ms: number | null, place: number): ExpectedText | null {
+    if (ms === null) return null;
+    const {minutes, rough} = expectedMinutes(ms, place);
+    return {text: '~' + minutes + ' min', rough};
+}
+
+/** What the heading says of a stalled queue. */
+export const STALLED_TEXT = 'Stalled — nothing moves until a failed PR is fixed or retried';
 
 /** The heading's counts: "4 queued · 1 held · 1 failed", leaving out the parts that are none. */
 export function countsText(counts: MergeQueue['counts']): string {
@@ -154,4 +177,62 @@ export function fixStatus(errands: readonly QueueErrandView[], numbers: readonly
 export function clockTime(at: number): string {
     const date = new Date(at);
     return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+}
+
+// ── The CI job queue ──
+
+/** "2 of 3 runners busy", or that none of its runners can be read. */
+export function poolBusyText(pool: JobPool): string {
+    if (pool.runners.length === 0) return 'no online runner fits';
+    const busy = pool.runners.filter((runner) => runner.busy).length;
+    return `${busy} of ${pool.runners.length} runner${pool.runners.length === 1 ? '' : 's'} busy`;
+}
+
+/** "~6 min" from now until `at`, "~6+ min" when it is the earliest it can be. */
+function aboutText(at: number, now: number, lowerBound: boolean): string {
+    const minutes = Math.max(1, Math.round((at - now) / 60_000));
+    return '~' + minutes + (lowerBound ? '+' : '') + ' min';
+}
+
+/** One row of a runner pool, worded. */
+export interface JobRowView {
+    /** "Tests (CI)", or the runner a row of another repository's job is about. */
+    readonly title: string;
+    /** "#12 Title", or a branch; null for another repository's job. */
+    readonly on: string | null;
+    /** The runner it runs on, or the labels it waits for. */
+    readonly where: string;
+    /** Its runner wait: so far while queued, and how long it waited once running. */
+    readonly wait: string | null;
+    /** "starts ~6 min · done ~30 min", "done ~4 min", or null when nobody can tell. */
+    readonly times: string | null;
+}
+
+export function jobRowView(row: JobQueueRow, now: number): JobRowView {
+    if (row.kind === 'other') {
+        return {
+            title: row.runner,
+            on: null,
+            where: 'busy (other repository)',
+            wait: null,
+            times: row.endsAt === null ? null : 'free ' + aboutText(row.endsAt, now, row.lowerBound),
+        };
+    }
+    const {job} = row;
+    const queued = job.status === 'queued';
+    const waited = Math.max(0, (queued ? now : (job.startedAt ?? now)) - job.createdAt);
+    const wait = queued ? `waiting ${minutesOf(waited)} min` : `waited ${minutesOf(waited)} min`;
+    const starts = expectedWaitMs(row, now);
+    const parts = [
+        starts === null ? null : 'starts ' + aboutText(now + starts, now, row.lowerBound),
+        row.endsAt === null ? null : 'done ' + aboutText(row.endsAt, now, row.lowerBound),
+    ].filter((part): part is string => part !== null);
+    const labels = job.labels.filter((label) => label.toLowerCase() !== 'self-hosted').join(' · ');
+    return {
+        title: `${job.name} (${job.workflow})`,
+        on: jobOn(job),
+        where: job.runner ?? (labels ? 'waits for ' + labels : 'waits for a runner'),
+        wait,
+        times: parts.length ? parts.join(' · ') : null,
+    };
 }

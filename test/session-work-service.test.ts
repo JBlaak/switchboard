@@ -19,6 +19,7 @@ import type {
     PlanReads,
     ProjectReads,
     QueueLabelWrites,
+    CiJobQueueCalls,
 } from '../src/application/ports/github-cli';
 import type {TranscriptLocation} from '../src/application/ports/transcript-store';
 import type {Session, SessionPullRequest} from '../src/domain/session/session';
@@ -273,6 +274,7 @@ function setup(overrides: Partial<World> = {}) {
         | 'deletePendingReview'
         | 'submitPendingReview'
         | QueueLabelWrites
+        | CiJobQueueCalls
         | PlanReads
         | ProjectReads
     > = {

@@ -228,8 +228,10 @@ function withPullRequests(
                 outside: [],
                 unknown: [],
                 counts: {queued: 0, held: 0, failed: 0},
+                stalled: false,
                 clearsInMs: null,
                 runMs: null,
+                clearsAtPlace: null,
                 pills,
             },
             pullRequests: pullRequests.map((pullRequest) => ({

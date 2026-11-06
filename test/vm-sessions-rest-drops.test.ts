@@ -78,7 +78,7 @@ function harness(files: DropFileReader, {capBytes}: {capBytes?: number} = {}) {
         appVersion: '2.12.0',
         registry,
         renderer,
-        questions: {receive: () => ({withdraw() {}}), receiveRound() {}, promptSubmitted() {}},
+        hooks: {receive: () => ({withdraw() {}}), turnEnded() {}, promptSubmitted() {}, subagentChanged() {}},
         archiveTool: {request: () => ({ok: true, message: ''}), turnEnded() {}},
         timers,
         clock,

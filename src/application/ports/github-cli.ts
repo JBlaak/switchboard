@@ -1,9 +1,10 @@
 /**
  * What GitHub says about a session's PRs and issues, through the user's own `gh`.
  *
- * Reads, plus the two kinds of GitHub write Switchboard makes: your own review
- * (C3), because those are your words, and the merge queue's own labels on a PR
- * (#315), because you asked to queue or retry it. Switchboard holds no token;
+ * Reads, plus the kinds of GitHub write Switchboard makes: your own review
+ * (C3), because those are your words, the merge queue's own labels on a PR
+ * (#315), because you asked to queue or retry it, and cancelling and re-running
+ * Actions runs, because you asked to bump a job ahead of them. Switchboard holds no token;
  * `gh` signs every request as the user.
  *
  * `gh` may be missing or signed out (D9), and the network may be down, so no
@@ -14,6 +15,7 @@ import type {GitHubAvailability, IssueStatus, PendingComment, PullRequestStatus}
 import type {ReviewEvent} from '../../domain/session-work/review';
 import type {IssueKey, Plan, PlanSummary} from '../../domain/plan/model';
 import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/overview';
+import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
 export type {GitHubAvailability};
@@ -119,6 +121,37 @@ export interface GitHubCli {
     /** Remove `label` from PR (or issue) `number` in `repo`. */
     removeLabel(repo: string, number: number, label: string): Promise<GitHubWrite>;
 
+    // ── The CI job queue under the merge queue: its reads, and a Bump's two run writes ──
+
+    /**
+     * The self-hosted runners that serve `repo`: its own and its owner's
+     * organisation's, each read when the token may (both need admin rights).
+     * Null when neither could be read.
+     */
+    selfHostedRunners(repo: string): Promise<Runner[] | null>;
+
+    /**
+     * The running and queued jobs of `repo`'s unfinished Actions runs (among
+     * its newest 50), each with the open PR whose branch it runs on. Null when
+     * unavailable.
+     */
+    ciJobs(repo: string): Promise<CiJob[] | null>;
+
+    /** The ids of the newest `count` successful runs of workflow `workflowId`, newest first. Null when unavailable. */
+    successfulRuns(repo: string, workflowId: number, count: number): Promise<number[] | null>;
+
+    /** How long each succeeded job of run `runId` ran; null when unavailable or none succeeded. */
+    runJobTimes(repo: string, runId: number, workflowId: number): Promise<TimedRun | null>;
+
+    /** Whether run `runId` has stopped (completed, whatever its conclusion); null when unavailable. */
+    runCompleted(repo: string, runId: number): Promise<boolean | null>;
+
+    /** Cancel run `runId`, every job in it. */
+    cancelRun(repo: string, runId: number): Promise<GitHubWrite>;
+
+    /** Re-run run `runId`'s failed and cancelled jobs. */
+    rerunFailedJobs(repo: string, runId: number): Promise<GitHubWrite>;
+
     // ── Your review (C3): with the queue's labels, the only writes Switchboard makes to GitHub ──
 
     /** Start a pending review on a PR (by its GraphQL id), answering the review's id. */
@@ -142,6 +175,16 @@ export type ProjectReads = 'issuesIn' | 'pullRequestsIn' | 'ciRunDurations';
 
 /** The merge queue's label writes (#315). */
 export type QueueLabelWrites = 'addLabel' | 'removeLabel';
+
+/** What the CI job queue reads and a Bump writes. */
+export type CiJobQueueCalls =
+    | 'selfHostedRunners'
+    | 'ciJobs'
+    | 'successfulRuns'
+    | 'runJobTimes'
+    | 'runCompleted'
+    | 'cancelRun'
+    | 'rerunFailedJobs';
 
 /** A PR and the issues it closes. */
 export interface PullRequestCloses {

@@ -11,6 +11,13 @@
  * held entry waiting for a review offers Nudge <reviewer>. Out of the queue,
  * in red, the failed entries with the queue's reason, Fix in session and
  * Retry; then the PRs the queue could not be read for, in its own words.
+ * A queue with failed entries and nothing else that can move says it is
+ * stalled, in red. Estimates from place 3 on are rough: rounded to 5 minutes
+ * and faded.
+ *
+ * Under it, the CI job queue: the repository's running and queued jobs on
+ * self-hosted runners, by runner pool, each queued one with its expected
+ * runner wait and, when queued jobs are ahead of it, Bump.
  *
  * Each entry is a cursor row (↵, or a click, opens it on GitHub). What it
  * says is `merge-queue-view`; what its buttons do, `merge-queue-actions`.
@@ -20,31 +27,30 @@ import {useStore} from '../use-store';
 import {sessionMap, view} from '../../state/session-store';
 import {sessionDisplayName} from '../../state/session-list-layout';
 import {queueActionKey, type QueueActionState} from '../../state/project-page-slice';
-import type {
-    EntryMember,
-    FailedEntry,
-    QueueHead,
-    QueuedEntry,
-    UnknownEntry,
-} from '../../../domain/project/merge-queue';
+import type {EntryMember, FailedEntry, QueueHead, QueuedEntry, UnknownEntry} from '../../../domain/project/merge-queue';
 import {nudgePullRequest, reviewerOf, type QueueErrandView} from '../../../domain/project/queue-errands';
 import type {IssueKey} from '../../../domain/plan/model';
 import {cursorId} from './page-rows';
 import {openProjectSession, openPullRequestOnGitHub} from './actions';
-import {fixInSession, nudgeReviewer, retryQueueEntry} from './merge-queue-actions';
+import {bumpCiJob, fixInSession, openCiJob, nudgeReviewer, retryQueueEntry} from './merge-queue-actions';
 import {
     approvedText,
     clockTime,
     countsText,
-    estimateText,
+    expectedText,
     failureLabel,
     fixStatus,
     headSteps,
     isEmptyQueue,
+    jobRowView,
     mergeQueueOf,
     minutesOf,
     nudgeStatus,
+    poolBusyText,
+    STALLED_TEXT,
+    type ExpectedText,
 } from './merge-queue-view';
+import {bumpedRuns, type JobPool, type JobQueueRow} from '../../../domain/project/ci-job-queue';
 import {pullRequestSession} from './project-sessions';
 
 interface Context {
@@ -72,15 +78,19 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
         actions: page.queueActions,
     };
     const counts = countsText(queue.counts);
+    const clears = expectedText(queue.clearsInMs, queue.clearsAtPlace ?? 1);
+    const jobs = page.ciJobQueue?.repository === repository ? page.ciJobQueue.answer : null;
+    const headNumbers = queue.head ? queue.head.members.map((member) => member.number) : [];
 
     return (
         <section className="pp-section pp-mq" aria-labelledby="pp-mq-heading">
             <div className="pp-section-head">
                 <h2 id="pp-mq-heading">Merge queue</h2>
                 {counts && <span className="pp-count">{counts}</span>}
-                {queue.clearsInMs !== null && (
-                    <span className="pp-mq-clears">
-                        Clears in about <strong>{minutesOf(queue.clearsInMs)} min</strong>
+                {queue.stalled && <span className="pp-mq-stalled">{STALLED_TEXT}</span>}
+                {clears && (
+                    <span className={'pp-mq-clears' + (clears.rough ? ' is-rough' : '')}>
+                        Clears in about <strong>{clears.text.slice(1)}</strong>
                     </span>
                 )}
             </div>
@@ -113,6 +123,15 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
                             ))}
                         </div>
                     </>
+                )}
+                {jobs?.ok && jobs.pools.length > 0 && (
+                    <CiJobQueue
+                        pools={jobs.pools}
+                        notes={jobs.notes}
+                        headNumbers={headNumbers}
+                        context={context}
+                        now={now}
+                    />
                 )}
             </div>
         </section>
@@ -223,7 +242,7 @@ function HeadCard({head, context, now}: {head: QueueHead; context: Context; now:
         head.members.map((member) => member.number),
     );
     const approved = approvedText(head);
-    const estimate = estimateText(head.estimateMs);
+    const estimate = expectedText(head.estimateMs, 1);
     return (
         <div {...rowProps(context, head.number, 'pp-mq-head')}>
             <div className="pp-mq-line">
@@ -245,7 +264,7 @@ function HeadCard({head, context, now}: {head: QueueHead; context: Context; now:
                     </span>
                 </span>
                 <span className="pp-mq-eta">
-                    {estimate && <span className="pp-mq-merges">merges in {estimate}</span>}
+                    {estimate && <span className="pp-mq-merges">merges in {estimate.text}</span>}
                     {head.runningSince !== null && (
                         <span className="pp-mq-since">CI for {minutesOf(now - head.runningSince)} min</span>
                     )}
@@ -278,7 +297,7 @@ function HeadCard({head, context, now}: {head: QueueHead; context: Context; now:
 function EntryRow({entry, context}: {entry: QueuedEntry; context: Context}): JSX.Element {
     const held = entry.state.kind === 'held';
     const reviewer = reviewerOf(entry);
-    const estimate = estimateText(entry.estimateMs);
+    const estimate = expectedText(entry.estimateMs, entry.position);
     return (
         <div {...rowProps(context, entry.number, 'pp-mq-entry' + (held ? ' is-held' : ''))}>
             <span className="pp-mq-pos">{entry.position}</span>
@@ -301,7 +320,7 @@ function EntryRow({entry, context}: {entry: QueuedEntry; context: Context}): JSX
                 {reviewer ? (
                     <NudgeButton pr={nudgePullRequest(entry)} reviewer={reviewer} context={context} />
                 ) : (
-                    estimate && <span className="pp-mq-estimate">{estimate}</span>
+                    estimate && <Estimate estimate={estimate} />
                 )}
             </span>
         </div>
@@ -435,6 +454,121 @@ function UnknownRow({entry, context}: {entry: UnknownEntry; context: Context}): 
             <span className="pp-mq-text">
                 <TitleLine title={entry.title} number={entry.number} />
                 <span className="pp-mq-sentence">{entry.text}</span>
+            </span>
+        </div>
+    );
+}
+
+/** An entry's expected merge time; faded when rough. */
+function Estimate({estimate}: {estimate: ExpectedText}): JSX.Element {
+    return (
+        <span
+            className={'pp-mq-estimate' + (estimate.rough ? ' is-rough' : '')}
+            title={estimate.rough ? 'A rough guess this far back: rounded to 5 minutes' : undefined}>
+            {estimate.text}
+        </span>
+    );
+}
+
+// ── The CI job queue ──
+
+function CiJobQueue({
+    pools,
+    notes,
+    headNumbers,
+    context,
+    now,
+}: {
+    pools: readonly JobPool[];
+    notes: Readonly<Record<number, string>>;
+    headNumbers: readonly number[];
+    context: Context;
+    now: number;
+}): JSX.Element {
+    return (
+        <>
+            <div className="pp-mq-subhead">CI job queue</div>
+            <div className="pp-mq-group pp-mq-jobs">
+                {pools.map((pool) => (
+                    <div key={pool.name} className="pp-mq-pool">
+                        <div className="pp-mq-pool-head">
+                            <span className="pp-mq-pool-name pp-mono">{pool.name || 'self-hosted'}</span>
+                            <span className="pp-mq-pool-busy">{poolBusyText(pool)}</span>
+                        </div>
+                        {pool.rows.length === 0 && <div className="pp-mq-job is-quiet">No jobs</div>}
+                        {pool.rows.map((row) => (
+                            <JobRow
+                                key={row.kind === 'job' ? 'job:' + row.job.id : 'other:' + row.runner}
+                                row={row}
+                                pools={pools}
+                                notes={notes}
+                                headNumbers={headNumbers}
+                                context={context}
+                                now={now}
+                            />
+                        ))}
+                    </div>
+                ))}
+            </div>
+        </>
+    );
+}
+
+function JobRow({
+    row,
+    pools,
+    notes,
+    headNumbers,
+    context,
+    now,
+}: {
+    row: JobQueueRow;
+    pools: readonly JobPool[];
+    notes: Readonly<Record<number, string>>;
+    headNumbers: readonly number[];
+    context: Context;
+    now: number;
+}): JSX.Element {
+    const view = jobRowView(row, now);
+    const job = row.kind === 'job' ? row.job : null;
+    const state = job === null ? 'is-other' : job.status === 'running' ? 'is-running' : 'is-queued';
+    const canBump = job !== null && bumpedRuns(pools, job.id, headNumbers).length > 0;
+    const action = job ? context.actions[queueActionKey('bump', job.id)] : undefined;
+    const note = job ? notes[job.id] : undefined;
+    return (
+        <div className={'pp-mq-job ' + state}>
+            <span className="pp-mq-job-dot" aria-hidden="true" />
+            <span className="pp-mq-text">
+                <span className="pp-mq-title-line">
+                    {job?.url ? (
+                        <button
+                            type="button"
+                            className="pp-inline-link pp-mq-job-name"
+                            onClick={() => openCiJob(job.url)}>
+                            {view.title}
+                        </button>
+                    ) : (
+                        <span className="pp-mq-job-name">{view.title}</span>
+                    )}
+                    {view.on && <span className="pp-mq-job-on">{view.on}</span>}
+                </span>
+                <span className="pp-mq-sentence">
+                    <span className="pp-mono">{view.where}</span>
+                    {view.wait && ' · ' + view.wait}
+                </span>
+                {action?.phase === 'note' && <span className="pp-mq-note">{action.text}</span>}
+                {action?.phase === 'failed' && <span className="pp-mq-note is-failed">{action.reason}</span>}
+                {note && <span className="pp-mq-note is-failed">{note}</span>}
+            </span>
+            <span className="pp-mq-side">
+                {view.times && <span className="pp-mq-estimate">{view.times}</span>}
+                {canBump && job && (
+                    <RowButton
+                        disabled={action?.phase === 'busy'}
+                        onClick={() => void bumpCiJob(context.repository, pools, job, headNumbers)}>
+                        {action?.phase === 'busy' ? 'Bumping…' : 'Bump'}
+                    </RowButton>
+                )}
             </span>
         </div>
     );

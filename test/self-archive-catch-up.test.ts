@@ -71,7 +71,7 @@ function harness({
         appVersion: APP_VERSION,
         registry: new SessionRegistry(),
         renderer: fakeRenderer(),
-        questions: {receive: () => ({withdraw() {}}), receiveRound() {}, promptSubmitted() {}},
+        hooks: {receive: () => ({withdraw() {}}), turnEnded() {}, promptSubmitted() {}, subagentChanged() {}},
         archiveTool: {request: () => ({ok: true, message: ''}), turnEnded() {}},
         timers: fakeTimers(),
         clock: {now: () => 0},

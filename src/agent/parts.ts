@@ -42,6 +42,7 @@ import {NodeTranscriptFiles} from '../infrastructure/agent/node-transcript-files
 import {NodeWorkingFiles} from '../infrastructure/agent/node-working-files';
 import {NodeFileSystem} from '../infrastructure/fs/node-file-system';
 import {FileTranscriptStore} from '../infrastructure/fs/transcript-store';
+import {FileTranscriptTail} from '../infrastructure/fs/transcript-tail-file';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
 import {cleanChildEnv, NodePtyGateway} from '../infrastructure/pty/node-pty-gateway';
@@ -99,7 +100,13 @@ export async function createParts({log}: PartsContext): Promise<AgentWiring> {
         selfArchived: new NodeSelfArchivedFile(),
         clock: systemClock,
     });
-    hookServer = new QuestionHookServer({receiver: hooks.receiver, archiveTool: hooks.archiveTool, log});
+    hookServer = new QuestionHookServer({
+        receiver: hooks.receiver,
+        archiveTool: hooks.archiveTool,
+        // The turn is read here, on the VM, where the transcript is; the Mac gets its text blocks.
+        transcripts: new FileTranscriptTail(new NodeFileSystem()),
+        log,
+    });
     await hookServer.start();
 
     const config = new HostConfig({

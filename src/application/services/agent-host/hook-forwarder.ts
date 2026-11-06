@@ -21,8 +21,10 @@
  * - With no client to ask (none connected, or its answer did not come in
  *   time, or it went away first), the archive call is accepted here instead
  *   (#308): see "Archiving while the Mac is away" below.
- * - Grill rounds, prompt submits and turn ends are notices. The CLI was
- *   already answered, so they are sent if a client is there and dropped if not.
+ * - Ended turns (the text blocks the agent's hook server read from the
+ *   transcript on the VM), prompt submits, subagent starts and stops, and turn
+ *   ends for the archive tool are notices. The CLI was already answered, so
+ *   they are sent if a client is there and dropped if not.
  *
  * "The client" is the most recently connected one still open. The Mac is the
  * only client in practice, and a second connection is almost always the same
@@ -50,20 +52,21 @@
 import {archiveToolMcpConfig, ARCHIVE_TOOL_QUALIFIED_NAME} from '../../../domain/session/archive-tool';
 import type {ArchiveToolOutcome} from '../../../domain/session/archive-tool';
 import {QUESTION_HOOK_TOKEN_HEADER, questionHookSettings} from '../../../domain/questions/question';
-import type {AskedQuestions, Question} from '../../../domain/questions/question';
+import type {AskedQuestions} from '../../../domain/questions/question';
 import type {SessionTools} from '../../../domain/launch/claude-command';
 import type {
     ForgetSelfArchivedMessage,
-    GrillRoundMessage,
+    GrillTurnMessage,
     PromptSubmittedMessage,
     SelfArchivedSession,
+    SubagentMessage,
     TurnEndedMessage,
 } from '../../../domain/agent/protocol';
 import type {ClientLink} from '../../ports/agent-link';
 import type {Clock, Timers, TimerHandle} from '../../ports/clock';
 import type {IdGenerator} from '../../ports/ids';
 import type {Logger} from '../../ports/logger';
-import type {QuestionHookEndpoint} from '../../ports/question-hook';
+import type {HookReceiver, QuestionHookEndpoint} from '../../ports/question-hook';
 import type {PendingQuestionsHandle, QuestionReply} from '../question-service';
 import type {HookForwarderMessage, HookForwarderPart} from './handlers';
 
@@ -82,17 +85,6 @@ export const SELF_ARCHIVE_OUTCOME: ArchiveToolOutcome = {
     ok: true,
     message: 'This session will be archived when this turn ends.',
 };
-
-/**
- * What the hook server hands questions and notices to. Structurally the same
- * slice of QuestionService the server's `receiver` dep takes, declared here so
- * the application layer does not import the HTTP adapter.
- */
-export interface HookReceiver {
-    receive(launchId: string, asked: AskedQuestions, reply: QuestionReply): PendingQuestionsHandle;
-    receiveRound(launchId: string, questions: Question[]): void;
-    promptSubmitted(launchId: string): void;
-}
 
 /**
  * The self-archive record on the VM (SELF_ARCHIVED_FILE), as raw text: a JSON
@@ -159,8 +151,10 @@ export class HookForwarder implements HookForwarderPart {
     /** Give this to the agent's `QuestionHookServer` as its `receiver`. */
     public readonly receiver: HookReceiver = {
         receive: (launchId, asked, reply) => this.receive(launchId, asked, reply),
-        receiveRound: (launchId, questions) => this.notify({type: 'grill-round', launchId, questions}),
-        promptSubmitted: (launchId) => this.notify({type: 'prompt-submitted', launchId}),
+        turnEnded: (launchId, turn, backgroundAgents) =>
+            this.notify({type: 'grill-turn', launchId, turn, backgroundAgents}),
+        promptSubmitted: (launchId, prompt) => this.notify({type: 'prompt-submitted', launchId, prompt}),
+        subagentChanged: (launchId, event, agentId) => this.notify({type: 'subagent', launchId, event, agentId}),
     };
 
     /** Give this to the agent's `QuestionHookServer` as its `archiveTool`. */
@@ -221,7 +215,12 @@ export class HookForwarder implements HookForwarderPart {
         if (!url) return null;
         const id = encodeURIComponent(launchId);
         return questionHookSettings(
-            {ask: `${url}/ask/${id}`, stop: `${url}/stop/${id}`, prompt: `${url}/prompt/${id}`},
+            {
+                ask: `${url}/ask/${id}`,
+                stop: `${url}/stop/${id}`,
+                prompt: `${url}/prompt/${id}`,
+                subagent: `${url}/subagent/${id}`,
+            },
             token,
         );
     }
@@ -361,7 +360,7 @@ export class HookForwarder implements HookForwarderPart {
     }
 
     /** A notice the CLI was already answered for: to the client if there is one, else dropped. */
-    private notify(message: GrillRoundMessage | PromptSubmittedMessage | TurnEndedMessage): void {
+    private notify(message: GrillTurnMessage | PromptSubmittedMessage | SubagentMessage | TurnEndedMessage): void {
         const client = this.current();
         if (client) client.send(message);
         else this.deps.log.debug(`[agent-hooks] no client; dropped ${message.type} for ${message.launchId}`);

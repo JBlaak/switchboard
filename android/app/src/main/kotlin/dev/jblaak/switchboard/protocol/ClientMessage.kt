@@ -110,6 +110,45 @@ sealed interface ClientMessage {
     data class VoiceCancel(val voiceId: String) : ClientMessage
 
     /**
+     * A draft answer to the question at [place] of the round, given against [revision]; null takes it back. The
+     * Mac keeps the draft and sends the next `grill` to every device.
+     */
+    @Serializable
+    @SerialName("grill-answer")
+    data class GrillAnswerGiven(
+        val sessionId: String,
+        val roundId: String,
+        val revision: Int,
+        val place: Int,
+        val answer: GrillAnswer?,
+    ) : ClientMessage
+
+    /** Ask about the question at [place]: [text] is the question for Claude; null is Wait, what?. The round stays open. */
+    @Serializable
+    @SerialName("grill-ask")
+    data class GrillAsk(
+        val sessionId: String,
+        val roundId: String,
+        val revision: Int,
+        val place: Int,
+        val text: String?,
+    ) : ClientMessage
+
+    /** Type the answers into the session now. */
+    @Serializable
+    @SerialName("grill-send")
+    data class GrillSend(val sessionId: String, val roundId: String) : ClientMessage
+
+    /** Send the answers once the session's research agents are done. */
+    @Serializable
+    @SerialName("grill-queue")
+    data class GrillQueue(val sessionId: String, val roundId: String) : ClientMessage
+
+    @Serializable
+    @SerialName("grill-cancel-queue")
+    data class GrillCancelQueue(val sessionId: String, val roundId: String) : ClientMessage
+
+    /**
      * Show the session as a chat: a [ServerMessage.Chat] with its messages so far, then [ServerMessage.ChatAppend]s
      * as its transcript grows, until [ChatUnsubscribe] or the connection ends. Only to a Mac that named
      * [MacFeatures.CHAT].
