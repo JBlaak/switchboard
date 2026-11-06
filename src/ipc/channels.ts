@@ -35,6 +35,14 @@ export const INVOKE = {
     getPendingQuestions: 'get-pending-questions',
     answerQuestions: 'answer-questions',
 
+    // Grilling rounds
+    grillViews: 'grill-views',
+    grillAnswer: 'grill-answer',
+    grillAsk: 'grill-ask',
+    grillSend: 'grill-send',
+    grillQueue: 'grill-queue',
+    grillCancelQueue: 'grill-cancel-queue',
+
     // Usage
     getUsage: 'get-usage',
 
@@ -205,6 +213,7 @@ export const EVENT = {
     remoteStatus: 'remote-status',
     questionsAsked: 'questions-asked',
     questionsSettled: 'questions-settled',
+    grillChanged: 'grill-changed',
     pageShown: 'page:shown',
     projectsChanged: 'projects-changed',
     statusUpdate: 'status-update',

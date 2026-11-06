@@ -16,6 +16,7 @@ import type {EffectiveSettings} from '../domain/settings/settings';
 import type {Appearance} from '../domain/settings/appearance';
 import type {Answers, PendingQuestions, QuestionsSettled} from '../domain/questions/question';
 import type {ShellProfile} from '../domain/shell/shell-profile';
+import type {GrillAnswer, GrillChanged, GrillResult, GrillView} from '../domain/grill/model';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../domain/session-work/model';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
@@ -122,6 +123,32 @@ export interface SwitchboardApi {
     getPendingQuestions(): Promise<PendingQuestions[]>;
     /** Send the answers; `{ ok: false }` when the questions were already withdrawn. */
     answerQuestions(sessionId: string, toolUseId: string, answers: Answers): Promise<IpcResult>;
+
+    // ── Grilling rounds ──
+    /** Every open grilling round with its draft answers, for a renderer that (re)loads. */
+    grillViews(): Promise<GrillView[]>;
+    /** Set or clear (null) the draft answer at `place`, given against `revision` of the round. */
+    grillAnswer(
+        sessionId: string,
+        roundId: string,
+        revision: number,
+        place: number,
+        answer: GrillAnswer | null,
+    ): Promise<GrillResult>;
+    /** Ask about the question at `place` with `text`, or Wait, what? when `text` is null. */
+    grillAsk(
+        sessionId: string,
+        roundId: string,
+        revision: number,
+        place: number,
+        text: string | null,
+    ): Promise<GrillResult>;
+    /** Type the round's answers into the session now. */
+    grillSend(sessionId: string, roundId: string): Promise<GrillResult>;
+    /** Send the answers once the session's research agents are done. */
+    grillQueue(sessionId: string, roundId: string): Promise<GrillResult>;
+    /** Take back a queued send. */
+    grillCancelQueue(sessionId: string, roundId: string): Promise<GrillResult>;
 
     // ── Usage ──
     getUsage(): Promise<Usage | null>;
@@ -475,6 +502,8 @@ export interface SwitchboardApi {
     onRemoteStatus(cb: (sessionId: string, status: RemoteStatusPayload) => void): Unsubscribe;
     onQuestionsAsked(cb: (pending: PendingQuestions) => void): Unsubscribe;
     onQuestionsSettled(cb: (settled: QuestionsSettled) => void): Unsubscribe;
+    /** A grilling round opened, changed (an answer, a revision, an ask) or closed. */
+    onGrillChanged(cb: (changed: GrillChanged) => void): Unsubscribe;
     /** A session showed the user a page (`show_page`). */
     onPageShown(cb: (page: ShownPage) => void): Unsubscribe;
     onProjectsChanged(cb: () => void): Unsubscribe;
