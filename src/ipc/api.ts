@@ -65,6 +65,7 @@ import type {SessionHandoffPhase, SessionHandoffPreview} from '../application/se
 import type {ScheduleLocation} from '../application/services/vm-schedules';
 import type {VmHostView} from '../application/services/vm-registry';
 import type {ShownPage} from '../domain/session/page-tool';
+import type {SessionLink} from '../domain/session/links';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
 
@@ -197,6 +198,16 @@ export interface SwitchboardApi {
     openSessionWork(sessionId: string): Promise<SessionWorkSnapshot | null>;
     /** False for remote sessions and for sessions outside a git repository (D14). */
     canOpenSessionWork(sessionId: string): Promise<boolean>;
+
+    // ── Session links (#340) ──
+    /**
+     * What the session produced or refers to, for the session tray's Links
+     * group: its PRs, issues, artifacts, pages and task, in that order and
+     * each kind newest first (see `domain/session/links`). Answers from what
+     * main has kept and never waits on `gh` or BlaakTasks: what has gone stale
+     * is asked again behind the answer, so the next call has it.
+     */
+    getSessionLinks(sessionId: string): Promise<SessionLink[]>;
     /** The parsed diff of one item (`SessionWorkItem.id`) of the open page, and where it came from. */
     getSessionWorkDiff(request: {sessionId: string; itemId: string}): Promise<SessionWorkDiff>;
     /**

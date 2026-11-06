@@ -14,10 +14,17 @@ import {encodeProjectPath, worktreeParentPath} from '../../domain/project/projec
 import {isProjectFolderName} from './claude-paths';
 import {workLocations, type TranscriptSource} from '../../domain/session-work/locations';
 import {issueMentionsInTranscript} from '../../domain/session-work/issues';
+import {artifactsInTranscript, type ArtifactRef} from '../../domain/session/artifacts';
+import {shownPagesInTranscript, type ShownPageRef} from '../../domain/session/page-tool';
 import type {Session} from '../../domain/session/session';
 import type {IssueRef} from '../../domain/session-work/model';
 import type {FileSystem} from '../../application/ports/file-system';
-import type {TranscriptLocation, TranscriptSeed, TranscriptStore} from '../../application/ports/transcript-store';
+import type {
+    TranscriptLocation,
+    TranscriptProducts,
+    TranscriptSeed,
+    TranscriptStore,
+} from '../../application/ports/transcript-store';
 
 /**
  * How much of a transcript is read looking for a `cwd` before giving up on the
@@ -184,6 +191,22 @@ export class FileTranscriptStore implements TranscriptStore {
             }
         }
         return [...found.values()];
+    }
+
+    public products(folder: string, sessionId: string): TranscriptProducts {
+        const artifacts = new Map<string, ArtifactRef>();
+        const pages = new Map<string, ShownPageRef>();
+        for (const source of this.sessionSources(folder, sessionId)) {
+            for (const artifact of artifactsInTranscript(source.lines)) {
+                const known = artifacts.get(artifact.id);
+                if (!known) artifacts.set(artifact.id, artifact);
+                else if (!known.title && artifact.title) known.title = artifact.title;
+            }
+            for (const page of shownPagesInTranscript(source.lines)) {
+                if (!pages.has(page.id)) pages.set(page.id, page);
+            }
+        }
+        return {artifacts: [...artifacts.values()], pages: [...pages.values()]};
     }
 
     public readSlug(folder: string, sessionId: string): string | null {

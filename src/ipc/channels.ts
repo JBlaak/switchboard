@@ -93,6 +93,9 @@ export const INVOKE = {
     sessionWorkReview: 'session-work:review',
     sessionWorkCheckLog: 'session-work:check-log',
 
+    // Session links: the session tray's Links group (#340)
+    sessionLinks: 'session-links:get',
+
     // Plan: sessions on a plan's issues (#125)
     planIssueSessions: 'plan:issue-sessions',
     planPrepareIssueWorktree: 'plan:prepare-issue-worktree',
