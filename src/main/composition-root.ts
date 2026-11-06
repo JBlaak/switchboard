@@ -60,6 +60,7 @@ import {SessionLifecycle} from '../application/services/session-lifecycle';
 import {SessionTransitionDetector} from '../application/services/session-transition-detector';
 import {SessionStatsService} from '../application/services/session-stats-service';
 import {SessionWorkService} from '../application/services/session-work-service';
+import {SessionLinksService} from '../application/services/session-links-service';
 import {IssueSessionService, type IssueSessionCandidate} from '../application/services/issue-session-service';
 import {PlanService} from '../application/services/plan-service';
 import {ProjectOverviewService} from '../application/services/project-overview-service';
@@ -210,6 +211,8 @@ export interface Container {
     readonly weather: WeatherService;
     readonly updates: UpdateService;
     readonly sessionWork: SessionWorkService;
+    /** The session tray's Links group (#340): a session's PRs, issues, artifacts, pages and task. */
+    readonly sessionLinks: SessionLinksService;
     /** A session's context used, messages, running time, branch and shell, for the session tray (#341). */
     readonly sessionStats: SessionStatsService;
     /** The session tray's Workspace group (#342): Editor, Finder, Shell here. */
@@ -1120,6 +1123,21 @@ export function buildContainer(): Container {
         log,
     });
 
+    // The session tray's links (#340): kept here, asked again behind each answer.
+    const sessionLinks = new SessionLinksService({
+        locate: locateSession,
+        pullRequests: (sessionId) =>
+            repository.getCachedSession(sessionId)?.pullRequests ?? vmTranscripts.pullRequests(sessionId),
+        transcripts: routedTranscripts,
+        remotes: git,
+        github,
+        watchedStatus: (url) => prWatch.statusOf(url),
+        tasks,
+        agentlessRemote,
+        clock,
+        log,
+    });
+
     // Every write the CLI makes to a transcript arrives here: re-index the folder,
     // check whether a session forked, and refresh the sidebar once per burst.
     const projectsWatcher = new ProjectsWatcher({
@@ -1287,6 +1305,7 @@ export function buildContainer(): Container {
         weather,
         updates,
         sessionWork,
+        sessionLinks,
         sessionStats,
         workspace: workspaceActions,
         sessionActions,

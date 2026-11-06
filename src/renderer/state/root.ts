@@ -17,6 +17,7 @@ import {archiveUndoReducer, initialArchiveUndoState, rekeyArchiveUndo} from './a
 import {dropUploadReducer, initialDropUploadState} from './drop-upload-slice';
 import {initialPagesState, pagesReducer, rekeyPages} from './pages-slice';
 import {initialMergeQueueState, mergeQueueReducer, rekeyMergeQueue} from './merge-queue-slice';
+import {initialSessionTrayState, rekeySessionTray, sessionTrayReducer} from './session-tray-slice';
 import {askReducer, initialAskState} from './ask-slice';
 import {answersReducer, followPending, initialAnswersState} from './answers-slice';
 import {grillReducer, initialGrillState, rekeyGrill} from './grill-slice';
@@ -50,6 +51,7 @@ import type {SessionHandoffState} from './session-handoff-slice';
 import type {DropUploadState} from './drop-upload-slice';
 import type {PagesState} from './pages-slice';
 import type {MergeQueueState} from './merge-queue-slice';
+import type {SessionTrayState} from './session-tray-slice';
 import type {ArchiveUndoState} from './archive-undo-slice';
 import type {AskState} from './ask-slice';
 import type {CiStatusState} from './ci-status-slice';
@@ -107,6 +109,7 @@ export interface RendererState {
     readonly dropUpload: DropUploadState;
     readonly pages: PagesState;
     readonly mergeQueue: MergeQueueState;
+    readonly sessionTray: SessionTrayState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -143,6 +146,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         dropUpload: initialDropUploadState,
         pages: initialPagesState,
         mergeQueue: initialMergeQueueState,
+        sessionTray: initialSessionTrayState,
     };
 }
 
@@ -187,6 +191,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const dropUpload = dropUploadReducer(state.dropUpload, event);
     const pages = pagesReducer(state.pages, event);
     const mergeQueue = mergeQueueReducer(state.mergeQueue, event);
+    const sessionTray = sessionTrayReducer(state.sessionTray, event);
 
     return settle(state, {
         view,
@@ -221,6 +226,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         dropUpload,
         pages,
         mergeQueue,
+        sessionTray,
     });
 }
 
@@ -289,6 +295,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         pages: rekeyPages(state.pages, oldId, newId),
         // An errand's session stays the errand's under its new id.
         mergeQueue: rekeyMergeQueue(state.mergeQueue, oldId, newId),
+        // The stats on screen stay the session's under its new id.
+        sessionTray: rekeySessionTray(state.sessionTray, oldId, newId),
     });
 }
 

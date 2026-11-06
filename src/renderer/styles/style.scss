@@ -21,6 +21,7 @@
 @use 'global-settings-button';
 @use 'project-picker';
 @use 'settings-viewer';
+@use 'saved-prompts';
 @use 'new-session-dialog';
 @use 'terminal-badge';
 @use 'sleep-toggle';
@@ -33,6 +34,7 @@
 @use 'queue-elsewhere';
 @use 'plan';
 @use 'session-task';
+@use 'session-tray';
 @use 'archive-undo';
 @use 'project-page';
 @use 'tasks-page';

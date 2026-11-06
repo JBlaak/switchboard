@@ -160,6 +160,11 @@ export class PrWatchService {
         return this.latest.get(url)?.state ?? null;
     }
 
+    /** What `gh` last answered about a PR, by URL; null when it never did (#340's links). */
+    public statusOf(url: string): PullRequestStatus | null {
+        return this.latest.get(url) ?? null;
+    }
+
     /** The end of a check run's log, for the page's Checks panel. */
     public async checkLog(repository: string, checkRunUrl: string): Promise<string | null> {
         if (this.logs.has(checkRunUrl)) return this.logs.get(checkRunUrl) ?? null;

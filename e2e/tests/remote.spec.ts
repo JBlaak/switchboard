@@ -1002,7 +1002,7 @@ test.describe('session hand-off', () => {
         }, projectPath);
     }
 
-    test('Hand off to… is on a local Claude session’s row and in its terminal header, never on a remote or terminal row', async ({
+    test('Hand off to… is on a local Claude session’s row and in its session tray, never on a remote or terminal row', async ({
         page,
         app,
         home,
@@ -1019,7 +1019,9 @@ test.describe('session hand-off', () => {
 
         /* When */
         await openSession(page, home, LABEL.loginFix, S.loginFix);
-        await terminalHeader(page).getByRole('button', {name: 'Hand off to…', exact: true}).click();
+        // In the session tray (#343), which hovering the bar opens.
+        await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
+        await page.getByRole('region', {name: 'Session tools'}).getByRole('button', {name: 'Hand off…'}).click();
 
         /* Then */
         const dialog = handOffDialog(page);
@@ -1030,7 +1032,7 @@ test.describe('session hand-off', () => {
     test.describe('without a VM host', () => {
         test.use({stubs: {}});
 
-        test('no row and no terminal header offers Hand off to…', async ({page, home}) => {
+        test('no row and no session tray offers Hand off to…', async ({page, home}) => {
             /* When */
             await openSession(page, home, LABEL.loginFix, S.loginFix);
             await sessionItem(page, S.loginFix).hover();

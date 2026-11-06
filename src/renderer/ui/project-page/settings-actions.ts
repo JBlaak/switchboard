@@ -1,7 +1,8 @@
 /**
  * What a project's settings view on its page does (#176): reading what the
  * project and the global settings store, storing each change as it is made,
- * resetting to the global settings, and hiding the project.
+ * and resetting to the global settings. Hiding the project is `hide-project`,
+ * so this stays importable in node for its tests.
  *
  * Every write goes through the settings IPC under the project's key, which
  * `get-effective-settings` layers over the global blob when a session in the
@@ -9,8 +10,6 @@
  * The rules for what a change stores are in `domain/settings/project-overrides`.
  */
 import {dispatch, getState} from '../../state/app-store';
-import {loadProjects} from '../../features/sessions/session-list';
-import {projectLabel} from '../../features/sessions/project-label';
 import {projectSettingsKey} from '../../../domain/settings/settings';
 import {withProjectValue, withoutOverrides} from '../../../domain/settings/project-overrides';
 import type {ProjectSettingField} from '../../../domain/settings/project-overrides';
@@ -40,33 +39,23 @@ export function resetProjectSettings(projectPath: string): Promise<void> {
     return store(projectPath, (view) => withoutOverrides(view.current));
 }
 
-/**
- * Hide the project from Switchboard, after asking. Its session files stay on
- * disk; it just stops being listed, so its page gives way to the empty screen.
- */
-export async function hideProjectFromPage(projectPath: string): Promise<void> {
-    if (
-        !confirm(
-            `Hide ${projectLabel(projectPath)}?\n\nSession files are not deleted. Add the folder again to bring it back.`,
-        )
-    )
-        return;
-    await window.api.removeProject(projectPath);
-    dispatch({type: 'screenCleared'});
-    void loadProjects();
-}
-
 /** The writes in flight, one after another, so each builds on the blob the one before it wrote. */
 let writes: Promise<void> = Promise.resolve();
 
-/** Write what `change` makes of the project's blob as last written, then say it is saved. */
+/**
+ * Write what `change` makes of the project's blob as stored now, then say it
+ * is saved. Read afresh rather than taken from the copy the view loaded, so
+ * what else writes to the blob meanwhile (its saved prompts, #344) is kept.
+ */
 function store(projectPath: string, change: (view: ProjectSettingsView) => SettingsRecord): Promise<void> {
     writes = writes
         .then(async () => {
             const view = getState().settings.project;
             if (!view || view.projectPath !== projectPath) return;
-            const next = change(view);
-            await window.api.setSetting(projectSettingsKey(projectPath), next);
+            const key = projectSettingsKey(projectPath);
+            const stored = (await window.api.getSetting<SettingsRecord>(key)) || {};
+            const next = change({...view, current: stored});
+            await window.api.setSetting(key, next);
             dispatch({type: 'projectSettingsSaved', projectPath, current: next});
         })
         .catch(() => undefined);

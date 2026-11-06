@@ -134,9 +134,21 @@ export function sidebarFooter(page: Page): Locator {
     return page.getByTestId('sidebar-footer');
 }
 
-/** The bar above the terminal: name, process title, id, status, stop. */
+/** The bar above the terminal: name, project, branch, questions, status. */
 export function terminalHeader(page: Page): Locator {
     return page.getByTestId('terminal-header');
+}
+
+/** The session tray over the terminal (#343): Ask, Links, Workspace and Session. */
+export function sessionTray(page: Page): Locator {
+    return page.getByRole('region', {name: 'Session tools'});
+}
+
+/** Hover the bar's session name until the tray is open, and answer the tray. */
+export async function openSessionTray(page: Page): Promise<Locator> {
+    await page.locator('#terminal-header-name').hover();
+    await expect(sessionTray(page)).toHaveClass(/is-open/);
+    return sessionTray(page);
 }
 
 /** A session row's label in the sidebar. Click it to open the session. */

@@ -160,7 +160,7 @@ function PullRequests({row}: {row: SessionListRow}): JSX.Element | null {
  * A chip's status dot, or a check once its PR is merged; nothing until the CI
  * watch has said something about it.
  */
-function ChipDot({dot}: {dot: StatusDot | null}): JSX.Element | null {
+export function ChipDot({dot}: {dot: StatusDot | null}): JSX.Element | null {
     if (!dot) return null;
     if (dot === 'merged') {
         return (

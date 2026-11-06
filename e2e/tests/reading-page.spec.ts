@@ -32,7 +32,13 @@ const HTML = [
 
 const readingPage = (page: Page) => page.getByRole('dialog', {name: TITLE});
 const article = (page: Page) => page.frameLocator('iframe.rp-frame');
-const reopenButton = (page: Page) => terminalHeader(page).getByRole('button', {name: 'Page'});
+/** The page's row in the session tray's Links (#343), which the bar opens on hover. */
+async function reopenRow(page: Page) {
+    await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
+    const tray = page.getByRole('region', {name: 'Session tools'});
+    await expect(tray).toHaveClass(/is-open/);
+    return tray.locator('.tray-link', {hasText: TITLE});
+}
 
 test.describe('smoke', () => {
     test('a page comes up over the terminal, Esc puts it away and the header brings it back', async ({page, home}) => {
@@ -47,21 +53,18 @@ test.describe('smoke', () => {
         await expect(readingPage(page)).toBeVisible();
         await expect(article(page).getByRole('heading', {name: '2. Use of AI systems'})).toBeVisible();
         await expect(readingPage(page).getByRole('navigation', {name: 'Outline'})).toBeVisible();
-        await expect(reopenButton(page)).toHaveCount(0);
 
         /* When */
         await article(page).locator('body').press('Escape');
 
         /* Then */
         await expect(readingPage(page)).toHaveCount(0);
-        await expect(reopenButton(page)).toBeVisible();
 
         /* When */
-        await reopenButton(page).click();
+        await (await reopenRow(page)).click();
 
         /* Then */
         await expect(readingPage(page)).toBeVisible();
-        await expect(reopenButton(page)).toHaveCount(0);
     });
 
     test('scripts in a page do not run', async ({page, home}) => {
@@ -91,7 +94,7 @@ test.describe('smoke', () => {
 
         /* Then */
         await expect(readingPage(page)).toHaveCount(0);
-        await expect(reopenButton(page)).toBeVisible();
+        await expect(await reopenRow(page)).toBeEnabled();
     });
 });
 

@@ -56,6 +56,17 @@ export function isTasksPageKey(e: KeyboardEvent): boolean {
     return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyT';
 }
 
+/**
+ * Cmd+1 … Cmd+9 send the session on screen its saved prompt on that key
+ * (#343): the key's number, or null for any other key. In the terminal too,
+ * tray open or not; not while typing in a text field, which keeps the key.
+ */
+export function savedPromptKey(e: KeyboardEvent): number | null {
+    const match = /^Digit([1-9])$/.exec(e.code);
+    if (!match || !isCommandKey(e, e.code)) return null;
+    return Number(match[1]);
+}
+
 /** Cmd plus `code`, unless the key is going into a text field. */
 function isCommandKey(e: KeyboardEvent, code: string): boolean {
     if (e.altKey || e.shiftKey || e.ctrlKey || !e.metaKey || e.code !== code) return false;

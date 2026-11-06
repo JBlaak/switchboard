@@ -45,7 +45,8 @@ import {openDialog} from '../../ui/dialogs/actions';
 import {isQuickSessionKey, launchQuickSession} from '../sessions/quick-session';
 import {isSessionWorkKey, toggleSessionWork} from '../../ui/session-work/actions';
 import {toggleTasksPage} from '../../ui/tasks-page/actions';
-import {isTasksPageKey} from '../../lib/shortcut-keys';
+import {isTasksPageKey, savedPromptKey} from '../../lib/shortcut-keys';
+import {sendSavedPromptOnScreen} from '../../ui/session-tray/actions';
 import {openSessions, sessionMap} from '../../state/session-store';
 import {remoteStatus} from '../../state/remote-status-store';
 import {TERMINAL_THEME} from '../terminal/terminal-themes';
@@ -229,6 +230,17 @@ function setupTerminalKeyBindings(
                 e._handled = true;
                 e.preventDefault();
                 toggleTasksPage();
+            }
+            return false;
+        }
+
+        // Cmd+1…9: type the saved prompt on that key into this session (#343)
+        const promptKey = savedPromptKey(e);
+        if (promptKey !== null) {
+            if (e.type === 'keydown') {
+                e._handled = true;
+                e.preventDefault();
+                void sendSavedPromptOnScreen(promptKey);
             }
             return false;
         }

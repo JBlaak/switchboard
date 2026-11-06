@@ -1,0 +1,470 @@
+/* ========== SESSION TRAY (#343, epic #338) ==========
+   The slimmed session bar, and the tray that drops over the top of the terminal
+   when it is hovered: the design's "Tinted cards · sidebar look", with the
+   timings of its "Motion · timings" sheet.
+
+   The tray hangs from a zero-height host under #terminal-header, so it lies over
+   the terminal without taking any of its height: xterm is never refitted for it.
+   Closed, it is clipped away and lets the pointer through; open, it unclips
+   downwards (with room below for its shadow). Closing is quicker than opening
+   and has no stagger. */
+
+$tray-enter: cubic-bezier(0.2, 0.8, 0.2, 1);
+$tray-exit: cubic-bezier(0.4, 0, 1, 1);
+
+/* ---- The bar ---- */
+
+/* While the pointer rests on the bar (and while the tray is up) its edge glows mint. */
+#terminal-header {
+    transition: box-shadow 120ms ease-out;
+
+    &.is-tray-intent,
+    &.is-tray-open {
+        box-shadow: inset 0 -2px 0 rgba(var(--sb-accent-rgb), 0.35);
+    }
+}
+
+#terminal-header-branch {
+    flex-shrink: 1;
+    min-width: 0;
+    font-family: var(--sb-font-mono);
+    font-size: 11px;
+    color: var(--sb-text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* "hover for tools": the hint, and the keyboard's way into the tray. */
+#terminal-header-tray-hint {
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 2px 6px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    font-family: var(--sb-font-body);
+    font-size: 11px;
+    color: var(--sb-text-dimmest);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: opacity 120ms;
+
+    #terminal-header.is-tray-intent &,
+    #terminal-header.is-tray-open & {
+        opacity: 0;
+    }
+
+    &:focus-visible {
+        opacity: 1;
+        outline: 2px solid rgba(var(--sb-accent-rgb), 0.6);
+    }
+}
+
+/* ---- The tray ---- */
+
+#session-tray-host {
+    position: relative;
+    z-index: 20;
+    height: 0;
+    flex-shrink: 0;
+}
+
+.session-tray-frame {
+    position: absolute;
+    inset: 0 0 auto;
+    /* Only the open tray takes the pointer: closed, the terminal under it gets every click. */
+    pointer-events: none;
+}
+
+.session-tray {
+    display: grid;
+    grid-template-columns: 1.3fr 1.3fr 0.8fr 0.8fr;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(var(--sb-bg-panel-rgb), 0.86);
+    -webkit-backdrop-filter: blur(14px) saturate(1.15);
+    backdrop-filter: blur(14px) saturate(1.15);
+    box-shadow:
+        inset 0 -1px 0 rgba(var(--sb-overlay-rgb), 0.06),
+        0 22px 44px -14px rgba(var(--sb-shadow-rgb), 0);
+    clip-path: inset(0 0 100% 0);
+    pointer-events: none;
+    transition:
+        clip-path 160ms $tray-exit,
+        box-shadow 160ms ease-in;
+
+    &.is-open {
+        clip-path: inset(0 0 -80px 0);
+        pointer-events: auto;
+        box-shadow:
+            inset 0 -1px 0 rgba(var(--sb-overlay-rgb), 0.06),
+            0 22px 44px -14px rgba(var(--sb-shadow-rgb), calc(0.55 * var(--sb-shadow-k)));
+        transition:
+            clip-path 220ms $tray-enter,
+            box-shadow 220ms ease-out;
+    }
+}
+
+/* A group: a 16px-radius wash of its tint. They fade and slide in one after another. */
+.tray-card {
+    --i: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 12px 10px;
+    border-radius: var(--sb-r-card);
+    opacity: 0;
+    transform: translateY(-6px);
+    transition:
+        opacity 100ms ease-in,
+        transform 100ms ease-in;
+
+    .session-tray.is-open & {
+        opacity: 1;
+        transform: none;
+        transition:
+            opacity 180ms ease-out,
+            transform 240ms $tray-enter;
+        transition-delay: calc(40ms + var(--i) * 30ms);
+    }
+}
+
+.tray-ask {
+    background: rgba(var(--sb-accent-rgb), 0.055);
+}
+.tray-links {
+    background: rgba(var(--sb-blue-rgb), 0.05);
+}
+.tray-workspace {
+    background: rgba(var(--sb-yellow-rgb), 0.045);
+}
+.tray-session {
+    background: rgba(var(--sb-overlay-rgb), 0.03);
+}
+
+.tray-label {
+    display: flex;
+    align-items: center;
+    padding: 0 10px 8px;
+    font-family: var(--sb-font-head);
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+
+    .tray-ask & {
+        color: var(--sb-accent);
+    }
+    .tray-links & {
+        color: var(--sb-blue);
+    }
+    .tray-workspace & {
+        color: var(--sb-yellow);
+    }
+    .tray-session & {
+        color: var(--sb-text-muted);
+    }
+}
+
+.tray-edit {
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: var(--sb-font-body);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--sb-text-dimmest);
+    cursor: pointer;
+
+    &:hover {
+        color: var(--sb-text-strong);
+    }
+}
+
+.tray-empty {
+    margin: 0;
+    padding: 7px 10px;
+    font-size: 13px;
+    color: var(--sb-text-faint);
+}
+
+/* A row: a prompt, a workspace action. The sidebar's accent wash on hover. */
+.tray-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: var(--sb-r-row);
+    background: transparent;
+    color: var(--sb-text-strong);
+    font-family: var(--sb-font-body);
+    font-size: 14px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+        background 120ms ease-out,
+        transform 90ms ease-out;
+
+    svg {
+        flex-shrink: 0;
+        color: var(--sb-text-muted);
+    }
+
+    &:hover:not(:disabled) {
+        background: rgba(var(--sb-accent-rgb), 0.14);
+    }
+
+    &:active:not(:disabled) {
+        transform: scale(0.985);
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.45;
+    }
+
+    &.is-sent {
+        background: rgba(var(--sb-accent-rgb), 0.3);
+    }
+}
+
+.tray-row-text {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tray-key {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-family: var(--sb-font-mono);
+    font-size: 11px;
+    color: var(--sb-text-dimmest);
+
+    .is-sent & {
+        color: var(--sb-accent);
+    }
+}
+
+/* Hand off…'s own button is the row; its wrapper only listens. */
+.tray-handoff {
+    display: contents;
+}
+
+/* A link: laid out like a sidebar session row, title over a meta line. */
+.tray-link {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: var(--sb-r-row);
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 120ms;
+
+    &:hover:not(:disabled) {
+        background: rgba(var(--sb-accent-rgb), 0.14);
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.55;
+    }
+}
+
+.tray-link-title {
+    max-width: 100%;
+    font-size: 14px;
+    color: var(--sb-text-strong);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tray-link-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--sb-text-faint);
+}
+
+/* The sidebar's PR chip, a size up. */
+.tray-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 7px;
+    border-radius: 6px;
+    background: rgba(var(--sb-overlay-rgb), 0.06);
+    color: var(--sb-text-dim);
+    font-size: 12px;
+
+    .session-pr-dot,
+    .session-pr-merged {
+        vertical-align: 0;
+    }
+}
+
+.tray-dot {
+    width: 7px;
+    height: 7px;
+    margin-right: 3px;
+    border-radius: 50%;
+
+    &.is-issue {
+        background: var(--sb-blue);
+    }
+    &.is-artifact {
+        background: var(--sb-yellow);
+    }
+    &.is-page {
+        background: var(--sb-accent);
+    }
+    &.is-task {
+        background: var(--sb-lav-ink);
+    }
+}
+
+/* ---- Session: context used, the meter, the meta line and the icon buttons ---- */
+
+.tray-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 10px;
+}
+
+.tray-context {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.tray-context-value {
+    font-family: var(--sb-font-head);
+    font-weight: 800;
+    font-size: 26px;
+    letter-spacing: -0.03em;
+    color: var(--sb-yellow);
+}
+
+.tray-context-label,
+.tray-meta {
+    font-size: 12px;
+    color: var(--sb-text-faint);
+}
+
+.tray-meter {
+    display: block;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+    overflow: hidden;
+}
+
+/* Fills from empty as the tray opens, after the cards have started in. */
+.tray-meter-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--sb-yellow);
+    transition: width 120ms ease-in;
+
+    .session-tray.is-open & {
+        width: var(--tray-context);
+        transition: width 420ms $tray-enter 160ms;
+    }
+}
+
+.tray-icons {
+    display: flex;
+    gap: 2px;
+    margin-top: auto;
+    padding: 8px 4px 0;
+}
+
+.tray-icon {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: var(--sb-r-control);
+    background: transparent;
+    color: var(--sb-text-muted);
+    cursor: pointer;
+    transition:
+        background 120ms,
+        color 120ms;
+
+    &:hover:not(:disabled) {
+        background: rgba(var(--sb-overlay-rgb), 0.07);
+        color: var(--sb-text-strong);
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.4;
+    }
+}
+
+.tray-stop {
+    margin-left: auto;
+    color: var(--sb-red);
+}
+
+/* ---- Reduce Transparency: a solid panel ---- */
+@media (prefers-reduced-transparency: reduce) {
+    .session-tray {
+        background: var(--sb-bg-panel);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+/* ---- Reduce Motion: the tray fades in 120 ms, opacity only; no clip, stagger, slide or meter fill ---- */
+@media (prefers-reduced-motion: reduce) {
+    .session-tray,
+    .session-tray.is-open {
+        clip-path: none;
+        transition: opacity 120ms linear;
+    }
+    .session-tray {
+        opacity: 0;
+    }
+    .session-tray.is-open {
+        opacity: 1;
+    }
+    .tray-card,
+    .session-tray.is-open .tray-card {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+    .tray-meter-fill,
+    .session-tray.is-open .tray-meter-fill {
+        width: var(--tray-context);
+        transition: none;
+    }
+    #terminal-header,
+    #terminal-header-tray-hint {
+        transition: none;
+    }
+}

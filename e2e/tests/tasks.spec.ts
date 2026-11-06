@@ -18,7 +18,7 @@
  * The project page's Tasks section (#251) lists the task linked to its repo,
  * and S there starts it in that repo, with no routing, keeping the page. What
  * it lists and its keys are unit tested (test/project-page-tasks.test.ts).
- * A linked session's chip, Task tab and sidebar marker (#250) are walked
+ * A linked session's task row in the session tray, Task tab and sidebar marker (#250) are walked
  * through the UI at the end.
  */
 import {spawnSync} from 'node:child_process';
@@ -27,7 +27,7 @@ import path from 'node:path';
 import {test, expect} from '../support/test';
 import {FakeCli} from '../support/fake-cli';
 import {LABEL, P, S} from '../fixtures/standard';
-import {openSession, sidebar} from '../support/app';
+import {openSession, sidebar, terminalHeader} from '../support/app';
 import {sessionWorkStub} from '../fixtures/session-work';
 import {fakeBlaakTasks, switchBlaakTasksOn, TASK, TITLE, TOKEN} from '../support/blaak-tasks';
 
@@ -279,7 +279,10 @@ test('the project page lists the repo’s linked task, and S starts it in this r
 test.describe('the task on its session', () => {
     test.use({stubs: {sessionWork: sessionWorkStub()}});
 
-    test('a linked session shows its task: the chip, the Task tab and the sidebar marker', async ({page, home}) => {
+    test('a linked session shows its task: the tray’s task row, the Task tab and the sidebar marker', async ({
+        page,
+        home,
+    }) => {
         /* Given: BlaakTasks on, and a session on screen with no task */
         const blaakTasks = await fakeBlaakTasks({
             brief: 'The login page loops back to itself after the cookie expires.',
@@ -300,9 +303,10 @@ test.describe('the task on its session', () => {
             );
             await switchBlaakTasksOn(page, blaakTasks.url);
             await openSession(page, home, LABEL.loginFix, S.loginFix);
-            const chip = page.locator('#terminal-header-task');
+            // The task is a row in the session tray's Links (#343), which hovering the bar opens.
+            const tray = page.getByRole('region', {name: 'Session tools'});
+            const taskRow = tray.locator('.tray-link').filter({hasText: TITLE});
             const marker = page.locator(`[data-session-id="${S.loginFix}"]`).getByTestId('session-task-marker');
-            await expect(chip).toHaveCount(0);
             await expect(marker).toHaveCount(0);
 
             /* When: the session is linked to the task */
@@ -311,13 +315,18 @@ test.describe('the task on its session', () => {
                 task: TASK,
             });
 
-            /* Then: the chip names the task and its status, and the row is marked */
-            await expect(chip).toContainText(TITLE);
-            await expect(chip).toContainText('In progress');
+            /* Then: the tray's task row names the task and its status, and the row is marked */
             await expect(marker).toHaveAttribute('title', 'Task: ' + TITLE);
+            // Main answers links from what it has and asks BlaakTasks behind the answer: open the tray again until it has.
+            await expect(async () => {
+                await page.mouse.move(600, 600);
+                await expect(tray).not.toHaveClass(/is-open/);
+                await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
+                await expect(taskRow).toContainText('In progress', {timeout: 1000});
+            }).toPass();
 
-            /* When: the chip is clicked */
-            await chip.click();
+            /* When: the task row is clicked */
+            await taskRow.click();
 
             /* Then: Session work opens on the Task tab, oldest progress first, with the PR's state */
             const work = page.getByRole('region', {name: /^Session work for /});
