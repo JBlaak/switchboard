@@ -211,12 +211,12 @@ export interface Container {
     readonly weather: WeatherService;
     readonly updates: UpdateService;
     readonly sessionWork: SessionWorkService;
-    /** The session tray's Workspace group (#342): Editor, Finder, Shell here. */
-    readonly workspace: WorkspaceActionService;
-    /** A session's context used, messages, running time, branch and shell, for the session tray (#341). */
-    readonly sessionStats: SessionStatsService;
     /** The session tray's Links group (#340): a session's PRs, issues, artifacts, pages and task. */
     readonly sessionLinks: SessionLinksService;
+    /** A session's context used, messages, running time, branch and shell, for the session tray (#341). */
+    readonly sessionStats: SessionStatsService;
+    /** The session tray's Workspace group (#342): Editor, Finder, Shell here. */
+    readonly workspace: WorkspaceActionService;
     readonly sessionActions: SessionActionService;
     readonly review: ReviewService;
     readonly prWatch: PrWatchService;
@@ -850,15 +850,6 @@ export function buildContainer(): Container {
         log,
     });
     sessionActions.attach(sessionWork);
-    // Local folders only: a remote session's actions answer "not available".
-    const workspaceActions = new WorkspaceActionService({
-        locate: locateSession,
-        transcripts,
-        git: localWorkspace,
-        fs,
-        launcher: new MacWorkspaceLauncher(log),
-        log,
-    });
     const sessionStats = new SessionStatsService({
         locate: locateSession,
         transcripts: routedTranscripts,
@@ -871,6 +862,15 @@ export function buildContainer(): Container {
             return id === 'auto' ? null : (shells.list().find((profile) => profile.id === id)?.name ?? id);
         },
         agentlessRemote,
+        log,
+    });
+    // Local folders only: a remote session's actions answer "not available".
+    const workspaceActions = new WorkspaceActionService({
+        locate: locateSession,
+        transcripts,
+        git: localWorkspace,
+        fs,
+        launcher: new MacWorkspaceLauncher(log),
         log,
     });
     const review = new ReviewService({github, page: sessionWork, actions: sessionActions, log});
@@ -1305,9 +1305,9 @@ export function buildContainer(): Container {
         weather,
         updates,
         sessionWork,
-        workspace: workspaceActions,
-        sessionStats,
         sessionLinks,
+        sessionStats,
+        workspace: workspaceActions,
         sessionActions,
         prWatch,
         review,

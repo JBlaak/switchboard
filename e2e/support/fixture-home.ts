@@ -46,7 +46,7 @@ export interface FixtureSession {
     at: number;
     /** Epoch ms of the first message. Defaults to 10 minutes before `at`. */
     startedAt?: number;
-    /** User and assistant entries; the row shows "· N msgs". Defaults to 4. */
+    /** User and assistant entries. Defaults to 4. */
     messages?: number;
     /** Sessions sharing a slug within one project fold into a slug group. */
     slug?: string;

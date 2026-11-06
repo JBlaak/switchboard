@@ -9,7 +9,7 @@
 
 export type Appearance = 'system' | 'light' | 'dark';
 
-/** The order the toolbar button cycles through. */
+/** The modes, in the order the settings menu offers them. */
 export const APPEARANCES: readonly Appearance[] = ['system', 'light', 'dark'];
 
 /** Following the OS is the default: it is what the app did before the toggle existed. */
@@ -35,15 +35,4 @@ export function isAppearance(value: unknown): value is Appearance {
  */
 export function normaliseAppearance(value: unknown): Appearance {
     return isAppearance(value) ? value : DEFAULT_APPEARANCE;
-}
-
-/** The mode one click on the toggle moves to: system → light → dark → system. */
-export function nextAppearance(mode: Appearance): Appearance {
-    const index = APPEARANCES.indexOf(mode);
-    return APPEARANCES[(index + 1) % APPEARANCES.length];
-}
-
-/** The toggle's tooltip: the mode it is in, and the one a click moves to. */
-export function appearanceTitle(mode: Appearance): string {
-    return `Appearance: ${APPEARANCE_LABELS[mode]} (click for ${APPEARANCE_LABELS[nextAppearance(mode)]})`;
 }

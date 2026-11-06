@@ -135,10 +135,9 @@ export function fallbackName(session: SessionRow): string {
     return session.aiTitle || session.summary;
 }
 
-/** The relative time, as of `now`, plus the message count. */
+/** The relative time, as of `now`. */
 export function sessionTimeLabel(session: SessionRow, now: number): string {
-    const suffix = session.messageCount ? ' · ' + session.messageCount + ' msgs' : '';
-    return formatDate(new Date(session.modified), now) + suffix;
+    return formatDate(new Date(session.modified), now);
 }
 
 /** What the meta line says while the session is asking questions. */

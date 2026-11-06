@@ -153,7 +153,11 @@ test('the Tasks page opens with ⌘T once BlaakTasks is on, and S starts a sessi
         const projectPath = home.projectPath(P.acmeApi);
         makeRepository(projectPath);
         const tasksPage = page.getByRole('region', {name: 'Tasks'});
-        await expect(page.getByRole('button', {name: 'Tasks', exact: true})).toHaveCount(0);
+        const gear = page.getByRole('button', {name: 'Global settings', exact: true});
+        const tasksItem = page.getByRole('menuitem', {name: 'Tasks'});
+        await gear.click();
+        await expect(tasksItem).toHaveCount(0);
+        await page.keyboard.press('Escape');
 
         /* When: the URL is saved in Settings */
         await switchBlaakTasksOn(page, blaakTasks.url);
@@ -162,8 +166,10 @@ test('the Tasks page opens with ⌘T once BlaakTasks is on, and S starts a sessi
             projectPath,
         });
 
-        /* Then: the page has its entry point, and ⌘T opens it on ★ Today with the task's row */
-        await expect(page.getByRole('button', {name: 'Tasks', exact: true})).toBeVisible();
+        /* Then: the gear's menu has its entry point, and ⌘T opens it on ★ Today with the task's row */
+        await gear.click();
+        await expect(tasksItem).toBeVisible();
+        await page.keyboard.press('Escape');
         await page.keyboard.press('Meta+t');
         await expect(tasksPage).toBeFocused();
         await expect(tasksPage.getByRole('tab', {name: '★ Today'})).toHaveAttribute('aria-selected', 'true');
