@@ -14,6 +14,8 @@ import {startsOnSharedSkill} from './skills';
 import {
     GARBLED_LINE,
     ROUTE_SYSTEM_PROMPT,
+    patchAnswer,
+    withAnswerRules,
     parseEnvelope,
     readAnswer,
     readRouteRun,
@@ -39,8 +41,8 @@ export function quickRouteSystemPrompt(targets: readonly CaptureTarget[] = ALL_T
     const tasks = targets.includes('tasks');
     const captures = tasks ? '"task" or "save"' : '"save"';
     return [
-        // Its own "Answering" section gives way to this call's, which adds two keys.
-        ROUTE_SYSTEM_PROMPT.replace(/\n+Answering:[\s\S]*$/, ''),
+        // Patch may answer first; the routing call's "Answering" section gives way to this call's, with more keys.
+        withAnswerRules(ROUTE_SYSTEM_PROMPT),
         '',
         'Choosing kind:',
         ...(tasks
@@ -63,17 +65,20 @@ export function quickRouteSystemPrompt(targets: readonly CaptureTarget[] = ALL_T
         "- When the request only mentions a skill along the way, rewrite it as usual and keep the skill's name in it as written.",
         `- Only use a skill listed for every project or for the chosen project. A skill request is a "session", never a ${captures}.`,
         '',
+        'Your own answer:',
+        `- A question you answer yourself is kind "session". For ${captures}, and for a skill request, answer is "".`,
+        '',
         'Answering:',
         '- Answer with only this JSON object, no prose, no code fence:',
-        `  {"kind": "session" or ${captures}, "captureText": "<the text to capture>" or "", "projectPath": "<a listed path>" or null, "confident": true or false, "candidates": ["<a listed path>", ...], "prompt": "<the first message>"}`,
+        `  {"kind": "session" or ${captures}, "captureText": "<the text to capture>" or "", "answer": "<your answer>" or "", "projectPath": "<a listed path>" or null, "confident": true or false, "candidates": ["<a listed path>", ...], "prompt": "<the first message>"}`,
     ].join('\n');
 }
 
 /** The instructions with every capture target offered. */
 export const QUICK_ROUTE_SYSTEM_PROMPT = quickRouteSystemPrompt();
 
-/** The two extra keys of a quick answer. */
-const QUICK_KEYS = ['kind', 'captureText'];
+/** The extra keys of a quick answer. */
+const QUICK_KEYS = ['kind', 'captureText', 'answer'];
 
 /**
  * Every flag of the quick routing call, without the message, so a warm
@@ -116,9 +121,10 @@ export function quickRouteArgs(request: RouteRequest, targets: readonly CaptureT
 /**
  * Turn a finished quick routing call into a result.
  *
- * `task` or `save` with some text to capture is a capture. Everything else —
+ * `task` or `save` with some text to capture is a capture; otherwise a filled
+ * `answer` is Patch answering a simple question itself. Everything else —
  * `session`, a kind it doesn't know, a capture with no text, a failed call —
- * reads exactly as `readRouteRun` reads it, the two extra keys aside, except
+ * reads exactly as `readRouteRun` reads it, the extra keys aside, except
  * that no project keeps a prompt that starts on a skill every project has.
  * A capture for a target not in `targets` isn't one: its routing keys are read
  * as for a session.
@@ -139,6 +145,8 @@ export function readQuickRouteRun(
     const target = typeof answer.kind === 'string' ? CAPTURE_KINDS[answer.kind] : undefined;
     const text = typeof answer.captureText === 'string' ? answer.captureText.trim() : '';
     if (target && targets.includes(target) && text) return {kind: 'capture', target, text};
+    const answered = patchAnswer(answer.answer);
+    if (answered) return {kind: 'answer', text: answered};
 
     const routing = Object.fromEntries(Object.entries(answer).filter(([key]) => !QUICK_KEYS.includes(key)));
     const checked = readAnswer(JSON.stringify(routing), request);

@@ -173,6 +173,7 @@ async function answer(asked: number, reply: Promise<QuickAskReply>): Promise<voi
             close();
             return;
         case 'choose':
+        case 'answered':
         case 'captureFailed':
         case 'unlocked':
             return;

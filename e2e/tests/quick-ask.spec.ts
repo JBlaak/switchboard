@@ -391,6 +391,44 @@ test('no match with a quick folder starts a quick session on the text exactly as
     await expect(dialog(page, 'Start this in…')).toBeHidden();
 });
 
+test('a simple question is answered in the pop-up, which starts nothing and stays open', async ({app, page, home}) => {
+    /* Given */
+    const route = fakeRoute(home);
+    route.answer({
+        kind: 'session',
+        captureText: '',
+        answer: 'Run lsof -iTCP -sTCP:LISTEN -n -P.',
+        projectPath: null,
+        confident: false,
+        candidates: [],
+        prompt: '',
+    });
+    const before = launchedKeys(home);
+    const popUp = await open(app);
+    const question = 'how do I list listening ports on macOS?';
+    await box(popUp).fill(question);
+
+    /* When */
+    await box(popUp).press('Enter');
+
+    /* Then */
+    await expect(popUp.getByTestId('ask-answer')).toContainText('Run lsof -iTCP -sTCP:LISTEN -n -P.');
+    await expect(box(popUp)).toHaveValue(question);
+    expect(await quickAskShowing(app)).toBe(true);
+    await expect(dialog(page, 'Start this in…')).toBeHidden();
+    expect(launchedKeys(home)).toEqual(before);
+    expect(await mainWindowFocused(app)).toBe(false);
+
+    /* When */
+    await box(popUp).press('Escape');
+
+    /* Then */
+    await expect.poll(() => quickAskShowing(app)).toBe(false);
+    await open(app);
+    await expect(box(popUp)).toHaveValue(question);
+    await expect(popUp.getByTestId('ask-answer')).toBeHidden();
+});
+
 test('⌘Enter starts a quick session on the text as typed, with no routing call', async ({app, page, home}) => {
     /* Given */
     const quickFolder = home.projectPath(P.notes);

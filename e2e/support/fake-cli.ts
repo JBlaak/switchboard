@@ -293,6 +293,8 @@ export interface RouteAnswer {
     /** Quick Ask's routing call only (C1): a session, or a capture of `captureText`. */
     kind?: 'session' | 'task' | 'save';
     captureText?: string;
+    /** The empty screen's and Quick Ask's call: Patch's own answer to a simple question, or ''. */
+    answer?: string;
 }
 
 /**

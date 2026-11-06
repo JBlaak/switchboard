@@ -6,7 +6,9 @@
  * and choosing mean what they mean on the empty screen. What the pop-up adds
  * is the `result` on top of the box: "Started in ‹folder›" for 0.7 s before
  * it closes (B7), a capture being saved, the saved line, and ⌘Z taking it
- * back (C4). Main does the routing (R1), so an answer is a `QuickAskReply`,
+ * back (C4). A simple question Patch answers itself shows its answer under
+ * the box, as on the empty screen, and closing the pop-up puts it away.
+ * Main does the routing (R1), so an answer is a `QuickAskReply`,
  * not a `RouteResult`.
  *
  * The draft lives here, in the pop-up's memory: closing keeps it, and only a
@@ -145,7 +147,7 @@ export function quickAskReducer(state: QuickAskState, event: QuickAskEvent): Qui
             if (!canClose(quickAskPhase(state))) return state;
             // Closed before "Undone" had gone: the text is back all the same.
             if (state.result?.kind === 'undone') return restored(state, state.result.text);
-            if (state.result === null && state.box.phase === 'editing') return state;
+            if (state.result === null && state.box.phase === 'editing' && !state.box.answer) return state;
             return {...state, box: closed(state.box), result: null, folders: []};
 
         default: {
@@ -187,6 +189,8 @@ function replied(state: QuickAskState, reply: QuickAskReply): QuickAskState {
                 note: '',
                 result: {kind: 'saved', target: reply.target, summary: reply.summary, text: state.box.text},
             };
+        case 'answered':
+            return {...state, box: {...editing, answer: reply.text}, result: null, note: ''};
         case 'captureFailed':
             return {...state, box: editing, result: null, note: reply.reason};
         case 'unlocked':
@@ -199,7 +203,7 @@ function restored(state: QuickAskState, text: string): QuickAskState {
     return {...state, box: {...closed(state.box), text}, result: null, note: ''};
 }
 
-/** The box back to editing, its list closed. */
+/** The box back to editing, its list and any answer put away. */
 function closed(box: AskState): AskState {
-    return {...box, phase: 'editing', choices: [], selected: 0, prompt: ''};
+    return {...box, phase: 'editing', choices: [], selected: 0, prompt: '', answer: ''};
 }

@@ -67,7 +67,8 @@ import {SettingsService} from '../application/services/settings-service';
 import {WorktreeCleanupService} from '../application/services/worktree-cleanup-service';
 import {UpdateService} from '../application/services/update-service';
 import {WeatherService} from '../application/services/weather-service';
-import {ASK_PATCH_CALL, AskRouteService} from '../application/services/ask-route-service';
+import {ASK_PATCH_CALL, AskRouteService, EMPTY_SCREEN_CALL} from '../application/services/ask-route-service';
+import type {AskPatchResult} from '../domain/ask/model';
 import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/quick-ask-hotkey';
 import {QuickAskService, quickRouteCall} from '../application/services/quick-ask-service';
 import {TaskLinkService} from '../application/services/task-link-service';
@@ -202,7 +203,7 @@ export interface Container {
     readonly projectOverview: ProjectOverviewService;
     /** The merge queue outside the project page (#315): the sidebar's pills, the header panel, the notifications. */
     readonly mergeQueueWatch: MergeQueueWatchService;
-    readonly askRoute: AskRouteService;
+    readonly askRoute: AskRouteService<AskPatchResult>;
     readonly quickAskHotkey: QuickAskHotkey;
     readonly quickAskPanel: QuickAskPanel;
     readonly quickAsk: QuickAskService;
@@ -629,7 +630,7 @@ export function buildContainer(): Container {
         shellProfileId,
         homeDir: paths.homeDir,
     });
-    const askRoute = new AskRouteService({cli: claudeCaller, timers, log, call: ASK_PATCH_CALL});
+    const askRoute = new AskRouteService({cli: claudeCaller, timers, log, call: EMPTY_SCREEN_CALL});
 
     // Quick Ask (#142): ⌥Space from anywhere. A window can only be made once the
     // app is ready, so the pop-up's is made by `prepareQuickAsk` at startup, or

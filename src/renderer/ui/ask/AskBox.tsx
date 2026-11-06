@@ -1,6 +1,7 @@
 /**
  * The box under Patch on the empty screen (#135): type what you want to work
- * on, and Patch starts the session in the right project.
+ * on, and Patch starts the session in the right project, or answers a simple
+ * question itself, under the box.
  *
  * Always there while the empty screen is (B1), and focused whenever it comes
  * into view (B2), unless a dialog or the session list has the keyboard. The
@@ -23,6 +24,7 @@ import {
     cancelAsk,
     changeAskText,
     closeAskChoices,
+    dismissAskAnswer,
     hoverAskChoice,
     openPickerFromChoices,
     sendAsk,
@@ -73,12 +75,16 @@ export function AskBox(): JSX.Element {
             (e.nativeEvent as MarkedEvent)._handled = true;
             return;
         }
-        const action = askKey(ask.phase, {
-            key: e.key,
-            shiftKey: e.shiftKey,
-            metaKey: e.metaKey,
-            isComposing: e.nativeEvent.isComposing,
-        });
+        const action = askKey(
+            ask.phase,
+            {
+                key: e.key,
+                shiftKey: e.shiftKey,
+                metaKey: e.metaKey,
+                isComposing: e.nativeEvent.isComposing,
+            },
+            ask.answer !== '',
+        );
         if (!action) return;
         e.preventDefault();
         switch (action) {
@@ -105,6 +111,9 @@ export function AskBox(): JSX.Element {
                 return;
             case 'close':
                 closeAskChoices();
+                return;
+            case 'dismissAnswer':
+                dismissAskAnswer();
                 return;
             case 'swallow':
                 return;

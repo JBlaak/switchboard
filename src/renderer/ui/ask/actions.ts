@@ -16,7 +16,7 @@ import {openDialog} from '../dialogs/actions';
 import {routeRequest} from './route-request';
 import type {AskOutcome} from '../../state/ask-slice';
 import type {Project} from '../../../domain/project/project';
-import type {RouteResult} from '../../../domain/ask/model';
+import type {AskPatchResult} from '../../../domain/ask/model';
 
 export function changeAskText(text: string): void {
     dispatch({type: 'askTextChanged', text});
@@ -34,7 +34,7 @@ export async function sendAsk(): Promise<void> {
     const result = await window.api
         .askRoute(routeRequest(text, view.cachedProjects))
         // It answers `failed` rather than rejecting; this is for the IPC itself giving way.
-        .catch((err: unknown): RouteResult => ({kind: 'failed', reason: `Something went wrong: ${String(err)}`}));
+        .catch((err: unknown): AskPatchResult => ({kind: 'failed', reason: `Something went wrong: ${String(err)}`}));
 
     const waiting = getState().ask;
     dispatch({type: 'askAnswered', asked, result});
@@ -58,6 +58,11 @@ export function sendQuickAsk(): void {
 /** The box got focus: have main boot a `claude` for the request that may follow (S2). */
 export function warmAsk(): void {
     void window.api.warmAskRoute().catch(() => {});
+}
+
+/** Esc under Patch's answer: put it away, keeping the text. */
+export function dismissAskAnswer(): void {
+    dispatch({type: 'askAnswerDismissed'});
 }
 
 /** Esc while waiting: stop the call and unlock the box straight away (W2). */
@@ -109,6 +114,7 @@ function follow(outcome: AskOutcome): void {
             openDialog({kind: 'projectPicker', initialPrompt: outcome.prompt});
             return;
         case 'choose':
+        case 'answer':
         case 'unlock':
             return;
     }
