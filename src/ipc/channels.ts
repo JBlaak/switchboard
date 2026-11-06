@@ -174,6 +174,12 @@ export const INVOKE = {
     vmRegistryAdd: 'vm-registry:add',
     vmRegistryRename: 'vm-registry:rename',
     vmRegistryRemove: 'vm-registry:remove',
+
+    // The session tray's Workspace group (#342)
+    workspaceEditor: 'workspace:editor',
+    workspaceOpenInEditor: 'workspace:open-in-editor',
+    workspaceRevealInFinder: 'workspace:reveal-in-finder',
+    workspaceShellHere: 'workspace:shell-here',
 } as const;
 
 /** Renderer tells main; no answer expected. */
