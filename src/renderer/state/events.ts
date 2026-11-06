@@ -49,6 +49,7 @@ import type {SessionHandoffPhase} from '../../application/services/session-hando
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
 import type {QuestionView} from './answers-slice';
+import type {QuestionMoment} from '../../domain/companion/question-beats';
 import type {DialogRequest} from './dialog-slice';
 import type {SettingsRecord} from './settings-slice';
 import type {ShellProfile} from '../../domain/shell/shell-profile';
@@ -150,6 +151,8 @@ export type LocalEvent =
     | {type: 'answerViewChosen'; toolUseId: string; view: QuestionView}
     /** Look at the terminal under this set for a moment, or stop looking; the draft stays as it is. */
     | {type: 'answersPeeked'; toolUseId: string; peeking: boolean}
+    /** Patch reacts to something done beside this set outside its draft (the grilling card's answers). */
+    | {type: 'answersSaid'; toolUseId: string; moment: QuestionMoment}
     /** Patch was poked beside this set. */
     | {type: 'answersPatchPoked'; toolUseId: string}
     /** The doze timer: this set has `minutesLeft` before the terminal takes over. */
