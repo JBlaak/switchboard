@@ -5,7 +5,6 @@ import dev.jblaak.switchboard.protocol.AnsweredOn
 import dev.jblaak.switchboard.protocol.ClientMessage
 import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.protocol.QuestionsOutcome
-import dev.jblaak.switchboard.protocol.QuestionsSource
 import dev.jblaak.switchboard.protocol.ServerMessage
 import dev.jblaak.switchboard.ui.connected.FakePhoneLink
 import dev.jblaak.switchboard.ui.connected.pendingQuestions
@@ -238,45 +237,6 @@ class QuestionSheetModelTest {
 
         /* Then */
         assertEquals("s-2", answerSent().sessionId)
-    }
-
-    @Test
-    fun `a grill round takes the recommendation with yes`() = runTest(UnconfinedTestDispatcher()) {
-        /* Given */
-        val grill = pendingQuestions(
-            "s-1",
-            source = QuestionsSource.Grill,
-            questions = listOf(question("Where should the code live?", false, "Yes (Recommended)", "Wait, what?")),
-        )
-        val model = newModel(grill)
-
-        /* When */
-        model.acceptRecommendation()
-
-        /* Then */
-        assertEquals(mapOf("Where should the code live?" to "Yes (Recommended)"), answerSent().answers)
-    }
-
-    @Test
-    fun `a skipped grill question goes back unanswered`() = runTest(UnconfinedTestDispatcher()) {
-        /* Given */
-        val grill = pendingQuestions(
-            "s-1",
-            source = QuestionsSource.Grill,
-            questions = listOf(
-                question("Q one?", false, "Yes (Recommended)", "Wait, what?"),
-                question("Q two?", false, "Yes (Recommended)", "Wait, what?"),
-            ),
-        )
-        val model = newModel(grill)
-
-        /* When */
-        model.skip()
-        model.type("Somewhere else")
-        model.next()
-
-        /* Then */
-        assertEquals(mapOf("Q two?" to "Somewhere else"), answerSent().answers)
     }
 
     @Test

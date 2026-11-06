@@ -88,6 +88,6 @@ fun SessionRoute(
         },
     )
     sheetSet?.let { set ->
-        QuestionSheetRoute(link, set, state.name, onClose = { sheetSet = null })
+        QuestionSheetRoute(link, board.grills, set, state.name, onClose = { sheetSet = null })
     }
 }
