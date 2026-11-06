@@ -100,8 +100,7 @@ export class ElectronRendererGateway implements RendererGateway {
     }
 
     public grillChanged(changed: GrillChanged): void {
-        // TODO(grilling card): EVENT.grillChanged, once src/ipc/channels.ts has it.
-        this.send('grill-changed', changed);
+        this.send(EVENT.grillChanged, changed);
     }
 
     // ── Pages ──
