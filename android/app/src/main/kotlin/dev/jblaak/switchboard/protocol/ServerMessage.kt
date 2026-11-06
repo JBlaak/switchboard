@@ -149,6 +149,16 @@ sealed interface ServerMessage {
     @SerialName("mac-battery")
     data class MacBatteryChanged(val battery: MacBattery?) : ServerMessage
 
+    /** Every session's open grilling round with its draft answers, on welcome and after every change. */
+    @Serializable
+    @SerialName("grill")
+    data class Grill(val views: List<GrillView>) : ServerMessage
+
+    /** A `grill-*` call from this phone failed; [error] is in words for the card ("Answer a question first"). */
+    @Serializable
+    @SerialName("grill-error")
+    data class GrillError(val sessionId: String, val roundId: String, val error: String) : ServerMessage
+
     /**
      * A subscribed session's chat, whole: on [ClientMessage.ChatSubscribe], and again when it starts over (a
      * re-key moved it to a new transcript). The latest messages, oldest first. [available] is false for a session

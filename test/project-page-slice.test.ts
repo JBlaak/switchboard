@@ -68,6 +68,7 @@ test('a page opens on what its project remembered, with no cursor and no filter'
         tasks: null,
         queueErrands: null,
         queueActions: {},
+        ciJobQueue: null,
     });
 });
 

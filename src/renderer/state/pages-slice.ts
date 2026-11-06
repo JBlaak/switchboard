@@ -12,7 +12,6 @@
 import {movedEntry, withEntry, withoutEntry} from './records';
 import type {IdRecord} from './records';
 import type {RendererEvent} from './events';
-import type {ShownPage} from '../../domain/session/page-tool';
 
 export interface SessionPage {
     readonly title: string;

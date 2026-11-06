@@ -21,6 +21,7 @@ import type {WorkingAgent} from '../../domain/terminal/program-status-children';
 import type {BackgroundTask} from '../../domain/session/background-tasks';
 import type {UpdateNotice} from '../../domain/update/release';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
+import type {GrillChanged} from '../../domain/grill/model';
 import type {SessionWorkSnapshot} from '../../domain/session-work/model';
 import type {PullRequestStatusChange} from '../../domain/session-work/status';
 import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
@@ -101,6 +102,10 @@ export class ElectronRendererGateway implements RendererGateway {
 
     public questionsSettled(settled: QuestionsSettled): void {
         this.send(EVENT.questionsSettled, settled);
+    }
+
+    public grillChanged(changed: GrillChanged): void {
+        this.send(EVENT.grillChanged, changed);
     }
 
     // ── Pages ──

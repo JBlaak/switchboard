@@ -8,7 +8,7 @@
  * because a filter or a search is a user's own action, and the one moment the
  * open session gives up the slot it is parked in.
  */
-import {nextAppearance, normaliseAppearance} from '../../../domain/settings/appearance';
+import {normaliseAppearance} from '../../../domain/settings/appearance';
 import {relayoutSessionList} from '../session-list/relayout';
 import {matchingProjectPaths} from '../../state/search-narrowing';
 import {dispatch, getState} from '../../state/app-store';
@@ -16,6 +16,7 @@ import {openSessions, view} from '../../state/session-store';
 import {safeFit} from '../../features/terminal/terminal-manager';
 import {syncQuickSessionButton} from '../../features/sessions/quick-session';
 import {watchSleepState} from './sleep-switch';
+import type {Appearance} from '../../../domain/settings/appearance';
 import type {GlobalSettings} from '../../../domain/settings/settings';
 import type {SidebarFilter} from '../../state/toolbar-slice';
 
@@ -136,11 +137,10 @@ async function runSearch(): Promise<void> {
 
 /**
  * Shown immediately; main applying the scheme (through `nativeTheme`, which
- * `prefers-color-scheme` follows) is what actually repaints, and it does not
- * need the button to wait for it.
+ * `prefers-color-scheme` follows) is what actually repaints, and the menu
+ * does not need to wait for it.
  */
-export function cycleAppearance(): void {
-    const mode = nextAppearance(getState().toolbar.appearance);
+export function setAppearance(mode: Appearance): void {
     dispatch({type: 'appearanceChanged', mode});
     void window.api.setAppearance(mode);
 }

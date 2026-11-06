@@ -12,6 +12,7 @@ import type {WorkingAgent} from '../../domain/terminal/program-status-children';
 import type {BackgroundTask} from '../../domain/session/background-tasks';
 import type {UpdateNotice} from '../../domain/update/release';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
+import type {GrillChanged} from '../../domain/grill/model';
 import type {SessionWorkSnapshot} from '../../domain/session-work/model';
 import type {PullRequestStatusChange} from '../../domain/session-work/status';
 import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
@@ -47,6 +48,8 @@ export interface RendererGateway {
     questionsAsked(pending: PendingQuestions): void;
     /** Those questions were answered here, or withdrawn (the CLI asks in the terminal). */
     questionsSettled(settled: QuestionsSettled): void;
+    /** A session's grilling round opened, changed (a draft, an ask, a revision, agents) or closed (`view` null). */
+    grillChanged(changed: GrillChanged): void;
 
     // ── Pages ──
     /** A session showed the user a page (`show_page`): lay it over that session's terminal. */

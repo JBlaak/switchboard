@@ -13,14 +13,12 @@ import {test, expect, forEachAppearance} from '../support/test';
 import {expectScreen, openSession, sessionRow, sidebar, terminalHeader} from '../support/app';
 import {
     askQuestions,
-    endTurn,
     focusIsIn,
     option,
     pushQuestions,
     questionSheet,
     recordAnimations,
     recordedAnimations,
-    submitPrompt,
 } from '../support/questions';
 import {fakeClaude} from '../support/fake-cli';
 import {LABEL, S} from '../fixtures/standard';
@@ -48,24 +46,6 @@ const QUESTIONS: AskedQuestion[] = [
         ],
     },
 ];
-
-/** A grilling round, as the `grilling` skill ends a turn with it. */
-const ROUND = [
-    'Settled: the cookie stays httpOnly.',
-    '',
-    '❓ **Q1** - **Keep the old login route?**: Two clients still call it.',
-    '',
-    '➡️ Keep it for one more release.',
-    '',
-    '---',
-    '',
-    '❓ **Q2** - **Where do sessions live?**: Pick a store.',
-    '',
-    '- **A)** SQLite — one file, no server',
-    '- **B)** Redis — shared, needs a server',
-    '',
-    '➡️ A, SQLite.',
-].join('\n');
 
 type HookReply = {hookSpecificOutput: {updatedInput: {answers: Record<string, string>}}};
 
@@ -179,21 +159,6 @@ forEachAppearance(() => {
         /* Then */
         await expect(questionPanel(page).getByRole('heading', {name: QUESTIONS[0].question})).toBeVisible();
         await expectScreen(page, 'question-panel');
-    });
-
-    test('question panel, grilling round', async ({page, home}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-        await endTurn(home, S.loginFix, ROUND);
-        await expect(questionPanel(page).getByRole('heading', {name: 'Keep the old login route?'})).toBeVisible();
-
-        /* When */
-        await option(page, /Keep it for one more release/).click();
-        await primary(page).click();
-
-        /* Then */
-        await expect(questionPanel(page).getByRole('heading', {name: 'Where do sessions live?'})).toBeVisible();
-        await expectScreen(page, 'question-panel-grill');
     });
 
     test('question panel, peeking at the terminal', async ({page, home}) => {
@@ -531,48 +496,6 @@ test.describe('peek', () => {
         await expect(back).toHaveCount(0);
         await expect(heading(page, 0)).toBeVisible();
         await expect.poll(() => focusIsIn(page)).toBe('panel');
-    });
-});
-
-test.describe('grilling', () => {
-    test('a round written at the end of a turn is answered by typing into the session', async ({page, home}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-
-        /* When */
-        await endTurn(home, S.loginFix, ROUND);
-
-        /* Then */
-        const panel = questionPanel(page);
-        await expect(panel.getByRole('heading', {name: 'Keep the old login route?'})).toBeVisible();
-        await expect(panel.getByText('Two clients still call it.')).toBeVisible();
-        await expect(panel.getByRole('button', {name: /Keep it for one more release/})).toBeVisible();
-        await expect(sidebar(page).getByText('Asking 2 questions', {exact: true})).toBeVisible();
-
-        /* When */
-        await panel.getByRole('button', {name: /Keep it for one more release/}).click();
-        await primary(page).click();
-        await expect(panel.getByRole('heading', {name: 'Where do sessions live?'})).toBeVisible();
-        await panel.getByRole('button', {name: /B\) Redis/}).click();
-        await primary(page).click();
-
-        /* Then */
-        await fakeClaude(home, S.loginFix).waitForInput('Q1: yes\nQ2: B) Redis — shared, needs a server');
-        await expect(sidebar(page).getByText('Asking 2 questions', {exact: true})).toHaveCount(0);
-    });
-
-    test('a prompt typed in the terminal takes the round away', async ({page, home}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-        await endTurn(home, S.loginFix, ROUND);
-        await expect(questionPanel(page).getByRole('heading', {name: 'Keep the old login route?'})).toBeVisible();
-
-        /* When */
-        await submitPrompt(home, S.loginFix, 'Q1: yes');
-
-        /* Then */
-        await expect(questionPanel(page)).toHaveCount(0);
-        await expect(sidebar(page).getByText('Asking 2 questions', {exact: true})).toHaveCount(0);
     });
 });
 

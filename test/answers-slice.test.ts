@@ -237,6 +237,17 @@ test('pokes count up, and each is a new line', () => {
     assert.deepStrictEqual(poked.answers.byToolUse.t1.said, {seq: 2, moment: {kind: 'poked', count: 2}});
 });
 
+test('the grilling card has Patch say a moment beside its set', () => {
+    /* Given */
+    const state = run(initialRendererState(), askedT1, greetedT1);
+
+    /* When */
+    const said = run(state, {type: 'answersSaid', toolUseId: 't1', moment: {kind: 'picked', recommended: false}});
+
+    /* Then */
+    assert.deepStrictEqual(said.answers.byToolUse.t1.said, {seq: 2, moment: {kind: 'picked', recommended: false}});
+});
+
 test('dozing says how many minutes are left', () => {
     /* Given */
     const state = run(initialRendererState(), askedT1);

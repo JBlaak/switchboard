@@ -25,7 +25,8 @@
  */
 import type {SessionOptions} from '../launch/session-options';
 import type {Session} from '../session/session';
-import type {AskedQuestions, Question} from '../questions/question';
+import type {AskedQuestions} from '../questions/question';
+import type {EndedTurn} from '../grill/model';
 import type {ArchiveToolOutcome} from '../session/archive-tool';
 
 /**
@@ -654,17 +655,42 @@ export interface AskWithdrawnMessage {
     hookId: string;
 }
 
-/** A turn ended on a grilling round (the Stop hook's last message). */
-export interface GrillRoundMessage {
-    type: 'grill-round';
+/**
+ * A turn of the session ended (the Stop hook), with the text blocks it wrote,
+ * for the grilling card. The agent reads them from the transcript on the VM,
+ * so the Mac never needs the file.
+ *
+ * It replaced `grill-round` (the round parsed on the agent) without a protocol
+ * bump: an older agent's `grill-round` is ignored by a newer Mac, and an older
+ * Mac ignores this, so a VM session only goes without the grilling card until
+ * its agent is upgraded.
+ */
+export interface GrillTurnMessage {
+    type: 'grill-turn';
     launchId: string;
-    questions: Question[];
+    turn: EndedTurn;
+    /** The background subagents still running, as the Stop listed them; null when it did not say. */
+    backgroundAgents: string[] | null;
 }
 
-/** The user submitted a prompt in the session (the UserPromptSubmit hook). */
+/** A prompt went in to the session (the UserPromptSubmit hook), with its text. */
 export interface PromptSubmittedMessage {
     type: 'prompt-submitted';
     launchId: string;
+    /**
+     * The prompt's text. Optional on the wire: an agent from before the
+     * grilling card (still running after an app update, since only the protocol
+     * must match) sends none, and the Mac reads that as ''.
+     */
+    prompt?: string;
+}
+
+/** A subagent of the session started or stopped (the SubagentStart and SubagentStop hooks). */
+export interface SubagentMessage {
+    type: 'subagent';
+    launchId: string;
+    event: 'start' | 'stop';
+    agentId: string;
 }
 
 /** The session called the archive tool; the Mac answers `archive-reply`. */
@@ -857,8 +883,9 @@ export type AgentMessage =
     | SessionsMessage
     | AskMessage
     | AskWithdrawnMessage
-    | GrillRoundMessage
+    | GrillTurnMessage
     | PromptSubmittedMessage
+    | SubagentMessage
     | ArchiveRequestMessage
     | TurnEndedMessage
     | HostSettingsMessage

@@ -4,7 +4,7 @@
    and the dialogs' own pieces; only what they lack is here, and every colour
    is a token. */
 
-/* --- Toolbar indicator: a quiet pill while on, mint with the phone's name while one is connected --- */
+/* --- Toolbar indicator: mint with the phone's name while one is connected, nothing otherwise --- */
 #phone-access-indicator {
     margin-left: auto;
     height: 28px;
@@ -15,8 +15,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(var(--sb-overlay-rgb), 0.08);
-    color: var(--sb-text-dim);
+    background: var(--sb-mint);
+    color: var(--sb-accent);
     font: 700 12px var(--sb-font-head);
     white-space: nowrap;
     cursor: pointer;
@@ -34,20 +34,9 @@
     text-overflow: ellipsis;
 }
 
-#phone-access-indicator:hover {
-    background: rgba(var(--sb-overlay-rgb), 0.12);
-    color: var(--sb-text-strong);
-}
-
-#phone-access-indicator.is-connected,
-#phone-access-indicator.is-connected:hover {
-    background: var(--sb-mint);
-    color: var(--sb-accent);
-}
-
 /* The indicator takes the toolbar's auto margin, so the icons after it stay together on the right. */
 #phone-access-indicator ~ #sleep-toggle-btn,
-#phone-access-indicator ~ #appearance-toggle-btn {
+#phone-access-indicator ~ #global-settings-btn {
     margin-left: 0;
 }
 

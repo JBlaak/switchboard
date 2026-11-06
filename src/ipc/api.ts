@@ -17,15 +17,18 @@ import type {Appearance} from '../domain/settings/appearance';
 import type {SavedPrompt, SavedPromptLists} from '../domain/settings/saved-prompts';
 import type {Answers, PendingQuestions, QuestionsSettled} from '../domain/questions/question';
 import type {ShellProfile} from '../domain/shell/shell-profile';
+import type {GrillAnswer, GrillChanged, GrillResult, GrillView} from '../domain/grill/model';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../domain/session-work/model';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
+import type {BumpRequest, BumpResult, CiJobQueueAnswer} from '../domain/project/ci-job-queue';
 import type {ActionRequest, ActionResult, CancelResult} from '../domain/session-work/actions';
 import type {CommentRequest, ReviewRequest, ReviewResult} from '../domain/session-work/review';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
 import type {BackgroundTask} from '../domain/session/background-tasks';
 import type {UpdateNotice} from '../domain/update/release';
 import type {Usage} from '../domain/usage/usage';
+import type {WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
 import type {Weather, WeatherLocation} from '../domain/weather/weather';
 import type {AskPatchResult, CaptureTarget, RouteRequest} from '../domain/ask/model';
 import type {IssueWorktreeRequest, IssueWorktreeResult} from '../domain/plan/issue-session';
@@ -68,6 +71,7 @@ import type {VmHostView} from '../application/services/vm-registry';
 import type {ShownPage} from '../domain/session/page-tool';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
+export type {Editor, WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
 
 /** Removes the listener an `on*` subscription added. */
 export type Unsubscribe = () => void;
@@ -124,6 +128,32 @@ export interface SwitchboardApi {
     getPendingQuestions(): Promise<PendingQuestions[]>;
     /** Send the answers; `{ ok: false }` when the questions were already withdrawn. */
     answerQuestions(sessionId: string, toolUseId: string, answers: Answers): Promise<IpcResult>;
+
+    // ── Grilling rounds ──
+    /** Every open grilling round with its draft answers, for a renderer that (re)loads. */
+    grillViews(): Promise<GrillView[]>;
+    /** Set or clear (null) the draft answer at `place`, given against `revision` of the round. */
+    grillAnswer(
+        sessionId: string,
+        roundId: string,
+        revision: number,
+        place: number,
+        answer: GrillAnswer | null,
+    ): Promise<GrillResult>;
+    /** Ask about the question at `place` with `text`, or Wait, what? when `text` is null. */
+    grillAsk(
+        sessionId: string,
+        roundId: string,
+        revision: number,
+        place: number,
+        text: string | null,
+    ): Promise<GrillResult>;
+    /** Type the round's answers into the session now. */
+    grillSend(sessionId: string, roundId: string): Promise<GrillResult>;
+    /** Send the answers once the session's research agents are done. */
+    grillQueue(sessionId: string, roundId: string): Promise<GrillResult>;
+    /** Take back a queued send. */
+    grillCancelQueue(sessionId: string, roundId: string): Promise<GrillResult>;
 
     // ── Usage ──
     getUsage(): Promise<Usage | null>;
@@ -199,6 +229,18 @@ export interface SwitchboardApi {
     /** Copy a PNG to the clipboard. */
     writeClipboardImage(png: Uint8Array): Promise<void>;
     getAppVersion(): Promise<string>;
+
+    // ── Workspace actions: the session tray's Workspace group (#342) ──
+    // Each takes `{sessionId}` (the session's working directory) or
+    // `{directory}`. A remote (ssh/VM) session answers `NOT_AVAILABLE_REMOTE`.
+    /** The IDE Open in editor would use, e.g. `app: 'PhpStorm'` for the button's label. */
+    workspaceEditor(target: WorkspaceTarget): Promise<WorkspaceEditorInfo>;
+    /** Open the folder in the IDE that matches the repo; a missing one falls back to Sublime Text, then Finder. */
+    openInEditor(target: WorkspaceTarget): Promise<WorkspaceActionResult>;
+    /** Open the folder in a Finder window. */
+    revealInFinder(target: WorkspaceTarget): Promise<WorkspaceActionResult>;
+    /** Open a shell in the folder: iTerm when installed, else Terminal. Not a Switchboard session. */
+    shellHere(target: WorkspaceTarget): Promise<WorkspaceActionResult>;
 
     // ── Session work ──
     /**
@@ -301,6 +343,13 @@ export interface SwitchboardApi {
     queueErrandAbandoned(errandId: string): Promise<ErrandResult>;
     /** The repository's errands (every one without it), oldest first, with how far each got. */
     queueErrands(repository?: string): Promise<QueueErrandView[]>;
+    /** The repository's running and queued jobs on self-hosted runners, by runner pool; asked while the section shows. */
+    ciJobQueue(repository: string): Promise<CiJobQueueAnswer>;
+    /**
+     * Bump a queued job, after the user said yes to the runs it moves: those
+     * runs are cancelled, and re-run once each stopped so they queue behind it.
+     */
+    ciJobBump(request: BumpRequest): Promise<BumpResult>;
 
     // ── Tasks: BlaakTasks in Switchboard (#248) ──
     // While no BlaakTasks URL is set, the BlaakTasks calls answer `{ kind: 'off' }`
@@ -489,6 +538,8 @@ export interface SwitchboardApi {
     onRemoteStatus(cb: (sessionId: string, status: RemoteStatusPayload) => void): Unsubscribe;
     onQuestionsAsked(cb: (pending: PendingQuestions) => void): Unsubscribe;
     onQuestionsSettled(cb: (settled: QuestionsSettled) => void): Unsubscribe;
+    /** A grilling round opened, changed (an answer, a revision, an ask) or closed. */
+    onGrillChanged(cb: (changed: GrillChanged) => void): Unsubscribe;
     /** A session showed the user a page (`show_page`). */
     onPageShown(cb: (page: ShownPage) => void): Unsubscribe;
     onProjectsChanged(cb: () => void): Unsubscribe;

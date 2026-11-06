@@ -408,6 +408,7 @@ test.describe('terminal scrolling and resize', () => {
         /* When */
         const before = await terminalState(page, S.loginFix);
         await page.getByRole('button', {name: 'Global settings', exact: true}).click();
+        await page.getByRole('menuitem', {name: 'All settings…'}).click();
         await expect(page.getByText('Global Settings', {exact: true})).toBeVisible();
         // Hidden behind settings, the terminal cannot measure itself.
         await setContentSize(app, 1100, 650);
