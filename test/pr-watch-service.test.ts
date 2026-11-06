@@ -476,6 +476,30 @@ test('a merged PR ends a give-up and is not asked about again', async () => {
     assert.deepEqual(dots(), [{sessionId: 's1', prs: [{number: 7, dot: 'merged'}], needsYou: false}]);
 });
 
+test('an open PR with auto-merge on says so on its dot', async () => {
+    /* Given */
+    const {watch, github, dots} = setup();
+    github.prs.set(7, status('aaa', 'passing', {autoMerge: true}));
+
+    /* When */
+    await watch.poll();
+
+    /* Then */
+    assert.deepEqual(dots(), [{sessionId: 's1', prs: [{number: 7, dot: 'green', autoMerge: true}], needsYou: false}]);
+});
+
+test('a closed PR says so on its dot', async () => {
+    /* Given */
+    const {watch, github, dots} = setup();
+    github.prs.set(7, status('aaa', 'passing', {state: 'closed'}));
+
+    /* When */
+    await watch.poll();
+
+    /* Then */
+    assert.deepEqual(dots(), [{sessionId: 's1', prs: [{number: 7, dot: 'green', closed: true}], needsYou: false}]);
+});
+
 test('dots are pushed only when they change: amber while Claude fixes it, gone when the session stops', async () => {
     /* Given */
     const {watch, github, prompter, dots, finishTurn} = setup();

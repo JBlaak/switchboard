@@ -54,6 +54,11 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
     terminalNotification: {type: 'terminalNotification', sessionId: 's1', message: 'Claude needs your permission'},
     sessionNeedsAttention: {type: 'sessionNeedsAttention', sessionId: 's1'},
     sessionAgents: {type: 'sessionAgents', sessionId: 's1', agents: [{id: 'a', title: 'x'} as never]},
+    sessionBackgroundTasks: {
+        type: 'sessionBackgroundTasks',
+        sessionId: 's1',
+        tasks: [{id: 'b1', description: 'Watch CI', watch: true}],
+    },
     remoteStatus: {type: 'remoteStatus', sessionId: 's1', status: {phase: 'connecting'}, receivedAt: 5},
     questionsAsked: {type: 'questionsAsked', pending: asked('s1', 't1')},
     questionsSettled: {type: 'questionsSettled', settled: {sessionId: 's1', toolUseId: 't1', outcome: 'answered'}},
@@ -344,6 +349,27 @@ test('sessionAgents with an empty list forgets them', () => {
     assert.ok(!('s1' in cleared.activity.agents));
 });
 
+// ── Background tasks ──
+
+test('sessionBackgroundTasks records the tasks the turn ended with', () => {
+    /* When */
+    const state = run(initial(), SAMPLES.sessionBackgroundTasks);
+
+    /* Then */
+    assert.strictEqual(state.activity.background.s1, SAMPLES.sessionBackgroundTasks.tasks);
+});
+
+test('sessionBackgroundTasks with an empty list forgets them', () => {
+    /* Given */
+    const withTasks = run(initial(), SAMPLES.sessionBackgroundTasks);
+
+    /* When */
+    const cleared = run(withTasks, {type: 'sessionBackgroundTasks', sessionId: 's1', tasks: []});
+
+    /* Then */
+    assert.ok(!('s1' in cleared.activity.background));
+});
+
 /** s1 busy, waiting and with agents, then all of it cleared. */
 const activityClearedState = () =>
     run(
@@ -367,7 +393,7 @@ test('activityCleared drops everything, the agents included', () => {
     const state = run(marked, {type: 'activityCleared', sessionId: 's1'});
 
     /* Then */
-    assert.deepStrictEqual(state.activity, {attention: {}, ready: {}, busy: {}, agents: {}});
+    assert.deepStrictEqual(state.activity, {attention: {}, ready: {}, busy: {}, agents: {}, background: {}});
 });
 
 test('activityCleared again is a no-op', () => {
@@ -554,6 +580,7 @@ function idsHeldIn(state: RendererState): Set<string> {
         activity.ready,
         activity.busy,
         activity.agents,
+        activity.background,
         questions.bySession,
         remote.statuses,
         keys.byId,
@@ -573,6 +600,7 @@ function everythingAbout(sessionId: string): RendererState {
         {type: 'cliBusyState', sessionId, busy: true},
         {type: 'sessionNeedsAttention', sessionId},
         {type: 'sessionAgents', sessionId, agents: [{id: 'a', title: 'x'} as never]},
+        {type: 'sessionBackgroundTasks', sessionId, tasks: [{id: 'b1', description: 'Watch CI', watch: true}]},
         {type: 'questionsAsked', pending: asked(sessionId, 't1')},
         {type: 'remoteStatus', sessionId, status: {phase: 'connecting'}, receivedAt: 5},
         {type: 'activeSessionChanged', sessionId},
@@ -793,7 +821,14 @@ test('rowActivity derives the classes a row renders', () => {
     const activity = rowActivity(state, 's1');
 
     /* Then */
-    assert.deepStrictEqual(activity, {needsAttention: true, responseReady: false, busy: false, agents: []});
+    assert.deepStrictEqual(activity, {
+        needsAttention: true,
+        responseReady: false,
+        busy: false,
+        agents: [],
+        backgroundWork: false,
+        merging: false,
+    });
 });
 
 test('a turn ending off screen makes the row ready and no longer busy', () => {
@@ -809,7 +844,87 @@ test('a turn ending off screen makes the row ready and no longer busy', () => {
         responseReady: true,
         busy: false,
         agents: [],
+        backgroundWork: false,
+        merging: false,
     });
+});
+
+/** s1 running, its turn just ended off screen with these background tasks still running. */
+function endedWith(...tasks: {id: string; watch: boolean}[]): RendererState {
+    return run(
+        initial('other'),
+        {type: 'viewPatched', patch: {activePtyIds: new Set(['s1'])}},
+        {type: 'cliBusyState', sessionId: 's1', busy: true},
+        {type: 'cliBusyState', sessionId: 's1', busy: false},
+        {
+            type: 'sessionBackgroundTasks',
+            sessionId: 's1',
+            tasks: tasks.map((task) => ({...task, description: task.id})),
+        },
+    );
+}
+
+const LINKED_PR = {number: 7, url: 'https://github.com/o/app/pull/7', repository: 'o/app'};
+
+/** The CI watch's word on s1's PR #7: green, with auto-merge on or not. */
+function prGreen(autoMerge: boolean): RendererEvent {
+    return {
+        type: 'prStatusChanged',
+        change: {
+            sessionId: 's1',
+            prs: [{number: 7, dot: 'green', ...(autoMerge ? {autoMerge: true} : {})}],
+            needsYou: false,
+        },
+    };
+}
+
+test('a turn that ended with background work shows the row as working on it', () => {
+    /* When */
+    const state = endedWith({id: 'build', watch: false}, {id: 'ci', watch: true});
+
+    /* Then */
+    assert.strictEqual(rowActivity(state, 's1').backgroundWork, true);
+});
+
+test('a turn that ended with only watches is not background work', () => {
+    /* When */
+    const state = endedWith({id: 'ci', watch: true});
+
+    /* Then */
+    assert.strictEqual(rowActivity(state, 's1').backgroundWork, false);
+});
+
+test('a turn that ended with only watches and a PR on auto-merge is merging', () => {
+    /* Given */
+    const watching = endedWith({id: 'ci', watch: true});
+
+    /* When */
+    const state = run(watching, prGreen(true));
+
+    /* Then */
+    assert.strictEqual(rowActivity(state, 's1', [LINKED_PR]).merging, true);
+});
+
+test('a turn that ended with only watches and a PR nobody will merge is not merging', () => {
+    /* Given */
+    const watching = endedWith({id: 'ci', watch: true});
+
+    /* When */
+    const state = run(watching, prGreen(false));
+
+    /* Then */
+    assert.strictEqual(rowActivity(state, 's1', [LINKED_PR]).merging, false);
+});
+
+test('a merging session that asks something is no longer merging', () => {
+    /* Given */
+    const merging = run(endedWith({id: 'ci', watch: true}), prGreen(true));
+
+    /* When */
+    const state = run(merging, {type: 'questionsAsked', pending: asked('s1', 't1')});
+
+    /* Then */
+    assert.strictEqual(rowActivity(state, 's1', [LINKED_PR]).merging, false);
 });
 
 test('a pending question set makes the row need attention', () => {

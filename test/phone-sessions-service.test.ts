@@ -311,6 +311,27 @@ test('the list is in the sidebar order: needing you, then idle by recency, then 
     assert.equal(list.sessions[0].changedAt, 9_000);
 });
 
+test('a turn that ended with background work shows as busy, one with only watches as idle', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('building');
+    h.addSession('watching');
+    const phone = h.connect();
+    phone.clear();
+
+    /* When */
+    h.service.sessionBackgroundTasks('building', [{id: 'b1', description: 'npm test', watch: false}]);
+    h.service.sessionBackgroundTasks('watching', [{id: 'b2', description: 'Watch CI', watch: true}]);
+    h.timers.tick();
+
+    /* Then */
+    const [list] = phone.of('sessions');
+    assert.deepEqual(Object.fromEntries(list.sessions.map((s) => [s.id, s.state])), {
+        building: 'busy',
+        watching: 'idle',
+    });
+});
+
 test('changes close together go out as one list', () => {
     /* Given */
     const h = harness();

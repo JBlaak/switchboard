@@ -9,6 +9,7 @@
 import type {PendingQuestions, QuestionsSettled} from '../../src/domain/questions/question';
 import type {RemoteStatusPayload} from '../../src/domain/remote/remote-status';
 import type {WorkingAgent} from '../../src/domain/terminal/program-status-children';
+import type {BackgroundTask} from '../../src/domain/session/background-tasks';
 import type {RepositoryIssue, RepositoryPullRequest, WorktreeSummary} from '../../src/domain/project/overview';
 import type {Timers} from '../../src/application/ports/clock';
 import type {GitWorkspace, GitWrite} from '../../src/application/ports/git-workspace';
@@ -206,6 +207,7 @@ export function fakeRenderer(): FakeRenderer {
         terminalNotification: record('terminalNotification'),
         sessionNeedsAttention: record('sessionNeedsAttention'),
         sessionAgents: record('sessionAgents') as (id: string, agents: WorkingAgent[]) => void,
+        sessionBackgroundTasks: record('sessionBackgroundTasks') as (id: string, tasks: BackgroundTask[]) => void,
         remoteStatus: record('remoteStatus') as (id: string, s: RemoteStatusPayload) => void,
         questionsAsked: record('questionsAsked') as (pending: PendingQuestions) => void,
         questionsSettled: record('questionsSettled') as (settled: QuestionsSettled) => void,
