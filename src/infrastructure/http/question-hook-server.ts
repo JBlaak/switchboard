@@ -8,11 +8,14 @@
  * timeout, the session stopped, the CLI interrupted) the CLI asks in its
  * terminal instead and the pending set is withdrawn.
  *
- * Two more routes take notices, answered at once: `POST /stop/<launchId>` at
- * the end of each turn, whose last message may be a grilling round, and
- * `POST /prompt/<launchId>` when a prompt goes in, which ends a round still
- * waiting. The end of a turn is also when a session that asked to be archived
- * is archived.
+ * Three more routes take notices, answered at once. `POST /stop/<launchId>`
+ * comes at the end of each turn: the server reads the turn's text blocks off
+ * the end of the transcript the Stop names (falling back to the Stop's last
+ * message) and hands them on, for the grilling card to look for a round in.
+ * `POST /prompt/<launchId>` brings each prompt that goes in, and
+ * `POST /subagent/<launchId>` each subagent that starts or stops. The end of a
+ * turn is also when a session that asked to be archived is archived. The
+ * parsing is all in `domain/grill/hook-input.ts`; this server only does I/O.
  *
  * `POST /onepassword/<launchId>` takes every Bash call before it runs. One
  * that will reach 1Password is held, as a question is, until the user answers
@@ -29,29 +32,40 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type {AddressInfo} from 'node:net';
 
-import {parseGrillRound} from '../../domain/questions/grill';
+import {
+    endedTurn,
+    parsePromptHook,
+    parseStopHook,
+    parseSubagentHook,
+    TRANSCRIPT_TAIL_BYTES,
+} from '../../domain/grill/hook-input';
 import {parseOnePasswordHookInput} from '../../domain/onepassword/heads-up';
 import {archiveToolReply, type ArchiveToolOutcome, type McpTool} from '../../domain/session/archive-tool';
 import {pageTool, type PageInput} from '../../domain/session/page-tool';
-import {parseQuestionHookInput, parseStopHookInput, QUESTION_HOOK_TOKEN_HEADER} from '../../domain/questions/question';
+import {parseQuestionHookInput, QUESTION_HOOK_TOKEN_HEADER} from '../../domain/questions/question';
 import type {Logger} from '../../application/ports/logger';
-import type {QuestionHookEndpoint} from '../../application/ports/question-hook';
-import type {QuestionService} from '../../application/services/question-service';
+import type {HookReceiver, QuestionHookEndpoint} from '../../application/ports/question-hook';
+import type {TranscriptTail} from '../../application/ports/transcript-tail';
 import type {OnePasswordHeadsUpService} from '../../application/services/onepassword-heads-up-service';
 
 /** Far more than any question set; a body this big is not from the CLI. */
 const MAX_BODY_BYTES = 1024 * 1024;
 
-const HOOK_PATH = /^\/(ask|stop|prompt|mcp|onepassword)\/([^/?#]+)$/;
+const HOOK_PATH = /^\/(ask|stop|prompt|subagent|mcp|onepassword)\/([^/?#]+)$/;
 
-type Route = 'ask' | 'stop' | 'prompt' | 'mcp' | 'onepassword';
+type Route = 'ask' | 'stop' | 'prompt' | 'subagent' | 'mcp' | 'onepassword';
 
 export interface QuestionHookServerDeps {
     /**
      * Where valid requests go. Only these, so the composition root can build
      * the server before the service that reads its address.
      */
-    receiver: Pick<QuestionService, 'receive' | 'receiveRound' | 'promptSubmitted'>;
+    receiver: HookReceiver;
+    /**
+     * Where the transcript a Stop names is read from, for the turn's text
+     * blocks. Without one, a turn is the Stop's last message alone.
+     */
+    transcripts?: TranscriptTail;
     /**
      * Where the archive tool's calls, and the ends of turns, go. On the Mac,
      * ArchiveToolService answers at once; on the agent the call is forwarded to
@@ -171,7 +185,14 @@ export class QuestionHookServer implements QuestionHookEndpoint {
         if (route === 'onepassword') return this.onePassword(launchId, body, res);
         if (route === 'prompt') {
             this.json(res, {});
-            this.deps.receiver.promptSubmitted(launchId);
+            const prompt = parsePromptHook(body);
+            if (prompt !== null) this.deps.receiver.promptSubmitted(launchId, prompt);
+            return;
+        }
+        if (route === 'subagent') {
+            this.json(res, {});
+            const change = parseSubagentHook(body);
+            if (change) this.deps.receiver.subagentChanged(launchId, change.event, change.agentId);
             return;
         }
 
@@ -214,12 +235,18 @@ export class QuestionHookServer implements QuestionHookEndpoint {
         });
     }
 
-    /** The turn is over either way: let the CLI go, then look for a round in what it said. */
+    /** The turn is over either way: let the CLI go, then hand on what the turn wrote. */
     private stopped(launchId: string, body: unknown, res: http.ServerResponse): void {
         this.json(res, {});
-        const text = parseStopHookInput(body);
-        const questions = text ? parseGrillRound(text) : null;
-        if (questions) this.deps.receiver.receiveRound(launchId, questions);
+        const stop = parseStopHook(body);
+        if (stop) {
+            const tail =
+                stop.transcriptPath && this.deps.transcripts
+                    ? this.deps.transcripts.read(stop.transcriptPath, TRANSCRIPT_TAIL_BYTES)
+                    : null;
+            const turn = endedTurn(tail === null ? null : tail.split('\n'), stop.lastMessage, textHash);
+            this.deps.receiver.turnEnded(launchId, turn, stop.backgroundAgents);
+        }
         this.deps.archiveTool?.turnEnded(launchId);
     }
 
@@ -278,4 +305,9 @@ export class QuestionHookServer implements QuestionHookEndpoint {
         res.writeHead(status);
         res.end();
     }
+}
+
+/** A short, stable digest of a text: the id of a turn read from the Stop's last message alone. */
+function textHash(text: string): string {
+    return crypto.createHash('sha1').update(text).digest('hex').slice(0, 12);
 }

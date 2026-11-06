@@ -8,6 +8,7 @@ const settings = questionHookSettings(
         ask: 'http://127.0.0.1:4321/ask/abc',
         stop: 'http://127.0.0.1:4321/stop/abc',
         prompt: 'http://127.0.0.1:4321/prompt/abc',
+        subagent: 'http://127.0.0.1:4321/subagent/abc',
     },
     "tok'en",
 );

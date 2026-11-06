@@ -1,0 +1,59 @@
+{
+    "type": "grill",
+    "views": [
+        {
+            "sessionId": "s-1",
+            "roundId": "b-41",
+            "revision": 1,
+            "preamble": "The agents are back.",
+            "questions": [
+                {
+                    "number": 1,
+                    "title": "Where the drafts live",
+                    "reason": "Both the window and the phone edit them.",
+                    "recommendation": "In the main process, per session.",
+                    "answer": {"kind": "accepted"},
+                    "setAside": null,
+                    "mark": null,
+                    "asked": false,
+                    "explanation": null
+                },
+                {
+                    "number": 2,
+                    "title": "How long to keep a draft",
+                    "reason": "Drafts cost little.",
+                    "recommendation": "(b) Until the round closes: nothing outlives it.",
+                    "choices": {
+                        "lead": "Drafts cost little.",
+                        "list": [
+                            {"letter": "a", "text": "Forever"},
+                            {"letter": "b", "text": "Until the round closes"}
+                        ],
+                        "after": ""
+                    },
+                    "recommendedChoice": "b",
+                    "answer": {"kind": "overridden", "text": "(a) Forever"},
+                    "setAside": {"kind": "noted", "note": "keep it small"},
+                    "mark": "changed",
+                    "asked": true,
+                    "explanation": "Because a closed round has nothing to come back to."
+                },
+                {
+                    "number": 3,
+                    "title": "Syncing to the phone",
+                    "reason": "The phone may be offline.",
+                    "recommendation": "Send the whole list on every change.",
+                    "answer": null,
+                    "setAside": null,
+                    "mark": "new",
+                    "asked": false,
+                    "explanation": null
+                }
+            ],
+            "dropped": 1,
+            "agentsRunning": 2,
+            "send": "queued",
+            "asking": 2
+        }
+    ]
+}
