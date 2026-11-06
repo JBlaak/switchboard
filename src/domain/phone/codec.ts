@@ -11,6 +11,7 @@
  * rather than refused, since protocol.ts allows adding optional fields
  * without a version bump.
  */
+import type {GrillAnswer} from '../grill/model';
 import type {Answers} from '../questions/question';
 import type {ClientMessage, PairingInvite} from './protocol';
 
@@ -27,6 +28,8 @@ const MAX_PATH = 4096;
 /** Prompt-box text, an Ask Patch request, a prompt, one answer. */
 const MAX_TEXT = 100_000;
 const MAX_ANSWERS = 50;
+/** More questions than any round asks. */
+const MAX_ROUND_QUESTIONS = 200;
 /** No phone has a terminal this big; the cap keeps a bad size from reaching the PTY. */
 export const MAX_TERMINAL_CELLS = 1000;
 /** One voice chunk's base64; the phone sends about 11 kB every quarter second. */
@@ -118,8 +121,62 @@ export function parseClientMessage(text: string): ClientMessage | null {
             if (!isText(raw.voiceId, MAX_ID)) return null;
             return {type: raw.type, voiceId: raw.voiceId};
         }
+        case 'grill-answer': {
+            if (!isText(raw.sessionId, MAX_ID) || !isText(raw.roundId, MAX_ID)) return null;
+            if (!isCount(raw.revision) || !isPlace(raw.place)) return null;
+            const answer = parseGrillAnswer(raw.answer);
+            if (answer === undefined) return null;
+            return {
+                type: 'grill-answer',
+                sessionId: raw.sessionId,
+                roundId: raw.roundId,
+                revision: raw.revision,
+                place: raw.place,
+                answer,
+            };
+        }
+        case 'grill-ask': {
+            if (!isText(raw.sessionId, MAX_ID) || !isText(raw.roundId, MAX_ID)) return null;
+            if (!isCount(raw.revision) || !isPlace(raw.place)) return null;
+            // An ask may be sent with nothing typed; null is Wait, what?.
+            if (raw.text !== null && !isString(raw.text, MAX_TEXT)) return null;
+            return {
+                type: 'grill-ask',
+                sessionId: raw.sessionId,
+                roundId: raw.roundId,
+                revision: raw.revision,
+                place: raw.place,
+                text: raw.text,
+            };
+        }
+        case 'grill-send':
+        case 'grill-queue':
+        case 'grill-cancel-queue': {
+            if (!isText(raw.sessionId, MAX_ID) || !isText(raw.roundId, MAX_ID)) return null;
+            return {type: raw.type, sessionId: raw.sessionId, roundId: raw.roundId};
+        }
         default:
             return null;
+    }
+}
+
+/**
+ * A grilling draft: null (cleared), or one of the three kinds with its text.
+ * A note or override may be empty, as a free-text answer may: an odd draft is
+ * not worth dropping the phone's connection over. Undefined when malformed.
+ */
+function parseGrillAnswer(value: unknown): GrillAnswer | null | undefined {
+    if (value === null) return null;
+    if (!isRecord(value)) return undefined;
+    switch (value.kind) {
+        case 'accepted':
+            return {kind: 'accepted'};
+        case 'noted':
+            return isString(value.note, MAX_TEXT) ? {kind: 'noted', note: value.note} : undefined;
+        case 'overridden':
+            return isString(value.text, MAX_TEXT) ? {kind: 'overridden', text: value.text} : undefined;
+        default:
+            return undefined;
     }
 }
 
@@ -250,6 +307,11 @@ function isText(value: unknown, max: number): value is string {
     return typeof value === 'string' && value.length > 0 && value.length <= max;
 }
 
+/** A string of at most `max` characters, empty allowed. */
+function isString(value: unknown, max: number): value is string {
+    return typeof value === 'string' && value.length <= max;
+}
+
 function isProtocolNumber(value: unknown): value is number {
     return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 0xffff;
 }
@@ -259,6 +321,16 @@ function isCells(value: unknown): value is number {
 }
 
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/** A revision number: 0 for a round as first posted. */
+function isCount(value: unknown): value is number {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 1_000_000;
+}
+
+/** A question's place in a round. */
+function isPlace(value: unknown): value is number {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < MAX_ROUND_QUESTIONS;
+}
 
 function isSeq(value: unknown): value is number {
     return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 1_000_000;
