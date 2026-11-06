@@ -76,6 +76,7 @@ export async function fakeBlaakTasks(
 /** BlaakTasks switched on the way a user does it: its URL saved in Settings. */
 export async function switchBlaakTasksOn(page: Page, url: string): Promise<void> {
     await page.getByRole('button', {name: 'Global settings', exact: true}).click();
+    await page.getByRole('menuitem', {name: 'All settings…'}).click();
     await page
         .getByText('Tasks URL', {exact: true})
         .locator('xpath=ancestor::*[.//input][1]')

@@ -1,32 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {DEFAULT_APPEARANCE, isAppearance, nextAppearance, normaliseAppearance} from '../src/domain/settings/appearance';
-
-test('cycles system → light → dark → system', () => {
-    /* When */
-    const afterSystem = nextAppearance('system');
-    const afterLight = nextAppearance('light');
-    const afterDark = nextAppearance('dark');
-
-    /* Then */
-    assert.equal(afterSystem, 'light');
-    assert.equal(afterLight, 'dark');
-    assert.equal(afterDark, 'system');
-});
-
-test('three clicks come back to where they started', () => {
-    /* Given */
-    const modes = ['system', 'light', 'dark'] as const;
-
-    for (const mode of modes) {
-        /* When */
-        const afterThree = nextAppearance(nextAppearance(nextAppearance(mode)));
-
-        /* Then */
-        assert.equal(afterThree, mode);
-    }
-});
+import {DEFAULT_APPEARANCE, isAppearance, normaliseAppearance} from '../src/domain/settings/appearance';
 
 test('recognises each of the three modes', () => {
     /* Given */

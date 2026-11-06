@@ -26,6 +26,7 @@ const says = (page: Page, line: string | RegExp) => page.locator('#placeholder')
 /** Put the empty screen away behind global settings and bring it back. */
 async function hideAndShowEmptyScreen(page: Page): Promise<void> {
     await page.getByRole('button', {name: 'Global settings', exact: true}).click();
+    await page.getByRole('menuitem', {name: 'All settings…'}).click();
     await expect(page.getByText('Global Settings', {exact: true})).toBeVisible();
     await page.getByRole('button', {name: 'Save Settings', exact: true}).click();
     await expect(page.getByText('Global Settings', {exact: true})).toBeHidden();
