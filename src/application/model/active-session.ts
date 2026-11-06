@@ -77,6 +77,11 @@ export class ActiveSession {
     public altScreen = false;
     /** The next resize should nudge the size, to force a TUI repaint. */
     public firstResize = true;
+    /**
+     * The app ended it on its way out (quitting, or its last window closing),
+     * not the user: it is brought back when Switchboard starts again.
+     */
+    public endedByApp = false;
 
     public readonly projectPath: string;
     public readonly projectFolder: string | null;

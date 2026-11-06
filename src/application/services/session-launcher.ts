@@ -89,6 +89,8 @@ export interface SessionLauncherDeps {
      * the legacy ssh+tmux kind.
      */
     agents?: LauncherAgents;
+    /** Keeps the record of live local Claude sessions that a restart brings back. */
+    liveSessions?: {started(sessionId: string, projectPath: string): void};
 }
 
 /**
@@ -189,6 +191,7 @@ export class SessionLauncher {
 
         registry.add(sessionId, session);
         lifecycle.wire(sessionId, session);
+        if (!isRemote && !isPlainTerminal) this.deps.liveSessions?.started(sessionId, projectPath);
 
         // Tell the renderer a connection is in flight. Until ssh prints something
         // there is nothing on screen at all, and a slow or unreachable host is

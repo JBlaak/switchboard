@@ -54,6 +54,8 @@ import {RemoteConnectionSupervisor} from '../application/services/remote-connect
 import {ScheduleService} from '../application/services/schedule-service';
 import {SessionIndex} from '../application/services/session-index';
 import {SessionLauncher} from '../application/services/session-launcher';
+import {SessionRestoreService} from '../application/services/session-restore-service';
+import {defaultSessionOptions} from '../domain/launch/session-options';
 import {SessionLifecycle} from '../application/services/session-lifecycle';
 import {SessionTransitionDetector} from '../application/services/session-transition-detector';
 import {SessionWorkService} from '../application/services/session-work-service';
@@ -180,6 +182,7 @@ export interface Container {
     readonly lifecycle: SessionLifecycle;
     readonly remote: RemoteConnectionSupervisor;
     readonly launcher: SessionLauncher;
+    readonly sessionRestore: SessionRestoreService;
     readonly transitions: SessionTransitionDetector;
     readonly questions: QuestionService;
     readonly questionHook: QuestionHookServer;
@@ -346,7 +349,14 @@ export function buildContainer(): Container {
         remote,
         timers,
         log,
-        cliState: prompter,
+        // The prompter hears every busy/idle change; the restore record hears each end.
+        cliState: {
+            cliStateChanged: (...args) => prompter.cliStateChanged(...args),
+            sessionEnded: (sessionId, session) => {
+                prompter.sessionEnded(sessionId, session);
+                sessionRestore.ended(sessionId, session);
+            },
+        },
     });
     remote.attach(lifecycle);
 
@@ -482,6 +492,21 @@ export function buildContainer(): Container {
         git: localWorkspace,
         fileExists: (target) => fs.exists(target),
         agents,
+        liveSessions: {started: (sessionId, projectPath) => sessionRestore.started(sessionId, projectPath)},
+    });
+    // The local sessions a restart or a reboot brings back.
+    const sessionRestore = new SessionRestoreService({
+        store: settingsStore,
+        enabled: () => settings.restoreSessions(),
+        optionsFor: (projectPath) => defaultSessionOptions(settings.effective(projectPath)),
+        launcher,
+        registry,
+        transcripts,
+        repository,
+        renderer,
+        fileExists: (target) => fs.exists(target),
+        clock,
+        log,
     });
 
     // Installing the agent on a VM (#281) and answering the UI's questions about
@@ -559,6 +584,7 @@ export function buildContainer(): Container {
         renderer,
         clock,
         log,
+        liveSessions: sessionRestore,
     });
 
     // ── Indexing ──
@@ -1188,6 +1214,7 @@ export function buildContainer(): Container {
         lifecycle,
         remote,
         launcher,
+        sessionRestore,
         transitions,
         questions,
         questionHook,
