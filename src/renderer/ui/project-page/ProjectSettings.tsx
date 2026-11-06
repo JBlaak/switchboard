@@ -27,7 +27,8 @@ import {
     projectFieldStates,
 } from '../../../domain/settings/project-overrides';
 import {backToProject, closeProject, isRemoteProject} from './actions';
-import {changeProjectSetting, hideProjectFromPage, resetProjectSettings} from './settings-actions';
+import {changeProjectSetting, resetProjectSettings} from './settings-actions';
+import {hideProjectFromPage} from './hide-project';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import {CommitText} from '../settings/CommitInputs';
 import {hostLinkOf} from '../vms/vm-hosts';
