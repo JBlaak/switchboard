@@ -10,7 +10,7 @@
  *
  * The phones hear what the renderer hears. `PhoneEventTee` sits in front of
  * the renderer gateway, so every service that already tells the renderer
- * about output, exits, re-keys, busy, attention, questions and a changed
+ * about output, exits, re-keys, busy, attention, questions, grilling rounds and a changed
  * project list tells the phones too, without knowing they exist.
  */
 import {encodeTerminalFrame, parseClientMessage} from '../domain/phone/codec';
@@ -21,6 +21,7 @@ import {VoiceService} from '../application/services/voice-service';
 import {TlsDeviceLink} from '../infrastructure/phone/tls-device-link';
 import type {PhoneAccessState, TerminalOwner} from '../domain/phone/state';
 import type {PendingQuestions, QuestionsSettled} from '../domain/questions/question';
+import type {GrillChanged} from '../domain/grill/model';
 import type {RemoteStatusPayload} from '../domain/remote/remote-status';
 import type {SessionWorkSnapshot} from '../domain/session-work/model';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
@@ -50,6 +51,7 @@ export type PhoneSessionEvents = Pick<
     | 'sessionNeedsAttention'
     | 'questionsAsked'
     | 'questionsSettled'
+    | 'grillChanged'
     | 'sessionsChanged'
     | 'sessionArchived'
 >;
@@ -115,6 +117,11 @@ export class PhoneEventTee implements RendererGateway {
     public questionsSettled(settled: QuestionsSettled): void {
         this.inner.questionsSettled(settled);
         this.phones()?.questionsSettled(settled);
+    }
+
+    public grillChanged(changed: GrillChanged): void {
+        this.inner.grillChanged(changed);
+        this.phones()?.grillChanged(changed);
     }
 
     /** The window only: a phone has no room for a page. */
