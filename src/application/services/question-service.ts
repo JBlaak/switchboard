@@ -228,6 +228,7 @@ export class QuestionService {
                 ask: `${url}/ask/${id}`,
                 stop: `${url}/stop/${id}`,
                 prompt: `${url}/prompt/${id}`,
+                subagent: `${url}/subagent/${id}`,
                 onePassword: `${url}/onepassword/${id}`,
             },
             token,

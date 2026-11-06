@@ -9,10 +9,11 @@
  * `answers` map; the CLI then never shows its own prompt. Not answering in time
  * makes the CLI give up on the hook and ask in the terminal, as it always did.
  *
- * The same settings carry two more hooks for the questions a grilling session
- * writes out as text (`grill.ts`): Stop, whose input holds the turn's last
- * message, and UserPromptSubmit, which says the user has replied some other
- * way. Neither is held: the server answers them at once.
+ * The same settings carry notice hooks for the rounds a grilling session
+ * writes out as text (`domain/grill/`): Stop, which ends a turn and names the
+ * transcript holding it; UserPromptSubmit, which carries the prompt that went
+ * in; and SubagentStart and SubagentStop, which say a research agent began or
+ * finished. None is held: the server answers them at once.
  */
 import {ONEPASSWORD_HOOK_STATUS, ONEPASSWORD_HOOK_TIMEOUT_SECONDS} from '../onepassword/heads-up';
 
@@ -98,7 +99,7 @@ export const QUESTION_HOOK_TIMEOUT_SECONDS = 600;
 /** The CLI shows this in its spinner while the hook waits. */
 export const QUESTION_HOOK_STATUS = 'Waiting for your answer in Switchboard';
 
-/** How long the CLI waits on the Stop and UserPromptSubmit hooks, which are answered at once. */
+/** How long the CLI waits on the notice hooks (Stop, UserPromptSubmit, Subagent*), which are answered at once. */
 export const NOTICE_HOOK_TIMEOUT_SECONDS = 10;
 
 /** The header carrying the per-run secret, so only our own sessions can post. */
@@ -128,15 +129,6 @@ export function parseQuestionHookInput(body: unknown): AskedQuestions | null {
 
     const toolUseId = typeof body.tool_use_id === 'string' ? body.tool_use_id : '';
     return {toolUseId, questions, toolInput};
-}
-
-/**
- * The text of the turn's last message, from a Stop hook request; null for
- * anything else, or a Stop that carries none.
- */
-export function parseStopHookInput(body: unknown): string | null {
-    if (!isRecord(body) || body.hook_event_name !== 'Stop') return null;
-    return typeof body.last_assistant_message === 'string' ? body.last_assistant_message : null;
 }
 
 function parseQuestion(raw: unknown): Question | null {
@@ -189,8 +181,10 @@ export interface QuestionHookUrls {
     ask: string;
     /** The end of each turn, to look for a grilling round. */
     stop: string;
-    /** A prompt submitted, which ends any grilling round still waiting. */
+    /** A prompt submitted, which ends any grilling round still waiting (unless it is one of Switchboard's asks). */
     prompt: string;
+    /** A subagent starting or stopping, for the grilling card's "agents running". */
+    subagent: string;
     /**
      * Bash calls, held for the 1Password heads-up when they will reach it
      * (`domain/onepassword/heads-up.ts`). Only the Mac has the pop-up, so a
@@ -204,9 +198,9 @@ export interface QuestionHookUrls {
  *
  * A PreToolUse hook matched to AskUserQuestion only, of type `http`, posting to
  * `urls.ask` with the token header, a `statusMessage` of QUESTION_HOOK_STATUS
- * and a `timeout` of QUESTION_HOOK_TIMEOUT_SECONDS; and Stop and
- * UserPromptSubmit hooks posting to `urls.stop` and `urls.prompt`, quietly and
- * briefly. With `urls.onePassword`, a second PreToolUse hook matched to Bash
+ * and a `timeout` of QUESTION_HOOK_TIMEOUT_SECONDS; Stop and UserPromptSubmit
+ * hooks posting to `urls.stop` and `urls.prompt`, and SubagentStart and
+ * SubagentStop hooks both posting to `urls.subagent`, all quietly and briefly. With `urls.onePassword`, a second PreToolUse hook matched to Bash
  * posts there, with ONEPASSWORD_HOOK_STATUS and ONEPASSWORD_HOOK_TIMEOUT_SECONDS;
  * the server answers a call that will not reach 1Password at once. Hooks merge
  * with the user's own settings rather than replacing them.
@@ -248,6 +242,8 @@ export function questionHookSettings(urls: QuestionHookUrls, token: string): str
             ],
             Stop: notice(urls.stop),
             UserPromptSubmit: notice(urls.prompt),
+            SubagentStart: notice(urls.subagent),
+            SubagentStop: notice(urls.subagent),
         },
     });
 }

@@ -97,6 +97,8 @@ import {HeadsUpWindow} from '../infrastructure/electron/heads-up-window';
 import {hiddenForE2e} from '../infrastructure/electron/main-window';
 import {FileTranscriptStore} from '../infrastructure/fs/transcript-store';
 import {NodeFileSystem} from '../infrastructure/fs/node-file-system';
+import {FileTranscriptTail} from '../infrastructure/fs/transcript-tail-file';
+import {legacyGrillReceiver} from '../application/services/legacy-grill-receiver';
 import {ClaudeJsonMcpServers} from '../infrastructure/claude-cli/mcp-servers';
 import {ClaudeSkillCatalog} from '../infrastructure/claude-cli/skill-catalog';
 import {ProjectsWatcher} from '../infrastructure/fs/projects-watcher';
@@ -353,12 +355,11 @@ export function buildContainer(): Container {
     // The server and the service need each other: the service bakes the server's
     // address into each launch, the server hands each request to the service.
     // The server only calls `receive` once a request arrives, long after both exist.
+    // TEMPORARY (grilling card): turns go to the old grill rounds until GrillService replaces this.
+    const hookReceiver = legacyGrillReceiver(() => questions);
     const questionHook = new QuestionHookServer({
-        receiver: {
-            receive: (...args) => questions.receive(...args),
-            receiveRound: (...args) => questions.receiveRound(...args),
-            promptSubmitted: (...args) => questions.promptSubmitted(...args),
-        },
+        receiver: hookReceiver,
+        transcripts: new FileTranscriptTail(fs),
         archiveTool: {
             request: (...args) => archiveTool.request(...args),
             turnEnded: (...args) => archiveTool.turnEnded(...args),
@@ -431,7 +432,7 @@ export function buildContainer(): Container {
         appVersion: agentVersion,
         registry,
         renderer,
-        questions,
+        hooks: hookReceiver,
         archiveTool,
         timers,
         clock,
