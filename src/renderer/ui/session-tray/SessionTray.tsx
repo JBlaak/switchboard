@@ -27,7 +27,7 @@ import {archiveActiveSession} from '../../features/sessions/sidebar-keyboard';
 import {openTaskTab} from '../session-task/actions';
 import {loadSavedPrompts} from './saved-prompts';
 import {factsFor, loadSessionLinks, loadSessionStats, projectOf, sendTrayPrompt} from './actions';
-import {openSavedPromptsSettings} from './open-settings';
+import {openSavedPromptsSettings} from '../settings/open-saved-prompts';
 import {focusTray, focusTrayHint} from './focus';
 import {trayLinks} from './tray-view';
 import {SessionTrayContent} from './SessionTrayContent';
