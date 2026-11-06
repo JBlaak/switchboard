@@ -1,13 +1,14 @@
 /**
  * A VM session's hooks, answered by the Mac (#276).
  *
- * The CLI on the VM posts its AskUserQuestion, Stop and UserPromptSubmit
- * hooks, and its archive tool calls, to the agent's own hook server; the agent
- * forwards them over the link. The Mac's QuestionService and
- * ArchiveToolService are the ones that answer, exactly as they answer a local
- * session's hook server, so the question panel, grill rounds and
- * `archive_session` work on a VM session unchanged. Both find the session by
- * the id it was launched under, which is the id the Mac opened it with.
+ * The CLI on the VM posts its AskUserQuestion, Stop, UserPromptSubmit and
+ * Subagent hooks, and its archive tool calls, to the agent's own hook server;
+ * the agent forwards them over the link. The Mac's hook receiver (the same one
+ * a local session's hook server hands to) and ArchiveToolService are the ones
+ * that answer, so the question panel, the grilling card and `archive_session`
+ * work on a VM session unchanged. Both find the session by the id it was
+ * launched under, which is the id the Mac opened it with. A turn arrives
+ * already read: the agent read its text blocks from the transcript on the VM.
  *
  * An `ask` holds the CLI until it is answered. The handle QuestionService
  * gives back is kept by the agent's `hookId` so the agent can withdraw it;
@@ -16,12 +17,13 @@
  * longer reach them.
  */
 import type {AgentMessage} from '../../../domain/agent/protocol';
+import type {HookReceiver} from '../../ports/question-hook';
 import type {ArchiveToolService} from '../archive-tool-service';
-import type {PendingQuestionsHandle, QuestionService} from '../question-service';
 import type {AgentConnection} from './agent-connection';
 
 export interface HookRelayDeps {
-    questions: Pick<QuestionService, 'receive' | 'receiveRound' | 'promptSubmitted'>;
+    /** Where asks and the grilling card's notices go: the same receiver the Mac's own hook server has. */
+    hooks: HookReceiver;
     archiveTool: Pick<ArchiveToolService, 'request' | 'turnEnded'>;
 }
 
@@ -29,15 +31,17 @@ export interface HookRelayDeps {
 export type HookMessage = Extract<
     AgentMessage,
     {
-        type: 'ask' | 'ask-withdrawn' | 'grill-round' | 'prompt-submitted' | 'archive-request' | 'turn-ended';
+        type:
+            'ask' | 'ask-withdrawn' | 'grill-turn' | 'prompt-submitted' | 'subagent' | 'archive-request' | 'turn-ended';
     }
 >;
 
 const HOOK_TYPES: ReadonlySet<string> = new Set([
     'ask',
     'ask-withdrawn',
-    'grill-round',
+    'grill-turn',
     'prompt-submitted',
+    'subagent',
     'archive-request',
     'turn-ended',
 ]);
@@ -48,7 +52,7 @@ export function isHookMessage(message: {type: string}): message is HookMessage {
 
 /** One host's relay; attached to its connection for the connection's life. */
 export class HookRelay {
-    private readonly held = new Map<string, PendingQuestionsHandle>();
+    private readonly held = new Map<string, {withdraw(): void}>();
 
     constructor(
         private readonly connection: Pick<AgentConnection, 'send' | 'onMessage' | 'onDisconnected'>,
@@ -66,12 +70,12 @@ export class HookRelay {
     }
 
     private handle(message: HookMessage): void {
-        const {questions, archiveTool} = this.deps;
+        const {hooks, archiveTool} = this.deps;
         switch (message.type) {
             case 'ask': {
                 const {hookId} = message;
                 let answered = false;
-                const handle = questions.receive(message.launchId, message.asked, (json) => {
+                const handle = hooks.receive(message.launchId, message.asked, (json) => {
                     answered = true;
                     this.held.delete(hookId);
                     this.connection.send({type: 'ask-reply', hookId, json});
@@ -87,11 +91,14 @@ export class HookRelay {
                 handle?.withdraw();
                 break;
             }
-            case 'grill-round':
-                questions.receiveRound(message.launchId, message.questions);
+            case 'grill-turn':
+                hooks.turnEnded(message.launchId, message.turn, message.backgroundAgents);
                 break;
             case 'prompt-submitted':
-                questions.promptSubmitted(message.launchId);
+                hooks.promptSubmitted(message.launchId, message.prompt ?? '');
+                break;
+            case 'subagent':
+                hooks.subagentChanged(message.launchId, message.event, message.agentId);
                 break;
             case 'archive-request': {
                 const outcome = archiveTool.request(message.launchId);

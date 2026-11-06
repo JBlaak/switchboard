@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
     NOTICE_HOOK_TIMEOUT_SECONDS,
     parseQuestionHookInput,
-    parseStopHookInput,
     questionHookResponse,
     questionHookSettings,
     QUESTION_HOOK_STATUS,
@@ -201,7 +200,7 @@ test('the response does not mutate the tool input', () => {
     assert.deepEqual(toolInput, {questions: [{question: 'Q?'}], extra: 1}, 'the input is not mutated');
 });
 
-test('the settings install the held AskUserQuestion hook and the two quick notices', () => {
+test('the settings install the held AskUserQuestion hook and the quick notices', () => {
     /* When */
     const settings = JSON.parse(
         questionHookSettings(
@@ -209,6 +208,7 @@ test('the settings install the held AskUserQuestion hook and the two quick notic
                 ask: 'http://127.0.0.1:4321/ask/s1',
                 stop: 'http://127.0.0.1:4321/stop/s1',
                 prompt: 'http://127.0.0.1:4321/prompt/s1',
+                subagent: 'http://127.0.0.1:4321/subagent/s1',
             },
             's3cret',
         ),
@@ -256,19 +256,30 @@ test('the settings install the held AskUserQuestion hook and the two quick notic
                     ],
                 },
             ],
+            SubagentStart: [
+                {
+                    hooks: [
+                        {
+                            type: 'http',
+                            url: 'http://127.0.0.1:4321/subagent/s1',
+                            headers,
+                            timeout: NOTICE_HOOK_TIMEOUT_SECONDS,
+                        },
+                    ],
+                },
+            ],
+            SubagentStop: [
+                {
+                    hooks: [
+                        {
+                            type: 'http',
+                            url: 'http://127.0.0.1:4321/subagent/s1',
+                            headers,
+                            timeout: NOTICE_HOOK_TIMEOUT_SECONDS,
+                        },
+                    ],
+                },
+            ],
         },
     });
-});
-
-test('a Stop request gives the last message; anything else gives nothing', () => {
-    /* When */
-    const parsed = [
-        parseStopHookInput({hook_event_name: 'Stop', last_assistant_message: 'Done.'}),
-        parseStopHookInput({hook_event_name: 'Stop'}),
-        parseStopHookInput({hook_event_name: 'SubagentStop', last_assistant_message: 'Done.'}),
-        parseStopHookInput('Stop'),
-    ];
-
-    /* Then */
-    assert.deepEqual(parsed, ['Done.', null, null, null]);
 });

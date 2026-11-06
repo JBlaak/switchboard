@@ -18,11 +18,16 @@ import {
 const prompt = (uuid: string, content: unknown, extra: Record<string, unknown> = {}) =>
     JSON.stringify({type: 'user', uuid, isSidechain: false, message: {role: 'user', content}, ...extra});
 
-const toolResult = (uuid: string) =>
-    prompt(uuid, [{type: 'tool_result', tool_use_id: 'tu', content: 'ok'}]);
+const toolResult = (uuid: string) => prompt(uuid, [{type: 'tool_result', tool_use_id: 'tu', content: 'ok'}]);
 
 const assistant = (uuid: string, blocks: unknown[], extra: Record<string, unknown> = {}) =>
-    JSON.stringify({type: 'assistant', uuid, isSidechain: false, message: {role: 'assistant', content: blocks}, ...extra});
+    JSON.stringify({
+        type: 'assistant',
+        uuid,
+        isSidechain: false,
+        message: {role: 'assistant', content: blocks},
+        ...extra,
+    });
 
 const text = (value: string) => ({type: 'text', text: value});
 const toolUse = {type: 'tool_use', id: 'tu', name: 'Bash', input: {}};

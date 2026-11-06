@@ -30,8 +30,7 @@ export interface StopHookInput {
 export function parseStopHook(body: unknown): StopHookInput | null {
     if (!isRecord(body) || body.hook_event_name !== 'Stop') return null;
     return {
-        transcriptPath:
-            typeof body.transcript_path === 'string' && body.transcript_path ? body.transcript_path : null,
+        transcriptPath: typeof body.transcript_path === 'string' && body.transcript_path ? body.transcript_path : null,
         lastMessage: typeof body.last_assistant_message === 'string' ? body.last_assistant_message : null,
         backgroundAgents: backgroundAgentIds(body.background_tasks),
     };
@@ -96,7 +95,11 @@ export function parsePromptHook(body: unknown): string | null {
  * `hash` (a short digest of the text), so the same text gets the same id.
  * With no text at all the turn is empty.
  */
-export function endedTurn(lines: string[] | null, lastMessage: string | null, hash: (text: string) => string): EndedTurn {
+export function endedTurn(
+    lines: string[] | null,
+    lastMessage: string | null,
+    hash: (text: string) => string,
+): EndedTurn {
     const said = lastMessage?.trim() ? lastMessage : null;
     const read = lines ? turnFromTranscript(lines) : null;
     const last = read?.texts.at(-1);
