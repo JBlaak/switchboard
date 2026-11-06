@@ -120,6 +120,7 @@ test.describe('patch', () => {
             const member = family.locator(`[data-member="${S.loginFix}"]`);
             await expect(member).toBeVisible();
             await expect(member).toHaveAttribute('aria-label', /^Fix the login redirect loop: /);
+            await expectScreen(page, 'empty-screen-family');
 
             /* When */
             // Members never stand still (they breathe, bob or wave), so take the keyboard path in.
