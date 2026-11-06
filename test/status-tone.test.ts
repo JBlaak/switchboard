@@ -29,8 +29,10 @@ function queue(pills: Record<number, QueuePill['kind']>): Record<string, MergeQu
         outside: [],
         unknown: [],
         counts: {queued: 0, held: 0, failed: 0},
+        stalled: false,
         clearsInMs: null,
         runMs: null,
+        clearsAtPlace: null,
         pills: all,
     };
     return {[REPO]: q};
