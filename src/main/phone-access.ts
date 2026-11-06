@@ -17,6 +17,7 @@ import {encodeTerminalFrame, parseClientMessage} from '../domain/phone/codec';
 import {PhoneAccessService} from '../application/services/phone-access-service';
 import {PhoneSessionsService} from '../application/services/phone-sessions-service';
 import {BatteryService} from '../application/services/battery-service';
+import {PhoneChatService} from '../application/services/phone-chat-service';
 import {VoiceService} from '../application/services/voice-service';
 import {TlsDeviceLink} from '../infrastructure/phone/tls-device-link';
 import type {PhoneAccessState, TerminalOwner} from '../domain/phone/state';
@@ -37,6 +38,7 @@ import type {Logger} from '../application/ports/logger';
 import type {DeviceRegistry, ServerIdentityStore, ServiceAdvertiser} from '../application/ports/phone-access';
 import type {RendererGateway} from '../application/ports/renderer-gateway';
 import type {SettingsStore} from '../application/ports/settings-store';
+import type {TranscriptStore} from '../application/ports/transcript-store';
 import type {Transcriber, VoiceModelStore} from '../application/ports/voice';
 import type {PhoneSessionsServiceDeps} from '../application/services/phone-sessions-service';
 
@@ -193,7 +195,10 @@ export class PhoneEventTee implements RendererGateway {
     }
 }
 
-export interface PhoneAccessDeps extends Omit<PhoneSessionsServiceDeps, 'settings' | 'renderer' | 'voice' | 'battery'> {
+export interface PhoneAccessDeps extends Omit<
+    PhoneSessionsServiceDeps,
+    'settings' | 'renderer' | 'voice' | 'battery' | 'chat'
+> {
     identity: ServerIdentityStore;
     devices: DeviceRegistry;
     advertiser: ServiceAdvertiser;
@@ -207,6 +212,8 @@ export interface PhoneAccessDeps extends Omit<PhoneSessionsServiceDeps, 'setting
     voice: {transcriber: Transcriber; model: VoiceModelStore; cli: ClaudeCaller};
     /** The Mac's battery level, shown on the phone. */
     battery: BatteryGauge;
+    /** The Mac's own transcripts, which the chat view reads. */
+    transcripts: Pick<TranscriptStore, 'readFrom'>;
     ids: IdGenerator;
     clock: Clock;
     timers: Timers;
@@ -238,11 +245,18 @@ export function buildPhoneAccess(deps: PhoneAccessDeps): PhoneAccess {
         log,
     });
     const battery = new BatteryService({gauge: deps.battery, timers: deps.timers});
+    const chat = new PhoneChatService({
+        registry: deps.registry,
+        transcripts: deps.transcripts,
+        timers: deps.timers,
+        log,
+    });
     const sessions = new PhoneSessionsService({
         ...deps,
         renderer,
         voice,
         battery,
+        chat,
         // A session a phone starts gets its row on the Mac at once (#194 story
         // 69), not only once its transcript has been written and indexed.
         launcher: {

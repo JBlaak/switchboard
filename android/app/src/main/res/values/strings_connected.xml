@@ -58,6 +58,9 @@
     <string name="session_archive_failed">Couldn’t archive this session: %1$s</string>
     <string name="session_archive_offline">Not connected to your Mac</string>
     <string name="session_back">Back to sessions</string>
+    <string name="session_chat_empty">Nothing said yet.</string>
+    <string name="session_chat_mac_too_old">Update Switchboard on your Mac to see this session as a chat.</string>
+    <string name="session_chat_unavailable">This session has no chat: its transcript isn’t on your Mac.</string>
     <string name="session_chip_here">Here</string>
     <string name="session_chip_mac">Mac</string>
     <string name="session_elsewhere_mac">This terminal is sized for your Mac. Use it here and it resizes to this phone, and your Mac shows this screen instead.</string>
@@ -83,6 +86,9 @@
     <string name="session_started_in">Started in %1$s, active on this phone</string>
     <string name="session_started_ok">OK</string>
     <string name="session_use_here">Use here</string>
+    <string name="session_view_chat">Chat</string>
+    <string name="session_view_switch">Switch between chat and terminal</string>
+    <string name="session_view_terminal">Terminal</string>
     <string name="session_waiting_terminal">Waiting in the terminal. Use it here to reply.</string>
     <string name="sessions_answer">Answer</string>
     <string name="sessions_ask_patch">Ask Patch</string>

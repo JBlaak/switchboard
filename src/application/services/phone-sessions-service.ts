@@ -52,6 +52,7 @@ import type {RendererGateway} from '../ports/renderer-gateway';
 import type {QuestionService} from './question-service';
 import type {BatteryService} from './battery-service';
 import type {VoiceService} from './voice-service';
+import type {PhoneChatService} from './phone-chat-service';
 import type {OpenSessionRequest, OpenSessionResult} from './session-launcher';
 
 /**
@@ -97,6 +98,8 @@ export interface PhoneSessionsServiceDeps {
     voice: Pick<VoiceService, 'connected' | 'message' | 'disconnected'>;
     /** The Mac's battery level, told to every phone. */
     battery: Pick<BatteryService, 'connected' | 'disconnected'>;
+    /** The chat view: a session's transcript as messages, which keeps its own subscriptions per connection. */
+    chat: Pick<PhoneChatService, 'message' | 'disconnected' | 'sessionForked'>;
     ids: IdGenerator;
     clock: Clock;
     timers: Timers;
@@ -199,6 +202,9 @@ export class PhoneSessionsService {
             case 'voice-end':
             case 'voice-cancel':
                 return this.deps.voice.message(connection, message);
+            case 'chat-subscribe':
+            case 'chat-unsubscribe':
+                return this.deps.chat.message(connection, message);
             case 'hello':
             case 'pair':
                 // The access service's; one after welcome is noise.
@@ -216,6 +222,7 @@ export class PhoneSessionsService {
         phone.router?.cancel();
         this.deps.voice.disconnected(connection);
         this.deps.battery.disconnected(connection);
+        this.deps.chat.disconnected(connection);
         this.apply({type: 'device-left', device: phone.deviceId});
     }
 
@@ -308,6 +315,7 @@ export class PhoneSessionsService {
         if (changedAt !== undefined) this.changedAt.set(newId, changedAt);
         if (this.listed.delete(oldId)) this.listed.add(newId);
         this.broadcast({type: 'session-rekeyed', from: oldId, to: newId});
+        this.deps.chat.sessionForked(oldId, newId);
         this.schedulePush();
     }
 

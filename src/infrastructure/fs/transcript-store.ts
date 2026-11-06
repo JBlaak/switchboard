@@ -146,6 +146,25 @@ export class FileTranscriptStore implements TranscriptStore {
         }
     }
 
+    public readFrom(
+        folder: string,
+        sessionId: string,
+        start: number,
+        byteLimit: number,
+    ): {text: string; size: number} | null {
+        const filePath = this.sessionPath(folder, sessionId);
+        const stat = this.fs.stat(filePath);
+        if (!stat) return null;
+        const from = Math.max(0, Math.min(start, stat.size));
+        const length = Math.min(stat.size - from, byteLimit);
+        if (length <= 0) return {text: '', size: stat.size};
+        try {
+            return {text: this.fs.readSlice(filePath, {start: from, length}), size: stat.size};
+        } catch {
+            return null;
+        }
+    }
+
     public locations(folder: string, sessionId: string): TranscriptLocation[] {
         // No worktree roots: each `cwd` stays as written, for whoever has git to
         // resolve to its worktree.

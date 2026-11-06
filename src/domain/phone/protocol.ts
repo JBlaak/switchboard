@@ -15,6 +15,9 @@
  * old app could misread a new message.
  */
 import type {Answers, PendingQuestions, QuestionsOutcome} from '../questions/question';
+import type {ChatMessage} from '../session/chat';
+
+export type {ChatMessage} from '../session/chat';
 
 /**
  * Bumped whenever a message changes shape in a way an older peer would misread.
@@ -22,6 +25,16 @@ import type {Answers, PendingQuestions, QuestionsOutcome} from '../questions/que
  * does not need a bump.
  */
 export const PROTOCOL_VERSION = 1;
+
+/**
+ * What this Mac can do beyond PROTOCOL_VERSION, named in `welcome`. A phone
+ * only sends a feature's messages to a Mac that named it, since an older Mac
+ * closes the connection on a message it doesn't know.
+ */
+export const FEATURES = {
+    /** `chat-subscribe` and `chat-unsubscribe`, answered with `chat` and `chat-append`. */
+    chat: 'chat',
+} as const;
 
 /** The Bonjour service type the Mac advertises. */
 export const BONJOUR_SERVICE_TYPE = '_switchboard._tcp';
@@ -177,7 +190,14 @@ export type ClientMessage =
     /** The user let go: transcribe what arrived. One `voice-result` follows. */
     | {type: 'voice-end'; voiceId: string}
     /** The user slid off the mic: drop the recording. Nothing follows. */
-    | {type: 'voice-cancel'; voiceId: string};
+    | {type: 'voice-cancel'; voiceId: string}
+    /**
+     * Show the session as a chat: `chat` with its messages so far, then
+     * `chat-append` as its transcript grows, until `chat-unsubscribe` or the
+     * connection ends. Only to a Mac whose `welcome` named FEATURES.chat.
+     */
+    | {type: 'chat-subscribe'; sessionId: string}
+    | {type: 'chat-unsubscribe'; sessionId: string};
 
 // ── Mac → Phone ──
 
@@ -188,7 +208,15 @@ export type ServerMessage =
      * all on the port this connection came in on: what the phone dials when its
      * last address and Bonjour both fail, e.g. over a VPN Bonjour can't cross.
      */
-    | {type: 'welcome'; protocol: number; macName: string; deviceId: string; addresses: string[]}
+    | {
+          type: 'welcome';
+          protocol: number;
+          macName: string;
+          deviceId: string;
+          addresses: string[];
+          /** What this Mac can do beyond the protocol version (FEATURES); an older Mac leaves it out. */
+          features?: string[];
+      }
     /**
      * The Mac's addresses changed while this phone was connected (a VPN came
      * up, a new Wi-Fi): the same list `welcome` would carry now. Older phones
@@ -237,6 +265,16 @@ export type ServerMessage =
     | {type: 'voice-result'; voiceId: string; result: VoiceResult}
     /** Sent on welcome and whenever the level or charging changes; null on a Mac without a battery. */
     | {type: 'mac-battery'; battery: MacBattery | null}
+    /**
+     * A subscribed session's chat, whole: on `chat-subscribe`, and again when
+     * it starts over (a re-key moved it to a new transcript). The latest
+     * messages, oldest first. `available` is false for a session without a
+     * transcript on the Mac (a terminal, an SSH or VM session); `messages` is
+     * empty then.
+     */
+    | {type: 'chat'; sessionId: string; available: boolean; messages: ChatMessage[]}
+    /** Messages the transcript gained since the last `chat` or `chat-append`, to add at the end. */
+    | {type: 'chat-append'; sessionId: string; messages: ChatMessage[]}
     /** Sent before close(notPaired) when the device is revoked or the Mac's identity is reset. */
     | {type: 'revoked'};
 

@@ -39,6 +39,8 @@ const EVERY_MESSAGE: ClientMessage[] = [
     {type: 'voice-chunk', voiceId: 'v1', seq: 0, audio: 'AAABAAIA/38AgA=='},
     {type: 'voice-end', voiceId: 'v1'},
     {type: 'voice-cancel', voiceId: 'v2'},
+    {type: 'chat-subscribe', sessionId: 's1'},
+    {type: 'chat-unsubscribe', sessionId: 's1'},
 ];
 
 /** Each message with one field broken, per field and per way it can break. */
@@ -78,6 +80,8 @@ const MALFORMED: Record<string, unknown[]> = {
     ],
     'use-here': [{type: 'use-here'}, {type: 'use-here', sessionId: null}],
     archive: [{type: 'archive'}, {type: 'archive', sessionId: ''}, {type: 'archive', sessionId: 7}],
+    'chat-subscribe': [{type: 'chat-subscribe'}, {type: 'chat-subscribe', sessionId: ''}],
+    'chat-unsubscribe': [{type: 'chat-unsubscribe'}, {type: 'chat-unsubscribe', sessionId: 'x'.repeat(257)}],
     'voice-start': [
         {type: 'voice-start'},
         {type: 'voice-start', voiceId: ''},
