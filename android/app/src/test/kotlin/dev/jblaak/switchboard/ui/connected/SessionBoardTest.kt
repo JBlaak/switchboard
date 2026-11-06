@@ -3,6 +3,8 @@ package dev.jblaak.switchboard.ui.connected
 import dev.jblaak.switchboard.link.LinkState
 import dev.jblaak.switchboard.link.SendOutcome
 import dev.jblaak.switchboard.protocol.ClientMessage
+import dev.jblaak.switchboard.protocol.GrillSendState
+import dev.jblaak.switchboard.protocol.GrillView
 import dev.jblaak.switchboard.protocol.MacBattery
 import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.protocol.ServerMessage
@@ -202,4 +204,54 @@ class SessionBoardTest {
         assertEquals(listOf("b"), board.sessions.value.map { it.id })
         assertEquals(emptyList<PendingQuestions>(), board.pending.value)
     }
+
+    @Test
+    fun `the grill message is every open round`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+
+        /* When */
+        link.macSays(ServerMessage.Grill(listOf(grillView("a"), grillView("b"))))
+
+        /* Then */
+        assertEquals(listOf("a", "b"), board.grills.value.map { it.sessionId })
+    }
+
+    @Test
+    fun `a re-key moves the session's round along`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        link.macSays(ServerMessage.Grill(listOf(grillView("a"))))
+
+        /* When */
+        link.macSays(ServerMessage.SessionRekeyed(from = "a", to = "a2"))
+
+        /* Then */
+        assertEquals(listOf("a2"), board.grills.value.map { it.sessionId })
+    }
+
+    @Test
+    fun `an exited session's round goes with it`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        link.macSays(ServerMessage.Grill(listOf(grillView("a"), grillView("b"))))
+
+        /* When */
+        link.macSays(ServerMessage.Exited("a", exitCode = 0))
+
+        /* Then */
+        assertEquals(listOf("b"), board.grills.value.map { it.sessionId })
+    }
+
+    private fun grillView(sessionId: String) = GrillView(
+        sessionId = sessionId,
+        roundId = "round-$sessionId",
+        revision = 0,
+        preamble = "",
+        questions = emptyList(),
+        dropped = 0,
+        agentsRunning = 0,
+        send = GrillSendState.Idle,
+        asking = null,
+    )
 }

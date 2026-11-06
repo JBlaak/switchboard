@@ -17,6 +17,8 @@ import {
     resolveWeatherEnabled,
     resolveWeatherLocation,
 } from '../../domain/settings/settings';
+import {parseSavedPrompts, SAVED_PROMPTS_SETTING} from '../../domain/settings/saved-prompts';
+import type {SavedPrompt, SavedPromptLists} from '../../domain/settings/saved-prompts';
 import {normalizeRemoteDir, parseRemoteProjectPath, remoteProjectPath} from '../../domain/project/remote-target';
 import type {
     EffectiveSettings,
@@ -108,6 +110,37 @@ export class SettingsService {
 
     public restoreSessions(): boolean {
         return resolveRestoreSessions(this.global());
+    }
+
+    // ── Saved prompts (#339) ──
+    // A list in the global blob and one in each project's, under the same key.
+    // Each write replaces one list and keeps every other key in its blob.
+
+    /** Both lists for a project; the project's is empty without one. */
+    public savedPrompts(projectPath: string | null): SavedPromptLists {
+        return {
+            global: parseSavedPrompts(this.global()[SAVED_PROMPTS_SETTING]),
+            project: projectPath ? parseSavedPrompts(this.project(projectPath)[SAVED_PROMPTS_SETTING]) : [],
+        };
+    }
+
+    /**
+     * Replace the global list (null) or a project's, and answer it as stored.
+     * An empty project list takes the key out of the project's blob.
+     */
+    public setSavedPrompts(projectPath: string | null, prompts: unknown): SavedPrompt[] {
+        const list = parseSavedPrompts(prompts);
+        if (!projectPath) {
+            this.updateGlobal((settings) => {
+                settings[SAVED_PROMPTS_SETTING] = list;
+            });
+            return list;
+        }
+        const blob = {...this.project(projectPath)};
+        if (list.length > 0) blob[SAVED_PROMPTS_SETTING] = list;
+        else delete blob[SAVED_PROMPTS_SETTING];
+        this.store.set(projectSettingsKey(projectPath), blob);
+        return list;
     }
 
     // ── Hidden projects ──

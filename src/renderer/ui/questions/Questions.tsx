@@ -16,6 +16,10 @@
  *
  * While the user peeks, the terminal comes back up from under the sheet and a
  * pill over it offers the way back to the questions.
+ *
+ * A grilling round (a set whose source is `grill`) shows as the grilling card
+ * instead of the panel, over the same box and with the same rise, sink and
+ * peek; the panel stays for AskUserQuestion.
  */
 import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {onEvent} from '../../state/app-store';
@@ -24,8 +28,11 @@ import {peek} from './actions';
 import {Farewell} from './Farewell';
 import {AnsweredOnPhone} from './AnsweredOnPhone';
 import {QuestionPanel} from './QuestionPanel';
+import {GrillingCard} from '../grill/GrillingCard';
+import {useStore} from '../use-store';
 import {useOnScreen} from './use-on-screen';
 import type {JSX} from 'react';
+import type {OnScreen} from './use-on-screen';
 
 interface FarewellItem {
     id: number;
@@ -33,7 +40,11 @@ interface FarewellItem {
 }
 
 export function Questions(): JSX.Element {
-    const screen = useOnScreen();
+    const onScreen = useOnScreen();
+    const grillView = useStore((s) => (onScreen.sessionId ? s.grill.views[onScreen.sessionId] : undefined));
+    const isGrill = onScreen.pending?.source === 'grill';
+    // A round main has not described yet has nothing to show, so nothing comes up for it.
+    const screen = isGrill && !grillView ? down(onScreen) : onScreen;
 
     // A switch should land, not animate: the new session's terminal is not
     // sinking, it is already behind its questions.
@@ -71,7 +82,8 @@ export function Questions(): JSX.Element {
 
     return (
         <>
-            <QuestionPanel screen={screen} onShow={dismissAll} />
+            <QuestionPanel screen={isGrill ? down(screen) : screen} onShow={dismissAll} />
+            <GrillingCard screen={isGrill ? screen : down(screen)} view={grillView} onShow={dismissAll} />
             {screen.peeking && screen.pending && (
                 <button
                     type="button"
@@ -80,7 +92,8 @@ export function Questions(): JSX.Element {
                     onClick={() => {
                         if (screen.pending) peek(screen.pending.toolUseId, false);
                     }}>
-                    Back to questions<kbd className="qp-peek-key">T</kbd>
+                    {isGrill ? 'Back to the round' : 'Back to questions'}
+                    <kbd className="qp-peek-key">T</kbd>
                 </button>
             )}
             <AnsweredOnPhone />
@@ -94,6 +107,11 @@ export function Questions(): JSX.Element {
             ))}
         </>
     );
+}
+
+/** The same screen with nothing up over it, for the sheet that is not the one showing. */
+function down(screen: OnScreen): OnScreen {
+    return screen.up || screen.peeking ? {...screen, up: false, peeking: false} : screen;
 }
 
 /** Let the next state apply without its transitions, for one frame. */

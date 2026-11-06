@@ -141,7 +141,7 @@ function harness({
         appVersion: '2.12.0',
         registry: new SessionRegistry(),
         renderer,
-        questions: {receive: () => ({withdraw() {}}), receiveRound() {}, promptSubmitted() {}},
+        hooks: {receive: () => ({withdraw() {}}), turnEnded() {}, promptSubmitted() {}, subagentChanged() {}},
         archiveTool: {request: () => ({ok: true, message: ''}), turnEnded() {}},
         timers: fakeTimers(),
         clock: {now: () => 0},

@@ -36,6 +36,14 @@ export const INVOKE = {
     getPendingQuestions: 'get-pending-questions',
     answerQuestions: 'answer-questions',
 
+    // Grilling rounds
+    grillViews: 'grill-views',
+    grillAnswer: 'grill-answer',
+    grillAsk: 'grill-ask',
+    grillSend: 'grill-send',
+    grillQueue: 'grill-queue',
+    grillCancelQueue: 'grill-cancel-queue',
+
     // Usage
     getUsage: 'get-usage',
 
@@ -67,6 +75,8 @@ export const INVOKE = {
     setAppearance: 'set-appearance',
     quickAskHotkeyStatus: 'quick-ask:hotkey-status',
     blaakTasksSetUp: 'blaak-tasks:set-up',
+    savedPrompts: 'saved-prompts:get',
+    setSavedPrompts: 'saved-prompts:set',
 
     // Quick Ask: the pop-up's own (#148)
     quickAskRoute: 'quick-ask:route',
@@ -114,6 +124,9 @@ export const INVOKE = {
     queueErrandStarted: 'queue:errand-started',
     queueErrandAbandoned: 'queue:errand-abandoned',
     queueErrands: 'queue:errands',
+    // The CI job queue under the merge queue, and Bump
+    ciJobQueue: 'queue:ci-jobs',
+    ciJobBump: 'queue:ci-job-bump',
 
     // Tasks: BlaakTasks in Switchboard (#248)
     tasksList: 'tasks:list',
@@ -175,6 +188,12 @@ export const INVOKE = {
     vmRegistryAdd: 'vm-registry:add',
     vmRegistryRename: 'vm-registry:rename',
     vmRegistryRemove: 'vm-registry:remove',
+
+    // The session tray's Workspace group (#342)
+    workspaceEditor: 'workspace:editor',
+    workspaceOpenInEditor: 'workspace:open-in-editor',
+    workspaceRevealInFinder: 'workspace:reveal-in-finder',
+    workspaceShellHere: 'workspace:shell-here',
 } as const;
 
 /** Renderer tells main; no answer expected. */
@@ -207,6 +226,7 @@ export const EVENT = {
     remoteStatus: 'remote-status',
     questionsAsked: 'questions-asked',
     questionsSettled: 'questions-settled',
+    grillChanged: 'grill-changed',
     pageShown: 'page:shown',
     projectsChanged: 'projects-changed',
     statusUpdate: 'status-update',

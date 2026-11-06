@@ -119,6 +119,13 @@ export function answersReducer(state: AnswersState, event: RendererEvent, questi
             return put(synced, event.toolUseId, {...entry, peeking: event.peeking});
         }
 
+        // The grilling card answers through main rather than the draft, and says so here.
+        case 'answersSaid': {
+            const entry = synced.byToolUse[event.toolUseId];
+            if (!entry) return synced;
+            return put(synced, event.toolUseId, say(entry, event.moment));
+        }
+
         case 'answersPatchPoked': {
             const entry = synced.byToolUse[event.toolUseId];
             if (!entry) return synced;

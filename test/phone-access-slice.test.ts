@@ -141,7 +141,7 @@ test('the listening line names the host and the connected phone, or says it is s
     assert.deepEqual(starting, {kind: 'starting'});
 });
 
-test('the indicator is absent while off, "On" while no phone is connected, and the phone\'s name while one is', () => {
+test("the indicator is absent until a phone is connected, then shows the phone's name", () => {
     /* When */
     const off = phoneIndicatorIn(PHONE_ACCESS_OFF);
     const on = phoneIndicatorIn({...LISTENING, devices: [tablet]});
@@ -150,9 +150,8 @@ test('the indicator is absent while off, "On" while no phone is connected, and t
 
     /* Then */
     assert.equal(off, null);
-    assert.deepEqual(on, {connected: false, label: 'On', title: 'Phone access is on, no phone connected'});
-    assert.equal(connected?.connected, true);
-    assert.equal(connected?.label, 'Pixel 9 Pro');
+    assert.equal(on, null);
+    assert.deepEqual(connected, {label: 'Pixel 9 Pro', title: 'Phone access is on: Pixel 9 Pro connected'});
     assert.equal(two?.label, 'Pixel 9 Pro +1');
 });
 

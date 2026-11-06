@@ -11,20 +11,24 @@ import {beforeEach, test} from 'node:test';
 import assert from 'node:assert/strict';
 import {initialRendererState, rootReducer} from '../src/renderer/state/root';
 import {dispatch, getState} from '../src/renderer/state/app-store';
-import {NO_MEMORY, queueActionKey} from '../src/renderer/state/project-page-slice';
+import {ciJobQueueRequest, NO_MEMORY, queueActionKey} from '../src/renderer/state/project-page-slice';
 import {cursorId, mergeQueueRows, pageRows} from '../src/renderer/ui/project-page/page-rows';
 import {pageKeyAction} from '../src/renderer/ui/project-page/page-keys';
 import {
     countsText,
     estimateText,
+    expectedText,
     failureLabel,
     fixStatus,
     headSteps,
     isEmptyQueue,
+    jobRowView,
     mergeQueueOf,
     nudgeStatus,
+    poolBusyText,
 } from '../src/renderer/ui/project-page/merge-queue-view';
 import {
+    bumpCiJob,
     fixInSession,
     followQueueErrands,
     nudgeConfirm,
@@ -43,6 +47,14 @@ import {
     type QueueErrandView,
 } from '../src/domain/project/queue-errands';
 import type {ProjectOverview} from '../src/domain/project/overview';
+import {
+    bumpConfirm,
+    bumpedRuns,
+    ciJobQueue,
+    type CiJob,
+    type CiJobQueueAnswer,
+    type JobPool,
+} from '../src/domain/project/ci-job-queue';
 import type {RendererEvent} from '../src/renderer/state/events';
 import type {RendererState} from '../src/renderer/state/root';
 import type {Project} from '../src/domain/project/project';
@@ -296,13 +308,13 @@ test('the heading counts what is queued, held and failed, leaving out what is no
     assert.deepEqual(texts, ['4 queued · 1 held · 1 failed', '2 queued', '']);
 });
 
-test('the fixture queue: a head 14 min from merging, the queue clear in 38', () => {
+test('the fixture queue: a head 15 min from merging, the queue clear in 40', () => {
     /* When */
     const q = queue();
 
     /* Then */
-    assert.equal(estimateText(q.head!.estimateMs), '~14 min');
-    assert.equal(estimateText(q.clearsInMs), '~38 min');
+    assert.equal(estimateText(q.head!.estimateMs), '~15 min');
+    assert.equal(estimateText(q.clearsInMs), '~40 min');
     assert.equal(countsText(q.counts), '2 queued · 1 held · 1 failed');
 });
 
@@ -793,4 +805,170 @@ test('the errands are read after main is told which held entries wait for a revi
         ['queueErrands', REPO],
     ]);
     assert.deepEqual(getState().projectPage.queueErrands, {repository: REPO, errands});
+});
+
+// ── Expected merge times as they read ──
+
+test('an expected merge time reads to the minute at places 1 and 2, and rough from place 3 on', () => {
+    /* When */
+    const texts = [
+        expectedText(12.4 * MIN, 1),
+        expectedText(36.6 * MIN, 2),
+        expectedText(57.4 * MIN, 3),
+        expectedText(null, 4),
+    ];
+
+    /* Then */
+    assert.deepEqual(texts, [
+        {text: '~12 min', rough: false},
+        {text: '~37 min', rough: false},
+        {text: '~55 min', rough: true},
+        null,
+    ]);
+});
+
+// ── The CI job queue ──
+
+function ciJob(id: number, fields: Partial<CiJob> = {}): CiJob {
+    return {
+        id,
+        runId: id * 10,
+        url: '',
+        workflow: 'CI',
+        workflowId: 1,
+        name: 'Tests',
+        status: 'queued',
+        createdAt: NOW - (10 - id) * MIN,
+        startedAt: null,
+        runner: null,
+        labels: ['self-hosted', 'macOS'],
+        on: {kind: 'pr', number: 100 + id, title: 'PR ' + (100 + id)},
+        actor: 'sam',
+        ...fields,
+    };
+}
+
+/** One runner, running job 1 for 4 more minutes; jobs 2 and 3 queued behind it. */
+function jobPools(): JobPool[] {
+    return ciJobQueue({
+        jobs: [ciJob(1, {status: 'running', runner: 'mini', startedAt: NOW - 6 * MIN}), ciJob(2), ciJob(3)],
+        runners: [
+            {name: 'mini', labels: ['self-hosted', 'macOS'], busy: true, online: true},
+            {name: 'mbp', labels: ['self-hosted', 'macOS'], busy: false, online: false},
+        ],
+        typical: () => 10 * MIN,
+        otherSince: () => null,
+        now: NOW,
+    });
+}
+
+const JOBS: CiJobQueueAnswer = {ok: true, pools: [], fetchedAt: NOW, notes: {}};
+
+test('the CI job queue is kept for its repository, a failed read keeps the jobs it had, and another project forgets them', () => {
+    /* Given */
+    const good = run(opened(), {type: 'projectCiJobQueueAnswered', repository: REPO, answer: JOBS});
+
+    /* When */
+    const failed = run(good, {
+        type: 'projectCiJobQueueAnswered',
+        repository: REPO,
+        answer: {ok: false, reason: 'GitHub did not answer'},
+    });
+    const elsewhere = run(good, {type: 'projectPageRestored', projectPath: '/dev/other', memory: NO_MEMORY});
+
+    /* Then */
+    assert.deepEqual(good.projectPage.ciJobQueue, {repository: REPO, answer: JOBS});
+    assert.equal(failed.projectPage.ciJobQueue, good.projectPage.ciJobQueue);
+    assert.equal(elsewhere.projectPage.ciJobQueue, null);
+});
+
+test('the CI job queue is read only while the overview of a repository with a merge queue is on screen', () => {
+    /* Given */
+    const onPage = run(
+        initialRendererState(),
+        {type: 'projectOpened', projectPath: APP, view: {kind: 'overview'}},
+        {type: 'projectPageRestored', projectPath: APP, memory: NO_MEMORY},
+    );
+
+    /* When */
+    const withQueue = run(onPage, answered(overview(queue())));
+    const withoutQueue = run(onPage, answered(overview(null)));
+
+    /* Then */
+    assert.equal(ciJobQueueRequest(withQueue), REPO);
+    assert.equal(ciJobQueueRequest(withoutQueue), null);
+    assert.equal(ciJobQueueRequest(run(opened(), answered(overview(queue())))), null);
+});
+
+test('a pool says how many of its runners are busy; a job row says what it runs for, its wait and when it starts', () => {
+    /* Given */
+    const [pool] = jobPools();
+
+    /* When */
+    const views = pool.rows.map((row) => jobRowView(row, NOW));
+
+    /* Then */
+    assert.equal(poolBusyText(pool), '1 of 1 runner busy');
+    assert.deepEqual(views[0], {
+        title: 'Tests (CI)',
+        on: '#101 PR 101',
+        where: 'mini',
+        wait: 'waited 3 min',
+        times: 'done ~4 min',
+    });
+    assert.deepEqual(views[1], {
+        title: 'Tests (CI)',
+        on: '#102 PR 102',
+        where: 'waits for macOS',
+        wait: 'waiting 8 min',
+        times: 'starts ~4 min · done ~14 min',
+    });
+});
+
+test('Bump asks first, naming the runs it moves, and moves nothing on no', async () => {
+    /* Given */
+    const main = installMain({});
+    const seen = installEffects({yes: false});
+    const pools = jobPools();
+
+    /* When */
+    await bumpCiJob(REPO, pools, ciJob(3), []);
+
+    /* Then */
+    assert.deepEqual(seen.confirms, [bumpConfirm(ciJob(3), bumpedRuns(pools, 3, []))]);
+    assert.deepEqual(main.calls, []);
+});
+
+test('Bump on yes sends main the job and the runs it confirmed, then reads the CI job queue again', async () => {
+    /* Given */
+    const main = installMain({ciJobBump: () => ({ok: true, runs: 1}), ciJobQueue: () => JOBS});
+    installEffects();
+
+    /* When */
+    await bumpCiJob(REPO, jobPools(), ciJob(3), [7]);
+
+    /* Then */
+    assert.deepEqual(main.calls, [
+        ['ciJobBump', {repository: REPO, jobId: 3, runIds: [20], headNumbers: [7]}],
+        ['ciJobQueue', REPO],
+    ]);
+    assert.deepEqual(getState().projectPage.queueActions[queueActionKey('bump', 3)], {
+        phase: 'note',
+        text: 'Bumped: 1 run re-queued behind it',
+    });
+});
+
+test('a bump main refuses keeps why on the job', async () => {
+    /* Given */
+    installMain({ciJobBump: () => ({ok: false, reason: 'Must have admin rights'}), ciJobQueue: () => JOBS});
+    installEffects();
+
+    /* When */
+    await bumpCiJob(REPO, jobPools(), ciJob(3), []);
+
+    /* Then */
+    assert.deepEqual(getState().projectPage.queueActions[queueActionKey('bump', 3)], {
+        phase: 'failed',
+        reason: 'Must have admin rights',
+    });
 });

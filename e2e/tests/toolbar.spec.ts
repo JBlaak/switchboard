@@ -4,8 +4,8 @@
  *
  * The rules behind them are tested in node: the filters and the search's
  * narrowing (`test/toolbar-slice`, `test/toolbar-search-filters`,
- * `test/session-list-layout`), the appearance cycle and its title
- * (`test/appearance`, `test/toolbar-appearance-title`) and the sleep switch
+ * `test/session-list-layout`), the stored appearance (`test/appearance`)
+ * and the sleep switch
  * (`test/toolbar-sleep-switch`). These keep what needs the real app: the
  * round trips to main (search, settings, the theme, the sleep switch), the
  * drag on the real window, and how the chrome looks.
@@ -27,7 +27,8 @@ function button(page: Page, name: string | RegExp): Locator {
 
 const clearButton = (page: Page) => button(page, 'Clear search');
 const titlesToggle = (page: Page) => button(page, 'Search titles only');
-const appearanceButton = (page: Page) => button(page, /^Appearance: /);
+const gearButton = (page: Page) => button(page, 'Global settings');
+const appearanceMode = (page: Page, name: string) => page.getByRole('menuitemradio', {name});
 const sleepButton = (page: Page) => button(page, /sleep|awake/i);
 const quickSessionButton = (page: Page) => button(page, 'Quick session (⌘N)');
 const resizeHandle = (page: Page) => page.getByTestId('sidebar-resize-handle');
@@ -171,6 +172,7 @@ test.describe('toolbar buttons', () => {
         /* Given */
         await expect(quickSessionButton(page)).toBeHidden();
         await button(page, 'Global settings').click();
+        await page.getByRole('menuitem', {name: 'All settings…'}).click();
         await page.getByPlaceholder('/path/to/folder').fill('/tmp');
 
         /* When */
@@ -283,20 +285,41 @@ test.describe('titles only', () => {
     });
 });
 
-test.describe('appearance', () => {
-    test('a click moves to the next mode, which main applies and stores', async ({page}) => {
+test.describe('settings menu', () => {
+    test('the gear opens a menu where a mode is picked directly, which main applies and stores', async ({page}) => {
         /* Given */
         // The harness starts every app in light.
-        await expect(appearanceButton(page)).toHaveAttribute('title', 'Appearance: Light (click for Dark)');
         const dark = () => page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches);
 
         /* When */
-        await appearanceButton(page).click();
+        await gearButton(page).click();
 
         /* Then */
-        await expect(appearanceButton(page)).toHaveAttribute('title', 'Appearance: Dark (click for System)');
+        await expect(appearanceMode(page, 'Light')).toHaveAttribute('aria-checked', 'true');
+        await expect(appearanceMode(page, 'Light')).toBeFocused();
+
+        /* When */
+        await appearanceMode(page, 'Dark').click();
+
+        /* Then */
+        await expect(appearanceMode(page, 'Dark')).toHaveAttribute('aria-checked', 'true');
         await expect.poll(dark).toBe(true);
         await expect.poll(async () => (await storedGlobal(page)).appearance).toBe('dark');
+
+        /* When */
+        await page.keyboard.press('Escape');
+
+        /* Then */
+        await expect(page.getByRole('menu', {name: 'Settings'})).toHaveCount(0);
+        await expect(gearButton(page)).toBeFocused();
+
+        /* When */
+        await gearButton(page).click();
+        await page.getByRole('menuitem', {name: 'All settings…'}).click();
+
+        /* Then */
+        await expect(page.getByText('Global Settings', {exact: true})).toBeVisible();
+        await expect(page.getByRole('menu', {name: 'Settings'})).toHaveCount(0);
     });
 });
 
@@ -322,7 +345,7 @@ test.describe('sleep toggle', () => {
         await page.evaluate(() => window.dispatchEvent(new Event('focus')));
 
         /* Then */
-        await expect(appearanceButton(page)).toBeVisible();
+        await expect(gearButton(page)).toBeVisible();
         await expect(sleepButton(page)).toBeHidden();
     });
 });
@@ -377,6 +400,15 @@ forEachAppearance(() => {
         await expect(sidebar(page).locator(':focus')).toHaveCount(0);
     });
 
+    test('settings menu, open', async ({page}) => {
+        /* When */
+        await gearButton(page).click();
+
+        /* Then */
+        await expect(page.getByRole('menu', {name: 'Settings'})).toBeVisible();
+        await expectScreen(page, 'settings-menu-open');
+    });
+
     test.describe('every toolbar control showing', () => {
         test.use({
             fixture: {...standardFixture(), settings: {quickSessionPath: '/tmp'}},
@@ -416,7 +448,6 @@ forEachAppearance(() => {
             for (const filter of ['running', 'pinned', 'snoozed'] as const) {
                 expect(await region(sidebarFilter(page, filter))).toBe('no-drag');
             }
-            expect(await region(appearanceButton(page))).toBe('no-drag');
             expect(await region(sleepButton(page))).toBe('no-drag');
             // The strip they sit in is a drag handle; the search box below it is not.
             expect(await parentRegion(button(page, 'Global settings'))).toBe('drag');

@@ -32,6 +32,7 @@ import {registerSessionHandoffHandlers} from './session-handoff-handlers';
 import {registerVmSchedulesHandlers} from './vm-schedules-handlers';
 import {registerDroppedFilesHandlers} from './dropped-files-handlers';
 import {registerVmRegistryHandlers} from './vm-registry-handlers';
+import {registerWorkspaceHandlers} from './workspace-handlers';
 import type {Container} from '../composition-root';
 
 export function registerIpcHandlers(app: Container): void {
@@ -62,4 +63,5 @@ export function registerIpcHandlers(app: Container): void {
     registerVmSchedulesHandlers(ipc, app);
     registerDroppedFilesHandlers(ipc, app);
     registerVmRegistryHandlers(ipc, app);
+    registerWorkspaceHandlers(ipc, app);
 }
