@@ -15,8 +15,16 @@
  * Quick Ask (#142, R1) has an instance of its own, making its own call, so a
  * request from the pop-up and one from the empty screen never cancel each other.
  */
-import {readRouteRun, routeArgs, routeBootArgs, routePrompt} from '../../domain/ask/route';
-import type {QuickRouteResult, RouteRequest, RouteResult} from '../../domain/ask/model';
+import {
+    askPatchArgs,
+    askPatchBootArgs,
+    readAskPatchRun,
+    readRouteRun,
+    routeArgs,
+    routeBootArgs,
+    routePrompt,
+} from '../../domain/ask/route';
+import type {AskPatchResult, QuickRouteResult, RouteRequest, RouteResult} from '../../domain/ask/model';
 import type {ClaudeRun} from '../../domain/ask/route';
 import {WARM_IDLE_MS} from '../ports/claude-cli';
 import type {ClaudeCaller, WarmCall} from '../ports/claude-cli';
@@ -39,12 +47,20 @@ export interface RouteCall<R extends QuickRouteResult> {
     read(run: ClaudeRun, request: RouteRequest): R;
 }
 
-/** Ask Patch's call, from the empty screen. */
+/** Ask Patch's routing call, for the phone and for tasks: always a project, never an answer. */
 export const ASK_PATCH_CALL: RouteCall<RouteResult> = {
     bootArgs: routeBootArgs,
     prompt: routePrompt,
     args: routeArgs,
     read: readRouteRun,
+};
+
+/** The empty screen's call: Ask Patch's, which may also answer a simple question itself. */
+export const EMPTY_SCREEN_CALL: RouteCall<AskPatchResult> = {
+    bootArgs: askPatchBootArgs,
+    prompt: routePrompt,
+    args: askPatchArgs,
+    read: readAskPatchRun,
 };
 
 /** How every call can end, whatever it asked. */

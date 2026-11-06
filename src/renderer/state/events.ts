@@ -50,7 +50,7 @@ import type {QuestionView} from './answers-slice';
 import type {DialogRequest} from './dialog-slice';
 import type {SettingsRecord} from './settings-slice';
 import type {ShellProfile} from '../../domain/shell/shell-profile';
-import type {RouteResult} from '../../domain/ask/model';
+import type {AskPatchResult} from '../../domain/ask/model';
 import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {ShownPage} from '../../domain/session/page-tool';
 
@@ -322,7 +322,9 @@ export type LocalEvent =
     /** Esc while waiting: main is told to stop, and the box unlocks at once (W2). */
     | {type: 'askCancelled'}
     /** Main answered the send counted as `asked`. */
-    | {type: 'askAnswered'; asked: number; result: RouteResult}
+    | {type: 'askAnswered'; asked: number; result: AskPatchResult}
+    /** Esc under Patch's answer: put it away. */
+    | {type: 'askAnswerDismissed'}
     /** ↑/↓ in the choice list (O2). */
     | {type: 'askChoiceStepped'; step: 1 | -1}
     /** The pointer is over a choice. */

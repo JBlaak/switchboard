@@ -164,6 +164,7 @@ export function QuickAsk(): JSX.Element {
                     onKeyDown={onKeyDown}
                     onHoverChoice={hoverChoice}
                     onPickChoice={(index) => void startChoice(index)}
+                    answerEscHint="close"
                 />
                 <QuickAskResult state={state} />
                 <QuickAskFoot state={state} />

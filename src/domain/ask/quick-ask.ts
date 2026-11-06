@@ -18,6 +18,8 @@ export type QuickAskOutcome =
     /** Bring the main window forward with the New Session picker; `reason` is Patch's line. */
     | {kind: 'picker'; prompt: string; reason?: string}
     | {kind: 'capture'; target: CaptureTarget; text: string}
+    /** Patch answered a simple question: show it in the pop-up, start nothing. */
+    | {kind: 'answer'; text: string}
     /** Back to editing. */
     | {kind: 'unlock'};
 
@@ -45,6 +47,8 @@ export function quickAskOutcome(result: QuickRouteResult, text: string, quickFol
         }
         case 'capture':
             return {kind: 'capture', target: result.target, text: result.text};
+        case 'answer':
+            return {kind: 'answer', text: result.text};
         case 'cancelled':
             return {kind: 'unlock'};
     }
@@ -65,6 +69,8 @@ export type QuickAskReply =
     | {kind: 'handedOff'}
     /** A task or a save was written (C4). */
     | {kind: 'saved'; target: CaptureTarget; summary: string}
+    /** Patch answered a simple question itself; the text stays, and nothing started. */
+    | {kind: 'answered'; text: string}
     /** A capture failed; the text stays, to retry (C5). */
     | {kind: 'captureFailed'; reason: string}
     /** Cancelled: back to editing. */

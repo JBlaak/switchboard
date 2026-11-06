@@ -13,7 +13,7 @@ import type {Project} from '../project/project';
 import type {SessionRow} from '../session/session';
 import {cleanDisplayName, resolveSessionName} from '../session/title';
 import {formatResetTime} from '../usage/usage';
-import type {RouteCandidate, RouteRequest, RouteResult} from './model';
+import type {AskPatchResult, RouteCandidate, RouteRequest, RouteResult} from './model';
 
 /** How many session titles describe a project to Haiku. */
 export const RECENT_TITLES = 5;
@@ -88,6 +88,54 @@ export const ROUTE_SYSTEM_PROMPT = [
     'Answering:',
     '- Answer with only this JSON object, no prose, no code fence:',
     '  {"projectPath": "<a listed path>" or null, "confident": true or false, "candidates": ["<a listed path>", ...], "prompt": "<the first message>"}',
+].join('\n');
+
+// ── Answering a simple question (no session) ──
+
+/**
+ * When Patch answers a question itself instead of routing it (the empty
+ * screen's box and Quick Ask). The bar is high on purpose: a session can
+ * answer anything, so a doubtful question goes there, and only what Haiku can
+ * answer well with no tools, no code and no current information stays inline.
+ * It is decided first, before any project is looked at: asked after the
+ * routing rules, Haiku often gave up on a general question as matching no
+ * project instead of answering it.
+ */
+export const ANSWER_RULES = [
+    'First, decide whether to answer the request yourself:',
+    '- When it is only a simple question you can answer fully and correctly from general knowledge (a fact, a definition, a command, a short how-to about a tool, language or concept), answer it: put your answer in answer. No coding session starts then, and no project is needed.',
+    '- A general question that names no project is the usual case to answer yourself. Matching no project is never a reason not to answer.',
+    '- Do not answer it, and leave answer "", when it asks for anything to be done (build, change, fix, run, write, review, check, plan, start, open), when it is about the user\'s own code, projects, files, sessions, machine or accounts, when it needs current information (news, prices, latest versions, weather, today\'s date), or when a good answer needs more than a short paragraph. When in doubt, leave it "": a session can answer anything.',
+    '- Write the answer in plain text, at most about 80 words, in the same language as the request. Put every command, path and piece of code in backticks, and a command to run on a line of its own, in backticks. Separate paragraphs with one blank line. No other markdown: no headings, bold, lists or code fences.',
+    '- With an answer, still fill the other keys: projectPath null, confident false, candidates [], prompt "".',
+    '',
+    'Otherwise, route it as follows.',
+].join('\n');
+
+/**
+ * `instructions` (the routing call's, or Quick Ask's) with `ANSWER_RULES` after
+ * the opening line, which says Patch may answer, and without their own
+ * "Answering" section, which the caller adds back with the answer key.
+ */
+export function withAnswerRules(instructions: string): string {
+    const opening = instructions.indexOf('\n\n');
+    const rest = instructions.slice(opening).replace(/\n+Answering:[\s\S]*$/, '');
+    return (
+        [
+            "You answer a developer's simple general questions yourself, and route every other request to one of their local projects, tidying it into the first message of a coding session in that project.",
+            '',
+            ANSWER_RULES,
+        ].join('\n') + rest
+    );
+}
+
+/** Ask Patch's instructions with `ANSWER_RULES`, and the answer key in the JSON. */
+export const ASK_PATCH_SYSTEM_PROMPT = [
+    withAnswerRules(ROUTE_SYSTEM_PROMPT),
+    '',
+    'Answering:',
+    '- Answer with only this JSON object, no prose, no code fence:',
+    '  {"answer": "<your answer>" or "", "projectPath": "<a listed path>" or null, "confident": true or false, "candidates": ["<a listed path>", ...], "prompt": "<the first message>"}',
 ].join('\n');
 
 /**
@@ -169,6 +217,18 @@ export function routeArgs(request: RouteRequest): string[] {
     return [...routeBootArgs(), routePrompt(request)];
 }
 
+/** The empty screen's boot args: the routing call's, with `ASK_PATCH_SYSTEM_PROMPT`. */
+export function askPatchBootArgs(): string[] {
+    const args = routeBootArgs();
+    args[args.length - 1] = ASK_PATCH_SYSTEM_PROMPT;
+    return args;
+}
+
+/** The `claude` argv for one cold call from the empty screen's box. */
+export function askPatchArgs(request: RouteRequest): string[] {
+    return [...askPatchBootArgs(), routePrompt(request)];
+}
+
 // ── The answer ──
 
 /** How one `claude -p` call ended, as the process reported it. */
@@ -204,6 +264,31 @@ export function readRouteRun(run: ClaudeRun, request: RouteRequest): RouteResult
     const answer = readAnswer(message, request);
     if (!answer) return {kind: 'failed', reason: GARBLED_LINE};
     return routeResultFrom(answer, request);
+}
+
+/**
+ * Turn a finished call from the empty screen's box into a result: Patch's own
+ * answer when `answer` holds one, otherwise exactly what `readRouteRun` makes
+ * of the routing keys.
+ */
+export function readAskPatchRun(run: ClaudeRun, request: RouteRequest): AskPatchResult {
+    const envelope = parseEnvelope(run.stdout);
+    if (!envelope || envelope.is_error === true || run.exitCode !== 0 || typeof envelope.result !== 'string') {
+        return readRouteRun(run, request);
+    }
+    const parsed = parseAnswerJson(envelope.result);
+    if (!isRecord(parsed)) return {kind: 'failed', reason: GARBLED_LINE};
+    const {answer, ...routing} = parsed;
+    const text = patchAnswer(answer);
+    if (text) return {kind: 'answer', text};
+    const checked = readAnswer(JSON.stringify(routing), request);
+    if (!checked) return {kind: 'failed', reason: GARBLED_LINE};
+    return routeResultFrom(checked, request);
+}
+
+/** The answer Haiku gave itself, trimmed, or '' when it routed instead. */
+export function patchAnswer(answer: unknown): string {
+    return typeof answer === 'string' ? answer.trim() : '';
 }
 
 /**
@@ -245,8 +330,7 @@ const FENCE = /^```(?:json)?[ \t]*\n?([\s\S]*?)\n?[ \t]*```$/;
  * either. A fence and whitespace around the object are fine; prose is not.
  */
 export function readAnswer(text: string, request: RouteRequest): RouteAnswer | null {
-    const trimmed = text.trim();
-    const parsed = parseJson(trimmed.match(FENCE)?.[1] ?? trimmed);
+    const parsed = parseAnswerJson(text);
     if (!isRecord(parsed)) return null;
     if (Object.keys(parsed).sort().join(',') !== 'candidates,confident,projectPath,prompt') return null;
 
@@ -326,6 +410,12 @@ export function usageLimitLine(message: string): string | null {
 }
 
 // ── Helpers ──
+
+/** The JSON Haiku wrote, a fence and whitespace around it aside. */
+function parseAnswerJson(text: string): unknown {
+    const trimmed = text.trim();
+    return parseJson(trimmed.match(FENCE)?.[1] ?? trimmed);
+}
 
 function parseJson(text: string): unknown {
     try {

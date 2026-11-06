@@ -180,3 +180,48 @@ test.describe('with a quick folder', () => {
         await expect(dialog(page, 'Start this in…')).toBeHidden();
     });
 });
+
+test('a simple question is answered under the box, and ⌘Enter still takes it towards a session', async ({
+    page,
+    home,
+}) => {
+    /* Given */
+    const route = fakeRoute(home);
+    route.answer({
+        answer: 'Run lsof -iTCP -sTCP:LISTEN -n -P.',
+        projectPath: null,
+        confident: false,
+        candidates: [],
+        prompt: '',
+    });
+    const before = launchedKeys(home);
+    const question = 'how do I list listening ports on macOS?';
+
+    /* When */
+    await box(page).fill(question);
+    await box(page).press('Enter');
+
+    /* Then */
+    await expect(page.getByTestId('ask-answer')).toContainText('Run lsof -iTCP -sTCP:LISTEN -n -P.');
+    await expect(says(page, 'Easy one! Here you go.')).toBeVisible();
+    await expect(box(page)).toHaveValue(question);
+    await expect(box(page)).toBeFocused();
+    await expect(dialog(page, 'Start this in…')).toBeHidden();
+    expect(launchedKeys(home)).toEqual(before);
+    expect(route.calls().at(-1)?.argv.join(' ')).toContain('decide whether to answer the request yourself');
+
+    /* When */
+    await box(page).press('Escape');
+
+    /* Then */
+    await expect(page.getByTestId('ask-answer')).toBeHidden();
+    await expect(box(page)).toHaveValue(question);
+
+    /* When */
+    await box(page).press('Meta+Enter');
+
+    /* Then */
+    const picker = dialog(page, 'Start this in…');
+    await expect(picker).toBeVisible();
+    await expect(picker).toContainText(question);
+});

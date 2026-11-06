@@ -42,6 +42,19 @@ export type RouteResult =
     | {kind: 'failed'; reason: string}
     | {kind: 'cancelled'};
 
+/**
+ * Patch answered a simple question itself, so no session starts: `text` is
+ * the answer, shown where the question was asked. Only the empty screen's box
+ * and Quick Ask offer it; the phone and task routing never get one.
+ */
+export interface PatchAnswer {
+    kind: 'answer';
+    text: string;
+}
+
+/** What came of a request from the empty screen's box: a routing result, or Patch's own answer. */
+export type AskPatchResult = RouteResult | PatchAnswer;
+
 // ── Quick Ask (#142) ──
 
 /** Where a capture goes: BlaakTasks for a task, James for something to keep. */
@@ -53,4 +66,4 @@ export type CaptureTarget = 'tasks' | 'james';
  * A capture's `text` is the request without its command words ("create a task
  * to call Peter" → "call Peter"), otherwise word for word.
  */
-export type QuickRouteResult = RouteResult | {kind: 'capture'; target: CaptureTarget; text: string};
+export type QuickRouteResult = AskPatchResult | {kind: 'capture'; target: CaptureTarget; text: string};

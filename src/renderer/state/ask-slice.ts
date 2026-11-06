@@ -7,7 +7,10 @@
  * still in it, until main answers which project the text is about. A sure
  * answer starts the session and clears the box; an unsure one goes
  * `choosing`, a short list of projects under the box; anything else hands the
- * text to the New Session picker and goes back to editing (O1–O3).
+ * text to the New Session picker and goes back to editing (O1–O3). A simple
+ * question Patch answers itself goes back to editing too, with its `answer`
+ * under the box and the text still in it, so ⌘Enter can still take it to a
+ * session; typing, sending again or Esc puts the answer away.
  *
  * The text survives a hand-off to the picker, since the user may dismiss it
  * and edit; `handedOff` remembers that the picker is carrying this text, so a
@@ -16,7 +19,7 @@
  * What an answer means is decided once, by `askOutcome`: the reducer moves
  * the box on it, and the actions do the matching launch or hand-off.
  */
-import type {RouteResult} from '../../domain/ask/model';
+import type {AskPatchResult} from '../../domain/ask/model';
 import type {RendererEvent} from './events';
 
 export type AskPhase = 'editing' | 'waiting' | 'choosing';
@@ -35,6 +38,8 @@ export interface AskState {
     readonly prompt: string;
     /** The New Session picker was opened carrying this text (or its rewrite). */
     readonly handedOff: boolean;
+    /** Patch's answer to the question last sent, shown under the box; '' when there is none. */
+    readonly answer: string;
 }
 
 export const initialAskState: AskState = {
@@ -45,6 +50,7 @@ export const initialAskState: AskState = {
     selected: 0,
     prompt: '',
     handedOff: false,
+    answer: '',
 };
 
 /** The most projects an unsure answer lists (O2). */
@@ -63,6 +69,8 @@ export type AskOutcome =
     | {readonly kind: 'choose'; readonly choices: readonly string[]; readonly prompt: string}
     /** Open the New Session picker carrying this prompt (O3). */
     | {readonly kind: 'picker'; readonly prompt: string; readonly say: string}
+    /** Patch answered a simple question itself: show it, start nothing. */
+    | {readonly kind: 'answer'; readonly text: string}
     /** Back to editing, nothing else (a cancel). */
     | {readonly kind: 'unlock'};
 
@@ -73,7 +81,7 @@ export type AskOutcome =
  * exactly as typed (P3). An unsure answer with no candidates left has nothing
  * to list, so it falls back too, though with the prompt it did rewrite.
  */
-export function askOutcome(result: RouteResult, text: string): AskOutcome {
+export function askOutcome(result: AskPatchResult, text: string): AskOutcome {
     switch (result.kind) {
         case 'confident':
             return {kind: 'start', projectPath: result.projectPath, prompt: result.prompt};
@@ -86,6 +94,8 @@ export function askOutcome(result: RouteResult, text: string): AskOutcome {
         case 'noMatch':
         case 'failed':
             return {kind: 'picker', prompt: text, say: result.reason};
+        case 'answer':
+            return {kind: 'answer', text: result.text};
         case 'cancelled':
             return {kind: 'unlock'};
     }
@@ -100,17 +110,22 @@ export function askReducer(state: AskState, event: RendererEvent): AskState {
     switch (event.type) {
         case 'askTextChanged':
             if (state.phase !== 'editing' || event.text === state.text) return state;
-            return {...state, text: event.text, handedOff: false};
+            return {...state, text: event.text, handedOff: false, answer: ''};
 
         case 'askSent':
             if (state.phase !== 'editing' || !canSend(state.text)) return state;
-            return {...state, phase: 'waiting', asked: state.asked + 1, handedOff: false};
+            return {...state, phase: 'waiting', asked: state.asked + 1, handedOff: false, answer: ''};
 
         // ⌘Enter: no routing, so no waiting. The session starts and clears the
         // box; with no Quick Session Folder the picker carries the text instead.
         case 'askQuickSent':
             if (state.phase !== 'editing' || !canSend(state.text)) return state;
-            return event.quickFolder ? {...state, text: '', handedOff: false} : {...state, handedOff: true};
+            return event.quickFolder
+                ? {...state, text: '', handedOff: false, answer: ''}
+                : {...state, handedOff: true, answer: ''};
+
+        case 'askAnswerDismissed':
+            return state.answer ? {...state, answer: ''} : state;
 
         // Unlocked straight away; main's `cancelled` answer comes later and is dropped.
         case 'askCancelled':
@@ -160,6 +175,8 @@ function answered(state: AskState, outcome: AskOutcome): AskState {
             return {...state, phase: 'choosing', choices: outcome.choices, selected: 0, prompt: outcome.prompt};
         case 'picker':
             return {...state, phase: 'editing', handedOff: true};
+        case 'answer':
+            return {...state, phase: 'editing', answer: outcome.text};
         case 'unlock':
             return {...state, phase: 'editing'};
     }

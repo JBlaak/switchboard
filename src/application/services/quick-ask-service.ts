@@ -23,6 +23,9 @@
  * that comes back anyway takes the no-match path. With it set, the capture
  * goes to the `~/.claude.json` server with that URL, whatever its name.
  *
+ * A simple question Patch can answer itself comes back as its answer, shown in
+ * the pop-up, and starts nothing.
+ *
  * ⌘Enter skips the routing call: a quick session starts on the text as typed.
  *
  * The capture call is cold. Warming it would mean warming both servers'
@@ -231,6 +234,8 @@ export class QuickAskService {
                 return {kind: 'handedOff'};
             case 'capture':
                 return this.capture(outcome.target, outcome.text, text, this.deps.ids.newId());
+            case 'answer':
+                return {kind: 'answered', text: outcome.text};
             case 'unlock':
                 return {kind: 'unlocked'};
         }

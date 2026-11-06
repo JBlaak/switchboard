@@ -27,6 +27,8 @@ export type AskKey =
     | 'picker'
     /** Choosing: back to editing the box. */
     | 'close'
+    /** Editing, under Patch's answer: Esc puts the answer away. */
+    | 'dismissAnswer'
     /** A key the box keeps to itself without acting on it. */
     | 'swallow';
 
@@ -40,13 +42,15 @@ export interface AskKeyPress {
 
 /**
  * Enter sends, ⌘Enter starts a quick session and Shift+Enter is a new line;
- * the rest only count while waiting or choosing.
+ * Esc puts away Patch's answer when one shows (`answered`); the rest only
+ * count while waiting or choosing.
  */
-export function askKey(phase: AskPhase, press: AskKeyPress): AskKey | null {
+export function askKey(phase: AskPhase, press: AskKeyPress, answered = false): AskKey | null {
     if (press.isComposing) return null;
     const {key, shiftKey} = press;
     switch (phase) {
         case 'editing':
+            if (key === 'Escape' && answered) return 'dismissAnswer';
             if (key !== 'Enter' || shiftKey) return null;
             return press.metaKey ? 'quick' : 'send';
         case 'waiting':
@@ -110,6 +114,9 @@ export function thinkingBeat(n: number): PatchBeat {
     return THINKING_BEATS[((Math.trunc(n) % k) + k) % k];
 }
 
+/** Patch when it answered a simple question itself; the answer shows under the box. */
+export const ANSWER_BEAT: PatchBeat = {move: 'hop', line: 'Easy one! Here you go.'};
+
 /** Patch once the box unlocks after Esc. */
 export const CANCELLED_BEAT: PatchBeat = {move: 'jelly', line: 'Okay, never mind.'};
 
@@ -123,6 +130,8 @@ export function outcomeBeat(outcome: AskOutcome): PatchBeat | null {
             return {move: 'wave', line: 'Not quite sure. One of these?'};
         case 'picker':
             return {move: 'jelly', line: outcome.say};
+        case 'answer':
+            return ANSWER_BEAT;
         case 'start':
         case 'unlock':
             return null;

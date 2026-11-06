@@ -25,7 +25,7 @@ import type {WorkingAgent} from '../domain/terminal/program-status-children';
 import type {UpdateNotice} from '../domain/update/release';
 import type {Usage} from '../domain/usage/usage';
 import type {Weather, WeatherLocation} from '../domain/weather/weather';
-import type {CaptureTarget, RouteRequest, RouteResult} from '../domain/ask/model';
+import type {AskPatchResult, CaptureTarget, RouteRequest} from '../domain/ask/model';
 import type {IssueWorktreeRequest, IssueWorktreeResult} from '../domain/plan/issue-session';
 import type {Plan, PlanSummary} from '../domain/plan/model';
 import type {ProjectOverview, ProjectOverviewOptions, WorktreeCleanResult} from '../domain/project/overview';
@@ -137,7 +137,7 @@ export interface SwitchboardApi {
      * Which project the user's text is about, and the prompt to start it on.
      * Never rejects: a failed call answers `{ kind: 'failed' }`.
      */
-    askRoute(request: RouteRequest): Promise<RouteResult>;
+    askRoute(request: RouteRequest): Promise<AskPatchResult>;
     /** Stop the request in flight; it then answers `{ kind: 'cancelled' }`. */
     cancelAskRoute(): Promise<void>;
     /** Start a `claude` process for the next request now, so it answers sooner; one at a time. */

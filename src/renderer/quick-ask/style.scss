@@ -396,6 +396,27 @@ body {
     }
 }
 
+/* ---- Patch's answer, rising in under the box ---- */
+.quick-ask-slab {
+    .ask-answer {
+        margin: 0;
+        padding: 6px 6px 0;
+        border-top: 1px solid var(--qa-divider);
+        animation:
+            qa-fade 200ms both,
+            qa-rise-8 320ms $spring-out both;
+    }
+
+    .ask-answer-text {
+        margin: 0;
+        padding: 10px 12px;
+        background: none;
+        box-shadow: none;
+        font-size: 15px;
+        max-height: 240px;
+    }
+}
+
 @keyframes qa-fade {
     from {
         opacity: 0;
@@ -440,6 +461,7 @@ body {
     .quick-ask-undo,
     .quick-ask-foot,
     .quick-ask-slab .ask-choice,
+    .quick-ask-slab .ask-answer,
     .quick-ask-slab .ask-hints {
         animation: qa-fade 120ms both;
     }
