@@ -660,6 +660,44 @@ test.describe('project settings on the project page', () => {
     });
 });
 
+test.describe('saved prompts', () => {
+    /** The prompts section of the global form (#344). */
+    function prompts(page: Page): Locator {
+        return page.locator('#settings-saved-prompts');
+    }
+
+    test('adding one stores it at once, and a scope change moves it to the project’s list', async ({page, home}) => {
+        /* Given */
+        const project = home.projectPath(P.acmeApi);
+        await openGlobalSettings(page);
+
+        /* When */
+        await prompts(page).getByRole('button', {name: 'Add a prompt', exact: true}).click();
+        await prompts(page).getByRole('textbox', {name: 'Label'}).fill('Where are we?');
+        await prompts(page).getByRole('textbox', {name: 'Prompt'}).fill('Summarise {branch} in three lines.');
+        await prompts(page).getByRole('radio', {name: 'Put in input'}).click();
+        await prompts(page).getByRole('button', {name: 'Save', exact: true}).click();
+
+        /* Then */
+        await expect(prompts(page).getByText('⌘1', {exact: true})).toBeVisible();
+        await expect
+            .poll(() => page.evaluate(() => window.api.savedPrompts(null)))
+            .toMatchObject({
+                global: [{label: 'Where are we?', text: 'Summarise {branch} in three lines.', mode: 'input'}],
+            });
+
+        /* When */
+        await prompts(page).getByRole('button', {name: 'Edit “Where are we?”'}).click();
+        await prompts(page).getByRole('combobox', {name: 'Scope'}).selectOption(project);
+        await prompts(page).getByRole('button', {name: 'Save', exact: true}).click();
+
+        /* Then */
+        await expect
+            .poll(() => page.evaluate((path) => window.api.savedPrompts(path), project))
+            .toMatchObject({global: [], project: [{label: 'Where are we?'}]});
+    });
+});
+
 forEachAppearance(() => {
     test('global settings', async ({page}) => {
         /* When */

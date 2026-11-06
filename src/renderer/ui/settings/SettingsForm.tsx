@@ -34,6 +34,7 @@ import {useWeatherCity} from './use-weather-city';
 import {useBlaakTasksUrl} from './use-blaak-tasks-url';
 import {PhoneAccessSection} from '../phone-access/PhoneAccessSection';
 import {VmsSection} from '../vms/VmsSection';
+import {SavedPromptsSection} from './SavedPromptsSection';
 import type {JSX} from 'react';
 import type {SettingsPanel} from '../../state/settings-slice';
 
@@ -292,6 +293,8 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
                     </label>
                 </AppField>
             </div>
+
+            <SavedPromptsSection />
 
             <div className="settings-section">
                 <div className="settings-section-title">Tasks</div>
