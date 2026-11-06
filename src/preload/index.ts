@@ -171,6 +171,8 @@ const api: SwitchboardApi = {
     queueErrandStarted: (errandId, sessionId) => ipcRenderer.invoke(INVOKE.queueErrandStarted, errandId, sessionId),
     queueErrandAbandoned: (errandId) => ipcRenderer.invoke(INVOKE.queueErrandAbandoned, errandId),
     queueErrands: (repository) => ipcRenderer.invoke(INVOKE.queueErrands, repository),
+    ciJobQueue: (repository) => ipcRenderer.invoke(INVOKE.ciJobQueue, repository),
+    ciJobBump: (request) => ipcRenderer.invoke(INVOKE.ciJobBump, request),
 
     // ── Tasks (#248) ──
     listTasks: (query) => ipcRenderer.invoke(INVOKE.tasksList, query),

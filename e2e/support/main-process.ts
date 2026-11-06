@@ -27,6 +27,7 @@ import type {CommentRequest, ReviewRequest} from '../../src/domain/session-work/
 import type {RemoteStatusPayload} from '../../src/domain/remote/remote-status';
 import type {UpdateNotice} from '../../src/domain/update/release';
 import type {ErrandResult, FixResult, NudgeResult, QueueErrandView} from '../../src/domain/project/queue-errands';
+import type {BumpResult, CiJobQueueAnswer} from '../../src/domain/project/ci-job-queue';
 import type {Usage} from '../../src/domain/usage/usage';
 import type {Weather, WeatherLocation} from '../../src/domain/weather/weather';
 import type {Plan, PlanSummary} from '../../src/domain/plan/model';
@@ -181,6 +182,9 @@ export interface HostStubs {
 
 /** What the `queue:*` channels answer. */
 export interface MergeQueueStub {
+    /** What the CI job queue under the section answers, and a Bump. */
+    ciJobs: CiJobQueueAnswer;
+    bump: BumpResult;
     errands: QueueErrandView[];
     nudge: NudgeResult;
     fix: FixResult;
@@ -832,6 +836,14 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 replace(
                     channels.queueErrands,
                     queue('queueErrands', (stub) => stub.errands),
+                );
+                replace(
+                    channels.ciJobQueue,
+                    queue('ciJobQueue', (stub) => stub.ciJobs),
+                );
+                replace(
+                    channels.ciJobBump,
+                    queue('ciJobBump', (stub) => stub.bump),
                 );
             }
 

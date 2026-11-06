@@ -18,11 +18,13 @@
  * The merge queue's errands (#315) have no push: they are read again with
  * each full overview whose repository has a queue, after main is told which
  * held entries wait for a review now. The section's effects are handed in
- * here too.
+ * here too. Its CI job queue is read as the section comes on screen and on
+ * the overview's cadence while it stays there, never while it is not.
  */
 import {dispatch, store} from '../../state/app-store';
 import {projectRoute} from '../../state/main-area-slice';
 import {
+    ciJobQueueRequest,
     memoryOf,
     overviewRequest,
     parseProjectPageMemories,
@@ -35,7 +37,7 @@ import {isVmProjectIn} from '../../state/agent-host-slice';
 import {isStorable, parseStoredOverviews, storedOverviewFor, storedOverviewsWith} from '../../state/stored-overviews';
 import {issueKeyString} from '../../../domain/plan/model';
 import {loadProjectOverview, reloadProjectOverview} from './actions';
-import {followQueueErrands, setMergeQueueEffects} from './merge-queue-actions';
+import {followQueueErrands, loadCiJobQueue, setMergeQueueEffects} from './merge-queue-actions';
 import {resolveDefaultSessionOptions} from '../../features/dialogs/launch-options';
 import {startClaudeSessionIn} from '../../features/sessions/session-actions';
 import {pulseSessionRow} from '../session-list/pulse';
@@ -74,6 +76,19 @@ export function installProjectPage(): () => void {
     let tasksFor: string | null = null;
     let tasksPoll: ReturnType<typeof setInterval> | null = null;
     let settling: ReturnType<typeof setTimeout> | null = null;
+    let jobsFor: string | null = null;
+    let jobsPoll: ReturnType<typeof setInterval> | null = null;
+
+    const followJobs = (state: RendererState): void => {
+        const repository = ciJobQueueRequest(state);
+        if (repository === jobsFor) return;
+        jobsFor = repository;
+        if (jobsPoll) clearInterval(jobsPoll);
+        jobsPoll = null;
+        if (!repository) return;
+        void loadCiJobQueue(repository);
+        jobsPoll = setInterval(() => void loadCiJobQueue(repository), OVERVIEW_POLL_MS);
+    };
 
     const followTasks = (state: RendererState): void => {
         const projectPath = tasksRequest(state);
@@ -146,6 +161,7 @@ export function installProjectPage(): () => void {
         }
 
         follow(state);
+        followJobs(state);
 
         // A full answer the page took as it is: kept for the next visit.
         if (
@@ -177,6 +193,7 @@ export function installProjectPage(): () => void {
     return () => {
         if (poll) clearInterval(poll);
         if (tasksPoll) clearInterval(tasksPoll);
+        if (jobsPoll) clearInterval(jobsPoll);
         if (settling) clearTimeout(settling);
         unsubscribe();
     };

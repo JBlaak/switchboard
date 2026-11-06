@@ -1,10 +1,12 @@
 /**
  * The merge queue's buttons (#315): Nudge, Fix in session, Retry and Opt in,
- * and the errand sessions Nudge and Fix start. Every request is checked for
+ * and the errand sessions Nudge and Fix start; and the CI job queue's reads
+ * and its Bump. Every request is checked for
  * shape here; what it may do is the queue errand service's to say.
  */
 import {INVOKE} from '../../ipc/channels';
 import type {FailureKind} from '../../domain/project/merge-queue';
+import type {BumpRequest} from '../../domain/project/ci-job-queue';
 import type {FixRequest, NudgeRequest} from '../../domain/project/queue-errands';
 import type {Container} from '../composition-root';
 import type {IpcRegistrar} from './support/registrar';
@@ -95,6 +97,23 @@ export function registerMergeQueueHandlers(ipc: IpcRegistrar, app: Container): v
     ipc.handle(INVOKE.queueErrands, (repository?: string) =>
         app.queueErrands.errands(isText(repository) ? repository : undefined),
     );
+    ipc.handle(INVOKE.ciJobQueue, (repository: string) =>
+        isText(repository) ? app.ciJobQueue.read(repository) : {ok: false, reason: 'Not a repository'},
+    );
+    ipc.handle(INVOKE.ciJobBump, (request: BumpRequest) => {
+        const {repository, jobId, runIds, headNumbers} = request ?? ({} as Partial<BumpRequest>);
+        if (
+            !isText(repository) ||
+            !isNumber(jobId) ||
+            !Array.isArray(runIds) ||
+            !runIds.every(isNumber) ||
+            !Array.isArray(headNumbers) ||
+            !headNumbers.every(isNumber)
+        ) {
+            return {ok: false, reason: 'Not a job to bump'};
+        }
+        return app.ciJobQueue.bump({repository, jobId, runIds, headNumbers});
+    });
 }
 
 function isText(value: unknown): value is string {

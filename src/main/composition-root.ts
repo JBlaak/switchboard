@@ -75,6 +75,7 @@ import {QuickAskService, quickRouteCall} from '../application/services/quick-ask
 import {TaskLinkService} from '../application/services/task-link-service';
 import {TaskSessionService} from '../application/services/task-session-service';
 import {QueueErrandService, type ErrandOwnerCandidate} from '../application/services/queue-errand-service';
+import {CiJobQueueService} from '../application/services/ci-job-queue-service';
 import {TaskWritesService} from '../application/services/task-writes-service';
 import {TasksService} from '../application/services/tasks-service';
 import {SessionRegistry} from '../application/model/session-registry';
@@ -203,6 +204,8 @@ export interface Container {
     readonly issueSessions: IssueSessionService;
     /** The merge queue's buttons (#315): Nudge, Fix in session, Retry, Opt in, and their errands. */
     readonly queueErrands: QueueErrandService;
+    /** The CI job queue under the merge queue, and Bump. */
+    readonly ciJobQueue: CiJobQueueService;
     /** Removes an archived session's worktrees, when Settings says to. */
     readonly worktreeCleanup: WorktreeCleanupService;
     readonly plans: PlanService;
@@ -920,6 +923,9 @@ export function buildContainer(): Container {
         queueErrands.turnEnded(sessionIds, archiving, currentId),
     );
 
+    // The CI job queue under the merge queue: its jobs by runner pool, and Bump.
+    const ciJobQueue = new CiJobQueueService({github, clock, timers, log});
+
     // Archiving removes the session's worktrees, when Settings says to.
     const worktreeCleanup = new WorktreeCleanupService({
         enabled: () => settings.removeWorktreeOnArchive(),
@@ -1206,6 +1212,7 @@ export function buildContainer(): Container {
         review,
         issueSessions,
         queueErrands,
+        ciJobQueue,
         worktreeCleanup,
         plans,
         projectOverview,

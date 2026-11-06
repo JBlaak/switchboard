@@ -113,6 +113,9 @@ export const INVOKE = {
     queueErrandStarted: 'queue:errand-started',
     queueErrandAbandoned: 'queue:errand-abandoned',
     queueErrands: 'queue:errands',
+    // The CI job queue under the merge queue, and Bump
+    ciJobQueue: 'queue:ci-jobs',
+    ciJobBump: 'queue:ci-job-bump',
 
     // Tasks: BlaakTasks in Switchboard (#248)
     tasksList: 'tasks:list',
