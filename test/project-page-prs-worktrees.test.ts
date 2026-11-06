@@ -19,9 +19,9 @@ import {
     plansView,
     pullRequestRows,
     pullRequestsView,
-    reviewText,
     worktreeRows,
     worktreesView,
+    type PullRequestGroupOnScreen,
 } from '../src/renderer/ui/project-page/page-rows';
 import {pageKeyAction} from '../src/renderer/ui/project-page/page-keys';
 import {
@@ -40,10 +40,12 @@ import type {RendererEvent} from '../src/renderer/state/events';
 import type {RendererState} from '../src/renderer/state/root';
 import type {Plan, PlanIssue} from '../src/domain/plan/model';
 import type {ProjectIssue, ProjectOverview, ProjectPullRequest, WorktreeOverview} from '../src/domain/project/overview';
+import type {MergeQueue} from '../src/domain/project/merge-queue';
 
 const REPO = 'acme/app';
 const APP = '/dev/app';
-const SHOWN = {showMerged: false, filter: ''};
+const NOW = Date.parse('2026-10-17T12:00:00Z');
+const SHOWN = {showMerged: false, filter: '', now: NOW};
 
 function run(state: RendererState, ...events: RendererEvent[]): RendererState {
     return events.reduce((s, e) => rootReducer(Object.freeze(s), e), state);
@@ -110,6 +112,16 @@ function pullRequest(
         checks: {state: 'passing', failing: 0},
         review: null,
         closes: [],
+        wait: {
+            closedAt: null,
+            failedChecks: [],
+            cancelledChecks: [],
+            reviewRequestedFromYou: false,
+            reviewRequestedFromOthers: false,
+            unresolvedThreads: 0,
+            mergeable: 'mergeable',
+            behindBase: null,
+        },
         ...fields,
     };
 }
@@ -189,8 +201,44 @@ function overview(fields: Partial<ProjectOverview> = {}): ProjectOverview {
     };
 }
 
-function numbers(rows: readonly {pullRequest: {number: number}}[]): number[] {
-    return rows.map((row) => row.pullRequest.number);
+function numbers(groups: readonly PullRequestGroupOnScreen[]): number[] {
+    return groups.flatMap((group) => group.rows.map((row) => row.pullRequest.number));
+}
+
+/** The section's groups for `o`. */
+function prGroups(o: ProjectOverview, options: Partial<typeof SHOWN> = {}): PullRequestGroupOnScreen[] {
+    return pullRequestsView(github(o), o.worktrees, {...SHOWN, ...options});
+}
+
+/** `o` with these PRs instead of its own, each closing the issues it says, merge queue pills as given. */
+function withPullRequests(
+    o: ProjectOverview,
+    pullRequests: ProjectPullRequest[],
+    pills: MergeQueue['pills'] = {},
+): ProjectOverview {
+    const groups = github(o);
+    return {
+        ...o,
+        github: {
+            ...groups,
+            mergeQueue: {
+                head: null,
+                entries: [],
+                failed: [],
+                outside: [],
+                unknown: [],
+                counts: {queued: 0, held: 0, failed: 0},
+                clearsInMs: null,
+                runMs: null,
+                pills,
+            },
+            pullRequests: pullRequests.map((pullRequest) => ({
+                pullRequest,
+                closes: pullRequest.closes.map((number) => ({repository: REPO, number})),
+                plan: null,
+            })),
+        },
+    };
 }
 
 function github(o: ProjectOverview) {
@@ -352,26 +400,55 @@ test('no Clean before the answer, for another project’s answer, or for an ssh 
 
 // ── Pull requests ──
 
-test('the section lists the open PRs, and Show merged adds the merged ones after them', () => {
+test('the section groups the open PRs by what they wait on, and Show merged adds the older merged ones last', () => {
     /* Given */
-    const groups = github(overview());
+    const o = overview();
 
     /* When */
-    const open = pullRequestsView(groups, SHOWN);
-    const all = pullRequestsView(groups, {...SHOWN, showMerged: true});
+    const open = prGroups(o);
+    const all = prGroups(o, {showMerged: true});
 
     /* Then */
-    assert.deepEqual(numbers(open), [20, 21, 22]);
-    assert.deepEqual(numbers(all), [20, 21, 22, 19]);
+    assert.deepEqual(
+        open.map((group) => [group.title, numbers([group])]),
+        [
+            ['Needs you', [21, 22]],
+            ['Waiting on CI', [20]],
+        ],
+    );
+    assert.deepEqual(
+        all.map((group) => [group.title, numbers([group])]),
+        [
+            ['Needs you', [21, 22]],
+            ['Waiting on CI', [20]],
+            ['Merged earlier', [19]],
+        ],
+    );
+});
+
+test('each PR says its open point in words', () => {
+    /* When */
+    const groups = prGroups(overview(), {showMerged: true});
+
+    /* Then */
+    assert.deepEqual(
+        groups.flatMap((group) => group.rows.map((row) => [row.pullRequest.number, row.wait.openPoint])),
+        [
+            [21, 'draft'],
+            [22, 'CI failing · waiting on review'],
+            [20, 'CI running'],
+            [19, 'merged'],
+        ],
+    );
 });
 
 test('a PR that closes an issue in a plan carries that plan for its chip, and is the issue’s PR pill', () => {
     /* Given */
-    const groups = github(overview());
+    const o = overview();
 
     /* When */
-    const rows = pullRequestsView(groups, SHOWN);
-    const plans = plansView(groups, {
+    const rows = prGroups(o).flatMap((group) => group.rows);
+    const plans = plansView(github(o), {
         expandedPlans: [REPO + '#10'],
         showClosed: false,
         filter: '',
@@ -379,8 +456,8 @@ test('a PR that closes an issue in a plan carries that plan for its chip, and is
     });
 
     /* Then */
-    assert.deepEqual(rows[0].plan, {repository: REPO, number: 10});
-    assert.equal(rows[1].plan, null);
+    assert.deepEqual(rows.find((row) => row.pullRequest.number === 20)?.plan, {repository: REPO, number: 10});
+    assert.equal(rows.find((row) => row.pullRequest.number === 21)?.plan, null);
     const redirect = plans.plans[0].issues.find((row) => row.issue.number === 12);
     assert.equal(redirect?.status?.kind, 'pull-request');
     assert.equal(redirect?.status?.kind === 'pull-request' && redirect.status.pullRequest.number, 20);
@@ -388,17 +465,116 @@ test('a PR that closes an issue in a plan carries that plan for its chip, and is
 
 test('the filter finds a PR by number, title or head branch', () => {
     /* Given */
-    const groups = github(overview());
+    const o = overview();
 
     /* When */
-    const byBranch = pullRequestsView(groups, {...SHOWN, filter: 'dependabot'});
-    const byNumber = pullRequestsView(groups, {...SHOWN, filter: '#21'});
-    const byTitle = pullRequestsView(groups, {...SHOWN, filter: 'redirect LOOP'});
+    const byBranch = prGroups(o, {filter: 'dependabot'});
+    const byNumber = prGroups(o, {filter: '#21'});
+    const byTitle = prGroups(o, {filter: 'redirect LOOP'});
 
     /* Then */
     assert.deepEqual(numbers(byBranch), [22]);
     assert.deepEqual(numbers(byNumber), [21]);
     assert.deepEqual(numbers(byTitle), [20]);
+});
+
+test('failing CI waits on CI while a session runs in the worktree of its head branch, and needs you otherwise', () => {
+    /* Given */
+    const failing = {checks: {state: 'failing', failing: 1}} as const;
+    const o = withPullRequests(overview(), [
+        pullRequest(30, 'Worked on', 'fix/redirect', failing),
+        pullRequest(31, 'Left alone', 'rate-limiter', failing),
+    ]);
+
+    /* When */
+    const groups = prGroups(o);
+
+    /* Then */
+    assert.deepEqual(
+        groups.map((group) => [group.group, numbers([group])]),
+        [
+            ['needs-you', [31]],
+            ['waiting-on-ci', [30]],
+        ],
+    );
+});
+
+test('failing CI waits on CI while the session that owns an issue it closes is running', () => {
+    /* Given */
+    const base = overview();
+    const owned = groupOverview<ProjectIssue, ProjectPullRequest>({
+        repository: REPO,
+        plans: [],
+        issues: [issue(40, 'Owned')],
+        pullRequests: [],
+        sessions: {owners: {[REPO + '#40']: 's9'}, running: new Set(['s9'])},
+    });
+    const o = withPullRequests({...base, github: {...github(base), loose: owned.loose}}, [
+        pullRequest(32, 'Closes the owned issue', 'elsewhere', {checks: {state: 'failing', failing: 1}, closes: [40]}),
+    ]);
+
+    /* When */
+    const groups = prGroups(o);
+
+    /* Then */
+    assert.deepEqual(
+        groups.map((group) => group.group),
+        ['waiting-on-ci'],
+    );
+});
+
+test('a PR merged or closed today shows without Show merged; one closed earlier never shows', () => {
+    /* Given */
+    const closedAt = (at: string): Partial<ProjectPullRequest> => ({
+        wait: {...pullRequest(0, '', '').wait, closedAt: at},
+    });
+    const o = withPullRequests(overview(), [
+        pullRequest(50, 'Merged today', 'a', {state: 'merged', ...closedAt('2026-10-17T09:00:00Z')}),
+        pullRequest(51, 'Closed today', 'b', {state: 'closed', ...closedAt('2026-10-17T10:00:00Z')}),
+        pullRequest(52, 'Merged last week', 'c', {state: 'merged', ...closedAt('2026-10-10T09:00:00Z')}),
+        pullRequest(53, 'Closed last week', 'd', {state: 'closed', ...closedAt('2026-10-10T09:00:00Z')}),
+    ]);
+
+    /* When */
+    const hidden = prGroups(o);
+    const shown = prGroups(o, {showMerged: true});
+
+    /* Then */
+    assert.deepEqual(
+        hidden.map((group) => [group.title, numbers([group])]),
+        [['Merged or closed today', [50, 51]]],
+    );
+    assert.deepEqual(
+        shown.map((group) => [group.title, numbers([group])]),
+        [
+            ['Merged or closed today', [50, 51]],
+            ['Merged earlier', [52]],
+        ],
+    );
+});
+
+test('a PR in the merge queue waits on CI, and one the queue failed needs you', () => {
+    /* Given */
+    const o = withPullRequests(
+        overview(),
+        [pullRequest(60, 'Queued', 'q', {review: 'approved'}), pullRequest(61, 'Failed', 'f', {review: 'approved'})],
+        {
+            60: {kind: 'queued', text: 'queued · 2nd', title: 'Second in the merge queue'},
+            61: {kind: 'failed', text: 'queue failed', title: 'The merge queue gave up'},
+        },
+    );
+
+    /* When */
+    const groups = prGroups(o);
+
+    /* Then */
+    assert.deepEqual(
+        groups.flatMap((group) => group.rows.map((row) => [row.pullRequest.number, group.group, row.wait.openPoint])),
+        [
+            [61, 'needs-you', 'merge queue failed'],
+            [60, 'waiting-on-ci', ''],
+        ],
+    );
 });
 
 test('the checks pill says passing, running or how many fail, and nothing without checks', () => {
@@ -417,24 +593,6 @@ test('the checks pill says passing, running or how many fail, and nothing withou
         {tone: 'failing', text: '✕ 2 failing'},
         null,
     ]);
-});
-
-test('the review state reads in words, and a draft or merged PR says so instead', () => {
-    /* Given */
-    const pr = pullRequest(1, 'A', 'a');
-
-    /* When */
-    const texts = [
-        reviewText({...pr, review: 'approved'}),
-        reviewText({...pr, review: 'changes_requested'}),
-        reviewText({...pr, review: 'review_required'}),
-        reviewText(pr),
-        reviewText({...pr, draft: true, review: 'approved'}),
-        reviewText({...pr, state: 'merged', review: 'approved'}),
-    ];
-
-    /* Then */
-    assert.deepEqual(texts, ['approved', 'changes requested', 'review requested', 'no review yet', 'draft', 'merged']);
 });
 
 // ── Worktrees ──
@@ -472,7 +630,7 @@ test('a merged worktree with no merged PR known still says it is safe to remove'
     const groups = github(overview());
     const openOnly: ProjectOverview = {
         ...overview(),
-        github: {...groups, pullRequests: pullRequestsView(groups, SHOWN)},
+        github: {...groups, pullRequests: groups.pullRequests.filter((row) => row.pullRequest.state === 'open')},
     };
 
     /* When */
@@ -522,7 +680,7 @@ test('the cursor walks pull requests, then plans, then sessions, then worktrees,
     /* When */
     const rows = pageRows({
         plans,
-        pullRequests: pullRequestRows(pullRequestsView(github(o), SHOWN)),
+        pullRequests: pullRequestRows(pullRequestsView(github(o), o.worktrees, SHOWN)),
         sessions: [{kind: 'session', id: cursorId.session('s1'), sessionId: 's1'}],
         worktrees: worktreeRows(worktreesView(o, '')).slice(0, 2),
     });
@@ -531,9 +689,9 @@ test('the cursor walks pull requests, then plans, then sessions, then worktrees,
     assert.deepEqual(
         rows.map((row) => row.id),
         [
-            'pr:acme/app#20',
             'pr:acme/app#21',
             'pr:acme/app#22',
+            'pr:acme/app#20',
             'plan:acme/app#10',
             'session:s1',
             'worktree:' + APP,
@@ -548,7 +706,7 @@ test('↵ on a pull request opens it on GitHub; on a worktree it does nothing', 
     const rows = pageRows({
         plans: [],
         sessions: [],
-        pullRequests: pullRequestRows(pullRequestsView(github(o), SHOWN)),
+        pullRequests: pullRequestRows(pullRequestsView(github(o), o.worktrees, SHOWN)),
         worktrees: worktreeRows(worktreesView(o, '')),
     });
 
@@ -567,7 +725,7 @@ test('S starts a session in a worktree with none running, and does nothing on a 
     const rows = pageRows({
         plans: [],
         sessions: [],
-        pullRequests: pullRequestRows(pullRequestsView(github(o), SHOWN)),
+        pullRequests: pullRequestRows(pullRequestsView(github(o), o.worktrees, SHOWN)),
         worktrees: worktreeRows(worktreesView(o, '')),
     });
     const limiter = APP + '/.claude/worktrees/limiter';
@@ -691,7 +849,7 @@ test('nothing open: the sections answer no rows, for one quiet line each', () =>
     });
 
     /* When */
-    const prs = pullRequestsView(empty, SHOWN);
+    const prs = pullRequestsView(empty, [], SHOWN);
     const plans = plansView(empty, {expandedPlans: [], showClosed: false, filter: '', looseExpanded: false});
 
     /* Then */

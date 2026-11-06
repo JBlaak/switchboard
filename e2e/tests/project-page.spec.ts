@@ -311,15 +311,18 @@ test.describe('plans and issues', () => {
         await rowProjectLink(page, S.loginFix).click();
         const prs = projectPage(page).getByRole('region', {name: 'Pull requests'});
         const rows = prs.locator('.pp-pr');
+        await expect(prs.locator('.pp-subhead')).toHaveText(['Needs you 2', 'Waiting on CI 1']);
         await expect(rows.locator('.pp-pr-title')).toHaveText([
-            'Stop the login redirect loop',
             'Try a token-bucket rate limiter',
             'Bump express to 5.1',
+            'Stop the login redirect loop',
         ]);
-        await expect(rows.nth(0)).toContainText('● running');
-        await expect(rows.nth(0)).toContainText('review requested');
-        await expect(rows.nth(1)).toHaveClass(/\bis-draft\b/);
-        await expect(rows.nth(2)).toContainText('✕ 2 failing');
+        await expect(rows.nth(0)).toHaveClass(/\bis-draft\b/);
+        await expect(rows.nth(0).locator('.pp-open-point')).toHaveText('draft');
+        await expect(rows.nth(1)).toContainText('✕ 2 failing');
+        await expect(rows.nth(1).locator('.pp-open-point')).toHaveText('CI failing');
+        await expect(rows.nth(2)).toContainText('● running');
+        await expect(rows.nth(2).locator('.pp-open-point')).toHaveText('CI running · waiting on review');
         const worktrees = projectPage(page).getByRole('region', {name: 'Worktrees'});
         await expect(worktrees.locator('.pp-worktree-branch')).toHaveText([
             'main',
@@ -329,7 +332,7 @@ test.describe('plans and issues', () => {
         ]);
 
         /* When */
-        await rows.nth(0).getByRole('button', {name: 'in #1300'}).click();
+        await rows.nth(2).getByRole('button', {name: 'in #1300'}).click();
 
         /* Then */
         await expect(plansSection(page).getByRole('button', {name: 'Collapse plan Login rework'})).toHaveAttribute(
@@ -341,10 +344,11 @@ test.describe('plans and issues', () => {
         await prs.getByRole('button', {name: 'Show merged'}).click();
 
         /* Then */
+        await expect(prs.locator('.pp-subhead')).toHaveText(['Needs you 2', 'Waiting on CI 1', 'Merged earlier 1']);
         await expect(rows.locator('.pp-pr-title')).toHaveText([
-            'Stop the login redirect loop',
             'Try a token-bucket rate limiter',
             'Bump express to 5.1',
+            'Stop the login redirect loop',
             'Cookie store behind a port',
         ]);
         await expect(worktrees.locator('.pp-worktree').filter({hasText: 'cookie-store'})).toContainText(

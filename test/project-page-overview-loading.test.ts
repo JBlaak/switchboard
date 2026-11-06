@@ -48,6 +48,13 @@ function answered(overview: ProjectOverview, plans: boolean, merged = false): Re
     return {type: 'projectOverviewAnswered', projectPath: overview.projectPath, closed: false, merged, plans, overview};
 }
 
+const NOW = Date.parse('2026-10-17T12:00:00Z');
+
+/** The Pull requests section's rows on `page`, group after group. */
+function shownPullRequests(page: RendererState['projectPage']) {
+    return pullRequestsViewOf(page, APP, NOW)!.flatMap((group) => group.rows);
+}
+
 // ── An overview: a plan whose issue a session works on, a PR closing it, a loose issue, two checkouts ──
 
 const LOGIN: Plan = {
@@ -97,6 +104,16 @@ const PR: ProjectPullRequest = {
     checks: {state: 'passing', failing: 0},
     review: null,
     closes: [11],
+    wait: {
+        closedAt: null,
+        failedChecks: [],
+        cancelledChecks: [],
+        reviewRequestedFromYou: false,
+        reviewRequestedFromOthers: false,
+        unresolvedThreads: 0,
+        mergeable: 'mergeable',
+        behindBase: null,
+    },
 };
 
 /** The full answer, or (`plans` false) the one without plans, as main gives them. */
@@ -179,7 +196,7 @@ test('the answer without plans shows its pull requests and loose issues, with th
         [30],
     );
     assert.deepEqual(
-        pullRequestsViewOf(page, APP)!.map((row) => [row.pullRequest.number, row.plan?.number]),
+        shownPullRequests(page).map((row) => [row.pullRequest.number, row.plan?.number]),
         [[20, 10]],
     );
 });
@@ -190,7 +207,7 @@ test('with the plans still coming, the cursor walks the pull requests, then the 
 
     /* When */
     const rows = pageRows({
-        pullRequests: pullRequestRows(pullRequestsViewOf(page, APP)!),
+        pullRequests: pullRequestRows(pullRequestsViewOf(page, APP, NOW)!),
         plans: planRows(plansViewOf(page, APP)!),
         sessions: [],
     });
@@ -243,7 +260,7 @@ test('after Show merged flips, the answer without plans brings its pull requests
     assert.equal(plans.plansPending, false);
     assert.equal(plans.plans.length, 1);
     assert.deepEqual(
-        pullRequestsViewOf(page, APP)!.map((row) => row.pullRequest.number),
+        shownPullRequests(page).map((row) => row.pullRequest.number),
         [20, 19],
     );
     assert.equal(page.overviewFrom?.merged, false);
@@ -288,7 +305,7 @@ test('the answer without plans brings its fresh pull requests, worktrees and run
     /* Then */
     const page = next.projectPage;
     assert.deepEqual(
-        pullRequestsViewOf(page, APP)!.map((row) => row.pullRequest.title),
+        shownPullRequests(page).map((row) => row.pullRequest.title),
         ['Stop the redirect loop, for good'],
     );
     assert.deepEqual(page.overview?.running, ['s1']);

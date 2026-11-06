@@ -26,10 +26,12 @@ import type {
     CheckRollup,
     IssueLabel,
     PullRequestQueueReads,
+    PullRequestWaitReads,
     RepositoryIssue,
     RepositoryPullRequest,
     ReviewDecision,
 } from '../../domain/project/overview';
+import {unresolvedThreadCount, type ReviewThreadFacts} from '../../domain/project/pull-request-wait';
 
 /**
  * Issues per repository: the 100 most recently updated, unpaged. One page is
@@ -87,52 +89,80 @@ export function toRepositoryIssues(data: any, repo: string): RepositoryIssue[] |
 /** Check runs read per PR for the merge queue's head stage: the first 50 on its head commit. */
 export const CHECK_RUNS_PER_PULL_REQUEST = 50;
 
+/** Merged or closed PRs read besides, for Merged or closed today: the most recently updated. */
+export const RECENTLY_CLOSED_PER_REPOSITORY = 20;
+
+/** Review threads read per PR, for its unresolved count: the first 50, each with its first comment. */
+export const REVIEW_THREADS_PER_PULL_REQUEST = 50;
+
 /**
- * A repository's pull requests, open ones only unless merged ones are wanted.
- * Checks are counted by state for the page's one pill, and listed (check runs
- * only) for the merge queue. The queue's `automerge` status is asked for by
- * name, so it is found however many other statuses the commit has. Requested
- * reviewers are read as users only: a team would need `read:org`.
+ * A repository's pull requests, open ones only unless merged ones are wanted,
+ * and besides them the ones merged or closed most recently, for Merged or
+ * closed today. Checks are counted by state for the page's one pill, and
+ * listed (check runs only) for the merge queue and the failed checks' names.
+ * The queue's `automerge` status is asked for by name, so it is found however
+ * many other statuses the commit has. Requested reviewers are read as users
+ * only: a team would need `read:org`. The viewer is the user `gh` signs in
+ * as, for a review requested from you; each review thread's first comment
+ * tells an author's note.
  */
 export function pullRequestsInQuery(merged: boolean): string {
     return `query($owner: String!, $name: String!) {
+  viewer { login }
   repository(owner: $owner, name: $name) {
     pullRequests(states: ${merged ? '[OPEN, MERGED]' : '[OPEN]'}, first: ${PULL_REQUESTS_PER_REPOSITORY}, orderBy: ${ORDER}) {
-      nodes {
-        number title state isDraft headRefName baseRefName url updatedAt reviewDecision
-        repository { nameWithOwner }
-        statusCheckRollup {
-          state
-          contexts(first: ${CHECK_RUNS_PER_PULL_REQUEST}) {
-            checkRunCountsByState { state count }
-            statusContextCountsByState { state count }
-            nodes { ... on CheckRun { name status conclusion startedAt } }
-          }
-        }
-        closingIssuesReferences(first: 20) { nodes { number repository { nameWithOwner } } }
-        labels(first: 20) { nodes { name } }
-        commits(last: 1) { nodes { commit { status { context(name: "${AUTOMERGE_CONTEXT}") { state description } } } } }
-        reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } }
-        latestReviews(first: 20) { nodes { state author { login } } }
-      }
+      nodes { ...pullRequestFields }
+    }
+    recentlyClosed: pullRequests(states: [MERGED, CLOSED], first: ${RECENTLY_CLOSED_PER_REPOSITORY}, orderBy: ${ORDER}) {
+      nodes { ...pullRequestFields }
     }
   }
+}
+
+fragment pullRequestFields on PullRequest {
+  number title state isDraft headRefName baseRefName url updatedAt closedAt reviewDecision mergeable mergeStateStatus
+  repository { nameWithOwner }
+  statusCheckRollup {
+    state
+    contexts(first: ${CHECK_RUNS_PER_PULL_REQUEST}) {
+      checkRunCountsByState { state count }
+      statusContextCountsByState { state count }
+      nodes { ... on CheckRun { name status conclusion startedAt } }
+    }
+  }
+  closingIssuesReferences(first: 20) { nodes { number repository { nameWithOwner } } }
+  labels(first: 20) { nodes { name } }
+  commits(last: 1) { nodes { commit { status { context(name: "${AUTOMERGE_CONTEXT}") { state description } } } } }
+  reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } } } }
+  latestReviews(first: 20) { nodes { state author { login } } }
+  reviewThreads(first: ${REVIEW_THREADS_PER_PULL_REQUEST}) { nodes { isResolved comments(first: 1) { totalCount nodes { body } } } }
 }`;
 }
 
-/** The PRs in `pullRequestsInQuery`'s data, newest first; null when it holds no repository. */
+/**
+ * The PRs in `pullRequestsInQuery`'s data, newest first, each once; null when
+ * it holds no repository.
+ */
 export function toRepositoryPullRequests(data: any, repo: string): RepositoryPullRequest[] | null {
     const nodes = data?.repository?.pullRequests?.nodes;
     if (!Array.isArray(nodes)) return null;
-    return nodes
-        .filter((node: any) => node && typeof node.number === 'number')
+    const closed = data.repository.recentlyClosed?.nodes;
+    const viewer = typeof data?.viewer?.login === 'string' && data.viewer.login ? data.viewer.login : null;
+    const seen = new Set<number>();
+    return [...nodes, ...(Array.isArray(closed) ? closed : [])]
+        .filter((node: any) => {
+            if (!node || typeof node.number !== 'number' || seen.has(node.number)) return false;
+            seen.add(node.number);
+            return true;
+        })
         .map((node: any): RepositoryPullRequest => {
             const repository = nameOf(node, repo);
+            const queue = toQueueReads(node, repository);
             return {
                 repository,
                 number: node.number,
                 title: node.title ?? '',
-                state: node.state === 'MERGED' ? 'merged' : 'open',
+                state: node.state === 'MERGED' ? 'merged' : node.state === 'CLOSED' ? 'closed' : 'open',
                 draft: node.isDraft === true,
                 headRef: node.headRefName ?? '',
                 updatedAt: node.updatedAt ?? '',
@@ -141,10 +171,46 @@ export function toRepositoryPullRequests(data: any, repo: string): RepositoryPul
                 closes: (node.closingIssuesReferences?.nodes ?? [])
                     .filter((issue: any) => issue && typeof issue.number === 'number')
                     .map((issue: any): IssueKey => ({repository: nameOf(issue, repository), number: issue.number})),
-                queue: toQueueReads(node, repository),
+                wait: toWaitReads(node, queue, viewer),
+                queue,
             };
         })
         .sort((a: RepositoryPullRequest, b: RepositoryPullRequest) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/**
+ * What a PR's group and open point read of its node. Its failed checks and
+ * requested reviewers come from what the queue read; without a viewer, no
+ * review is taken to be requested from you. A field GitHub left out reads as
+ * nothing in the way: no threads, mergeability unknown, not behind.
+ */
+export function toWaitReads(node: any, queue: PullRequestQueueReads, viewer: string | null): PullRequestWaitReads {
+    const threads = (Array.isArray(node?.reviewThreads?.nodes) ? node.reviewThreads.nodes : [])
+        .filter((thread: any) => thread && typeof thread === 'object')
+        .map((thread: any): ReviewThreadFacts => ({
+            resolved: thread.isResolved === true,
+            comments: typeof thread.comments?.totalCount === 'number' ? thread.comments.totalCount : 0,
+            firstComment: typeof thread.comments?.nodes?.[0]?.body === 'string' ? thread.comments.nodes[0].body : '',
+        }));
+    const named = (state: string): string[] => [
+        ...new Set(queue.checks.filter((check) => check.state === state).map((check) => check.name)),
+    ];
+    const cancelled = named('cancelled');
+    return {
+        closedAt: typeof node?.closedAt === 'string' && node.closedAt ? node.closedAt : null,
+        failedChecks: [...new Set([...named('failed'), ...cancelled])],
+        cancelledChecks: cancelled,
+        reviewRequestedFromYou: viewer !== null && queue.requestedReviewers.includes(viewer),
+        reviewRequestedFromOthers: queue.requestedReviewers.some((login) => login !== viewer),
+        unresolvedThreads: unresolvedThreadCount(threads),
+        mergeable:
+            node?.mergeable === 'CONFLICTING' || node?.mergeStateStatus === 'DIRTY'
+                ? 'conflicting'
+                : node?.mergeable === 'MERGEABLE'
+                  ? 'mergeable'
+                  : 'unknown',
+        behindBase: node?.mergeStateStatus === 'BEHIND' && queue.baseRef ? queue.baseRef : null,
+    };
 }
 
 /**
