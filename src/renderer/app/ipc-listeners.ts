@@ -26,6 +26,7 @@ import {openDialog} from '../ui/dialogs/actions';
 import {setHeaderIdentity} from '../features/sessions/terminal-header';
 import {handleRemoteStatus} from '../features/remote/connection-log';
 import {busyChanged} from '../state/activity-slice';
+import {turnHolds} from '../../domain/session/background-tasks';
 import {getState, onEvent} from '../state/app-store';
 import {pendingSessions, sessionMap} from '../state/session-store';
 import {rekeyRegistries} from './rekey-registries';
@@ -55,6 +56,21 @@ export function installIpcListeners(): void {
     onEvent('terminalNotification', ({sessionId}, state, previous) => {
         // "Waiting for your input" settles the session; see `activityReducer`.
         if (busyChanged(previous.activity, state.activity, sessionId)) relayoutSessionList();
+    });
+
+    // What a turn ended with still running decides whether it is working, the
+    // user's turn or merging, and so its section (see `domain/session/tiers`).
+    onEvent('sessionBackgroundTasks', ({sessionId}, state, previous) => {
+        const holds = (s: RendererState) => turnHolds(s.activity.background[sessionId] ?? []);
+        if (holds(state) !== holds(previous)) relayoutSessionList();
+    });
+    // Whether a watching session's PRs land on their own decides whether it is
+    // merging; only a session whose turn holds only watches can move for it.
+    onEvent('prStatusChanged', (_event, state) => {
+        if (anyWatching(state)) relayoutSessionList();
+    });
+    onEvent('mergeQueueChanged', (_event, state) => {
+        if (anyWatching(state)) relayoutSessionList();
     });
 
     onEvent('remoteStatus', ({sessionId, status}, _state, previous) => {
@@ -93,6 +109,11 @@ export function installIpcListeners(): void {
     onEvent('fullscreenChanged', ({isFullscreen}) => {
         document.documentElement.classList.toggle('fullscreen', isFullscreen);
     });
+}
+
+/** Some session's turn ended with only watches running. */
+function anyWatching(state: RendererState): boolean {
+    return Object.values(state.activity.background).some((tasks) => turnHolds(tasks) === 'watches');
 }
 
 /**

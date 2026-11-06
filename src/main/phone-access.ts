@@ -26,6 +26,7 @@ import type {SessionWorkSnapshot} from '../domain/session-work/model';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
+import type {BackgroundTask} from '../domain/session/background-tasks';
 import type {UpdateNotice} from '../domain/update/release';
 import type {TasksUpdate} from '../domain/tasks/surface';
 import type {ShownPage} from '../domain/session/page-tool';
@@ -48,6 +49,7 @@ export type PhoneSessionEvents = Pick<
     | 'sessionForked'
     | 'cliBusyState'
     | 'sessionNeedsAttention'
+    | 'sessionBackgroundTasks'
     | 'questionsAsked'
     | 'questionsSettled'
     | 'sessionsChanged'
@@ -101,6 +103,11 @@ export class PhoneEventTee implements RendererGateway {
 
     public sessionAgents(sessionId: string, agents: WorkingAgent[]): void {
         this.inner.sessionAgents(sessionId, agents);
+    }
+
+    public sessionBackgroundTasks(sessionId: string, tasks: BackgroundTask[]): void {
+        this.inner.sessionBackgroundTasks(sessionId, tasks);
+        this.phones()?.sessionBackgroundTasks(sessionId, tasks);
     }
 
     public remoteStatus(sessionId: string, status: RemoteStatusPayload): void {
