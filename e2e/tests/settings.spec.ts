@@ -254,6 +254,7 @@ test.describe('global save', () => {
             quickSessionPath: '/tmp/scratch',
             quickAsk: true,
             removeWorktreeOnArchive: false,
+            restoreSessions: true,
             blaakTasksUrl: 'https://tasks.example.com/mcp',
             terminalTheme: 'nord',
             terminalFontFamily: 'Menlo',
