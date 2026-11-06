@@ -58,6 +58,7 @@ import {SessionRestoreService} from '../application/services/session-restore-ser
 import {defaultSessionOptions} from '../domain/launch/session-options';
 import {SessionLifecycle} from '../application/services/session-lifecycle';
 import {SessionTransitionDetector} from '../application/services/session-transition-detector';
+import {SessionStatsService} from '../application/services/session-stats-service';
 import {SessionWorkService} from '../application/services/session-work-service';
 import {IssueSessionService, type IssueSessionCandidate} from '../application/services/issue-session-service';
 import {PlanService} from '../application/services/plan-service';
@@ -211,6 +212,8 @@ export interface Container {
     readonly sessionWork: SessionWorkService;
     /** The session tray's Workspace group (#342): Editor, Finder, Shell here. */
     readonly workspace: WorkspaceActionService;
+    /** A session's context used, messages, running time, branch and shell, for the session tray (#341). */
+    readonly sessionStats: SessionStatsService;
     readonly sessionActions: SessionActionService;
     readonly review: ReviewService;
     readonly prWatch: PrWatchService;
@@ -853,6 +856,20 @@ export function buildContainer(): Container {
         launcher: new MacWorkspaceLauncher(log),
         log,
     });
+    const sessionStats = new SessionStatsService({
+        locate: locateSession,
+        transcripts: routedTranscripts,
+        cached: (sessionId) => repository.getCachedSession(sessionId),
+        openedAt: (sessionId) => registry.find(sessionId)?.session.openedAt ?? null,
+        git: workspace,
+        // As the header names it: only a profile other than the default.
+        shellName: (projectPath) => {
+            const id = settings.shellProfileId(projectPath);
+            return id === 'auto' ? null : (shells.list().find((profile) => profile.id === id)?.name ?? id);
+        },
+        agentlessRemote,
+        log,
+    });
     const review = new ReviewService({github, page: sessionWork, actions: sessionActions, log});
     // The Plan tab (#121): reads only, each answer kept for 30 s.
     const plans = new PlanService({
@@ -1271,6 +1288,7 @@ export function buildContainer(): Container {
         updates,
         sessionWork,
         workspace: workspaceActions,
+        sessionStats,
         sessionActions,
         prWatch,
         review,

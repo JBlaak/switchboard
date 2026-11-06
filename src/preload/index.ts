@@ -50,6 +50,7 @@ const api: SwitchboardApi = {
     renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
     archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
     snoozeSession: (id, until) => ipcRenderer.invoke(INVOKE.snoozeSession, id, until),
+    getSessionStats: (id) => ipcRenderer.invoke(INVOKE.getSessionStats, id),
 
     // ── Questions ──
     getPendingQuestions: () => ipcRenderer.invoke(INVOKE.getPendingQuestions),

@@ -69,6 +69,7 @@ import type {SessionHandoffPhase, SessionHandoffPreview} from '../application/se
 import type {ScheduleLocation} from '../application/services/vm-schedules';
 import type {VmHostView} from '../application/services/vm-registry';
 import type {ShownPage} from '../domain/session/page-tool';
+import type {SessionStats} from '../domain/session/stats';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
 export type {Editor, WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
@@ -122,6 +123,13 @@ export interface SwitchboardApi {
     archiveSession(id: string, archived: boolean): Promise<{archived: number; markDone?: MarkDoneOffer}>;
     /** Keep a session's row out of the list until `until` (an ISO time), or wake it with null. */
     snoozeSession(id: string, until: string | null): Promise<void>;
+    /**
+     * A session's context used, message count, start time, branch and shell,
+     * for the session tray (#341). Read fresh on every call; each field is
+     * null when it is not known (an agentless remote has no transcript or git
+     * here). An unknown id answers all nulls.
+     */
+    getSessionStats(id: string): Promise<SessionStats>;
 
     // ── Questions ──
     /** Every set of questions a running session is blocked on, for a renderer that (re)loads. */
