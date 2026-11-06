@@ -145,6 +145,15 @@ export class RoutingTranscriptStore implements AwaitableTranscriptStore {
         return splitVmFolder(folder) ? null : this.deps.local.sessionFingerprint(folder, sessionId);
     }
 
+    public readFrom(
+        folder: string,
+        sessionId: string,
+        start: number,
+        byteLimit: number,
+    ): {text: string; size: number} | null {
+        return splitVmFolder(folder) ? null : this.deps.local.readFrom(folder, sessionId, start, byteLimit);
+    }
+
     public readSlug(folder: string, sessionId: string): string | null {
         return splitVmFolder(folder) ? null : this.deps.local.readSlug(folder, sessionId);
     }

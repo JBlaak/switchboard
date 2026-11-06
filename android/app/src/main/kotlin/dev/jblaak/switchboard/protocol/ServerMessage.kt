@@ -10,6 +10,9 @@ sealed interface ServerMessage {
     /**
      * The answer to `hello` on an enrolled connection; the full state follows. [addresses] are the hosts the Mac
      * listens on (LAN and VPN), all on the port this connection came in on; an older Mac leaves them out.
+     * [features] are what it can do beyond the protocol version ([MacFeatures]); an older Mac leaves them out, and
+     * closes the connection on a message it doesn't know, so the phone only sends a feature's messages to a Mac
+     * that named it.
      */
     @Serializable
     @SerialName("welcome")
@@ -18,6 +21,7 @@ sealed interface ServerMessage {
         val macName: String,
         val deviceId: String,
         val addresses: List<String> = emptyList(),
+        val features: List<String> = emptyList(),
     ) : ServerMessage
 
     /**
@@ -144,6 +148,20 @@ sealed interface ServerMessage {
     @Serializable
     @SerialName("mac-battery")
     data class MacBatteryChanged(val battery: MacBattery?) : ServerMessage
+
+    /**
+     * A subscribed session's chat, whole: on [ClientMessage.ChatSubscribe], and again when it starts over (a
+     * re-key moved it to a new transcript). The latest messages, oldest first. [available] is false for a session
+     * without a transcript on the Mac (a terminal, an SSH or VM session).
+     */
+    @Serializable
+    @SerialName("chat")
+    data class Chat(val sessionId: String, val available: Boolean, val messages: List<ChatMessage>) : ServerMessage
+
+    /** Messages the transcript gained since the last [Chat] or [ChatAppend], to add at the end. */
+    @Serializable
+    @SerialName("chat-append")
+    data class ChatAppend(val sessionId: String, val messages: List<ChatMessage>) : ServerMessage
 
     /** Sent before [CloseReason.NotPaired] when the device is revoked or the Mac's identity is reset. */
     @Serializable

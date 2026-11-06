@@ -297,7 +297,7 @@ class MacLink(
                                 ),
                             )
                             connected.set(connection)
-                            val now = LinkState.Connected(message.deviceId, message.macName)
+                            val now = LinkState.Connected(message.deviceId, message.macName, message.features.toSet())
                             mutableLastConnected.value = now
                             show(now)
                         }

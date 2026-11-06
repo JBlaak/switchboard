@@ -17,6 +17,7 @@ test('an enrolled device on the same protocol is welcomed with its id', () => {
             macName: 'Joris MacBook',
             deviceId: 'dev-1',
             addresses: ['192.168.1.20', '10.8.0.3'],
+            features: ['chat'],
         },
         close: null,
     });
@@ -30,10 +31,11 @@ test('the welcome leaves out link-local addresses, which only mean something on 
     const reply = helloReply(PROTOCOL_VERSION, {kind: 'device', deviceId: 'dev-1'}, mac);
 
     /* Then */
-    assert.deepStrictEqual(
-        reply.message.type === 'welcome' && reply.message.addresses,
-        ['192.168.1.20', '10.8.0.3', '2a02:a45::5'],
-    );
+    assert.deepStrictEqual(reply.message.type === 'welcome' && reply.message.addresses, [
+        '192.168.1.20',
+        '10.8.0.3',
+        '2a02:a45::5',
+    ]);
 });
 
 test('a pairing connection on the same protocol gets pairing', () => {

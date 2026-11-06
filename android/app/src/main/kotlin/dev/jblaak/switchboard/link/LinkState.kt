@@ -24,7 +24,8 @@ sealed interface LinkState {
 
     data class PairFailed(val failure: PairFailure) : LinkState
 
-    data class Connected(val deviceId: String, val macName: String) : LinkState
+    /** [features] are what the Mac said it can do beyond the protocol version, in its `welcome` ([MacFeatures]). */
+    data class Connected(val deviceId: String, val macName: String, val features: Set<String> = emptySet()) : LinkState
 
     /** A connection dropped and the link is trying again, silently, while the key is still unlocked. */
     data object Reconnecting : LinkState

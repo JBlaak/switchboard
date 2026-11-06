@@ -6,7 +6,7 @@
  * decision this used to make is now behind a service — what is left is the
  * order things happen in, which is the one thing an entry point should own.
  */
-import {app, globalShortcut} from 'electron';
+import {app, globalShortcut, powerMonitor} from 'electron';
 import log from 'electron-log';
 import {buildContainer, isolateUserDataIfRequested} from './composition-root';
 import {registerIpcHandlers} from './ipc';
@@ -79,6 +79,8 @@ function main(): void {
         container.questionHook.stop();
         // Close the VM links first: their sessions keep running on the VM.
         container.agents.shutdown();
+        // Whatever ends from here on was running when the app quit, and comes back.
+        container.sessionRestore.freeze();
         container.lifecycle.terminateAll();
     });
 
@@ -109,6 +111,11 @@ async function start(container: Container): Promise<void> {
     container.appearance.apply(normaliseAppearance(container.settings.global().appearance));
     container.appIcon.apply(normaliseAppIcon(container.settings.global().appIcon));
     container.setWindowOpener((options) => openWindow(container, options));
+    // A shutdown may take the sessions down before the app hears it is quitting;
+    // they were still running, so they come back after the reboot.
+    powerMonitor.on('shutdown', () => container.sessionRestore.freeze());
+    // Before the window, so its first poll already finds them running.
+    void restoreSessions(container);
     openWindow(container);
     // After the main window, which stays the app's first.
     if (container.settings.quickAskEnabled()) container.prepareQuickAsk();
@@ -144,6 +151,15 @@ async function start(container: Container): Promise<void> {
     app.on('activate', () => {
         if (!container.getWindow()) openWindow(container);
     });
+}
+
+/** Resume the local sessions a quit, a crash or a reboot cut off. */
+async function restoreSessions(container: Container): Promise<void> {
+    try {
+        await container.sessionRestore.restore();
+    } catch (err) {
+        container.log.error('[restore] failed:', (err as Error).message);
+    }
 }
 
 function openWindow(container: Container, {inactive = false} = {}): void {
