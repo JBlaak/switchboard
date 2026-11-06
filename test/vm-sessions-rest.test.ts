@@ -462,6 +462,7 @@ test("the phone's row of a VM session is labelled with its host", async () => {
         running: {runningSessionIds: () => ['vm-1']},
         projects: {list: () => []},
         questions: {pending: () => [], answer: () => ({ok: true})},
+        grill: {views: () => []},
         voice: {connected() {}, message() {}, disconnected() {}},
         battery: {connected() {}, disconnected() {}},
         clock: h.clock,

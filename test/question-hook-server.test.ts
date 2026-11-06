@@ -8,7 +8,7 @@ import path from 'node:path';
 import {ActiveSession} from '../src/application/model/active-session';
 import {SessionRegistry} from '../src/application/model/session-registry';
 import {QuestionService} from '../src/application/services/question-service';
-import {legacyGrillReceiver} from '../src/application/services/legacy-grill-receiver';
+import {GrillService} from '../src/application/services/grill-service';
 import {QUESTION_HOOK_TOKEN_HEADER} from '../src/domain/questions/question';
 import {QuestionHookServer} from '../src/infrastructure/http/question-hook-server';
 import {NodeFileSystem} from '../src/infrastructure/fs/node-file-system';
@@ -27,7 +27,12 @@ async function harness() {
     const registry = new SessionRegistry();
     const renderer = fakeRenderer();
     const server = new QuestionHookServer({
-        receiver: legacyGrillReceiver(() => service),
+        receiver: {
+            receive: (...args) => grill.receive(...args),
+            turnEnded: (...args) => grill.turnEnded(...args),
+            promptSubmitted: (...args) => grill.promptSubmitted(...args),
+            subagentChanged: (...args) => grill.subagentChanged(...args),
+        },
         log: silentLog,
     });
     const sent: Array<[string, string]> = [];
@@ -35,16 +40,18 @@ async function harness() {
         send: (sessionId: string, prompt: string) => {
             sent.push([sessionId, prompt]);
         },
+        isBusy: () => false,
+        onIdle: () => ({dispose() {}}),
         onExit: () => ({dispose() {}}),
     };
     const service = new QuestionService({
         registry,
         renderer,
         endpoint: server,
-        prompter,
         log: silentLog,
         clock: {now: () => 0},
     });
+    const grill = new GrillService({registry, renderer, prompter, questions: service, log: silentLog});
     await server.start();
 
     registry.add(

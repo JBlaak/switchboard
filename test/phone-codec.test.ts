@@ -39,7 +39,26 @@ const EVERY_MESSAGE: ClientMessage[] = [
     {type: 'voice-chunk', voiceId: 'v1', seq: 0, audio: 'AAABAAIA/38AgA=='},
     {type: 'voice-end', voiceId: 'v1'},
     {type: 'voice-cancel', voiceId: 'v2'},
+    {type: 'grill-answer', sessionId: 's1', roundId: 'b1', revision: 0, place: 0, answer: {kind: 'accepted'}},
+    {type: 'grill-answer', sessionId: 's1', roundId: 'b1', revision: 2, place: 1, answer: {kind: 'noted', note: 'n'}},
+    {
+        type: 'grill-answer',
+        sessionId: 's1',
+        roundId: 'b1',
+        revision: 0,
+        place: 2,
+        answer: {kind: 'overridden', text: 'x'},
+    },
+    {type: 'grill-answer', sessionId: 's1', roundId: 'b1', revision: 0, place: 0, answer: null},
+    {type: 'grill-ask', sessionId: 's1', roundId: 'b1', revision: 1, place: 3, text: 'why not files?'},
+    {type: 'grill-ask', sessionId: 's1', roundId: 'b1', revision: 0, place: 0, text: ''},
+    {type: 'grill-ask', sessionId: 's1', roundId: 'b1', revision: 0, place: 0, text: null},
+    {type: 'grill-send', sessionId: 's1', roundId: 'b1'},
+    {type: 'grill-queue', sessionId: 's1', roundId: 'b1'},
+    {type: 'grill-cancel-queue', sessionId: 's1', roundId: 'b1'},
 ];
+
+const GRILL = {sessionId: 's1', roundId: 'b1'};
 
 /** Each message with one field broken, per field and per way it can break. */
 const MALFORMED: Record<string, unknown[]> = {
@@ -149,6 +168,46 @@ const MALFORMED: Record<string, unknown[]> = {
         {type: 'ask-start', requestId: 'r1', projectPath: '/p', prompt: 'hi', cols: 48.5, rows: 30},
         {type: 'ask-start', requestId: 'r1', projectPath: '/p', prompt: 'hi', cols: 48, rows: -1},
     ],
+    'grill-answer': [
+        {type: 'grill-answer', roundId: 'b1', revision: 0, place: 0, answer: null},
+        {type: 'grill-answer', sessionId: 's1', revision: 0, place: 0, answer: null},
+        {type: 'grill-answer', ...GRILL, roundId: '', revision: 0, place: 0, answer: null},
+        {type: 'grill-answer', ...GRILL, place: 0, answer: null},
+        {type: 'grill-answer', ...GRILL, revision: -1, place: 0, answer: null},
+        {type: 'grill-answer', ...GRILL, revision: 0.5, place: 0, answer: null},
+        {type: 'grill-answer', ...GRILL, revision: '0', place: 0, answer: null},
+        {type: 'grill-answer', ...GRILL, revision: 0, answer: null},
+        {type: 'grill-answer', ...GRILL, revision: 0, place: -1, answer: null},
+        {type: 'grill-answer', ...GRILL, revision: 0, place: 1.5, answer: null},
+        {type: 'grill-answer', ...GRILL, revision: 0, place: 10_000, answer: null},
+        {type: 'grill-answer', ...GRILL, revision: 0, place: 0},
+        {type: 'grill-answer', ...GRILL, revision: 0, place: 0, answer: 'yes'},
+        {type: 'grill-answer', ...GRILL, revision: 0, place: 0, answer: {kind: 'maybe'}},
+        {type: 'grill-answer', ...GRILL, revision: 0, place: 0, answer: {kind: 'noted'}},
+        {type: 'grill-answer', ...GRILL, revision: 0, place: 0, answer: {kind: 'noted', note: 7}},
+        {type: 'grill-answer', ...GRILL, revision: 0, place: 0, answer: {kind: 'overridden', note: 'x'}},
+        {
+            type: 'grill-answer',
+            ...GRILL,
+            revision: 0,
+            place: 0,
+            answer: {kind: 'overridden', text: 'x'.repeat(100_001)},
+        },
+    ],
+    'grill-ask': [
+        {type: 'grill-ask', roundId: 'b1', revision: 0, place: 0, text: null},
+        {type: 'grill-ask', ...GRILL, place: 0, text: null},
+        {type: 'grill-ask', ...GRILL, revision: 0, place: -1, text: null},
+        {type: 'grill-ask', ...GRILL, revision: 0, place: 0},
+        {type: 'grill-ask', ...GRILL, revision: 0, place: 0, text: 3},
+        {type: 'grill-ask', ...GRILL, revision: 0, place: 0, text: 'x'.repeat(100_001)},
+    ],
+    'grill-send': [
+        {type: 'grill-send', sessionId: 's1'},
+        {type: 'grill-send', roundId: 'b1'},
+    ],
+    'grill-queue': [{type: 'grill-queue', sessionId: 's1', roundId: ''}],
+    'grill-cancel-queue': [{type: 'grill-cancel-queue', sessionId: 'x'.repeat(257), roundId: 'b1'}],
 };
 
 test('every client message round-trips through JSON', () => {
