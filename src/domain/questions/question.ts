@@ -14,6 +14,7 @@
  * message, and UserPromptSubmit, which says the user has replied some other
  * way. Neither is held: the server answers them at once.
  */
+import {ONEPASSWORD_HOOK_STATUS, ONEPASSWORD_HOOK_TIMEOUT_SECONDS} from '../onepassword/heads-up';
 
 /** One choice on a question. */
 export interface QuestionOption {
@@ -190,6 +191,12 @@ export interface QuestionHookUrls {
     stop: string;
     /** A prompt submitted, which ends any grilling round still waiting. */
     prompt: string;
+    /**
+     * Bash calls, held for the 1Password heads-up when they will reach it
+     * (`domain/onepassword/heads-up.ts`). Only the Mac has the pop-up, so a
+     * VM's agent leaves it out.
+     */
+    onePassword?: string;
 }
 
 /**
@@ -199,7 +206,10 @@ export interface QuestionHookUrls {
  * `urls.ask` with the token header, a `statusMessage` of QUESTION_HOOK_STATUS
  * and a `timeout` of QUESTION_HOOK_TIMEOUT_SECONDS; and Stop and
  * UserPromptSubmit hooks posting to `urls.stop` and `urls.prompt`, quietly and
- * briefly. Hooks merge with the user's own settings rather than replacing them.
+ * briefly. With `urls.onePassword`, a second PreToolUse hook matched to Bash
+ * posts there, with ONEPASSWORD_HOOK_STATUS and ONEPASSWORD_HOOK_TIMEOUT_SECONDS;
+ * the server answers a call that will not reach 1Password at once. Hooks merge
+ * with the user's own settings rather than replacing them.
  */
 export function questionHookSettings(urls: QuestionHookUrls, token: string): string {
     const headers = {[QUESTION_HOOK_TOKEN_HEADER]: token};
@@ -219,6 +229,22 @@ export function questionHookSettings(urls: QuestionHookUrls, token: string): str
                         },
                     ],
                 },
+                ...(urls.onePassword
+                    ? [
+                          {
+                              matcher: 'Bash',
+                              hooks: [
+                                  {
+                                      type: 'http',
+                                      url: urls.onePassword,
+                                      headers,
+                                      statusMessage: ONEPASSWORD_HOOK_STATUS,
+                                      timeout: ONEPASSWORD_HOOK_TIMEOUT_SECONDS,
+                                  },
+                              ],
+                          },
+                      ]
+                    : []),
             ],
             Stop: notice(urls.stop),
             UserPromptSubmit: notice(urls.prompt),

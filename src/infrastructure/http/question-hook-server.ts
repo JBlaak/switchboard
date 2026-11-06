@@ -14,6 +14,10 @@
  * waiting. The end of a turn is also when a session that asked to be archived
  * is archived.
  *
+ * `POST /onepassword/<launchId>` takes every Bash call before it runs. One
+ * that will reach 1Password is held, as a question is, until the user answers
+ * the heads-up pop-up; any other is let go at once.
+ *
  * And `POST /mcp/<launchId>` serves the session Switchboard's own MCP server,
  * with `archive_session` and, where a page tool is given, `show_page`.
  *
@@ -26,19 +30,21 @@ import crypto from 'node:crypto';
 import type {AddressInfo} from 'node:net';
 
 import {parseGrillRound} from '../../domain/questions/grill';
+import {parseOnePasswordHookInput} from '../../domain/onepassword/heads-up';
 import {archiveToolReply, type ArchiveToolOutcome, type McpTool} from '../../domain/session/archive-tool';
 import {pageTool, type PageInput} from '../../domain/session/page-tool';
 import {parseQuestionHookInput, parseStopHookInput, QUESTION_HOOK_TOKEN_HEADER} from '../../domain/questions/question';
 import type {Logger} from '../../application/ports/logger';
 import type {QuestionHookEndpoint} from '../../application/ports/question-hook';
 import type {QuestionService} from '../../application/services/question-service';
+import type {OnePasswordHeadsUpService} from '../../application/services/onepassword-heads-up-service';
 
 /** Far more than any question set; a body this big is not from the CLI. */
 const MAX_BODY_BYTES = 1024 * 1024;
 
-const HOOK_PATH = /^\/(ask|stop|prompt|mcp)\/([^/?#]+)$/;
+const HOOK_PATH = /^\/(ask|stop|prompt|mcp|onepassword)\/([^/?#]+)$/;
 
-type Route = 'ask' | 'stop' | 'prompt' | 'mcp';
+type Route = 'ask' | 'stop' | 'prompt' | 'mcp' | 'onepassword';
 
 export interface QuestionHookServerDeps {
     /**
@@ -60,6 +66,11 @@ export interface QuestionHookServerDeps {
      * VM) the tool is not offered.
      */
     pageTool?: {show(launchId: string, page: PageInput): ArchiveToolOutcome};
+    /**
+     * Where Bash calls that will reach 1Password go, held. Without one (the
+     * agent on a VM) every Bash call is let go at once.
+     */
+    onePassword?: Pick<OnePasswordHeadsUpService, 'receive'>;
     log: Logger;
 }
 
@@ -157,6 +168,7 @@ export class QuestionHookServer implements QuestionHookEndpoint {
         }
         if (route === 'stop') return this.stopped(launchId, body, res);
         if (route === 'mcp') return this.mcp(launchId, body, res);
+        if (route === 'onepassword') return this.onePassword(launchId, body, res);
         if (route === 'prompt') {
             this.json(res, {});
             this.deps.receiver.promptSubmitted(launchId);
@@ -167,13 +179,31 @@ export class QuestionHookServer implements QuestionHookEndpoint {
         // Not something we can show: no decision, so the CLI carries on as usual.
         if (!asked) return this.json(res, {});
 
+        this.hold(res, (reply) => this.deps.receiver.receive(launchId, asked, reply));
+    }
+
+    /** A Bash call: held for the heads-up when it will reach 1Password, let go otherwise. */
+    private onePassword(launchId: string, body: unknown, res: http.ServerResponse): void {
+        const receiver = this.deps.onePassword;
+        const call = receiver ? parseOnePasswordHookInput(body) : null;
+        if (!receiver || !call) return this.json(res, {});
+        this.hold(res, (reply) => receiver.receive(launchId, call, reply));
+    }
+
+    /**
+     * Hold a request until `receive`'s reply is called, and withdraw it when
+     * the connection goes away first.
+     */
+    private hold(
+        res: http.ServerResponse,
+        receive: (reply: (json: Record<string, unknown>) => void) => {withdraw(): void},
+    ): void {
         let replied = false;
-        const handle = this.deps.receiver.receive(launchId, asked, (json) => {
+        const handle = receive((json) => {
             if (replied) return;
             replied = true;
             this.json(res, json);
         });
-
         // 'close' on the response fires when the connection goes away as well as
         // after a normal finish; only the former withdraws.
         res.on('close', () => {

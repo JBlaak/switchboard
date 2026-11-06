@@ -188,6 +188,8 @@ export const SEND = {
     needsInputCount: 'needs-input-count',
     quickAskDismiss: 'quick-ask:dismiss',
     quickAskPointerOverSlab: 'quick-ask:pointer-over-slab',
+    headsUpAnswer: 'heads-up:answer',
+    headsUpReady: 'heads-up:ready',
     rendererReady: 'renderer-ready',
 } as const;
 
@@ -231,4 +233,9 @@ export const QUICK_ASK_EVENT = {
     shown: 'quick-ask:shown',
     closeRequested: 'quick-ask:close-requested',
     saving: 'quick-ask:saving',
+} as const;
+
+/** Main tells the 1Password heads-up pop-up, unprompted; it is a window of its own. */
+export const HEADS_UP_EVENT = {
+    shown: 'heads-up:shown',
 } as const;
