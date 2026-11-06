@@ -1,0 +1,280 @@
+/* ========== SETTINGS → SAVED PROMPTS (#344) ==========
+   As quiet as the tray that shows them: rows are bare until hovered, with the
+   sidebar's accent wash; the key is a small mono chip; the one being edited
+   gets a mint ring and opens its form under it. Buttons are Phone access's
+   (`pa-btn`), inputs the settings viewer's. */
+
+.saved-prompts .sp-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.saved-prompts .sp-head .settings-section-title {
+    padding-bottom: 0;
+}
+
+.saved-prompts .sp-intro {
+    margin: 4px 0 10px;
+}
+
+.saved-prompts .sp-empty {
+    padding: 8px 0 12px;
+    margin: 0;
+}
+
+/* --- Segmented choice: the scope filter and the send mode --- */
+.sp-filter {
+    margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--sb-r-control);
+    background: var(--sb-bg-base);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+}
+
+.sp-seg {
+    border: none;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--sb-text-muted);
+    font: 700 12px var(--sb-font-head);
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+
+.sp-seg:hover {
+    color: var(--sb-text-strong);
+}
+
+.sp-seg.is-on {
+    background: var(--sb-bg-raised);
+    color: var(--sb-text-strong);
+    box-shadow: var(--sb-edge);
+}
+
+.sp-seg:focus-visible,
+.sp-main:focus-visible,
+.sp-move:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(var(--sb-accent-rgb), 0.45);
+}
+
+/* --- The list --- */
+.sp-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sp-row {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 120px 96px 52px;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: var(--sb-r-row);
+}
+
+.sp-row.sp-row-heads {
+    padding-top: 0;
+    padding-bottom: 2px;
+    font: 700 10.5px var(--sb-font-head);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sb-text-faint);
+}
+
+.sp-item {
+    border-radius: var(--sb-r-row);
+    transition: background 0.15s;
+}
+
+.sp-item:hover {
+    background: rgba(var(--sb-accent-rgb), 0.05);
+}
+
+.sp-item.is-editing {
+    background: rgba(var(--sb-accent-rgb), 0.07);
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.3);
+}
+
+.sp-key {
+    justify-self: start;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(var(--sb-overlay-rgb), 0.06);
+    font: 11px var(--sb-font-mono);
+    color: var(--sb-text-muted);
+}
+
+.sp-key:empty {
+    visibility: hidden;
+}
+
+.sp-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 2px 4px;
+    margin: 0 -4px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sp-label {
+    font: 700 13px var(--sb-font-head);
+    color: var(--sb-text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sp-text {
+    font: 12px var(--sb-font-body);
+    color: var(--sb-text-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sp-meta {
+    font: 12px var(--sb-font-body);
+    color: var(--sb-text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Up and down stay in the tab order; they only show on hover or focus. */
+.sp-moves {
+    display: flex;
+    gap: 2px;
+    justify-self: end;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.sp-item:hover .sp-moves,
+.sp-item:focus-within .sp-moves,
+.sp-item.is-editing .sp-moves {
+    opacity: 1;
+}
+
+.sp-move {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--sb-text-muted);
+    font: 700 13px var(--sb-font-head);
+    cursor: pointer;
+}
+
+.sp-move:hover:not(:disabled) {
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+    color: var(--sb-text-strong);
+}
+
+.sp-move:disabled {
+    opacity: 0.25;
+    cursor: default;
+}
+
+.sp-add {
+    padding: 10px 0 14px;
+}
+
+/* --- The form: under the row it edits, or at the end for a new prompt --- */
+.sp-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 4px 8px 8px;
+    padding: 14px;
+    border-radius: var(--sb-r-card);
+    background: var(--sb-bg-base);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+}
+
+.saved-prompts > .sp-form {
+    margin: 8px 0 14px;
+}
+
+.sp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font: 700 12px var(--sb-font-head);
+    color: var(--sb-text-muted);
+}
+
+.sp-field.sp-field-inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.sp-textarea {
+    resize: vertical;
+    min-height: 56px;
+    font: 12px/1.5 var(--sb-font-mono);
+}
+
+.sp-placeholders {
+    font: 12px var(--sb-font-body);
+    color: var(--sb-text-faint);
+}
+
+.sp-placeholders code {
+    margin-right: 6px;
+    font: 11.5px var(--sb-font-mono);
+    color: var(--sb-text-muted);
+}
+
+.sp-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+}
+
+.sp-form-row .sp-filter {
+    margin-left: 0;
+}
+
+.sp-form-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sp-spacer {
+    flex: 1;
+}
+
+.pa-btn.sp-save {
+    box-shadow: none;
+    background: var(--sb-action);
+    color: var(--sb-action-text);
+}
+
+.pa-btn.sp-save:hover:not(:disabled) {
+    background: var(--sb-action);
+    color: var(--sb-action-text);
+    opacity: 0.88;
+}
