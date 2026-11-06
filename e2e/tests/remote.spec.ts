@@ -161,6 +161,7 @@ async function openProjectPage(page: Page, label: string): Promise<void> {
 
 async function openGlobalSettings(page: Page): Promise<void> {
     await page.getByRole('button', {name: 'Global settings', exact: true}).click();
+    await page.getByRole('menuitem', {name: 'All settings…'}).click();
     await expect(globalSettingsTitle(page)).toBeVisible();
 }
 
