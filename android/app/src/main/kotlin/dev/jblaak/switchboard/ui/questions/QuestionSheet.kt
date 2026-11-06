@@ -27,7 +27,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -67,18 +66,19 @@ interface QuestionSheetActions {
     fun type(text: String)
     fun next()
     fun back()
-    fun skip()
-    fun acceptRecommendation()
     fun failureSeen()
     fun later()
 }
 
-/** The inside of the question sheet: a question of the set, or why the set went away; [voice] is the own-words mic. */
+/**
+ * The inside of the question sheet for an AskUserQuestion set: a question of the set, or why the set went away;
+ * [voice] is the own-words mic. A grilling round has [GrillSheetContent] instead.
+ */
 @Composable
 fun QuestionSheetContent(state: QuestionSheetState, sessionName: String?, actions: QuestionSheetActions, voice: HoldToTalk?) {
     Column(Modifier.navigationBarsPadding()) {
         when (val phase = state.phase) {
-            is QuestionPhase.AnsweredElsewhere -> AnsweredElsewhere(phase.on, actions)
+            is QuestionPhase.AnsweredElsewhere -> AnsweredElsewhere(phase.on, actions::later)
             else -> {
                 SheetHeader(state, sessionName)
                 AnimatedContent(
@@ -89,7 +89,7 @@ fun QuestionSheetContent(state: QuestionSheetState, sessionName: String?, action
                     val question = state.set.questions[step]
                     val draft = state.drafts[step]
                     Column {
-                        if (state.isGrill) GrillQuestion(question, draft, actions, voice) else AskQuestion(question, draft, actions, voice)
+                        AskQuestion(question, draft, actions, voice)
                     }
                 }
                 SheetFooter(state, actions)
@@ -101,8 +101,8 @@ fun QuestionSheetContent(state: QuestionSheetState, sessionName: String?, action
 @Composable
 private fun SheetHeader(state: QuestionSheetState, sessionName: String?) {
     val colors = SwitchboardTheme.colors
-    val tone = if (state.isGrill) colors.pinned else colors.remote
-    val chip = if (state.isGrill) stringResource(R.string.questions_grill_round) else state.question.header
+    val tone = colors.remote
+    val chip = state.question.header
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -275,7 +275,7 @@ private fun RecommendedBadge() {
 }
 
 @Composable
-private fun OwnWordsField(
+internal fun OwnWordsField(
     text: String,
     placeholder: String,
     onChange: (String) -> Unit,
@@ -324,72 +324,6 @@ private fun OwnWordsField(
 }
 
 @Composable
-private fun ColumnScope.GrillQuestion(question: Question, draft: Draft, actions: QuestionSheetActions, voice: HoldToTalk?) {
-    val colors = SwitchboardTheme.colors
-    val recommendation = question.options.firstOrNull()
-    Column(
-        Modifier
-            .weight(1f, fill = false)
-            .verticalScroll(rememberScrollState()),
-    ) {
-        QuestionTitle(question.question)
-        question.detail?.let {
-            Text(
-                text = rememberLinkified(it),
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 23.sp),
-                color = colors.textDim,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
-            )
-        }
-        if (recommendation != null) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                    .padding(horizontal = 12.dp)
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(colors.running.fill)
-                    .padding(16.dp),
-            ) {
-                Text(
-                    stringResource(R.string.questions_claude_recommends).uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.6.sp),
-                    color = colors.accent,
-                )
-                Text(rememberLinkified(recommendation.description), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp), color = colors.textStrong)
-            }
-        }
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp),
-        ) {
-            for (option in question.options.drop(1)) {
-                OptionRow(option, picked = option.label in draft.picked, multiSelect = false, onClick = { actions.pick(option.label) })
-            }
-        }
-    }
-    Spacer(Modifier.height(16.dp))
-    HorizontalDivider(color = colors.line)
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp),
-    ) {
-        PrimaryButton(
-            text = stringResource(R.string.questions_grill_yes),
-            onClick = actions::acceptRecommendation,
-            leadingCheck = true,
-        )
-        OwnWordsField(
-            text = draft.ownWords,
-            placeholder = stringResource(R.string.questions_grill_own_words),
-            onChange = actions::type,
-            voice = voice,
-            shape = RoundedCornerShape(26.dp),
-        )
-    }
-}
-
-@Composable
 private fun SheetFooter(state: QuestionSheetState, actions: QuestionSheetActions) {
     val colors = SwitchboardTheme.colors
     val phase = state.phase
@@ -410,79 +344,48 @@ private fun SheetFooter(state: QuestionSheetState, actions: QuestionSheetActions
                 }
             }
         }
-        if (state.isGrill) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = actions::back, enabled = state.step > 0) {
-                    Text(stringResource(R.string.questions_back), style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp))
-                }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(PhoneIcon, contentDescription = null, tint = colors.textFaint, modifier = Modifier.size(14.dp))
+            Text(stringResource(R.string.questions_moves_here), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = colors.textFaint)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = if (state.step > 0) actions::back else actions::later,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp),
+            ) {
                 Text(
-                    text = if (state.set.questions.size > 1) {
-                        stringResource(R.string.questions_grill_one_reply)
-                    } else {
-                        ""
-                    },
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = colors.textFaint,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
+                    stringResource(if (state.step > 0) R.string.questions_back else R.string.questions_later),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = colors.textStrong,
                 )
-                TextButton(onClick = if (state.draft.ownWords.isNotBlank() || state.draft.picked.isNotEmpty()) actions::next else actions::skip) {
-                    Text(
-                        stringResource(
-                            when {
-                                state.draft.ownWords.isNotBlank() || state.draft.picked.isNotEmpty() ->
-                                    if (state.isLastStep) R.string.questions_send else R.string.questions_next
-                                else -> R.string.questions_skip
-                            },
-                        ),
-                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp),
-                    )
-                }
             }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(PhoneIcon, contentDescription = null, tint = colors.textFaint, modifier = Modifier.size(14.dp))
-                Text(stringResource(R.string.questions_moves_here), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), color = colors.textFaint)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = if (state.step > 0) actions::back else actions::later,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp),
-                ) {
-                    Text(
-                        stringResource(if (state.step > 0) R.string.questions_back else R.string.questions_later),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = colors.textStrong,
-                    )
-                }
-                Button(
-                    onClick = actions::next,
-                    enabled = state.canGoOn && phase == QuestionPhase.Answering,
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
-                    modifier = Modifier
-                        .weight(2f)
-                        .height(48.dp),
-                ) {
-                    Text(
-                        stringResource(
-                            when {
-                                phase == QuestionPhase.Sending -> R.string.questions_sending
-                                state.isLastStep -> R.string.questions_send
-                                else -> R.string.questions_next
-                            },
-                        ),
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                }
+            Button(
+                onClick = actions::next,
+                enabled = state.canGoOn && phase == QuestionPhase.Answering,
+                colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.onAccent),
+                modifier = Modifier
+                    .weight(2f)
+                    .height(48.dp),
+            ) {
+                Text(
+                    stringResource(
+                        when {
+                            phase == QuestionPhase.Sending -> R.string.questions_sending
+                            state.isLastStep -> R.string.questions_send
+                            else -> R.string.questions_next
+                        },
+                    ),
+                    style = MaterialTheme.typography.labelLarge,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun PrimaryButton(text: String, onClick: () -> Unit, leadingCheck: Boolean) {
+internal fun PrimaryButton(text: String, onClick: () -> Unit, leadingCheck: Boolean) {
     val colors = SwitchboardTheme.colors
     Button(
         onClick = onClick,
@@ -500,7 +403,7 @@ private fun PrimaryButton(text: String, onClick: () -> Unit, leadingCheck: Boole
 }
 
 @Composable
-private fun AnsweredElsewhere(on: AnsweredOn, actions: QuestionSheetActions) {
+internal fun AnsweredElsewhere(on: AnsweredOn, onClose: () -> Unit) {
     val colors = SwitchboardTheme.colors
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -521,7 +424,7 @@ private fun AnsweredElsewhere(on: AnsweredOn, actions: QuestionSheetActions) {
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(4.dp))
-        PrimaryButton(stringResource(R.string.questions_close), actions::later, leadingCheck = false)
+        PrimaryButton(stringResource(R.string.questions_close), onClose, leadingCheck = false)
     }
 }
 
@@ -530,8 +433,6 @@ private val previewActions = object : QuestionSheetActions {
     override fun type(text: String) = Unit
     override fun next() = Unit
     override fun back() = Unit
-    override fun skip() = Unit
-    override fun acceptRecommendation() = Unit
     override fun failureSeen() = Unit
     override fun later() = Unit
 }
@@ -560,20 +461,6 @@ private val previewAskQuestions = listOf(
     Question("Anything else?", "", emptyList(), false),
 )
 
-private val previewGrillQuestions = listOf(
-    Question("Where should the code live?", "Q1", listOf(QuestionOption("Yes (Recommended)", "In the domain."), QuestionOption("Wait, what?", "")), false),
-    Question(
-        question = "Where should a snoozed session's row go?",
-        header = "Q2",
-        options = listOf(
-            QuestionOption("Yes (Recommended)", "One \"Snoozed\" section across projects, soonest wake first."),
-            QuestionOption("Wait, what?", "Have Claude re-pitch this one in plain words (/wait-what)"),
-        ),
-        multiSelect = false,
-        detail = "Today a snoozed row drops into a collapsed group at the bottom of its project. That keeps the board calm, but you lose sight of when each one wakes up.",
-    ),
-)
-
 @Composable
 private fun SheetPreviewOf(state: QuestionSheetState) {
     SwitchboardTheme {
@@ -588,13 +475,6 @@ private fun SheetPreviewOf(state: QuestionSheetState) {
 @Composable
 internal fun QuestionSheetPreview() {
     SheetPreviewOf(previewSheet(QuestionsSource.Ask, previewAskQuestions, QuestionPhase.Answering, picked = listOf("Two minutes (Recommended)")))
-}
-
-@Preview(name = "Grill dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Preview(name = "Grill light", uiMode = Configuration.UI_MODE_NIGHT_NO)
-@Composable
-internal fun GrillSheetPreview() {
-    SheetPreviewOf(previewSheet(QuestionsSource.Grill, previewGrillQuestions, QuestionPhase.Answering, picked = emptyList()).copy(step = 1))
 }
 
 @Preview(name = "Answered on Mac dark", uiMode = Configuration.UI_MODE_NIGHT_YES)

@@ -1,0 +1,611 @@
+/* ========== GRILLING CARD ==========
+   A grilling round as a sheet over the terminal area (ui/grill). The sheet
+   itself, its rise and the terminal sinking behind it are the question
+   panel's (.qp in _questions.scss), and so is Patch's column; this styles the
+   card beside it: the tabs, the question, the review and the footer. */
+
+.gc .qp-inner {
+    max-width: 960px;
+}
+
+.gc-card {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.gc kbd,
+.gc-kbd {
+    font-family: var(--sb-font-mono);
+    font-size: 10.5px;
+    color: var(--sb-text-dim);
+    padding: 1px 5px;
+    border-radius: 5px;
+    box-shadow: inset 0 0 0 1px var(--sb-border-strong);
+}
+
+.gc code {
+    font-family: var(--sb-font-mono);
+    font-size: 0.9em;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: rgba(var(--sb-overlay-rgb), 0.07);
+}
+
+.gc a {
+    color: var(--sb-accent);
+}
+
+.gc-label {
+    font-family: var(--sb-font-head);
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sb-text-faint);
+}
+
+/* ---- Tabs: a bar per question, drawn by its answer ---- */
+
+.gc-tabs {
+    display: flex;
+    gap: 6px;
+}
+
+.gc-tab {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+}
+
+.gc-tab-bar {
+    display: block;
+    height: 4px;
+    border-radius: 3px;
+    background: var(--sb-line);
+    transition:
+        background 200ms ease,
+        box-shadow 160ms ease;
+}
+
+.gc-tab.is-accepted .gc-tab-bar {
+    background: var(--sb-text-strong);
+}
+.gc-tab.is-overridden .gc-tab-bar {
+    background: var(--sb-accent);
+}
+.gc-tab.is-noted .gc-tab-bar {
+    background: linear-gradient(90deg, var(--sb-text-strong) 50%, var(--sb-accent) 50%);
+}
+.gc-tab.is-asked .gc-tab-bar {
+    background: repeating-linear-gradient(90deg, var(--sb-accent) 0 5px, transparent 5px 9px);
+}
+.gc-tab.is-review {
+    flex: 0 0 64px;
+}
+.gc-tab.is-review .gc-tab-bar {
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+}
+.gc-tab.is-current .gc-tab-bar {
+    box-shadow:
+        0 0 0 2px var(--sb-bg-base),
+        0 0 0 3px var(--sb-accent);
+}
+
+.gc-tab-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+    white-space: nowrap;
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--sb-text-faint);
+}
+
+.gc-tab.is-current .gc-tab-label {
+    color: var(--sb-text-strong);
+}
+
+/* A revision changed or added this question. */
+.gc-mark {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--sb-orange);
+}
+
+.gc-progress {
+    font-family: var(--sb-font-head);
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--sb-text-muted);
+}
+
+/* ---- Context and the banner ---- */
+
+.gc-context {
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-panel);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+}
+
+.gc-context summary {
+    cursor: pointer;
+    padding: 9px 14px;
+    font-family: var(--sb-font-head);
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sb-text-faint);
+}
+
+.gc-context-body {
+    padding: 0 14px 12px;
+    max-height: 40vh;
+    overflow: auto;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--sb-text-muted);
+}
+
+.gc-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-peach);
+    color: var(--sb-orange);
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.gc-banner.is-alert {
+    box-shadow: inset 3px 0 0 var(--sb-orange);
+}
+
+.gc-banner-dismiss {
+    border: none;
+    background: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* ---- The question ---- */
+
+.gc-q,
+.gc-review {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.gc-head {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gc-counter {
+    font-family: var(--sb-font-head);
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sb-text-faint);
+}
+
+.gc-title,
+.gc-review-title {
+    margin: 0;
+    font-family: var(--sb-font-head);
+    font-weight: 800;
+    font-size: 26px;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    color: var(--sb-text-strong);
+}
+
+.gc-review-title {
+    font-size: 22px;
+}
+
+.gc-rev-note {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--sb-orange);
+}
+
+.gc-aside {
+    display: block;
+    font-weight: 400;
+    color: var(--sb-text-muted);
+}
+
+.gc-reason {
+    max-width: 68ch;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--sb-text);
+}
+
+.gc p {
+    margin: 0;
+}
+.gc p + p,
+.gc p + ul,
+.gc p + ol,
+.gc ul + p,
+.gc ol + p {
+    margin-top: 8px;
+}
+.gc ul,
+.gc ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.gc-choices {
+    list-style: none;
+    margin: 10px 0;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.gc-choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-panel);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    color: inherit;
+    font: inherit;
+    font-size: 14.5px;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background 120ms ease,
+        box-shadow 120ms ease;
+}
+
+.gc-choice.is-recommended {
+    box-shadow: inset 0 0 0 1px var(--sb-accent);
+}
+
+.gc-choice.is-picked {
+    background: var(--sb-mint);
+    box-shadow: inset 0 0 0 2px var(--sb-accent);
+}
+
+.gc-badge {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    background: rgba(var(--sb-overlay-rgb), 0.07);
+    font-family: var(--sb-font-mono);
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--sb-text-muted);
+}
+
+.gc-choice.is-recommended .gc-badge {
+    background: var(--sb-accent);
+    color: var(--sb-action-text);
+}
+
+.gc-choice-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.gc-tag {
+    margin-left: auto;
+    font-family: var(--sb-font-head);
+    font-weight: 800;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sb-accent);
+}
+
+.gc-recbox {
+    padding: 12px 14px;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-mint);
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--sb-text-strong);
+}
+
+.gc-recbox .gc-label {
+    color: var(--sb-accent);
+    margin-bottom: 3px;
+}
+
+.gc-explain {
+    padding: 12px 14px;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-panel);
+    box-shadow:
+        inset 3px 0 0 var(--sb-accent),
+        inset 0 0 0 1px var(--sb-line);
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.gc-explain .gc-label {
+    margin-bottom: 3px;
+}
+
+.gc-explain.is-waiting p {
+    font-style: italic;
+    color: var(--sb-text-muted);
+}
+
+.gc-answer-now {
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--sb-accent);
+}
+
+/* ---- Buttons ---- */
+
+.gc-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.gc-askgroup {
+    margin-left: auto;
+    display: flex;
+    gap: 2px;
+}
+
+.gc-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: var(--sb-r-control);
+    background: var(--sb-bg-raised);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    color: var(--sb-text);
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.gc-btn:hover {
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+}
+
+.gc-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.gc-btn.is-accept {
+    background: var(--sb-mint);
+    color: var(--sb-accent);
+    box-shadow: inset 0 0 0 1px var(--sb-accent);
+}
+
+.gc-btn.is-accept kbd {
+    color: inherit;
+    box-shadow: inset 0 0 0 1px var(--sb-accent);
+}
+
+.gc-btn.is-primary {
+    background: var(--sb-action);
+    color: var(--sb-action-text);
+    box-shadow: none;
+}
+
+.gc-btn.is-primary kbd {
+    color: inherit;
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-overlay-rgb), 0.35);
+    opacity: 0.75;
+}
+
+.gc-btn.is-quiet,
+.gc-btn.is-ghost {
+    background: none;
+    box-shadow: none;
+    color: var(--sb-text-muted);
+}
+
+.gc-btn.is-quiet {
+    padding-inline: 6px;
+}
+
+.gc-btn.is-quiet:hover:not(:disabled),
+.gc-btn.is-ghost:hover {
+    color: var(--sb-text);
+    background: rgba(var(--sb-overlay-rgb), 0.06);
+}
+
+/* ---- The open field ---- */
+
+.gc-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.gc-field-input {
+    flex: 1;
+    min-width: 0;
+    resize: vertical;
+    padding: 10px 12px;
+    border: none;
+    border-radius: var(--sb-r-row);
+    outline: none;
+    background: var(--sb-bg-panel);
+    box-shadow: inset 0 0 0 1px var(--sb-accent);
+    color: var(--sb-text-strong);
+    font-family: var(--sb-font-body);
+    font-size: 14.5px;
+    line-height: 1.45;
+}
+
+.gc-field-input::placeholder {
+    color: var(--sb-text-placeholder);
+}
+
+/* ---- Review ---- */
+
+.gc-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.gc-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px 12px;
+    padding: 9px 12px;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-panel);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+}
+
+.gc-row-title {
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    color: var(--sb-text-strong);
+}
+
+.gc-row-flag {
+    margin-left: 6px;
+    font-size: 12px;
+    color: var(--sb-orange);
+}
+
+.gc-row-answer {
+    grid-column: 1;
+    font-size: 13px;
+    color: var(--sb-text-muted);
+}
+
+.gc-row-change {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    border: none;
+    background: none;
+    color: var(--sb-accent);
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.gc-preview-label {
+    margin-top: 4px;
+}
+
+.gc-preview {
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-panel);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    color: var(--sb-text);
+    font-family: var(--sb-font-mono);
+    font-size: 12.5px;
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+
+/* ---- Footer: hints on the left, sending on the right ---- */
+
+.gc-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+    margin-top: 4px;
+    padding-top: 14px;
+    border-top: 1px solid var(--sb-line);
+}
+
+.gc-hints {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: 12px;
+    color: var(--sb-text-faint);
+}
+
+.gc-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.gc-send {
+    margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.gc-queued {
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    font-size: 12.5px;
+    color: var(--sb-blue);
+}
+
+.gc-error {
+    flex-basis: 100%;
+    text-align: right;
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    font-size: 12.5px;
+    color: var(--sb-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .gc-tab-bar,
+    .gc-choice {
+        transition: none;
+    }
+}

@@ -77,6 +77,7 @@ import {QuickAskService, quickRouteCall} from '../application/services/quick-ask
 import {TaskLinkService} from '../application/services/task-link-service';
 import {TaskSessionService} from '../application/services/task-session-service';
 import {QueueErrandService, type ErrandOwnerCandidate} from '../application/services/queue-errand-service';
+import {CiJobQueueService} from '../application/services/ci-job-queue-service';
 import {TaskWritesService} from '../application/services/task-writes-service';
 import {TasksService} from '../application/services/tasks-service';
 import {SessionRegistry} from '../application/model/session-registry';
@@ -101,6 +102,9 @@ import {HeadsUpWindow} from '../infrastructure/electron/heads-up-window';
 import {hiddenForE2e} from '../infrastructure/electron/main-window';
 import {FileTranscriptStore} from '../infrastructure/fs/transcript-store';
 import {NodeFileSystem} from '../infrastructure/fs/node-file-system';
+import {FileTranscriptTail} from '../infrastructure/fs/transcript-tail-file';
+import {GrillService} from '../application/services/grill-service';
+import type {HookReceiver} from '../application/ports/question-hook';
 import {ClaudeJsonMcpServers} from '../infrastructure/claude-cli/mcp-servers';
 import {ClaudeSkillCatalog} from '../infrastructure/claude-cli/skill-catalog';
 import {ProjectsWatcher} from '../infrastructure/fs/projects-watcher';
@@ -188,6 +192,8 @@ export interface Container {
     readonly sessionRestore: SessionRestoreService;
     readonly transitions: SessionTransitionDetector;
     readonly questions: QuestionService;
+    /** The grilling card's open rounds and drafts; the grill IPC handlers call it. */
+    readonly grill: GrillService;
     readonly questionHook: QuestionHookServer;
     /** The 1Password heads-ups waiting on the user. */
     readonly onePasswordHeadsUp: OnePasswordHeadsUpService;
@@ -211,6 +217,8 @@ export interface Container {
     readonly issueSessions: IssueSessionService;
     /** The merge queue's buttons (#315): Nudge, Fix in session, Retry, Opt in, and their errands. */
     readonly queueErrands: QueueErrandService;
+    /** The CI job queue under the merge queue, and Bump. */
+    readonly ciJobQueue: CiJobQueueService;
     /** Removes an archived session's worktrees, when Settings says to. */
     readonly worktreeCleanup: WorktreeCleanupService;
     readonly plans: PlanService;
@@ -375,12 +383,17 @@ export function buildContainer(): Container {
     // The server and the service need each other: the service bakes the server's
     // address into each launch, the server hands each request to the service.
     // The server only calls `receive` once a request arrives, long after both exist.
+    // Questions, turns, prompts and subagents all go to the grilling service,
+    // which hands AskUserQuestion on to the question service.
+    const hookReceiver: HookReceiver = {
+        receive: (...args) => grill.receive(...args),
+        turnEnded: (...args) => grill.turnEnded(...args),
+        promptSubmitted: (...args) => grill.promptSubmitted(...args),
+        subagentChanged: (...args) => grill.subagentChanged(...args),
+    };
     const questionHook = new QuestionHookServer({
-        receiver: {
-            receive: (...args) => questions.receive(...args),
-            receiveRound: (...args) => questions.receiveRound(...args),
-            promptSubmitted: (...args) => questions.promptSubmitted(...args),
-        },
+        receiver: hookReceiver,
+        transcripts: new FileTranscriptTail(fs),
         archiveTool: {
             request: (...args) => archiveTool.request(...args),
             turnEnded: (...args) => archiveTool.turnEnded(...args),
@@ -405,11 +418,13 @@ export function buildContainer(): Container {
     const questions = new QuestionService({
         registry,
         renderer,
-        prompter,
         clock,
         log,
         endpoint: questionHook,
     });
+    // The grilling card's rounds: what a session's turns
+    // posted, the drafts the Mac and the phones edit, and typing them in.
+    const grill = new GrillService({registry, renderer, prompter, questions, log});
     // A session archiving itself (`archive_session`), as a phone's archive does.
     // The archiver is built on the first call: the worktree cleanup it ends with
     // is made further down.
@@ -453,7 +468,7 @@ export function buildContainer(): Container {
         appVersion: agentVersion,
         registry,
         renderer,
-        questions,
+        hooks: hookReceiver,
         archiveTool,
         timers,
         clock,
@@ -967,6 +982,9 @@ export function buildContainer(): Container {
         queueErrands.turnEnded(sessionIds, archiving, currentId),
     );
 
+    // The CI job queue under the merge queue: its jobs by runner pool, and Bump.
+    const ciJobQueue = new CiJobQueueService({github, clock, timers, log});
+
     // Archiving removes the session's worktrees, when Settings says to.
     const worktreeCleanup = new WorktreeCleanupService({
         enabled: () => settings.removeWorktreeOnArchive(),
@@ -1127,6 +1145,7 @@ export function buildContainer(): Container {
         running: lifecycle,
         projects,
         questions,
+        grill,
         // Its own instance per phone (#194): a phone's request never cancels the Mac's.
         router: () => new AskRouteService({cli: claudeCaller, timers, log, call: ASK_PATCH_CALL}),
         launcher,
@@ -1239,6 +1258,7 @@ export function buildContainer(): Container {
         sessionRestore,
         transitions,
         questions,
+        grill,
         questionHook,
         onePasswordHeadsUp,
         headsUpWindow: () => headsUpWindow,
@@ -1256,6 +1276,7 @@ export function buildContainer(): Container {
         review,
         issueSessions,
         queueErrands,
+        ciJobQueue,
         worktreeCleanup,
         plans,
         projectOverview,

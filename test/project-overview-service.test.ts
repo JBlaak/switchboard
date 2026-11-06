@@ -776,7 +776,8 @@ test('a repository whose PRs show the merge queue answers the queue, with estima
         [[202, 2]],
     );
     assert.equal(queue.runMs, 12 * MINUTE);
-    assert.equal(queue.clearsInMs, 24 * MINUTE);
+    // The head's CI not started: a run and a queue step; the entry behind it one more of each.
+    assert.equal(queue.clearsInMs, 2 * (12 * MINUTE + MINUTE));
     assert.equal(calls.filter((call) => call === 'ciRunDurations').length, 1);
     assert.deepEqual(
         github.pullRequests.map((row) => 'queue' in row.pullRequest),
@@ -848,8 +849,8 @@ test('the merge queue is cached with the rest: a second call within 30 s reads n
 
     /* Then */
     assert.deepEqual(calls, []);
-    assert.equal(first?.head?.estimateMs, 10 * MINUTE);
-    assert.equal(second?.head?.estimateMs, 10 * MINUTE - 20_000);
+    assert.equal(first?.head?.estimateMs, 10 * MINUTE + 30_000);
+    assert.equal(second?.head?.estimateMs, 10 * MINUTE + 30_000 - 20_000);
 });
 
 test('after a failed refresh the merge queue is served stale with the rest', async () => {

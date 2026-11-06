@@ -242,7 +242,7 @@ export class AgentClient {
     // ── Wiring ──
 
     private wire(key: string, connection: AgentConnection): void {
-        new HookRelay(connection, {questions: this.deps.questions, archiveTool: this.deps.archiveTool});
+        new HookRelay(connection, {hooks: this.deps.hooks, archiveTool: this.deps.archiveTool});
 
         connection.onStatus((status) => this.fanOut(key, status));
 

@@ -113,7 +113,10 @@ test("the copy: Patch's line on top, and why in Claude's words", () => {
 test('the hook settings match Bash to the 1Password route, waiting for an answer', () => {
     /* When */
     const settings = JSON.parse(
-        questionHookSettings({ask: 'a', stop: 's', prompt: 'p', onePassword: 'http://x/onepassword/1'}, 't'),
+        questionHookSettings(
+            {ask: 'a', stop: 's', prompt: 'p', subagent: 'g', onePassword: 'http://x/onepassword/1'},
+            't',
+        ),
     );
 
     /* Then */
@@ -131,7 +134,7 @@ test('the hook settings match Bash to the 1Password route, waiting for an answer
 
 test("a VM agent's hook settings, with no 1Password route, have no Bash hook", () => {
     /* When */
-    const settings = JSON.parse(questionHookSettings({ask: 'a', stop: 's', prompt: 'p'}, 't'));
+    const settings = JSON.parse(questionHookSettings({ask: 'a', stop: 's', prompt: 'p', subagent: 'g'}, 't'));
 
     /* Then */
     assert.deepEqual(
@@ -155,7 +158,7 @@ async function harness() {
         },
     });
     const server = new QuestionHookServer({
-        receiver: {receive: () => ({withdraw() {}}), receiveRound() {}, promptSubmitted() {}},
+        receiver: {receive: () => ({withdraw() {}}), turnEnded() {}, promptSubmitted() {}, subagentChanged() {}},
         onePassword: service,
         log: silentLog,
     });

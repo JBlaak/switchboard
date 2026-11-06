@@ -10,8 +10,8 @@
  * What stays here is the choreography the store has no business holding:
  * which question is drawn while the next one waits to come in (`shown`
  * trails the draft's step through a swap, and keys are held until it lands),
- * which entrance to play, and Patch, an imperative handle mounted once and
- * told what to say whenever the entry's `said` moves on.
+ * which entrance to play, and when Patch (see `PatchColumn`) may say the
+ * entry's latest line.
  *
  * Peeking keeps the panel up but steps it aside, so the terminal under it can
  * be read (and scrolled) for context; the keyboard stays on the sheet, so T or
@@ -23,19 +23,15 @@
  * attaches its own listeners.
  */
 import {useEffect, useLayoutEffect, useRef, useState} from 'react';
-import {mountPatch} from '@jblaak/patch';
 import {answeredCount, isAnswered} from '../../../domain/questions/answer-draft';
-import {dressingOn} from '../../../domain/companion/calendar';
-import {questionBeat} from '../../../domain/companion/question-beats';
-import {timeOfDay} from '../../../domain/companion/patch';
 import {answeredFoot, keyHints, questionCounter} from '../../features/questions/question-copy';
 import {panelKey} from '../../features/questions/question-keys';
-import {SHEET_SETTLE_MS, patchArrive, questionIn, questionOut, settle} from '../../features/questions/question-motion';
+import {SHEET_SETTLE_MS, questionIn, questionOut, settle} from '../../features/questions/question-motion';
 import {getState, onEvent} from '../../state/app-store';
-import {answer, chooseView, focusTerminal, greet, peek, pokePatch, questionSky} from './actions';
+import {answer, chooseView, focusTerminal, greet, peek} from './actions';
+import {PatchColumn} from './PatchColumn';
 import {OptionRow, OtherRow} from './QuestionRows';
 import type {CSSProperties, JSX} from 'react';
-import type {PatchHandle} from '@jblaak/patch';
 import type {DraftAction} from '../../../domain/questions/answer-draft';
 import type {PendingQuestions} from '../../../domain/questions/question';
 import type {Answering} from '../../state/answers-slice';
@@ -68,9 +64,7 @@ export function QuestionPanel({screen, onShow}: QuestionPanelProps): JSX.Element
     const sheet = useRef<HTMLElement>(null);
     const block = useRef<HTMLDivElement>(null);
     const group = useRef<HTMLDivElement>(null);
-    const patchStage = useRef<HTMLDivElement>(null);
     const otherInput = useRef<HTMLInputElement>(null);
-    const patch = useRef<PatchHandle | null>(null);
 
     // While hidden the sheet keeps what it last showed, so it fades out with it.
     const last = useRef<Shown | null>(null);
@@ -143,22 +137,6 @@ export function QuestionPanel({screen, onShow}: QuestionPanelProps): JSX.Element
     const handlers = useRef({act, syncFocus});
     handlers.current = {act, syncFocus};
 
-    // ── Patch, mounted once ──
-
-    useEffect(() => {
-        const handle = mountPatch(patchStage.current!, {
-            onPoke: () => {
-                const now = live.current;
-                if (now.toolUseId) pokePatch(now.toolUseId);
-            },
-        });
-        patch.current = handle;
-        return () => {
-            handle.destroy();
-            if (patch.current === handle) patch.current = null;
-        };
-    }, []);
-
     // ── Keys ──
     // On the panel rather than the window, so they can only act while the
     // panel has the keyboard. Which keys stop here and what each does is
@@ -202,8 +180,6 @@ export function QuestionPanel({screen, onShow}: QuestionPanelProps): JSX.Element
         toolUseId: undefined,
         view: undefined,
     });
-    /** The line Patch last played: which set, and its `said` count. Cleared on hiding, so a re-show replays it. */
-    const played = useRef<{toolUseId: string; seq: number} | null>(null);
     /** The set Patch is about to greet, so its hello comes with the rise into the panel. */
     const arriving = useRef<string | null>(null);
 
@@ -217,7 +193,6 @@ export function QuestionPanel({screen, onShow}: QuestionPanelProps): JSX.Element
                 generation.current++;
                 leavingNow.current = false;
                 setLeaving(false);
-                played.current = null;
             }
             return;
         }
@@ -282,27 +257,9 @@ export function QuestionPanel({screen, onShow}: QuestionPanelProps): JSX.Element
         });
     }, [up, toolUseId, target, shownStep, step.toolUseId]);
 
-    // ── Patch's lines ──
+    // ── Patch's lines: `PatchColumn` plays them once the question drawn is settled ──
 
     const said = shown?.answering.said ?? null;
-    useLayoutEffect(() => {
-        if (!up || leaving || !toolUseId || step.toolUseId !== toolUseId) return;
-        const seq = said?.seq ?? 0;
-        const prev = played.current;
-        if (prev && prev.toolUseId === toolUseId && prev.seq === seq) return;
-        played.current = {toolUseId, seq};
-        if (!said || !patch.current) return;
-        if (arriving.current === toolUseId && said.moment.kind === 'arrived') {
-            arriving.current = null;
-            if (patchStage.current) patchArrive(patchStage.current);
-        }
-        patch.current.appear({
-            ...questionBeat(said.moment),
-            time: timeOfDay(new Date().getHours()),
-            sky: questionSky(),
-            ...dressingOn(new Date()),
-        });
-    }, [up, leaving, toolUseId, step.toolUseId, said?.seq]);
 
     // ── The keyboard around a showing ──
 
@@ -363,13 +320,14 @@ export function QuestionPanel({screen, onShow}: QuestionPanelProps): JSX.Element
             aria-hidden={up ? 'false' : 'true'}
             inert={!up}>
             <div className="qp-inner">
-                <div className="qp-patch-col">
-                    <div ref={patchStage} className="qp-patch" />
-                    <span className="qp-foot">{shown ? answeredFoot(done, questions.length) : ''}</span>
-                    <div className="qp-sr" role="status" aria-live="polite">
-                        {said ? questionBeat(said.moment).line : ''}
-                    </div>
-                </div>
+                <PatchColumn
+                    up={up}
+                    ready={!leaving && !!toolUseId && step.toolUseId === toolUseId}
+                    toolUseId={toolUseId}
+                    said={said}
+                    arriving={arriving}
+                    foot={shown ? answeredFoot(done, questions.length) : ''}
+                />
                 <div className="qp-col">
                     <nav
                         className="qp-tabs"

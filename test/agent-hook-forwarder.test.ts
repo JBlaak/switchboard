@@ -214,20 +214,23 @@ test('a reply from a client the ask was not sent to is ignored', () => {
     assert.equal(older.received[0]?.type, 'ask');
 });
 
-test('grill rounds, prompt submits and turn ends are forwarded as notices', () => {
+test('ended turns, prompt submits, subagent changes and turn ends are forwarded as notices', () => {
     /* Given */
     const h = harness();
     const mac = h.connect();
+    const turn = {texts: [{id: 'u1', text: 'The round.'}]};
 
     /* When */
-    h.forwarder.receiver.receiveRound('launch-1', asked.questions);
-    h.forwarder.receiver.promptSubmitted('launch-1');
+    h.forwarder.receiver.turnEnded('launch-1', turn, ['ag1']);
+    h.forwarder.receiver.promptSubmitted('launch-1', 'Q1: yes');
+    h.forwarder.receiver.subagentChanged('launch-1', 'start', 'ag1');
     h.forwarder.archiveTool.turnEnded('launch-1');
 
     /* Then */
     assert.deepEqual(mac.received, [
-        {type: 'grill-round', launchId: 'launch-1', questions: asked.questions},
-        {type: 'prompt-submitted', launchId: 'launch-1'},
+        {type: 'grill-turn', launchId: 'launch-1', turn, backgroundAgents: ['ag1']},
+        {type: 'prompt-submitted', launchId: 'launch-1', prompt: 'Q1: yes'},
+        {type: 'subagent', launchId: 'launch-1', event: 'start', agentId: 'ag1'},
         {type: 'turn-ended', launchId: 'launch-1'},
     ]);
 });
@@ -239,7 +242,8 @@ test('notices with no client connected are dropped quietly', () => {
     mac.pair.drop();
 
     /* When */
-    h.forwarder.receiver.promptSubmitted('launch-1');
+    h.forwarder.receiver.promptSubmitted('launch-1', 'hi');
+    h.forwarder.receiver.subagentChanged('launch-1', 'stop', 'ag1');
     h.forwarder.archiveTool.turnEnded('launch-1');
 
     /* Then */
@@ -300,7 +304,6 @@ test("settings and tools point at the agent's own server, as a local launch's do
         endpoint,
         log: silentLog,
         clock: {now: () => 0},
-        prompter: {send: () => {}, onExit: () => ({dispose() {}})},
     });
     const archive = new ArchiveToolService({
         registry,

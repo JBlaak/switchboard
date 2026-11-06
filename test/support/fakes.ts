@@ -211,6 +211,7 @@ export function fakeRenderer(): FakeRenderer {
         remoteStatus: record('remoteStatus') as (id: string, s: RemoteStatusPayload) => void,
         questionsAsked: record('questionsAsked') as (pending: PendingQuestions) => void,
         questionsSettled: record('questionsSettled') as (settled: QuestionsSettled) => void,
+        grillChanged: record('grillChanged'),
         pageShown: record('pageShown'),
         projectsChanged: record('projectsChanged'),
         vmHostsChanged: record('vmHostsChanged'),
