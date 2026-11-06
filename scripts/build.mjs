@@ -117,6 +117,16 @@ const targets = [
         external: nodeExternals,
     },
     {
+        // The 1Password heads-up pop-up's: it exposes `window.headsUp`.
+        name: 'heads-up-preload',
+        ...common,
+        entryPoints: [path.join(root, 'src/preload/heads-up.ts')],
+        outfile: path.join(out, 'heads-up-preload.js'),
+        platform: 'node',
+        format: 'cjs',
+        external: nodeExternals,
+    },
+    {
         // Emitted on its own so the schema-reconciliation test can open the
         // database under Electron-as-Node without booting the app (see
         // test/db-schema-reconcile.test.ts). main.js bundles its own copy.
@@ -169,6 +179,18 @@ const targets = [
         loader: {'.ttf': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl'},
     },
     {
+        // The 1Password heads-up pop-up, a window of its own like Quick Ask's.
+        name: 'heads-up',
+        ...common,
+        entryPoints: [path.join(root, 'src/renderer/heads-up/index.tsx')],
+        outfile: path.join(out, 'heads-up/heads-up.js'),
+        platform: 'browser',
+        format: 'iife',
+        jsx: 'automatic',
+        define: {'process.env.NODE_ENV': JSON.stringify(watch ? 'development' : 'production')},
+        loader: {'.ttf': 'dataurl', '.woff': 'dataurl', '.woff2': 'dataurl'},
+    },
+    {
         // The agent itself, what the VM's systemd user service runs.
         name: 'agent',
         ...agentCommon,
@@ -189,12 +211,14 @@ const targets = [
 const stylesheets = [
     {from: 'src/renderer/styles/style.scss', to: 'renderer/style.css'},
     {from: 'src/renderer/quick-ask/style.scss', to: 'quick-ask/style.css'},
+    {from: 'src/renderer/heads-up/style.scss', to: 'heads-up/style.css'},
 ];
 
 /** Each page: its source, and where it is copied. */
 const pages = [
     {from: 'src/renderer/index.html', to: 'renderer/index.html'},
     {from: 'src/renderer/quick-ask/index.html', to: 'quick-ask/index.html'},
+    {from: 'src/renderer/heads-up/index.html', to: 'heads-up/index.html'},
 ];
 
 function buildStyles() {
@@ -242,7 +266,7 @@ async function main() {
         }
         copyHtml();
         buildStyles();
-        for (const dir of ['src/renderer/styles', 'src/renderer/quick-ask']) {
+        for (const dir of ['src/renderer/styles', 'src/renderer/quick-ask', 'src/renderer/heads-up']) {
             fs.watch(path.join(root, dir), {recursive: true}, (_event, file) => {
                 if (!String(file).endsWith('.scss')) return;
                 try {

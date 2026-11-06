@@ -314,7 +314,12 @@ test("settings and tools point at the agent's own server, as a local launch's do
     const tools = h.forwarder.toolsFor('launch/1');
 
     /* Then */
-    assert.equal(settings, questions.settingsFor('launch/1'));
+    // The same hooks, but without the 1Password heads-up: only the Mac has its pop-up.
+    const localSettings = JSON.parse(questions.settingsFor('launch/1')!);
+    localSettings.hooks.PreToolUse = localSettings.hooks.PreToolUse.filter(
+        (entry: {matcher: string}) => entry.matcher !== 'Bash',
+    );
+    assert.deepEqual(JSON.parse(settings!), localSettings);
     // The same server, but without `show_page`: the agent does not forward its calls to the Mac yet.
     const local = archive.launchFor('launch/1');
     assert.deepEqual(tools, {

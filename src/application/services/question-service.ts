@@ -224,7 +224,12 @@ export class QuestionService {
         if (!url) return null;
         const id = encodeURIComponent(sessionId);
         return questionHookSettings(
-            {ask: `${url}/ask/${id}`, stop: `${url}/stop/${id}`, prompt: `${url}/prompt/${id}`},
+            {
+                ask: `${url}/ask/${id}`,
+                stop: `${url}/stop/${id}`,
+                prompt: `${url}/prompt/${id}`,
+                onePassword: `${url}/onepassword/${id}`,
+            },
             token,
         );
     }

@@ -47,6 +47,7 @@ import {AgentBundleBuilder, agentBundleSources, bundledAgentVersion} from '../in
 import {OpenSshProvisioner} from '../infrastructure/ssh/ssh-provisioner';
 import {NodeClaudeConfigSource} from '../infrastructure/fs/claude-config-source';
 import {QuestionService} from '../application/services/question-service';
+import {OnePasswordHeadsUpService} from '../application/services/onepassword-heads-up-service';
 import {ProjectListService} from '../application/services/project-list-service';
 import {ProjectFolderService} from '../application/services/project-folder-service';
 import {RemoteConnectionSupervisor} from '../application/services/remote-connection-supervisor';
@@ -92,6 +93,7 @@ import {ElectronWindowDrag} from '../infrastructure/electron/window-drag';
 import {ElectronDockAttention} from '../infrastructure/electron/dock-attention';
 import {E2eGlobalHotkey, ElectronGlobalHotkey} from '../infrastructure/electron/global-hotkey';
 import {QuickAskWindow} from '../infrastructure/electron/quick-ask-window';
+import {HeadsUpWindow} from '../infrastructure/electron/heads-up-window';
 import {hiddenForE2e} from '../infrastructure/electron/main-window';
 import {FileTranscriptStore} from '../infrastructure/fs/transcript-store';
 import {NodeFileSystem} from '../infrastructure/fs/node-file-system';
@@ -181,6 +183,10 @@ export interface Container {
     readonly transitions: SessionTransitionDetector;
     readonly questions: QuestionService;
     readonly questionHook: QuestionHookServer;
+    /** The 1Password heads-ups waiting on the user. */
+    readonly onePasswordHeadsUp: OnePasswordHeadsUpService;
+    /** The heads-up pop-up's window, once one exists. */
+    headsUpWindow(): HeadsUpWindow | null;
 
     readonly sessionIndex: SessionIndex;
     readonly projects: ProjectListService;
@@ -359,7 +365,20 @@ export function buildContainer(): Container {
         },
         // A session showing the user a page (`show_page`), over its terminal.
         pageTool: new PageToolService({registry, renderer, clock, log}),
+        onePassword: {receive: (...args) => onePasswordHeadsUp.receive(...args)},
         log,
+    });
+    // The 1Password heads-up pop-up. A window can only be made once the app is
+    // ready, and a heads-up only comes long after, so it is made at the first.
+    let headsUpWindow: HeadsUpWindow | null = null;
+    const onePasswordHeadsUp = new OnePasswordHeadsUpService({
+        registry,
+        clock,
+        log,
+        panel: {
+            show: (headsUp) => (headsUpWindow ??= new HeadsUpWindow(appDir())).show(headsUp),
+            hide: () => headsUpWindow?.hide(),
+        },
     });
     const questions = new QuestionService({
         registry,
@@ -1172,6 +1191,8 @@ export function buildContainer(): Container {
         transitions,
         questions,
         questionHook,
+        onePasswordHeadsUp,
+        headsUpWindow: () => headsUpWindow,
         sessionIndex,
         projects,
         projectFolders,

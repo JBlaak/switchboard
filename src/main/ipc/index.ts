@@ -23,6 +23,7 @@ import {registerUpdateHandlers} from './update-handlers';
 import {registerWeatherHandlers} from './weather-handlers';
 import {registerAskHandlers} from './ask-handlers';
 import {registerQuickAskHandlers} from './quick-ask-handlers';
+import {registerHeadsUpHandlers} from './heads-up-handlers';
 import {registerPhoneAccessHandlers} from './phone-access-handlers';
 import {registerTasksHandlers} from './tasks-handlers';
 import {registerAgentHandlers} from './agent-handlers';
@@ -52,6 +53,7 @@ export function registerIpcHandlers(app: Container): void {
     registerMergeQueueHandlers(ipc, app);
     registerAskHandlers(ipc, app);
     registerQuickAskHandlers(ipc, app);
+    registerHeadsUpHandlers(ipc, app);
     registerPhoneAccessHandlers(ipc, app);
     registerTasksHandlers(ipc, app);
     registerAgentHandlers(ipc, app);

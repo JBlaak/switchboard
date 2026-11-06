@@ -1,0 +1,205 @@
+// The 1Password heads-up pop-up's stylesheet, from the approved design: a
+// solid card, Patch in a round stage on the left, the eyebrow, Patch's line,
+// Claude's reason and the command on the right, and a footer bar with the two
+// keys, Spotlight-like.
+
+@use '../styles/reset';
+@use '../styles/tokens';
+
+:root {
+    --hu-rim: rgba(var(--sb-overlay-rgb), 0.1);
+    --hu-shadow: 0 24px 48px -16px rgba(var(--sb-shadow-rgb), 0.7), 0 2px 8px rgba(var(--sb-shadow-rgb), 0.4);
+    --hu-stage: color-mix(in srgb, var(--sb-accent) 10%, transparent);
+    --hu-go-text: #141517;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --hu-rim: rgba(20, 30, 50, 0.08);
+        --hu-shadow: 0 24px 48px -16px rgba(20, 30, 50, 0.28), 0 2px 8px rgba(20, 30, 50, 0.1);
+        --hu-go-text: #ffffff;
+    }
+
+    // Patch's light dressing, as on the empty screen.
+    .hu-stage .patch {
+        --patch-body: #7fd0b4;
+        --patch-ink: #16181d;
+        --patch-pole: #7b8491;
+        --patch-shadow: rgba(20, 30, 50, 0.12);
+        --patch-sun: #e3b94f;
+        --patch-cap: #b3a0dc;
+    }
+}
+
+html,
+body {
+    background: transparent;
+}
+
+body {
+    display: block;
+    overflow: hidden;
+}
+
+.hu-card {
+    position: absolute;
+    inset: 20px 20px auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 24px;
+    background: var(--sb-bg-raised);
+    border: 1px solid var(--hu-rim);
+    box-shadow: var(--hu-shadow);
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+    transition:
+        opacity 160ms ease-out,
+        transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+
+    &.is-shown {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hu-card {
+        transform: none;
+        transition: opacity 120ms;
+    }
+}
+
+.hu-main {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 22px 24px 20px 18px;
+}
+
+/* Patch's 220×200 art at 0.7, placed so everything it holds fits the round
+   stage: art x 50–197 (the body to the keys put down beside it) centred, the
+   shadow (art y 178) 12 px above the bottom edge. */
+.hu-stage {
+    position: relative;
+    flex: 0 0 128px;
+    height: 128px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--hu-stage);
+
+    .patch {
+        position: absolute;
+        left: -30px;
+        top: -16px;
+    }
+
+    .patch-bubble {
+        display: none;
+    }
+
+    .patch-svg {
+        width: 154px;
+        height: 140px;
+    }
+}
+
+.hu-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hu-eyebrow {
+    font: 700 12px/1.2 var(--sb-font-head);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sb-accent);
+}
+
+.hu-line {
+    font: 800 23px/1.2 var(--sb-font-head);
+    color: var(--sb-text-strong);
+}
+
+.hu-why {
+    font: 15px/1.45 var(--sb-font-body);
+    color: var(--sb-text);
+}
+
+.hu-command {
+    margin-top: 4px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--sb-bg-base);
+    font: 12.5px/1.4 var(--sb-font-mono);
+    color: var(--sb-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hu-prompt {
+    color: var(--sb-text-faint);
+}
+
+.hu-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px 12px 24px;
+    background: var(--sb-bg-panel);
+    border-top: 1px solid rgba(var(--sb-overlay-rgb), 0.06);
+}
+
+.hu-then {
+    font: 13px var(--sb-font-body);
+    color: var(--sb-text-muted);
+}
+
+.hu-actions {
+    display: flex;
+    gap: 8px;
+
+    button {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 10px;
+        font: 700 13px var(--sb-font-head);
+        cursor: pointer;
+    }
+
+    kbd {
+        padding: 2px 6px;
+        border-radius: 6px;
+        font: 11px var(--sb-font-mono);
+    }
+}
+
+.hu-stop {
+    background: rgba(var(--sb-overlay-rgb), 0.07);
+    color: var(--sb-text);
+
+    kbd {
+        background: rgba(var(--sb-overlay-rgb), 0.08);
+        color: var(--sb-text-muted);
+    }
+}
+
+.hu-go {
+    background: var(--sb-accent);
+    color: var(--hu-go-text);
+    font-weight: 800;
+
+    kbd {
+        background: color-mix(in srgb, var(--hu-go-text) 16%, transparent);
+        color: var(--hu-go-text);
+    }
+}
