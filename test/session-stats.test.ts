@@ -1,12 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert';
-import {
-    LONG_CONTEXT_WINDOW,
-    STANDARD_CONTEXT_WINDOW,
-    contextFraction,
-    contextWindowFor,
-    lastContextUsage,
-} from '../src/domain/session/stats';
+import {CONTEXT_WINDOW, contextFraction, lastContextUsage} from '../src/domain/session/stats';
 import {SessionStatsService, type SessionStatsServiceDeps} from '../src/application/services/session-stats-service';
 import {silentLog} from './support/fakes';
 
@@ -41,7 +35,7 @@ test('the last assistant turn counts its input, cache-read and cache-creation to
     const usage = lastContextUsage(lines);
 
     /* Then */
-    assert.deepStrictEqual(usage, {model: 'claude-opus-5-5', tokens: 48_002, peakTokens: 48_002});
+    assert.deepStrictEqual(usage, {model: 'claude-opus-5-5', tokens: 48_002});
 });
 
 test('a subagent turn and a turn the CLI made up are passed over', () => {
@@ -56,7 +50,7 @@ test('a subagent turn and a turn the CLI made up are passed over', () => {
     const usage = lastContextUsage(lines);
 
     /* Then */
-    assert.deepStrictEqual(usage, {model: 'claude-opus-5-5', tokens: 1010, peakTokens: 1010});
+    assert.deepStrictEqual(usage, {model: 'claude-opus-5-5', tokens: 1010});
 });
 
 test('a transcript with no usage yet answers null, and a line cut off by the tail read is ignored', () => {
@@ -71,49 +65,25 @@ test('a transcript with no usage yet answers null, and a line cut off by the tai
     assert.strictEqual(contextFraction(usage), null);
 });
 
-// ── The window choice ──
+// ── The window ──
 
-test('a model without [1m] is measured against 200k', () => {
+test('every session is measured against a 1M window, whatever its model', () => {
     /* When */
-    const window = contextWindowFor({model: 'claude-opus-5-5', tokens: 50_000, peakTokens: 50_000});
+    const fractions = [
+        contextFraction({model: 'claude-opus-5-5', tokens: 250_000}),
+        contextFraction({model: 'claude-sonnet-5[1m]', tokens: 250_000}),
+    ];
 
     /* Then */
-    assert.strictEqual(window, STANDARD_CONTEXT_WINDOW);
+    assert.deepStrictEqual(fractions, [0.25, 0.25]);
 });
 
-test('a [1m] model is measured against 1M', () => {
+test('a turn past the window reads as full, not more', () => {
     /* When */
-    const window = contextWindowFor({model: 'claude-opus-5-5[1m]', tokens: 50_000, peakTokens: 50_000});
+    const fraction = contextFraction({model: 'claude-opus-5-5', tokens: CONTEXT_WINDOW + 1});
 
     /* Then */
-    assert.strictEqual(window, LONG_CONTEXT_WINDOW);
-});
-
-test('a turn sent more than 200k tokens must have run in the 1M window', () => {
-    /* When */
-    const window = contextWindowFor({model: 'claude-opus-5-5', tokens: 229_123, peakTokens: 229_123});
-
-    /* Then */
-    assert.strictEqual(window, LONG_CONTEXT_WINDOW);
-});
-
-test('a session that once sent more than 200k stays in the 1M window after a compaction', () => {
-    /* Given */
-    const lines = [assistant({cache_read_input_tokens: 300_000}), assistant({cache_read_input_tokens: 40_000})];
-
-    /* When */
-    const fraction = contextFraction(lastContextUsage(lines));
-
-    /* Then */
-    assert.strictEqual(fraction, 0.04);
-});
-
-test('the context used is the turn tokens over the window', () => {
-    /* When */
-    const fraction = contextFraction({model: 'claude-sonnet-5[1m]', tokens: 250_000, peakTokens: 250_000});
-
-    /* Then */
-    assert.strictEqual(fraction, 0.25);
+    assert.strictEqual(fraction, 1);
 });
 
 // ── The service ──
@@ -162,7 +132,7 @@ test('a session with no usage yet answers null context, and its count and start 
 
 test('the context used comes from the last assistant turn in the transcript', async () => {
     /* Given */
-    const h = harness({tail: [user(), assistant({input_tokens: 50_000})].join('\n')});
+    const h = harness({tail: [user(), assistant({input_tokens: 250_000})].join('\n')});
 
     /* When */
     const stats = await h.service.stats('s1');
