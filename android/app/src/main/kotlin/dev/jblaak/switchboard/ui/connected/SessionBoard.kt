@@ -2,6 +2,7 @@ package dev.jblaak.switchboard.ui.connected
 
 import dev.jblaak.switchboard.link.SendOutcome
 import dev.jblaak.switchboard.protocol.ClientMessage
+import dev.jblaak.switchboard.protocol.GrillView
 import dev.jblaak.switchboard.protocol.MacBattery
 import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.protocol.PhoneSession
@@ -19,7 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * The Mac's running sessions, pending questions and battery, as the phone last heard them. They arrive right after
+ * The Mac's running sessions, pending questions, open grilling rounds and battery, as the phone last heard them. They arrive right after
  * `welcome` and then on every change, and [PhoneLink.messages] does not replay, so create the board before the
  * link starts and keep it as long as the link.
  */
@@ -46,6 +47,11 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
 
     private val mutablePending = MutableStateFlow<List<PendingQuestions>>(emptyList())
     val pending: StateFlow<List<PendingQuestions>> = mutablePending.asStateFlow()
+
+    private val mutableGrills = MutableStateFlow<List<GrillView>>(emptyList())
+
+    /** Every session's open grilling round with its draft answers, as the Mac last showed them. */
+    val grills: StateFlow<List<GrillView>> = mutableGrills.asStateFlow()
 
     private val mutableMacBattery = MutableStateFlow<MacBattery?>(null)
 
@@ -86,6 +92,7 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
                 publish()
             }
             is ServerMessage.Questions -> mutablePending.value = message.pending
+            is ServerMessage.Grill -> mutableGrills.value = message.views
             is ServerMessage.MacBatteryChanged -> mutableMacBattery.value = message.battery
             is ServerMessage.SessionRekeyed -> rekey(message.from, message.to)
             is ServerMessage.Owner -> {
@@ -105,12 +112,13 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
         }
     }
 
-    /** Ended or archived: off the list, with its questions, before the Mac's next list says so. */
+    /** Ended or archived: off the list, with its questions and round, before the Mac's next list says so. */
     private fun drop(sessionId: String) {
         received = received.filterNot { it.id == sessionId }
         archiving = archiving - sessionId
         publish()
         mutablePending.value = mutablePending.value.filterNot { it.sessionId == sessionId }
+        mutableGrills.value = mutableGrills.value.filterNot { it.sessionId == sessionId }
     }
 
     private fun publish() {
@@ -125,6 +133,9 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
         publish()
         mutablePending.value = mutablePending.value.map { set ->
             if (set.sessionId == from) set.copy(sessionId = to) else set
+        }
+        mutableGrills.value = mutableGrills.value.map { view ->
+            if (view.sessionId == from) view.copy(sessionId = to) else view
         }
     }
 }

@@ -12,13 +12,18 @@ import {answeredCount} from '../../../domain/questions/answer-draft';
 import {waitingLabel} from '../../features/questions/question-copy';
 import {chooseView} from './actions';
 import {useOnScreen} from './use-on-screen';
+import {useStore} from '../use-store';
+import {answeredCount as grillAnswered} from '../../features/grill/grill-card';
 import type {JSX} from 'react';
 
 const SLOT_ID = 'terminal-header-questions';
 
 export function QuestionsHeaderButton(): JSX.Element | null {
-    const {pending, answering, up} = useOnScreen();
+    const {pending, answering, up, sessionId} = useOnScreen();
     const entry = pending && answering ? {pending, answering} : null;
+    // A grilling round's answers are main's, not the panel draft's; Esc there peeks instead.
+    const grillView = useStore((s) => (sessionId ? s.grill.views[sessionId] : undefined));
+    const grill = pending?.source === 'grill';
 
     useLayoutEffect(() => {
         const slot = document.getElementById(SLOT_ID);
@@ -36,11 +41,16 @@ export function QuestionsHeaderButton(): JSX.Element | null {
                 className="qh-terminal"
                 onClick={() => chooseView(toolUseId, 'terminal')}>
                 <TerminalIcon />
-                Answer in terminal<kbd className="qh-kbd">esc</kbd>
+                Answer in terminal{!grill && <kbd className="qh-kbd">esc</kbd>}
             </button>
         );
     }
-    const label = waitingLabel(questions.length - answeredCount(questions, entry.answering.draft));
+    const unanswered = grill
+        ? grillView
+            ? grillView.questions.length - grillAnswered(grillView)
+            : questions.length
+        : questions.length - answeredCount(questions, entry.answering.draft);
+    const label = waitingLabel(unanswered);
     return (
         <button
             key={`${toolUseId}:down:${label}`}

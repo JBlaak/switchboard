@@ -12,6 +12,7 @@ import {registerProjectHandlers} from './project-handlers';
 import {registerQuestionHandlers} from './question-handlers';
 import {registerSessionHandlers} from './session-handlers';
 import {registerSessionWorkHandlers} from './session-work-handlers';
+import {registerSessionLinksHandlers} from './session-links-handlers';
 import {registerIssueSessionHandlers} from './issue-session-handlers';
 import {registerPlanHandlers} from './plan-handlers';
 import {registerProjectOverviewHandlers} from './project-overview-handlers';
@@ -32,6 +33,7 @@ import {registerSessionHandoffHandlers} from './session-handoff-handlers';
 import {registerVmSchedulesHandlers} from './vm-schedules-handlers';
 import {registerDroppedFilesHandlers} from './dropped-files-handlers';
 import {registerVmRegistryHandlers} from './vm-registry-handlers';
+import {registerWorkspaceHandlers} from './workspace-handlers';
 import type {Container} from '../composition-root';
 
 export function registerIpcHandlers(app: Container): void {
@@ -47,6 +49,7 @@ export function registerIpcHandlers(app: Container): void {
     registerSleepHandlers(ipc, app);
     registerUpdateHandlers(ipc, app);
     registerSessionWorkHandlers(ipc, app);
+    registerSessionLinksHandlers(ipc, app);
     registerIssueSessionHandlers(ipc, app);
     registerPlanHandlers(ipc, app);
     registerProjectOverviewHandlers(ipc, app);
@@ -62,4 +65,5 @@ export function registerIpcHandlers(app: Container): void {
     registerVmSchedulesHandlers(ipc, app);
     registerDroppedFilesHandlers(ipc, app);
     registerVmRegistryHandlers(ipc, app);
+    registerWorkspaceHandlers(ipc, app);
 }

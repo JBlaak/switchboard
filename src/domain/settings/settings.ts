@@ -10,6 +10,7 @@ import type {RemoteConfig} from '../project/remote-target';
 import type {RemoteSessionRecord} from '../session/session';
 import type {AppIcon} from './app-icon';
 import type {Appearance} from './appearance';
+import type {SavedPrompt} from './saved-prompts';
 import {DEFAULT_WEATHER_LOCATION, parseWeatherLocation} from '../weather/weather';
 import type {WeatherLocation} from '../weather/weather';
 
@@ -77,6 +78,12 @@ export interface GlobalSettings {
      * `resolveBlaakTasksUrl`.
      */
     blaakTasksUrl?: string;
+    /**
+     * The saved prompts every project's session tray offers (#339); a
+     * project's blob holds its own under the same key. Read and written
+     * through `SettingsService.savedPrompts` / `setSavedPrompts`.
+     */
+    savedPrompts?: SavedPrompt[];
     [key: string]: unknown;
 }
 

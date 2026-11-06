@@ -15,6 +15,7 @@ import type {ClaudeRun} from '../src/domain/ask/route';
 import type {ClientMessage} from '../src/domain/phone/protocol';
 import type {Project} from '../src/domain/project/project';
 import type {AskedQuestions} from '../src/domain/questions/question';
+import type {GrillResult, GrillView} from '../src/domain/grill/model';
 import type {SessionRow} from '../src/domain/session/session';
 
 /**
@@ -125,10 +126,22 @@ function harness() {
         registry,
         renderer: questionRenderer,
         endpoint: {url: 'http://127.0.0.1:4000', token: 't'},
-        prompter: {send() {}, onExit: () => ({dispose() {}})},
         clock: {now: () => 5_000},
         log: silentLog,
     });
+
+    // The grilling card's service, as calls recorded and a result the test sets.
+    const grillCalls: unknown[][] = [];
+    let grillResult: GrillResult = {ok: true};
+    let grillViews: GrillView[] = [];
+    const grill = {
+        views: () => grillViews,
+        answer: (...args: unknown[]) => (grillCalls.push(['answer', ...args]), grillResult),
+        ask: (...args: unknown[]) => (grillCalls.push(['ask', ...args]), grillResult),
+        send: (...args: unknown[]) => (grillCalls.push(['send', ...args]), grillResult),
+        queue: (...args: unknown[]) => (grillCalls.push(['queue', ...args]), grillResult),
+        cancelQueue: (...args: unknown[]) => (grillCalls.push(['cancelQueue', ...args]), grillResult),
+    };
 
     const service = new PhoneSessionsService({
         registry,
@@ -141,6 +154,7 @@ function harness() {
         },
         projects: {list: () => projects},
         questions,
+        grill,
         router: () => new AskRouteService({cli: caller.cli, timers: routeTimers, log: silentLog, call: ASK_PATCH_CALL}),
         launcher: {
             async open(request) {
@@ -223,6 +237,13 @@ function harness() {
         send,
         ask,
         voiceCalls,
+        grillCalls,
+        setGrillResult: (result: GrillResult) => {
+            grillResult = result;
+        },
+        setGrillViews: (views: GrillView[]) => {
+            grillViews = views;
+        },
         chatCalls,
         setProjects: (next: Project[]) => {
             projects = next;
@@ -238,7 +259,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 // ── The list ──
 
-test('a phone that connects is sent the running sessions and the questions', () => {
+test('a phone that connects is sent the running sessions, the questions and the grilling rounds', () => {
     /* Given */
     const h = harness();
     h.addSession('s1');
@@ -266,6 +287,7 @@ test('a phone that connects is sent the running sessions and the questions', () 
             ],
         },
         {type: 'questions', pending: []},
+        {type: 'grill', views: []},
     ]);
 });
 
@@ -854,6 +876,88 @@ test('a withdrawn set settles on the phones with nowhere it was answered, and mo
 });
 
 // ── Ask Patch ──
+
+// ── The grilling card ──
+
+test('grilling calls from a phone go to the grilling service as the phone’s', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'grill-answer', sessionId: 's1', roundId: 'b1', revision: 1, place: 2, answer: null});
+    h.send(phone, {type: 'grill-ask', sessionId: 's1', roundId: 'b1', revision: 1, place: 0, text: null});
+    h.send(phone, {type: 'grill-queue', sessionId: 's1', roundId: 'b1'});
+    h.send(phone, {type: 'grill-cancel-queue', sessionId: 's1', roundId: 'b1'});
+
+    /* Then */
+    assert.deepEqual(h.grillCalls, [
+        ['answer', 's1', 'b1', 1, 2, null, 'phone'],
+        ['ask', 's1', 'b1', 1, 0, null],
+        ['queue', 's1', 'b1'],
+        ['cancelQueue', 's1', 'b1'],
+    ]);
+    assert.deepEqual(phone.of('grill-error'), []);
+});
+
+test('a grilling call that fails is told to the phone that made it', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    const phone = h.connect();
+    const other = h.connect(OTHER_PHONE);
+    h.setGrillResult({ok: false, error: 'Claude is busy; send once it stops'});
+
+    /* When */
+    h.send(phone, {type: 'grill-send', sessionId: 's1', roundId: 'b1'});
+
+    /* Then */
+    assert.deepEqual(phone.of('grill-error'), [
+        {type: 'grill-error', sessionId: 's1', roundId: 'b1', error: 'Claude is busy; send once it stops'},
+    ]);
+    assert.deepEqual(other.of('grill-error'), []);
+    assert.equal(h.service.owners().s1, undefined, 'nothing moved');
+});
+
+test('sending a round from a phone makes the phone active', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'grill-send', sessionId: 's1', roundId: 'b1'});
+
+    /* Then */
+    assert.deepEqual(h.grillCalls, [['send', 's1', 'b1', 'phone']]);
+    assert.deepEqual(h.service.owners().s1, {kind: 'device', deviceId: 'phone-1', name: 'Pixel 9'});
+});
+
+test('every grilling change sends every phone all open rounds', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    const phone = h.connect();
+    const view: GrillView = {
+        sessionId: 's1',
+        roundId: 'b1',
+        revision: 0,
+        preamble: '',
+        questions: [],
+        dropped: 0,
+        agentsRunning: 0,
+        send: 'idle',
+        asking: null,
+    };
+    h.setGrillViews([view]);
+
+    /* When */
+    h.service.grillChanged({sessionId: 's1', view});
+
+    /* Then */
+    assert.deepEqual(phone.of('grill').at(-1), {type: 'grill', views: [view]});
+});
 
 test('a confident answer starts the session with the default options, owned by the phone at its size', async () => {
     /* Given */

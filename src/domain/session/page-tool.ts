@@ -12,6 +12,7 @@
  * holds, it can only be looked at.
  */
 import {ARCHIVE_TOOL_SERVER, type ArchiveToolOutcome, type McpPrompt, type McpTool} from './archive-tool';
+import {transcriptBlocks} from './support/transcript-blocks';
 
 export const PAGE_TOOL_NAME = 'show_page';
 /** The tool's full name in the CLI, as `--allowedTools` takes it. */
@@ -100,6 +101,40 @@ export function parsePageInput(args: unknown): {ok: true; page: PageInput} | {ok
     }
     const line = title.replace(/\s+/g, ' ').trim();
     return {ok: true, page: {title: line.length > MAX_TITLE ? line.slice(0, MAX_TITLE - 1) + '…' : line, html}};
+}
+
+/** A page a session showed, as its transcript recorded the call (#340). */
+export interface ShownPageRef {
+    /** The `show_page` call's tool-use id: stable, and one per page shown. */
+    id: string;
+    title: string;
+    /** When the call was made, epoch ms; null when the entry carried no time. */
+    shownAt: number | null;
+}
+
+/**
+ * The pages a transcript shows were put on screen with `show_page`, in the
+ * order they were shown. A call whose arguments were not a page, or whose
+ * result was an error (no window open, the session not running), showed
+ * nothing and is left out.
+ *
+ * Main keeps no copy of a page once it is sent, so the transcript is the one
+ * record of every page a session showed, across restarts.
+ */
+export function shownPagesInTranscript(lines: readonly string[]): ShownPageRef[] {
+    const calls = new Map<string, ShownPageRef>();
+    const failed = new Set<string>();
+    for (const block of transcriptBlocks(lines)) {
+        if (block.type === 'tool_use' && block.name === PAGE_TOOL_QUALIFIED_NAME && typeof block.id === 'string') {
+            const parsed = parsePageInput(block.input);
+            if (!parsed.ok || calls.has(block.id)) continue;
+            const at = Date.parse(block.timestamp);
+            calls.set(block.id, {id: block.id, title: parsed.page.title, shownAt: Number.isNaN(at) ? null : at});
+        } else if (block.type === 'tool_result' && block.is_error === true && typeof block.tool_use_id === 'string') {
+            failed.add(block.tool_use_id);
+        }
+    }
+    return [...calls.values()].filter((page) => !failed.has(page.id));
 }
 
 /** The tool as the MCP server offers it, calling `show` with a valid page. */

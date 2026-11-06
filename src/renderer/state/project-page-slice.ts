@@ -30,7 +30,8 @@
  * So is the merge queue's side of the page (#315): the errands Nudge and Fix
  * in session started in the repository, read again with each overview, and
  * how each of the queue's buttons is getting on (`queueActions`, by
- * `queueActionKey`). The queue itself is the overview's.
+ * `queueActionKey`). The queue itself is the overview's. The CI job queue
+ * under it (`ciJobQueue`) is read on its own, only while the section shows.
  *
  * The events are declared here rather than in `events.ts`, like the session
  * list's, so the page's vocabulary stays in one file.
@@ -43,6 +44,7 @@ import type {IssueSessionStart} from '../../domain/plan/issue-session';
 import type {TaskRow} from '../../domain/tasks/model';
 import type {StoredOverview} from './stored-overviews';
 import type {QueueErrandView} from '../../domain/project/queue-errands';
+import type {CiJobQueueAnswer} from '../../domain/project/ci-job-queue';
 
 export type ProjectPageEvent =
     /** The page opened on `projectPath`, with what it remembered of it. */
@@ -103,7 +105,9 @@ export type ProjectPageEvent =
     | {type: 'projectQueueErrandsAnswered'; repository: string; errands: readonly QueueErrandView[]}
     /** One of the merge queue's buttons was pressed (#315), by `queueActionKey`; and how it went. */
     | {type: 'projectQueueActionAsked'; key: string}
-    | {type: 'projectQueueActionAnswered'; key: string; outcome: QueueActionOutcome};
+    | {type: 'projectQueueActionAnswered'; key: string; outcome: QueueActionOutcome}
+    /** The CI job queue of `repository`, as main last answered it. */
+    | {type: 'projectCiJobQueueAnswered'; repository: string; answer: CiJobQueueAnswer};
 
 /**
  * How a merge queue button's job ended: done (nothing more to show), handed
@@ -126,8 +130,21 @@ export interface ProjectQueueErrands {
     readonly errands: readonly QueueErrandView[];
 }
 
-/** Which button a `queueActions` entry is: one per job and PR (and reviewer, for a nudge). */
-export function queueActionKey(job: 'nudge' | 'fix' | 'retry' | 'opt-in', number: number, reviewer?: string): string {
+/** The CI job queue (its jobs by runner pool) of one repository. */
+export interface ProjectCiJobQueue {
+    readonly repository: string;
+    readonly answer: CiJobQueueAnswer;
+}
+
+/**
+ * Which button a `queueActions` entry is: one per job and PR (and reviewer,
+ * for a nudge); a bump's is the bumped CI job's id.
+ */
+export function queueActionKey(
+    job: 'nudge' | 'fix' | 'retry' | 'opt-in' | 'bump',
+    number: number,
+    reviewer?: string,
+): string {
     return job + ':' + number + (reviewer ? ':' + reviewer : '');
 }
 
@@ -173,6 +190,8 @@ export interface ProjectPageState extends ProjectPageMemory {
     readonly queueErrands: ProjectQueueErrands | null;
     /** The merge queue's buttons that are busy or have something to say, by `queueActionKey`. */
     readonly queueActions: Readonly<Record<string, QueueActionState>>;
+    /** The CI job queue of the project's repository; null until read, and for a repository without a queue. */
+    readonly ciJobQueue: ProjectCiJobQueue | null;
 }
 
 export interface OverviewFrom {
@@ -211,6 +230,7 @@ export const initialProjectPageState: ProjectPageState = {
     tasks: null,
     queueErrands: null,
     queueActions: {},
+    ciJobQueue: null,
 };
 
 export function projectPageReducer(state: ProjectPageState, event: RendererEvent): ProjectPageState {
@@ -239,6 +259,7 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
                 tasks: state.tasks?.projectPath === event.projectPath ? state.tasks : null,
                 queueErrands: state.projectPath === event.projectPath ? state.queueErrands : null,
                 queueActions: {},
+                ciJobQueue: state.projectPath === event.projectPath ? state.ciJobQueue : null,
             };
         }
 
@@ -358,6 +379,14 @@ export function projectPageReducer(state: ProjectPageState, event: RendererEvent
             };
         }
 
+        case 'projectCiJobQueueAnswered': {
+            if (state.projectPath === null) return state;
+            // A failed read after a good one keeps the jobs it had on screen.
+            const kept = state.ciJobQueue?.repository === event.repository && state.ciJobQueue.answer.ok;
+            if (!event.answer.ok && kept) return state;
+            return {...state, ciJobQueue: {repository: event.repository, answer: event.answer}};
+        }
+
         case 'blaakTasksSwitched':
             return !event.on && state.tasks ? {...state, tasks: null} : state;
 
@@ -420,6 +449,18 @@ export function overviewRequest(state: RendererState): {projectPath: string; clo
     const route = projectRoute(state.mainArea);
     if (!route || route.view.kind !== 'overview' || state.projectPage.projectPath !== route.projectPath) return null;
     return {projectPath: route.projectPath, closed: state.projectPage.showClosed, merged: state.projectPage.showMerged};
+}
+
+/**
+ * The repository whose CI job queue the page shows now, to be read while it
+ * does: the overview is on screen and its repository has a merge queue (so
+ * the Merge queue section shows). Null otherwise: nothing is read.
+ */
+export function ciJobQueueRequest(state: RendererState): string | null {
+    const request = overviewRequest(state);
+    const overview = state.projectPage.overview;
+    if (!request || overview?.projectPath !== request.projectPath || !overview.repository) return null;
+    return overview.github?.ok && overview.github.mergeQueue ? overview.repository : null;
 }
 
 /** What the page remembers of its project, to persist. */

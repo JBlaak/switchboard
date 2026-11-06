@@ -43,6 +43,8 @@ import {
     toRepositoryPullRequests,
 } from './gh-overview';
 import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/overview';
+import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
+import {ciJobPaths, toActiveRuns, toCiJobs, toRunCompleted, toRunIds, toRunners, toTimedRun} from './gh-ci-jobs';
 import type {ReviewEvent} from '../../domain/session-work/review';
 import type {
     CheckRun,
@@ -291,6 +293,72 @@ export class GhCli implements GitHubCli {
         return this.rest(['api', '--method', 'DELETE', `${path}/${encodeURIComponent(label)}`]);
     }
 
+    // ── The CI job queue: the paths and their mapping are in `gh-ci-jobs.ts` ──
+
+    public async selfHostedRunners(repo: string): Promise<Runner[] | null> {
+        const parts = REPO.exec(repo);
+        if (!parts) return null;
+        const [own, org] = await Promise.all([
+            this.getJson(ciJobPaths.repoRunners(repo)),
+            this.getJson(ciJobPaths.orgRunners(parts[1])),
+        ]);
+        const read = [toRunners(own), toRunners(org)].filter((runners): runners is Runner[] => runners !== null);
+        if (read.length === 0) return null;
+        const byName = new Map<string, Runner>();
+        for (const runner of read.flat()) if (!byName.has(runner.name)) byName.set(runner.name, runner);
+        return [...byName.values()];
+    }
+
+    public async ciJobs(repo: string): Promise<CiJob[] | null> {
+        if (!REPO.test(repo)) return null;
+        const [runs, pulls] = await Promise.all([
+            this.getJson(ciJobPaths.runs(repo)),
+            this.getJson(ciJobPaths.pulls(repo)),
+        ]);
+        const active = toActiveRuns(runs, pulls);
+        if (!active) return null;
+        const jobs = await Promise.all(
+            active.map(async (run) => toCiJobs(run, await this.getJson(ciJobPaths.jobs(repo, run.id)))),
+        );
+        return jobs.flat();
+    }
+
+    public async successfulRuns(repo: string, workflowId: number, count: number): Promise<number[] | null> {
+        if (!REPO.test(repo) || !isId(workflowId) || !isId(count)) return null;
+        return toRunIds(await this.getJson(ciJobPaths.successfulRuns(repo, workflowId, count)));
+    }
+
+    public async runJobTimes(repo: string, runId: number, workflowId: number): Promise<TimedRun | null> {
+        if (!REPO.test(repo) || !isId(runId)) return null;
+        return toTimedRun(runId, workflowId, await this.getJson(ciJobPaths.jobs(repo, runId)));
+    }
+
+    public async runCompleted(repo: string, runId: number): Promise<boolean | null> {
+        if (!REPO.test(repo) || !isId(runId)) return null;
+        return toRunCompleted(await this.getJson(ciJobPaths.run(repo, runId)));
+    }
+
+    public async cancelRun(repo: string, runId: number): Promise<GitHubWrite> {
+        if (!REPO.test(repo) || !isId(runId)) return {ok: false, reason: 'That run cannot be cancelled'};
+        return this.rest(['api', '--method', 'POST', ciJobPaths.cancel(repo, runId)]);
+    }
+
+    public async rerunFailedJobs(repo: string, runId: number): Promise<GitHubWrite> {
+        if (!REPO.test(repo) || !isId(runId)) return {ok: false, reason: 'That run cannot be run again'};
+        return this.rest(['api', '--method', 'POST', ciJobPaths.rerunFailed(repo, runId)]);
+    }
+
+    /** A REST read's JSON; null when `gh` could not ask or GitHub refused. */
+    private async getJson(path: string): Promise<any | null> {
+        const result = await this.run(['api', path]);
+        if (result.missing || result.code !== 0) return null;
+        try {
+            return JSON.parse(result.stdout);
+        } catch {
+            return null;
+        }
+    }
+
     /** Run a REST write; whether it went through, or GitHub's reason it did not. */
     private async rest(args: string[]): Promise<GitHubWrite> {
         const result = await this.run(args);
@@ -429,6 +497,11 @@ export const SUBMIT_REVIEW = `mutation($reviewId: ID!, $event: PullRequestReview
 function labelsPath(repo: string, number: number): string | null {
     if (!REPO.test(repo) || !Number.isSafeInteger(number) || number < 1) return null;
     return `repos/${repo}/issues/${number}/labels`;
+}
+
+/** A positive integer, as written into a REST path. */
+function isId(value: number): boolean {
+    return Number.isSafeInteger(value) && value > 0;
 }
 
 /** Positive integers only, once each: they are written into the query text. */

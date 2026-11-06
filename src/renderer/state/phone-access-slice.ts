@@ -141,11 +141,11 @@ export function connectedDevices(access: PhoneAccessState): PhoneDeviceView[] {
 }
 
 /**
- * The toolbar indicator: absent while Phone access is off; "On" while it is on
- * with no phone attached; the phone's name (mint) while one is.
+ * The toolbar indicator: the phone's name (mint) while one is connected, and
+ * absent otherwise. That Phone access is merely on is not worth a slot in the
+ * toolbar; Settings says so.
  */
 export interface PhoneIndicator {
-    readonly connected: boolean;
     readonly label: string;
     readonly title: string;
 }
@@ -153,20 +153,9 @@ export interface PhoneIndicator {
 export function phoneIndicatorIn(access: PhoneAccessState): PhoneIndicator | null {
     if (!access.enabled) return null;
     const connected = connectedDevices(access);
-    if (connected.length === 0) {
-        return {
-            connected: false,
-            label: 'On',
-            title: access.listening
-                ? 'Phone access is on, no phone connected'
-                : access.error
-                  ? `Phone access is on, but not listening: ${access.error}`
-                  : 'Phone access is starting',
-        };
-    }
+    if (connected.length === 0) return null;
     const more = connected.length > 1 ? ` +${connected.length - 1}` : '';
     return {
-        connected: true,
         label: connected[0].name + more,
         title: `Phone access is on: ${connected.map((d) => d.name).join(', ')} connected`,
     };

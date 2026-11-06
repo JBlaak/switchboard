@@ -452,7 +452,7 @@ test.describe('merge queue', () => {
         return projectPage(page).getByRole('region', {name: 'Merge queue'});
     }
 
-    test('the queue shows over Pull requests, its rows join the cursor, Retry and + Queue reach main, and Nudge asks first with the exact message', async ({
+    test('the queue shows over Pull requests, its rows join the cursor, Retry and + Queue reach main, Nudge asks first with the exact message, and so does Bump on a CI job', async ({
         page,
         app,
     }) => {
@@ -465,11 +465,11 @@ test.describe('merge queue', () => {
         await expect(projectPage(page).locator('.pp-section h2').nth(0)).toHaveText('Merge queue');
         await expect(projectPage(page).locator('.pp-section h2').nth(1)).toHaveText('Pull requests');
         await expect(queue.locator('.pp-section-head')).toContainText('3 queued · 1 held · 1 failed');
-        await expect(queue.locator('.pp-section-head')).toContainText('Clears in about 105 min');
+        await expect(queue.locator('.pp-section-head')).toContainText('Clears in about 110 min');
         const head = queue.locator('.pp-mq-head');
         await expect(head).toContainText('Stop the login redirect loop');
         await expect(head).toContainText('approved by ana');
-        await expect(head).toContainText('merges in ~9 min');
+        await expect(head).toContainText('merges in ~10 min');
         await expect(head).toContainText('Checks 3 of 5');
         await expect(head).toContainText('Integration tests');
         await expect(head.getByRole('button', {name: 'session “' + LABEL.loginFix + '”'})).toBeVisible();
@@ -477,7 +477,7 @@ test.describe('merge queue', () => {
         await expect(behind).toHaveCount(3);
         await expect(behind.nth(0)).toContainText('Bump express to 5.1');
         await expect(behind.nth(0)).toContainText('next');
-        await expect(behind.nth(0)).toContainText('~33 min');
+        await expect(behind.nth(0)).toContainText('~35 min');
         await expect(behind.nth(1).locator('.pp-mq-member-at')).toHaveText(['↑3', '↑2', '↑1']);
         await expect(behind.nth(1)).toContainText('stack · 3 PRs · merges as one');
         await expect(behind.nth(2)).toHaveClass(/\bis-held\b/);
@@ -537,6 +537,34 @@ test.describe('merge queue', () => {
         );
         await expect.poll(() => dialogsAsked(page)).toEqual([expect.stringContaining(message)]);
         expect((await mergeQueueRequests(app)).filter((request) => request.call === 'queueNudge')).toEqual([]);
+
+        /* When */
+        const jobs = queue.locator('.pp-mq-job');
+        await expect(queue.locator('.pp-mq-pool-head')).toContainText('2 of 2 runners busy');
+        await expect(jobs.filter({hasText: '#1340'})).toContainText('starts ~3 min');
+        await answerDialogs(page, false);
+        await jobs.filter({hasText: '#1370'}).getByRole('button', {name: 'Bump'}).click();
+
+        /* Then */
+        await expect
+            .poll(() => dialogsAsked(page))
+            .toEqual([expect.stringContaining('Bump Unit tests on #1370 Add a health endpoint?')]);
+        expect((await mergeQueueRequests(app)).filter((request) => request.call === 'ciJobBump')).toEqual([]);
+
+        /* When */
+        await answerDialogs(page, true);
+        await jobs.filter({hasText: '#1370'}).getByRole('button', {name: 'Bump'}).click();
+
+        /* Then */
+        await expect
+            .poll(async () => (await mergeQueueRequests(app)).filter((request) => request.call === 'ciJobBump'))
+            .toEqual([
+                {
+                    call: 'ciJobBump',
+                    args: [expect.objectContaining({repository: 'acme/api', jobId: 5, runIds: [30, 40]})],
+                },
+            ]);
+        await expect(jobs.filter({hasText: '#1370'})).toContainText('Bumped: 2 runs re-queued behind it');
     });
 
     forEachAppearance(() => {
@@ -545,7 +573,7 @@ test.describe('merge queue', () => {
             await rowProjectLink(page, S.loginFix).click();
 
             /* Then */
-            await expect(queueSection(page).locator('.pp-mq-head')).toContainText('merges in ~9 min');
+            await expect(queueSection(page).locator('.pp-mq-head')).toContainText('merges in ~10 min');
             await expectScreen(page, 'project-page-merge-queue', {
                 mask: [projectPage(page).getByText(home.projectPath(P.acmeApi), {exact: true})],
             });

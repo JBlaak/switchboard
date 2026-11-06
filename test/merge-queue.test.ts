@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+    expectedMinutes,
     failureKind,
     medianRunMs,
     mergeQueue,
@@ -9,6 +10,7 @@ import {
     queueEvents,
     usesMergeQueue,
     QUEUE_LABELS,
+    QUEUE_STEP_MS,
     type AutomergeStatus,
     type MergeQueueInput,
     type QueueCheckRun,
@@ -277,8 +279,8 @@ test('a stack costs one run per member in the estimates behind it', () => {
 
     /* Then */
     const head = queue.head!.estimateMs!;
-    assert.equal(queue.entries[0].estimateMs, head + 2 * 22 * MIN);
-    assert.equal(queue.entries[1].estimateMs, head + 3 * 22 * MIN);
+    assert.equal(queue.entries[0].estimateMs, head + 2 * 22 * MIN + QUEUE_STEP_MS);
+    assert.equal(queue.entries[1].estimateMs, head + 3 * 22 * MIN + 2 * QUEUE_STEP_MS);
 });
 
 // ── The head ──
@@ -292,7 +294,7 @@ test("the head's stage counts its checks and names the running one", () => {
     assert.equal(queue.head?.runningSince, NOW - 10 * MIN);
 });
 
-test('the head needs what is left of a median run, and at least a minute', () => {
+test('the head needs what is left of a median run and half a queue step, and at least a minute', () => {
     /* Given */
     const late = {...HEAD, checks: [check('Tests', 'running', NOW - 40 * MIN)]};
 
@@ -301,7 +303,7 @@ test('the head needs what is left of a median run, and at least a minute', () =>
     const overstaying = mergeQueue(input([late]));
 
     /* Then */
-    assert.equal(onTime.head?.estimateMs, 12 * MIN);
+    assert.equal(onTime.head?.estimateMs, 12 * MIN + QUEUE_STEP_MS / 2);
     assert.equal(overstaying.head?.estimateMs, MIN);
 });
 
@@ -340,7 +342,8 @@ test('the queue clears when its last queued entry merges', () => {
     const queue = mergeQueue(input(prs));
 
     /* Then */
-    assert.equal(queue.clearsInMs, 12 * MIN + 2 * 22 * MIN);
+    assert.equal(queue.clearsInMs, 12 * MIN + QUEUE_STEP_MS / 2 + 2 * (22 * MIN + QUEUE_STEP_MS));
+    assert.equal(queue.clearsAtPlace, 3);
 });
 
 test('with fewer than three green runs nothing is estimated', () => {
@@ -472,4 +475,70 @@ test('only my own PRs make events: up next, failed as the head, merged', () => {
         [['failed', 1]],
     );
     assert.deepEqual(notMine, []);
+});
+
+// ── Expected merge time ──
+
+test('a head whose CI has not started needs a whole run and a queue step', () => {
+    /* Given */
+    const rebasing = {...HEAD, checks: []};
+
+    /* When */
+    const queue = mergeQueue(input([rebasing, queued(2, 2)]));
+
+    /* Then */
+    assert.equal(queue.head?.estimateMs, 22 * MIN + QUEUE_STEP_MS);
+    assert.equal(queue.entries[0].estimateMs, 2 * (22 * MIN + QUEUE_STEP_MS));
+});
+
+test('an expected merge time is to the minute near the head, and rough from place 3 on: rounded to 5 minutes', () => {
+    /* When */
+    const times = [
+        expectedMinutes(12.4 * MIN, 1),
+        expectedMinutes(20 * 1000, 1),
+        expectedMinutes(36.6 * MIN, 2),
+        expectedMinutes(57.4 * MIN, 3),
+        expectedMinutes(58 * MIN, 4),
+        expectedMinutes(1 * MIN, 3),
+    ];
+
+    /* Then */
+    assert.deepEqual(times, [
+        {minutes: 12, rough: false},
+        {minutes: 1, rough: false},
+        {minutes: 37, rough: false},
+        {minutes: 55, rough: true},
+        {minutes: 60, rough: true},
+        {minutes: 5, rough: true},
+    ]);
+});
+
+// ── A stalled queue ──
+
+const FAILED = pr(5, {
+    labels: [QUEUE_LABELS.optIn, QUEUE_LABELS.failed],
+    automerge: {state: 'failure', description: 'CI failed'},
+});
+
+test('a queue with failed entries, no head and nothing the next pass would pick is stalled', () => {
+    /* Given */
+    const held = pr(4, {labels: [QUEUE_LABELS.optIn], automerge: pending('Waits for an approval')});
+
+    /* When */
+    const onlyFailed = mergeQueue(input([FAILED]));
+    const failedAndHeld = mergeQueue(input([FAILED, held]));
+
+    /* Then */
+    assert.equal(onlyFailed.stalled, true);
+    assert.equal(failedAndHeld.stalled, true);
+});
+
+test('a queue with a head, or an entry the next pass picks, or nothing failed, is not stalled', () => {
+    /* When */
+    const withHead = mergeQueue(input([FAILED, HEAD]));
+    const withQueued = mergeQueue(input([FAILED, queued(2, 2)]));
+    const empty = mergeQueue(input([]));
+
+    /* Then */
+    assert.deepEqual([withHead.stalled, withQueued.stalled, empty.stalled], [false, false, false]);
 });

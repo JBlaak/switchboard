@@ -283,8 +283,9 @@ async function harness() {
     const server = new QuestionHookServer({
         receiver: {
             receive: (...args) => questions.receive(...args),
-            receiveRound: (...args) => questions.receiveRound(...args),
-            promptSubmitted: (...args) => questions.promptSubmitted(...args),
+            turnEnded() {},
+            promptSubmitted() {},
+            subagentChanged() {},
         },
         archiveTool: {
             request: (...args) => tool.request(...args),
@@ -298,7 +299,6 @@ async function harness() {
         endpoint: server,
         log: silentLog,
         clock: {now: () => 0},
-        prompter: {send: () => {}, onExit: () => ({dispose() {}})},
     });
     const tool = new ArchiveToolService({
         registry,

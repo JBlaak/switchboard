@@ -1,12 +1,20 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import {ActiveSession} from '../src/application/model/active-session';
 import {SessionRegistry} from '../src/application/model/session-registry';
 import {QuestionService} from '../src/application/services/question-service';
+import {GrillService} from '../src/application/services/grill-service';
 import {QUESTION_HOOK_TOKEN_HEADER} from '../src/domain/questions/question';
 import {QuestionHookServer} from '../src/infrastructure/http/question-hook-server';
+import {NodeFileSystem} from '../src/infrastructure/fs/node-file-system';
+import {FileTranscriptTail} from '../src/infrastructure/fs/transcript-tail-file';
+import type {TranscriptTail} from '../src/application/ports/transcript-tail';
+import type {EndedTurn} from '../src/domain/grill/model';
 import {fakePty, fakeRenderer, silentLog} from './support/fakes';
 
 /**
@@ -20,9 +28,10 @@ async function harness() {
     const renderer = fakeRenderer();
     const server = new QuestionHookServer({
         receiver: {
-            receive: (...args) => service.receive(...args),
-            receiveRound: (...args) => service.receiveRound(...args),
-            promptSubmitted: (...args) => service.promptSubmitted(...args),
+            receive: (...args) => grill.receive(...args),
+            turnEnded: (...args) => grill.turnEnded(...args),
+            promptSubmitted: (...args) => grill.promptSubmitted(...args),
+            subagentChanged: (...args) => grill.subagentChanged(...args),
         },
         log: silentLog,
     });
@@ -31,16 +40,18 @@ async function harness() {
         send: (sessionId: string, prompt: string) => {
             sent.push([sessionId, prompt]);
         },
+        isBusy: () => false,
+        onIdle: () => ({dispose() {}}),
         onExit: () => ({dispose() {}}),
     };
     const service = new QuestionService({
         registry,
         renderer,
         endpoint: server,
-        prompter,
         log: silentLog,
         clock: {now: () => 0},
     });
+    const grill = new GrillService({registry, renderer, prompter, questions: service, log: silentLog});
     await server.start();
 
     registry.add(
@@ -93,7 +104,12 @@ async function until(predicate: () => boolean): Promise<void> {
 test('the endpoint is only known once listening, and forgotten on stop', async () => {
     /* Given */
     const server = new QuestionHookServer({
-        receiver: {receive: () => ({withdraw() {}}), receiveRound: () => {}, promptSubmitted: () => {}},
+        receiver: {
+            receive: () => ({withdraw() {}}),
+            turnEnded: () => {},
+            promptSubmitted: () => {},
+            subagentChanged: () => {},
+        },
         log: silentLog,
     });
 
@@ -388,13 +404,119 @@ test('the notice routes need the token too', async (t) => {
     t.after(() => h.server.stop());
 
     /* When */
-    const [stop, prompt] = await Promise.all([
+    const [stop, prompt, subagent] = await Promise.all([
         post(`${h.server.url}/stop/s1`, JSON.stringify(stopBody(ROUND_TEXT))),
         post(`${h.server.url}/prompt/s1`, '{}'),
+        post(`${h.server.url}/subagent/s1`, '{}'),
     ]);
 
     /* Then */
     assert.equal(stop.status, 401);
     assert.equal(prompt.status, 401);
+    assert.equal(subagent.status, 401);
     assert.deepEqual(h.service.pending(), []);
+});
+
+// ── The grilling card's notices, as the receiver gets them ──
+
+/** A server whose receiver only records what it is handed. */
+async function recordingServer(transcripts?: TranscriptTail) {
+    const calls: unknown[][] = [];
+    const server = new QuestionHookServer({
+        receiver: {
+            receive: () => ({withdraw() {}}),
+            turnEnded: (launchId: string, turn: EndedTurn, agents: string[] | null) =>
+                void calls.push(['turnEnded', launchId, turn, agents]),
+            promptSubmitted: (launchId: string, prompt: string) =>
+                void calls.push(['promptSubmitted', launchId, prompt]),
+            subagentChanged: (launchId: string, event: string, agentId: string) =>
+                void calls.push(['subagentChanged', launchId, event, agentId]),
+        },
+        transcripts,
+        log: silentLog,
+    });
+    await server.start();
+    const send = (route: string, body: unknown) =>
+        post(`${server.url}/${route}/s1`, JSON.stringify(body), {[QUESTION_HOOK_TOKEN_HEADER]: server.token});
+    return {server, calls, send};
+}
+
+const line = (entry: Record<string, unknown>) => JSON.stringify(entry);
+
+test("a Stop hands on the turn read from the end of the session's transcript, with its background agents", async (t) => {
+    /* Given */
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'grill-turn-'));
+    t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+    const transcript = path.join(dir, 's.jsonl');
+    fs.writeFileSync(
+        transcript,
+        [
+            line({type: 'user', uuid: 'u1', message: {role: 'user', content: 'grill me'}}),
+            line({type: 'assistant', uuid: 'a1', message: {content: [{type: 'text', text: 'Researching.'}]}}),
+            line({type: 'assistant', uuid: 'a2', message: {content: [{type: 'text', text: 'The round.'}]}}),
+        ].join('\n') + '\n',
+    );
+    const h = await recordingServer(new FileTranscriptTail(new NodeFileSystem()));
+    t.after(() => h.server.stop());
+
+    /* When */
+    const res = await h.send('stop', {
+        ...stopBody('The round.'),
+        transcript_path: transcript,
+        background_tasks: [{id: 'ag1', type: 'subagent'}],
+    });
+
+    /* Then */
+    assert.deepEqual(await res.json(), {});
+    await until(() => h.calls.length === 1);
+    assert.deepEqual(h.calls, [
+        [
+            'turnEnded',
+            's1',
+            {
+                texts: [
+                    {id: 'a1', text: 'Researching.'},
+                    {id: 'a2', text: 'The round.'},
+                ],
+            },
+            ['ag1'],
+        ],
+    ]);
+});
+
+test("a Stop whose transcript cannot be read hands on the Stop's last message alone", async (t) => {
+    /* Given */
+    const h = await recordingServer({read: () => null});
+    t.after(() => h.server.stop());
+
+    /* When */
+    await h.send('stop', {...stopBody('All done.'), transcript_path: '/nowhere.jsonl'});
+    await h.send('stop', stopBody(undefined));
+
+    /* Then */
+    await until(() => h.calls.length === 2);
+    assert.deepEqual(h.calls, [
+        ['turnEnded', 's1', {texts: [{id: 'stop-e6aa44429812', text: 'All done.'}]}, null],
+        ['turnEnded', 's1', {texts: []}, null],
+    ]);
+});
+
+test('a prompt hands on its text, and subagent starts and stops their agent', async (t) => {
+    /* Given */
+    const h = await recordingServer();
+    t.after(() => h.server.stop());
+
+    /* When */
+    await h.send('prompt', {hook_event_name: 'UserPromptSubmit', prompt: 'Q1: yes'});
+    await h.send('subagent', {hook_event_name: 'SubagentStart', agent_id: 'ag1', agent_type: 'Explore'});
+    await h.send('subagent', {hook_event_name: 'SubagentStop', agent_id: 'ag1'});
+    const junk = await h.send('subagent', {hook_event_name: 'SubagentStop'});
+
+    /* Then */
+    assert.deepEqual(await junk.json(), {});
+    assert.deepEqual(h.calls, [
+        ['promptSubmitted', 's1', 'Q1: yes'],
+        ['subagentChanged', 's1', 'start', 'ag1'],
+        ['subagentChanged', 's1', 'stop', 'ag1'],
+    ]);
 });

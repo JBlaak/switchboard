@@ -8,9 +8,10 @@
  * handed a way to reply and will be told if the request is withdrawn.
  *
  * A grilling round is the other kind of set: questions written out at the end
- * of a turn, which the Stop hook hands us after the fact. Nothing is held for
- * it. It waits until it is answered — by typing the reply into the session —
- * or until the user replies in the terminal, or the session ends.
+ * of a turn. Nothing is held for it, and it is not answered here: the
+ * GrillService keeps the round and its drafts for the grilling card, and
+ * opens and closes this set so that everything following pending questions
+ * (the sidebar, the panel, the phone's attention) sees the round as well.
  *
  * Pending sets are keyed by the ActiveSession object rather than an id,
  * because a fork or plan-accept re-keys a running session while its question
@@ -22,7 +23,6 @@ import {
     questionHookResponse,
     questionHookSettings,
 } from '../../domain/questions/question';
-import {grillReply} from '../../domain/questions/grill';
 import type {
     Answers,
     AskedQuestions,
@@ -35,9 +35,7 @@ import type {SessionRegistry} from '../model/session-registry';
 import type {Clock} from '../ports/clock';
 import type {Logger} from '../ports/logger';
 import type {QuestionHookEndpoint} from '../ports/question-hook';
-import type {Disposable} from '../ports/git-workspace';
 import type {RendererGateway} from '../ports/renderer-gateway';
-import type {SessionPrompter} from '../ports/session-prompter';
 
 /** How the hook request is answered; called at most once per request. */
 export type QuestionReply = (json: Record<string, unknown>) => void;
@@ -73,11 +71,9 @@ interface AskEntry extends BaseEntry {
     readonly deadline: number;
 }
 
-/** A grilling round, answered by typing into the session. */
+/** A grilling round open on the grilling card, which answers it by typing into the session. */
 interface GrillEntry extends BaseEntry {
     readonly source: 'grill';
-    /** Withdraws the round if the session ends first. */
-    exitWatch: Disposable | null;
 }
 
 type Entry = AskEntry | GrillEntry;
@@ -86,16 +82,12 @@ export interface QuestionServiceDeps {
     registry: SessionRegistry;
     renderer: RendererGateway;
     endpoint: QuestionHookEndpoint;
-    /** Types a grilling round's answers in, and says when its session ends. */
-    prompter: Pick<SessionPrompter, 'send' | 'onExit'>;
     clock: Clock;
     log: Logger;
 }
 
 export class QuestionService {
     private readonly pendingBySession = new Map<ActiveSession, Entry>();
-    /** Numbers the made-up ids of grilling rounds. */
-    private rounds = 0;
 
     constructor(private readonly deps: QuestionServiceDeps) {}
 
@@ -147,44 +139,56 @@ export class QuestionService {
     }
 
     /**
-     * A turn ended with a grilling round, for the session launched as
-     * `launchId`. Like a new AskUserQuestion, it replaces whatever the session
-     * was still asking: Claude has moved on from it.
+     * The grilling card opened a round for the session launched as
+     * `launchId`, or revised it. The round itself, its drafts
+     * and its sending are the GrillService's; this keeps the pending set that
+     * says a round is open, which the sidebar, the panel and the phone's
+     * attention follow. Its `questions` summarise the round.
+     *
+     * A new round replaces whatever the session was still asking, as a new
+     * AskUserQuestion does. The same round again (a revision) only updates the
+     * set's questions: the renderer, which keeps a set it already has, carries
+     * on; the phones get the fresh list.
      */
-    public receiveRound(launchId: string, questions: Question[]): void {
-        const {registry, renderer, prompter, clock, log} = this.deps;
+    public openRound(launchId: string, toolUseId: string, questions: Question[]): void {
+        const {registry, renderer, clock, log} = this.deps;
         const found = registry.find(launchId);
         if (!found) return;
         const {key, session} = found;
+        const previous = this.pendingBySession.get(session);
+        if (previous?.source === 'grill' && previous.toolUseId === toolUseId) {
+            const entry: GrillEntry = {...previous, questions};
+            this.pendingBySession.set(session, entry);
+            renderer.questionsAsked(this.toPending(session, entry));
+            return;
+        }
         this.replace(session);
 
-        const askedAt = clock.now();
-        const entry: GrillEntry = {
-            source: 'grill',
-            key,
-            toolUseId: `grill-${askedAt}-${++this.rounds}`,
-            questions,
-            askedAt,
-            exitWatch: null,
-        };
+        const entry: GrillEntry = {source: 'grill', key, toolUseId, questions, askedAt: clock.now()};
         this.pendingBySession.set(session, entry);
-        entry.exitWatch = prompter.onExit(key, () => {
-            if (this.pendingBySession.get(session) === entry) this.settle(session, entry, 'withdrawn');
-        });
         log.info(
-            `[questions] session=${currentId(session, key)} tool=${entry.toolUseId} grilling round of ${questions.length} question(s)`,
+            `[questions] session=${currentId(session, key)} tool=${toolUseId} grilling round of ${questions.length} question(s)`,
         );
         renderer.questionsAsked(this.toPending(session, entry));
     }
 
     /**
-     * A prompt went in to the session launched as `launchId`. A grilling round
-     * still waiting has been answered in the terminal, or passed over.
+     * The grilling round of the session launched as `launchId` closed: sent
+     * (`answered`, from where), replied to in the terminal, or the session
+     * ended (`withdrawn`). The session may be gone from the registry already
+     * when it ended, so its set is also found by any id it has had.
      */
-    public promptSubmitted(launchId: string): void {
+    public closeRound(launchId: string, outcome: QuestionsOutcome, answeredOn?: 'mac' | 'phone'): void {
         const found = this.deps.registry.find(launchId);
-        const entry = found ? this.pendingBySession.get(found.session) : undefined;
-        if (found && entry?.source === 'grill') this.settle(found.session, entry, 'withdrawn');
+        let session: ActiveSession | undefined = found?.session;
+        if (!session) {
+            for (const [candidate, entry] of this.pendingBySession) {
+                if (entry.source === 'grill' && answersTo(candidate, entry.key, launchId)) session = candidate;
+            }
+        }
+        const entry = session ? this.pendingBySession.get(session) : undefined;
+        if (!session || entry?.source !== 'grill') return;
+        this.settle(session, entry, outcome, answeredOn);
     }
 
     /**
@@ -203,10 +207,10 @@ export class QuestionService {
         if (!found || !entry || entry.toolUseId !== toolUseId) {
             return {ok: false, error: 'These questions are no longer waiting'};
         }
-        // Settled first: the prompt typed in fires UserPromptSubmit, which must find nothing left to withdraw.
+        // A round's drafts and sending are the grilling card's (GrillService).
+        if (entry.source === 'grill') return {ok: false, error: 'Answer this round on the grilling card'};
         this.settle(found.session, entry, 'answered', answeredOn);
-        if (entry.source === 'ask') entry.reply(questionHookResponse(entry.asked.toolInput, answers));
-        else this.deps.prompter.send(found.key, grillReply(entry.questions, answers));
+        entry.reply(questionHookResponse(entry.asked.toolInput, answers));
         return {ok: true};
     }
 
@@ -228,6 +232,7 @@ export class QuestionService {
                 ask: `${url}/ask/${id}`,
                 stop: `${url}/stop/${id}`,
                 prompt: `${url}/prompt/${id}`,
+                subagent: `${url}/subagent/${id}`,
                 onePassword: `${url}/onepassword/${id}`,
             },
             token,
@@ -252,7 +257,6 @@ export class QuestionService {
         answeredOn?: 'mac' | 'phone',
     ): void {
         this.pendingBySession.delete(session);
-        if (entry.source === 'grill') entry.exitWatch?.dispose();
         const sessionId = currentId(session, entry.key);
         this.deps.log.info(
             `[questions] session=${sessionId} tool=${toolUseLabel(entry.toolUseId)} ${outcome}${answeredOn ? ` on ${answeredOn}` : ''}`,
@@ -280,6 +284,11 @@ export class QuestionService {
 /** A tool-use id for the log; a hook body without one parses to ''. */
 function toolUseLabel(toolUseId: string): string {
     return toolUseId || '(none)';
+}
+
+/** Whether a session (perhaps gone from the registry) has answered to `id`. */
+function answersTo(session: ActiveSession, key: string, id: string): boolean {
+    return key === id || session.realSessionId === id || (session.priorIds?.has(id) ?? false);
 }
 
 /** The id the renderer knows a session by now — as the lifecycle computes it. */

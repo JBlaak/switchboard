@@ -24,6 +24,7 @@ import {bufferTerminalData} from '../features/terminal/write-buffer';
 import {installTerminalProbe} from '../features/terminal/terminal-probe';
 import {TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals} from '../features/terminal/terminal-themes';
 import {installQuestions} from '../ui/questions/actions';
+import {installGrill} from '../ui/grill/actions';
 import {mountReactRoot} from '../ui/Root';
 import {countRunning} from '../ui/footer/actions';
 import {installFooter} from '../ui/footer/install-footer';
@@ -56,6 +57,7 @@ export function bootstrap(): void {
     installSessionList();
     installFooter();
     installQuestions();
+    installGrill();
     installMainArea();
     installSessionWork();
     installPlan();

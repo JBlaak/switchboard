@@ -14,6 +14,7 @@
  * field for field, so change them together and bump PROTOCOL_VERSION when an
  * old app could misread a new message.
  */
+import type {GrillAnswer, GrillView} from '../grill/model';
 import type {Answers, PendingQuestions, QuestionsOutcome} from '../questions/question';
 import type {ChatMessage} from '../session/chat';
 
@@ -191,6 +192,25 @@ export type ClientMessage =
     | {type: 'voice-end'; voiceId: string}
     /** The user slid off the mic: drop the recording. Nothing follows. */
     | {type: 'voice-cancel'; voiceId: string}
+    // The grilling card. Each names the round and, where a place is given,
+    // the revision the phone saw it in. A failure answers `grill-error`;
+    // success shows in the next `grill`.
+    /** Draft (or clear, for null) the answer to the question at `place`. */
+    | {
+          type: 'grill-answer';
+          sessionId: string;
+          roundId: string;
+          revision: number;
+          place: number;
+          answer: GrillAnswer | null;
+      }
+    /** Ask about the question at `place`: `text`, or null for Wait, what?. */
+    | {type: 'grill-ask'; sessionId: string; roundId: string; revision: number; place: number; text: string | null}
+    /** Type the answers in now. */
+    | {type: 'grill-send'; sessionId: string; roundId: string}
+    /** Send when research is done. */
+    | {type: 'grill-queue'; sessionId: string; roundId: string}
+    | {type: 'grill-cancel-queue'; sessionId: string; roundId: string}
     /**
      * Show the session as a chat: `chat` with its messages so far, then
      * `chat-append` as its transcript grows, until `chat-unsubscribe` or the
@@ -265,6 +285,10 @@ export type ServerMessage =
     | {type: 'voice-result'; voiceId: string; result: VoiceResult}
     /** Sent on welcome and whenever the level or charging changes; null on a Mac without a battery. */
     | {type: 'mac-battery'; battery: MacBattery | null}
+    /** Every open grilling round with its drafts, on welcome and after every change. Older phones ignore it. */
+    | {type: 'grill'; views: GrillView[]}
+    /** A `grill-*` call from this phone failed; `error` is in words for the card. */
+    | {type: 'grill-error'; sessionId: string; roundId: string; error: string}
     /**
      * A subscribed session's chat, whole: on `chat-subscribe`, and again when
      * it starts over (a re-key moved it to a new transcript). The latest

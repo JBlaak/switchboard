@@ -6,10 +6,15 @@
  * PR held for @sam's review; #1360 failed its unit tests; #1380's status is
  * one the page does not know; and a draft, a PR waiting on its base and an
  * approved one nobody queued are not in it yet.
+ *
+ * Its CI job queue: one pool of two Mac runners, both busy with the head's
+ * tests and #1331's, and three jobs queued behind them, the last of which
+ * (#1370's) can be bumped past the two ahead of it.
  */
 import {FIXTURE_NOW} from '../support/fixture-home';
 import {acmeOverview, overviewPullRequest} from './plans';
 import {mergeQueue, type QueuePullRequest} from '../../src/domain/project/merge-queue';
+import {ciJobQueue, type CiJob, type CiJobQueueAnswer} from '../../src/domain/project/ci-job-queue';
 import type {ProjectOverview, ProjectPullRequest} from '../../src/domain/project/overview';
 import type {MergeQueueStub} from '../support/main-process';
 
@@ -130,9 +135,60 @@ export function acmeQueueOverview(): ProjectOverview {
     };
 }
 
+const MAC = ['self-hosted', 'macOS', 'ARM64'];
+
+function ciJob(id: number, pr: number, title: string, fields: Partial<CiJob> = {}): CiJob {
+    return {
+        id,
+        runId: id * 10,
+        url: `https://github.com/${REPO}/actions/runs/${id * 10}/job/${id}`,
+        workflow: 'CI',
+        workflowId: 1,
+        name: 'Unit tests',
+        status: 'queued',
+        createdAt: FIXTURE_NOW - 5 * MIN,
+        startedAt: null,
+        runner: null,
+        labels: MAC,
+        on: {kind: 'pr', number: pr, title},
+        actor: 'ana',
+        ...fields,
+    };
+}
+
+/** The CI job queue: two busy Macs, three jobs waiting; each job typically runs 12 minutes. */
+export function acmeCiJobs(): CiJobQueueAnswer {
+    const running = (id: number, pr: number, title: string, runner: string, minutes: number) =>
+        ciJob(id, pr, title, {
+            status: 'running',
+            runner,
+            createdAt: FIXTURE_NOW - (minutes + 1) * MIN,
+            startedAt: FIXTURE_NOW - minutes * MIN,
+        });
+    const pools = ciJobQueue({
+        jobs: [
+            running(1, 1320, 'Stop the login redirect loop', 'mac-1', 9),
+            running(2, 1331, 'Bump express to 5.1', 'mac-2', 4),
+            ciJob(3, 1340, 'Split the auth module', {createdAt: FIXTURE_NOW - 6 * MIN, actor: 'sam'}),
+            ciJob(4, 1350, 'Bump TypeScript to 5.9', {createdAt: FIXTURE_NOW - 4 * MIN, actor: 'sam'}),
+            ciJob(5, 1370, 'Add a health endpoint', {createdAt: FIXTURE_NOW - 2 * MIN}),
+        ],
+        runners: [
+            {name: 'mac-1', labels: MAC, busy: true, online: true},
+            {name: 'mac-2', labels: MAC, busy: true, online: true},
+        ],
+        typical: () => 12 * MIN,
+        otherSince: () => null,
+        now: FIXTURE_NOW,
+    });
+    return {ok: true, pools, fetchedAt: FIXTURE_NOW, notes: {}};
+}
+
 /** The queue's channels: no errands yet, and every button answering as it would. */
 export function mergeQueueStub(fields: Partial<MergeQueueStub> = {}): MergeQueueStub {
     return {
+        ciJobs: acmeCiJobs(),
+        bump: {ok: true, runs: 2},
         errands: [],
         nudge: {ok: true, errandId: 'errand-nudge', prompt: 'Send a Slack message for me.'},
         fix: {ok: true, kind: 'queued', sessionId: 'not-a-session', activityId: 'activity-1'},

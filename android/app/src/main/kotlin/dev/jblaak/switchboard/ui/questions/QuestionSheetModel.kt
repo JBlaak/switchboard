@@ -6,7 +6,6 @@ import dev.jblaak.switchboard.protocol.ClientMessage
 import dev.jblaak.switchboard.protocol.PendingQuestions
 import dev.jblaak.switchboard.protocol.Question
 import dev.jblaak.switchboard.protocol.QuestionsOutcome
-import dev.jblaak.switchboard.protocol.QuestionsSource
 import dev.jblaak.switchboard.protocol.ServerMessage
 import dev.jblaak.switchboard.ui.connected.PhoneLink
 import kotlinx.coroutines.CoroutineScope
@@ -18,8 +17,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Answering one set of questions, a question at a time: AskUserQuestion's options, multi-select and own words, or
- * a grilling round's recommendation. The answers go back together, and answering makes this phone the session's
+ * Answering one AskUserQuestion set, a question at a time: its options, multi-select and own words. (A grilling
+ * round has a sheet of its own, [GrillSheetModel].) The answers go back together, and answering makes this phone the session's
  * active device (the Mac follows with `owner`).
  *
  * The first answer wins: when the Mac (or another phone) answers first, or the CLI gives up on the questions,
@@ -77,19 +76,6 @@ class QuestionSheetModel(
 
     fun back() {
         mutableState.update { if (it.step > 0 && it.phase == QuestionPhase.Answering) it.copy(step = it.step - 1) else it }
-    }
-
-    /** A grilling round: leave this question unanswered and go on. */
-    fun skip() {
-        updateDraft { _, _ -> Draft(emptyList(), "") }
-        next()
-    }
-
-    /** A grilling round: "Yes, go with that", and on. */
-    fun acceptRecommendation() {
-        val label = mutableState.value.question.options.firstOrNull()?.label ?: return
-        pick(label)
-        next()
     }
 
     /** After a failed send: back to the answers, to try again. */
@@ -164,11 +150,10 @@ data class QuestionSheetState(
 ) {
     val question: Question get() = set.questions[step]
     val draft: Draft get() = drafts[step]
-    val isGrill: Boolean get() = set.source == QuestionsSource.Grill
     val isLastStep: Boolean get() = step == set.questions.lastIndex
 
-    /** A grilling round may leave questions unanswered; AskUserQuestion needs every one. */
-    val canGoOn: Boolean get() = isGrill || answerOf(question, draft) != null
+    /** AskUserQuestion needs every question answered. */
+    val canGoOn: Boolean get() = answerOf(question, draft) != null
 }
 
 /** What has been picked or typed for one question so far. */

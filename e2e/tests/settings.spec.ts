@@ -24,6 +24,7 @@ const BERLIN = {name: 'Berlin', latitude: 52.52, longitude: 13.4};
 
 async function openGlobalSettings(page: Page) {
     await page.getByRole('button', {name: 'Global settings', exact: true}).click();
+    await page.getByRole('menuitem', {name: 'All settings…'}).click();
     await expect(globalTitle(page)).toBeVisible();
 }
 

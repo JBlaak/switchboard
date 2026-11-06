@@ -62,6 +62,7 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
     remoteStatus: {type: 'remoteStatus', sessionId: 's1', status: {phase: 'connecting'}, receivedAt: 5},
     questionsAsked: {type: 'questionsAsked', pending: asked('s1', 't1')},
     questionsSettled: {type: 'questionsSettled', settled: {sessionId: 's1', toolUseId: 't1', outcome: 'answered'}},
+    grillChanged: {type: 'grillChanged', changed: {sessionId: 's1', view: null}},
     pageShown: {type: 'pageShown', page: {sessionId: 's1', title: 'Terms', html: '<p>x</p>', shownAt: 5}},
     projectsChanged: {type: 'projectsChanged'},
     statusUpdate: {type: 'statusUpdate', text: 'Scanning…', kind: 'active'},

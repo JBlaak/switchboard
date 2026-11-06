@@ -252,7 +252,12 @@ test('a session shows a page over the socket', async (t) => {
     const registry = new SessionRegistry();
     const renderer = fakeRenderer();
     const server = new QuestionHookServer({
-        receiver: {receive: () => ({withdraw() {}}), receiveRound: () => {}, promptSubmitted: () => {}},
+        receiver: {
+            receive: () => ({withdraw() {}}),
+            turnEnded: () => {},
+            promptSubmitted: () => {},
+            subagentChanged: () => {},
+        },
         archiveTool: {request: archiveNever, turnEnded: () => {}},
         pageTool: new PageToolService({registry, renderer, clock: {now: () => 7}, log: silentLog}),
         log: silentLog,
