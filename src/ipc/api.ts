@@ -19,6 +19,7 @@ import type {ShellProfile} from '../domain/shell/shell-profile';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../domain/session-work/model';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
+import type {BumpRequest, BumpResult, CiJobQueueAnswer} from '../domain/project/ci-job-queue';
 import type {ActionRequest, ActionResult, CancelResult} from '../domain/session-work/actions';
 import type {CommentRequest, ReviewRequest, ReviewResult} from '../domain/session-work/review';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
@@ -289,6 +290,13 @@ export interface SwitchboardApi {
     queueErrandAbandoned(errandId: string): Promise<ErrandResult>;
     /** The repository's errands (every one without it), oldest first, with how far each got. */
     queueErrands(repository?: string): Promise<QueueErrandView[]>;
+    /** The repository's running and queued jobs on self-hosted runners, by runner pool; asked while the section shows. */
+    ciJobQueue(repository: string): Promise<CiJobQueueAnswer>;
+    /**
+     * Bump a queued job, after the user said yes to the runs it moves: those
+     * runs are cancelled, and re-run once each stopped so they queue behind it.
+     */
+    ciJobBump(request: BumpRequest): Promise<BumpResult>;
 
     // ── Tasks: BlaakTasks in Switchboard (#248) ──
     // While no BlaakTasks URL is set, the BlaakTasks calls answer `{ kind: 'off' }`

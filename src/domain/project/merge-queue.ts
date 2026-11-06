@@ -12,8 +12,15 @@
  *
  * Estimates come from the repository's recent green CI runs: the median is one
  * run. The head needs what is left of its run, and every entry behind it one
- * more run per PR in it (a stack's CI runs member after member). A held entry
- * adds nothing, since the queue passes over it.
+ * more run per PR in it (a stack's CI runs member after member) and one queue
+ * step (the rebase and push before CI, the merge after it). A held entry adds
+ * nothing, since the queue passes over it. An estimate is good near the head
+ * and rough further back, so from place 3 on it is rounded to 5 minutes and
+ * shown faded (`expectedMinutes`).
+ *
+ * A queue with failed entries, no head and nothing the next pass would pick
+ * (held entries are passed over) is stalled: nothing in it moves until
+ * someone acts on a failed one.
  */
 import type {ReviewDecision} from './overview';
 
@@ -36,6 +43,16 @@ export const MIN_RUNS_FOR_ESTIMATE = 3;
 
 /** The shortest estimate shown, so a run that overstays its median never says "0 min". */
 export const MIN_ESTIMATE_MS = 60_000;
+
+/**
+ * A queue step: the queue's rebase and push before an entry's CI, and its
+ * merge after it, about a minute together. Every entry costs one CI run per
+ * PR in it and one step; the head, whose rebase is behind it, half of one.
+ */
+export const QUEUE_STEP_MS = 60_000;
+
+/** From this place on an estimate is rough: rounded to 5 minutes and shown faded. */
+export const ROUGH_FROM_PLACE = 3;
 
 // ── What is read ──
 
@@ -248,12 +265,37 @@ export interface MergeQueue {
     outside: OutsideEntry[];
     unknown: UnknownEntry[];
     counts: {queued: number; held: number; failed: number};
+    /**
+     * Failed entries, no head, and nothing queued that the next pass would
+     * pick (held entries are passed over): nothing moves until a failed one
+     * is acted on.
+     */
+    stalled: boolean;
     /** Ms until every queued entry has merged; null without estimates or with nothing queued. */
     clearsInMs: number | null;
+    /** The place of the entry `clearsInMs` is about (1 for the head alone); null with it. */
+    clearsAtPlace: number | null;
     /** One CI run, the median of the green ones; null with fewer than MIN_RUNS_FOR_ESTIMATE. */
     runMs: number | null;
     /** Pills by PR number. */
     pills: Record<number, QueuePill>;
+}
+
+/** An expected merge time as shown: whole minutes, and whether it is rough (rounded to 5, faded). */
+export interface ExpectedMinutes {
+    minutes: number;
+    rough: boolean;
+}
+
+/**
+ * How `ms` reads at `place` (the head is 1): to the minute near the head, and
+ * from place 3 on, where the guess is rough, to 5 minutes. Never under one
+ * minute, or under five once rough.
+ */
+export function expectedMinutes(ms: number, place: number): ExpectedMinutes {
+    const minutes = ms / 60_000;
+    if (place >= ROUGH_FROM_PLACE) return {minutes: Math.max(5, Math.round(minutes / 5) * 5), rough: true};
+    return {minutes: Math.max(1, Math.round(minutes)), rough: false};
 }
 
 /** Whether a repository uses the queue: one of its open PRs carries a queue label or status. */
@@ -386,7 +428,7 @@ export function mergeQueue(input: MergeQueueInput): MergeQueue {
     const entries: QueuedEntry[] = [];
     let position = 2;
     for (const {entry} of queued) {
-        if (elapsed !== null && runMs !== null) elapsed += runMs * entry.members.length;
+        if (elapsed !== null && runMs !== null) elapsed += runMs * entry.members.length + QUEUE_STEP_MS;
         else elapsed = null;
         entries.push({
             ...entry,
@@ -408,6 +450,7 @@ export function mergeQueue(input: MergeQueueInput): MergeQueue {
 
     const lastQueued = [...entries].reverse().find((entry) => entry.state.kind === 'queued');
     const clearsInMs = runMs === null ? null : (lastQueued?.estimateMs ?? head?.estimateMs ?? null);
+    const clearsAtPlace = clearsInMs === null ? null : (lastQueued?.position ?? 1);
 
     return {
         head,
@@ -420,7 +463,9 @@ export function mergeQueue(input: MergeQueueInput): MergeQueue {
             held: entries.filter((entry) => entry.state.kind === 'held').length,
             failed: failed.length,
         },
+        stalled: head === null && !lastQueued && failed.length > 0,
         clearsInMs,
+        clearsAtPlace,
         runMs,
         pills: pillsOf(prs, input.trunk, head, entries, failed, outside),
     };
@@ -450,11 +495,13 @@ function headOf(
         stage = {kind: 'merging'}; // none running or queued
     else stage = {kind: 'checks', done, total: checks.length, running: running?.name ?? null, waitsForCiOn};
 
+    // What is left of its CI, then half a queue step for the merge; a whole run and step before its CI starts.
     let estimateMs: number | null = null;
     if (runMs !== null) {
         if (stage.kind === 'merging') estimateMs = MIN_ESTIMATE_MS;
-        else if (runningSince !== null) estimateMs = Math.max(MIN_ESTIMATE_MS, runMs - (now - runningSince));
-        else estimateMs = runMs;
+        else if (runningSince !== null) {
+            estimateMs = Math.max(MIN_ESTIMATE_MS, Math.max(0, runMs - (now - runningSince)) + QUEUE_STEP_MS / 2);
+        } else estimateMs = runMs + QUEUE_STEP_MS;
         // A stack's members above the one running still need a run each.
         if (entry.stack && waitsForCiOn !== null) {
             const index = entry.members.findIndex((member) => member.number === waitsForCiOn);

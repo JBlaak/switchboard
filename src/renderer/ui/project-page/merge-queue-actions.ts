@@ -1,7 +1,8 @@
 /**
  * What the project page's Merge queue section does (#315): its buttons
- * (Nudge, Fix in session, Retry and a PR row's + Queue), and reading
- * the queue's errands again with each overview.
+ * (Nudge, Fix in session, Retry and a PR row's + Queue), reading
+ * the queue's errands again with each overview, and the CI job queue under
+ * it: reading it, and Bump on a queued job.
  *
  * Switchboard never moves a PR itself: Retry and + Queue only remove or add
  * the queue's own labels, through main. Nudge and a new Fix answer a first
@@ -18,6 +19,7 @@ import {dispatch, getState} from '../../state/app-store';
 import {queueActionKey, type QueueActionOutcome} from '../../state/project-page-slice';
 import {heldForReview, nudgeMessage} from '../../../domain/project/queue-errands';
 import type {FailedEntry, MergeQueue} from '../../../domain/project/merge-queue';
+import {bumpConfirm, bumpedRuns, type CiJob, type JobPool} from '../../../domain/project/ci-job-queue';
 
 type Started = {ok: true; sessionId: string} | {ok: false; reason: string};
 
@@ -208,4 +210,62 @@ export function retryQueueEntry(repository: string, number: number): Promise<voi
 /** + Queue (a PR row): `automerge:opt-in` added. */
 export function optInToQueue(repository: string, number: number): Promise<void> {
     return labelWrite(queueActionKey('opt-in', number), () => window.api.queueOptIn(repository, number));
+}
+
+/** Read the CI job queue of `repository`; a failed read keeps what the section had. */
+export async function loadCiJobQueue(repository: string): Promise<void> {
+    try {
+        const answer = await window.api.ciJobQueue(repository);
+        if (answer && typeof answer === 'object') dispatch({type: 'projectCiJobQueueAnswered', repository, answer});
+    } catch (err) {
+        dispatch({
+            type: 'projectCiJobQueueAnswered',
+            repository,
+            answer: {ok: false, reason: reasonOf(err, 'GitHub did not answer')},
+        });
+    }
+}
+
+/**
+ * Bump a queued job: a plain confirm that names every run it cancels and
+ * re-runs, and whose it is; on yes main cancels those runs and re-runs them
+ * once they stopped, so they queue behind it. Nothing happens on no, or when
+ * nothing is ahead of it to move.
+ */
+export async function bumpCiJob(
+    repository: string,
+    pools: readonly JobPool[],
+    job: CiJob,
+    headNumbers: readonly number[],
+): Promise<void> {
+    const key = queueActionKey('bump', job.id);
+    if (busy(key)) return;
+    const runs = bumpedRuns(pools, job.id, headNumbers);
+    if (runs.length === 0) return;
+    if (!effects.confirm(bumpConfirm(job, runs))) return;
+    dispatch({type: 'projectQueueActionAsked', key});
+    let outcome: QueueActionOutcome;
+    try {
+        const result = await window.api.ciJobBump({
+            repository,
+            jobId: job.id,
+            runIds: runs.map((run) => run.runId),
+            headNumbers: [...headNumbers],
+        });
+        outcome = result.ok
+            ? {
+                  phase: 'note',
+                  text: `Bumped: ${result.runs === 1 ? '1 run' : result.runs + ' runs'} re-queued behind it`,
+              }
+            : {phase: 'failed', reason: result.reason};
+    } catch (err) {
+        outcome = {phase: 'failed', reason: reasonOf(err, 'Could not bump the job')};
+    }
+    answered(key, outcome);
+    await loadCiJobQueue(repository);
+}
+
+/** A CI job's page in the browser. */
+export function openCiJob(url: string): void {
+    void window.api.openExternal(url);
 }
