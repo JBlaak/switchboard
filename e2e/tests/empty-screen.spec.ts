@@ -9,7 +9,7 @@
  * the running count, and a reaction beating a slow gather.
  */
 import {test, expect, forEachAppearance} from '../support/test';
-import {expectScreen, openSession, searchBox, sidebar} from '../support/app';
+import {expectScreen, openSession, searchBox, sidebar, terminalStatus} from '../support/app';
 import {hostStubCalls} from '../support/main-process';
 import {LABEL, S, emptyFixture, standardFixture} from '../fixtures/standard';
 import type {Page} from '@playwright/test';
@@ -58,7 +58,7 @@ test.describe('patch', () => {
     test.describe('near the limit, in the rain', () => {
         test.use({
             stubs: {
-                weather: {sky: 'rain', isDay: true, location: 'Utrecht', fetchedAt: 0},
+                weather: {sky: 'rain', isDay: true, location: 'Utrecht', fetchedAt: 0, sunrise: null, sunset: null},
                 usage: {
                     limits: [
                         {
@@ -106,6 +106,30 @@ test.describe('patch', () => {
             /* Then */
             // The second appearance with one session running.
             await expect(says(page, 'Missed you.')).toBeVisible();
+        });
+    });
+
+    test.describe('with its family', () => {
+        test.use({fixture: standardFixture()});
+
+        test('a running session is out with the family, and choosing its Patch opens it again', async ({page, home}) => {
+            /* Given */
+            await openSession(page, home, LABEL.loginFix, S.loginFix);
+            await sidebar(page).getByText('Recent', {exact: true}).click();
+            const family = page.getByTestId('patch-family');
+            const member = family.locator(`[data-member="${S.loginFix}"]`);
+            await expect(member).toBeVisible();
+            await expect(member).toHaveAttribute('aria-label', /^Fix the login redirect loop: /);
+            await expectScreen(page, 'empty-screen-family');
+
+            /* When */
+            // Members never stand still (they breathe, bob or wave), so take the keyboard path in.
+            await member.focus();
+            await page.keyboard.press('Enter');
+
+            /* Then */
+            await expect(terminalStatus(page)).toHaveText('Running');
+            await expect(page.locator('#placeholder')).toBeHidden();
         });
     });
 

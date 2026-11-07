@@ -34,6 +34,10 @@ export interface Weather {
     location: string;
     /** Epoch milliseconds the forecast was fetched at. */
     fetchedAt: number;
+    /** Epoch milliseconds of today's sunrise at the location, or null when the forecast did not say. */
+    sunrise: number | null;
+    /** Epoch milliseconds of today's sunset at the location, or null when the forecast did not say. */
+    sunset: number | null;
 }
 
 /**
@@ -60,10 +64,41 @@ function isFiniteNumber(value: unknown): value is number {
     return typeof value === 'number' && Number.isFinite(value);
 }
 
+const LOCAL_ISO_MINUTE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+/**
+ * A local wall-clock time like "2026-11-06T07:48" at a UTC offset, as epoch
+ * milliseconds, or null when it does not parse.
+ *
+ * Open-Meteo sends daily times without an offset when asked for
+ * `timezone=auto`, and the offset separately as `utc_offset_seconds`.
+ */
+function epochFromLocalIso(value: unknown, utcOffsetSeconds: number): number | null {
+    if (typeof value !== 'string') return null;
+    const match = LOCAL_ISO_MINUTE.exec(value);
+    if (!match) return null;
+    const [year, month, day, hour, minute] = match.slice(1).map(Number);
+    if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return null;
+    return Date.UTC(year, month - 1, day, hour, minute) - utcOffsetSeconds * 1000;
+}
+
+/**
+ * Today's sunrise and sunset from the response's `daily` block. Each is null on
+ * its own when it is missing or malformed, so a forecast without them still
+ * dresses Patch.
+ */
+function parseSunTimes(body: Record<string, unknown>): {sunrise: number | null; sunset: number | null} {
+    const offset = body.utc_offset_seconds;
+    if (!isFiniteNumber(offset) || !isRecord(body.daily)) return {sunrise: null, sunset: null};
+    const first = (list: unknown) => (Array.isArray(list) ? epochFromLocalIso(list[0], offset) : null);
+    return {sunrise: first(body.daily.sunrise), sunset: first(body.daily.sunset)};
+}
+
 /**
  * The forecast response's `current` block, or null when it is not there.
  *
- * `is_day` is 1 or 0 on the wire; a boolean is accepted too.
+ * `is_day` is 1 or 0 on the wire; a boolean is accepted too. Sunrise and
+ * sunset come from the `daily` block and are null when it is missing.
  */
 export function parseForecastResponse(body: unknown, location: WeatherLocation, fetchedAt: number): Weather | null {
     if (!isRecord(body) || !isRecord(body.current)) return null;
@@ -75,6 +110,7 @@ export function parseForecastResponse(body: unknown, location: WeatherLocation, 
         isDay: isDay === 1 || isDay === true,
         location: location.name,
         fetchedAt,
+        ...parseSunTimes(body),
     };
 }
 

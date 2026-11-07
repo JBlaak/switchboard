@@ -59,7 +59,123 @@ test('a forecast response parses into the weather at that location', () => {
     const weather = parseForecastResponse(body, amsterdam, 1000);
 
     /* Then */
-    assert.deepStrictEqual(weather, {sky: 'rain', isDay: true, location: 'Amsterdam', fetchedAt: 1000});
+    assert.deepStrictEqual(weather, {
+        sky: 'rain',
+        isDay: true,
+        location: 'Amsterdam',
+        fetchedAt: 1000,
+        sunrise: null,
+        sunset: null,
+    });
+});
+
+test("a forecast response's daily block gives today's sunrise and sunset at the location's offset", () => {
+    /* Given */
+    const body = {
+        utc_offset_seconds: 3600,
+        current: {weather_code: 0, is_day: 1},
+        daily: {time: ['2026-11-06'], sunrise: ['2026-11-06T07:48'], sunset: ['2026-11-06T16:52']},
+    };
+
+    /* When */
+    const weather = parseForecastResponse(body, amsterdam, 0);
+
+    /* Then */
+    assert.strictEqual(weather?.sunrise, Date.UTC(2026, 10, 6, 6, 48));
+    assert.strictEqual(weather?.sunset, Date.UTC(2026, 10, 6, 15, 52));
+});
+
+test('a negative UTC offset moves sunrise and sunset later in UTC', () => {
+    /* Given */
+    const body = {
+        utc_offset_seconds: -5 * 3600,
+        current: {weather_code: 0, is_day: 1},
+        daily: {sunrise: ['2026-11-06T06:30'], sunset: ['2026-11-06T16:45']},
+    };
+
+    /* When */
+    const weather = parseForecastResponse(body, amsterdam, 0);
+
+    /* Then */
+    assert.strictEqual(weather?.sunrise, Date.UTC(2026, 10, 6, 11, 30));
+    assert.strictEqual(weather?.sunset, Date.UTC(2026, 10, 6, 21, 45));
+});
+
+test('a missing daily block still parses the weather, without sunrise and sunset', () => {
+    /* Given */
+    const bodies: unknown[] = [
+        {current: {weather_code: 3, is_day: 1}},
+        {utc_offset_seconds: 3600, current: {weather_code: 3, is_day: 1}},
+        {current: {weather_code: 3, is_day: 1}, daily: {sunrise: ['2026-11-06T07:48'], sunset: ['2026-11-06T16:52']}},
+    ];
+
+    for (const body of bodies) {
+        /* When */
+        const weather = parseForecastResponse(body, amsterdam, 0);
+
+        /* Then */
+        assert.strictEqual(weather?.sky, 'cloudy', JSON.stringify(body));
+        assert.strictEqual(weather?.sunrise, null, JSON.stringify(body));
+        assert.strictEqual(weather?.sunset, null, JSON.stringify(body));
+    }
+});
+
+test('a malformed sunrise or sunset parses to null on its own', () => {
+    /* Given */
+    const good = '2026-11-06T16:52';
+    const bad: unknown[] = [
+        null,
+        undefined,
+        42,
+        '',
+        'nope',
+        '2026-11-06',
+        '2026-11-06T7:48',
+        '2026-11-06T07:48:00Z',
+        '2026-13-06T07:48',
+        '2026-11-06T24:00',
+        '2026-11-06T07:60',
+    ];
+
+    for (const sunrise of bad) {
+        const body = {
+            utc_offset_seconds: 0,
+            current: {weather_code: 0, is_day: 1},
+            daily: {sunrise: [sunrise], sunset: [good]},
+        };
+
+        /* When */
+        const weather = parseForecastResponse(body, amsterdam, 0);
+
+        /* Then */
+        assert.strictEqual(weather?.sunrise, null, JSON.stringify(sunrise));
+        assert.strictEqual(weather?.sunset, Date.UTC(2026, 10, 6, 16, 52), JSON.stringify(sunrise));
+    }
+});
+
+test('a malformed daily block or offset gives no sunrise and sunset', () => {
+    /* Given */
+    const daily = {sunrise: ['2026-11-06T07:48'], sunset: ['2026-11-06T16:52']};
+    const bad: unknown[] = [
+        {utc_offset_seconds: '3600', daily},
+        {utc_offset_seconds: NaN, daily},
+        {utc_offset_seconds: 0, daily: null},
+        {utc_offset_seconds: 0, daily: []},
+        {utc_offset_seconds: 0, daily: {sunrise: '2026-11-06T07:48', sunset: '2026-11-06T16:52'}},
+        {utc_offset_seconds: 0, daily: {sunrise: [], sunset: []}},
+    ];
+
+    for (const extra of bad) {
+        const body = {current: {weather_code: 0, is_day: 1}, ...(extra as object)};
+
+        /* When */
+        const weather = parseForecastResponse(body, amsterdam, 0);
+
+        /* Then */
+        assert.notStrictEqual(weather, null, JSON.stringify(extra));
+        assert.strictEqual(weather?.sunrise, null, JSON.stringify(extra));
+        assert.strictEqual(weather?.sunset, null, JSON.stringify(extra));
+    }
 });
 
 test('a forecast response for the night parses as not day', () => {
@@ -200,7 +316,14 @@ function fakeSource() {
             state.fetches += 1;
             if (state.next === 'throw') throw new Error('offline');
             if (state.next === null) return null;
-            return {sky: state.next, isDay: true, location: loc.name, fetchedAt: clockRef.now};
+            return {
+                sky: state.next,
+                isDay: true,
+                location: loc.name,
+                fetchedAt: clockRef.now,
+                sunrise: null,
+                sunset: null,
+            };
         },
         async geocode(name) {
             state.geocodes.push(name);

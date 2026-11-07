@@ -27,6 +27,10 @@ export class OpenMeteoWeatherSource implements WeatherSource {
         url.searchParams.set('latitude', String(loc.latitude));
         url.searchParams.set('longitude', String(loc.longitude));
         url.searchParams.set('current', 'weather_code,is_day');
+        // Today's sunrise and sunset, in the location's own time zone.
+        url.searchParams.set('daily', 'sunrise,sunset');
+        url.searchParams.set('timezone', 'auto');
+        url.searchParams.set('forecast_days', '1');
         const body = await this.getJson(url);
         return body === null ? null : parseForecastResponse(body, loc, this.clock.now());
     }
