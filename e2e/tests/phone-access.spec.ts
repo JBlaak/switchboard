@@ -102,6 +102,22 @@ async function setContentSize(app: ElectronApplication, width: number, height: n
     );
 }
 
+/**
+ * Wait until the session's xterm has been fitted to the window and the pty has
+ * that size too. Until the first fit both sit on xterm's own 80 × 24, which on a
+ * busy runner can still be what a test reads as the size "before".
+ */
+async function waitForFittedSession(page: Page, size: () => {cols: number; rows: number} | null): Promise<void> {
+    await expect
+        .poll(async () => {
+            const {cols, rows} = await terminalState(page, S.loginFix);
+            const pty = size();
+            const fitted = cols !== 80 || rows !== 24;
+            return fitted && pty?.cols === cols && pty?.rows === rows;
+        })
+        .toBe(true);
+}
+
 /** Type into the session's xterm, focusing its input directly: the placeholder covers it from the mouse. */
 async function typeIntoTerminal(page: Page, text: string): Promise<void> {
     await page.locator('.terminal-container.visible .xterm-helper-textarea').focus();
@@ -117,7 +133,7 @@ test.describe('phone access', () => {
         /* Given */
         const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
         await stubPhoneAccess(app, LISTENING);
-        await expect.poll(() => claude.size()).not.toBeNull();
+        await waitForFittedSession(page, () => claude.size());
         const before = await terminalState(page, S.loginFix);
 
         /* When */
