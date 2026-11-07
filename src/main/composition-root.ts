@@ -129,6 +129,7 @@ import {OpenMeteoWeatherSource} from '../infrastructure/weather/open-meteo';
 import {PmsetSleepControl} from '../infrastructure/system/pmset-sleep-control';
 import {PmsetBatteryGauge} from '../infrastructure/system/pmset-battery-gauge';
 import {BundleInstaller} from '../infrastructure/system/bundle-installer';
+import {PendingUpdateFile} from '../infrastructure/system/pending-update-file';
 import {GitHubReleaseFeed} from '../infrastructure/github/github-release-feed';
 import {GitCliRemotes} from '../infrastructure/git/git-cli-remotes';
 import {RoutingGitRemotes, RoutingGitWorkspace} from '../infrastructure/git/routing-git';
@@ -678,6 +679,7 @@ export function buildContainer(): Container {
     const updates = new UpdateService({
         feed: new GitHubReleaseFeed({owner: 'JBlaak', name: 'switchboard'}),
         installer: new BundleInstaller(log),
+        pending: new PendingUpdateFile(path.join(app.getPath('userData'), 'pending-update.json')),
         renderer,
         timers,
         log,

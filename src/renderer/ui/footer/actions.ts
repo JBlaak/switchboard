@@ -24,9 +24,11 @@ export async function refreshUsage(): Promise<void> {
     }
 }
 
-/** Ask main for an update it found before this window loaded. */
+/** Ask main for an update it found before this window loaded, and how the install before this launch went. */
 export async function checkForUpdate(): Promise<void> {
-    dispatch({type: 'updateChecked', update: await window.api.getUpdate()});
+    const [update, outcome] = await Promise.all([window.api.getUpdate(), window.api.getUpdateOutcome()]);
+    dispatch({type: 'updateChecked', update});
+    dispatch({type: 'updateOutcomeChecked', outcome});
 }
 
 /** Take the footer's running count, after the project list has loaded. */
@@ -38,7 +40,8 @@ export function countRunning(): void {
  * Download the update, swap it in and restart.
  *
  * Restarting stops every running session, so that is asked first when any
- * are. On success the app quits from under this; an answer means it did not.
+ * are. Each step's progress arrives as `updateProgress` while this waits. On
+ * success the app quits from under this; an answer means it did not.
  */
 export async function installUpdate(): Promise<void> {
     const {update, view} = getState();
@@ -48,13 +51,19 @@ export async function installUpdate(): Promise<void> {
     if (question && !confirm(question)) return;
 
     dispatch({type: 'updateInstallStarted'});
-    if (!(await window.api.installUpdate())) dispatch({type: 'updateInstallFailed'});
+    const result = await window.api.installUpdate();
+    if (!result.ok) dispatch({type: 'updateInstallFailed', failure: result.failure});
 }
 
 /** Open the release page, for an app that cannot replace itself. */
 export function openReleasePage(): void {
     const notice = getState().update.notice;
     if (notice) void window.api.openExternal(notice.pageUrl);
+}
+
+/** Hide the "Updated to …" line. */
+export function dismissUpdateOutcome(): void {
+    dispatch({type: 'updateOutcomeDismissed'});
 }
 
 /** Hide the notice until a later version turns up. */
