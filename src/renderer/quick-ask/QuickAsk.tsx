@@ -16,6 +16,7 @@ import {quickAskPhase, savedLabel, savingLine} from '../state/quick-ask-slice';
 import {store} from './store';
 import {overSlab, quickAskKey} from './quick-ask-keys';
 import {slabMotion} from './motion';
+import {PatchMark} from './PatchMark';
 import {
     cancel,
     changeText,
@@ -147,9 +148,7 @@ export function QuickAsk(): JSX.Element {
             <div className="quick-ask-sheen" aria-hidden="true" />
             <div className="quick-ask-inner" ref={inner}>
                 <span className="quick-ask-mark" ref={mark} aria-hidden="true">
-                    <svg viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M9.2 1 3 9h4l-1.2 6L12 7H8z" />
-                    </svg>
+                    <PatchMark phase={phase} />
                 </span>
                 <span className="quick-ask-hint" aria-hidden="true">
                     ↵ send · esc close
