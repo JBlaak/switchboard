@@ -104,9 +104,11 @@ export function SessionTray(): JSX.Element | null {
                 header.style.display !== 'none' &&
                 (header.contains(target) ||
                     !!target?.closest('.session-tray-frame') ||
-                    // Only on the terminal itself, not a card or page laid over it; and a
-                    // drag (selecting text in the terminal) never opens it.
+                    // Only on the terminal itself, not a card or page laid over it, nor on a
+                    // link in it (xterm marks one under the pointer), which the tray would cover
+                    // before it is clicked; and a drag (selecting text) never opens it.
                     (!!target?.closest('.xterm') &&
+                        !target.closest('.xterm-cursor-pointer') &&
                         (inside || e.buttons === 0) &&
                         inTerminalTopZone(e.clientX, e.clientY, terminals.getBoundingClientRect())));
             if (now === inside) return;
