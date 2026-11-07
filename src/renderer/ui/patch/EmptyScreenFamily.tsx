@@ -9,7 +9,8 @@
  *
  * While the empty screen shows, the scene follows the sessions: a session that
  * starts working or asks for the user changes pose straight away. Clicking a
- * member opens its session. Like Patch, the scene is the package's imperative
+ * member opens its session. It holds still while the window is in the
+ * background. Like Patch, the scene is the package's imperative
  * handle mounted from an effect.
  */
 import {useEffect, useRef} from 'react';
@@ -96,6 +97,13 @@ export function EmptyScreenFamily(): JSX.Element {
             draw(arriving);
         };
 
+        // Hold the scene still while the window is in the background: nobody is watching, and it saves the battery.
+        const syncPause = (): void => family.pause(document.hidden || !document.hasFocus());
+        syncPause();
+        window.addEventListener('focus', syncPause);
+        window.addEventListener('blur', syncPause);
+        document.addEventListener('visibilitychange', syncPause);
+
         if (visible()) void appear();
         const unsubscribers = [
             onEvent('emptyScreenShown', () => void appear()),
@@ -112,6 +120,9 @@ export function EmptyScreenFamily(): JSX.Element {
         }, TICK_MS);
 
         return () => {
+            window.removeEventListener('focus', syncPause);
+            window.removeEventListener('blur', syncPause);
+            document.removeEventListener('visibilitychange', syncPause);
             clearInterval(tick);
             unsubscribers.forEach((unsubscribe) => unsubscribe());
             family.destroy();
