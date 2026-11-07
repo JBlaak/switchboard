@@ -33,9 +33,11 @@ npm run test:e2e -- --update-snapshots    # rewrite the screenshot baselines
 The windows stay hidden and never take focus, so you can keep working while it
 runs. `SB_E2E_HEADED=1` shows them, for watching a test.
 `SB_E2E_SKIP_SCREENSHOTS=1` runs every functional assertion but skips the
-pixel comparisons. CI does that: the baselines are rendered on a developer's
-Mac, and a runner's macOS version and GPU draw text differently enough to fail
-them. Run the screenshots locally before you push.
+pixel comparisons, and runs the tests that cover both colour schemes in light
+only, since dark repeats light's assertions for its own baselines. CI does that:
+the baselines are rendered on a developer's Mac, and a runner's macOS version
+and GPU draw text differently enough to fail them. Run the screenshots locally
+before you push.
 
 **On Linux** the suite runs too, for developing on a Linux box (tested on
 Ubuntu 24.04). Electron needs its GTK and NSS libraries, and the windows need a

@@ -1,6 +1,6 @@
-import test, {after} from 'node:test';
+import {after, describe, test} from 'node:test';
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
+import {execFile} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,15 +10,33 @@ const APP_DIR = path.join(__dirname, '..');
 // it (or database.js). Run every DB-touching snippet under Electron-as-Node instead.
 // Under plain node, require('electron') returns the path to the binary.
 // The typings model `electron` as the module the main process gets; under plain
-// node it is the path to the binary, which is what spawnSync needs.
+// node it is the path to the binary, which is what execFile needs.
 import electronBin from 'electron';
 const ELECTRON: string = electronBin as unknown as string;
 
-function runInElectronNode(code: string, dataDir: string) {
-    return spawnSync(ELECTRON, ['-e', code], {
-        cwd: APP_DIR,
-        env: {...process.env, ELECTRON_RUN_AS_NODE: '1', SWITCHBOARD_DATA_DIR: dataDir},
-        encoding: 'utf8',
+/**
+ * Async, so the scenarios below can run side by side: each one waits on several
+ * Electron starts in a row, which made this one of the slowest files when they
+ * ran one after another.
+ */
+function runInElectronNode(
+    code: string,
+    dataDir: string,
+): Promise<{status: number | null; stdout: string; stderr: string}> {
+    return new Promise((resolve) => {
+        execFile(
+            ELECTRON,
+            ['-e', code],
+            {
+                cwd: APP_DIR,
+                env: {...process.env, ELECTRON_RUN_AS_NODE: '1', SWITCHBOARD_DATA_DIR: dataDir},
+                encoding: 'utf8',
+            },
+            (error, stdout, stderr) => {
+                const code = (error as (NodeJS.ErrnoException & {code?: unknown}) | null)?.code;
+                resolve({status: error ? (typeof code === 'number' ? code : null) : 0, stdout, stderr});
+            },
+        );
     });
 }
 
@@ -28,13 +46,13 @@ function runInElectronNode(code: string, dataDir: string) {
 // better-sqlite3 needs Electron's ABI, so the snippet cannot go through tsx.
 const BUILT_DB = path.join(APP_DIR, 'app', 'database.js');
 
-function openDatabase(dataDir: string) {
+async function openDatabase(dataDir: string) {
     assert.ok(fs.existsSync(BUILT_DB), `${BUILT_DB} is missing — run \`npm run build\` before the tests`);
     return runInElectronNode(`require(${JSON.stringify(BUILT_DB)}).openDatabase().close()`, dataDir);
 }
 
-function inspectDb(dataDir: string) {
-    const r = runInElectronNode(
+async function inspectDb(dataDir: string) {
+    const r = await runInElectronNode(
         `
     const Database = require('better-sqlite3');
     const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'), { readonly: true });
@@ -64,8 +82,8 @@ function dataDir(prefix: string): string {
 }
 
 /** Run a snippet against the data dir's database (as `db`), failing on a non-zero exit; answers its last line. */
-function sqlite(dataDir: string, code: string, readonly = false): string {
-    const r = runInElectronNode(
+async function sqlite(dataDir: string, code: string, readonly = false): Promise<string> {
+    const r = await runInElectronNode(
         `
     const Database = require('better-sqlite3');
     const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db')${readonly ? ', { readonly: true }' : ''});
@@ -78,33 +96,23 @@ function sqlite(dataDir: string, code: string, readonly = false): string {
 }
 
 /** Open the database as a step towards the scenario, failing if that open fails. */
-function opened(dataDir: string): void {
-    const r = openDatabase(dataDir);
+async function opened(dataDir: string): Promise<void> {
+    const r = await openDatabase(dataDir);
     assert.equal(r.status, 0, r.stderr);
 }
 
-test('fresh database gets fileMtime column', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-fresh-');
-
-    /* When */
-    const r = openDatabase(dir);
-
-    /* Then */
-    assert.equal(r.status, 0, r.stderr);
-    assert.ok(inspectDb(dir).cols.includes('fileMtime'));
-});
-
-// Regression: a DB migrated to db_version 5 by a parallel branch (different
-// v4/v5 migrations, extra columns, no fileMtime) skips this branch's
-// version-numbered migrations entirely. Startup must still add fileMtime and
-// clear the stale cache instead of crashing at prepare().
-test('foreign higher-version database is reconciled, not crashed', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-foreign-');
-    sqlite(
-        dir,
-        `
+// Every scenario has its own data dir, so they run side by side.
+describe('schema reconcile', {concurrency: true}, () => {
+    // Regression: a DB migrated to db_version 5 by a parallel branch (different
+    // v4/v5 migrations, extra columns, no fileMtime) skips this branch's
+    // version-numbered migrations entirely. Startup must still add fileMtime and
+    // clear the stale cache instead of crashing at prepare().
+    test('foreign higher-version database is reconciled, not crashed', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-foreign-');
+        await sqlite(
+            dir,
+            `
     db.exec(\`CREATE TABLE session_cache (
       sessionId TEXT PRIMARY KEY, folder TEXT NOT NULL, projectPath TEXT,
       summary TEXT, firstPrompt TEXT, created TEXT, modified TEXT,
@@ -118,37 +126,25 @@ test('foreign higher-version database is reconciled, not crashed', () => {
     db.prepare("INSERT INTO session_cache (sessionId, folder, modified) VALUES ('s1', 'f1', '2026-01-01T00:00:00Z')").run();
     db.prepare("INSERT INTO cache_meta (folder, indexMtimeMs) VALUES ('f1', 123)").run();
   `,
-    );
+        );
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0, r.stderr);
-    const state = inspectDb(dir);
-    assert.ok(state.cols.includes('fileMtime'), 'fileMtime column added');
-    assert.equal(state.cacheCount, 0, 'stale cache cleared for re-index');
-    assert.equal(state.metaCount, 0, 'folder index gate cleared for re-index');
-    assert.equal(state.version, '5', 'foreign db_version not downgraded');
-    for (const col of ['parentSessionId', 'agentId', 'runtime', 'sessionFile']) {
-        assert.ok(state.cols.includes(col), `foreign column ${col} preserved`);
-    }
-});
+        /* Then */
+        assert.equal(r.status, 0, r.stderr);
+        const state = await inspectDb(dir);
+        assert.ok(state.cols.includes('fileMtime'), 'fileMtime column added');
+        assert.equal(state.cacheCount, 0, 'stale cache cleared for re-index');
+        assert.equal(state.metaCount, 0, 'folder index gate cleared for re-index');
+        assert.equal(state.version, '5', 'foreign db_version not downgraded');
+        for (const col of ['parentSessionId', 'agentId', 'runtime', 'sessionFile']) {
+            assert.ok(state.cols.includes(col), `foreign column ${col} preserved`);
+        }
+    });
 
-test('fresh database gets pullRequests column', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-fresh-prs-');
-
-    /* When */
-    const r = openDatabase(dir);
-
-    /* Then */
-    assert.equal(r.status, 0, r.stderr);
-    assert.ok(inspectDb(dir).cols.includes('pullRequests'));
-});
-
-/** A v4 cache from before pullRequests existed, holding one session and its folder gate. */
-const CACHE_WITHOUT_PULL_REQUESTS = `
+    /** A v4 cache from before pullRequests existed, holding one session and its folder gate. */
+    const CACHE_WITHOUT_PULL_REQUESTS = `
   db.exec(\`CREATE TABLE session_cache (
     sessionId TEXT PRIMARY KEY, folder TEXT NOT NULL, projectPath TEXT,
     summary TEXT, firstPrompt TEXT, created TEXT, modified TEXT,
@@ -161,277 +157,283 @@ const CACHE_WITHOUT_PULL_REQUESTS = `
   db.prepare("INSERT INTO cache_meta (folder, indexMtimeMs) VALUES ('f1', 123)").run();
 `;
 
-// A cache written before pullRequests existed holds rows that would read as
-// "no PRs" until their transcript next changes. The column's arrival clears the
-// cache and the folder gate so the cold-start rebuild re-reads every session.
-test('a cache without pullRequests gains the column and is cleared for re-index', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-prs-');
-    sqlite(dir, CACHE_WITHOUT_PULL_REQUESTS);
+    // A cache written before pullRequests existed holds rows that would read as
+    // "no PRs" until their transcript next changes. The column's arrival clears the
+    // cache and the folder gate so the cold-start rebuild re-reads every session.
+    test('a cache without pullRequests gains the column and is cleared for re-index', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-prs-');
+        await sqlite(dir, CACHE_WITHOUT_PULL_REQUESTS);
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0, r.stderr);
-    const state = inspectDb(dir);
-    assert.ok(state.cols.includes('pullRequests'), 'pullRequests column added');
-    assert.equal(state.cacheCount, 0, 'stale cache cleared for re-index');
-    assert.equal(state.metaCount, 0, 'folder index gate cleared for re-index');
-});
+        /* Then */
+        assert.equal(r.status, 0, r.stderr);
+        const state = await inspectDb(dir);
+        assert.ok(state.cols.includes('pullRequests'), 'pullRequests column added');
+        assert.equal(state.cacheCount, 0, 'stale cache cleared for re-index');
+        assert.equal(state.metaCount, 0, 'folder index gate cleared for re-index');
+    });
 
-test('the pullRequests re-index happens only once', () => {
-    // Only once: a second open finds the column and leaves the cache alone.
-    /* Given */
-    const dir = dataDir('switchboard-db-prs-once-');
-    sqlite(dir, CACHE_WITHOUT_PULL_REQUESTS);
-    opened(dir);
-    sqlite(
-        dir,
-        `db.prepare("INSERT INTO session_cache (sessionId, folder, pullRequests) VALUES ('s1', 'f1', '[]')").run();`,
-    );
+    test('the pullRequests re-index happens only once', async () => {
+        // Only once: a second open finds the column and leaves the cache alone.
+        /* Given */
+        const dir = dataDir('switchboard-db-prs-once-');
+        await sqlite(dir, CACHE_WITHOUT_PULL_REQUESTS);
+        await opened(dir);
+        await sqlite(
+            dir,
+            `db.prepare("INSERT INTO session_cache (sessionId, folder, pullRequests) VALUES ('s1', 'f1', '[]')").run();`,
+        );
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0);
-    assert.equal(inspectDb(dir).cacheCount, 1, 'cache kept once the column exists');
-});
+        /* Then */
+        assert.equal(r.status, 0);
+        assert.equal((await inspectDb(dir)).cacheCount, 1, 'cache kept once the column exists');
+    });
 
-function sessionActionColumns(dataDir: string): string[] {
-    const r = runInElectronNode(
-        `
+    async function sessionActionColumns(dataDir: string): Promise<string[]> {
+        const r = await runInElectronNode(
+            `
     const Database = require('better-sqlite3');
     const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'), { readonly: true });
     console.log(JSON.stringify(db.prepare('PRAGMA table_info(session_actions)').all().map(c => c.name)));
   `,
-        dataDir,
-    );
-    assert.equal(r.status, 0, r.stderr);
-    return JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]');
-}
+            dataDir,
+        );
+        assert.equal(r.status, 0, r.stderr);
+        return JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]');
+    }
 
-const SESSION_ACTION_COLUMNS = [
-    'id',
-    'session',
-    'repository',
-    'item_key',
-    'action',
-    'origin',
-    'phase',
-    'prompt',
-    'queued_at',
-    'sent_at',
-    'done_at',
-    'details',
-];
+    const SESSION_ACTION_COLUMNS = [
+        'id',
+        'session',
+        'repository',
+        'item_key',
+        'action',
+        'origin',
+        'phase',
+        'prompt',
+        'queued_at',
+        'sent_at',
+        'done_at',
+        'details',
+    ];
 
-/** A database a parallel branch migrated past this one's version, with nothing else in it. */
-const FOREIGN_V9 = `
+    /** A database a parallel branch migrated past this one's version, with nothing else in it. */
+    const FOREIGN_V9 = `
   db.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
   db.prepare("INSERT INTO settings (key, value) VALUES ('db_version', '9')").run();
 `;
 
-const QUEUE_ONE_ACTION = `
+    const QUEUE_ONE_ACTION = `
   db.prepare(\`INSERT INTO session_actions (id, session, item_key, action, origin, phase, prompt, queued_at)
     VALUES ('a1', 's1', 'pr:x', 'ship', 'manual', 'queued', 'Ship PR #1', '2026-01-01T00:00:00Z')\`).run();
 `;
 
-test('a fresh database gets the session_actions table', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-actions-');
+    // One fresh open answers for every column and table the schema adds, rather
+    // than an Electron start per addition.
+    test('a fresh database gets fileMtime, pullRequests and the session_actions table', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-fresh-');
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0);
-    assert.deepEqual(sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
-});
+        /* Then */
+        assert.equal(r.status, 0, r.stderr);
+        const {cols} = await inspectDb(dir);
+        assert.ok(cols.includes('fileMtime'));
+        assert.ok(cols.includes('pullRequests'));
+        assert.deepEqual(await sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
+    });
 
-// The Session work queue must survive a restart, so its table is created on
-// every database, including one a parallel branch migrated past this one's
-// version: a numbered migration would be skipped there.
-test('an existing, foreign higher-version database gains session_actions', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-actions-foreign-');
-    sqlite(dir, FOREIGN_V9);
+    // The Session work queue must survive a restart, so its table is created on
+    // every database, including one a parallel branch migrated past this one's
+    // version: a numbered migration would be skipped there.
+    test('an existing, foreign higher-version database gains session_actions', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-actions-foreign-');
+        await sqlite(dir, FOREIGN_V9);
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0);
-    assert.deepEqual(sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
-});
+        /* Then */
+        assert.equal(r.status, 0);
+        assert.deepEqual(await sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
+    });
 
-test('an existing, foreign higher-version database keeps its session_actions rows across opens', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-actions-foreign-rows-');
-    sqlite(dir, FOREIGN_V9);
-    opened(dir);
-    sqlite(dir, QUEUE_ONE_ACTION);
+    test('an existing, foreign higher-version database keeps its session_actions rows across opens', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-actions-foreign-rows-');
+        await sqlite(dir, FOREIGN_V9);
+        await opened(dir);
+        await sqlite(dir, QUEUE_ONE_ACTION);
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0);
-    const count = sqlite(
-        dir,
-        `console.log(String(db.prepare('SELECT COUNT(*) AS n FROM session_actions').get().n));`,
-        true,
-    );
-    assert.equal(count, '1', 'a queued action survives the next open');
-});
+        /* Then */
+        assert.equal(r.status, 0);
+        const count = await sqlite(
+            dir,
+            `console.log(String(db.prepare('SELECT COUNT(*) AS n FROM session_actions').get().n));`,
+            true,
+        );
+        assert.equal(count, '1', 'a queued action survives the next open');
+    });
 
-test('a session_actions table from before card details gains the column, and keeps its rows', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-actions-details-');
-    sqlite(
-        dir,
-        `
+    test('a session_actions table from before card details gains the column, and keeps its rows', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-actions-details-');
+        await sqlite(
+            dir,
+            `
     db.exec(\`CREATE TABLE session_actions (id TEXT PRIMARY KEY, session TEXT NOT NULL, repository TEXT NOT NULL DEFAULT '',
       item_key TEXT NOT NULL, action TEXT NOT NULL, origin TEXT NOT NULL, phase TEXT NOT NULL, prompt TEXT NOT NULL,
       queued_at TEXT NOT NULL, sent_at TEXT, done_at TEXT)\`);
     ${QUEUE_ONE_ACTION}
   `,
-    );
+        );
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0);
-    assert.deepEqual(sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
-});
+        /* Then */
+        assert.equal(r.status, 0);
+        assert.deepEqual(await sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
+    });
 
-// The auto-fix limit survives a restart only if its history does (W3).
-test('the auto-fix history table is created, and its rows survive the next open', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-auto-fix-');
-    opened(dir);
-    sqlite(
-        dir,
-        `
+    // The auto-fix limit survives a restart only if its history does (W3).
+    test('the auto-fix history table is created, and its rows survive the next open', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-auto-fix-');
+        await opened(dir);
+        await sqlite(
+            dir,
+            `
     db.prepare(\`INSERT INTO auto_fix_attempts (kind, repository, number, check_name, head_sha, origin, activity_id, at)
       VALUES ('attempt', 'o/app', 7, 'test', 'aaa', 'auto', 'a1', '2026-01-01T00:00:00Z')\`).run();
   `,
-    );
+        );
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0);
-    const rows = sqlite(
-        dir,
-        `console.log(JSON.stringify(db.prepare('SELECT kind, head_sha FROM auto_fix_attempts').all()));`,
-        true,
-    );
-    assert.deepEqual(JSON.parse(rows || '[]'), [{kind: 'attempt', head_sha: 'aaa'}]);
-});
+        /* Then */
+        assert.equal(r.status, 0);
+        const rows = await sqlite(
+            dir,
+            `console.log(JSON.stringify(db.prepare('SELECT kind, head_sha FROM auto_fix_attempts').all()));`,
+            true,
+        );
+        assert.deepEqual(JSON.parse(rows || '[]'), [{kind: 'attempt', head_sha: 'aaa'}]);
+    });
 
-test('a session_meta table from before snoozing gains snoozedUntil, and keeps its rows', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-snooze-');
-    sqlite(
-        dir,
-        `
+    test('a session_meta table from before snoozing gains snoozedUntil, and keeps its rows', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-snooze-');
+        await sqlite(
+            dir,
+            `
     db.exec('CREATE TABLE session_meta (sessionId TEXT PRIMARY KEY, name TEXT, starred INTEGER DEFAULT 0, archived INTEGER DEFAULT 0)');
     db.prepare("INSERT INTO session_meta (sessionId, name) VALUES ('s1', 'Kept')").run();
   `,
-    );
+        );
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0, r.stderr);
-    const row = JSON.parse(
-        sqlite(
+        /* Then */
+        assert.equal(r.status, 0, r.stderr);
+        const row = JSON.parse(
+            await sqlite(
+                dir,
+                `console.log(JSON.stringify(db.prepare("SELECT * FROM session_meta WHERE sessionId = 's1'").get()))`,
+                true,
+            ),
+        );
+        assert.deepEqual(row, {sessionId: 's1', name: 'Kept', starred: 0, archived: 0, snoozedUntil: null});
+    });
+
+    // The enrolled phones (#194) must be there on every database, including one a
+    // parallel branch migrated past this one's version.
+    test('a foreign higher-version database gains phone_devices, and its rows survive the next open', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-phone-devices-');
+        await sqlite(dir, FOREIGN_V9);
+        await opened(dir);
+        await sqlite(
             dir,
-            `console.log(JSON.stringify(db.prepare("SELECT * FROM session_meta WHERE sessionId = 's1'").get()))`,
-            true,
-        ),
-    );
-    assert.deepEqual(row, {sessionId: 's1', name: 'Kept', starred: 0, archived: 0, snoozedUntil: null});
-});
-
-// The enrolled phones (#194) must be there on every database, including one a
-// parallel branch migrated past this one's version.
-test('a foreign higher-version database gains phone_devices, and its rows survive the next open', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-phone-devices-');
-    sqlite(dir, FOREIGN_V9);
-    opened(dir);
-    sqlite(
-        dir,
-        `
+            `
     db.prepare(\`INSERT INTO phone_devices (id, name, fingerprint, paired_at, last_seen_at)
       VALUES ('d1', 'Pixel 9 Pro', 'aa', 1700000000000, NULL)\`).run();
   `,
-    );
+        );
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0, r.stderr);
-    const state = JSON.parse(
-        sqlite(
-            dir,
-            `console.log(JSON.stringify({
+        /* Then */
+        assert.equal(r.status, 0, r.stderr);
+        const state = JSON.parse(
+            await sqlite(
+                dir,
+                `console.log(JSON.stringify({
     cols: db.prepare('PRAGMA table_info(phone_devices)').all().map(c => c.name),
     rows: db.prepare('SELECT id FROM phone_devices').all(),
   }));`,
-            true,
-        ),
-    );
-    assert.deepEqual(state, {
-        cols: ['id', 'name', 'fingerprint', 'paired_at', 'last_seen_at'],
-        rows: [{id: 'd1'}],
+                true,
+            ),
+        );
+        assert.deepEqual(state, {
+            cols: ['id', 'name', 'fingerprint', 'paired_at', 'last_seen_at'],
+            rows: [{id: 'd1'}],
+        });
     });
-});
 
-// Which session works on which task (#245) must be there on every database,
-// including one a parallel branch migrated past this one's version.
-test('a foreign higher-version database gains task_links and task_unlinks, and their rows survive the next open', () => {
-    /* Given */
-    const dir = dataDir('switchboard-db-task-links-');
-    sqlite(dir, FOREIGN_V9);
-    opened(dir);
-    sqlite(
-        dir,
-        `
+    // Which session works on which task (#245) must be there on every database,
+    // including one a parallel branch migrated past this one's version.
+    test('a foreign higher-version database gains task_links and task_unlinks, and their rows survive the next open', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-task-links-');
+        await sqlite(dir, FOREIGN_V9);
+        await opened(dir);
+        await sqlite(
+            dir,
+            `
     db.prepare(\`INSERT INTO task_links (task_id, project_path, session_id, source, linked_at)
       VALUES ('1f2e3d4c-5b6a-4978-8695-a4b3c2d1e0f9', '/code/app', 's1', 'start', 1700000000000)\`).run();
     db.prepare("INSERT INTO task_unlinks (session_id, unlinked_at) VALUES ('s2', 1700000000000)").run();
   `,
-    );
+        );
 
-    /* When */
-    const r = openDatabase(dir);
+        /* When */
+        const r = await openDatabase(dir);
 
-    /* Then */
-    assert.equal(r.status, 0, r.stderr);
-    const state = JSON.parse(
-        sqlite(
-            dir,
-            `console.log(JSON.stringify({
+        /* Then */
+        assert.equal(r.status, 0, r.stderr);
+        const state = JSON.parse(
+            await sqlite(
+                dir,
+                `console.log(JSON.stringify({
     cols: db.prepare('PRAGMA table_info(task_links)').all().map(c => c.name),
     rows: db.prepare('SELECT session_id FROM task_links').all(),
     unlinkCols: db.prepare('PRAGMA table_info(task_unlinks)').all().map(c => c.name),
     unlinks: db.prepare('SELECT session_id FROM task_unlinks').all(),
   }));`,
-            true,
-        ),
-    );
-    assert.deepEqual(state, {
-        cols: ['id', 'task_id', 'project_path', 'session_id', 'source', 'linked_at'],
-        rows: [{session_id: 's1'}],
-        unlinkCols: ['session_id', 'unlinked_at'],
-        unlinks: [{session_id: 's2'}],
+                true,
+            ),
+        );
+        assert.deepEqual(state, {
+            cols: ['id', 'task_id', 'project_path', 'session_id', 'source', 'linked_at'],
+            rows: [{session_id: 's1'}],
+            unlinkCols: ['session_id', 'unlinked_at'],
+            unlinks: [{session_id: 's2'}],
+        });
     });
 });
