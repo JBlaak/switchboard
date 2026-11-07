@@ -90,10 +90,13 @@ test.describe('patch', () => {
         });
     });
 
-    test.describe('with a session running', () => {
+    test.describe('with its family', () => {
         test.use({fixture: standardFixture()});
 
-        test('reads the running count', async ({page, home}) => {
+        test('reads the running count; a running session is out with the family, and choosing its Patch opens it again', async ({
+            page,
+            home,
+        }) => {
             /* Given */
             await expect(says(page, FIRST_LINE)).toBeVisible();
             await openSession(page, home, LABEL.loginFix, S.loginFix);
@@ -106,16 +109,6 @@ test.describe('patch', () => {
             /* Then */
             // The second appearance with one session running.
             await expect(says(page, 'Missed you.')).toBeVisible();
-        });
-    });
-
-    test.describe('with its family', () => {
-        test.use({fixture: standardFixture()});
-
-        test('a running session is out with the family, and choosing its Patch opens it again', async ({page, home}) => {
-            /* Given */
-            await openSession(page, home, LABEL.loginFix, S.loginFix);
-            await sidebar(page).getByText('Recent', {exact: true}).click();
             const family = page.getByTestId('patch-family');
             const member = family.locator(`[data-member="${S.loginFix}"]`);
             await expect(member).toBeVisible();
@@ -134,7 +127,7 @@ test.describe('patch', () => {
     });
 
     test.describe('when the weather never answers', () => {
-        test.use({stubs: {weather: 'never'}});
+        test.use({stubs: {weather: 'never'}, fakeTimers: true});
 
         test('a poke or a drop answers at once and wins over the gather in flight, which goes with what it has after 1.5s', async ({
             page,
@@ -150,17 +143,26 @@ test.describe('patch', () => {
 
             /* Then */
             await expect(says(page, 'Hey, that tickles!')).toBeVisible({timeout: 500});
-            await page.waitForTimeout(2000);
+
+            /* When */
+            await page.clock.fastForward(2000);
+
+            /* Then */
             await expect(says(page, 'Hey, that tickles!')).toBeVisible();
 
             /* When */
             // The poke won, so this is still only Patch's second appearance.
             await hideAndShowEmptyScreen(page);
-            const shownAt = Date.now();
 
             /* Then */
-            await expect(says(page, 'All quiet on the board. Start a session?')).toBeVisible({timeout: 4000});
-            expect(Date.now() - shownAt).toBeGreaterThanOrEqual(1200);
+            // The gather is still waiting on the weather.
+            await expect(says(page, 'All quiet on the board. Start a session?')).toHaveCount(0);
+
+            /* When */
+            await page.clock.fastForward(1600);
+
+            /* Then */
+            await expect(says(page, 'All quiet on the board. Start a session?')).toBeVisible();
 
             /* When */
             await hideAndShowEmptyScreen(page);
@@ -174,7 +176,11 @@ test.describe('patch', () => {
             const dropLine = /Wheee!|Again! Again!|all wobbly|Right back where I belong|Where was I|That was fun/;
             await expect(says(page, dropLine)).toBeVisible({timeout: 500});
             const line = await says(page, dropLine).textContent();
-            await page.waitForTimeout(2000);
+
+            /* When */
+            await page.clock.fastForward(2000);
+
+            /* Then */
             await expect(says(page, line!)).toBeVisible();
         });
     });
