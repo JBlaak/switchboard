@@ -27,6 +27,7 @@ import type {CommentRequest, ReviewRequest, ReviewResult} from '../domain/sessio
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
 import type {BackgroundTask} from '../domain/session/background-tasks';
 import type {UpdateNotice} from '../domain/update/release';
+import type {InstallProgress, InstallResult, UpdateOutcome} from '../domain/update/progress';
 import type {Usage} from '../domain/usage/usage';
 import type {WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
 import type {Weather, WeatherLocation} from '../domain/weather/weather';
@@ -194,7 +195,9 @@ export interface SwitchboardApi {
     /** A newer release waiting to be installed, or null. */
     getUpdate(): Promise<UpdateNotice | null>;
     /** Download and swap in the waiting update, then relaunch. False when it could not. */
-    installUpdate(): Promise<boolean>;
+    installUpdate(): Promise<InstallResult>;
+    /** How the install before this launch went; null when there was none. */
+    getUpdateOutcome(): Promise<UpdateOutcome | null>;
 
     // ── Search ──
     search(type: SearchType, query: string, titleOnly: boolean): Promise<SearchResult[]>;
@@ -565,6 +568,8 @@ export interface SwitchboardApi {
     onStatusUpdate(cb: (text: string, type: string) => void): Unsubscribe;
     onFullscreenChanged(cb: (isFullscreen: boolean) => void): Unsubscribe;
     onUpdateAvailable(cb: (update: UpdateNotice) => void): Unsubscribe;
+    /** An install moved on a step, or its download moved on. */
+    onUpdateProgress(cb: (progress: InstallProgress) => void): Unsubscribe;
     onSessionWorkSnapshot(cb: (snapshot: SessionWorkSnapshot) => void): Unsubscribe;
     /** A running session's PR chips changed colour (W4). */
     onPrStatusChanged(cb: (change: PullRequestStatusChange) => void): Unsubscribe;

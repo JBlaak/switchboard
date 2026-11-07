@@ -218,6 +218,7 @@ export function fakeRenderer(): FakeRenderer {
         statusUpdate: record('statusUpdate'),
         fullscreenChanged: record('fullscreenChanged'),
         updateAvailable: record('updateAvailable'),
+        updateProgress: record('updateProgress'),
         sessionWorkSnapshot: record('sessionWorkSnapshot'),
         prStatusChanged: record('prStatusChanged'),
         mergeQueueChanged: record('mergeQueueChanged'),

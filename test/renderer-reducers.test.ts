@@ -68,6 +68,7 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
     statusUpdate: {type: 'statusUpdate', text: 'Scanning…', kind: 'active'},
     fullscreenChanged: {type: 'fullscreenChanged', isFullscreen: true},
     updateAvailable: {type: 'updateAvailable', update: {version: '9.9.9', pageUrl: 'u', installable: true}},
+    updateProgress: {type: 'updateProgress', progress: {step: 'unpacking'}},
     sessionWorkSnapshot: {
         type: 'sessionWorkSnapshot',
         snapshot: {

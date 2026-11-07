@@ -16,6 +16,7 @@ import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/qu
 import type {RemoteStatusPayload} from '../../domain/remote/remote-status';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {UpdateNotice} from '../../domain/update/release';
+import type {InstallFailure, InstallProgress, UpdateOutcome} from '../../domain/update/progress';
 import type {SessionWorkDiff, SessionWorkSnapshot, WorkAction} from '../../domain/session-work/model';
 import type {DiffMode, ImageDefaults, ReviewKind, WorkTab} from './session-work-slice';
 import type {PlanSource, SessionPlansAnswer} from './plan-slice';
@@ -83,6 +84,7 @@ export type PushEvent =
     | {type: 'statusUpdate'; text: string; kind: string}
     | {type: 'fullscreenChanged'; isFullscreen: boolean}
     | {type: 'updateAvailable'; update: UpdateNotice}
+    | {type: 'updateProgress'; progress: InstallProgress}
     | {type: 'sessionWorkSnapshot'; snapshot: SessionWorkSnapshot}
     | {type: 'prStatusChanged'; change: PullRequestStatusChange}
     /** A repository's merge queue or its errands changed (#315). */
@@ -196,8 +198,12 @@ export type LocalEvent =
     /** The user hid the update notice for this version. */
     | {type: 'updateDismissed'; version: string}
     | {type: 'updateInstallStarted'}
-    /** Main answered the install, which means it did not quit to finish it. */
-    | {type: 'updateInstallFailed'}
+    /** Main answered the install: it stopped at `failure.step`. */
+    | {type: 'updateInstallFailed'; failure: InstallFailure}
+    /** The renderer asked main at launch how the install before it went. */
+    | {type: 'updateOutcomeChecked'; outcome: UpdateOutcome | null}
+    /** The user hid the "Updated to …" line. */
+    | {type: 'updateOutcomeDismissed'}
     // The terminals' chrome; see `terminal-slice`. Never the byte stream.
     /** A terminal was created for a session; `slotId` keys its container. */
     | {type: 'terminalOpened'; sessionId: string; slotId: number}

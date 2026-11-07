@@ -63,6 +63,7 @@ export const INVOKE = {
     // Updates
     getUpdate: 'get-update',
     installUpdate: 'install-update',
+    getUpdateOutcome: 'get-update-outcome',
 
     // Search
     search: 'search',
@@ -235,6 +236,7 @@ export const EVENT = {
     statusUpdate: 'status-update',
     fullscreenChanged: 'fullscreen-changed',
     updateAvailable: 'update-available',
+    updateProgress: 'update-progress',
     sessionWorkSnapshot: 'session-work:snapshot',
     prStatusChanged: 'pr-status:changed',
     mergeQueueChanged: 'merge-queue:changed',

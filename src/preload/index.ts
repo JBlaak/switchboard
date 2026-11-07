@@ -97,6 +97,7 @@ const api: SwitchboardApi = {
     // ── Updates ──
     getUpdate: () => ipcRenderer.invoke(INVOKE.getUpdate),
     installUpdate: () => ipcRenderer.invoke(INVOKE.installUpdate),
+    getUpdateOutcome: () => ipcRenderer.invoke(INVOKE.getUpdateOutcome),
 
     // ── Search ──
     search: (type, query, titleOnly) => ipcRenderer.invoke(INVOKE.search, type, query, titleOnly),
@@ -244,6 +245,7 @@ const api: SwitchboardApi = {
     onStatusUpdate: (cb) => subscribe(EVENT.statusUpdate, (_e, text, type) => cb(text, type)),
     onFullscreenChanged: (cb) => subscribe(EVENT.fullscreenChanged, (_e, isFullscreen) => cb(isFullscreen)),
     onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
+    onUpdateProgress: (cb) => subscribe(EVENT.updateProgress, (_e, progress) => cb(progress)),
     onSessionWorkSnapshot: (cb) => subscribe(EVENT.sessionWorkSnapshot, (_e, snapshot) => cb(snapshot)),
     onPrStatusChanged: (cb) => subscribe(EVENT.prStatusChanged, (_e, change) => cb(change)),
     onMergeQueueChanged: (cb) => subscribe(EVENT.mergeQueueChanged, (_e, change) => cb(change)),
