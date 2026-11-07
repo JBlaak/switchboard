@@ -22,6 +22,14 @@ test('hovering the bar opens the tray over the terminal, and ⌘1 types a saved 
     const tray = page.getByRole('region', {name: 'Session tools'});
     await expect(tray).not.toHaveClass(/is-open/);
     await expect.poll(() => claude.size()).not.toBeNull();
+    // The first fit can still be followed by a refit as the window settles: wait until it holds.
+    await expect
+        .poll(async () => {
+            const before = JSON.stringify(claude.size());
+            await page.waitForTimeout(300);
+            return JSON.stringify(claude.size()) === before;
+        })
+        .toBe(true);
     const sizeBefore = claude.size();
 
     /* When */

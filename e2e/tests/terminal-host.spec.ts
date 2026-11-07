@@ -63,6 +63,14 @@ async function setContentSize(app: ElectronApplication, width: number, height: n
     );
 }
 
+/**
+ * Push what is printed next below the top of the terminal, where resting the
+ * pointer opens the session tray over it.
+ */
+async function belowTrayBand(claude: {println(...lines: string[]): Promise<void>}): Promise<void> {
+    await claude.println(...Array<string>(10).fill(''));
+}
+
 /** Click into the terminal grid, which focuses it. */
 async function clickTerminal(page: Page, sessionId: string): Promise<void> {
     const point = await cellPoint(page, sessionId, 10, 5);
@@ -140,6 +148,7 @@ test.describe('terminal host', () => {
     test('plain URLs and OSC 8 links open in the browser', async ({page, home, app}) => {
         /* Given */
         const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
+        await belowTrayBand(claude);
         await claude.println('See https://example.com/docs for more');
         await claude.println('\x1b]8;;https://example.com/osc8\x07an OSC 8 link\x1b]8;;\x07');
         await expectTerminalText(page, S.loginFix, 'an OSC 8 link');
@@ -171,6 +180,7 @@ test.describe('terminal host', () => {
     test('clicking a `! command` types it at the prompt, so it runs in the session', async ({page, home}) => {
         /* Given */
         const claude = await openSession(page, home, LABEL.loginFix, S.loginFix);
+        await belowTrayBand(claude);
         // Inline code the way the CLI draws it: no backticks, a colour of its own.
         await claude.println(
             'To push, run \x1b[38;2;177;185;249m! git push -u origin nohrd-faq-sync\x1b[39m in the prompt.',
