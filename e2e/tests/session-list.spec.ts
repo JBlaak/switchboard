@@ -576,6 +576,7 @@ test.describe('snooze', () => {
             'This evening18:00',
             'TomorrowThu 08:00',
             'This weekendFri 18:00',
+            'Next weekMon 08:00',
         ]);
 
         /* When */
