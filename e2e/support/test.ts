@@ -23,7 +23,7 @@ import {test as base, expect} from '@playwright/test';
 import type {ElectronApplication, Page} from '@playwright/test';
 import {fixtureHome} from './fixture-home';
 import {launchApp, mainWindow} from './launch';
-import {waitForIndex} from './app';
+import {SCREENSHOTS_SKIPPED, waitForIndex} from './app';
 import {standardFixture} from '../fixtures/standard';
 import type {FixtureHome, FixtureSpec} from './fixture-home';
 import type {HostStubs} from './main-process';
@@ -80,9 +80,16 @@ export const test = base.extend<HarnessOptions & HarnessFixtures>({
 
 export {expect};
 
-/** Run the enclosed tests once per colour scheme, named "… (light)" / "… (dark)". */
+/**
+ * Run the enclosed tests once per colour scheme, named "… (light)" / "… (dark)".
+ *
+ * The second scheme is there for its screenshot baselines; its functional
+ * assertions are the first one's again. So with screenshots skipped (as on CI)
+ * only light runs, which saves a launch and a run for each of these tests.
+ */
 export function forEachAppearance(define: (appearance: 'light' | 'dark') => void): void {
-    for (const appearance of ['light', 'dark'] as const) {
+    const appearances = SCREENSHOTS_SKIPPED ? (['light'] as const) : (['light', 'dark'] as const);
+    for (const appearance of appearances) {
         test.describe(appearance, () => {
             test.use({appearance});
             define(appearance);
