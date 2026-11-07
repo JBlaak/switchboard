@@ -4,9 +4,10 @@
  * The options are fixed moments in local time, offered only while they are
  * still ahead: after lunch (12:30), later today (15:00), this evening (18:00),
  * tomorrow morning (08:00), later this week (Wednesday morning from a Monday,
- * Thursday morning from a Tuesday) and this weekend (Friday at 18:00). A time
- * another option already offers is not offered twice, so on a Friday afternoon
- * "This evening" stands for the weekend too.
+ * Thursday morning from a Tuesday), this weekend (Friday at 18:00) and next
+ * week (the coming Monday at 08:00). A time another option already offers is
+ * not offered twice, so on a Friday afternoon "This evening" stands for the
+ * weekend too, and on a Sunday "Tomorrow" stands for next week.
  */
 
 export interface SnoozeOption {
@@ -36,6 +37,11 @@ function thisWeekend(now: Date): Date | null {
     return day === SUNDAY ? null : at(now, FRIDAY - day, 18);
 }
 
+/** The coming Monday at 08:00: a week on from a Monday, tomorrow from a Sunday. */
+function nextWeek(now: Date): Date {
+    return at(now, (MONDAY + 7 - now.getDay()) % 7 || 7, 8);
+}
+
 /** The snooze options open at `now`, earliest first. */
 export function snoozeOptions(now: Date): SnoozeOption[] {
     const candidates: {label: string; until: Date | null}[] = [
@@ -45,6 +51,7 @@ export function snoozeOptions(now: Date): SnoozeOption[] {
         {label: 'Tomorrow', until: at(now, 1, 8)},
         {label: 'Later this week', until: laterThisWeek(now)},
         {label: 'This weekend', until: thisWeekend(now)},
+        {label: 'Next week', until: nextWeek(now)},
     ];
     const options: SnoozeOption[] = [];
     for (const {label, until} of candidates) {
