@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {test, expect, forEachAppearance} from '../support/test';
-import {dialog, sessionRow} from '../support/app';
+import {SCREENSHOTS_SKIPPED, dialog, sessionRow} from '../support/app';
 import {fakeRoute, launchedKeys, waitForNewLaunch} from '../support/fake-cli';
 import {
     closeMainWindow,
@@ -126,21 +126,18 @@ async function setQuickSessionFolder(page: Page, folder: string): Promise<void> 
 
 // ── The pop-up ──
 
-test('the hook opens it, and the box has the focus at once', async ({app}) => {
+test('the hook opens it with the box focused; Esc, a click away and ⌥Space close it, keeping the draft', async ({
+    app,
+}) => {
     /* When */
     const popUp = await open(app);
 
     /* Then */
     await expect(box(popUp)).toBeFocused();
     await expect(box(popUp)).toHaveValue('');
-});
-
-test('Esc closes it, and the draft is there, selected, when it reopens', async ({app}) => {
-    /* Given */
-    const popUp = await open(app);
-    await box(popUp).fill(TEXT);
 
     /* When */
+    await box(popUp).fill(TEXT);
     await box(popUp).press('Escape');
 
     /* Then */
@@ -153,12 +150,6 @@ test('Esc closes it, and the draft is there, selected, when it reopens', async (
     await expect(box(popUp)).toBeFocused();
     await expect(box(popUp)).toHaveValue(TEXT);
     expect(await selection(popUp)).toEqual([0, TEXT.length]);
-});
-
-test('a click away closes it, and so does ⌥Space, keeping the draft', async ({app}) => {
-    /* Given */
-    const popUp = await open(app);
-    await box(popUp).fill(TEXT);
 
     /* When */
     await clickAway(popUp);
@@ -176,14 +167,18 @@ test('a click away closes it, and so does ⌥Space, keeping the draft', async ({
     await expect(box(popUp)).toHaveValue(TEXT);
 });
 
+/** How long the fake holds back the answer the next test cancels. */
+const LATE_MS = 2_000;
+
 test('while it waits nothing closes it, and Esc cancels and unlocks the box', async ({app, home}) => {
     /* Given */
     const route = fakeRoute(home);
-    answerSure(route, home, 'Too late.', 5_000);
+    answerSure(route, home, 'Too late.', LATE_MS);
     const before = launchedKeys(home);
     const popUp = await open(app);
     await box(popUp).fill(TEXT);
     await box(popUp).press('Enter');
+    const sentAt = Date.now();
     await expect(box(popUp)).toHaveAttribute('aria-busy', 'true');
 
     /* When */
@@ -203,26 +198,9 @@ test('while it waits nothing closes it, and Esc cancels and unlocks the box', as
     await expect(box(popUp)).toBeEditable();
     await expect(box(popUp)).toHaveValue(TEXT);
     expect(await quickAskShowing(app)).toBe(true);
-    await popUp.waitForTimeout(5_500);
+    // Past the moment the cancelled answer would have come back, and a little more.
+    await popUp.waitForTimeout(Math.max(0, sentAt + LATE_MS + 500 - Date.now()));
     expect([...launchedKeys(home)].filter((key) => !before.has(key))).toEqual([]);
-});
-
-test('Esc while choosing closes the list, and the text is there to edit', async ({app, home}) => {
-    /* Given */
-    answerUnsure(fakeRoute(home), home, 'Fix the flaky upload test.');
-    const popUp = await open(app);
-    await box(popUp).fill(TEXT);
-    await box(popUp).press('Enter');
-    await expect(choices(popUp)).toBeVisible();
-
-    /* When */
-    await box(popUp).press('Escape');
-
-    /* Then */
-    await expect(choices(popUp)).toBeHidden();
-    await expect(box(popUp)).toBeEditable();
-    await expect(box(popUp)).toHaveValue(TEXT);
-    expect(await quickAskShowing(app)).toBe(true);
 });
 
 test('only the slab takes the mouse: beside it, a click goes to the window underneath', async ({app}) => {
@@ -245,81 +223,100 @@ test('only the slab takes the mouse: beside it, a click goes to the window under
 
 // ── The session it starts ──
 
-test('a sure answer starts the session in the main window, which is never brought forward', async ({
-    app,
-    page,
-    home,
-}) => {
-    /* Given */
-    const route = fakeRoute(home);
-    answerSure(route, home, ' Fix the flaky upload test. \n', 100);
-    const before = launchedKeys(home);
-    await watchMainWindowFocus(app);
-    const popUp = await open(app);
-    await box(popUp).fill(TEXT);
+test.describe('on the fake clock', () => {
+    // The fake clock reaches the pop-up too, so "Started in …"'s linger is
+    // fast-forwarded instead of waited out.
+    test.use({fakeTimers: true});
 
-    /* When */
-    await box(popUp).press('Enter');
+    test('a sure answer starts the session in the main window, which is never brought forward', async ({
+        app,
+        page,
+        home,
+    }) => {
+        /* Given */
+        const route = fakeRoute(home);
+        answerSure(route, home, ' Fix the flaky upload test. \n', 100);
+        const before = launchedKeys(home);
+        await watchMainWindowFocus(app);
+        const popUp = await open(app);
+        await box(popUp).fill(TEXT);
 
-    /* Then */
-    await expect(line(popUp)).toHaveText('Started in acme-api');
-    expect(await quickAskShowing(app)).toBe(true);
-    const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
-    expect(launch.cwd).toBe(home.projectPath(P.acmeApi));
-    expect(launch.argv.at(-1)).toBe('Fix the flaky upload test.');
-    await expect(sessionRow(page, 'New session')).toBeVisible();
-    await expect.poll(() => quickAskShowing(app)).toBe(false);
-    expect(await mainWindowFocusCalls(app)).toEqual([]);
-    expect(await mainWindowFocused(app)).toBe(false);
+        /* When */
+        await box(popUp).press('Enter');
 
-    // The pop-up warmed a process as it showed, and Quick Ask's own call went through it.
-    const [call] = route.calls();
-    expect(call.warm).toBe(true);
-    expect(call.argv.join(' ')).toContain('Choosing kind:');
-    expect(call.prompt).toContain(TEXT);
+        /* Then */
+        await expect(line(popUp)).toHaveText('Started in acme-api');
+        expect(await quickAskShowing(app)).toBe(true);
+        const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
+        expect(launch.cwd).toBe(home.projectPath(P.acmeApi));
+        expect(launch.argv.at(-1)).toBe('Fix the flaky upload test.');
+        await expect(sessionRow(page, 'New session')).toBeVisible();
+        await popUp.clock.fastForward(1_000);
+        await expect.poll(() => quickAskShowing(app)).toBe(false);
+        expect(await mainWindowFocusCalls(app)).toEqual([]);
+        expect(await mainWindowFocused(app)).toBe(false);
 
-    /* When */
-    await open(app);
+        // The pop-up warmed a process as it showed, and Quick Ask's own call went through it.
+        const [call] = route.calls();
+        expect(call.warm).toBe(true);
+        expect(call.argv.join(' ')).toContain('Choosing kind:');
+        expect(call.prompt).toContain(TEXT);
 
-    /* Then */
-    await expect(box(popUp)).toHaveValue('');
-    await expect(line(popUp)).toBeHidden();
-});
+        /* When */
+        await open(app);
 
-test('an unsure answer lists three; ↑↓ move, and Enter starts the one picked on the rewritten prompt', async ({
-    app,
-    home,
-}) => {
-    /* Given */
-    answerUnsure(fakeRoute(home), home, 'Fix the flaky upload test.', 100);
-    const before = launchedKeys(home);
-    const popUp = await open(app);
-    await box(popUp).fill(TEXT);
+        /* Then */
+        await expect(box(popUp)).toHaveValue('');
+        await expect(line(popUp)).toBeHidden();
+    });
 
-    /* When */
-    await box(popUp).press('Enter');
+    test('an unsure answer lists three; Esc closes the list, ↑↓ move, and Enter starts the one picked on the rewritten prompt', async ({
+        app,
+        home,
+    }) => {
+        /* Given */
+        answerUnsure(fakeRoute(home), home, 'Fix the flaky upload test.', 100);
+        const before = launchedKeys(home);
+        const popUp = await open(app);
+        await box(popUp).fill(TEXT);
+        await box(popUp).press('Enter');
+        await expect(choices(popUp)).toBeVisible();
 
-    /* Then */
-    await expect(choices(popUp).getByRole('option')).toHaveCount(3);
-    await expect(choices(popUp).getByRole('option', {selected: true})).toHaveText('acme-api');
+        /* When */
+        await box(popUp).press('Escape');
 
-    /* When */
-    await box(popUp).press('ArrowDown');
-    await box(popUp).press('ArrowDown');
-    await box(popUp).press('ArrowUp');
+        /* Then */
+        await expect(choices(popUp)).toBeHidden();
+        await expect(box(popUp)).toBeEditable();
+        await expect(box(popUp)).toHaveValue(TEXT);
+        expect(await quickAskShowing(app)).toBe(true);
 
-    /* Then */
-    await expect(choices(popUp).getByRole('option', {selected: true})).toHaveText('web-dashboard');
+        /* When */
+        await box(popUp).press('Enter');
 
-    /* When */
-    await box(popUp).press('Enter');
+        /* Then */
+        await expect(choices(popUp).getByRole('option')).toHaveCount(3);
+        await expect(choices(popUp).getByRole('option', {selected: true})).toHaveText('acme-api');
 
-    /* Then */
-    await expect(line(popUp)).toHaveText('Started in web-dashboard');
-    const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
-    expect(launch.cwd).toBe(home.projectPath(P.webDashboard));
-    expect(launch.argv.at(-1)).toBe('Fix the flaky upload test.');
-    await expect.poll(() => quickAskShowing(app)).toBe(false);
+        /* When */
+        await box(popUp).press('ArrowDown');
+        await box(popUp).press('ArrowDown');
+        await box(popUp).press('ArrowUp');
+
+        /* Then */
+        await expect(choices(popUp).getByRole('option', {selected: true})).toHaveText('web-dashboard');
+
+        /* When */
+        await box(popUp).press('Enter');
+
+        /* Then */
+        await expect(line(popUp)).toHaveText('Started in web-dashboard');
+        const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
+        expect(launch.cwd).toBe(home.projectPath(P.webDashboard));
+        expect(launch.argv.at(-1)).toBe('Fix the flaky upload test.');
+        await popUp.clock.fastForward(1_000);
+        await expect.poll(() => quickAskShowing(app)).toBe(false);
+    });
 });
 
 test('Tab from the list opens the picker in the main window with the rewritten prompt', async ({app, page, home}) => {
@@ -371,12 +368,17 @@ test('no match without a quick folder hands the text to the picker, with Patch�
     await expect(box(popUp)).toHaveValue(TEXT);
 });
 
-test('no match with a quick folder starts a quick session on the text exactly as typed', async ({app, page, home}) => {
+test('with a quick folder, no match and ⌘Enter (with no routing call) start a quick session on the text as typed', async ({
+    app,
+    page,
+    home,
+}) => {
     /* Given */
     const quickFolder = home.projectPath(P.notes);
     await setQuickSessionFolder(page, quickFolder);
-    answerNoMatch(fakeRoute(home));
-    const before = launchedKeys(home);
+    const route = fakeRoute(home);
+    answerNoMatch(route);
+    let before = launchedKeys(home);
     const popUp = await open(app);
     await box(popUp).fill(TEXT);
 
@@ -385,10 +387,30 @@ test('no match with a quick folder starts a quick session on the text exactly as
 
     /* Then */
     await expect(line(popUp)).toHaveText('Started in notes');
-    const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
+    let launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
     expect(launch.cwd).toBe(quickFolder);
     expect(launch.argv.at(-1)).toBe(TEXT);
     await expect(dialog(page, 'Start this in…')).toBeHidden();
+
+    /* Given */
+    const typed = 'tidy the notes index';
+    answerSure(route, home, 'Tidy the notes index.');
+    await expect.poll(() => quickAskShowing(app)).toBe(false);
+    before = launchedKeys(home);
+    await open(app);
+    await box(popUp).fill(typed);
+
+    /* When */
+    await box(popUp).press('Meta+Enter');
+
+    /* Then */
+    await expect(line(popUp)).toHaveText('Started in notes');
+    launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
+    expect(launch.cwd).toBe(quickFolder);
+    expect(launch.argv.at(-1)).toBe(typed);
+    expect(route.calls().filter((call) => call.prompt?.includes(typed))).toEqual([]);
+    await expect(dialog(page, 'Start this in…')).toBeHidden();
+    expect(await mainWindowFocused(app)).toBe(false);
 });
 
 test('a simple question is answered in the pop-up, which starts nothing and stays open', async ({app, page, home}) => {
@@ -427,29 +449,6 @@ test('a simple question is answered in the pop-up, which starts nothing and stay
     await open(app);
     await expect(box(popUp)).toHaveValue(question);
     await expect(popUp.getByTestId('ask-answer')).toBeHidden();
-});
-
-test('⌘Enter starts a quick session on the text as typed, with no routing call', async ({app, page, home}) => {
-    /* Given */
-    const quickFolder = home.projectPath(P.notes);
-    await setQuickSessionFolder(page, quickFolder);
-    const route = fakeRoute(home);
-    answerSure(route, home, 'Fix the flaky upload test.');
-    const before = launchedKeys(home);
-    const popUp = await open(app);
-    await box(popUp).fill(TEXT);
-
-    /* When */
-    await box(popUp).press('Meta+Enter');
-
-    /* Then */
-    await expect(line(popUp)).toHaveText('Started in notes');
-    const launch = await (await waitForNewLaunch(home, 'claude', before)).launched();
-    expect(launch.cwd).toBe(quickFolder);
-    expect(launch.argv.at(-1)).toBe(TEXT);
-    expect(route.calls().filter((call) => call.prompt?.includes(TEXT))).toEqual([]);
-    await expect(dialog(page, 'Start this in…')).toBeHidden();
-    expect(await mainWindowFocused(app)).toBe(false);
 });
 
 test('with the main window closed, it opens without the focus and the session starts in it', async ({app, home}) => {
@@ -522,7 +521,8 @@ forEachAppearance(() => {
     test('a capture saving, and saved', async ({app, home}) => {
         /* Given */
         await setUpServers(app, home);
-        answerTask(fakeRoute(home), 1_500);
+        // The delay only holds the saving state still for its screenshot.
+        answerTask(fakeRoute(home), SCREENSHOTS_SKIPPED ? 0 : 1_500);
         const popUp = await open(app);
         await box(popUp).fill(TASK);
 
@@ -530,10 +530,13 @@ forEachAppearance(() => {
         await box(popUp).press('Enter');
 
         /* Then */
-        await expect(line(popUp)).toHaveText('Adding to BlaakTasks…');
+        if (!SCREENSHOTS_SKIPPED) await expect(line(popUp)).toHaveText('Adding to BlaakTasks…');
         await expectPopUp(popUp, 'quick-ask-saving');
         await expect(line(popUp)).toHaveText('Task added · Call Peter · due Thu');
         await expectPopUp(popUp, 'quick-ask-saved');
+        // Without the screenshots the rest is only a wait; the saved line is
+        // proven by "a task is added to BlaakTasks…".
+        if (SCREENSHOTS_SKIPPED) return;
 
         // It holds 3 s, then closes, and the draft is gone.
         await expect.poll(() => quickAskShowing(app), {timeout: 6_000}).toBe(false);
@@ -545,7 +548,8 @@ forEachAppearance(() => {
 forEachAppearance(() => {
     test('each state of the pop-up', async ({app, home}) => {
         /* Given */
-        answerUnsure(fakeRoute(home), home, 'Fix the flaky upload test.', 1_500);
+        // The delay only holds the waiting state still for its screenshot.
+        answerUnsure(fakeRoute(home), home, 'Fix the flaky upload test.', SCREENSHOTS_SKIPPED ? 0 : 1_500);
         const popUp = await open(app);
         await box(popUp).fill(TEXT);
 
@@ -556,7 +560,7 @@ forEachAppearance(() => {
         await box(popUp).press('Enter');
 
         /* Then */
-        await expect(line(popUp)).toHaveText('Thinking…');
+        if (!SCREENSHOTS_SKIPPED) await expect(line(popUp)).toHaveText('Thinking…');
         await expectPopUp(popUp, 'quick-ask-waiting');
         await expect(choices(popUp).getByRole('option')).toHaveCount(3);
         await expectPopUp(popUp, 'quick-ask-choosing');
