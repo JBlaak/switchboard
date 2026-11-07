@@ -20,6 +20,7 @@ import type {RemoteStatusPayload} from '../../domain/remote/remote-status';
 import type {WorkingAgent} from '../../domain/terminal/program-status-children';
 import type {BackgroundTask} from '../../domain/session/background-tasks';
 import type {UpdateNotice} from '../../domain/update/release';
+import type {InstallProgress} from '../../domain/update/progress';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
 import type {GrillChanged} from '../../domain/grill/model';
 import type {SessionWorkSnapshot} from '../../domain/session-work/model';
@@ -132,6 +133,10 @@ export class ElectronRendererGateway implements RendererGateway {
 
     public updateAvailable(update: UpdateNotice): void {
         this.send(EVENT.updateAvailable, update);
+    }
+
+    public updateProgress(progress: InstallProgress): void {
+        this.send(EVENT.updateProgress, progress);
     }
 
     // ── Session work ──

@@ -116,9 +116,50 @@
    it waits to be noticed rather than asking to be. */
 #update-notice {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    column-gap: 8px;
     min-width: 0;
+}
+/* A failed install, and an update that did not apply after the restart, read
+   in the warning colour so the line is not taken for an offer. */
+#update-notice.failed #update-notice-label,
+#update-notice.notApplied #update-notice-label {
+    color: var(--sb-warning-text);
+}
+/* A thin bar under the line while an install runs: filled to the download's
+   percentage, or a sliding segment for a step whose length is unknown. */
+#update-notice-bar {
+    flex-basis: 100%;
+    height: 2px;
+    margin-top: 4px;
+    border-radius: 1px;
+    overflow: hidden;
+    background: rgba(var(--sb-accent-rgb), 0.15);
+}
+#update-notice-bar-fill {
+    height: 100%;
+    background: var(--sb-accent);
+    transition: width 0.2s ease-out;
+}
+#update-notice-bar.indeterminate #update-notice-bar-fill {
+    width: 30%;
+    animation: update-notice-slide 1.2s ease-in-out infinite;
+}
+@keyframes update-notice-slide {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(340%);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    #update-notice-bar.indeterminate #update-notice-bar-fill {
+        width: 100%;
+        animation: none;
+        opacity: 0.5;
+    }
 }
 #update-notice[hidden] {
     display: none;
@@ -147,10 +188,6 @@
 }
 #update-notice-action:hover:not(:disabled) {
     background: rgba(var(--sb-accent-rgb), 0.12);
-}
-#update-notice-action:disabled {
-    cursor: progress;
-    opacity: 0.7;
 }
 #update-notice-dismiss {
     padding: 0 4px;

@@ -26,6 +26,7 @@ import type {ActionRequest} from '../../src/domain/session-work/actions';
 import type {CommentRequest, ReviewRequest} from '../../src/domain/session-work/review';
 import type {RemoteStatusPayload} from '../../src/domain/remote/remote-status';
 import type {UpdateNotice} from '../../src/domain/update/release';
+import type {InstallResult, UpdateOutcome} from '../../src/domain/update/progress';
 import type {ErrandResult, FixResult, NudgeResult, QueueErrandView} from '../../src/domain/project/queue-errands';
 import type {BumpResult, CiJobQueueAnswer} from '../../src/domain/project/ci-job-queue';
 import type {Usage} from '../../src/domain/usage/usage';
@@ -76,9 +77,12 @@ export interface HostStubs {
     update: UpdateNotice | null;
     /**
      * What `installUpdate` answers. 'pending' never answers, which is what the
-     * renderer sees when an install works: the app quits from under it.
+     * renderer sees when an install works: the app quits from under it. Its
+     * progress is pushed with `pushEvent(app, EVENT.updateProgress, …)`.
      */
-    installUpdate: boolean | 'pending';
+    installUpdate: InstallResult | 'pending';
+    /** What `getUpdateOutcome` answers: how the install before this launch went. */
+    updateOutcome: UpdateOutcome | null;
     /** Whether `pmset` would report sleep as disabled; null is a host that cannot say. */
     sleepDisabled: boolean | null;
     /**
@@ -538,6 +542,7 @@ export const DEFAULT_STUBS: HostStubs = {
     usageFails: false,
     update: null,
     installUpdate: 'pending',
+    updateOutcome: null,
     sleepDisabled: false,
     sleepPromptDelayMs: 0,
     sleepPromptCancelled: false,
@@ -853,6 +858,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 return state.usage;
             });
             replace(channels.getUpdate, () => state.update);
+            replace(channels.getUpdateOutcome, () => state.updateOutcome);
             replace(channels.installUpdate, () => {
                 state.calls.installUpdate++;
                 return state.installUpdate === 'pending' ? new Promise(() => {}) : state.installUpdate;

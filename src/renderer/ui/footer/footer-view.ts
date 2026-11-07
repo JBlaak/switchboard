@@ -7,7 +7,9 @@
  */
 import {shortUsageLabel} from '../../../domain/usage/usage';
 import type {UsageLimit} from '../../../domain/usage/usage';
+import {downloadPercent, formatMegabytes} from '../../../domain/update/progress';
 import type {UpdateNotice} from '../../../domain/update/release';
+import type {InstallProgress, InstallStep, UpdateOutcome} from '../../../domain/update/progress';
 import type {UpdateState} from '../../state/update-slice';
 
 /**
@@ -49,20 +51,92 @@ export function quotaGaugeView(row: UsageLimit): QuotaGaugeView {
 
 export interface UpdateNoticeView {
     readonly label: string;
-    readonly action: string;
+    /** More about the line, for its tooltip: download sizes, or why an install failed. */
+    readonly detail: string | null;
+    /** The button's text; null while an install runs, which cannot be stopped. */
+    readonly action: string | null;
     readonly actionTitle: string;
+    /** The bar under the line: a fraction, 'indeterminate' for a step of unknown length, or null for none. */
+    readonly bar: number | 'indeterminate' | null;
+    /** Whether the × shows; not while an install runs. */
+    readonly dismissible: boolean;
 }
 
-/** The notice's line and button for a release on offer. */
+/** What the line says while each step of an install runs. */
+function progressLine(
+    version: string,
+    progress: InstallProgress | null,
+): Pick<UpdateNoticeView, 'label' | 'detail' | 'bar'> {
+    if (!progress) return {label: `Starting the ${version} download…`, detail: null, bar: 'indeterminate'};
+    switch (progress.step) {
+        case 'downloading': {
+            const {received, total} = progress;
+            const percent = downloadPercent(received, total);
+            if (percent === null) {
+                return {
+                    label: `Downloading ${version}… ${formatMegabytes(received)}`,
+                    detail: null,
+                    bar: 'indeterminate',
+                };
+            }
+            return {
+                label: `Downloading ${version}… ${percent}%`,
+                detail: `${formatMegabytes(received)} of ${formatMegabytes(total!)}`,
+                bar: percent / 100,
+            };
+        }
+        case 'unpacking':
+            return {label: `Unpacking ${version}…`, detail: null, bar: 'indeterminate'};
+        case 'checking':
+            return {label: `Checking ${version}…`, detail: null, bar: 'indeterminate'};
+        case 'restarting':
+            return {label: `Restarting into ${version}…`, detail: null, bar: 1};
+    }
+}
+
+const FAILED_AT: Record<InstallStep, string> = {
+    downloading: 'Download failed',
+    unpacking: 'Unpacking failed',
+    checking: 'The download is damaged',
+    restarting: 'Restart failed',
+};
+
+/** The notice's line, bar and button for a release on offer. */
 export function updateNoticeView(
     notice: UpdateNotice,
-    state: Pick<UpdateState, 'installing' | 'failed'>,
+    state: Pick<UpdateState, 'installing' | 'progress' | 'failure'>,
 ): UpdateNoticeView {
-    const {installing, failed} = state;
+    const {installing, progress, failure} = state;
+    const actionTitle = notice.installable ? 'Download, replace this app and restart' : 'Open the release page';
+    if (installing) {
+        return {...progressLine(notice.version, progress), action: null, actionTitle, dismissible: false};
+    }
+    if (failure) {
+        return {
+            label: FAILED_AT[failure.step],
+            detail: `${failure.reason} This app was left as it was.`,
+            action: 'Retry',
+            actionTitle,
+            bar: null,
+            dismissible: true,
+        };
+    }
     return {
-        label: failed ? 'Update failed' : `Version ${notice.version} is available`,
-        action: installing ? 'Installing…' : failed ? 'Retry' : notice.installable ? 'Install' : 'View',
-        actionTitle: notice.installable ? 'Download, replace this app and restart' : 'Open the release page',
+        label: `Version ${notice.version} is available`,
+        detail: null,
+        action: notice.installable ? 'Install' : 'View',
+        actionTitle,
+        bar: null,
+        dismissible: true,
+    };
+}
+
+/** The line after a restart: whether the install arrived. */
+export function updateOutcomeView(outcome: UpdateOutcome): {label: string; detail: string | null} {
+    if (outcome.kind === 'updated') return {label: `Updated to ${outcome.version}`, detail: null};
+    return {
+        label: `Update to ${outcome.version} didn't apply`,
+        detail: `Switchboard restarted on ${outcome.running}. Try installing again, or download it from the release page.`,
     };
 }
 
