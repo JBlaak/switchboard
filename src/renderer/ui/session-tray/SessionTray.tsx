@@ -1,6 +1,6 @@
 /**
  * The session tray (#343, epic #338): session tools that drop over the top of
- * the terminal when the bar above it is hovered.
+ * the terminal when the bar above it, or the top of the terminal, is hovered.
  *
  * It lies over `#terminal-area` from a zero-height host under the header, so
  * the terminal below never moves and xterm is never refitted for it. Hovering
@@ -30,6 +30,7 @@ import {factsFor, loadSessionLinks, loadSessionStats, projectOf, sendTrayPrompt}
 import {openSavedPromptsSettings} from '../settings/open-saved-prompts';
 import {focusTray, focusTrayHint} from './focus';
 import {trayLinks} from './tray-view';
+import {inTerminalTopZone} from './hover-zone';
 import {SessionTrayContent} from './SessionTrayContent';
 import type {SessionTrayActions} from './SessionTrayContent';
 import type {ResolvedSavedPrompt} from '../../../domain/settings/saved-prompts';
@@ -88,11 +89,51 @@ export function SessionTray(): JSX.Element | null {
         dispatch({type: 'trayPointerLeft', at: Date.now()});
     }, []);
 
-    // Hovering the bar counts as hovering the tray; the bar's edge glows while it does.
+    // Hovering the bar, the tray, or the top of the terminal under them counts as
+    // hovering the tray; the bar's edge glows while it does. One tracker over the
+    // whole terminal area, so moving between those parts is not a leave.
+    useEffect(() => {
+        const area = document.getElementById('terminal-area');
+        const header = document.getElementById('terminal-header');
+        const terminals = document.getElementById('terminals');
+        if (!area || !header || !terminals) return;
+        let inside = false;
+        const track = (e: PointerEvent): void => {
+            const target = e.target as Element | null;
+            const now =
+                header.style.display !== 'none' &&
+                (header.contains(target) ||
+                    !!target?.closest('.session-tray-frame') ||
+                    // Only on the terminal itself, not a card or page laid over it, nor on a
+                    // link in it (xterm marks one under the pointer), which the tray would cover
+                    // before it is clicked; and a drag (selecting text) never opens it.
+                    (!!target?.closest('.xterm') &&
+                        !target.closest('.xterm-cursor-pointer') &&
+                        (inside || e.buttons === 0) &&
+                        inTerminalTopZone(e.clientX, e.clientY, terminals.getBoundingClientRect())));
+            if (now === inside) return;
+            inside = now;
+            if (now) dispatch({type: 'trayPointerEntered', at: Date.now()});
+            else leave();
+        };
+        const out = (): void => {
+            if (!inside) return;
+            inside = false;
+            leave();
+        };
+        area.addEventListener('pointermove', track);
+        area.addEventListener('pointerover', track);
+        area.addEventListener('pointerleave', out);
+        return () => {
+            area.removeEventListener('pointermove', track);
+            area.removeEventListener('pointerover', track);
+            area.removeEventListener('pointerleave', out);
+        };
+    }, [leave]);
+
     useEffect(() => {
         const header = document.getElementById('terminal-header');
         if (!header) return;
-        const enter = (): void => dispatch({type: 'trayPointerEntered', at: Date.now()});
         const keydown = (e: KeyboardEvent): void => {
             if (e.key === 'Escape') {
                 dispatch({type: 'trayClosed'});
@@ -109,15 +150,9 @@ export function SessionTray(): JSX.Element | null {
                 focusTray();
             }
         };
-        header.addEventListener('pointerenter', enter);
-        header.addEventListener('pointerleave', leave);
         header.addEventListener('keydown', keydown);
-        return () => {
-            header.removeEventListener('pointerenter', enter);
-            header.removeEventListener('pointerleave', leave);
-            header.removeEventListener('keydown', keydown);
-        };
-    }, [leave]);
+        return () => header.removeEventListener('keydown', keydown);
+    }, []);
 
     useEffect(() => {
         const header = document.getElementById('terminal-header');
@@ -203,8 +238,6 @@ export function SessionTray(): JSX.Element | null {
                 section.current = el?.querySelector('section') ?? null;
             }}
             className="session-tray-frame"
-            onPointerEnter={() => dispatch({type: 'trayPointerEntered', at: Date.now()})}
-            onPointerLeave={leave}
             onFocus={() => {
                 if (!open) dispatch({type: 'trayOpened'});
             }}
