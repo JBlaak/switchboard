@@ -107,6 +107,7 @@ test('each other push becomes its event', () => {
     fake.push('statusUpdate', 'Scanning', 'active');
     fake.push('fullscreenChanged', true);
     fake.push('updateAvailable', {version: '1'});
+    fake.push('updateProgress', {step: 'unpacking'});
     fake.push('sessionWorkSnapshot', {
         sessionId: 's1',
         repository: '',
@@ -136,6 +137,7 @@ test('each other push becomes its event', () => {
             {type: 'statusUpdate', text: 'Scanning', kind: 'active'},
             {type: 'fullscreenChanged', isFullscreen: true},
             {type: 'updateAvailable', update: {version: '1'}},
+            {type: 'updateProgress', progress: {step: 'unpacking'}},
             {
                 type: 'sessionWorkSnapshot',
                 snapshot: {

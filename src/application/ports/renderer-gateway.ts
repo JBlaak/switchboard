@@ -11,6 +11,7 @@ import type {RemoteStatusPayload} from '../../domain/remote/remote-status';
 import type {WorkingAgent} from '../../domain/terminal/program-status-children';
 import type {BackgroundTask} from '../../domain/session/background-tasks';
 import type {UpdateNotice} from '../../domain/update/release';
+import type {InstallProgress} from '../../domain/update/progress';
 import type {PendingQuestions, QuestionsSettled} from '../../domain/questions/question';
 import type {GrillChanged} from '../../domain/grill/model';
 import type {SessionWorkSnapshot} from '../../domain/session-work/model';
@@ -67,6 +68,8 @@ export interface RendererGateway {
     fullscreenChanged(isFullscreen: boolean): void;
     /** A newer release was found. */
     updateAvailable(update: UpdateNotice): void;
+    /** An install moved on a step, or its download moved on. */
+    updateProgress(progress: InstallProgress): void;
 
     // ── Session work ──
     /** The open Session work page's snapshot changed. */

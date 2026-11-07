@@ -1,9 +1,15 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {installConfirmation, quotaGaugeView, updateNoticeView} from '../src/renderer/ui/footer/footer-view';
+import {
+    installConfirmation,
+    quotaGaugeView,
+    updateNoticeView,
+    updateOutcomeView,
+} from '../src/renderer/ui/footer/footer-view';
 import {usageGaugeRows} from '../src/domain/usage/usage';
 import type {UsageLimit} from '../src/domain/usage/usage';
 import type {UpdateNotice} from '../src/domain/update/release';
+import type {InstallProgress} from '../src/domain/update/progress';
 
 const sessionAt = (percent: number): UsageLimit => ({
     kind: 'session',
@@ -29,7 +35,8 @@ const notice = (installable = true): UpdateNotice => ({
     installable,
 });
 
-const idle = {installing: false, failed: false};
+const idle = {installing: false, progress: null, failure: null};
+const installingAt = (progress: InstallProgress | null) => ({installing: true, progress, failure: null});
 
 // ── Quota gauges ──
 
@@ -124,8 +131,11 @@ test('an installable release offers Install, which replaces the app', () => {
     /* Then */
     assert.deepEqual(shown, {
         label: 'Version 9.1.0 is available',
+        detail: null,
         action: 'Install',
         actionTitle: 'Download, replace this app and restart',
+        bar: null,
+        dismissible: true,
     });
 });
 
@@ -137,20 +147,75 @@ test('a release the app cannot install itself offers the release page instead', 
     assert.deepEqual([shown.action, shown.actionTitle], ['View', 'Open the release page']);
 });
 
-test('an install under way says so', () => {
-    /* When */
-    const shown = updateNoticeView(notice(), {installing: true, failed: false});
+test('an install says each step, with no button or × while it runs', () => {
+    /* Given */
+    const steps: [InstallProgress | null, string, number | 'indeterminate'][] = [
+        [null, 'Starting the 9.1.0 download…', 'indeterminate'],
+        [{step: 'downloading', received: 41_200_000, total: 98_000_000}, 'Downloading 9.1.0… 42%', 0.42],
+        [{step: 'downloading', received: 41_200_000, total: null}, 'Downloading 9.1.0… 41.2 MB', 'indeterminate'],
+        [{step: 'unpacking'}, 'Unpacking 9.1.0…', 'indeterminate'],
+        [{step: 'checking'}, 'Checking 9.1.0…', 'indeterminate'],
+        [{step: 'restarting'}, 'Restarting into 9.1.0…', 1],
+    ];
 
-    /* Then */
-    assert.deepEqual([shown.label, shown.action], ['Version 9.1.0 is available', 'Installing…']);
+    for (const [progress, label, bar] of steps) {
+        /* When */
+        const shown = updateNoticeView(notice(), installingAt(progress));
+
+        /* Then */
+        assert.deepEqual(
+            [shown.label, shown.bar, shown.action, shown.dismissible],
+            [label, bar, null, false],
+            JSON.stringify(progress),
+        );
+    }
 });
 
-test('a failed install says so and offers a retry', () => {
+test('a download of known size gives its megabytes in the tooltip', () => {
     /* When */
-    const shown = updateNoticeView(notice(), {installing: false, failed: true});
+    const shown = updateNoticeView(
+        notice(),
+        installingAt({step: 'downloading', received: 41_200_000, total: 98_000_000}),
+    );
 
     /* Then */
-    assert.deepEqual([shown.label, shown.action], ['Update failed', 'Retry']);
+    assert.equal(shown.detail, '41.2 MB of 98.0 MB');
+});
+
+test('a failed install names the step it stopped at, says why, and offers a retry', () => {
+    /* Given */
+    const cases = [
+        ['downloading', 'Download failed'],
+        ['unpacking', 'Unpacking failed'],
+        ['checking', 'The download is damaged'],
+        ['restarting', 'Restart failed'],
+    ] as const;
+
+    for (const [step, label] of cases) {
+        /* When */
+        const shown = updateNoticeView(notice(), {
+            installing: false,
+            progress: null,
+            failure: {step, reason: 'GitHub answered 404.'},
+        });
+
+        /* Then */
+        assert.deepEqual(
+            [shown.label, shown.detail, shown.action, shown.bar],
+            [label, 'GitHub answered 404. This app was left as it was.', 'Retry', null],
+        );
+    }
+});
+
+test('after a restart the line says whether the update arrived', () => {
+    /* When */
+    const updated = updateOutcomeView({kind: 'updated', version: '9.1.0'});
+    const notApplied = updateOutcomeView({kind: 'notApplied', version: '9.1.0', running: '9.0.0'});
+
+    /* Then */
+    assert.deepEqual(updated, {label: 'Updated to 9.1.0', detail: null});
+    assert.equal(notApplied.label, "Update to 9.1.0 didn't apply");
+    assert.match(notApplied.detail ?? '', /restarted on 9\.0\.0/);
 });
 
 test('installing with nothing running asks nothing', () => {

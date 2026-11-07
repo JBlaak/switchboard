@@ -241,7 +241,10 @@ test.describe('update notice', () => {
         }) => {
             /* Given */
             await openSession(page, home, LABEL.loginFix, S.loginFix);
-            await setHostStub(app, 'installUpdate', false);
+            await setHostStub(app, 'installUpdate', {
+                ok: false,
+                failure: {step: 'downloading', reason: 'GitHub answered 404.'},
+            });
 
             /* When */
             // The count is taken after a load; reloading the window loads again with
@@ -267,7 +270,9 @@ test.describe('update notice', () => {
             await noticeButton(page, 'Install').click();
 
             /* Then */
-            await expect(sidebarFooter(page).getByText('Update failed', {exact: true})).toBeVisible();
+            const failed = sidebarFooter(page).getByText('Download failed', {exact: true});
+            await expect(failed).toBeVisible();
+            await expect(failed).toHaveAttribute('title', 'GitHub answered 404. This app was left as it was.');
             expect((await hostStubCalls(app)).installUpdate).toBe(1);
 
             /* When */
@@ -276,8 +281,64 @@ test.describe('update notice', () => {
             await noticeButton(page, 'Retry').click();
 
             /* Then */
-            await expect(noticeButton(page, 'Installing…')).toBeDisabled();
+            await expect(sidebarFooter(page).getByText('Starting the 9.1.0 download…', {exact: true})).toBeVisible();
+            await expect(noticeButton(page, 'Retry')).toHaveCount(0);
             expect((await hostStubCalls(app)).installUpdate).toBe(2);
+        });
+
+        test('follows the install through each step, with a bar for the download', async ({page, app}) => {
+            /* Given */
+            const bar = sidebarFooter(page).getByRole('progressbar', {name: 'Update progress'});
+            const line = (text: string) => sidebarFooter(page).getByText(text, {exact: true});
+
+            /* When */
+            await noticeButton(page, 'Install').click();
+
+            /* Then */
+            await expect(line('Starting the 9.1.0 download…')).toBeVisible();
+            await expect(noticeButton(page, 'Dismiss')).toHaveCount(0);
+
+            /* When */
+            await pushEvent(app, EVENT.updateProgress, {step: 'downloading', received: 41_200_000, total: 98_000_000});
+
+            /* Then */
+            await expect(line('Downloading 9.1.0… 42%')).toHaveAttribute('title', '41.2 MB of 98.0 MB');
+            await expect(bar).toHaveAttribute('aria-valuenow', '42');
+
+            /* When */
+            await pushEvent(app, EVENT.updateProgress, {step: 'unpacking'});
+
+            /* Then */
+            await expect(line('Unpacking 9.1.0…')).toBeVisible();
+
+            /* When */
+            await pushEvent(app, EVENT.updateProgress, {step: 'checking'});
+
+            /* Then */
+            await expect(line('Checking 9.1.0…')).toBeVisible();
+
+            /* When */
+            await pushEvent(app, EVENT.updateProgress, {step: 'restarting'});
+
+            /* Then */
+            await expect(line('Restarting into 9.1.0…')).toBeVisible();
+            await expect(bar).toHaveAttribute('aria-valuenow', '100');
+        });
+    });
+
+    test.describe('after the restart', () => {
+        test.use({stubs: {updateOutcome: {kind: 'updated', version: '9.1.0'}}});
+
+        test('says the update arrived, until dismissed', async ({page}) => {
+            /* Given */
+            const updated = sidebarFooter(page).getByText('Updated to 9.1.0', {exact: true});
+            await expect(updated).toBeVisible();
+
+            /* When */
+            await noticeButton(page, 'Dismiss').click();
+
+            /* Then */
+            await expect(updated).toBeHidden();
         });
     });
 });

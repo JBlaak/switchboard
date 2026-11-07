@@ -30,6 +30,7 @@ import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
 import type {BackgroundTask} from '../domain/session/background-tasks';
 import type {UpdateNotice} from '../domain/update/release';
+import type {InstallProgress} from '../domain/update/progress';
 import type {TasksUpdate} from '../domain/tasks/surface';
 import type {ShownPage} from '../domain/session/page-tool';
 import type {BatteryGauge} from '../application/ports/battery';
@@ -154,6 +155,10 @@ export class PhoneEventTee implements RendererGateway {
 
     public updateAvailable(update: UpdateNotice): void {
         this.inner.updateAvailable(update);
+    }
+
+    public updateProgress(progress: InstallProgress): void {
+        this.inner.updateProgress(progress);
     }
 
     public sessionWorkSnapshot(snapshot: SessionWorkSnapshot): void {
