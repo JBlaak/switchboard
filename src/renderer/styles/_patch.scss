@@ -24,9 +24,7 @@
     border-radius: var(--sb-r-panel);
     overflow: hidden;
     background: #0d0e11;
-    box-shadow:
-        var(--sb-edge),
-        var(--sb-lift);
+    box-shadow: var(--sb-edge), var(--sb-lift);
     font-family: var(--sb-font-head);
 }
 
@@ -40,6 +38,41 @@
 .placeholder-family + .placeholder-patch .patch-art,
 .placeholder-family + .placeholder-patch .patch-bubble {
     pointer-events: auto;
+}
+
+/* With the family above, Patch's bubble would sit on the outing. It talks
+   from beside Patch instead: to its right, under the card's lower edge, the
+   tail pointing back at Patch. The bubble hangs off the scene, so Patch stays
+   centred over the box, and it is held to the card's right half. Its top sits
+   just under the card (the scene's foot is 90px below the card's edge: 290px
+   held, 200px tucked under), so a longer line grows down, not into the card. */
+@media (min-height: 721px) {
+    .placeholder-family + .placeholder-patch {
+        align-self: stretch;
+        container-type: inline-size;
+    }
+
+    .placeholder-family + .placeholder-patch .patch-scene {
+        position: relative;
+    }
+
+    .placeholder-family + .placeholder-patch .patch-bubble {
+        position: absolute;
+        left: calc(100% - 34px);
+        top: calc(100% - 80px);
+        width: max-content;
+        max-width: min(280px, calc(min(820px, 100cqw - 64px) / 2 - 80px));
+        text-align: left;
+        transform-origin: 0 50%;
+    }
+
+    .placeholder-family + .placeholder-patch .patch-bubble::after {
+        left: -5px;
+        top: 13px;
+        bottom: auto;
+        margin: 0;
+        box-shadow: -1px 1px 0 0 var(--patch-bubble-edge);
+    }
 }
 
 /* A short window keeps Patch and the box, and leaves the outing out. */
