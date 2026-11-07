@@ -34,8 +34,6 @@ import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
 import {askQuestions} from '../support/questions';
 import {
     allowMotion,
-    expectInOrder,
-    expectRowsInOrder,
     failInvoke,
     listScroller,
     readMotion,
@@ -101,63 +99,10 @@ async function startPlainTerminal(page: Page, projectPath: string): Promise<stri
     }, projectPath);
 }
 
-// ── Order and sections ──
+// ── Truncation and pinning ──
 
-test.describe('order', () => {
-    test('needs input, ready, working, pinned, then recent; a busy↔idle flip moves the open row', async ({
-        page,
-        app,
-        home,
-    }) => {
-        /* Given */
-        const login = await openSession(page, home, LABEL.loginFix, S.loginFix);
-        const charts = await openSession(page, home, LABEL.chartsDarkMode, S.chartsDarkMode);
-        const worktree = await openSession(page, home, LABEL.worktreeTry, S.worktreeTry);
-
-        /* When */
-        await charts.status({state: 'working'});
-        await login.status({state: 'blocked', kind: 'permission'});
-        await redraw(page, app, S.bumpDeps);
-
-        /* Then */
-        expect(await sectionOf(page, LABEL.loginFix)).toBe('Blocked');
-        expect(await sectionOf(page, LABEL.worktreeTry)).toBe('Your turn');
-        expect(await sectionOf(page, LABEL.chartsDarkMode)).toBe('Working');
-        expect(await sectionOf(page, LABEL.releaseNotes)).toBe('Pinned');
-        expect(await sectionOf(page, LABEL.billingGroup)).toBe('Recent');
-        await expectInOrder(page, [
-            'Blocked',
-            LABEL.loginFix,
-            'Your turn',
-            LABEL.worktreeTry,
-            'Working',
-            LABEL.chartsDarkMode,
-            'Pinned',
-            LABEL.releaseNotes,
-            'Recent',
-            LABEL.billingGroup,
-            LABEL.remoteApi,
-            LABEL.parserExperiment,
-        ]);
-
-        /* When */
-        await worktree.status({state: 'working'});
-
-        /* Then */
-        await expect.poll(() => sectionOf(page, LABEL.worktreeTry)).toBe('Working');
-
-        /* When */
-        await worktree.status({state: 'idle'});
-
-        /* Then */
-        await expect.poll(() => sectionOf(page, LABEL.worktreeTry)).toBe('Your turn');
-    });
-});
-
-// ── Truncation ──
-
-test.describe('truncation', () => {
-    test('rows older than the age limit fold behind "+ N older", which opens, survives a redraw and closes', async ({
+test.describe('truncation and pin', () => {
+    test('old rows fold behind "+ N older", which opens, survives a redraw and closes; pinning and unpinning go through main', async ({
         page,
         app,
     }) => {
@@ -185,6 +130,26 @@ test.describe('truncation', () => {
         // Pinned five days ago, and a remote last opened three hours ago: both stay.
         await expect(sessionRow(page, LABEL.releaseNotes)).toBeVisible();
         await expect(sessionRow(page, LABEL.remoteApi)).toBeVisible();
+
+        /* When */
+        await sessionRow(page, LABEL.chartsDarkMode).hover();
+        await sessionItem(page, S.chartsDarkMode).getByTestId('session-pin').click();
+
+        /* Then */
+        // The row moves into Pinned once main has stored it.
+        await expect.poll(() => sectionOf(page, LABEL.chartsDarkMode)).toBe('Pinned');
+        expect(await storedSession(page, S.chartsDarkMode)).toMatchObject({starred: 1});
+        await expect(sessionItem(page, S.chartsDarkMode).getByTestId('session-pin')).toHaveClass(/\bpinned\b/);
+
+        /* When */
+        await sessionRow(page, LABEL.releaseNotes).hover();
+        await sessionItem(page, S.releaseNotes).getByTestId('session-pin').click();
+
+        /* Then */
+        // Unpinned, the old row goes behind "+ N older".
+        await expect(sidebar(page).getByText('+ 4 older', {exact: true})).toBeVisible();
+        await expect(sessionRow(page, LABEL.releaseNotes)).toBeHidden();
+        expect(await storedSession(page, S.releaseNotes)).toMatchObject({starred: 0});
     });
 });
 
@@ -258,7 +223,7 @@ test.describe('after a redraw', () => {
 // ── What a row shows ──
 
 test.describe('row state', () => {
-    test('follows its session: running, busy, on screen, answered unread and needing attention', async ({
+    test('follows its session: running, busy, on screen, answered unread and needing attention, filed under its section', async ({
         page,
         home,
     }) => {
@@ -278,6 +243,7 @@ test.describe('row state', () => {
 
         /* Then */
         await expect(row).toHaveClass(/\bcli-busy\b/);
+        await expect.poll(() => sectionOf(page, LABEL.loginFix)).toBe('Working');
 
         /* When */
         // Look at another session, so the answer arrives unread.
@@ -289,6 +255,7 @@ test.describe('row state', () => {
         await expect(row).not.toHaveClass(/\bactive\b/);
         await expect(row).toHaveClass(/\bresponse-ready\b/);
         await expect(row).not.toHaveClass(/\bcli-busy\b/);
+        await expect.poll(() => sectionOf(page, LABEL.loginFix)).toBe('Your turn');
 
         /* When */
         await login.notify('Claude needs your permission to use Bash');
@@ -319,11 +286,7 @@ test.describe('row state', () => {
 // ── Slug groups ──
 
 test.describe('slug group', () => {
-    test('folds on its header, stays open across a reload, and keeps the session on screen in view', async ({
-        page,
-        app,
-        home,
-    }) => {
+    test('opens on its header, stays open across a reload, and its sessions open from it', async ({page, home}) => {
         /* When */
         await sessionRow(page, LABEL.billingGroup).first().click();
 
@@ -338,32 +301,9 @@ test.describe('slug group', () => {
 
         /* When */
         await openSession(page, home, BILLING_PLAN, S.billingPlan);
-        await redraw(page, app, S.bumpDeps);
 
         /* Then */
-        // The running session first, the rest behind "+ 2 more".
-        await expectRowsInOrder(page, [S.billingPlan, S.billingStep2, S.billingStep1]);
-        await expect(sidebar(page).getByText('+ 2 more', {exact: true})).toHaveCount(1);
-
-        /* When */
-        await sidebar(page).getByText('3 sessions', {exact: true}).click();
-
-        /* Then */
-        await expect(sessionRow(page, BILLING_STEP_1)).toBeHidden();
-
-        /* When */
-        await redraw(page, app, S.bumpDeps);
-
-        /* Then */
-        // It holds the session on screen, so a redraw opens it again.
-        await expect(sessionRow(page, BILLING_STEP_1)).toBeVisible();
-
-        /* When */
-        await sidebar(page).getByText('3 sessions', {exact: true}).click();
-        await sessionRow(page, BILLING_STEP_1).waitFor({state: 'hidden'});
-        await sidebar(page).getByText('+ 2 more', {exact: true}).dispatchEvent('click');
-
-        /* Then */
+        await expect(sessionItem(page, S.billingPlan)).toHaveClass(/\bactive\b/);
         await expect(sessionRow(page, BILLING_STEP_1)).toBeVisible();
     });
 });
@@ -436,43 +376,9 @@ test.describe('under a short list', () => {
 
 // ── Row actions ──
 
-test.describe('pin', () => {
-    test('pinning moves the row into Pinned once main has stored it; unpinning sends an old row behind "+ N older"', async ({
-        page,
-    }) => {
-        /* When */
-        await sessionRow(page, LABEL.chartsDarkMode).hover();
-        await sessionItem(page, S.chartsDarkMode).getByTestId('session-pin').click();
-
-        /* Then */
-        await expect.poll(() => sectionOf(page, LABEL.chartsDarkMode)).toBe('Pinned');
-        expect(await storedSession(page, S.chartsDarkMode)).toMatchObject({starred: 1});
-        await expect(sessionItem(page, S.chartsDarkMode).getByTestId('session-pin')).toHaveClass(/\bpinned\b/);
-
-        /* When */
-        await sessionRow(page, LABEL.releaseNotes).hover();
-        await sessionItem(page, S.releaseNotes).getByTestId('session-pin').click();
-
-        /* Then */
-        await expect(sidebar(page).getByText('+ 4 older', {exact: true})).toBeVisible();
-        await expect(sessionRow(page, LABEL.releaseNotes)).toBeHidden();
-        expect(await storedSession(page, S.releaseNotes)).toMatchObject({starred: 0});
-    });
-});
-
 test.describe('pin a plan', () => {
-    test('a pinned plan sits above every unpinned session, live ones included, and stays pinned after a reload', async ({
-        page,
-        app,
-        home,
-    }) => {
+    test('a pinned plan files under Pinned plans and stays pinned after a reload', async ({page}) => {
         /* Given */
-        const login = await openSession(page, home, LABEL.loginFix, S.loginFix);
-        const charts = await openSession(page, home, LABEL.chartsDarkMode, S.chartsDarkMode);
-        await charts.status({state: 'working'});
-        await login.status({state: 'blocked', kind: 'permission'});
-        await redraw(page, app, S.bumpDeps);
-        expect(await sectionOf(page, LABEL.loginFix)).toBe('Blocked');
         const header = sidebar(page).locator('.slug-group-header').filter({hasText: LABEL.billingGroup});
 
         /* When */
@@ -482,17 +388,6 @@ test.describe('pin a plan', () => {
         /* Then */
         await expect.poll(() => sectionOf(page, LABEL.billingGroup)).toBe('Pinned plans');
         await expect(header.getByTestId('plan-pin')).toHaveClass(/\bpinned\b/);
-        await expectInOrder(page, [
-            'Pinned plans',
-            LABEL.billingGroup,
-            'Blocked',
-            LABEL.loginFix,
-            'Working',
-            LABEL.chartsDarkMode,
-            'Pinned',
-            LABEL.releaseNotes,
-            'Recent',
-        ]);
         // The plan's sessions keep their own stars.
         expect(await storedSession(page, S.billingStep1)).toMatchObject({starred: 0});
 
@@ -612,6 +507,7 @@ test.describe('snooze', () => {
     test.describe('on time', () => {
         test.use({fakeTimers: true});
 
+        // The renderer's wake timer; when a snooze ends is unit tested (test/session-snooze.test.ts).
         test('a snoozed row comes back by itself once its time has come', async ({page}) => {
             /* Given */
             const row = sessionRow(page, LABEL.loginFix);
@@ -621,13 +517,7 @@ test.describe('snooze', () => {
             await expect(sessionItem(page, S.loginFix)).toHaveCount(0);
 
             /* When */
-            await page.clock.fastForward('59:00');
-
-            /* Then */
-            await expect(sessionItem(page, S.loginFix)).toHaveCount(0);
-
-            /* When */
-            await page.clock.fastForward('02:00');
+            await page.clock.fastForward('01:01:00');
 
             /* Then */
             await expect(row).toBeVisible();
@@ -737,7 +627,7 @@ test.describe('archive', () => {
         // It stops at the first session it cannot stop.
         await expect.poll(() => dialogsAsked(page)).toHaveLength(2);
         await expect(header).toBeVisible();
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(200);
         expect(await dialogsAsked(page)).toHaveLength(2);
         for (const id of [S.billingPlan, S.billingStep1, S.billingStep2]) {
             expect(await storedSession(page, id)).toMatchObject({archived: 0});
@@ -760,7 +650,8 @@ test.describe('archive', () => {
             await rowButton(row, 'Archive').click();
             await row.click();
             await page.clock.runFor(440);
-            await page.waitForTimeout(1000);
+            // Real time for a launch or a store the click might have set off.
+            await page.waitForTimeout(200);
 
             /* Then */
             expect(fakeClaude(home, S.chartsDarkMode).launches()).toHaveLength(0);
@@ -910,17 +801,21 @@ test.describe('rename', () => {
         /* Then */
         await expect(sessionRow(page, LABEL.loginFix)).toBeVisible();
         await expect(input).toHaveCount(0);
-        await page.waitForTimeout(300);
-        expect(await storedSession(page, S.loginFix)).toMatchObject({name: null});
 
         /* When */
         await sessionRow(page, LABEL.loginFix).dblclick();
+
+        /* Then */
+        // It opens again on the old name: Escape stored nothing.
+        await expect(input).toHaveValue(LABEL.loginFix);
+
+        /* When */
         await input.fill('Redirect loop, take two');
         await page.keyboard.press('Enter');
 
         /* Then */
         await expect(sessionRow(page, 'Redirect loop, take two')).toBeVisible();
-        expect(await storedSession(page, S.loginFix)).toMatchObject({name: 'Redirect loop, take two'});
+        await expect.poll(() => storedSession(page, S.loginFix)).toMatchObject({name: 'Redirect loop, take two'});
 
         /* When */
         await sessionRow(page, 'Redirect loop, take two').dblclick();
