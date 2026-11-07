@@ -11,6 +11,8 @@
 
 $tray-enter: cubic-bezier(0.2, 0.8, 0.2, 1);
 $tray-exit: cubic-bezier(0.4, 0, 1, 1);
+/* Fits Workspace's four rows and the Session card, so only a long Ask or Links list scrolls. */
+$tray-height: 240px;
 
 /* ---- The bar ---- */
 
@@ -80,6 +82,10 @@ $tray-exit: cubic-bezier(0.4, 0, 1, 1);
 .session-tray {
     display: grid;
     grid-template-columns: 1.3fr 1.3fr 0.8fr 0.8fr;
+    /* Always the same height, however many prompts or links: a longer group scrolls in its card. */
+    grid-template-rows: minmax(0, 1fr);
+    box-sizing: border-box;
+    height: min(#{$tray-height}, 70vh);
     gap: 8px;
     padding: 12px;
     background: rgba(var(--sb-bg-panel-rgb), 0.86);
@@ -113,6 +119,8 @@ $tray-exit: cubic-bezier(0.4, 0, 1, 1);
     flex-direction: column;
     gap: 2px;
     min-width: 0;
+    min-height: 0;
+    overflow: hidden;
     padding: 12px 10px;
     border-radius: var(--sb-r-card);
     opacity: 0;
@@ -129,6 +137,18 @@ $tray-exit: cubic-bezier(0.4, 0, 1, 1);
             transform 240ms $tray-enter;
         transition-delay: calc(40ms + var(--i) * 30ms);
     }
+}
+
+/* A group's rows, under its label: they scroll when there are more than fit. */
+.tray-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
 }
 
 .tray-ask {
