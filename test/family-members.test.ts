@@ -95,7 +95,10 @@ test('the front of the family is whoever needs the user, then the busiest', () =
     });
 
     /* When */
-    const members = familyMembersIn(state, ['idle', 'one', 'three', 'asks', 'done'].map((id) => row(id, id)));
+    const members = familyMembersIn(
+        state,
+        ['idle', 'one', 'three', 'asks', 'done'].map((id) => row(id, id)),
+    );
 
     /* Then */
     assert.deepEqual(
@@ -142,4 +145,21 @@ test('a session without a title goes by its project folder', () => {
 
     /* Then */
     assert.equal(member!.name, 'patch');
+});
+
+test('a snoozed session stays home, and joins again once it wakes', () => {
+    /* Given */
+    const state = stateWith(['awake', 'asleep', 'woken']);
+    const now = Date.parse('2026-11-07T10:00:00Z');
+    const rows = [
+        row('awake', 'Awake'),
+        {...row('asleep', 'Asleep'), snoozedUntil: '2026-11-07T15:00:00Z'},
+        {...row('woken', 'Woken'), snoozedUntil: '2026-11-07T09:00:00Z'},
+    ];
+
+    /* When */
+    const members = familyMembersIn(state, rows, now);
+
+    /* Then */
+    assert.deepEqual(members.map((m) => m.id).sort(), ['awake', 'woken']);
 });

@@ -1,12 +1,14 @@
 /**
  * Who is out with the Patch family on the empty screen: one member per
- * session with a live terminal, posed for what it is doing.
+ * session with a live terminal that is not snoozed, posed for what it is
+ * doing. A snoozed session would only add a sleeping Patch, so it stays home.
  *
  * Pure, so the rule is written once and tested in node; the scene itself is
  * drawn by `ui/patch/EmptyScreenFamily`. The order matters: the first members
  * stand in front, so a session waiting on the user comes first, then the busy
  * ones (most helpers first), then the finished and the resting.
  */
+import {isSnoozed} from '../../domain/session/snooze';
 import {rowActivity} from './row-activity';
 import {sessionDisplayName} from './session-list-layout';
 import type {RendererState} from './root';
@@ -53,14 +55,18 @@ export function familyStatusOf(state: RendererState, sessionId: string): {status
 }
 
 /**
- * The members for the sessions in `rows` that have a live terminal, front
- * first, at most `FAMILY_SIZE` of them.
+ * The members for the sessions in `rows` that have a live terminal and are
+ * not snoozed at `now`, front first, at most `FAMILY_SIZE` of them.
  */
-export function familyMembersIn(state: RendererState, rows: Iterable<SessionRow>): FamilyMemberView[] {
+export function familyMembersIn(
+    state: RendererState,
+    rows: Iterable<SessionRow>,
+    now: number = Date.now(),
+): FamilyMemberView[] {
     const live = state.view.activePtyIds;
     const members: FamilyMemberView[] = [];
     for (const row of rows) {
-        if (!live.has(row.sessionId)) continue;
+        if (!live.has(row.sessionId) || isSnoozed(row.snoozedUntil, now)) continue;
         const {status, helpers} = familyStatusOf(state, row.sessionId);
         const title = sessionDisplayName(row) || folderOf(row.projectPath);
         const helping = helpers ? ` · ${helpers} agent${helpers === 1 ? '' : 's'}` : '';
