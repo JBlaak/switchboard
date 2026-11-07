@@ -80,9 +80,34 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
+              with:
+                  # The previous release's tag, to see what changed since.
+                  fetch-depth: 0
+
+            # A release that changes nothing the phone app is built from (the
+            # paths android.yml watches, plus this workflow) carries the previous
+            # release's APK, under its own version, instead of building a new one:
+            # the phone and the Mac agree on PROTOCOL_VERSION in src/domain/phone,
+            # not on the app version. With no previous APK to take, it builds.
+            - name: Reuse the previous APK when nothing Android changed
+              id: reuse
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  previous="$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_SHA}^" 2>/dev/null || true)"
+                  if [ -n "$previous" ] \
+                    && git diff --quiet "$previous" "$GITHUB_SHA" -- android src/domain/phone .github/workflows/build.yml \
+                    && gh release download "$previous" --repo "$GITHUB_REPOSITORY" --pattern '*.apk' --dir dist; then
+                    echo "::notice::Nothing the phone app is built from changed since ${previous}: this release carries $(basename dist/*.apk)."
+                    echo "done=true" >> "$GITHUB_OUTPUT"
+                  else
+                    rm -rf dist
+                    echo "done=false" >> "$GITHUB_OUTPUT"
+                  fi
 
             - name: Check for the signing secrets
               id: signing
+              if: steps.reuse.outputs.done != 'true'
               env:
                   KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
                   KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -134,7 +159,7 @@ jobs:
               run: rm -f "$RUNNER_TEMP/release.jks"
 
             - name: Upload the APK
-              if: steps.signing.outputs.available == 'true'
+              if: steps.signing.outputs.available == 'true' || steps.reuse.outputs.done == 'true'
               uses: actions/upload-artifact@v4
               with:
                   name: android-apk
