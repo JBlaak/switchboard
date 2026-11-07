@@ -8,6 +8,9 @@
  * - Session: context used with its meter, shell · running time · messages,
  *   Copy session id, Archive and Stop.
  *
+ * The tray is always the same height: a group with more rows than fit
+ * scrolls inside its card (`.tray-card-body`) instead of stretching the tray.
+ *
  * Kept apart from the store so a test can draw it; `SessionTray` feeds it.
  */
 import type {CSSProperties, JSX, MouseEvent} from 'react';
@@ -85,22 +88,24 @@ function AskGroup({prompts, sent, actions}: SessionTrayContentProps): JSX.Elemen
                     Edit
                 </button>
             </div>
-            {prompts.length === 0 && <p className="tray-empty">No saved prompts yet</p>}
-            {prompts.map((prompt) => {
-                const isSent = sent === prompt.id;
-                return (
-                    <button
-                        key={prompt.scope + ':' + prompt.id}
-                        type="button"
-                        className={'tray-row' + (isSent ? ' is-sent' : '')}
-                        title={prompt.text}
-                        aria-label={(prompt.mode === 'send' ? 'Send: ' : 'Type: ') + prompt.label}
-                        onClick={() => actions.sendPrompt(prompt)}>
-                        <span className="tray-row-text">{isSent ? 'Sent ✓' : prompt.label}</span>
-                        {prompt.key !== null && <span className="tray-key">{'⌘' + prompt.key}</span>}
-                    </button>
-                );
-            })}
+            <div className="tray-card-body">
+                {prompts.length === 0 && <p className="tray-empty">No saved prompts yet</p>}
+                {prompts.map((prompt) => {
+                    const isSent = sent === prompt.id;
+                    return (
+                        <button
+                            key={prompt.scope + ':' + prompt.id}
+                            type="button"
+                            className={'tray-row' + (isSent ? ' is-sent' : '')}
+                            title={prompt.text}
+                            aria-label={(prompt.mode === 'send' ? 'Send: ' : 'Type: ') + prompt.label}
+                            onClick={() => actions.sendPrompt(prompt)}>
+                            <span className="tray-row-text">{isSent ? 'Sent ✓' : prompt.label}</span>
+                            {prompt.key !== null && <span className="tray-key">{'⌘' + prompt.key}</span>}
+                        </button>
+                    );
+                })}
+            </div>
         </div>
     );
 }
@@ -111,51 +116,55 @@ function LinksGroup({links, now, actions}: SessionTrayContentProps): JSX.Element
             <div className="tray-label" id="tray-links-label">
                 Links
             </div>
-            {links.length === 0 && <p className="tray-empty">Nothing yet</p>}
-            {links.map(({link, opens}) => {
-                const meta = linkMeta(link, now);
-                const inside = (
-                    <>
-                        <span className="tray-link-title">{link.title}</span>
-                        <span className="tray-link-meta">
-                            <span className="tray-chip">
-                                <LinkChipDot dot={meta.dot} />
-                                {meta.chip}
+            <div className="tray-card-body">
+                {links.length === 0 && <p className="tray-empty">Nothing yet</p>}
+                {links.map(({link, opens}) => {
+                    const meta = linkMeta(link, now);
+                    const inside = (
+                        <>
+                            <span className="tray-link-title">{link.title}</span>
+                            <span className="tray-link-meta">
+                                <span className="tray-chip">
+                                    <LinkChipDot dot={meta.dot} />
+                                    {meta.chip}
+                                </span>
+                                {meta.text}
                             </span>
-                            {meta.text}
-                        </span>
-                    </>
-                );
-                const url = linkUrl(link);
-                if (url) {
-                    return (
-                        <a
-                            key={link.key}
-                            className="tray-link"
-                            href={url}
-                            title={url}
-                            onClick={(e: MouseEvent<HTMLAnchorElement>) => {
-                                e.preventDefault();
-                                actions.openLink(link);
-                            }}>
-                            {inside}
-                        </a>
+                        </>
                     );
-                }
-                return (
-                    <button
-                        key={link.key}
-                        type="button"
-                        className="tray-link"
-                        disabled={!opens}
-                        title={
-                            opens ? linkTitle(link) : 'Shown before Switchboard restarted, so it cannot be shown again'
-                        }
-                        onClick={() => actions.openLink(link)}>
-                        {inside}
-                    </button>
-                );
-            })}
+                    const url = linkUrl(link);
+                    if (url) {
+                        return (
+                            <a
+                                key={link.key}
+                                className="tray-link"
+                                href={url}
+                                title={url}
+                                onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+                                    e.preventDefault();
+                                    actions.openLink(link);
+                                }}>
+                                {inside}
+                            </a>
+                        );
+                    }
+                    return (
+                        <button
+                            key={link.key}
+                            type="button"
+                            className="tray-link"
+                            disabled={!opens}
+                            title={
+                                opens
+                                    ? linkTitle(link)
+                                    : 'Shown before Switchboard restarted, so it cannot be shown again'
+                            }
+                            onClick={() => actions.openLink(link)}>
+                            {inside}
+                        </button>
+                    );
+                })}
+            </div>
         </div>
     );
 }
@@ -196,52 +205,54 @@ function WorkspaceGroup({editor, handOffHosts, sessionId, actions}: SessionTrayC
             <div className="tray-label" id="tray-ws-label">
                 Workspace
             </div>
-            <button
-                type="button"
-                className="tray-row"
-                disabled={!available}
-                title={why}
-                aria-label={app ? 'Open in ' + app : 'Open in editor'}
-                onClick={actions.openInEditor}>
-                <Icon d="m6 4.5-3.5 3.5L6 11.5M10 4.5l3.5 3.5-3.5 3.5" />
-                {app ?? 'Editor'}
-            </button>
-            <button
-                type="button"
-                className="tray-row"
-                disabled={!available}
-                title={why}
-                aria-label="Reveal in Finder"
-                onClick={actions.revealInFinder}>
-                <Icon d="M2 4.5h4l1.5 1.5H14v6.5H2z" />
-                Finder
-            </button>
-            <button
-                type="button"
-                className="tray-row"
-                disabled={!available}
-                title={why}
-                aria-label="Open a shell here"
-                onClick={actions.shellHere}>
-                <Icon d="m5 7 2 1.5L5 10M8.5 10.5H11" rect={{x: 2, y: 3, width: 12, height: 10, rx: 2}} />
-                Shell here
-            </button>
-            {handOffHosts && (
-                // The button keeps its click to itself; with one host that click opens the dialog at once.
-                <div
-                    className="tray-handoff"
-                    onClickCapture={() => {
-                        if (handOffHosts.length === 1) actions.handOffClicked();
-                    }}>
-                    <HandOffSessionButton
-                        sessionId={sessionId}
-                        hosts={handOffHosts}
-                        className="tray-row"
-                        onMenu={actions.handOffMenu}
-                        html={{__html: HAND_OFF_HTML}}
-                    />
-                </div>
-            )}
+            <div className="tray-card-body">
+                <button
+                    type="button"
+                    className="tray-row"
+                    disabled={!available}
+                    title={why}
+                    aria-label={app ? 'Open in ' + app : 'Open in editor'}
+                    onClick={actions.openInEditor}>
+                    <Icon d="m6 4.5-3.5 3.5L6 11.5M10 4.5l3.5 3.5-3.5 3.5" />
+                    {app ?? 'Editor'}
+                </button>
+                <button
+                    type="button"
+                    className="tray-row"
+                    disabled={!available}
+                    title={why}
+                    aria-label="Reveal in Finder"
+                    onClick={actions.revealInFinder}>
+                    <Icon d="M2 4.5h4l1.5 1.5H14v6.5H2z" />
+                    Finder
+                </button>
+                <button
+                    type="button"
+                    className="tray-row"
+                    disabled={!available}
+                    title={why}
+                    aria-label="Open a shell here"
+                    onClick={actions.shellHere}>
+                    <Icon d="m5 7 2 1.5L5 10M8.5 10.5H11" rect={{x: 2, y: 3, width: 12, height: 10, rx: 2}} />
+                    Shell here
+                </button>
+                {handOffHosts && (
+                    // The button keeps its click to itself; with one host that click opens the dialog at once.
+                    <div
+                        className="tray-handoff"
+                        onClickCapture={() => {
+                            if (handOffHosts.length === 1) actions.handOffClicked();
+                        }}>
+                        <HandOffSessionButton
+                            sessionId={sessionId}
+                            hosts={handOffHosts}
+                            className="tray-row"
+                            onMenu={actions.handOffMenu}
+                            html={{__html: HAND_OFF_HTML}}
+                        />
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

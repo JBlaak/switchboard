@@ -593,6 +593,35 @@ test.describe('terminal search', () => {
     });
 });
 
+test.describe('session tray, hover zone', () => {
+    test('hovering the top of the terminal opens the tray, lower down does not', async ({page, home}) => {
+        /* Given */
+        await openSession(page, home, LABEL.loginFix, S.loginFix);
+        const box = await page.locator('#terminals').boundingBox();
+        if (!box) throw new Error('no terminal on screen');
+        const x = box.x + box.width / 2;
+
+        /* When */
+        await page.mouse.move(x, box.y + 160);
+        await settle(page, 300);
+
+        /* Then */
+        await expect(sessionTray(page)).not.toHaveClass(/is-open/);
+
+        /* When */
+        await page.mouse.move(x, box.y + 50);
+
+        /* Then */
+        await expect(sessionTray(page)).toHaveClass(/is-open/);
+
+        /* When */
+        await page.mouse.move(x, box.y + box.height - 20);
+
+        /* Then */
+        await expect(sessionTray(page)).not.toHaveClass(/is-open/);
+    });
+});
+
 test.describe('session tray, shell profile', () => {
     test.use({fixture: {...standardFixture(), projectSettings: {[P.acmeApi]: {shellProfile: 'bash'}}}});
 

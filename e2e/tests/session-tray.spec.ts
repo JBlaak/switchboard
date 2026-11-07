@@ -47,3 +47,47 @@ test('hovering the bar opens the tray over the terminal, and ⌘1 types a saved 
     await expect(tray).not.toHaveClass(/is-open/);
     expect(claude.size()).toEqual(sizeBefore);
 });
+
+test.describe('a tray with more rows than fit', () => {
+    const many = Array.from({length: 14}, (_, i) => ({
+        id: 'p' + i,
+        label: 'Prompt ' + (i + 1),
+        text: 'Prompt text ' + (i + 1),
+        mode: 'send' as const,
+    }));
+    test.use({fixture: {...standardFixture(), settings: {savedPrompts: many}}});
+
+    test('keeps the tray the same height and scrolls the group inside its card', async ({page, home}) => {
+        /* Given */
+        await openSession(page, home, LABEL.loginFix, S.loginFix);
+        const tray = page.getByRole('region', {name: 'Session tools'});
+
+        /* When */
+        await terminalHeader(page).getByText(LABEL.loginFix, {exact: true}).hover();
+        await expect(tray).toHaveClass(/is-open/);
+
+        /* Then */
+        expect((await tray.boundingBox())?.height).toBe(240);
+        const bodies = tray.locator('.tray-card-body');
+        const overflow = await bodies.evaluateAll((els) =>
+            els.map((el) => ({group: el.parentElement!.className, more: el.scrollHeight > el.clientHeight})),
+        );
+        expect(overflow).toEqual([
+            {group: expect.stringContaining('tray-ask'), more: true},
+            {group: expect.stringContaining('tray-links'), more: false},
+            {group: expect.stringContaining('tray-workspace'), more: false},
+        ]);
+        const session = tray.locator('.tray-session');
+        expect(await session.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
+
+        /* When */
+        const last = tray.getByRole('button', {name: 'Send: Prompt 14'});
+        await bodies.first().hover();
+        await page.mouse.wheel(0, 1000);
+
+        /* Then */
+        await expect(last).toBeInViewport();
+        await expect(tray).toHaveClass(/is-open/);
+        expect((await tray.boundingBox())?.height).toBe(240);
+    });
+});
