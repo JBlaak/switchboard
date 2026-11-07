@@ -28,6 +28,7 @@ test('on a Monday morning every option is open, later this week landing on Wedne
         Tomorrow: 'Tue 20 08:00',
         'Later this week': 'Wed 21 08:00',
         'This weekend': 'Fri 23 18:00',
+        'Next week': 'Mon 26 08:00',
     });
 });
 
@@ -59,6 +60,7 @@ test('a time of day that has passed is no longer offered', () => {
         'Tomorrow',
         'Later this week',
         'This weekend',
+        'Next week',
     ]);
 });
 
@@ -67,7 +69,7 @@ test('in the evening only the days ahead are offered', () => {
     const options = offered(local(19, 18));
 
     /* Then */
-    assert.deepEqual(Object.keys(options), ['Tomorrow', 'Later this week', 'This weekend']);
+    assert.deepEqual(Object.keys(options), ['Tomorrow', 'Later this week', 'This weekend', 'Next week']);
 });
 
 test('on a Friday afternoon this evening stands for the weekend too', () => {
@@ -79,17 +81,30 @@ test('on a Friday afternoon this evening stands for the weekend too', () => {
         'Later today': 'Fri 23 15:00',
         'This evening': 'Fri 23 18:00',
         Tomorrow: 'Sat 24 08:00',
+        'Next week': 'Mon 26 08:00',
     });
 });
 
-test('on a weekend only tomorrow is offered', () => {
+test('on a weekend tomorrow and next week are offered, and on a Sunday tomorrow is next week', () => {
     /* When */
     const saturday = offered(local(24, 19));
     const sunday = offered(local(25, 19));
 
     /* Then */
-    assert.deepEqual(saturday, {Tomorrow: 'Sun 25 08:00'});
+    assert.deepEqual(saturday, {Tomorrow: 'Sun 25 08:00', 'Next week': 'Mon 26 08:00'});
     assert.deepEqual(sunday, {Tomorrow: 'Mon 26 08:00'});
+});
+
+test('next week is the coming Monday morning from any day of the week', () => {
+    /* When */
+    const fromEachDay = [19, 20, 21, 22, 23, 24, 25].map((day) =>
+        snoozeOptions(local(day, 23, 59)).find(
+            (o) => o.label === 'Next week' || (o.label === 'Tomorrow' && o.until.getDay() === 1),
+        ),
+    );
+
+    /* Then */
+    for (const option of fromEachDay) assert.deepEqual(option?.until, local(26, 8));
 });
 
 test('a session is asleep until its time and awake from it', () => {
