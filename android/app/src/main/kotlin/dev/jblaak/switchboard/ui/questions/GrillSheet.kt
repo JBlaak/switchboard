@@ -45,22 +45,20 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.jblaak.switchboard.R
-import dev.jblaak.switchboard.components.webLinksIn
+import dev.jblaak.switchboard.components.MarkdownText
+import dev.jblaak.switchboard.components.rememberInlineMarkdown
 import dev.jblaak.switchboard.protocol.Choice
 import dev.jblaak.switchboard.protocol.Choices
 import dev.jblaak.switchboard.protocol.GrillAnswer
@@ -343,7 +341,7 @@ private fun QuestionCard(state: GrillSheetState, question: GrillQuestionView, ac
     val reasonStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 21.sp)
     val choices = question.choices
     if (choices == null) {
-        Text(markdown(question.reason), style = reasonStyle, color = colors.text)
+        MarkdownText(question.reason, style = reasonStyle, color = colors.text)
     } else {
         ChoicesReason(choices, question.recommendedChoice, state.pickedChoice(place), reasonStyle, actions)
     }
@@ -356,7 +354,7 @@ private fun QuestionCard(state: GrillSheetState, question: GrillQuestionView, ac
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Label(stringResource(R.string.questions_claude_recommends), colors.accent)
-        Text(markdown(question.recommendation), style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp), color = colors.textStrong)
+        MarkdownText(question.recommendation, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 22.sp), color = colors.textStrong)
     }
     Explanation(question, asking = state.isAsking(place))
     state.answerAt(place)?.let { answer ->
@@ -389,11 +387,11 @@ private fun RevisionNote(question: GrillQuestionView) {
 private fun ChoicesReason(choices: Choices, recommended: String?, picked: String?, style: TextStyle, actions: GrillSheetActions) {
     val colors = SwitchboardTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (choices.lead.isNotBlank()) Text(markdown(choices.lead), style = style, color = colors.text)
+        if (choices.lead.isNotBlank()) MarkdownText(choices.lead, style = style, color = colors.text)
         for (choice in choices.list) {
             ChoiceRow(choice, recommended = choice.letter == recommended, picked = choice.letter == picked, onClick = { actions.pick(choice.letter) })
         }
-        if (choices.after.isNotBlank()) Text(markdown(choices.after), style = style, color = colors.text)
+        if (choices.after.isNotBlank()) MarkdownText(choices.after, style = style, color = colors.text)
     }
 }
 
@@ -464,7 +462,7 @@ private fun Explanation(question: GrillQuestionView, asking: Boolean) {
     ) {
         if (explanation != null) {
             Label(stringResource(R.string.questions_grill_explanation), colors.textFaint)
-            Text(markdown(explanation), style = MaterialTheme.typography.bodyMedium, color = colors.text)
+            MarkdownText(explanation, style = MaterialTheme.typography.bodyMedium, color = colors.text)
         } else {
             Label(stringResource(R.string.questions_grill_asked), colors.textFaint)
             Text(
@@ -693,43 +691,9 @@ private fun answerLabel(answer: GrillAnswer): String = when (answer) {
     is GrillAnswer.Overridden -> stringResource(R.string.questions_grill_answer_own, answer.text)
 }
 
-/** [text]'s inline Markdown (`code`, **bold**) styled, and its web links tappable, in the house style. */
+/** [text]'s inline Markdown styled, and its web links tappable, in the house style. */
 @Composable
-private fun markdown(text: String): AnnotatedString {
-    val colors = SwitchboardTheme.colors
-    return remember(text, colors) {
-        inlineMarkdown(
-            text,
-            code = SpanStyle(fontFamily = JetBrainsMonoFamily, background = colors.line),
-            links = TextLinkStyles(style = SpanStyle(color = colors.accent, textDecoration = TextDecoration.Underline)),
-        )
-    }
-}
-
-/** `code` spans and **bold** spans, the marks taken out; web links in what is left made tappable. */
-internal fun inlineMarkdown(text: String, code: SpanStyle, links: TextLinkStyles?): AnnotatedString {
-    val marked = buildAnnotatedString {
-        var at = 0
-        for (match in inlineMark.findAll(text)) {
-            append(text.substring(at, match.range.first))
-            val codeText = match.groups[1]?.value
-            if (codeText != null) {
-                withStyle(code) { append(codeText) }
-            } else {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(match.groups[2]?.value.orEmpty()) }
-            }
-            at = match.range.last + 1
-        }
-        append(text.substring(at))
-    }
-    return AnnotatedString.Builder(marked).apply {
-        for (range in webLinksIn(marked.text)) {
-            addLink(LinkAnnotation.Url(marked.text.substring(range), links), range.first, range.last + 1)
-        }
-    }.toAnnotatedString()
-}
-
-private val inlineMark = Regex("""`([^`]+)`|\*\*([^*]+)\*\*""")
+private fun markdown(text: String): AnnotatedString = rememberInlineMarkdown(text)
 
 private val previewActions = object : GrillSheetActions {
     override fun accept() = Unit
@@ -775,7 +739,7 @@ private val previewView = GrillView(
             reason = "Transcripts are Claude's, so only our row and the worktree cost space.",
             recommendation = "(b) 30 days, then drop the row: predictable, and the transcript stays in Claude anyway.",
             choices = Choices(
-                lead = "Transcripts are Claude's, so only our row and the worktree cost space.",
+                lead = "Transcripts are Claude's, so only **our row** and the worktree cost space.\n\nPick how long a row stays:",
                 list = listOf(Choice("a", "Forever"), Choice("b", "30 days, then drop the row"), Choice("c", "Until its worktree is removed")),
                 after = "",
             ),
@@ -784,7 +748,9 @@ private val previewView = GrillView(
             setAside = GrillAnswer.Overridden("(c) Until its worktree is removed"),
             mark = GrillMark.Changed,
             asked = true,
-            explanation = "Worktrees are often removed by hand, so (c) would keep most rows forever.",
+            explanation = "Worktrees are often removed by hand, so (c) would keep **most rows forever**.\n\n" +
+                "What (b) costs:\n- one `DELETE` on start-up\n- *nothing* in the sidebar query\n\n" +
+                "```sql\nDELETE FROM sessions WHERE archived_at < ?\n```",
         ),
         previewQuestion(3, "The undo window", GrillAnswer.Noted("unless it's bulk")),
         previewQuestion(7, "Removing the worktree on archive", null, GrillMark.New),
