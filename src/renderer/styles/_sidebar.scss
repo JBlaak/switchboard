@@ -272,6 +272,130 @@
     color: var(--sb-yellow);
 }
 
+/* ---- Folding the pinned sections ----
+   Pinned projects and Pinned plans fold under their label (SessionList's
+   FoldableSection). The label is a button; its chevron sits in the marker
+   gutter, above the pins, so the label text stays on the shared text rail.
+   The body eases shut on grid rows (0fr ↔ 1fr), while its entries fade and
+   lift one after another: top-down when opening, bottom-up when folding, so
+   the section reads as gathering into its label. */
+$fold-ease: cubic-bezier(0.22, 1, 0.36, 1);
+$fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+.session-section-label.is-foldable {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    margin: 0;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.15s;
+}
+
+.session-section-label.is-foldable:hover {
+    color: var(--sb-text-strong);
+}
+
+.session-section-label.is-foldable:focus-visible,
+.session-section-label.is-foldable.kbd-cursor {
+    outline: none;
+    box-shadow: inset 0 0 0 1.5px var(--sb-accent);
+}
+
+.session-section-chevron {
+    position: absolute;
+    left: calc(var(--sb-row-inset) + (var(--sb-row-gutter) - 10px) / 2);
+    display: flex;
+    opacity: 0.6;
+    transform: rotate(90deg);
+    transition:
+        transform 320ms $fold-spring,
+        opacity 0.15s;
+}
+
+.session-section-label.is-foldable:hover .session-section-chevron {
+    opacity: 1;
+}
+
+.session-section-label.is-foldable:active .session-section-chevron {
+    scale: 0.85;
+}
+
+.session-section-label.is-folded .session-section-chevron {
+    transform: rotate(0deg);
+}
+
+/* How many entries the folded section holds; it pops in once they have gone. */
+.session-section-count {
+    padding: 1px 7px;
+    border-radius: 99px;
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+    color: var(--sb-text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+    animation: section-count-in 320ms $fold-spring 140ms both;
+}
+
+@keyframes section-count-in {
+    from {
+        opacity: 0;
+        transform: scale(0.6);
+    }
+}
+
+/* Once shut, the body is hidden outright, not just clipped: visibility flips
+   at the end of the fold and at the very start of the opening. */
+.session-section-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+        grid-template-rows 380ms $fold-ease,
+        visibility 0s;
+}
+
+.session-section-body.is-folded {
+    grid-template-rows: 0fr;
+    visibility: hidden;
+    transition:
+        grid-template-rows 300ms $fold-ease,
+        visibility 0s 300ms;
+}
+
+.session-section-rows {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.session-section-entry {
+    transition:
+        opacity 220ms ease calc(40ms + var(--i) * 35ms),
+        transform 300ms $fold-ease calc(40ms + var(--i) * 35ms);
+}
+
+.session-section-body.is-folded .session-section-entry {
+    opacity: 0;
+    transform: translateY(-6px);
+    transition-delay: calc((var(--n) - 1 - var(--i)) * 25ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .session-section-chevron,
+    .session-section-body,
+    .session-section-entry {
+        transition-duration: 0s;
+        transition-delay: 0s;
+    }
+    .session-section-count {
+        animation: none;
+    }
+}
+
 /* Wraps instead of truncating: the project name is the one part of the row that
    can be arbitrarily long, and an elided path tells you nothing. */
 .session-meta-left {

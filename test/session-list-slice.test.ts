@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {initialRendererState, rootReducer} from '../src/renderer/state/root';
-import {TIER_READY, TIER_REST} from '../src/domain/session/tiers';
+import {TIER_PINNED_PLAN, TIER_PINNED_PROJECT, TIER_READY, TIER_REST} from '../src/domain/session/tiers';
 import type {ListItem, SessionListGroup, SessionListRow} from '../src/renderer/state/session-list-layout';
 import type {RendererEvent} from '../src/renderer/state/events';
 import type {RendererState} from '../src/renderer/state/root';
@@ -291,4 +291,47 @@ test('a re-key leaves the list state alone: it is keyed by element ids', () => {
 
     /* Then */
     assert.equal(rekeyed.sessionList, state.sessionList);
+});
+
+test('a pinned section folds under its label and opens again', () => {
+    /* Given */
+    const state = run(initialRendererState(), built([item(row('a'))]));
+
+    /* When */
+    const folded = run(state, {type: 'sectionToggled', tier: TIER_PINNED_PLAN});
+
+    /* Then */
+    assert.deepEqual(folded.sessionList.foldedSections, [TIER_PINNED_PLAN]);
+
+    /* When */
+    const opened = run(folded, {type: 'sectionToggled', tier: TIER_PINNED_PLAN});
+
+    /* Then */
+    assert.deepEqual(opened.sessionList.foldedSections, []);
+});
+
+test('the pinned sections fold one at a time, and a redraw keeps them folded', () => {
+    /* Given */
+    const state = run(
+        initialRendererState(),
+        {type: 'sectionToggled', tier: TIER_PINNED_PROJECT},
+        {type: 'sectionToggled', tier: TIER_PINNED_PLAN},
+    );
+
+    /* When */
+    const redrawn = run(state, built([item(row('a'))]));
+
+    /* Then */
+    assert.deepEqual(redrawn.sessionList.foldedSections, [TIER_PINNED_PROJECT, TIER_PINNED_PLAN]);
+});
+
+test('only the pinned sections fold', () => {
+    /* Given */
+    const state = initialRendererState();
+
+    /* When */
+    const after = run(state, {type: 'sectionToggled', tier: TIER_READY});
+
+    /* Then */
+    assert.equal(after.sessionList, state.sessionList);
 });

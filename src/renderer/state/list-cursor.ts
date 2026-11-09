@@ -9,7 +9,8 @@
  * only lands on what is on screen; session navigation (Cmd+Shift+[ / ])
  * walks the rows in the same order, hidden ones included, as it always did.
  *
- * What is hidden is the stylesheet's rule, restated here: a folded group
+ * What is hidden is the stylesheet's rule, restated here: a folded section
+ * (Pinned projects, Pinned plans) hides its entries, a folded group
  * hides its rows, the "+ N older" list hides its entries until opened, a
  * group's own "+ N more" never shows (an open group shows its rows instead,
  * and a folded one hides the container the toggle sits in), and anything
@@ -17,6 +18,7 @@
  *
  * Nothing here reads the DOM or the store, so it is tested in node.
  */
+import {isFoldableTier} from '../../domain/session/tiers';
 import type {SessionListState} from './session-list-slice';
 import type {LaidEntry, SessionListRow} from './session-list-layout';
 
@@ -39,7 +41,8 @@ export type CursorTarget =
     | {readonly kind: 'project'; readonly name: string; readonly shown: boolean; readonly projectPath: string}
     | {readonly kind: 'header'; readonly name: string; readonly shown: boolean; readonly groupId: string}
     | {readonly kind: 'more'; readonly name: string; readonly shown: boolean; readonly groupId: string}
-    | {readonly kind: 'older'; readonly name: string; readonly shown: boolean};
+    | {readonly kind: 'older'; readonly name: string; readonly shown: boolean}
+    | {readonly kind: 'section'; readonly name: string; readonly shown: boolean; readonly tier: number};
 
 /** The cursor's name for a slug group's header, which has no element id of its own. */
 export function headerTarget(groupId: string): string {
@@ -49,6 +52,19 @@ export function headerTarget(groupId: string): string {
 /** The "+ N more" toggle inside a group, by its element id. */
 export function moreTarget(groupId: string): string {
     return 'sgm-' + groupId;
+}
+
+/** A section's label, by its element id. */
+export function sectionTarget(tier: number): string {
+    return 'section-' + tier;
+}
+
+/**
+ * Whether the section of this tier is folded away right now. A filtered list
+ * draws no labels, so nothing in it is folded.
+ */
+export function isSectionFolded(list: SessionListState, tier: number): boolean {
+    return !!list.layout && !list.layout.filtering && list.foldedSections.includes(tier);
 }
 
 /** The "+ N older" toggle, by its element id. */
@@ -100,7 +116,15 @@ export function cursorTargets(list: SessionListState, running: ReadonlySet<strin
         }
     };
 
-    for (const laid of layout.visible) entry(laid, true);
+    // A foldable section's label is a stop of its own, and folding it hides what is under it.
+    let lastTier: number | null = null;
+    for (const laid of layout.visible) {
+        if (!layout.filtering && laid.tier !== lastTier && isFoldableTier(laid.tier)) {
+            targets.push({kind: 'section', name: sectionTarget(laid.tier), shown: true, tier: laid.tier});
+        }
+        lastTier = laid.tier;
+        entry(laid, !isSectionFolded(list, laid.tier));
+    }
     if (layout.older.length > 0) {
         targets.push({kind: 'older', name: OLDER_TARGET, shown: true});
         for (const laid of layout.older) entry(laid, list.olderExpanded);

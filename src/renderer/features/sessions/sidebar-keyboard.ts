@@ -8,7 +8,7 @@
  * new session, and Escape goes back to the terminal.
  *
  * Where the cursor can go is read from the list's layout (`state/list-cursor`):
- * rows, group headers and the "more" toggles all take part, in the order the
+ * rows, group headers, the foldable section labels and the "more" toggles all take part, in the order the
  * list renders them. The cursor itself is state, so it survives a redraw, and
  * if what it was on is gone the next arrow simply starts again from the top.
  *
@@ -32,7 +32,14 @@ import {openSessions} from '../../state/session-store';
 import {openDialog} from '../../ui/dialogs/actions';
 import {openPlanPage} from '../../ui/plan-page/actions';
 import {openProjectPage} from '../../ui/project-page/actions';
-import {expandSlugGroup, openRow, startRename, toggleOlder, toggleSlugGroup} from '../../ui/session-list/actions';
+import {
+    expandSlugGroup,
+    openRow,
+    startRename,
+    toggleOlder,
+    toggleSection,
+    toggleSlugGroup,
+} from '../../ui/session-list/actions';
 import {cursorElement, pressArchive, setListCursor} from '../../ui/session-list/cursor';
 import {highlightedSession} from '../../state/main-area-slice';
 import type {CursorTarget} from '../../state/list-cursor';
@@ -145,6 +152,9 @@ function activateCursor(): void {
             return;
         case 'older':
             toggleOlder();
+            return;
+        case 'section':
+            toggleSection(cursor.tier);
             return;
     }
 }
