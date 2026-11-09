@@ -23,8 +23,13 @@ export const STORED_OVERVIEWS_KEPT = 20;
 /** How long the stored record may get, in characters: well within what localStorage holds. */
 export const STORED_OVERVIEWS_BUDGET = 2_000_000;
 
-/** The record's shape; a record of another version is not read. */
-const VERSION = 1;
+/**
+ * The record's shape; a record of another version is not read. Raise it
+ * whenever `ProjectOverview` gains a field the page reads: a stored overview
+ * without it reaches the page as it opens, and the throw takes down the window.
+ * 2: pull requests carry their wait reads (#332).
+ */
+const VERSION = 2;
 
 /** One project's last full overview, and what it was asked with. */
 export interface StoredOverview {

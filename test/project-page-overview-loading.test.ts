@@ -429,6 +429,18 @@ test('a record that is not ours reads as empty', () => {
     assert.deepEqual(read, [[], [], [], [], [], []]);
 });
 
+test('a record from before the pull requests carried their wait reads is not read', () => {
+    /* Given: the shape builds before #332 wrote, whose rows the page can't draw */
+    const record = JSON.parse(storedOverviewsWith([], {overview: overview(), closed: false, merged: false}));
+    const old = JSON.stringify({...record, v: 1});
+
+    /* When */
+    const read = parseStoredOverviews(old);
+
+    /* Then */
+    assert.deepEqual(read, []);
+});
+
 test('only a full, fresh answer for a local project is stored, not an agentless remote’s', () => {
     /* Given */
     const fresh = overview();
