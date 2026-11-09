@@ -428,14 +428,16 @@ test('issues: mentions and branch names, minus what a PR closes and the PRs them
     assert.deepEqual(summary(items), ['pr #50', 'issue #11', 'issue #44']);
 });
 
-const gaveUp: Activity = {
+const fixing: Activity = {
     id: 'a1',
-    action: 'fix-ci',
-    phase: 'gave-up',
-    origin: 'auto',
-    attempt: 2,
+    action: 'fix-comments',
+    phase: 'sent',
+    origin: 'manual',
     queuedAt: '2026-01-01T00:00:00Z',
 };
+const waitingOnYou = [
+    {id: 't', path: 'a', line: 1, side: 'RIGHT' as const, resolved: false, needsYou: true, comments: []},
+];
 
 function everyKind(): WorkFacts {
     return facts({
@@ -443,11 +445,8 @@ function everyKind(): WorkFacts {
         pullRequests: [link(1), link(2), link(3), link(4), link(5), link(6)],
         github: [
             gh(1, {state: 'merged'}),
-            gh(2, {state: 'open'}),
-            gh(3, {
-                state: 'draft',
-                threads: [{id: 't', path: 'a', line: 1, side: 'RIGHT', resolved: false, needsYou: true, comments: []}],
-            }),
+            gh(2, {state: 'open', threads: waitingOnYou}),
+            gh(3, {state: 'draft', threads: waitingOnYou}),
             gh(4, {state: 'closed'}),
             gh(5, {state: 'open'}),
             gh(6, {state: 'open'}),
@@ -468,7 +467,7 @@ function everyKind(): WorkFacts {
             {worktree: MAIN, branch: 'main', files: [{path: 'a', status: 'modified'}], additions: 0, deletions: 0},
         ],
         issueMentions: [{repository: REPO, number: 99}],
-        activities: new Map([[`pr:${url(2)}`, gaveUp]]),
+        activities: new Map([[`pr:${url(2)}`, fixing]]),
     });
 }
 
@@ -504,7 +503,7 @@ test('activities attach to PRs by their key', () => {
     /* Then */
     const two = items[1];
     assert.ok(two.kind === 'pr');
-    assert.equal(two.activity, gaveUp);
+    assert.equal(two.activity, fixing);
 });
 
 test('activities attach to branches by their key', () => {

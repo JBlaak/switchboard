@@ -40,13 +40,11 @@ export function shipSteps(pr: PullRequestStatus, activity: Activity | null | und
     const shipping = activity?.action === 'ship' ? activity : null;
     // A queued Ship it has not started: nothing is running until it is typed in.
     const active = shipping?.phase === 'sent';
-    const gaveUp = shipping?.phase === 'gave-up';
     const merged = pr.state === 'merged';
 
     // Where the PR is stuck when it is not done: running while Claude works on
-    // it, failed once Claude has given up, to do otherwise.
+    // it, to do otherwise.
     const pending = (stuck: boolean): ShipStepState => {
-        if (gaveUp) return 'failed';
         if (active) return 'running';
         return stuck ? 'failed' : 'todo';
     };
@@ -61,7 +59,7 @@ export function shipSteps(pr: PullRequestStatus, activity: Activity | null | und
     if (merged) ci = 'done';
     else if (!rebaseDone) ci = 'todo';
     else if (failing) ci = pending(!active);
-    else if (ciPending) ci = gaveUp ? 'failed' : 'running';
+    else if (ciPending) ci = 'running';
     else ci = 'done';
 
     let merge: ShipStepState;
@@ -73,7 +71,7 @@ export function shipSteps(pr: PullRequestStatus, activity: Activity | null | und
     let cleanup: ShipStepState;
     if (!merged) cleanup = 'todo';
     else if (shipping?.phase === 'done' || !shipping) cleanup = 'done';
-    else cleanup = gaveUp ? 'failed' : 'running';
+    else cleanup = 'running';
 
     return [
         {id: 'rebase', label: LABELS.rebase, state: rebase},

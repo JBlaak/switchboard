@@ -30,7 +30,7 @@ export interface StoredAction {
 }
 
 /** The parts of an `Activity` only some actions have. */
-export type ActivityDetails = Pick<Activity, 'attempt' | 'checkName' | 'attempts'>;
+export type ActivityDetails = Pick<Activity, 'checkName'>;
 
 export interface ActivityStore {
     add(action: StoredAction): void;

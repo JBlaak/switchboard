@@ -46,7 +46,7 @@ export class SqliteActivityStore implements ActivityStore {
     `);
         this.removeStatement = db.prepare<[string]>('DELETE FROM session_actions WHERE id = ?');
         this.unfinishedStatement = db.prepare<[], Row>(
-            "SELECT * FROM session_actions WHERE phase IN ('queued', 'sent', 'gave-up') ORDER BY queued_at, rowid",
+            "SELECT * FROM session_actions WHERE phase IN ('queued', 'sent') ORDER BY queued_at, rowid",
         );
     }
 

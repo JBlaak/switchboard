@@ -6,7 +6,6 @@
  * (A6), so they live here, word for word, where a test can hold them still.
  */
 import type {MergeMethod, ReviewThread} from './model';
-import {MAX_AUTO_FIX_ATTEMPTS} from './auto-fix';
 
 export type {MergeMethod};
 
@@ -36,8 +35,6 @@ export interface FixCiPrompt {
     sha: string;
     logTail: string;
     worktree: string;
-    /** Set for an automatic attempt: which one it is, 1-based. */
-    automaticAttempt?: number;
 }
 
 export interface FixCommentsPrompt {
@@ -96,6 +93,12 @@ export function promptThreadIds(prompt: string): string[] {
     return ids;
 }
 
+/** What failed and where to fix it: the start of Fix CI, and of the merge queue's fix for a CI failure. */
+export function fixCiTask(request: Omit<FixCiPrompt, 'action'>): string {
+    const {number: n, url, checkName, sha, logTail, worktree} = request;
+    return `CI is failing on PR #${n} (${url}): ${checkName} failed on ${sha}. Log tail:\n${logTail}\nFix it in ${worktree} and push.`;
+}
+
 /** The prompt for an action, in the exact words of the epic's prompt table. */
 export function renderPrompt(request: PromptRequest): string {
     switch (request.action) {
@@ -118,13 +121,13 @@ export function renderPrompt(request: PromptRequest): string {
                 'Resolve conflicts if there are any; if a conflict needs a decision from me, stop and ask.'
             );
         }
-        case 'fix-ci': {
-            const {number: n, url, checkName, sha, logTail, worktree, automaticAttempt} = request;
-            const prompt = `CI is failing on PR #${n} (${url}): ${checkName} failed on ${sha}. Log tail:\n${logTail}\nFix it in ${worktree} and push.`;
-            return automaticAttempt === undefined
-                ? prompt
-                : `${prompt} This is automatic attempt ${automaticAttempt} of ${MAX_AUTO_FIX_ATTEMPTS}.`;
-        }
+        case 'fix-ci':
+            // Switchboard hands a failing check over once; trying again is Claude's call.
+            return (
+                `${fixCiTask(request)} Then wait for CI with gh pr checks ${request.number} --watch. ` +
+                'If it fails again, decide whether another try is worth it: fix and push again, ' +
+                're-run a job that was cancelled or flaked, or stop and tell me why.'
+            );
         case 'fix-comments': {
             const {number: n, url, threads, worktree} = request;
             // A thread resolved since the button was drawn has nothing left to address.

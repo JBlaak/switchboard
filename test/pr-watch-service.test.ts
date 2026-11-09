@@ -126,7 +126,7 @@ function setup({
 const attempts = (history: MemoryHistory) =>
     history.rows.filter((row) => row.kind === 'attempt').map((row) => row.kind === 'attempt' && row.headSha);
 
-test('a failing check is handed to the session as automatic attempt 1, with its check, commit and log', async () => {
+test('a failing check is handed to the session once, with its check, commit and log, and retries left to Claude', async () => {
     /* Given */
     const {watch, github, prompter, history, store} = setup();
     github.prs.set(7, status('aaa1111', 'failing'));
@@ -143,8 +143,12 @@ test('a failing check is handed to the session as automatic attempt 1, with its 
         prompt,
         /^CI is failing on PR #7 \(https:\/\/github.com\/o\/app\/pull\/7\): test failed on aaa1111\. Log tail:\n/,
     );
-    assert.match(prompt, /expected 2, got 3\nFix it in \/code\/app\/\.claude\/worktrees\/agent-1 and push\./);
-    assert.match(prompt, /This is automatic attempt 1 of 2\.$/);
+    assert.match(
+        prompt,
+        /expected 2, got 3\nFix it in \/code\/app\/\.claude\/worktrees\/agent-1 and push\. Then wait for CI/,
+    );
+    assert.match(prompt, /decide whether another try is worth it/);
+    assert.doesNotMatch(prompt, /attempt/);
     assert.equal(store.rows[0].origin, 'auto');
     assert.equal(store.rows[0].itemKey, KEY7);
     assert.deepEqual(
@@ -179,7 +183,7 @@ test('one gh request per repository, however many sessions and PRs', async () =>
     assert.deepEqual(github.calls, [[REPO, [7, 8]]]);
 });
 
-test('while Claude has the attempt, the same red check is left alone', async () => {
+test('while Claude has it, the same red check is left alone', async () => {
     /* Given */
     const {watch, github, prompter, history} = setup();
     github.prs.set(7, status('aaa', 'failing'));
@@ -196,93 +200,40 @@ test('while Claude has the attempt, the same red check is left alone', async () 
     assert.deepEqual(attempts(history), ['aaa']);
 });
 
-test('a new failing commit is attempt 2, and the next failure gives up: Needs you, and the row says so', async () => {
+test('once Claude stopped, a check still red is not typed in again: not for the same commit, not for a new one', async () => {
     /* Given */
-    const {watch, github, prompter, history, actions, renderer, dots, finishTurn} = setup();
+    const {watch, github, prompter, history, renderer, dots, finishTurn} = setup();
     github.prs.set(7, status('aaa', 'failing'));
     await watch.poll();
     finishTurn();
 
     /* When */
+    await watch.poll();
     github.prs.set(7, status('bbb', 'failing'));
-    await watch.poll();
-
-    /* Then */
-    assert.equal(prompter.sent.length, 2);
-    assert.match(prompter.sent[1].prompt, /test failed on bbb\..*This is automatic attempt 2 of 2\.$/s);
-
-    /* When */
-    finishTurn();
-    github.prs.set(7, status('ccc', 'failing'));
-    await watch.poll();
-
-    /* Then */
-    assert.equal(prompter.sent.length, 2, 'nothing more is typed in');
-    const card = actions.forSession('s1').byItem.get(KEY7);
-    assert.equal(card?.phase, 'gave-up');
-    assert.equal(card?.checkName, 'test');
-    assert.deepEqual(card?.attempts, [
-        {attempt: 1, failedOn: 'aaa', pushed: 'bbb'},
-        {attempt: 2, failedOn: 'bbb', pushed: 'ccc'},
-    ]);
-    assert.deepEqual(renderer.only('sessionNeedsAttention'), [['sessionNeedsAttention', 's1']]);
-    assert.deepEqual(dots().at(-1), {sessionId: 's1', prs: [{number: 7, dot: 'red'}], needsYou: true});
-
-    // Given up once: the next poll does not give up again.
-    /* When */
-    await watch.poll();
-
-    /* Then */
-    assert.equal(renderer.only('sessionNeedsAttention').length, 1);
-    assert.deepEqual(
-        history.rows.map((row) => row.kind),
-        ['attempt', 'attempt', 'gave-up'],
-    );
-});
-
-test('a turn that ended without a push spends the attempt: the same commit still failing is attempt 2', async () => {
-    /* Given */
-    const {watch, github, prompter, history, finishTurn} = setup();
-    github.prs.set(7, status('aaa', 'failing'));
-    await watch.poll();
-    finishTurn();
-
-    /* When */
-    await watch.poll();
-
-    /* Then */
-    assert.equal(prompter.sent.length, 2);
-    assert.match(prompter.sent[1].prompt, /automatic attempt 2 of 2\.$/);
-
-    /* When */
-    finishTurn();
-    await watch.poll();
-
-    /* Then */
-    assert.deepEqual(attempts(history), ['aaa', 'aaa']);
-    assert.deepEqual(history.rows.at(-1)?.kind, 'gave-up');
-});
-
-test('green wipes the slate and ends the give-up; a later failure starts again at attempt 1', async () => {
-    /* Given */
-    const {watch, github, prompter, history, actions, dots, finishTurn} = setup();
-
-    /* When */
-    for (const sha of ['aaa', 'bbb', 'ccc']) {
-        github.prs.set(7, status(sha, 'failing'));
+    for (let poll = 0; poll < 3; poll++) {
         await watch.poll();
         finishTurn();
     }
 
     /* Then */
-    assert.equal(actions.forSession('s1').byItem.get(KEY7)?.phase, 'gave-up');
+    assert.equal(prompter.sent.length, 1, 'whether to try again was Claude’s call');
+    assert.deepEqual(attempts(history), ['aaa']);
+    assert.deepEqual(dots().at(-1), {sessionId: 's1', prs: [{number: 7, dot: 'red'}], needsYou: false});
+    assert.deepEqual(renderer.only('sessionNeedsAttention'), []);
+});
+
+test('green wipes the slate: a later failure is handed over again', async () => {
+    /* Given */
+    const {watch, github, prompter, history, dots, finishTurn} = setup();
+    github.prs.set(7, status('aaa', 'failing'));
+    await watch.poll();
+    finishTurn();
 
     /* When */
     github.prs.set(7, status('ddd', 'passing'));
     await watch.poll();
 
     /* Then */
-    assert.equal(actions.forSession('s1').byItem.get(KEY7), undefined);
     assert.equal(history.rows.at(-1)?.kind, 'passed');
     assert.deepEqual(dots().at(-1), {sessionId: 's1', prs: [{number: 7, dot: 'green'}], needsYou: false});
 
@@ -297,21 +248,43 @@ test('green wipes the slate and ends the give-up; a later failure starts again a
     await watch.poll();
 
     /* Then */
-    assert.match(prompter.sent.at(-1)!.prompt, /test failed on eee\..*automatic attempt 1 of 2\.$/s);
+    assert.equal(prompter.sent.length, 2);
+    assert.match(prompter.sent.at(-1)!.prompt, /test failed on eee\./);
 });
 
-test('a manual Fix CI is always allowed and does not count', async () => {
+test('a check listed twice, failing and passing (a cancelled run beside its re-run), is handed over once', async () => {
+    /* Given */
+    const {watch, github, prompter, history, finishTurn} = setup();
+    github.prs.set(
+        7,
+        status('aaa', 'failing', {
+            checks: [
+                {name: 'test', state: 'failing', url: RUN},
+                {name: 'test', state: 'passing'},
+            ],
+        }),
+    );
+
+    /* When */
+    for (let poll = 0; poll < 6; poll++) {
+        await watch.poll();
+        finishTurn();
+    }
+
+    /* Then */
+    assert.equal(prompter.sent.length, 1, 'Fix CI is typed in once, not once per poll');
+    assert.equal(history.rows.filter((row) => row.kind === 'passed').length, 0);
+});
+
+test('a manual Fix CI is always allowed, and the watch stays out of its way', async () => {
     /* Given */
     const {watch, github, prompter, actions, history, finishTurn} = setup();
     github.prs.set(7, status('aaa', 'failing'));
     await watch.poll();
     finishTurn();
-    github.prs.set(7, status('bbb', 'failing'));
-    await watch.poll();
-    finishTurn();
-    // Two automatic attempts spent; you ask for one yourself, from the page.
-    github.prs.set(7, status('ccc', 'failing'));
-    const pr = status('ccc', 'failing');
+    // Claude stopped with it red; you ask for one yourself, from the page.
+    const pr = status('bbb', 'failing');
+    github.prs.set(7, pr);
     const item = {
         id: KEY7,
         kind: 'pr' as const,
@@ -325,33 +298,23 @@ test('a manual Fix CI is always allowed and does not count', async () => {
     const manual = await actions.request('s1', KEY7, 'fix-ci', 'manual', {
         resolved: {item, context: {repository: REPO, mainCheckout: ROOT, gh: 'ok'}},
     });
-
-    /* Then */
-    assert.equal(manual.ok, true);
-    assert.equal(prompter.sent.length, 3);
-    assert.doesNotMatch(prompter.sent[2].prompt, /automatic attempt/);
-
-    // While it is with Claude, the watch neither queues nor gives up.
-    /* When */
     await watch.poll();
 
     /* Then */
+    assert.equal(manual.ok, true);
+    assert.equal(prompter.sent.length, 2);
     assert.equal(actions.forSession('s1').byItem.get(KEY7)?.phase, 'sent');
-    assert.deepEqual(
-        history.rows.map((row) => row.kind),
-        ['attempt', 'attempt'],
-    );
 
-    // It did not fix it either: now the PR is yours.
     /* When */
     finishTurn();
     await watch.poll();
 
     /* Then */
-    assert.equal(actions.forSession('s1').byItem.get(KEY7)?.phase, 'gave-up');
+    assert.equal(prompter.sent.length, 2, 'nothing more is typed in');
+    assert.deepEqual(attempts(history), ['aaa']);
 });
 
-test('a manual Fix CI that did not fix it leaves both automatic attempts', async () => {
+test('auto-fix waits for a manual Fix CI queued before it, then hands the check over once', async () => {
     /* Given */
     const {watch, github, prompter, actions, finishTurn} = setup();
     const pr = status('aaa', 'failing');
@@ -379,9 +342,12 @@ test('a manual Fix CI that did not fix it leaves both automatic attempts', async
     prompter.goIdle();
     finishTurn();
     await watch.poll();
+    finishTurn();
+    await watch.poll();
 
     /* Then */
-    assert.match(prompter.sent.at(-1)!.prompt, /automatic attempt 1 of 2\.$/);
+    assert.equal(prompter.sent.length, 2);
+    assert.match(prompter.sent.at(-1)!.prompt, /test failed on aaa\./);
 });
 
 test('a session that is not running gets nothing; a fix queued while it was busy waits for its next start', async () => {
@@ -416,7 +382,7 @@ test('a session that is not running gets nothing; a fix queued while it was busy
     assert.match(prompter.sent[0].prompt, /test failed on aaa\./);
 });
 
-test('a session that exits mid-fix finishes the action, so the next poll can go on', async () => {
+test('a session that exits mid-fix finishes the action; the check is not handed over again', async () => {
     /* Given */
     const {watch, github, prompter, store, history} = setup();
     github.prs.set(7, status('aaa', 'failing'));
@@ -438,19 +404,17 @@ test('a session that exits mid-fix finishes the action, so the next poll can go 
     await watch.poll();
 
     /* Then */
-    assert.deepEqual(attempts(history), ['aaa', 'aaa']);
+    assert.deepEqual(attempts(history), ['aaa']);
 });
 
-test('the history survives a restart: two spent attempts are not handed out again', async () => {
+test('the history survives a restart: a check handed over is not handed over again', async () => {
     /* Given */
     const history = new MemoryHistory();
     const store = new MemoryStore();
     const before = setup({history, store});
-    for (const sha of ['aaa', 'bbb']) {
-        before.github.prs.set(7, status(sha, 'failing'));
-        await before.watch.poll();
-        before.finishTurn();
-    }
+    before.github.prs.set(7, status('aaa', 'failing'));
+    await before.watch.poll();
+    before.finishTurn();
     const after = setup({history, store});
     after.github.prs.set(7, status('ccc', 'failing'));
 
@@ -459,10 +423,9 @@ test('the history survives a restart: two spent attempts are not handed out agai
 
     /* Then */
     assert.equal(after.prompter.sent.length, 0);
-    assert.equal(after.actions.forSession('s1').byItem.get(KEY7)?.phase, 'gave-up');
 });
 
-test('a merged PR ends a give-up and is not asked about again', async () => {
+test('a merged PR is not asked about again', async () => {
     /* Given */
     const {watch, github, dots} = setup();
     github.prs.set(7, status('aaa', 'passing', {state: 'merged'}));
@@ -606,7 +569,7 @@ test("an action finishing polls its PR's repository at once, and keeps the dot a
     await watch.poll();
 
     /* Then */
-    assert.equal(prompter.sent.length, 1, 'attempt 1 is with Claude');
+    assert.equal(prompter.sent.length, 1, 'the Fix CI is with Claude');
     assert.deepEqual(dots().at(-1)?.prs, [
         {number: 7, dot: 'amber'},
         {number: 3, dot: 'green'},
@@ -664,22 +627,29 @@ test('an answer asked for before the action finished does not end the amber', as
     });
     const minute = watch.poll();
     await settle();
+    // The poll the finish asks for waits behind a gate of its own.
+    let releaseAfter!: () => void;
+    const after = new Promise<void>((resolve) => {
+        releaseAfter = resolve;
+    });
     finishTurn();
-    github.gate = null;
+    github.gate = after;
     release();
     await minute;
 
     /* Then */
     assert.equal(dots().at(-1)?.prs[0].dot, 'amber', 'that answer left before Claude finished');
 
-    // The poll the finish asked for runs after it, and hands over attempt 2.
+    // The poll the finish asked for answers: Claude stopped with it red.
     /* When */
+    github.gate = null;
+    releaseAfter();
     await settle();
     await watch.poll();
 
     /* Then */
     assert.ok(github.calls.length >= 3);
-    assert.equal(dots().at(-1)?.prs[0].dot, 'amber', 'attempt 2 is with Claude');
+    assert.equal(dots().at(-1)?.prs[0].dot, 'red', 'Claude stopped and nothing is handed over again');
 });
 
 test('without the watch on (the e2e suite), a finished action asks gh nothing', async () => {

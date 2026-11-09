@@ -27,8 +27,9 @@ export class SqliteAutoFixHistory implements AutoFixHistory {
       INSERT INTO auto_fix_attempts (kind, repository, number, check_name, head_sha, origin, activity_id, at)
       VALUES (@kind, @repository, @number, @check_name, @head_sha, @origin, @activity_id, @at)
     `);
+        // `gave-up` rows are from the attempt limit auto-fix no longer has.
         this.forPullRequestStatement = db.prepare<[string, number], Row>(
-            'SELECT * FROM auto_fix_attempts WHERE repository = ? AND number = ? ORDER BY id',
+            "SELECT * FROM auto_fix_attempts WHERE repository = ? AND number = ? AND kind IN ('attempt', 'passed') ORDER BY id",
         );
     }
 
@@ -58,7 +59,7 @@ export class SqliteAutoFixHistory implements AutoFixHistory {
                     activityId: row.activity_id ?? '',
                 };
             }
-            return {...base, kind: row.kind};
+            return {...base, kind: 'passed'};
         });
     }
 }

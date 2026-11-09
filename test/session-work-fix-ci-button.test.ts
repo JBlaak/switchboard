@@ -28,23 +28,19 @@ function failingPr(activity: Activity): SessionWorkItem {
     };
 }
 
-test('once auto-fix gave up, a manual Fix CI is still offered and can be pressed', () => {
+test("once Claude's automatic Fix CI is done and the check still fails, a manual Fix CI is offered", () => {
     /* Given */
-    const gaveUp: Activity = {
-        id: 'gave-1',
+    const handedOver: Activity = {
+        id: 'auto-1',
         action: 'fix-ci',
-        phase: 'gave-up',
+        phase: 'done',
         origin: 'auto',
         checkName: 'test',
-        attempts: [
-            {attempt: 1, failedOn: 'aaaaaaa111', pushed: 'bbbbbbb222'},
-            {attempt: 2, failedOn: 'bbbbbbb222', pushed: 'c0ffee1234'},
-        ],
         queuedAt: '2026-06-10T13:50:00.000Z',
     };
 
     /* When */
-    const buttons = itemButtons(failingPr(gaveUp), {gh: 'ok', running: true, pending: null});
+    const buttons = itemButtons(failingPr(handedOver), {gh: 'ok', running: true, pending: null});
 
     /* Then */
     const fixCi = buttons.find((button) => button.id === 'fix-ci');

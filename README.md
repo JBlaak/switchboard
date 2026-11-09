@@ -43,8 +43,8 @@ own answer. Patch keeps count. Press `Esc` to answer in Claude instead.
 `⌘G` opens **Session work** for the session on screen: its pull requests, branches, uncommitted
 worktrees and the issues it touched, each with its CI status. Read the diff unified or split, leave
 review comments on lines, and hand them back to Claude. Buttons like _Ship it_, _Rebase_ and
-_Fix CI_ type the prompt into the session for you. While a session runs, failing CI on its PRs is
-handed to Claude automatically, at most twice per check.
+_Fix CI_ type the prompt into the session for you. While a session runs, a failing check on its PRs
+is handed to Claude automatically, once until it goes green; Claude decides whether to try again.
 
 ![Session work](build/screenshot-work.png)
 

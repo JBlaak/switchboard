@@ -81,7 +81,6 @@ export function currentActivity(activities: readonly Activity[]): Activity | nul
     return (
         activities.find((activity) => activity.phase === 'sent') ??
         activities.find((activity) => activity.phase === 'queued') ??
-        [...activities].reverse().find((activity) => activity.phase === 'gave-up') ??
         null
     );
 }

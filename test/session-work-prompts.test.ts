@@ -77,26 +77,17 @@ const fixCi = {
     worktree: '/wt',
 };
 
-test('Fix CI, manual', () => {
+test('Fix CI: fix, push, watch CI, and decide yourself whether to try again', () => {
     /* When */
     const prompt = renderPrompt(fixCi);
 
     /* Then */
     assert.equal(
         prompt,
-        'CI is failing on PR #12 (https://github.com/owner/repo/pull/12): test failed on abc1234. Log tail:\nline 1\nline 2\nFix it in /wt and push.',
-    );
-});
-
-test('Fix CI, automatic', () => {
-    /* When */
-    const prompt = renderPrompt({...fixCi, automaticAttempt: 2});
-
-    /* Then */
-    assert.equal(
-        prompt,
-        'CI is failing on PR #12 (https://github.com/owner/repo/pull/12): test failed on abc1234. Log tail:\nline 1\nline 2\nFix it in /wt and push. ' +
-            'This is automatic attempt 2 of 2.',
+        'CI is failing on PR #12 (https://github.com/owner/repo/pull/12): test failed on abc1234. Log tail:\nline 1\nline 2\n' +
+            'Fix it in /wt and push. Then wait for CI with gh pr checks 12 --watch. ' +
+            'If it fails again, decide whether another try is worth it: fix and push again, ' +
+            're-run a job that was cancelled or flaked, or stop and tell me why.',
     );
 });
 

@@ -266,16 +266,14 @@ test("while main is asked, that item's buttons wait for the answer", () => {
 
 // ── The card ──
 
-test('the card shows the action with Claude, else the next one waiting, else the one given up on', () => {
+test('the card shows the action with Claude, else the next one waiting', () => {
     /* Given */
     const queued = activity('rebase', 'queued', {id: 'q'});
     const sent = activity('ship', 'sent', {id: 's'});
-    const gaveUp = activity('fix-ci', 'gave-up', {id: 'g'});
     const cases: Array<[Activity[], string | undefined]> = [
         [[], undefined],
         [[queued, sent], 's'],
-        [[gaveUp, queued], 'q'],
-        [[gaveUp, activity('ship', 'done')], 'g'],
+        [[activity('ship', 'done'), queued], 'q'],
         [[activity('ship', 'done')], undefined],
     ];
 
@@ -358,14 +356,6 @@ test('Ship it: once merged, only the clean-up is left', () => {
         merged.steps.map((s) => s.state),
         ['done', 'done', 'done', 'running'],
     );
-});
-
-test('gave up: a red card', () => {
-    /* When */
-    const card = activityCard(pr({}, activity('fix-ci', 'gave-up')), NOW);
-
-    /* Then */
-    assert.equal(card?.tone, 'red');
 });
 
 test('done, or no activity at all: no card', () => {
