@@ -85,11 +85,24 @@ const GIT_SSH = /\bGIT_SSH(?:_COMMAND)?=|\bcore\.sshCommand\b/;
  * `access` wins when a command does both: reading a secret is the bigger ask.
  */
 export function onePasswordNeed(command: string): OnePasswordNeed | null {
-    if (OP.test(command) || /\bop:\/\//.test(command)) return 'access';
-    if (SSH_TOOLS.test(command)) return 'unlock';
-    if (RSYNC.test(command) && RSYNC_REMOTE.test(command)) return 'unlock';
-    if (GIT.test(command) && (SSH_ADDRESS.test(command) || GIT_SSH.test(command))) return 'unlock';
+    const bare = withoutQuotedText(command);
+    if (OP.test(bare) || /\bop:\/\//.test(command)) return 'access';
+    if (SSH_TOOLS.test(bare)) return 'unlock';
+    if (RSYNC.test(bare) && RSYNC_REMOTE.test(command)) return 'unlock';
+    if (GIT.test(bare) && (SSH_ADDRESS.test(command) || GIT_SSH.test(command))) return 'unlock';
     return null;
+}
+
+/**
+ * The command with quoted text blanked out, so a program named inside an
+ * argument (`grep -E "run:|ssh|rsync"`) is not taken for one being run.
+ * Double-quoted text that runs a command of its own (`$(…)` or a backtick)
+ * is kept, since what it runs is real.
+ */
+function withoutQuotedText(command: string): string {
+    return command.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, (quoted) =>
+        quoted.startsWith('"') && /\$\(|\x60/.test(quoted) ? quoted : ' '.repeat(quoted.length),
+    );
 }
 
 /**
