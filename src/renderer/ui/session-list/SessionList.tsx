@@ -17,6 +17,7 @@ import {sidebarContent} from '../../lib/dom';
 import {useStore} from '../use-store';
 import {clearScreenFromList, toggleOlder, toggleSection} from './actions';
 import {installDragSpace} from './drag-space';
+import {installPinDrag} from './pin-drag';
 import {restoreTerminalFocus} from './focus';
 import {PinnedPlanItem} from './PinnedPlanItem';
 import {PinnedProjectItem} from './PinnedProjectItem';
@@ -51,6 +52,9 @@ export function SessionList(): JSX.Element | null {
     // there is a layout, so that is when it is watched.
     const dragSpace = useRef<HTMLDivElement>(null);
     useEffect(() => (dragSpace.current ? installDragSpace(dragSpace.current) : undefined), [layout !== null]);
+
+    // Pinned entries drag into their own order (#379); one listener serves them all.
+    useEffect(() => installPinDrag(sidebarContent), []);
 
     const noProjects = useStore((s) => s.toolbar.hasProjects === false);
 

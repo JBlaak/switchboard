@@ -28,6 +28,7 @@ export const INVOKE = {
     togglePlanPin: 'toggle-plan-pin',
     toggleIssuePlanPin: 'toggle-issue-plan-pin',
     toggleProjectPin: 'toggle-project-pin',
+    movePins: 'move-pins',
     renameSession: 'rename-session',
     archiveSession: 'archive-session',
     snoozeSession: 'snooze-session',

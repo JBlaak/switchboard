@@ -112,11 +112,14 @@ Paired phones are listed in the same place, where you can revoke one at any time
 | Keys               | Does                                               |
 | ------------------ | -------------------------------------------------- |
 | `↑` `↓` or `J` `K` | Move                                               |
+| `⌥↑` `⌥↓`          | Move a pinned row up or down its section           |
 | `Enter`            | Open the session, fold a group, or show older ones |
 | `R` or `F2`        | Rename                                             |
 | `E`                | Archive (a whole group, on a group header)         |
 | `A`                | New session                                        |
 | `Esc`              | Back to Claude                                     |
+
+**Trackpad or mouse:** drag a pinned session, project or plan up or down to put its section in your own order, as `⌥↑` / `⌥↓` do. `Esc` puts it back.
 
 **In Session work**
 

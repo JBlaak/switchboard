@@ -60,6 +60,8 @@ function fakeRepository(meta: Map<string, FolderMeta>) {
         toggleIssuePlanPin: () => false,
         getPinnedProjects: () => [],
         toggleProjectPin: () => false,
+        getPinOrder: () => [],
+        setPinOrder() {},
 
         isCachePopulated: () => cached.size > 0,
         getAllCached: () => [...cached.values()],

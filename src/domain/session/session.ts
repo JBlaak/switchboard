@@ -55,6 +55,8 @@ export interface SessionMeta {
     archived: 0 | 1;
     /** An ISO time; null when the session is not snoozed. */
     snoozedUntil: string | null;
+    /** Its position among the pinned sessions (#379); null when not pinned, or pinned before positions. */
+    pinPosition?: number | null;
 }
 
 /** A cached session: `Session` minus the fields too large to keep in the cache. */
@@ -96,6 +98,8 @@ export interface SessionRow {
     pullRequests?: SessionPullRequest[];
     name: string | null;
     starred: number;
+    /** Its position among the pinned sessions (#379); null when not pinned or not placed yet. */
+    pinPosition?: number | null;
     archived: number;
     /** An ISO time the row stays out of the list until; absent or null when awake. */
     snoozedUntil?: string | null;
@@ -127,6 +131,7 @@ export function toSessionRow(cached: CachedSession, meta: SessionMeta | null | u
         pullRequests: cached.pullRequests ?? [],
         name: meta?.name || null,
         starred: meta?.starred || 0,
+        pinPosition: meta?.starred ? (meta.pinPosition ?? null) : null,
         archived: meta?.archived || 0,
         snoozedUntil: meta?.snoozedUntil || null,
     };

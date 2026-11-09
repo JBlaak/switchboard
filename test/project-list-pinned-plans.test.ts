@@ -84,3 +84,31 @@ test('a pinned project carries when it was pinned; a pin on a project without a 
     assert.equal(projects.find((p) => p.projectPath === '/two')?.pinnedAt, undefined);
     assert.deepEqual(projects.map((p) => p.projectPath).sort(), ['/one', '/two']);
 });
+
+test("each pin's position (#379) lands on its project beside the pin", () => {
+    /* When */
+    const projects = build(
+        [{projectPath: '/one', slug: 'plan', position: 2}],
+        [{projectPath: '/one', repository: 'o/r', number: 7, title: 'Epic', pinnedAt: 1, position: 0}],
+        [{projectPath: '/two', pinnedAt: 1, position: 1}],
+    );
+
+    /* Then */
+    const one = projects.find((p) => p.projectPath === '/one');
+    assert.deepEqual(one?.pinnedPlanPositions, {plan: 2});
+    assert.equal(one?.pinnedIssuePlans?.[0].position, 0);
+    assert.equal(projects.find((p) => p.projectPath === '/two')?.pinPosition, 1);
+});
+
+test('a pin stored before positions has none on its project', () => {
+    /* When */
+    const projects = build(
+        [{projectPath: '/one', slug: 'plan', position: null}],
+        [],
+        [{projectPath: '/two', pinnedAt: 1}],
+    );
+
+    /* Then */
+    assert.equal(projects.find((p) => p.projectPath === '/one')?.pinnedPlanPositions, undefined);
+    assert.equal(projects.find((p) => p.projectPath === '/two')?.pinPosition, undefined);
+});

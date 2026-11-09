@@ -9,6 +9,7 @@
  */
 import type {CachedSession, FolderMeta, SessionMeta} from '../../domain/session/session';
 import type {IssuePlanPin, PlanPin, ProjectPin} from '../../domain/project/project-list';
+import type {PinRef, PinSection} from '../../domain/pin/pin-order';
 
 export interface SessionRepository {
     // ── Metadata: the user's own state, which no re-index may touch ──
@@ -32,6 +33,13 @@ export interface SessionRepository {
     getPinnedProjects(): ProjectPin[];
     /** Pins or unpins a project and answers whether it is pinned now. */
     toggleProjectPin(projectPath: string): boolean;
+    /**
+     * A section's pins in the order the user put them (#379): by position, then
+     * any without one newest first (see `domain/pin/pin-order`).
+     */
+    getPinOrder(section: PinSection): PinRef[];
+    /** Store these pins' positions as their places in `order`. */
+    setPinOrder(order: readonly PinRef[]): void;
 
     // ── Cache: a rebuildable copy of what the transcripts say ──
     isCachePopulated(): boolean;

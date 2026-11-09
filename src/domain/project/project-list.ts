@@ -18,6 +18,8 @@ import type {RemoteProjectSetting} from '../settings/settings';
 export interface PlanPin {
     projectPath: string;
     slug: string;
+    /** Its position among Pinned plans (#379); null for one stored before positions. */
+    position?: number | null;
 }
 
 /** A GitHub plan pinned to the top of the session list from its page, in one project. */
@@ -30,6 +32,8 @@ export interface ProjectPin {
     projectPath: string;
     /** Epoch ms. */
     pinnedAt: number;
+    /** Its position among Pinned projects (#379); null for one stored before positions. */
+    position?: number | null;
 }
 
 /** A plain terminal, which has no transcript and lives only while it runs. */
@@ -191,6 +195,7 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
                     ...(transcript ? fromVmTranscript(transcript, opened) : {}),
                     name: meta?.name || null,
                     starred: meta?.starred || 0,
+                    pinPosition: meta?.starred ? (meta.pinPosition ?? null) : null,
                     archived: meta?.archived || 0,
                     snoozedUntil: meta?.snoozedUntil || null,
                     type: 'remote',
@@ -204,15 +209,20 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
     // nowhere to show, and stays stored for when it does.
     for (const pin of inputs.pinnedPlans) {
         const project = projects.get(pin.projectPath);
-        if (project) (project.pinnedPlans ??= []).push(pin.slug);
+        if (!project) continue;
+        (project.pinnedPlans ??= []).push(pin.slug);
+        if (pin.position !== null && pin.position !== undefined)
+            (project.pinnedPlanPositions ??= {})[pin.slug] = pin.position;
     }
     for (const {projectPath, ...pin} of inputs.pinnedIssuePlans) {
         const project = projects.get(projectPath);
         if (project) (project.pinnedIssuePlans ??= []).push(pin);
     }
-    for (const {projectPath, pinnedAt} of inputs.pinnedProjects ?? []) {
+    for (const {projectPath, pinnedAt, position} of inputs.pinnedProjects ?? []) {
         const project = projects.get(projectPath);
-        if (project) project.pinnedAt = pinnedAt;
+        if (!project) continue;
+        project.pinnedAt = pinnedAt;
+        if (position !== null && position !== undefined) project.pinPosition = position;
     }
 
     const list = [...projects.values()];

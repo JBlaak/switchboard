@@ -6,6 +6,7 @@ import {searchTitleFor} from '../../domain/session/title';
 import {reconnectSession} from '../reconnect-session';
 import {stopSession} from '../stop-session';
 import type {Container} from '../composition-root';
+import type {PinRef, PinSection, PinTarget} from '../../domain/pin/pin-order';
 import type {IpcRegistrar} from './support/registrar';
 
 export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void {
@@ -29,18 +30,48 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
     /** "Retry now" on a session's connection card; see `reconnectSession`. */
     ipc.handle(INVOKE.reconnectRemote, (sessionId: string) => reconnectSession(app, sessionId));
 
-    ipc.handle(INVOKE.toggleStar, (sessionId: string) => ({
-        starred: app.repository.toggleStar(sessionId),
-    }));
+    // Each pin lands at the end of its section, and the section's order comes back with it (#379).
+    ipc.handle(INVOKE.toggleStar, (sessionId: string) => {
+        const {result, order} = app.pinOrder.toggle(
+            'sessions',
+            {kind: 'session', sessionId},
+            () => app.repository.toggleStar(sessionId),
+            (starred) => starred === 1,
+        );
+        return {starred: result, order};
+    });
 
-    ipc.handle(INVOKE.togglePlanPin, (projectPath: string, slug: string) => ({
-        pinned: app.repository.togglePlanPin(projectPath, slug),
-    }));
-    ipc.handle(INVOKE.toggleIssuePlanPin, (projectPath: string, repository: string, number: number, title: string) => ({
-        pinned: app.repository.toggleIssuePlanPin(projectPath, repository, number, title),
-    }));
-    ipc.handle(INVOKE.toggleProjectPin, (projectPath: string) => ({
-        pinned: app.repository.toggleProjectPin(projectPath),
+    ipc.handle(INVOKE.togglePlanPin, (projectPath: string, slug: string) => {
+        const {result, order} = app.pinOrder.toggle(
+            'plans',
+            {kind: 'plan', projectPath, slug},
+            () => app.repository.togglePlanPin(projectPath, slug),
+            (pinned) => pinned,
+        );
+        return {pinned: result, order};
+    });
+    ipc.handle(INVOKE.toggleIssuePlanPin, (projectPath: string, repository: string, number: number, title: string) => {
+        const {result, order} = app.pinOrder.toggle(
+            'plans',
+            {kind: 'issuePlan', projectPath, repository, number},
+            () => app.repository.toggleIssuePlanPin(projectPath, repository, number, title),
+            (pinned) => pinned,
+        );
+        return {pinned: result, order};
+    });
+    ipc.handle(INVOKE.toggleProjectPin, (projectPath: string) => {
+        const {result, order} = app.pinOrder.toggle(
+            'projects',
+            {kind: 'project', projectPath},
+            () => app.repository.toggleProjectPin(projectPath),
+            (pinned) => pinned,
+        );
+        return {pinned: result, order};
+    });
+
+    /** Dragging a pinned row, or ⌥↑ / ⌥↓ on one (#379). */
+    ipc.handle(INVOKE.movePins, (section: PinSection, moving: PinRef[], target: PinTarget) => ({
+        order: app.pinOrder.move(section, moving, target),
     }));
 
     /**

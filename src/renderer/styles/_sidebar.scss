@@ -634,6 +634,25 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     background: var(--row-fill);
 }
 
+/* ---- Dragging a pin into order (#379) ----
+   The entry follows the pointer itself (ui/session-list/pin-drag), so its own
+   transitions are off while it does; it rides above its neighbours, a little
+   lifted, while they slide out of its way. */
+.is-pin-dragging:not(body) {
+    position: relative;
+    z-index: 6;
+    transition: none;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-panel);
+    box-shadow: 0 6px 18px rgba(var(--sb-shadow-rgb), calc(0.22 * var(--sb-shadow-k)));
+}
+
+body.is-pin-dragging,
+body.is-pin-dragging * {
+    cursor: grabbing !important;
+    user-select: none;
+}
+
 /* The keyboard cursor (Cmd+L): a ring on top of whatever fill the row has, so
    it reads on the active row as well as on a plain one. */
 #sidebar-content:focus {

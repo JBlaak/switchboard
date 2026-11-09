@@ -2,7 +2,8 @@
  * Driving the session list from the keyboard.
  *
  * Cmd+L takes focus out of the terminal and puts a cursor on the row on
- * screen. The arrows (or J and K) move it, Enter does what a click would, R or
+ * screen. The arrows (or J and K) move it, ⌥↑ and ⌥↓ move the pinned row (or
+ * pinned group, plan or project) under it within its section, Enter does what a click would, R or
  * F2 renames, E archives (a group header archives the whole group; Cmd+E, from
  * anywhere, archives the open session), A (or Cmd+A, from anywhere) starts a
  * new session, and Escape goes back to the terminal.
@@ -32,8 +33,10 @@ import {openSessions} from '../../state/session-store';
 import {openDialog} from '../../ui/dialogs/actions';
 import {openPlanPage} from '../../ui/plan-page/actions';
 import {openProjectPage} from '../../ui/project-page/actions';
+import {cursorEntryId, pinnedSectionOf, stepPinMove} from '../../state/pin-moves';
 import {
     expandSlugGroup,
+    movePins,
     openRow,
     startRename,
     toggleOlder,
@@ -96,6 +99,10 @@ function onKeyDown(e: KeyboardEvent): void {
         case 'up':
             step(key === 'down' ? 1 : -1);
             return;
+        case 'moveDown':
+        case 'moveUp':
+            movePinAtCursor(key === 'moveDown' ? 1 : -1);
+            return;
         case 'activate':
             activateCursor();
             return;
@@ -157,6 +164,28 @@ function activateCursor(): void {
             toggleSection(cursor.tier);
             return;
     }
+}
+
+/**
+ * ⌥↑ / ⌥↓: move the pinned entry under the cursor one place within its
+ * section (#379), what dragging it does. The cursor stays on it.
+ */
+function movePinAtCursor(direction: -1 | 1): void {
+    const cursor = currentCursor();
+    const entryId = cursor ? cursorEntryId(cursor) : null;
+    if (!cursor || !entryId) {
+        step(direction);
+        return;
+    }
+    const found = pinnedSectionOf(getState().sessionList.layout, entryId);
+    // Off a pinned section, ⌥↑ / ⌥↓ move the cursor as the plain arrows do.
+    if (!found) {
+        step(direction);
+        return;
+    }
+    const move = stepPinMove(found, direction);
+    if (!move) return;
+    void movePins(found.section, move).then(() => cursorElement(cursor.name)?.scrollIntoView({block: 'nearest'}));
 }
 
 function renameAtCursor(): void {

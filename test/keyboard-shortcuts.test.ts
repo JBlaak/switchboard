@@ -271,6 +271,22 @@ test('in the list, the arrows and J/K step, Enter activates and Escape lets go',
     assert.deepEqual(actions, ['down', 'down', 'up', 'up', 'activate', 'leave']);
 });
 
+test('in the list, ⌥↑ and ⌥↓ move the pinned row; with Cmd or Ctrl too they only step', () => {
+    /* Given */
+    const presses = [
+        keydown({key: 'ArrowUp', altKey: true}),
+        keydown({key: 'ArrowDown', altKey: true}),
+        keydown({key: 'ArrowUp', altKey: true, metaKey: true}),
+        keydown({key: 'ArrowDown', altKey: true, ctrlKey: true}),
+    ];
+
+    /* When */
+    const actions = presses.map(listCursorKey);
+
+    /* Then */
+    assert.deepEqual(actions, ['moveUp', 'moveDown', 'up', 'down']);
+});
+
 test('in the list, R or F2 renames, E archives and A starts a new session', () => {
     /* When */
     const actions = ['r', 'F2', 'e', 'a'].map((key) => listCursorKey(keydown({key})));

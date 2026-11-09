@@ -26,6 +26,9 @@ import {pollActiveSessions} from '../../features/sessions/session-poller';
 import {celebrateFrom, isLeaving, leave} from './leave';
 import {offerArchiveUndo, sessionOnScreen} from '../archive-undo/actions';
 import type {SessionRow} from '../../../domain/session/session';
+import type {Project} from '../../../domain/project/project';
+import type {PinRef, PinSection} from '../../../domain/pin/pin-order';
+import type {PinMove} from '../../state/pin-moves';
 
 // ── Opening and the empty space ──
 
@@ -58,8 +61,10 @@ export function clearScreenFromList(target: Element): void {
 export async function togglePin(sessionId: string, pin: HTMLElement): Promise<void> {
     const session = sessionMap.get(sessionId);
     if (!session) return;
-    const {starred} = await window.api.toggleStar(sessionId);
+    const {starred, order} = await window.api.toggleStar(sessionId);
     session.starred = starred;
+    session.pinPosition = null;
+    applyPinOrder(order);
     // A pin going in pops, one coming out dips.
     bump(pin, starred ? 10 : -4);
     relayoutSessionList({resort: true});
@@ -70,13 +75,13 @@ export async function togglePin(sessionId: string, pin: HTMLElement): Promise<vo
  * a session's pin. Its sessions keep their own stars.
  */
 export async function togglePlanPin(projectPath: string, slug: string, pin: HTMLElement): Promise<void> {
-    const {pinned} = await window.api.togglePlanPin(projectPath, slug);
-    // The same project can be in both cached lists as separate objects.
-    for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
-        if (project.projectPath !== projectPath) continue;
+    const {pinned, order} = await window.api.togglePlanPin(projectPath, slug);
+    for (const project of cachedProjectsAt(projectPath)) {
         const others = (project.pinnedPlans ?? []).filter((s) => s !== slug);
         project.pinnedPlans = pinned ? [...others, slug] : others;
+        if (project.pinnedPlanPositions) delete project.pinnedPlanPositions[slug];
     }
+    applyPinOrder(order);
     bump(pin, pinned ? 10 : -4);
     relayoutSessionList({resort: true});
 }
@@ -92,15 +97,14 @@ export async function toggleIssuePlanPin(
     pin?: HTMLElement,
 ): Promise<void> {
     const {repository, number, title} = plan;
-    const {pinned} = await window.api.toggleIssuePlanPin(projectPath, repository, number, title);
-    // The same project can be in both cached lists as separate objects.
-    for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
-        if (project.projectPath !== projectPath) continue;
+    const {pinned, order} = await window.api.toggleIssuePlanPin(projectPath, repository, number, title);
+    for (const project of cachedProjectsAt(projectPath)) {
         const others = (project.pinnedIssuePlans ?? []).filter(
             (p) => p.repository !== repository || p.number !== number,
         );
         project.pinnedIssuePlans = pinned ? [...others, {repository, number, title, pinnedAt: Date.now()}] : others;
     }
+    applyPinOrder(order);
     if (pin) bump(pin, pinned ? 10 : -4);
     relayoutSessionList({resort: true});
 }
@@ -110,14 +114,51 @@ export async function toggleIssuePlanPin(
  * or unpin it from there or from its row, once main has stored it.
  */
 export async function toggleProjectPin(projectPath: string, pin?: HTMLElement): Promise<void> {
-    const {pinned} = await window.api.toggleProjectPin(projectPath);
-    // The same project can be in both cached lists as separate objects.
-    for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
-        if (project.projectPath !== projectPath) continue;
+    const {pinned, order} = await window.api.toggleProjectPin(projectPath);
+    for (const project of cachedProjectsAt(projectPath)) {
         project.pinnedAt = pinned ? Date.now() : undefined;
+        project.pinPosition = undefined;
     }
+    applyPinOrder(order);
     if (pin) bump(pin, pinned ? 10 : -4);
     relayoutSessionList({resort: true});
+}
+
+/**
+ * Move a pinned entry's pins next to another in their section, by a drag or
+ * ⌥↑ / ⌥↓ (#379), once main has stored it. The open session may move too:
+ * the user moved it.
+ */
+export async function movePins(section: PinSection, {moving, target}: PinMove): Promise<void> {
+    const {order} = await window.api.movePins(section, moving, target);
+    applyPinOrder(order);
+    relayoutSessionList({resort: true});
+}
+
+/** A cached project, as each of the two cached lists holds it: the same project can be in both as separate objects. */
+function cachedProjectsAt(projectPath: string): Project[] {
+    return [...view.cachedProjects, ...view.cachedAllProjects].filter((p) => p.projectPath === projectPath);
+}
+
+/** Take a section's order from main as every pin's position: its place in `order`. */
+function applyPinOrder(order: readonly PinRef[]): void {
+    order.forEach((ref, i) => {
+        if (ref.kind === 'session') {
+            const session = sessionMap.get(ref.sessionId);
+            if (session) session.pinPosition = i;
+            return;
+        }
+        for (const project of cachedProjectsAt(ref.projectPath)) {
+            if (ref.kind === 'project') project.pinPosition = i;
+            else if (ref.kind === 'plan') (project.pinnedPlanPositions ??= {})[ref.slug] = i;
+            else {
+                const pin = project.pinnedIssuePlans?.find(
+                    (p) => p.repository === ref.repository && p.number === ref.number,
+                );
+                if (pin) pin.position = i;
+            }
+        }
+    });
 }
 
 /** Whether a project is pinned to the top of the list. */

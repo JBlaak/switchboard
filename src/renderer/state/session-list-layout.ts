@@ -9,6 +9,8 @@
  * Sessions sharing a slug fold into a group, but only within their own project.
  * A plan the user pinned (such a group, or a GitHub plan pinned from its
  * page) sits above all of them, and a project pinned from its page above that.
+ * Pinned projects, Pinned plans and Pinned are in the user's own order
+ * instead (#379), the one their pins were dragged into.
  *
  * The list is *anchored*: the session the user is working in keeps the slot it
  * already had, so the list cannot slide out from under the cursor while the
@@ -23,7 +25,17 @@ import {byMostRecentlyModified} from '../../domain/session/session';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {isSnoozed} from '../../domain/session/snooze';
 import {cleanDisplayName} from '../../domain/session/title';
-import {TIER_ORDER, TIER_REST, TIER_RUNNING, itemTier, rowSurvivesTruncation} from '../../domain/session/tiers';
+import {
+    TIER_ORDER,
+    TIER_PINNED,
+    TIER_PINNED_PLAN,
+    TIER_PINNED_PROJECT,
+    TIER_REST,
+    TIER_RUNNING,
+    itemTier,
+    rowSurvivesTruncation,
+} from '../../domain/session/tiers';
+import {comparePinPositions} from '../../domain/pin/pin-order';
 import {formatDate, localDateKey} from '../lib/format';
 import type {Project} from '../../domain/project/project';
 import type {SessionRow} from '../../domain/session/session';
@@ -85,6 +97,12 @@ export interface ListItem {
     /** The highest tier of its sessions, before pinning is taken into account. */
     readonly tier: number;
     readonly remote: boolean;
+    /**
+     * Its place in the pinned section it lands in (#379): the project's, the
+     * plan's, or for a pinned session its own (a group: its first pinned
+     * session's). Absent when not placed yet; see `orderEntries`.
+     */
+    readonly pinPosition?: number;
 }
 
 /** An entry in its final place, under the section it is filed in. */
@@ -342,6 +360,7 @@ export function listItems(
                 pinned: false,
                 pinnedPlan: false,
                 pinnedProject: true,
+                pinPosition: project.pinPosition,
                 tier: TIER_REST,
                 remote: false,
             });
@@ -361,6 +380,7 @@ export function listItems(
                     startTime: pin.pinnedAt,
                     pinned: false,
                     pinnedPlan: true,
+                    pinPosition: pin.position ?? undefined,
                     tier: TIER_REST,
                     remote: false,
                 });
@@ -391,6 +411,7 @@ export function listItems(
                 startTime: new Date(session.created).getTime(),
                 pinned: !!session.starred,
                 pinnedPlan: false,
+                pinPosition: session.starred ? (session.pinPosition ?? undefined) : undefined,
                 tier: inputs.tierOf(session.sessionId),
                 remote: session.type === 'remote',
             });
@@ -418,6 +439,7 @@ export function listItems(
                 startTime: Math.max(...sorted.map((s) => new Date(s.created).getTime())),
                 pinned: sorted.some((s) => !!s.starred),
                 pinnedPlan,
+                pinPosition: pinnedPlan ? project.pinnedPlanPositions?.[slug] : firstPinPosition(sorted),
                 tier: Math.max(...sorted.map((s) => inputs.tierOf(s.sessionId))),
                 remote: sorted.some((s) => s.type === 'remote'),
             });
@@ -425,6 +447,16 @@ export function listItems(
     }
 
     return {items, activeItemId};
+}
+
+/** A group's place among the pinned sessions: its highest-placed pinned session's. */
+function firstPinPosition(sessions: readonly SessionRow[]): number | undefined {
+    let first: number | undefined;
+    for (const s of sessions) {
+        if (!s.starred || s.pinPosition === null || s.pinPosition === undefined) continue;
+        if (first === undefined || s.pinPosition < first) first = s.pinPosition;
+    }
+    return first;
 }
 
 // ── Ordering ──
@@ -440,6 +472,15 @@ export function listItems(
  */
 function sortKey(item: ListItem, tier: number): number {
     return tier === TIER_RUNNING ? item.startTime : item.sortTime;
+}
+
+/**
+ * The sections the user puts in order by dragging (#379): by each entry's
+ * position, and the ones not placed yet after them in the order they always
+ * had, newest first.
+ */
+function isPinOrdered(tier: number): boolean {
+    return tier === TIER_PINNED_PROJECT || tier === TIER_PINNED_PLAN || tier === TIER_PINNED;
 }
 
 /**
@@ -478,11 +519,16 @@ export function orderEntries(
     for (const tier of TIER_ORDER) {
         const bucket = buckets.get(tier);
         if (!bucket) continue;
-        bucket.sort((a, b) => sortKey(b, tier) - sortKey(a, tier));
+        bucket.sort(
+            (a, b) =>
+                (isPinOrdered(tier) ? comparePinPositions(a.pinPosition, b.pinPosition) : 0) ||
+                sortKey(b, tier) - sortKey(a, tier),
+        );
         // Anchoring only holds while the session stays in the same block: once its
         // tier changes, the slot it used to occupy belongs to another section, and
-        // holding it there would file the row under the wrong heading.
-        if (!resort && activeItemId) {
+        // holding it there would file the row under the wrong heading. A section in
+        // the user's own order needs none: it only moves when the user moves it.
+        if (!resort && activeItemId && !isPinOrdered(tier)) {
             anchorToPreviousIndex(
                 bucket,
                 activeItemId,

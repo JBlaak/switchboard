@@ -7,10 +7,13 @@
  * test/question-panel-keys.test.ts and test/grill-keys.test.ts. This plays a
  * swipe as the wheel events macOS sends for it, one per frame, onto Claude's
  * pane or the question sheet, and checks it does what its twin does.
+ * Dragging a pinned row into its place (#379) is a real mouse drag; the order
+ * rules are test/pin-order.test.ts's and test/pin-moves.test.ts's.
  */
 import {test, expect} from '../support/test';
-import {openSession, sessionRow, terminalHeader} from '../support/app';
-import {sessionItem} from '../support/session-list';
+import {openSession, sessionRow, terminalHeader, waitForIndex} from '../support/app';
+import {expectRowsInOrder, keyboardCursor, sessionItem} from '../support/session-list';
+import {launchApp} from '../support/launch';
 import {askQuestions, questionPanel} from '../support/questions';
 import {LABEL, S} from '../fixtures/standard';
 import type {Locator, Page} from '@playwright/test';
@@ -190,4 +193,121 @@ test('a sideways swipe on the question sheet goes to the next question and back'
 
     /* Then */
     await expect(heading('Where should the session cookie be scoped?')).toBeVisible();
+});
+
+// ── Dragging pins into order (#379) ──
+
+/** The middle of the row with this label. */
+async function middleOf(page: Page, label: string): Promise<{x: number; y: number}> {
+    const box = (await sessionRow(page, label).boundingBox())!;
+    return {x: box.x + box.width / 2, y: box.y + box.height / 2};
+}
+
+/** The pin of the row with this label. */
+const pinOf = (page: Page, label: string): Locator =>
+    sessionRow(page, label)
+        .locator('xpath=ancestor::*[contains(@class, "session-item")][1]')
+        .getByTestId('session-pin');
+
+/** Pin the charts session beside the fixture's pinned release notes: it lands below them. */
+async function pinCharts(page: Page): Promise<void> {
+    await pinOf(page, LABEL.chartsDarkMode).click();
+    await expect(pinOf(page, LABEL.chartsDarkMode)).toHaveClass(/\bpinned\b/);
+    await expect(async () => expectRowsInOrder(page, [S.releaseNotes, S.chartsDarkMode])).toPass();
+}
+
+test('dragging a pinned session above another reorders Pinned, opens nothing, and the order survives a restart', async ({
+    app,
+    page,
+    home,
+}) => {
+    /* Given */
+    await pinCharts(page);
+    const notes = await middleOf(page, LABEL.releaseNotes);
+
+    /* When */
+    const charts = await middleOf(page, LABEL.chartsDarkMode);
+    await page.mouse.move(charts.x, charts.y);
+    await page.mouse.down();
+    await page.mouse.move(notes.x, notes.y - 20, {steps: 10});
+
+    /* Then: it is lifted, and the release notes slid down out of its way */
+    await expect(sessionItem(page, S.chartsDarkMode)).toHaveClass(/\bis-pin-dragging\b/);
+    await expect(async () => expect((await middleOf(page, LABEL.releaseNotes)).y).toBeCloseTo(charts.y, 0)).toPass();
+
+    /* When */
+    await page.mouse.up();
+
+    /* Then */
+    await expect(async () => expectRowsInOrder(page, [S.chartsDarkMode, S.releaseNotes])).toPass();
+    await expect(sessionItem(page, S.chartsDarkMode)).not.toHaveClass(/\bis-pin-dragging\b/);
+    await expect(sessionItem(page, S.chartsDarkMode)).not.toHaveClass(/\bactive\b/);
+
+    /* When */
+    await app.close();
+    const again = await launchApp(home);
+    try {
+        await waitForIndex(again.page, again.app, home);
+
+        /* Then */
+        await expect(async () => expectRowsInOrder(again.page, [S.chartsDarkMode, S.releaseNotes])).toPass();
+    } finally {
+        await again.close();
+    }
+});
+
+test('Esc puts a dragged pin back where it was', async ({page}) => {
+    /* Given */
+    await pinCharts(page);
+    const charts = await middleOf(page, LABEL.chartsDarkMode);
+    const notes = await middleOf(page, LABEL.releaseNotes);
+    await page.mouse.move(charts.x, charts.y);
+    await page.mouse.down();
+    await page.mouse.move(notes.x, notes.y - 20, {steps: 10});
+    await expect(async () => expect((await middleOf(page, LABEL.releaseNotes)).y).toBeCloseTo(charts.y, 0)).toPass();
+
+    /* When */
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+
+    /* Then: everything springs back */
+    await expect(async () => expect((await middleOf(page, LABEL.releaseNotes)).y).toBeCloseTo(notes.y, 0)).toPass();
+    await expect(sessionItem(page, S.chartsDarkMode)).not.toHaveClass(/\bis-pin-dragging\b/);
+    await expectRowsInOrder(page, [S.releaseNotes, S.chartsDarkMode]);
+});
+
+test('a click on a pinned row that wobbles a few px still opens it', async ({page}) => {
+    /* Given */
+    await pinCharts(page);
+    const charts = await middleOf(page, LABEL.chartsDarkMode);
+
+    /* When: pressed, moved past the drag slop but not to another slot, and let go */
+    await page.mouse.move(charts.x, charts.y);
+    await page.mouse.down();
+    await page.mouse.move(charts.x + 2, charts.y + 7, {steps: 3});
+    await page.mouse.up();
+
+    /* Then */
+    await expect(sessionItem(page, S.chartsDarkMode)).toHaveClass(/\bactive\b/);
+    await expectRowsInOrder(page, [S.releaseNotes, S.chartsDarkMode]);
+});
+
+test('⌥↓ and ⌥↑ move the pinned row at the cursor down and up its section', async ({page}) => {
+    /* Given */
+    await pinCharts(page);
+    await page.keyboard.press('Meta+l');
+    await expect(keyboardCursor(page)).toHaveAttribute('data-session-id', S.releaseNotes);
+
+    /* When */
+    await page.keyboard.press('Alt+ArrowDown');
+
+    /* Then: it moved, and the cursor went with it */
+    await expect(async () => expectRowsInOrder(page, [S.chartsDarkMode, S.releaseNotes])).toPass();
+    await expect(keyboardCursor(page)).toHaveAttribute('data-session-id', S.releaseNotes);
+
+    /* When */
+    await page.keyboard.press('Alt+ArrowUp');
+
+    /* Then */
+    await expect(async () => expectRowsInOrder(page, [S.releaseNotes, S.chartsDarkMode])).toPass();
 });

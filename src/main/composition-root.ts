@@ -118,6 +118,7 @@ import {SystemShellProfileProvider} from '../infrastructure/shell/shell-discover
 import {WorkerProjectScanner} from '../infrastructure/worker/worker-project-scanner';
 import {SqliteSearchIndex} from '../infrastructure/sqlite/search-index';
 import {SqliteSessionRepository} from '../infrastructure/sqlite/session-repository';
+import {PinOrderService} from '../application/services/pin-order-service';
 import {SqliteSettingsStore} from '../infrastructure/sqlite/settings-store';
 import {SqliteActivityStore} from '../infrastructure/sqlite/activity-store';
 import {SqliteAutoFixHistory} from '../infrastructure/sqlite/auto-fix-history';
@@ -207,6 +208,8 @@ export interface Container {
 
     readonly sessionIndex: SessionIndex;
     readonly projects: ProjectListService;
+    /** The order of the pinned sections (#379). */
+    readonly pinOrder: PinOrderService;
     /** Checks a folder before it is added as a project (#171). */
     readonly projectFolders: ProjectFolderService;
     readonly usage: OAuthUsageService;
@@ -655,6 +658,7 @@ export function buildContainer(): Container {
         log,
     });
     const projects = new ProjectListService({repository, transcripts, settings, registry, vmTranscripts});
+    const pinOrder = new PinOrderService(repository);
     // Moving a running conversation to a VM (#276 stage 3).
     const sessionHandoff = new SessionHandoffService({
         registry,
@@ -1311,6 +1315,7 @@ export function buildContainer(): Container {
         headsUpWindow: () => headsUpWindow,
         sessionIndex,
         projects,
+        pinOrder,
         projectFolders,
         usage,
         schedules,

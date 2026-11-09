@@ -23,7 +23,8 @@ const TABLES = [
     sessionId TEXT PRIMARY KEY,
     name TEXT,
     starred INTEGER DEFAULT 0,
-    archived INTEGER DEFAULT 0
+    archived INTEGER DEFAULT 0,
+    pinPosition INTEGER
   )`,
     `CREATE TABLE IF NOT EXISTS session_cache (
     sessionId TEXT PRIMARY KEY,
@@ -113,10 +114,12 @@ const TABLES = [
   )`,
     // The plans pinned to the top of the session list: a plan is the sessions
     // sharing a slug within one project, so the pin is keyed on both and holds
-    // for sessions started from the plan later.
+    // for sessions started from the plan later. Its position is shared with
+    // pinned_issue_plans': Pinned plans is one section (#379).
     `CREATE TABLE IF NOT EXISTS pinned_plans (
     project_path TEXT NOT NULL,
     slug TEXT NOT NULL,
+    position INTEGER,
     PRIMARY KEY (project_path, slug)
   )`,
     // The GitHub plans pinned to the top of the session list, from the plan's
@@ -129,13 +132,15 @@ const TABLES = [
     number INTEGER NOT NULL,
     title TEXT NOT NULL,
     pinned_at INTEGER NOT NULL,
+    position INTEGER,
     PRIMARY KEY (project_path, repository, number)
   )`,
     // The projects pinned to the top of the session list, above the pinned
     // plans, from the project's page. Epoch ms for pinned_at.
     `CREATE TABLE IF NOT EXISTS pinned_projects (
     project_path TEXT PRIMARY KEY,
-    pinned_at INTEGER NOT NULL
+    pinned_at INTEGER NOT NULL,
+    position INTEGER
   )`,
     // When a session was unlinked from its task by hand, so detection does not
     // relink it from a tool call made before (#245). Epoch ms.
@@ -274,6 +279,9 @@ function readVersion(db: Database.Database): number {
  * say) must not be recorded as migrated — the next launch simply retries.
  */
 function reconcileColumns(db: Database.Database): void {
+    // First, while the session cache the pinned sessions are ordered by is still there.
+    reconcilePinPositions(db);
+
     const columns = new Set(
         db
             .prepare<[], {name: string}>('PRAGMA table_info(session_cache)')
@@ -322,6 +330,114 @@ function reconcileColumns(db: Database.Database): void {
             .map((c) => c.name),
     );
     if (!actionColumns.has('details')) db.exec('ALTER TABLE session_actions ADD COLUMN details TEXT');
+}
+
+/** The names of a table's columns. */
+function columnsOf(db: Database.Database, table: string): Set<string> {
+    return new Set(
+        db
+            .prepare<[], {name: string}>(`PRAGMA table_info(${table})`)
+            .all()
+            .map((c) => c.name),
+    );
+}
+
+/** An ISO time as epoch ms; 0 when there is none. */
+function timeOf(iso: string | null): number {
+    const ms = iso ? Date.parse(iso) : NaN;
+    return Number.isNaN(ms) ? 0 : ms;
+}
+
+/**
+ * Newest first: the order pins without a position show in
+ * (`domain/pin/pin-order`'s `orderPins`). Restated rather than imported, as
+ * this file is compiled on its own by the store tests.
+ */
+function newestFirst<T>(pins: readonly T[], time: (pin: T) => number): T[] {
+    return [...pins].sort((a, b) => time(b) - time(a));
+}
+
+/**
+ * A position for every pin (#379), so each pinned section keeps the order the
+ * user drags it into. Keyed on the columns being there, like the others here,
+ * and filled in when they arrive with the order each section showed until
+ * then: Pinned newest activity first, Pinned projects newest pin first, and
+ * Pinned plans, across both kinds of plan, by the newest session of a slug
+ * plan or when a GitHub plan was pinned, newest first.
+ */
+function reconcilePinPositions(db: Database.Database): void {
+    if (!columnsOf(db, 'session_meta').has('pinPosition')) {
+        db.exec('ALTER TABLE session_meta ADD COLUMN pinPosition INTEGER');
+        const pins = db
+            .prepare<[], {sessionId: string; modified: string | null}>(
+                `SELECT m.sessionId AS sessionId, c.modified AS modified
+                 FROM session_meta m LEFT JOIN session_cache c ON c.sessionId = m.sessionId
+                 WHERE m.starred = 1`,
+            )
+            .all();
+        const set = db.prepare<[number, string]>('UPDATE session_meta SET pinPosition = ? WHERE sessionId = ?');
+        db.transaction(() => {
+            newestFirst(pins, (p) => timeOf(p.modified)).forEach((p, i) => set.run(i, p.sessionId));
+        })();
+    }
+
+    if (!columnsOf(db, 'pinned_projects').has('position')) {
+        db.exec('ALTER TABLE pinned_projects ADD COLUMN position INTEGER');
+        const pins = db.prepare<[], {project_path: string; pinned_at: number}>('SELECT * FROM pinned_projects').all();
+        const set = db.prepare<[number, string]>('UPDATE pinned_projects SET position = ? WHERE project_path = ?');
+        db.transaction(() => {
+            newestFirst(pins, (p) => p.pinned_at).forEach((p, i) => set.run(i, p.project_path));
+        })();
+    }
+
+    const slugPlans = columnsOf(db, 'pinned_plans').has('position');
+    const issuePlans = columnsOf(db, 'pinned_issue_plans').has('position');
+    if (!slugPlans || !issuePlans) {
+        if (!slugPlans) db.exec('ALTER TABLE pinned_plans ADD COLUMN position INTEGER');
+        if (!issuePlans) db.exec('ALTER TABLE pinned_issue_plans ADD COLUMN position INTEGER');
+        type PlanRow = {project_path: string; slug: string | null; repository: string | null; number: number | null};
+        const plans: (PlanRow & {time: number})[] = [
+            ...db
+                .prepare<[], {project_path: string; slug: string; modified: string | null}>(
+                    `SELECT p.project_path AS project_path, p.slug AS slug,
+                       (SELECT MAX(c.modified) FROM session_cache c
+                        WHERE c.projectPath = p.project_path AND c.slug = p.slug) AS modified
+                     FROM pinned_plans p`,
+                )
+                .all()
+                .map((p) => ({
+                    project_path: p.project_path,
+                    slug: p.slug,
+                    repository: null,
+                    number: null,
+                    time: timeOf(p.modified),
+                })),
+            ...db
+                .prepare<[], {project_path: string; repository: string; number: number; pinned_at: number}>(
+                    'SELECT project_path, repository, number, pinned_at FROM pinned_issue_plans',
+                )
+                .all()
+                .map((p) => ({
+                    project_path: p.project_path,
+                    slug: null,
+                    repository: p.repository,
+                    number: p.number,
+                    time: p.pinned_at,
+                })),
+        ];
+        const setSlug = db.prepare<[number, string, string]>(
+            'UPDATE pinned_plans SET position = ? WHERE project_path = ? AND slug = ?',
+        );
+        const setIssue = db.prepare<[number, string, string, number]>(
+            'UPDATE pinned_issue_plans SET position = ? WHERE project_path = ? AND repository = ? AND number = ?',
+        );
+        db.transaction(() => {
+            newestFirst(plans, (p) => p.time).forEach((p, i) => {
+                if (p.slug !== null) setSlug.run(i, p.project_path, p.slug);
+                else setIssue.run(i, p.project_path, p.repository ?? '', p.number ?? 0);
+            });
+        })();
+    }
 }
 
 /** Create what is missing, migrate what is old, and reconcile what is odd. */

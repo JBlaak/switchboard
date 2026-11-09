@@ -13,10 +13,14 @@ export interface Project {
     agent?: boolean;
     /** The slugs of the plans pinned to the top of the session list. */
     pinnedPlans?: string[];
+    /** slug → the pinned plan's position among Pinned plans (#379); absent for one stored before positions. */
+    pinnedPlanPositions?: Record<string, number>;
     /** The GitHub plans pinned to the top of the session list from their page. */
     pinnedIssuePlans?: PinnedIssuePlan[];
     /** Epoch ms the project was pinned to the top of the session list, above the pinned plans. */
     pinnedAt?: number;
+    /** The pinned project's position among Pinned projects (#379); absent when not pinned or not placed yet. */
+    pinPosition?: number;
 }
 
 /** A GitHub plan pinned to the top of the session list, by its issue. */
@@ -27,4 +31,6 @@ export interface PinnedIssuePlan {
     title: string;
     /** Epoch ms. */
     pinnedAt: number;
+    /** Its position among Pinned plans (#379); null for one stored before positions. */
+    position?: number | null;
 }

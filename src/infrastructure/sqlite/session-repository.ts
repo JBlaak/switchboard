@@ -11,9 +11,17 @@ import {decodePullRequests} from '../../domain/session/pull-requests';
 import type {CachedSession, FolderMeta, SessionMeta} from '../../domain/session/session';
 import type {IssuePlanPin, PlanPin, ProjectPin} from '../../domain/project/project-list';
 import type {SessionRepository} from '../../application/ports/session-repository';
+import {orderPins} from '../../domain/pin/pin-order';
+import type {PinRef, PinSection} from '../../domain/pin/pin-order';
 
 /** A `session_cache` row as SQLite hands it back: the PR list is still JSON text. */
 type CachedSessionRow = Omit<CachedSession, 'pullRequests'> & {pullRequests: string | null};
+
+/** An ISO time as epoch ms; 0 when there is none. */
+function timeOf(iso: string | null): number {
+    const ms = iso ? Date.parse(iso) : NaN;
+    return Number.isNaN(ms) ? 0 : ms;
+}
 
 /** A cache row with its PR list decoded. */
 function fromRow(row: CachedSessionRow): CachedSession {
@@ -37,6 +45,9 @@ export class SqliteSessionRepository implements SessionRepository {
     private readonly projectPinsGetAllStatement;
     private readonly projectPinInsertStatement;
     private readonly projectPinDeleteStatement;
+    private readonly sessionPinsStatement;
+    private readonly planPinTimesStatement;
+    private readonly setPinOrderTransaction;
 
     private readonly cacheCountStatement;
     private readonly cacheGetAllStatement;
@@ -62,7 +73,9 @@ export class SqliteSessionRepository implements SessionRepository {
     `);
         this.metaToggleStarStatement = db.prepare<[string]>(`
       INSERT INTO session_meta (sessionId, starred) VALUES (?, 1)
-      ON CONFLICT(sessionId) DO UPDATE SET starred = CASE WHEN starred = 1 THEN 0 ELSE 1 END
+      ON CONFLICT(sessionId) DO UPDATE SET
+        starred = CASE WHEN starred = 1 THEN 0 ELSE 1 END,
+        pinPosition = CASE WHEN starred = 1 THEN NULL ELSE pinPosition END
     `);
         this.metaUpsertArchivedStatement = db.prepare<[string, 0 | 1]>(`
       INSERT INTO session_meta (sessionId, archived) VALUES (?, ?)
@@ -73,8 +86,8 @@ export class SqliteSessionRepository implements SessionRepository {
       ON CONFLICT(sessionId) DO UPDATE SET snoozedUntil = excluded.snoozedUntil
     `);
 
-        this.planPinsGetAllStatement = db.prepare<[], {project_path: string; slug: string}>(
-            'SELECT project_path, slug FROM pinned_plans',
+        this.planPinsGetAllStatement = db.prepare<[], {project_path: string; slug: string; position: number | null}>(
+            'SELECT project_path, slug, position FROM pinned_plans',
         );
         this.planPinInsertStatement = db.prepare<[string, string]>(
             'INSERT OR IGNORE INTO pinned_plans (project_path, slug) VALUES (?, ?)',
@@ -84,21 +97,79 @@ export class SqliteSessionRepository implements SessionRepository {
         );
         this.issuePlanPinsGetAllStatement = db.prepare<
             [],
-            {project_path: string; repository: string; number: number; title: string; pinned_at: number}
-        >('SELECT project_path, repository, number, title, pinned_at FROM pinned_issue_plans ORDER BY pinned_at');
+            {
+                project_path: string;
+                repository: string;
+                number: number;
+                title: string;
+                pinned_at: number;
+                position: number | null;
+            }
+        >(
+            'SELECT project_path, repository, number, title, pinned_at, position FROM pinned_issue_plans ORDER BY pinned_at',
+        );
         this.issuePlanPinInsertStatement = db.prepare<[string, string, number, string, number]>(
             'INSERT OR IGNORE INTO pinned_issue_plans (project_path, repository, number, title, pinned_at) VALUES (?, ?, ?, ?, ?)',
         );
         this.issuePlanPinDeleteStatement = db.prepare<[string, string, number]>(
             'DELETE FROM pinned_issue_plans WHERE project_path = ? AND repository = ? AND number = ?',
         );
-        this.projectPinsGetAllStatement = db.prepare<[], {project_path: string; pinned_at: number}>(
-            'SELECT project_path, pinned_at FROM pinned_projects ORDER BY pinned_at',
-        );
+        this.projectPinsGetAllStatement = db.prepare<
+            [],
+            {project_path: string; pinned_at: number; position: number | null}
+        >('SELECT project_path, pinned_at, position FROM pinned_projects ORDER BY pinned_at');
         this.projectPinInsertStatement = db.prepare<[string, number]>(
             'INSERT OR IGNORE INTO pinned_projects (project_path, pinned_at) VALUES (?, ?)',
         );
         this.projectPinDeleteStatement = db.prepare<[string]>('DELETE FROM pinned_projects WHERE project_path = ?');
+
+        this.sessionPinsStatement = db.prepare<
+            [],
+            {sessionId: string; pinPosition: number | null; modified: string | null}
+        >(`
+      SELECT m.sessionId AS sessionId, m.pinPosition AS pinPosition, c.modified AS modified
+      FROM session_meta m LEFT JOIN session_cache c ON c.sessionId = m.sessionId
+      WHERE m.starred = 1
+    `);
+        this.planPinTimesStatement = db.prepare<
+            [],
+            {project_path: string; slug: string; position: number | null; modified: string | null}
+        >(`
+      SELECT p.project_path AS project_path, p.slug AS slug, p.position AS position,
+        (SELECT MAX(c.modified) FROM session_cache c
+         WHERE c.projectPath = p.project_path AND c.slug = p.slug) AS modified
+      FROM pinned_plans p
+    `);
+        const setSessionPosition = db.prepare<[number, string]>(
+            'UPDATE session_meta SET pinPosition = ? WHERE sessionId = ?',
+        );
+        const setProjectPosition = db.prepare<[number, string]>(
+            'UPDATE pinned_projects SET position = ? WHERE project_path = ?',
+        );
+        const setPlanPosition = db.prepare<[number, string, string]>(
+            'UPDATE pinned_plans SET position = ? WHERE project_path = ? AND slug = ?',
+        );
+        const setIssuePlanPosition = db.prepare<[number, string, string, number]>(
+            'UPDATE pinned_issue_plans SET position = ? WHERE project_path = ? AND repository = ? AND number = ?',
+        );
+        this.setPinOrderTransaction = db.transaction((order: readonly PinRef[]) => {
+            order.forEach((ref, i) => {
+                switch (ref.kind) {
+                    case 'session':
+                        setSessionPosition.run(i, ref.sessionId);
+                        return;
+                    case 'project':
+                        setProjectPosition.run(i, ref.projectPath);
+                        return;
+                    case 'plan':
+                        setPlanPosition.run(i, ref.projectPath, ref.slug);
+                        return;
+                    case 'issuePlan':
+                        setIssuePlanPosition.run(i, ref.projectPath, ref.repository, ref.number);
+                        return;
+                }
+            });
+        });
 
         this.cacheCountStatement = db.prepare<[], {cnt: number}>('SELECT COUNT(*) as cnt FROM session_cache');
         this.cacheGetAllStatement = db.prepare<[], CachedSessionRow>('SELECT * FROM session_cache');
@@ -200,7 +271,9 @@ export class SqliteSessionRepository implements SessionRepository {
     }
 
     public getPinnedPlans(): PlanPin[] {
-        return this.planPinsGetAllStatement.all().map((row) => ({projectPath: row.project_path, slug: row.slug}));
+        return this.planPinsGetAllStatement
+            .all()
+            .map((row) => ({projectPath: row.project_path, slug: row.slug, position: row.position}));
     }
 
     public togglePlanPin(projectPath: string, slug: string): boolean {
@@ -216,6 +289,7 @@ export class SqliteSessionRepository implements SessionRepository {
             number: row.number,
             title: row.title,
             pinnedAt: row.pinned_at,
+            position: row.position,
         }));
     }
 
@@ -228,13 +302,58 @@ export class SqliteSessionRepository implements SessionRepository {
     public getPinnedProjects(): ProjectPin[] {
         return this.projectPinsGetAllStatement
             .all()
-            .map((row) => ({projectPath: row.project_path, pinnedAt: row.pinned_at}));
+            .map((row) => ({projectPath: row.project_path, pinnedAt: row.pinned_at, position: row.position}));
     }
 
     public toggleProjectPin(projectPath: string): boolean {
         if (this.projectPinDeleteStatement.run(projectPath).changes > 0) return false;
         this.projectPinInsertStatement.run(projectPath, Date.now());
         return true;
+    }
+
+    public getPinOrder(section: PinSection): PinRef[] {
+        switch (section) {
+            case 'sessions':
+                return orderPins(
+                    this.sessionPinsStatement.all(),
+                    (p) => p.pinPosition,
+                    (p) => timeOf(p.modified),
+                ).map((p) => ({kind: 'session', sessionId: p.sessionId}));
+            case 'projects':
+                return orderPins(
+                    this.projectPinsGetAllStatement.all(),
+                    (p) => p.position,
+                    (p) => p.pinned_at,
+                ).map((p) => ({kind: 'project', projectPath: p.project_path}));
+            case 'plans': {
+                const plans: {ref: PinRef; position: number | null; time: number}[] = [
+                    ...this.planPinTimesStatement.all().map((p) => ({
+                        ref: {kind: 'plan', projectPath: p.project_path, slug: p.slug} as const,
+                        position: p.position,
+                        time: timeOf(p.modified),
+                    })),
+                    ...this.issuePlanPinsGetAllStatement.all().map((p) => ({
+                        ref: {
+                            kind: 'issuePlan',
+                            projectPath: p.project_path,
+                            repository: p.repository,
+                            number: p.number,
+                        } as const,
+                        position: p.position,
+                        time: p.pinned_at,
+                    })),
+                ];
+                return orderPins(
+                    plans,
+                    (p) => p.position,
+                    (p) => p.time,
+                ).map((p) => p.ref);
+            }
+        }
+    }
+
+    public setPinOrder(order: readonly PinRef[]): void {
+        this.setPinOrderTransaction(order);
     }
 
     // ── Cache ──

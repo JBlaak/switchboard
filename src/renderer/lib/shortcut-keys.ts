@@ -121,21 +121,24 @@ export function sessionNavDirection(e: KeyboardEvent): -1 | 1 | null {
 }
 
 /** What a key does while the session list holds the keyboard. */
-export type ListCursorKey = 'down' | 'up' | 'activate' | 'rename' | 'archive' | 'newSession' | 'leave';
+export type ListCursorKey =
+    'down' | 'up' | 'moveDown' | 'moveUp' | 'activate' | 'rename' | 'archive' | 'newSession' | 'leave';
 
 /**
- * The session list's own keys: the arrows or J and K step, Enter does what a
- * click would, R or F2 renames, E archives, A starts a new session and Escape
+ * The session list's own keys: the arrows or J and K step, ⌥ with an arrow
+ * moves a pinned row up or down its section, Enter does what a click would, R or F2 renames, E archives, A starts a new session and Escape
  * lets go. The letters are left alone with Cmd, Ctrl or Alt held, so those
  * chords stay free for the app's shortcuts.
  */
 export function listCursorKey(e: KeyboardEvent): ListCursorKey | null {
     const chord = e.metaKey || e.ctrlKey || e.altKey;
+    // ⌥ alone on an arrow moves a pinned row within its section (#379).
+    const moves = e.altKey && !e.metaKey && !e.ctrlKey;
     switch (e.key) {
         case 'ArrowDown':
-            return 'down';
+            return moves ? 'moveDown' : 'down';
         case 'ArrowUp':
-            return 'up';
+            return moves ? 'moveUp' : 'up';
         case 'j':
             return chord ? null : 'down';
         case 'k':

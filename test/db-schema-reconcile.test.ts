@@ -357,7 +357,14 @@ describe('schema reconcile', {concurrency: true}, () => {
                 true,
             ),
         );
-        assert.deepEqual(row, {sessionId: 's1', name: 'Kept', starred: 0, archived: 0, snoozedUntil: null});
+        assert.deepEqual(row, {
+            sessionId: 's1',
+            name: 'Kept',
+            starred: 0,
+            archived: 0,
+            pinPosition: null,
+            snoozedUntil: null,
+        });
     });
 
     // The enrolled phones (#194) must be there on every database, including one a
@@ -435,5 +442,102 @@ describe('schema reconcile', {concurrency: true}, () => {
             unlinkCols: ['session_id', 'unlinked_at'],
             unlinks: [{session_id: 's2'}],
         });
+    });
+
+    /**
+     * Pins stored before positions existed (#379): two pinned sessions and
+     * one not, two pinned projects, and two slug plans and a GitHub plan.
+     */
+    const PINS_WITHOUT_POSITIONS = `
+  db.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
+  db.prepare("INSERT INTO settings (key, value) VALUES ('db_version', '5')").run();
+  db.exec(\`CREATE TABLE session_cache (
+    sessionId TEXT PRIMARY KEY, folder TEXT NOT NULL, projectPath TEXT,
+    summary TEXT, firstPrompt TEXT, created TEXT, modified TEXT,
+    messageCount INTEGER DEFAULT 0, slug TEXT, aiTitle TEXT, fileMtime TEXT, pullRequests TEXT
+  )\`);
+  db.exec('CREATE TABLE session_meta (sessionId TEXT PRIMARY KEY, name TEXT, starred INTEGER DEFAULT 0, archived INTEGER DEFAULT 0, snoozedUntil TEXT)');
+  db.exec('CREATE TABLE pinned_projects (project_path TEXT PRIMARY KEY, pinned_at INTEGER NOT NULL)');
+  db.exec('CREATE TABLE pinned_plans (project_path TEXT NOT NULL, slug TEXT NOT NULL, PRIMARY KEY (project_path, slug))');
+  db.exec(\`CREATE TABLE pinned_issue_plans (project_path TEXT NOT NULL, repository TEXT NOT NULL, number INTEGER NOT NULL,
+    title TEXT NOT NULL, pinned_at INTEGER NOT NULL, PRIMARY KEY (project_path, repository, number))\`);
+  const cache = db.prepare("INSERT INTO session_cache (sessionId, folder, projectPath, modified, slug) VALUES (?, 'f', '/app', ?, ?)");
+  cache.run('old', '2026-01-01T00:00:00.000Z', null);
+  cache.run('new', '2026-03-01T00:00:00.000Z', null);
+  cache.run('plain', '2026-04-01T00:00:00.000Z', null);
+  cache.run('quiet-plan', '2026-01-15T00:00:00.000Z', 'quiet');
+  cache.run('busy-plan', '2026-02-15T00:00:00.000Z', 'busy');
+  const meta = db.prepare('INSERT INTO session_meta (sessionId, starred) VALUES (?, ?)');
+  meta.run('old', 1);
+  meta.run('new', 1);
+  meta.run('plain', 0);
+  const project = db.prepare('INSERT INTO pinned_projects (project_path, pinned_at) VALUES (?, ?)');
+  project.run('/first-pinned', 1000);
+  project.run('/last-pinned', 2000);
+  const plan = db.prepare('INSERT INTO pinned_plans (project_path, slug) VALUES (?, ?)');
+  plan.run('/app', 'quiet');
+  plan.run('/app', 'busy');
+  db.prepare("INSERT INTO pinned_issue_plans VALUES ('/app', 'o/app', 7, 'Epic', ?)").run(Date.parse('2026-02-01T00:00:00.000Z'));
+`;
+
+    /** Every pin's position, by what it pins. */
+    const PIN_POSITIONS = `console.log(JSON.stringify({
+    sessions: db.prepare('SELECT sessionId, pinPosition FROM session_meta ORDER BY sessionId').all(),
+    projects: db.prepare('SELECT project_path, position FROM pinned_projects ORDER BY project_path').all(),
+    plans: db.prepare('SELECT slug, position FROM pinned_plans ORDER BY slug').all(),
+    issuePlans: db.prepare('SELECT number, position FROM pinned_issue_plans').all(),
+  }));`;
+
+    // Each pinned section keeps the order it showed: Pinned by newest activity,
+    // Pinned projects newest pin first, Pinned plans (both kinds together) by a
+    // slug plan's newest session and a GitHub plan's pin time, newest first.
+    test('pins from before positions get the positions of the order they showed', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-pin-positions-');
+        await sqlite(dir, PINS_WITHOUT_POSITIONS);
+
+        /* When */
+        const r = await openDatabase(dir);
+
+        /* Then */
+        assert.equal(r.status, 0, r.stderr);
+        assert.deepEqual(JSON.parse(await sqlite(dir, PIN_POSITIONS, true)), {
+            sessions: [
+                {sessionId: 'new', pinPosition: 0},
+                {sessionId: 'old', pinPosition: 1},
+                {sessionId: 'plain', pinPosition: null},
+            ],
+            projects: [
+                {project_path: '/first-pinned', position: 1},
+                {project_path: '/last-pinned', position: 0},
+            ],
+            plans: [
+                {slug: 'busy', position: 0},
+                {slug: 'quiet', position: 2},
+            ],
+            issuePlans: [{number: 7, position: 1}],
+        });
+    });
+
+    test('positions are filled in only once: a later open keeps a reordered section', async () => {
+        /* Given */
+        const dir = dataDir('switchboard-db-pin-positions-once-');
+        await sqlite(dir, PINS_WITHOUT_POSITIONS);
+        await opened(dir);
+        await sqlite(
+            dir,
+            `db.prepare("UPDATE session_meta SET pinPosition = CASE sessionId WHEN 'old' THEN 0 ELSE 1 END WHERE starred = 1").run();`,
+        );
+
+        /* When */
+        const r = await openDatabase(dir);
+
+        /* Then */
+        assert.equal(r.status, 0, r.stderr);
+        assert.deepEqual(JSON.parse(await sqlite(dir, PIN_POSITIONS, true)).sessions, [
+            {sessionId: 'new', pinPosition: 1},
+            {sessionId: 'old', pinPosition: 0},
+            {sessionId: 'plain', pinPosition: null},
+        ]);
     });
 });

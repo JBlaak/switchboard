@@ -922,3 +922,109 @@ test('a pending row with no PTY is not Working, so it can age out of the list', 
     /* Then */
     assert.deepEqual(ids(laid.older), [r('pending')]);
 });
+
+// ── The user's own order of the pinned sections (#379) ──
+
+test('pinned sessions list by their position, not by recency', () => {
+    /* Given */
+    const projects = [
+        project('/p', [
+            session('newest', {starred: 1, pinPosition: 2, modified: at(HOUR)}),
+            session('oldest', {starred: 1, pinPosition: 0, modified: at(5 * DAY)}),
+            session('middle', {starred: 1, pinPosition: 1, modified: at(DAY)}),
+        ]),
+    ];
+
+    /* When */
+    const {layout: laid} = layout(projects);
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [r('oldest'), r('middle'), r('newest')]);
+});
+
+test('a pinned session not placed yet lists after the placed ones, newest first', () => {
+    /* Given */
+    const projects = [
+        project('/p', [
+            session('placed', {starred: 1, pinPosition: 0, modified: at(5 * DAY)}),
+            session('old', {starred: 1, modified: at(2 * DAY)}),
+            session('new', {starred: 1, modified: at(HOUR)}),
+        ]),
+    ];
+
+    /* When */
+    const {layout: laid} = layout(projects);
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [r('placed'), r('new'), r('old')]);
+});
+
+test('a pinned group takes the place of its first-placed pinned session', () => {
+    /* Given */
+    const projects = [
+        project('/p', [
+            session('alone', {starred: 1, pinPosition: 1}),
+            session('g1', {slug: 'plan', starred: 1, pinPosition: 2}),
+            session('g2', {slug: 'plan', starred: 1, pinPosition: 0}),
+        ]),
+    ];
+
+    /* When */
+    const {layout: laid} = layout(projects);
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [slugId('plan', '/p'), r('alone')]);
+});
+
+test('the open pinned session does not hold its old slot against a new order', () => {
+    /* Given */
+    const projects = [
+        project('/p', [session('a', {starred: 1, pinPosition: 1}), session('b', {starred: 1, pinPosition: 0})]),
+    ];
+    const previous = [
+        {id: r('a'), tier: TIER_PINNED},
+        {id: r('b'), tier: TIER_PINNED},
+    ];
+
+    /* When */
+    const {layout: laid} = layout(projects, {activeSessionId: 'a'}, {previous});
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [r('b'), r('a')]);
+});
+
+test('pinned projects list by their position', () => {
+    /* Given */
+    const projects = [
+        project('/new', [], {pinnedAt: NOW, pinPosition: 1}),
+        project('/old', [], {pinnedAt: NOW - DAY, pinPosition: 0}),
+    ];
+
+    /* When */
+    const {layout: laid} = layout(projects);
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [projectPinId('/old'), projectPinId('/new')]);
+});
+
+test('pinned plans share one order across slug plans, GitHub plans and projects', () => {
+    /* Given */
+    const projects = [
+        project('/a', [session('s', {slug: 'plan', modified: at(0)})], {
+            pinnedPlans: ['plan'],
+            pinnedPlanPositions: {plan: 2},
+            pinnedIssuePlans: [{...issuePlan(1, NOW), position: 0}],
+        }),
+        project('/b', [], {pinnedIssuePlans: [{...issuePlan(2, NOW - DAY), position: 1}]}),
+    ];
+
+    /* When */
+    const {layout: laid} = layout(projects);
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [
+        planPinId('/a', 'acme/app', 1),
+        planPinId('/b', 'acme/app', 2),
+        slugId('plan', '/a'),
+    ]);
+});

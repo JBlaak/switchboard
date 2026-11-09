@@ -7,6 +7,7 @@
  * from the same channel table, so the two sides cannot drift apart silently.
  */
 import type {Project} from '../domain/project/project';
+import type {PinRef, PinSection, PinTarget} from '../domain/pin/pin-order';
 import type {RemoteConfig} from '../domain/project/remote-target';
 import type {ProjectFolderCheck} from '../domain/project/folder-check';
 import type {RemoteStatusPayload} from '../domain/remote/remote-status';
@@ -108,18 +109,24 @@ export interface SwitchboardApi {
     openTerminal(id: string, projectPath: string, isNew: boolean, sessionOptions?: SessionOptions): Promise<IpcResult>;
     stopSession(id: string): Promise<IpcResult>;
     reconnectRemote(id: string): Promise<IpcResult>;
-    toggleStar(id: string): Promise<{starred: number}>;
+    /** Pin or unpin a session; `order` is the pinned sessions' order after it (#379). */
+    toggleStar(id: string): Promise<{starred: number; order: PinRef[]}>;
     /** Pin a plan (the sessions sharing `slug` in one project) to the top of the list, or unpin it. */
-    togglePlanPin(projectPath: string, slug: string): Promise<{pinned: boolean}>;
+    togglePlanPin(projectPath: string, slug: string): Promise<{pinned: boolean; order: PinRef[]}>;
     /** Pin a GitHub plan, from its page in a project, to the top of the list, or unpin it. */
     toggleIssuePlanPin(
         projectPath: string,
         repository: string,
         number: number,
         title: string,
-    ): Promise<{pinned: boolean}>;
+    ): Promise<{pinned: boolean; order: PinRef[]}>;
     /** Pin a project, from its page, to the top of the list above the pinned plans, or unpin it. */
-    toggleProjectPin(projectPath: string): Promise<{pinned: boolean}>;
+    toggleProjectPin(projectPath: string): Promise<{pinned: boolean; order: PinRef[]}>;
+    /**
+     * Move pins (one entry's: a session, a group's pinned sessions, a project or
+     * a plan) next to another in their section (#379); answers the section's new order.
+     */
+    movePins(section: PinSection, moving: PinRef[], target: PinTarget): Promise<{order: PinRef[]}>;
     /** `null` clears the rename, falling back to the AI/first-prompt title. */
     renameSession(id: string, name: string | null): Promise<IpcResult>;
     /**
