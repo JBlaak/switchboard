@@ -6,6 +6,7 @@ import {
     FLING_SPEED,
     patchBeats,
     patchMood,
+    petBeat,
     pokeBeat,
     RAPID_POKE_WINDOW_MS,
     timeOfDay,
@@ -546,4 +547,75 @@ test('setting Patch down cycles through its lines and wraps', () => {
     /* Then */
     assert.strictEqual(second.line, 'Where was I? Oh, right here.');
     assert.deepStrictEqual(fourth, dropBeat(0, 5));
+});
+
+test('a thrown Patch says it flew, however slow the let-go', () => {
+    /* Given */
+    const speed = FLING_SPEED - 0.5;
+
+    /* When */
+    const beat = dropBeat(0, speed, true);
+
+    /* Then */
+    assert.deepStrictEqual(beat, {move: 'twirl', line: 'Wheeeee… splat!'});
+});
+
+test('a fast let-go that did not throw Patch is still a fling', () => {
+    /* Given */
+    const speed = FLING_SPEED + 0.1;
+
+    /* When */
+    const beat = dropBeat(0, speed, false);
+
+    /* Then */
+    assert.strictEqual(beat.line, 'Wheee!');
+});
+
+test('throws cycle through their lines and wrap', () => {
+    /* Given */
+    const drops = [1, 3, -1];
+
+    /* When */
+    const [second, fourth, last] = drops.map((d) => dropBeat(d, 2, true));
+
+    /* Then */
+    assert.strictEqual(second.line, 'I flew! Did you see me fly?');
+    assert.deepStrictEqual(fourth, dropBeat(0, 2, true));
+    assert.strictEqual(last.line, 'Stuck the landing. Mostly.');
+});
+
+test('petting Patch makes it purr with love', () => {
+    /* Given */
+    const pet = 0;
+
+    /* When */
+    const beat = petBeat(pet, 'petted');
+
+    /* Then */
+    assert.deepStrictEqual(beat, {move: 'love', line: 'Purrrr…'});
+});
+
+test('petting Patch long enough makes it doze off', () => {
+    /* Given */
+    const pet = 0;
+
+    /* When */
+    const beat = petBeat(pet, 'sleepy');
+
+    /* Then */
+    assert.deepStrictEqual(beat, {move: 'doze', line: 'Keep that up and I’ll nod off…'});
+});
+
+test('pets cycle through their lines and wrap at both ends', () => {
+    /* Given */
+    const pets = [1, 3, -1, Number.NaN];
+
+    /* When */
+    const [second, fourth, last, odd] = pets.map((p) => petBeat(p, 'sleepy'));
+
+    /* Then */
+    assert.strictEqual(second.line, 'So… cosy…');
+    assert.deepStrictEqual(fourth, petBeat(0, 'sleepy'));
+    assert.strictEqual(last.line, 'Just five more minutes…');
+    assert.deepStrictEqual(odd, petBeat(0, 'sleepy'));
 });

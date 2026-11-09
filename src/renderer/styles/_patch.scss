@@ -106,8 +106,10 @@
         display: none;
     }
 
+    /* Across the main area, as the box a throw stays in (EmptyScreenPatch). */
     .placeholder-family + .placeholder-patch {
         margin-top: 0;
+        align-self: stretch;
     }
 }
 

@@ -280,10 +280,46 @@ const SET_DOWN_BEATS: readonly PatchBeat[] = [
     {move: 'love', line: 'That was fun.'},
 ];
 
-/** What Patch says when let go after a drag: the nth reaction, flung or set down. */
-export function dropBeat(drop: number, speed: number): PatchBeat {
-    const beats = speed > FLING_SPEED ? FLUNG_BEATS : SET_DOWN_BEATS;
+/** Thrown across the stage and landed with a squish (#380). */
+const THROWN_BEATS: readonly PatchBeat[] = [
+    {move: 'twirl', line: 'Wheeeee… splat!'},
+    {move: 'hop', line: 'I flew! Did you see me fly?'},
+    {move: 'jelly', line: 'Stuck the landing. Mostly.'},
+];
+
+/**
+ * What Patch says when let go after a drag: the nth reaction, thrown, flung
+ * or set down. `thrown` is the package's word that Patch actually flew; a fast
+ * let-go that did not throw it (reduced motion) still counts as a fling.
+ */
+export function dropBeat(drop: number, speed: number, thrown = false): PatchBeat {
+    const beats = thrown ? THROWN_BEATS : speed > FLING_SPEED ? FLUNG_BEATS : SET_DOWN_BEATS;
+    return nth(beats, drop);
+}
+
+/** How far a rub has got: eyes closed and purring, then nodding off. */
+export type PetStage = 'petted' | 'sleepy';
+
+const PETTED_BEATS: readonly PatchBeat[] = [
+    {move: 'love', line: 'Purrrr…'},
+    {move: 'love', line: 'Ooh, that’s the spot.'},
+    {move: 'love', line: 'Okay, you can stay.'},
+];
+
+const SLEEPY_BEATS: readonly PatchBeat[] = [
+    {move: 'doze', line: 'Keep that up and I’ll nod off…'},
+    {move: 'doze', line: 'So… cosy…'},
+    {move: 'doze', line: 'Just five more minutes…'},
+];
+
+/** What Patch says when rubbed (#380): the nth reaction for how far the rub has got. */
+export function petBeat(pet: number, stage: PetStage): PatchBeat {
+    return nth(stage === 'sleepy' ? SLEEPY_BEATS : PETTED_BEATS, pet);
+}
+
+/** The kth beat, wrapping at both ends; anything not a number is the first. */
+function nth(beats: readonly PatchBeat[], k: number): PatchBeat {
     const n = beats.length;
-    const k = Number.isFinite(drop) ? Math.trunc(drop) : 0;
-    return beats[((k % n) + n) % n];
+    const i = Number.isFinite(k) ? Math.trunc(k) : 0;
+    return beats[((i % n) + n) % n];
 }

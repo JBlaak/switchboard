@@ -8,9 +8,13 @@
  * placeholder is shown and hidden imperatively, with the rest of the main
  * area's panel swap, and `showEmptyScreen` says so with `emptyScreenShown`.
  *
- * Clicking Patch pokes it, and dragging picks it up; either way it answers
- * straight away with a reaction, dressed as it was, without gathering the
- * board again. Asking it something in the box below (#135) is answered the
+ * Clicking Patch pokes it, dragging picks it up, a fast fling throws it and
+ * rubbing over it pets it (#380); each way it answers straight away with a
+ * reaction, dressed as it was, without gathering the board again. A throw
+ * stays inside the family card while the card shows (its floor, #370, is the
+ * one Patch stands in front of, so Patch lands no lower than its feet), and
+ * inside Patch's own box across the main area when a short window leaves the
+ * card out. Asking it something in the box below (#135) is answered the
  * same way: it thinks while the text is routed, and says why when it cannot
  * tell where the text belongs.
  *
@@ -21,7 +25,15 @@
 import {useEffect, useRef} from 'react';
 import {mountPatch} from '@jblaak/patch';
 import '@jblaak/patch/patch.css';
-import {RAPID_POKE_WINDOW_MS, beatFor, dropBeat, patchMood, pokeBeat, timeOfDay} from '../../../domain/companion/patch';
+import {
+    RAPID_POKE_WINDOW_MS,
+    beatFor,
+    dropBeat,
+    patchMood,
+    petBeat,
+    pokeBeat,
+    timeOfDay,
+} from '../../../domain/companion/patch';
 import {dressingOn} from '../../../domain/companion/calendar';
 import {fetchWeather} from '../../app/weather';
 import {getState, onEvent} from '../../state/app-store';
@@ -49,6 +61,7 @@ export function EmptyScreenPatch(): JSX.Element {
         latest: 0,
         pokes: 0,
         drops: 0,
+        pets: 0,
         thoughts: 0,
         /** When the recent pokes landed, oldest first. */
         pokeTimes: [] as number[],
@@ -59,6 +72,7 @@ export function EmptyScreenPatch(): JSX.Element {
     useEffect(() => {
         const c = counts.current;
         const placeholder = stage.current!.parentElement!;
+        const card = placeholder.querySelector<HTMLElement>('.placeholder-family');
         const visible = (): boolean => placeholder.style.display !== 'none';
 
         /** Answer the user straight away, keeping the dressing Patch arrived in. */
@@ -78,7 +92,12 @@ export function EmptyScreenPatch(): JSX.Element {
                 c.pokeTimes.push(now);
                 react(beat);
             },
-            onDrop: ({speed}: Fling) => react(dropBeat(c.drops++, speed)),
+            onDrop: ({speed, thrown}: Fling) => react(dropBeat(c.drops++, speed, thrown)),
+            onPet: (petStage) => react(petBeat(c.pets++, petStage)),
+            // Read at each throw: the card is left out of a short window (display: none, no box).
+            get stage() {
+                return card && card.offsetParent !== null ? card : undefined;
+            },
         });
 
         let mounted = true;

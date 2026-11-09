@@ -3,7 +3,7 @@
  * nothing running.
  *
  * What Patch says for a given board — the beats, the weather and holiday
- * asides, the usage lines, pokes and drops — is unit tested
+ * asides, the usage lines, pokes, drops and pets — is unit tested
  * (test/patch-mood.test.ts, test/patch-calendar.test.ts). These check that
  * the board reaches Patch: each appearance, the weather and usage from main,
  * the running count, and a reaction beating a slow gather.
@@ -126,6 +126,24 @@ test.describe('patch', () => {
         });
     });
 
+    test('rubbing over Patch pets it, and it answers with a line', async ({page}) => {
+        /* Given */
+        await expect(says(page, FIRST_LINE)).toBeVisible();
+        const box = (await page.locator('#placeholder').getByRole('button', {name: 'Poke Patch'}).boundingBox())!;
+        const x = box.x + box.width / 2;
+        const y = box.y + box.height / 2;
+
+        /* When */
+        // Back and forth without pressing: six sideways turns, each leg well over the 6px a turn needs.
+        // A leg is one move, so the turns come well inside the 600ms a rub may pause, on a slow runner too.
+        await page.mouse.move(x, y);
+        for (const dx of [-20, 20, -20, 20, -20, 20, -20]) await page.mouse.move(x + dx, y);
+
+        /* Then */
+        await expect(page.locator('#placeholder .patch')).toHaveClass(/patch-petted/);
+        await expect(says(page, 'Purrrr…')).toBeVisible();
+    });
+
     test.describe('when the weather never answers', () => {
         test.use({stubs: {weather: 'never'}, fakeTimers: true});
 
@@ -173,7 +191,8 @@ test.describe('patch', () => {
             await page.mouse.up();
 
             /* Then */
-            const dropLine = /Wheee!|Again! Again!|all wobbly|Right back where I belong|Where was I|That was fun/;
+            const dropLine =
+                /Wheee|Again! Again!|all wobbly|Right back where I belong|Where was I|That was fun|I flew|Stuck the landing/;
             await expect(says(page, dropLine)).toBeVisible({timeout: 500});
             const line = await says(page, dropLine).textContent();
 

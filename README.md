@@ -24,7 +24,8 @@ reaching for the mouse. See [Keyboard](#keyboard).
 
 **A little whimsy.** Archiving throws confetti. Every fifth time, there are stars. Patch lives on the
 empty screen and has opinions about the weather, your usage limits, late nights and Dutch
-holidays. Poke Patch and see what happens. Then poke again.
+holidays. Poke Patch and see what happens. Then poke again. Rub it to make it purr, or fling it
+and watch it fly.
 
 ![Patch on the empty screen](build/screenshot-patch.png)
 
