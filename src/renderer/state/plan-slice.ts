@@ -24,6 +24,8 @@ import {layOutPlan} from '../../domain/plan/layout';
 import {shouldCelebrate} from '../../domain/plan/celebrate';
 import type {Celebration} from '../../domain/plan/celebrate';
 import type {RendererEvent} from './events';
+import {planProgress, sameProgress} from '../../domain/plan/plan-progress';
+import type {PlanProgress} from '../../domain/plan/plan-progress';
 
 /** What `sessionPlans` answers (see `SessionPlans` in the plan service). */
 export interface SessionPlansAnswer {
@@ -80,6 +82,11 @@ export interface PlanState {
      * outside the view so a view closed meanwhile still finds it when it is back.
      */
     readonly levelStart: PlanLevelStart | null;
+    /**
+     * `owner/repo#n` → how far that plan is, for its row under Pinned plans.
+     * Only plans a row asked for: a plan view's loads refresh them, never add.
+     */
+    readonly progress: IdRecord<PlanProgress>;
 }
 
 /** A celebration to play: which plan, what for, and the issues that just turned Ready. */
@@ -111,7 +118,7 @@ export type PlanLevelStart =
           readonly failed: readonly {readonly issue: IssueKey; readonly reason: string}[];
       };
 
-export const initialPlanState: PlanState = {view: null, levelsSeen: {}, celebration: null, levelStart: null};
+export const initialPlanState: PlanState = {view: null, levelsSeen: {}, celebration: null, levelStart: null, progress: {}};
 
 /** A stable string for a source, to tell an answer for it from one for another. */
 export function planSourceKey(source: PlanSource): string {
@@ -125,7 +132,30 @@ export function planReducer(state: PlanState, event: RendererEvent): PlanState {
     // Every plan the view shows is sighted: on each load and poll, and when the switcher picks it (A4).
     const sighted =
         viewed !== state && (event.type === 'planLoaded' || event.type === 'planChosen') ? sight(viewed) : viewed;
-    return reduceLevels(sighted, event);
+    return reduceProgress(reduceLevels(sighted, event), event);
+}
+
+/** Pinned plans' progress: from their own loads, and from any plan view load of the same plan. */
+function reduceProgress(state: PlanState, event: RendererEvent): PlanState {
+    let plans: readonly Plan[];
+    let adding = false;
+    if (event.type === 'planProgressLoaded') {
+        plans = event.plans;
+        adding = true;
+    } else if ((event.type === 'planLoaded' || event.type === 'planSeeded') && event.answer) {
+        plans = event.answer.plans;
+    } else {
+        return state;
+    }
+    let progress = state.progress;
+    for (const plan of plans) {
+        const planKey = issueKeyString(plan);
+        const known = progress[planKey];
+        if (!known && !adding) continue;
+        const next = planProgress(plan);
+        if (!known || !sameProgress(known, next)) progress = withEntry(progress, planKey, next);
+    }
+    return progress === state.progress ? state : {...state, progress};
 }
 
 /**

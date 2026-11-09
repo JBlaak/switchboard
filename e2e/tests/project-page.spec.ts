@@ -247,7 +247,7 @@ test.describe('plans and issues', () => {
         await expect(planPage.getByTestId('plan-live')).toHaveCount(0);
     });
 
-    test('the pin on a plan’s page puts it under Pinned plans, as a row that opens the page and unpins it', async ({
+    test('the pin on a plan’s page puts it under Pinned plans, as a row with its progress that opens the page and unpins it', async ({
         page,
     }) => {
         /* Given */
@@ -266,10 +266,11 @@ test.describe('plans and issues', () => {
         await expect(planPage.getByTestId('plan-page-pin')).toHaveAttribute('aria-pressed', 'true');
         await expect(sidebar(page).getByText('Pinned plans', {exact: true})).toBeVisible();
         await expect(pinnedRow).toHaveClass(/\bactive\b/);
+        await expect(pinnedRow.getByTestId('pinned-plan-progress')).toHaveText(/Level 2 of 3.*2\/5/);
 
         /* When */
         await page.keyboard.press('Meta+BracketLeft');
-        await pinnedRow.click();
+        await pinnedRow.getByText('Login rework', {exact: true}).click();
 
         /* Then */
         await expect(planPage.getByRole('heading', {name: 'Login rework'})).toBeVisible();

@@ -709,6 +709,57 @@
     gap: 2px 8px;
 }
 
+/* ---- A pinned plan's progress ----
+   A third line under a pinned plan (PinnedPlanItem): its level, a bar with one
+   segment per level sized by its issues, and closed / all issues. */
+.pinned-plan-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: var(--sb-text-dimmest);
+    font-variant-numeric: tabular-nums;
+}
+
+.pinned-plan-level {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: var(--sb-progress-orange);
+
+    &.is-cleared {
+        color: var(--sb-green);
+    }
+}
+
+.pinned-plan-bar {
+    display: flex;
+    flex: 1 1 auto;
+    gap: 3px;
+    min-width: 40px;
+    max-width: 160px;
+    height: 4px;
+}
+
+.pinned-plan-segment {
+    display: flex;
+    flex-basis: 0;
+    overflow: hidden;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--sb-text-dimmest) 45%, transparent);
+
+    .is-done {
+        background: var(--sb-green);
+    }
+    .is-started {
+        background: var(--sb-progress-orange);
+    }
+}
+
+.pinned-plan-count {
+    flex-shrink: 0;
+}
+
 /* ---- Working agents badge ----
    How many subagents a session has working (OSC 7501 child records), as one
    more piece of the meta line: a robot glyph and a count on a lavender pill,
