@@ -15,18 +15,24 @@
  * up. The card never takes the keyboard from a terminal the user is typing in
  * when a round arrives; showing the session, or coming back to the round,
  * does.
+ *
+ * A two-finger sideways swipe on the card steps through the round as ↓ and ↑
+ * do (`grillSwipe`); a round of one question takes none.
  */
 import {useEffect, useLayoutEffect, useMemo, useRef} from 'react';
 import {answeredFoot} from '../../features/questions/question-copy';
 import {questionIn, settle} from '../../features/questions/question-motion';
 import {bannerFor, bannerSeenFor} from '../../features/grill/grill-banner';
 import {answeredCount, choiceAnswer, onReview, stepPlace} from '../../features/grill/grill-card';
-import {grillKey} from '../../features/grill/grill-keys';
+import {grillKey, grillSwipe} from '../../features/grill/grill-keys';
 import {fieldText, freshUi, withInFlight} from '../../features/grill/grill-ui';
 import {useStore} from '../use-store';
 import {focusTerminal, greet, peek} from '../questions/actions';
 import {onEvent} from '../../state/app-store';
 import {PatchColumn} from '../questions/PatchColumn';
+import {pageCommitDistance} from '../../../domain/gesture/swipe-paging';
+import {nudgeQuestion, releaseQuestion} from '../questions/swipe-nudge';
+import {useTrackpadSwipe} from '../use-trackpad-swipe';
 import * as grill from './actions';
 import {GrillFieldBox, GrillFooter, GrillReview, GrillTabs} from './GrillParts';
 import {GrillQuestion} from './GrillQuestion';
@@ -259,6 +265,27 @@ export function GrillingCard({screen, view: mainView, onShow}: GrillingCardProps
         el.addEventListener('keydown', onKey);
         return () => el.removeEventListener('keydown', onKey);
     }, []);
+
+    // ── Swiping ──
+    // Sideways through the round, as ↓ and ↑ go (the review included). Tables
+    // in the markdown that scroll sideways keep their own wheel (the hook
+    // leaves streams that start in one alone).
+
+    useTrackpadSwipe(
+        sheet,
+        {
+            commitDistance: (el) => pageCommitDistance(el.clientWidth),
+            onTrack: (offset) => nudgeQuestion(block.current, offset),
+            onCommit: (direction) => {
+                releaseQuestion(block.current);
+                const now = live.current;
+                const action = now.view && grillSwipe(direction, {place: now.place, total: now.view.questions.length});
+                if (action) handlers.current.act(action);
+            },
+            onCancel: () => releaseQuestion(block.current),
+        },
+        up && !peeking && total > 1,
+    );
 
     // ⌘↵ sends from anywhere while the card is up; inside the sheet its own listener has it.
     useEffect(() => {

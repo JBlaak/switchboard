@@ -105,6 +105,8 @@ Paired phones are listed in the same place, where you can revoke one at any time
 | `⌘F`          | Find in Claude's output                                           |
 | `⌘T`          | Open or close the Tasks page (only while a BlaakTasks URL is set) |
 
+**Trackpad:** a two-finger swipe left on Claude's output goes to the next session, right to the previous one, as `⌘⇧]` / `⌘⇧[` do.
+
 **In the session list** (after `⌘L`)
 
 | Keys               | Does                                               |
@@ -135,6 +137,8 @@ Paired phones are listed in the same place, where you can revoke one at any time
 | `←` `→` or `Enter` | Previous / next question                    |
 | `Space`            | Toggle an option, when you can pick several |
 | `Esc`              | Answer in Claude instead                    |
+
+**Trackpad:** a two-finger swipe left or right moves to the next or previous question, here and on the grilling card.
 
 ## Run it
 

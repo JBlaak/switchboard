@@ -219,3 +219,21 @@ export function stepOpenSession(
     if (at === -1) return ids[0];
     return ids[(at + direction + ids.length) % ids.length];
 }
+
+/**
+ * The session a sideways swipe on Claude's pane moves to (#377): the same
+ * order and the same skipping as `stepOpenSession`, but without wrapping
+ * round, so at either end of the list there is nothing there. Null too when
+ * the session on screen is not one of the open ones.
+ */
+export function neighbourOpenSession(
+    order: readonly string[],
+    isOpen: (sessionId: string) => boolean,
+    current: string | null,
+    direction: -1 | 1,
+): string | null {
+    const ids = order.filter(isOpen);
+    const at = current ? ids.indexOf(current) : -1;
+    if (at === -1) return null;
+    return ids[at + direction] ?? null;
+}

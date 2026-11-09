@@ -21,16 +21,22 @@
  * sheet must stop unmodified keys from reaching the window's shortcuts, and
  * doing it at the element itself keeps that independent of where React
  * attaches its own listeners.
+ *
+ * A two-finger sideways swipe on the sheet goes to the next or previous
+ * question, as → and ← do (`panelSwipe`); a set of one question takes none.
  */
 import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {answeredCount, isAnswered} from '../../../domain/questions/answer-draft';
 import {answeredFoot, keyHints, questionCounter} from '../../features/questions/question-copy';
-import {panelKey} from '../../features/questions/question-keys';
+import {panelKey, panelSwipe} from '../../features/questions/question-keys';
 import {SHEET_SETTLE_MS, questionIn, questionOut, settle} from '../../features/questions/question-motion';
 import {getState, onEvent} from '../../state/app-store';
 import {answer, chooseView, focusTerminal, greet, peek} from './actions';
 import {PatchColumn} from './PatchColumn';
 import {OptionRow, OtherRow} from './QuestionRows';
+import {pageCommitDistance} from '../../../domain/gesture/swipe-paging';
+import {nudgeQuestion, releaseQuestion} from './swipe-nudge';
+import {useTrackpadSwipe} from '../use-trackpad-swipe';
 import type {CSSProperties, JSX} from 'react';
 import type {DraftAction} from '../../../domain/questions/answer-draft';
 import type {PendingQuestions} from '../../../domain/questions/question';
@@ -94,8 +100,8 @@ export function QuestionPanel({screen, onShow}: QuestionPanelProps): JSX.Element
     const n = q?.options.length ?? 0;
 
     // What the handlers need, as of the last render.
-    const live = useRef({toolUseId, up, peeking, shownStep, n});
-    live.current = {toolUseId, up, peeking, shownStep, n};
+    const live = useRef({toolUseId, up, peeking, shownStep, n, count: questions.length});
+    live.current = {toolUseId, up, peeking, shownStep, n, count: questions.length};
 
     // ── Acting ──
 
@@ -171,6 +177,30 @@ export function QuestionPanel({screen, onShow}: QuestionPanelProps): JSX.Element
         el.addEventListener('keydown', onKey);
         return () => el.removeEventListener('keydown', onKey);
     }, []);
+
+    // ── Swiping ──
+    // Sideways between questions, through the same actions ← and → take.
+    // Option lists that scroll sideways keep their own wheel (the hook leaves
+    // streams that start in one alone).
+
+    useTrackpadSwipe(
+        sheet,
+        {
+            commitDistance: (el) => pageCommitDistance(el.clientWidth),
+            onTrack: (offset) => nudgeQuestion(block.current, offset),
+            onCommit: (direction) => {
+                releaseQuestion(block.current);
+                const now = live.current;
+                const action = panelSwipe(direction, {step: now.shownStep, count: now.count});
+                if (!action || !now.toolUseId) return;
+                const entry = getState().answers.byToolUse[now.toolUseId];
+                if (!entry || entry.sending) return;
+                handlers.current.act(action);
+            },
+            onCancel: () => releaseQuestion(block.current),
+        },
+        up && !peeking && questions.length > 1,
+    );
 
     // ── Showing and hiding ──
 

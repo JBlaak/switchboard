@@ -57,6 +57,12 @@ export interface TrackpadSwipeOptions {
     swipeInsideHorizontalScrollers?: boolean;
     /** Any other stream to leave alone, judged by its first event. */
     ignore?(event: WheelEvent): boolean;
+    /**
+     * Listen in the capture phase, ahead of descendants that stop the wheel
+     * from bubbling (xterm's viewport does), and keep a claimed event from
+     * reaching them. Read once, when the listener is attached.
+     */
+    capture?: boolean;
 }
 
 /** Pixels in a wheel "line", for a mouse that reports lines rather than pixels (as ImageStage). */
@@ -66,6 +72,7 @@ const LINE_PIXELS = 16;
 export function attachTrackpadSwipe(el: HTMLElement, options: TrackpadSwipeOptions): () => void {
     let state: SwipeState = IDLE;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    const capture = options.capture ?? false;
 
     /** Move to `next`, telling the caller what changed for it. */
     const move = (next: SwipeState): void => {
@@ -99,14 +106,17 @@ export function attachTrackpadSwipe(el: HTMLElement, options: TrackpadSwipeOptio
         if (state.phase === 'tracking' && sample.t - state.tail.lastT >= RELEASE_GAP_MS) move(releaseSwipe(state));
         if (startsStream(state, sample) && ignored(event)) move(ignoreStream(sample));
         else move(feedSwipe(state, sample, (options.commitDistance ?? defaultCommitDistance)(el)));
-        if (claimsWheel(state)) event.preventDefault();
+        if (claimsWheel(state)) {
+            event.preventDefault();
+            if (capture) event.stopPropagation();
+        }
         if (timer !== null) clearTimeout(timer);
         timer = setTimeout(release, RELEASE_GAP_MS);
     };
 
-    el.addEventListener('wheel', onWheel, {passive: false});
+    el.addEventListener('wheel', onWheel, {passive: false, capture});
     return () => {
-        el.removeEventListener('wheel', onWheel);
+        el.removeEventListener('wheel', onWheel, {capture});
         if (timer !== null) clearTimeout(timer);
         if (state.phase === 'tracking') options.onCancel?.();
         state = IDLE;
@@ -149,6 +159,9 @@ export function useTrackpadSwipe(
             },
             get ignore() {
                 return live.current.ignore;
+            },
+            get capture() {
+                return live.current.capture;
             },
         });
     }, [ref, enabled]);

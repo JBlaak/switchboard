@@ -315,6 +315,67 @@
     outline-offset: -2px;
 }
 
+/* --- Swipe to the next session (#377) ---
+   While a two-finger sideways swipe tracks over the pane, the session it would
+   go to slides in from the edge the fingers move away from
+   (ui/terminal/use-pane-swipe writes its translate), as a quiet chip that takes
+   the accent once letting go would switch. It never takes the pointer. Under
+   reduced motion it is not shown at all. */
+.pane-swipe {
+    position: absolute;
+    top: 50%;
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 40%;
+    margin-top: -15px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 99px;
+    background: var(--sb-bg-panel);
+    color: var(--sb-text-muted);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+    font-family: var(--sb-font-head);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    pointer-events: none;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+
+.pane-swipe.from-right {
+    right: 16px;
+}
+
+.pane-swipe.from-left {
+    left: 16px;
+}
+
+.pane-swipe.is-armed {
+    background: var(--sb-mint);
+    color: var(--sb-accent);
+}
+
+.pane-swipe-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pane-swipe-arrow {
+    font-size: 14px;
+    line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pane-swipe {
+        display: none;
+    }
+}
+
 /* --- Remote (SSH) connecting card --- */
 /* Sits over the terminal while a connection is in flight. A scrim rather than
    an opaque panel: on a reconnect the last screen tmux painted stays readable

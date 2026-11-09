@@ -12,6 +12,10 @@
  * class list rather than rendered into `className`: other code puts classes of
  * its own on this element (`qp-under` from the question panel, `drag-over`
  * from the drop handler) that a re-render must not wipe.
+ *
+ * A two-finger sideways swipe on the slot on screen goes to the previous or
+ * next session (`usePaneSwipe`), with the name of the one it goes to sliding
+ * in from the edge while it tracks.
  */
 import {useCallback, useLayoutEffect, useRef} from 'react';
 import type {JSX} from 'react';
@@ -19,6 +23,8 @@ import {attachTerminal} from '../../features/terminal/terminal-manager';
 import {RemoteCard} from '../remote/RemoteCard';
 import {TerminalSearchBar} from './TerminalSearchBar';
 import {TerminalPlaceholder} from '../phone-access/TerminalPlaceholder';
+import {usePaneSwipe} from './use-pane-swipe';
+import type {PaneSwipeLabel} from './use-pane-swipe';
 
 export interface TerminalSlotProps {
     sessionId: string;
@@ -42,11 +48,38 @@ export function TerminalSlot({sessionId, visible}: TerminalSlotProps): JSX.Eleme
         element.current?.classList.toggle('visible', visible);
     }, [visible]);
 
+    const swipe = usePaneSwipe(element, sessionId, visible);
+
     return (
         <div className="terminal-container" ref={attach}>
             <TerminalSearchBar sessionId={sessionId} />
             <RemoteCard sessionId={sessionId} />
             <TerminalPlaceholder sessionId={sessionId} />
+            {swipe.label && <SwipeTarget label={swipe.label} labelRef={swipe.labelRef} />}
+        </div>
+    );
+}
+
+/** The session a swipe would go to, at the edge it comes in from. */
+function SwipeTarget({
+    label,
+    labelRef,
+}: {
+    label: PaneSwipeLabel;
+    labelRef: (el: HTMLDivElement | null) => void;
+}): JSX.Element {
+    const {direction, name, armed} = label;
+    // A swipe left brings the next session in from the right.
+    const side = direction === 'left' ? 'from-right' : 'from-left';
+    return (
+        <div
+            ref={labelRef}
+            className={`pane-swipe ${side}` + (armed ? ' is-armed' : '')}
+            data-testid="pane-swipe"
+            aria-hidden="true">
+            {direction === 'right' && <span className="pane-swipe-arrow">‹</span>}
+            <span className="pane-swipe-name">{name}</span>
+            {direction === 'left' && <span className="pane-swipe-arrow">›</span>}
         </div>
     );
 }

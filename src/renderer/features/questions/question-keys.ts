@@ -9,6 +9,7 @@
  * that moment (up, not mid-swap, not sending) is its own to check.
  */
 import type {DraftAction} from '../../../domain/questions/answer-draft';
+import type {SwipeDirection} from '../../../domain/gesture/trackpad-swipe';
 
 export interface PanelKeyEvent {
     key: string;
@@ -72,4 +73,24 @@ export function panelKey(e: PanelKeyEvent, at: PanelKeyPlace): PanelKey {
     if (e.key === 'ArrowLeft') return act({kind: 'back'});
     if (e.key === 'ArrowRight') return act({kind: 'next'});
     return KEEP;
+}
+
+/** Where the panel's question is, for a sideways swipe on it. */
+export interface PanelSwipePlace {
+    /** The question on screen. */
+    step: number;
+    /** How many questions the set has. */
+    count: number;
+}
+
+/**
+ * What a two-finger sideways swipe on the panel does (#377): what → does for
+ * a swipe left, ← for a swipe right. It only ever moves between questions, so
+ * a swipe left on the last question does not send the answers (→ would), and
+ * a set of one question does not move at all.
+ */
+export function panelSwipe(direction: SwipeDirection, at: PanelSwipePlace): DraftAction | null {
+    if (at.count <= 1) return null;
+    if (direction === 'left') return at.step < at.count - 1 ? {kind: 'next'} : null;
+    return at.step > 0 ? {kind: 'back'} : null;
 }

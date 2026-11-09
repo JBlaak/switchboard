@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {grillKey} from '../src/renderer/features/grill/grill-keys';
+import {grillKey, grillSwipe} from '../src/renderer/features/grill/grill-keys';
 import type {GrillKey, GrillKeyEvent, GrillKeyPlace} from '../src/renderer/features/grill/grill-keys';
 
 /** A key on a question with three choices, on the card itself unless `at` says otherwise. */
@@ -139,4 +139,59 @@ test('unmodified keys that mean nothing stop at the card', () => {
 
     /* Then */
     assert.deepEqual(pressed, Array(3).fill({does: 'keep'}));
+});
+
+// ── A sideways swipe (#377) ──
+
+test('a swipe left goes to the next question and a swipe right back, as ↓ and ↑ do', () => {
+    /* Given */
+    const middle = {place: 1, total: 3};
+
+    /* When */
+    const left = grillSwipe('left', middle);
+    const right = grillSwipe('right', middle);
+
+    /* Then */
+    assert.equal(left, 'next');
+    assert.equal(right, 'prev');
+    assert.deepEqual(press('ArrowDown'), {does: 'act', action: left});
+    assert.deepEqual(press('ArrowUp'), {does: 'act', action: right});
+});
+
+test('a swipe left on the last question goes on to the review, and nowhere past it', () => {
+    /* Given */
+    const last = {place: 2, total: 3};
+    const review = {place: 3, total: 3};
+
+    /* When */
+    const fromLast = grillSwipe('left', last);
+    const fromReview = grillSwipe('left', review);
+    const backFromReview = grillSwipe('right', review);
+
+    /* Then */
+    assert.equal(fromLast, 'next');
+    assert.equal(fromReview, null);
+    assert.equal(backFromReview, 'prev');
+});
+
+test('a swipe right on the first question goes nowhere', () => {
+    /* Given */
+    const first = {place: 0, total: 3};
+
+    /* When */
+    const swiped = grillSwipe('right', first);
+
+    /* Then */
+    assert.equal(swiped, null);
+});
+
+test('a round of one question does not move', () => {
+    /* Given */
+    const only = {place: 0, total: 1};
+
+    /* When */
+    const swiped = [grillSwipe('left', only), grillSwipe('right', only)];
+
+    /* Then */
+    assert.deepEqual(swiped, [null, null]);
 });

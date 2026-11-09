@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {panelKey} from '../src/renderer/features/questions/question-keys';
+import {panelKey, panelSwipe} from '../src/renderer/features/questions/question-keys';
 import type {PanelKey, PanelKeyEvent, PanelKeyPlace} from '../src/renderer/features/questions/question-keys';
 
 /** A key on a two-option question, on the panel itself unless `at` says otherwise. */
@@ -185,4 +185,46 @@ test('while peeking, app shortcuts still go on', () => {
 
     /* Then */
     assert.deepEqual(pressed, {does: 'pass'});
+});
+
+// ── A sideways swipe (#377) ──
+
+test('a swipe left goes on to the next question and a swipe right back, as → and ← do', () => {
+    /* Given */
+    const middle = {step: 1, count: 3};
+
+    /* When */
+    const left = panelSwipe('left', middle);
+    const right = panelSwipe('right', middle);
+
+    /* Then */
+    assert.deepEqual(left, {kind: 'next'});
+    assert.deepEqual(right, {kind: 'back'});
+    assert.deepEqual(press('ArrowRight'), {does: 'act', action: left});
+    assert.deepEqual(press('ArrowLeft'), {does: 'act', action: right});
+});
+
+test('a swipe goes nowhere past either end, so it never sends the answers', () => {
+    /* Given */
+    const first = {step: 0, count: 3};
+    const last = {step: 2, count: 3};
+
+    /* When */
+    const beforeTheFirst = panelSwipe('right', first);
+    const pastTheLast = panelSwipe('left', last);
+
+    /* Then */
+    assert.equal(beforeTheFirst, null);
+    assert.equal(pastTheLast, null);
+});
+
+test('a set of one question does not move', () => {
+    /* Given */
+    const only = {step: 0, count: 1};
+
+    /* When */
+    const swiped = [panelSwipe('left', only), panelSwipe('right', only)];
+
+    /* Then */
+    assert.deepEqual(swiped, [null, null]);
 });

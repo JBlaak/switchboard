@@ -16,6 +16,7 @@
  * global shortcut (a bare N would otherwise start a quick session); other
  * Cmd/Ctrl/Alt combinations, Tab and keys mid IME composition go on.
  */
+import type {SwipeDirection} from '../../../domain/gesture/trackpad-swipe';
 
 export interface GrillKeyEvent {
     key: string;
@@ -107,4 +108,23 @@ export function grillKey(e: GrillKeyEvent, at: GrillKeyPlace): GrillKey {
     if (!action) return KEEP;
     if (at.onReview && !REVIEW_ACTIONS.has(action)) return KEEP;
     return act(action);
+}
+
+/** Where the card is in its round, for a sideways swipe on it. */
+export interface GrillSwipePlace {
+    /** The question on screen; the review is the place after the last. */
+    place: number;
+    /** How many questions the round has. */
+    total: number;
+}
+
+/**
+ * What a two-finger sideways swipe on the card does (#377): what ↓ does for
+ * a swipe left (on to the next question, or from the last to the review), ↑
+ * for a swipe right. A round of one question does not move.
+ */
+export function grillSwipe(direction: SwipeDirection, at: GrillSwipePlace): GrillAction | null {
+    if (at.total <= 1) return null;
+    if (direction === 'left') return at.place < at.total ? 'next' : null;
+    return at.place > 0 ? 'prev' : null;
 }
