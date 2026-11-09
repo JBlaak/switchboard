@@ -52,3 +52,64 @@ test('a block of bullets or numbers is a list', () => {
         {kind: 'list', ordered: true, items: [[{kind: 'text', text: 'c'}], [{kind: 'text', text: 'd'}]]},
     ]);
 });
+
+test('a pipe table is a table, with its alignment and ragged rows padded', () => {
+    /* Given */
+    const text =
+        'Here is my split.\n\n| Action | Admin | Member |\n|---|:-:|--:|\n| Edit `club` | ✅ | ❌ |\n| Claim | instantly |';
+
+    /* When */
+    const blocks = markdownBlocks(text);
+
+    /* Then */
+    assert.deepEqual(blocks, [
+        {kind: 'paragraph', lines: [[{kind: 'text', text: 'Here is my split.'}]]},
+        {
+            kind: 'table',
+            align: [null, 'center', 'right'],
+            header: [
+                [{kind: 'text', text: 'Action'}],
+                [{kind: 'text', text: 'Admin'}],
+                [{kind: 'text', text: 'Member'}],
+            ],
+            rows: [
+                [
+                    [
+                        {kind: 'text', text: 'Edit '},
+                        {kind: 'code', text: 'club'},
+                    ],
+                    [{kind: 'text', text: '✅'}],
+                    [{kind: 'text', text: '❌'}],
+                ],
+                [[{kind: 'text', text: 'Claim'}], [{kind: 'text', text: 'instantly'}], []],
+            ],
+        },
+    ]);
+});
+
+test('a table with no blank line around it is lifted out of its paragraph', () => {
+    /* When */
+    const blocks = markdownBlocks('Before\n| a | b |\n| - | - |\n| `x|y` | z \\| w |\nAfter');
+
+    /* Then */
+    assert.deepEqual(blocks, [
+        {kind: 'paragraph', lines: [[{kind: 'text', text: 'Before'}]]},
+        {
+            kind: 'table',
+            align: [null, null],
+            header: [[{kind: 'text', text: 'a'}], [{kind: 'text', text: 'b'}]],
+            rows: [[[{kind: 'code', text: 'x|y'}], [{kind: 'text', text: 'z | w'}]]],
+        },
+        {kind: 'paragraph', lines: [[{kind: 'text', text: 'After'}]]},
+    ]);
+});
+
+test('pipes without a divider row stay text', () => {
+    /* When */
+    const blocks = markdownBlocks('a | b\nc | d');
+
+    /* Then */
+    assert.deepEqual(blocks, [
+        {kind: 'paragraph', lines: [[{kind: 'text', text: 'a | b'}], [{kind: 'text', text: 'c | d'}]]},
+    ]);
+});

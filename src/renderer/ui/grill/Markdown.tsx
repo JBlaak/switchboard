@@ -1,11 +1,11 @@
 /**
  * A round's Markdown drawn as elements: a title's inline runs, or a reason's
- * paragraphs and lists (see `grill-markdown`). A web link opens in the
+ * paragraphs, lists and tables (see `grill-markdown`). A web link opens in the
  * browser; the window itself never navigates.
  */
 import {inlineMarkdown, markdownBlocks} from '../../features/grill/grill-markdown';
 import type {JSX, MouseEvent} from 'react';
-import type {Inline} from '../../features/grill/grill-markdown';
+import type {Block, Inline} from '../../features/grill/grill-markdown';
 
 export function InlineMarkdown({text}: {text: string}): JSX.Element {
     return <Runs runs={inlineMarkdown(text)} />;
@@ -24,6 +24,8 @@ export function BlockMarkdown({text, className}: {text: string; className?: stri
                             </span>
                         ))}
                     </p>
+                ) : block.kind === 'table' ? (
+                    <Table key={i} table={block} />
                 ) : block.ordered ? (
                     <ol key={i}>
                         {block.items.map((item, j) => (
@@ -42,6 +44,37 @@ export function BlockMarkdown({text, className}: {text: string; className?: stri
                     </ul>
                 ),
             )}
+        </div>
+    );
+}
+
+/** A wide table scrolls sideways in its own box rather than widening the card. */
+function Table({table}: {table: Extract<Block, {kind: 'table'}>}): JSX.Element {
+    const align = (i: number) => table.align[i] ?? undefined;
+    return (
+        <div className="gc-table">
+            <table>
+                <thead>
+                    <tr>
+                        {table.header.map((cell, i) => (
+                            <th key={i} style={{textAlign: align(i)}}>
+                                <Runs runs={cell} />
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {table.rows.map((row, r) => (
+                        <tr key={r}>
+                            {row.map((cell, i) => (
+                                <td key={i} style={{textAlign: align(i)}}>
+                                    <Runs runs={cell} />
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }

@@ -255,13 +255,37 @@
 .gc p + ul,
 .gc p + ol,
 .gc ul + p,
-.gc ol + p {
+.gc ol + p,
+.gc * + .gc-table,
+.gc .gc-table + * {
     margin-top: 8px;
 }
 .gc ul,
 .gc ol {
     margin: 0;
     padding-left: 20px;
+}
+
+.gc-table {
+    max-width: 100%;
+    overflow-x: auto;
+}
+.gc-table table {
+    border-collapse: collapse;
+    font-size: 13.5px;
+    line-height: 1.4;
+}
+.gc-table th,
+.gc-table td {
+    padding: 5px 10px;
+    text-align: left;
+    vertical-align: top;
+    border: 1px solid var(--sb-border-strong);
+}
+.gc-table th {
+    font-weight: 700;
+    color: var(--sb-text-strong);
+    background: rgba(var(--sb-overlay-rgb), 0.05);
 }
 
 .gc-choices {
