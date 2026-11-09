@@ -18,6 +18,7 @@ import type {TaskRow} from '../../../domain/tasks/model';
 import type {TaskSessionStart} from '../../../domain/tasks/surface';
 import type {ExistingBranchChoice} from '../../../domain/project/branch-worktree';
 import type {StartTaskSessionRequest} from '../tasks/start-task-session';
+import type {HandoffHost} from '../../../application/services/project-handoff';
 
 /** What the page needs from the rest of the renderer. */
 export interface TasksPageEffects {
@@ -233,7 +234,12 @@ export interface StartChoice {
     existing?: ExistingBranchChoice;
     /** Without them, the ones the task's start was given, if any. */
     instructions?: string;
+    /** Hand the start off to this VM. A start asked again without instructions goes where the first went. */
+    vm?: HandoffHost;
 }
+
+/** Where each task's last start was sent, so a start asked again (a project picked, Continue) goes there too. */
+const startedOn = new Map<string, HandoffHost | undefined>();
 
 /** S, or Start session: ask for any extra instructions first; `startFromTask` with them starts. */
 export function askStartInstructions(task: TaskRow): void {
@@ -252,6 +258,9 @@ export async function startFromTask(task: TaskRow, choice: StartChoice = {}): Pr
     if (tasks.start?.phase === 'starting') return;
     const earlier = tasks.start?.taskId === task.id && tasks.start.phase === 'answered' ? tasks.start.instructions : '';
     const instructions = (choice.instructions ?? earlier).trim();
+    // Instructions come only from the first ask, which also says where it goes.
+    const vm = choice.instructions !== undefined ? choice.vm : (choice.vm ?? startedOn.get(task.id));
+    startedOn.set(task.id, vm);
     dispatch({type: 'tasksStartAsked', taskId: task.id, instructions});
 
     // Whether Ask Patch picks the repo: none asked for, and none linked, as main has it now.
@@ -264,6 +273,7 @@ export async function startFromTask(task: TaskRow, choice: StartChoice = {}): Pr
             task: {id: task.id, title: task.title, ...(brief ? {brief} : {}), ...(instructions ? {instructions} : {})},
             ...(choice.projectPath ? {projectPath: choice.projectPath} : {}),
             ...(choice.existing ? {existing: choice.existing} : {}),
+            ...(vm ? {vm} : {}),
             show: false,
         });
     } catch (err) {

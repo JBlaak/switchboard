@@ -238,6 +238,26 @@ export async function startClaudeSessionIn(
 }
 
 /**
+ * Start a Claude session in a VM project (#276) with exactly these options,
+ * as `startClaudeSessionIn` does here: a start handed off before it began
+ * ("Do you want to hand this off to…?") runs in the copy it was sent to.
+ */
+export async function startClaudeSessionOnVm(
+    copyPath: string,
+    options: SessionOptions,
+    {show = true}: {show?: boolean} = {},
+): Promise<{ok: true; sessionId: string} | {ok: false; reason: string}> {
+    const session = newSessionRow(copyPath, {summary: 'Claude on VM', type: 'remote', remoteKind: 'claude'});
+    trackPending(session, true);
+    const error = await spawn(session, {
+        isNew: true,
+        options: {...options, type: 'remote', remoteKind: 'claude'},
+        show,
+    });
+    return error === null ? {ok: true, sessionId: session.sessionId} : {ok: false, reason: error};
+}
+
+/**
  * Create the terminal, ask main to start the process, and show the result
  * (unless `show` is false). Answers why it could not start, or null when it did.
  */

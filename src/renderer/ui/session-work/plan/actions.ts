@@ -8,6 +8,7 @@ import {openSession, startClaudeSessionIn} from '../../../features/sessions/sess
 import {resolveDefaultSessionOptions} from '../../../features/dialogs/launch-options';
 import {sessionMap} from '../../../state/session-store';
 import {startIssueSessionWith, type StartIssueSessionRequest, type StartIssueSessionSteps} from './start-issue-session';
+import {vmStartSteps} from '../../session-handoff/vm-start-steps';
 import type {IssueSessionStart} from '../../../../domain/plan/issue-session';
 
 /**
@@ -29,6 +30,7 @@ export const issueSessionSteps: StartIssueSessionSteps = {
     prepare: (prepare) => window.api.prepareIssueWorktree(prepare),
     defaultOptions: resolveDefaultSessionOptions,
     launch: (projectPath, options, how) => startClaudeSessionIn(projectPath, options, how),
+    vm: vmStartSteps,
 };
 
 /** Put a session on screen, the way a click on its row does. False when no row goes by that id. */

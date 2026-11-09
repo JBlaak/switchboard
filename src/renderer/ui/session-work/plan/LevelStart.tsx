@@ -9,12 +9,15 @@ import type {Plan} from '../../../../domain/plan/model';
 import {shortRef} from './describe';
 import {levelStartLine} from './start-level';
 import type {IssueActions} from './types';
+import {StartWhereButtons} from '../../session-handoff/StartWhereButtons';
+import {handOffQuestion} from '../../session-handoff/start-on-vm';
 
 export function LevelStart({plan, issueActions}: {plan: Plan; issueActions?: IssueActions}): JSX.Element | null {
     const asked = issueActions?.levelStart;
     if (!asked || !sameIssue(asked.plan, plan)) return null;
     const count = asked.issues.length;
     const agents = count === 1 ? '1 agent' : `${count} agents`;
+    const vmHosts = issueActions?.vmHosts ?? [];
 
     if (asked.phase === 'confirm') {
         return (
@@ -25,13 +28,14 @@ export function LevelStart({plan, issueActions}: {plan: Plan; issueActions?: Iss
                         asked.issues.map((issue) => shortRef(plan, issue)).join(', ') +
                         '. The session coordinates them.'}
                 </span>
+                {vmHosts.length > 0 && <strong>{handOffQuestion(vmHosts)}</strong>}
                 <div className="pv-confirm-buttons">
-                    <button
-                        type="button"
-                        className="sw-btn is-primary"
-                        onClick={() => issueActions!.confirmLevelStart?.(plan)}>
-                        Start session
-                    </button>
+                    <StartWhereButtons
+                        hosts={vmHosts}
+                        hereLabel={vmHosts.length ? 'Start here' : 'Start session'}
+                        onHere={() => issueActions!.confirmLevelStart?.(plan)}
+                        onVm={(host) => issueActions!.confirmLevelStart?.(plan, host)}
+                    />
                     <button type="button" className="sw-btn" onClick={() => issueActions!.cancelLevelStart?.()}>
                         Cancel
                     </button>

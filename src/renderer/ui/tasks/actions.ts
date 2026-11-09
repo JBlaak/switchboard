@@ -7,6 +7,7 @@
 import {startClaudeSessionIn} from '../../features/sessions/session-actions';
 import {resolveDefaultSessionOptions} from '../../features/dialogs/launch-options';
 import {startTaskSessionWith, type StartTaskSessionRequest, type StartTaskSessionSteps} from './start-task-session';
+import {vmStartSteps} from '../session-handoff/vm-start-steps';
 import type {TaskSessionStart} from '../../../domain/tasks/surface';
 
 /**
@@ -29,4 +30,5 @@ export const taskSessionSteps: StartTaskSessionSteps = {
     defaultOptions: resolveDefaultSessionOptions,
     launch: (projectPath, options, how) => startClaudeSessionIn(projectPath, options, how),
     started: (taskId, sessionId, projectPath) => window.api.taskSessionStarted(taskId, sessionId, projectPath),
+    vm: vmStartSteps,
 };

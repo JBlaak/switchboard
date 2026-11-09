@@ -28,6 +28,8 @@ import {
 } from './describe';
 import {blockersInPlan} from './geometry';
 import type {IssueActions, PlanHandlers} from './types';
+import {StartWhereButtons} from '../../session-handoff/StartWhereButtons';
+import {handOffQuestion} from '../../session-handoff/start-on-vm';
 
 export function IssueDetail({
     plan,
@@ -52,6 +54,7 @@ export function IssueDetail({
     const session = issueActions?.sessionFor?.(issue) ?? null;
     const canStart = !!issueActions?.startSession && (state === 'ready' || state === 'locked') && !session;
     const start = issueActions?.start && sameIssue(issueActions.start.issue, issue) ? issueActions.start : null;
+    const vmHosts = issueActions?.vmHosts ?? [];
     // Its options replace Start session, which would only be refused again.
     const existing = start?.phase === 'answered' && !start.result.ok ? (start.result.existing ?? null) : null;
 
@@ -187,15 +190,23 @@ export function IssueDetail({
             )}
 
             {start?.phase === 'confirm' && (
-                <div className="pv-confirm" role="group" aria-label="Start early">
-                    <span>{stackLine(plan, issue)}</span>
+                <div
+                    className="pv-confirm"
+                    role="group"
+                    aria-label={state === 'locked' ? 'Start early' : 'Hand off to a VM'}>
+                    {state === 'locked' && <span>{stackLine(plan, issue)}</span>}
+                    {vmHosts.length > 0 && <strong>{handOffQuestion(vmHosts)}</strong>}
                     <div className="pv-confirm-buttons">
-                        <button
-                            type="button"
-                            className="sw-btn is-primary"
-                            onClick={() => issueActions!.confirmStart?.(plan)}>
-                            {'Start #' + issue.number + ' early'}
-                        </button>
+                        <StartWhereButtons
+                            hosts={vmHosts}
+                            hereLabel={
+                                state === 'locked'
+                                    ? 'Start #' + issue.number + ' early' + (vmHosts.length ? ' here' : '')
+                                    : 'Start here'
+                            }
+                            onHere={() => issueActions!.confirmStart?.(plan)}
+                            onVm={(host) => issueActions!.confirmStart?.(plan, host)}
+                        />
                         <button type="button" className="sw-btn" onClick={() => issueActions!.cancelStart?.()}>
                             Cancel
                         </button>

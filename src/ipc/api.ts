@@ -64,6 +64,7 @@ import type {
     HandoffPreview,
     HandoffChoices,
     HandoffResult,
+    StartHandoffResult,
     ProjectCopy,
 } from '../application/services/project-handoff';
 import type {SessionHandoffPhase, SessionHandoffPreview} from '../application/services/session-handoff';
@@ -514,6 +515,18 @@ export interface SwitchboardApi {
         ticked: string[],
         choices?: HandoffChoices,
     ): Promise<HandoffResult>;
+    /**
+     * A start the user handed off to a VM before it began (an issue's, a
+     * task's, a level's): the worktrees it made go over as worktrees of the
+     * project's copy, and with `project` the project's own copy is made when
+     * the host has none. Progress lines arrive on `onHandoffProgress`.
+     */
+    handOffForStart(
+        localPath: string,
+        hostKey: string,
+        worktrees: string[],
+        options: {project: boolean},
+    ): Promise<StartHandoffResult>;
     /** A local project's copies on VMs. */
     projectCopies(localPath: string): Promise<ProjectCopy[]>;
     /** The local project a copy was made from; null for a remote that isn't a copy. */

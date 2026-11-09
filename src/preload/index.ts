@@ -160,6 +160,8 @@ const api: SwitchboardApi = {
     previewHandoff: (localPath) => ipcRenderer.invoke(INVOKE.handoffPreview, localPath),
     handOffProject: (localPath, hostKey, ticked, choices) =>
         ipcRenderer.invoke(INVOKE.handoffRun, localPath, hostKey, ticked, choices),
+    handOffForStart: (localPath, hostKey, worktrees, options) =>
+        ipcRenderer.invoke(INVOKE.handoffForStart, localPath, hostKey, worktrees, options),
     projectCopies: (localPath) => ipcRenderer.invoke(INVOKE.handoffCopiesOf, localPath),
     copyOrigin: (copyPath) => ipcRenderer.invoke(INVOKE.handoffOriginOf, copyPath),
     copyStatus: (copyPath) => ipcRenderer.invoke(INVOKE.handoffCopyStatus, copyPath),

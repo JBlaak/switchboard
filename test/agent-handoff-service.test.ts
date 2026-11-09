@@ -668,3 +668,97 @@ test("a worktree's preview counts the worktree's checkout but keeps the project'
     assert.equal(preview.branch, 'fix-login');
     assert.deepEqual(preview.existing, {'dev@vm.local:22': COPY});
 });
+
+// ── A start handed off before it began ("Do you want to hand this off to…?") ──
+
+test("a start's worktree goes over as a worktree of the project's copy, with the default ticks", async () => {
+    /* Given */
+    const h = harness({git: worktreeGit()});
+    h.script.handoffDone = {ok: true};
+    const preview = await h.service.preview(LOCAL, {checkout: WORKTREE});
+    assert.ok(!('error' in preview));
+    const ticked = preview.candidates.filter((candidate) => candidate.ticked).map((candidate) => candidate.path);
+
+    /* When */
+    const result = await h.service.handOffForStart(LOCAL, 'dev@vm.local:22', [WORKTREE], {project: false});
+
+    /* Then */
+    assert.deepEqual(result, {
+        ok: true,
+        projectCopy: null,
+        worktrees: [{checkout: WORKTREE, ok: true, copyPath: WORKTREE_COPY}],
+    });
+    const handoffs = h.agent.sent('handoff');
+    assert.equal(handoffs.length, 1, 'only the worktree, not the project');
+    assert.equal(handoffs[0].worktree, 'fix-login');
+    assert.deepEqual(
+        handoffs[0].files.map((file) => file.path),
+        ticked,
+    );
+});
+
+test("a level's start makes the project's copy first when the host has none", async () => {
+    /* Given */
+    const h = harness({git: worktreeGit()});
+    h.script.handoffDone = {ok: true};
+
+    /* When */
+    const result = await h.service.handOffForStart(LOCAL, 'dev@vm.local:22', [WORKTREE], {project: true});
+
+    /* Then */
+    assert.deepEqual(result, {
+        ok: true,
+        projectCopy: COPY,
+        worktrees: [{checkout: WORKTREE, ok: true, copyPath: WORKTREE_COPY}],
+    });
+    assert.deepEqual(
+        h.agent.sent('handoff').map((handoff) => handoff.worktree ?? null),
+        [null, 'fix-login'],
+    );
+    assert.equal(h.settings.findRemoteProject(COPY)?.copyOf, LOCAL);
+});
+
+test("a level's start uses the project's existing copy as it is, never a worktree's copy for it", async () => {
+    /* Given */
+    const worktreeCopy = copySetting({dir: '~/projects/site/.claude/worktrees/older'});
+    const h = harness({remotes: [VM_HOME, worktreeCopy, copySetting()], git: worktreeGit()});
+    h.script.handoffDone = {ok: true};
+
+    /* When */
+    const result = await h.service.handOffForStart(LOCAL, 'dev@vm.local:22', [WORKTREE], {project: true});
+
+    /* Then */
+    assert.ok(result.ok);
+    assert.equal(result.projectCopy, COPY);
+    assert.deepEqual(
+        h.agent.sent('handoff').map((handoff) => handoff.worktree ?? null),
+        ['fix-login'],
+    );
+});
+
+test("a start's worktree that fails is reported on its own, and the rest still go", async () => {
+    /* Given */
+    const h = harness({git: worktreeGit()});
+    h.script.handoffDone = {ok: true};
+    const gone = `${LOCAL}/.claude/worktrees/gone`;
+
+    /* When */
+    const result = await h.service.handOffForStart(LOCAL, 'dev@vm.local:22', [gone, WORKTREE], {project: false});
+
+    /* Then */
+    assert.ok(result.ok);
+    assert.equal(result.worktrees[0].ok, false);
+    assert.deepEqual(result.worktrees[1], {checkout: WORKTREE, ok: true, copyPath: WORKTREE_COPY});
+});
+
+test('a start handed off to a host that is not a VM is refused before anything goes', async () => {
+    /* Given */
+    const h = harness({git: worktreeGit()});
+
+    /* When */
+    const result = await h.service.handOffForStart(LOCAL, 'pi@pi.local:22', [WORKTREE], {project: true});
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, error: 'pi@pi.local:22 is not a VM with the Switchboard agent.'});
+    assert.equal(h.agent.sent('handoff').length, 0);
+});
