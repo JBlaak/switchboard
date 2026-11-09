@@ -28,6 +28,8 @@ val EnterIcon: ImageVector by lazy { lineIcon("Enter", "M20 5v7a3 3 0 0 1-3 3H5"
 val ArchiveIcon: ImageVector by lazy {
     lineIcon("Archive", "M4 4h16v4H4z", "M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8", "M12 11v6", "M9 14l3 3 3-3")
 }
+val PinIcon: ImageVector by lazy { lineIcon("Pin", "M9 4h6l-1 5 3 3v2H7v-2l3-3z", "M12 14v6") }
+val RenameIcon: ImageVector by lazy { lineIcon("Rename", "M4 20h4L19 9l-4-4L4 16z", "M13.5 6.5l4 4") }
 val CheckIcon: ImageVector by lazy { lineIcon("Check", "M5 12.5l4.5 4.5L19 7.5") }
 val SearchIcon: ImageVector by lazy { lineIcon("Search", "M17.5 11a6.5 6.5 0 1 1-13 0a6.5 6.5 0 1 1 13 0z", "M20 20l-4-4") }
 val MicIcon: ImageVector by lazy {

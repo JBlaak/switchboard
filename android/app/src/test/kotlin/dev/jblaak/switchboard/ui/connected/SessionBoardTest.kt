@@ -191,6 +191,99 @@ class SessionBoardTest {
     }
 
     @Test
+    fun `pinning sends pin and shows the session pinned at once`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("a"), phoneSession("b"))))
+
+        /* When */
+        val outcome = board.pin("a", pinned = true)
+
+        /* Then */
+        assertEquals(SendOutcome.Sent, outcome)
+        assertEquals(listOf(ClientMessage.Pin("a", pinned = true)), link.sent)
+        assertEquals(listOf(true, false), board.sessions.value.map { it.pinned })
+    }
+
+    @Test
+    fun `the Mac's next list says whether a session is pinned`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("a"))))
+        board.pin("a", pinned = true)
+
+        /* When */
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("a", pinned = false))))
+
+        /* Then */
+        assertEquals(listOf(false), board.sessions.value.map { it.pinned })
+    }
+
+    @Test
+    fun `renaming sends rename and shows the name at once`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("a"))))
+
+        /* When */
+        board.rename("a", "Login fix")
+
+        /* Then */
+        assertEquals(listOf(ClientMessage.Rename("a", "Login fix")), link.sent)
+        assertEquals(listOf("Login fix"), board.sessions.value.map { it.name })
+    }
+
+    @Test
+    fun `pinning while not connected sends nothing and changes nothing`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("a"))))
+        link.state.value = LinkState.Reconnecting
+
+        /* When */
+        val outcome = board.pin("a", pinned = true)
+
+        /* Then */
+        assertEquals(SendOutcome.NotConnected, outcome)
+        assertEquals(listOf(false), board.sessions.value.map { it.pinned })
+    }
+
+    @Test
+    fun `undoing an archive sends undo-archive and lists the session again when the Mac does`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("a"), phoneSession("b"))))
+        board.archive("a")
+
+        /* When */
+        board.undoArchive("a")
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("a"), phoneSession("b"))))
+
+        /* Then */
+        assertEquals(listOf(ClientMessage.Archive("a"), ClientMessage.UndoArchive("a")), link.sent)
+        assertEquals(listOf("a", "b"), board.sessions.value.map { it.id })
+    }
+
+    @Test
+    fun `an undo the Mac could not do keeps the session archived and says why`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val board = newBoard()
+        val failures = mutableListOf<String>()
+        backgroundScope.launch { board.undoFailures.toList(failures) }
+        runCurrent()
+        link.macSays(ServerMessage.Sessions(listOf(phoneSession("a"), phoneSession("b"))))
+        board.archive("a")
+        board.undoArchive("a")
+
+        /* When */
+        link.macSays(ServerMessage.UndoArchiveResult("a", ok = false, error = "It is still stopping"))
+
+        /* Then */
+        assertEquals(listOf("b"), board.sessions.value.map { it.id })
+        assertEquals(listOf("It is still stopping"), failures)
+    }
+
+    @Test
     fun `a session archived elsewhere leaves the list with its questions`() = runTest(UnconfinedTestDispatcher()) {
         /* Given */
         val board = newBoard()

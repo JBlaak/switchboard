@@ -40,6 +40,8 @@ data class PhoneSession(
     val owner: TerminalOwner,
     /** Epoch ms of the last state change. */
     val changedAt: Long,
+    /** Pinned in the Mac's sidebar; an older Mac leaves it out. */
+    val pinned: Boolean = false,
 )
 
 @Serializable
@@ -223,4 +225,7 @@ enum class ChatRole {
 object MacFeatures {
     /** [ClientMessage.ChatSubscribe], answered with [ServerMessage.Chat] and [ServerMessage.ChatAppend]. */
     const val CHAT = "chat"
+
+    /** [ClientMessage.Pin], [ClientMessage.Rename] and [ClientMessage.UndoArchive], the session rows' actions. */
+    const val ROW_ACTIONS = "row-actions"
 }

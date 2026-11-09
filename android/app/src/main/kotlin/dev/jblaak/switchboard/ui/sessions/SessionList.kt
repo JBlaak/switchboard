@@ -25,6 +25,8 @@ data class SessionRow(
     val waiting: Waiting?,
     val place: TerminalPlace,
     val changedAt: Long,
+    /** Pinned in the Mac's sidebar. */
+    val pinned: Boolean = false,
 )
 
 enum class SessionStatus { NeedsYou, Working, Ready }
@@ -63,6 +65,7 @@ fun sessionRowOf(session: PhoneSession, pending: List<PendingQuestions>, deviceI
         waiting = waitingOf(session, pending),
         place = session.owner.placeFor(deviceId),
         changedAt = session.changedAt,
+        pinned = session.pinned,
     )
 }
 

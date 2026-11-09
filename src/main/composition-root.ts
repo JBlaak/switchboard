@@ -69,6 +69,7 @@ import {ReviewService} from '../application/services/review-service';
 import {PullRequestPageService} from '../application/services/pull-request-page-service';
 import {WorkPageRouter} from '../application/services/work-page-router';
 import {SessionActionService} from '../application/services/session-action-service';
+import {SessionMetaService} from '../application/services/session-meta-service';
 import {PrWatchService} from '../application/services/pr-watch-service';
 import {SettingsService} from '../application/services/settings-service';
 import {WorktreeCleanupService} from '../application/services/worktree-cleanup-service';
@@ -228,6 +229,8 @@ export interface Container {
     /** The session tray's Workspace group (#342): Editor, Finder, Shell here. */
     readonly workspace: WorkspaceActionService;
     readonly sessionActions: SessionActionService;
+    /** A session's name, pin and archive, for the window's IPC and a phone's row actions alike. */
+    readonly sessionMeta: SessionMetaService;
     readonly review: ReviewService;
     readonly prWatch: PrWatchService;
     readonly issueSessions: IssueSessionService;
@@ -659,6 +662,7 @@ export function buildContainer(): Container {
     });
     const projects = new ProjectListService({repository, transcripts, settings, registry, vmTranscripts});
     const pinOrder = new PinOrderService(repository);
+    const sessionMeta = new SessionMetaService({repository, searchIndex, pinOrder});
     // Moving a running conversation to a VM (#276 stage 3).
     const sessionHandoff = new SessionHandoffService({
         registry,
@@ -1210,6 +1214,7 @@ export function buildContainer(): Container {
             worktreeCleanup,
             tasks,
         }),
+        meta: sessionMeta,
         settings,
         renderer,
         // Hold-to-talk: Whisper's model is fetched into user data on first use.
@@ -1328,6 +1333,7 @@ export function buildContainer(): Container {
         sessionStats,
         workspace: workspaceActions,
         sessionActions,
+        sessionMeta,
         prWatch,
         review,
         issueSessions,

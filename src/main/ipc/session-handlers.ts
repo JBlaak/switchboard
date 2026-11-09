@@ -2,7 +2,6 @@
  * Session state: which are running, stopping one, and the per-session metadata.
  */
 import {INVOKE, SEND} from '../../ipc/channels';
-import {searchTitleFor} from '../../domain/session/title';
 import {reconnectSession} from '../reconnect-session';
 import {stopSession} from '../stop-session';
 import type {Container} from '../composition-root';
@@ -30,15 +29,12 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
     /** "Retry now" on a session's connection card; see `reconnectSession`. */
     ipc.handle(INVOKE.reconnectRemote, (sessionId: string) => reconnectSession(app, sessionId));
 
-    // Each pin lands at the end of its section, and the section's order comes back with it (#379).
+    // Each pin lands at the end of its section, and the section's order comes back with it (#379);
+    // the phones' rows show the pin too (#381).
     ipc.handle(INVOKE.toggleStar, (sessionId: string) => {
-        const {result, order} = app.pinOrder.toggle(
-            'sessions',
-            {kind: 'session', sessionId},
-            () => app.repository.toggleStar(sessionId),
-            (starred) => starred === 1,
-        );
-        return {starred: result, order};
+        const {starred, order} = app.sessionMeta.toggleStar(sessionId);
+        app.phoneSessions.sessionsChanged();
+        return {starred, order};
     });
 
     ipc.handle(INVOKE.togglePlanPin, (projectPath: string, slug: string) => {
@@ -74,18 +70,11 @@ export function registerSessionHandlers(ipc: IpcRegistrar, app: Container): void
         order: app.pinOrder.move(section, moving, target),
     }));
 
-    /**
-     * Rename a session.
-     *
-     * The search index carries the name as part of its title, so a rename has to
-     * update it or the session stops being findable under its new name until the
-     * next re-index.
-     */
+    /** Rename a session; the phones' list follows, as a phone's rename does here (#381). */
     ipc.handle(INVOKE.renameSession, (sessionId: string, name: string | null) => {
-        app.repository.setName(sessionId, name || null);
-        const summary = app.repository.getCachedSession(sessionId)?.summary || '';
-        app.searchIndex.updateTitle(sessionId, 'session', searchTitleFor({storedName: name}, summary));
-        return {name: name || null};
+        const renamed = app.sessionMeta.rename(sessionId, name);
+        app.phoneSessions.sessionsChanged();
+        return renamed;
     });
 
     // The window has closed it already; a phone with it open closes it too, and

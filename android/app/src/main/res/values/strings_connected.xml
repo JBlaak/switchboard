@@ -140,7 +140,9 @@
     <string name="session_view_switch">Switch between chat and terminal</string>
     <string name="session_view_terminal">Terminal</string>
     <string name="session_waiting_terminal">Waiting in the terminal. Use it here to reply.</string>
+    <string name="sessions_actions">Actions</string>
     <string name="sessions_answer">Answer</string>
+    <string name="sessions_archived">Archived “%1$s”</string>
     <string name="sessions_ask_patch">Ask Patch</string>
     <plurals name="sessions_count_needs_you">
         <item quantity="one">%1$d needs you</item>
@@ -166,15 +168,23 @@
     <string name="sessions_place_mac">On Mac</string>
     <string name="sessions_place_other_phone">On %1$s</string>
     <string name="sessions_place_this_phone">On this phone</string>
+    <string name="sessions_pin">Pin</string>
+    <string name="sessions_pinned">Pinned</string>
     <plurals name="sessions_questions_waiting">
         <item quantity="one">%1$d question waiting</item>
         <item quantity="other">%1$d questions waiting</item>
     </plurals>
+    <string name="sessions_rename">Rename</string>
+    <string name="sessions_rename_save">Save</string>
+    <string name="sessions_rename_title">Rename session</string>
     <string name="sessions_section_needs_you">Needs you</string>
     <string name="sessions_section_ready">Ready</string>
     <string name="sessions_section_working">Working</string>
     <string name="sessions_ssh">SSH</string>
     <string name="sessions_title">Sessions</string>
+    <string name="sessions_undo">Undo</string>
+    <string name="sessions_undo_failed">Couldn’t bring it back: %1$s</string>
+    <string name="sessions_unpin">Unpin</string>
     <string name="sessions_waiting_terminal">waiting in the terminal</string>
     <string name="voice_cancel">Cancel</string>
     <string name="voice_failed">Couldn’t transcribe: %1$s</string>

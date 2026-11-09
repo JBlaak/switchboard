@@ -21,7 +21,7 @@
  * idle ones, which is where the sidebar files it too.
  */
 import {routeCandidates, folderName} from '../../domain/ask/route';
-import {parseRemoteProjectPath} from '../../domain/project/remote-target';
+import {isRemoteProjectPath, parseRemoteProjectPath} from '../../domain/project/remote-target';
 import {isAgentPty} from './agent-client/agent-pty';
 import {defaultSessionOptions} from '../../domain/launch/session-options';
 import {MAC, NO_OWNERSHIP, acceptsInput, applyOwnership, ownerOf} from '../../domain/phone/ownership';
@@ -56,6 +56,7 @@ import type {GrillService} from './grill-service';
 import type {BatteryService} from './battery-service';
 import type {VoiceService} from './voice-service';
 import type {PhoneChatService} from './phone-chat-service';
+import type {SessionMetaService} from './session-meta-service';
 import type {OpenSessionRequest, OpenSessionResult} from './session-launcher';
 
 /**
@@ -97,6 +98,8 @@ export interface PhoneSessionsServiceDeps {
     launcher: {open(request: OpenSessionRequest): Promise<OpenSessionResult>};
     /** Stop the session and archive its row, as the Mac's archive does; `ok: false` leaves it running and listed. */
     archiver: {archive(sessionId: string): {ok: boolean; error?: string}};
+    /** A session's name, pin and archive, as the Mac's own rename, pin and archive undo set them (#381). */
+    meta: Pick<SessionMetaService, 'rename' | 'setPinned' | 'unarchive'>;
     settings: {effective(projectPath: string): EffectiveSettings};
     renderer: Pick<RendererGateway, 'terminalOwnerChanged' | 'projectsChanged'>;
     /** Hold-to-talk, which keeps its own state per connection. */
@@ -123,8 +126,17 @@ interface Phone {
     open: boolean;
 }
 
+/**
+ * How long a phone's Undo waits for the archived session to finish stopping
+ * before it gives up and leaves the session archived. Stopping escalates to
+ * SIGKILL well within this.
+ */
+export const UNDO_STOP_WAIT_MS = 10_000;
+
 export class PhoneSessionsService {
     private readonly phones = new Map<string, Phone>();
+    /** Undos waiting for a session to finish stopping, by id: called with whether it exited. */
+    private readonly stopping = new Map<string, (exited: boolean) => void>();
     /** What each device called itself, kept past its disconnect: it may still own sessions. */
     private readonly names = new Map<string, string>();
     private ownership: OwnershipState = NO_OWNERSHIP;
@@ -234,6 +246,15 @@ export class PhoneSessionsService {
                 return;
             case 'archive':
                 return this.archive(phone, message.sessionId);
+            case 'pin':
+                this.deps.meta.setPinned(this.currentId(message.sessionId) ?? message.sessionId, message.pinned);
+                return this.metaChanged();
+            case 'rename':
+                this.deps.meta.rename(this.currentId(message.sessionId) ?? message.sessionId, message.name);
+                return this.metaChanged();
+            case 'undo-archive':
+                void this.undoArchive(phone, message.sessionId);
+                return;
             case 'voice-start':
             case 'voice-chunk':
             case 'voice-end':
@@ -328,6 +349,8 @@ export class PhoneSessionsService {
      * session has had; the phones hear it once, under the one they know.
      */
     public processExited(sessionId: string, exitCode: number): void {
+        // An Undo waiting for this archive's stop goes on, once the registry has let go.
+        this.stopping.get(sessionId)?.(true);
         const known =
             this.listed.has(sessionId) || [...this.phones.values()].some((phone) => phone.attached.has(sessionId));
         for (const phone of this.phones.values()) phone.attached.delete(sessionId);
@@ -516,6 +539,86 @@ export class PhoneSessionsService {
         }
         this.deps.log.info(`[phone] archive ${sessionId}: ${result.ok ? 'done' : result.error}`);
         phone.connection.send({type: 'archive-result', sessionId: requested, ...result});
+    }
+
+    /**
+     * Undo an archive, as the Mac's archive toast does: the row comes back, and
+     * the session is resumed. The toast resumes only the session that was on
+     * screen; a phone lists running sessions only, so without the resume the
+     * row it asked back would not come back to it. Only a local Claude session
+     * is resumed: a terminal has nothing to resume, and a remote one is opened
+     * from its row on the Mac. One still stopping from the archive (an Undo
+     * tapped straight away) is waited for, up to `UNDO_STOP_WAIT_MS`, since
+     * resuming before then would only reattach to the process on its way out;
+     * one that outlasts that is left archived.
+     */
+    private async undoArchive(phone: Phone, sessionId: string): Promise<void> {
+        const {meta, launcher, settings, renderer, log} = this.deps;
+        const answer = (result: {ok: boolean; error?: string}): void => {
+            if (phone.open) phone.connection.send({type: 'undo-archive-result', sessionId, ...result});
+        };
+        if (this.deps.registry.find(sessionId) && !(await this.whenStopped(sessionId))) {
+            answer({ok: false, error: 'It is still stopping; try again in a moment'});
+            return;
+        }
+        const row = this.archivedRow(sessionId);
+        meta.unarchive(sessionId);
+        renderer.projectsChanged();
+        log.info(`[phone] undo archive ${sessionId}`);
+        if (!row || !resumable(row)) {
+            answer({ok: true});
+            return;
+        }
+        let opened: OpenSessionResult;
+        try {
+            opened = await launcher.open({
+                sessionId,
+                projectPath: row.projectPath,
+                isNew: false,
+                options: defaultSessionOptions(settings.effective(row.projectPath)),
+            });
+        } catch (err) {
+            opened = {ok: false, error: (err as Error).message};
+        }
+        if (!opened.ok) log.warn(`[phone] could not resume ${sessionId}: ${opened.error}`);
+        this.schedulePush();
+        answer(opened.ok ? {ok: true} : {ok: false, error: opened.error ?? 'The session could not be resumed'});
+    }
+
+    /** Answers true once the session's process has exited, or false when it is still going after `UNDO_STOP_WAIT_MS`. */
+    private whenStopped(sessionId: string): Promise<boolean> {
+        const {timers} = this.deps;
+        return new Promise((resolve) => {
+            this.stopping.get(sessionId)?.(false);
+            const timer = timers.setTimeout(() => {
+                this.stopping.delete(sessionId);
+                resolve(false);
+            }, UNDO_STOP_WAIT_MS);
+            this.stopping.set(sessionId, (exited) => {
+                timers.clearTimeout(timer);
+                this.stopping.delete(sessionId);
+                resolve(exited);
+            });
+        });
+    }
+
+    /** The row of a session, archived ones included. */
+    private archivedRow(sessionId: string): SessionRow | null {
+        for (const project of this.deps.projects.list(true)) {
+            const row = project.sessions.find((candidate) => candidate.sessionId === sessionId);
+            if (row) return row;
+        }
+        return null;
+    }
+
+    /**
+     * A phone renamed or pinned a session: the Mac's list reloads, and the
+     * phones' list follows (the wiring's gateway tells them; this covers a
+     * gateway that doesn't).
+     */
+    private metaChanged(): void {
+        this.deps.renderer.projectsChanged();
+        this.schedulePush();
     }
 
     /** Feed an event to the ownership rules, and do what they say. */
@@ -747,6 +850,7 @@ export class PhoneSessionsService {
                     waiting: questionsWaiting ? 'questions' : terminal ? 'terminal' : null,
                     owner: this.wireOwner(ownerOf(this.ownership, sessionId)),
                     changedAt: this.changedAt.get(sessionId) ?? session.openedAt,
+                    pinned: Boolean(row?.starred),
                 },
             });
         }
@@ -783,6 +887,11 @@ function remoteLabel(session: Pick<ActiveSession, 'remote' | 'pty' | 'projectPat
     if (!isAgentPty(session.pty)) return null;
     const parsed = parseRemoteProjectPath(session.projectPath);
     return parsed ? `${parsed.user}@${parsed.host}` : null;
+}
+
+/** Whether undoing an archive resumes the session: a local Claude one only. */
+function resumable(row: SessionRow): boolean {
+    return (row.type ?? 'claude') === 'claude' && !isRemoteProjectPath(row.projectPath);
 }
 
 /** Both or neither, as the protocol says. */

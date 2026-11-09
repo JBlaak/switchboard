@@ -22,6 +22,8 @@ export const MAX_MESSAGE_CHARS = 512 * 1024;
 const MAX_ID = 256;
 const MAX_APP_VERSION = 64;
 const MAX_DEVICE_NAME = 100;
+/** A session's name: longer than any row shows, short enough to stay a name. */
+const MAX_NAME = 500;
 /** Generous on purpose: a wrong-length code must reach the pairing rules and count as a wrong guess. */
 const MAX_CODE = 64;
 const MAX_PATH = 4096;
@@ -66,10 +68,21 @@ export function parseClientMessage(text: string): ClientMessage | null {
         case 'detach':
         case 'use-here':
         case 'archive':
+        case 'undo-archive':
         case 'chat-subscribe':
         case 'chat-unsubscribe': {
             if (!isText(raw.sessionId, MAX_ID)) return null;
             return {type: raw.type, sessionId: raw.sessionId};
+        }
+        case 'pin': {
+            if (!isText(raw.sessionId, MAX_ID) || typeof raw.pinned !== 'boolean') return null;
+            return {type: 'pin', sessionId: raw.sessionId, pinned: raw.pinned};
+        }
+        case 'rename': {
+            if (!isText(raw.sessionId, MAX_ID) || !isText(raw.name, MAX_NAME)) return null;
+            const name = raw.name.trim();
+            if (!name) return null;
+            return {type: 'rename', sessionId: raw.sessionId, name};
         }
         case 'input': {
             if (!isText(raw.sessionId, MAX_ID) || !isText(raw.data, MAX_TEXT)) return null;

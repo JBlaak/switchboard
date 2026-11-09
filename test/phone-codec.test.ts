@@ -34,6 +34,10 @@ const EVERY_MESSAGE: ClientMessage[] = [
     {type: 'ask-start', requestId: 'r1', projectPath: '/Users/joris/Development/switchboard', prompt: 'Add dark mode'},
     {type: 'list-projects'},
     {type: 'archive', sessionId: 's1'},
+    {type: 'pin', sessionId: 's1', pinned: true},
+    {type: 'pin', sessionId: 's1', pinned: false},
+    {type: 'rename', sessionId: 's1', name: 'Fix the login'},
+    {type: 'undo-archive', sessionId: 's1'},
     {type: 'voice-start', voiceId: 'v1'},
     {type: 'voice-start', voiceId: 'v2', sessionId: 's1'},
     {type: 'voice-chunk', voiceId: 'v1', seq: 0, audio: 'AAABAAIA/38AgA=='},
@@ -99,6 +103,29 @@ const MALFORMED: Record<string, unknown[]> = {
     ],
     'use-here': [{type: 'use-here'}, {type: 'use-here', sessionId: null}],
     archive: [{type: 'archive'}, {type: 'archive', sessionId: ''}, {type: 'archive', sessionId: 7}],
+    pin: [
+        {type: 'pin', pinned: true},
+        {type: 'pin', sessionId: '', pinned: true},
+        {type: 'pin', sessionId: 's1'},
+        {type: 'pin', sessionId: 's1', pinned: 'true'},
+        {type: 'pin', sessionId: 's1', pinned: 1},
+        {type: 'pin', sessionId: 's1', pinned: null},
+    ],
+    rename: [
+        {type: 'rename', name: 'Fix'},
+        {type: 'rename', sessionId: 's1'},
+        {type: 'rename', sessionId: 's1', name: ''},
+        {type: 'rename', sessionId: 's1', name: '   '},
+        {type: 'rename', sessionId: 's1', name: 7},
+        {type: 'rename', sessionId: 's1', name: null},
+        {type: 'rename', sessionId: 's1', name: 'x'.repeat(501)},
+        {type: 'rename', sessionId: 'x'.repeat(257), name: 'Fix'},
+    ],
+    'undo-archive': [
+        {type: 'undo-archive'},
+        {type: 'undo-archive', sessionId: ''},
+        {type: 'undo-archive', sessionId: 7},
+    ],
     'chat-subscribe': [{type: 'chat-subscribe'}, {type: 'chat-subscribe', sessionId: ''}],
     'chat-unsubscribe': [{type: 'chat-unsubscribe'}, {type: 'chat-unsubscribe', sessionId: 'x'.repeat(257)}],
     'voice-start': [
@@ -293,6 +320,17 @@ test('unknown fields are dropped, not passed on', () => {
 
     /* Then */
     assert.deepStrictEqual(parsed, {type: 'use-here', sessionId: 's1'});
+});
+
+test('a rename is trimmed', () => {
+    /* Given */
+    const text = JSON.stringify({type: 'rename', sessionId: 's1', name: '  Fix the login \n'});
+
+    /* When */
+    const parsed = parseClientMessage(text);
+
+    /* Then */
+    assert.deepStrictEqual(parsed, {type: 'rename', sessionId: 's1', name: 'Fix the login'});
 });
 
 test('terminal frames round-trip, multi-byte session ids and output included', () => {

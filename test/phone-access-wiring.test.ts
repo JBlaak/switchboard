@@ -240,6 +240,7 @@ async function mac() {
         router: () => ({route: async () => ({kind: 'cancelled' as const}), cancel() {}}),
         launcher,
         archiver: sessionArchiver({...stopper, repository, renderer, worktreeCleanup}),
+        meta: {rename: (_id, name) => ({name}), setPinned: () => 0, unarchive: () => {}},
         settings: {
             get: <T>(key: string) => (settings.get(key) ?? null) as T | null,
             set: (key: string, value: unknown) => {
@@ -438,7 +439,7 @@ test('a phone pairs with the code on the Mac, is confirmed, and reconnects enrol
         macName: 'Joris’s MacBook Pro',
         deviceId: accepted.deviceId,
         addresses: ['127.0.0.1'],
-        features: ['chat'],
+        features: ['chat', 'row-actions'],
     });
     assert.deepEqual(
         list.sessions.map((session) => [session.id, session.owner]),

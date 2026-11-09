@@ -60,6 +60,18 @@ class SessionListTest {
     }
 
     @Test
+    fun `a pinned session's row is pinned`() {
+        /* Given */
+        val session = phoneSession("a", pinned = true)
+
+        /* When */
+        val row = sessionRowOf(session, emptyList(), DEVICE_ID)
+
+        /* Then */
+        assertEquals(true, row.pinned)
+    }
+
+    @Test
     fun `a session owned by this phone is on this phone`() {
         /* Given */
         val session = phoneSession("a", owner = THIS_PHONE)

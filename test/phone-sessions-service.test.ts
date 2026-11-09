@@ -6,6 +6,9 @@ import {SessionRegistry} from '../src/application/model/session-registry';
 import {ASK_PATCH_CALL, AskRouteService} from '../src/application/services/ask-route-service';
 import {PhoneSessionsService} from '../src/application/services/phone-sessions-service';
 import {QuestionService} from '../src/application/services/question-service';
+import {PinOrderService} from '../src/application/services/pin-order-service';
+import {SessionMetaService} from '../src/application/services/session-meta-service';
+import type {PinRef} from '../src/domain/pin/pin-order';
 import {ENTER_ALT_SCREEN, HIDE_CURSOR} from '../src/domain/terminal/ansi';
 import {fakeDeviceConnection, fakeRenderer, fakeTimers, resizingPty, silentLog} from './support/fakes';
 import type {FakeDeviceConnection, FakePty} from './support/fakes';
@@ -16,7 +19,7 @@ import type {ClientMessage} from '../src/domain/phone/protocol';
 import type {Project} from '../src/domain/project/project';
 import type {AskedQuestions} from '../src/domain/questions/question';
 import type {GrillResult, GrillView} from '../src/domain/grill/model';
-import type {SessionRow} from '../src/domain/session/session';
+import type {SessionMeta, SessionRow} from '../src/domain/session/session';
 
 /**
  * What a phone sees and does once it is in: the running list, a terminal's
@@ -80,6 +83,32 @@ function harness() {
     const launches: OpenSessionRequest[] = [];
     const archived: string[] = [];
     let archiveResult: {ok: boolean; error?: string} = {ok: true};
+    let launchResult: {ok: boolean; error?: string} = {ok: true};
+    // The store behind the Mac's rename, pin and archive undo, in memory.
+    const metas = new Map<string, SessionMeta>();
+    const metaOf = (sessionId: string): SessionMeta =>
+        metas.get(sessionId) ?? {sessionId, name: null, starred: 0, archived: 0, snoozedUntil: null};
+    const searchTitles: [string, string][] = [];
+    const pinned: PinRef[] = [];
+    const meta = new SessionMetaService({
+        repository: {
+            setName: (sessionId, name) => void metas.set(sessionId, {...metaOf(sessionId), name}),
+            getCachedSession: () => null,
+            getMeta: (sessionId) => metas.get(sessionId) ?? null,
+            toggleStar: (sessionId) => {
+                const starred = metaOf(sessionId).starred ? 0 : 1;
+                metas.set(sessionId, {...metaOf(sessionId), starred});
+                return starred;
+            },
+            setArchived: (sessionId, archived) =>
+                void metas.set(sessionId, {...metaOf(sessionId), archived: archived ? 1 : 0}),
+        },
+        pinOrder: new PinOrderService({
+            getPinOrder: () => pinned.filter((ref) => ref.kind === 'session'),
+            setPinOrder: (order) => void pinned.splice(0, pinned.length, ...order),
+        }),
+        searchIndex: {updateTitle: (id, _type, title) => void searchTitles.push([id, title])},
+    });
     let projects: Project[] = [
         {projectPath: APP, folder: '-code-app', sessions: []},
         {projectPath: SITE, folder: '-code-site', sessions: []},
@@ -159,6 +188,7 @@ function harness() {
         launcher: {
             async open(request) {
                 launches.push(request);
+                if (!launchResult.ok) return launchResult;
                 addSession(request.sessionId, {projectPath: request.projectPath});
                 return {ok: true, reattached: false};
             },
@@ -169,6 +199,7 @@ function harness() {
                 return archiveResult;
             },
         },
+        meta,
         settings: {effective: () => ({permissionMode: 'auto', worktree: true})},
         renderer,
         voice: {
@@ -251,6 +282,12 @@ function harness() {
         failArchive: (error: string) => {
             archiveResult = {ok: false, error};
         },
+        failLaunch: (error: string) => {
+            launchResult = {ok: false, error};
+        },
+        metas,
+        metaOf,
+        searchTitles,
     };
 }
 
@@ -283,6 +320,7 @@ test('a phone that connects is sent the running sessions, the questions and the 
                     waiting: null,
                     owner: {kind: 'mac'},
                     changedAt: 0,
+                    pinned: false,
                 },
             ],
         },
@@ -507,6 +545,210 @@ test('a session that has already exited is pushed as archived under the id it ha
 
     /* Then */
     assert.deepEqual(phone.of('archived'), [{type: 'archived', sessionId: 'gone'}]);
+});
+
+// ── Pin, rename and undo (#381) ──
+
+/** The last list the phone was sent. */
+const lastList = (phone: FakeDeviceConnection) => {
+    const lists = phone.of('sessions');
+    const last = lists[lists.length - 1];
+    assert.ok(last && last.type === 'sessions');
+    return last.sessions;
+};
+
+test('the list says which sessions are pinned', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    h.addSession('s2');
+    h.setProjects([{projectPath: APP, folder: '-code-app', sessions: [row('s1', {starred: 1}), row('s2')]}]);
+
+    /* When */
+    const phone = h.connect();
+
+    /* Then */
+    assert.deepEqual(
+        lastList(phone).map((session) => [session.id, session.pinned]),
+        [
+            ['s1', true],
+            ['s2', false],
+        ],
+    );
+});
+
+test('pin pins the session under its current id, as the sidebar does, and the Mac’s list reloads', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('old');
+    const phone = h.connect();
+    h.registry.rekey('old', 'new');
+    h.service.sessionForked('old', 'new');
+
+    /* When */
+    h.send(phone, {type: 'pin', sessionId: 'old', pinned: true});
+
+    /* Then */
+    assert.equal(h.metaOf('new').starred, 1);
+    assert.equal(h.renderer.only('projectsChanged').length, 1);
+});
+
+test('pinning a pinned session leaves it pinned', () => {
+    /* Given */
+    const h = harness();
+    const phone = h.connect();
+    h.send(phone, {type: 'pin', sessionId: 's1', pinned: true});
+
+    /* When */
+    h.send(phone, {type: 'pin', sessionId: 's1', pinned: true});
+
+    /* Then */
+    assert.equal(h.metaOf('s1').starred, 1);
+});
+
+test('unpin unpins the session', () => {
+    /* Given */
+    const h = harness();
+    const phone = h.connect();
+    h.send(phone, {type: 'pin', sessionId: 's1', pinned: true});
+
+    /* When */
+    h.send(phone, {type: 'pin', sessionId: 's1', pinned: false});
+
+    /* Then */
+    assert.equal(h.metaOf('s1').starred, 0);
+});
+
+test('a pin goes out to the phones in the next list', () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    h.setProjects([{projectPath: APP, folder: '-code-app', sessions: [row('s1')]}]);
+    const phone = h.connect();
+    phone.clear();
+
+    /* When */
+    h.send(phone, {type: 'pin', sessionId: 's1', pinned: true});
+    h.setProjects([{projectPath: APP, folder: '-code-app', sessions: [row('s1', {starred: h.metaOf('s1').starred})]}]);
+    h.timers.tick();
+
+    /* Then */
+    assert.equal(lastList(phone)[0].pinned, true);
+});
+
+test('rename names the session and updates its search title, and the Mac’s list reloads', () => {
+    /* Given */
+    const h = harness();
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'rename', sessionId: 's1', name: 'Login fix'});
+
+    /* Then */
+    assert.equal(h.metaOf('s1').name, 'Login fix');
+    assert.deepEqual(h.searchTitles, [['s1', 'Login fix ']]);
+    assert.equal(h.renderer.only('projectsChanged').length, 1);
+});
+
+test('undo-archive brings the row back and resumes a local Claude session', async () => {
+    /* Given */
+    const h = harness();
+    h.setProjects([{projectPath: APP, folder: '-code-app', sessions: [row('s1', {archived: 1})]}]);
+    const phone = h.connect();
+    h.metas.set('s1', {...h.metaOf('s1'), archived: 1});
+
+    /* When */
+    h.send(phone, {type: 'undo-archive', sessionId: 's1'});
+    await settle();
+
+    /* Then */
+    assert.equal(h.metaOf('s1').archived, 0);
+    assert.deepEqual(
+        h.launches.map((launch) => [launch.sessionId, launch.projectPath, launch.isNew]),
+        [['s1', APP, false]],
+    );
+    assert.equal(h.renderer.only('projectsChanged').length, 1);
+    assert.deepEqual(phone.of('undo-archive-result'), [{type: 'undo-archive-result', sessionId: 's1', ok: true}]);
+});
+
+test('undo-archive of a terminal brings the row back without resuming it', async () => {
+    /* Given */
+    const h = harness();
+    h.setProjects([{projectPath: APP, folder: '-code-app', sessions: [row('t1', {archived: 1, type: 'terminal'})]}]);
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'undo-archive', sessionId: 't1'});
+    await settle();
+
+    /* Then */
+    assert.equal(h.metaOf('t1').archived, 0);
+    assert.deepEqual(h.launches, []);
+    assert.deepEqual(phone.of('undo-archive-result'), [{type: 'undo-archive-result', sessionId: 't1', ok: true}]);
+});
+
+test('undo-archive of a session still stopping waits for it to stop, then resumes it', async () => {
+    /* Given: the archive's stop has not finished yet */
+    const h = harness();
+    h.setProjects([{projectPath: APP, folder: '-code-app', sessions: [row('s1', {archived: 1})]}]);
+    h.addSession('s1');
+    const phone = h.connect();
+    h.send(phone, {type: 'undo-archive', sessionId: 's1'});
+    await settle();
+    const before = phone.of('undo-archive-result').length;
+
+    /* When: the process exits */
+    h.registry.delete('s1');
+    h.service.processExited('s1', 0);
+    await settle();
+
+    /* Then */
+    assert.equal(before, 0);
+    assert.equal(h.metaOf('s1').archived, 0);
+    assert.deepEqual(
+        h.launches.map((launch) => launch.sessionId),
+        ['s1'],
+    );
+    assert.deepEqual(phone.of('undo-archive-result'), [{type: 'undo-archive-result', sessionId: 's1', ok: true}]);
+});
+
+test('undo-archive of a session that never stops leaves it archived and says so', async () => {
+    /* Given */
+    const h = harness();
+    h.addSession('s1');
+    h.metas.set('s1', {...h.metaOf('s1'), archived: 1});
+    const phone = h.connect();
+    h.send(phone, {type: 'undo-archive', sessionId: 's1'});
+    await settle();
+
+    /* When: the wait runs out */
+    h.timers.tick();
+    await settle();
+
+    /* Then */
+    assert.equal(h.metaOf('s1').archived, 1);
+    assert.deepEqual(h.launches, []);
+    assert.deepEqual(phone.of('undo-archive-result'), [
+        {type: 'undo-archive-result', sessionId: 's1', ok: false, error: 'It is still stopping; try again in a moment'},
+    ]);
+});
+
+test('an undo whose resume fails tells the phone why, with the row back on the Mac', async () => {
+    /* Given */
+    const h = harness();
+    h.setProjects([{projectPath: APP, folder: '-code-app', sessions: [row('s1', {archived: 1})]}]);
+    h.failLaunch('No claude');
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'undo-archive', sessionId: 's1'});
+    await settle();
+
+    /* Then */
+    assert.equal(h.metaOf('s1').archived, 0);
+    assert.deepEqual(phone.of('undo-archive-result'), [
+        {type: 'undo-archive-result', sessionId: 's1', ok: false, error: 'No claude'},
+    ]);
 });
 
 // ── The terminal ──

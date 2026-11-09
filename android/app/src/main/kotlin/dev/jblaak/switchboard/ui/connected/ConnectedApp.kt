@@ -4,6 +4,9 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -17,9 +20,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalResources
 import dev.jblaak.switchboard.R
 import dev.jblaak.switchboard.link.LinkState
+import dev.jblaak.switchboard.link.SendOutcome
+import dev.jblaak.switchboard.protocol.MacFeatures
 import dev.jblaak.switchboard.ui.ask.AskRoute
 import dev.jblaak.switchboard.ui.session.SessionRoute
 import dev.jblaak.switchboard.ui.sessions.LinkStatus
+import dev.jblaak.switchboard.ui.sessions.RowActions
 import dev.jblaak.switchboard.ui.sessions.SessionStatus
 import dev.jblaak.switchboard.ui.sessions.SessionsScreen
 import dev.jblaak.switchboard.ui.sessions.Waiting
@@ -63,12 +69,17 @@ fun ConnectedApp(
             Toast.makeText(context, resources.getString(R.string.session_archive_failed, error), Toast.LENGTH_LONG).show()
         }
     }
+    LaunchedEffect(board) {
+        board.undoFailures.collect { error ->
+            Toast.makeText(context, resources.getString(R.string.sessions_undo_failed, error), Toast.LENGTH_LONG).show()
+        }
+    }
 
     CompositionLocalProvider(LocalVoiceControls provides voice) {
         Box(Modifier.fillMaxSize()) {
             AnimatedContent(targetState = route, contentKey = { it::class }, label = "connected route") { current ->
                 when (current) {
-                    ConnectedRoute.Sessions -> SessionsRoute(link, board, deviceId, macName, navigation, onMenuClick)
+                    ConnectedRoute.Sessions -> SessionsRoute(link, board, deviceId, macName, navigation, confetti, onMenuClick)
                     is ConnectedRoute.Session -> SessionRoute(
                         link = link,
                         board = board,
@@ -105,12 +116,46 @@ private fun SessionsRoute(
     deviceId: String,
     macName: String,
     navigation: ConnectedNavigation,
+    confetti: Confetti,
     onMenuClick: () -> Unit,
 ) {
     val sessions by board.sessions.collectAsState()
     val pending by board.pending.collectAsState()
     val macBattery by board.macBattery.collectAsState()
     val linkState by link.state.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val density = LocalDensity.current.density
+    // Swipes and the long-press sheet only for a Mac that takes their messages: an older one closes on them.
+    val rowActionsOn = (linkState as? LinkState.Connected)?.features?.contains(MacFeatures.ROW_ACTIONS) == true
+    val rowActions = remember(board, confetti, snackbar, scope) {
+        val offline = { Toast.makeText(context, R.string.session_archive_offline, Toast.LENGTH_SHORT).show() }
+        RowActions(
+            archive = { row, from ->
+                val sent = board.archive(row.id) == SendOutcome.Sent
+                if (!sent) {
+                    offline()
+                } else {
+                    confetti.burst(from, density)
+                    scope.launch {
+                        // A newer archive's Undo replaces the one on screen.
+                        snackbar.currentSnackbarData?.dismiss()
+                        val result = snackbar.showSnackbar(
+                            message = resources.getString(R.string.sessions_archived, row.name),
+                            actionLabel = resources.getString(R.string.sessions_undo),
+                            duration = SnackbarDuration.Long,
+                        )
+                        if (result == SnackbarResult.ActionPerformed && board.undoArchive(row.id) != SendOutcome.Sent) offline()
+                    }
+                }
+                sent
+            },
+            pin = { row, pinned -> if (board.pin(row.id, pinned) != SendOutcome.Sent) offline() },
+            rename = { row, name -> if (board.rename(row.id, name) != SendOutcome.Sent) offline() },
+        )
+    }
     SessionsScreen(
         list = sessionListOf(sessions, pending, deviceId),
         macName = macName,
@@ -126,5 +171,7 @@ private fun SessionsRoute(
         },
         onAskPatchClick = navigation::askOpened,
         onMenuClick = onMenuClick,
+        rowActions = rowActions.takeIf { rowActionsOn },
+        snackbar = snackbar,
     )
 }

@@ -35,6 +35,8 @@ export const PROTOCOL_VERSION = 1;
 export const FEATURES = {
     /** `chat-subscribe` and `chat-unsubscribe`, answered with `chat` and `chat-append`. */
     chat: 'chat',
+    /** `pin`, `rename` and `undo-archive`, answered with `undo-archive-result` (#381). */
+    rowActions: 'row-actions',
 } as const;
 
 /** The Bonjour service type the Mac advertises. */
@@ -80,6 +82,8 @@ export interface PhoneSession {
     owner: TerminalOwner;
     /** Epoch ms of the last state change, for the row's "2m". */
     changedAt: number;
+    /** Pinned in the sidebar (its star). An older Mac leaves it out. */
+    pinned: boolean;
 }
 
 /** A local project Ask Patch may start a session in. */
@@ -177,6 +181,17 @@ export type ClientMessage =
     | {type: 'list-projects'}
     /** Archive the session, as ⌘E does on the Mac: it is stopped first, and stays listed if that fails. */
     | {type: 'archive'; sessionId: string}
+    // A row's other actions (#381), only to a Mac whose `welcome` named
+    // FEATURES.rowActions. Each shows in the next `sessions`.
+    /** Pin or unpin the session, as the sidebar's pin does. Pinning a pinned one leaves it pinned. */
+    | {type: 'pin'; sessionId: string; pinned: boolean}
+    /** Rename the session, as the sidebar's rename does. Trimmed, never empty. */
+    | {type: 'rename'; sessionId: string; name: string}
+    /**
+     * Undo this phone's archive: the row comes back on the Mac and a local
+     * Claude session is resumed, so it is listed again. One `undo-archive-result` follows.
+     */
+    | {type: 'undo-archive'; sessionId: string}
     /**
      * Voice input: a recording starts. `sessionId`, when the phone is in a
      * session, primes Whisper and the cleanup with that session's project. A
@@ -273,6 +288,8 @@ export type ServerMessage =
     | {type: 'answer-result'; sessionId: string; toolUseId: string; ok: boolean; error?: string}
     /** `error` is only there when `ok` is false. */
     | {type: 'archive-result'; sessionId: string; ok: boolean; error?: string}
+    /** `error` is only there when `ok` is false. */
+    | {type: 'undo-archive-result'; sessionId: string; ok: boolean; error?: string}
     /** Archived on the Mac or from another phone: an open screen of it closes, as the Mac's view does. */
     | {type: 'archived'; sessionId: string}
     | {type: 'ask-result'; requestId: string; result: PhoneAskResult}

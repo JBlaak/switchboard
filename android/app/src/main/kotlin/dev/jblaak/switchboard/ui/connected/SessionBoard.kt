@@ -32,6 +32,10 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
     /** Archived here and not yet gone from the Mac's list: hidden meanwhile, back if the Mac couldn't stop them. */
     private var archiving: Set<String> = emptySet()
 
+    /** Pinned or unpinned here, and renamed here: shown at once, until the Mac's next list says how it stands. */
+    private var pinnedHere: Map<String, Boolean> = emptyMap()
+    private var renamedHere: Map<String, String> = emptyMap()
+
     private val mutableSessions = MutableStateFlow<List<PhoneSession>>(emptyList())
 
     /** In the Mac's sidebar order. */
@@ -44,6 +48,14 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
 
     /** Why an archive failed, as the Mac said it; the session is listed again. */
     val archiveFailures: SharedFlow<String> = mutableArchiveFailures.asSharedFlow()
+
+    private val mutableUndoFailures = MutableSharedFlow<String>(
+        extraBufferCapacity = 4,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+
+    /** Why an archive's Undo failed, as the Mac said it; the session stays archived. */
+    val undoFailures: SharedFlow<String> = mutableUndoFailures.asSharedFlow()
 
     private val mutablePending = MutableStateFlow<List<PendingQuestions>>(emptyList())
     val pending: StateFlow<List<PendingQuestions>> = mutablePending.asStateFlow()
@@ -83,12 +95,49 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
         return outcome
     }
 
+    /** Asks the Mac to pin or unpin [sessionId], and shows it so at once. Only to a Mac that names `row-actions`. */
+    fun pin(sessionId: String, pinned: Boolean): SendOutcome {
+        val outcome = link.send(ClientMessage.Pin(sessionId, pinned))
+        if (outcome == SendOutcome.Sent) {
+            pinnedHere = pinnedHere + (sessionId to pinned)
+            publish()
+        }
+        return outcome
+    }
+
+    /** Asks the Mac to rename [sessionId], and shows the name at once. Only to a Mac that names `row-actions`. */
+    fun rename(sessionId: String, name: String): SendOutcome {
+        val outcome = link.send(ClientMessage.Rename(sessionId, name))
+        if (outcome == SendOutcome.Sent) {
+            renamedHere = renamedHere + (sessionId to name)
+            publish()
+        }
+        return outcome
+    }
+
+    /**
+     * Undoes this phone's archive of [sessionId]: the Mac brings the row back and resumes the session, which its next
+     * list carries. Only to a Mac that names `row-actions`.
+     */
+    fun undoArchive(sessionId: String): SendOutcome {
+        val outcome = link.send(ClientMessage.UndoArchive(sessionId))
+        if (outcome == SendOutcome.Sent) {
+            // Listed again once it is resumed, even if the Mac's list never went without it.
+            archiving = archiving - sessionId
+            publish()
+        }
+        return outcome
+    }
+
     private fun receive(message: ServerMessage) {
         when (message) {
             is ServerMessage.Sessions -> {
                 received = message.sessions
                 // Gone from the Mac's list: nothing left to hide.
                 archiving = archiving.filterTo(mutableSetOf()) { id -> received.any { it.id == id } }
+                // The Mac's list has the pins and names now.
+                pinnedHere = emptyMap()
+                renamedHere = emptyMap()
                 publish()
             }
             is ServerMessage.Questions -> mutablePending.value = message.pending
@@ -108,6 +157,12 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
                 publish()
                 mutableArchiveFailures.tryEmit(message.error.orEmpty())
             }
+            is ServerMessage.UndoArchiveResult -> if (!message.ok) {
+                // Still on its way out: hidden again, as it was.
+                if (received.any { it.id == message.sessionId }) archiving = archiving + message.sessionId
+                publish()
+                mutableUndoFailures.tryEmit(message.error.orEmpty())
+            }
             else -> Unit
         }
     }
@@ -122,7 +177,14 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
     }
 
     private fun publish() {
-        mutableSessions.value = received.filterNot { it.id in archiving }
+        mutableSessions.value = received
+            .filterNot { it.id in archiving }
+            .map { session ->
+                session.copy(
+                    pinned = pinnedHere[session.id] ?: session.pinned,
+                    name = renamedHere[session.id] ?: session.name,
+                )
+            }
     }
 
     private fun rekey(from: String, to: String) {
@@ -130,6 +192,8 @@ class SessionBoard(private val link: PhoneLink, scope: CoroutineScope) {
             if (session.id == from) session.copy(id = to) else session
         }
         if (from in archiving) archiving = archiving - from + to
+        pinnedHere[from]?.let { pinnedHere = pinnedHere - from + (to to it) }
+        renamedHere[from]?.let { renamedHere = renamedHere - from + (to to it) }
         publish()
         mutablePending.value = mutablePending.value.map { set ->
             if (set.sessionId == from) set.copy(sessionId = to) else set

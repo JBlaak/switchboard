@@ -621,7 +621,7 @@ test('hello on an enrolled connection is welcomed and handed to the sessions han
             macName: 'Joris MacBook',
             deviceId: PIXEL.id,
             addresses: ['192.168.1.20', '10.8.0.3'],
-            features: ['chat'],
+            features: ['chat', 'row-actions'],
         },
     ]);
     assert.deepEqual(h.sessions.events, [

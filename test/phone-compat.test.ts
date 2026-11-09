@@ -17,7 +17,7 @@ test('an enrolled device on the same protocol is welcomed with its id', () => {
             macName: 'Joris MacBook',
             deviceId: 'dev-1',
             addresses: ['192.168.1.20', '10.8.0.3'],
-            features: ['chat'],
+            features: ['chat', 'row-actions'],
         },
         close: null,
     });

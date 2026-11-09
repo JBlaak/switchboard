@@ -48,6 +48,7 @@ fun phoneSession(
     state: SessionState = SessionState.Idle,
     owner: TerminalOwner = TerminalOwner.Mac,
     waiting: WaitingReason? = null,
+    pinned: Boolean = false,
 ): PhoneSession {
     return PhoneSession(
         id = id,
@@ -59,6 +60,7 @@ fun phoneSession(
         waiting = waiting,
         owner = owner,
         changedAt = 0,
+        pinned = pinned,
     )
 }
 

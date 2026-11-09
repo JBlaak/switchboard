@@ -2,7 +2,7 @@ package dev.jblaak.switchboard.ui.sessions
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,17 +24,21 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
@@ -52,6 +56,7 @@ import dev.jblaak.switchboard.ui.connected.LaptopIcon
 import dev.jblaak.switchboard.ui.connected.MoreIcon
 import dev.jblaak.switchboard.ui.connected.PatchFigure
 import dev.jblaak.switchboard.ui.connected.PhoneIcon
+import dev.jblaak.switchboard.ui.connected.PinIcon
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.delay
 import nl.jblaak.patch.PatchMood
@@ -63,6 +68,13 @@ import nl.jblaak.patch.rememberPatchState
 /** How the link stands, for the line under the title. */
 enum class LinkStatus { Connected, Reconnecting, Offline }
 
+/** A long-pressed row, with where its middle was for the confetti of an Archive from its sheet. */
+private data class Pressed(val row: SessionRow, val middle: Offset)
+
+/**
+ * The session list. With [rowActions], for a Mac that takes them, a row swipes to archive or pin and a long-press
+ * opens its actions (#381); without, a row only opens. [snackbar] is where the archive's Undo shows.
+ */
 @Composable
 fun SessionsScreen(
     list: SessionList,
@@ -72,8 +84,13 @@ fun SessionsScreen(
     onSessionClick: (row: SessionRow) -> Unit,
     onAskPatchClick: () -> Unit,
     onMenuClick: () -> Unit,
+    rowActions: RowActions? = null,
+    snackbar: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val now = rememberMinuteClock()
+    var pressed by remember { mutableStateOf<Pressed?>(null) }
+    var renaming by remember { mutableStateOf<SessionRow?>(null) }
+    val rows = RowCallbacks(onSessionClick, rowActions, onLongPress = { row, middle -> pressed = Pressed(row, middle) })
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(Modifier.safeDrawingPadding()) {
             LazyColumn(
@@ -85,9 +102,9 @@ fun SessionsScreen(
                 if (list.isEmpty) {
                     item(key = "empty") { EmptySessions() }
                 }
-                section(SessionStatus.NeedsYou, list.needsYou, now, onSessionClick)
-                section(SessionStatus.Working, list.working, now, onSessionClick)
-                section(SessionStatus.Ready, list.ready, now, onSessionClick)
+                section(SessionStatus.NeedsYou, list.needsYou, now, rows)
+                section(SessionStatus.Working, list.working, now, rows)
+                section(SessionStatus.Ready, list.ready, now, rows)
             }
             ExtendedFloatingActionButton(
                 onClick = onAskPatchClick,
@@ -100,9 +117,52 @@ fun SessionsScreen(
                     .align(Alignment.BottomEnd)
                     .padding(end = 16.dp, bottom = 16.dp),
             )
+            SnackbarHost(
+                hostState = snackbar,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 80.dp),
+            )
         }
     }
+
+    val actions = rowActions ?: return
+    pressed?.let { (row, middle) ->
+        RowActionsSheet(
+            row = row,
+            onArchive = {
+                pressed = null
+                actions.archive(row, middle)
+            },
+            onPin = {
+                pressed = null
+                actions.pin(row, !row.pinned)
+            },
+            onRename = {
+                pressed = null
+                renaming = row
+            },
+            onDismiss = { pressed = null },
+        )
+    }
+    renaming?.let { row ->
+        RenameDialog(
+            current = row.name,
+            onRename = { name ->
+                renaming = null
+                actions.rename(row, name)
+            },
+            onDismiss = { renaming = null },
+        )
+    }
 }
+
+/** What a row does when tapped, swiped and long-pressed; no swipes or long-press without [actions]. */
+private class RowCallbacks(
+    val onClick: (SessionRow) -> Unit,
+    val actions: RowActions?,
+    val onLongPress: (row: SessionRow, middle: Offset) -> Unit,
+)
 
 @Composable
 private fun rememberMinuteClock(): Long {
@@ -228,9 +288,10 @@ private fun LazyListScope.section(
     status: SessionStatus,
     rows: List<SessionRow>,
     now: Long,
-    onSessionClick: (SessionRow) -> Unit,
+    callbacks: RowCallbacks,
 ) {
     if (rows.isEmpty()) return
+    // The section's title never swipes: only the rows under it do.
     item(key = "section-$status") {
         SectionTitle(status, Modifier.animateItem())
     }
@@ -238,13 +299,46 @@ private fun LazyListScope.section(
         val modifier = Modifier
             .animateItem()
             .padding(horizontal = 12.dp, vertical = 4.dp)
-        if (row.status == SessionStatus.NeedsYou) {
-            NeedsYouRow(row, now, onClick = { onSessionClick(row) }, modifier = modifier)
+        val actions = callbacks.actions
+        if (actions == null) {
+            SessionRowContent(row, now, onClick = { callbacks.onClick(row) }, onLongClick = null, modifier = modifier)
         } else {
-            CompactRow(row, onClick = { onSessionClick(row) }, modifier = modifier)
+            SwipeableRow(row, actions, modifier) { middle ->
+                SessionRowContent(
+                    row = row,
+                    now = now,
+                    onClick = { callbacks.onClick(row) },
+                    onLongClick = { callbacks.onLongPress(row, middle()) },
+                    modifier = Modifier,
+                )
+            }
         }
     }
     item(key = "gap-$status") { Spacer(Modifier.height(16.dp)) }
+}
+
+@Composable
+private fun SessionRowContent(
+    row: SessionRow,
+    now: Long,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+    modifier: Modifier,
+) {
+    if (row.status == SessionStatus.NeedsYou) {
+        NeedsYouRow(row, now, onClick, onLongClick, modifier)
+    } else {
+        CompactRow(row, onClick, onLongClick, modifier)
+    }
+}
+
+/** A tap opens the row; a long-press, when there is one, opens its actions ([longClickLabel] for TalkBack). */
+private fun Modifier.rowClicks(onClick: () -> Unit, onLongClick: (() -> Unit)?, longClickLabel: String): Modifier {
+    return combinedClickable(
+        onLongClickLabel = if (onLongClick != null) longClickLabel else null,
+        onLongClick = onLongClick,
+        onClick = onClick,
+    )
 }
 
 @Composable
@@ -264,7 +358,7 @@ private fun SectionTitle(status: SessionStatus, modifier: Modifier) {
 }
 
 @Composable
-private fun NeedsYouRow(row: SessionRow, now: Long, onClick: () -> Unit, modifier: Modifier) {
+private fun NeedsYouRow(row: SessionRow, now: Long, onClick: () -> Unit, onLongClick: (() -> Unit)?, modifier: Modifier) {
     val colors = SwitchboardTheme.colors
     Row(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -272,7 +366,7 @@ private fun NeedsYouRow(row: SessionRow, now: Long, onClick: () -> Unit, modifie
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(colors.bgRaised)
-            .clickable(onClick = onClick)
+            .rowClicks(onClick, onLongClick, stringResource(R.string.sessions_actions))
             .padding(16.dp),
     ) {
         Dot(colors.needsYou.dot, size = 10, modifier = Modifier.padding(top = 7.dp))
@@ -318,7 +412,7 @@ private fun NeedsYouRow(row: SessionRow, now: Long, onClick: () -> Unit, modifie
 }
 
 @Composable
-private fun CompactRow(row: SessionRow, onClick: () -> Unit, modifier: Modifier) {
+private fun CompactRow(row: SessionRow, onClick: () -> Unit, onLongClick: (() -> Unit)?, modifier: Modifier) {
     val colors = SwitchboardTheme.colors
     val status = statusColorsOf(row.status)
     Row(
@@ -328,7 +422,7 @@ private fun CompactRow(row: SessionRow, onClick: () -> Unit, modifier: Modifier)
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(colors.bgPanel)
-            .clickable(onClick = onClick)
+            .rowClicks(onClick, onLongClick, stringResource(R.string.sessions_actions))
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         if (row.status == SessionStatus.Working) {
@@ -368,6 +462,14 @@ private fun RowTitle(row: SessionRow, style: androidx.compose.ui.text.TextStyle)
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
+        if (row.pinned) {
+            Icon(
+                PinIcon,
+                contentDescription = stringResource(R.string.sessions_pinned),
+                tint = colors.pinned.dot,
+                modifier = Modifier.size(14.dp),
+            )
+        }
         if (row.remote != null) {
             Box(
                 contentAlignment = Alignment.Center,

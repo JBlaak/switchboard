@@ -113,6 +113,15 @@ sealed interface ServerMessage {
         val error: String? = null,
     ) : ServerMessage
 
+    /** [error] is only there when [ok] is false. */
+    @Serializable
+    @SerialName("undo-archive-result")
+    data class UndoArchiveResult(
+        val sessionId: String,
+        val ok: Boolean,
+        val error: String? = null,
+    ) : ServerMessage
+
     /** Archived on the Mac or from another phone: an open screen of it closes. */
     @Serializable
     @SerialName("archived")

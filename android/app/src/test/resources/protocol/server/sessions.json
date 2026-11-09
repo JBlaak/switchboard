@@ -10,7 +10,8 @@
             "state": "needs-you",
             "waiting": "questions",
             "owner": {"kind": "mac"},
-            "changedAt": 1792756800000
+            "changedAt": 1792756800000,
+            "pinned": true
         },
         {
             "id": "s-2",

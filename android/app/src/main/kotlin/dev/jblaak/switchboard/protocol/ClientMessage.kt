@@ -86,6 +86,24 @@ sealed interface ClientMessage {
     @SerialName("archive")
     data class Archive(val sessionId: String) : ClientMessage
 
+    /** Pin or unpin the session, as the Mac's sidebar pin does. Only to a Mac that named [MacFeatures.ROW_ACTIONS]. */
+    @Serializable
+    @SerialName("pin")
+    data class Pin(val sessionId: String, val pinned: Boolean) : ClientMessage
+
+    /** Rename the session, as the Mac's sidebar rename does; trimmed and never empty. Only with [MacFeatures.ROW_ACTIONS]. */
+    @Serializable
+    @SerialName("rename")
+    data class Rename(val sessionId: String, val name: String) : ClientMessage
+
+    /**
+     * Undo this phone's [Archive]: the row comes back on the Mac and the session is resumed, so it is listed again.
+     * Answered with [ServerMessage.UndoArchiveResult]. Only with [MacFeatures.ROW_ACTIONS].
+     */
+    @Serializable
+    @SerialName("undo-archive")
+    data class UndoArchive(val sessionId: String) : ClientMessage
+
     /**
      * Voice input: a recording starts. [sessionId], when the phone is in a session, primes Whisper and the cleanup
      * with that session's project. One recording at a time; a new start drops the previous one.
