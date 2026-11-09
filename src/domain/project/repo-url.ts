@@ -10,7 +10,8 @@
 export function repoWebUrl(remote: string): string | null {
     const trimmed = remote.trim();
 
-    const scp = trimmed.match(/^[^@/\s]+@([^:/\s]+):(?!\/)(.+)$/);
+    // `git@github.com:/owner/repo.git` works as well as without the slash.
+    const scp = trimmed.match(/^[^@/\s]+@([^:/\s]+):\/?(?!\/)(.+)$/);
     if (scp) return build(scp[1], scp[2]);
 
     const url = trimmed.match(/^(?:ssh|git|https?):\/\/(?:[^@/\s]+@)?([^:/\s]+)(?::\d+)?\/(.+)$/i);

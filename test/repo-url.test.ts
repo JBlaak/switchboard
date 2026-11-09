@@ -13,6 +13,16 @@ test('turns an scp-style ssh remote into its web page', () => {
     assert.equal(gitlab, 'https://gitlab.com/group/sub/repo');
 });
 
+test('turns an scp-style remote with a slash after the colon into its web page', () => {
+    /* When */
+    const url = repoWebUrl('git@github.com:/octo-org/hello-app.git');
+    const repository = gitHubRepository('git@github.com:/octo-org/hello-app.git');
+
+    /* Then */
+    assert.equal(url, 'https://github.com/octo-org/hello-app');
+    assert.equal(repository, 'octo-org/hello-app');
+});
+
 test('turns an ssh:// remote into its web page, dropping user and port', () => {
     /* When */
     const url = repoWebUrl('ssh://git@github.com:22/JBlaak/switchboard.git');
