@@ -19,13 +19,10 @@ export function isWorking(activity: Activity | null | undefined): boolean {
 }
 
 /**
- * Does this PR wait on you rather than on CI or Claude?
- *
- * Either auto-fix spent its attempts (W3), or Claude answered a review thread
- * and left it open because it wants your call (C5).
+ * Does this PR wait on you rather than on CI or Claude? Claude answered a
+ * review thread and left it open because it wants your call (C5).
  */
-export function needsYou(pr: PullRequestStatus, activity: Activity | null | undefined): boolean {
-    if (activity?.phase === 'gave-up') return true;
+export function needsYou(pr: PullRequestStatus): boolean {
     return (pr.threads ?? []).some((thread) => !thread.resolved && thread.needsYou === true);
 }
 
@@ -34,7 +31,7 @@ export function needsYou(pr: PullRequestStatus, activity: Activity | null | unde
  *
  * A failing check that Claude is already working on is amber, not red: with
  * auto-fix on, every failure is handed over within a poll, and a dot that
- * flashed red each time would cry wolf. It turns red when Claude gives up. A
+ * flashed red each time would cry wolf. It turns red once Claude has stopped. A
  * merged PR has its own mark. A closed one has nothing left to do, and nothing
  * known about checks (no `gh`) is not a reason to alarm anyone, so both are
  * green.
@@ -42,7 +39,7 @@ export function needsYou(pr: PullRequestStatus, activity: Activity | null | unde
 export function statusDot(pr: PullRequestStatus, activity: Activity | null | undefined): StatusDot {
     if (pr.state === 'merged') return 'merged';
     if (pr.state === 'closed') return 'green';
-    if (needsYou(pr, activity)) return 'red';
+    if (needsYou(pr)) return 'red';
     if (isWorking(activity)) return 'amber';
     const checks = pr.checks ?? [];
     if (checks.some((check) => check.state === 'failing')) return 'red';

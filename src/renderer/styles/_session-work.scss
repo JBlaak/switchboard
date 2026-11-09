@@ -469,7 +469,7 @@
 
 /* ---- The activity card ----
    Grey while the action waits for the session, amber while Claude works on
-   it, blue for a Ship it with its steps, red once Claude gave up. */
+   it, blue for a Ship it with its steps. */
 .sw-activity {
     display: flex;
     flex-direction: column;
@@ -489,22 +489,6 @@
         background: var(--sb-blue-tint);
         box-shadow: inset 0 0 0 1px rgba(var(--sb-blue-rgb), 0.25);
     }
-    &.is-red {
-        background: var(--sb-peach);
-        box-shadow: inset 0 0 0 1px rgba(var(--sb-red-rgb), 0.35);
-    }
-}
-
-/* Each automatic attempt, on the card that says auto-fix gave up. */
-.sw-activity-lines {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    font: 12px var(--sb-font-mono);
-    color: var(--sb-text-dim);
 }
 
 /* ---- The Checks panel ---- */

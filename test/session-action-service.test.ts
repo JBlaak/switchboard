@@ -373,7 +373,9 @@ test('Fix CI carries the failing check, its commit and the end of its log', asyn
     assert.equal(
         prompter.sent[0].prompt,
         'CI is failing on PR #12 (https://github.com/o/app/pull/12): test failed on sha12. Log tail:\n' +
-            'Error: expected 2, got 3\nFix it in /code/app/.claude/worktrees/agent-1 and push.',
+            'Error: expected 2, got 3\nFix it in /code/app/.claude/worktrees/agent-1 and push. Then wait for CI with gh pr checks 12 --watch. ' +
+            'If it fails again, decide whether another try is worth it: fix and push again, ' +
+            're-run a job that was cancelled or flaked, or stop and tell me why.',
     );
 });
 
@@ -572,8 +574,7 @@ test('another thread can be handed over while one is with Claude; the same one c
     assert.equal(first.ok, true);
     assert.deepEqual(same, {ok: false, reason: 'Already queued'});
     assert.ok(second.ok);
-    // In flight like any action, and the item's current one: the CI watch stays out of its way.
-    assert.equal(service.isInFlight(second.activityId), true);
+    // The item's current action, like any other: the CI watch stays out of its way.
     assert.equal(service.forSession('s1').byItem.get(PR12)?.action, 'fix-comments');
     assert.deepEqual(service.forSession('s1').fixingThreads?.get(PR12), ['T1', 'T2']);
 
@@ -671,29 +672,28 @@ test('without the page open, an item handed in can be asked for: an automatic Fi
 
     /* When */
     const result = await service.request('s1', item.id, 'fix-ci', 'auto', {
-        resolved: {item, context, checkName: 'test', attempt: 1},
+        resolved: {item, context, checkName: 'test'},
     });
 
     /* Then */
     assert.equal(result.ok, true);
     assert.deepEqual(logRequests, [[REPO, 'https://github.com/o/app/runs/2', AUTO_FIX_LOG_TAIL_LINES]]);
     assert.match(prompter.sent[0].prompt, /: test failed on abc1234\. Log tail:\nError: expected 2, got 3\n/);
-    assert.match(prompter.sent[0].prompt, /This is automatic attempt 1 of 2\.$/);
+    assert.doesNotMatch(prompter.sent[0].prompt, /attempt/);
     assert.equal(store.rows[0].origin, 'auto');
     const activity = service.forSession('s1').byItem.get(item.id);
-    assert.equal(activity?.attempt, 1);
+    assert.equal(activity?.phase, 'sent');
     assert.equal(activity?.checkName, 'test');
-    assert.equal(service.isInFlight(store.rows[0].id), true);
 
     /* When */
     prompter.goBusy();
     prompter.goIdle();
 
     /* Then */
-    assert.equal(service.isInFlight(store.rows[0].id), false);
+    assert.equal(service.forSession('s1').byItem.get(item.id), undefined);
 });
 
-test('a manual Fix CI carries the shorter log and no attempt', async () => {
+test('a manual Fix CI carries the shorter log', async () => {
     /* Given */
     const {service, logRequests, store} = setup({
         items: [prItem(12, {checks: [{name: 'test', state: 'failing', url: 'https://github.com/o/app/runs/2'}]})],
@@ -705,68 +705,6 @@ test('a manual Fix CI carries the shorter log and no attempt', async () => {
     /* Then */
     assert.equal(logRequests[0][2], LOG_TAIL_LINES);
     assert.deepEqual(store.rows[0].details, {checkName: 'test'});
-});
-
-const attempts = [
-    {attempt: 1, failedOn: 'aaa', pushed: 'bbb'},
-    {attempt: 2, failedOn: 'bbb', pushed: null},
-];
-
-/** A store holding a Fix CI given up on for PR 12's test check, and the app restarted on it. */
-function gaveUpThenRestarted() {
-    const store = new MemoryStore();
-    setup({store}).service.giveUp('s1', PR12, REPO, {checkName: 'test', attempts});
-    return {store, after: setup({store})};
-}
-
-test('giving up shows red', () => {
-    /* Given */
-    const {service, changed} = setup();
-
-    /* When */
-    service.giveUp('s1', PR12, REPO, {checkName: 'test', attempts});
-
-    /* Then */
-    const card = service.forSession('s1').byItem.get(PR12);
-    assert.equal(card?.phase, 'gave-up');
-    assert.equal(card?.origin, 'auto');
-    assert.deepEqual(card?.attempts, attempts);
-    assert.ok(changed.length > 0);
-});
-
-test('giving up survives a restart', () => {
-    /* When */
-    const {after} = gaveUpThenRestarted();
-
-    /* Then */
-    assert.deepEqual(after.service.forSession('s1').byItem.get(PR12)?.attempts, attempts);
-});
-
-test('giving up shows red while another check goes green', () => {
-    /* Given */
-    const {after} = gaveUpThenRestarted();
-
-    /* When */
-    after.service.settleGaveUp('s1', PR12, 'lint');
-
-    /* Then */
-    assert.equal(
-        after.service.forSession('s1').byItem.get(PR12)?.phase,
-        'gave-up',
-        'another check going green changes nothing',
-    );
-});
-
-test('giving up is settled once the check is green again', () => {
-    /* Given */
-    const {store, after} = gaveUpThenRestarted();
-
-    /* When */
-    after.service.settleGaveUp('s1', PR12, 'test');
-
-    /* Then */
-    assert.equal(after.service.forSession('s1').byItem.get(PR12), undefined);
-    assert.equal(store.rows[0].phase, 'done');
 });
 
 // ── A prompt rendered elsewhere (the merge queue's Fix in session, #315) ──

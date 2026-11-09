@@ -175,48 +175,23 @@ const auto = (phase: Activity['phase'], extra: Partial<Activity> = {}): Activity
     ...extra,
 });
 
-test('Claude fixing CI on its own says which attempt it is, in amber', () => {
+test('Claude fixing CI on its own says so, with the check, in amber', () => {
     /* Given */
-    const sent = item(auto('sent', {attempt: 2, checkName: 'test', sentAt: '2026-06-10T13:58:00.000Z'}));
+    const sent = item(auto('sent', {checkName: 'test', sentAt: '2026-06-10T13:58:00.000Z'}));
 
     /* When */
     const card = activityCard(sent, NOW)!;
 
     /* Then */
     assert.equal(card.tone, 'amber');
-    assert.equal(card.title, 'Claude is fixing CI · attempt 2 of 2');
+    assert.equal(card.title, 'Claude is fixing CI');
     assert.equal(card.detail, 'test failed · sent to the session · started 2m ago');
 });
 
-test('a queued automatic fix says which attempt it will be', () => {
+test('a queued automatic fix says what it will do', () => {
     /* When */
-    const card = activityCard(item(auto('queued', {attempt: 1})), NOW)!;
+    const card = activityCard(item(auto('queued')), NOW)!;
 
     /* Then */
-    assert.equal(card.title, 'Queued: fix CI on #52 · attempt 1 of 2');
-});
-
-test('auto-fix giving up is red, and lists each attempt and what Claude pushed', () => {
-    /* Given */
-    const gaveUp = item(
-        auto('gave-up', {
-            checkName: 'test',
-            attempts: [
-                {attempt: 1, failedOn: 'aaaaaaa111', pushed: 'bbbbbbb222'},
-                {attempt: 2, failedOn: 'bbbbbbb222', pushed: null},
-            ],
-        }),
-    );
-
-    /* When */
-    const card = activityCard(gaveUp, NOW)!;
-
-    /* Then */
-    assert.equal(card.tone, 'red');
-    assert.equal(card.title, 'Still failing after 2 automatic fixes');
-    assert.match(card.detail, /^test still fails\./);
-    assert.deepEqual(card.lines, [
-        'Attempt 1 · failed on aaaaaaa · pushed bbbbbbb',
-        'Attempt 2 · failed on bbbbbbb · nothing pushed',
-    ]);
+    assert.equal(card.title, 'Queued: fix CI on #52');
 });

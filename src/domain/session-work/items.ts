@@ -193,7 +193,7 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
         };
         item.activity = activityOf(workItemKey(item));
         if (isDone(item)) donePrs.push({item, order});
-        else openPrs.push({item, order, needsYou: needsYou(pr, item.activity)});
+        else openPrs.push({item, order, needsYou: needsYou(pr)});
     }
     openPrs.sort((a, b) => Number(b.needsYou) - Number(a.needsYou) || b.order - a.order);
     donePrs.sort((a, b) => b.order - a.order);

@@ -61,8 +61,6 @@ export interface ResolvedRequest {
     context: ActionContext;
     /** Fix CI: the failing check to hand over, rather than the first one. */
     checkName?: string;
-    /** Fix CI: which automatic attempt this is, 1-based. */
-    attempt?: number;
 }
 
 /** How an action is asked for, beyond the item and the action. */
@@ -84,9 +82,6 @@ export interface QueuedPrompt {
     prompt: string;
     details?: ActivityDetails | null;
 }
-
-/** What a gave-up card shows: the check, and each attempt with what Claude pushed. */
-export type GaveUpDetails = Required<Pick<ActivityDetails, 'checkName' | 'attempts'>>;
 
 /** The Session work page, as far as the actions need it. */
 export interface WorkPageSource {
@@ -194,7 +189,7 @@ export class SessionActionService {
                 : same[0];
         if (busy) return {ok: false, reason: busy.phase === 'queued' ? 'Already queued' : 'Claude is already on it'};
 
-        const request = await this.promptRequest(item, action, context, options);
+        const request = await this.promptRequest(item, action, context, origin, options);
         if (!request) return {ok: false, reason: 'This item has nothing for that action to do'};
         // The session may have ended while the CI log was fetched.
         if (!prompter.runningId(sessionId)) return {ok: false, reason: NOT_RUNNING_REASON};
@@ -206,7 +201,7 @@ export class SessionActionService {
             action,
             origin,
             prompt: renderPrompt(request),
-            details: request.action === 'fix-ci' ? fixCiDetails(request.checkName, request.automaticAttempt) : null,
+            details: request.action === 'fix-ci' ? {checkName: request.checkName} : null,
         });
     }
 
@@ -268,53 +263,6 @@ export class SessionActionService {
         this.unlistenIfIdle(action.sessionId);
         this.changed(action.sessionId);
         return {ok: true};
-    }
-
-    /** Is this action still waiting for the session, or with Claude? */
-    public isInFlight(activityId: string): boolean {
-        const action = this.actions.find((candidate) => candidate.id === activityId);
-        return action !== undefined && (action.phase === 'queued' || action.phase === 'sent');
-    }
-
-    /**
-     * Auto-fix ran out of attempts on an item's check (W3): show it as given up,
-     * red, until the check goes green or the PR is done. Nothing is typed in.
-     */
-    public giveUp(sessionId: string, itemKey: string, repository: string, details: GaveUpDetails): void {
-        const stored: StoredAction = {
-            id: this.deps.ids.newId(),
-            sessionId,
-            repository,
-            itemKey,
-            action: 'fix-ci',
-            origin: 'auto',
-            phase: 'gave-up',
-            prompt: '',
-            queuedAt: this.now(),
-            sentAt: null,
-            doneAt: null,
-            details,
-        };
-        this.deps.store.add(stored);
-        this.actions.push(stored);
-        this.changed(sessionId);
-    }
-
-    /**
-     * The check auto-fix gave up on is green again, or the PR is done: the item
-     * no longer needs you. Without `checkName`, every give-up on the item ends.
-     */
-    public settleGaveUp(sessionId: string, itemKey: string, checkName?: string): void {
-        const now = this.now();
-        let settled = false;
-        for (const action of this.storedForSession(sessionId)) {
-            if (action.phase !== 'gave-up' || action.itemKey !== itemKey) continue;
-            if (checkName !== undefined && action.details?.checkName !== checkName) continue;
-            this.actions.splice(this.actions.indexOf(action), 1);
-            this.deps.store.update(action.id, {phase: 'done', doneAt: now});
-            settled = true;
-        }
-        if (settled) this.changed(sessionId);
     }
 
     /** One session's actions for its page, under any id it has gone by. */
@@ -456,6 +404,7 @@ export class SessionActionService {
         item: SessionWorkItem,
         action: WorkAction,
         context: ActionContext,
+        origin: Activity['origin'],
         {resolved, threadIds}: RequestOptions = {},
     ): Promise<PromptRequest | null> {
         if (item.kind === 'branch') {
@@ -498,8 +447,7 @@ export class SessionActionService {
                     : failingCheck(pr);
                 if (!check) return null;
                 const repository = pr.repository || context.repository;
-                const automatic = resolved?.attempt;
-                const lines = automatic === undefined ? LOG_TAIL_LINES : AUTO_FIX_LOG_TAIL_LINES;
+                const lines = origin === 'auto' ? AUTO_FIX_LOG_TAIL_LINES : LOG_TAIL_LINES;
                 const log =
                     check.url && repository ? await this.deps.github.checkLogTail(repository, check.url, lines) : null;
                 return {
@@ -510,7 +458,6 @@ export class SessionActionService {
                     sha: pr.headSha ?? 'the head commit',
                     logTail: log ?? '(no log available; read it with gh run view)',
                     worktree,
-                    ...(automatic === undefined ? {} : {automaticAttempt: automatic}),
                 };
             }
             case 'fix-comments': {
@@ -540,14 +487,8 @@ function toActivity(action: StoredAction): Activity {
     if (action.sentAt) activity.sentAt = action.sentAt;
     if (action.action === 'fix-comments') activity.threadIds = promptThreadIds(action.prompt);
     const details = action.details;
-    if (details?.attempt !== undefined) activity.attempt = details.attempt;
     if (details?.checkName !== undefined) activity.checkName = details.checkName;
-    if (details?.attempts !== undefined) activity.attempts = details.attempts;
     return activity;
-}
-
-function fixCiDetails(checkName: string, attempt: number | undefined): ActivityDetails {
-    return attempt === undefined ? {checkName} : {checkName, attempt};
 }
 
 /** The threads each item's waiting or sent Fix comments cover. */

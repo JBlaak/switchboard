@@ -148,30 +148,16 @@ export interface Activity {
      * `queued` waits for the session to go idle (A2); `sent` has been typed in
      * and Claude is on it; `done` once the session went busy and idle again.
      */
-    phase: 'queued' | 'sent' | 'done' | 'gave-up';
+    phase: 'queued' | 'sent' | 'done';
     origin: 'manual' | 'auto';
-    /** Which automatic Fix CI attempt this is, 1-based. */
-    attempt?: number;
     /** The check a Fix CI is about, when it was handed one (auto-fix always is). */
     checkName?: string;
-    /** For a Fix CI auto-fix gave up on: each automatic attempt, and what Claude pushed in answer. */
-    attempts?: AutoFixAttemptSummary[];
     /** ISO-8601. */
     queuedAt: string;
     /** ISO-8601. */
     sentAt?: string;
     /** The review threads a Fix comments hands over. */
     threadIds?: string[];
-}
-
-/** One automatic Fix CI attempt, as the card that says auto-fix gave up lists it. */
-export interface AutoFixAttemptSummary {
-    /** 1-based. */
-    attempt: number;
-    /** The head commit the check failed on when it was handed over. */
-    failedOn: string;
-    /** The commit Claude pushed in answer; null when the head did not move. */
-    pushed: string | null;
 }
 
 /**

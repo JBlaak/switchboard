@@ -1,10 +1,9 @@
 /**
  * What auto-fix has done to each PR's checks, kept across restarts (W3).
  *
- * The limit of two automatic attempts per check only means something if a
- * restart does not reset it, so every attempt, every check going green and
- * every time auto-fix gave up is a stored row. An attempt names the action it
- * queued, so the CI watch can tell whether Claude still has it.
+ * A failing check is handed to Claude once until it goes green, and that only
+ * holds if a restart does not forget it: every hand-over and every check going
+ * green is a stored row.
  */
 export type AutoFixRecord =
     | {
@@ -19,7 +18,7 @@ export type AutoFixRecord =
           /** ISO-8601. */
           at: string;
       }
-    | {kind: 'passed' | 'gave-up'; repository: string; number: number; checkName: string; at: string};
+    | {kind: 'passed'; repository: string; number: number; checkName: string; at: string};
 
 export interface AutoFixHistory {
     record(event: AutoFixRecord): void;

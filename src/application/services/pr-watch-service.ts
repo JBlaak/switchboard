@@ -8,9 +8,9 @@
  *
  * - **Auto-fix (W2, W3).** A failing check is handed to the session that
  *   opened the PR as a Fix CI, with the check's name, its head commit and the
- *   end of its log, at most twice per check; then the PR is given up on: it
- *   needs you, and the session's row says so. The history is stored, so a
- *   restart does not hand out two fresh attempts.
+ *   end of its log — once, until the check goes green. Whether to try again is
+ *   Claude's call. The history is stored, so a restart does not hand the same
+ *   failure over again.
  * - **Sidebar dots (W4).** Each PR's colour, pushed for the session's row only
  *   when it changed.
  * - **Stopping.** A merged or closed PR has nothing left to watch.
@@ -19,12 +19,7 @@
  * sessions are watched, and a Fix CI that is queued waits in the session's
  * queue (the action service's) until it is running and idle.
  */
-import {
-    autoFixAttempts,
-    autoFixDecision,
-    hasAutoFixStreak,
-    type AutoFixEvent,
-} from '../../domain/session-work/auto-fix';
+import {autoFixDecision, wentGreen, type AutoFixEvent} from '../../domain/session-work/auto-fix';
 import {isWorking, needsYou, statusDot, type PullRequestDot} from '../../domain/session-work/status';
 import type {SessionPullRequest} from '../../domain/session/session';
 import type {PullRequestStatus, SessionWorkItem, WorkLocation} from '../../domain/session-work/model';
@@ -60,7 +55,7 @@ export interface PrWatchServiceDeps {
     sessions(): WatchedSession[];
     github: Pick<GitHubCli, 'available' | 'pullRequests' | 'checkLogTail'>;
     history: AutoFixHistory;
-    actions: Pick<SessionActionService, 'request' | 'isInFlight' | 'giveUp' | 'settleGaveUp' | 'forSession' | 'follow'>;
+    actions: Pick<SessionActionService, 'request' | 'forSession' | 'follow'>;
     transcripts: Pick<TranscriptStore, 'locations'>;
     git: Pick<GitWorkspace, 'worktreeRoot'>;
     renderer: Pick<RendererGateway, 'prStatusChanged' | 'sessionNeedsAttention'>;
@@ -192,8 +187,6 @@ export class PrWatchService {
             return;
         }
 
-        // Whether each attempt is still with Claude is taken before `gh` is asked:
-        // an answer that left before Claude pushed must not spend the attempt.
         const histories = new Map<string, AutoFixEvent[]>();
         for (const {pr} of owners.values()) histories.set(pr.link.url, this.history(pr));
 
@@ -243,25 +236,18 @@ export class PrWatchService {
         const {actions} = this.deps;
         if (status.state === 'merged' || status.state === 'closed') {
             this.finished.add(pr.link.url);
-            actions.settleGaveUp(session.sessionId, pr.key);
             return;
         }
 
-        // A check that went green wipes its slate, and ends a give-up on it.
-        for (const check of status.checks ?? []) {
-            if (check.state !== 'passing' || !hasAutoFixStreak(status, check.name, history)) continue;
-            this.record(history, {
-                kind: 'passed',
-                repository: status.repository,
-                number: status.number,
-                checkName: check.name,
-            });
-            actions.settleGaveUp(session.sessionId, pr.key, check.name);
+        // A check that went green: its next failure is a new one, handed over again.
+        for (const checkName of wentGreen(status, history)) {
+            const passed = {kind: 'passed', repository: status.repository, number: status.number, checkName} as const;
+            this.deps.history.record({...passed, at: this.now()});
+            history.push(passed);
         }
 
-        // Something you asked for is waiting or with Claude — a Fix CI of your own,
-        // or a Ship it, which fixes CI itself. Auto-fix stays out of its way, and
-        // does not give up while Claude may still fix it.
+        // Something is waiting or with Claude — a Fix CI, or a Ship it, which
+        // fixes CI itself. Auto-fix stays out of its way.
         if (isWorking(actions.forSession(session.sessionId).byItem.get(pr.key))) return;
 
         const decision = autoFixDecision(status, history);
@@ -273,16 +259,13 @@ export class PrWatchService {
                     item,
                     context: {repository: status.repository, mainCheckout, gh: 'ok'},
                     checkName: decision.checkName,
-                    attempt: decision.attempt,
                 },
             });
             if (!result.ok) {
                 this.deps.log.info(`[pr-watch] auto-fix for ${pr.link.url} not queued: ${result.reason}`);
                 return;
             }
-            this.deps.log.info(
-                `[pr-watch] auto-fix attempt ${decision.attempt} queued for ${pr.link.url} (${decision.checkName})`,
-            );
+            this.deps.log.info(`[pr-watch] auto-fix queued for ${pr.link.url} (${decision.checkName})`);
             this.deps.history.record({
                 kind: 'attempt',
                 repository: status.repository,
@@ -293,49 +276,17 @@ export class PrWatchService {
                 activityId: result.activityId,
                 at: this.now(),
             });
-        } else if (decision.action === 'give-up') {
-            const attempts = autoFixAttempts(status, decision.checkName, history);
-            this.record(history, {
-                kind: 'gave-up',
-                repository: status.repository,
-                number: status.number,
-                checkName: decision.checkName,
-            });
-            this.deps.log.info(`[pr-watch] auto-fix gave up on ${pr.link.url} (${decision.checkName})`);
-            actions.giveUp(session.sessionId, pr.key, status.repository, {checkName: decision.checkName, attempts});
-            this.deps.renderer.sessionNeedsAttention(session.sessionId);
         }
     }
 
-    /** Store a passed or gave-up event, and add it to the history this poll decides on. */
-    private record(history: AutoFixEvent[], event: Extract<AutoFixEvent, {kind: 'passed' | 'gave-up'}>): void {
-        this.deps.history.record({...event, at: this.now()});
-        history.push(event);
-    }
-
-    /** The stored history of a PR, each attempt marked with whether Claude still has it. */
+    /** The stored history of a PR. */
     private history(pr: WatchedPr): AutoFixEvent[] {
-        return this.deps.history
-            .forPullRequest(pr.repository, pr.link.number)
-            .map((record: AutoFixRecord): AutoFixEvent => {
-                if (record.kind !== 'attempt') {
-                    return {
-                        kind: record.kind,
-                        repository: record.repository,
-                        number: record.number,
-                        checkName: record.checkName,
-                    };
-                }
-                return {
-                    kind: 'attempt',
-                    repository: record.repository,
-                    number: record.number,
-                    checkName: record.checkName,
-                    headSha: record.headSha,
-                    origin: record.origin,
-                    inFlight: this.deps.actions.isInFlight(record.activityId),
-                };
-            });
+        return this.deps.history.forPullRequest(pr.repository, pr.link.number).map((record: AutoFixRecord) => {
+            const base = {repository: record.repository, number: record.number, checkName: record.checkName};
+            return record.kind === 'passed'
+                ? {kind: 'passed', ...base}
+                : {kind: 'attempt', ...base, headSha: record.headSha, origin: record.origin};
+        });
     }
 
     /**
@@ -410,7 +361,7 @@ export class PrWatchService {
             const activity = activities.get(pr.key) ?? null;
             let dot = statusDot(status, activity);
             // What `gh` last said is from before Claude finished: not red yet.
-            if (dot === 'red' && this.settling.has(pr.link.url) && !needsYou(status, activity)) dot = 'amber';
+            if (dot === 'red' && this.settling.has(pr.link.url) && !needsYou(status)) dot = 'amber';
             prs.push({
                 number: pr.link.number,
                 dot,
@@ -420,7 +371,7 @@ export class PrWatchService {
                     ? {autoMerge: true as const}
                     : {}),
             });
-            if (needsYou(status, activity)) waiting = true;
+            if (needsYou(status)) waiting = true;
         }
         const key = JSON.stringify({prs, waiting});
         const last = this.published.get(session.sessionId);

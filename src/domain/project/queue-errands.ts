@@ -24,7 +24,7 @@
  * Pure: the words of every prompt are here, where a test can hold them still.
  */
 import {ARCHIVE_TOOL_QUALIFIED_NAME} from '../session/archive-tool';
-import {renderPrompt} from '../session-work/prompts';
+import {fixCiTask, renderPrompt} from '../session-work/prompts';
 import type {ReviewThread, WorkAction} from '../session-work/model';
 import type {FailureKind, MergeQueue, QueuedEntry} from './merge-queue';
 import type {ExistingBranch} from './branch-worktree';
@@ -294,8 +294,7 @@ export function fixPrompt({pr, failure, worktree, errand}: FixPromptRequest): st
 function fixBody(pr: FixPromptRequest['pr'], failure: FixPromptRequest['failure'], worktree: string): string {
     switch (failure.kind) {
         case 'ci':
-            return renderPrompt({
-                action: 'fix-ci',
+            return fixCiTask({
                 number: pr.number,
                 url: pr.url,
                 checkName: failure.checkName ?? 'a required check',
