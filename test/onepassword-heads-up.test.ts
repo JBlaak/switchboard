@@ -33,6 +33,7 @@ const access = [
     'cd infra && op inject -i config.tpl -o config.yml',
     'TOKEN=$(op read op://Work/npm/token) npm publish',
     'export X=`op read op://a/b/c`',
+    'echo "token: $(op whoami)"',
     'env OP_ACCOUNT=my op whoami',
     '/opt/homebrew/bin/op vault list',
     'echo op://Private/GitHub/token | op inject',
@@ -46,6 +47,7 @@ const unlock = [
     'git push ssh://git@github.com/JBlaak/Patch.git main',
     'GIT_SSH_COMMAND="ssh -v" git fetch',
     'git remote add vm me@vm:repo.git && git push vm main',
+    'echo "it\'s up" && ssh me@host uptime',
 ];
 const neither = [
     'git push origin main',
@@ -57,6 +59,10 @@ const neither = [
     'cat ~/.ssh/config',
     'ls ./op-notes',
     'git commit -m "op is fine"',
+    'grep -nE "run:|ssh|rsync|gcloud|host" .github/workflows/deploy.yml | head -30',
+    "grep -E 'a|ssh host' notes.md",
+    'echo "; op read x"',
+    'git commit -m "don\'t ssh in"',
 ];
 
 for (const command of access) {
