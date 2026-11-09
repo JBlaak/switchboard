@@ -19,12 +19,12 @@ $spring-out: cubic-bezier(0.2, 0.9, 0.3, 1.2);
 
 /* ========== THE GLASS ==========
    CSS glass throughout (G1, as changed after the spike): a transparent window
-   can't blur the apps behind it, so the tint stays dense enough, at 0.66 (0.72
+   can't blur the apps behind it, so the tint stays dense enough, at 0.88 (0.90
    in the light), to read over a white page, a black terminal or a busy photo.
    A backdrop-filter would only blur the page's own transparent pixels, so
    there is none. */
 :root {
-    --qa-glass: color-mix(in srgb, var(--sb-bg-raised) 66%, transparent);
+    --qa-glass: color-mix(in srgb, var(--sb-bg-raised) 88%, transparent);
     --qa-rim: rgba(var(--sb-overlay-rgb), 0.22);
     --qa-hi: rgba(var(--sb-overlay-rgb), 0.3);
     --qa-lo: rgba(var(--sb-shadow-rgb), 0.35);
@@ -51,7 +51,7 @@ $spring-out: cubic-bezier(0.2, 0.9, 0.3, 1.2);
    prototype, over the palette's own white. */
 @media (prefers-color-scheme: light) {
     :root {
-        --qa-glass: color-mix(in srgb, var(--sb-bg-raised) 72%, transparent);
+        --qa-glass: color-mix(in srgb, var(--sb-bg-raised) 90%, transparent);
         --qa-rim: rgba(255, 255, 255, 0.72);
         --qa-hi: rgba(255, 255, 255, 0.9);
         --qa-lo: rgba(var(--sb-overlay-rgb), 0.08);
