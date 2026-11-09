@@ -31,6 +31,7 @@ import {
 import {openSessions} from '../../state/session-store';
 import {openDialog} from '../../ui/dialogs/actions';
 import {openPlanPage} from '../../ui/plan-page/actions';
+import {openProjectPage} from '../../ui/project-page/actions';
 import {expandSlugGroup, openRow, startRename, toggleOlder, toggleSlugGroup} from '../../ui/session-list/actions';
 import {cursorElement, pressArchive, setListCursor} from '../../ui/session-list/cursor';
 import {highlightedSession} from '../../state/main-area-slice';
@@ -132,6 +133,9 @@ function activateCursor(): void {
             return;
         case 'plan':
             openPlanPage(cursor);
+            return;
+        case 'project':
+            openProjectPage(cursor.projectPath);
             return;
         case 'header':
             toggleSlugGroup(cursor.groupId);

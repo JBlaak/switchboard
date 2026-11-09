@@ -131,6 +131,12 @@ const TABLES = [
     pinned_at INTEGER NOT NULL,
     PRIMARY KEY (project_path, repository, number)
   )`,
+    // The projects pinned to the top of the session list, above the pinned
+    // plans, from the project's page. Epoch ms for pinned_at.
+    `CREATE TABLE IF NOT EXISTS pinned_projects (
+    project_path TEXT PRIMARY KEY,
+    pinned_at INTEGER NOT NULL
+  )`,
     // When a session was unlinked from its task by hand, so detection does not
     // relink it from a tool call made before (#245). Epoch ms.
     `CREATE TABLE IF NOT EXISTS task_unlinks (

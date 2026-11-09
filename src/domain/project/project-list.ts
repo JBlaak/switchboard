@@ -25,6 +25,13 @@ export interface IssuePlanPin extends PinnedIssuePlan {
     projectPath: string;
 }
 
+/** A project pinned to the top of the session list from its page. */
+export interface ProjectPin {
+    projectPath: string;
+    /** Epoch ms. */
+    pinnedAt: number;
+}
+
 /** A plain terminal, which has no transcript and lives only while it runs. */
 export interface ActiveTerminalRow {
     sessionId: string;
@@ -49,6 +56,8 @@ export interface ProjectListInputs {
     remoteProjects: Iterable<RemoteProjectSetting>;
     pinnedPlans: Iterable<PlanPin>;
     pinnedIssuePlans: Iterable<IssuePlanPin>;
+    /** Optional so callers that never pin projects need not say so. */
+    pinnedProjects?: Iterable<ProjectPin>;
     showArchived: boolean;
     /**
      * sessionId → a VM session's transcript as last fetched from its host
@@ -200,6 +209,10 @@ export function buildProjectList(inputs: ProjectListInputs): Project[] {
     for (const {projectPath, ...pin} of inputs.pinnedIssuePlans) {
         const project = projects.get(projectPath);
         if (project) (project.pinnedIssuePlans ??= []).push(pin);
+    }
+    for (const {projectPath, pinnedAt} of inputs.pinnedProjects ?? []) {
+        const project = projects.get(projectPath);
+        if (project) project.pinnedAt = pinnedAt;
     }
 
     const list = [...projects.values()];

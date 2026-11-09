@@ -3,7 +3,7 @@
  * than from the DOM.
  *
  * The list renders, top to bottom: each visible entry (a row, a pinned
- * GitHub plan, or a slug group's header followed by its rows), then the "+ N older" toggle and the
+ * project, a pinned GitHub plan, or a slug group's header followed by its rows), then the "+ N older" toggle and the
  * entries behind it. `cursorTargets` walks that same order and says, for each
  * thing a click would act on, whether it is on screen. The keyboard cursor
  * only lands on what is on screen; session navigation (Cmd+Shift+[ / ])
@@ -36,6 +36,7 @@ export type CursorTarget =
           readonly repository: string;
           readonly number: number;
       }
+    | {readonly kind: 'project'; readonly name: string; readonly shown: boolean; readonly projectPath: string}
     | {readonly kind: 'header'; readonly name: string; readonly shown: boolean; readonly groupId: string}
     | {readonly kind: 'more'; readonly name: string; readonly shown: boolean; readonly groupId: string}
     | {readonly kind: 'older'; readonly name: string; readonly shown: boolean};
@@ -72,6 +73,10 @@ export function cursorTargets(list: SessionListState, running: ReadonlySet<strin
         if (entry.kind === 'plan') {
             const {id, projectPath, repository, number} = entry;
             targets.push({kind: 'plan', name: id, shown, projectPath, repository, number});
+            return;
+        }
+        if (entry.kind === 'project') {
+            targets.push({kind: 'project', name: entry.id, shown, projectPath: entry.projectPath});
             return;
         }
         const groupId = entry.id;

@@ -1,6 +1,7 @@
 /**
  * A GitHub plan pinned from its page: one row under Pinned plans that opens
- * the plan's page in its project, and whose pin unpins it.
+ * the plan's page in its project, and whose pin unpins it. Its project's name
+ * opens the project page (⌘-click GitHub), as on a session row.
  *
  * It has no sessions of its own, so none of a session row's live state or
  * buttons; the title is the one stored when it was pinned.
@@ -11,6 +12,7 @@ import {useStore} from '../use-store';
 import {openPlanPage} from '../plan-page/actions';
 import {toggleIssuePlanPin} from './actions';
 import {HTML} from './markup';
+import {ProjectLink} from '../project-page/ProjectLink';
 import type {JSX} from 'react';
 import type {SessionListPlan} from '../../state/session-list-layout';
 
@@ -46,7 +48,11 @@ export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
                     <div className="session-summary">{title}</div>
                     <div className="session-meta">
                         <span className="session-meta-left">
-                            <span className="session-project">{projectLabel(projectPath)}</span>
+                            <ProjectLink
+                                path={projectPath}
+                                className={'session-project' + (projectPath.startsWith('ssh://') ? ' is-remote' : '')}>
+                                {projectLabel(projectPath)}
+                            </ProjectLink>
                             <span className="session-time">{'#' + number}</span>
                         </span>
                     </div>

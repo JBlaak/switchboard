@@ -202,7 +202,7 @@ function renamed(state: SessionListState, sessionId: string, name: string | null
             changed = true;
             return {...laid, entry: {...entry, session: {...entry.session, name}}};
         }
-        if (entry.kind === 'plan') return laid;
+        if (entry.kind === 'plan' || entry.kind === 'project') return laid;
         if (!entry.sessions.some((row) => row.session.sessionId === sessionId)) return laid;
         changed = true;
         return {

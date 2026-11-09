@@ -105,6 +105,28 @@ export async function toggleIssuePlanPin(
     relayoutSessionList({resort: true});
 }
 
+/**
+ * Pin a project to the top of the list, above the pinned plans, from its page,
+ * or unpin it from there or from its row, once main has stored it.
+ */
+export async function toggleProjectPin(projectPath: string, pin?: HTMLElement): Promise<void> {
+    const {pinned} = await window.api.toggleProjectPin(projectPath);
+    // The same project can be in both cached lists as separate objects.
+    for (const project of [...view.cachedProjects, ...view.cachedAllProjects]) {
+        if (project.projectPath !== projectPath) continue;
+        project.pinnedAt = pinned ? Date.now() : undefined;
+    }
+    if (pin) bump(pin, pinned ? 10 : -4);
+    relayoutSessionList({resort: true});
+}
+
+/** Whether a project is pinned to the top of the list. */
+export function isProjectPinned(projectPath: string): boolean {
+    return [...view.cachedProjects, ...view.cachedAllProjects].some(
+        (project) => project.projectPath === projectPath && project.pinnedAt !== undefined,
+    );
+}
+
 /** Whether a GitHub plan is pinned to the top of the list in `projectPath`. */
 export function isIssuePlanPinned(projectPath: string, repository: string, number: number): boolean {
     return [...view.cachedProjects, ...view.cachedAllProjects].some(
