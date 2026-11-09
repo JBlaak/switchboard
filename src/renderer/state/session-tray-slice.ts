@@ -5,7 +5,7 @@
  * The tray opens on hover intent and closes after a grace, as a small state
  * machine (the design's "Motion · timings"):
  *
- * - closed → pointer on the bar → `intent`; 120 ms later → `open`. Leaving
+ * - closed → pointer on the bar → `intent`; 50 ms later → `open`. Leaving
  *   during intent goes straight back to `closed`: crossing the bar on the way
  *   elsewhere never opens it.
  * - open → pointer leaves bar and tray → `grace`; 250 ms later → `closed`.
@@ -23,7 +23,7 @@ import type {SessionStats} from '../../domain/session/stats';
 import type {RendererEvent} from './events';
 
 /** How long the pointer rests on the bar before the tray opens. */
-export const TRAY_INTENT_MS = 120;
+export const TRAY_INTENT_MS = 50;
 /** How long the tray stays after the pointer leaves, so a slip does not close it. */
 export const TRAY_GRACE_MS = 250;
 /** How long a sent prompt's row says "Sent ✓" before the tray closes. */

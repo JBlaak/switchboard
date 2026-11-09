@@ -22,6 +22,12 @@ const MENTION = /(?:^|[^\w&#/.-])(?:([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[
 /** A GitHub issue URL. A pull request URL is a PR, not an issue, and is left alone. */
 const ISSUE_URL = /https:\/\/github\.com\/([A-Za-z0-9-]+\/[A-Za-z0-9._-]+)\/issues\/(\d+)\b/g;
 
+/**
+ * Claude Code's stand-ins for what you attached: `[Image #1]`, `[Pasted text #2 +40 lines]`.
+ * Their numbers count attachments, not issues.
+ */
+const ATTACHMENT = /\[(?:Image|Pasted text) #\d+[^\]]*\]/g;
+
 /** A leading number in a branch's last segment: `fix/123-foo`, `123_bar`, `issue/42`. */
 const BRANCH_ISSUE = /(?:^|\/)(\d+)(?:[-_.]|$)/;
 
@@ -42,6 +48,7 @@ function addIssue(into: Map<string, IssueRef>, issue: IssueRef): void {
  * does not say; `repository` is that repository, or '' when it is not known.
  */
 export function issueMentionsInText(text: string, repository: string): IssueRef[] {
+    text = text.replace(ATTACHMENT, '');
     const found = new Map<string, IssueRef>();
     const hits: Array<{at: number; issue: IssueRef}> = [];
     for (const match of text.matchAll(ISSUE_URL)) {
