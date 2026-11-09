@@ -107,8 +107,8 @@ $tray-height: 240px;
             inset 0 -1px 0 rgba(var(--sb-overlay-rgb), 0.06),
             0 22px 44px -14px rgba(var(--sb-shadow-rgb), calc(0.55 * var(--sb-shadow-k)));
         transition:
-            clip-path 220ms $tray-enter,
-            box-shadow 220ms ease-out;
+            clip-path 160ms $tray-enter,
+            box-shadow 160ms ease-out;
     }
 }
 
@@ -133,9 +133,9 @@ $tray-height: 240px;
         opacity: 1;
         transform: none;
         transition:
-            opacity 180ms ease-out,
-            transform 240ms $tray-enter;
-        transition-delay: calc(40ms + var(--i) * 30ms);
+            opacity 120ms ease-out,
+            transform 160ms $tray-enter;
+        transition-delay: calc(var(--i) * 15ms);
     }
 }
 

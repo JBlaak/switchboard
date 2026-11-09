@@ -34,7 +34,7 @@ function opened(): SessionTrayState {
     return run(intent, fire(intent));
 }
 
-test('resting on the bar is intent first, and opens the tray 120 ms later', () => {
+test('resting on the bar is intent first, and opens the tray 50 ms later', () => {
     /* Given */
     const closed = initialSessionTrayState;
 
@@ -51,7 +51,7 @@ test('resting on the bar is intent first, and opens the tray 120 ms later', () =
     assert.equal(trayIsOpen(open.phase), true);
 });
 
-test('crossing the bar in under 120 ms never opens it', () => {
+test('crossing the bar in under 50 ms never opens it', () => {
     /* Given */
     const intent = run(initialSessionTrayState, enter(T0));
     const stale = fire(intent);

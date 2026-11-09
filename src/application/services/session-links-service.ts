@@ -3,8 +3,9 @@
  * mentioned, the artifacts it published, the pages it showed and its task, in
  * one answer (`sessionLinks` puts them in order).
  *
- * The tray opens on a hover, so the answer never waits on `gh` or on
- * BlaakTasks. It is laid out from what is kept here, and whatever has gone
+ * The tray opens on a hover, so the answer waits on `gh` only once per
+ * session, and only when the conversation mentioned issues (they are listed
+ * once `gh` confirms them), and never on BlaakTasks. It is laid out from what is kept here, and whatever has gone
  * stale is asked again behind it, for the next hover: the transcript when it
  * was written to, `gh` once a minute or when a new PR or mention turns up,
  * and the task's detail once a minute. The very first answer for a session
@@ -106,7 +107,10 @@ export class SessionLinksService {
     public async links(sessionId: string): Promise<SessionLink[]> {
         const entry = this.entry(sessionId);
         if (!entry.transcript) await this.readTranscript(sessionId, entry);
-        if (this.isStale(sessionId, entry)) void this.refresh(sessionId);
+        // Mentions only list once `gh` has said which are issues (`sessionLinks`), so the
+        // first answer for a session that has any waits for it rather than leave them out.
+        if (!entry.github && (entry.transcript?.mentions.length ?? 0) > 0) await this.refresh(sessionId);
+        else if (this.isStale(sessionId, entry)) void this.refresh(sessionId);
         return this.assemble(sessionId, entry);
     }
 

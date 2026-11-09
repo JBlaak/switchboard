@@ -172,6 +172,21 @@ function facts(overrides: Partial<SessionLinkFacts> = {}): SessionLinkFacts {
     };
 }
 
+/** What `gh` says when each of these numbers is an issue in the session's repository. */
+const confirmed = (...numbers: number[]) =>
+    new Map([
+        [
+            REPO,
+            numbers.map((number) => ({
+                repository: REPO,
+                number,
+                title: '',
+                state: 'open' as const,
+                url: `https://github.com/${REPO}/issues/${number}`,
+            })),
+        ],
+    ]);
+
 const pr = (number: number, repository = REPO) => ({
     number,
     url: `https://github.com/${repository}/pull/${number}`,
@@ -186,6 +201,7 @@ test('the kinds come PRs, issues, artifacts, pages, task; each newest first', ()
             {repository: '', number: 3},
             {repository: '', number: 4},
         ],
+        issueStatuses: confirmed(3, 4),
         artifacts: [
             {id: 'A1', url: 'https://claude.ai/artifact/A1', title: 'First'},
             {id: 'A2', url: 'https://claude.ai/artifact/A2', title: null},
@@ -282,6 +298,7 @@ test('an issue a PR closes, or that is the PR itself, is not listed again', () =
                 {repository: '', number: 10},
                 {repository: '', number: 5},
             ],
+            issueStatuses: confirmed(3, 5),
         }),
     );
 
@@ -321,6 +338,25 @@ test('an issue gh confirmed carries its title and state; a mention gh says is no
             status: 'closed',
         },
     ]);
+});
+
+test('a mention is not listed before gh has said it is an issue', () => {
+    /* When */
+    const links = sessionLinks(facts({issueMentions: [{repository: '', number: 3}], issueStatuses: null}));
+
+    /* Then */
+    assert.deepEqual(links, []);
+});
+
+test('a mention in a repository gh could not be asked about is not listed', () => {
+    /* Given */
+    const issueStatuses = new Map([[REPO, null]]);
+
+    /* When */
+    const links = sessionLinks(facts({issueMentions: [{repository: '', number: 3}], issueStatuses}));
+
+    /* Then */
+    assert.deepEqual(links, []);
 });
 
 test('an issue in no known repository has nowhere to open and is left out', () => {

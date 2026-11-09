@@ -11,7 +11,8 @@
  * PRs and issues go through the Session work page's own rules
  * (`deriveWorkItems`), so a PR in another repository that `gh` does not know
  * is left out, a PR is never also an issue, and an issue a PR closes shows
- * under that PR rather than on its own, here as there.
+ * under that PR rather than on its own, here as there. Unlike that page, a
+ * mention is only listed once `gh` has confirmed it is an issue.
  */
 import {confirmedIssues} from '../session-work/issues';
 import {deriveWorkItems} from '../session-work/items';
@@ -138,9 +139,12 @@ export function sessionLinks(facts: SessionLinkFacts): SessionLink[] {
         branches: [],
         changes: [],
         github: facts.pullRequestStatuses,
+        // Only what `gh` says is an issue: a conversation's `#123` is as often
+        // another PR, a list item or a number from a pasted log, and until `gh`
+        // has said (or where it cannot) there is no telling which.
         issueMentions: facts.issueStatuses
-            ? confirmedIssues(facts.issueMentions, facts.issueStatuses, repository)
-            : facts.issueMentions,
+            ? confirmedIssues(facts.issueMentions, facts.issueStatuses, repository).filter((issue) => 'state' in issue)
+            : [],
         repository,
     });
 

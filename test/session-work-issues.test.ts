@@ -46,6 +46,14 @@ test('hashes that are part of something else are not mentions', () => {
     assert.deepEqual(mentions, []);
 });
 
+test("Claude Code's attachment stand-ins are not mentions", () => {
+    /* When */
+    const mentions = issueMentionsInText('look [Image #1] and [Pasted text #2 +40 lines], see #5', REPO);
+
+    /* Then */
+    assert.deepEqual(mentions, [{repository: REPO, number: 5}]);
+});
+
 test("a bare mention takes the session's repository, or none when it is unknown", () => {
     /* When */
     const mentions = issueMentionsInText('(#9)', '');

@@ -237,6 +237,34 @@ test('issues, artifacts, pages and the task come back with the PRs in one answer
     );
 });
 
+test('the first answer for a session that mentioned issues waits for gh to confirm them', async () => {
+    /* Given */
+    const w = world();
+    w.mentions = [
+        {repository: '', number: 7},
+        {repository: '', number: 8},
+    ];
+    w.issueAnswer = async () => [
+        {
+            repository: REPO,
+            number: 7,
+            title: 'The bar is busy',
+            state: 'open',
+            url: 'https://github.com/acme/web/issues/7',
+        },
+    ];
+    const service = new SessionLinksService(w.deps);
+
+    /* When */
+    const links = await service.links(SESSION);
+
+    /* Then */
+    assert.deepEqual(
+        links.map((link) => link.key),
+        ['pr:' + PR.url, 'issue:acme/web#7'],
+    );
+});
+
 test('the task shows before BlaakTasks answers, by its id alone', async () => {
     /* Given */
     const w = world();
