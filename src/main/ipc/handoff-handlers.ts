@@ -71,6 +71,20 @@ export function registerHandoffHandlers(ipc: IpcRegistrar, app: Container): void
         return result;
     });
 
+    ipc.handle(INVOKE.handoffForStart, async (path: string, hostKey: string, worktrees: unknown, options: unknown) => {
+        const local = localPath(path);
+        if (typeof hostKey !== 'string' || !hostKey) throw new Error('No host to hand off to');
+        const checkouts = Array.isArray(worktrees)
+            ? worktrees.filter((dir): dir is string => typeof dir === 'string' && dir.startsWith('/'))
+            : [];
+        const project = !!options && typeof options === 'object' && (options as {project?: unknown}).project === true;
+        const result = await handoffOf(app).handOffForStart(local, hostKey, checkouts, {project}, (line) =>
+            push(EVENT.handoffProgress, local, line),
+        );
+        if (result.ok) app.renderer.projectsChanged();
+        return result;
+    });
+
     ipc.handle(INVOKE.handoffCopiesOf, (path: string) =>
         typeof path === 'string' && !isRemoteProjectPath(path) ? (app.projectHandoff?.copiesOf(path) ?? []) : [],
     );

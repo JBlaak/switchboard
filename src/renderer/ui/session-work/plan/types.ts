@@ -5,6 +5,7 @@
  */
 import type {IssueKey, Plan, PlanSummary} from '../../../../domain/plan/model';
 import type {PlanLevelStart, PlanStart, SessionPlansAnswer} from '../../../state/plan-slice';
+import type {HandoffHost} from '../../../../application/services/project-handoff';
 
 /** The plan page's pin, which puts the plan at the top of the sidebar; the Plan tab has none. */
 export interface PlanPinControl {
@@ -70,10 +71,18 @@ export interface IssueActions {
     sessionFor?(issue: IssueKey): IssueSession | null;
     /** Jump to session (A1). */
     jumpToSession?(sessionId: string): void;
-    /** Start session pressed on an issue (A2); a Locked one asks to confirm first (A3). */
+    /**
+     * Start session pressed on an issue (A2); a Locked one asks to confirm
+     * first (A3), and so does any one while there are `vmHosts` to hand it off to.
+     */
     startSession?(issue: IssueKey, plan: Plan): void;
-    /** Confirm the start that is asking. */
-    confirmStart?(plan: Plan): void;
+    /** Confirm the start that is asking: here, or handed off to `vm`. */
+    confirmStart?(plan: Plan, vm?: HandoffHost): void;
+    /**
+     * The VMs a start may be handed off to, which its confirmation offers
+     * ("Do you want to hand this off to…?"); none for a project on a VM already.
+     */
+    readonly vmHosts?: readonly HandoffHost[];
     cancelStart?(): void;
     /**
      * Start again on an issue whose branch exists already: `replace` deletes its
@@ -84,8 +93,8 @@ export interface IssueActions {
     readonly start?: PlanStart | null;
     /** Start level pressed on the current level (A1): asks to confirm `issues`, its Ready ones. */
     startLevel?(plan: Plan, level: number, issues: IssueKey[]): void;
-    /** Confirm the level start that is asking. */
-    confirmLevelStart?(plan: Plan): void;
+    /** Confirm the level start that is asking: here, or handed off to `vm`. */
+    confirmLevelStart?(plan: Plan, vm?: HandoffHost): void;
     /** Turn the confirmation down, or put the answer away. */
     cancelLevelStart?(): void;
     /** Where Start level is, for any plan; the view shows it for its own. */

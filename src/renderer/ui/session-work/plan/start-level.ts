@@ -15,6 +15,9 @@ import type {IssueKey, Plan, PlanLayout} from '../../../../domain/plan/model';
 import type {IssueWorktreeResult} from '../../../../domain/plan/issue-session';
 import {levelSessionPrompt, type LevelAgent} from '../../../../domain/plan/start';
 import type {StartIssueSessionSteps} from './start-issue-session';
+import type {HandoffHost, StartHandoffResult} from '../../../../application/services/project-handoff';
+import {parseRemoteProjectPath} from '../../../../domain/project/remote-target';
+import {notHandedOff, sentence} from '../../session-handoff/start-on-vm';
 
 export interface LevelStartReport {
     /** How many issues got an agent in the level's session. */
@@ -30,6 +33,8 @@ export interface StartLevelRequest {
     plan: Plan;
     level: number;
     issues: readonly IssueKey[];
+    /** Hand the level off to this VM: the worktrees go there, and the session starts in the project's copy. */
+    vm?: HandoffHost;
 }
 
 /** The issues Start level starts on `level`: its Ready ones, in row order. */
@@ -44,7 +49,7 @@ export function readyOnLevel(layout: PlanLayout, level: number): IssueKey[] {
  */
 export async function startLevelWith(
     steps: StartIssueSessionSteps,
-    {projectPath, plan, level, issues}: StartLevelRequest,
+    {projectPath, plan, level, issues, vm}: StartLevelRequest,
 ): Promise<LevelStartReport> {
     const agents: LevelAgent[] = [];
     const failed: LevelStartReport['failed'] = [];
@@ -60,6 +65,7 @@ export async function startLevelWith(
         else failed.push({issue, reason: prepared.reason});
     }
     if (!agents.length) return {started: 0, failed};
+    if (vm) return startLevelOnVm(steps, vm, {projectPath, plan, level}, agents, failed);
 
     // The session governs from the project; `--worktree` would make it one of its own.
     const {worktree: _worktree, worktreeName: _worktreeName, ...defaults} = await steps.defaultOptions(projectPath);
@@ -76,6 +82,74 @@ export async function startLevelWith(
         return {started: 0, failed: [...agents.map(({issue}) => ({issue, reason})), ...failed]};
     }
     return {started: agents.length, failed, sessionId: launched.sessionId};
+}
+
+/**
+ * The level handed off to a VM: the project's copy made when the host has
+ * none, every worktree sent over as a worktree of it, and the session started
+ * in the copy with those worktrees added, named by their folders there. A
+ * worktree that did not go is a failed issue; the rest start without it.
+ */
+async function startLevelOnVm(
+    steps: StartIssueSessionSteps,
+    vm: HandoffHost,
+    {projectPath, plan, level}: Pick<StartLevelRequest, 'projectPath' | 'plan' | 'level'>,
+    agents: LevelAgent[],
+    failed: LevelStartReport['failed'],
+): Promise<LevelStartReport> {
+    const allFailed = (reason: string): LevelStartReport => ({
+        started: 0,
+        failed: [...agents.map(({issue}) => ({issue, reason})), ...failed],
+    });
+    if (!steps.vm) return allFailed(notHandedOff(vm, 'hand-off isn’t available here.'));
+    let handed: StartHandoffResult;
+    try {
+        handed = await steps.vm.handOff(
+            projectPath,
+            vm.key,
+            agents.map((agent) => agent.worktreePath),
+            {project: true},
+        );
+    } catch (err) {
+        handed = {ok: false, error: (err as Error).message || 'the hand-off stopped.'};
+    }
+    if (!handed.ok) return allFailed(notHandedOff(vm, sentence(handed.error)));
+    const projectCopy = handed.projectCopy;
+    const projectDir = projectCopy ? parseRemoteProjectPath(projectCopy)?.dir : null;
+    if (!projectCopy || !projectDir) return allFailed(notHandedOff(vm, 'the VM did not say where the project went.'));
+
+    const onVm: LevelAgent[] = [];
+    for (const agent of agents) {
+        const copy = handed.worktrees.find((worktree) => worktree.checkout === agent.worktreePath);
+        const dir = copy?.ok ? parseRemoteProjectPath(copy.copyPath)?.dir : null;
+        if (dir) onVm.push({...agent, worktreePath: dir});
+        else
+            failed.push({
+                issue: agent.issue,
+                reason: notHandedOff(
+                    vm,
+                    copy && !copy.ok ? sentence(copy.error) : 'the VM did not say where the worktree went.',
+                ),
+            });
+    }
+    if (!onVm.length) return {started: 0, failed};
+
+    // `--add-dir` gets no `~` expanded on the VM, so a worktree inside the copy is named from it.
+    const relative = (dir: string) => (dir.startsWith(projectDir + '/') ? dir.slice(projectDir.length + 1) : dir);
+    const {worktree: _worktree, worktreeName: _worktreeName, ...defaults} = await steps.defaultOptions(projectCopy);
+    const addDirs = [defaults.addDirs, ...onVm.map((agent) => relative(agent.worktreePath))].filter(Boolean).join(',');
+    const initialPrompt = levelSessionPrompt(plan, level, onVm);
+    let launched: Awaited<ReturnType<StartIssueSessionSteps['launch']>>;
+    try {
+        launched = await steps.vm.launch(projectCopy, {...defaults, addDirs, initialPrompt}, {show: false});
+    } catch (err) {
+        launched = {ok: false, reason: (err as Error)?.message || 'Could not start the session'};
+    }
+    if (!launched.ok) {
+        const reason = 'The session didn’t start: ' + launched.reason;
+        return {started: 0, failed: [...onVm.map(({issue}) => ({issue, reason})), ...failed]};
+    }
+    return {started: onVm.length, failed, sessionId: launched.sessionId};
 }
 
 /** What the plan view says once the level's session came back. */

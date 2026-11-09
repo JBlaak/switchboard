@@ -172,6 +172,7 @@ export const INVOKE = {
     handoffHosts: 'handoff:hosts',
     handoffPreview: 'handoff:preview',
     handoffRun: 'handoff:hand-off',
+    handoffForStart: 'handoff:for-start',
     handoffCopiesOf: 'handoff:copies-of',
     handoffOriginOf: 'handoff:origin-of',
     handoffCopyStatus: 'handoff:copy-status',

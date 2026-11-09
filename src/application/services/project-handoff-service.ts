@@ -52,6 +52,8 @@ import type {
     HandoffResult,
     ProjectCopy,
     ProjectHandoff,
+    StartHandoffResult,
+    StartWorktreeCopy,
 } from './project-handoff';
 import type {SettingsService} from './settings-service';
 import {WORKTREES_DIR} from './support/branch-worktrees';
@@ -268,6 +270,53 @@ export class ProjectHandoffService implements ProjectHandoff {
         return {ok: true, copyPath, reused: done.reused === true};
     }
 
+    public async handOffForStart(
+        localPath: string,
+        hostKey: string,
+        worktrees: string[],
+        {project}: {project: boolean},
+        onProgress: (line: string) => void = () => {},
+    ): Promise<StartHandoffResult> {
+        if (!this.agentHosts().has(hostKey))
+            return {ok: false, error: `${hostKey} is not a VM with the Switchboard agent.`};
+        let projectCopy: string | null = null;
+        if (project) {
+            projectCopy =
+                this.copiesOf(localPath).find((copy) => copy.hostKey === hostKey && !isWorktreeCopy(copy.copyPath))
+                    ?.copyPath ?? null;
+            if (!projectCopy) {
+                const ticks = await this.defaultTicks(localPath);
+                if ('error' in ticks) return {ok: false, error: ticks.error};
+                const handed = await this.handOff(localPath, hostKey, ticks, onProgress);
+                if (!handed.ok) return handed;
+                projectCopy = handed.copyPath;
+            }
+        }
+        const copies: StartWorktreeCopy[] = [];
+        for (const checkout of worktrees) {
+            const ticks = await this.defaultTicks(localPath, checkout);
+            if ('error' in ticks) {
+                copies.push({checkout, ok: false, error: ticks.error});
+                continue;
+            }
+            const name = checkout.replace(/\/+$/, '').split('/').pop() || checkout;
+            const handed = await this.handOff(localPath, hostKey, ticks, onProgress, {worktree: {name, checkout}});
+            copies.push(
+                handed.ok
+                    ? {checkout, ok: true, copyPath: handed.copyPath}
+                    : {checkout, ok: false, error: handed.error},
+            );
+        }
+        return {ok: true, projectCopy, worktrees: copies};
+    }
+
+    /** The ignored files a hand-off ticks when nobody is asked: the remembered ones, or the config-like ones for a first. */
+    private async defaultTicks(localPath: string, checkout?: string): Promise<string[] | {error: string}> {
+        const preview = await this.preview(localPath, checkout ? {checkout} : {});
+        if ('error' in preview) return preview;
+        return preview.candidates.filter((candidate) => candidate.ticked).map((candidate) => candidate.path);
+    }
+
     public copiesOf(localPath: string): ProjectCopy[] {
         return this.deps.settings
             .remoteProjects()
@@ -455,6 +504,11 @@ export class ProjectHandoffService implements ProjectHandoff {
         if (!asked.answer.ok) return {ok: false, error: asked.answer.error || 'The VM could not read the copy.'};
         return {ok: true, state: asked.answer};
     }
+}
+
+/** A worktree's copy (`<copy>/.claude/worktrees/<name>`) rather than the project's own. */
+function isWorktreeCopy(copyPath: string): boolean {
+    return copyPath.includes(WORKTREES_DIR);
 }
 
 /** Where a copy's checkout is when the agent did not say: the copy, or its worktree of that name. */

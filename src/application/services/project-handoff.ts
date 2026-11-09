@@ -63,6 +63,17 @@ export interface CopyStatus {
 }
 
 export type HandoffResult = {ok: true; copyPath: string; reused: boolean} | {ok: false; error: string};
+
+/** One worktree a start sent to the VM: its copy there, or why it did not go. */
+export type StartWorktreeCopy =
+    {checkout: string; ok: true; copyPath: string} | {checkout: string; ok: false; error: string};
+
+/**
+ * What a start handed off to a VM ("Do you want to hand this off to…?"): the
+ * project's own copy when it was asked for, and each worktree's.
+ */
+export type StartHandoffResult =
+    {ok: true; projectCopy: string | null; worktrees: StartWorktreeCopy[]} | {ok: false; error: string};
 export type BringBackResult = {ok: true; worktree: string; branch: string} | {ok: false; error: string};
 
 export interface ProjectHandoff {
@@ -82,6 +93,21 @@ export interface ProjectHandoff {
         onProgress?: (line: string) => void,
         options?: HandoffChoices,
     ): Promise<HandoffResult>;
+    /**
+     * A session start that the user handed off to `hostKey` before it began
+     * (an issue's, a task's or a level's): each of the local `worktrees` the
+     * start just made goes over as a worktree of the project's copy, with the
+     * ignored files ticked as they would be by default. With `project`, the
+     * project's own copy is made first when the host has none, so a level's
+     * session has a project to run in; an existing copy is used as it is.
+     */
+    handOffForStart(
+        localPath: string,
+        hostKey: string,
+        worktrees: string[],
+        options: {project: boolean},
+        onProgress?: (line: string) => void,
+    ): Promise<StartHandoffResult>;
     /** The local project's copies. */
     copiesOf(localPath: string): ProjectCopy[];
     /** The local project a copy was made from, or null for a remote that is not a copy. */

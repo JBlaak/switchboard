@@ -25,9 +25,19 @@ import type {IssueActions, IssueSession} from './types';
 import {startLevelWith} from './start-level';
 import {reloadOwners} from './load';
 import {pulseSessionRow} from '../../session-list/pulse';
+import {isRemoteProjectPath} from '../../../../domain/project/remote-target';
+import type {HandoffHost} from '../../../../application/services/project-handoff';
 
 const NO_OWNERS: IdRecord<string> = {};
 const NO_BUSY: IdRecord<boolean> = {};
+const NO_HOSTS: readonly HandoffHost[] = [];
+
+/**
+ * Where each issue's last start was sent, by `owner/repo#n`: a start asked
+ * again because its branch exists (Continue, Delete and start again) goes
+ * where the first was handed off to, without asking a second time.
+ */
+const startedOn = new Map<string, HandoffHost | undefined>();
 
 /** The owner of an issue, named the way the terminal header names it. */
 export function issueSession(
@@ -52,9 +62,11 @@ async function start(
     plan: Plan,
     show: boolean,
     existing?: 'replace' | 'reuse',
+    vm?: HandoffHost,
 ): Promise<void> {
     dispatch({type: 'planStartAsked', issue, confirm: false});
-    const result = await startIssueSession({projectPath, issue, plan, show, existing}).catch((err: Error) => ({
+    startedOn.set(issueKeyString(issue), vm);
+    const result = await startIssueSession({projectPath, issue, plan, show, existing, vm}).catch((err: Error) => ({
         ok: false as const,
         reason: err.message || 'Could not start the session',
     }));
@@ -68,7 +80,7 @@ async function start(
  * asked issue, so the plan view stays on screen; then the report, and the
  * owners asked again.
  */
-async function startLevel(projectPath: string, plan: Plan, pulse: boolean): Promise<void> {
+async function startLevel(projectPath: string, plan: Plan, pulse: boolean, vm?: HandoffHost): Promise<void> {
     const asking = getState().plan.levelStart;
     if (asking?.phase !== 'confirm' || !sameIssue(asking.plan, plan)) return;
     dispatch({type: 'planLevelStartConfirmed'});
@@ -77,6 +89,7 @@ async function startLevel(projectPath: string, plan: Plan, pulse: boolean): Prom
         plan,
         level: asking.level,
         issues: asking.issues,
+        ...(vm ? {vm} : {}),
     });
     if (sessionId && pulse) pulseSessionRow(sessionId);
     dispatch({type: 'planLevelStartAnswered', ...report});
@@ -94,6 +107,9 @@ export function useIssueActions(projectPath: string | null, {show = true}: {show
     const busy = useStore((state) => state.activity.busy ?? NO_BUSY);
     const pending = useStore((state) => state.plan.view?.start ?? null);
     const levelStart = useStore((state) => state.plan.levelStart);
+    const hosts = useStore((state) => state.handoff.hosts ?? NO_HOSTS);
+    // A project on a VM already starts there; only a local one is asked.
+    const vmHosts = projectPath && !isRemoteProjectPath(projectPath) ? hosts : NO_HOSTS;
 
     return useMemo<IssueActions>(() => {
         const actions: IssueActions = {
@@ -103,29 +119,30 @@ export function useIssueActions(projectPath: string | null, {show = true}: {show
             },
             start: pending,
             levelStart,
+            vmHosts,
         };
         if (!projectPath) return actions;
         return {
             ...actions,
             startSession: (issue, plan) => {
-                if (layOutPlan(plan).stateOf(issue) === 'locked')
+                if (vmHosts.length || layOutPlan(plan).stateOf(issue) === 'locked')
                     dispatch({type: 'planStartAsked', issue, confirm: true});
                 else void start(projectPath, issue, plan, show);
             },
-            confirmStart: (plan) => {
+            confirmStart: (plan, vm) => {
                 const asking = getState().plan.view?.start;
-                if (asking?.phase === 'confirm') void start(projectPath, asking.issue, plan, show);
+                if (asking?.phase === 'confirm') void start(projectPath, asking.issue, plan, show, undefined, vm);
             },
             cancelStart: () => dispatch({type: 'planStartCancelled'}),
             startAgain: (issue, plan, existing) => {
                 if (getState().plan.view?.start?.phase !== 'starting')
-                    void start(projectPath, issue, plan, show, existing);
+                    void start(projectPath, issue, plan, show, existing, startedOn.get(issueKeyString(issue)));
             },
             startLevel: (plan, level, issues) => dispatch({type: 'planLevelStartAsked', plan, level, issues}),
-            confirmLevelStart: (plan) => {
-                void startLevel(projectPath, plan, !show);
+            confirmLevelStart: (plan, vm) => {
+                void startLevel(projectPath, plan, !show, vm);
             },
             cancelLevelStart: () => dispatch({type: 'planLevelStartCancelled'}),
         };
-    }, [owners, busy, pending, levelStart, projectPath, show]);
+    }, [owners, busy, pending, levelStart, vmHosts, projectPath, show]);
 }
