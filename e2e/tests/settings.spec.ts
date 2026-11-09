@@ -188,25 +188,8 @@ test.describe('global fields', () => {
     });
 });
 
-test('scrolled to the bottom, the buttons keep the body padding beneath them', async ({page}) => {
-    /* Given */
-    await openGlobalSettings(page);
-    const body = page.locator('#settings-viewer-body');
-
-    /* When */
-    await body.evaluate((el) => el.scrollTo(0, el.scrollHeight));
-
-    /* Then */
-    const gap = await body.evaluate((el) => {
-        const row = el.querySelector('.settings-btn-row')!.getBoundingClientRect();
-        return el.getBoundingClientRect().bottom - row.bottom;
-    });
-    // 32px of padding, give or take subpixel rounding.
-    expect(gap).toBeGreaterThan(30);
-});
-
 test.describe('global save', () => {
-    test('writes every field, merged over the stored settings, and re-syncs the quick session button', async ({
+    test('writes every field, merged over the stored settings, and re-syncs the quick session button and the sidebar', async ({
         page,
     }) => {
         /* Given */
@@ -219,6 +202,7 @@ test.describe('global save', () => {
         /* Then */
         // Hidden until there is a folder to launch in.
         await expect(quick).toBeHidden();
+        await expect(sidebar(page).getByText('+ 3 older', {exact: true})).toBeVisible();
 
         /* When */
         await field(page, 'Permission Mode').getByRole('combobox').selectOption('plan');
@@ -269,75 +253,16 @@ test.describe('global save', () => {
             appIcon: 'patch',
         });
         await expect(quick).toBeVisible();
-    });
-
-    test('applies the session limits to the sidebar at once', async ({page}) => {
-        /* When */
-        await openGlobalSettings(page);
-
-        /* Then */
-        await expect(sidebar(page).getByText('+ 3 older', {exact: true})).toBeVisible();
-
-        /* When */
-        await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('100');
-        await field(page, 'Session Max Age (days)').getByRole('spinbutton').fill('365');
-        await button(page, 'Save Settings').click();
-
-        /* Then */
-        await expect(globalTitle(page)).toBeHidden();
-        await expect(sidebar(page).getByText(/^\+ \d+ older$/)).toHaveCount(0);
-
-        /* When */
-        await openGlobalSettings(page);
-        await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('1');
-        await button(page, 'Save Settings').click();
-
-        /* Then */
-        await expect(globalTitle(page)).toBeHidden();
+        // The session limits apply to the sidebar at once: fewer rows, so more fold away.
         const older = sidebar(page).getByText(/^\+ \d+ older$/);
-        await expect(older).toBeVisible();
+        await expect(older).not.toHaveText('+ 3 older');
         expect(Number((await older.textContent())!.match(/\d+/)![0])).toBeGreaterThan(3);
     });
 });
 
-test.describe('global cancel', () => {
-    test('closes without saving, back to the empty screen', async ({page}) => {
-        /* Given */
-        const before = withoutWindowBounds(await readSetting(page, 'global'));
-
-        /* When */
-        await openGlobalSettings(page);
-
-        /* Then */
-        await expect(emptyScreen(page)).toBeHidden();
-        // The header is a window drag region.
-        const region = await globalTitle(page)
-            .locator('..')
-            .evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-app-region'));
-        expect(region).toBe('drag');
-
-        /* When */
-        await field(page, 'Pre-launch Command').getByRole('textbox').fill('never-saved');
-        await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('2');
-        await button(page, 'Cancel').click();
-
-        /* Then */
-        await expect(globalTitle(page)).toBeHidden();
-        await expect(emptyScreen(page)).toBeVisible();
-        expect(withoutWindowBounds(await readSetting(page, 'global'))).toEqual(before);
-        await expect(sidebar(page).getByText('+ 3 older', {exact: true})).toBeVisible();
-
-        /* When */
-        await openGlobalSettings(page);
-
-        /* Then */
-        // The next open starts from what is stored, not from the abandoned edit.
-        await expect(field(page, 'Pre-launch Command').getByRole('textbox')).toHaveValue('');
-    });
-});
-
 test.describe('quick ask', () => {
-    test('the switch lets go of ⌥Space and takes it back, and says when another app holds it', async ({page, app}) => {
+    // Taking it back, and trying again after a refusal, are unit tested (test/quick-ask-hotkey.test.ts).
+    test('the switch lets go of ⌥Space, and says when another app holds it', async ({page, app}) => {
         /* Given */
         const label = 'Open Quick Ask with ⌥Space';
         const inUse = page.getByText('⌥Space is in use by another app', {exact: true});
@@ -370,72 +295,16 @@ test.describe('quick ask', () => {
         await expect(toggle(page, label)).toBeChecked();
         await expect(inUse).toBeVisible();
         expect(await pressQuickAsk(app)).toBe(false);
-
-        /* When */
-        await refuseQuickAskHotkey(app, false);
-        await toggle(page, label).locator('..').click();
-        await button(page, 'Save Settings').click();
-        await expect(globalTitle(page)).toBeHidden();
-        await openGlobalSettings(page);
-        await switchOn(page, label);
-        await button(page, 'Save Settings').click();
-        await expect(globalTitle(page)).toBeHidden();
-        await openGlobalSettings(page);
-
-        /* Then */
-        // Switching off and on tried again, and this time the key was free.
-        await expect(inUse).toHaveCount(0);
-        expect(await pressQuickAsk(app)).toBe(true);
     });
 });
 
-/** A monospace font every machine of the platform has: Menlo ships with macOS, DejaVu with Ubuntu. */
-const INSTALLED_MONOSPACE = process.platform === 'darwin' ? 'Menlo' : 'DejaVu Sans Mono';
-
-test.describe('terminal font warning', () => {
-    test('warns live when the font is not installed', async ({page}) => {
-        /* Given */
-        await openGlobalSettings(page);
-        const input = field(page, 'Terminal Font').getByRole('textbox');
-        const warning = page.getByText(/isn't installed; falling back to the default/);
-
-        /* When */
-        await input.fill('No Such Font Xyz');
-
-        /* Then */
-        await expect(warning).toBeVisible();
-        await expect(warning).toContainText('“No Such Font Xyz”');
-
-        /* When */
-        await input.fill(INSTALLED_MONOSPACE);
-
-        /* Then */
-        await expect(warning).toHaveCount(0);
-
-        /* When */
-        await input.fill('');
-
-        /* Then */
-        await expect(warning).toHaveCount(0);
-    });
-});
-
+// What a city resolves to, and how a failed lookup reads, are unit tested (test/settings-weather-city.test.ts).
 test.describe('weather city', () => {
-    test('resolves on change, and Save saves the place it resolves to', async ({page, app}) => {
+    test('Save waits for the lookup in flight and saves the place it resolves to', async ({page, app}) => {
         /* Given */
-        await setHostStub(app, 'geocode', {
-            utrecht: {location: UTRECHT},
-            Berlin: {location: BERLIN, delayMs: 600},
-        });
+        await setHostStub(app, 'geocode', {Berlin: {location: BERLIN, delayMs: 600}});
         await openGlobalSettings(page);
         const city = field(page, 'City').getByRole('textbox');
-
-        /* When */
-        await city.fill('utrecht');
-        await city.press('Tab');
-
-        /* Then */
-        await expect(page.getByText('Weather for Utrecht', {exact: true})).toBeVisible();
 
         /* When */
         await city.fill('Berlin');
@@ -457,38 +326,41 @@ test.describe('project settings on the project page', () => {
     };
     test.use({fixture: OVERRIDES});
 
-    test('shows every field at the value sessions launch with, and which ones override the global default', async ({
-        page,
-    }) => {
-        /* When */
-        await openProjectSettings(page, P.acmeApi);
+    forEachAppearance(() => {
+        test('project settings: every field at the value sessions launch with, and which ones override the global default', async ({
+            page,
+        }) => {
+            /* When */
+            await openProjectSettings(page, P.acmeApi);
 
-        /* Then */
-        const view = projectSettings(page, P.acmeApi);
-        await expect(view).toBeFocused();
-        await expect(view.getByRole('heading', {level: 1})).toHaveText(`Settings · ${P.acmeApi}`);
-        // Inherited: the global value, the same as global.
-        await expect(view.getByRole('radio', {name: 'Plan', exact: true})).toHaveAttribute('aria-checked', 'true');
-        await expect(projectField(page, 'Permission mode')).toContainText('Same as global.');
-        await expect(view.getByLabel('Before Claude starts')).toHaveValue('env SB_GLOBAL=1');
-        await expect(projectField(page, 'Before Claude starts')).toContainText('Same as global.');
-        await expect(view.getByRole('switch', {name: 'Start new sessions in a worktree'})).toHaveAttribute(
-            'aria-checked',
-            'true',
-        );
-        // Overridden: the project's value, and the global one it replaces.
-        await expect(view.getByLabel('Extra directories')).toHaveValue('/proj');
-        await expect(projectField(page, 'Extra directories')).toContainText('Overrides the global default (none).');
-        await expect(view.getByRole('switch', {name: 'Chrome'})).toHaveAttribute('aria-checked', 'true');
-        await expect(projectField(page, 'Chrome')).toContainText('Overrides the global default (off).');
-        // The application settings are global only, and the old panel stays shut.
-        for (const label of ['Quick Session Folder', 'Terminal Theme', 'City', 'Version']) {
-            await expect(page.getByText(label, {exact: true})).toHaveCount(0);
-        }
-        await expect(globalTitle(page)).toBeHidden();
+            /* Then */
+            const view = projectSettings(page, P.acmeApi);
+            await expect(view).toBeFocused();
+            await expect(view.getByRole('heading', {level: 1})).toHaveText(`Settings · ${P.acmeApi}`);
+            // Inherited: the global value, the same as global.
+            await expect(view.getByRole('radio', {name: 'Plan', exact: true})).toHaveAttribute('aria-checked', 'true');
+            await expect(projectField(page, 'Permission mode')).toContainText('Same as global.');
+            await expect(view.getByLabel('Before Claude starts')).toHaveValue('env SB_GLOBAL=1');
+            await expect(projectField(page, 'Before Claude starts')).toContainText('Same as global.');
+            await expect(view.getByRole('switch', {name: 'Start new sessions in a worktree'})).toHaveAttribute(
+                'aria-checked',
+                'true',
+            );
+            // Overridden: the project's value, and the global one it replaces.
+            await expect(view.getByLabel('Extra directories')).toHaveValue('/proj');
+            await expect(projectField(page, 'Extra directories')).toContainText('Overrides the global default (none).');
+            await expect(view.getByRole('switch', {name: 'Chrome'})).toHaveAttribute('aria-checked', 'true');
+            await expect(projectField(page, 'Chrome')).toContainText('Overrides the global default (off).');
+            // The application settings are global only, and the old panel stays shut.
+            for (const label of ['Quick Session Folder', 'Terminal Theme', 'City', 'Version']) {
+                await expect(page.getByText(label, {exact: true})).toHaveCount(0);
+            }
+            await expect(globalTitle(page)).toBeHidden();
+            await expectScreen(page, 'settings-project');
+        });
     });
 
-    test('a change saves at once, and the next session started in the project launches with it', async ({
+    test('a change saves at once, the next session started in the project launches with it, and Reset drops every override', async ({
         page,
         home,
     }) => {
@@ -548,30 +420,14 @@ test.describe('project settings on the project page', () => {
         expect(argv).toContain('--permission-mode acceptEdits');
         expect(argv).toContain('--add-dir /a --add-dir /b');
         expect(argv).not.toContain('--chrome');
-    });
-
-    test('Reset to global settings drops every override', async ({page, home}) => {
-        /* Given */
-        await openProjectSettings(page, P.acmeApi);
-        const view = projectSettings(page, P.acmeApi);
-        const reset = view.getByRole('button', {name: 'Reset to global settings', exact: true});
 
         /* When */
+        // What Reset leaves is unit tested (test/project-overrides.test.ts); here, that it reaches main.
+        await openProjectSettings(page, P.acmeApi);
+        const reset = view.getByRole('button', {name: 'Reset to global settings', exact: true});
         await reset.click();
 
         /* Then */
-        await expect(view.getByLabel('Extra directories')).toHaveValue('');
-        await expect(view.getByRole('switch', {name: 'Chrome'})).toHaveAttribute('aria-checked', 'false');
-        for (const label of [
-            'Permission mode',
-            'Skip permission prompts',
-            'Start new sessions in a worktree',
-            'Chrome',
-            'Before Claude starts',
-            'Extra directories',
-        ]) {
-            await expect(projectField(page, label)).toContainText('Same as global.');
-        }
         await expect(reset).toBeDisabled();
         await expect.poll(() => readSetting(page, 'project:' + home.projectPath(P.acmeApi))).toEqual({});
     });
@@ -648,17 +504,6 @@ test.describe('project settings on the project page', () => {
             .toBe(false);
         await expect(sidebar(page).getByText(LABEL.loginFix, {exact: true})).toHaveCount(0);
     });
-
-    forEachAppearance(() => {
-        test('project settings', async ({page}) => {
-            /* When */
-            await openProjectSettings(page, P.acmeApi);
-
-            /* Then */
-            await expect(projectSettings(page, P.acmeApi).getByLabel('Extra directories')).toHaveValue('/proj');
-            await expectScreen(page, 'settings-project');
-        });
-    });
 });
 
 test.describe('saved prompts', () => {
@@ -699,25 +544,80 @@ test.describe('saved prompts', () => {
     });
 });
 
+/** A monospace font every machine of the platform has: Menlo ships with macOS, DejaVu with Ubuntu. */
+const INSTALLED_MONOSPACE = process.platform === 'darwin' ? 'Menlo' : 'DejaVu Sans Mono';
+
 forEachAppearance(() => {
-    test('global settings', async ({page}) => {
+    // One launch for the form as it opens: its screenshots, the live font
+    // warning, and a Cancel that saves none of the edits made on the way.
+    test('global settings: scrolled to the bottom, the font warning, and Cancel saving nothing', async ({page}) => {
+        /* Given */
+        const before = withoutWindowBounds(await readSetting(page, 'global'));
+
         /* When */
         await openGlobalSettings(page);
 
         /* Then */
+        await expect(emptyScreen(page)).toBeHidden();
+        // The header is a window drag region.
+        const region = await globalTitle(page)
+            .locator('..')
+            .evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-app-region'));
+        expect(region).toBe('drag');
         await expectScreen(page, 'settings-global');
-    });
-
-    test('global settings, scrolled down to the app icon', async ({page}) => {
-        /* Given */
-        await openGlobalSettings(page);
-        const body = page.locator('#settings-viewer-body');
 
         /* When */
+        const body = page.locator('#settings-viewer-body');
         await body.evaluate((el) => el.scrollTo(0, el.scrollHeight));
 
         /* Then */
         await expect(field(page, 'Dock Icon').getByRole('combobox')).toBeInViewport();
         await expectScreen(page, 'settings-global-app-icon');
+        // The buttons keep the body padding beneath them: 32px, give or take subpixel rounding.
+        const gap = await body.evaluate((el) => {
+            const row = el.querySelector('.settings-btn-row')!.getBoundingClientRect();
+            return el.getBoundingClientRect().bottom - row.bottom;
+        });
+        expect(gap).toBeGreaterThan(30);
+
+        /* When */
+        const font = field(page, 'Terminal Font').getByRole('textbox');
+        const warning = page.getByText(/isn't installed; falling back to the default/);
+        await font.fill('No Such Font Xyz');
+
+        /* Then */
+        // It warns live when the font is not installed.
+        await expect(warning).toBeVisible();
+        await expect(warning).toContainText('“No Such Font Xyz”');
+
+        /* When */
+        await font.fill(INSTALLED_MONOSPACE);
+
+        /* Then */
+        await expect(warning).toHaveCount(0);
+
+        /* When */
+        await font.fill('');
+
+        /* Then */
+        await expect(warning).toHaveCount(0);
+
+        /* When */
+        await field(page, 'Pre-launch Command').getByRole('textbox').fill('never-saved');
+        await field(page, 'Max Visible Sessions').getByRole('spinbutton').fill('2');
+        await button(page, 'Cancel').click();
+
+        /* Then */
+        await expect(globalTitle(page)).toBeHidden();
+        await expect(emptyScreen(page)).toBeVisible();
+        expect(withoutWindowBounds(await readSetting(page, 'global'))).toEqual(before);
+        await expect(sidebar(page).getByText('+ 3 older', {exact: true})).toBeVisible();
+
+        /* When */
+        await openGlobalSettings(page);
+
+        /* Then */
+        // The next open starts from what is stored, not from the abandoned edit.
+        await expect(field(page, 'Pre-launch Command').getByRole('textbox')).toHaveValue('');
     });
 });

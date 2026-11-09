@@ -5,7 +5,8 @@
  * What the panel decides on its own is unit tested: the draft rules
  * (test/answer-draft.test.ts), Patch's lines (test/question-beats.test.ts,
  * test/answers-slice.test.ts), the copy (test/question-copy.test.ts) and what
- * each key means (test/question-panel-keys.test.ts). These tests keep what
+ * each key means (test/question-panel-keys.test.ts), and that a withdrawn
+ * set gets no farewell (test/question-actions.test.ts). These tests keep what
  * only the running app can show: the hook round-trip, where the keyboard
  * goes, the motion, and how it looks.
  */
@@ -149,7 +150,7 @@ test.describe('smoke', () => {
 });
 
 forEachAppearance(() => {
-    test('question panel', async ({page, home}) => {
+    test('question panel, then peeking at the terminal', async ({page, home}) => {
         /* Given */
         await openSession(page, home, LABEL.loginFix, S.loginFix);
 
@@ -159,13 +160,6 @@ forEachAppearance(() => {
         /* Then */
         await expect(questionPanel(page).getByRole('heading', {name: QUESTIONS[0].question})).toBeVisible();
         await expectScreen(page, 'question-panel');
-    });
-
-    test('question panel, peeking at the terminal', async ({page, home}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-        await askQuestions(home, S.loginFix, QUESTIONS);
-        await expect(questionPanel(page).getByRole('heading', {name: QUESTIONS[0].question})).toBeVisible();
 
         /* When */
         await questionPanel(page)
@@ -198,7 +192,10 @@ test.describe('showing again', () => {
     const sheetGone = (page: Page) =>
         expect.poll(() => questionSheet(page).evaluate((el) => getComputedStyle(el).visibility)).toBe('hidden');
 
-    test('a later set comes up whole and takes clicks', async ({page, home}) => {
+    test('a later set comes up whole and takes clicks, also when come back to from the terminal', async ({
+        page,
+        home,
+    }) => {
         /* Given */
         const first = await askedOnScreen(page, home);
         await option(page, /The whole site/).click();
@@ -212,7 +209,16 @@ test.describe('showing again', () => {
         const second = await askQuestions(home, S.loginFix, QUESTIONS);
         await option(page, /Only \/app/).click({timeout: 3000});
         await primary(page).click();
+        await expect(heading(page, 1)).toBeVisible();
+        await page.keyboard.press('Escape');
+        await sheetGone(page);
+        await waitingPill(page).click();
         await option(page, /Lint/).click({timeout: 3000});
+
+        /* Then */
+        await expect(tab(page, 'Checks')).toHaveClass(/is-done/);
+
+        /* When */
         await primary(page).click();
 
         /* Then */
@@ -221,23 +227,6 @@ test.describe('showing again', () => {
             [QUESTIONS[0].question]: 'Only /app',
             [QUESTIONS[1].question]: 'Lint',
         });
-    });
-
-    test('a set come back to from the terminal takes clicks', async ({page, home}) => {
-        /* Given */
-        await askedOnScreen(page, home);
-        await option(page, /The whole site/).click();
-        await primary(page).click();
-        await expect(heading(page, 1)).toBeVisible();
-        await page.keyboard.press('Escape');
-        await sheetGone(page);
-
-        /* When */
-        await waitingPill(page).click();
-        await option(page, /Lint/).click({timeout: 3000});
-
-        /* Then */
-        await expect(tab(page, 'Checks')).toHaveClass(/is-done/);
     });
 });
 
@@ -289,9 +278,30 @@ test.describe('placement', () => {
 });
 
 test.describe('keys', () => {
-    test('the keyboard answers the whole set', async ({page, home}) => {
+    test('the keyboard answers the whole set; other keys stop at the panel, or at Patch', async ({page, home}) => {
         /* Given */
         const asked = await askedOnScreen(page, home);
+        await page.evaluate(() => {
+            const w = window as unknown as {__keys: string[]};
+            w.__keys = [];
+            window.addEventListener('keydown', (e) => w.__keys.push((e.metaKey ? 'Meta+' : '') + e.key));
+        });
+
+        /* When */
+        await page.keyboard.press('x');
+        await page.keyboard.press('n');
+        await page.keyboard.press('Meta+k');
+        // Dispatched rather than pressed, so it reaches the window without moving focus.
+        await keysAtOnce(page, ['Tab']);
+
+        /* Then */
+        // Unmodified keys stop at the panel; Tab and shortcuts go on.
+        const keys = await page.evaluate(() => (window as unknown as {__keys: string[]}).__keys);
+        expect(keys).not.toContain('x');
+        expect(keys).not.toContain('n');
+        expect(keys).toContain('Meta+k');
+        expect(keys).toContain('Tab');
+        expect(await focusIsIn(page)).toBe('panel');
 
         /* When */
         await page.keyboard.press('3');
@@ -347,52 +357,11 @@ test.describe('keys', () => {
         /* When */
         await page.keyboard.press('Enter');
         await expect(heading(page, 1)).toBeVisible();
-        await page.keyboard.press('2');
-        await page.keyboard.press('Enter');
-
-        /* Then */
-        const reply = (await asked.response) as HookReply;
-        expect(reply.hookSpecificOutput.updatedInput.answers).toEqual({
-            [QUESTIONS[0].question]: 'Only /app',
-            [QUESTIONS[1].question]: 'Unit tests, Type check',
-        });
-    });
-
-    test('unmodified keys stop at the panel; Tab and shortcuts go on', async ({page, home}) => {
-        /* Given */
-        await askedOnScreen(page, home);
-        await page.evaluate(() => {
-            const w = window as unknown as {__keys: string[]};
-            w.__keys = [];
-            window.addEventListener('keydown', (e) => w.__keys.push((e.metaKey ? 'Meta+' : '') + e.key));
-        });
-
-        /* When */
-        await page.keyboard.press('x');
-        await page.keyboard.press('n');
-        await page.keyboard.press('Meta+k');
-        await page.keyboard.press('Tab');
-
-        /* Then */
-        const keys = await page.evaluate(() => (window as unknown as {__keys: string[]}).__keys);
-        expect(keys).not.toContain('x');
-        expect(keys).not.toContain('n');
-        expect(keys).toContain('Meta+k');
-        expect(keys).toContain('Tab');
-    });
-
-    test('Enter or Space on Patch pokes Patch, and Patch keeps focus when a key acts on the panel', async ({
-        page,
-        home,
-    }) => {
-        /* Given */
-        await askedOnScreen(page, home);
         await pokePatch(page).focus();
-
-        /* When */
         await page.keyboard.press('Enter');
 
         /* Then */
+        // Enter and Space on Patch poke it, and go no further.
         await expect(patchSays(page)).toHaveText('Hey! I’m counting.');
 
         /* When */
@@ -400,16 +369,26 @@ test.describe('keys', () => {
 
         /* Then */
         await expect(patchSays(page)).toHaveText('Hehe. That tickles.');
-        // Neither went on to the panel: nothing is picked, the question is the same.
-        await expect(option(page, /The whole site/)).toHaveAttribute('aria-pressed', 'false');
-        await expect(heading(page, 0)).toBeVisible();
+        await expect(heading(page, 1)).toBeVisible();
+        await expect(option(page, /Type check/)).toHaveAttribute('aria-pressed', 'false');
 
         /* When */
         await page.keyboard.press('2');
 
         /* Then */
-        await expect(option(page, /Only \/app/)).toHaveAttribute('aria-pressed', 'true');
+        // Other keys on Patch act on the panel, and Patch keeps the focus.
+        await expect(option(page, /Type check/)).toHaveAttribute('aria-pressed', 'true');
         await expect(pokePatch(page)).toBeFocused();
+
+        /* When */
+        await page.keyboard.press('ArrowRight');
+
+        /* Then */
+        const reply = (await asked.response) as HookReply;
+        expect(reply.hookSpecificOutput.updatedInput.answers).toEqual({
+            [QUESTIONS[0].question]: 'Only /app',
+            [QUESTIONS[1].question]: 'Unit tests, Type check',
+        });
     });
 });
 
@@ -626,24 +605,40 @@ test.describe('motion', () => {
 });
 
 test.describe('send', () => {
-    test('a farewell Patch comes 280ms after sending and stays about 3.2s', async ({page, home}) => {
-        /* Given */
-        const asked = await askedOnScreen(page, home, QUESTIONS.slice(0, 1));
-        await option(page, /The whole site/).click();
-        await recordAnimations(page);
+    test.describe('on the fake clock', () => {
+        test.use({fakeTimers: true});
 
-        /* When */
-        await page.keyboard.press('Enter');
-        await asked.response;
+        test('a farewell Patch comes 280ms after sending and stays about 3.2s', async ({page, home}) => {
+            /* Given */
+            const asked = await askedOnScreen(page, home, QUESTIONS.slice(0, 1));
+            await option(page, /The whole site/).click();
+            await recordAnimations(page);
 
-        /* Then */
-        const farewell = page.getByText('Off it goes!');
-        await expect(farewell).toBeVisible();
-        const arrival = (await recordedAnimations(page)).find((a) => a.target === 'div.qp-farewell');
-        expect(arrival?.delay).toBe(280);
-        await page.waitForTimeout(2500);
-        await expect(farewell).toBeVisible();
-        await expect(farewell).toHaveCount(0, {timeout: 2000});
+            /* When */
+            await page.keyboard.press('Enter');
+            await asked.response;
+
+            /* Then */
+            const farewell = page.getByText('Off it goes!');
+            await expect(farewell).toBeVisible();
+            const arrival = (await recordedAnimations(page)).find((a) => a.target === 'div.qp-farewell');
+            expect(arrival?.delay).toBe(280);
+            // The stay starts as the farewell arrives; `at` is on the same clock.
+            const since = await page.evaluate((at) => performance.now() - at, arrival!.at);
+            expect(since).toBeLessThan(3000);
+
+            /* When */
+            await page.clock.fastForward(Math.round(3100 - since));
+
+            /* Then */
+            await expect(farewell).toBeVisible();
+
+            /* When */
+            await page.clock.fastForward(200);
+
+            /* Then */
+            await expect(farewell).toHaveCount(0);
+        });
     });
 
     test('a new set sends the farewell away', async ({page, home}) => {
@@ -661,25 +656,11 @@ test.describe('send', () => {
         await expect(heading(page, 1)).toBeVisible();
         await expect(page.getByText('Off it goes!')).toHaveCount(0, {timeout: 1000});
     });
-
-    test('a set main has already withdrawn settles without a farewell', async ({page, home, app}) => {
-        /* Given */
-        await openSession(page, home, LABEL.loginFix, S.loginFix);
-        await pushQuestions(app, S.loginFix, QUESTIONS.slice(0, 1));
-        await expect(heading(page, 0)).toBeVisible();
-        await option(page, /The whole site/).click();
-
-        /* When */
-        await page.keyboard.press('Enter');
-
-        /* Then */
-        await expect(questionPanel(page)).toHaveCount(0);
-        await page.waitForTimeout(500);
-        await expect(page.getByText('Off it goes!')).toHaveCount(0);
-    });
 });
 
 test.describe('doze', () => {
+    test.use({fakeTimers: true});
+
     test('Patch says when the terminal takes over', async ({page, home, app}) => {
         /* Given */
         await openSession(page, home, LABEL.loginFix, S.loginFix);
@@ -690,8 +671,14 @@ test.describe('doze', () => {
         /* Then */
         await expect(heading(page, 0)).toBeVisible();
         await expect(patchSays(page)).toHaveText('Claude has a question for you. I’ll keep count!');
+
+        /* When */
+        // The doze check runs every 5s; the clock started at FIXTURE_NOW, as the deadline did.
+        await page.clock.fastForward(5000);
+
+        /* Then */
         // Once a minute at most, and not while plenty of time is left: test/question-copy.test.ts.
-        await expect(patchSays(page)).toHaveText('Still here. The terminal takes over in 3 min.', {timeout: 7000});
+        await expect(patchSays(page)).toHaveText('Still here. The terminal takes over in 3 min.');
     });
 });
 
