@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -127,6 +128,87 @@ class QuestionSheetModelTest {
         /* Then */
         assertEquals(0, model.state.value.step)
         assertEquals(listOf("HTTP"), model.state.value.draft.picked)
+    }
+
+    @Test
+    fun `swiping left moves to the next question once this one is answered`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        model.pick("HTTP")
+
+        /* When */
+        model.swipe(QuestionSwipe.Next)
+
+        /* Then */
+        assertEquals(1, model.state.value.step)
+    }
+
+    @Test
+    fun `swiping left on an unanswered question stays on it`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+
+        /* When */
+        model.swipe(QuestionSwipe.Next)
+
+        /* Then */
+        assertEquals(0, model.state.value.step)
+    }
+
+    @Test
+    fun `swiping left on the last question never sends the answers`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        model.pick("HTTP")
+        model.next()
+        model.pick("Sessions")
+
+        /* When */
+        model.swipe(QuestionSwipe.Next)
+
+        /* Then */
+        assertEquals(1, model.state.value.step)
+        assertEquals(QuestionPhase.Answering, model.state.value.phase)
+        assertTrue(link.sent.filterIsInstance<ClientMessage.Answer>().isEmpty())
+    }
+
+    @Test
+    fun `swiping right goes back to the previous question`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        model.pick("HTTP")
+        model.next()
+
+        /* When */
+        model.swipe(QuestionSwipe.Previous)
+
+        /* Then */
+        assertEquals(0, model.state.value.step)
+        assertEquals(listOf("HTTP"), model.state.value.draft.picked)
+    }
+
+    @Test
+    fun `swiping right on the first question stays on it`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+
+        /* When */
+        model.swipe(QuestionSwipe.Previous)
+
+        /* Then */
+        assertEquals(0, model.state.value.step)
+    }
+
+    @Test
+    fun `a sideways drag past the threshold is a swipe, a shorter one is not`() {
+        /* Given */
+        val threshold = 100f
+
+        /* When */
+        val swipes = listOf(questionSwipeOf(-120f, threshold), questionSwipeOf(130f, threshold), questionSwipeOf(-60f, threshold))
+
+        /* Then */
+        assertEquals(listOf(QuestionSwipe.Next, QuestionSwipe.Previous, null), swipes)
     }
 
     @Test

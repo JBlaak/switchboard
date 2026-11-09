@@ -56,8 +56,8 @@ private const val MeterBars = 14
 fun HoldToTalk.isBusy(): Boolean = shown() !is VoiceState.Idle
 
 /**
- * What [voice]'s mic is doing, in words: the time and a meter while held, with how to cancel; then transcribing;
- * or a problem's note, which a tap dismisses. Empty while idle.
+ * What [voice]'s mic is doing, in words: the time and a meter while held, with how to lock or cancel, or, locked,
+ * a Cancel to drop it; then transcribing; or a problem's note, which a tap dismisses. Empty while idle.
  */
 @Composable
 fun VoiceStrip(voice: HoldToTalk, modifier: Modifier = Modifier, initialLevels: List<Float> = emptyList()) {
@@ -77,7 +77,7 @@ fun VoiceStrip(voice: HoldToTalk, modifier: Modifier = Modifier, initialLevels: 
         Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.heightIn(min = 36.dp)) {
             when (state) {
                 VoiceState.Idle -> Unit
-                is VoiceState.Recording -> Recording(state.elapsedMillis, levels, voice.cancelling)
+                is VoiceState.Recording -> Recording(state.elapsedMillis, levels, voice.cancelling, voice.locked, onCancel = voice::cancel)
                 VoiceState.Transcribing -> Transcribing()
                 is VoiceState.Problem -> Note(noteOf(state.problem), onDismiss = voice::dismiss)
             }
@@ -86,7 +86,7 @@ fun VoiceStrip(voice: HoldToTalk, modifier: Modifier = Modifier, initialLevels: 
 }
 
 @Composable
-private fun Recording(elapsedMillis: Long, levels: List<Float>, cancelling: Boolean) {
+private fun Recording(elapsedMillis: Long, levels: List<Float>, cancelling: Boolean, locked: Boolean, onCancel: () -> Unit) {
     val colors = SwitchboardTheme.colors
     val blink by rememberInfiniteTransition(label = "recording dot").animateFloat(
         initialValue = 1f,
@@ -108,14 +108,28 @@ private fun Recording(elapsedMillis: Long, levels: List<Float>, cancelling: Bool
             color = colors.textStrong,
         )
         LevelMeter(levels, if (cancelling) colors.textFaint else colors.accent)
-        Text(
-            stringResource(if (cancelling) R.string.voice_release_to_cancel else R.string.voice_slide_to_cancel),
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-            color = if (cancelling) colors.danger else colors.textMuted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        if (locked) {
+            // Hands-free, the finger has nowhere to slide to: the stop button sends and this drops it.
+            Text(
+                stringResource(R.string.voice_cancel),
+                style = MaterialTheme.typography.labelLarge,
+                color = colors.danger,
+                maxLines = 1,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onCancel)
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            )
+        } else {
+            Text(
+                stringResource(if (cancelling) R.string.voice_release_to_cancel else R.string.voice_lock_or_cancel),
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = if (cancelling) colors.danger else colors.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -168,10 +182,11 @@ private class PreviewVoiceControls(state: VoiceState) : VoiceControls {
 }
 
 /** A mic showing [state], as if it had been pressed, for the previews of the screens it is on. */
-internal fun previewHoldToTalk(state: VoiceState, cancelling: Boolean = false): HoldToTalk {
+internal fun previewHoldToTalk(state: VoiceState, cancelling: Boolean = false, locked: Boolean = false): HoldToTalk {
     return HoldToTalk(PreviewVoiceControls(state), sessionId = { null }, onText = {}, hasPermission = { true }, haptics = null).apply {
         owns = true
         this.cancelling = cancelling
+        this.locked = locked
     }
 }
 
@@ -208,6 +223,13 @@ internal fun VoiceRecordingPreview() {
 @Composable
 internal fun VoiceCancellingPreview() {
     VoicePreviewOf(previewHoldToTalk(VoiceState.Recording(level = 0.3f, elapsedMillis = 12_000), cancelling = true))
+}
+
+@Preview(name = "Locked dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Locked light", uiMode = Configuration.UI_MODE_NIGHT_NO)
+@Composable
+internal fun VoiceLockedPreview() {
+    VoicePreviewOf(previewHoldToTalk(VoiceState.Recording(level = 0.5f, elapsedMillis = 41_000), locked = true))
 }
 
 @Preview(name = "Transcribing dark", uiMode = Configuration.UI_MODE_NIGHT_YES)

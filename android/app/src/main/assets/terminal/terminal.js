@@ -7,7 +7,7 @@
  * the input, so stdin is off and the hidden textarea can't take focus or raise the keyboard. The one input the
  * page makes itself is a scroll on the alternate screen, which it sends as "input <base64 of UTF-8 bytes>".
  * A tap on a link, typed out or an OSC 8 hyperlink, asks the app to open it as "open <url>": the WebView itself
- * never navigates.
+ * never navigates. A double tap jumps to the latest output.
  */
 (function () {
     'use strict';
@@ -148,6 +148,49 @@
         );
     }
 
+    /*
+     * Two quick taps close together jump back to the latest output, after scrolling up through the scrollback.
+     * Taps are only watched, never held back, so a single tap (on a link) works as it always did.
+     */
+    function jumpToLatestOnDoubleTap() {
+        var DOUBLE_TAP_MS = 300;
+        var TAP_SLOP_PX = 12;
+        var NEAR_PX = 40;
+        var start = null;
+        var lastTap = null;
+        element.addEventListener(
+            'touchstart',
+            function (event) {
+                var touch = event.touches[0];
+                start = event.touches.length === 1 ? {x: touch.clientX, y: touch.clientY} : null;
+            },
+            {capture: true, passive: true},
+        );
+        element.addEventListener(
+            'touchend',
+            function (event) {
+                var touch = event.changedTouches[0];
+                if (!start || !touch || event.touches.length !== 0) return;
+                var dx = Math.abs(touch.clientX - start.x);
+                var dy = Math.abs(touch.clientY - start.y);
+                start = null;
+                if (dx > TAP_SLOP_PX || dy > TAP_SLOP_PX) {
+                    lastTap = null;
+                    return;
+                }
+                var tap = {x: touch.clientX, y: touch.clientY, at: event.timeStamp};
+                var near = lastTap && Math.abs(tap.x - lastTap.x) < NEAR_PX && Math.abs(tap.y - lastTap.y) < NEAR_PX;
+                if (near && tap.at - lastTap.at < DOUBLE_TAP_MS) {
+                    term.scrollToBottom();
+                    lastTap = null;
+                } else {
+                    lastTap = tap;
+                }
+            },
+            {capture: true, passive: true},
+        );
+    }
+
     /* Only web links leave the terminal; the app opens them in the phone's browser. */
     function openLink(_event, uri) {
         var url;
@@ -178,6 +221,7 @@
         term.open(element);
         lockInput(term.textarea);
         scrollByTouch();
+        jumpToLatestOnDoubleTap();
         fit.fit();
         window.sb = {
             write: function (base64) {

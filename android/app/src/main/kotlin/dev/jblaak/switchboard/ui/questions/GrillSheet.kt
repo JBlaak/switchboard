@@ -89,6 +89,7 @@ interface GrillSheetActions {
     fun cancelQueue()
     fun errorSeen()
     fun close()
+    fun swipe(to: QuestionSwipe)
 }
 
 /**
@@ -98,7 +99,12 @@ interface GrillSheetActions {
  */
 @Composable
 fun GrillSheetContent(state: GrillSheetState, sessionName: String?, actions: GrillSheetActions, voice: HoldToTalk?) {
-    Column(Modifier.navigationBarsPadding()) {
+    val pages = state.view != null && state.phase == GrillPhase.Answering && state.field == null
+    Column(
+        Modifier
+            .swipeBetweenQuestions(enabled = pages, onSwipe = actions::swipe)
+            .navigationBarsPadding(),
+    ) {
         val phase = state.phase
         val view = state.view
         when {
@@ -712,6 +718,7 @@ private val previewActions = object : GrillSheetActions {
     override fun cancelQueue() = Unit
     override fun errorSeen() = Unit
     override fun close() = Unit
+    override fun swipe(to: QuestionSwipe) = Unit
 }
 
 private fun previewQuestion(number: Int, title: String, answer: GrillAnswer?, mark: GrillMark? = null) = GrillQuestionView(

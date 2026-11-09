@@ -68,6 +68,7 @@ interface QuestionSheetActions {
     fun back()
     fun failureSeen()
     fun later()
+    fun swipe(to: QuestionSwipe)
 }
 
 /**
@@ -76,7 +77,12 @@ interface QuestionSheetActions {
  */
 @Composable
 fun QuestionSheetContent(state: QuestionSheetState, sessionName: String?, actions: QuestionSheetActions, voice: HoldToTalk?) {
-    Column(Modifier.navigationBarsPadding()) {
+    val pages = state.set.questions.size > 1 && state.phase == QuestionPhase.Answering
+    Column(
+        Modifier
+            .swipeBetweenQuestions(enabled = pages, onSwipe = actions::swipe)
+            .navigationBarsPadding(),
+    ) {
         when (val phase = state.phase) {
             is QuestionPhase.AnsweredElsewhere -> AnsweredElsewhere(phase.on, actions::later)
             else -> {
@@ -435,6 +441,7 @@ private val previewActions = object : QuestionSheetActions {
     override fun back() = Unit
     override fun failureSeen() = Unit
     override fun later() = Unit
+    override fun swipe(to: QuestionSwipe) = Unit
 }
 
 private fun previewSheet(source: QuestionsSource, questions: List<Question>, phase: QuestionPhase, picked: List<String>): QuestionSheetState {

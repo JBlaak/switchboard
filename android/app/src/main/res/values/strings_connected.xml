@@ -176,8 +176,11 @@
     <string name="sessions_ssh">SSH</string>
     <string name="sessions_title">Sessions</string>
     <string name="sessions_waiting_terminal">waiting in the terminal</string>
+    <string name="voice_cancel">Cancel</string>
     <string name="voice_failed">Couldn’t transcribe: %1$s</string>
     <string name="voice_hold_to_talk">Hold to talk</string>
+    <!-- Under a held mic: slide up to keep recording without holding, left to drop the recording. -->
+    <string name="voice_lock_or_cancel">↑ lock · ← cancel</string>
     <string name="voice_no_microphone">Couldn’t open the microphone</string>
     <string name="voice_no_permission">Switchboard needs the microphone</string>
     <string name="voice_no_whisper">Voice needs whisper-cpp on your Mac: brew install whisper-cpp</string>
@@ -187,6 +190,6 @@
     <string name="voice_preparing">Getting voice ready on your Mac</string>
     <string name="voice_preparing_progress">Getting voice ready on your Mac, %1$d%%</string>
     <string name="voice_release_to_cancel">Let go to cancel</string>
-    <string name="voice_slide_to_cancel">Slide away to cancel</string>
+    <string name="voice_stop">Stop and transcribe</string>
     <string name="voice_transcribing">Transcribing…</string>
 </resources>

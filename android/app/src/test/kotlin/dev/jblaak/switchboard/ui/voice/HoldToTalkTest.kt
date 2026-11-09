@@ -36,27 +36,68 @@ class HoldToTalkTest {
         .apply { askPermission = { asked++ } }
 
     @Test
-    fun `sliding less than the threshold does not cancel`() {
+    fun `sliding less than the thresholds neither locks nor cancels`() {
         /* Given */
-        val threshold = 100f
+        val lockAt = 72f
+        val cancelAt = 96f
 
         /* When */
-        val off = slidOff(-60f, -70f, threshold)
+        val slide = slideOf(-60f, -50f, lockAt, cancelAt)
 
         /* Then */
-        assertFalse(off)
+        assertEquals(Slide.None, slide)
     }
 
     @Test
-    fun `sliding the threshold away in any direction cancels`() {
+    fun `sliding up past the lock threshold locks`() {
         /* Given */
-        val threshold = 100f
+        val lockAt = 72f
+        val cancelAt = 96f
 
         /* When */
-        val off = listOf(slidOff(-100f, 0f, threshold), slidOff(0f, -120f, threshold), slidOff(80f, 80f, threshold))
+        val slide = slideOf(-20f, -80f, lockAt, cancelAt)
 
         /* Then */
-        assertEquals(listOf(true, true, true), off)
+        assertEquals(Slide.Lock, slide)
+    }
+
+    @Test
+    fun `sliding left past the cancel threshold cancels`() {
+        /* Given */
+        val lockAt = 72f
+        val cancelAt = 96f
+
+        /* When */
+        val slide = slideOf(-100f, -40f, lockAt, cancelAt)
+
+        /* Then */
+        assertEquals(Slide.Cancel, slide)
+    }
+
+    @Test
+    fun `sliding down or right does nothing however far`() {
+        /* Given */
+        val lockAt = 72f
+        val cancelAt = 96f
+
+        /* When */
+        val slides = listOf(slideOf(0f, 300f, lockAt, cancelAt), slideOf(300f, 0f, lockAt, cancelAt))
+
+        /* Then */
+        assertEquals(listOf(Slide.None, Slide.None), slides)
+    }
+
+    @Test
+    fun `a slide up and left goes the way it went further`() {
+        /* Given */
+        val lockAt = 72f
+        val cancelAt = 96f
+
+        /* When */
+        val slides = listOf(slideOf(-100f, -130f, lockAt, cancelAt), slideOf(-130f, -100f, lockAt, cancelAt))
+
+        /* Then */
+        assertEquals(listOf(Slide.Lock, Slide.Cancel), slides)
     }
 
     @Test
@@ -114,7 +155,7 @@ class HoldToTalkTest {
     fun `letting go after sliding away cancels`() {
         /* Given */
         voice.press()
-        voice.slide(-150f, 0f, threshold = 100f)
+        voice.slide(-150f, 0f, lockAt = 72f, cancelAt = 100f)
 
         /* When */
         voice.release()
@@ -128,14 +169,135 @@ class HoldToTalkTest {
     fun `sliding back onto the mic before letting go still transcribes`() {
         /* Given */
         voice.press()
-        voice.slide(-150f, 0f, threshold = 100f)
-        voice.slide(-20f, 0f, threshold = 100f)
+        voice.slide(-150f, 0f, lockAt = 72f, cancelAt = 100f)
+        voice.slide(-20f, 0f, lockAt = 72f, cancelAt = 100f)
 
         /* When */
         voice.release()
 
         /* Then */
         assertEquals(listOf("start s-1", "stop"), controls.calls)
+    }
+
+    @Test
+    fun `sliding up locks and letting go keeps recording`() {
+        /* Given */
+        voice.press()
+        voice.slide(0f, -100f, lockAt = 72f, cancelAt = 100f)
+
+        /* When */
+        voice.release()
+
+        /* Then */
+        assertEquals(listOf("start s-1"), controls.calls)
+        assertTrue(voice.locked)
+        assertTrue(voice.holding)
+    }
+
+    @Test
+    fun `stop on a locked recording transcribes, as letting go does`() {
+        /* Given */
+        voice.press()
+        voice.slide(0f, -100f, lockAt = 72f, cancelAt = 100f)
+        voice.release()
+
+        /* When */
+        voice.stop()
+
+        /* Then */
+        assertEquals(listOf("start s-1", "stop"), controls.calls)
+        assertFalse(voice.locked)
+        assertFalse(voice.holding)
+    }
+
+    @Test
+    fun `cancel on a locked recording drops it`() {
+        /* Given */
+        voice.press()
+        voice.slide(0f, -100f, lockAt = 72f, cancelAt = 100f)
+        voice.release()
+
+        /* When */
+        voice.cancel()
+
+        /* Then */
+        assertEquals(listOf("start s-1", "cancel"), controls.calls)
+        assertFalse(voice.locked)
+    }
+
+    @Test
+    fun `once locked, sliding left no longer cancels`() {
+        /* Given */
+        voice.press()
+        voice.slide(0f, -100f, lockAt = 72f, cancelAt = 100f)
+
+        /* When */
+        voice.slide(-200f, 0f, lockAt = 72f, cancelAt = 100f)
+        voice.release()
+
+        /* Then */
+        assertFalse(voice.cancelling)
+        assertTrue(voice.locked)
+        assertEquals(listOf("start s-1"), controls.calls)
+    }
+
+    @Test
+    fun `sliding left past the threshold then up locks instead of cancelling`() {
+        /* Given */
+        voice.press()
+        voice.slide(-150f, 0f, lockAt = 72f, cancelAt = 100f)
+
+        /* When */
+        voice.slide(-20f, -150f, lockAt = 72f, cancelAt = 100f)
+
+        /* Then */
+        assertFalse(voice.cancelling)
+        assertTrue(voice.locked)
+    }
+
+    @Test
+    fun `stop without a lock does nothing`() {
+        /* Given */
+        voice.press()
+
+        /* When */
+        voice.stop()
+        voice.cancel()
+
+        /* Then */
+        assertEquals(listOf("start s-1"), controls.calls)
+        assertTrue(voice.holding)
+    }
+
+    @Test
+    fun `a locked recording the controls ended on their own is no longer locked`() {
+        /* Given */
+        voice.press()
+        voice.slide(0f, -100f, lockAt = 72f, cancelAt = 100f)
+        voice.release()
+
+        /* When */
+        voice.controlsNow(VoiceState.Problem(VoiceProblem.NotConnected))
+
+        /* Then */
+        assertFalse(voice.locked)
+        assertFalse(voice.holding)
+        assertEquals(listOf("start s-1"), controls.calls)
+    }
+
+    @Test
+    fun `the mic leaving the screen drops a locked recording`() {
+        /* Given */
+        voice.press()
+        voice.slide(0f, -100f, lockAt = 72f, cancelAt = 100f)
+        voice.release()
+
+        /* When */
+        voice.abandon()
+
+        /* Then */
+        assertEquals(listOf("start s-1", "cancel"), controls.calls)
+        assertFalse(voice.locked)
     }
 
     @Test

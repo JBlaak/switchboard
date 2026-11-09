@@ -78,6 +78,17 @@ class QuestionSheetModel(
         mutableState.update { if (it.step > 0 && it.phase == QuestionPhase.Answering) it.copy(step = it.step - 1) else it }
     }
 
+    /**
+     * A sideways swipe: back, or on to the next question as Next does, once this one is answered. It never sends
+     * the answers: that stays a press of Send.
+     */
+    fun swipe(to: QuestionSwipe) {
+        when (to) {
+            QuestionSwipe.Previous -> back()
+            QuestionSwipe.Next -> if (!mutableState.value.isLastStep) next()
+        }
+    }
+
     /** After a failed send: back to the answers, to try again. */
     fun failureSeen() {
         mutableState.update { if (it.phase is QuestionPhase.Failed) it.copy(phase = QuestionPhase.Answering) else it }

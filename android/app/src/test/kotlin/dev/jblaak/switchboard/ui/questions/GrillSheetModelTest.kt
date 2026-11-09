@@ -193,6 +193,72 @@ class GrillSheetModelTest {
     }
 
     @Test
+    fun `swiping left moves to the next question without answering`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+
+        /* When */
+        model.swipe(QuestionSwipe.Next)
+
+        /* Then */
+        assertEquals(1, model.state.value.place)
+        assertTrue(link.sent.isEmpty())
+    }
+
+    @Test
+    fun `swiping left on the last question opens the review`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        model.goTo(2)
+
+        /* When */
+        model.swipe(QuestionSwipe.Next)
+
+        /* Then */
+        assertTrue(model.state.value.onReview)
+    }
+
+    @Test
+    fun `swiping right goes back a question, and from the review to the last one`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        model.goTo(3)
+
+        /* When */
+        model.swipe(QuestionSwipe.Previous)
+
+        /* Then */
+        assertEquals(2, model.state.value.place)
+    }
+
+    @Test
+    fun `swiping right on the first question stays on it`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+
+        /* When */
+        model.swipe(QuestionSwipe.Previous)
+
+        /* Then */
+        assertEquals(0, model.state.value.place)
+    }
+
+    @Test
+    fun `a swipe while a text field is open keeps the question and what was typed`() = runTest(UnconfinedTestDispatcher()) {
+        /* Given */
+        val model = newModel()
+        model.open(GrillFieldKind.Instead)
+        model.type("Keep them a week")
+
+        /* When */
+        model.swipe(QuestionSwipe.Next)
+
+        /* Then */
+        assertEquals(0, model.state.value.place)
+        assertEquals(GrillField(GrillFieldKind.Instead, "Keep them a week"), model.state.value.field)
+    }
+
+    @Test
     fun `ask about this sends the question and shows Claude answering`() = runTest(UnconfinedTestDispatcher()) {
         /* Given */
         val model = newModel()

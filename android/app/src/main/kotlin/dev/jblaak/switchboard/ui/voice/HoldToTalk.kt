@@ -42,8 +42,14 @@ class HoldToTalk internal constructor(
     internal var holding by mutableStateOf(false)
         private set
 
-    /** Held and slid far enough off the mic that letting go drops the recording. */
+    /** Held and slid far enough left that letting go drops the recording. */
     internal var cancelling by mutableStateOf(false)
+
+    /**
+     * Slid up far enough to lock: the recording carries on with the finger lifted, until [stop] sends it or
+     * [cancel] drops it. [holding] stays true meanwhile, as this mic is still the one recording.
+     */
+    internal var locked by mutableStateOf(false)
 
     /** A problem found here rather than by [controls]: the microphone permission was denied. */
     internal var localProblem by mutableStateOf<VoiceProblem?>(null)
@@ -62,32 +68,74 @@ class HoldToTalk internal constructor(
         owns = true
         holding = true
         cancelling = false
+        locked = false
         haptics?.performHapticFeedback(HapticFeedbackType.LongPress)
         controls.start(sessionId(), onText)
         return true
     }
 
-    /** The finger moved by [dx], [dy] from where it pressed. */
-    internal fun slide(dx: Float, dy: Float, threshold: Float) {
-        val off = slidOff(dx, dy, threshold)
-        if (off && !cancelling) haptics?.performHapticFeedback(HapticFeedbackType.SegmentTick)
-        cancelling = off
+    /**
+     * The finger moved by [dx], [dy] from where it pressed: up past [lockAt] locks the recording, left past
+     * [cancelAt] means letting go cancels it. Once locked, the finger can go anywhere.
+     */
+    internal fun slide(dx: Float, dy: Float, lockAt: Float, cancelAt: Float) {
+        if (!holding || locked) return
+        when (slideOf(dx, dy, lockAt, cancelAt)) {
+            Slide.Lock -> {
+                locked = true
+                cancelling = false
+                haptics?.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+            }
+            Slide.Cancel -> {
+                if (!cancelling) haptics?.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                cancelling = true
+            }
+            Slide.None -> cancelling = false
+        }
     }
 
-    /** Let go: transcribe, or drop the recording when slid off. */
+    /** Let go: transcribe, or drop the recording when slid off. Locked, the recording carries on. */
     internal fun release() {
-        if (!holding) return
+        if (!holding || locked) return
         holding = false
         if (cancelling) controls.cancel() else controls.stop()
         cancelling = false
     }
 
-    /** The gesture was taken away, or the mic left the screen, while held. */
+    /** The locked recording's Stop: transcribe, as letting go does. */
+    internal fun stop() {
+        if (!holding || !locked) return
+        holding = false
+        locked = false
+        controls.stop()
+    }
+
+    /** The locked recording's cancel: drop it, and nothing is sent. */
+    internal fun cancel() {
+        if (!holding || !locked) return
+        holding = false
+        locked = false
+        controls.cancel()
+    }
+
+    /** The gesture was taken away, or the mic left the screen, while held or locked. */
     internal fun abandon() {
         if (!holding) return
         holding = false
         cancelling = false
+        locked = false
         controls.cancel()
+    }
+
+    /**
+     * What [controls] are doing now. A locked recording that ended on its own (the link dropped, the mic failed)
+     * is no longer this mic's to stop, so the lock goes with it.
+     */
+    internal fun controlsNow(state: VoiceState) {
+        if (!locked || state is VoiceState.Recording) return
+        locked = false
+        holding = false
+        cancelling = false
     }
 
     internal fun denied() {
@@ -99,8 +147,23 @@ class HoldToTalk internal constructor(
     }
 }
 
-/** Slid [dx], [dy] from where the mic was pressed: far enough off it to cancel. */
-fun slidOff(dx: Float, dy: Float, threshold: Float): Boolean = dx * dx + dy * dy >= threshold * threshold
+/** Where a held mic's finger has slid to. */
+enum class Slide { None, Lock, Cancel }
+
+/**
+ * Slid [dx], [dy] from where the mic was pressed: up past [lockAt] locks, left past [cancelAt] cancels, and
+ * whichever way the finger went further wins, so a slide that drifts a little never does the other one. Down and
+ * right do nothing.
+ */
+fun slideOf(dx: Float, dy: Float, lockAt: Float, cancelAt: Float): Slide {
+    val up = -dy
+    val left = -dx
+    return when {
+        up >= lockAt && up > left -> Slide.Lock
+        left >= cancelAt && left >= up -> Slide.Cancel
+        else -> Slide.None
+    }
+}
 
 /** What a mic shows of the controls' [state]: nothing unless it [owns] it, and a [localProblem] over anything. */
 fun shownVoiceOf(state: VoiceState, owns: Boolean, localProblem: VoiceProblem?): VoiceState {
@@ -146,6 +209,7 @@ fun rememberHoldToTalk(sessionId: String?, onText: (String) -> Unit): HoldToTalk
     LaunchedEffect(voice) {
         var busy = false
         controls.state.collect { state ->
+            voice.controlsNow(state)
             when {
                 !voice.owns -> busy = false
                 state !is VoiceState.Idle -> busy = true

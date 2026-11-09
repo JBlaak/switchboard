@@ -110,6 +110,19 @@ class GrillSheetModel(
 
     fun back() = goTo(mutableState.value.place - 1)
 
+    /**
+     * A sideways swipe: the previous question, or the next as Skip does (the review after the last). Not while a
+     * text field is open, so a swipe never throws away what is being typed.
+     */
+    fun swipe(to: QuestionSwipe) {
+        val current = mutableState.value
+        if (current.field != null || current.phase != GrillPhase.Answering) return
+        when (to) {
+            QuestionSwipe.Previous -> back()
+            QuestionSwipe.Next -> skip()
+        }
+    }
+
     /** [place] past the last question is the review. */
     fun goTo(place: Int) {
         mutableState.update { current ->

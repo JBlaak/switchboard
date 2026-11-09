@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -31,12 +32,16 @@ import dev.jblaak.switchboard.R
 import dev.jblaak.switchboard.theme.SwitchboardTheme
 import dev.jblaak.switchboard.ui.connected.MicIcon
 
-/** How far the finger slides off the mic before letting go cancels, like a voice note in a chat app. */
+/** How far the finger slides left before letting go cancels, like a voice note in a chat app: far, so a wobble doesn't. */
 private val CancelDistance = 96.dp
 
+/** How far the finger slides up to lock the recording, so it can be let go. */
+private val LockDistance = 72.dp
+
 /**
- * The mic: press and hold to record, let go to transcribe, slide away and let go to cancel. Lit up with a ring
- * that swells with the voice while recording, red once letting go would cancel, and a spinner while transcribing.
+ * The mic: press and hold to record, let go to transcribe, slide left and let go to cancel, slide up to lock it
+ * and record hands-free. Lit up with a ring that swells with the voice while recording, red once letting go would
+ * cancel, a stop button while locked, and a spinner while transcribing.
  */
 @Composable
 fun HoldToTalkMic(voice: HoldToTalk, size: Dp, idleContainer: Color, idleContent: Color, modifier: Modifier = Modifier) {
@@ -44,6 +49,7 @@ fun HoldToTalkMic(voice: HoldToTalk, size: Dp, idleContainer: Color, idleContent
     val shown = voice.shown()
     val recording = shown is VoiceState.Recording
     val cancelling = recording && voice.cancelling
+    val locked = recording && voice.locked
     val container by animateColorAsState(
         when {
             cancelling -> colors.danger
@@ -63,7 +69,7 @@ fun HoldToTalkMic(voice: HoldToTalk, size: Dp, idleContainer: Color, idleContent
     val level by animateFloatAsState((shown as? VoiceState.Recording)?.level ?: 0f, label = "mic level")
     val scale by animateFloatAsState(if (recording) 1.12f else 1f, label = "mic scale")
     val ring = colors.accent.copy(alpha = 0.25f)
-    val description = stringResource(R.string.voice_hold_to_talk)
+    val description = stringResource(if (locked) R.string.voice_stop else R.string.voice_hold_to_talk)
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
@@ -85,18 +91,37 @@ fun HoldToTalkMic(voice: HoldToTalk, size: Dp, idleContainer: Color, idleContent
     ) {
         if (shown is VoiceState.Transcribing) {
             CircularProgressIndicator(color = colors.accent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+        } else if (locked) {
+            // Stop, as in a voice note: a tap sends what was said for transcribing, as letting go does.
+            Box(
+                Modifier
+                    .size(14.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(content),
+            )
         } else {
             Icon(MicIcon, contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
         }
     }
 }
 
-/** The press, slide and release of [voice]'s mic; the touches are its own, so a sheet under it doesn't drag. */
+/**
+ * The press, slide and release of [voice]'s mic, or, while it is locked, a tap on its stop button; the touches
+ * are its own, so a sheet under it doesn't drag.
+ */
 private fun Modifier.holdToTalk(voice: HoldToTalk): Modifier = pointerInput(voice) {
-    val threshold = CancelDistance.toPx()
+    val lockAt = LockDistance.toPx()
+    val cancelAt = CancelDistance.toPx()
     awaitEachGesture {
         val down = awaitFirstDown()
         down.consume()
+        if (voice.locked) {
+            waitForUpOrCancellation()?.let {
+                it.consume()
+                voice.stop()
+            }
+            return@awaitEachGesture
+        }
         if (!voice.press()) {
             waitForUpOrCancellation()?.consume()
             return@awaitEachGesture
@@ -112,10 +137,11 @@ private fun Modifier.holdToTalk(voice: HoldToTalk): Modifier = pointerInput(voic
                     break
                 }
                 val moved = change.position - down.position
-                voice.slide(moved.x, moved.y, threshold)
+                voice.slide(moved.x, moved.y, lockAt, cancelAt)
             }
         } finally {
-            if (!released) voice.abandon()
+            // Locked, the recording no longer needs the finger: losing the gesture leaves it running.
+            if (!released && !voice.locked) voice.abandon()
         }
     }
 }

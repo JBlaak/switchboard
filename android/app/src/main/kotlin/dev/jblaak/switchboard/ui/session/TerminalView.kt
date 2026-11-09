@@ -36,7 +36,8 @@ val TerminalBackground = Color(0xFF141517)
  * A session's terminal: xterm.js from the APK's assets in a WebView that loads nothing else. [writes] are fed to
  * it a frame at a time; [onOpened] comes each time the page has loaded and fitted itself (an empty terminal to
  * replay into), [onResized] whenever the fit changes. The terminal takes no typing of its own; [onInput] is
- * what a scroll on the alternate screen sends the program. A tapped web link opens in the phone's browser.
+ * what a scroll on the alternate screen sends the program. A tapped web link opens in the phone's browser, and a
+ * double tap jumps to the latest output (the page does that itself, in `terminal.js`).
  */
 @Composable
 fun TerminalView(

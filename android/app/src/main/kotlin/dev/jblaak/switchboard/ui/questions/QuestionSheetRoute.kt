@@ -32,6 +32,8 @@ fun QuestionSheetRoute(
     sessionName: String?,
     onClose: () -> Unit,
 ) {
+    // Dragging the sheet down closes it as its close button does: the sheet's own drag, which the options' scroll
+    // only hands on once it is back at the top. Sideways swipes between questions are the sheets' own.
     ModalBottomSheet(
         onDismissRequest = onClose,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -62,6 +64,7 @@ private fun AskSheet(link: PhoneLink, set: PendingQuestions, sessionName: String
             override fun back() = model.back()
             override fun failureSeen() = model.failureSeen()
             override fun later() = close()
+            override fun swipe(to: QuestionSwipe) = model.swipe(to)
         }
     }
     QuestionSheetContent(state, sessionName, actions, voice)
@@ -102,6 +105,7 @@ private fun GrillSheet(
             override fun cancelQueue() = model.cancelQueue()
             override fun errorSeen() = model.errorSeen()
             override fun close() = close()
+            override fun swipe(to: QuestionSwipe) = model.swipe(to)
         }
     }
     GrillSheetContent(state, sessionName, actions, voice)
