@@ -116,6 +116,8 @@ export interface SwitchboardApi {
         number: number,
         title: string,
     ): Promise<{pinned: boolean}>;
+    /** Pin a project, from its page, to the top of the list above the pinned plans, or unpin it. */
+    toggleProjectPin(projectPath: string): Promise<{pinned: boolean}>;
     /** `null` clears the rename, falling back to the AI/first-prompt title. */
     renameSession(id: string, name: string | null): Promise<IpcResult>;
     /**

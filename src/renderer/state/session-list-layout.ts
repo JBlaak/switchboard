@@ -8,7 +8,7 @@
  * first, except Working, which is newest *started* first (see `sortKey`).
  * Sessions sharing a slug fold into a group, but only within their own project.
  * A plan the user pinned (such a group, or a GitHub plan pinned from its
- * page) sits above all of them.
+ * page) sits above all of them, and a project pinned from its page above that.
  *
  * The list is *anchored*: the session the user is working in keeps the slot it
  * already had, so the list cannot slide out from under the cursor while the
@@ -60,7 +60,15 @@ export interface SessionListPlan {
     readonly title: string;
 }
 
-export type SessionListEntry = SessionListRow | SessionListGroup | SessionListPlan;
+/** A project pinned from its page: a row that opens the page; its sessions stay in their own sections. */
+export interface SessionListProject {
+    readonly kind: 'project';
+    /** See `projectPinId`. */
+    readonly id: string;
+    readonly projectPath: string;
+}
+
+export type SessionListEntry = SessionListRow | SessionListGroup | SessionListPlan | SessionListProject;
 
 /** A top-level entry, with what the ordering rules need from it. */
 export interface ListItem {
@@ -72,6 +80,8 @@ export interface ListItem {
     readonly pinned: boolean;
     /** A plan pinned to the top of the list. */
     readonly pinnedPlan: boolean;
+    /** A project pinned to the top of the list, above the plans. */
+    readonly pinnedProject?: boolean;
     /** The highest tier of its sessions, before pinning is taken into account. */
     readonly tier: number;
     readonly remote: boolean;
@@ -112,6 +122,11 @@ export function slugId(slug: string, projectPath: string): string {
 /** The element id for a pinned GitHub plan's row; the same plan can be pinned in two projects. */
 export function planPinId(projectPath: string, repository: string, number: number): string {
     return 'plan-' + (projectPath + '--' + repository + '--' + number).replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+/** The element id for a pinned project's row. */
+export function projectPinId(projectPath: string): string {
+    return 'project-' + projectPath.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
 /** The element id of a session's row. */
@@ -307,8 +322,8 @@ export function listItems(
         projectPath,
     });
 
-    // A pinned GitHub plan is a section of the unfiltered list only: a filter
-    // or a search asks about sessions, and it has none.
+    // A pinned project or GitHub plan is a section of the unfiltered list
+    // only: a filter or a search asks about sessions, and its row is none.
     const {filters} = inputs;
     const filtering =
         filters.showArchived ||
@@ -319,6 +334,18 @@ export function listItems(
         filters.searchMatchIds !== null;
 
     for (const project of projects) {
+        if (!filtering && project.pinnedAt !== undefined) {
+            items.push({
+                entry: {kind: 'project', id: projectPinId(project.projectPath), projectPath: project.projectPath},
+                sortTime: project.pinnedAt,
+                startTime: project.pinnedAt,
+                pinned: false,
+                pinnedPlan: false,
+                pinnedProject: true,
+                tier: TIER_REST,
+                remote: false,
+            });
+        }
         if (!filtering) {
             for (const pin of project.pinnedIssuePlans ?? []) {
                 items.push({

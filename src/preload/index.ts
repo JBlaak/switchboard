@@ -47,6 +47,7 @@ const api: SwitchboardApi = {
     togglePlanPin: (projectPath, slug) => ipcRenderer.invoke(INVOKE.togglePlanPin, projectPath, slug),
     toggleIssuePlanPin: (projectPath, repository, number, title) =>
         ipcRenderer.invoke(INVOKE.toggleIssuePlanPin, projectPath, repository, number, title),
+    toggleProjectPin: (projectPath) => ipcRenderer.invoke(INVOKE.toggleProjectPin, projectPath),
     renameSession: (id, name) => ipcRenderer.invoke(INVOKE.renameSession, id, name),
     archiveSession: (id, archived) => ipcRenderer.invoke(INVOKE.archiveSession, id, archived),
     snoozeSession: (id, until) => ipcRenderer.invoke(INVOKE.snoozeSession, id, until),

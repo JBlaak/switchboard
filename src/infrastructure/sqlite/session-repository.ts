@@ -9,7 +9,7 @@
 import type Database from 'better-sqlite3';
 import {decodePullRequests} from '../../domain/session/pull-requests';
 import type {CachedSession, FolderMeta, SessionMeta} from '../../domain/session/session';
-import type {IssuePlanPin, PlanPin} from '../../domain/project/project-list';
+import type {IssuePlanPin, PlanPin, ProjectPin} from '../../domain/project/project-list';
 import type {SessionRepository} from '../../application/ports/session-repository';
 
 /** A `session_cache` row as SQLite hands it back: the PR list is still JSON text. */
@@ -34,6 +34,9 @@ export class SqliteSessionRepository implements SessionRepository {
     private readonly issuePlanPinsGetAllStatement;
     private readonly issuePlanPinInsertStatement;
     private readonly issuePlanPinDeleteStatement;
+    private readonly projectPinsGetAllStatement;
+    private readonly projectPinInsertStatement;
+    private readonly projectPinDeleteStatement;
 
     private readonly cacheCountStatement;
     private readonly cacheGetAllStatement;
@@ -89,6 +92,13 @@ export class SqliteSessionRepository implements SessionRepository {
         this.issuePlanPinDeleteStatement = db.prepare<[string, string, number]>(
             'DELETE FROM pinned_issue_plans WHERE project_path = ? AND repository = ? AND number = ?',
         );
+        this.projectPinsGetAllStatement = db.prepare<[], {project_path: string; pinned_at: number}>(
+            'SELECT project_path, pinned_at FROM pinned_projects ORDER BY pinned_at',
+        );
+        this.projectPinInsertStatement = db.prepare<[string, number]>(
+            'INSERT OR IGNORE INTO pinned_projects (project_path, pinned_at) VALUES (?, ?)',
+        );
+        this.projectPinDeleteStatement = db.prepare<[string]>('DELETE FROM pinned_projects WHERE project_path = ?');
 
         this.cacheCountStatement = db.prepare<[], {cnt: number}>('SELECT COUNT(*) as cnt FROM session_cache');
         this.cacheGetAllStatement = db.prepare<[], CachedSessionRow>('SELECT * FROM session_cache');
@@ -212,6 +222,18 @@ export class SqliteSessionRepository implements SessionRepository {
     public toggleIssuePlanPin(projectPath: string, repository: string, number: number, title: string): boolean {
         if (this.issuePlanPinDeleteStatement.run(projectPath, repository, number).changes > 0) return false;
         this.issuePlanPinInsertStatement.run(projectPath, repository, number, title, Date.now());
+        return true;
+    }
+
+    public getPinnedProjects(): ProjectPin[] {
+        return this.projectPinsGetAllStatement
+            .all()
+            .map((row) => ({projectPath: row.project_path, pinnedAt: row.pinned_at}));
+    }
+
+    public toggleProjectPin(projectPath: string): boolean {
+        if (this.projectPinDeleteStatement.run(projectPath).changes > 0) return false;
+        this.projectPinInsertStatement.run(projectPath, Date.now());
         return true;
     }
 

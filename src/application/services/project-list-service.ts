@@ -44,6 +44,7 @@ export class ProjectListService {
             remoteProjects,
             pinnedPlans: repository.getPinnedPlans(),
             pinnedIssuePlans: repository.getPinnedIssuePlans(),
+            pinnedProjects: repository.getPinnedProjects(),
             showArchived,
             vmTranscripts: vmTranscripts?.forList(remoteProjects),
             handedOffSessions: new Set(Object.keys(settings.global().handedOffSessions ?? {})),

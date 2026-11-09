@@ -16,6 +16,7 @@ import type {
     LaidEntry,
     SessionListGroup,
     SessionListPlan,
+    SessionListProject,
     SessionListRow,
 } from '../src/renderer/state/session-list-layout';
 import type {SessionRow} from '../src/domain/session/session';
@@ -47,7 +48,11 @@ function plan(id: string): SessionListPlan {
     return {kind: 'plan', id, projectPath: '/p', repository: 'acme/app', number: 12, title: 'Plan'};
 }
 
-type Entry = SessionListRow | SessionListGroup | SessionListPlan;
+function pinnedProject(id: string): SessionListProject {
+    return {kind: 'project', id, projectPath: '/p'};
+}
+
+type Entry = SessionListRow | SessionListGroup | SessionListPlan | SessionListProject;
 
 const laid = (entry: Entry): LaidEntry => ({entry, tier: TIER_REST});
 
@@ -102,6 +107,18 @@ test('a pinned GitHub plan is one target that opens its page, and no session', (
         repository: 'acme/app',
         number: 12,
     });
+    assert.deepEqual(rowOrder(targets), ['a']);
+});
+
+test('a pinned project is one target that opens its page, and no session', () => {
+    /* Given */
+    const state = list([pinnedProject('project-x'), row('a')]);
+
+    /* When */
+    const targets = cursorTargets(state, NONE);
+
+    /* Then */
+    assert.deepEqual(targets[0], {kind: 'project', name: 'project-x', shown: true, projectPath: '/p'});
     assert.deepEqual(rowOrder(targets), ['a']);
 });
 

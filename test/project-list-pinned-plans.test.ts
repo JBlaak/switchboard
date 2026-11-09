@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {buildProjectList} from '../src/domain/project/project-list';
 import type {CachedSession} from '../src/domain/session/session';
-import type {IssuePlanPin, PlanPin} from '../src/domain/project/project-list';
+import type {IssuePlanPin, PlanPin, ProjectPin} from '../src/domain/project/project-list';
 
 function cached(sessionId: string, projectPath: string, slug: string): CachedSession {
     return {
@@ -18,7 +18,7 @@ function cached(sessionId: string, projectPath: string, slug: string): CachedSes
     } as CachedSession;
 }
 
-function build(pinnedPlans: PlanPin[], pinnedIssuePlans: IssuePlanPin[] = []) {
+function build(pinnedPlans: PlanPin[], pinnedIssuePlans: IssuePlanPin[] = [], pinnedProjects: ProjectPin[] = []) {
     return buildProjectList({
         cached: [cached('a', '/one', 'plan'), cached('b', '/two', 'plan')],
         meta: new Map(),
@@ -28,6 +28,7 @@ function build(pinnedPlans: PlanPin[], pinnedIssuePlans: IssuePlanPin[] = []) {
         remoteProjects: [],
         pinnedPlans,
         pinnedIssuePlans,
+        pinnedProjects,
         showArchived: false,
     });
 }
@@ -65,4 +66,21 @@ test('a pinned GitHub plan lands on the project it was pinned in', () => {
         {repository: 'acme/app', number: 12, title: 'Redesign', pinnedAt: 1},
     ]);
     assert.equal(projects.find((p) => p.projectPath === '/two')?.pinnedIssuePlans, undefined);
+});
+
+test('a pinned project carries when it was pinned; a pin on a project without a row is left out', () => {
+    /* When */
+    const projects = build(
+        [],
+        [],
+        [
+            {projectPath: '/one', pinnedAt: 5},
+            {projectPath: '/hidden', pinnedAt: 6},
+        ],
+    );
+
+    /* Then */
+    assert.equal(projects.find((p) => p.projectPath === '/one')?.pinnedAt, 5);
+    assert.equal(projects.find((p) => p.projectPath === '/two')?.pinnedAt, undefined);
+    assert.deepEqual(projects.map((p) => p.projectPath).sort(), ['/one', '/two']);
 });

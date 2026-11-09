@@ -12,6 +12,9 @@
  * A project on a registered VM (#307) says which, "On <VM> · Manage in
  * Settings", in place of the host's address.
  *
+ * The pin before the name puts the project under Pinned projects at the top
+ * of the sidebar, above the pinned plans.
+ *
  * Hand-off (#276 stage 2): a local project offers Hand off to… once there is
  * a VM host, and a copy on a VM says which local project it is a copy of.
  */
@@ -24,6 +27,8 @@ import {remoteBadge} from '../../features/sessions/remote-badge';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import {CopyOriginLink, HandOffButton} from './HandoffSections';
 import {useHostLink, VmLink} from './VmLink';
+import {HTML} from '../session-list/markup';
+import {isProjectPinned, toggleProjectPin} from '../session-list/actions';
 import {closeProject, isRemoteProject, openProjectOnGitHub, openProjectSettings, startProjectSession} from './actions';
 
 /** The repository on GitHub, as a link, and the branch the main checkout is on. */
@@ -96,6 +101,25 @@ function HostBadge({projectPath}: {projectPath: string}): JSX.Element | null {
     );
 }
 
+/** The pin before the name: the project at the top of the sidebar, or not. */
+function ProjectPin({projectPath}: {projectPath: string}): JSX.Element {
+    // The pins live on the cached projects, outside the store; every pin or
+    // unpin lays the list out again, which is the signal to read them anew.
+    useStore((state) => state.sessionList.revision);
+    const pinned = isProjectPinned(projectPath);
+    return (
+        <button
+            type="button"
+            className={'pv-pin pp-pin' + (pinned ? ' pinned' : '')}
+            data-testid="project-page-pin"
+            title={pinned ? 'Unpin project' : 'Pin project to the top of the sidebar'}
+            aria-pressed={pinned}
+            dangerouslySetInnerHTML={pinned ? HTML.pinFilled : HTML.pinOutline}
+            onClick={(e) => void toggleProjectPin(projectPath, e.currentTarget)}
+        />
+    );
+}
+
 export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element {
     const remote = isRemoteProject(projectPath);
     const vm = useStore((state) => isVmProjectIn(state.agentHost, projectPath));
@@ -128,7 +152,10 @@ export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element
                     Close <kbd className="sw-kbd">esc</kbd>
                 </button>
                 <div className="sw-heading">
-                    <h1 className="sw-title pp-title">{projectLabel(projectPath)}</h1>
+                    <div className="pp-title-row">
+                        <ProjectPin projectPath={projectPath} />
+                        <h1 className="sw-title pp-title">{projectLabel(projectPath)}</h1>
+                    </div>
                     <div className="sw-subline pp-subline">
                         {remote && <CopyOriginLink projectPath={projectPath} />}
                         <HeaderFacts projectPath={projectPath} />

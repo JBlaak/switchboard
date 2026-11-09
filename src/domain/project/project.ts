@@ -15,6 +15,8 @@ export interface Project {
     pinnedPlans?: string[];
     /** The GitHub plans pinned to the top of the session list from their page. */
     pinnedIssuePlans?: PinnedIssuePlan[];
+    /** Epoch ms the project was pinned to the top of the session list, above the pinned plans. */
+    pinnedAt?: number;
 }
 
 /** A GitHub plan pinned to the top of the session list, by its issue. */

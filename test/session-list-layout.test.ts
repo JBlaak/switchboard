@@ -6,6 +6,7 @@ import {
     layoutRows,
     orderEntries,
     planPinId,
+    projectPinId,
     rowId,
     slugId,
     truncateEntries,
@@ -14,6 +15,7 @@ import {
     TIER_ATTENTION,
     TIER_PINNED,
     TIER_PINNED_PLAN,
+    TIER_PINNED_PROJECT,
     TIER_READY,
     TIER_REST,
     TIER_RUNNING,
@@ -564,6 +566,53 @@ test('a filter or a search leaves pinned GitHub plans out', () => {
     /* Then */
     assert.deepEqual(ids(starred.layout.visible), [r('a')]);
     assert.deepEqual(ids(search.layout.visible), [r('a')]);
+});
+
+test('a pinned project sits under Pinned projects, above the pinned plans, as a row that opens it', () => {
+    /* Given */
+    const projects = [
+        project('/p', [session('asking', {modified: at(0)})], {
+            pinnedAt: NOW - 30 * DAY,
+            pinnedIssuePlans: [issuePlan(12, NOW)],
+        }),
+    ];
+
+    /* When */
+    const {layout: laid} = layout(projects, {tierOf: () => TIER_ATTENTION});
+
+    /* Then */
+    assert.deepEqual(
+        laid.visible.map((l) => [l.entry.id, l.tier]),
+        [
+            [projectPinId('/p'), TIER_PINNED_PROJECT],
+            [planPinId('/p', 'acme/app', 12), TIER_PINNED_PLAN],
+            [r('asking'), TIER_ATTENTION],
+        ],
+    );
+    assert.deepEqual(laid.visible[0].entry, {kind: 'project', id: projectPinId('/p'), projectPath: '/p'});
+});
+
+test('pinned projects list the latest pin first, and hold no rows', () => {
+    /* Given */
+    const projects = [project('/old', [], {pinnedAt: NOW - DAY}), project('/new', [], {pinnedAt: NOW})];
+
+    /* When */
+    const {layout: laid} = layout(projects);
+
+    /* Then */
+    assert.deepEqual(ids(laid.visible), [projectPinId('/new'), projectPinId('/old')]);
+    assert.deepEqual(layoutRows(laid), []);
+});
+
+test('a filter or a search leaves pinned projects out', () => {
+    /* Given */
+    const projects = [project('/p', [session('a', {starred: 1})], {pinnedAt: NOW})];
+
+    /* When */
+    const starred = layout(projects, {filters: {...inputs().filters, showStarredOnly: true}}, {filtering: true});
+
+    /* Then */
+    assert.deepEqual(ids(starred.layout.visible), [r('a')]);
 });
 
 test('a pinned plan never folds away, however old', () => {

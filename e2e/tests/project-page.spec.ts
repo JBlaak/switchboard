@@ -283,6 +283,64 @@ test.describe('plans and issues', () => {
         await expect(planPage.getByTestId('plan-page-pin')).toHaveAttribute('aria-pressed', 'false');
     });
 
+    test('a pinned plan’s project name opens the project page, as a session row’s does', async ({page}) => {
+        /* Given */
+        const planPage = page.getByRole('region', {name: /^Plan in /});
+        const pinnedRow = sidebar(page).locator('.pinned-plan-item').filter({hasText: 'Login rework'});
+        await rowProjectLink(page, S.loginFix).click();
+        await cursorToFirstPlan(page);
+        await page.keyboard.press('Enter');
+        await planPage.getByTestId('plan-page-pin').click();
+        await page.keyboard.press('Escape');
+        await expect(planPage).toHaveCount(0);
+
+        /* When */
+        await pinnedRow.getByTestId('project-link').click();
+
+        /* Then */
+        await expect(projectPage(page)).toBeVisible();
+        await expect(planPage).toHaveCount(0);
+    });
+
+    test('the pin on a project’s page puts it under Pinned projects, above the pinned plans, as a row that opens the page and unpins it', async ({
+        page,
+    }) => {
+        /* Given */
+        const planPage = page.getByRole('region', {name: /^Plan in /});
+        const pinnedProject = sidebar(page).getByTestId('pinned-project');
+        await rowProjectLink(page, S.loginFix).click();
+        await cursorToFirstPlan(page);
+        await page.keyboard.press('Enter');
+        await planPage.getByTestId('plan-page-pin').click();
+        await page.keyboard.press('Meta+BracketLeft');
+        await expect(projectPage(page)).toBeVisible();
+
+        /* When */
+        await projectPage(page).getByTestId('project-page-pin').click();
+
+        /* Then */
+        await expect(projectPage(page).getByTestId('project-page-pin')).toHaveAttribute('aria-pressed', 'true');
+        await expect(pinnedProject).toHaveClass(/\bactive\b/);
+        await expect(sidebar(page).locator('.session-section-label').first()).toHaveText('Pinned projects');
+        await expect(sidebar(page).locator('.session-section-label').nth(1)).toHaveText('Pinned plans');
+
+        /* When */
+        await page.keyboard.press('Escape');
+        await expect(projectPage(page)).toHaveCount(0);
+        await pinnedProject.click();
+
+        /* Then */
+        await expect(projectPage(page)).toBeVisible();
+
+        /* When */
+        await pinnedProject.getByTestId('project-pin').click();
+
+        /* Then */
+        await expect(pinnedProject).toHaveCount(0);
+        await expect(sidebar(page).getByText('Pinned projects', {exact: true})).toHaveCount(0);
+        await expect(projectPage(page).getByTestId('project-page-pin')).toHaveAttribute('aria-pressed', 'false');
+    });
+
     test('/ filters the rows by text, and Esc clears the filter before it closes the page', async ({page}) => {
         /* Given */
         await rowProjectLink(page, S.loginFix).click();

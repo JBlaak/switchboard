@@ -550,6 +550,15 @@
     color: var(--sb-yellow);
 }
 
+/* A pinned project's path: one line ending in an ellipsis; the full path is
+   its tooltip. */
+.pinned-project-path {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
 .session-status-dot.is-spacer {
     visibility: hidden;
 }

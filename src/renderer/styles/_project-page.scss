@@ -24,6 +24,13 @@
     line-height: 28px;
 }
 
+.pp-title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
 .pp-path {
     font: 11.5px var(--sb-font-mono);
     color: var(--sb-text-dimmest);
