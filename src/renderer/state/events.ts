@@ -21,7 +21,7 @@ import type {SessionWorkDiff, SessionWorkSnapshot, WorkAction} from '../../domai
 import type {DiffMode, ImageDefaults, ReviewKind, WorkTab} from './session-work-slice';
 import type {PlanSource, SessionPlansAnswer} from './plan-slice';
 import type {ProjectView} from './main-area-slice';
-import type {IssueKey} from '../../domain/plan/model';
+import type {IssueKey, Plan} from '../../domain/plan/model';
 import type {IssueSessionStart} from '../../domain/plan/issue-session';
 import type {ImageMode} from '../ui/session-work/image-compare/modes/types';
 import type {Background, View} from '../ui/session-work/image-compare/types';
@@ -292,6 +292,8 @@ export type LocalEvent =
     | {type: 'planLoaded'; owner: string; sourceKey: string; answer: SessionPlansAnswer | null}
     /** The answer stored when the source last loaded, shown until main answers (`plan/stored-plans`). */
     | {type: 'planSeeded'; owner: string; sourceKey: string; answer: SessionPlansAnswer}
+    /** Pinned plans as main or the stored copies answered them, for their rows' progress. */
+    | {type: 'planProgressLoaded'; plans: readonly Plan[]}
     /** A plan picked in the switcher (W2). */
     | {type: 'planChosen'; plan: IssueKey}
     /** The pointer is over an issue, or over none (D3). */

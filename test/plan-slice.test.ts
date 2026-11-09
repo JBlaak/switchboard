@@ -309,3 +309,40 @@ test('the tab is kept per session, Work unless Plan was picked (W1)', () => {
     assert.equal(workTabOf(state.sessionWork, 'b'), 'work');
     assert.deepEqual(back.sessionWork.tabs, {});
 });
+
+test('a pinned plan’s load records how far it is', () => {
+    /* When */
+    const state = run(initialRendererState(), {type: 'planProgressLoaded', plans: [diamond()]});
+
+    /* Then */
+    assert.equal(state.plan.progress['acme/app#1']?.current, 1);
+    assert.equal(state.plan.progress['acme/app#1']?.levels.length, 3);
+});
+
+test('a plan view’s load refreshes a pinned plan’s progress, and adds none for plans not pinned', () => {
+    /* Given */
+    const pinned = run(opened(), {type: 'planProgressLoaded', plans: [plan([issue(10)])]});
+
+    /* When */
+    const state = run(pinned, {
+        type: 'planLoaded',
+        owner: OWNER,
+        sourceKey: planSourceKey(SESSION),
+        answer: {plans: [diamond(), second], others: []},
+    });
+
+    /* Then */
+    assert.equal(state.plan.progress['acme/app#1']?.levels.length, 3);
+    assert.equal(state.plan.progress['acme/app#2'], undefined);
+});
+
+test('a load with the same progress changes nothing', () => {
+    /* Given */
+    const state = run(initialRendererState(), {type: 'planProgressLoaded', plans: [diamond()]});
+
+    /* When */
+    const next = run(state, {type: 'planProgressLoaded', plans: [diamond()]});
+
+    /* Then */
+    assert.equal(next.plan, state.plan);
+});

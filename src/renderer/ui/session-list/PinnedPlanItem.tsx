@@ -13,7 +13,10 @@ import {openPlanPage} from '../plan-page/actions';
 import {toggleIssuePlanPin} from './actions';
 import {HTML} from './markup';
 import {ProjectLink} from '../project-page/ProjectLink';
-import type {JSX} from 'react';
+import {useEffect, type JSX} from 'react';
+import {issueKeyString} from '../../../domain/plan/model';
+import {progressCounts, type PlanProgress} from '../../../domain/plan/plan-progress';
+import {followPinnedPlan} from './pinned-plan-progress';
 import type {SessionListPlan} from '../../state/session-list-layout';
 
 export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
@@ -25,6 +28,8 @@ export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
         );
     });
     const cursor = useStore((s) => s.sessionList.cursor === id);
+    const progress = useStore((s) => s.plan.progress[issueKeyString({repository, number})]);
+    useEffect(() => followPinnedPlan({repository, number}), [repository, number]);
 
     return (
         <div
@@ -56,8 +61,41 @@ export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
                             <span className="session-time">{'#' + number}</span>
                         </span>
                     </div>
+                    {progress && <PinnedPlanProgress progress={progress} />}
                 </div>
             </div>
         </div>
     );
+}
+
+/**
+ * The plan's level, a bar with one segment per level sized by its issues
+ * (closed in green, with a PR in orange), and closed / all issues.
+ */
+function PinnedPlanProgress({progress}: {progress: PlanProgress}): JSX.Element {
+    const {done, total} = progressCounts(progress);
+    const level =
+        progress.current === null
+            ? 'Cleared'
+            : 'Level ' + progress.current + (progress.levels.length > 1 ? ' of ' + progress.levels.length : '');
+    return (
+        <div className="pinned-plan-progress" data-testid="pinned-plan-progress">
+            <span className={'pinned-plan-level' + (progress.current === null ? ' is-cleared' : '')}>{level}</span>
+            <span className="pinned-plan-bar" aria-hidden="true">
+                {progress.levels.map((l, i) => (
+                    <span key={i} className="pinned-plan-segment" style={{flexGrow: Math.max(l.total, 1)}}>
+                        <span className="is-done" style={{width: pct(l.done, l.total)}} />
+                        <span className="is-started" style={{width: pct(l.started, l.total)}} />
+                    </span>
+                ))}
+            </span>
+            <span className="pinned-plan-count" title={done + ' of ' + total + ' issues closed'}>
+                {done + '/' + total}
+            </span>
+        </div>
+    );
+}
+
+function pct(part: number, whole: number): string {
+    return whole ? (part / whole) * 100 + '%' : '0%';
 }
