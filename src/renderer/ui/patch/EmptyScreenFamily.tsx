@@ -12,6 +12,9 @@
  * member opens its session. It holds still while the window is in the
  * background. Like Patch, the scene is the package's imperative
  * handle mounted from an effect.
+ *
+ * Under the scene the card has a floor for Patch to stand on, so Patch, in
+ * front of the card, never covers a member of the outing.
  */
 import {useEffect, useRef} from 'react';
 import {mountFamily} from '@jblaak/patch';
@@ -42,14 +45,15 @@ function sameDay(epoch: number, now: Date): boolean {
 let lastPlace: string | null = null;
 
 export function EmptyScreenFamily(): JSX.Element {
+    const frame = useRef<HTMLDivElement>(null);
     const stage = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const card = stage.current!;
+        const card = frame.current!;
         const placeholder = card.parentElement!;
         const visible = (): boolean => placeholder.style.display !== 'none';
 
-        const family: FamilyHandle = mountFamily(card, {
+        const family: FamilyHandle = mountFamily(stage.current!, {
             onSelect: (sessionId) => openRow(sessionId, sessionId),
         });
 
@@ -129,5 +133,10 @@ export function EmptyScreenFamily(): JSX.Element {
         };
     }, []);
 
-    return <div ref={stage} className="placeholder-family" data-testid="patch-family" />;
+    return (
+        <div ref={frame} className="placeholder-family" data-testid="patch-family">
+            <div ref={stage} className="placeholder-family-scene" />
+            <div className="placeholder-family-floor" />
+        </div>
+    );
 }

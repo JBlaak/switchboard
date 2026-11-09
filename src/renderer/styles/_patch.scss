@@ -14,13 +14,14 @@
 }
 
 /* The Patch family (ui/patch/EmptyScreenFamily): the running sessions out on
-   an adventure, framed as a card above Patch. Patch stands in front of the
-   card's lower edge, so the pair reads as one picture; the space Patch keeps
-   free for its bubble lets clicks through to the members behind it. */
+   an adventure, framed as a card above Patch. Under the outing the card has a
+   floor, and Patch stands on it in front of the card's lower edge, so the pair
+   reads as one picture without Patch covering a member; the space Patch keeps
+   free for its bubble lets clicks through to the card behind it. */
 .placeholder-family {
     flex: none;
+    display: grid;
     width: min(820px, calc(100% - 64px));
-    aspect-ratio: 12 / 5;
     border-radius: var(--sb-r-panel);
     overflow: hidden;
     background: #0d0e11;
@@ -28,10 +29,33 @@
     font-family: var(--sb-font-head);
 }
 
+/* The scene keeps the card's old shape and fades into the floor at its foot.
+   The card stays dark in the light theme too, so the floor is a fixed tone. */
+.placeholder-family-scene {
+    position: relative;
+    aspect-ratio: 12 / 5;
+}
+
+.placeholder-family-scene::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: 56px;
+    background: linear-gradient(to bottom, rgba(22, 23, 26, 0), #16171a);
+    pointer-events: none;
+}
+
+.placeholder-family-floor {
+    height: 112px;
+    background: #16171a;
+}
+
+/* Patch's head stays below the scene: 290px held, 232px tucked into the card,
+   so its feet are 58px below the card's edge and the rest is on the floor. */
 .placeholder-family + .placeholder-patch {
     position: relative;
     z-index: 1;
-    margin-top: -200px;
+    margin-top: -232px;
     pointer-events: none;
 }
 
@@ -44,8 +68,9 @@
    from beside Patch instead: to its right, under the card's lower edge, the
    tail pointing back at Patch. The bubble hangs off the scene, so Patch stays
    centred over the box, and it is held to the card's right half. Its top sits
-   just under the card (the scene's foot is 90px below the card's edge: 290px
-   held, 200px tucked under), so a longer line grows down, not into the card. */
+   on the floor, below the scene (the scene's foot is 58px below the card's
+   edge: 290px held, 232px tucked under), so a longer line grows down, not into
+   the outing. */
 @media (min-height: 721px) {
     .placeholder-family + .placeholder-patch {
         align-self: stretch;
