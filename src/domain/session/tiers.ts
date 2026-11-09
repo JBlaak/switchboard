@@ -46,6 +46,15 @@ export const TIER_LABELS: Record<number, string> = {
     [TIER_REST]: 'Recent',
 };
 
+/**
+ * The sections whose label folds them away: the two the user pinned. The others hold what needs looking at, so they always show.
+ */
+export const FOLDABLE_TIERS: readonly number[] = [TIER_PINNED_PROJECT, TIER_PINNED_PLAN];
+
+export function isFoldableTier(tier: number): boolean {
+    return FOLDABLE_TIERS.includes(tier);
+}
+
 /** What is currently true of one session, as far as ranking cares. */
 export type SessionSignals = ToneSignals;
 

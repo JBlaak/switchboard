@@ -255,6 +255,11 @@ export function toggleOlder(): void {
     dispatch({type: 'olderToggled'});
 }
 
+/** Fold Pinned projects or Pinned plans under its label, or open it again. */
+export function toggleSection(tier: number): void {
+    dispatch({type: 'sectionToggled', tier});
+}
+
 // ── Rename ──
 
 export function startRename(rowId: string): void {

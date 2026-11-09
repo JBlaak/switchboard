@@ -18,6 +18,7 @@
  * The events are declared here rather than in `events.ts`, like the toolbar's,
  * so the list's vocabulary stays in one file.
  */
+import {isFoldableTier} from '../../domain/session/tiers';
 import {layoutRows, layoutSessionList} from './session-list-layout';
 import {withEntry, withoutEntry} from './records';
 import type {IdRecord} from './records';
@@ -46,6 +47,8 @@ export type SessionListEvent =
     /** The groups that were open before a reload. */
     | {type: 'slugGroupsRestored'; ids: readonly string[]}
     | {type: 'olderToggled'}
+    /** A foldable section's label was clicked: Pinned projects or Pinned plans. */
+    | {type: 'sectionToggled'; tier: number}
     | {type: 'renameStarted'; rowId: string}
     | {type: 'renameEnded'; rowId: string}
     /** The keyboard cursor moved (null: it is gone). See `ui/session-list/cursor`. */
@@ -66,6 +69,8 @@ export interface SessionListState {
     readonly expandedSlugs: IdRecord<true>;
     /** The "+ N older" list is showing. */
     readonly olderExpanded: boolean;
+    /** The section tiers folded under their label. Kept for this run of the app only. */
+    readonly foldedSections: readonly number[];
     /** The row with its rename input open. */
     readonly renaming: string | null;
     /** What the keyboard cursor is on: an element id, or `header:<group id>`. */
@@ -81,6 +86,7 @@ export const initialSessionListState: SessionListState = {
     now: 0,
     expandedSlugs: {},
     olderExpanded: false,
+    foldedSections: [],
     renaming: null,
     cursor: null,
     leaving: {},
@@ -116,6 +122,15 @@ export function sessionListReducer(state: SessionListState, event: RendererEvent
 
         case 'olderToggled':
             return {...state, olderExpanded: !state.olderExpanded};
+
+        case 'sectionToggled':
+            if (!isFoldableTier(event.tier)) return state;
+            return {
+                ...state,
+                foldedSections: state.foldedSections.includes(event.tier)
+                    ? state.foldedSections.filter((tier) => tier !== event.tier)
+                    : [...state.foldedSections, event.tier],
+            };
 
         case 'renameStarted':
             return patch(state, {renaming: event.rowId});

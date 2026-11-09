@@ -342,6 +342,36 @@ test.describe('plans and issues', () => {
         await expect(projectPage(page).getByTestId('project-page-pin')).toHaveAttribute('aria-pressed', 'false');
     });
 
+    test('clicking the Pinned plans label folds its rows away behind a count, and clicking it again brings them back', async ({
+        page,
+    }) => {
+        /* Given */
+        const planPage = page.getByRole('region', {name: /^Plan in /});
+        const label = sidebar(page).getByRole('button', {name: /^Pinned plans/});
+        const pinnedRow = sidebar(page).locator('.pinned-plan-item').filter({hasText: 'Login rework'});
+        await rowProjectLink(page, S.loginFix).click();
+        await cursorToFirstPlan(page);
+        await page.keyboard.press('Enter');
+        await planPage.getByTestId('plan-page-pin').click();
+        await expect(pinnedRow).toBeVisible();
+
+        /* When */
+        await label.click();
+
+        /* Then */
+        await expect(label).toHaveAttribute('aria-expanded', 'false');
+        await expect(label.locator('.session-section-count')).toHaveText('1');
+        await expect(pinnedRow).toBeHidden();
+
+        /* When */
+        await label.click();
+
+        /* Then */
+        await expect(label).toHaveAttribute('aria-expanded', 'true');
+        await expect(label.locator('.session-section-count')).toHaveCount(0);
+        await expect(pinnedRow).toBeVisible();
+    });
+
     test('/ filters the rows by text, and Esc clears the filter before it closes the page', async ({page}) => {
         /* Given */
         await rowProjectLink(page, S.loginFix).click();

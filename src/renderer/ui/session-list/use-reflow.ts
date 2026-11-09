@@ -20,8 +20,11 @@ import {play, snapshot} from '../../lib/motion/reflow';
 import {redrawGlides} from '../../state/list-reflow';
 import type {Snapshot} from '../../lib/motion/reflow';
 
-/** The list's top-level entries: rows, slug groups, section labels and the "older" toggle — never what sits inside a group. */
-const REFLOW_SELECTOR = '.session-list > [id], .sessions-older > [id]';
+/**
+ * The list's top-level entries: rows, slug groups, section labels and the "older" toggle — never what sits inside a group.
+ * A pinned section's entries sit in its folding body, a wrapper each, and count as top-level too.
+ */
+const REFLOW_SELECTOR = '.session-list > [id], .sessions-older > [id], .session-section-entry > [id]';
 
 export function useReflow(container: HTMLElement, revision: number): void {
     const before = useRef<Snapshot | null>(null);

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
     cursorTargets,
     headerTarget,
+    isSectionFolded,
+    sectionTarget,
     rowOrder,
     shownTargets,
     startTarget,
@@ -10,7 +12,7 @@ import {
     targetAfterRemoval,
 } from '../src/renderer/state/list-cursor';
 import {initialSessionListState} from '../src/renderer/state/session-list-slice';
-import {TIER_REST} from '../src/domain/session/tiers';
+import {TIER_PINNED_PLAN, TIER_PINNED_PROJECT, TIER_REST} from '../src/domain/session/tiers';
 import type {SessionListState} from '../src/renderer/state/session-list-slice';
 import type {
     LaidEntry,
@@ -343,4 +345,63 @@ test('headers are named after their group', () => {
 
     /* Then */
     assert.equal(name, 'header:slug-x');
+});
+
+/** Two pinned projects, a pinned plan and a plain row, each in its own section. */
+function pinnedList(extra: Partial<SessionListState> = {}, filtering = false): SessionListState {
+    return {
+        ...initialSessionListState,
+        layout: {
+            visible: [
+                {entry: pinnedProject('project-x'), tier: TIER_PINNED_PROJECT},
+                {entry: pinnedProject('project-y'), tier: TIER_PINNED_PROJECT},
+                {entry: plan('plan-x'), tier: TIER_PINNED_PLAN},
+                {entry: row('a'), tier: TIER_REST},
+            ],
+            older: [],
+            filtering,
+        },
+        ...extra,
+    };
+}
+
+test('a pinned section label is a stop of its own, above what it holds', () => {
+    /* Given */
+    const state = pinnedList();
+
+    /* When */
+    const shown = shownTargets(cursorTargets(state, NONE));
+
+    /* Then */
+    assert.deepEqual(shown, [
+        sectionTarget(TIER_PINNED_PROJECT),
+        'project-x',
+        'project-y',
+        sectionTarget(TIER_PINNED_PLAN),
+        'plan-x',
+        'si-a',
+    ]);
+});
+
+test('a folded pinned section keeps its label and hides its entries', () => {
+    /* Given */
+    const state = pinnedList({foldedSections: [TIER_PINNED_PROJECT]});
+
+    /* When */
+    const shown = shownTargets(cursorTargets(state, NONE));
+
+    /* Then */
+    assert.deepEqual(shown, [sectionTarget(TIER_PINNED_PROJECT), sectionTarget(TIER_PINNED_PLAN), 'plan-x', 'si-a']);
+});
+
+test('a filtered list has no labels and folds nothing', () => {
+    /* Given */
+    const state = pinnedList({foldedSections: [TIER_PINNED_PROJECT, TIER_PINNED_PLAN]}, true);
+
+    /* When */
+    const shown = shownTargets(cursorTargets(state, NONE));
+
+    /* Then */
+    assert.deepEqual(shown, ['project-x', 'project-y', 'plan-x', 'si-a']);
+    assert.equal(isSectionFolded(state, TIER_PINNED_PROJECT), false);
 });
