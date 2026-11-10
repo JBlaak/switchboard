@@ -43,6 +43,7 @@ import type {VmsEvent} from './vms-slice';
 import type {HandoffEvent} from './handoff-slice';
 import type {SessionHandoffEvent} from './session-handoff-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
+import type {PrPeekEvent} from './pr-peek-slice';
 import type {PagesEvent} from './pages-slice';
 import type {MergeQueueEvent} from './merge-queue-slice';
 import type {SessionTrayEvent} from './session-tray-slice';
@@ -381,7 +382,8 @@ export type RendererEvent =
     | PagesEvent
     | MergeQueueEvent
     | GrillEvent
-    | SessionTrayEvent;
+    | SessionTrayEvent
+    | PrPeekEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the
