@@ -431,7 +431,7 @@ test("a VM session's tail, read over its link, links it to the task it names", a
 
 // ── Quick Ask ──
 
-test('Quick Ask may route to VM projects, but not to agentless remotes or any worktree', () => {
+test('Patch routes only to local projects: no VM projects, agentless remotes or worktrees', () => {
     /* Given */
     const projects: Project[] = [
         {projectPath: LOCAL_SITE, folder: '-Users-joris-code-site', sessions: []},
@@ -447,7 +447,7 @@ test('Quick Ask may route to VM projects, but not to agentless remotes or any wo
     /* Then */
     assert.deepEqual(
         candidates.map((candidate) => candidate.projectPath),
-        [LOCAL_SITE, VM_SITE],
+        [LOCAL_SITE],
     );
 });
 

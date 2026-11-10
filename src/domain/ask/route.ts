@@ -10,6 +10,7 @@
  * however confident Haiku says it is.
  */
 import type {Project} from '../project/project';
+import {isRemoteProjectPath} from '../project/remote-target';
 import type {SessionRow} from '../session/session';
 import {cleanDisplayName, resolveSessionName} from '../session/title';
 import {formatResetTime} from '../usage/usage';
@@ -25,17 +26,17 @@ const WORKTREE_PATH = /\/\.claude\/worktrees\//;
 // ── Candidates ──
 
 /**
- * The projects Haiku may route to: local ones and VM ones (R2, #276 story 33).
+ * The projects Patch may route to: local ones only (R2).
  *
- * A VM project's session opens on its host's agent, which starts Claude with
- * the first prompt as a local launch does, so it is offered like a local
- * project. An agentless remote is not: its ssh+tmux session can't be handed a
- * prompt. A worktree, local or on a VM, is a copy of a project that is
- * already on the list — offering both would split the vote.
+ * A remote (`ssh://`) project, VM or agentless, is never offered: every one
+ * of them is a second copy of a project already checked out here, so it shows
+ * up as a twin of the local entry that the pick always lands on anyway. A
+ * worktree is a copy of a project that is already on the list — offering both
+ * would split the vote.
  */
 export function routeCandidates(projects: Project[]): RouteCandidate[] {
     return projects
-        .filter((project) => (!project.remote || project.agent) && !WORKTREE_PATH.test(project.projectPath))
+        .filter((project) => !isRemoteProjectPath(project.projectPath) && !WORKTREE_PATH.test(project.projectPath))
         .map((project) => ({
             projectPath: project.projectPath,
             folder: project.folder,
