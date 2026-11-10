@@ -54,6 +54,7 @@ import {isAtBottom} from './write-buffer';
 import {afterUpload, dropPlan} from './dropped-files';
 import {isVmRepositoryIn} from '../../ui/project-page/page-state';
 import {bangCommandKeys, findBangCommands, type BangCell} from '../../../domain/terminal/bang-command';
+import {openLink} from '../../ui/pr-view/actions';
 
 // --- Terminal font ---
 // Global font settings shared by every xterm instance. Mutated by applyTerminalFont
@@ -394,9 +395,8 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
         // in place.
         macOptionClickForcesSelection: true,
         linkHandler: {
-            activate: (_event, uri) => {
-                window.api.openExternal(uri);
-            },
+            // A PR link opens the peek; anything else the browser.
+            activate: (_event, uri) => openLink(uri),
             allowNonHttpProtocols: true,
         },
     });
@@ -420,11 +420,7 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
-    terminal.loadAddon(
-        new WebLinksAddon((_event, url) => {
-            window.api.openExternal(url);
-        }),
-    );
+    terminal.loadAddon(new WebLinksAddon((_event, url) => openLink(url)));
     // A plain terminal has no Claude prompt to take `!`; there it is history expansion.
     if (session.type !== 'terminal') {
         terminal.registerLinkProvider(bangCommandLinks(terminal, () => entry.session.sessionId));

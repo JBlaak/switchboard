@@ -19,7 +19,7 @@ import {useStore} from '../use-store';
 import {dispatch} from '../../state/app-store';
 import type {IssueKey} from '../../../domain/plan/model';
 import {checksPill, cursorId, pullRequestsViewOf, type PullRequestOnScreen} from './page-rows';
-import {openPullRequestOnGitHub, revealPlan} from './actions';
+import {openPullRequest, revealPlan} from './actions';
 import {SectionSkeleton} from './SectionSkeleton';
 import {optInToQueue} from './merge-queue-actions';
 import {queueActionKey} from '../../state/project-page-slice';
@@ -108,7 +108,7 @@ function PullRequestRow({
         <div
             className={'pp-pr is-' + state + (cursor === id ? ' is-cursor' : '')}
             data-cursor-id={id}
-            onClick={() => openPullRequestOnGitHub(key)}>
+            onClick={() => openPullRequest(key)}>
             <PullRequestIcon state={state} />
             <span className="pp-row-text">
                 <span className="pp-pr-line">

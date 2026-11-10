@@ -10,6 +10,7 @@ import {tomorrow} from '../../state/session-task-slice';
 import type {TaskAction} from '../../state/session-task-slice';
 import {answerOfferWith, changeError, markDoneWith, type OfferSteps} from './offer';
 import {canOpenSessionWork, openSessionWork} from '../session-work/actions';
+import {openLink} from '../pr-view/actions';
 
 /** How many tasks Link task… lists at a time. */
 const PICKER_LIMIT = 20;
@@ -80,9 +81,9 @@ export function openTaskInNotion(url: string): void {
     if (url) void window.api.openExternal(url);
 }
 
-/** Open one of the task's PRs. */
+/** One of the task's PRs, in the peek. */
 export function openTaskPullRequest(url: string): void {
-    void window.api.openExternal(url);
+    openLink(url);
 }
 
 /** D or Leave it on the archive's offer. */

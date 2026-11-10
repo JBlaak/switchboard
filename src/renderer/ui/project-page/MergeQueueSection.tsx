@@ -19,7 +19,7 @@
  * self-hosted runners, by runner pool, each queued one with its expected
  * runner wait and, when queued jobs are ahead of it, Bump.
  *
- * Each entry is a cursor row (↵, or a click, opens it on GitHub). What it
+ * Each entry is a cursor row (↵, or a click, opens its PR in the peek). What it
  * says is `merge-queue-view`; what its buttons do, `merge-queue-actions`.
  */
 import type {JSX, MouseEvent, ReactNode} from 'react';
@@ -31,7 +31,7 @@ import type {EntryMember, FailedEntry, QueueHead, QueuedEntry, UnknownEntry} fro
 import {nudgePullRequest, reviewerOf, type QueueErrandView} from '../../../domain/project/queue-errands';
 import type {IssueKey} from '../../../domain/plan/model';
 import {cursorId} from './page-rows';
-import {openProjectSession, openPullRequestOnGitHub} from './actions';
+import {openProjectSession, openPullRequest} from './actions';
 import {bumpCiJob, fixInSession, openCiJob, nudgeReviewer, retryQueueEntry} from './merge-queue-actions';
 import {
     approvedText,
@@ -140,14 +140,14 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
 
 // ── Pieces ──
 
-/** The props a cursor row carries: its id, its class, and a click that opens its PR on GitHub. */
+/** The props a cursor row carries: its id, its class, and a click that peeks at its PR. */
 function rowProps(context: Context, number: number, className: string) {
     const key: IssueKey = {repository: context.repository, number};
     const id = cursorId.queueEntry(key);
     return {
         className: className + (context.cursor === id ? ' is-cursor' : ''),
         'data-cursor-id': id,
-        onClick: () => openPullRequestOnGitHub(key),
+        onClick: () => openPullRequest(key),
     };
 }
 

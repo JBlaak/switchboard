@@ -7,6 +7,7 @@ import {startClaudeSessionIn} from '../../features/sessions/session-actions';
 import {resolveDefaultSessionOptions} from '../../features/dialogs/launch-options';
 import {fixInSessionWith, type FixInSessionSteps} from './fix-in-session';
 import {failedPullRequest, retriedPullRequest, type SessionQueueFailure} from '../../../domain/project/queue-elsewhere';
+import {openLink} from '../pr-view/actions';
 
 const steps: FixInSessionSteps = {
     fix: (request) => window.api.queueFix(request),
@@ -46,10 +47,11 @@ export async function retryInQueue(failure: SessionQueueFailure): Promise<void> 
 }
 
 /**
- * The failed run on GitHub. The queue's view names the failing check but not
- * its run, so a CI failure opens the PR's Checks tab, and anything else the PR.
+ * The failed PR, in the peek. The queue's view names the failing check but not
+ * its run, so for a CI failure the peek's Open on GitHub goes to the PR's
+ * Checks tab, and for anything else to the PR.
  */
 export function openTheRun(failure: SessionQueueFailure): void {
     const {url} = failedPullRequest(failure);
-    void window.api.openExternal(failure.entry.kind === 'ci' ? url + '/checks' : url);
+    openLink(failure.entry.kind === 'ci' ? url + '/checks' : url);
 }
