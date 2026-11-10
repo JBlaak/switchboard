@@ -16,6 +16,7 @@ import {showPage} from '../support/pages';
 import {endTurn} from '../support/questions';
 import {EVENT} from '../../src/ipc/channels';
 import {openedExternally, peekedPullRequests, pushEvent, sessionWorkReviews} from '../support/main-process';
+import type {HostStubs} from '../support/main-process';
 import {cellPoint, expectTerminalText, findInTerminal} from '../support/terminal';
 import {LABEL, S} from '../fixtures/standard';
 import {LOGIN_LOOP_DIFF, LOGIN_FIX_WORK, sessionWorkStub} from '../fixtures/session-work';
@@ -64,7 +65,7 @@ const ORPHAN_WORK: SessionWorkSnapshot = {
     updatedAt: LOGIN_FIX_WORK.updatedAt,
 };
 
-function stubs() {
+function stubs(): Partial<HostStubs> {
     const work = sessionWorkStub();
     return {
         pullRequestPeeks: PEEKS,
@@ -77,7 +78,7 @@ function stubs() {
                 ['pr:' + ORPHAN_URL]: {files: parseUnifiedDiff(LOGIN_LOOP_DIFF), source: 'github'},
             },
         },
-    } as const;
+    };
 }
 
 function peek(page: Page) {
