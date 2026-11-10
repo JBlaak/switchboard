@@ -30,8 +30,8 @@ const listeners = new Set<() => void>();
 
 /**
  * Whether a file can have a refinement worth asking for: a text file changed
- * in place or renamed, with lines, drawn as lines (not an image card). The
- * diff must be local too, which the caller knows.
+ * in place or renamed, with lines, drawn as lines (not an image card). Main
+ * reads its sides from the checkout or, for GitHub's copy of a diff, from GitHub.
  */
 export function refinable(file: FileDiff, imageCard: boolean): boolean {
     return (
@@ -100,8 +100,8 @@ export function resetRefinements(): void {
 
 /**
  * `file`'s refinement once `enabled` and main has answered; null before, when
- * there is none, and whenever it is not enabled. Only a local diff's text
- * files that are drawn as lines should be enabled (see `refinable`), so a
+ * there is none, and whenever it is not enabled. Only text files that are
+ * drawn as lines should be enabled (see `refinable`), so a
  * collapsed file asks only once it is opened.
  */
 export function useRefinement(

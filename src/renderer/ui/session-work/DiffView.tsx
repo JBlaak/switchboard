@@ -95,7 +95,6 @@ export function DiffView({page, item}: {page: SessionWorkPage; item: SessionWork
                         itemId={item.id}
                         loadKey={diff.key}
                         github={diff.source === 'github'}
-                        local={diff.source === 'local'}
                         image={diff.images[file.path]}
                         background={imageDefaults.background}
                         defaultMode={imageDefaults.mode}
@@ -170,7 +169,6 @@ const FileCard = memo(function FileCard({
     itemId,
     loadKey,
     github,
-    local = false,
     image,
     background,
     defaultMode,
@@ -190,8 +188,6 @@ const FileCard = memo(function FileCard({
     loadKey: string;
     /** The diff is GitHub's copy (D8): an image there has no bytes to compare (I4). */
     github: boolean;
-    /** The diff is the local checkout's: only such a file gets OmniDiff's refinement. */
-    local?: boolean;
     /** The image card's state, once it has been drawn. */
     image: ImageCardState | undefined;
     background: Background;
@@ -226,7 +222,7 @@ const FileCard = memo(function FileCard({
         itemId,
         file,
         loadKey,
-        local && !collapsed && refinable(file, imageCard),
+        !collapsed && refinable(file, imageCard),
     );
     const pills = [pill, refinementPill(refinement?.summary)].filter((p): p is NonNullable<typeof p> => p !== null);
 
