@@ -106,6 +106,9 @@ export async function openSessionWork(sessionId: string, options: OpenSessionWor
             ...(options.pullRequest ? {pullRequest: options.pullRequest} : {}),
         }),
     );
+    // A PR asked for by its link is shown on the Work tab, where its diff is,
+    // even when the page was open on Plan or Task (a task's PR chip, say).
+    if (options.pullRequest && !pull) dispatch({type: 'sessionWorkTabSet', sessionId, tab: 'work'});
 
     let snapshot = null;
     try {

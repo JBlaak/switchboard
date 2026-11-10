@@ -24,7 +24,13 @@
 import {test, expect, forEachAppearance} from '../support/test';
 import {expectScreen, openSession, rowButton, sessionRow, sidebar, terminalHeader} from '../support/app';
 import {answerDialogs, dialogsAsked} from '../support/native-dialogs';
-import {clipboardWrites, mergeQueueRequests, openedExternally, setHostStub} from '../support/main-process';
+import {
+    clipboardWrites,
+    mergeQueueRequests,
+    openedExternally,
+    peekedPullRequests,
+    setHostStub,
+} from '../support/main-process';
 import {sessionItem} from '../support/session-list';
 import {LABEL, P, S} from '../fixtures/standard';
 import {acmeOverview, plansStub} from '../fixtures/plans';
@@ -452,7 +458,7 @@ test.describe('plans and issues', () => {
         await page.keyboard.press('Enter');
 
         /* Then */
-        await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1331');
+        await expect.poll(() => peekedPullRequests(app)).toContain('acme/api#1331');
     });
 
     test('Clean by the Worktrees heading asks how many, then removes the merged worktree and lists it gone', async ({
@@ -593,9 +599,12 @@ test.describe('merge queue', () => {
 
         /* Then */
         await expect(behind.nth(0)).toHaveClass(/\bis-cursor\b/);
-        await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1331');
+        await expect.poll(() => peekedPullRequests(app)).toContain('acme/api#1331');
+        await expect(page.getByTestId('pr-peek')).toBeFocused();
 
-        /* When */
+        /* When: the peek put away, Retry on the failed entry */
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('pr-peek')).toHaveCount(0);
         await failed.getByRole('button', {name: 'Retry'}).click();
 
         /* Then */
