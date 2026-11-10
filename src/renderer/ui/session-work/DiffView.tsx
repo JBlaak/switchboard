@@ -30,6 +30,7 @@ import {Pills} from './Pills';
 import type {CommentTarget, DiffMode, ImageCardState, ItemDiff, SessionWorkPage} from '../../state/session-work-slice';
 import type {FileDiff, PullRequestStatus, SessionWorkItem} from '../../../domain/session-work/model';
 import {canComment} from '../../../domain/session-work/review';
+import {isPullRequestPageId} from '../../../domain/session-work/pull-request-link';
 import {imageFormatOf} from '../../../domain/session-work/image';
 import {useStore} from '../use-store';
 import {ImageCard} from './ImageCard';
@@ -55,7 +56,8 @@ export function DiffView({page, item}: {page: SessionWorkPage; item: SessionWork
         [item],
     );
     const fixingThreads = item.kind === 'pr' ? item.fixingThreads : undefined;
-    const canFix = !(item.kind === 'pr' && item.otherRepository);
+    // Nothing is handed to Claude for a PR in another repository, or on a PR's own page (no session at all).
+    const canFix = !(item.kind === 'pr' && item.otherRepository) && !isPullRequestPageId(page.sessionId);
     const scope = useMemo<ReviewScope>(
         () => ({
             sessionId: page.sessionId,

@@ -125,6 +125,7 @@ const EMPTY_PAGE = {
     composer: null,
     reviewPending: null,
     reviewError: null,
+    wantedPullRequest: null,
 };
 const openPage = () => run(initialRendererState('s1'), opened());
 

@@ -13,13 +13,16 @@ import {useStore} from '../use-store';
 import {cancelWorkAction, openOnGitHub, requestWorkAction, viewInTerminal} from './actions';
 import {activityCard, itemButtons} from './describe';
 import type {SessionWorkPage} from '../../state/session-work-slice';
+import {isPullRequestPageId} from '../../../domain/session-work/pull-request-link';
 import type {SessionWorkItem} from '../../../domain/session-work/model';
 import type {ShipStepState} from '../../../domain/session-work/ship';
 
 export function ActionRow({page, item}: {page: SessionWorkPage; item: SessionWorkItem}): JSX.Element | null {
     const running = useStore((state) => state.view.activePtyIds.has(page.sessionId));
     if (!page.snapshot) return null;
-    const buttons = itemButtons(item, {gh: page.snapshot.gh, running, pending: page.pendingAction});
+    const all = itemButtons(item, {gh: page.snapshot.gh, running, pending: page.pendingAction});
+    // A PR's own page has no session to hand anything to: only Open on GitHub.
+    const buttons = isPullRequestPageId(page.sessionId) ? all.filter((button) => button.id === 'github') : all;
     if (!buttons.length) return null;
 
     return (

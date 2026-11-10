@@ -26,6 +26,7 @@ import type {IssueSessionStart} from '../../domain/plan/issue-session';
 import type {ImageMode} from '../ui/session-work/image-compare/modes/types';
 import type {Background, View} from '../ui/session-work/image-compare/types';
 import type {DiffSide} from '../../domain/session-work/model';
+import type {PullRequestRef} from '../../domain/session-work/pull-request-link';
 import type {PullRequestStatusChange} from '../../domain/session-work/status';
 import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
 import type {UsageLimit} from '../../domain/usage/usage';
@@ -225,8 +226,12 @@ export type LocalEvent =
     | {type: 'terminalSearchOpened'; sessionId: string}
     | {type: 'terminalSearchClosed'; sessionId: string}
     // The Session work page; see `session-work-slice`.
-    /** The page opened for a session (its list a skeleton until the first snapshot); `at` stamps its clock. */
-    | {type: 'sessionWorkOpened'; sessionId: string; name: string; at: number}
+    /**
+     * The page opened for a session (its list a skeleton until the first
+     * snapshot); `at` stamps its clock. `pullRequest`: opened from a link to this PR (or, with a `pull:` id, for
+     * it alone), which the page selects once a snapshot has it.
+     */
+    | {type: 'sessionWorkOpened'; sessionId: string; name: string; at: number; pullRequest?: PullRequestRef}
     /** The page for this session closed: Esc, Back, Cmd+G. A close for a page not open does nothing. */
     | {type: 'sessionWorkClosed'; sessionId: string}
     /** Main answered whether the page can open for this session (D14). */

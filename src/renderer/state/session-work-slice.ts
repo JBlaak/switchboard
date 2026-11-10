@@ -25,6 +25,8 @@ import type {
     WorkAction,
 } from '../../domain/session-work/model';
 import type {ReviewMode} from '../../domain/session-work/review';
+import {isPullRequestPageId, parsePullRequestUrl, samePullRequest} from '../../domain/session-work/pull-request-link';
+import type {PullRequestRef} from '../../domain/session-work/pull-request-link';
 import {IMAGE_MODES} from '../ui/session-work/image-compare/modes/types';
 import type {ImageMode} from '../ui/session-work/image-compare/modes/types';
 import type {Background, View} from '../ui/session-work/image-compare/types';
@@ -67,6 +69,13 @@ export interface SessionWorkPage {
     readonly reviewPending: {readonly itemId: string; readonly kind: ReviewKind} | null;
     /** Why main refused the last review write, shown where it was asked until the next one. */
     readonly reviewError: {readonly itemId: string; readonly kind: ReviewKind; readonly message: string} | null;
+    /**
+     * The PR a pull request link opened the page for, to be selected once a
+     * snapshot has it. The first snapshot would otherwise select the first
+     * item in progress, which is not the PR the user clicked. Dropped once it
+     * is selected, or once the user selects something else.
+     */
+    readonly wantedPullRequest: PullRequestRef | null;
 }
 
 /** A line a comment is being written on. */
@@ -174,12 +183,18 @@ export const initialSessionWorkState: SessionWorkState = {
  * a task (`hasTask`, #250): unlinked, its page is back on Work.
  */
 export function workTabOf(state: SessionWorkState, sessionId: string, hasTask = false): WorkTab {
+    // A PR's own page has no session behind it, so no plan and no task either.
+    if (isPullRequestPageId(sessionId)) return 'work';
     const tab = state.tabs[sessionId] ?? 'work';
     return tab === 'task' && !hasTask ? 'work' : tab;
 }
 
-/** The tabs a session's page has, in order: Work, Plan, and Task while it works on a task. */
-export function workTabsFor(hasTask: boolean): readonly WorkTab[] {
+/**
+ * The tabs a session's page has, in order: Work, Plan, and Task while it works
+ * on a task. A PR's own page (`pullPage`) has Work alone.
+ */
+export function workTabsFor(hasTask: boolean, pullPage = false): readonly WorkTab[] {
+    if (pullPage) return ['work'];
     return hasTask ? ['work', 'plan', 'task'] : ['work', 'plan'];
 }
 
@@ -192,7 +207,12 @@ export function nextWorkTab(tab: WorkTab, tabs: readonly WorkTab[]): WorkTab {
 export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent): SessionWorkState {
     switch (event.type) {
         case 'sessionWorkOpened': {
-            if (state.page?.sessionId === event.sessionId) return state;
+            const wantedPullRequest = event.pullRequest ?? null;
+            // Open already: a link to one of its PRs still selects that PR.
+            if (state.page?.sessionId === event.sessionId)
+                return wantedPullRequest
+                    ? {...state, page: withWantedPullRequest(state.page, wantedPullRequest)}
+                    : state;
             return {
                 ...state,
                 now: event.at,
@@ -209,6 +229,7 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
                     composer: null,
                     reviewPending: null,
                     reviewError: null,
+                    wantedPullRequest,
                 },
             };
         }
@@ -219,9 +240,14 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
         case 'sessionWorkSnapshot': {
             const {page} = state;
             if (!page || page.sessionId !== event.snapshot.sessionId) return state;
-            const selectedItemId = keptSelection(event.snapshot, page.selectedItemId);
             const diffs = keptDiffs(page.diffs, event.snapshot);
-            return {...state, page: {...page, snapshot: event.snapshot, selectedItemId, diffs}};
+            const next = {...page, snapshot: event.snapshot, diffs};
+            if (page.wantedPullRequest) {
+                const wanted = withWantedPullRequest(next, page.wantedPullRequest);
+                if (!wanted.wantedPullRequest) return {...state, page: wanted};
+            }
+            const selectedItemId = keptSelection(event.snapshot, page.selectedItemId);
+            return {...state, page: {...next, selectedItemId}};
         }
 
         case 'sessionWorkDiffRequested': {
@@ -295,7 +321,14 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
             if (!selectableItems(page.snapshot).some((item) => item.id === event.itemId)) return state;
             return {
                 ...state,
-                page: {...page, selectedItemId: event.itemId, actionError: null, composer: null, reviewError: null},
+                page: {
+                    ...page,
+                    selectedItemId: event.itemId,
+                    actionError: null,
+                    composer: null,
+                    reviewError: null,
+                    wantedPullRequest: null,
+                },
             };
         }
 
@@ -435,6 +468,7 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
             return state.page ? {...state, page: {...state.page, doneExpanded: !state.page.doneExpanded}} : state;
 
         case 'sessionWorkTabSet': {
+            if (isPullRequestPageId(event.sessionId)) return state;
             const tabs =
                 event.tab === 'work'
                     ? withoutEntry(state.tabs, event.sessionId)
@@ -450,9 +484,12 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
             return canOpen === state.canOpen ? state : {...state, canOpen};
         }
 
-        // Another session on screen, or none: the page was this one's.
+        // Another session on screen, or none: the page was this one's. A PR's own
+        // page belongs to no session, so the active one going away leaves it be.
         case 'activeSessionChanged':
-            return state.page && state.page.sessionId !== event.sessionId ? {...state, page: null} : state;
+            return state.page && state.page.sessionId !== event.sessionId && !isPullRequestPageId(state.page.sessionId)
+                ? {...state, page: null}
+                : state;
 
         // A session put on screen — another one, or this one again from its row —
         // takes the terminal area back. A "no" for it may have been asked before
@@ -541,6 +578,33 @@ function keptSelection(snapshot: SessionWorkSnapshot, current: string | null): s
     const items = selectableItems(snapshot);
     if (current && items.some((item) => item.id === current)) return current;
     return items[0]?.id ?? null;
+}
+
+/** The PR an item is, by its URL (which can differ from a link's) or else its repository and number. */
+function itemPullRequest(item: Item): PullRequestRef | null {
+    if (item.kind !== 'pr') return null;
+    return parsePullRequestUrl(item.pr.url) ?? {repository: item.pr.repository, number: item.pr.number};
+}
+
+/**
+ * The page with `wanted` selected when its snapshot has that PR (the Done
+ * group opened if that is where it is), and `wanted` dropped; otherwise the
+ * page waiting for a snapshot that does.
+ */
+function withWantedPullRequest(page: SessionWorkPage, wanted: PullRequestRef): SessionWorkPage {
+    const item = page.snapshot?.items.find((candidate) => {
+        const ref = itemPullRequest(candidate);
+        return ref !== null && samePullRequest(ref, wanted);
+    });
+    if (!item) return page.wantedPullRequest === wanted ? page : {...page, wantedPullRequest: wanted};
+    const selectionMoved = page.selectedItemId !== item.id;
+    return {
+        ...page,
+        selectedItemId: item.id,
+        doneExpanded: page.doneExpanded || isDoneItem(item),
+        wantedPullRequest: null,
+        ...(selectionMoved ? {actionError: null, composer: null, reviewError: null} : {}),
+    };
 }
 
 /**
