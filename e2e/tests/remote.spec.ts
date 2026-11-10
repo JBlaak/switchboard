@@ -900,6 +900,7 @@ test.describe('Bring back', () => {
             'The conversation, resumed on this Mac in the same row',
             'The branch session-cookie',
             'Into the worktree at ' + STUB_BRING_BACK_WORKTREE,
+            '2 uncommitted changes, still uncommitted here',
         ]);
         const existing = dialog.getByRole('group', {name: 'Branch exists'});
         await expect(existing).toContainText(
