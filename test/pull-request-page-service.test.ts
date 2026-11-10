@@ -4,15 +4,12 @@ import assert from 'node:assert/strict';
 import {PullRequestPageService} from '../src/application/services/pull-request-page-service';
 import {WorkPageRouter, type WorkPageBackend} from '../src/application/services/work-page-router';
 import {ReviewService} from '../src/application/services/review-service';
-import {SessionActionService} from '../src/application/services/session-action-service';
 import {GITHUB_REFRESH_MS} from '../src/application/services/session-work-service';
-import {NOT_RUNNING_REASON} from '../src/domain/session-work/actions';
 import {pullRequestPageId} from '../src/domain/session-work/pull-request-link';
 import {linkTarget} from '../src/infrastructure/electron/support/link-target';
 import type {GitHubAvailability, PullRequestStatus, SessionWorkSnapshot} from '../src/domain/session-work/model';
 import type {Timers} from '../src/application/ports/clock';
 import {silentLog} from './support/fakes';
-import {FakePrompter, MemoryStore} from './support/session-work-fakes';
 
 const REPO = 'o/app';
 const URL = `https://github.com/${REPO}/pull/12`;
@@ -198,7 +195,6 @@ test('opening a PR page answers a snapshot of the one PR, handing nothing to Cla
     assert.equal(snapshot.repository, REPO);
     assert.equal(snapshot.gh, 'ok');
     assert.deepEqual(snapshot.footprint, {worktrees: 0, branches: 0});
-    assert.equal(snapshot.queued, 0);
     assert.equal(snapshot.items.length, 1);
     const [item] = snapshot.items;
     assert.equal(item.id, ITEM);
@@ -335,7 +331,7 @@ test('opening another PR page closes the first', async () => {
     assert.equal(timers.intervals.size, 1);
 });
 
-test("the PR page's context has no checkout and gh's answer", async () => {
+test("the PR page's context has its repository and gh's answer", async () => {
     /* Given */
     const {service} = setup();
     await service.open(PAGE);
@@ -344,7 +340,7 @@ test("the PR page's context has no checkout and gh's answer", async () => {
     const context = service.context(PAGE);
 
     /* Then */
-    assert.deepEqual(context, {repository: REPO, mainCheckout: '', gh: 'ok'});
+    assert.deepEqual(context, {repository: REPO, gh: 'ok'});
 });
 
 // ── The router ──
@@ -422,9 +418,9 @@ test('opening either kind of page closes the other kind', async () => {
     assert.deepEqual(calls, ['sessions.closeAll', `prs.open ${PAGE}`, 'prs.closeAll', 'sessions.open s1']);
 });
 
-// ── What a PR page hands Claude: nothing ──
+// ── Your review on a PR page ──
 
-test('your review on a PR page can be submitted but not handed to Claude to fix', async () => {
+test('your review on a PR page can be submitted', async () => {
     /* Given */
     const {service} = setup({
         prs: [prStatus({pendingReviewId: 'PRR_1', pendingReview: [{path: 'a.txt', line: 1, body: 'Hm'} as never]})],
@@ -432,7 +428,6 @@ test('your review on a PR page can be submitted but not handed to Claude to fix'
     const router = new WorkPageRouter(recordingBackend('sessions', []), service);
     await router.open(PAGE);
     const submitted: string[] = [];
-    const handed: string[] = [];
     const review = new ReviewService({
         github: {
             startPendingReview: async () => ({ok: true, reviewId: 'PRR_2'}),
@@ -444,42 +439,15 @@ test('your review on a PR page can be submitted but not handed to Claude to fix'
             },
         },
         page: router,
-        actions: {
-            async request(sessionId) {
-                handed.push(sessionId);
-                return {ok: true, activityId: 'a1'};
-            },
-        },
         log: silentLog,
     });
 
     /* When */
-    const fix = await review.review({sessionId: PAGE, itemId: ITEM, mode: 'fix'});
     const plain = await review.review({sessionId: PAGE, itemId: ITEM, mode: 'submit'});
 
     /* Then */
-    assert.deepEqual(fix, {ok: false, reason: 'No session owns this PR, so Claude cannot fix it here'});
     assert.deepEqual(plain, {ok: true});
     assert.deepEqual(submitted, ['PRR_1']);
-    assert.deepEqual(handed, []);
-});
-
-test('an action asked for on a PR page is refused: no session runs under its id', async () => {
-    /* Given */
-    const actions = new SessionActionService({
-        prompter: new FakePrompter(),
-        store: new MemoryStore(),
-        github: {checkLogTail: async () => null},
-        ids: {newId: () => 'a1'},
-        clock: {now: () => 0},
-        log: silentLog,
-    });
-
-    /* When */
-    const result = await actions.request(PAGE, ITEM, 'fix-comments');
-
-    /* Then */
-    assert.deepEqual(result, {ok: false, reason: NOT_RUNNING_REASON});
 });
 
 // ── Stray links in the main window ──

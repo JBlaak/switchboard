@@ -14,7 +14,7 @@ import type {JSX} from 'react';
 import {useStore} from '../use-store';
 import {shallowEqual} from '../../state/store';
 import {closeSessionWork, openOnGitHub, setWorkTab} from './actions';
-import {agentsLabel, footprintLine, queueLabel, updatedAgo, workPageTitle} from './describe';
+import {agentsLabel, footprintLine, updatedAgo, workPageTitle} from './describe';
 import {isPullRequestPageId} from '../../../domain/session-work/pull-request-link';
 import type {SessionWorkPage, WorkTab} from '../../state/session-work-slice';
 import type {WorkingAgent} from '../../../domain/terminal/program-status-children';
@@ -46,7 +46,6 @@ export function WorkHeader({
     );
     const {snapshot} = page;
     const repository = snapshot ? snapshot.repository : '';
-    const queue = snapshot ? queueLabel(snapshot) : null;
 
     return (
         <header className="sw-header">
@@ -88,11 +87,6 @@ export function WorkHeader({
                         {snapshot && <span className="sw-updated">{updatedAgo(snapshot.updatedAt, now)}</span>}
                     </div>
                 </div>
-                {queue && (
-                    <span className="sw-pill is-amber" role="status">
-                        {queue}
-                    </span>
-                )}
                 {!pullPage && (
                     <kbd className="sw-kbd" title="Cmd+G toggles this page">
                         ⌘G

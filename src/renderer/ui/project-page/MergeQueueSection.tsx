@@ -413,11 +413,6 @@ function FailedRow({entry, context}: {entry: FailedEntry; context: Context}): JS
                 {fix.kind === 'needs-you' && (
                     <span className="pp-mq-note is-needs-you">Needs you: the fix stopped without pushing</span>
                 )}
-                {fix.kind === 'none' && fixAction?.phase === 'sent' && (
-                    <span className="pp-mq-note is-running">
-                        Sent to its own <SessionLink sessionId={fixAction.sessionId} />
-                    </span>
-                )}
                 {fixAction?.phase === 'note' && <span className="pp-mq-note">{fixAction.text}</span>}
                 {fixAction?.phase === 'failed' && <span className="pp-mq-note is-failed">{fixAction.reason}</span>}
                 {retryAction?.phase === 'failed' && <span className="pp-mq-note is-failed">{retryAction.reason}</span>}

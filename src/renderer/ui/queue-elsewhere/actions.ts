@@ -17,15 +17,11 @@ const steps: FixInSessionSteps = {
     abandoned: (errandId) => window.api.queueErrandAbandoned(errandId),
 };
 
-/** Hand the queue's failure to Claude: this session when it owns the PR, else a new errand session. */
-export async function fixInSession(
-    sessionId: string,
-    projectPath: string,
-    failure: SessionQueueFailure,
-): Promise<void> {
+/** Hand the queue's failure to Claude in a new errand session. */
+export async function fixInSession(projectPath: string, failure: SessionQueueFailure): Promise<void> {
     const {repository, number} = failure;
     dispatch({type: 'queuePanelActionStarted', repository, number, action: 'fix'});
-    const outcome = await fixInSessionWith(steps, {sessionId, projectPath, failure});
+    const outcome = await fixInSessionWith(steps, {projectPath, failure});
     dispatch({type: 'queuePanelActionFinished', repository, number, action: 'fix', ...outcome});
 }
 

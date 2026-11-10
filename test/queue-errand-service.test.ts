@@ -1,20 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-    ERRAND_START_TIMEOUT_MS,
-    QueueErrandService,
-    type ErrandOwnerCandidate,
-} from '../src/application/services/queue-errand-service';
-import {SessionActionService} from '../src/application/services/session-action-service';
+import {ERRAND_START_TIMEOUT_MS, QueueErrandService} from '../src/application/services/queue-errand-service';
 import {nudgeMessage, type FixRequest, type QueueErrand} from '../src/domain/project/queue-errands';
 import {ARCHIVE_TOOL_QUALIFIED_NAME} from '../src/domain/session/archive-tool';
 import type {QueueErrandStore} from '../src/application/ports/queue-errand-store';
 import type {GitHubWrite} from '../src/application/ports/github-cli';
 import type {PullRequestStatus} from '../src/domain/session-work/model';
-import type {TranscriptLocation} from '../src/application/ports/transcript-store';
 import {FakeStartGit, silentLog} from './support/fakes';
-import {FakePrompter, MemoryStore} from './support/session-work-fakes';
+import {FakePrompter} from './support/session-work-fakes';
 
 const REPO = 'o/app';
 const ROOT = '/code/app';
@@ -60,11 +54,7 @@ function status(fields: Partial<PullRequestStatus> = {}): PullRequestStatus {
     };
 }
 
-function harness({
-    running = [] as ErrandOwnerCandidate[],
-    locations = {} as Record<string, TranscriptLocation[]>,
-    prs = [status()] as PullRequestStatus[] | null,
-} = {}) {
+function harness({prs = [status()] as PullRequestStatus[] | null} = {}) {
     const store = new MemoryErrandStore();
     const prompter = new FakePrompter();
     prompter.running.clear();
@@ -73,15 +63,6 @@ function harness({
     const now = {value: Date.UTC(2026, 10, 4, 12)};
     let seq = 0;
     const ids = {newId: () => 'id' + ++seq};
-    const actionStore = new MemoryStore();
-    const actions = new SessionActionService({
-        prompter,
-        store: actionStore,
-        github: {checkLogTail: async () => null},
-        ids,
-        clock: {now: () => now.value},
-        log: silentLog,
-    });
     const labelWrites: string[] = [];
     const logRequests: string[] = [];
     const archiveRequested = new Set<string>();
@@ -92,10 +73,8 @@ function harness({
         return labelAnswer.value;
     };
     const service = new QueueErrandService({
-        running: () => running,
         sessions: () => [],
         store,
-        actions,
         github: {
             pullRequests: async () => prs,
             checkLogTail: async (repo, url, lines) => {
@@ -108,7 +87,7 @@ function harness({
             removeLabel: (repo, number, label) => write(`remove ${repo}#${number} ${label}`),
         },
         git: {...git.port, worktreeRoot: async (cwd) => cwd},
-        transcripts: {locations: (_folder, sessionId) => locations[sessionId] ?? []},
+        transcripts: {locations: () => []},
         prompter,
         archiveRequested: (sessionId) => archiveRequested.has(sessionId),
         archived: (sessionId) => archived.has(sessionId),
@@ -122,7 +101,6 @@ function harness({
         prompter,
         git,
         now,
-        actionStore,
         labelWrites,
         labelAnswer,
         logRequests,
@@ -142,15 +120,6 @@ function fixRequest(fields: Partial<FixRequest> = {}): FixRequest {
         pr: {...PR, headRef: 'faster-sync'},
         failure: {kind: 'ci', reason: 'Required check test failed', checkName: 'test'},
         ...fields,
-    };
-}
-
-function owner(sessionId: string, url = PR.url): ErrandOwnerCandidate {
-    return {
-        sessionId,
-        projectPath: ROOT,
-        folder: 'folder-' + sessionId,
-        pullRequests: [{number: Number(url.split('/').pop()), url, repository: REPO}],
     };
 }
 
@@ -311,40 +280,9 @@ test('a nudge whose session was never reported started is dropped after a while'
 
 // ── Fix in session ──
 
-test("a fix goes to the running owner session's action queue, in the worktree it worked on the branch in, not told to archive", async () => {
+test('a fix prepares a worktree on the PR branch with the fix prompt, as an errand', async () => {
     /* Given */
-    const worktree = ROOT + '/.claude/worktrees/faster-sync';
-    const {service, prompter, actionStore, git, logRequests} = harness({
-        running: [owner('other', 'https://github.com/o/app/pull/1'), owner('s1')],
-        locations: {s1: [{cwd: worktree, branch: 'faster-sync', fromSubagent: false}]},
-    });
-    prompter.running.add('s1');
-
-    /* When */
-    const result = await service.fix(fixRequest());
-
-    /* Then */
-    assert.deepEqual(result, {ok: true, kind: 'queued', sessionId: 's1', activityId: 'id1'});
-    assert.deepEqual(
-        actionStore.rows.map(({sessionId, itemKey, action, details}) => ({sessionId, itemKey, action, details})),
-        [{sessionId: 's1', itemKey: 'pr:' + PR.url, action: 'fix-ci', details: {checkName: 'test'}}],
-    );
-    const prompt = prompter.sent[0]?.prompt ?? '';
-    assert.match(prompt, /out of the queue\. [^]*\nRequired check test failed\n/);
-    assert.match(
-        prompt,
-        new RegExp(
-            `test failed on abc123\\. Log tail:\\n<<<SWITCHBOARD-CI-LOG-BEGIN>>>\\nError: expected 2, got 3\\n<<<SWITCHBOARD-CI-LOG-END>>>\\nFix it in ${worktree} and push\\.`,
-        ),
-    );
-    assert.ok(!prompt.includes(ARCHIVE_TOOL_QUALIFIED_NAME));
-    assert.deepEqual(logRequests, [`o/app ${RUN_URL} 80`]);
-    assert.deepEqual(git.writes, [], 'no worktree made');
-});
-
-test('with no running owner, a fix prepares a worktree on the PR branch with the fix prompt, as an errand', async () => {
-    /* Given */
-    const {service, git, store} = harness();
+    const {service, git, store, logRequests} = harness();
 
     /* When */
     const result = await service.fix(fixRequest());
@@ -363,6 +301,7 @@ test('with no running owner, a fix prepares a worktree on the PR branch with the
     );
     assert.match(result.prompt, /Push to faster-sync only/);
     assert.ok(result.prompt.includes(ARCHIVE_TOOL_QUALIFIED_NAME));
+    assert.deepEqual(logRequests, [`o/app ${RUN_URL} 80`]);
     assert.deepEqual(
         store.rows.map(({id, kind, number}) => ({id, kind, number})),
         [{id: result.errandId, kind: 'fix', number: 2270}],

@@ -83,14 +83,10 @@ export interface PendingComment {
     body: string;
     /**
      * The thread GitHub made for it. It keeps its id once the review is
-     * submitted, which is how Submit & have Claude fix names exactly the
-     * threads it submitted.
+     * submitted.
      */
     threadId?: string;
 }
-
-/** How the repository merges a PR, as `gh pr merge` spells it. */
-export type MergeMethod = 'merge' | 'squash' | 'rebase';
 
 /**
  * A pull request the session opened, with whatever `gh` could add to it.
@@ -129,35 +125,6 @@ export interface PullRequestStatus {
     /** Lines the PR adds and removes, as GitHub counts them. */
     additions?: number;
     deletions?: number;
-    /**
-     * How Ship it merges it: your default merge method on the repository when
-     * the repository allows it, otherwise the first one it does allow.
-     */
-    mergeMethod?: MergeMethod;
-}
-
-/** The actions a work item can hand to Claude, each one a prompt (A1). */
-export type WorkAction = 'ship' | 'rebase' | 'fix-ci' | 'fix-comments' | 'open-pr' | 'create-pr';
-
-/** An action on a work item and how far it got. */
-export interface Activity {
-    /** The stored action's id: what Cancel names. */
-    id: string;
-    action: WorkAction;
-    /**
-     * `queued` waits for the session to go idle (A2); `sent` has been typed in
-     * and Claude is on it; `done` once the session went busy and idle again.
-     */
-    phase: 'queued' | 'sent' | 'done';
-    origin: 'manual' | 'auto';
-    /** The check a Fix CI is about, when it was handed one (auto-fix always is). */
-    checkName?: string;
-    /** ISO-8601. */
-    queuedAt: string;
-    /** ISO-8601. */
-    sentAt?: string;
-    /** The review threads a Fix comments hands over. */
-    threadIds?: string[];
 }
 
 /**
@@ -204,9 +171,6 @@ export type WorkItem = {error?: string} & (
           pr: PullRequestStatus;
           location: WorkLocation | null;
           diff: DiffSource;
-          activity: Activity | null;
-          /** Review threads a queued or sent Fix comments covers: "Claude is on it". */
-          fixingThreads?: string[];
           /** In another repository than the session's: no checkout here, so nothing is handed to Claude. */
           otherRepository?: true;
       }
@@ -215,11 +179,10 @@ export type WorkItem = {error?: string} & (
           location: WorkLocation;
           ahead: number;
           diff: DiffSource;
-          activity: Activity | null;
           /** Has an upstream, or a branch of the same name on origin: someone else could see it. */
           pushed: boolean;
       } & LineStats)
-    | ({kind: 'dirty'; location: WorkLocation; files: FileChange[]; activity: Activity | null} & LineStats)
+    | ({kind: 'dirty'; location: WorkLocation; files: FileChange[]} & LineStats)
     /** An `IssueStatus` once `gh` confirmed it is an issue; a bare ref without `gh`. */
     | {kind: 'issue'; issue: IssueRef | IssueStatus}
 );
@@ -241,6 +204,13 @@ export interface SessionWorkDiff {
 /** Whether `gh` can be asked anything: installed, and signed in to github.com (D9). */
 export type GitHubAvailability = 'ok' | 'missing' | 'unauthenticated';
 
+/** What the open page knows about its session beyond its items. */
+export interface WorkPageContext {
+    /** `owner/name`; '' when the session's repository is not on GitHub. */
+    repository: string;
+    gh: GitHubAvailability;
+}
+
 /** A work item in a snapshot, with the id the page asks for its diff by (`workItemKey`). */
 export type SessionWorkItem = WorkItem & {id: string};
 
@@ -256,8 +226,6 @@ export interface SessionWorkSnapshot {
      * merged still worked somewhere.
      */
     footprint: {worktrees: number; branches: number};
-    /** Actions waiting for the session to go idle, on any item (A2). */
-    queued: number;
     gh: GitHubAvailability;
     /** ISO-8601: when this snapshot was assembled. */
     updatedAt: string;

@@ -17,7 +17,7 @@ import type {RemoteStatusPayload} from '../../domain/remote/remote-status';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {UpdateNotice} from '../../domain/update/release';
 import type {InstallFailure, InstallProgress, UpdateOutcome} from '../../domain/update/progress';
-import type {SessionWorkDiff, SessionWorkSnapshot, WorkAction} from '../../domain/session-work/model';
+import type {SessionWorkDiff, SessionWorkSnapshot} from '../../domain/session-work/model';
 import type {DiffMode, ImageDefaults, ReviewKind, WorkTab} from './session-work-slice';
 import type {PlanSource, SessionPlansAnswer} from './plan-slice';
 import type {ProjectView} from './main-area-slice';
@@ -262,10 +262,6 @@ export type LocalEvent =
     | {type: 'sessionWorkFileFocused'; itemId: string; path: string}
     /** The page's once-a-second clock, for "updated Xs ago". Only runs while it is open. */
     | {type: 'sessionWorkTicked'; at: number}
-    /** An action button was pressed: main is asked to queue it (A2). */
-    | {type: 'sessionWorkActionRequested'; sessionId: string; itemId: string; action: WorkAction; threadIds?: string[]}
-    /** Main answered: queued (`error` null; the snapshot shows it), or refused with why. */
-    | {type: 'sessionWorkActionAnswered'; sessionId: string; itemId: string; error: string | null}
     /** `+` or `c` on a line of a PR's diff: the comment composer opens under it (C1). */
     | {type: 'sessionWorkComposerOpened'; itemId: string; path: string; line: number; side: DiffSide}
     /** Cancel, Esc, or the comment went into the review. */

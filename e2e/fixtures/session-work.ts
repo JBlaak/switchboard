@@ -16,7 +16,6 @@ import {imageStubKey} from '../support/main-process';
 import {solidPng} from './png';
 import type {SessionWorkStub} from '../support/main-process';
 import type {
-    Activity,
     FileDiff,
     PendingComment,
     PullRequestStatus,
@@ -48,7 +47,6 @@ const ITEMS: SessionWorkItem[] = [
         },
         location: {worktree: '/w/acme-api', branch: 'fix/login-loop', fromSubagent: false},
         diff: {kind: 'local', worktree: '/w/acme-api', base: 'origin/main', head: 'fix/login-loop'},
-        activity: null,
     },
     {
         id: 'pr:' + pr(1312),
@@ -65,7 +63,6 @@ const ITEMS: SessionWorkItem[] = [
         },
         location: {worktree: '/w/acme-api-2', branch: 'test/redirect', fromSubagent: true},
         diff: {kind: 'local', worktree: '/w/acme-api-2', base: 'origin/main', head: 'test/redirect'},
-        activity: null,
     },
     {
         id: 'branch:/w/acme-api-2\0spike/cookie-store',
@@ -73,7 +70,6 @@ const ITEMS: SessionWorkItem[] = [
         location: {worktree: '/w/acme-api-2', branch: 'spike/cookie-store', fromSubagent: true},
         ahead: 2,
         diff: {kind: 'local', worktree: '/w/acme-api-2', base: 'origin/main', head: 'spike/cookie-store'},
-        activity: null,
         additions: 61,
         deletions: 0,
         pushed: false,
@@ -86,7 +82,6 @@ const ITEMS: SessionWorkItem[] = [
             {path: 'src/session.ts', status: 'modified'},
             {path: 'src/cookie.ts', status: 'untracked'},
         ],
-        activity: null,
         additions: 18,
         deletions: 4,
     },
@@ -125,7 +120,6 @@ const ITEMS: SessionWorkItem[] = [
         },
         location: null,
         diff: {kind: 'pull-request', repository: REPO, number: 1309},
-        activity: null,
     },
 ];
 
@@ -137,7 +131,6 @@ export const LOGIN_FIX_WORK: SessionWorkSnapshot = {
     repository: REPO,
     items: ITEMS,
     footprint: {worktrees: 2, branches: 3},
-    queued: 0,
     gh: 'ok',
     updatedAt: UPDATED_AT,
 };
@@ -147,7 +140,6 @@ export const DASHBOARD_WORK: SessionWorkSnapshot = {
     repository: 'acme/dashboard',
     items: [],
     footprint: {worktrees: 1, branches: 1},
-    queued: 0,
     gh: 'unauthenticated',
     updatedAt: UPDATED_AT,
 };
@@ -155,19 +147,12 @@ export const DASHBOARD_WORK: SessionWorkSnapshot = {
 /** The first PR's item id. */
 export const FIRST_PR_ID = 'pr:' + pr(1320);
 
-/**
- * The login-fix snapshot with an action on its first PR, as the queue would
- * push it, and `queued` actions waiting in all. `facts` changes what GitHub
- * says about that PR.
- */
-export function loginFixWorkWith(
-    activity: Activity | null,
-    {queued = 0, facts = {}}: {queued?: number; facts?: Partial<PullRequestStatus>} = {},
-): SessionWorkSnapshot {
+/** The login-fix snapshot with `facts` changing what GitHub says about its first PR. */
+export function loginFixWorkWith(facts: Partial<PullRequestStatus> = {}): SessionWorkSnapshot {
     const items = ITEMS.map((item): SessionWorkItem =>
-        item.id === FIRST_PR_ID && item.kind === 'pr' ? {...item, pr: {...item.pr, ...facts}, activity} : item,
+        item.id === FIRST_PR_ID && item.kind === 'pr' ? {...item, pr: {...item.pr, ...facts}} : item,
     );
-    return {...LOGIN_FIX_WORK, items, queued};
+    return {...LOGIN_FIX_WORK, items};
 }
 
 /**
@@ -175,10 +160,7 @@ export function loginFixWorkWith(
  * (#77): an open one from a teammate, one from a bot, a resolved one, one that
  * needs you, and one whose line is gone; plus `pending` comments of your own.
  */
-export function loginFixWorkWithReview({
-    pending = [],
-    fixing = [],
-}: {pending?: PendingComment[]; fixing?: string[]} = {}): SessionWorkSnapshot {
+export function loginFixWorkWithReview({pending = []}: {pending?: PendingComment[]} = {}): SessionWorkSnapshot {
     const at = (minutes: number) => new Date(FIXTURE_NOW - minutes * 60_000).toISOString();
     const threads: ReviewThread[] = [
         {
@@ -237,7 +219,6 @@ export function loginFixWorkWithReview({
                       pendingReview: pending,
                       ...(pending.length ? {pendingReviewId: 'PRR_mine'} : {}),
                   },
-                  ...(fixing.length ? {fixingThreads: fixing} : {}),
               }
             : item,
     );

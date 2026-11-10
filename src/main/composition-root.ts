@@ -69,8 +69,7 @@ import {MergeQueueWatchService} from '../application/services/merge-queue-watch-
 import {ReviewService} from '../application/services/review-service';
 import {PullRequestPageService} from '../application/services/pull-request-page-service';
 import {WorkPageRouter} from '../application/services/work-page-router';
-import {SessionActionService} from '../application/services/session-action-service';
-import {PrWatchService} from '../application/services/pr-watch-service';
+import {PrWatchService, type WatchedSession} from '../application/services/pr-watch-service';
 import {SettingsService} from '../application/services/settings-service';
 import {WorktreeCleanupService} from '../application/services/worktree-cleanup-service';
 import {UpdateService} from '../application/services/update-service';
@@ -81,7 +80,7 @@ import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/qui
 import {QuickAskService, quickRouteCall} from '../application/services/quick-ask-service';
 import {TaskLinkService} from '../application/services/task-link-service';
 import {TaskSessionService} from '../application/services/task-session-service';
-import {QueueErrandService, type ErrandOwnerCandidate} from '../application/services/queue-errand-service';
+import {QueueErrandService} from '../application/services/queue-errand-service';
 import {CiJobQueueService} from '../application/services/ci-job-queue-service';
 import {TaskWritesService} from '../application/services/task-writes-service';
 import {TasksService} from '../application/services/tasks-service';
@@ -120,8 +119,6 @@ import {WorkerProjectScanner} from '../infrastructure/worker/worker-project-scan
 import {SqliteSearchIndex} from '../infrastructure/sqlite/search-index';
 import {SqliteSessionRepository} from '../infrastructure/sqlite/session-repository';
 import {SqliteSettingsStore} from '../infrastructure/sqlite/settings-store';
-import {SqliteActivityStore} from '../infrastructure/sqlite/activity-store';
-import {SqliteAutoFixHistory} from '../infrastructure/sqlite/auto-fix-history';
 import {SqliteTaskLinkStore} from '../infrastructure/sqlite/task-link-store';
 import {SqliteQueueErrandStore} from '../infrastructure/sqlite/queue-errand-store';
 import {McpBlaakTasks} from '../infrastructure/blaaktasks/mcp-blaak-tasks';
@@ -226,7 +223,6 @@ export interface Container {
     readonly sessionStats: SessionStatsService;
     /** The session tray's Workspace group (#342): Editor, Finder, Shell here. */
     readonly workspace: WorkspaceActionService;
-    readonly sessionActions: SessionActionService;
     readonly review: ReviewService;
     readonly prWatch: PrWatchService;
     readonly issueSessions: IssueSessionService;
@@ -836,16 +832,6 @@ export function buildContainer(): Container {
 
     const ghRun: GhRunner = async (args) => defaultGhRunner(await toolEnv())(args);
     const github = new GhCli({run: ghRun});
-    // The page and its actions need each other: the actions read the page's
-    // items, and the page shows each item's action. Closed with `attach`.
-    const sessionActions = new SessionActionService({
-        prompter,
-        store: new SqliteActivityStore(database.db),
-        github,
-        ids,
-        clock,
-        log,
-    });
     const vmLocation = {
         live: (id: string) => {
             const session = registry.find(id)?.session;
@@ -872,15 +858,12 @@ export function buildContainer(): Container {
         git: workspace,
         github,
         remotes: git,
-        activities: sessionActions,
         renderer,
         clock,
         timers,
         log,
     });
-    sessionActions.attach(sessionWork);
     // A PR no session opened has a page of its own, keyed `pull:owner/repo#N`.
-    // Its actions stay with the session's page: no session, nothing to hand Claude.
     const pullRequestPages = new PullRequestPageService({github, renderer, clock, timers, log});
     const workPages = new WorkPageRouter(sessionWork, pullRequestPages);
     const sessionStats = new SessionStatsService({
@@ -906,7 +889,7 @@ export function buildContainer(): Container {
         launcher: new MacWorkspaceLauncher(log),
         log,
     });
-    const review = new ReviewService({github, page: workPages, actions: sessionActions, log});
+    const review = new ReviewService({github, page: workPages, log});
     // The Plan tab (#121): reads only, each answer kept for 30 s.
     const plans = new PlanService({
         locate: locateSession,
@@ -919,9 +902,8 @@ export function buildContainer(): Container {
     });
 
     // The running Claude sessions' PRs, as their transcripts linked them: what the
-    // CI watch watches, always on, page or no page (W1), and which session owns a
-    // PR for the merge queue's Fix in session. Remote sessions are out of scope.
-    const runningClaudeSessions = (): ErrandOwnerCandidate[] =>
+    // CI watch watches, always on, page or no page (W1). Remote sessions are out of scope.
+    const runningClaudeSessions = (): WatchedSession[] =>
         registry
             .snapshot()
             // Local sessions, and VM sessions (#276 stage 3), whose PR links come
@@ -938,7 +920,6 @@ export function buildContainer(): Container {
                     return {
                         sessionId,
                         projectPath: session.projectPath,
-                        folder: null,
                         pullRequests: vmTranscripts.pullRequests(sessionId),
                     };
                 }
@@ -946,19 +927,13 @@ export function buildContainer(): Container {
                 return {
                     sessionId,
                     projectPath: session.projectPath,
-                    folder: cached?.folder ?? encodeProjectPath(session.projectPath),
                     pullRequests: cached?.pullRequests ?? [],
                 };
             });
     const prWatch = new PrWatchService({
         sessions: runningClaudeSessions,
         github,
-        history: new SqliteAutoFixHistory(database.db),
-        actions: sessionActions,
-        transcripts,
-        git: workspace,
         renderer,
-        clock,
         timers,
         log,
     });
@@ -1011,14 +986,11 @@ export function buildContainer(): Container {
         log,
     });
 
-    // The merge queue's buttons (#315). A session the PR's own transcript linked
-    // gets a fix as a queued action; anything else is an errand the renderer
-    // starts, kept in the database so it stays one across a restart.
+    // The merge queue's buttons (#315). Nudge and Fix in session are errands the
+    // renderer starts, kept in the database so they stay errands across a restart.
     const queueErrands = new QueueErrandService({
-        running: runningClaudeSessions,
         sessions: sessionCandidates,
         store: new SqliteQueueErrandStore(database.db),
-        actions: sessionActions,
         github,
         labels: github,
         git: workspace,
@@ -1344,7 +1316,6 @@ export function buildContainer(): Container {
         sessionLinks,
         sessionStats,
         workspace: workspaceActions,
-        sessionActions,
         prWatch,
         review,
         issueSessions,

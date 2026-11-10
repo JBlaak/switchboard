@@ -31,7 +31,6 @@ function pr(number: number, state: 'open' | 'merged' = 'open', url?: string): Se
         pr: {number, url: prUrl, repository: 'acme/api', title: `PR ${number}`, state, closes: []},
         location: null,
         diff: {kind: 'pull-request', repository: 'acme/api', number},
-        activity: null,
     };
 }
 
@@ -41,7 +40,6 @@ function snapshot(items: SessionWorkItem[], sessionId = 's1'): SessionWorkSnapsh
         repository: 'acme/api',
         items,
         footprint: {worktrees: 1, branches: 1},
-        queued: 0,
         gh: 'ok',
         updatedAt: new Date(AT).toISOString(),
     };

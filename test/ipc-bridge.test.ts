@@ -113,7 +113,6 @@ test('each other push becomes its event', () => {
         repository: '',
         items: [],
         footprint: {worktrees: 0, branches: 0},
-        queued: 0,
         gh: 'ok',
         updatedAt: 'now',
     });
@@ -145,7 +144,6 @@ test('each other push becomes its event', () => {
                     repository: '',
                     items: [],
                     footprint: {worktrees: 0, branches: 0},
-                    queued: 0,
                     gh: 'ok',
                     updatedAt: 'now',
                 },

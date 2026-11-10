@@ -16,17 +16,11 @@
 import {test, expect} from '../support/test';
 import {openSession, sessionRow, sidebar, terminalHeader} from '../support/app';
 import {fakeClaude} from '../support/fake-cli';
-import {
-    openedExternally,
-    pushEvent,
-    sessionWorkActions,
-    sessionWorkCancels,
-    sessionWorkClosed,
-} from '../support/main-process';
+import {openedExternally, pushEvent, sessionWorkClosed} from '../support/main-process';
 import {hasTerminal} from '../support/terminal';
 import {sessionItem} from '../support/session-list';
 import {LABEL, S} from '../fixtures/standard';
-import {BIG_FILE_LINES, FIRST_PR_ID, loginFixWorkWith, sessionWorkStub} from '../fixtures/session-work';
+import {BIG_FILE_LINES, sessionWorkStub} from '../fixtures/session-work';
 import {EVENT} from '../../src/ipc/channels';
 import type {Page} from '@playwright/test';
 
@@ -224,77 +218,22 @@ test.describe('actions', () => {
         await workPage(page).getByRole('navigation', {name: 'Work items'}).getByRole('button', {name}).click();
     }
 
-    test('a button hands its item to main for the session on screen; the card cancels it, or goes to the terminal', async ({
-        page,
-        home,
-        app,
-    }) => {
+    test('a PR offers only Open on GitHub, and a branch offers nothing', async ({page, home, app}) => {
         /* Given */
         await openLoginFixWork(page, home);
 
         /* When */
-        await actions(page).getByRole('button', {name: 'Ship it'}).click();
-
-        /* Then */
-        await expect
-            .poll(() => sessionWorkActions(app))
-            .toEqual([{sessionId: S.loginFix, itemId: FIRST_PR_ID, action: 'ship'}]);
-
-        /* When */
-        await select(page, /spike\/cookie-store/);
-        await actions(page).getByRole('button', {name: 'Open a new PR'}).click();
-
-        /* Then */
-        await expect
-            .poll(async () => (await sessionWorkActions(app)).map((request) => request.action))
-            .toEqual(['ship', 'open-pr']);
-        await expect(actions(page).getByRole('button', {name: 'Open on GitHub'})).toHaveCount(0);
-
-        /* When */
-        await select(page, /Stop the login redirect loop/);
         await actions(page).getByRole('button', {name: 'Open on GitHub'}).click();
 
         /* Then */
+        await expect(actions(page).getByRole('button')).toHaveCount(1);
         await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1320');
 
         /* When */
-        await pushEvent(
-            app,
-            EVENT.sessionWorkSnapshot,
-            loginFixWorkWith(
-                {id: 'act-7', action: 'ship', phase: 'queued', origin: 'manual', queuedAt: new Date().toISOString()},
-                {queued: 2},
-            ),
-        );
+        await select(page, /spike\/cookie-store/);
 
         /* Then */
-        const card = page.getByTestId('session-work-activity');
-        await expect(card).toContainText('Queued: ship #1320');
-
-        /* When */
-        await card.getByRole('button', {name: 'Cancel'}).click();
-
-        /* Then */
-        await expect.poll(() => sessionWorkCancels(app)).toEqual(['act-7']);
-
-        /* When */
-        const now = new Date().toISOString();
-        await pushEvent(
-            app,
-            EVENT.sessionWorkSnapshot,
-            loginFixWorkWith({
-                id: 'act-1',
-                action: 'ship',
-                phase: 'sent',
-                origin: 'manual',
-                queuedAt: now,
-                sentAt: now,
-            }),
-        );
-        await card.getByRole('button', {name: 'View in terminal'}).click();
-
-        /* Then */
-        await expectBackOnTerminal(page, home);
+        await expect(actions(page)).toHaveCount(0);
     });
 });
 

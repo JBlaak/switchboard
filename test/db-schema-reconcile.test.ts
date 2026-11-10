@@ -195,12 +195,12 @@ describe('schema reconcile', {concurrency: true}, () => {
         assert.equal((await inspectDb(dir)).cacheCount, 1, 'cache kept once the column exists');
     });
 
-    async function sessionActionColumns(dataDir: string): Promise<string[]> {
+    async function tableNames(dataDir: string): Promise<string[]> {
         const r = await runInElectronNode(
             `
     const Database = require('better-sqlite3');
     const db = new Database(require('path').join(process.env.SWITCHBOARD_DATA_DIR, 'switchboard.db'), { readonly: true });
-    console.log(JSON.stringify(db.prepare('PRAGMA table_info(session_actions)').all().map(c => c.name)));
+    console.log(JSON.stringify(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(t => t.name)));
   `,
             dataDir,
         );
@@ -208,35 +208,15 @@ describe('schema reconcile', {concurrency: true}, () => {
         return JSON.parse(r.stdout.trim().split('\n').pop() ?? '[]');
     }
 
-    const SESSION_ACTION_COLUMNS = [
-        'id',
-        'session',
-        'repository',
-        'item_key',
-        'action',
-        'origin',
-        'phase',
-        'prompt',
-        'queued_at',
-        'sent_at',
-        'done_at',
-        'details',
-    ];
-
     /** A database a parallel branch migrated past this one's version, with nothing else in it. */
     const FOREIGN_V9 = `
   db.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)');
   db.prepare("INSERT INTO settings (key, value) VALUES ('db_version', '9')").run();
 `;
 
-    const QUEUE_ONE_ACTION = `
-  db.prepare(\`INSERT INTO session_actions (id, session, item_key, action, origin, phase, prompt, queued_at)
-    VALUES ('a1', 's1', 'pr:x', 'ship', 'manual', 'queued', 'Ship PR #1', '2026-01-01T00:00:00Z')\`).run();
-`;
-
-    // One fresh open answers for every column and table the schema adds, rather
-    // than an Electron start per addition.
-    test('a fresh database gets fileMtime, pullRequests and the session_actions table', async () => {
+    // One fresh open answers for every column the schema adds, rather than an
+    // Electron start per addition.
+    test('a fresh database gets fileMtime and pullRequests, and no Session work action tables', async () => {
         /* Given */
         const dir = dataDir('switchboard-db-fresh-');
 
@@ -248,55 +228,24 @@ describe('schema reconcile', {concurrency: true}, () => {
         const {cols} = await inspectDb(dir);
         assert.ok(cols.includes('fileMtime'));
         assert.ok(cols.includes('pullRequests'));
-        assert.deepEqual(await sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
+        const tables = await tableNames(dir);
+        assert.ok(!tables.includes('session_actions'));
+        assert.ok(!tables.includes('auto_fix_attempts'));
     });
 
-    // The Session work queue must survive a restart, so its table is created on
-    // every database, including one a parallel branch migrated past this one's
-    // version: a numbered migration would be skipped there.
-    test('an existing, foreign higher-version database gains session_actions', async () => {
+    // The Session work actions are gone; a database from before still opens, and
+    // what it kept of them is left alone.
+    test('a database with the old action tables still opens, and keeps them as they were', async () => {
         /* Given */
-        const dir = dataDir('switchboard-db-actions-foreign-');
-        await sqlite(dir, FOREIGN_V9);
-
-        /* When */
-        const r = await openDatabase(dir);
-
-        /* Then */
-        assert.equal(r.status, 0);
-        assert.deepEqual(await sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
-    });
-
-    test('an existing, foreign higher-version database keeps its session_actions rows across opens', async () => {
-        /* Given */
-        const dir = dataDir('switchboard-db-actions-foreign-rows-');
-        await sqlite(dir, FOREIGN_V9);
-        await opened(dir);
-        await sqlite(dir, QUEUE_ONE_ACTION);
-
-        /* When */
-        const r = await openDatabase(dir);
-
-        /* Then */
-        assert.equal(r.status, 0);
-        const count = await sqlite(
-            dir,
-            `console.log(String(db.prepare('SELECT COUNT(*) AS n FROM session_actions').get().n));`,
-            true,
-        );
-        assert.equal(count, '1', 'a queued action survives the next open');
-    });
-
-    test('a session_actions table from before card details gains the column, and keeps its rows', async () => {
-        /* Given */
-        const dir = dataDir('switchboard-db-actions-details-');
+        const dir = dataDir('switchboard-db-old-actions-');
         await sqlite(
             dir,
             `
     db.exec(\`CREATE TABLE session_actions (id TEXT PRIMARY KEY, session TEXT NOT NULL, repository TEXT NOT NULL DEFAULT '',
       item_key TEXT NOT NULL, action TEXT NOT NULL, origin TEXT NOT NULL, phase TEXT NOT NULL, prompt TEXT NOT NULL,
       queued_at TEXT NOT NULL, sent_at TEXT, done_at TEXT)\`);
-    ${QUEUE_ONE_ACTION}
+    db.prepare(\`INSERT INTO session_actions (id, session, item_key, action, origin, phase, prompt, queued_at)
+      VALUES ('a1', 's1', 'pr:x', 'ship', 'manual', 'queued', 'Ship PR #1', '2026-01-01T00:00:00Z')\`).run();
   `,
         );
 
@@ -304,34 +253,13 @@ describe('schema reconcile', {concurrency: true}, () => {
         const r = await openDatabase(dir);
 
         /* Then */
-        assert.equal(r.status, 0);
-        assert.deepEqual(await sessionActionColumns(dir), SESSION_ACTION_COLUMNS);
-    });
-
-    // The auto-fix limit survives a restart only if its history does (W3).
-    test('the auto-fix history table is created, and its rows survive the next open', async () => {
-        /* Given */
-        const dir = dataDir('switchboard-db-auto-fix-');
-        await opened(dir);
-        await sqlite(
+        assert.equal(r.status, 0, r.stderr);
+        const count = await sqlite(
             dir,
-            `
-    db.prepare(\`INSERT INTO auto_fix_attempts (kind, repository, number, check_name, head_sha, origin, activity_id, at)
-      VALUES ('attempt', 'o/app', 7, 'test', 'aaa', 'auto', 'a1', '2026-01-01T00:00:00Z')\`).run();
-  `,
-        );
-
-        /* When */
-        const r = await openDatabase(dir);
-
-        /* Then */
-        assert.equal(r.status, 0);
-        const rows = await sqlite(
-            dir,
-            `console.log(JSON.stringify(db.prepare('SELECT kind, head_sha FROM auto_fix_attempts').all()));`,
+            `console.log(String(db.prepare('SELECT COUNT(*) AS n FROM session_actions').get().n));`,
             true,
         );
-        assert.deepEqual(JSON.parse(rows || '[]'), [{kind: 'attempt', head_sha: 'aaa'}]);
+        assert.equal(count, '1');
     });
 
     test('a session_meta table from before snoozing gains snoozedUntil, and keeps its rows', async () => {

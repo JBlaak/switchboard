@@ -116,16 +116,6 @@ test('auto-merge is on for a PR GitHub has an auto-merge request on, and unknown
     assert.equal(draft.autoMerge, undefined);
 });
 
-test('the merge method is your default where the repository allows it, else the first it allows', async () => {
-    /* When */
-    const [open, draft, merged] = await recordedPullRequests([12, 13, 14]);
-
-    /* Then */
-    assert.equal(open.mergeMethod, 'squash', 'your default, allowed');
-    assert.equal(draft.mergeMethod, 'merge', 'your default (rebase) is not allowed: the first that is');
-    assert.equal(merged.mergeMethod, undefined, 'GitHub said nothing about it');
-});
-
 test('check runs and status contexts fold into the four states', async () => {
     /* When */
     const [pr] = await recordedPullRequests([12]);

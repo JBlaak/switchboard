@@ -3,8 +3,8 @@
  * `+N` chip's tooltip, the row's needs-attention marker, and the Checks panel
  * with a failing check's log.
  *
- * Which dot a chip takes and what the auto-fix activity card says are unit
- * tested (test/ci-status-slice.test.ts, test/session-work-rules.test.ts);
+ * Which dot a chip takes is unit tested (test/ci-status-slice.test.ts,
+ * test/session-work-rules.test.ts);
  * these tests prove main's pushes and the log request reach the screen.
  *
  * The suite never reaches GitHub, so the watch itself is off here (it polls
@@ -91,7 +91,7 @@ test('the watch\'s pushes reach the row: a dot per PR chip, the worst on "+N" na
     await expect(row.locator('.session-pr-dot')).toHaveCount(0);
 
     /* When */
-    // What main sends when auto-fix gives up on a session that is not on screen.
+    // What main sends when a PR of a session that is not on screen waits on you.
     await pushEvent(app, EVENT.prStatusChanged, prStatus([{number: 1320, dot: 'red'}], true));
     await pushEvent(app, EVENT.sessionNeedsAttention, S.loginFix);
 
@@ -114,7 +114,7 @@ test("the Checks panel lists each check, with the failing one's log", async ({pa
     await openLoginFixWork(page, home);
 
     /* When */
-    await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(null, {facts: FAILING}));
+    await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWith(FAILING));
 
     /* Then */
     const checks = workPage(page).getByRole('region', {name: 'Checks'});

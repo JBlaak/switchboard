@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {deriveWorkItems, isDone, workItemKey, type WorkFacts} from '../src/domain/session-work/items';
-import type {Activity, PullRequestStatus, WorkItem, WorkLocation} from '../src/domain/session-work/model';
+import type {PullRequestStatus, WorkItem, WorkLocation} from '../src/domain/session-work/model';
 
 const REPO = 'owner/repo';
 const MAIN = '/repo';
@@ -227,7 +227,6 @@ test('a branch with commits and no PR is an item, diffed locally; one with no co
             location: loc(AGENT, 'feat/a', true),
             ahead: 2,
             diff: {kind: 'local', worktree: AGENT, base: 'origin/main', head: 'feat/a'},
-            activity: null,
             additions: 10,
             deletions: 2,
             pushed: false,
@@ -401,7 +400,6 @@ test('a dirty worktree on a branch the transcripts never named still shows', () 
             kind: 'dirty',
             location: loc(AGENT, 'feat/c', true),
             files: [{path: 'x', status: 'added'}],
-            activity: null,
             additions: 1,
             deletions: 0,
         },
@@ -428,13 +426,6 @@ test('issues: mentions and branch names, minus what a PR closes and the PRs them
     assert.deepEqual(summary(items), ['pr #50', 'issue #11', 'issue #44']);
 });
 
-const fixing: Activity = {
-    id: 'a1',
-    action: 'fix-comments',
-    phase: 'sent',
-    origin: 'manual',
-    queuedAt: '2026-01-01T00:00:00Z',
-};
 const waitingOnYou = [
     {id: 't', path: 'a', line: 1, side: 'RIGHT' as const, resolved: false, needsYou: true, comments: []},
 ];
@@ -467,7 +458,6 @@ function everyKind(): WorkFacts {
             {worktree: MAIN, branch: 'main', files: [{path: 'a', status: 'modified'}], additions: 0, deletions: 0},
         ],
         issueMentions: [{repository: REPO, number: 99}],
-        activities: new Map([[`pr:${url(2)}`, fixing]]),
     });
 }
 
@@ -493,28 +483,8 @@ test('the list is ordered: open PRs (needs-you first, then newest), branches, di
     assert.deepEqual(items.map(isDone), [false, false, false, false, false, false, false, true, true]);
 });
 
-test('activities attach to PRs by their key', () => {
+test('a branch is keyed by its worktree and branch', () => {
     /* Given */
-    const known = everyKind();
-
-    /* When */
-    const items = deriveWorkItems(known);
-
-    /* Then */
-    const two = items[1];
-    assert.ok(two.kind === 'pr');
-    assert.equal(two.activity, fixing);
-});
-
-test('activities attach to branches by their key', () => {
-    /* Given */
-    const opening: Activity = {
-        id: 'a2',
-        action: 'open-pr',
-        phase: 'sent',
-        origin: 'manual',
-        queuedAt: '2026-01-01T00:00:00Z',
-    };
     const known = facts({
         locations: [loc(AGENT, 'feat/a')],
         branches: [
@@ -529,7 +499,6 @@ test('activities attach to branches by their key', () => {
                 pushed: true,
             },
         ],
-        activities: new Map([[`branch:${AGENT}\0feat/a`, opening]]),
     });
 
     /* When */
@@ -537,6 +506,5 @@ test('activities attach to branches by their key', () => {
 
     /* Then */
     assert.ok(items[0].kind === 'branch');
-    assert.equal(items[0].activity, opening);
     assert.equal(workItemKey(items[0]), `branch:${AGENT}\0feat/a`);
 });

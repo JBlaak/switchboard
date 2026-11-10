@@ -22,7 +22,6 @@ const branch: SessionWorkItem = {
     location: {worktree: '/w', branch: 'art', fromSubagent: false},
     ahead: 1,
     diff: {kind: 'local', worktree: '/w', base: 'origin/main', head: 'art'},
-    activity: null,
     additions: 0,
     deletions: 0,
     pushed: false,
@@ -55,7 +54,6 @@ function snapshot(): SessionWorkSnapshot {
         repository: 'acme/art',
         items: [branch],
         footprint: {worktrees: 1, branches: 1},
-        queued: 0,
         gh: 'ok',
         updatedAt: '2026-06-10T14:00:00.000Z',
     };

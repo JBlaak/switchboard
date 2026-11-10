@@ -208,7 +208,7 @@ function linkedPr(pr: PullRequestStatus): LinkedPr {
         url: pr.url,
         repository: pr.repository,
         number: pr.number,
-        status: pr.state ? {state: pr.state, checks: checksOf(pr), dot: statusDot(pr, null)} : null,
+        status: pr.state ? {state: pr.state, checks: checksOf(pr), dot: statusDot(pr)} : null,
     };
 }
 

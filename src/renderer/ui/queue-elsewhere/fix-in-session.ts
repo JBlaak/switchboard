@@ -3,11 +3,9 @@
  * terminal and the DOM so the sequence is tested in node with fakes;
  * `actions.ts` hands it the real steps.
  *
- * Main decides where the fix goes. From the PR's own session's header that is
- * almost always that session (`queued`). When main answers `start` instead (no
- * running session owns the PR), the renderer starts the errand's session in
- * the worktree main prepared, without putting it on screen, and says which it
- * is; a session that would not start abandons the errand.
+ * Main prepares a worktree on the PR's branch; the renderer starts the
+ * errand's session there, without putting it on screen, and says which it is.
+ * A session that would not start abandons the errand.
  */
 import {failedPullRequest, type SessionQueueFailure} from '../../../domain/project/queue-elsewhere';
 import type {ErrandResult, FixRequest, FixResult} from '../../../domain/project/queue-errands';
@@ -30,7 +28,7 @@ export type FixInSessionOutcome = {ok: true; text: string} | {ok: false; text: s
 
 export async function fixInSessionWith(
     steps: FixInSessionSteps,
-    {sessionId, projectPath, failure}: {sessionId: string; projectPath: string; failure: SessionQueueFailure},
+    {projectPath, failure}: {projectPath: string; failure: SessionQueueFailure},
 ): Promise<FixInSessionOutcome> {
     const {entry} = failure;
     let result: FixResult;
@@ -45,15 +43,6 @@ export async function fixInSessionWith(
         return {ok: false, text: (err as Error).message || 'Could not hand the fix over'};
     }
     if (!result.ok) return {ok: false, text: result.reason};
-    if (result.kind === 'queued') {
-        return {
-            ok: true,
-            text:
-                result.sessionId === sessionId
-                    ? 'Sent to this session: it fixes and pushes, and stays open'
-                    : 'Sent to the PR’s own session',
-        };
-    }
 
     // The session is in its worktree already; `--worktree` would make another.
     const {worktree: _worktree, worktreeName: _worktreeName, ...defaults} = await steps.defaultOptions(projectPath);

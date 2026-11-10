@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 import {
     errandState,
-    fixAction,
     dataBlock,
     fixPrompt,
     isGitHubLogin,
@@ -18,7 +17,7 @@ import type {ReviewThread} from '../src/domain/session-work/model';
 const PR = {number: 2270, title: 'Faster sync', url: 'https://github.com/o/app/pull/2270'};
 const WORKTREE = '/code/app/.claude/worktrees/faster-sync';
 
-function fixRequest(fields: Partial<FixPromptRequest['failure']> = {}, errand = true): FixPromptRequest {
+function fixRequest(fields: Partial<FixPromptRequest['failure']> = {}): FixPromptRequest {
     return {
         pr: {number: PR.number, url: PR.url, headRef: 'faster-sync', baseRef: 'main'},
         failure: {
@@ -31,7 +30,6 @@ function fixRequest(fields: Partial<FixPromptRequest['failure']> = {}, errand = 
             ...fields,
         },
         worktree: WORKTREE,
-        errand,
     };
 }
 
@@ -182,21 +180,6 @@ test('a new fix session pushes to the branch only, never merges, leaves the labe
     );
 });
 
-test("the PR's own session is never told to archive", () => {
-    /* Given */
-    const request = fixRequest({}, false);
-
-    /* When */
-    const prompt = fixPrompt(request);
-
-    /* Then */
-    assert.ok(!prompt.includes(ARCHIVE_TOOL_QUALIFIED_NAME));
-    assert.ok(!prompt.includes('First bring it up to date'));
-    assert.ok(
-        prompt.endsWith('If you are stuck, or the fix needs a decision from me, stop and tell me why in one line.'),
-    );
-});
-
 test('a CI failure without a log or a commit says where to read it', () => {
     /* Given */
     const request = fixRequest({checkName: null, sha: null, logTail: null});
@@ -273,17 +256,6 @@ test('a refused merge says to find out why', () => {
     assert.ok(
         prompt.includes(`Find out why with gh pr view 2270 and gh pr checks 2270, fix it in ${WORKTREE}, and push.`),
     );
-});
-
-test("a fix shows on the owner's page as the work it is", () => {
-    /* Given */
-    const kinds = ['ci', 'conflict', 'changes-requested', 'unresolved-thread', 'merge-refused', 'other'] as const;
-
-    /* When */
-    const actions = kinds.map(fixAction);
-
-    /* Then */
-    assert.deepEqual(actions, ['fix-ci', 'rebase', 'fix-comments', 'fix-comments', 'fix-ci', 'fix-ci']);
 });
 
 // ── How far an errand got ──

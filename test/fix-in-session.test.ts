@@ -40,18 +40,15 @@ function steps(answer: FixResult, launched: {ok: true; sessionId: string} | {ok:
     return {fake, calls, requests, launches};
 }
 
-test('from the PR’s own session the fix is queued there, with the queue’s failure', async () => {
+test('the errand’s session starts in its worktree, off screen, with the queue’s failure, and is reported', async () => {
     /* Given */
-    const {fake, requests, launches} = steps(
-        {ok: true, kind: 'queued', sessionId: 's1', activityId: 'a1'},
-        {
-            ok: true,
-            sessionId: 'never',
-        },
+    const {fake, calls, requests, launches} = steps(
+        {ok: true, kind: 'start', errandId: 'e1', worktreePath: '/wt/fix-4', branch: 'branch-4', prompt: 'Fix it'},
+        {ok: true, sessionId: 's9'},
     );
 
     /* When */
-    const outcome = await fixInSessionWith(fake, {sessionId: 's1', projectPath: '/code/app', failure: FAILURE});
+    const outcome = await fixInSessionWith(fake, {projectPath: '/code/app', failure: FAILURE});
 
     /* Then */
     assert.deepEqual(requests, [
@@ -62,22 +59,6 @@ test('from the PR’s own session the fix is queued there, with the queue’s fa
             failure: {kind: 'ci', reason: 'CI failed: Unit tests', checkName: 'Unit tests'},
         },
     ]);
-    assert.deepEqual(launches, []);
-    assert.equal(outcome.ok, true);
-    assert.match(outcome.text, /this session/);
-});
-
-test('without an owner session, the errand’s session starts in its worktree, off screen, and is reported', async () => {
-    /* Given */
-    const {fake, calls, launches} = steps(
-        {ok: true, kind: 'start', errandId: 'e1', worktreePath: '/wt/fix-4', branch: 'branch-4', prompt: 'Fix it'},
-        {ok: true, sessionId: 's9'},
-    );
-
-    /* When */
-    const outcome = await fixInSessionWith(fake, {sessionId: 's1', projectPath: '/code/app', failure: FAILURE});
-
-    /* Then */
     assert.deepEqual(launches, [['/wt/fix-4', {model: 'opus', initialPrompt: 'Fix it'}]]);
     assert.deepEqual(calls, ['started e1 s9']);
     assert.equal(outcome.ok, true);
@@ -92,8 +73,8 @@ test('an errand session that would not start abandons the errand; a refusal is s
     const refused = steps({ok: false, reason: 'A fix session for #4 is already running'}, {ok: true, sessionId: 'x'});
 
     /* When */
-    const notStarted = await fixInSessionWith(start.fake, {sessionId: 's1', projectPath: '/p', failure: FAILURE});
-    const notAsked = await fixInSessionWith(refused.fake, {sessionId: 's1', projectPath: '/p', failure: FAILURE});
+    const notStarted = await fixInSessionWith(start.fake, {projectPath: '/p', failure: FAILURE});
+    const notAsked = await fixInSessionWith(refused.fake, {projectPath: '/p', failure: FAILURE});
 
     /* Then */
     assert.deepEqual(start.calls, ['abandoned e1']);

@@ -2,15 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {parseUnifiedDiff} from '../src/domain/session-work/diff';
-import {
-    canComment,
-    initials,
-    lineAnchorKeys,
-    placeOnFile,
-    submitEvent,
-    threadsToFix,
-} from '../src/domain/session-work/review';
-import {promptThreadIds, renderPrompt} from '../src/domain/session-work/prompts';
+import {canComment, initials, lineAnchorKeys, placeOnFile} from '../src/domain/session-work/review';
 import {fileReview, noteKey} from '../src/renderer/ui/session-work/review-notes';
 import {initialRendererState, rootReducer} from '../src/renderer/state/root';
 import type {RendererEvent} from '../src/renderer/state/events';
@@ -188,7 +180,6 @@ const prItem = (state: PullRequestStatus['state']): SessionWorkItem => ({
     pr: {number: 1, url: 'u', repository: 'o/a', state, closes: []},
     location: null,
     diff: {kind: 'pull-request', repository: 'o/a', number: 1},
-    activity: null,
 });
 
 test('only an open PR with gh takes comments', () => {
@@ -207,81 +198,6 @@ test('only an open PR with gh takes comments', () => {
         /* Then */
         assert.equal(allowed, expected, `${state} with gh ${gh}`);
     }
-});
-
-test('fix submits as Request changes', () => {
-    /* When */
-    const event = submitEvent('fix');
-
-    /* Then */
-    assert.equal(event, 'REQUEST_CHANGES');
-});
-
-test('submit submits as a comment', () => {
-    /* When */
-    const event = submitEvent('submit');
-
-    /* Then */
-    assert.equal(event, 'COMMENT');
-});
-
-const threeThreads: PullRequestStatus = {
-    number: 1,
-    url: 'u',
-    repository: 'o/a',
-    closes: [],
-    threads: [thread('A', 1), thread('B', 2, 'RIGHT', 'src/a.ts', true), thread('C', 3)],
-};
-
-test('threads to fix: every open one', () => {
-    /* When */
-    const threads = threadsToFix(threeThreads);
-
-    /* Then */
-    assert.deepEqual(
-        threads.map((t) => t.id),
-        ['A', 'C'],
-    );
-});
-
-test('threads to fix: just the named open ones', () => {
-    /* When */
-    const threads = threadsToFix(threeThreads, ['B', 'C']);
-
-    /* Then */
-    assert.deepEqual(
-        threads.map((t) => t.id),
-        ['C'],
-    );
-});
-
-test('a Fix comments prompt gives its thread ids back, whatever the bodies say', () => {
-    /* Given */
-    const tricky = {
-        ...thread('PRRT_x1', 4),
-        comments: [{author: 'sam', isBot: false, body: 'see (this)', createdAt: ''}],
-    };
-    const prompt = renderPrompt({
-        action: 'fix-comments',
-        number: 1,
-        url: 'u (x)',
-        threads: [tricky, thread('PRRT_y2', null)],
-        worktree: '/w',
-    });
-
-    /* When */
-    const ids = promptThreadIds(prompt);
-
-    /* Then */
-    assert.deepEqual(ids, ['PRRT_x1', 'PRRT_y2']);
-});
-
-test('a prompt that is not Fix comments gives no thread ids back', () => {
-    /* When */
-    const ids = promptThreadIds('Ship PR #1 (u).');
-
-    /* Then */
-    assert.deepEqual(ids, []);
 });
 
 test('avatar initials', () => {
@@ -313,7 +229,6 @@ const snapshot: SessionWorkSnapshot = {
     repository: 'o/a',
     items: [ITEM, {...ITEM, id: 'pr:2'}],
     footprint: {worktrees: 1, branches: 1},
-    queued: 0,
     gh: 'ok',
     updatedAt: '2026-10-17T12:00:00.000Z',
 };
@@ -446,30 +361,4 @@ test('a comment that went in closes the composer', () => {
     /* Then */
     assert.equal(added.sessionWork.page!.composer, null);
     assert.equal(added.sessionWork.page!.reviewError, null);
-});
-
-test("one thread's Have Claude fix keeps its refusal on that thread", () => {
-    /* Given */
-    const asked = run(open(), {
-        type: 'sessionWorkActionRequested',
-        sessionId: 's1',
-        itemId: 'pr:1',
-        action: 'fix-comments',
-        threadIds: ['T1'],
-    });
-
-    /* When */
-    const state = run(asked, {
-        type: 'sessionWorkActionAnswered',
-        sessionId: 's1',
-        itemId: 'pr:1',
-        error: 'Already queued',
-    });
-
-    /* Then */
-    assert.deepEqual(state.sessionWork.page!.actionError, {
-        itemId: 'pr:1',
-        message: 'Already queued',
-        threadIds: ['T1'],
-    });
 });

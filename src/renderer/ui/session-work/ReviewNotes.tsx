@@ -5,15 +5,12 @@
  *
  * A thread shows each comment's author (with a Bot badge for bots), its age
  * and its body. A resolved one is dimmed and says who resolved it. An open one
- * has Have Claude fix, which hands just that thread over, and says "Claude is
- * on it" while a Fix comments that covers it waits or runs, or "needs you"
- * when Claude answered and left it open (C5). Nothing here fixes a thread by
- * itself (C4).
+ * says "needs you" when Claude answered and left it open (C5).
  */
-import {createContext, useContext, useEffect, useId, useRef, useState} from 'react';
+import {useEffect, useId, useRef, useState} from 'react';
 import type {FormEvent, JSX, KeyboardEvent} from 'react';
 import {useStore} from '../use-store';
-import {addReviewComment, closeComposer, finishReview, openComposer, requestWorkAction} from './actions';
+import {addReviewComment, closeComposer, finishReview, openComposer} from './actions';
 import {initials, pendingLabel} from '../../../domain/session-work/review';
 import type {
     DiffLine,
@@ -23,21 +20,8 @@ import type {
     ReviewThread,
 } from '../../../domain/session-work/model';
 import {commentAnchor} from '../../../domain/session-work/diff';
-import {NOT_RUNNING_REASON} from '../../../domain/session-work/actions';
 import {formatDate} from '../../lib/format';
 import type {LineNotes} from './review-notes';
-
-/** What every note on the selected item's diff needs to know about the item. */
-export interface ReviewScope {
-    readonly sessionId: string;
-    readonly itemId: string;
-    /** Threads a waiting or sent Fix comments covers. */
-    readonly fixing: ReadonlySet<string>;
-    /** False for a PR in another repository: its threads cannot be handed to Claude. */
-    readonly canFix: boolean;
-}
-
-export const ReviewContext = createContext<ReviewScope | null>(null);
 
 /**
  * The element a composer was opened from, so Esc and Cancel can give it the
@@ -135,8 +119,6 @@ export function OutdatedNotes({
 }
 
 function ThreadView({thread}: {thread: ReviewThread}): JSX.Element {
-    const scope = useContext(ReviewContext);
-    const fixing = scope?.fixing.has(thread.id) ?? false;
     const where = thread.line === null ? thread.path : `${thread.path}:${thread.line}`;
     return (
         <article
@@ -159,7 +141,7 @@ function ThreadView({thread}: {thread: ReviewThread}): JSX.Element {
                     </div>
                 </div>
             ))}
-            <ThreadFooter thread={thread} fixing={fixing} />
+            <ThreadFooter thread={thread} />
         </article>
     );
 }
@@ -175,17 +157,7 @@ function CommentAge({at}: {at: string}): JSX.Element | null {
     );
 }
 
-function ThreadFooter({thread, fixing}: {thread: ReviewThread; fixing: boolean}): JSX.Element {
-    const scope = useContext(ReviewContext);
-    const running = useStore((state) => (scope ? state.view.activePtyIds.has(scope.sessionId) : false));
-    const pending = useStore((state) => state.sessionWork.page?.pendingAction ?? null);
-    const error = useStore((state) => {
-        const failed = state.sessionWork.page?.actionError;
-        return failed && failed.itemId === scope?.itemId && failed.threadIds?.includes(thread.id)
-            ? failed.message
-            : null;
-    });
-
+function ThreadFooter({thread}: {thread: ReviewThread}): JSX.Element {
     if (thread.resolved) {
         return (
             <div className="sw-thread-foot">
@@ -195,37 +167,7 @@ function ThreadFooter({thread, fixing}: {thread: ReviewThread; fixing: boolean})
             </div>
         );
     }
-    const asking = pending?.itemId === scope?.itemId && (pending?.threadIds?.includes(thread.id) ?? false);
-    const disabled = !running ? NOT_RUNNING_REASON : pending ? 'Handing it to Claude…' : null;
-    return (
-        <div className="sw-thread-foot">
-            {fixing ? (
-                <span className="sw-pill is-amber" data-testid="session-work-thread-fixing">
-                    Claude is on it
-                </span>
-            ) : (
-                thread.needsYou && <span className="sw-pill is-red">needs you</span>
-            )}
-            {!fixing && scope?.canFix && (
-                <button
-                    type="button"
-                    className="sw-btn sw-btn-small"
-                    title={disabled ?? 'Hand just this thread to Claude'}
-                    aria-disabled={disabled ? true : undefined}
-                    onClick={() => {
-                        if (disabled) return;
-                        void requestWorkAction(scope.itemId, 'fix-comments', [thread.id]);
-                    }}>
-                    {asking ? 'Handing it to Claude…' : 'Have Claude fix'}
-                </button>
-            )}
-            {error && (
-                <span className="sw-note-error" role="alert">
-                    {error}
-                </span>
-            )}
-        </div>
-    );
+    return <div className="sw-thread-foot">{thread.needsYou && <span className="sw-pill is-red">needs you</span>}</div>;
 }
 
 function PendingView({comment}: {comment: PendingComment}): JSX.Element {
@@ -311,20 +253,9 @@ function Composer(): JSX.Element {
 
 /**
  * The bar under the diff while your review has pending comments (C2):
- * Discard, Submit only, and Submit & have Claude fix.
+ * Discard, and Submit.
  */
-export function ReviewBar({
-    sessionId,
-    itemId,
-    pr,
-    canFix,
-}: {
-    sessionId: string;
-    itemId: string;
-    pr: PullRequestStatus;
-    canFix: boolean;
-}): JSX.Element | null {
-    const running = useStore((state) => state.view.activePtyIds.has(sessionId));
+export function ReviewBar({itemId, pr}: {itemId: string; pr: PullRequestStatus}): JSX.Element | null {
     const busy = useStore((state) => {
         const pending = state.sessionWork.page?.reviewPending;
         return pending && pending.kind !== 'comment' ? pending.kind : null;
@@ -336,7 +267,6 @@ export function ReviewBar({
     const count = pr.pendingReview?.length ?? 0;
     if (count === 0) return null;
 
-    const fixBlocked = !running ? NOT_RUNNING_REASON : null;
     return (
         <div className="sw-review-bar" role="region" aria-label="Pending review" data-testid="session-work-review-bar">
             <span className="sw-review-dot" aria-hidden="true" />
@@ -358,26 +288,14 @@ export function ReviewBar({
                 </button>
                 <button
                     type="button"
-                    className="sw-btn sw-btn-small"
+                    className="sw-btn sw-btn-small is-primary"
                     title="Submit the review as a comment"
                     aria-disabled={busy ? true : undefined}
                     onClick={() => {
                         if (!busy) void finishReview(itemId, 'submit');
                     }}>
-                    {busy === 'submit' ? 'Submitting…' : 'Submit only'}
+                    {busy === 'submit' ? 'Submitting…' : 'Submit'}
                 </button>
-                {canFix && (
-                    <button
-                        type="button"
-                        className="sw-btn sw-btn-small is-primary"
-                        title={fixBlocked ?? 'Submit as Request changes, then hand these comments to Claude'}
-                        aria-disabled={busy || fixBlocked ? true : undefined}
-                        onClick={() => {
-                            if (!busy && !fixBlocked) void finishReview(itemId, 'fix');
-                        }}>
-                        {busy === 'fix' ? 'Submitting…' : 'Submit & have Claude fix'}
-                    </button>
-                )}
             </span>
         </div>
     );

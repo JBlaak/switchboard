@@ -55,12 +55,10 @@ const ORPHAN_WORK: SessionWorkSnapshot = {
             pr: {...PEEKS['acme/web#7'].pr!, nodeId: 'PR_web7'},
             location: null,
             diff: {kind: 'pull-request', repository: 'acme/web', number: 7},
-            activity: null,
             otherRepository: true,
         },
     ],
     footprint: {worktrees: 0, branches: 0},
-    queued: 0,
     gh: 'ok',
     updatedAt: LOGIN_FIX_WORK.updatedAt,
 };

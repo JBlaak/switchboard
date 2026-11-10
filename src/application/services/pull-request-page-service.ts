@@ -8,9 +8,8 @@
  * (`pullRequestPageId`), carries the one PR as its only item, and is asked
  * `gh` again every minute while it is open, like a session's page.
  *
- * It hands nothing to Claude: its item is marked as in another repository,
- * which is what turns every action off, and your review can be submitted or
- * discarded but never handed over to fix. Only one such page is open at a time.
+ * Its item is marked as in another repository: there is no checkout of it
+ * here. Only one such page is open at a time.
  */
 import {parseUnifiedDiff} from '../../domain/session-work/diff';
 import {workItemKey} from '../../domain/session-work/items';
@@ -28,8 +27,8 @@ import type {
     SessionWorkDiff,
     SessionWorkItem,
     SessionWorkSnapshot,
+    WorkPageContext,
 } from '../../domain/session-work/model';
-import type {ActionContext} from './session-action-service';
 import {GITHUB_REFRESH_MS} from './session-work-service';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {GitHubCli} from '../ports/github-cli';
@@ -177,10 +176,10 @@ export class PullRequestPageService {
     }
 
     /** What your review needs to know about the open page: there is no checkout. */
-    public context(pageId: string): ActionContext | null {
+    public context(pageId: string): WorkPageContext | null {
         const page = this.page;
         if (!page || page.pageId !== pageId || !page.last) return null;
-        return {repository: page.ref.repository, mainCheckout: '', gh: page.gh};
+        return {repository: page.ref.repository, gh: page.gh};
     }
 
     /** Ask `gh` again now, after your review was written, and push the snapshot. */
@@ -287,7 +286,6 @@ export class PullRequestPageService {
             repository: page.ref.repository,
             items,
             footprint,
-            queued: 0,
             gh: page.gh,
             updatedAt: new Date(this.deps.clock.now()).toISOString(),
         };
@@ -308,14 +306,13 @@ function validRef(ref: PullRequestRef | null | undefined): PullRequestRef | null
     return pullRequestPageRef(pullRequestPageId(ref));
 }
 
-/** The page's one item: the PR, in no checkout, handing nothing to Claude. */
+/** The page's one item: the PR, in no checkout. */
 function pullRequestItem(ref: PullRequestRef, pr: PullRequestStatus): SessionWorkItem {
     const item = {
         kind: 'pr' as const,
         pr,
         location: null,
         diff: {kind: 'pull-request' as const, repository: ref.repository, number: ref.number},
-        activity: null,
         otherRepository: true as const,
     };
     return {...item, id: workItemKey(item)};

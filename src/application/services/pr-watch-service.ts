@@ -4,33 +4,21 @@
  *
  * Once a minute, and once more when the window gets focus, it asks `gh` about
  * them — one batched request per repository, however many sessions share it —
- * and does three things with the answer:
+ * and does two things with the answer:
  *
- * - **Auto-fix (W2, W3).** A failing check is handed to the session that
- *   opened the PR as a Fix CI, with the check's name, its head commit and the
- *   end of its log — once, until the check goes green. Whether to try again is
- *   Claude's call. The history is stored, so a restart does not hand the same
- *   failure over again.
  * - **Sidebar dots (W4).** Each PR's colour, pushed for the session's row only
  *   when it changed.
  * - **Stopping.** A merged or closed PR has nothing left to watch.
  *
- * Nothing here is ever typed into a session that is not running: only running
- * sessions are watched, and a Fix CI that is queued waits in the session's
- * queue (the action service's) until it is running and idle.
+ * It only reads: nothing is ever typed into a session.
  */
-import {autoFixDecision, wentGreen, type AutoFixEvent} from '../../domain/session-work/auto-fix';
-import {isWorking, needsYou, statusDot, type PullRequestDot} from '../../domain/session-work/status';
+import {needsYou, statusDot, type PullRequestDot} from '../../domain/session-work/status';
 import type {SessionPullRequest} from '../../domain/session/session';
-import type {PullRequestStatus, SessionWorkItem, WorkLocation} from '../../domain/session-work/model';
-import type {AutoFixHistory, AutoFixRecord} from '../ports/auto-fix-history';
-import type {Clock, TimerHandle, Timers} from '../ports/clock';
-import type {GitWorkspace} from '../ports/git-workspace';
+import type {PullRequestStatus} from '../../domain/session-work/model';
+import type {TimerHandle, Timers} from '../ports/clock';
 import type {GitHubCli} from '../ports/github-cli';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
-import type {TranscriptStore} from '../ports/transcript-store';
-import type {SessionActionService} from './session-action-service';
 
 /** How often `gh` is asked about the running sessions' PRs (W1). */
 export const PR_WATCH_INTERVAL_MS = 60_000;
@@ -44,8 +32,6 @@ export interface WatchedSession {
     sessionId: string;
     /** The directory it was started in. */
     projectPath: string;
-    /** Its transcript folder, for where it worked; null when it has none yet. */
-    folder: string | null;
     /** The PRs its transcript linked, chronological. */
     pullRequests: readonly SessionPullRequest[];
 }
@@ -54,12 +40,7 @@ export interface PrWatchServiceDeps {
     /** The running Claude sessions (not plain terminals, not remote ones). */
     sessions(): WatchedSession[];
     github: Pick<GitHubCli, 'available' | 'pullRequests' | 'checkLogTail'>;
-    history: AutoFixHistory;
-    actions: Pick<SessionActionService, 'request' | 'forSession' | 'follow'>;
-    transcripts: Pick<TranscriptStore, 'locations'>;
-    git: Pick<GitWorkspace, 'worktreeRoot'>;
-    renderer: Pick<RendererGateway, 'prStatusChanged' | 'sessionNeedsAttention'>;
-    clock: Clock;
+    renderer: Pick<RendererGateway, 'prStatusChanged'>;
     timers: Timers;
     log: Logger;
 }
@@ -68,8 +49,6 @@ export interface PrWatchServiceDeps {
 interface WatchedPr {
     link: SessionPullRequest;
     repository: string;
-    /** The page's item id for it (`workItemKey`). */
-    key: string;
 }
 
 export class PrWatchService {
@@ -85,23 +64,7 @@ export class PrWatchService {
     private readonly published = new Map<string, string>();
     /** Check logs already read, by check run URL: a finished run's log does not change. */
     private readonly logs = new Map<string, string | null>();
-    /** Each session's PRs (by item key) with an action queued or with Claude, as last published. */
-    private readonly working = new Map<string, Set<string>>();
-    /**
-     * PRs whose action finished after `gh` last answered, by URL, with the poll
-     * count at the time: what `gh` said is from before Claude's push, so the dot
-     * stays amber until a poll started after that answers.
-     */
-    private readonly settling = new Map<string, number>();
-    /** Polls started so far. */
-    private polls = 0;
-    /** A poll asked for while one was running: which repositories (null: all), to run after it. */
-    private next: Set<string> | null | undefined = undefined;
-
-    constructor(private readonly deps: PrWatchServiceDeps) {
-        // An action changing phase changes a dot (amber while Claude works on it).
-        deps.actions.follow(() => this.publishAll());
-    }
+    constructor(private readonly deps: PrWatchServiceDeps) {}
 
     /** Poll now and every minute after. */
     public start(): void {
@@ -121,31 +84,15 @@ export class PrWatchService {
     }
 
     /**
-     * Ask `gh` about every open PR of every running session, and act on it. A
-     * poll asked for while one is running (a focus during the minute's) is that one.
+     * Ask `gh` about every open PR of every running session. A poll asked for
+     * while one is running (a focus during the minute's) is that one.
      */
     public poll(): Promise<void> {
-        return this.run(null);
-    }
-
-    /**
-     * Poll these repositories (null: all). While a poll is running, a targeted
-     * one is run after it — the running one may have asked before Claude pushed.
-     */
-    private run(repositories: Set<string> | null): Promise<void> {
-        if (this.polling) {
-            if (repositories) {
-                if (this.next !== null) this.next = new Set([...(this.next ?? []), ...repositories]);
-            }
-            return this.polling;
-        }
-        this.polling = this.pollRepositories(repositories)
+        if (this.polling) return this.polling;
+        this.polling = this.pollAll()
             .catch((err) => this.deps.log.error('[pr-watch] polling failed:', (err as Error).message))
             .finally(() => {
                 this.polling = null;
-                const next = this.next;
-                this.next = undefined;
-                if (next !== undefined) void this.run(next);
             });
         return this.polling;
     }
@@ -168,8 +115,7 @@ export class PrWatchService {
         return log;
     }
 
-    private async pollRepositories(repositories: Set<string> | null): Promise<void> {
-        const ticket = ++this.polls;
+    private async pollAll(): Promise<void> {
         const sessions = this.deps.sessions();
         this.forgetStopped(sessions);
         this.sessions = sessions;
@@ -178,7 +124,6 @@ export class PrWatchService {
         const owners = new Map<string, {session: WatchedSession; pr: WatchedPr}>();
         for (const session of sessions) {
             for (const pr of watchedPrs(session)) {
-                if (repositories && !repositories.has(pr.repository)) continue;
                 if (!this.finished.has(pr.link.url) && !owners.has(pr.link.url)) owners.set(pr.link.url, {session, pr});
             }
         }
@@ -186,9 +131,6 @@ export class PrWatchService {
             this.publishAll();
             return;
         }
-
-        const histories = new Map<string, AutoFixEvent[]>();
-        for (const {pr} of owners.values()) histories.set(pr.link.url, this.history(pr));
 
         const byRepository = new Map<string, number[]>();
         for (const {pr} of owners.values()) {
@@ -208,110 +150,10 @@ export class PrWatchService {
                     url: owner.pr.link.url,
                     repository: status.repository || repository,
                 });
-                // Asked after the action finished: this answer knows what Claude pushed.
-                if ((this.settling.get(owner.pr.link.url) ?? Infinity) < ticket)
-                    this.settling.delete(owner.pr.link.url);
-            }
-        }
-
-        for (const {session, pr} of owners.values()) {
-            const status = this.latest.get(pr.link.url);
-            if (!status) continue;
-            try {
-                await this.act(session, pr, status, histories.get(pr.link.url) ?? []);
-            } catch (err) {
-                this.deps.log.error(`[pr-watch] acting on ${pr.link.url} failed:`, (err as Error).message);
+                if (status.state === 'merged' || status.state === 'closed') this.finished.add(owner.pr.link.url);
             }
         }
         this.publishAll();
-    }
-
-    /** Auto-fix for one PR, after a fresh answer from `gh`. */
-    private async act(
-        session: WatchedSession,
-        pr: WatchedPr,
-        status: PullRequestStatus,
-        history: AutoFixEvent[],
-    ): Promise<void> {
-        const {actions} = this.deps;
-        if (status.state === 'merged' || status.state === 'closed') {
-            this.finished.add(pr.link.url);
-            return;
-        }
-
-        // A check that went green: its next failure is a new one, handed over again.
-        for (const checkName of wentGreen(status, history)) {
-            const passed = {kind: 'passed', repository: status.repository, number: status.number, checkName} as const;
-            this.deps.history.record({...passed, at: this.now()});
-            history.push(passed);
-        }
-
-        // Something is waiting or with Claude — a Fix CI, or a Ship it, which
-        // fixes CI itself. Auto-fix stays out of its way.
-        if (isWorking(actions.forSession(session.sessionId).byItem.get(pr.key))) return;
-
-        const decision = autoFixDecision(status, history);
-        if (decision.action === 'queue') {
-            const item = await this.item(session, status, pr.key);
-            const mainCheckout = (await this.deps.git.worktreeRoot(session.projectPath)) ?? session.projectPath;
-            const result = await actions.request(session.sessionId, pr.key, 'fix-ci', 'auto', {
-                resolved: {
-                    item,
-                    context: {repository: status.repository, mainCheckout, gh: 'ok'},
-                    checkName: decision.checkName,
-                },
-            });
-            if (!result.ok) {
-                this.deps.log.info(`[pr-watch] auto-fix for ${pr.link.url} not queued: ${result.reason}`);
-                return;
-            }
-            this.deps.log.info(`[pr-watch] auto-fix queued for ${pr.link.url} (${decision.checkName})`);
-            this.deps.history.record({
-                kind: 'attempt',
-                repository: status.repository,
-                number: status.number,
-                checkName: decision.checkName,
-                headSha: decision.headSha,
-                origin: 'auto',
-                activityId: result.activityId,
-                at: this.now(),
-            });
-        }
-    }
-
-    /** The stored history of a PR. */
-    private history(pr: WatchedPr): AutoFixEvent[] {
-        return this.deps.history.forPullRequest(pr.repository, pr.link.number).map((record: AutoFixRecord) => {
-            const base = {repository: record.repository, number: record.number, checkName: record.checkName};
-            return record.kind === 'passed'
-                ? {kind: 'passed', ...base}
-                : {kind: 'attempt', ...base, headSha: record.headSha, origin: record.origin};
-        });
-    }
-
-    /**
-     * The PR as a work item, without the page: where the session worked on its
-     * branch comes from the transcript, so the prompt names the right worktree.
-     */
-    private async item(session: WatchedSession, status: PullRequestStatus, key: string): Promise<SessionWorkItem> {
-        let location: WorkLocation | null = null;
-        if (session.folder && status.headRef) {
-            const written = this.deps.transcripts
-                .locations(session.folder, session.sessionId)
-                .find((entry) => entry.branch === status.headRef);
-            if (written) {
-                const worktree = (await this.deps.git.worktreeRoot(written.cwd)) ?? written.cwd;
-                location = {worktree, branch: written.branch, fromSubagent: written.fromSubagent};
-            }
-        }
-        return {
-            id: key,
-            kind: 'pr',
-            pr: status,
-            location,
-            diff: {kind: 'pull-request', repository: status.repository, number: status.number},
-            activity: null,
-        };
     }
 
     // ── The sidebar ──
@@ -327,44 +169,19 @@ export class PrWatchService {
     }
 
     private publishAll(): void {
-        const settled = new Set<string>();
-        for (const session of this.sessions) {
-            for (const repository of this.publish(session)) settled.add(repository);
-        }
-        // Claude finished with a PR: ask about it now rather than within the minute.
-        if (settled.size > 0 && this.interval) void this.run(settled);
+        for (const session of this.sessions) this.publish(session);
     }
 
-    /**
-     * Push the session's dots when they differ from what was pushed last, and
-     * answer the repositories of its PRs whose action just finished.
-     */
-    private publish(session: WatchedSession): Set<string> {
-        const activities = this.deps.actions.forSession(session.sessionId).byItem;
-        const working = new Set<string>();
-        for (const [key, activity] of activities) {
-            if (isWorking(activity)) working.add(key);
-        }
-        const before = this.working.get(session.sessionId);
-        this.working.set(session.sessionId, working);
-
-        const settled = new Set<string>();
+    /** Push the session's dots when they differ from what was pushed last. */
+    private publish(session: WatchedSession): void {
         const prs: PullRequestDot[] = [];
         let waiting = false;
         for (const pr of watchedPrs(session)) {
-            if (before?.has(pr.key) && !working.has(pr.key)) {
-                this.settling.set(pr.link.url, this.polls);
-                settled.add(pr.repository);
-            }
             const status = this.latest.get(pr.link.url);
             if (!status) continue;
-            const activity = activities.get(pr.key) ?? null;
-            let dot = statusDot(status, activity);
-            // What `gh` last said is from before Claude finished: not red yet.
-            if (dot === 'red' && this.settling.has(pr.link.url) && !needsYou(status)) dot = 'amber';
             prs.push({
                 number: pr.link.number,
-                dot,
+                dot: statusDot(status),
                 // What the sidebar needs to tell a session whose PRs land on their own (merging).
                 ...(status.state === 'closed' ? {closed: true as const} : {}),
                 ...(status.autoMerge && (status.state === 'open' || status.state === 'draft')
@@ -375,14 +192,9 @@ export class PrWatchService {
         }
         const key = JSON.stringify({prs, waiting});
         const last = this.published.get(session.sessionId);
-        if (last === key || (last === undefined && prs.length === 0)) return settled;
+        if (last === key || (last === undefined && prs.length === 0)) return;
         this.published.set(session.sessionId, key);
         this.deps.renderer.prStatusChanged({sessionId: session.sessionId, prs, needsYou: waiting});
-        return settled;
-    }
-
-    private now(): string {
-        return new Date(this.deps.clock.now()).toISOString();
     }
 }
 
@@ -394,7 +206,7 @@ function watchedPrs(session: WatchedSession): WatchedPr[] {
         if (seen.has(link.url)) continue;
         seen.add(link.url);
         const repository = link.repository || repositoryOf(link.url);
-        if (repository) prs.push({link, repository, key: 'pr:' + link.url});
+        if (repository) prs.push({link, repository});
     }
     return prs;
 }
