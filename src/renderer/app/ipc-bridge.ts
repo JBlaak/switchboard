@@ -72,6 +72,7 @@ export function installIpcBridge(
         api.onVmHostsChanged(() => send({type: 'vmHostsChanged'})),
         api.onBringBackProgress((copyPath, line) => send({type: 'bringBackProgress', copyPath, line})),
         api.onSessionHandoffPhase((sessionId, phase) => send({type: 'sessionHandoffPhase', sessionId, phase})),
+        api.onSessionBringBackPhase((sessionId, phase) => send({type: 'sessionBringBackPhase', sessionId, phase})),
     ];
     return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
 }

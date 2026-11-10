@@ -19,7 +19,9 @@ import type {JSX} from 'react';
 import {dispatch} from '../../state/app-store';
 import {shallowEqual} from '../../state/store';
 import {sessionMap} from '../../state/session-store';
-import {canHandOffSession} from '../../state/session-list-layout';
+import {canBringBackSession, canHandOffSession} from '../../state/session-list-layout';
+import {isVmCopyIn, isVmProjectIn} from '../../state/agent-host-slice';
+import {openSessionBringBack} from '../dialogs/session-bring-back-actions';
 import {sessionStatsIn, trayIsOpen} from '../../state/session-tray-slice';
 import {useStore} from '../use-store';
 import {stopSessionOnScreen} from '../terminal/actions';
@@ -52,9 +54,10 @@ const EMPTY: TrayData = {sessionId: null, prompts: [], links: [], editor: null};
 const COPIED_MS = 1200;
 
 export function SessionTray(): JSX.Element | null {
-    const {sessionId, phase, deadline, sent, stats, running, hosts, kept} = useStore((state) => {
+    const {sessionId, phase, deadline, sent, stats, running, hosts, kept, isVm, isCopy} = useStore((state) => {
         const id = state.terminal.onScreen;
         const page = id ? state.pages.bySession[id] : undefined;
+        const path = id ? sessionMap.get(id)?.projectPath : undefined;
         return {
             sessionId: id,
             phase: state.sessionTray.phase,
@@ -64,6 +67,8 @@ export function SessionTray(): JSX.Element | null {
             running: !!id && state.view.activePtyIds.has(id),
             hosts: state.handoff.hosts,
             kept: page ?? null,
+            isVm: isVmProjectIn(state.agentHost, path),
+            isCopy: isVmCopyIn(state.agentHost, path),
         };
     }, shallowEqual);
     const open = trayIsOpen(phase);
@@ -195,6 +200,7 @@ export function SessionTray(): JSX.Element | null {
     const mine = data.sessionId === sessionId ? data : {...EMPTY, sessionId};
     const row = sessionMap.get(sessionId);
     const handOffHosts = row && hosts && canHandOffSession(row, hosts.length) ? hosts : null;
+    const bringBack = !!row && canBringBackSession(row, {vm: isVm, copy: isCopy});
     const close = (): void => dispatch({type: 'trayClosed'});
 
     const actions: SessionTrayActions = {
@@ -231,6 +237,10 @@ export function SessionTray(): JSX.Element | null {
             if (!menuOpen) close();
         },
         handOffClicked: close,
+        bringBack: () => {
+            close();
+            void openSessionBringBack(sessionId);
+        },
     };
 
     return (
@@ -265,6 +275,7 @@ export function SessionTray(): JSX.Element | null {
                 stats={stats}
                 editor={mine.editor}
                 handOffHosts={handOffHosts}
+                bringBack={bringBack}
                 running={running}
                 copied={copied}
                 now={Date.now()}

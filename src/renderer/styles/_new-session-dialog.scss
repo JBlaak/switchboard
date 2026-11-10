@@ -323,6 +323,17 @@
     color: var(--sb-green);
 }
 
+/* A VM session's Bring back (#276): the choices for a branch that is here already. */
+.bring-back-existing {
+    margin-top: 12px;
+}
+
+.bring-back-choices {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
 .handoff-dialog .new-session-actions {
     margin-top: 16px;
 }

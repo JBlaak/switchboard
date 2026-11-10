@@ -116,6 +116,7 @@ function tray(overrides: Partial<SessionTrayContentProps> = {}): string {
             stats,
             editor: {available: true, directory: '/w', editor: 'phpstorm', app: 'PhpStorm'},
             handOffHosts: null,
+            bringBack: false,
             running: true,
             copied: false,
             now: NOW,

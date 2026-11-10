@@ -69,6 +69,8 @@ import type {
     ProjectCopy,
 } from '../application/services/project-handoff';
 import type {SessionHandoffPhase, SessionHandoffPreview} from '../application/services/session-handoff';
+import type {SessionBringBackPhase, SessionBringBackPreview} from '../application/services/session-bring-back';
+import type {ExistingBranchChoice} from '../domain/project/branch-worktree';
 import type {ScheduleLocation} from '../application/services/vm-schedules';
 import type {VmHostView} from '../application/services/vm-registry';
 import type {ShownPage} from '../domain/session/page-tool';
@@ -556,6 +558,20 @@ export interface SwitchboardApi {
     /** Cancel a hand-off still waiting for its turn to end; false once it is running. */
     cancelSessionHandoff(sessionId: string): Promise<boolean>;
 
+    // ── A VM session brought back to this Mac (#276) ──
+    /** What bringing a VM session back would do, or why it can't be brought back. */
+    previewSessionBringBack(sessionId: string): Promise<SessionBringBackPreview | {error: string}>;
+    /**
+     * Bring a VM session back: its branch into a local worktree, its
+     * conversation resumed here in the same row. With the branch here already,
+     * `existing` says what to do with it (`reuse` updates it, `replace` deletes
+     * and recreates it); without, the answer is the `existing` phase. Every
+     * phase also arrives on `onSessionBringBackPhase`.
+     */
+    bringBackSession(sessionId: string, existing?: ExistingBranchChoice): Promise<SessionBringBackPhase>;
+    /** Cancel a Bring back still waiting for its turn to end; false once it is running. */
+    cancelSessionBringBack(sessionId: string): Promise<boolean>;
+
     // ── Stage 5 (#276) ──
     /** Where a local project's (or its copy's) schedules run; null with neither schedules nor copies. */
     schedulesWhere(projectPath: string): Promise<ScheduleLocation | null>;
@@ -622,6 +638,8 @@ export interface SwitchboardApi {
     onBringBackProgress(cb: (copyPath: string, line: string) => void): Unsubscribe;
     /** Where a session's hand-off stands: waiting, a progress line, done, failed or cancelled. */
     onSessionHandoffPhase(cb: (sessionId: string, phase: SessionHandoffPhase) => void): Unsubscribe;
+    /** Where a session's Bring back stands. */
+    onSessionBringBackPhase(cb: (sessionId: string, phase: SessionBringBackPhase) => void): Unsubscribe;
 
     // ── Host facts the renderer needs synchronously ──
     /** The absolute path of a dropped File, for drag-and-drop into a terminal. */

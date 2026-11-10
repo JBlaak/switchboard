@@ -49,6 +49,7 @@ import type {
 } from '../../src/application/services/project-handoff';
 import type {ScheduleLocation} from '../../src/application/services/vm-schedules';
 import type {SessionHandoffPhase, SessionHandoffPreview} from '../../src/application/services/session-handoff';
+import type {SessionBringBackPhase, SessionBringBackPreview} from '../../src/application/services/session-bring-back';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -169,6 +170,13 @@ export interface HostStubs {
      */
     sessionHandoff: SessionHandoffStub;
     /**
+     * A VM session brought back to this Mac (#276), standing in for the agent
+     * and the git that move it: every `session-bring-back:*` channel answers
+     * from here, so no test can reach a VM. Each request is recorded (see
+     * `sessionBringBackRequests`).
+     */
+    sessionBringBack: SessionBringBackStub;
+    /**
      * Where schedules run (#276 stage 5), standing in for the agent a move
      * tells: every `vm-schedules:*` channel answers from here, so no test can
      * reach a VM. Each request is recorded (see `vmSchedulesRequests`). The
@@ -255,6 +263,63 @@ export interface SessionHandoffStub {
      */
     waitingMs: number;
 }
+
+/** What the `session-bring-back:*` channels answer. */
+export interface SessionBringBackStub {
+    preview: SessionBringBackPreview | {error: string};
+    /**
+     * The phases Bring back pushes on `session-bring-back:phase`, by the choice
+     * it was called with (`none` without one), `phaseDelayMs` apart; it
+     * answers the last one.
+     */
+    phases: Record<'none' | 'reuse' | 'replace', SessionBringBackPhase[]>;
+    phaseDelayMs: number;
+}
+
+/** What the renderer asked the `session-bring-back:*` stubs, in order. */
+export interface SessionBringBackRequests {
+    preview: string[];
+    bringBack: {sessionId: string; existing: string | null}[];
+}
+
+/** Where the e2e Bring back lands: the hand-off's worktree of acme-api, left behind on this Mac. */
+export const STUB_BRING_BACK_WORKTREE = '/nowhere/acme-api/.claude/worktrees/session-cookie';
+
+/**
+ * A session on the acme-api copy whose branch is on this Mac already, in the
+ * worktree its hand-off left; each choice runs two steps and continues here.
+ */
+export const STUB_SESSION_BRING_BACK: SessionBringBackStub = {
+    preview: {
+        copyPath: 'ssh://joris@devbox.local/~/projects/acme-api',
+        localPath: '/nowhere/acme-api',
+        branch: 'session-cookie',
+        worktree: STUB_BRING_BACK_WORKTREE,
+        existing: {
+            branch: 'session-cookie',
+            worktreePath: STUB_BRING_BACK_WORKTREE,
+            main: false,
+            changedFiles: 1,
+            ahead: 2,
+            sessionId: null,
+        },
+        busy: false,
+    },
+    phases: {
+        none: [{kind: 'failed', error: 'The stub wants a choice'}],
+        reuse: [
+            {kind: 'running', line: 'Fetching session-cookie from the VM'},
+            {kind: 'running', line: 'Carrying the conversation back'},
+            {kind: 'done', projectPath: STUB_BRING_BACK_WORKTREE},
+        ],
+        replace: [
+            {kind: 'running', line: `Deleting the worktree at ${STUB_BRING_BACK_WORKTREE}`},
+            {kind: 'running', line: 'Carrying the conversation back'},
+            {kind: 'done', projectPath: STUB_BRING_BACK_WORKTREE},
+        ],
+    },
+    phaseDelayMs: 0,
+};
 
 /** What the renderer asked the `session-handoff:*` stubs, in order. */
 export interface SessionHandoffRequests {
@@ -518,6 +583,8 @@ interface StubState extends HostStubs {
     handoffRequests: HandoffRequests;
     /** What the renderer asked the session hand-off stubs. */
     sessionHandoffRequests: SessionHandoffRequests;
+    /** What the renderer asked the session Bring back stubs. */
+    sessionBringBackRequests: SessionBringBackRequests;
     /** What the renderer asked the schedules stubs. */
     vmSchedulesRequests: VmSchedulesRequests;
     /** Every upload of dropped files the renderer asked for, in order. */
@@ -566,6 +633,7 @@ export const DEFAULT_STUBS: HostStubs = {
     vmRegistry: null,
     handoff: {...STUB_HANDOFF, hosts: []},
     sessionHandoff: STUB_SESSION_HANDOFF,
+    sessionBringBack: STUB_SESSION_BRING_BACK,
     vmSchedules: {where: {}, runOn: {error: 'No VM in the harness'}},
     droppedFiles: {result: {ok: false, error: 'No VM in the harness'}},
     pullRequestPeeks: {},
@@ -589,6 +657,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 agentRequests: {install: [], setHostSettings: [], openSetupTerminal: []},
                 handoffRequests: {preview: [], handOff: [], copyStatus: [], bringBack: [], removeCopy: []},
                 sessionHandoffRequests: {preview: [], handOff: [], cancel: []},
+                sessionBringBackRequests: {preview: [], bringBack: []},
                 vmSchedulesRequests: {where: [], runOn: []},
                 droppedFilesRequests: [],
                 terminalInputs: [],
@@ -1138,6 +1207,28 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 }
                 return last;
             });
+            // A VM session's Bring back (#276). The real handlers ask the VM and run
+            // git here; these answer from `state.sessionBringBack`, read at each call.
+            replace(channels.sessionBringBackPreview, (sessionId) => {
+                state.sessionBringBackRequests.preview.push(String(sessionId));
+                return state.sessionBringBack.preview;
+            });
+            ipcMain.removeHandler(channels.sessionBringBackRun);
+            ipcMain.handle(channels.sessionBringBackRun, async (event, sessionId, existing) => {
+                const id = String(sessionId);
+                const choice: 'reuse' | 'replace' | null =
+                    existing === 'reuse' || existing === 'replace' ? existing : null;
+                state.sessionBringBackRequests.bringBack.push({sessionId: id, existing: choice});
+                const stub = state.sessionBringBack;
+                let last: SessionBringBackPhase = {kind: 'failed', error: 'The stub has no phases'};
+                for (const phase of stub.phases[choice ?? 'none']) {
+                    await new Promise((resolve) => setTimeout(resolve, stub.phaseDelayMs));
+                    event.sender.send(events.sessionBringBackPhase, id, phase);
+                    last = phase;
+                }
+                return last;
+            });
+            replace(channels.sessionBringBackCancel, () => false);
             replace(channels.sessionHandoffCancel, (sessionId) => {
                 const id = String(sessionId);
                 state.sessionHandoffRequests.cancel.push(id);
@@ -1190,6 +1281,14 @@ export async function sessionHandoffRequests(app: ElectronApplication): Promise<
             handOff: requests.handOff.map((request) => ({...request, ticked: [...request.ticked]})),
             cancel: [...requests.cancel],
         };
+    });
+}
+
+/** What the renderer asked the session Bring back stubs since the app launched. */
+export async function sessionBringBackRequests(app: ElectronApplication): Promise<SessionBringBackRequests> {
+    return await app.evaluate(() => {
+        const requests = (globalThis as WithStubs).__switchboardE2E.sessionBringBackRequests;
+        return {preview: [...requests.preview], bringBack: requests.bringBack.map((request) => ({...request}))};
     });
 }
 

@@ -43,7 +43,12 @@ export type DialogRequest =
      * mode. What it shows lives in the session hand-off slice; a hand-off
      * cancelled while it waited closes it.
      */
-    | {readonly kind: 'handOffSession'; readonly sessionId: string; readonly host: HandoffHost};
+    | {readonly kind: 'handOffSession'; readonly sessionId: string; readonly host: HandoffHost}
+    /**
+     * Bring a VM session back to this Mac (#276). What it shows lives in the
+     * session Bring back slice; one cancelled while it waited closes it.
+     */
+    | {readonly kind: 'bringBackSession'; readonly sessionId: string};
 
 export interface DialogState {
     readonly open: DialogRequest | null;
@@ -67,6 +72,13 @@ export function dialogReducer(state: DialogState, event: RendererEvent): DialogS
         case 'sessionHandoffFinished':
             return event.phase.kind === 'cancelled' &&
                 state.open?.kind === 'handOffSession' &&
+                state.open.sessionId === event.sessionId
+                ? {...state, open: null}
+                : state;
+        case 'sessionBringBackPhase':
+        case 'bringBackFinishedRun':
+            return event.phase.kind === 'cancelled' &&
+                state.open?.kind === 'bringBackSession' &&
                 state.open.sessionId === event.sessionId
                 ? {...state, open: null}
                 : state;

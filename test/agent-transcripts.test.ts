@@ -403,6 +403,47 @@ test('the tail of a session with no file is empty', () => {
     assert.deepEqual(reply(h.received, 'transcript-tail', 'r1').lines, []);
 });
 
+// ── read-transcript ──
+
+test('a transcript is read whole, slice by slice, raw', () => {
+    /* Given */
+    const h = harness();
+    writeTranscript(h, '-p', ['{"n":1}', '{"n":2}']);
+
+    /* When */
+    // The file is `{"n":1}\n{"n":2}\n`: 16 bytes, read as 10 and the 6 after.
+    h.send({type: 'read-transcript', requestId: 'r1', sessionId: SESSION, offset: 0, maxBytes: 10});
+    h.send({type: 'read-transcript', requestId: 'r2', sessionId: SESSION, offset: 10, maxBytes: 10});
+    h.send({type: 'read-transcript', requestId: 'r3', sessionId: SESSION, offset: 99, maxBytes: 10});
+
+    /* Then */
+    const slice = (id: string) => {
+        const answer = reply(h.received, 'transcript-bytes', id);
+        return {
+            found: answer.found,
+            size: answer.size,
+            text: Buffer.from(answer.contentBase64 ?? '', 'base64').toString(),
+        };
+    };
+    assert.deepEqual(slice('r1'), {found: true, size: 16, text: '{"n":1}\n{"'});
+    assert.deepEqual(slice('r2'), {found: true, size: 16, text: 'n":2}\n'});
+    assert.deepEqual(slice('r3'), {found: true, size: 16, text: ''});
+});
+
+test('reading a transcript the VM does not have, or a crafted id, finds nothing', () => {
+    /* Given */
+    const h = harness();
+    writeTranscript(h, '-p', ['{"n":1}']);
+
+    /* When */
+    h.send({type: 'read-transcript', requestId: 'r1', sessionId: 'not-there', offset: 0, maxBytes: 10});
+    h.send({type: 'read-transcript', requestId: 'r2', sessionId: '../-p/' + SESSION, offset: 0, maxBytes: 10});
+
+    /* Then */
+    assert.equal(reply(h.received, 'transcript-bytes', 'r1').found, false);
+    assert.equal(reply(h.received, 'transcript-bytes', 'r2').found, false);
+});
+
 // ── import-transcript ──
 
 test('an import places the upload at the encoded path, 0600', async () => {

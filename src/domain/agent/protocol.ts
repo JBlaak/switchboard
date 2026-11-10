@@ -400,6 +400,22 @@ export interface TranscriptTailMessage {
 }
 
 /**
+ * A slice of a session's whole transcript, raw, for a session's Bring back:
+ * `maxBytes` (at most TRANSCRIPT_READ_MAX_BYTES) from `offset`. The Mac reads
+ * it slice by slice until it has `size` bytes. Answered with `transcript-bytes`.
+ */
+export interface ReadTranscriptMessage {
+    type: 'read-transcript';
+    requestId: string;
+    sessionId: string;
+    offset: number;
+    maxBytes: number;
+}
+
+/** The most one `transcript-bytes` carries, before base64. */
+export const TRANSCRIPT_READ_MAX_BYTES = 4 * 1024 * 1024;
+
+/**
  * Put a session's transcript (uploaded first) where `claude --resume` on the
  * VM finds it: `~/.claude/projects/<encoded dir>/<sessionId>.jsonl`, `dir`
  * expanded. Refused when a transcript of that id is already there. Answered
@@ -574,6 +590,7 @@ export type MacMessage =
     | RemoveCopyMessage
     | GetTranscriptMessage
     | TranscriptTailMessage
+    | ReadTranscriptMessage
     | ImportTranscriptMessage
     | RunToolMessage
     | ReadFileMessage
@@ -796,6 +813,19 @@ export interface TranscriptTailReply {
     lines: string[];
 }
 
+/**
+ * A slice of a transcript, for `read-transcript`. `found` is false when the VM
+ * has no transcript of that id; `size` is the whole file's, so the Mac knows
+ * when it has all of it.
+ */
+export interface TranscriptBytesMessage {
+    type: 'transcript-bytes';
+    requestId: string;
+    found: boolean;
+    size?: number;
+    contentBase64?: string;
+}
+
 /** Transcripts the Mac asked for before have changed on disk; it asks again. */
 export interface TranscriptsChangedMessage {
     type: 'transcripts-changed';
@@ -896,6 +926,7 @@ export type AgentMessage =
     | CopyStateMessage
     | TranscriptMessage
     | TranscriptTailReply
+    | TranscriptBytesMessage
     | TranscriptsChangedMessage
     | ToolResultMessage
     | FileContentMessage

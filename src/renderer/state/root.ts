@@ -12,6 +12,8 @@ import {agentHostReducer, initialAgentHostState} from './agent-host-slice';
 import {initialVmsState, vmsReducer} from './vms-slice';
 import {handoffReducer, initialHandoffState} from './handoff-slice';
 import {initialSessionHandoffState, rekeySessionHandoff, sessionHandoffReducer} from './session-handoff-slice';
+import {initialSessionBringBackState, rekeySessionBringBack, sessionBringBackReducer} from './session-bring-back-slice';
+import type {SessionBringBackState} from './session-bring-back-slice';
 import {activityReducer, initialActivityState, rekeyActivity} from './activity-slice';
 import {archiveUndoReducer, initialArchiveUndoState, rekeyArchiveUndo} from './archive-undo-slice';
 import {dropUploadReducer, initialDropUploadState} from './drop-upload-slice';
@@ -108,6 +110,7 @@ export interface RendererState {
     readonly vms: VmsState;
     readonly handoff: HandoffState;
     readonly sessionHandoff: SessionHandoffState;
+    readonly sessionBringBack: SessionBringBackState;
     readonly dropUpload: DropUploadState;
     readonly pages: PagesState;
     readonly mergeQueue: MergeQueueState;
@@ -146,6 +149,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         vms: initialVmsState,
         handoff: initialHandoffState,
         sessionHandoff: initialSessionHandoffState,
+        sessionBringBack: initialSessionBringBackState,
         dropUpload: initialDropUploadState,
         pages: initialPagesState,
         mergeQueue: initialMergeQueueState,
@@ -192,6 +196,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const vms = vmsReducer(state.vms, event);
     const handoff = handoffReducer(state.handoff, event);
     const sessionHandoff = sessionHandoffReducer(state.sessionHandoff, event);
+    const sessionBringBack = sessionBringBackReducer(state.sessionBringBack, event);
     const dropUpload = dropUploadReducer(state.dropUpload, event);
     const pages = pagesReducer(state.pages, event);
     const mergeQueue = mergeQueueReducer(state.mergeQueue, event);
@@ -228,6 +233,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         vms,
         handoff,
         sessionHandoff,
+        sessionBringBack,
         dropUpload,
         pages,
         mergeQueue,
@@ -295,6 +301,7 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         handoff: state.handoff,
         // A session handed off keeps its hand-off under its new id.
         sessionHandoff: rekeySessionHandoff(state.sessionHandoff, oldId, newId),
+        sessionBringBack: rekeySessionBringBack(state.sessionBringBack, oldId, newId),
         // Names no session: the note is for whichever terminal the files were dropped on.
         dropUpload: state.dropUpload,
         // A page stays with its session under the new id.

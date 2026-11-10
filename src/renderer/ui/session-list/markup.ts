@@ -19,6 +19,9 @@ const SVG = {
     /** Hand off to… (#276 stage 3): out of the box, up and away. */
     handOff:
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
+    /** Bring back (#276): into the box, down and home; Hand off to…'s counterpart. */
+    bringBack:
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4l-9 9M11 7v6h6M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
     terminal:
         '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>',
 } as const;
@@ -32,6 +35,7 @@ export const HTML = {
     terminal: {__html: SVG.terminal},
     moon: {__html: SVG.moon},
     handOff: {__html: SVG.handOff},
+    bringBack: {__html: SVG.bringBack},
     archive16: {__html: ICONS.archive(16)},
     archive14: {__html: ICONS.archive(14)},
     unarchive16: {__html: ICONS.unarchive(16)},

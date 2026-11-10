@@ -14,7 +14,8 @@ import {rowActivity} from '../../state/row-activity';
 import {rowButtons, sessionDisplayName, showsTerminalBadge} from '../../state/session-list-layout';
 import {shallowEqual} from '../../state/store';
 import {useStore} from '../use-store';
-import {isVmProjectIn} from '../../state/agent-host-slice';
+import {isVmCopyIn, isVmProjectIn} from '../../state/agent-host-slice';
+import {openSessionBringBack} from '../dialogs/session-bring-back-actions';
 import {HTML} from './markup';
 import {RenameInput} from './RenameInput';
 import {RowMeta, useCanOpenWork} from './RowMeta';
@@ -206,7 +207,8 @@ function RowActions({row, onOpenWork, onStop, onArchive, onSnooze, onResume}: Ro
     const vm = useStore((state) => isVmProjectIn(state.agentHost, path));
     const canOpenWork = useCanOpenWork(session.sessionId, workOffReason(session, path, vm) !== null);
     const hosts = useStore((state) => state.handoff.hosts) ?? NO_HOSTS;
-    const buttons = rowButtons(session, {vm, hosts: hosts.length});
+    const copy = useStore((state) => isVmCopyIn(state.agentHost, path));
+    const buttons = rowButtons(session, {vm, copy, hosts: hosts.length});
     const snooze = useRef<HTMLButtonElement>(null);
     const [snoozing, setSnoozing] = useState(false);
     const [pickingHost, setPickingHost] = useState(false);
@@ -270,6 +272,18 @@ function RowActions({row, onOpenWork, onStop, onArchive, onSnooze, onResume}: Ro
                     className="session-handoff-btn"
                     html={HTML.handOff}
                     onMenu={setPickingHost}
+                />
+            )}
+            {buttons.bringBack && (
+                <button
+                    className="session-bring-back-btn"
+                    title="Bring back to this Mac"
+                    dangerouslySetInnerHTML={HTML.bringBack}
+                    onClick={(e) => {
+                        // A row's click opens the session; this one is the button's own.
+                        e.stopPropagation();
+                        void openSessionBringBack(session.sessionId);
+                    }}
                 />
             )}
             {buttons.resume && (

@@ -23,7 +23,8 @@ import type {RendererEvent} from './events';
 
 export type AgentHostEvent =
     /** The project list was read: these are its VM projects, and no others. */
-    | {type: 'agentProjectsLoaded'; projectPaths: readonly string[]}
+    /** `copyPaths`: those of them that are hand-off copies of a local project, which a session can be brought back from. */
+    | {type: 'agentProjectsLoaded'; projectPaths: readonly string[]; copyPaths?: readonly string[]}
     /** Install agent, Retry or Update agent was pressed. */
     | {type: 'agentInstallStarted'; hostKey: string}
     | {type: 'agentInstallFinished'; hostKey: string; ok: boolean; error?: string}
@@ -67,6 +68,8 @@ export interface AgentHostView {
 export interface AgentHostState {
     /** projectPath → true, for every VM project. */
     readonly vmProjects: IdRecord<true>;
+    /** projectPath → true, for every VM project that is a hand-off copy of a local one. */
+    readonly vmCopies: IdRecord<true>;
     /** VM key → its controls' state. */
     readonly hosts: IdRecord<AgentHostView>;
 }
@@ -78,7 +81,7 @@ export const NO_HOST: AgentHostView = {
     setupError: null,
 };
 
-export const initialAgentHostState: AgentHostState = {vmProjects: {}, hosts: {}};
+export const initialAgentHostState: AgentHostState = {vmProjects: {}, vmCopies: {}, hosts: {}};
 
 /** How many progress lines are kept; an install prints a few dozen. */
 const MAX_LINES = 200;
@@ -88,7 +91,10 @@ export function agentHostReducer(state: AgentHostState, event: RendererEvent): A
         case 'agentProjectsLoaded': {
             const next: Record<string, true> = {};
             for (const path of event.projectPaths) next[path] = true;
-            return sameKeys(state.vmProjects, next) ? state : {...state, vmProjects: next};
+            const copies: Record<string, true> = {};
+            for (const path of event.copyPaths ?? []) copies[path] = true;
+            if (sameKeys(state.vmProjects, next) && sameKeys(state.vmCopies, copies)) return state;
+            return {...state, vmProjects: next, vmCopies: copies};
         }
 
         case 'agentInstallStarted':
@@ -184,6 +190,11 @@ function sameKeys(a: IdRecord<true>, b: IdRecord<true>): boolean {
 /** Whether a project is a VM project: a remote whose host runs a Switchboard agent. */
 export function isVmProjectIn(state: AgentHostState, projectPath: string | null | undefined): boolean {
     return !!projectPath && state.vmProjects[projectPath] === true;
+}
+
+/** Whether a project is a VM copy of a local project (#276), which its sessions can be brought back to. */
+export function isVmCopyIn(state: AgentHostState, projectPath: string | null | undefined): boolean {
+    return !!projectPath && state.vmCopies[projectPath] === true;
 }
 
 /** A VM's controls' state, by its key. */

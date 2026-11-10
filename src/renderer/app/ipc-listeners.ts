@@ -18,9 +18,15 @@ import {relayoutSessionList} from '../ui/session-list/relayout';
 import {celebrateArchivedRow} from '../ui/session-list/leave';
 import {closeArchivedSession, dropPendingSession, writeExitBanner} from '../features/sessions/session-actions';
 import {pollActiveSessions} from '../features/sessions/session-poller';
-import {continueOnVm, launchClaudeSession, trackStartedElsewhere} from '../features/sessions/session-actions';
+import {
+    continueHere,
+    continueOnVm,
+    launchClaudeSession,
+    trackStartedElsewhere,
+} from '../features/sessions/session-actions';
 import {loadHandoffHosts} from '../ui/project-page/handoff-actions';
 import {sessionRunIn} from '../state/session-handoff-slice';
+import {bringBackRunIn} from '../state/session-bring-back-slice';
 import {projectAt} from '../ui/ask/actions';
 import {openDialog} from '../ui/dialogs/actions';
 import {setHeaderIdentity} from '../features/sessions/terminal-header';
@@ -92,6 +98,9 @@ export function installIpcListeners(): void {
     // A session handed off to a VM (#276 stage 3) continues in its own row and terminal.
     onEvent('sessionHandoffPhase', ({sessionId}, state, previous) => onHandedOff(sessionId, state, previous));
     onEvent('sessionHandoffFinished', ({sessionId}, state, previous) => onHandedOff(sessionId, state, previous));
+    // A VM session brought back (#276) continues here in its own row and terminal.
+    onEvent('sessionBringBackPhase', ({sessionId}, state, previous) => onBroughtBack(sessionId, state, previous));
+    onEvent('bringBackFinishedRun', ({sessionId}, state, previous) => onBroughtBack(sessionId, state, previous));
     // Hand off to… on a row needs the VM hosts; an install or a removal changes which projects are on one.
     onEvent('agentProjectsLoaded', (_event, state, previous) => {
         if (state.handoff.hosts === null || state.agentHost !== previous.agentHost) void loadHandoffHosts();
@@ -176,6 +185,14 @@ function onHandedOff(sessionId: string, state: RendererState, previous: Renderer
     const run = sessionRunIn(state.sessionHandoff, sessionId);
     if (run.phase !== 'done' || sessionRunIn(previous.sessionHandoff, sessionId).phase === 'done') return;
     continueOnVm(sessionId, run.copyPath);
+    onProjectsChanged();
+}
+
+/** The Bring back of `sessionId` just finished: its row and terminal follow it to this Mac, once. */
+function onBroughtBack(sessionId: string, state: RendererState, previous: RendererState): void {
+    const run = bringBackRunIn(state.sessionBringBack, sessionId);
+    if (run.phase !== 'done' || bringBackRunIn(previous.sessionBringBack, sessionId).phase === 'done') return;
+    continueHere(sessionId, run.projectPath);
     onProjectsChanged();
 }
 
