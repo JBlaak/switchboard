@@ -25,3 +25,12 @@ export function inTerminalTopZone(x: number, y: number, terminal: ZoneRect): boo
         y < Math.min(terminal.bottom, terminal.top + TRAY_ZONE_PX)
     );
 }
+
+/**
+ * Whether a point lies over the bar above the terminal. Read from the bar's box
+ * rather than the element under the pointer: the terminal's box reaches a few
+ * pixels up over the bar's bottom edge, and the pointer there is still on the bar.
+ */
+export function inHeaderBox(x: number, y: number, header: ZoneRect): boolean {
+    return x >= header.left && x < header.right && y >= header.top && y < header.bottom;
+}

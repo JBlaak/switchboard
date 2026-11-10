@@ -12,8 +12,12 @@
 /** How far a press travels, in px, before it is a drag rather than a click. */
 const DRAG_THRESHOLD_PX = 4;
 
-/** Watch `space` for drags; answers the call that stops watching. */
-export function installDragSpace(space: HTMLElement): () => void {
+/**
+ * Watch `space` for drags; answers the call that stops watching. `startsOn`
+ * picks the presses that may move the window (every press when left out), so
+ * a space with controls in it leaves them their clicks and text selection.
+ */
+export function installDragSpace(space: HTMLElement, startsOn?: (target: Element) => boolean): () => void {
     let press: {id: number; screenX: number; screenY: number; dragging: boolean} | null = null;
     let swallowClick = false;
     let frame = 0;
@@ -37,6 +41,7 @@ export function installDragSpace(space: HTMLElement): () => void {
 
     const onDown = (e: PointerEvent): void => {
         if (e.button !== 0) return;
+        if (startsOn && !(e.target instanceof Element && startsOn(e.target))) return;
         press = {id: e.pointerId, screenX: e.screenX, screenY: e.screenY, dragging: false};
         swallowClick = false;
         // Keeps the moves coming once the pointer leaves the window, as it will

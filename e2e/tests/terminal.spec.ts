@@ -35,14 +35,6 @@ test.describe('smoke', () => {
         expect(launch.settings?.hooks?.PreToolUse?.[0].matcher).toBe('AskUserQuestion');
         expect(launch.cwd).toBe(home.projectPath('Development/acme-api'));
         await expect(terminalHeader(page).getByText(LABEL.loginFix, {exact: true})).toBeVisible();
-        // The header is a window drag region whose controls opt out.
-        const region = (locator: ReturnType<typeof terminalHeader>) =>
-            locator.evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-app-region'));
-        expect(await region(terminalHeader(page))).toBe('drag');
-        expect(await region(terminalHeader(page).getByRole('button', {name: 'Session tools', exact: true}))).toBe(
-            'no-drag',
-        );
-        expect(await region(terminalHeader(page).getByText(LABEL.loginFix, {exact: true}))).toBe('no-drag');
     });
 
     test('OSC 0 titles set the header and drive working/ready, and a notification replaces the title', async ({

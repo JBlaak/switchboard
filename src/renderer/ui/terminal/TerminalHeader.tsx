@@ -11,8 +11,9 @@
  * stays in `index.html` so the settings panel can keep hiding and showing it;
  * whether it is up follows the session on screen.
  *
- * The header is a window drag region; the stylesheet opts its spans and
- * buttons out (`_chrome.scss`), which is why the markup keeps its ids.
+ * The header moves the window from its blank space, by hand rather than as a
+ * CSS drag region (`_chrome.scss`): a drag region never hands the page a
+ * pointer event, so hovering it would close the session tray.
  */
 import {useEffect, useLayoutEffect} from 'react';
 import type {JSX, ReactNode} from 'react';
@@ -28,6 +29,15 @@ import {ProjectLink} from '../project-page/ProjectLink';
 import {HandoffMarker} from '../session-handoff/HandoffMarker';
 import {loadSessionStats} from '../session-tray/actions';
 import {SESSION_TRAY_ID, focusTray} from '../session-tray/focus';
+import {installDragSpace} from '../session-list/drag-space';
+
+/** What in the bar keeps its press: controls, and text that can be selected. */
+const KEEPS_PRESS = 'button, input, a, [role="button"], #terminal-header-info > span, #terminal-header-questions';
+
+/** Whether a press on `target` in the bar moves the window: only on its blank space and plain labels. */
+function headerPressMovesWindow(target: Element): boolean {
+    return target.closest(KEEPS_PRESS) === null;
+}
 
 /** The session's name (its process title as the tooltip), its project (a way into the project page, #173) and its branch. */
 export function TerminalHeaderInfo(): JSX.Element {
@@ -46,6 +56,11 @@ export function TerminalHeaderInfo(): JSX.Element {
         const header = document.getElementById('terminal-header');
         if (header) header.style.display = onScreen ? '' : 'none';
     }, [onScreen]);
+
+    useEffect(() => {
+        const header = document.getElementById('terminal-header');
+        return header ? installDragSpace(header, headerPressMovesWindow) : undefined;
+    }, []);
 
     // The branch is read fresh for each session put on screen (and again as the tray opens).
     useEffect(() => {
