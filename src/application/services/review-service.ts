@@ -13,6 +13,7 @@
  * GitHub made of it. Writes go one at a time: two comments added at once must
  * not each start a review of their own.
  */
+import {isPullRequestPageId} from '../../domain/session-work/pull-request-link';
 import {canComment, submitEvent} from '../../domain/session-work/review';
 import type {CommentRequest, ReviewMode, ReviewRequest, ReviewResult} from '../../domain/session-work/review';
 import type {ActionResult} from '../../domain/session-work/actions';
@@ -118,6 +119,9 @@ export class ReviewService {
         const pending = pr.pendingReview ?? [];
         if (pending.length === 0) return {ok: false, reason: 'The review has no comments yet'};
         // Checked before submitting, so a refused hand-over does not leave a Request changes behind.
+        if (mode === 'fix' && isPullRequestPageId(sessionId)) {
+            return {ok: false, reason: 'No session owns this PR, so Claude cannot fix it here'};
+        }
         if (mode === 'fix' && found.item.otherRepository) {
             return {ok: false, reason: 'This PR is in another repository, so Claude cannot fix it from this session'};
         }

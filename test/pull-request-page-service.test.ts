@@ -1,0 +1,511 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+
+import {PullRequestPageService} from '../src/application/services/pull-request-page-service';
+import {WorkPageRouter, type WorkPageBackend} from '../src/application/services/work-page-router';
+import {ReviewService} from '../src/application/services/review-service';
+import {SessionActionService} from '../src/application/services/session-action-service';
+import {GITHUB_REFRESH_MS} from '../src/application/services/session-work-service';
+import {NOT_RUNNING_REASON} from '../src/domain/session-work/actions';
+import {pullRequestPageId} from '../src/domain/session-work/pull-request-link';
+import {linkTarget} from '../src/infrastructure/electron/support/link-target';
+import type {GitHubAvailability, PullRequestStatus, SessionWorkSnapshot} from '../src/domain/session-work/model';
+import type {Timers} from '../src/application/ports/clock';
+import {silentLog} from './support/fakes';
+import {FakePrompter, MemoryStore} from './support/session-work-fakes';
+
+const REPO = 'o/app';
+const URL = `https://github.com/${REPO}/pull/12`;
+const PAGE = pullRequestPageId({repository: REPO, number: 12});
+const ITEM = 'pr:' + URL;
+
+const DIFF = [
+    'diff --git a/a.txt b/a.txt',
+    'index 1111111..2222222 100644',
+    '--- a/a.txt',
+    '+++ b/a.txt',
+    '@@ -1 +1 @@',
+    '-one',
+    '+two',
+    '',
+].join('\n');
+
+function prStatus(extra: Partial<PullRequestStatus> = {}): PullRequestStatus {
+    return {
+        number: 12,
+        url: URL,
+        repository: REPO,
+        title: 'Rename things',
+        state: 'open',
+        headSha: 'head-1',
+        nodeId: 'PR_12',
+        closes: [],
+        ...extra,
+    };
+}
+
+/** Intervals fired by hand, with the ones still running on show. */
+function manualTimers() {
+    let seq = 0;
+    const intervals = new Map<number, {fn: () => void; ms: number}>();
+    const timers: Timers & {intervals: typeof intervals; fire(): void} = {
+        intervals,
+        setTimeout: () => ++seq,
+        clearTimeout: () => {},
+        setInterval(fn, ms) {
+            intervals.set(++seq, {fn, ms});
+            return seq;
+        },
+        clearInterval(handle) {
+            if (handle != null) intervals.delete(handle as number);
+        },
+        fire() {
+            for (const {fn} of [...intervals.values()]) fn();
+        },
+    };
+    return timers;
+}
+
+function setup({
+    gh = 'ok' as GitHubAvailability,
+    prs = [prStatus()] as PullRequestStatus[] | null,
+    diff = DIFF as string | null,
+} = {}) {
+    const world = {gh, prs, diff, statusCalls: 0, diffCalls: 0};
+    const pushed: SessionWorkSnapshot[] = [];
+    const timers = manualTimers();
+    const service = new PullRequestPageService({
+        github: {
+            async available() {
+                return world.gh;
+            },
+            async pullRequests(repo, numbers) {
+                world.statusCalls++;
+                assert.equal(repo, REPO);
+                assert.deepEqual(numbers, [12]);
+                return world.prs;
+            },
+            async pullRequestDiff(repo, number) {
+                world.diffCalls++;
+                assert.equal(repo, REPO);
+                assert.equal(number, 12);
+                return world.diff;
+            },
+        },
+        renderer: {sessionWorkSnapshot: (snapshot) => pushed.push(snapshot)},
+        clock: {now: () => Date.UTC(2026, 10, 10, 12, 0, 0)},
+        timers,
+        log: silentLog,
+    });
+    return {service, world, pushed, timers};
+}
+
+// ── The peek ──
+
+test('the peek answers the PR status and its parsed diff from GitHub', async () => {
+    /* Given */
+    const {service} = setup();
+
+    /* When */
+    const peek = await service.peek({repository: REPO, number: 12});
+
+    /* Then */
+    assert.equal(peek.error, undefined);
+    assert.equal(peek.url, URL);
+    assert.deepEqual(peek.ref, {repository: REPO, number: 12});
+    assert.equal(peek.pr?.title, 'Rename things');
+    assert.deepEqual(
+        peek.files.map((file) => [file.path, file.additions, file.deletions]),
+        [['a.txt', 1, 1]],
+    );
+});
+
+test('the peek says gh is missing instead of rejecting', async () => {
+    /* Given */
+    const {service, world} = setup({gh: 'missing'});
+
+    /* When */
+    const peek = await service.peek({repository: REPO, number: 12});
+
+    /* Then */
+    assert.match(peek.error ?? '', /gh is not installed/);
+    assert.equal(peek.pr, null);
+    assert.deepEqual(peek.files, []);
+    assert.equal(world.statusCalls + world.diffCalls, 0);
+});
+
+test('the peek says gh is signed out', async () => {
+    /* Given */
+    const {service} = setup({gh: 'unauthenticated'});
+
+    /* When */
+    const peek = await service.peek({repository: REPO, number: 12});
+
+    /* Then */
+    assert.match(peek.error ?? '', /not signed in/);
+});
+
+test('the peek of a PR GitHub does not know says so', async () => {
+    /* Given */
+    const {service} = setup({prs: [], diff: null});
+
+    /* When */
+    const peek = await service.peek({repository: REPO, number: 12});
+
+    /* Then */
+    assert.match(peek.error ?? '', /does not know this PR/);
+    assert.equal(peek.pr, null);
+});
+
+test('the peek turns a failing gh into an error rather than a rejection', async () => {
+    /* Given */
+    const {service} = setup();
+    (service as unknown as {deps: {github: {available(): Promise<never>}}}).deps.github.available = async () => {
+        throw new Error('gh crashed');
+    };
+
+    /* When */
+    const peek = await service.peek({repository: REPO, number: 12});
+
+    /* Then */
+    assert.equal(peek.error, 'gh crashed');
+});
+
+test('the peek refuses a ref that is not a pull request', async () => {
+    /* Given */
+    const {service, world} = setup();
+
+    /* When */
+    const peek = await service.peek({repository: '../etc', number: -1});
+
+    /* Then */
+    assert.match(peek.error ?? '', /not a pull request/);
+    assert.equal(world.statusCalls + world.diffCalls, 0);
+});
+
+// ── The PR's own page ──
+
+test('opening a PR page answers a snapshot of the one PR, handing nothing to Claude', async () => {
+    /* Given */
+    const {service, pushed} = setup();
+
+    /* When */
+    const snapshot = await service.open(PAGE);
+
+    /* Then */
+    assert.ok(snapshot);
+    assert.equal(snapshot.sessionId, PAGE);
+    assert.equal(snapshot.repository, REPO);
+    assert.equal(snapshot.gh, 'ok');
+    assert.deepEqual(snapshot.footprint, {worktrees: 0, branches: 0});
+    assert.equal(snapshot.queued, 0);
+    assert.equal(snapshot.items.length, 1);
+    const [item] = snapshot.items;
+    assert.equal(item.id, ITEM);
+    assert.equal(item.kind, 'pr');
+    if (item.kind !== 'pr') return;
+    assert.equal(item.pr.title, 'Rename things');
+    assert.equal(item.location, null);
+    assert.deepEqual(item.diff, {kind: 'pull-request', repository: REPO, number: 12});
+    assert.equal(item.otherRepository, true);
+    assert.deepEqual(pushed, [snapshot]);
+});
+
+test('a PR page gh cannot answer for still opens, with the PR as its link says and the reason', async () => {
+    /* Given */
+    const {service} = setup({gh: 'missing'});
+
+    /* When */
+    const snapshot = await service.open(PAGE);
+
+    /* Then */
+    assert.ok(snapshot);
+    assert.equal(snapshot.gh, 'missing');
+    const [item] = snapshot.items;
+    assert.equal(item.kind, 'pr');
+    if (item.kind !== 'pr') return;
+    assert.deepEqual(item.pr, {number: 12, url: URL, repository: REPO, closes: []});
+    assert.match(item.error ?? '', /gh is not installed/);
+});
+
+test('a page id that is not a PR does not open', async () => {
+    /* Given */
+    const {service} = setup();
+
+    /* When */
+    const snapshot = await service.open('session-1');
+
+    /* Then */
+    assert.equal(snapshot, null);
+    assert.equal(service.canOpen('session-1'), false);
+    assert.equal(service.canOpen(PAGE), true);
+});
+
+test("the PR page's diff is GitHub's, fetched once per head commit", async () => {
+    /* Given */
+    const {service, world} = setup();
+    await service.open(PAGE);
+
+    /* When */
+    const first = await service.diff(PAGE, ITEM);
+    const second = await service.diff(PAGE, ITEM);
+
+    /* Then */
+    assert.equal(first.source, 'github');
+    assert.deepEqual(
+        first.files.map((file) => file.path),
+        ['a.txt'],
+    );
+    assert.deepEqual(second, first);
+    assert.equal(world.diffCalls, 1);
+});
+
+test('a diff GitHub would not send shows on the item', async () => {
+    /* Given */
+    const {service, pushed} = setup({diff: null});
+    await service.open(PAGE);
+
+    /* When */
+    const diff = await service.diff(PAGE, ITEM);
+
+    /* Then */
+    assert.equal(diff.source, null);
+    assert.equal(diff.error, 'GitHub did not send the diff');
+    assert.equal(pushed.at(-1)?.items[0].error, 'GitHub did not send the diff');
+});
+
+test('the PR page polls GitHub while open, and pushes what changed', async () => {
+    /* Given */
+    const {service, world, pushed, timers} = setup();
+    await service.open(PAGE);
+    assert.deepEqual(
+        [...timers.intervals.values()].map((interval) => interval.ms),
+        [GITHUB_REFRESH_MS],
+    );
+    world.prs = [prStatus({state: 'merged'})];
+
+    /* When */
+    timers.fire();
+    await service.refreshGitHub(PAGE);
+
+    /* Then */
+    const last = pushed.at(-1)?.items[0];
+    assert.equal(last?.kind === 'pr' && last.pr.state, 'merged');
+});
+
+test('closing the PR page stops the poll and forgets the page', async () => {
+    /* Given */
+    const {service, timers} = setup();
+    await service.open(PAGE);
+
+    /* When */
+    service.close(PAGE);
+
+    /* Then */
+    assert.equal(timers.intervals.size, 0);
+    assert.equal(service.openPageId, null);
+    assert.equal(service.item(PAGE, ITEM), null);
+    assert.deepEqual(await service.diff(PAGE, ITEM), {files: [], source: null});
+});
+
+test('closeAll stops the poll too', async () => {
+    /* Given */
+    const {service, timers} = setup();
+    await service.open(PAGE);
+
+    /* When */
+    service.closeAll();
+
+    /* Then */
+    assert.equal(timers.intervals.size, 0);
+});
+
+test('opening another PR page closes the first', async () => {
+    /* Given */
+    const {service, timers} = setup({prs: [prStatus(), prStatus({number: 13, url: URL.replace('12', '13')})]});
+    await service.open(PAGE);
+    const other = pullRequestPageId({repository: REPO, number: 13});
+    (service as unknown as {deps: {github: {pullRequests: unknown}}}).deps.github.pullRequests = async () => [];
+
+    /* When */
+    await service.open(other);
+
+    /* Then */
+    assert.equal(service.openPageId, other);
+    assert.equal(timers.intervals.size, 1);
+});
+
+test("the PR page's context has no checkout and gh's answer", async () => {
+    /* Given */
+    const {service} = setup();
+    await service.open(PAGE);
+
+    /* When */
+    const context = service.context(PAGE);
+
+    /* Then */
+    assert.deepEqual(context, {repository: REPO, mainCheckout: '', gh: 'ok'});
+});
+
+// ── The router ──
+
+function recordingBackend(name: string, calls: string[]): WorkPageBackend {
+    return {
+        async open(pageId) {
+            calls.push(`${name}.open ${pageId}`);
+            return null;
+        },
+        canOpen: (pageId) => {
+            calls.push(`${name}.canOpen ${pageId}`);
+            return true;
+        },
+        close: (pageId) => calls.push(`${name}.close ${pageId}`),
+        closeAll: () => calls.push(`${name}.closeAll`),
+        async diff(pageId) {
+            calls.push(`${name}.diff ${pageId}`);
+            return {files: [], source: null};
+        },
+        async image(pageId) {
+            calls.push(`${name}.image ${pageId}`);
+            return null;
+        },
+        item: (pageId) => {
+            calls.push(`${name}.item ${pageId}`);
+            return null;
+        },
+        context: (pageId) => {
+            calls.push(`${name}.context ${pageId}`);
+            return null;
+        },
+        async refreshGitHub(pageId) {
+            calls.push(`${name}.refreshGitHub ${pageId}`);
+        },
+    };
+}
+
+test('the router sends PR page ids to the PR pages and the rest to the sessions', async () => {
+    /* Given */
+    const calls: string[] = [];
+    const router = new WorkPageRouter(recordingBackend('sessions', calls), recordingBackend('prs', calls));
+
+    /* When */
+    await router.canOpen('s1');
+    await router.diff(PAGE, ITEM);
+    await router.image('s1', 'x', 'a.png', 'after');
+    router.item(PAGE, ITEM);
+    router.context('s1');
+    await router.refreshGitHub(PAGE);
+    router.close('s1');
+
+    /* Then */
+    assert.deepEqual(calls, [
+        'sessions.canOpen s1',
+        `prs.diff ${PAGE}`,
+        'sessions.image s1',
+        `prs.item ${PAGE}`,
+        'sessions.context s1',
+        `prs.refreshGitHub ${PAGE}`,
+        'sessions.close s1',
+    ]);
+});
+
+test('opening either kind of page closes the other kind', async () => {
+    /* Given */
+    const calls: string[] = [];
+    const router = new WorkPageRouter(recordingBackend('sessions', calls), recordingBackend('prs', calls));
+
+    /* When */
+    await router.open(PAGE);
+    await router.open('s1');
+
+    /* Then */
+    assert.deepEqual(calls, ['sessions.closeAll', `prs.open ${PAGE}`, 'prs.closeAll', 'sessions.open s1']);
+});
+
+// ── What a PR page hands Claude: nothing ──
+
+test('your review on a PR page can be submitted but not handed to Claude to fix', async () => {
+    /* Given */
+    const {service} = setup({
+        prs: [prStatus({pendingReviewId: 'PRR_1', pendingReview: [{path: 'a.txt', line: 1, body: 'Hm'} as never]})],
+    });
+    const router = new WorkPageRouter(recordingBackend('sessions', []), service);
+    await router.open(PAGE);
+    const submitted: string[] = [];
+    const handed: string[] = [];
+    const review = new ReviewService({
+        github: {
+            startPendingReview: async () => ({ok: true, reviewId: 'PRR_2'}),
+            addPendingComment: async () => ({ok: true, threadId: 'T'}),
+            deletePendingReview: async () => ({ok: true}),
+            submitPendingReview: async (reviewId) => {
+                submitted.push(reviewId);
+                return {ok: true};
+            },
+        },
+        page: router,
+        actions: {
+            async request(sessionId) {
+                handed.push(sessionId);
+                return {ok: true, activityId: 'a1'};
+            },
+        },
+        log: silentLog,
+    });
+
+    /* When */
+    const fix = await review.review({sessionId: PAGE, itemId: ITEM, mode: 'fix'});
+    const plain = await review.review({sessionId: PAGE, itemId: ITEM, mode: 'submit'});
+
+    /* Then */
+    assert.deepEqual(fix, {ok: false, reason: 'No session owns this PR, so Claude cannot fix it here'});
+    assert.deepEqual(plain, {ok: true});
+    assert.deepEqual(submitted, ['PRR_1']);
+    assert.deepEqual(handed, []);
+});
+
+test('an action asked for on a PR page is refused: no session runs under its id', async () => {
+    /* Given */
+    const actions = new SessionActionService({
+        prompter: new FakePrompter(),
+        store: new MemoryStore(),
+        github: {checkLogTail: async () => null},
+        ids: {newId: () => 'a1'},
+        clock: {now: () => 0},
+        log: silentLog,
+    });
+
+    /* When */
+    const result = await actions.request(PAGE, ITEM, 'fix-comments');
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: NOT_RUNNING_REASON});
+});
+
+// ── Stray links in the main window ──
+
+test('the main window keeps PR links for its own viewer; other links go to the browser', () => {
+    /* Given */
+    const files = URL + '/files';
+
+    /* When */
+    const routed = [
+        linkTarget(files, true),
+        linkTarget('https://github.com/o/app/issues/3', true),
+        linkTarget('file:///etc/passwd', true),
+    ];
+
+    /* Then */
+    assert.deepEqual(routed, ['pull-request', 'browser', null]);
+});
+
+test('a window that does not show PRs itself sends their links to the browser', () => {
+    /* Given */
+    const url = URL;
+
+    /* When */
+    const target = linkTarget(url, false);
+
+    /* Then */
+    assert.equal(target, 'browser');
+});
