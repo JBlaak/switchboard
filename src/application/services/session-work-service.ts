@@ -45,8 +45,11 @@ import type {CiJobQueueCalls, GitHubCli, PlanReads, ProjectReads, QueueLabelWrit
 import type {GitRemotes} from '../ports/git-remotes';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
-import {noStructuralDiffer, type StructuralDiffer} from '../ports/structural-differ';
+import type {StructuralDiffer} from '../ports/structural-differ';
 import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
+import {DiffRefinements, gitHubSides, lazily, refinable, type DiffSideReader} from './diff-refinements';
+
+export {REFINE_MAX_BYTES} from './diff-refinements';
 
 /** How long git's watchers have to be quiet before the page is rebuilt. */
 export const WATCH_DEBOUNCE_MS = 300;
@@ -120,14 +123,26 @@ interface DiffSides {
     after: string | null;
 }
 
-/** Past this, a side is not refined: its lines are drawn plain. */
-export const REFINE_MAX_BYTES = 1024 * 1024;
+/**
+ * Where the two sides of a diff from GitHub are read, for refining it: the
+ * PR's repository at its head commit and the merge-base GitHub diffed it
+ * against, asked for once, when a file is first refined.
+ */
+interface GitHubSides {
+    repository: string;
+    head: string;
+    mergeBase: () => Promise<string | null>;
+}
 
-/** A parsed diff, and for a local one where its sides are read. */
+/** A parsed diff, and where its sides are read: a local one's with git, GitHub's from GitHub. */
 interface CachedDiff {
     files: FileDiff[];
     sides: DiffSides | null;
+    github?: GitHubSides;
 }
+
+/** The diff an item last answered with, and where its sides are read. */
+type ServedDiff = {files: FileDiff[]; sides: DiffSides} | {files: FileDiff[]; github: GitHubSides};
 
 /** The one open page. */
 interface Page {
@@ -158,12 +173,11 @@ interface Page {
     readonly diffErrors: Map<string, string>;
     readonly diffCache: Map<string, CachedDiff>;
     /**
-     * The local diff each item last answered with: the only files `image` will
-     * read, at the only commits it will read them at (L3).
+     * The diff each item last answered with: the only files `image` and
+     * `refinement` will read, at the only commits they will read them at (L3).
      */
-    readonly served: Map<string, {files: FileDiff[]; sides: DiffSides}>;
-    /** Refinements between two commits, by the commits and both paths: they never change. */
-    readonly refinements: Map<string, Promise<FileRefinement | null>>;
+    readonly served: Map<string, ServedDiff>;
+    readonly refinements: DiffRefinements;
     last: SessionWorkSnapshot | null;
     lastKey: string;
     closed: boolean;
@@ -240,7 +254,7 @@ export class SessionWorkService {
             diffErrors: new Map(),
             diffCache: new Map(),
             served: new Map(),
-            refinements: new Map(),
+            refinements: new DiffRefinements(this.deps, '[session-work]'),
             last: null,
             lastKey: '',
             closed: false,
@@ -327,14 +341,16 @@ export class SessionWorkService {
 
         let result: SessionWorkDiff;
         let sides: DiffSides | undefined;
+        let github: GitHubSides | undefined;
         try {
-            ({sides, ...result} = await this.diffOf(page, item));
+            ({sides, github, ...result} = await this.diffOf(page, item));
         } catch (err) {
             result = {files: [], source: null, error: (err as Error).message || 'The diff could not be read'};
         }
         if (page.closed) return result;
 
         if (sides) page.served.set(itemId, {files: result.files, sides});
+        else if (github) page.served.set(itemId, {files: result.files, github});
         else page.served.delete(itemId);
 
         const before = page.diffErrors.get(itemId);
@@ -363,7 +379,7 @@ export class SessionWorkService {
         if (!page || page.sessionId !== sessionId || !page.items.has(itemId)) return null;
         const served = page.served.get(itemId);
         const file = served?.files.find((candidate) => candidate.path === path && candidate.image);
-        if (!served || !file?.image) return null;
+        if (!served || !('sides' in served) || !file?.image) return null;
 
         const {git} = this.deps;
         const {worktree, before, after} = served.sides;
@@ -379,12 +395,10 @@ export class SessionWorkService {
      * OmniDiff's finer reading of one file in an item's diff: which parts of
      * its changed lines changed. Null when there is none to have.
      *
-     * The same guard as `image` (L3): only a file in the local diff the item
-     * last answered with, read at that diff's commits. Only a modified or
-     * renamed text file with hunks is refined, and only when both sides are
-     * UTF-8 text no larger than `REFINE_MAX_BYTES`. A refinement between two
-     * commits is kept for the page's life; one of the working tree is made
-     * fresh each time.
+     * The same guard as `image` (L3): only a file in the diff the item last
+     * answered with, read at that diff's commits. A local diff's sides are read
+     * with git; GitHub's from GitHub, at the PR's merge-base and head commit.
+     * Which files are refined, and what is kept, is `DiffRefinements`' to say.
      */
     public async refinement(sessionId: string, itemId: string, path: string): Promise<FileRefinement | null> {
         const page = this.page;
@@ -392,46 +406,25 @@ export class SessionWorkService {
         const served = page.served.get(itemId);
         const file = served?.files.find((candidate) => candidate.path === path);
         if (!served || !file || !refinable(file)) return null;
-        const {worktree, before, after} = served.sides;
-        if (!before) return null;
-
-        const oldPath = file.oldPath ?? file.path;
-        if (!after) return this.refine(worktree, before, null, oldPath, file.path);
-        const key = [worktree, before, after, oldPath, file.path].join('\0');
-        let refinement = page.refinements.get(key);
-        if (!refinement) {
-            refinement = this.refine(worktree, before, after, oldPath, file.path);
-            page.refinements.set(key, refinement);
-            // A null may be a passing failure (a timeout under load): the next ask tries again.
-            void refinement.then((answer) => {
-                if (answer === null) page.refinements.delete(key);
-            });
-        }
-        return refinement;
+        const sides = 'sides' in served ? this.gitSides(served.sides) : await this.gitHubSides(served.github);
+        return sides ? page.refinements.refine(file, sides) : null;
     }
 
-    /** Read both sides and hand them to the differ; null when either is not text it should see. */
-    private async refine(
-        worktree: string,
-        before: string,
-        after: string | null,
-        oldPath: string,
-        path: string,
-    ): Promise<FileRefinement | null> {
-        const {git, differ = noStructuralDiffer, log} = this.deps;
-        try {
-            const [beforeBytes, afterBytes] = await Promise.all([
-                git.blob(worktree, before, oldPath),
-                after ? git.blob(worktree, after, path) : git.workingFile(worktree, path),
-            ]);
-            const beforeText = refinableText(beforeBytes);
-            const afterText = refinableText(afterBytes);
-            if (beforeText === null || afterText === null) return null;
-            return await differ.refine(path, beforeText, afterText);
-        } catch (err) {
-            log.debug('[session-work] refining', path, 'failed:', (err as Error).message);
-            return null;
-        }
+    /** A local diff's sides, read with git; null in a repository with no commits yet. */
+    private gitSides({worktree, before, after}: DiffSides): DiffSideReader | null {
+        const {git} = this.deps;
+        if (!before) return null;
+        return {
+            commits: after ? [worktree, before, after].join('\0') : null,
+            before: (path) => git.blob(worktree, before, path),
+            after: (path) => (after ? git.blob(worktree, after, path) : git.workingFile(worktree, path)),
+        };
+    }
+
+    /** A diff from GitHub's sides, read from GitHub; null when the merge-base could not be had. */
+    private async gitHubSides({repository, head, mergeBase}: GitHubSides): Promise<DiffSideReader | null> {
+        const base = await mergeBase();
+        return base ? gitHubSides(this.deps.github, repository, base, head) : null;
     }
 
     // ── Building the snapshot ──
@@ -700,7 +693,10 @@ export class SessionWorkService {
     // ── Diffs ──
 
     /** An item's diff, and for a local one where its sides are read. */
-    private async diffOf(page: Page, item: SessionWorkItem): Promise<SessionWorkDiff & {sides?: DiffSides}> {
+    private async diffOf(
+        page: Page,
+        item: SessionWorkItem,
+    ): Promise<SessionWorkDiff & {sides?: DiffSides; github?: GitHubSides}> {
         const {git, github} = this.deps;
         const failed = (error: string): SessionWorkDiff => ({files: [], source: null, error});
         if (item.kind === 'issue') return NO_DIFF;
@@ -759,17 +755,41 @@ export class SessionWorkService {
             const text = await github.pullRequestDiff(repository, pr.number);
             return text === null ? null : this.parse(page.projectRoot, text);
         };
-        const fromGitHub = (files: FileDiff[] | null | undefined): SessionWorkDiff =>
-            files
-                ? {files, source: 'github', ...(differs ? {note: LOCAL_DIFFERS} : {})}
+        const fromGitHub = (diff: CachedDiff | null | undefined): SessionWorkDiff & {github?: GitHubSides} =>
+            diff
+                ? {
+                      files: diff.files,
+                      source: 'github',
+                      ...(differs ? {note: LOCAL_DIFFERS} : {}),
+                      ...(diff.github ? {github: diff.github} : {}),
+                  }
                 : failed('GitHub did not send the diff');
-        if (!pr.headSha) return fromGitHub(await fetch());
-        const key = ['pr', repository, String(pr.number), pr.headSha].join('\0');
+        const {headSha, baseRef} = pr;
+        if (!headSha) {
+            const files = await fetch();
+            return fromGitHub(files && {files, sides: null});
+        }
+        const key = ['pr', repository, String(pr.number), headSha].join('\0');
         const cached = page.diffCache.get(key);
-        if (cached) return fromGitHub(cached.files);
+        if (cached) return fromGitHub(cached);
         const files = await fetch();
-        if (files && !page.closed) page.diffCache.set(key, {files, sides: null});
-        return fromGitHub(files);
+        if (!files) return fromGitHub(null);
+        // GitHub's diff is against the merge-base with the base branch, not its tip: its sides are read there.
+        const diff: CachedDiff = {
+            files,
+            sides: null,
+            ...(baseRef
+                ? {
+                      github: {
+                          repository,
+                          head: headSha,
+                          mergeBase: lazily(() => github.mergeBase(repository, baseRef, headSha)),
+                      },
+                  }
+                : {}),
+        };
+        if (!page.closed) page.diffCache.set(key, diff);
+        return fromGitHub(diff);
     }
 
     private async cached(page: Page, key: string, read: () => Promise<CachedDiff>): Promise<CachedDiff> {
@@ -857,25 +877,4 @@ function pullRequestError(item: WorkItem, github: GitHubFacts, repository: strin
     if (answer === null) return 'GitHub did not answer for this PR';
     if (answer && !answer.some((pr) => pr.number === item.pr.number)) return 'GitHub does not know this PR';
     return undefined;
-}
-
-/** A file OmniDiff can say more about than its lines do: changed on both sides, and text. */
-function refinable(file: FileDiff): boolean {
-    return (
-        (file.status === 'modified' || file.status === 'renamed') &&
-        !file.binary &&
-        !file.image &&
-        file.hunks.length > 0
-    );
-}
-
-/** A side's bytes as text, or null when they are missing, too large, or not UTF-8 text. */
-function refinableText(bytes: Uint8Array | null): string | null {
-    if (!bytes || bytes.length > REFINE_MAX_BYTES || bytes.includes(0)) return null;
-    try {
-        // A byte order mark stays, as it does in git's first line.
-        return new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(bytes);
-    } catch {
-        return null;
-    }
 }

@@ -861,6 +861,8 @@ export function buildContainer(): Container {
         appPath: app.getAppPath(),
         arch: process.arch,
     });
+    // One differ for both kinds of work page: a session's and a PR's own.
+    const differ = omnidiff ? new OmnidiffDiffer({binary: omnidiff, log}) : noStructuralDiffer;
     const sessionWork = new SessionWorkService({
         locate: locateSession,
         transcripts: routedTranscripts,
@@ -868,14 +870,14 @@ export function buildContainer(): Container {
         git: workspace,
         github,
         remotes: git,
-        differ: omnidiff ? new OmnidiffDiffer({binary: omnidiff, log}) : noStructuralDiffer,
+        differ,
         renderer,
         clock,
         timers,
         log,
     });
     // A PR no session opened has a page of its own, keyed `pull:owner/repo#N`.
-    const pullRequestPages = new PullRequestPageService({github, renderer, clock, timers, log});
+    const pullRequestPages = new PullRequestPageService({github, renderer, differ, clock, timers, log});
     const workPages = new WorkPageRouter(sessionWork, pullRequestPages);
     const sessionStats = new SessionStatsService({
         locate: locateSession,

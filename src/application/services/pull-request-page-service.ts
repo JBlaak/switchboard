@@ -3,7 +3,8 @@
  * page of its own the peek opens on request.
  *
  * Such a PR has no checkout and no session behind it, so everything here comes
- * from GitHub: its status and threads from `gh`, its diff from `gh pr diff`.
+ * from GitHub: its status and threads from `gh`, its diff from `gh pr diff`,
+ * and both sides of a file OmniDiff refines from GitHub's API.
  * The page is keyed by a page id that is never a session's
  * (`pullRequestPageId`), carries the one PR as its only item, and is asked
  * `gh` again every minute while it is open, like a session's page.
@@ -20,6 +21,7 @@ import {
     type PullRequestPeek,
     type PullRequestRef,
 } from '../../domain/session-work/pull-request-link';
+import type {FileRefinement} from '../../domain/session-work/refinement';
 import type {
     FileDiff,
     GitHubAvailability,
@@ -34,11 +36,15 @@ import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {GitHubCli} from '../ports/github-cli';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
+import type {StructuralDiffer} from '../ports/structural-differ';
+import {DiffRefinements, gitHubSides, lazily, refinable} from './diff-refinements';
 
 export interface PullRequestPageServiceDeps {
     /** Reads only: your review is the review service's. */
-    github: Pick<GitHubCli, 'available' | 'pullRequests' | 'pullRequestDiff'>;
+    github: Pick<GitHubCli, 'available' | 'pullRequests' | 'pullRequestDiff' | 'fileAt' | 'mergeBase'>;
     renderer: Pick<RendererGateway, 'sessionWorkSnapshot'>;
+    /** OmniDiff, for the finer marks inside a file's changed lines; without it, none. */
+    differ?: StructuralDiffer;
     clock: Clock;
     timers: Timers;
     log: Logger;
@@ -56,13 +62,30 @@ interface Page {
     /** Why the diff could not be had, until it can. */
     diffError: string | null;
     /** GitHub's diff, parsed, by the head commit it was fetched at. */
-    readonly diffCache: Map<string, FileDiff[]>;
+    readonly diffCache: Map<string, GitHubDiff>;
+    /**
+     * The diff the page last answered with: the only files `refinement` will
+     * read, at the only commits it will read them at (L3). Null when it had
+     * none, or none whose sides can be read.
+     */
+    served: GitHubDiff | null;
+    readonly refinements: DiffRefinements;
     last: SessionWorkSnapshot | null;
     lastKey: string;
     closed: boolean;
 }
 
 const NO_DIFF: SessionWorkDiff = {files: [], source: null};
+
+/**
+ * GitHub's diff of the PR at one head commit, and where its sides are read: at
+ * that commit, and at the merge-base GitHub diffed it against, asked for once,
+ * when a file is first refined. No sides without the base branch's name.
+ */
+interface GitHubDiff {
+    files: FileDiff[];
+    sides: {head: string; mergeBase: () => Promise<string | null>} | null;
+}
 
 export class PullRequestPageService {
     private page: Page | null = null;
@@ -143,6 +166,8 @@ export class PullRequestPageService {
             again: false,
             diffError: null,
             diffCache: new Map(),
+            served: null,
+            refinements: new DiffRefinements(this.deps, '[pull-request]'),
             last: null,
             lastKey: '',
             closed: false,
@@ -195,12 +220,14 @@ export class PullRequestPageService {
         if (!page || page.pageId !== pageId || page.item.id !== itemId) return NO_DIFF;
 
         let result: SessionWorkDiff;
+        let served: GitHubDiff | null = null;
         try {
-            result = await this.diffOf(page);
+            ({served, ...result} = await this.diffOf(page));
         } catch (err) {
             result = {files: [], source: null, error: (err as Error).message || 'The diff could not be read'};
         }
         if (page.closed) return result;
+        page.served = served;
         const before = page.diffError;
         page.diffError = result.error ?? null;
         if (before !== page.diffError) this.publish(page);
@@ -212,20 +239,48 @@ export class PullRequestPageService {
         return null;
     }
 
-    private async diffOf(page: Page): Promise<SessionWorkDiff> {
-        const failed = (error: string): SessionWorkDiff => ({files: [], source: null, error});
+    /**
+     * OmniDiff's finer reading of one file in the PR's diff, both of its sides
+     * read from GitHub at the PR's merge-base and head commit. Null when there
+     * is none to have.
+     *
+     * The same guard as a session's page (L3): only a file in the diff the page
+     * last answered with, at that diff's commits.
+     */
+    public async refinement(pageId: string, itemId: string, path: string): Promise<FileRefinement | null> {
+        const page = this.page;
+        if (!page || page.pageId !== pageId || page.item.id !== itemId) return null;
+        const served = page.served;
+        const file = served?.files.find((candidate) => candidate.path === path);
+        if (!served?.sides || !file || !refinable(file)) return null;
+        const {head, mergeBase} = served.sides;
+        const base = await mergeBase();
+        if (!base || page.closed) return null;
+        return page.refinements.refine(file, gitHubSides(this.deps.github, page.ref.repository, base, head));
+    }
+
+    private async diffOf(page: Page): Promise<SessionWorkDiff & {served: GitHubDiff | null}> {
+        const failed = (error: string) => ({files: [], source: null, error, served: null});
         if (page.gh !== 'ok') return failed(unavailableReason(page.gh));
-        if (page.item.kind !== 'pr') return NO_DIFF;
+        if (page.item.kind !== 'pr') return {...NO_DIFF, served: null};
         const {repository, number} = page.ref;
-        const headSha = page.item.pr.headSha;
+        const {headSha, baseRef} = page.item.pr;
         const cached = headSha ? page.diffCache.get(headSha) : undefined;
-        if (cached) return {files: cached, source: 'github'};
+        if (cached) return {files: cached.files, source: 'github', served: cached};
         const text = await this.deps.github.pullRequestDiff(repository, number);
         if (text === null) return failed('GitHub did not send the diff');
         // No checkout to read `.gitattributes` in: lockfiles, build output and huge files still start collapsed.
         const files = parseUnifiedDiff(text);
-        if (headSha && !page.closed) page.diffCache.set(headSha, files);
-        return {files, source: 'github'};
+        // GitHub's diff is against the merge-base with the base branch, not its tip: its sides are read there.
+        const diff: GitHubDiff = {
+            files,
+            sides:
+                headSha && baseRef
+                    ? {head: headSha, mergeBase: lazily(() => this.deps.github.mergeBase(repository, baseRef, headSha))}
+                    : null,
+        };
+        if (headSha && !page.closed) page.diffCache.set(headSha, diff);
+        return {files, source: 'github', served: diff};
     }
 
     /** Ask `gh` again, one build at a time: a request during a build runs one more after it. */

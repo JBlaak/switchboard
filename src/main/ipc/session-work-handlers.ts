@@ -28,7 +28,7 @@ export function registerSessionWorkHandlers(ipc: IpcRegistrar, app: Container): 
         );
     });
     ipc.handle(INVOKE.sessionWorkRefinement, (request: {sessionId: string; itemId: string; path: string}) =>
-        app.sessionWork.refinement(String(request?.sessionId), String(request?.itemId), String(request?.path)),
+        app.workPages.refinement(String(request?.sessionId), String(request?.itemId), String(request?.path)),
     );
     ipc.handle(INVOKE.sessionWorkComment, (request: CommentRequest) => app.review.comment(request));
     ipc.handle(INVOKE.sessionWorkReview, (request: ReviewRequest) => {

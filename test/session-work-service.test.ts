@@ -136,6 +136,10 @@ interface World {
     blobs: Map<string, string | Uint8Array>;
     /** Working-tree file contents, by `worktree:path`. */
     files: Map<string, string>;
+    /** The merge-base GitHub compares a PR's head with its base branch at. */
+    ghMergeBase: string | null;
+    /** Files on GitHub, by `commit:path`. */
+    ghFiles: Map<string, string | Uint8Array>;
 }
 
 function setup(overrides: Partial<World> = {}) {
@@ -176,6 +180,8 @@ function setup(overrides: Partial<World> = {}) {
         mergeBase: 'merge-base-1',
         blobs: new Map(),
         files: new Map(),
+        ghMergeBase: 'gh-merge-base',
+        ghFiles: new Map<string, string | Uint8Array>(),
         ...overrides,
     };
 
@@ -183,7 +189,7 @@ function setup(overrides: Partial<World> = {}) {
     const count = (name: string) => {
         calls[name] = (calls[name] ?? 0) + 1;
     };
-    /** Every file read for its bytes, as `revision:path` or `worktree:path`. */
+    /** Every file read for its bytes, as `revision:path` or `worktree:path`; from GitHub as `gh:repo@sha:path`. */
     const reads: string[] = [];
     const bytes = (text: string | Uint8Array | undefined) =>
         text === undefined ? null : typeof text === 'string' ? new TextEncoder().encode(text) : text;
@@ -303,6 +309,14 @@ function setup(overrides: Partial<World> = {}) {
         async issues() {
             count('issues');
             return world.issues;
+        },
+        async fileAt(repo, sha, path) {
+            reads.push(`gh:${repo}@${sha}:${path}`);
+            return bytes(world.ghFiles.get(sha + ':' + path));
+        },
+        async mergeBase(repo, base, head) {
+            count('mergeBase ' + [repo, base, head].join(' '));
+            return world.ghMergeBase;
         },
     };
 
@@ -1663,22 +1677,85 @@ test('refinement answers nothing for an item whose diff has not been asked for',
     assert.deepEqual(reads, []);
 });
 
-test('a diff from GitHub is not refined', async () => {
-    /* Given */
-    const {service, reads, refined} = setup({
+/** A PR whose branch is not checked out here: its diff, and its files' sides, come from GitHub. */
+function refineGitHubPr() {
+    return setup({
         pullRequests: [prLink(9)],
         prs: [prStatus(9, {headRef: 'feat/gone'})],
         prDiff: REFINE_DIFF,
+        ghFiles: new Map([
+            ['gh-merge-base:src/cart.ts', CART_BEFORE],
+            ['head-9:src/cart.ts', CART_AFTER],
+            ['gh-merge-base:src/old.ts', 'let a = 1;\n'],
+            ['head-9:src/new.ts', 'const a = 1;\n'],
+        ]),
     });
+}
+
+test("a diff from GitHub is refined from GitHub at the PR's merge-base and head commit", async () => {
+    /* Given */
+    const {service, reads, refined, calls} = refineGitHubPr();
     const id = (await service.open('s1'))!.items[0].id;
     const diff = await service.diff('s1', id);
 
     /* When */
     const refinement = await service.refinement('s1', id, 'src/cart.ts');
+    await service.refinement('s1', id, 'src/new.ts');
 
     /* Then */
     assert.equal(diff.source, 'github');
-    assert.equal(refinement, null);
+    assert.deepEqual(refinement?.after[1], [{start: 0, end: CART_AFTER.length, kind: 'update'}]);
+    assert.equal(calls[`mergeBase ${REPO} main head-9`], 1, 'the merge-base is asked for once per served diff');
+    assert.deepEqual(reads, [
+        `gh:${REPO}@gh-merge-base:src/cart.ts`,
+        `gh:${REPO}@head-9:src/cart.ts`,
+        `gh:${REPO}@gh-merge-base:src/old.ts`,
+        `gh:${REPO}@head-9:src/new.ts`,
+    ]);
+    assert.deepEqual(
+        refined.map(({path}) => path),
+        ['src/cart.ts', 'src/new.ts'],
+    );
+});
+
+test('a refinement from GitHub is kept, and one GitHub could not give is asked for again', async () => {
+    /* Given */
+    const {service, world, reads, refined} = refineGitHubPr();
+    world.ghMergeBase = null;
+    const id = (await service.open('s1'))!.items[0].id;
+    await service.diff('s1', id);
+    const failed = await service.refinement('s1', id, 'src/cart.ts');
+    world.ghMergeBase = 'gh-merge-base';
+
+    /* When */
+    const first = await service.refinement('s1', id, 'src/cart.ts');
+    const second = await service.refinement('s1', id, 'src/cart.ts');
+
+    /* Then */
+    assert.equal(failed, null);
+    assert.ok(first);
+    assert.equal(second, first);
+    assert.equal(reads.length, 2, 'both sides read once');
+    assert.equal(refined.length, 1);
+});
+
+test("a diff from GitHub refines only files in the item's diff, and serves no image", async () => {
+    /* Given */
+    const {service, world, reads, calls} = refineGitHubPr();
+    world.ghFiles.set('gh-merge-base:secret.ts', 'x');
+    const id = (await service.open('s1'))!.items[0].id;
+    await service.diff('s1', id);
+
+    /* When */
+    const refused = await Promise.all([
+        service.refinement('s1', id, 'secret.ts'),
+        service.refinement('s1', id, 'src/added.ts'),
+        service.refinement('s1', id, 'src/old.ts'),
+        service.image('s1', id, 'icon.svg', 'after'),
+    ]);
+
+    /* Then */
+    assert.deepEqual(refused, [null, null, null, null]);
     assert.deepEqual(reads, []);
-    assert.deepEqual(refined, []);
+    assert.equal(calls[`mergeBase ${REPO} main head-9`], undefined);
 });

@@ -41,6 +41,18 @@ export interface GitHubCli {
     pullRequestDiff(repo: string, number: number): Promise<string | null>;
 
     /**
+     * The bytes of the file at `path` in `repo` at commit `sha`, for refining a
+     * diff from GitHub. Null when there is no such file, or it could not be read.
+     */
+    fileAt(repo: string, sha: string, path: string): Promise<Uint8Array | null>;
+
+    /**
+     * The commit GitHub diffs a PR against: the merge-base of `head` and the
+     * base branch `base`, not the base branch's tip. Null when unavailable.
+     */
+    mergeBase(repo: string, base: string, head: string): Promise<string | null>;
+
+    /**
      * The last `lines` lines of a check run's log, for the Checks panel and the merge queue's fix prompt.
      *
      * Only GitHub Actions keeps logs `gh` can read; any other check answers null.

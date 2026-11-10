@@ -9,6 +9,8 @@ import {pullRequestPageId} from '../src/domain/session-work/pull-request-link';
 import {linkTarget} from '../src/infrastructure/electron/support/link-target';
 import type {GitHubAvailability, PullRequestStatus, SessionWorkSnapshot} from '../src/domain/session-work/model';
 import type {Timers} from '../src/application/ports/clock';
+import type {StructuralDiffer} from '../src/application/ports/structural-differ';
+import {REFINE_MAX_BYTES} from '../src/application/services/diff-refinements';
 import {silentLog} from './support/fakes';
 
 const REPO = 'o/app';
@@ -35,6 +37,7 @@ function prStatus(extra: Partial<PullRequestStatus> = {}): PullRequestStatus {
         title: 'Rename things',
         state: 'open',
         headSha: 'head-1',
+        baseRef: 'main',
         nodeId: 'PR_12',
         closes: [],
         ...extra,
@@ -67,8 +70,22 @@ function setup({
     gh = 'ok' as GitHubAvailability,
     prs = [prStatus()] as PullRequestStatus[] | null,
     diff = DIFF as string | null,
+    /** Files on GitHub, by `commit:path`. */
+    files = new Map<string, string | Uint8Array>(),
+    mergeBase = 'merge-base-1' as string | null,
 } = {}) {
-    const world = {gh, prs, diff, statusCalls: 0, diffCalls: 0};
+    const world = {gh, prs, diff, files, mergeBase, statusCalls: 0, diffCalls: 0};
+    /** Every file read from GitHub as `commit:path`, and every merge-base asked for as `base...head`. */
+    const fileReads: string[] = [];
+    const mergeBaseAsks: string[] = [];
+    /** Every file handed to the differ, with both of its texts. */
+    const refined: Array<{path: string; before: string; after: string}> = [];
+    const differ: StructuralDiffer = {
+        async refine(path, before, after) {
+            refined.push({path, before, after});
+            return {summary: null, before: {}, after: {1: [{start: 0, end: after.length, kind: 'update'}]}};
+        },
+    };
     const pushed: SessionWorkSnapshot[] = [];
     const timers = manualTimers();
     const service = new PullRequestPageService({
@@ -88,13 +105,25 @@ function setup({
                 assert.equal(number, 12);
                 return world.diff;
             },
+            async fileAt(repo, sha, path) {
+                assert.equal(repo, REPO);
+                fileReads.push(sha + ':' + path);
+                const file = world.files.get(sha + ':' + path);
+                return file === undefined ? null : typeof file === 'string' ? new TextEncoder().encode(file) : file;
+            },
+            async mergeBase(repo, base, head) {
+                assert.equal(repo, REPO);
+                mergeBaseAsks.push(base + '...' + head);
+                return world.mergeBase;
+            },
         },
         renderer: {sessionWorkSnapshot: (snapshot) => pushed.push(snapshot)},
+        differ,
         clock: {now: () => Date.UTC(2026, 10, 10, 12, 0, 0)},
         timers,
         log: silentLog,
     });
-    return {service, world, pushed, timers};
+    return {service, world, pushed, timers, fileReads, mergeBaseAsks, refined};
 }
 
 // ── The peek ──
@@ -343,6 +372,194 @@ test("the PR page's context has its repository and gh's answer", async () => {
     assert.deepEqual(context, {repository: REPO, gh: 'ok'});
 });
 
+// ── OmniDiff refinements ──
+
+const REFINE_DIFF = [
+    'diff --git a/a.txt b/a.txt',
+    'index 1111111..2222222 100644',
+    '--- a/a.txt',
+    '+++ b/a.txt',
+    '@@ -1 +1 @@',
+    '-one',
+    '+two',
+    'diff --git a/src/old.ts b/src/new.ts',
+    'similarity index 90%',
+    'rename from src/old.ts',
+    'rename to src/new.ts',
+    'index 3333333..4444444 100644',
+    '--- a/src/old.ts',
+    '+++ b/src/new.ts',
+    '@@ -1 +1 @@',
+    '-let a = 1;',
+    '+const a = 1;',
+    'diff --git a/src/added.ts b/src/added.ts',
+    'new file mode 100644',
+    'index 0000000..5555555',
+    '--- /dev/null',
+    '+++ b/src/added.ts',
+    '@@ -0,0 +1 @@',
+    '+export {};',
+    '',
+].join('\n');
+
+/** An open PR page whose diff has been served, with both sides of its files on GitHub. */
+async function refinePage(files: Array<[string, string | Uint8Array]> = []) {
+    const harness = setup({
+        diff: REFINE_DIFF,
+        files: new Map<string, string | Uint8Array>([
+            ['merge-base-1:a.txt', 'one\n'],
+            ['head-1:a.txt', 'two\n'],
+            ['merge-base-1:src/old.ts', 'let a = 1;\n'],
+            ['head-1:src/new.ts', 'const a = 1;\n'],
+            ['head-1:src/added.ts', 'export {};\n'],
+            ...files,
+        ]),
+    });
+    await harness.service.open(PAGE);
+    await harness.service.diff(PAGE, ITEM);
+    return harness;
+}
+
+test("a PR page's file is refined from GitHub at the merge-base and the PR's head commit", async () => {
+    /* Given */
+    const {service, fileReads, mergeBaseAsks, refined} = await refinePage();
+
+    /* When */
+    const refinement = await service.refinement(PAGE, ITEM, 'a.txt');
+
+    /* Then */
+    assert.deepEqual(refinement?.after[1], [{start: 0, end: 'two\n'.length, kind: 'update'}]);
+    assert.deepEqual(mergeBaseAsks, ['main...head-1']);
+    assert.deepEqual(fileReads, ['merge-base-1:a.txt', 'head-1:a.txt']);
+    assert.deepEqual(refined, [{path: 'a.txt', before: 'one\n', after: 'two\n'}]);
+});
+
+test("a renamed file on a PR page is read at its old path on the merge-base's side", async () => {
+    /* Given */
+    const {service, fileReads, refined} = await refinePage();
+
+    /* When */
+    await service.refinement(PAGE, ITEM, 'src/new.ts');
+
+    /* Then */
+    assert.deepEqual(fileReads, ['merge-base-1:src/old.ts', 'head-1:src/new.ts']);
+    assert.deepEqual(refined, [{path: 'src/new.ts', before: 'let a = 1;\n', after: 'const a = 1;\n'}]);
+});
+
+test('the merge-base is asked for once per served diff, not once per file', async () => {
+    /* Given */
+    const {service, mergeBaseAsks} = await refinePage();
+
+    /* When */
+    await service.refinement(PAGE, ITEM, 'a.txt');
+    await service.refinement(PAGE, ITEM, 'src/new.ts');
+
+    /* Then */
+    assert.deepEqual(mergeBaseAsks, ['main...head-1']);
+});
+
+test('a PR page refuses anything but a refinable file in the diff it last served, and never asks GitHub', async () => {
+    /* Given */
+    const {service, fileReads, mergeBaseAsks, refined} = await refinePage([['merge-base-1:secret.ts', 'x']]);
+
+    /* When */
+    const refused = await Promise.all([
+        service.refinement(PAGE, ITEM, 'secret.ts'),
+        service.refinement(PAGE, ITEM, 'src/old.ts'),
+        service.refinement(PAGE, ITEM, 'src/added.ts'),
+        service.refinement(PAGE, 'pr:other', 'a.txt'),
+        service.refinement(pullRequestPageId({repository: REPO, number: 13}), ITEM, 'a.txt'),
+    ]);
+
+    /* Then */
+    assert.deepEqual(refused, [null, null, null, null, null]);
+    assert.deepEqual(fileReads, []);
+    assert.deepEqual(mergeBaseAsks, []);
+    assert.deepEqual(refined, []);
+});
+
+test('a PR page whose diff has not been asked for refines nothing', async () => {
+    /* Given */
+    const {service, fileReads, mergeBaseAsks} = setup({diff: REFINE_DIFF});
+    await service.open(PAGE);
+
+    /* When */
+    const refinement = await service.refinement(PAGE, ITEM, 'a.txt');
+
+    /* Then */
+    assert.equal(refinement, null);
+    assert.deepEqual(fileReads, []);
+    assert.deepEqual(mergeBaseAsks, []);
+});
+
+test('a side from GitHub over 1 MB, with a NUL in it, or not UTF-8 is not refined', async () => {
+    /* Given */
+    // Latin-1 é: a byte UTF-8 has no character for.
+    const sides = ['x'.repeat(REFINE_MAX_BYTES + 1), 'a\0b', new Uint8Array([0x63, 0x61, 0x66, 0xe9])];
+    const harnesses = await Promise.all(sides.map((after) => refinePage([['head-1:a.txt', after]])));
+
+    /* When */
+    const answers = await Promise.all(harnesses.map(({service}) => service.refinement(PAGE, ITEM, 'a.txt')));
+
+    /* Then */
+    assert.deepEqual(answers, [null, null, null]);
+    assert.deepEqual(
+        harnesses.flatMap(({refined}) => refined),
+        [],
+    );
+});
+
+test('a refinement from GitHub is kept: asking again makes no gh call', async () => {
+    /* Given */
+    const {service, fileReads, mergeBaseAsks, refined} = await refinePage();
+    await service.refinement(PAGE, ITEM, 'a.txt');
+    const calls = fileReads.length + mergeBaseAsks.length;
+
+    /* When */
+    const again = await service.refinement(PAGE, ITEM, 'a.txt');
+
+    /* Then */
+    assert.ok(again);
+    assert.equal(fileReads.length + mergeBaseAsks.length, calls);
+    assert.equal(refined.length, 1);
+});
+
+test('a refinement GitHub could not give is asked for again, merge-base and files both', async () => {
+    /* Given */
+    const {service, world, fileReads, mergeBaseAsks} = await refinePage();
+    world.mergeBase = null;
+    const first = await service.refinement(PAGE, ITEM, 'a.txt');
+    world.mergeBase = 'merge-base-1';
+    world.files.delete('head-1:a.txt');
+    const second = await service.refinement(PAGE, ITEM, 'a.txt');
+    world.files.set('head-1:a.txt', 'two\n');
+
+    /* When */
+    const third = await service.refinement(PAGE, ITEM, 'a.txt');
+
+    /* Then */
+    assert.equal(first, null);
+    assert.equal(second, null);
+    assert.ok(third);
+    assert.deepEqual(mergeBaseAsks, ['main...head-1', 'main...head-1']);
+    assert.deepEqual(fileReads, ['merge-base-1:a.txt', 'head-1:a.txt', 'merge-base-1:a.txt', 'head-1:a.txt']);
+});
+
+test('a PR whose base branch GitHub did not name is not refined', async () => {
+    /* Given */
+    const {service, mergeBaseAsks, fileReads} = setup({diff: REFINE_DIFF, prs: [prStatus({baseRef: undefined})]});
+    await service.open(PAGE);
+    await service.diff(PAGE, ITEM);
+
+    /* When */
+    const refinement = await service.refinement(PAGE, ITEM, 'a.txt');
+
+    /* Then */
+    assert.equal(refinement, null);
+    assert.deepEqual(mergeBaseAsks, []);
+    assert.deepEqual(fileReads, []);
+});
+
 // ── The router ──
 
 function recordingBackend(name: string, calls: string[]): WorkPageBackend {
@@ -363,6 +580,10 @@ function recordingBackend(name: string, calls: string[]): WorkPageBackend {
         },
         async image(pageId) {
             calls.push(`${name}.image ${pageId}`);
+            return null;
+        },
+        async refinement(pageId) {
+            calls.push(`${name}.refinement ${pageId}`);
             return null;
         },
         item: (pageId) => {
@@ -388,6 +609,8 @@ test('the router sends PR page ids to the PR pages and the rest to the sessions'
     await router.canOpen('s1');
     await router.diff(PAGE, ITEM);
     await router.image('s1', 'x', 'a.png', 'after');
+    await router.refinement(PAGE, ITEM, 'a.txt');
+    await router.refinement('s1', 'x', 'a.txt');
     router.item(PAGE, ITEM);
     router.context('s1');
     await router.refreshGitHub(PAGE);
@@ -398,6 +621,8 @@ test('the router sends PR page ids to the PR pages and the rest to the sessions'
         'sessions.canOpen s1',
         `prs.diff ${PAGE}`,
         'sessions.image s1',
+        `prs.refinement ${PAGE}`,
+        'sessions.refinement s1',
         `prs.item ${PAGE}`,
         'sessions.context s1',
         `prs.refreshGitHub ${PAGE}`,

@@ -64,9 +64,12 @@ export interface GhResult {
     code: number | null;
     stdout: string;
     stderr: string;
+    /** What it wrote, byte for byte, when it was run for `bytes`; `stdout` is then empty. */
+    bytes?: Uint8Array;
 }
 
-export type GhRunner = (args: readonly string[]) => Promise<GhResult>;
+/** How `gh` is run: for text, or (`bytes`) for a file's contents, which may not be text at all. */
+export type GhRunner = (args: readonly string[], options?: {bytes?: boolean}) => Promise<GhResult>;
 
 export interface GhCliOptions {
     /** Defaults to running the `gh` on `env`'s PATH. */
@@ -84,12 +87,15 @@ const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 /** `owner/repo`, both parts in GitHub's own alphabet. */
 const REPO = /^([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+)$/;
 
+/** A full commit id: what a file is read at and the merge-base is compared from. */
+const SHA = /^[0-9a-f]{40}([0-9a-f]{24})?$/i;
+
 /** An Actions job's page, `…/actions/runs/<run>/job/<job>`, or a check run's, `…/runs/<id>`. */
 const ACTIONS_JOB_URL = /\/actions\/runs\/\d+\/jobs?\/(\d+)/;
 const CHECK_RUN_URL = /\/runs\/(\d+)(?:[/?#]|$)/;
 
 export function defaultGhRunner(env: NodeJS.ProcessEnv = process.env): GhRunner {
-    return (args) =>
+    return (args, options = {}) =>
         new Promise((resolve) => {
             execFile(
                 'gh',
@@ -97,17 +103,20 @@ export function defaultGhRunner(env: NodeJS.ProcessEnv = process.env): GhRunner 
                 {
                     timeout: TIMEOUT_MS,
                     maxBuffer: MAX_OUTPUT_BYTES,
-                    encoding: 'utf8',
+                    // A file's bytes are kept as they are: decoding them would hide that they are not UTF-8.
+                    encoding: 'buffer',
                     // Plain output, and no prompt that could hang a background poll.
                     env: {...env, GH_PROMPT_DISABLED: '1', NO_COLOR: '1', GH_NO_UPDATE_NOTIFIER: '1'},
                 },
                 (err, stdout, stderr) => {
                     const errCode = (err as {code?: unknown} | null)?.code;
+                    const out = stdout ?? Buffer.alloc(0);
                     resolve({
                         missing: errCode === 'ENOENT',
                         code: err ? (typeof errCode === 'number' ? errCode : null) : 0,
-                        stdout: stdout ?? '',
-                        stderr: stderr ?? '',
+                        stdout: options.bytes ? '' : out.toString('utf8'),
+                        stderr: (stderr ?? Buffer.alloc(0)).toString('utf8'),
+                        ...(options.bytes ? {bytes: new Uint8Array(out)} : {}),
                     });
                 },
             );
@@ -162,6 +171,25 @@ export class GhCli implements GitHubCli {
         if (!REPO.test(repo) || validNumbers([number]).length === 0) return null;
         const result = await this.run(['pr', 'diff', String(number), '--repo', repo, '--color', 'never']);
         return result.code === 0 ? result.stdout : null;
+    }
+
+    public async fileAt(repo: string, sha: string, path: string): Promise<Uint8Array | null> {
+        if (!REPO.test(repo) || !SHA.test(sha) || !validPath(path)) return null;
+        const encoded = path.split('/').map(encodeURIComponent).join('/');
+        const result = await this.run(
+            ['api', '-H', 'Accept: application/vnd.github.raw', `repos/${repo}/contents/${encoded}?ref=${sha}`],
+            {bytes: true},
+        );
+        return result.code === 0 && result.bytes ? result.bytes : null;
+    }
+
+    public async mergeBase(repo: string, base: string, head: string): Promise<string | null> {
+        if (!REPO.test(repo) || !validRef(base) || !SHA.test(head)) return null;
+        // Each part of a branch name is escaped; its slashes stay, as GitHub reads them.
+        const escaped = base.split('/').map(encodeURIComponent).join('/');
+        const answer = await this.getJson(`repos/${repo}/compare/${escaped}...${head}`);
+        const sha: unknown = answer?.merge_base_commit?.sha;
+        return typeof sha === 'string' && SHA.test(sha) ? sha : null;
     }
 
     public async checkLogTail(repo: string, checkRunUrl: string, lines: number): Promise<string | null> {
@@ -501,6 +529,27 @@ function labelsPath(repo: string, number: number): string | null {
 /** A positive integer, as written into a REST path. */
 function isId(value: number): boolean {
     return Number.isSafeInteger(value) && value > 0;
+}
+
+/** A path in a repository: relative, no empty, `.` or `..` part, and nothing that would end the URL's path. */
+function validPath(path: string): boolean {
+    return (
+        typeof path === 'string' &&
+        path.length > 0 &&
+        path.split('/').every((part) => part !== '' && part !== '.' && part !== '..')
+    );
+}
+
+/** A branch name git would accept, roughly: no `..`, no leading `-`, none of the characters git refuses. */
+function validRef(ref: string): boolean {
+    return (
+        typeof ref === 'string' &&
+        ref.length > 0 &&
+        !ref.startsWith('-') &&
+        !ref.includes('..') &&
+        !/[\s~^:?*[\\]/.test(ref) &&
+        [...ref].every((char) => char >= ' ' && char !== '\u007f')
+    );
 }
 
 /** Positive integers only, once each: they are written into the query text. */
