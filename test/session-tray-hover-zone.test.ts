@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {TRAY_ZONE_PX, inTerminalTopZone} from '../src/renderer/ui/session-tray/hover-zone';
+import {TRAY_ZONE_PX, inHeaderBox, inTerminalTopZone} from '../src/renderer/ui/session-tray/hover-zone';
 
 const terminal = {left: 200, right: 1000, top: 40, bottom: 800};
 
@@ -59,4 +59,39 @@ test('a terminal shorter than the band is all zone, and no more', () => {
     /* Then */
     assert.equal(inside, true);
     assert.equal(below, false);
+});
+
+const header = {left: 200, right: 1000, top: 0, bottom: 38};
+
+test('the bottom edge of the bar, where the terminal box overlaps it, is still the bar', () => {
+    /* Given */
+    const y = header.bottom - 1;
+
+    /* When */
+    const onBar = inHeaderBox(600, y, header);
+
+    /* Then */
+    assert.equal(onBar, true);
+});
+
+test('just below the bar is not the bar', () => {
+    /* Given */
+    const y = header.bottom;
+
+    /* When */
+    const onBar = inHeaderBox(600, y, header);
+
+    /* Then */
+    assert.equal(onBar, false);
+});
+
+test('beside the bar, over the sidebar, is not the bar', () => {
+    /* Given */
+    const x = header.left - 1;
+
+    /* When */
+    const onBar = inHeaderBox(x, 10, header);
+
+    /* Then */
+    assert.equal(onBar, false);
 });

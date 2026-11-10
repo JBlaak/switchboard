@@ -32,7 +32,7 @@ import {factsFor, loadSessionLinks, loadSessionStats, projectOf, sendTrayPrompt}
 import {openSavedPromptsSettings} from '../settings/open-saved-prompts';
 import {focusTray, focusTrayHint} from './focus';
 import {trayLinks} from './tray-view';
-import {inTerminalTopZone} from './hover-zone';
+import {inHeaderBox, inTerminalTopZone} from './hover-zone';
 import {SessionTrayContent} from './SessionTrayContent';
 import type {SessionTrayActions} from './SessionTrayContent';
 import type {ResolvedSavedPrompt} from '../../../domain/settings/saved-prompts';
@@ -109,11 +109,15 @@ export function SessionTray(): JSX.Element | null {
             const now =
                 header.style.display !== 'none' &&
                 (header.contains(target) ||
+                    // The terminal's box overlaps the bar's bottom edge: that is still the bar.
+                    (terminals.contains(target) && inHeaderBox(e.clientX, e.clientY, header.getBoundingClientRect())) ||
                     !!target?.closest('.session-tray-frame') ||
-                    // Only on the terminal itself, not a card or page laid over it, nor on a
-                    // link in it (xterm marks one under the pointer), which the tray would cover
-                    // before it is clicked; and a drag (selecting text) never opens it.
-                    (!!target?.closest('.xterm') &&
+                    // Only on the terminal itself (its text, or the padding around it), not a
+                    // card or page laid over it, nor on a link in it (xterm marks one under the
+                    // pointer), which the tray would cover before it is clicked; and a drag
+                    // (selecting text) never opens it.
+                    (!!target &&
+                        (target.classList.contains('terminal-container') || !!target.closest('.xterm')) &&
                         !target.closest('.xterm-cursor-pointer') &&
                         (inside || e.buttons === 0) &&
                         inTerminalTopZone(e.clientX, e.clientY, terminals.getBoundingClientRect())));
