@@ -15,6 +15,7 @@
 import {parseUnifiedDiff} from '../../domain/session-work/diff';
 import {workItemKey} from '../../domain/session-work/items';
 import {
+    PEEK_ITEM_ID,
     pullRequestPageId,
     pullRequestPageRef,
     pullRequestUrl,
@@ -87,8 +88,17 @@ interface GitHubDiff {
     sides: {head: string; mergeBase: () => Promise<string | null>} | null;
 }
 
+/** The diff the peek last showed: the only files `refinement` reads for it. */
+interface Peeked {
+    readonly pageId: string;
+    readonly ref: PullRequestRef;
+    readonly diff: GitHubDiff;
+    readonly refinements: DiffRefinements;
+}
+
 export class PullRequestPageService {
     private page: Page | null = null;
+    private peeked: Peeked | null = null;
 
     constructor(private readonly deps: PullRequestPageServiceDeps) {}
 
@@ -129,7 +139,14 @@ export class PullRequestPageService {
                     pr,
                 );
             }
-            return {ref: valid, url, pr, files: parseUnifiedDiff(text)};
+            const files = parseUnifiedDiff(text);
+            this.peeked = {
+                pageId: pullRequestPageId(valid),
+                ref: valid,
+                diff: {files, sides: this.sidesOf(valid, pr)},
+                refinements: new DiffRefinements(this.deps, '[pull-request]'),
+            };
+            return {ref: valid, url, pr, files};
         } catch (err) {
             this.deps.log.warn('[pull-request] peek failed:', (err as Error).message);
             return failed((err as Error).message || 'GitHub could not be asked');
@@ -248,6 +265,7 @@ export class PullRequestPageService {
      * last answered with, at that diff's commits.
      */
     public async refinement(pageId: string, itemId: string, path: string): Promise<FileRefinement | null> {
+        if (itemId === PEEK_ITEM_ID) return this.peekRefinement(pageId, path);
         const page = this.page;
         if (!page || page.pageId !== pageId || page.item.id !== itemId) return null;
         const served = page.served;
@@ -259,12 +277,36 @@ export class PullRequestPageService {
         return page.refinements.refine(file, gitHubSides(this.deps.github, page.ref.repository, base, head));
     }
 
+    /** The peek's refinement of a file in the diff it last showed; the same guard as a page's. */
+    private async peekRefinement(pageId: string, path: string): Promise<FileRefinement | null> {
+        const peeked = this.peeked;
+        if (!peeked || peeked.pageId !== pageId) return null;
+        const file = peeked.diff.files.find((candidate) => candidate.path === path);
+        if (!peeked.diff.sides || !file || !refinable(file)) return null;
+        const {head, mergeBase} = peeked.diff.sides;
+        const base = await mergeBase();
+        if (!base || this.peeked !== peeked) return null;
+        return peeked.refinements.refine(file, gitHubSides(this.deps.github, peeked.ref.repository, base, head));
+    }
+
+    /**
+     * Where a PR's diff from GitHub has its sides: its head commit, and the
+     * merge-base with its base branch, which GitHub's diff is taken against
+     * (not the branch's tip). Asked for once, when a file is first refined.
+     */
+    private sidesOf(ref: PullRequestRef, pr: PullRequestStatus | null): GitHubDiff['sides'] {
+        const headSha = pr?.headSha;
+        const baseRef = pr?.baseRef;
+        if (!headSha || !baseRef) return null;
+        return {head: headSha, mergeBase: lazily(() => this.deps.github.mergeBase(ref.repository, baseRef, headSha))};
+    }
+
     private async diffOf(page: Page): Promise<SessionWorkDiff & {served: GitHubDiff | null}> {
         const failed = (error: string) => ({files: [], source: null, error, served: null});
         if (page.gh !== 'ok') return failed(unavailableReason(page.gh));
         if (page.item.kind !== 'pr') return {...NO_DIFF, served: null};
         const {repository, number} = page.ref;
-        const {headSha, baseRef} = page.item.pr;
+        const {headSha} = page.item.pr;
         const cached = headSha ? page.diffCache.get(headSha) : undefined;
         if (cached) return {files: cached.files, source: 'github', served: cached};
         const text = await this.deps.github.pullRequestDiff(repository, number);
@@ -272,13 +314,7 @@ export class PullRequestPageService {
         // No checkout to read `.gitattributes` in: lockfiles, build output and huge files still start collapsed.
         const files = parseUnifiedDiff(text);
         // GitHub's diff is against the merge-base with the base branch, not its tip: its sides are read there.
-        const diff: GitHubDiff = {
-            files,
-            sides:
-                headSha && baseRef
-                    ? {head: headSha, mergeBase: lazily(() => this.deps.github.mergeBase(repository, baseRef, headSha))}
-                    : null,
-        };
+        const diff: GitHubDiff = {files, sides: this.sidesOf(page.ref, page.item.pr)};
         if (headSha && !page.closed) page.diffCache.set(headSha, diff);
         return {files, source: 'github', served: diff};
     }

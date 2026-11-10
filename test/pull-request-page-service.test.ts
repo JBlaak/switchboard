@@ -5,7 +5,7 @@ import {PullRequestPageService} from '../src/application/services/pull-request-p
 import {WorkPageRouter, type WorkPageBackend} from '../src/application/services/work-page-router';
 import {ReviewService} from '../src/application/services/review-service';
 import {GITHUB_REFRESH_MS} from '../src/application/services/session-work-service';
-import {pullRequestPageId} from '../src/domain/session-work/pull-request-link';
+import {PEEK_ITEM_ID, pullRequestPageId} from '../src/domain/session-work/pull-request-link';
 import {linkTarget} from '../src/infrastructure/electron/support/link-target';
 import type {GitHubAvailability, PullRequestStatus, SessionWorkSnapshot} from '../src/domain/session-work/model';
 import type {Timers} from '../src/application/ports/clock';
@@ -561,6 +561,53 @@ test('a PR whose base branch GitHub did not name is not refined', async () => {
 });
 
 // ── The router ──
+
+/** A peek of the PR whose diff has both sides of its files on GitHub; no page is open. */
+async function refinePeek() {
+    const harness = setup({
+        diff: REFINE_DIFF,
+        files: new Map<string, string | Uint8Array>([
+            ['merge-base-1:a.txt', 'one\n'],
+            ['head-1:a.txt', 'two\n'],
+        ]),
+    });
+    await harness.service.peek({repository: REPO, number: 12});
+    return harness;
+}
+
+test("the peek's file is refined from GitHub at the merge-base and the PR's head commit, with no page open", async () => {
+    /* Given */
+    const {service, fileReads, mergeBaseAsks, refined} = await refinePeek();
+
+    /* When */
+    const refinement = await service.refinement(PAGE, PEEK_ITEM_ID, 'a.txt');
+
+    /* Then */
+    assert.deepEqual(refinement?.after[1], [{start: 0, end: 'two\n'.length, kind: 'update'}]);
+    assert.deepEqual(mergeBaseAsks, ['main...head-1']);
+    assert.deepEqual(fileReads, ['merge-base-1:a.txt', 'head-1:a.txt']);
+    assert.deepEqual(refined, [{path: 'a.txt', before: 'one\n', after: 'two\n'}]);
+});
+
+test('the peek refuses a file not in the diff it last showed, another PR, or no peek at all, and never asks GitHub', async () => {
+    /* Given */
+    const {service, fileReads, mergeBaseAsks} = await refinePeek();
+    const unpeeked = setup({diff: REFINE_DIFF});
+
+    /* When */
+    const refused = await Promise.all([
+        service.refinement(PAGE, PEEK_ITEM_ID, 'secret.ts'),
+        service.refinement(PAGE, PEEK_ITEM_ID, 'src/added.ts'),
+        service.refinement(pullRequestPageId({repository: REPO, number: 13}), PEEK_ITEM_ID, 'a.txt'),
+        unpeeked.service.refinement(PAGE, PEEK_ITEM_ID, 'a.txt'),
+    ]);
+
+    /* Then */
+    assert.deepEqual(refused, [null, null, null, null]);
+    assert.deepEqual(fileReads, []);
+    assert.deepEqual(mergeBaseAsks, []);
+    assert.deepEqual(unpeeked.fileReads, []);
+});
 
 function recordingBackend(name: string, calls: string[]): WorkPageBackend {
     return {

@@ -39,6 +39,12 @@ export function pullRequestUrl(ref: PullRequestRef): string {
 const PAGE_PREFIX = 'pull:';
 
 /** The work page id of a PR no session owns: `pull:owner/repo#12`. Never a session id. */
+/**
+ * The item id the peek asks for its refinements under, with its PR's page id
+ * (`pullRequestPageId`): the peek is not a page and has no item of its own.
+ */
+export const PEEK_ITEM_ID = 'peek';
+
 export function pullRequestPageId(ref: PullRequestRef): string {
     return `${PAGE_PREFIX}${ref.repository}#${ref.number}`;
 }

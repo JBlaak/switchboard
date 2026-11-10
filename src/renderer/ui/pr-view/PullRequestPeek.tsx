@@ -25,7 +25,9 @@ import {DiffRows} from '../session-work/DiffRows';
 import {DiffSkeleton} from '../session-work/DiffSkeleton';
 import {LineCounts} from '../session-work/LineCounts';
 import {Pills} from '../session-work/Pills';
-import {collapsedText, diffSummary, fileStatusPill} from '../session-work/describe';
+import {collapsedText, diffSummary, fileStatusPill, refinementPill} from '../session-work/describe';
+import {refinable, useRefinement} from '../session-work/refinement-load';
+import {PEEK_ITEM_ID, pullRequestPageId} from '../../../domain/session-work/pull-request-link';
 import type {Pill} from '../session-work/describe';
 import type {DiffMode} from '../../state/session-work-slice';
 import type {PrPeek} from '../../state/pr-peek-slice';
@@ -168,6 +170,8 @@ function PeekBody({peek, mode}: {peek: PrPeek; mode: DiffMode}): JSX.Element {
                 peek.files.map((file, i) => (
                     <PeekFile
                         key={file.path}
+                        pageId={pullRequestPageId(peek.ref)}
+                        loadKey={String(peek.id)}
                         file={file}
                         mode={mode}
                         expanded={peek.expanded.includes(file.path)}
@@ -197,11 +201,17 @@ function ModeToggle({mode}: {mode: DiffMode}): JSX.Element {
 }
 
 const PeekFile = memo(function PeekFile({
+    pageId,
+    loadKey,
     file,
     mode,
     expanded,
     eager,
 }: {
+    /** The PR's page id, which the peek asks for OmniDiff's marks under (with `PEEK_ITEM_ID`). */
+    pageId: string;
+    /** This peek's own: a new peek asks again. */
+    loadKey: string;
     file: FileDiff;
     mode: DiffMode;
     expanded: boolean;
@@ -211,6 +221,9 @@ const PeekFile = memo(function PeekFile({
     const reason = collapsedText(file);
     const collapsed = reason !== null && !expanded;
     const pill = fileStatusPill(file, false);
+    // Asked for only once the file's lines are drawn: a collapsed file waits until it is opened.
+    const refinement = useRefinement(pageId, PEEK_ITEM_ID, file, loadKey, !collapsed && refinable(file, false));
+    const pills = [pill, refinementPill(refinement?.summary)].filter((p): p is NonNullable<typeof p> => p !== null);
 
     const showDiff = (): void => {
         // The button goes as the lines come; the focus stays in the peek, so its keys keep working.
@@ -225,7 +238,7 @@ const PeekFile = memo(function PeekFile({
                     {file.oldPath && <span className="sw-file-old">{file.oldPath} → </span>}
                     {file.path}
                 </span>
-                {pill && <Pills pills={[pill]} />}
+                <Pills pills={pills} />
                 {!file.binary && <LineCounts stats={file} />}
             </header>
             {file.binary ? (
@@ -240,7 +253,7 @@ const PeekFile = memo(function PeekFile({
             ) : file.hunks.length === 0 ? (
                 <div className="sw-file-row">No changes to the content</div>
             ) : (
-                <DiffRows file={file} mode={mode} eager={eager} review={null} />
+                <DiffRows file={file} mode={mode} eager={eager} review={null} refinement={refinement} />
             )}
         </section>
     );
