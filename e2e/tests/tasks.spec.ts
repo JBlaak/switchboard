@@ -342,6 +342,20 @@ test.describe('the task on its session', () => {
             for (const name of ['Mark done', 'Snooze', 'Open in Notion'])
                 await expect(tab.getByRole('button', {name})).toBeVisible();
 
+            /* When: its PR is clicked, and the peek's Full view asked for */
+            await tab.getByRole('button', {name: '#1320 open'}).click();
+            const peek = page.getByTestId('pr-peek');
+            await expect(peek).toBeFocused();
+            await page.keyboard.press('Enter');
+
+            /* Then: the Work tab, with that PR selected */
+            await expect(peek).toHaveCount(0);
+            await expect(work.getByRole('tab', {name: 'Work'})).toHaveAttribute('aria-selected', 'true');
+            await expect(work.locator('.sw-item.is-selected')).toHaveAttribute(
+                'data-item-id',
+                'pr:https://github.com/acme/api/pull/1320',
+            );
+
             /* When: unlinked */
             await page.evaluate((sessionId) => window.api.unlinkSessionTask(sessionId), S.loginFix);
 

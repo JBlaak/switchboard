@@ -251,7 +251,7 @@ export const BIG_FILE_LINES = 5000;
  * The first PR's diff, from its local branch: a change to read unified and
  * split, a lock file and a large file that start collapsed, and a binary file.
  */
-const LOGIN_LOOP_DIFF = [
+export const LOGIN_LOOP_DIFF = [
     'diff --git a/src/session.ts b/src/session.ts',
     'index 1111111..2222222 100644',
     '--- a/src/session.ts',

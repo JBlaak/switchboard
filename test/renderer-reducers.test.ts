@@ -48,6 +48,7 @@ function asked(sessionId: string, toolUseId: string, count = 1): PendingQuestion
 
 /** One of each; typed so a push channel without a sample fails to compile. */
 const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
+    pullRequestLinkOpened: {type: 'pullRequestLinkOpened', url: 'https://github.com/o/r/pull/1'},
     processExited: {type: 'processExited', sessionId: 's1', exitCode: 0},
     sessionForked: {type: 'sessionForked', oldId: 's1', newId: 's2'},
     cliBusyState: {type: 'cliBusyState', sessionId: 's1', busy: true},

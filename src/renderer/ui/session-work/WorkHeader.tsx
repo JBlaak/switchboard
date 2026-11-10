@@ -5,12 +5,17 @@
  * Nothing in the first row's title or the agents strip needs git, so both
  * show the moment the page opens; the repository and counts wait for the
  * first snapshot.
+ *
+ * A PR's own page (`pull:…`) has no session: it is titled by the PR, and
+ * leaves out what only a session has — its agents, its worktree and branch
+ * counts, the terminal Back goes to, Cmd+G, the tabs and the task link.
  */
 import type {JSX} from 'react';
 import {useStore} from '../use-store';
 import {shallowEqual} from '../../state/store';
 import {closeSessionWork, openOnGitHub, setWorkTab} from './actions';
-import {agentsLabel, footprintLine, queueLabel, updatedAgo} from './describe';
+import {agentsLabel, footprintLine, queueLabel, updatedAgo, workPageTitle} from './describe';
+import {isPullRequestPageId} from '../../../domain/session-work/pull-request-link';
 import type {SessionWorkPage, WorkTab} from '../../state/session-work-slice';
 import type {WorkingAgent} from '../../../domain/terminal/program-status-children';
 import {LinkTaskButton} from '../session-task/LinkTask';
@@ -34,7 +39,11 @@ export function WorkHeader({
     tabs: readonly WorkTab[];
 }): JSX.Element {
     const now = useStore((state) => state.sessionWork.now);
-    const agents = useStore((state) => state.activity.agents[page.sessionId] ?? NO_AGENTS, shallowEqual);
+    const pullPage = isPullRequestPageId(page.sessionId);
+    const agents = useStore(
+        (state) => (pullPage ? NO_AGENTS : (state.activity.agents[page.sessionId] ?? NO_AGENTS)),
+        shallowEqual,
+    );
     const {snapshot} = page;
     const repository = snapshot ? snapshot.repository : '';
     const queue = snapshot ? queueLabel(snapshot) : null;
@@ -46,7 +55,7 @@ export function WorkHeader({
                     type="button"
                     className="sw-btn sw-back"
                     onClick={closeSessionWork}
-                    aria-label="Back to terminal (Esc)">
+                    aria-label={pullPage ? 'Back (Esc)' : 'Back to terminal (Esc)'}>
                     <svg
                         width="14"
                         height="14"
@@ -59,10 +68,10 @@ export function WorkHeader({
                         aria-hidden="true">
                         <path d="M15 18l-6-6 6-6" />
                     </svg>
-                    Terminal <kbd className="sw-kbd">esc</kbd>
+                    {pullPage ? 'Back' : 'Terminal'} <kbd className="sw-kbd">esc</kbd>
                 </button>
                 <div className="sw-heading">
-                    <h1 className="sw-title">{'Work · ' + page.name}</h1>
+                    <h1 className="sw-title">{workPageTitle(page)}</h1>
                     <div className="sw-subline">
                         {repository && (
                             <a
@@ -75,7 +84,7 @@ export function WorkHeader({
                                 {repository}
                             </a>
                         )}
-                        {snapshot && <span>{footprintLine(snapshot)}</span>}
+                        {snapshot && !pullPage && <span>{footprintLine(snapshot)}</span>}
                         {snapshot && <span className="sw-updated">{updatedAgo(snapshot.updatedAt, now)}</span>}
                     </div>
                 </div>
@@ -84,9 +93,11 @@ export function WorkHeader({
                         {queue}
                     </span>
                 )}
-                <kbd className="sw-kbd" title="Cmd+G toggles this page">
-                    ⌘G
-                </kbd>
+                {!pullPage && (
+                    <kbd className="sw-kbd" title="Cmd+G toggles this page">
+                        ⌘G
+                    </kbd>
+                )}
             </div>
             {agents.length > 0 && (
                 <div className="sw-agents" data-testid="session-work-agents">
@@ -118,23 +129,25 @@ export function WorkHeader({
                     ))}
                 </div>
             )}
-            <div className="sw-tabs" role="tablist" aria-label="Session work">
-                {TABS.filter(({tab: id}) => tabs.includes(id)).map(({tab: id, label}) => (
-                    <button
-                        key={id}
-                        type="button"
-                        role="tab"
-                        className={'sw-tab' + (tab === id ? ' is-current' : '')}
-                        aria-selected={tab === id}
-                        onClick={() => setWorkTab(id)}>
-                        {label}
-                    </button>
-                ))}
-                <kbd className="sw-kbd" title="t switches tabs">
-                    t
-                </kbd>
-                <LinkTaskButton sessionId={page.sessionId} />
-            </div>
+            {!pullPage && (
+                <div className="sw-tabs" role="tablist" aria-label="Session work">
+                    {TABS.filter(({tab: id}) => tabs.includes(id)).map(({tab: id, label}) => (
+                        <button
+                            key={id}
+                            type="button"
+                            role="tab"
+                            className={'sw-tab' + (tab === id ? ' is-current' : '')}
+                            aria-selected={tab === id}
+                            onClick={() => setWorkTab(id)}>
+                            {label}
+                        </button>
+                    ))}
+                    <kbd className="sw-kbd" title="t switches tabs">
+                        t
+                    </kbd>
+                    <LinkTaskButton sessionId={page.sessionId} />
+                </div>
+            )}
         </header>
     );
 }

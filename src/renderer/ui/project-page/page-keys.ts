@@ -2,7 +2,7 @@
  * What a key does on the project page (#174), from the rows on screen and
  * the cursor: ↑/↓ move through every row across sections, → expands a plan,
  * ← collapses it or goes from an issue up to its plan, ↵ opens what is under
- * the cursor (a PR on GitHub, #175), S starts a session on a startable issue
+ * the cursor (a PR in the peek, #175), S starts a session on a startable issue
  * or (#175) in a worktree with none running, / filters. On a task (#251) the
  * Tasks page's keys: S starts a session on it, * stars it for today, D marks
  * it done, Z snoozes it to tomorrow, O opens it in Notion, ↵ its detail.
@@ -27,7 +27,7 @@ export type PageKeyAction =
     | {readonly kind: 'open-session'; readonly sessionId: string}
     | {readonly kind: 'show-more-loose'}
     | {readonly kind: 'start'; readonly issue: IssueKey; readonly plan: IssueKey}
-    /** A pull request, on GitHub. */
+    /** A pull request, in the peek. */
     | {readonly kind: 'open-pull-request'; readonly pullRequest: IssueKey}
     /** A session in one of the project's worktrees, by its path. */
     | {readonly kind: 'start-worktree'; readonly path: string}

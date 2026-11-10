@@ -66,6 +66,8 @@ import {PlanService} from '../application/services/plan-service';
 import {ProjectOverviewService} from '../application/services/project-overview-service';
 import {MergeQueueWatchService} from '../application/services/merge-queue-watch-service';
 import {ReviewService} from '../application/services/review-service';
+import {PullRequestPageService} from '../application/services/pull-request-page-service';
+import {WorkPageRouter} from '../application/services/work-page-router';
 import {SessionActionService} from '../application/services/session-action-service';
 import {PrWatchService} from '../application/services/pr-watch-service';
 import {SettingsService} from '../application/services/settings-service';
@@ -212,6 +214,10 @@ export interface Container {
     readonly weather: WeatherService;
     readonly updates: UpdateService;
     readonly sessionWork: SessionWorkService;
+    /** PRs no session opened: the peek a PR link shows, and their own work page. */
+    readonly pullRequestPages: PullRequestPageService;
+    /** The work page IPC and your review go through here: a session's page or a PR's own. */
+    readonly workPages: WorkPageRouter;
     /** The session tray's Links group (#340): a session's PRs, issues, artifacts, pages and task. */
     readonly sessionLinks: SessionLinksService;
     /** A session's context used, messages, running time, branch and shell, for the session tray (#341). */
@@ -852,6 +858,10 @@ export function buildContainer(): Container {
         log,
     });
     sessionActions.attach(sessionWork);
+    // A PR no session opened has a page of its own, keyed `pull:owner/repo#N`.
+    // Its actions stay with the session's page: no session, nothing to hand Claude.
+    const pullRequestPages = new PullRequestPageService({github, renderer, clock, timers, log});
+    const workPages = new WorkPageRouter(sessionWork, pullRequestPages);
     const sessionStats = new SessionStatsService({
         locate: locateSession,
         transcripts: routedTranscripts,
@@ -875,7 +885,7 @@ export function buildContainer(): Container {
         launcher: new MacWorkspaceLauncher(log),
         log,
     });
-    const review = new ReviewService({github, page: sessionWork, actions: sessionActions, log});
+    const review = new ReviewService({github, page: workPages, actions: sessionActions, log});
     // The Plan tab (#121): reads only, each answer kept for 30 s.
     const plans = new PlanService({
         locate: locateSession,
@@ -1307,6 +1317,8 @@ export function buildContainer(): Container {
         weather,
         updates,
         sessionWork,
+        pullRequestPages,
+        workPages,
         sessionLinks,
         sessionStats,
         workspace: workspaceActions,
@@ -1359,6 +1371,7 @@ export function buildContainer(): Container {
             prWatch.stop();
             mergeQueueWatch.stop();
             sessionWork.closeAll();
+            pullRequestPages.closeAll();
             claudeCaller.close();
             // A capture cut short by quitting never reaches its `finally`.
             mcpServers.removeAll();

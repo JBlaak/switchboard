@@ -23,6 +23,7 @@ import type {ElectronApplication} from '@playwright/test';
 import {EVENT, INVOKE, SEND} from '../../src/ipc/channels';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../../src/domain/session-work/model';
 import type {ActionRequest} from '../../src/domain/session-work/actions';
+import type {PullRequestPeek} from '../../src/domain/session-work/pull-request-link';
 import type {CommentRequest, ReviewRequest} from '../../src/domain/session-work/review';
 import type {RemoteStatusPayload} from '../../src/domain/remote/remote-status';
 import type {UpdateNotice} from '../../src/domain/update/release';
@@ -182,6 +183,12 @@ export interface HostStubs {
      * error, so nothing is typed.
      */
     droppedFiles: DroppedFilesStub;
+    /**
+     * What the peek a PR link opens answers, by `owner/repo#N`, standing in for
+     * `gh`. A PR not listed answers as one GitHub does not know. Each request is
+     * recorded (see `peekedPullRequests`).
+     */
+    pullRequestPeeks: Record<string, PullRequestPeek>;
 }
 
 /** What the `queue:*` channels answer. */
@@ -517,6 +524,8 @@ interface StubState extends HostStubs {
     droppedFilesRequests: DroppedFilesRequest[];
     /** Everything the renderer sent a terminal as input, in order. */
     terminalInputs: TerminalInput[];
+    /** Every PR the peek asked main for, as `owner/repo#N`, in order. */
+    peeked: string[];
 }
 
 /** One `sendInput`: what the renderer typed into a session's terminal. */
@@ -559,6 +568,7 @@ export const DEFAULT_STUBS: HostStubs = {
     sessionHandoff: STUB_SESSION_HANDOFF,
     vmSchedules: {where: {}, runOn: {error: 'No VM in the harness'}},
     droppedFiles: {result: {ok: false, error: 'No VM in the harness'}},
+    pullRequestPeeks: {},
 };
 
 /** Replace the host-facing IPC handlers. Call before the renderer (re)loads. */
@@ -582,6 +592,7 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 vmSchedulesRequests: {where: [], runOn: []},
                 droppedFilesRequests: [],
                 terminalInputs: [],
+                peeked: [],
             };
             (globalThis as WithStubs).__switchboardE2E = state;
 
@@ -886,6 +897,21 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
             });
             replace(channels.openExternal, (url) => {
                 state.opened.push(String(url));
+            });
+            // The real peek asks `gh` for the PR and its diff.
+            replace(channels.pullRequestPeek, (ref) => {
+                const {repository, number} = ref as {repository: string; number: number};
+                const key = `${repository}#${number}`;
+                state.peeked.push(key);
+                return (
+                    state.pullRequestPeeks[key] ?? {
+                        ref: {repository, number},
+                        url: `https://github.com/${repository}/pull/${number}`,
+                        pr: null,
+                        files: [],
+                        error: 'GitHub does not know this PR',
+                    }
+                );
             });
             // The real clipboard is the user's: a test that copies must not overwrite it.
             replace(channels.writeClipboard, (text) => {
@@ -1255,6 +1281,11 @@ export async function setHostStub<K extends keyof HostStubs>(
  * The URLs the app tried to open in a browser — PR chips, terminal links — and
  * `repository:<path>` for each "open repository" request.
  */
+/** Every PR the peek asked main for, as `owner/repo#N`, in order. */
+export async function peekedPullRequests(app: ElectronApplication): Promise<string[]> {
+    return await app.evaluate(() => [...(globalThis as WithStubs).__switchboardE2E.peeked]);
+}
+
 export async function openedExternally(app: ElectronApplication): Promise<string[]> {
     return await app.evaluate(() => {
         return [...(globalThis as WithStubs).__switchboardE2E.opened];

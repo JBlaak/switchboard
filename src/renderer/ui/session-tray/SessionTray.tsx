@@ -36,6 +36,7 @@ import type {SessionTrayActions} from './SessionTrayContent';
 import type {ResolvedSavedPrompt} from '../../../domain/settings/saved-prompts';
 import type {SessionLink} from '../../../domain/session/links';
 import type {WorkspaceEditorInfo} from '../../../domain/workspace/model';
+import {openLink as followLink} from '../pr-view/actions';
 
 /** What the tray asked main for, and whose it is. */
 interface TrayData {
@@ -208,7 +209,7 @@ export function SessionTray(): JSX.Element | null {
             close();
             if (link.kind === 'page') dispatch({type: 'pageReopened', sessionId});
             else if (link.kind === 'task') void openTaskTab(sessionId);
-            else void window.api.openExternal(link.url);
+            else followLink(link.url);
         },
         openInEditor: () => void window.api.openInEditor({sessionId}),
         revealInFinder: () => void window.api.revealInFinder({sessionId}),

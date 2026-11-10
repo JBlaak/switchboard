@@ -40,6 +40,8 @@ import {installMainArea} from '../ui/main-area/install-main-area';
 import {installPhoneAccess} from '../ui/phone-access/install-phone-access';
 import {installVms} from '../ui/vms/install-vms';
 import {installSessionTask} from '../ui/session-task/install-session-task';
+import {installPullRequestPeek} from '../ui/pr-view/actions';
+import {openPullRequestFullView} from '../ui/pr-view/full-view';
 import type {GlobalSettings} from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -67,6 +69,7 @@ export function bootstrap(): void {
     installPhoneAccess();
     installVms();
     installSessionTask();
+    installPullRequestPeek(openPullRequestFullView);
     followColorSchemeInTerminals();
     installTerminalProbe();
     // The surfaces that have moved to React portal out of it.

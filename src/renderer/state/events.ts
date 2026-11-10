@@ -26,6 +26,7 @@ import type {IssueSessionStart} from '../../domain/plan/issue-session';
 import type {ImageMode} from '../ui/session-work/image-compare/modes/types';
 import type {Background, View} from '../ui/session-work/image-compare/types';
 import type {DiffSide} from '../../domain/session-work/model';
+import type {PullRequestRef} from '../../domain/session-work/pull-request-link';
 import type {PullRequestStatusChange} from '../../domain/session-work/status';
 import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
 import type {UsageLimit} from '../../domain/usage/usage';
@@ -43,6 +44,7 @@ import type {VmsEvent} from './vms-slice';
 import type {HandoffEvent} from './handoff-slice';
 import type {SessionHandoffEvent} from './session-handoff-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
+import type {PrPeekEvent} from './pr-peek-slice';
 import type {PagesEvent} from './pages-slice';
 import type {MergeQueueEvent} from './merge-queue-slice';
 import type {SessionTrayEvent} from './session-tray-slice';
@@ -86,6 +88,8 @@ export type PushEvent =
     | {type: 'updateAvailable'; update: UpdateNotice}
     | {type: 'updateProgress'; progress: InstallProgress}
     | {type: 'sessionWorkSnapshot'; snapshot: SessionWorkSnapshot}
+    /** A PR link the main window was asked to navigate to: the peek opens it. */
+    | {type: 'pullRequestLinkOpened'; url: string}
     | {type: 'prStatusChanged'; change: PullRequestStatusChange}
     /** A repository's merge queue or its errands changed (#315). */
     | {type: 'mergeQueueChanged'; change: MergeQueueChange}
@@ -223,8 +227,12 @@ export type LocalEvent =
     | {type: 'terminalSearchOpened'; sessionId: string}
     | {type: 'terminalSearchClosed'; sessionId: string}
     // The Session work page; see `session-work-slice`.
-    /** The page opened for a session (its list a skeleton until the first snapshot); `at` stamps its clock. */
-    | {type: 'sessionWorkOpened'; sessionId: string; name: string; at: number}
+    /**
+     * The page opened for a session (its list a skeleton until the first
+     * snapshot); `at` stamps its clock. `pullRequest`: opened from a link to this PR (or, with a `pull:` id, for
+     * it alone), which the page selects once a snapshot has it.
+     */
+    | {type: 'sessionWorkOpened'; sessionId: string; name: string; at: number; pullRequest?: PullRequestRef}
     /** The page for this session closed: Esc, Back, Cmd+G. A close for a page not open does nothing. */
     | {type: 'sessionWorkClosed'; sessionId: string}
     /** Main answered whether the page can open for this session (D14). */
@@ -379,7 +387,8 @@ export type RendererEvent =
     | PagesEvent
     | MergeQueueEvent
     | GrillEvent
-    | SessionTrayEvent;
+    | SessionTrayEvent
+    | PrPeekEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the
