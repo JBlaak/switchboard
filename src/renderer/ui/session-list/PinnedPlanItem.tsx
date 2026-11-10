@@ -70,7 +70,8 @@ export function PinnedPlanItem({plan}: {plan: SessionListPlan}): JSX.Element {
 
 /**
  * The plan's level, a bar with one segment per level sized by its issues
- * (closed in green, with a PR in orange), and closed / all issues.
+ * coloured like the plan view's nodes (closed in purple, with a PR in orange,
+ * ready to start in green, blocked in gray), and closed / all issues.
  */
 function PinnedPlanProgress({progress}: {progress: PlanProgress}): JSX.Element {
     const {done, total} = progressCounts(progress);
@@ -86,6 +87,7 @@ function PinnedPlanProgress({progress}: {progress: PlanProgress}): JSX.Element {
                     <span key={i} className="pinned-plan-segment" style={{flexGrow: Math.max(l.total, 1)}}>
                         <span className="is-done" style={{width: pct(l.done, l.total)}} />
                         <span className="is-started" style={{width: pct(l.started, l.total)}} />
+                        <span className="is-ready" style={{width: pct(l.ready, l.total)}} />
                     </span>
                 ))}
             </span>

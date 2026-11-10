@@ -1,6 +1,7 @@
 /**
  * How far a plan is, in a few numbers: the level you are on and, per level,
- * how many issues it has, how many are closed and how many have a PR. What a
+ * how many issues it has, how many are closed, how many have a PR and how
+ * many are ready to start. What a
  * pinned plan's row in the session list draws, without the whole plan.
  */
 import {layOutPlan} from './layout';
@@ -12,6 +13,8 @@ export interface LevelProgress {
     readonly done: number;
     /** Open with a PR, draft or not. */
     readonly started: number;
+    /** Open, unblocked and without a PR: ready to start. The rest are blocked. */
+    readonly ready: number;
 }
 
 export interface PlanProgress {
@@ -34,6 +37,7 @@ export function planProgress(plan: Plan): PlanProgress {
                 total: states.length,
                 done: states.filter((state) => DONE.includes(state)).length,
                 started: states.filter((state) => STARTED.includes(state)).length,
+                ready: states.filter((state) => state === 'ready').length,
             };
         }),
     };
@@ -55,7 +59,8 @@ export function sameProgress(a: PlanProgress, b: PlanProgress): boolean {
             (level, i) =>
                 level.total === b.levels[i]!.total &&
                 level.done === b.levels[i]!.done &&
-                level.started === b.levels[i]!.started,
+                level.started === b.levels[i]!.started &&
+                level.ready === b.levels[i]!.ready,
         )
     );
 }

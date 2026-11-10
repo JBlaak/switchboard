@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {planProgress, progressCounts, sameProgress} from '../src/domain/plan/plan-progress';
 import {diamond, merged, needs, plan, pr} from './support/plans';
 
-test('a plan’s progress counts, per level, its issues, the closed ones and the ones with a PR', () => {
+test('a plan’s progress counts, per level, its issues, the closed ones, the ones with a PR and the ready ones', () => {
     /* Given */
     const diamondPlan = diamond();
 
@@ -14,9 +14,9 @@ test('a plan’s progress counts, per level, its issues, the closed ones and the
     assert.deepEqual(progress, {
         current: 1,
         levels: [
-            {total: 2, done: 1, started: 0},
-            {total: 2, done: 0, started: 1},
-            {total: 1, done: 0, started: 0},
+            {total: 2, done: 1, started: 0, ready: 1},
+            {total: 2, done: 0, started: 1, ready: 1},
+            {total: 1, done: 0, started: 0, ready: 0},
         ],
     });
 });
@@ -33,8 +33,8 @@ test('a draft PR counts as started, and a not planned issue as done', () => {
 
     /* Then */
     assert.deepEqual(progress.levels, [
-        {total: 1, done: 1, started: 0},
-        {total: 1, done: 0, started: 1},
+        {total: 1, done: 1, started: 0, ready: 0},
+        {total: 1, done: 0, started: 1, ready: 0},
     ]);
     assert.equal(progress.current, 2);
 });
