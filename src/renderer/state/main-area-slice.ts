@@ -14,6 +14,7 @@
  * `ui/main-area/install-main-area`.
  */
 import type {RendererEvent} from './events';
+import {isPullRequestPageId} from '../../domain/session-work/pull-request-link';
 
 /** What a project route shows: its page (#173), one of its plans (#128), or its settings (#176). */
 export type ProjectView =
@@ -84,12 +85,10 @@ export function mainAreaReducer(state: MainAreaState, event: RendererEvent, retu
             return !event.on && state.route.kind === 'tasks' ? routed(state, back(returnTo)) : state;
 
         // The session went away (stopped, archived, cleared): its own pages go
-        // with it, but a project or the settings covering it stay where they are,
-        // only with nothing to return to.
+        // with it, but a project, the settings or a PR's own page covering it
+        // stay where they are, only with nothing to return to.
         case 'activeSessionChanged':
-            return event.sessionId === null && (state.route.kind === 'session' || state.route.kind === 'sessionWork')
-                ? routed(state, EMPTY)
-                : state;
+            return event.sessionId === null && highlightedSession(state) !== null ? routed(state, EMPTY) : state;
 
         // The empty screen asked for outright: a click on the list's blank space.
         case 'screenCleared':
@@ -112,12 +111,16 @@ export function rekeyMainArea(state: MainAreaState, oldId: string, newId: string
 
 /**
  * The session whose sidebar row is lit: the one on screen, as its terminal
- * or as its work page. Nothing is lit while a project, the settings or the
- * empty screen has the main area.
+ * or as its work page. Nothing is lit while a project, the settings, the
+ * empty screen or a PR's own work page (`pull:…`, no session's) has the main
+ * area — which is also what keeps that page's id away from everything that
+ * looks the session on screen up.
  */
 export function highlightedSession(state: MainAreaState): string | null {
     const {route} = state;
-    return route.kind === 'session' || route.kind === 'sessionWork' ? route.sessionId : null;
+    if (route.kind === 'session') return route.sessionId;
+    if (route.kind === 'sessionWork' && !isPullRequestPageId(route.sessionId)) return route.sessionId;
+    return null;
 }
 
 /** The project the main area shows, and which of its views; null for any other route. */

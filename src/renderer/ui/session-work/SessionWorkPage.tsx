@@ -21,6 +21,10 @@
  * Plan and Task tabs the Work keys rest; on Plan, Esc closes an open issue
  * detail before it closes the page, and ↑/↓ step through the issues while
  * the detail is open (D4).
+ *
+ * The same page is a pull request's full view: a session's page with that PR
+ * selected, or for a PR no session opened a page of its own (`pull:…` id,
+ * see `pr-view/full-view`) with the Work tab alone.
  */
 import {useLayoutEffect, useRef} from 'react';
 import type {JSX, KeyboardEvent} from 'react';
@@ -35,7 +39,8 @@ import {planKey} from './plan/load';
 import {WorkHeader} from './WorkHeader';
 import {WorkList} from './WorkList';
 import {WorkDetail} from './WorkDetail';
-import {githubBanner} from './describe';
+import {githubBanner, workPageTitle} from './describe';
+import {isPullRequestPageId} from '../../../domain/session-work/pull-request-link';
 import {openComposerAt} from './ReviewNotes';
 
 /** The single-letter keys the page answers (D15). */
@@ -127,9 +132,9 @@ export function SessionWorkPage(): JSX.Element | null {
             className="sw-page"
             tabIndex={-1}
             role="region"
-            aria-label={'Session work for ' + page.name}
+            aria-label={isPullRequestPageId(page.sessionId) ? workPageTitle(page) : 'Session work for ' + page.name}
             onKeyDown={onKeyDown}>
-            <WorkHeader page={page} tab={tab} tabs={workTabsFor(hasTask)} />
+            <WorkHeader page={page} tab={tab} tabs={workTabsFor(hasTask, isPullRequestPageId(page.sessionId))} />
             {tab === 'plan' ? (
                 <PlanTab sessionId={page.sessionId} />
             ) : tab === 'task' ? (
@@ -148,7 +153,11 @@ function WorkTab({page}: {page: SessionWorkPageState}): JSX.Element {
         <>
             {banner && <GitHubBanner text={banner} />}
             {page.snapshot && page.snapshot.items.length === 0 ? (
-                <div className="sw-empty">Nothing changed yet in this session.</div>
+                <div className="sw-empty">
+                    {isPullRequestPageId(page.sessionId)
+                        ? 'This pull request could not be read.'
+                        : 'Nothing changed yet in this session.'}
+                </div>
             ) : (
                 <div className="sw-body">
                     <WorkList page={page} />

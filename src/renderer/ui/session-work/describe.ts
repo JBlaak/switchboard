@@ -20,6 +20,7 @@ import type {FileImage} from '../../../domain/session-work/model';
 import {formatBytes} from './image-compare/image-meta';
 import type {ImageMode} from './image-compare/modes/types';
 import type {Background} from './image-compare/types';
+import {pullRequestPageRef} from '../../../domain/session-work/pull-request-link';
 
 /** The pastel fill and matching ink a pill is drawn in. */
 export type PillTone = 'green' | 'red' | 'amber' | 'grey' | 'lavender';
@@ -455,6 +456,24 @@ export const IMAGE_GITHUB_NOTE = 'Check out the branch to compare images';
 
 /** Beside the toolbar when an overlay mode compares an animated image (I3). */
 export const IMAGE_FIRST_FRAME = 'Comparing the first frame';
+
+/**
+ * The page's title: `Work · <session name>`, or for a PR's own page (no
+ * session behind it) `owner/repo #12 · <its title>` once a snapshot has the
+ * title, the bare ref before.
+ */
+export function workPageTitle(page: {
+    readonly sessionId: string;
+    readonly name: string;
+    readonly snapshot: SessionWorkSnapshot | null;
+}): string {
+    const pull = pullRequestPageRef(page.sessionId);
+    if (!pull) return 'Work · ' + page.name;
+    const ref = `${pull.repository} #${pull.number}`;
+    const item = page.snapshot?.items.find((candidate) => candidate.kind === 'pr');
+    const title = item?.kind === 'pr' ? item.pr.title?.trim() : '';
+    return title ? `${ref} · ${title}` : ref;
+}
 
 /**
  * "N worktrees · M branches" the session worked in: every one its transcripts

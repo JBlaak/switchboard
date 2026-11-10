@@ -31,6 +31,8 @@ import {headerNameFor} from '../../features/sessions/terminal-header';
 import {openSession} from '../../features/sessions/session-actions';
 import type {WorkAction} from '../../../domain/session-work/model';
 import type {ImageMode} from './image-compare/modes/types';
+import {isPullRequestPageId, pullRequestPageRef} from '../../../domain/session-work/pull-request-link';
+import type {PullRequestRef} from '../../../domain/session-work/pull-request-link';
 import type {Background, View} from './image-compare/types';
 
 /** Sessions whose eligibility is being asked right now, so a row asks once. */
@@ -73,23 +75,35 @@ export function canOpenSessionWork(sessionId: string, {fresh = false} = {}): Pro
     return answer;
 }
 
+/** What opening the page asks for besides the page itself. */
+export interface OpenSessionWorkOptions {
+    /** A PR to select once a snapshot has it: the page was opened from a link to it. */
+    readonly pullRequest?: PullRequestRef;
+}
+
 /**
  * Open the page for a session: the skeleton at once, then the first snapshot.
  *
  * The header and the agents strip need nothing from git, so they show while
  * main reads the session's worktrees. Should main answer that the page cannot
  * open after all, it closes again.
+ *
+ * A PR's own page (`pullRequestPageId`) opens the same way: main answers its
+ * id with a snapshot of that one PR. Its name is the PR's `owner/repo #12`.
  */
-export async function openSessionWork(sessionId: string): Promise<void> {
+export async function openSessionWork(sessionId: string, options: OpenSessionWorkOptions = {}): Promise<void> {
     const session = sessionMap.get(sessionId);
+    const pull = pullRequestPageRef(sessionId);
+    const name = pull ? `${pull.repository} #${pull.number}` : session ? headerNameFor(session) : '';
     // Rendered now: the page takes its panel synchronously (see `panel`) and the
     // focus goes into it.
     flushSync(() =>
         dispatch({
             type: 'sessionWorkOpened',
             sessionId,
-            name: session ? headerNameFor(session) : '',
+            name,
             at: Date.now(),
+            ...(options.pullRequest ? {pullRequest: options.pullRequest} : {}),
         }),
     );
 
@@ -120,8 +134,10 @@ export function setWorkTab(tab: WorkTab): void {
 export function toggleWorkTab(): void {
     const {sessionWork, sessionTask} = getState();
     if (!sessionWork.page) return;
-    const hasTask = taskIdOf(sessionTask, sessionWork.page.sessionId) !== null;
-    setWorkTab(nextWorkTab(workTabOf(sessionWork, sessionWork.page.sessionId, hasTask), workTabsFor(hasTask)));
+    const {sessionId} = sessionWork.page;
+    const hasTask = taskIdOf(sessionTask, sessionId) !== null;
+    const tabs = workTabsFor(hasTask, isPullRequestPageId(sessionId));
+    setWorkTab(nextWorkTab(workTabOf(sessionWork, sessionId, hasTask), tabs));
 }
 
 /** Cmd+G, wherever the focus is (D3). */
@@ -129,9 +145,16 @@ export function isSessionWorkKey(e: KeyboardEvent): boolean {
     return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyG';
 }
 
-/** Cmd+G: the page for the session on screen, open or closed. Nothing when it cannot open. */
+/**
+ * Cmd+G: the page for the session on screen, open or closed. Nothing when it
+ * cannot open. A PR's own page has no session to toggle back to: Cmd+G closes it.
+ */
 export async function toggleSessionWork(): Promise<void> {
     const {mainArea, sessionWork} = getState();
+    if (sessionWork.page && isPullRequestPageId(sessionWork.page.sessionId)) {
+        closeSessionWork();
+        return;
+    }
     const sessionId = highlightedSession(mainArea);
     if (!sessionId) return;
     if (sessionWork.page?.sessionId === sessionId) {
@@ -147,16 +170,21 @@ export async function toggleSessionWork(): Promise<void> {
 
 /**
  * A click on a row's meta line: put the session on screen if it is not, then
- * open its page.
+ * open its page. A PR link the session opened does the same with that PR
+ * selected (`options.pullRequest`). Answers whether the page opened.
  */
-export async function openSessionWorkFromRow(sessionId: string): Promise<void> {
+export async function openSessionWorkFromRow(
+    sessionId: string,
+    options: OpenSessionWorkOptions = {},
+): Promise<boolean> {
     if (highlightedSession(getState().mainArea) !== sessionId) {
         const session = sessionMap.get(sessionId);
-        if (!session) return;
+        if (!session) return false;
         await openSession(session);
-        if (highlightedSession(getState().mainArea) !== sessionId) return;
+        if (highlightedSession(getState().mainArea) !== sessionId) return false;
     }
-    await openSessionWork(sessionId);
+    await openSessionWork(sessionId, options);
+    return true;
 }
 
 export function selectWorkItem(itemId: string): void {
