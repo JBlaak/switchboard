@@ -39,6 +39,8 @@ export interface SessionTrayActions {
     handOffMenu(open: boolean): void;
     /** Hand off… opened its dialog straight away (one host). */
     handOffClicked(): void;
+    /** Bring back (#276): a VM session's dialog to bring it back to this Mac. */
+    bringBack(): void;
 }
 
 export interface SessionTrayContentProps {
@@ -54,6 +56,8 @@ export interface SessionTrayContentProps {
     editor: WorkspaceEditorInfo | null;
     /** The VM hosts Hand off… can go to; null when the session cannot be handed off. */
     handOffHosts: readonly HandoffHost[] | null;
+    /** The session runs on a VM copy of a local project, so it can be brought back. */
+    bringBack: boolean;
     running: boolean;
     /** Copy session id was just pressed. */
     copied: boolean;
@@ -196,7 +200,7 @@ function LinkChipDot({dot}: {dot: LinkDot | null}): JSX.Element | null {
     return <span className={'tray-dot is-' + dot} aria-hidden="true" />;
 }
 
-function WorkspaceGroup({editor, handOffHosts, sessionId, actions}: SessionTrayContentProps): JSX.Element {
+function WorkspaceGroup({editor, handOffHosts, bringBack, sessionId, actions}: SessionTrayContentProps): JSX.Element {
     const available = editor?.available === true;
     const why = editor && !editor.available ? editor.reason : undefined;
     const app = editor?.available ? editor.app : null;
@@ -251,6 +255,20 @@ function WorkspaceGroup({editor, handOffHosts, sessionId, actions}: SessionTrayC
                             html={{__html: HAND_OFF_HTML}}
                         />
                     </div>
+                )}
+                {bringBack && (
+                    <button
+                        type="button"
+                        className="tray-row"
+                        title="Bring back to this Mac"
+                        aria-label="Bring back to this Mac"
+                        onClick={actions.bringBack}>
+                        <Icon
+                            d="M8 2.5v6M5.5 6 8 8.5 10.5 6M5.5 13.5h5M8 11v2.5"
+                            rect={{x: 2, y: 3, width: 12, height: 8, rx: 1.5}}
+                        />
+                        Bring back…
+                    </button>
                 )}
             </div>
         </div>

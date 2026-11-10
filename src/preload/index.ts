@@ -172,6 +172,9 @@ const api: SwitchboardApi = {
     handOffSession: (sessionId, hostKey, ticked) =>
         ipcRenderer.invoke(INVOKE.sessionHandoffRun, sessionId, hostKey, ticked),
     cancelSessionHandoff: (sessionId) => ipcRenderer.invoke(INVOKE.sessionHandoffCancel, sessionId),
+    previewSessionBringBack: (sessionId) => ipcRenderer.invoke(INVOKE.sessionBringBackPreview, sessionId),
+    bringBackSession: (sessionId, existing) => ipcRenderer.invoke(INVOKE.sessionBringBackRun, sessionId, existing),
+    cancelSessionBringBack: (sessionId) => ipcRenderer.invoke(INVOKE.sessionBringBackCancel, sessionId),
     // ── Stage 5 (#276): where schedules run, files dropped on a VM terminal ──
     schedulesWhere: (projectPath) => ipcRenderer.invoke(INVOKE.vmSchedulesWhere, projectPath),
     runSchedulesOn: (localPath, copyPath) => ipcRenderer.invoke(INVOKE.vmSchedulesRunOn, localPath, copyPath),
@@ -271,6 +274,8 @@ const api: SwitchboardApi = {
     onHandoffProgress: (cb) => subscribe(EVENT.handoffProgress, (_e, localPath, line) => cb(localPath, line)),
     onBringBackProgress: (cb) => subscribe(EVENT.bringBackProgress, (_e, copyPath, line) => cb(copyPath, line)),
     onSessionHandoffPhase: (cb) => subscribe(EVENT.sessionHandoffPhase, (_e, sessionId, phase) => cb(sessionId, phase)),
+    onSessionBringBackPhase: (cb) =>
+        subscribe(EVENT.sessionBringBackPhase, (_e, sessionId, phase) => cb(sessionId, phase)),
 
     // ── Host facts ──
     getPathForFile: (file) => webUtils.getPathForFile(file),

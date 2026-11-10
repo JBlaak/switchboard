@@ -197,6 +197,8 @@ export interface RowButtons {
     readonly resume: boolean;
     /** Hand off to… (#276 stage 3): a local Claude session, once there is a VM host. */
     readonly handOff: boolean;
+    /** Bring back (#276): a Claude session on a VM copy of a local project, the counterpart of Hand off to…. */
+    readonly bringBack: boolean;
 }
 
 /**
@@ -211,6 +213,15 @@ export function canHandOffSession(session: SessionRow, hosts: number): boolean {
 }
 
 /**
+ * Whether a session can be brought back from a VM to this Mac: a Claude
+ * session (never a terminal) on a VM project that is a hand-off copy of a
+ * local one, which is where it comes back to.
+ */
+export function canBringBackSession(session: SessionRow, {vm, copy}: {vm: boolean; copy: boolean}): boolean {
+    return vm && copy && session.type === 'remote' && session.remoteKind !== 'shell';
+}
+
+/**
  * Which buttons a row offers, depending on what the session actually supports.
  *
  * A remote session has no local transcript to relaunch from; archive still
@@ -218,11 +229,12 @@ export function canHandOffSession(session: SessionRow, hosts: number): boolean {
  * one". A session on a VM (`vm`, #276) is the exception: it has one, on the
  * agent. A plain terminal has nothing to archive or resume either. Stop is
  * always there; the stylesheet shows it only while something runs. Hand off
- * to… is there for a local Claude session once there are `hosts` to hand it to.
+ * to… is there for a local Claude session once there are `hosts` to hand it to;
+ * Bring back for a Claude session on a VM `copy` of a local project.
  */
 export function rowButtons(
     session: SessionRow,
-    {vm = false, hosts = 0}: {vm?: boolean; hosts?: number} = {},
+    {vm = false, copy = false, hosts = 0}: {vm?: boolean; copy?: boolean; hosts?: number} = {},
 ): RowButtons {
     // A session on a VM (#276) runs on the agent as a local one does: stopping
     // it stops it, and a Claude session there resumes like one here.
@@ -234,6 +246,7 @@ export function rowButtons(
         snooze: session.type !== 'terminal' && !session.archived,
         resume: !disconnects && !shell,
         handOff: canHandOffSession(session, hosts),
+        bringBack: canBringBackSession(session, {vm, copy}),
     };
 }
 

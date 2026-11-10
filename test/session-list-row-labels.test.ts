@@ -117,7 +117,14 @@ test('a Claude session can be stopped, archived, snoozed and resumed with a conf
     const buttons = rowButtons(session('c'));
 
     /* Then */
-    assert.deepEqual(buttons, {stop: 'Stop session', archive: 'Archive', snooze: true, resume: true, handOff: false});
+    assert.deepEqual(buttons, {
+        stop: 'Stop session',
+        archive: 'Archive',
+        snooze: true,
+        resume: true,
+        handOff: false,
+        bringBack: false,
+    });
 });
 
 test('a remote session can be disconnected, archived and snoozed, not resumed', () => {
@@ -131,6 +138,7 @@ test('a remote session can be disconnected, archived and snoozed, not resumed', 
         snooze: true,
         resume: false,
         handOff: false,
+        bringBack: false,
     });
 });
 
@@ -139,7 +147,14 @@ test('a plain terminal can only be stopped', () => {
     const buttons = rowButtons(session('t', {type: 'terminal'}));
 
     /* Then */
-    assert.deepEqual(buttons, {stop: 'Stop session', archive: null, snooze: false, resume: false, handOff: false});
+    assert.deepEqual(buttons, {
+        stop: 'Stop session',
+        archive: null,
+        snooze: false,
+        resume: false,
+        handOff: false,
+        bringBack: false,
+    });
 });
 
 test('an archived session offers to unarchive', () => {

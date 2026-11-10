@@ -29,6 +29,7 @@ import {SshAgentDialer} from '../infrastructure/agent/ssh-agent-dialer';
 import {AgentHostsService} from '../application/services/agent-hosts-service';
 import {ProjectHandoffService} from '../application/services/project-handoff-service';
 import {SessionHandoffService} from '../application/services/session-handoff-service';
+import {SessionBringBackService} from '../application/services/session-bring-back-service';
 import {VmTranscripts} from '../application/services/vm-transcripts';
 import {VmSchedulesService} from '../application/services/vm-schedules-service';
 import {VmRegistryService} from '../application/services/vm-registry-service';
@@ -174,6 +175,7 @@ import type {SwitchboardDatabase} from '../infrastructure/sqlite/database';
 import type {AgentHosts} from '../application/services/agent-hosts';
 import type {ProjectHandoff} from '../application/services/project-handoff';
 import type {SessionHandoff} from '../application/services/session-handoff';
+import type {SessionBringBack} from '../application/services/session-bring-back';
 
 /** Everything the IPC layer and the app lifecycle reach for. */
 export interface Container {
@@ -261,6 +263,8 @@ export interface Container {
      * `buildContainer` builds it.
      */
     readonly sessionHandoff: SessionHandoff;
+    /** A VM session brought back to this Mac (#276), the counterpart of its hand-off. */
+    readonly sessionBringBack: SessionBringBack;
     /** VM sessions' transcripts, parsed on their VMs (#276 stage 3). */
     readonly vmTranscripts: VmTranscripts;
     /**
@@ -669,6 +673,23 @@ export function buildContainer(): Container {
         settings,
         renderer,
         sha256: (bytes) => createHash('sha256').update(bytes).digest('hex'),
+        clock,
+        timers,
+        log,
+    });
+    // The other way: a VM session's work and conversation brought back here (#276).
+    const sessionBringBack = new SessionBringBackService({
+        registry,
+        sessions: repository,
+        transcripts,
+        handoffGit,
+        git: localWorkspace,
+        agents,
+        prompter,
+        stop: (sessionId) => stopSession({registry, remote, lifecycle, terminals}, sessionId),
+        launcher,
+        settings,
+        renderer,
         clock,
         timers,
         log,
@@ -1294,6 +1315,7 @@ export function buildContainer(): Container {
         agentHosts,
         projectHandoff,
         sessionHandoff,
+        sessionBringBack,
         vmTranscripts,
         vmSchedules,
         droppedFiles,

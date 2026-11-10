@@ -43,6 +43,7 @@ import type {AgentHostEvent} from './agent-host-slice';
 import type {VmsEvent} from './vms-slice';
 import type {HandoffEvent} from './handoff-slice';
 import type {SessionHandoffEvent} from './session-handoff-slice';
+import type {SessionBringBackEvent} from './session-bring-back-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
 import type {PrPeekEvent} from './pr-peek-slice';
 import type {PagesEvent} from './pages-slice';
@@ -51,6 +52,7 @@ import type {SessionTrayEvent} from './session-tray-slice';
 import type {GrillEvent} from './grill-slice';
 import type {GrillChanged} from '../../domain/grill/model';
 import type {SessionHandoffPhase} from '../../application/services/session-handoff';
+import type {SessionBringBackPhase} from '../../application/services/session-bring-back';
 import type {ViewState} from './view-slice';
 import type {DraftAction} from '../../domain/questions/answer-draft';
 import type {QuestionView} from './answers-slice';
@@ -116,7 +118,9 @@ export type PushEvent =
     /** One line of a Bring back's progress, for the copy. */
     | {type: 'bringBackProgress'; copyPath: string; line: string}
     /** Where a session's hand-off to a VM stands (#276 stage 3). */
-    | {type: 'sessionHandoffPhase'; sessionId: string; phase: SessionHandoffPhase};
+    | {type: 'sessionHandoffPhase'; sessionId: string; phase: SessionHandoffPhase}
+    /** Where a VM session's Bring back to this Mac stands (#276). */
+    | {type: 'sessionBringBackPhase'; sessionId: string; phase: SessionBringBackPhase};
 
 // ── From the renderer itself: user actions and timers ──
 
@@ -383,6 +387,7 @@ export type RendererEvent =
     | VmsEvent
     | HandoffEvent
     | SessionHandoffEvent
+    | SessionBringBackEvent
     | DropUploadEvent
     | PagesEvent
     | MergeQueueEvent

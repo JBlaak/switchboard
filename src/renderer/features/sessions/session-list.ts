@@ -37,7 +37,11 @@ export async function loadProjects({resort = false}: LoadOptions = {}): Promise<
     view.cachedAllProjects = allProjects;
     dispatch({type: 'projectsLoading', loading: false});
     dispatch({type: 'projectsCounted', any: allProjects.length > 0});
-    dispatch({type: 'agentProjectsLoaded', projectPaths: allProjects.filter((p) => p.agent).map((p) => p.projectPath)});
+    dispatch({
+        type: 'agentProjectsLoaded',
+        projectPaths: allProjects.filter((p) => p.agent).map((p) => p.projectPath),
+        copyPaths: allProjects.filter((p) => p.agent && p.copyOf).map((p) => p.projectPath),
+    });
 
     adoptSessions(view.cachedProjects);
     adoptSessions(view.cachedAllProjects);

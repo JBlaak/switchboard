@@ -60,12 +60,14 @@
  * and remembered by file, since a transcript's cwd never changes.
  */
 import {rewriteTranscriptCwd} from '../../../domain/agent/session-handoff';
-import {TRANSCRIPT_TEXT_CAP_CHARS} from '../../../domain/agent/protocol';
+import {TRANSCRIPT_READ_MAX_BYTES, TRANSCRIPT_TEXT_CAP_CHARS} from '../../../domain/agent/protocol';
 import type {
     AgentTranscript,
     GetTranscriptMessage,
     ImportTranscriptMessage,
     ListTranscriptsMessage,
+    ReadTranscriptMessage,
+    SetTranscriptAsideMessage,
     TranscriptListMessage,
     TranscriptTailMessage,
 } from '../../../domain/agent/protocol';
@@ -243,6 +245,10 @@ export class Transcripts implements TranscriptsPart {
                 return this.getTranscript(client, message);
             case 'transcript-tail':
                 return this.tail(client, message);
+            case 'read-transcript':
+                return this.readTranscript(client, message);
+            case 'set-transcript-aside':
+                return this.setTranscriptAside(client, message);
             case 'import-transcript':
                 return this.importTranscript(client, message);
             case 'list-transcripts':
@@ -465,6 +471,65 @@ export class Transcripts implements TranscriptsPart {
             body = slice.subarray(newline + 1);
         }
         answer(new TextDecoder().decode(body).split('\n').filter(Boolean));
+    }
+
+    // ── read-transcript ──
+
+    /** A slice of the whole file, raw: a session's Bring back carries it to the Mac slice by slice. */
+    private readTranscript(client: ClientLink, message: ReadTranscriptMessage): void {
+        const {requestId, sessionId} = message;
+        const notFound = () => {
+            if (!client.closed) client.send({type: 'transcript-bytes', requestId, found: false});
+        };
+        if (!SESSION_ID.test(sessionId)) return notFound();
+        const found = this.find(sessionId);
+        if (!found) return notFound();
+        const size = found.stat.size;
+        const offset = Math.min(Math.max(Math.floor(message.offset) || 0, 0), size);
+        const length = Math.min(
+            Math.max(Math.floor(message.maxBytes) || 0, 0),
+            TRANSCRIPT_READ_MAX_BYTES,
+            size - offset,
+        );
+        const slice = length > 0 ? this.deps.files.readSlice(found.file, offset, length) : new Uint8Array(0);
+        if (!slice) return notFound();
+        if (client.closed) return;
+        client.send({
+            type: 'transcript-bytes',
+            requestId,
+            found: true,
+            size,
+            contentBase64: Buffer.from(slice).toString('base64'),
+        });
+    }
+
+    // ── set-transcript-aside ──
+
+    /**
+     * Every file of the session, in any project folder, renamed out of the way:
+     * `<id>.jsonl.brought-back`, or `-2`, `-3`… after an earlier round trip.
+     */
+    private setTranscriptAside(client: ClientLink, message: SetTranscriptAsideMessage): void {
+        const {requestId, sessionId} = message;
+        const answer = (error?: string) => {
+            if (client.closed) return;
+            client.send(error ? {type: 'done', requestId, ok: false, error} : {type: 'done', requestId, ok: true});
+        };
+        if (!SESSION_ID.test(sessionId)) return answer(`not a session id: ${sessionId}`);
+        const {files} = this.deps;
+        try {
+            for (let found = this.find(sessionId); found; found = this.find(sessionId)) {
+                let aside = `${found.file}.brought-back`;
+                for (let n = 2; files.stat(aside); n++) aside = `${found.file}.brought-back-${n}`;
+                files.moveNoClobber(found.file, aside, 0o600);
+                this.deps.log.info(`[transcripts] set ${sessionId} aside as ${aside}`);
+            }
+        } catch (err) {
+            return answer(`could not set the transcript aside: ${errorText(err)}`);
+        }
+        const watched = this.watched.get(sessionId);
+        if (watched) this.check(watched);
+        answer();
     }
 
     // ── list-transcripts ──

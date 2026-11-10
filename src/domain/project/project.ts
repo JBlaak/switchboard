@@ -11,6 +11,8 @@ export interface Project {
     remote?: boolean;
     /** True for a remote whose host runs a Switchboard agent (#276): shown as VM, not SSH. */
     agent?: boolean;
+    /** On a VM project that is a hand-off copy (#276): the local project it was handed off from. */
+    copyOf?: string;
     /** The slugs of the plans pinned to the top of the session list. */
     pinnedPlans?: string[];
     /** The GitHub plans pinned to the top of the session list from their page. */

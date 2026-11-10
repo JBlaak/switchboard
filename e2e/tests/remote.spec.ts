@@ -34,6 +34,13 @@
  * nothing here waits on a real turn or runs ssh or git. What the parts say is
  * unit tested in test/session-handoff-view.test.ts and the slice behind them.
  *
+ * Bring back (#276): on a Claude session on a VM copy, in its row and its
+ * tray, the dialog's lines and its choices for a branch that is on this Mac
+ * already: Update it, and Delete and recreate…, which asks once more. The
+ * `session-bring-back:*` channels answer from the `sessionBringBack` stub, so
+ * nothing here runs ssh or git. What the parts say, and the slice behind them,
+ * are unit tested in test/session-bring-back-ui.test.ts.
+ *
  * VM project pages (#276 stage 4): a VM session's row takes its title from
  * the `vm_transcripts` cache, seeded by `vmTranscriptFixture`; a VM project's page shows the GitHub
  * sections, plans and worktrees from a stubbed `projectOverview`, and its
@@ -70,11 +77,13 @@ import {
     handoffRequests,
     openedExternally,
     pushRemoteStatus,
+    sessionBringBackRequests,
     sessionHandoffRequests,
     setHostStub,
     STUB_AGENT,
     STUB_HANDOFF,
     STUB_HANDOFF_HOST,
+    STUB_BRING_BACK_WORKTREE,
     STUB_SESSION_HANDOFF,
     stubVmHost,
     stubOpenTerminal,
@@ -836,6 +845,116 @@ test.describe('session hand-off', () => {
         await expect(dialog.getByRole('button', {name: 'Close', exact: true})).toBeVisible();
         await expect(sessionItem(page, S.loginFix).getByText(/^(Waiting|Handing off)…$/)).toHaveCount(0);
         expect((await sessionHandoffRequests(app)).handOff).toHaveLength(1);
+    });
+});
+
+test.describe('Bring back', () => {
+    /** `handoffFixture` with one Claude session on the acme-api copy, titled from the VM's transcript. */
+    function bringBackFixture(): FixtureSpec {
+        const fixture = handoffFixture();
+        return {
+            ...fixture,
+            remotes: (fixture.remotes ?? []).map((remote) =>
+                'copyOf' in remote && remote.copyOf
+                    ? {
+                          ...remote,
+                          sessions: [
+                              {
+                                  id: S.vmWeb,
+                                  kind: 'claude' as const,
+                                  created: hoursAgo(6),
+                                  lastOpened: hoursAgo(4),
+                                  vmTranscript: {summary: LABEL.vmWeb, messages: 8},
+                              },
+                          ],
+                      }
+                    : remote,
+            ),
+        };
+    }
+    test.use({fixture: bringBackFixture()});
+
+    function bringBackDialog(page: Page): Locator {
+        return page.getByRole('dialog', {name: 'Bring back to this Mac'});
+    }
+
+    test('Bring back… in a VM session’s tray opens its dialog; Update it brings the branch into the worktree here and continues', async ({
+        page,
+        app,
+    }) => {
+        /* Given */
+        await stubOpenTerminal(app);
+        await sessionItem(page, S.vmWeb).click();
+        await terminalHeader(page).getByText(LABEL.vmWeb, {exact: true}).hover();
+
+        /* When */
+        await page
+            .getByRole('region', {name: 'Session tools'})
+            .getByRole('button', {name: 'Bring back to this Mac'})
+            .click();
+
+        /* Then */
+        const dialog = bringBackDialog(page);
+        await expect(dialog).toContainText(LABEL.vmWeb);
+        await expect(dialog.getByRole('listitem')).toHaveText([
+            'The conversation, resumed on this Mac in the same row',
+            'The branch session-cookie',
+            'Into the worktree at ' + STUB_BRING_BACK_WORKTREE,
+            '2 uncommitted changes, still uncommitted here',
+        ]);
+        const existing = dialog.getByRole('group', {name: 'Branch exists'});
+        await expect(existing).toContainText(
+            'session-cookie is in a worktree on this Mac already, with 1 uncommitted file and 2 commits not on the default branch.',
+        );
+        await expect(dialog.getByRole('button', {name: 'Bring back', exact: true})).toHaveCount(0);
+
+        /* When */
+        await existing.getByRole('button', {name: 'Update it', exact: true}).click();
+
+        /* Then */
+        await expect(dialog).toContainText('Fetching session-cookie from the VM');
+        await expect(dialog.getByRole('status')).toHaveText('Continues on this Mac in ' + STUB_BRING_BACK_WORKTREE);
+        expect(await sessionBringBackRequests(app)).toEqual({
+            preview: [S.vmWeb],
+            bringBack: [{sessionId: S.vmWeb, existing: 'reuse'}],
+        });
+    });
+
+    test('Delete and recreate… on its row asks once more, naming what goes; Keep it backs out, and confirming recreates it', async ({
+        page,
+        app,
+    }) => {
+        /* Given */
+        const row = sessionItem(page, S.vmWeb);
+        await row.hover();
+        await row.getByRole('button', {name: 'Bring back to this Mac'}).click();
+        const dialog = bringBackDialog(page);
+
+        /* When */
+        await dialog.getByRole('button', {name: 'Delete and recreate…'}).click();
+
+        /* Then */
+        const confirm = dialog.getByRole('alertdialog', {name: 'Delete worktree and branch'});
+        await expect(confirm).toContainText(
+            `Delete the worktree at ${STUB_BRING_BACK_WORKTREE} and its branch, with 1 uncommitted file and 2 commits not on the default branch,`,
+        );
+
+        /* When */
+        await confirm.getByRole('button', {name: 'Keep it', exact: true}).click();
+
+        /* Then */
+        await expect(confirm).toHaveCount(0);
+        await expect(dialog.getByRole('button', {name: 'Update it', exact: true})).toBeVisible();
+        expect((await sessionBringBackRequests(app)).bringBack).toEqual([]);
+
+        /* When */
+        await dialog.getByRole('button', {name: 'Delete and recreate…'}).click();
+        await dialog.getByRole('button', {name: 'Delete and recreate', exact: true}).click();
+
+        /* Then */
+        await expect(dialog).toContainText('Deleting the worktree at ' + STUB_BRING_BACK_WORKTREE);
+        await expect(dialog.getByRole('status')).toHaveText('Continues on this Mac in ' + STUB_BRING_BACK_WORKTREE);
+        expect((await sessionBringBackRequests(app)).bringBack).toEqual([{sessionId: S.vmWeb, existing: 'replace'}]);
     });
 });
 

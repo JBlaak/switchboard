@@ -148,6 +148,8 @@ const MESSAGE_FIELDS: Record<MacMessage['type'], Record<string, Check>> = {
     'forget-self-archived': {requestId: nonEmptyString, sessionIds: arrayOf(nonEmptyString)},
     'get-transcript': {requestId: nonEmptyString, sessionId: nonEmptyString},
     'transcript-tail': {requestId: nonEmptyString, sessionId: nonEmptyString, bytes: integer},
+    'set-transcript-aside': {requestId: nonEmptyString, sessionId: nonEmptyString},
+    'read-transcript': {requestId: nonEmptyString, sessionId: nonEmptyString, offset: integer, maxBytes: integer},
     'import-transcript': {
         requestId: nonEmptyString,
         sessionId: nonEmptyString,

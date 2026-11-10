@@ -323,6 +323,33 @@
     color: var(--sb-green);
 }
 
+/* A VM session's Bring back (#276). A checkout's path is long: it wraps rather than overflow. */
+.bring-back-dialog .settings-field > :not(.settings-label) {
+    min-width: 0;
+}
+
+.bring-back-dialog .handoff-code {
+    overflow-wrap: anywhere;
+}
+
+/* The choices for a branch that is here already: what is there, then the buttons under it. */
+.bring-back-dialog .settings-field.bring-back-existing {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+}
+
+.bring-back-existing .handoff-error {
+    margin-top: 0;
+}
+
+.bring-back-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
 .handoff-dialog .new-session-actions {
     margin-top: 16px;
 }

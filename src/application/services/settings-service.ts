@@ -374,6 +374,21 @@ export class SettingsService {
         });
     }
 
+    /**
+     * Drop a remote session's record, so its row goes from the remote project:
+     * a VM session brought back to this Mac (#276), whose conversation goes on
+     * here. False when the project or the record is not there.
+     */
+    public forgetRemoteSession(projectPath: string, sessionId: string): boolean {
+        return this.updateGlobal((settings) => {
+            const project = (settings.remoteProjects || []).find((r) => remoteProjectPath(r) === projectPath);
+            const before = project?.sessions?.length ?? 0;
+            if (!project?.sessions) return false;
+            project.sessions = project.sessions.filter((s) => s.sessionId !== sessionId);
+            return project.sessions.length !== before;
+        });
+    }
+
     // ── Hand-off ──
     // The ignored files the user carried on the last hand-off of a project
     // (#276 stage 2), so the next one starts with the same ones ticked. Kept
@@ -398,6 +413,15 @@ export class SettingsService {
     /** Where `sessionId` was handed off to, or null for a session that never was. */
     public handedOffSession(sessionId: string): {copyPath: string; at: string} | null {
         return this.global().handedOffSessions?.[sessionId] ?? null;
+    }
+
+    /** A handed-off session brought back (#276): its local row shows again. */
+    public forgetHandedOffSession(sessionId: string): void {
+        if (!this.handedOffSession(sessionId)) return;
+        this.updateGlobal((settings) => {
+            const {[sessionId]: _gone, ...rest} = settings.handedOffSessions ?? {};
+            settings.handedOffSessions = rest;
+        });
     }
 
     public recordHandedOffSession(sessionId: string, copyPath: string, at: string): void {

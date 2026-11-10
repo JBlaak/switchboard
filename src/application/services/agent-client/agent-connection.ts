@@ -21,7 +21,7 @@
  * Messages the agent sends unasked (output, `exited`, `attached`, hook
  * forwards) go to whoever listens: the session side and the hook relay.
  */
-import {AGENT_CLOSE, AGENT_PROTOCOL_VERSION} from '../../../domain/agent/protocol';
+import {AGENT_CLOSE, AGENT_PROTOCOL_VERSION, TRANSCRIPT_READ_MAX_BYTES} from '../../../domain/agent/protocol';
 import {
     isFatalSshOutput,
     MAX_RETRIES,
@@ -55,6 +55,7 @@ import type {
     TranscriptMessage,
     TranscriptQueryMethod,
     TranscriptTailReply,
+    TranscriptBytesMessage,
     WelcomeMessage,
 } from '../../../domain/agent/protocol';
 import type {RemoteConfig} from '../../../domain/project/remote-target';
@@ -491,6 +492,40 @@ export class AgentConnection {
             bytes,
         }));
         return reply.lines;
+    }
+
+    /**
+     * A session's whole transcript on the VM, raw, read slice by slice (a
+     * session's Bring back); null when the VM has none of that id. Refuses
+     * past `capBytes` rather than read a file no Bring back should carry.
+     */
+    public async readTranscript(sessionId: string, capBytes: number): Promise<Uint8Array | null> {
+        const slices: Buffer[] = [];
+        let offset = 0;
+        let size = Infinity;
+        while (offset < size) {
+            const reply = await this.request<TranscriptBytesMessage>('transcript-bytes', (requestId) => ({
+                type: 'read-transcript',
+                requestId,
+                sessionId,
+                offset,
+                maxBytes: TRANSCRIPT_READ_MAX_BYTES,
+            }));
+            if (!reply.found) return offset === 0 ? null : Buffer.concat(slices);
+            size = reply.size ?? 0;
+            if (size > capBytes) throw new Error(`the transcript is over ${Math.round(capBytes / 1024 / 1024)} MB`);
+            const slice = Buffer.from(reply.contentBase64 ?? '', 'base64');
+            // The file grew or shrank under us, or the agent sent nothing: what there is, is the answer.
+            if (slice.length === 0) break;
+            slices.push(slice);
+            offset += slice.length;
+        }
+        return Buffer.concat(slices);
+    }
+
+    /** Rename a session's transcript out of the way on the VM, once it was brought back to the Mac. */
+    public async setTranscriptAside(sessionId: string): Promise<DoneMessage> {
+        return this.request<DoneMessage>('done', (requestId) => ({type: 'set-transcript-aside', requestId, sessionId}));
     }
 
     /**

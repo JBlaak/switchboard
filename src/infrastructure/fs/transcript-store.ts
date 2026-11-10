@@ -243,6 +243,28 @@ export class FileTranscriptStore implements TranscriptStore {
     }
 
     /**
+     * Write a session's whole transcript, as it is, into `projectPath`'s
+     * folder (made when missing), replacing any there: a session's Bring back
+     * from a VM (#276), whose transcript there is the newest. Answers the folder.
+     */
+    public writeSession(projectPath: string, sessionId: string, text: string): string {
+        const folder = encodeProjectPath(projectPath);
+        this.fs.makeDir(this.folderPath(folder));
+        this.fs.writeText(this.sessionPath(folder, sessionId), text);
+        return folder;
+    }
+
+    /**
+     * Move a session's transcript in `folder` out of the index's way, renamed
+     * `<id>.jsonl.brought-back`: an older copy left in another folder when a
+     * Bring back writes the newest where the session resumes. Kept, not deleted.
+     */
+    public setSessionAside(folder: string, sessionId: string): void {
+        const file = this.sessionPath(folder, sessionId);
+        if (this.fs.exists(file)) this.fs.rename(file, file + '.brought-back');
+    }
+
+    /**
      * A session's main transcript and its subagents' (`<session>/subagents/*.jsonl`),
      * main first, then the subagents by file name. A file that cannot be read is
      * skipped. Read whole: every line can carry a `cwd` or a mention.

@@ -185,6 +185,11 @@ export const INVOKE = {
     sessionHandoffRun: 'session-handoff:hand-off',
     sessionHandoffCancel: 'session-handoff:cancel',
 
+    // A VM session brought back to this Mac (#276): the counterpart of its hand-off
+    sessionBringBackPreview: 'session-bring-back:preview',
+    sessionBringBackRun: 'session-bring-back:bring-back',
+    sessionBringBackCancel: 'session-bring-back:cancel',
+
     // Stage 5 (#276): where schedules run, and files dropped on a VM session's terminal
     vmSchedulesWhere: 'vm-schedules:where',
     vmSchedulesRunOn: 'vm-schedules:run-on',
@@ -256,6 +261,7 @@ export const EVENT = {
     handoffProgress: 'handoff:progress',
     bringBackProgress: 'handoff:bring-back-progress',
     sessionHandoffPhase: 'session-handoff:phase',
+    sessionBringBackPhase: 'session-bring-back:phase',
     vmHostsChanged: 'vm-registry:changed',
 } as const;
 

@@ -19,6 +19,8 @@ import type {
     GetTranscriptMessage,
     ImportTranscriptMessage,
     TranscriptTailMessage,
+    ReadTranscriptMessage,
+    SetTranscriptAsideMessage,
     ArchiveReplyMessage,
     ForgetSelfArchivedMessage,
     ListSelfArchivedMessage,
@@ -108,7 +110,12 @@ export interface CopiesPart extends ClientAware {
 }
 
 export type TranscriptsMessage =
-    GetTranscriptMessage | TranscriptTailMessage | ImportTranscriptMessage | ListTranscriptsMessage;
+    | GetTranscriptMessage
+    | TranscriptTailMessage
+    | ReadTranscriptMessage
+    | SetTranscriptAsideMessage
+    | ImportTranscriptMessage
+    | ListTranscriptsMessage;
 
 /**
  * The VM's transcripts (#276 stage 3): parsed for the Mac's rows and search,

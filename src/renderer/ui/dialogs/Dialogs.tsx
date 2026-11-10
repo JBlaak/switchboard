@@ -11,6 +11,7 @@ import {closeDialog} from './actions';
 import {ProjectsModal} from './ProjectsModal';
 import {ResumeSessionDialog} from './ResumeSessionDialog';
 import {HandOffDialog} from './HandOffDialog';
+import {BringBackDialog} from './BringBackDialog';
 import type {JSX} from 'react';
 
 export function Dialogs(): JSX.Element | null {
@@ -27,5 +28,7 @@ export function Dialogs(): JSX.Element | null {
             return <HandOffDialog key={seq} localPath={open.localPath} host={open.host} onClose={onClose} />;
         case 'handOffSession':
             return <HandOffDialog key={seq} sessionId={open.sessionId} host={open.host} onClose={onClose} />;
+        case 'bringBackSession':
+            return <BringBackDialog key={seq} sessionId={open.sessionId} onClose={onClose} />;
     }
 }

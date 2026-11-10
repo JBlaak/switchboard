@@ -986,6 +986,7 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 .session-launch-config-btn,
 .session-snooze-btn,
 .session-handoff-btn,
+.session-bring-back-btn,
 .session-archive-btn {
     cursor: pointer;
     background: none;
@@ -1032,12 +1033,14 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     font: 700 10.5px/16px var(--sb-font-head);
 }
 
-/* Hand off to… (#276 stage 3). */
-.session-handoff-btn {
+/* Hand off to… (#276 stage 3), and its counterpart, Bring back. */
+.session-handoff-btn,
+.session-bring-back-btn {
     color: var(--sb-accent-dim);
 }
 
 .session-handoff-btn:hover,
+.session-bring-back-btn:hover,
 .session-handoff-btn[aria-expanded='true'] {
     color: var(--sb-accent);
     background: rgba(var(--sb-accent-rgb), 0.1);

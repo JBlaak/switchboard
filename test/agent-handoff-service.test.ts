@@ -75,6 +75,7 @@ function fakeGit(over: Partial<HandoffGit> = {}) {
             calls.push(`worktree ${worktree} ${branch} ${base}`);
             return {ok: true};
         },
+        applyPatch: async () => ({ok: true}),
         ...over,
     };
     return {git, calls};

@@ -99,6 +99,26 @@ export function continueOnVm(sessionId: string, copyPath: string): void {
 }
 
 /**
+ * A VM session brought back to this Mac (#276) continues in its own row: the
+ * row becomes a local Claude session in the checkout it resumed in, and an
+ * open terminal is opened again, which attaches to the session main already
+ * started here. The project list read after puts the row under its project.
+ */
+export function continueHere(sessionId: string, projectPath: string): void {
+    const row = sessionMap.get(sessionId) ?? pendingSessions.get(sessionId)?.session;
+    if (!row) return;
+    row.projectPath = projectPath;
+    delete row.type;
+    delete row.remoteKind;
+    if (openSessions.has(sessionId)) {
+        const onScreen = getState().terminal.onScreen === sessionId;
+        destroySession(sessionId);
+        if (onScreen) void openSession(row);
+    }
+    relayoutSessionList();
+}
+
+/**
  * The setup terminal main started on a VM's host (#276): a shell row for it,
  * opened in the terminal area the way any session is, by its id. Opening it
  * attaches to the shell already running on the agent.

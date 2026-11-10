@@ -69,7 +69,14 @@ test('a Claude session on a VM stops and resumes like a local one', () => {
     const buttons = rowButtons(VM_CLAUDE, {vm: true});
 
     /* Then */
-    assert.deepEqual(buttons, {stop: 'Stop session', archive: 'Archive', snooze: true, resume: true, handOff: false});
+    assert.deepEqual(buttons, {
+        stop: 'Stop session',
+        archive: 'Archive',
+        snooze: true,
+        resume: true,
+        handOff: false,
+        bringBack: false,
+    });
 });
 
 test('a shell on a VM stops, and has nothing to resume', () => {
@@ -95,6 +102,7 @@ test('a session on an agentless remote still only disconnects', () => {
         snooze: true,
         resume: false,
         handOff: false,
+        bringBack: false,
     });
 });
 
@@ -103,7 +111,14 @@ test('a local Claude session is unchanged', () => {
     const buttons = rowButtons(session(), {vm: false});
 
     /* Then */
-    assert.deepEqual(buttons, {stop: 'Stop session', archive: 'Archive', snooze: true, resume: true, handOff: false});
+    assert.deepEqual(buttons, {
+        stop: 'Stop session',
+        archive: 'Archive',
+        snooze: true,
+        resume: true,
+        handOff: false,
+        bringBack: false,
+    });
 });
 
 // ── Session work ──

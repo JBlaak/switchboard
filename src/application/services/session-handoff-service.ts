@@ -51,7 +51,6 @@ import type {RemoteConfig} from '../../domain/project/remote-target';
 import type {Session} from '../../domain/session/session';
 import {parseTranscriptLine} from '../../domain/session/transcript';
 import type {Clock, Timers} from '../ports/clock';
-import type {Disposable} from '../ports/git-workspace';
 import type {HandoffGit} from '../ports/handoff-git';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
@@ -66,14 +65,8 @@ import type {HandoffPreview, HandoffResult} from './project-handoff';
 import type {OpenSessionRequest, OpenSessionResult} from './session-launcher';
 import type {SessionHandoff, SessionHandoffPhase, SessionHandoffPreview} from './session-handoff';
 import type {SettingsService} from './settings-service';
-import {STOP_ESCALATE_MS, STOP_GIVE_UP_MS} from './session-lifecycle';
-
-/**
- * How long the hand-off waits for the stopped session's process to end. The
- * lifecycle's own escalation retires the record after SIGTERM, SIGKILL and a
- * give-up, so this only catches a stop that never reached the lifecycle.
- */
-export const STOP_WAIT_MS = STOP_ESCALATE_MS + STOP_GIVE_UP_MS + 2000;
+import {stopAndWait, turnEnded} from './support/session-turns';
+import type {InFlight} from './support/session-turns';
 
 /** The most of a transcript one hand-off carries; past it, the upload would not be the right tool. */
 export const TRANSCRIPT_CAP_BYTES = 256 * 1024 * 1024;
@@ -164,11 +157,6 @@ interface Handable {
     running: boolean;
 }
 
-/** A hand-off in flight: `cancel` is set only while it waits for the turn to end. */
-interface InFlight {
-    cancel: (() => void) | null;
-}
-
 export class SessionHandoffService implements SessionHandoff {
     private readonly inFlight = new Map<string, InFlight>();
 
@@ -243,7 +231,7 @@ export class SessionHandoffService implements SessionHandoff {
 
         if (first.running && this.deps.prompter.isBusy(first.sessionId)) {
             emit({kind: 'waiting'});
-            const went = await this.turnEnded(first.sessionId, flight);
+            const went = await turnEnded(this.deps.prompter, first.sessionId, flight);
             if (went === 'cancelled') {
                 log.info(`[session-handoff] ${sessionId} cancelled while waiting for its turn to end`);
                 return {kind: 'cancelled'};
@@ -365,24 +353,6 @@ export class SessionHandoffService implements SessionHandoff {
         return {sessionId: id, localPath, checkout, folder, transcriptRoot, running: live !== null};
     }
 
-    /** Resolve when the session comes to its prompt or ends; or 'cancelled' when `cancel` is called first. */
-    private turnEnded(sessionId: string, flight: InFlight): Promise<'idle' | 'cancelled'> {
-        const {prompter} = this.deps;
-        return new Promise((resolve) => {
-            const subscriptions: Disposable[] = [];
-            const settle = (how: 'idle' | 'cancelled') => {
-                subscriptions.forEach((subscription) => subscription.dispose());
-                flight.cancel = null;
-                resolve(how);
-            };
-            flight.cancel = () => settle('cancelled');
-            subscriptions.push(prompter.onIdle(sessionId, () => settle('idle')));
-            subscriptions.push(prompter.onExit(sessionId, () => settle('idle')));
-            // It may have gone idle between the caller's look and the subscription.
-            if (!prompter.runningId(sessionId) || !prompter.isBusy(sessionId)) settle('idle');
-        });
-    }
-
     /** The transcript, moved to `dir`, uploaded and imported on the copy's host. */
     private async carryTranscript(
         handable: Handable,
@@ -415,16 +385,9 @@ export class SessionHandoffService implements SessionHandoff {
 
     /** Stop the local session and wait for its process to end. */
     private async stopHere(sessionId: string): Promise<{ok: true} | {ok: false; error: string}> {
-        const {prompter, timers} = this.deps;
-        let subscription: Disposable | null = null;
-        const ended = new Promise<void>((resolve) => {
-            subscription = prompter.onExit(sessionId, resolve);
-        });
         try {
-            const stopped = this.deps.stop(sessionId);
-            if (!stopped.ok) return {ok: false, error: 'The session on this Mac did not stop.'};
-            if (prompter.runningId(sessionId)) await withTimeout(ended, STOP_WAIT_MS, timers);
-            return {ok: true};
+            const stopped = await stopAndWait(this.deps.prompter, this.deps.timers, this.deps.stop, sessionId);
+            return stopped ? {ok: true} : {ok: false, error: 'The session on this Mac did not stop.'};
         } catch {
             return {
                 ok: false,
@@ -432,8 +395,6 @@ export class SessionHandoffService implements SessionHandoff {
                     'The session on this Mac did not stop in time, so it carries on here. ' +
                     'The VM already has a copy of the conversation, which a second hand-off cannot replace.',
             };
-        } finally {
-            (subscription as Disposable | null)?.dispose();
         }
     }
 
