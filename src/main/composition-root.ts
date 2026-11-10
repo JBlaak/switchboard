@@ -833,7 +833,7 @@ export function buildContainer(): Container {
         log,
     });
 
-    const ghRun: GhRunner = async (args) => defaultGhRunner(await toolEnv())(args);
+    const ghRun: GhRunner = async (args, options) => defaultGhRunner(await toolEnv())(args, options);
     const github = new GhCli({run: ghRun});
     const vmLocation = {
         live: (id: string) => {

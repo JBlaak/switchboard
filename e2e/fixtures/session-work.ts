@@ -12,7 +12,7 @@
 import {FIXTURE_NOW} from '../support/fixture-home';
 import {S} from './standard';
 import {parseUnifiedDiff} from '../../src/domain/session-work/diff';
-import {imageStubKey} from '../support/main-process';
+import {imageStubKey, refinementStubKey} from '../support/main-process';
 import {solidPng} from './png';
 import type {SessionWorkStub} from '../support/main-process';
 import type {
@@ -328,6 +328,23 @@ export function sessionWorkStub(): SessionWorkStub {
         diffs: {
             ['pr:' + pr(1320)]: {files: parseUnifiedDiff(LOGIN_LOOP_DIFF), source: 'local'},
             ['pr:' + pr(1309)]: {files: parseUnifiedDiff(REDIRECT_CHAIN_DIFF), source: 'github'},
+        },
+    };
+}
+
+/**
+ * `sessionWorkStub`, with OmniDiff's answer for the local PR's `src/session.ts`:
+ * on line 11 only `redirect("/login")` became `null`, the rest of it stayed.
+ */
+export function sessionWorkStubWithRefinement(): SessionWorkStub {
+    return {
+        ...sessionWorkStub(),
+        refinements: {
+            [refinementStubKey('pr:' + pr(1320), 'src/session.ts')]: {
+                summary: null,
+                before: {11: [{start: 21, end: 39, kind: 'update'}]},
+                after: {11: [{start: 21, end: 25, kind: 'update'}]},
+            },
         },
     };
 }
