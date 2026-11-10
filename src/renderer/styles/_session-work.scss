@@ -651,8 +651,136 @@
     flex-direction: column;
     gap: 10px;
 
+    /* The PR peek's skeleton still draws plain boxes. */
     .sw-skeleton {
         height: 120px;
+    }
+}
+
+/*
+ * The diff's own skeleton: cards with the file card's border and radius, a
+ * header strip like `.sw-file-head` and lines on the real 20px rhythm, so the
+ * swap to the real cards barely moves. Later cards fade back like the boxes
+ * did. The rise and the sweep are below, only when motion is welcome.
+ */
+.sw-skel-file {
+    position: relative;
+    border: 1px solid var(--sb-line);
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-panel);
+    overflow: clip;
+
+    & + & {
+        opacity: 0.75;
+    }
+    & + & + & {
+        opacity: 0.5;
+    }
+}
+
+.sw-skel-bar {
+    display: block;
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(var(--sb-overlay-rgb), 0.08);
+}
+
+.sw-skel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 38px;
+    padding: 6px 12px;
+    background: var(--sb-bg-raised);
+    border-bottom: 1px solid var(--sb-line);
+
+    .sw-skel-bar {
+        height: 10px;
+        border-radius: 5px;
+        background: rgba(var(--sb-overlay-rgb), 0.11);
+    }
+    .sw-skel-counts {
+        flex: 0 0 52px;
+        height: 16px;
+        border-radius: 999px;
+        background: rgba(var(--sb-overlay-rgb), 0.07);
+    }
+}
+
+.sw-skel-lines {
+    padding: 4px 0;
+    // The real lines' font, so an indent in `ch` is the code's own.
+    font: 12px/20px var(--sb-font-mono);
+}
+
+.sw-skel-line {
+    display: grid;
+    grid-template-columns: calc(3ch + 16px) minmax(0, 1fr);
+    align-items: center;
+    column-gap: 12px;
+    height: 20px;
+    padding-left: 20px;
+
+    &.is-add {
+        background: rgba(var(--sb-green-rgb), 0.08);
+    }
+    &.is-delete {
+        background: rgba(var(--sb-red-rgb), 0.08);
+    }
+
+    .sw-skel-num {
+        justify-self: end;
+        width: 2ch;
+        background: rgba(var(--sb-overlay-rgb), 0.05);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .sw-skel-file {
+        animation: sw-skel-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+        // A soft highlight sweeping across the card, each a beat after the one above.
+        &::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(
+                100deg,
+                transparent 30%,
+                rgba(var(--sb-overlay-rgb), 0.05) 50%,
+                transparent 70%
+            );
+            transform: translateX(-100%);
+            animation: sw-skel-sweep 1.6s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        &:nth-child(2) {
+            animation-delay: 70ms;
+            &::after {
+                animation-delay: 140ms;
+            }
+        }
+        &:nth-child(3) {
+            animation-delay: 140ms;
+            &::after {
+                animation-delay: 280ms;
+            }
+        }
+    }
+}
+
+@keyframes sw-skel-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+}
+
+@keyframes sw-skel-sweep {
+    to {
+        transform: translateX(100%);
     }
 }
 
@@ -839,6 +967,20 @@
         text-decoration: underline dashed rgba(var(--sb-blue-rgb), 0.9);
         text-decoration-thickness: 1px;
         text-underline-offset: 3px;
+    }
+}
+
+/* The marks arrive after their lines: their tint fades in rather than pops. */
+@media (prefers-reduced-motion: no-preference) {
+    .sw-ch {
+        animation: sw-ch-in 180ms ease-out;
+    }
+}
+
+@keyframes sw-ch-in {
+    from {
+        background-color: transparent;
+        text-decoration-color: transparent;
     }
 }
 
