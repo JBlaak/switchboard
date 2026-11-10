@@ -51,6 +51,7 @@ export function installIpcBridge(
         api.onUpdateAvailable((update) => send({type: 'updateAvailable', update})),
         api.onUpdateProgress((progress) => send({type: 'updateProgress', progress})),
         api.onSessionWorkSnapshot((snapshot) => send({type: 'sessionWorkSnapshot', snapshot})),
+        api.onPullRequestLinkOpened((url) => send({type: 'pullRequestLinkOpened', url})),
         api.onPrStatusChanged((change) => send({type: 'prStatusChanged', change})),
         api.onMergeQueueChanged((change) => send({type: 'mergeQueueChanged', change})),
         api.onLaunchRequested((projectPath, initialPrompt) =>

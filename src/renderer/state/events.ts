@@ -86,6 +86,8 @@ export type PushEvent =
     | {type: 'updateAvailable'; update: UpdateNotice}
     | {type: 'updateProgress'; progress: InstallProgress}
     | {type: 'sessionWorkSnapshot'; snapshot: SessionWorkSnapshot}
+    /** A PR link the main window was asked to navigate to: the peek opens it. */
+    | {type: 'pullRequestLinkOpened'; url: string}
     | {type: 'prStatusChanged'; change: PullRequestStatusChange}
     /** A repository's merge queue or its errands changed (#315). */
     | {type: 'mergeQueueChanged'; change: MergeQueueChange}
