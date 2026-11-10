@@ -835,7 +835,9 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
 /* ---- A pinned plan's progress ----
    A third line under a pinned plan (PinnedPlanItem): its level, a bar with one
-   segment per level sized by its issues, and closed / all issues. */
+   segment per level sized by its issues, and closed / all issues. The bar
+   takes the plan view's state inks (_plan.scss): merged purple, in review
+   orange, ready green, blocked the gray track. */
 .pinned-plan-progress {
     display: flex;
     align-items: center;
@@ -852,7 +854,7 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     color: var(--sb-progress-orange);
 
     &.is-cleared {
-        color: var(--sb-green);
+        color: var(--sb-purple);
     }
 }
 
@@ -873,10 +875,13 @@ $fold-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
     background: color-mix(in srgb, var(--sb-text-dimmest) 45%, transparent);
 
     .is-done {
-        background: var(--sb-green);
+        background: var(--sb-purple);
     }
     .is-started {
         background: var(--sb-progress-orange);
+    }
+    .is-ready {
+        background: var(--sb-accent);
     }
 }
 
