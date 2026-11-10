@@ -16,6 +16,7 @@ import type {IssueKey, PlanSummary} from '../../../../domain/plan/model';
 import type {PlanHandlers} from './types';
 import {loadIssueSessions} from './actions';
 import {storePlans, storedPlan} from './stored-plans';
+import {openLink} from '../../pr-view/actions';
 
 /** Sources being asked right now, so a poll never stacks on a slow answer. */
 const asking = new Set<string>();
@@ -118,9 +119,8 @@ export const planHandlers: PlanHandlers = {
     step: (direction) => {
         stepIssue(direction);
     },
-    open: (url) => {
-        void window.api.openExternal(url);
-    },
+    // An issue goes to the browser; a PR link would open the peek.
+    open: (url) => openLink(url),
     pickOther,
     back,
 };

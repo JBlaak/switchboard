@@ -22,6 +22,7 @@ import {useOnScreen} from '../questions/use-on-screen';
 import {useStore} from '../use-store';
 import type {JSX, KeyboardEvent as ReactKeyboardEvent} from 'react';
 import type {SessionPage} from '../../state/pages-slice';
+import {openLink} from '../pr-view/actions';
 
 /** An outline needs a few headings to be worth its room. */
 const MIN_OUTLINE = 3;
@@ -131,7 +132,7 @@ function followLink(doc: Document, event: MouseEvent): void {
         doc.getElementById(id)?.scrollIntoView({behavior: 'smooth', block: 'start'});
         return;
     }
-    if (/^(https?:|mailto:)/i.test(href)) void window.api.openExternal(href);
+    if (/^(https?:|mailto:)/i.test(href)) openLink(href);
 }
 
 /** The page's h2 and h3 headings, each given an id to jump to if it had none. */

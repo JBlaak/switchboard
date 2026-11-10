@@ -31,16 +31,18 @@ import {MarkDoneOffer} from './session-task/MarkDoneOffer';
 import {ArchiveUndoToast} from './archive-undo/ArchiveUndoToast';
 import {DropUploadToast} from './terminal/DropUploadToast';
 import {QueueFailurePanel} from './queue-elsewhere/QueueFailurePanel';
+import {PullRequestPeek} from './pr-view/PullRequestPeek';
 import type {JSX} from 'react';
 import type {Root as ReactRoot} from 'react-dom/client';
 
-/** Every surface, each a `<Portal>` into its container (the toolbar and the dialogs place their own). */
+/** Every surface, each a `<Portal>` into its container (the toolbar, the dialogs and the PR peek place their own). */
 export function Root(): JSX.Element | null {
     return (
         <>
             <Toolbar />
             <Dialogs />
             <PairConfirmDialog />
+            <PullRequestPeek />
             <Portal target="settings-viewer">
                 <SettingsViewer />
             </Portal>

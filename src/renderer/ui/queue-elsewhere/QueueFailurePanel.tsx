@@ -1,7 +1,7 @@
 /**
  * The strip between a session's header and its terminal when the session's
  * own PR left the merge queue (#315): "#N left the queue", the failing check
- * and the queue's reason, and Fix in session, Open the run and Retry.
+ * and the queue's reason, and Fix in session, Open the PR and Retry.
  *
  * It renders into `#terminal-queue-panel`, a sibling of `#terminals`, and
  * shows and hides that container itself; the terminal on screen is refitted
@@ -68,7 +68,7 @@ export function QueueFailurePanel(): JSX.Element | null {
                     {busy && action.action === 'fix' ? 'Sending…' : fixed ? 'Sent' : 'Fix in session'}
                 </button>
                 <button type="button" className="sw-btn sw-btn-small" onClick={() => openTheRun(failure)}>
-                    Open the run
+                    Open the PR
                 </button>
                 <button
                     type="button"

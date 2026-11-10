@@ -46,7 +46,7 @@ import {
     openProjectSettings,
     openProjectPlan,
     openProjectSession,
-    openPullRequestOnGitHub,
+    openPullRequest,
     startPageIssueSession,
     startWorktreeSession,
 } from './actions';
@@ -207,7 +207,7 @@ export function ProjectOverview({projectPath}: {projectPath: string}): JSX.Eleme
                 void startPageIssueSession(projectPath, action.issue, action.plan);
                 break;
             case 'open-pull-request':
-                openPullRequestOnGitHub(action.pullRequest);
+                openPullRequest(action.pullRequest);
                 break;
             case 'start-worktree':
                 void startWorktreeSession(projectPath, action.path);

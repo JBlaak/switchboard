@@ -24,6 +24,8 @@ import {startIssueSession} from '../session-work/plan/actions';
 import {pulseSessionRow} from '../session-list/pulse';
 import {cursorId} from './page-rows';
 import {AUTH_COMMAND, cleanConfirm, cleanableWorktrees, isVmRepositoryIn, opensGitHub} from './page-state';
+import {openLink} from '../pr-view/actions';
+import {pullRequestUrl} from '../../../domain/session-work/pull-request-link';
 
 /** True for an ssh:// project, VM or not: nothing on the Mac to read. */
 export function isRemoteProject(projectPath: string): boolean {
@@ -167,9 +169,9 @@ export async function startPageIssueSession(projectPath: string, issue: IssueKey
 
 // ── Pull requests, worktrees and the edge states (#175) ──
 
-/** A PR row's click or ↵: the pull request on GitHub. */
-export function openPullRequestOnGitHub(pullRequest: IssueKey): void {
-    void window.api.openExternal(`https://github.com/${pullRequest.repository}/pull/${pullRequest.number}`);
+/** A PR row's click or ↵: the pull request, in the peek. */
+export function openPullRequest(pullRequest: IssueKey): void {
+    openLink(pullRequestUrl(pullRequest));
 }
 
 /** A PR's "in #n" chip: that plan expanded in place, with the cursor on it. */

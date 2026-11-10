@@ -8,10 +8,10 @@
  * Plans & issues, then the right column's Sessions and Worktrees. Each row's
  * `id` is what `projectPage.cursor` holds, and what the row's element carries
  * as `data-cursor-id`. The Pull requests and Worktrees sections (#175) add
- * theirs: a PR (↵ opens it on GitHub) and a worktree (S starts a session there).
+ * theirs: a PR (↵ peeks at it) and a worktree (S starts a session there).
  * The Tasks section (#251) adds a task, with the Tasks page's keys on it.
  * The Merge queue section (#315), over Pull requests, adds its entries as
- * PRs of their own (↵ opens one on GitHub), under ids of their own.
+ * PRs of their own (↵ peeks at one), under ids of their own.
  *
  * Pure, so it is tested in node.
  */

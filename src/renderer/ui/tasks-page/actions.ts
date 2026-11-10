@@ -19,6 +19,7 @@ import type {TaskSessionStart} from '../../../domain/tasks/surface';
 import type {ExistingBranchChoice} from '../../../domain/project/branch-worktree';
 import type {StartTaskSessionRequest} from '../tasks/start-task-session';
 import type {HandoffHost} from '../../../application/services/project-handoff';
+import {openLink} from '../pr-view/actions';
 
 /** What the page needs from the rest of the renderer. */
 export interface TasksPageEffects {
@@ -216,9 +217,9 @@ export function closeTaskDetail(): void {
     dispatch({type: 'tasksDetailClosed'});
 }
 
-/** One of the task's pull requests, in the browser. */
+/** One of the task's pull requests, in the peek. */
 export function openTaskPullRequest(url: string): void {
-    void window.api.openExternal(url);
+    openLink(url);
 }
 
 /** One of the task's sessions, on screen; the page gives way to it. */

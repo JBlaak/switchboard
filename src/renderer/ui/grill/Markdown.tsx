@@ -1,11 +1,12 @@
 /**
  * A round's Markdown drawn as elements: a title's inline runs, or a reason's
- * paragraphs, lists and tables (see `grill-markdown`). A web link opens in the
- * browser; the window itself never navigates.
+ * paragraphs, lists and tables (see `grill-markdown`). A PR link opens the
+ * peek, any other web link the browser; the window itself never navigates.
  */
 import {inlineMarkdown, markdownBlocks} from '../../features/grill/grill-markdown';
 import type {JSX, MouseEvent} from 'react';
 import type {Block, Inline} from '../../features/grill/grill-markdown';
+import {openLink as followLink} from '../pr-view/actions';
 
 export function InlineMarkdown({text}: {text: string}): JSX.Element {
     return <Runs runs={inlineMarkdown(text)} />;
@@ -106,5 +107,5 @@ function Runs({runs}: {runs: Inline[]}): JSX.Element {
 
 function openLink(e: MouseEvent, href: string): void {
     e.preventDefault();
-    if (/^(https?:|mailto:)/i.test(href)) void window.api.openExternal(href);
+    if (/^(https?:|mailto:)/i.test(href)) followLink(href);
 }
