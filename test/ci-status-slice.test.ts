@@ -9,8 +9,6 @@ import {
     rekeyCiStatus,
 } from '../src/renderer/state/ci-status-slice';
 import {initialRendererState, rootReducer} from '../src/renderer/state/root';
-import {activityCard} from '../src/renderer/ui/session-work/describe';
-import type {Activity, SessionWorkItem} from '../src/domain/session-work/model';
 import type {PullRequestStatusChange} from '../src/domain/session-work/status';
 
 const change = (sessionId: string, prs: PullRequestStatusChange['prs'], needsYou = false): PullRequestStatusChange => ({
@@ -141,57 +139,4 @@ test('a check log is kept once it came', () => {
 
     /* Then */
     assert.deepEqual(loaded.checkLogs[LOG_URL], {loading: false, text: 'boom'});
-});
-
-// The activity card of an automatic Fix CI
-
-const NOW = Date.parse('2026-06-10T14:00:00.000Z');
-
-function item(activity: Activity): SessionWorkItem {
-    const url = 'https://github.com/acme/api/pull/52';
-    return {
-        id: 'pr:' + url,
-        kind: 'pr',
-        pr: {
-            number: 52,
-            url,
-            repository: 'acme/api',
-            state: 'open',
-            checks: [{name: 'test', state: 'failing'}],
-            closes: [],
-        },
-        location: null,
-        diff: {kind: 'pull-request', repository: 'acme/api', number: 52},
-        activity,
-    };
-}
-
-const auto = (phase: Activity['phase'], extra: Partial<Activity> = {}): Activity => ({
-    id: 'a1',
-    action: 'fix-ci',
-    phase,
-    origin: 'auto',
-    queuedAt: '2026-06-10T13:50:00.000Z',
-    ...extra,
-});
-
-test('Claude fixing CI on its own says so, with the check, in amber', () => {
-    /* Given */
-    const sent = item(auto('sent', {checkName: 'test', sentAt: '2026-06-10T13:58:00.000Z'}));
-
-    /* When */
-    const card = activityCard(sent, NOW)!;
-
-    /* Then */
-    assert.equal(card.tone, 'amber');
-    assert.equal(card.title, 'Claude is fixing CI');
-    assert.equal(card.detail, 'test failed · sent to the session · started 2m ago');
-});
-
-test('a queued automatic fix says what it will do', () => {
-    /* When */
-    const card = activityCard(item(auto('queued')), NOW)!;
-
-    /* Then */
-    assert.equal(card.title, 'Queued: fix CI on #52');
 });

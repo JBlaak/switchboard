@@ -13,7 +13,7 @@
  */
 import {test, expect} from '../support/test';
 import {openSession} from '../support/app';
-import {pushEvent, sessionWorkActions, sessionWorkReviews} from '../support/main-process';
+import {pushEvent, sessionWorkReviews} from '../support/main-process';
 import {LABEL, S} from '../fixtures/standard';
 import {FIRST_PR_ID, loginFixWorkWithReview, sessionWorkStub} from '../fixtures/session-work';
 import {EVENT} from '../../src/ipc/channels';
@@ -156,11 +156,7 @@ test.describe('review threads and a pending review', () => {
         return workPage(page).locator(`[data-thread-id="${id}"]`);
     }
 
-    test('show inline under their lines; the bar finishes the review three ways, and Have Claude fix hands over one thread', async ({
-        page,
-        home,
-        app,
-    }) => {
+    test('show inline under their lines, and the bar submits or discards the review', async ({page, home, app}) => {
         /* Given */
         await openLoginFixWork(page, home);
         const bar = workPage(page).getByRole('region', {name: 'Pending review'});
@@ -177,7 +173,6 @@ test.describe('review threads and a pending review', () => {
         );
         await expect(resolved).toHaveClass(/\bis-resolved\b/);
         await expect(resolved).toContainText('Resolved by sam-lee');
-        await expect(resolved.getByRole('button', {name: 'Have Claude fix'})).toHaveCount(0);
         await expect(thread(page, 'PRRT_needs_you').getByText('needs you', {exact: true})).toBeVisible();
         // Outdated threads sit at the top of their file, before the lines.
         await expect(sessionFile(page).locator('.sw-file-head + .sw-notes.is-outdated')).toContainText(
@@ -193,35 +188,24 @@ test.describe('review threads and a pending review', () => {
         /* When */
         await bar.getByRole('button', {name: 'Discard'}).click();
         await expect.poll(async () => (await sessionWorkReviews(app)).length).toBe(1);
-        await bar.getByRole('button', {name: 'Submit only'}).click();
-        await expect.poll(async () => (await sessionWorkReviews(app)).length).toBe(2);
-        await bar.getByRole('button', {name: 'Submit & have Claude fix'}).click();
+        await bar.getByRole('button', {name: 'Submit', exact: true}).click();
 
         /* Then */
         await expect
             .poll(() => sessionWorkReviews(app))
             .toEqual(
-                ['discard', 'submit', 'fix'].map((mode) => ({
+                ['discard', 'submit'].map((mode) => ({
                     review: {sessionId: S.loginFix, itemId: FIRST_PR_ID, mode},
                 })),
             );
+        await expect(bar.getByRole('button')).toHaveCount(2);
 
         /* When */
-        await thread(page, 'PRRT_bot').getByRole('button', {name: 'Have Claude fix'}).click();
-
-        /* Then */
-        await expect
-            .poll(() => sessionWorkActions(app))
-            .toEqual([{sessionId: S.loginFix, itemId: FIRST_PR_ID, action: 'fix-comments', threadIds: ['PRRT_bot']}]);
-
-        /* When */
-        // GitHub says the review went out, and Claude has the thread.
-        await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWithReview({fixing: ['PRRT_bot']}));
+        // GitHub says the review went out.
+        await pushEvent(app, EVENT.sessionWorkSnapshot, loginFixWorkWithReview());
 
         /* Then */
         await expect(bar).toHaveCount(0);
-        await expect(thread(page, 'PRRT_bot').getByText('Claude is on it', {exact: true})).toBeVisible();
-        await expect(thread(page, 'PRRT_bot').getByRole('button', {name: 'Have Claude fix'})).toHaveCount(0);
-        await expect(thread(page, 'PRRT_open').getByRole('button', {name: 'Have Claude fix'})).toBeVisible();
+        await expect(thread(page, 'PRRT_open').getByRole('button')).toHaveCount(0);
     });
 });

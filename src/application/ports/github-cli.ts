@@ -41,7 +41,7 @@ export interface GitHubCli {
     pullRequestDiff(repo: string, number: number): Promise<string | null>;
 
     /**
-     * The last `lines` lines of a check run's log, for the Fix CI prompt (W2).
+     * The last `lines` lines of a check run's log, for the Checks panel and the merge queue's fix prompt.
      *
      * Only GitHub Actions keeps logs `gh` can read; any other check answers null.
      */

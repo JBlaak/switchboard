@@ -11,7 +11,7 @@
 import type {SessionPullRequest} from '../session/session';
 import {issueFromBranch, standaloneIssues} from './issues';
 import {locationKey} from './locations';
-import type {Activity, DiffSource, FileChange, IssueRef, PullRequestStatus, WorkItem, WorkLocation} from './model';
+import type {DiffSource, FileChange, IssueRef, PullRequestStatus, WorkItem, WorkLocation} from './model';
 import {needsYou} from './status';
 
 /** What git says about one branch the session worked on that still exists locally. */
@@ -56,12 +56,10 @@ export interface WorkFacts {
     issueMentions: readonly IssueRef[];
     /** `owner/repo` of the session's repository, for the issue a branch is named after; '' when unknown. */
     repository: string;
-    /** Each item's current action, by {@link workItemKey}. */
-    activities?: ReadonlyMap<string, Activity>;
 }
 
 /**
- * A stable identity for an item, for keying activities, selection and React.
+ * A stable identity for an item, for keying selection and React.
  *
  * A PR is its URL, which the transcript records and which does not change;
  * a branch or a dirty worktree is where it lives.
@@ -107,7 +105,6 @@ function isForeign(repository: string, sessionRepository: string): boolean {
 }
 
 export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
-    const activityOf = (key: string) => facts.activities?.get(key) ?? null;
     const locations = new Map<string, WorkLocation>();
     for (const location of facts.locations) {
         const key = locationKey(location.worktree, location.branch);
@@ -162,12 +159,10 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
             location,
             ahead: branch.ahead,
             diff: {kind: 'local', worktree: branch.worktree, base: branch.base, head: branch.branch},
-            activity: null,
             additions: branch.additions,
             deletions: branch.deletions,
             pushed: branch.pushed,
         };
-        item.activity = activityOf(workItemKey(item));
         branchItems.push(item);
     }
 
@@ -188,10 +183,8 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
             pr,
             location: local?.location ?? null,
             diff,
-            activity: null,
             ...(otherRepository ? {otherRepository: true as const} : {}),
         };
-        item.activity = activityOf(workItemKey(item));
         if (isDone(item)) donePrs.push({item, order});
         else openPrs.push({item, order, needsYou: needsYou(pr)});
     }
@@ -216,11 +209,9 @@ export function deriveWorkItems(facts: WorkFacts): WorkItem[] {
             kind: 'dirty',
             location: known ?? {worktree: change.worktree, branch: change.branch, fromSubagent},
             files: change.files,
-            activity: null,
             additions: change.additions,
             deletions: change.deletions,
         };
-        item.activity = activityOf(workItemKey(item));
         dirtyItems.push(item);
     }
 

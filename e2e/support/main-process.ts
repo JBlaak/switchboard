@@ -22,7 +22,6 @@
 import type {ElectronApplication} from '@playwright/test';
 import {EVENT, INVOKE, SEND} from '../../src/ipc/channels';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../../src/domain/session-work/model';
-import type {ActionRequest} from '../../src/domain/session-work/actions';
 import type {PullRequestPeek} from '../../src/domain/session-work/pull-request-link';
 import type {CommentRequest, ReviewRequest} from '../../src/domain/session-work/review';
 import type {RemoteStatusPayload} from '../../src/domain/remote/remote-status';
@@ -534,11 +533,6 @@ export interface SessionWorkStub {
     snapshots: Record<string, SessionWorkSnapshot>;
     /** What `getSessionWorkDiff` answers, by item id: an item not here has no changes, and 'never' never answers. */
     diffs?: Record<string, SessionWorkDiff | 'never'>;
-    /**
-     * Why every action is refused; unset queues each one, answering `act-<n>`.
-     * Either way the request is recorded (see `sessionWorkActions`).
-     */
-    refuseActions?: string;
     /** Why every review write (a comment, submit, discard) is refused; unset, each one goes through. */
     refuseReview?: string;
     /** What the Checks panel's log request answers, by check run URL; a URL not here has no log. */
@@ -570,10 +564,6 @@ interface StubState extends HostStubs {
     clipboardImages: string[];
     /** Every session the renderer told main its Session work page closed for, in order. */
     sessionWorkClosed: string[];
-    /** Every action the page asked main for, in order. */
-    sessionWorkActions: ActionRequest[];
-    /** Every queued action the page asked main to cancel, by id. */
-    sessionWorkCancels: string[];
     /** Every call on a `queue:*` channel, in order. */
     mergeQueueRequests: MergeQueueRequest[];
     /** Every write to your review the page asked main for, in order. */
@@ -651,8 +641,6 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                 clipboard: [],
                 clipboardImages: [],
                 sessionWorkClosed: [],
-                sessionWorkActions: [],
-                sessionWorkCancels: [],
                 mergeQueueRequests: [],
                 sessionWorkReviews: [],
                 agentRequests: {install: [], setHostSettings: [], openSetupTerminal: []},
@@ -692,20 +680,6 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                     const diff = work.diffs?.[String(request?.itemId)];
                     if (diff === 'never') return new Promise(() => {});
                     return diff ?? {files: [], source: null};
-                });
-                // The page's actions would type into the session through the real queue,
-                // which needs the real page; recorded here instead, and the test pushes
-                // the snapshot that shows what the queue would have done.
-                ipcMain.removeHandler(channels.sessionWorkAction);
-                ipcMain.handle(channels.sessionWorkAction, (_event, request: ActionRequest) => {
-                    state.sessionWorkActions.push(request);
-                    if (work.refuseActions) return {ok: false, reason: work.refuseActions};
-                    return {ok: true, activityId: 'act-' + state.sessionWorkActions.length};
-                });
-                ipcMain.removeHandler(channels.sessionWorkCancel);
-                ipcMain.handle(channels.sessionWorkCancel, (_event, activityId) => {
-                    state.sessionWorkCancels.push(String(activityId));
-                    return {ok: true};
                 });
                 // Your review would be written to GitHub; recorded here instead.
                 ipcMain.removeHandler(channels.sessionWorkComment);
@@ -1335,24 +1309,10 @@ export async function existingBranchAsks(app: ElectronApplication): Promise<(str
     return await app.evaluate(() => [...((globalThis as {__existingAsked?: (string | null)[]}).__existingAsked ?? [])]);
 }
 
-/** The actions the page asked main for, in order. */
-export async function sessionWorkActions(app: ElectronApplication): Promise<ActionRequest[]> {
-    return await app.evaluate(() => {
-        return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkActions];
-    });
-}
-
 /** Every call the renderer made on a `queue:*` channel, in order (#315). */
 export async function mergeQueueRequests(app: ElectronApplication): Promise<MergeQueueRequest[]> {
     return await app.evaluate(() => {
         return [...(globalThis as WithStubs).__switchboardE2E.mergeQueueRequests];
-    });
-}
-
-/** The queued actions the page asked main to cancel, by id. */
-export async function sessionWorkCancels(app: ElectronApplication): Promise<string[]> {
-    return await app.evaluate(() => {
-        return [...(globalThis as WithStubs).__switchboardE2E.sessionWorkCancels];
     });
 }
 

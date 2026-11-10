@@ -29,7 +29,6 @@ import type {DiffSide} from '../../../domain/session-work/model';
 import type {ReviewMode, ReviewResult} from '../../../domain/session-work/review';
 import {headerNameFor} from '../../features/sessions/terminal-header';
 import {openSession} from '../../features/sessions/session-actions';
-import type {WorkAction} from '../../../domain/session-work/model';
 import type {ImageMode} from './image-compare/modes/types';
 import {isPullRequestPageId, pullRequestPageRef} from '../../../domain/session-work/pull-request-link';
 import type {PullRequestRef} from '../../../domain/session-work/pull-request-link';
@@ -215,51 +214,6 @@ export function openOnGitHub(url: string): void {
     void window.api.openExternal(url);
 }
 
-// ── Handing an item to Claude ──
-
-/**
- * An action button: ask main to queue the action for the page's session. The
- * activity arrives with the next snapshot; a refusal shows on the item.
- */
-export async function requestWorkAction(itemId: string, action: WorkAction, threadIds?: string[]): Promise<void> {
-    const page = getState().sessionWork.page;
-    if (!page || page.pendingAction) return;
-    const {sessionId} = page;
-    dispatch({type: 'sessionWorkActionRequested', sessionId, itemId, action, ...(threadIds ? {threadIds} : {})});
-    let error: string | null;
-    try {
-        const result = await window.api.sessionWorkAction({
-            sessionId,
-            itemId,
-            action,
-            ...(threadIds ? {threadIds} : {}),
-        });
-        error = result.ok ? null : result.reason;
-    } catch (err) {
-        error = (err as Error)?.message || 'The action could not be queued';
-    }
-    dispatch({type: 'sessionWorkActionAnswered', sessionId, itemId, error});
-}
-
-/** Cancel on a queued action's card. One Claude already has cannot be taken back. */
-export async function cancelWorkAction(itemId: string, activityId: string): Promise<void> {
-    const page = getState().sessionWork.page;
-    if (!page) return;
-    let error: string | null = null;
-    try {
-        const result = await window.api.cancelSessionWorkAction(activityId);
-        if (!result.ok) error = result.reason;
-    } catch (err) {
-        error = (err as Error)?.message || 'The action could not be cancelled';
-    }
-    if (error) dispatch({type: 'sessionWorkActionAnswered', sessionId: page.sessionId, itemId, error});
-}
-
-/** "View in terminal": back to the session's terminal, where Claude is working on it. */
-export function viewInTerminal(): void {
-    closeSessionWork();
-}
-
 // ── The diff ──
 
 /**
@@ -338,7 +292,7 @@ export async function addReviewComment(body: string): Promise<boolean> {
     );
 }
 
-/** A button of the pending review bar: Submit & have Claude fix, Submit only, or Discard. */
+/** A button of the pending review bar: Submit or Discard. */
 export async function finishReview(itemId: string, mode: ReviewMode): Promise<boolean> {
     const page = getState().sessionWork.page;
     if (!page || page.reviewPending) return false;

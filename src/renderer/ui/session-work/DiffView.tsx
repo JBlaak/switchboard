@@ -30,21 +30,18 @@ import {Pills} from './Pills';
 import type {CommentTarget, DiffMode, ImageCardState, ItemDiff, SessionWorkPage} from '../../state/session-work-slice';
 import type {FileDiff, PullRequestStatus, SessionWorkItem} from '../../../domain/session-work/model';
 import {canComment} from '../../../domain/session-work/review';
-import {isPullRequestPageId} from '../../../domain/session-work/pull-request-link';
 import {imageFormatOf} from '../../../domain/session-work/image';
 import {useStore} from '../use-store';
 import {ImageCard} from './ImageCard';
 import type {Background} from './image-compare/types';
 import type {ImageMode} from './image-compare/modes/types';
 import {fileReview} from './review-notes';
-import {OutdatedNotes, ReviewBar, ReviewContext} from './ReviewNotes';
-import type {ReviewScope} from './ReviewNotes';
+import {OutdatedNotes, ReviewBar} from './ReviewNotes';
 
 /** How many cards draw their first lines at once; the rest fill in a frame later. */
 const EAGER_FILES = 3;
 
 const NO_PATHS: ReadonlySet<string> = new Set();
-const NO_THREADS: ReadonlySet<string> = new Set();
 
 export function DiffView({page, item}: {page: SessionWorkPage; item: SessionWorkItem}): JSX.Element | null {
     const diff: ItemDiff | undefined = page.diffs[item.id];
@@ -54,18 +51,6 @@ export function DiffView({page, item}: {page: SessionWorkPage; item: SessionWork
                 ? new Set(item.files.filter((file) => file.status === 'untracked').map((file) => file.path))
                 : NO_PATHS,
         [item],
-    );
-    const fixingThreads = item.kind === 'pr' ? item.fixingThreads : undefined;
-    // Nothing is handed to Claude for a PR in another repository, or on a PR's own page (no session at all).
-    const canFix = !(item.kind === 'pr' && item.otherRepository) && !isPullRequestPageId(page.sessionId);
-    const scope = useMemo<ReviewScope>(
-        () => ({
-            sessionId: page.sessionId,
-            itemId: item.id,
-            fixing: fixingThreads ? new Set(fixingThreads) : NO_THREADS,
-            canFix,
-        }),
-        [page.sessionId, item.id, fixingThreads, canFix],
     );
     const imageDefaults = useStore((state) => state.sessionWork.imageDefaults);
     if (item.kind === 'issue') return null;
@@ -77,56 +62,54 @@ export function DiffView({page, item}: {page: SessionWorkPage; item: SessionWork
     const summary = diffSummary(files);
 
     return (
-        <ReviewContext.Provider value={scope}>
-            <div className="sw-diff" data-testid="session-work-diff" aria-busy={loading}>
-                <div className="sw-diff-bar">
-                    {!loading && files.length > 0 && (
-                        <span className="sw-diff-summary">
-                            <span>{summary.label}</span>
-                            <LineCounts stats={summary.stats} />
-                        </span>
-                    )}
-                    {diff?.source === 'github' && (
-                        <span className="sw-diff-note" role="note">
-                            {diff.note ?? 'Branch not checked out locally.'}
-                        </span>
-                    )}
-                    <ModeToggle mode={page.diffMode} />
-                </div>
-                {loading ? (
-                    <DiffSkeleton />
-                ) : diff.phase === 'failed' ? (
-                    <div className="sw-diff-empty">
-                        {diff.error && diff.error !== item.error ? diff.error : 'No diff to show.'}
-                    </div>
-                ) : files.length === 0 ? (
-                    <div className="sw-diff-empty">No changes to show.</div>
-                ) : (
-                    files.map((file, i) => (
-                        <FileCard
-                            key={file.path}
-                            sessionId={page.sessionId}
-                            itemId={item.id}
-                            loadKey={diff.key}
-                            github={diff.source === 'github'}
-                            image={diff.images[file.path]}
-                            background={imageDefaults.background}
-                            defaultMode={imageDefaults.mode}
-                            file={file}
-                            mode={page.diffMode}
-                            expanded={diff.expanded.includes(file.path)}
-                            focused={diff.focusedPath === file.path}
-                            untracked={untracked.has(file.path)}
-                            eager={i < EAGER_FILES}
-                            pr={pr}
-                            commentable={commentable}
-                            composer={page.composer}
-                        />
-                    ))
+        <div className="sw-diff" data-testid="session-work-diff" aria-busy={loading}>
+            <div className="sw-diff-bar">
+                {!loading && files.length > 0 && (
+                    <span className="sw-diff-summary">
+                        <span>{summary.label}</span>
+                        <LineCounts stats={summary.stats} />
+                    </span>
                 )}
-                {pr && <ReviewBar sessionId={page.sessionId} itemId={item.id} pr={pr} canFix={canFix} />}
+                {diff?.source === 'github' && (
+                    <span className="sw-diff-note" role="note">
+                        {diff.note ?? 'Branch not checked out locally.'}
+                    </span>
+                )}
+                <ModeToggle mode={page.diffMode} />
             </div>
-        </ReviewContext.Provider>
+            {loading ? (
+                <DiffSkeleton />
+            ) : diff.phase === 'failed' ? (
+                <div className="sw-diff-empty">
+                    {diff.error && diff.error !== item.error ? diff.error : 'No diff to show.'}
+                </div>
+            ) : files.length === 0 ? (
+                <div className="sw-diff-empty">No changes to show.</div>
+            ) : (
+                files.map((file, i) => (
+                    <FileCard
+                        key={file.path}
+                        sessionId={page.sessionId}
+                        itemId={item.id}
+                        loadKey={diff.key}
+                        github={diff.source === 'github'}
+                        image={diff.images[file.path]}
+                        background={imageDefaults.background}
+                        defaultMode={imageDefaults.mode}
+                        file={file}
+                        mode={page.diffMode}
+                        expanded={diff.expanded.includes(file.path)}
+                        focused={diff.focusedPath === file.path}
+                        untracked={untracked.has(file.path)}
+                        eager={i < EAGER_FILES}
+                        pr={pr}
+                        commentable={commentable}
+                        composer={page.composer}
+                    />
+                ))
+            )}
+            {pr && <ReviewBar itemId={item.id} pr={pr} />}
+        </div>
     );
 }
 

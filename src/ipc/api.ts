@@ -23,7 +23,6 @@ import type {PullRequestPeek, PullRequestRef} from '../domain/session-work/pull-
 import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
 import type {BumpRequest, BumpResult, CiJobQueueAnswer} from '../domain/project/ci-job-queue';
-import type {ActionRequest, ActionResult, CancelResult} from '../domain/session-work/actions';
 import type {CommentRequest, ReviewRequest, ReviewResult} from '../domain/session-work/review';
 import type {WorkingAgent} from '../domain/terminal/program-status-children';
 import type {BackgroundTask} from '../domain/session/background-tasks';
@@ -297,14 +296,6 @@ export interface SwitchboardApi {
         path: string;
         side: 'before' | 'after';
     }): Promise<Uint8Array | null>;
-    /**
-     * Hand an item of the open page to Claude: its prompt is queued and typed
-     * into the session's terminal once it is idle. Refused, with the reason,
-     * when the session is not running or the item cannot take the action.
-     */
-    sessionWorkAction(request: ActionRequest): Promise<ActionResult>;
-    /** Take a queued action back out of its queue; one already typed in cannot be. */
-    cancelSessionWorkAction(activityId: string): Promise<CancelResult>;
     /** Add a line comment to your pending review on a PR item, starting the review if there is none (C1, C2). */
     sessionWorkComment(request: CommentRequest): Promise<ReviewResult>;
     /** Finish your pending review on a PR item: submit it (and hand its threads to Claude), or discard it (C2). */
@@ -360,11 +351,7 @@ export interface SwitchboardApi {
     queueForgetNudge(repository: string, number: number, reviewer: string): Promise<void>;
     /** These PRs of the repository wait for these reviewers now: every other standing nudge in it is forgotten. */
     queueSettleNudges(repository: string, held: {number: number; reviewer: string}[]): Promise<void>;
-    /**
-     * Fix in session: queued in the PR's own running session (`kind: 'queued'`),
-     * or a worktree on its branch and the first prompt of a new session there
-     * (`kind: 'start'`).
-     */
+    /** Fix in session: a worktree on the PR's branch and the first prompt of a new session there. */
     queueFix(request: FixRequest): Promise<FixResult>;
     /** Retry: remove `automerge:failed` from the PR. */
     queueRetry(repository: string, number: number): Promise<ErrandResult>;

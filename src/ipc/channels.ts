@@ -101,8 +101,6 @@ export const INVOKE = {
     pullRequestPeek: 'pull-request:peek',
     sessionWorkDiff: 'session-work:diff',
     sessionWorkImage: 'session-work:image',
-    sessionWorkAction: 'session-work:action',
-    sessionWorkCancel: 'session-work:cancel',
     sessionWorkComment: 'session-work:comment',
     sessionWorkReview: 'session-work:review',
     sessionWorkCheckLog: 'session-work:check-log',

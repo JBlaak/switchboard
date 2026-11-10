@@ -1,10 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {ReviewService, type FixRequester, type ReviewPage} from '../src/application/services/review-service';
+import {ReviewService, type ReviewPage} from '../src/application/services/review-service';
 import {silentLog} from './support/fakes';
 import type {GitHubCli, GitHubWrite, NewLineComment} from '../src/application/ports/github-cli';
-import type {ActionResult} from '../src/domain/session-work/actions';
 import type {GitHubAvailability, PullRequestStatus, SessionWorkItem} from '../src/domain/session-work/model';
 import type {ReviewEvent} from '../src/domain/session-work/review';
 
@@ -18,7 +17,6 @@ function prItem(extra: Partial<PullRequestStatus> = {}): SessionWorkItem {
         pr: {number: 12, url: URL, repository: 'o/app', state: 'open', nodeId: 'PR_12', closes: [], ...extra},
         location: null,
         diff: {kind: 'pull-request', repository: 'o/app', number: 12},
-        activity: null,
     };
 }
 
@@ -57,26 +55,18 @@ function setup({
     item = prItem(),
     gh = 'ok' as GitHubAvailability,
     answers = {} as Partial<Record<string, GitHubWrite<any>>>,
-    fix = {ok: true, activityId: 'a1'} as ActionResult,
 } = {}) {
     const {github, writes} = fakeGitHub(answers);
     const state = {item, refreshes: 0};
     const page: ReviewPage = {
         item: (sessionId, itemId) => (sessionId === 's1' && itemId === state.item.id ? state.item : null),
-        context: (sessionId) => (sessionId === 's1' ? {repository: 'o/app', mainCheckout: '/code/app', gh} : null),
+        context: (sessionId) => (sessionId === 's1' ? {repository: 'o/app', gh} : null),
         async refreshGitHub() {
             state.refreshes++;
         },
     };
-    const requests: Array<{itemId: string; action: string; threadIds?: readonly string[]}> = [];
-    const actions: FixRequester = {
-        async request(_sessionId, itemId, action, _origin, options) {
-            requests.push({itemId, action, threadIds: options?.threadIds});
-            return fix;
-        },
-    };
-    const service = new ReviewService({github, page, actions, log: silentLog});
-    return {service, writes, state, requests};
+    const service = new ReviewService({github, page, log: silentLog});
+    return {service, writes, state};
 }
 
 const comment = (body = 'Rename this', line = 3) => ({
@@ -177,9 +167,9 @@ const pendingPr = prItem({
     ],
 });
 
-test('Submit only submits the review as a comment and hands nothing to Claude', async () => {
+test('Submit submits the review as a comment', async () => {
     /* Given */
-    const {service, writes, requests, state} = setup({item: pendingPr});
+    const {service, writes, state} = setup({item: pendingPr});
 
     /* When */
     const result = await service.review({sessionId: 's1', itemId: ITEM, mode: 'submit'});
@@ -187,60 +177,21 @@ test('Submit only submits the review as a comment and hands nothing to Claude', 
     /* Then */
     assert.deepEqual(result, {ok: true});
     assert.deepEqual(writes, [{call: 'submit', args: ['PRR_9', 'COMMENT']}]);
-    assert.equal(requests.length, 0);
     assert.equal(state.refreshes, 1);
 });
 
-test('Submit & have Claude fix requests changes, then hands over exactly the submitted threads', async () => {
+test('a submit GitHub refuses comes back with its reason', async () => {
     /* Given */
-    const {service, writes, requests} = setup({item: pendingPr});
-
-    /* When */
-    const result = await service.review({sessionId: 's1', itemId: ITEM, mode: 'fix'});
-
-    /* Then */
-    assert.deepEqual(result, {ok: true});
-    assert.deepEqual(writes, [{call: 'submit', args: ['PRR_9', 'REQUEST_CHANGES']}]);
-    assert.deepEqual(requests, [{itemId: ITEM, action: 'fix-comments', threadIds: ['PRRT_a', 'PRRT_b']}]);
-});
-
-test('a submitted review whose fix cannot be queued says so', async () => {
-    /* Given */
-    const {service} = setup({item: pendingPr, fix: {ok: false, reason: 'Start the session to hand this to Claude'}});
-
-    /* When */
-    const result = await service.review({sessionId: 's1', itemId: ITEM, mode: 'fix'});
-
-    /* Then */
-    assert.deepEqual(result, {ok: false, reason: 'Review submitted, but start the session to hand this to Claude'});
-});
-
-test('Submit & have Claude fix on a PR in another repository is refused before anything is submitted', async () => {
-    /* Given */
-    const {service, writes, requests} = setup({item: {...pendingPr, otherRepository: true} as SessionWorkItem});
-
-    /* When */
-    const result = await service.review({sessionId: 's1', itemId: ITEM, mode: 'fix'});
-
-    /* Then */
-    assert.equal(result.ok, false);
-    assert.equal(writes.length, 0);
-    assert.equal(requests.length, 0);
-});
-
-test('a submit GitHub refuses hands nothing to Claude', async () => {
-    /* Given */
-    const {service, requests} = setup({
+    const {service} = setup({
         item: pendingPr,
         answers: {submit: {ok: false, reason: 'Review is not pending'}},
     });
 
     /* When */
-    const result = await service.review({sessionId: 's1', itemId: ITEM, mode: 'fix'});
+    const result = await service.review({sessionId: 's1', itemId: ITEM, mode: 'submit'});
 
     /* Then */
     assert.deepEqual(result, {ok: false, reason: 'Could not submit the review: Review is not pending'});
-    assert.equal(requests.length, 0);
 });
 
 test('Discard deletes the pending review', async () => {
@@ -259,7 +210,7 @@ test('with no review in progress there is nothing to submit or discard', async (
     /* Given */
     const {service, writes} = setup();
 
-    for (const mode of ['fix', 'submit', 'discard'] as const) {
+    for (const mode of ['submit', 'discard'] as const) {
         /* When */
         const result = await service.review({sessionId: 's1', itemId: ITEM, mode});
 

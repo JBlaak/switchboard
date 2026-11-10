@@ -167,8 +167,6 @@ export async function fixInSession(projectPath: string, repository: string, entr
         });
         if (!result.ok) {
             answered(key, {phase: 'failed', reason: result.reason});
-        } else if (result.kind === 'queued') {
-            answered(key, {phase: 'sent', sessionId: result.sessionId});
         } else {
             const started = await startErrand(result.errandId, result.worktreePath, projectPath, result.prompt);
             answered(

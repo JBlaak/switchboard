@@ -191,7 +191,7 @@ export function mergeQueueStub(fields: Partial<MergeQueueStub> = {}): MergeQueue
         bump: {ok: true, runs: 2},
         errands: [],
         nudge: {ok: true, errandId: 'errand-nudge', prompt: 'Send a Slack message for me.'},
-        fix: {ok: true, kind: 'queued', sessionId: 'not-a-session', activityId: 'activity-1'},
+        fix: {ok: false, reason: 'Fix in session is not stubbed in this suite'},
         retry: {ok: true},
         optIn: {ok: true},
         ...fields,

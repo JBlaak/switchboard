@@ -1,14 +1,13 @@
 /**
  * The page's right column: the selected item's header — title and ref, its
- * pills, `branch → base`, the issues it closes, its action buttons and the
- * card of what Claude is doing with it — over its diff.
+ * pills, `branch → base`, the issues it closes and Open on GitHub — over its diff.
  */
 import type {JSX} from 'react';
 import {openOnGitHub} from './actions';
 import {closedIssues, itemBranchLine, itemPills, itemRef, itemTitle} from './describe';
 import {DiffView} from './DiffView';
 import {Pills} from './Pills';
-import {ActionRow, ActivityCardView} from './WorkActions';
+import {ActionRow} from './WorkActions';
 import {ChecksPanel} from './ChecksPanel';
 import {selectedItem} from '../../state/session-work-slice';
 import type {SessionWorkPage} from '../../state/session-work-slice';
@@ -30,7 +29,7 @@ export function WorkDetail({page}: {page: SessionWorkPage}): JSX.Element {
                     <h2 className="sw-detail-title">
                         {itemTitle(item)} <span className="sw-detail-ref">{itemRef(item)}</span>
                     </h2>
-                    <ActionRow page={page} item={item} />
+                    <ActionRow item={item} />
                 </div>
                 <div className="sw-detail-facts">
                     <Pills pills={itemPills(item)} />
@@ -63,12 +62,6 @@ export function WorkDetail({page}: {page: SessionWorkPage}): JSX.Element {
                         {item.error}
                     </div>
                 )}
-                {page.actionError?.itemId === item.id && !page.actionError.threadIds && (
-                    <div className="sw-item-error" role="alert">
-                        {page.actionError.message}
-                    </div>
-                )}
-                <ActivityCardView item={item} />
                 <ChecksPanel item={item} />
             </div>
             <DiffView page={page} item={item} />

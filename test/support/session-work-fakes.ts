@@ -1,9 +1,7 @@
 /**
- * Doubles for the Session work queue's ports: a session the test drives
- * (running or not, busy or idle, exiting, moving to a new id) and a store
- * that keeps its rows in memory, the way SQLite would across a restart.
+ * A session the test drives: running or not, busy or idle, exiting, moving to
+ * a new id.
  */
-import type {ActivityStore, StoredAction} from '../../src/application/ports/activity-store';
 import type {SessionPrompter} from '../../src/application/ports/session-prompter';
 
 /** A session the test drives: running or not, busy or idle, with its id moving on a fork. */
@@ -70,22 +68,5 @@ export class FakePrompter implements SessionPrompter {
     }
     public listenerCount(): number {
         return [...this.listeners.values()].reduce((n, set) => n + set.size, 0);
-    }
-}
-
-export class MemoryStore implements ActivityStore {
-    public rows: StoredAction[] = [];
-    public add(action: StoredAction) {
-        this.rows.push({...action});
-    }
-    public update(id: string, changes: Partial<Pick<StoredAction, 'phase' | 'sentAt' | 'doneAt'>>) {
-        const row = this.rows.find((r) => r.id === id);
-        if (row) Object.assign(row, Object.fromEntries(Object.entries(changes).filter(([, v]) => v !== undefined)));
-    }
-    public remove(id: string) {
-        this.rows = this.rows.filter((r) => r.id !== id);
-    }
-    public unfinished() {
-        return this.rows.filter((r) => r.phase !== 'done').map((r) => ({...r}));
     }
 }

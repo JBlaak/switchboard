@@ -51,7 +51,6 @@ import type {
     DiffSide,
     IssueRef,
     IssueStatus,
-    MergeMethod,
     PendingComment,
     PullRequestStatus,
     ReviewThread,
@@ -516,7 +515,6 @@ const PULL_REQUEST_FIELDS = `
   headRefName headRefOid baseRefName
   repository {
     defaultBranchRef { name }
-    viewerDefaultMergeMethod mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed
   }
   headRef { compare(headRef: "HEAD") { aheadBy } }
   statusCheckRollup {
@@ -578,9 +576,6 @@ function toPullRequest(node: any, repo: string, viewer: string): PullRequestStat
     const behindBy = behindBase(node);
     if (behindBy !== undefined) pr.behindBy = behindBy;
 
-    const mergeMethod = mergeMethodOf(node.repository);
-    if (mergeMethod) pr.mergeMethod = mergeMethod;
-
     const {threads, pending} = reviewThreads(node, viewer);
     pr.threads = threads;
     pr.pendingReview = pending;
@@ -612,26 +607,6 @@ function behindBase(node: any): number | undefined {
     if (!defaultBranch || node.baseRefName !== defaultBranch) return undefined;
     const aheadBy = node.headRef?.compare?.aheadBy;
     return typeof aheadBy === 'number' ? aheadBy : undefined;
-}
-
-/** GraphQL's merge methods, as `gh pr merge` takes them. */
-const MERGE_METHODS: ReadonlyArray<[MergeMethod, string, string]> = [
-    ['merge', 'MERGE', 'mergeCommitAllowed'],
-    ['squash', 'SQUASH', 'squashMergeAllowed'],
-    ['rebase', 'REBASE', 'rebaseMergeAllowed'],
-];
-
-/**
- * How Ship it merges in this repository: the viewer's default merge method
- * (the one GitHub's merge button starts on) when the repository allows it,
- * else the first it allows, merge commit first. Unknown when GitHub said
- * nothing about it.
- */
-function mergeMethodOf(repository: any): MergeMethod | undefined {
-    if (!repository) return undefined;
-    const allowed = MERGE_METHODS.filter(([, , flag]) => repository[flag] === true);
-    const preferred = allowed.find(([, name]) => name === repository.viewerDefaultMergeMethod);
-    return (preferred ?? allowed[0])?.[0];
 }
 
 function toCheck(node: any): CheckRun {

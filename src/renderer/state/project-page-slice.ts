@@ -109,14 +109,9 @@ export type ProjectPageEvent =
     /** The CI job queue of `repository`, as main last answered it. */
     | {type: 'projectCiJobQueueAnswered'; repository: string; answer: CiJobQueueAnswer};
 
-/**
- * How a merge queue button's job ended: done (nothing more to show), handed
- * to a running session (Fix in session, to the PR's own), done with a note,
- * or why not.
- */
+/** How a merge queue button's job ended: done (nothing more to show), done with a note, or why not. */
 export type QueueActionOutcome =
     | {readonly phase: 'done'}
-    | {readonly phase: 'sent'; readonly sessionId: string}
     | {readonly phase: 'note'; readonly text: string}
     | {readonly phase: 'failed'; readonly reason: string};
 

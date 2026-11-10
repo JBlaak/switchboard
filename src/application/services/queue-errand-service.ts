@@ -10,11 +10,9 @@
  *   nudge stands for its review request: a second one for the same PR and
  *   reviewer is refused until `forgetNudge` or `settleNudges` says the
  *   request changed.
- * - **Fix in session** hands the queue's failure to the running session that
- *   owns the PR (the one whose transcript linked it, as the CI watch decides)
- *   as a queued action, which is never told to archive; with no such session
- *   it makes a worktree on the PR's branch and answers the first prompt of a
- *   new session there, which pushes the fix and archives itself.
+ * - **Fix in session** makes a worktree on the PR's branch and answers the
+ *   first prompt of a new session there, which pushes the fix and archives
+ *   itself.
  *
  * The renderer starts every new session, because a session's row is its to
  * make, then says which session it started (`started`), or that it could not
@@ -32,7 +30,6 @@ import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {QUEUE_LABELS} from '../../domain/project/merge-queue';
 import {
     errandState,
-    fixAction,
     fixPrompt,
     isGitHubLogin,
     nudgeMessage,
@@ -48,7 +45,6 @@ import {
     type QueueFailure,
 } from '../../domain/project/queue-errands';
 import type {PullRequestStatus} from '../../domain/session-work/model';
-import type {SessionPullRequest} from '../../domain/session/session';
 import type {Clock} from '../ports/clock';
 import type {GitWorkspace} from '../ports/git-workspace';
 import type {GitHubCli, GitHubWrite} from '../ports/github-cli';
@@ -57,11 +53,13 @@ import type {Logger} from '../ports/logger';
 import type {QueueErrandStore} from '../ports/queue-errand-store';
 import type {SessionPrompter} from '../ports/session-prompter';
 import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
-import {AUTO_FIX_LOG_TAIL_LINES, type SessionActionService} from './session-action-service';
 import {BranchWorktrees, type BranchSessionCandidate, type BranchWorktreesDeps} from './support/branch-worktrees';
 
 /** An errand whose session the renderer never said it started is given up on after this long. */
 export const ERRAND_START_TIMEOUT_MS = 10 * 60_000;
+
+/** How much of a failing check's log the fix prompt carries: Claude reads it with nobody there to add more. */
+export const FIX_LOG_TAIL_LINES = 80;
 
 /** Errands are forgotten this long after they were asked for. */
 export const ERRAND_RETENTION_MS = 14 * 24 * 60 * 60_000;
@@ -75,23 +73,10 @@ export interface QueueLabelWriter {
     removeLabel(repo: string, number: number, label: string): Promise<GitHubWrite>;
 }
 
-/** A running Claude session that may own a PR: the CI watch's view of it. */
-export interface ErrandOwnerCandidate {
-    sessionId: string;
-    projectPath: string;
-    /** Its transcript folder; null when it has none yet. */
-    folder: string | null;
-    /** The PRs its transcript linked. */
-    pullRequests: readonly SessionPullRequest[];
-}
-
 export interface QueueErrandServiceDeps {
-    /** The running Claude sessions that may own a PR (the CI watch's). */
-    running(): ErrandOwnerCandidate[];
     /** Every listed and running session, for the worktree mechanics (as issue starts use). */
     sessions(): BranchSessionCandidate[];
     store: QueueErrandStore;
-    actions: Pick<SessionActionService, 'queuePrompt'>;
     github: Pick<GitHubCli, 'pullRequests' | 'checkLogTail'>;
     labels: QueueLabelWriter;
     git: BranchWorktreesDeps['git'] & Pick<GitWorkspace, 'worktreeRoot'>;
@@ -195,7 +180,7 @@ export class QueueErrandService {
 
     // ── Fix in session ──
 
-    /** Hand the queue's failure to the PR's own running session, or prepare a new one on its branch. */
+    /** Prepare a new session on the PR's branch to fix the queue's failure. */
     public async fix({repository, projectPath, pr, failure}: FixRequest): Promise<FixResult> {
         const status = await this.status(repository, pr.number);
         const logTail = failure.kind === 'ci' ? await this.logTail(repository, failure, status) : null;
@@ -210,21 +195,6 @@ export class QueueErrandService {
         const headRef = pr.headRef || status?.headRef || '';
         if (!headRef) return {ok: false, reason: `Could not tell which branch #${pr.number} is on`};
         const prompted = {number: pr.number, url: pr.url, headRef, baseRef: pr.baseRef || status?.baseRef || 'main'};
-
-        const owner = this.owner(repository, pr);
-        if (owner) {
-            const worktree = await this.ownerWorktree(owner, headRef);
-            const result = this.deps.actions.queuePrompt(owner.sessionId, {
-                itemKey: 'pr:' + pr.url,
-                action: fixAction(failure.kind),
-                repository,
-                prompt: fixPrompt({pr: prompted, failure: facts, worktree, errand: false}),
-                details: failure.kind === 'ci' && failure.checkName ? {checkName: failure.checkName} : null,
-            });
-            if (!result.ok) return result;
-            this.deps.log.info(`[queue-errands] fix for ${repository}#${pr.number} queued in ${owner.sessionId}`);
-            return {ok: true, kind: 'queued', sessionId: owner.sessionId, activityId: result.activityId};
-        }
 
         const busy = this.views().find(
             (errand) =>
@@ -253,36 +223,9 @@ export class QueueErrandService {
             errandId: errand.id,
             worktreePath: prepared.worktreePath,
             branch: headRef,
-            prompt: fixPrompt({pr: prompted, failure: facts, worktree: prepared.worktreePath, errand: true}),
+            prompt: fixPrompt({pr: prompted, failure: facts, worktree: prepared.worktreePath}),
             ...(prepared.warning ? {warning: prepared.warning} : {}),
         };
-    }
-
-    /** The running session whose transcript linked the PR, if any. */
-    private owner(repository: string, pr: ErrandPullRequest): ErrandOwnerCandidate | null {
-        return (
-            this.deps
-                .running()
-                .find((session) =>
-                    session.pullRequests.some(
-                        (link) =>
-                            link.url === pr.url ||
-                            (link.number === pr.number && (link.repository || repositoryOf(link.url)) === repository),
-                    ),
-                ) ?? null
-        );
-    }
-
-    /** Where the owner worked on the branch, from its transcript; else the worktree it was started in. */
-    private async ownerWorktree(owner: ErrandOwnerCandidate, headRef: string): Promise<string> {
-        const {git, transcripts} = this.deps;
-        if (owner.folder) {
-            const written = (await transcripts.locations(owner.folder, owner.sessionId)).find(
-                (location) => location.branch === headRef,
-            );
-            if (written) return (await git.worktreeRoot(written.cwd)) ?? written.cwd;
-        }
-        return (await git.worktreeRoot(owner.projectPath)) ?? owner.projectPath;
     }
 
     /** A worktree on the PR's existing branch: its own when it has one, else a new one off `origin/<branch>`. */
@@ -335,7 +278,7 @@ export class QueueErrandService {
             failure.checkRunUrl ||
             (failure.checkName ? failing.find((check) => check.name === failure.checkName)?.url : failing[0]?.url);
         if (!url) return null;
-        return this.deps.github.checkLogTail(repository, url, AUTO_FIX_LOG_TAIL_LINES);
+        return this.deps.github.checkLogTail(repository, url, FIX_LOG_TAIL_LINES);
     }
 
     // ── Errands ──
@@ -432,9 +375,4 @@ export class QueueErrandService {
         this.deps.store.add(errand);
         return errand;
     }
-}
-
-function repositoryOf(url: string): string {
-    const match = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/\d+/i.exec(url);
-    return match ? match[1] : '';
 }

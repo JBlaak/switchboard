@@ -63,7 +63,7 @@ export function QueueFailurePanel(): JSX.Element | null {
                     className="sw-btn sw-btn-small is-accent"
                     aria-disabled={busy || fixed}
                     onClick={() => {
-                        if (!busy && !fixed) void fixInSession(row.sessionId, row.projectPath, failure);
+                        if (!busy && !fixed) void fixInSession(row.projectPath, failure);
                     }}>
                     {busy && action.action === 'fix' ? 'Sending…' : fixed ? 'Sent' : 'Fix in session'}
                 </button>

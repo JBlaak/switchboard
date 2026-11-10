@@ -2,21 +2,15 @@
  * How a PR is doing, in the one colour a sidebar chip has room for (W4).
  *
  * The chip is glanced at, not read, so it only says which way to look: green
- * is fine, amber is something in motion (CI running, Claude working), red is
- * stuck (a check failing that nobody is fixing, or Claude giving up and handing
- * it back to you). A merged PR is done, and says so with a purple check instead
+ * is fine, amber is something in motion (CI running), red is stuck (a check
+ * failing, or a review thread waiting on you). A merged PR is done, and says so with a purple check instead
  * of a dot.
  */
-import type {Activity, PullRequestStatus} from './model';
+import type {PullRequestStatus} from './model';
 
 export type StatusDot = 'merged' | 'green' | 'amber' | 'red';
 
 const SEVERITY: Record<StatusDot, number> = {merged: 0, green: 1, amber: 2, red: 3};
-
-/** Is an action on its way to Claude or with it right now? */
-export function isWorking(activity: Activity | null | undefined): boolean {
-    return activity?.phase === 'queued' || activity?.phase === 'sent';
-}
 
 /**
  * Does this PR wait on you rather than on CI or Claude? Claude answered a
@@ -29,18 +23,14 @@ export function needsYou(pr: PullRequestStatus): boolean {
 /**
  * The colour of a PR's chip.
  *
- * A failing check that Claude is already working on is amber, not red: with
- * auto-fix on, every failure is handed over within a poll, and a dot that
- * flashed red each time would cry wolf. It turns red once Claude has stopped. A
- * merged PR has its own mark. A closed one has nothing left to do, and nothing
- * known about checks (no `gh`) is not a reason to alarm anyone, so both are
- * green.
+ * A merged PR has its own mark. A closed one has nothing left to do, and
+ * nothing known about checks (no `gh`) is not a reason to alarm anyone, so
+ * both are green.
  */
-export function statusDot(pr: PullRequestStatus, activity: Activity | null | undefined): StatusDot {
+export function statusDot(pr: PullRequestStatus): StatusDot {
     if (pr.state === 'merged') return 'merged';
     if (pr.state === 'closed') return 'green';
     if (needsYou(pr)) return 'red';
-    if (isWorking(activity)) return 'amber';
     const checks = pr.checks ?? [];
     if (checks.some((check) => check.state === 'failing')) return 'red';
     if (checks.some((check) => check.state === 'pending')) return 'amber';
@@ -65,7 +55,7 @@ export interface PullRequestDot {
 export interface PullRequestStatusChange {
     sessionId: string;
     prs: PullRequestDot[];
-    /** Any of them waits on you (auto-fix gave up, or a thread wants your call). */
+    /** Any of them waits on you: a thread wants your call. */
     needsYou: boolean;
 }
 

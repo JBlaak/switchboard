@@ -1,5 +1,5 @@
 /**
- * A PR's checks, under its activity card: each one with its state, and the
+ * A PR's checks, under its header: each one with its state, and the
  * end of a failing one's log, so what broke can be read without leaving the
  * page (or knowing which job to open on GitHub).
  */

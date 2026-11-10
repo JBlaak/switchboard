@@ -9,15 +9,7 @@
  * file as a whole) has no row, and is listed at the top of its file instead.
  */
 import {commentAnchor} from './diff';
-import type {
-    DiffLine,
-    DiffSide,
-    FileDiff,
-    GitHubAvailability,
-    PullRequestStatus,
-    ReviewThread,
-    WorkItem,
-} from './model';
+import type {DiffLine, DiffSide, FileDiff, GitHubAvailability, WorkItem} from './model';
 
 /** Add a line comment to your pending review on a PR item of the session's open page. */
 export interface CommentRequest {
@@ -29,11 +21,8 @@ export interface CommentRequest {
     body: string;
 }
 
-/**
- * Finish your pending review: `fix` submits it as Request changes and hands
- * its threads to Claude, `submit` submits it as a comment, `discard` deletes it.
- */
-export type ReviewMode = 'fix' | 'submit' | 'discard';
+/** Finish your pending review: `submit` submits it as a comment, `discard` deletes it. */
+export type ReviewMode = 'submit' | 'discard';
 
 export interface ReviewRequest {
     sessionId: string;
@@ -46,10 +35,6 @@ export type ReviewResult = {ok: true} | {ok: false; reason: string};
 
 /** How a submitted review reads on GitHub. */
 export type ReviewEvent = 'REQUEST_CHANGES' | 'COMMENT';
-
-export function submitEvent(mode: Exclude<ReviewMode, 'discard'>): ReviewEvent {
-    return mode === 'fix' ? 'REQUEST_CHANGES' : 'COMMENT';
-}
 
 /**
  * Can this item's diff take line comments (C1)? Only a PR's, only while it is
@@ -117,14 +102,6 @@ export function placeOnFile<T extends Anchored>(file: FileDiff, items: readonly 
         byLine.set(at, list);
     }
     return {byLine, outdated};
-}
-
-/** The open threads a Fix comments would hand over, or just these when named. */
-export function threadsToFix(pr: PullRequestStatus, threadIds?: readonly string[]): ReviewThread[] {
-    const open = (pr.threads ?? []).filter((thread) => !thread.resolved);
-    if (!threadIds) return open;
-    const wanted = new Set(threadIds);
-    return open.filter((thread) => wanted.has(thread.id));
 }
 
 /** "Review in progress · 2 pending". */

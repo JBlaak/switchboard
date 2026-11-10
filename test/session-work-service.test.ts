@@ -4,12 +4,10 @@ import assert from 'node:assert/strict';
 import {
     GITHUB_REFRESH_MS,
     LOCAL_DIFFERS,
-    SHIP_REFRESH_MS,
     SessionWorkService,
     WATCH_DEBOUNCE_MS,
     type SessionWorkTarget,
 } from '../src/application/services/session-work-service';
-import type {SessionActivities} from '../src/application/services/session-action-service';
 import {canComment} from '../src/domain/session-work/review';
 import type {Timers} from '../src/application/ports/clock';
 import type {GitWorkspace} from '../src/application/ports/git-workspace';
@@ -130,7 +128,6 @@ interface World {
     issues: IssueStatus[] | null;
     targets: Map<string, SessionWorkTarget>;
     /** What the action service says about the session's items. */
-    activities: SessionActivities;
     /** The merge-base of any branch and base. */
     mergeBase: string | null;
     /** Committed file contents, by `revision:path`. */
@@ -174,7 +171,6 @@ function setup(overrides: Partial<World> = {}) {
             ['remote', {folder: null, projectPath: 'ssh://me@host/dir'}],
             ['loose', {folder: 'f3', projectPath: '/tmp/not-a-repo'}],
         ]),
-        activities: {byItem: new Map(), queued: 0, shipping: false},
         mergeBase: 'merge-base-1',
         blobs: new Map(),
         files: new Map(),
@@ -318,7 +314,6 @@ function setup(overrides: Partial<World> = {}) {
             },
         },
         renderer: {sessionWorkSnapshot: (snapshot) => snapshots.push(snapshot)},
-        activities: {forSession: () => world.activities},
         clock: {now: () => (now += 1000)},
         timers,
         log: silentLog,
@@ -1052,60 +1047,9 @@ test('a stale close for the first session is ignored', async () => {
     assert.ok(watchers.filter((w) => !first.includes(w)).every((w) => !w.disposed));
 });
 
-// ── Actions ──
+// ── What the page answers for ──
 
 const PR6 = `pr:https://github.com/${REPO}/pull/6`;
-const rebaseQueued = (): SessionActivities => ({
-    byItem: new Map([[PR6, {id: 'a1', action: 'rebase', phase: 'queued', origin: 'manual', queuedAt: 'x'}]]),
-    queued: 1,
-    shipping: false,
-});
-
-test('with nothing under way an item has no activity and nothing is queued', async () => {
-    /* Given */
-    const {service, last} = polledPr();
-
-    /* When */
-    await service.open('s1');
-
-    /* Then */
-    const before = last().items[0];
-    assert.equal(before.kind === 'pr' && before.activity, null);
-    assert.equal(last().queued, 0);
-});
-
-test("an action's phase is laid over its item, and pushed without asking git or gh again", async () => {
-    /* Given */
-    const {service, world, snapshots, calls, last} = polledPr();
-    await service.open('s1');
-    const asked = calls.pullRequests;
-
-    /* When */
-    world.activities = rebaseQueued();
-    service.activitiesChanged('s1');
-
-    /* Then */
-    assert.equal(snapshots.length, 2);
-    const item = last().items[0];
-    assert.equal(item.kind === 'pr' && item.activity?.phase, 'queued');
-    assert.equal(last().queued, 1);
-    assert.equal(calls.pullRequests, asked);
-});
-
-test('the same activities again push nothing', async () => {
-    /* Given */
-    const {service, world, snapshots} = polledPr();
-    await service.open('s1');
-    world.activities = rebaseQueued();
-    service.activitiesChanged('s1');
-
-    /* When */
-    service.activitiesChanged('s1');
-
-    /* Then */
-    assert.equal(snapshots.length, 2, 'nothing changed, nothing pushed');
-});
-
 test('the open page answers for its items', async () => {
     /* Given */
     const {service} = polledPr();
@@ -1141,7 +1085,7 @@ test('the open page answers for its context', async () => {
     const context = service.context('s1');
 
     /* Then */
-    assert.deepEqual(context, {repository: REPO, mainCheckout: ROOT, gh: 'ok'});
+    assert.deepEqual(context, {repository: REPO, gh: 'ok'});
 });
 
 test('the open page has no context for another session', async () => {
@@ -1156,88 +1100,18 @@ test('the open page has no context for another session', async () => {
     assert.equal(context, null);
 });
 
-const shipping = (): SessionActivities => ({
-    byItem: new Map([[PR6, {id: 'a1', action: 'ship', phase: 'sent', origin: 'manual', queuedAt: 'x'}]]),
-    queued: 0,
-    shipping: true,
-});
-
-async function shippingPage() {
-    const harness = polledPr();
-    await harness.service.open('s1');
-    const cadence = () => [...harness.timers.intervals.values()].map((interval) => interval.ms).sort((a, b) => a - b);
-    return {...harness, cadence};
-}
-
-test('without a Ship it under way gh is asked every minute', async () => {
-    /* When */
-    const {cadence} = await shippingPage();
-
-    /* Then */
-    assert.deepEqual(cadence(), [GITHUB_REFRESH_MS]);
-});
-
-test('while a Ship it is under way gh is asked every 20 s instead of every minute', async () => {
+test('gh is asked every minute while the page is open', async () => {
     /* Given */
-    const {service, world, cadence} = await shippingPage();
+    const {service, timers} = polledPr();
 
     /* When */
-    world.activities = shipping();
-    service.activitiesChanged('s1');
+    await service.open('s1');
 
     /* Then */
-    assert.deepEqual(cadence(), [SHIP_REFRESH_MS, GITHUB_REFRESH_MS]);
-});
-
-test('while a Ship it is under way each tick asks gh once', async () => {
-    /* Given */
-    const {service, world, timers, calls} = await shippingPage();
-    world.activities = shipping();
-    service.activitiesChanged('s1');
-    const asked = calls.pullRequests;
-
-    /* When */
-    // Each 20 s tick asks; the minute's tick stands aside while it runs.
-    timers.fireIntervals();
-    await settle();
-
-    /* Then */
-    assert.equal(calls.pullRequests, asked + 1);
-});
-
-test('once the Ship it is over gh is asked every minute again', async () => {
-    /* Given */
-    const {service, world, timers, cadence} = await shippingPage();
-    world.activities = shipping();
-    service.activitiesChanged('s1');
-    timers.fireIntervals();
-    await settle();
-
-    /* When */
-    world.activities = {byItem: new Map(), queued: 0, shipping: false};
-    service.activitiesChanged('s1');
-
-    /* Then */
-    assert.deepEqual(cadence(), [GITHUB_REFRESH_MS]);
-});
-
-test('closing during a Ship it stops both polls', async () => {
-    /* Given */
-    const {service, world, timers} = await shippingPage();
-    world.activities = shipping();
-    service.activitiesChanged('s1');
-    timers.fireIntervals();
-    await settle();
-    world.activities = {byItem: new Map(), queued: 0, shipping: false};
-    service.activitiesChanged('s1');
-    world.activities = {...world.activities, shipping: true};
-    service.activitiesChanged('s1');
-
-    /* When */
-    service.close('s1');
-
-    /* Then */
-    assert.equal(timers.intervals.size, 0, 'closing stops both polls');
+    assert.deepEqual(
+        [...timers.intervals.values()].map((interval) => interval.ms),
+        [GITHUB_REFRESH_MS],
+    );
 });
 
 test("the footprint counts every worktree and branch the session worked in, not only the items' ones", async () => {

@@ -3,9 +3,8 @@
  *
  * Line comments collect in a pending GitHub review — the same one GitHub's own
  * page uses, so a review started in the browser is carried on here and the
- * other way round. The review is finished one of three ways: submitted as a
- * comment, submitted as Request changes with its threads handed to Claude, or
- * discarded.
+ * other way round. The review is finished by submitting it as a comment, or
+ * by discarding it.
  *
  * These are the only writes Switchboard makes to GitHub, and they are made
  * here rather than typed into the session, because they are your words, not
@@ -13,38 +12,23 @@
  * GitHub made of it. Writes go one at a time: two comments added at once must
  * not each start a review of their own.
  */
-import {isPullRequestPageId} from '../../domain/session-work/pull-request-link';
-import {canComment, submitEvent} from '../../domain/session-work/review';
+import {canComment} from '../../domain/session-work/review';
 import type {CommentRequest, ReviewMode, ReviewRequest, ReviewResult} from '../../domain/session-work/review';
-import type {ActionResult} from '../../domain/session-work/actions';
-import type {PullRequestStatus, SessionWorkItem, WorkAction} from '../../domain/session-work/model';
+import type {PullRequestStatus, SessionWorkItem, WorkPageContext} from '../../domain/session-work/model';
 import type {GitHubCli} from '../ports/github-cli';
 import type {Logger} from '../ports/logger';
-import type {ActionContext} from './session-action-service';
 
 /** The Session work page, as far as your review needs it. */
 export interface ReviewPage {
     item(sessionId: string, itemId: string): SessionWorkItem | null;
-    context(sessionId: string): ActionContext | null;
+    context(sessionId: string): WorkPageContext | null;
     /** Ask `gh` again and push the page's snapshot. */
     refreshGitHub(sessionId: string): Promise<void>;
-}
-
-/** Handing threads to Claude: the action service's `request`. */
-export interface FixRequester {
-    request(
-        sessionId: string,
-        itemId: string,
-        action: WorkAction,
-        origin?: 'manual' | 'auto',
-        options?: {threadIds?: readonly string[]},
-    ): Promise<ActionResult>;
 }
 
 export interface ReviewServiceDeps {
     github: Pick<GitHubCli, 'startPendingReview' | 'addPendingComment' | 'deletePendingReview' | 'submitPendingReview'>;
     page: ReviewPage;
-    actions: FixRequester;
     log: Logger;
 }
 
@@ -118,27 +102,11 @@ export class ReviewService {
 
         const pending = pr.pendingReview ?? [];
         if (pending.length === 0) return {ok: false, reason: 'The review has no comments yet'};
-        // Checked before submitting, so a refused hand-over does not leave a Request changes behind.
-        if (mode === 'fix' && isPullRequestPageId(sessionId)) {
-            return {ok: false, reason: 'No session owns this PR, so Claude cannot fix it here'};
-        }
-        if (mode === 'fix' && found.item.otherRepository) {
-            return {ok: false, reason: 'This PR is in another repository, so Claude cannot fix it from this session'};
-        }
-        // The threads are named before submitting: afterwards they are
-        // everyone's threads, and only their ids tell them apart.
-        const threadIds = pending.flatMap((comment) => (comment.threadId ? [comment.threadId] : []));
 
-        const submitted = await this.deps.github.submitPendingReview(reviewId, submitEvent(mode));
+        const submitted = await this.deps.github.submitPendingReview(reviewId, 'COMMENT');
         if (submitted.ok) this.started.delete(pr.url);
         await this.deps.page.refreshGitHub(sessionId);
-        if (!submitted.ok) return this.failed('submit the review', submitted.reason);
-        if (mode === 'submit') return {ok: true};
-
-        if (threadIds.length === 0)
-            return {ok: false, reason: 'Review submitted, but GitHub did not say which threads it made'};
-        const handed = await this.deps.actions.request(sessionId, itemId, 'fix-comments', 'manual', {threadIds});
-        return handed.ok ? {ok: true} : {ok: false, reason: 'Review submitted, but ' + lowerFirst(handed.reason)};
+        return submitted.ok ? {ok: true} : this.failed('submit the review', submitted.reason);
     }
 
     /** The PR item a review is about, when it can take one. */
@@ -168,8 +136,4 @@ export class ReviewService {
         this.queue = next.catch(() => undefined);
         return next;
     }
-}
-
-function lowerFirst(text: string): string {
-    return text ? text[0].toLowerCase() + text.slice(1) : text;
 }

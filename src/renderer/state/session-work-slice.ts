@@ -17,13 +17,7 @@
 import {movedEntry, withEntry, withoutEntry} from './records';
 import type {IdRecord} from './records';
 import type {RendererEvent} from './events';
-import type {
-    DiffSide,
-    FileDiff,
-    SessionWorkDiff,
-    SessionWorkSnapshot,
-    WorkAction,
-} from '../../domain/session-work/model';
+import type {DiffSide, FileDiff, SessionWorkDiff, SessionWorkSnapshot} from '../../domain/session-work/model';
 import type {ReviewMode} from '../../domain/session-work/review';
 import {isPullRequestPageId, parsePullRequestUrl, samePullRequest} from '../../domain/session-work/pull-request-link';
 import type {PullRequestRef} from '../../domain/session-work/pull-request-link';
@@ -48,21 +42,6 @@ export interface SessionWorkPage {
      * the page is open, so going back to an item does not ask main again.
      */
     readonly diffs: IdRecord<ItemDiff>;
-    /**
-     * The action asked of main and not answered yet: its button does not take a
-     * second press. `threadIds` when it was one thread's Have Claude fix.
-     */
-    readonly pendingAction: {
-        readonly itemId: string;
-        readonly action: WorkAction;
-        readonly threadIds?: readonly string[];
-    } | null;
-    /** Why main refused the last action, shown on its item (or its thread) until the next one or another selection. */
-    readonly actionError: {
-        readonly itemId: string;
-        readonly message: string;
-        readonly threadIds?: readonly string[];
-    } | null;
     /** The line the comment composer is open under; null when it is closed. One at a time. */
     readonly composer: CommentTarget | null;
     /** The review write asked of main and not answered yet: Add to review, or a bar button. */
@@ -224,8 +203,6 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
                     doneExpanded: false,
                     diffMode: 'unified',
                     diffs: {},
-                    pendingAction: null,
-                    actionError: null,
                     composer: null,
                     reviewPending: null,
                     reviewError: null,
@@ -324,34 +301,11 @@ export function sessionWorkReducer(state: SessionWorkState, event: RendererEvent
                 page: {
                     ...page,
                     selectedItemId: event.itemId,
-                    actionError: null,
                     composer: null,
                     reviewError: null,
                     wantedPullRequest: null,
                 },
             };
-        }
-
-        case 'sessionWorkActionRequested': {
-            const {page} = state;
-            if (!page || page.sessionId !== event.sessionId || page.pendingAction) return state;
-            const pendingAction = event.threadIds
-                ? {itemId: event.itemId, action: event.action, threadIds: event.threadIds}
-                : {itemId: event.itemId, action: event.action};
-            return {...state, page: {...page, pendingAction, actionError: null}};
-        }
-
-        case 'sessionWorkActionAnswered': {
-            const {page} = state;
-            if (!page || page.sessionId !== event.sessionId) return state;
-            const threadIds = page.pendingAction?.itemId === event.itemId ? page.pendingAction.threadIds : undefined;
-            const actionError =
-                event.error === null
-                    ? null
-                    : threadIds
-                      ? {itemId: event.itemId, message: event.error, threadIds}
-                      : {itemId: event.itemId, message: event.error};
-            return {...state, page: {...page, pendingAction: null, actionError}};
         }
 
         case 'sessionWorkComposerOpened': {
@@ -603,7 +557,7 @@ function withWantedPullRequest(page: SessionWorkPage, wanted: PullRequestRef): S
         selectedItemId: item.id,
         doneExpanded: page.doneExpanded || isDoneItem(item),
         wantedPullRequest: null,
-        ...(selectionMoved ? {actionError: null, composer: null, reviewError: null} : {}),
+        ...(selectionMoved ? {composer: null, reviewError: null} : {}),
     };
 }
 

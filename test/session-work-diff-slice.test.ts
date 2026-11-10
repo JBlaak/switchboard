@@ -17,14 +17,12 @@ const pr: SessionWorkItem = {
     pr: {number: 52, url: 'u52', repository: 'acme/api', state: 'open', headSha: 'aaa', closes: []},
     location: null,
     diff: {kind: 'pull-request', repository: 'acme/api', number: 52},
-    activity: null,
 };
 const dirty: SessionWorkItem = {
     id: 'dirty:/w',
     kind: 'dirty',
     location: {worktree: '/w', branch: 'main', fromSubagent: false},
     files: [{path: 'a.ts', status: 'modified'}],
-    activity: null,
     additions: 1,
     deletions: 1,
 };
@@ -45,7 +43,6 @@ function snapshot(items: SessionWorkItem[]): SessionWorkSnapshot {
         repository: 'acme/api',
         items,
         footprint: {worktrees: 2, branches: 2},
-        queued: 0,
         gh: 'ok',
         updatedAt: '2026-06-10T14:00:00.000Z',
     };

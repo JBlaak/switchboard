@@ -77,7 +77,6 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
             repository: '',
             items: [],
             footprint: {worktrees: 0, branches: 0},
-            queued: 0,
             gh: 'ok',
             updatedAt: 'now',
         },

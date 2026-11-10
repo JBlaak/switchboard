@@ -44,7 +44,6 @@ const openPr: SessionWorkItem = {
     },
     location: {worktree: '/w/api', branch: 'fix/login', fromSubagent: false},
     diff: {kind: 'local', worktree: '/w/api', base: 'origin/main', head: 'fix/login'},
-    activity: null,
 };
 const branch: SessionWorkItem = {
     id: 'branch:/w/api-2\0spike',
@@ -52,7 +51,6 @@ const branch: SessionWorkItem = {
     location: {worktree: '/w/api-2', branch: 'spike', fromSubagent: true},
     ahead: 2,
     diff: {kind: 'local', worktree: '/w/api-2', base: 'origin/main', head: 'spike'},
-    activity: null,
     additions: 40,
     deletions: 7,
     pushed: false,
@@ -65,7 +63,6 @@ const dirty: SessionWorkItem = {
         {path: 'a.ts', status: 'modified'},
         {path: 'b.ts', status: 'untracked'},
     ],
-    activity: null,
     additions: 12,
     deletions: 3,
 };
@@ -93,7 +90,6 @@ const merged: SessionWorkItem = {
     },
     location: null,
     diff: {kind: 'pull-request', repository: 'acme/api', number: 50},
-    activity: null,
 };
 
 function snapshot(items: SessionWorkItem[], sessionId = 's1'): SessionWorkSnapshot {
@@ -102,7 +98,6 @@ function snapshot(items: SessionWorkItem[], sessionId = 's1'): SessionWorkSnapsh
         repository: 'acme/api',
         items,
         footprint: {worktrees: 2, branches: 2},
-        queued: 0,
         gh: 'ok',
         updatedAt: new Date(AT).toISOString(),
     };
@@ -120,8 +115,6 @@ const EMPTY_PAGE = {
     doneExpanded: false,
     diffMode: 'unified',
     diffs: {},
-    pendingAction: null,
-    actionError: null,
     composer: null,
     reviewPending: null,
     reviewError: null,

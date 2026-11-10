@@ -213,7 +213,7 @@ test('a button is busy once pressed, and forgets it when its job is done', () =>
     assert.deepEqual(done.projectPage.queueActions, {});
 });
 
-test('a button that failed keeps why, and one handed to a running session keeps which', () => {
+test('a button that failed keeps why, and one with a note keeps it', () => {
     /* Given */
     const state = run(
         opened(),
@@ -225,13 +225,13 @@ test('a button that failed keeps why, and one handed to a running session keeps 
     const next = run(
         state,
         {type: 'projectQueueActionAnswered', key: 'retry:4', outcome: {phase: 'failed', reason: 'gh said no'}},
-        {type: 'projectQueueActionAnswered', key: 'fix:4', outcome: {phase: 'sent', sessionId: 's1'}},
+        {type: 'projectQueueActionAnswered', key: 'fix:4', outcome: {phase: 'note', text: 'Could not fetch'}},
     );
 
     /* Then */
     assert.deepEqual(next.projectPage.queueActions, {
         'retry:4': {phase: 'failed', reason: 'gh said no'},
-        'fix:4': {phase: 'sent', sessionId: 's1'},
+        'fix:4': {phase: 'note', text: 'Could not fetch'},
     });
 });
 
@@ -716,30 +716,7 @@ test('a nudge main refuses starts nothing, and the row says why', async () => {
     });
 });
 
-test('Fix in session handed to the PR’s own running session says which, and starts nothing', async () => {
-    /* Given */
-    const failed = queue().failed[0];
-    const main = installMain({queueFix: () => ({ok: true, kind: 'queued', sessionId: 'own', activityId: 'a1'})});
-    const seen = installEffects();
-
-    /* When */
-    await fixInSession(APP, REPO, failed);
-
-    /* Then */
-    assert.deepEqual(main.calls[0], [
-        'queueFix',
-        {
-            repository: REPO,
-            projectPath: APP,
-            pr: {number: 4, title: 'Broken', url: `https://github.com/${REPO}/pull/4`, headRef: 'broken'},
-            failure: {kind: 'ci', reason: 'CI failed: a test', checkName: 'Unit tests'},
-        },
-    ]);
-    assert.deepEqual(seen.launches, []);
-    assert.deepEqual(getState().projectPage.queueActions['fix:4'], {phase: 'sent', sessionId: 'own'});
-});
-
-test('Fix in session with no session of the PR running starts one in the worktree main prepared', async () => {
+test('Fix in session starts a session in the worktree main prepared', async () => {
     /* Given */
     const failed = queue().failed[0];
     const main = installMain({
@@ -758,6 +735,15 @@ test('Fix in session with no session of the PR running starts one in the worktre
     await fixInSession(APP, REPO, failed);
 
     /* Then */
+    assert.deepEqual(main.calls[0], [
+        'queueFix',
+        {
+            repository: REPO,
+            projectPath: APP,
+            pr: {number: 4, title: 'Broken', url: `https://github.com/${REPO}/pull/4`, headRef: 'broken'},
+            failure: {kind: 'ci', reason: 'CI failed: a test', checkName: 'Unit tests'},
+        },
+    ]);
     assert.deepEqual(seen.launches, [[APP + '/.claude/worktrees/broken', APP, 'Fix it']]);
     assert.ok(main.calls.some(([method, ...args]) => method === 'queueErrandStarted' && args[0] === 'fix-1'));
     assert.deepEqual(getState().projectPage.queueActions, {});
