@@ -90,6 +90,7 @@ const OWNER: Record<Exclude<MacMessage['type'], 'hello' | 'bye'>, Owner> = {
     'get-transcript': 'transcripts',
     'transcript-tail': 'transcripts',
     'read-transcript': 'transcripts',
+    'set-transcript-aside': 'transcripts',
     'import-transcript': 'transcripts',
     'run-tool': 'tools',
     'read-file': 'tools',

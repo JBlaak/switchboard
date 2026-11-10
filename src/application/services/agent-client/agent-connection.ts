@@ -523,6 +523,11 @@ export class AgentConnection {
         return Buffer.concat(slices);
     }
 
+    /** Rename a session's transcript out of the way on the VM, once it was brought back to the Mac. */
+    public async setTranscriptAside(sessionId: string): Promise<DoneMessage> {
+        return this.request<DoneMessage>('done', (requestId) => ({type: 'set-transcript-aside', requestId, sessionId}));
+    }
+
     /**
      * Put a transcript uploaded first (`upload`) where `claude --resume` on the
      * VM finds it, for a session handed off from the Mac. `dir` is the folder it

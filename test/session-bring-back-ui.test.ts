@@ -41,6 +41,7 @@ const PREVIEW: SessionBringBackPreview = {
     branch: 'fix-login',
     worktree: WORKTREE,
     existing: null,
+    uncommitted: 0,
     busy: false,
 };
 

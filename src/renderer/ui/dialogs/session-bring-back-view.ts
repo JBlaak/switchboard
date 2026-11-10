@@ -16,6 +16,9 @@ export function bringBackLines(preview: SessionBringBackPreview): CarriedLine[] 
             text: preview.existing?.worktreePath ? 'Into the worktree at ' : 'Into a new worktree at ',
             code: preview.worktree,
         },
+        ...(preview.uncommitted
+            ? [{text: plural(preview.uncommitted, 'uncommitted change') + ', still uncommitted here'}]
+            : []),
     ];
 }
 
@@ -134,6 +137,7 @@ export function bringBackPreviewAnswer(value: unknown): SessionBringBackPreview 
         typeof preview.branch === 'string' &&
         typeof preview.worktree === 'string' &&
         (preview.existing === null || isExisting(preview.existing)) &&
+        typeof preview.uncommitted === 'number' &&
         typeof preview.busy === 'boolean'
     ) {
         return value as SessionBringBackPreview;

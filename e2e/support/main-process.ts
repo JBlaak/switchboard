@@ -303,6 +303,7 @@ export const STUB_SESSION_BRING_BACK: SessionBringBackStub = {
             ahead: 2,
             sessionId: null,
         },
+        uncommitted: 2,
         busy: false,
     },
     phases: {

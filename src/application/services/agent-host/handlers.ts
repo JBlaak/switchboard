@@ -20,6 +20,7 @@ import type {
     ImportTranscriptMessage,
     TranscriptTailMessage,
     ReadTranscriptMessage,
+    SetTranscriptAsideMessage,
     ArchiveReplyMessage,
     ForgetSelfArchivedMessage,
     ListSelfArchivedMessage,
@@ -112,6 +113,7 @@ export type TranscriptsMessage =
     | GetTranscriptMessage
     | TranscriptTailMessage
     | ReadTranscriptMessage
+    | SetTranscriptAsideMessage
     | ImportTranscriptMessage
     | ListTranscriptsMessage;
 

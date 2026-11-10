@@ -7,8 +7,8 @@
  *    waits. A VM session that runs on the agent but is not attached here is
  *    attached first, so it can be waited on and stopped like any other.
  * 2. **Check the VM checkout**: the copy, or the worktree of it the session
- *    works in. It must be on a branch, with nothing uncommitted: work comes
- *    back only through git, as a copy's Bring back says.
+ *    works in. It must be on a branch. Its commits come back through git;
+ *    what it has uncommitted comes back as a patch (step 5).
  * 3. **Ask about an existing branch.** When the branch is on this Mac already
  *    (the worktree a hand-off left behind, most often) and no choice was
  *    made, answer `existing` and change nothing. `reuse` brings the VM's
@@ -16,10 +16,15 @@
  *    worktree and the branch first.
  * 4. **Fetch** the branch straight from the copy over the user's ssh (never
  *    through origin: nothing is pushed), and check it out in the worktree.
- * 5. **Stop the VM session** and wait for its process to end.
+ * 5. **Stop the VM session** and wait for its process to end; then **carry
+ *    its uncommitted changes** as one `git diff --binary` patch, untracked
+ *    files included, applied here unstaged. Once they apply, the VM checkout
+ *    is reset to its commit: its work is here now, and a later hand-off would
+ *    otherwise take what it left as the VM's own and refuse.
  * 6. **Carry the transcript back**: read whole from the agent, every line's
  *    `cwd` moved to the Mac's checkout, written where `claude --resume` here
- *    finds it. An older copy of it in another folder is set aside.
+ *    finds it. An older copy of it in another folder is set aside, and so is
+ *    the VM's, so the next hand-off can bring it there again.
  * 7. **Move the row**: the VM's session record goes, and so does a hand-off
  *    record that hid the local row.
  * 8. **Resume here** under the same id.
@@ -56,8 +61,14 @@ import {WORKTREES_DIR} from './support/branch-worktrees';
 import {stopAndWait, turnEnded} from './support/session-turns';
 import type {InFlight} from './support/session-turns';
 
-/** How many of a checkout's uncommitted paths a refusal names before "and N more". */
-const NAMED_PATHS = 5;
+/** How long one git on the VM may take while the changes are read and the checkout reset. */
+const VM_GIT_TIMEOUT_MS = 60_000;
+
+/** The most untracked files one Bring back carries; past it, a commit on the VM is the way. */
+const MAX_UNTRACKED_FILES = 500;
+
+/** Where Switchboard's own worktrees sit in a checkout: never carried as untracked files. */
+const OWN_WORKTREES = '.claude/worktrees/';
 
 /** The agent link, as far as a Bring back needs it (an `AgentConnection` is one). */
 export interface BringBackLink {
@@ -67,6 +78,15 @@ export interface BringBackLink {
     getTranscript(sessionId: string): Promise<{cwd: string} | null>;
     copyStatus(dir: string): Promise<{ok: boolean; error?: string; branch?: string | null; uncommitted?: string[]}>;
     readTranscript(sessionId: string, capBytes: number): Promise<Uint8Array | null>;
+    /** Rename the session's transcript out of the way on the VM, once it is here. */
+    setTranscriptAside(sessionId: string): Promise<{ok: boolean; error?: string}>;
+    /** Run git on the VM, in `cwd` (absolute there), for the uncommitted changes and the reset after. */
+    runTool(
+        tool: 'git',
+        cwd: string,
+        args: readonly string[],
+        options: {timeoutMs: number},
+    ): Promise<{code: number; stdout: Uint8Array; stderr: string; truncated: boolean}>;
 }
 
 export interface SessionBringBackServiceDeps {
@@ -79,7 +99,7 @@ export interface SessionBringBackServiceDeps {
         writeSession(projectPath: string, sessionId: string, text: string): string;
         setSessionAside(folder: string, sessionId: string): void;
     };
-    handoffGit: Pick<HandoffGit, 'repositoryRoot' | 'fetchFromCopy' | 'addWorktree'>;
+    handoffGit: Pick<HandoffGit, 'repositoryRoot' | 'fetchFromCopy' | 'addWorktree' | 'applyPatch'>;
     /** The Mac's own git, for what is on a branch already here and for deleting it. */
     git: Pick<GitWorkspace, 'branchExists' | 'worktrees'> &
         Pick<GitWorktrees, 'removeWorktree' | 'pruneWorktrees' | 'deleteBranch'>;
@@ -114,6 +134,8 @@ interface Planned extends Bringable {
     /** The VM checkout the session works in, absolute there. */
     vmDir: string;
     branch: string;
+    /** The paths the VM checkout has uncommitted, as `git status` names them; they come back as a patch. */
+    uncommitted: string[];
     /** The local repository's main checkout. */
     root: string;
     /** Where a new worktree goes on this Mac. */
@@ -137,6 +159,7 @@ export class SessionBringBackService implements SessionBringBack {
             branch: planned.branch,
             worktree: planned.existing?.worktreePath ?? planned.target,
             existing: planned.existing,
+            uncommitted: planned.uncommitted.length,
             busy: this.deps.prompter.isBusy(sessionId),
         };
     }
@@ -212,6 +235,10 @@ export class SessionBringBackService implements SessionBringBack {
             if (!stopped.ok) return {kind: 'failed', error: stopped.error};
         }
 
+        // Read once the session has stopped, so nothing it writes is left behind.
+        const changes = await this.carryChanges(planned, checkout, line);
+        if (!changes.ok) return {kind: 'failed', error: changes.error};
+
         line('Carrying the conversation back');
         const carried = await this.carryTranscript(planned, checkout);
         if (!carried.ok) return {kind: 'failed', error: carried.error};
@@ -220,6 +247,7 @@ export class SessionBringBackService implements SessionBringBack {
         this.deps.settings.forgetRemoteSession(planned.copyPath, sessionId);
         this.deps.settings.forgetHandedOffSession(sessionId);
         this.deps.renderer.projectsChanged();
+        await this.setVmTranscriptAside(planned);
 
         line('Resuming the conversation on this Mac');
         const resumed = await this.resumeHere(sessionId, checkout, planned.localPath);
@@ -286,13 +314,6 @@ export class SessionBringBackService implements SessionBringBack {
         if (!branch)
             return {error: 'The session’s checkout on the VM is on a detached HEAD; check out a branch first.'};
         const uncommitted = state.uncommitted ?? [];
-        if (uncommitted.length > 0) {
-            return {
-                error:
-                    `The session’s checkout on the VM has uncommitted changes, which only come back committed: ` +
-                    `${namePaths(uncommitted)}. Commit them on the VM first.`,
-            };
-        }
 
         const root = await this.deps.handoffGit.repositoryRoot(localPath);
         if (!root) return {error: `${localPath} is no longer a git repository.`};
@@ -306,7 +327,7 @@ export class SessionBringBackService implements SessionBringBack {
             if (!attached.ok) return {error: `Could not attach to the session on the VM: ${attached.error}`};
         }
         running = running || this.deps.prompter.runningId(sessionId) !== null;
-        return {...bringable, link, home, vmDir: checkout.dir, branch, root, target, existing, running};
+        return {...bringable, link, home, vmDir: checkout.dir, branch, uncommitted, root, target, existing, running};
     }
 
     /** A VM Claude session whose project is a copy of a local one; or why it cannot be brought back. */
@@ -396,6 +417,123 @@ export class SessionBringBackService implements SessionBringBack {
         return {ok: true, checkout: target};
     }
 
+    /**
+     * The VM checkout's uncommitted changes, applied to `checkout` here, and
+     * the VM checkout reset once they are: nothing when it has none. The VM is
+     * reset only when what it has is still exactly what was applied.
+     */
+    private async carryChanges(
+        planned: Planned,
+        checkout: string,
+        line: (text: string) => void,
+    ): Promise<{ok: true} | {ok: false; error: string}> {
+        const stopped = 'The session on the VM has stopped and its changes are still there; its row resumes it there.';
+        const first = await this.vmChanges(planned);
+        if (!first.ok) return {ok: false, error: `${first.error} ${stopped}`};
+        if (first.patch.length === 0) return {ok: true};
+
+        line(`Bringing back ${plural(first.count, 'uncommitted change')}`);
+        const applied = await this.deps.handoffGit.applyPatch(checkout, first.patch);
+        if (!applied.ok) {
+            return {
+                ok: false,
+                error: `The VM’s uncommitted changes don’t apply to ${checkout}: ${applied.reason}. ${stopped}`,
+            };
+        }
+
+        const again = await this.vmChanges(planned);
+        if (!again.ok || Buffer.compare(Buffer.from(again.patch), Buffer.from(first.patch)) !== 0) {
+            this.deps.log.warn(`[bring-back] ${planned.vmDir} changed while its changes were read; left as it is`);
+            return {ok: true};
+        }
+        line('Resetting the checkout on the VM, whose changes are here now');
+        const {link, vmDir} = planned;
+        const run = (args: string[]) => link.runTool('git', vmDir, args, {timeoutMs: VM_GIT_TIMEOUT_MS});
+        try {
+            const reset = await run(['reset', '--hard', '--quiet']);
+            // The untracked files that came back; never `-x`, which would take ignored files too.
+            const cleaned =
+                reset.code === 0 && first.untracked.length
+                    ? await run(['clean', '-f', '--quiet', '--', ...first.untracked])
+                    : reset;
+            if (reset.code !== 0 || cleaned.code !== 0) {
+                this.deps.log.warn(`[bring-back] could not reset ${vmDir}: ${reset.stderr || cleaned.stderr}`);
+            }
+        } catch (err) {
+            this.deps.log.warn(`[bring-back] could not reset ${vmDir}: ${(err as Error).message}`);
+        }
+        return {ok: true};
+    }
+
+    /**
+     * What the VM checkout has uncommitted, as one patch `git apply` takes:
+     * the tracked changes against HEAD, then each untracked file (never
+     * Switchboard's own worktrees, nor a nested repository) as a new file.
+     */
+    private async vmChanges(
+        planned: Planned,
+    ): Promise<{ok: true; patch: Uint8Array; count: number; untracked: string[]} | {ok: false; error: string}> {
+        const {link, vmDir} = planned;
+        const prefixes = [
+            '--binary',
+            '--no-color',
+            '--no-ext-diff',
+            '--no-textconv',
+            '--src-prefix=a/',
+            '--dst-prefix=b/',
+        ];
+        const run = (args: string[]) => link.runTool('git', vmDir, args, {timeoutMs: VM_GIT_TIMEOUT_MS});
+        try {
+            const tracked = await run(['diff', ...prefixes, 'HEAD']);
+            if (tracked.code !== 0) return {ok: false, error: `Could not read the VM’s changes: ${tracked.stderr}`};
+            if (tracked.truncated) return {ok: false, error: 'The VM’s uncommitted changes are too big to bring back.'};
+            const listed = await run(['ls-files', '-z', '--others', '--exclude-standard']);
+            if (listed.code !== 0) return {ok: false, error: `Could not list the VM’s new files: ${listed.stderr}`};
+            const untracked = Buffer.from(listed.stdout)
+                .toString('utf8')
+                .split('\0')
+                .filter((path) => path && !path.endsWith('/') && !path.startsWith(OWN_WORKTREES));
+            if (untracked.length > MAX_UNTRACKED_FILES) {
+                return {
+                    ok: false,
+                    error: `The VM checkout has ${untracked.length} new files; commit them there to bring them back.`,
+                };
+            }
+            const parts: Uint8Array[] = [tracked.stdout];
+            for (const path of untracked) {
+                // Exits 1 when there is a difference, which a new file always is.
+                const added = await run(['diff', '--no-index', ...prefixes, '--', '/dev/null', path]);
+                if (added.code !== 1 && added.code !== 0) {
+                    return {ok: false, error: `Could not read ${path} on the VM: ${added.stderr}`};
+                }
+                if (added.truncated) return {ok: false, error: `${path} on the VM is too big to bring back.`};
+                parts.push(added.stdout);
+            }
+            const changed =
+                Buffer.from(tracked.stdout)
+                    .toString('utf8')
+                    .match(/^diff --git /gm)?.length ?? 0;
+            return {
+                ok: true,
+                patch: Buffer.concat(parts.map((part) => Buffer.from(part))),
+                count: changed + untracked.length,
+                untracked,
+            };
+        } catch (err) {
+            return {ok: false, error: `Could not read the VM’s changes: ${(err as Error).message}`};
+        }
+    }
+
+    /** The VM's transcript out of the way, so the next hand-off can bring the conversation there again. */
+    private async setVmTranscriptAside(planned: Planned): Promise<void> {
+        try {
+            const done = await planned.link.setTranscriptAside(planned.sessionId);
+            if (!done.ok) this.deps.log.warn(`[bring-back] VM kept ${planned.sessionId}'s transcript: ${done.error}`);
+        } catch (err) {
+            this.deps.log.warn(`[bring-back] VM kept ${planned.sessionId}'s transcript: ${(err as Error).message}`);
+        }
+    }
+
     /** Attach to a session the agent runs, as opening its row would. */
     private async attach(sessionId: string, copyPath: string): Promise<{ok: true} | {ok: false; error: string}> {
         try {
@@ -475,7 +613,6 @@ function hostLabel(host: Pick<RemoteConfig, 'user' | 'host' | 'port'>): string {
     return `${host.user}@${host.host}${port === 22 ? '' : `:${port}`}`;
 }
 
-function namePaths(paths: readonly string[]): string {
-    const named = paths.slice(0, NAMED_PATHS).join(', ');
-    return paths.length > NAMED_PATHS ? `${named} and ${paths.length - NAMED_PATHS} more` : named;
+function plural(count: number, noun: string): string {
+    return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }

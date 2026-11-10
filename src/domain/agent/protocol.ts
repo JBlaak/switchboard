@@ -412,6 +412,19 @@ export interface ReadTranscriptMessage {
     maxBytes: number;
 }
 
+/**
+ * Move a session's transcript out of the way on the VM, renamed
+ * `<id>.jsonl.brought-back` (never deleted): it was brought back to the Mac,
+ * where the conversation goes on, so the VM neither lists it nor refuses the
+ * next hand-off's import of it. Answered with `done`; a VM with no transcript
+ * of that id answers ok.
+ */
+export interface SetTranscriptAsideMessage {
+    type: 'set-transcript-aside';
+    requestId: string;
+    sessionId: string;
+}
+
 /** The most one `transcript-bytes` carries, before base64. */
 export const TRANSCRIPT_READ_MAX_BYTES = 4 * 1024 * 1024;
 
@@ -591,6 +604,7 @@ export type MacMessage =
     | GetTranscriptMessage
     | TranscriptTailMessage
     | ReadTranscriptMessage
+    | SetTranscriptAsideMessage
     | ImportTranscriptMessage
     | RunToolMessage
     | ReadFileMessage

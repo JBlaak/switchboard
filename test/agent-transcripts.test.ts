@@ -664,3 +664,25 @@ test('a folder with no sessions answers an empty list', () => {
     /* Then */
     assert.deepEqual(reply(h.received, 'transcript-list', 'l6').sessions, []);
 });
+
+// ── set-transcript-aside ──
+
+test('a transcript brought back to the Mac is set aside, renamed, and a second time gets a new name', () => {
+    /* Given */
+    const h = harness();
+    const file = writeTranscript(h, '-p', ['{"n":1}']);
+
+    /* When */
+    h.send({type: 'set-transcript-aside', requestId: 'r1', sessionId: SESSION});
+    writeTranscript(h, '-p', ['{"n":2}']);
+    h.send({type: 'set-transcript-aside', requestId: 'r2', sessionId: SESSION});
+    h.send({type: 'read-transcript', requestId: 'r3', sessionId: SESSION, offset: 0, maxBytes: 10});
+
+    /* Then */
+    assert.equal(reply(h.received, 'done', 'r1').ok, true);
+    assert.equal(reply(h.received, 'done', 'r2').ok, true);
+    assert.equal(fs.readFileSync(file + '.brought-back', 'utf8'), '{"n":1}\n');
+    assert.equal(fs.readFileSync(file + '.brought-back-2', 'utf8'), '{"n":2}\n');
+    assert.equal(fs.existsSync(file), false);
+    assert.equal(reply(h.received, 'transcript-bytes', 'r3').found, false, 'nor is it found any more');
+});

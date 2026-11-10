@@ -75,6 +75,7 @@ function fakeGit(localBranch: string | null = 'main'): HandoffGit {
         readFile: async () => ({bytes: Buffer.from('SECRET=1\n'), mode: 0o600}),
         fetchFromCopy: async () => ({ok: true}),
         addWorktree: async () => ({ok: true}),
+        applyPatch: async () => ({ok: true}),
     };
 }
 

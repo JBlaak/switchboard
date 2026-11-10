@@ -109,4 +109,12 @@ export interface HandoffGit {
      * gives it one.
      */
     addWorktree(root: string, path: string, branch: string, base: string): Promise<BringBackWorktree>;
+
+    /**
+     * Apply a session's uncommitted changes brought back from a VM (`git diff
+     * --binary` output) to the working tree at `checkout`, unstaged, as they
+     * were there: changed files stay changed, new ones untracked. All or
+     * nothing; git refuses a patch that does not apply cleanly.
+     */
+    applyPatch(checkout: string, patch: Uint8Array): Promise<GitWrite>;
 }

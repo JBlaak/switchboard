@@ -336,6 +336,19 @@ export class GitCliHandoff implements HandoffGit {
         return added.code === 0 ? {ok: true} : fail(added);
     }
 
+    public async applyPatch(checkout: string, patch: Uint8Array): Promise<GitWrite> {
+        const env = await this.toolEnv();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switchboard-bring-back-'));
+        const file = path.join(dir, 'changes.patch');
+        try {
+            fs.writeFileSync(file, patch, {mode: 0o600});
+            const applied = await run(checkout, ['apply', '--binary', '--whitespace=nowarn', file], env);
+            return applied.code === 0 ? {ok: true} : {ok: false, reason: reasonOf(applied)};
+        } finally {
+            fs.rmSync(dir, {recursive: true, force: true});
+        }
+    }
+
     /**
      * Unstage, in the temp index, every gitlink (a nested repository) that
      * HEAD does not have: `git add -A` stages one for each embedded repo.

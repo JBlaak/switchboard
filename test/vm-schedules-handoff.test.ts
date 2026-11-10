@@ -51,6 +51,7 @@ const git: HandoffGit = {
     readFile: async () => null,
     fetchFromCopy: async () => ({ok: true}),
     addWorktree: async () => ({ok: true}),
+    applyPatch: async () => ({ok: true}),
 };
 
 function harness(afterHandoff: (localPath: string, copyPath: string, choices: HandoffChoices) => Promise<void>) {

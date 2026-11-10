@@ -15,6 +15,9 @@
  * into the existing checkout (fast-forward only), `replace` deletes that
  * worktree and the branch and makes them afresh from the VM.
  *
+ * Uncommitted changes on the VM come back uncommitted, and the VM checkout is
+ * reset once they apply here, so the session can go out and back again.
+ *
  * The IPC handlers call this; the composition root builds it.
  */
 import type {ExistingBranch, ExistingBranchChoice} from '../../domain/project/branch-worktree';
@@ -31,6 +34,8 @@ export interface SessionBringBackPreview {
     worktree: string;
     /** The branch exists on this Mac already: where, and what is on it. Null when it does not. */
     existing: ExistingBranch | null;
+    /** How many files the VM checkout has uncommitted; they come back uncommitted, as a patch. */
+    uncommitted: number;
     /** Whether Claude is mid-turn now, so the Bring back would wait. */
     busy: boolean;
 }

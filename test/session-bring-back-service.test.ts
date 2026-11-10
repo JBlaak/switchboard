@@ -69,6 +69,9 @@ interface HarnessOptions {
     /** The folder an older local transcript of the session is indexed in. */
     olderFolder?: string | null;
     addWorktree?: {ok: true} | {ok: false; reason: string; taken: boolean};
+    /** What the VM checkout has uncommitted: its tracked diff, and its untracked files. */
+    vmChanges?: {tracked: string; untracked: string[]};
+    applyPatch?: {ok: true} | {ok: false; reason: string};
 }
 
 function worktree(path: string, over: Partial<WorktreeSummary> = {}): WorktreeSummary {
@@ -97,6 +100,8 @@ function harness({
     notACopy = false,
     olderFolder = null,
     addWorktree = {ok: true},
+    vmChanges = {tracked: '', untracked: []},
+    applyPatch = {ok: true},
 }: HarnessOptions = {}) {
     const order: string[] = [];
 
@@ -143,6 +148,7 @@ function harness({
         [...idle].forEach((fn) => fn());
     };
 
+    const vm = {...vmChanges, untracked: [...vmChanges.untracked]};
     const link: BringBackLink = {
         home: HOME,
         whenConnected: async () => {},
@@ -157,9 +163,28 @@ function harness({
             order.push('read-transcript');
             return Buffer.from(VM_TRANSCRIPT);
         },
+        setTranscriptAside: async (sessionId) => {
+            order.push(`vm set-aside ${sessionId}`);
+            return {ok: true};
+        },
+        // The VM checkout's git, as far as reading its changes and resetting it goes.
+        runTool: async (_tool, dir, args) => {
+            const out = (text: string, code = 0) => ({code, stdout: Buffer.from(text), stderr: '', truncated: false});
+            if (args[0] === 'diff' && args.includes('--no-index')) {
+                const file = args[args.length - 1];
+                return out(`diff --git a/${file} b/${file}\nnew file mode 100644\n+${file}\n`, 1);
+            }
+            if (args[0] === 'diff') return out(vm.tracked);
+            if (args[0] === 'ls-files') return out(vm.untracked.map((f) => f + '\0').join(''));
+            order.push(`vm ${args.filter((a) => !a.startsWith('--') && a !== '-f').join(' ')} in ${dir}`);
+            if (args[0] === 'reset') vm.tracked = '';
+            if (args[0] === 'clean') vm.untracked = [];
+            return out('');
+        },
     };
 
     const written: {projectPath: string; sessionId: string; text: string}[] = [];
+    const applied: string[] = [];
     const opened: OpenSessionRequest[] = [];
     const script = {opened: {ok: true} as OpenSessionResult};
     const hasBranch = branchHere || worktrees.some((w) => w.branch === 'fix-login');
@@ -189,6 +214,11 @@ function harness({
             addWorktree: async (_root, path, branch, base) => {
                 order.push(`add-worktree ${path} ${branch} ${base}`);
                 return addWorktree;
+            },
+            applyPatch: async (checkout, patch) => {
+                order.push(`apply in ${checkout}`);
+                applied.push(Buffer.from(patch).toString());
+                return applyPatch;
             },
         },
         git: {
@@ -237,7 +267,7 @@ function harness({
         log: silentLog,
     });
 
-    return {service, order, written, opened, real, script, goIdle};
+    return {service, order, written, opened, applied, vm, real, script, goIdle};
 }
 
 function phases() {
@@ -264,6 +294,7 @@ test("a preview names the VM worktree's branch and the local worktree it lands i
         branch: 'fix-login',
         worktree: LOCAL_WORKTREE,
         existing: null,
+        uncommitted: 0,
         busy: false,
     });
 });
@@ -300,19 +331,6 @@ test('a session on a VM project that is not a copy cannot be brought back', asyn
     assert.match(preview.error, /not a copy/);
 });
 
-test('uncommitted changes on the VM are refused, naming them', async () => {
-    /* Given */
-    const h = harness({uncommitted: ['src/a.ts', 'src/b.ts']});
-
-    /* When */
-    const done = await h.service.bringBack('s1');
-
-    /* Then */
-    assert.equal(done.kind, 'failed');
-    assert.match(done.kind === 'failed' ? done.error : '', /src\/a\.ts, src\/b\.ts.*Commit them on the VM/);
-    assert.ok(!h.order.some((step) => step.startsWith('fetch') || step === 'stop'));
-});
-
 // ── Bring back ──
 
 test('a Bring back fetches the branch, stops the VM session, carries the conversation and resumes here', async () => {
@@ -334,6 +352,7 @@ test('a Bring back fetches the branch, stops the VM session, carries the convers
         'read-transcript',
         'write-transcript',
         'projectsChanged',
+        'vm set-aside s1',
         `open ${LOCAL_WORKTREE}`,
         `sessionStarted ${LOCAL_WORKTREE}`,
     ]);
@@ -351,6 +370,47 @@ test('a Bring back fetches the branch, stops the VM session, carries the convers
     assert.deepEqual(remoteSessionIds(h.real), [], 'the VM row goes');
     assert.equal(h.real.handedOffSession('s1'), null, 'the local row shows again');
     assert.ok(seen.some((phase) => phase.kind === 'running' && phase.line === 'Carrying the conversation back'));
+});
+
+test('uncommitted changes on the VM come back uncommitted, after the stop, and the VM checkout is reset', async () => {
+    /* Given */
+    const tracked = 'diff --git a/README.md b/README.md\n-old\n+new\n';
+    const h = harness({vmChanges: {tracked, untracked: ['notes.md', '.claude/worktrees/x/a', 'nested/']}});
+
+    /* When */
+    const preview = await h.service.preview('s1');
+    const done = await h.service.bringBack('s1');
+
+    /* Then */
+    assert.equal(!('error' in preview) && preview.uncommitted, 0, 'from copy-status, which says none here');
+    assert.equal(done.kind, 'done');
+    assert.deepEqual(h.applied, [tracked + 'diff --git a/notes.md b/notes.md\nnew file mode 100644\n+notes.md\n']);
+    const steps = h.order.filter((step) => /^(stop|apply|vm reset|vm clean|read-transcript)/.test(step));
+    assert.deepEqual(steps, [
+        'stop',
+        `apply in ${LOCAL_WORKTREE}`,
+        `vm reset in ${VM_WORKTREE}`,
+        `vm clean notes.md in ${VM_WORKTREE}`,
+        'read-transcript',
+    ]);
+});
+
+test('changes that do not apply here fail before the conversation moves, and the VM keeps them', async () => {
+    /* Given */
+    const h = harness({
+        worktrees: [worktree(LOCAL_WORKTREE)],
+        vmChanges: {tracked: 'diff --git a/README.md b/README.md\n', untracked: []},
+        applyPatch: {ok: false, reason: 'patch failed: README.md:1'},
+    });
+
+    /* When */
+    const done = await h.service.bringBack('s1', 'reuse');
+
+    /* Then */
+    assert.equal(done.kind, 'failed');
+    assert.match(done.kind === 'failed' ? done.error : '', /don’t apply.*README\.md:1.*resumes it there/);
+    assert.ok(!h.order.some((step) => step.startsWith('vm reset') || step === 'read-transcript'));
+    assert.deepEqual(remoteSessionIds(h.real), ['s1']);
 });
 
 test('an older local transcript in another folder is set aside, not deleted', async () => {

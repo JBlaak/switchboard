@@ -67,6 +67,7 @@ import type {
     ImportTranscriptMessage,
     ListTranscriptsMessage,
     ReadTranscriptMessage,
+    SetTranscriptAsideMessage,
     TranscriptListMessage,
     TranscriptTailMessage,
 } from '../../../domain/agent/protocol';
@@ -246,6 +247,8 @@ export class Transcripts implements TranscriptsPart {
                 return this.tail(client, message);
             case 'read-transcript':
                 return this.readTranscript(client, message);
+            case 'set-transcript-aside':
+                return this.setTranscriptAside(client, message);
             case 'import-transcript':
                 return this.importTranscript(client, message);
             case 'list-transcripts':
@@ -498,6 +501,35 @@ export class Transcripts implements TranscriptsPart {
             size,
             contentBase64: Buffer.from(slice).toString('base64'),
         });
+    }
+
+    // ── set-transcript-aside ──
+
+    /**
+     * Every file of the session, in any project folder, renamed out of the way:
+     * `<id>.jsonl.brought-back`, or `-2`, `-3`… after an earlier round trip.
+     */
+    private setTranscriptAside(client: ClientLink, message: SetTranscriptAsideMessage): void {
+        const {requestId, sessionId} = message;
+        const answer = (error?: string) => {
+            if (client.closed) return;
+            client.send(error ? {type: 'done', requestId, ok: false, error} : {type: 'done', requestId, ok: true});
+        };
+        if (!SESSION_ID.test(sessionId)) return answer(`not a session id: ${sessionId}`);
+        const {files} = this.deps;
+        try {
+            for (let found = this.find(sessionId); found; found = this.find(sessionId)) {
+                let aside = `${found.file}.brought-back`;
+                for (let n = 2; files.stat(aside); n++) aside = `${found.file}.brought-back-${n}`;
+                files.moveNoClobber(found.file, aside, 0o600);
+                this.deps.log.info(`[transcripts] set ${sessionId} aside as ${aside}`);
+            }
+        } catch (err) {
+            return answer(`could not set the transcript aside: ${errorText(err)}`);
+        }
+        const watched = this.watched.get(sessionId);
+        if (watched) this.check(watched);
+        answer();
     }
 
     // ── list-transcripts ──
