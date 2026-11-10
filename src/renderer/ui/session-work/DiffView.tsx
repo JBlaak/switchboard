@@ -38,7 +38,7 @@ import type {ImageMode} from './image-compare/modes/types';
 import {fileReview} from './review-notes';
 import {OutdatedNotes, ReviewBar} from './ReviewNotes';
 import {refinable, useRefinement} from './refinement-load';
-import {SKELETON_CARDS} from './support/diff-skeleton';
+import {DiffSkeleton} from './DiffSkeleton';
 
 /** How many cards draw their first lines at once; the rest fill in a frame later. */
 const EAGER_FILES = 3;
@@ -132,38 +132,6 @@ function ModeToggle({mode}: {mode: DiffMode}): JSX.Element {
     );
 }
 
-/**
- * While the diff loads: cards shaped like the file cards to come, a header
- * with a path and a counts pill over a few lines, a couple of them tinted as
- * an addition or a deletion. They rise in one after another and a soft
- * highlight sweeps across them (none of it under reduced motion).
- */
-function DiffSkeleton(): JSX.Element {
-    return (
-        <div className="sw-diff-skeleton" aria-hidden="true">
-            {SKELETON_CARDS.map((card, i) => (
-                <div key={i} className="sw-skel-file">
-                    <div className="sw-skel-head">
-                        <span className="sw-skel-bar" style={{width: `${card.path}%`}} />
-                        <span className="sw-skel-bar sw-skel-counts" />
-                    </div>
-                    <div className="sw-skel-lines">
-                        {card.lines.map((line, j) => (
-                            <div key={j} className={'sw-skel-line is-' + line.kind}>
-                                <span className="sw-skel-bar sw-skel-num" />
-                                <span
-                                    className="sw-skel-bar"
-                                    style={{marginLeft: `${line.indent}ch`, width: `${line.width}%`}}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ))}
-        </div>
-    );
-}
-
 const FileCard = memo(function FileCard({
     sessionId,
     itemId,
@@ -217,13 +185,7 @@ const FileCard = memo(function FileCard({
     const svg = file.image?.format === 'svg';
     const imageCard = !!file.image && !(svg && svgSource);
     // Asked for only once the file's lines are drawn: a collapsed file waits until it is opened.
-    const refinement = useRefinement(
-        sessionId,
-        itemId,
-        file,
-        loadKey,
-        !collapsed && refinable(file, imageCard),
-    );
+    const refinement = useRefinement(sessionId, itemId, file, loadKey, !collapsed && refinable(file, imageCard));
     const pills = [pill, refinementPill(refinement?.summary)].filter((p): p is NonNullable<typeof p> => p !== null);
 
     const showDiff = (): void => {

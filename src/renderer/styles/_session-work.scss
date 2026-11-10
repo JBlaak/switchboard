@@ -650,11 +650,6 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-
-    /* The PR peek's skeleton still draws plain boxes. */
-    .sw-skeleton {
-        height: 120px;
-    }
 }
 
 /*

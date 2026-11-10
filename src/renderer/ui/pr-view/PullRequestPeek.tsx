@@ -22,6 +22,7 @@ import {createPortal} from 'react-dom';
 import type {JSX, KeyboardEvent, MouseEvent} from 'react';
 import {useStore} from '../use-store';
 import {DiffRows} from '../session-work/DiffRows';
+import {DiffSkeleton} from '../session-work/DiffSkeleton';
 import {LineCounts} from '../session-work/LineCounts';
 import {Pills} from '../session-work/Pills';
 import {collapsedText, diffSummary, fileStatusPill} from '../session-work/describe';
@@ -156,11 +157,7 @@ function PeekBody({peek, mode}: {peek: PrPeek; mode: DiffMode}): JSX.Element {
     return (
         <div className="pr-peek-body sw-diff" aria-busy={loading}>
             {loading ? (
-                <div className="sw-diff-skeleton" aria-hidden="true">
-                    <div className="sw-skeleton" />
-                    <div className="sw-skeleton" />
-                    <div className="sw-skeleton" />
-                </div>
+                <DiffSkeleton />
             ) : peek.error ? (
                 <div className="sw-diff-empty pr-peek-error" role="alert">
                     {peek.error}
