@@ -15,7 +15,11 @@ import {dispatch, getState, onEvent} from '../../state/app-store';
 import {parsePullRequestUrl} from '../../../domain/session-work/pull-request-link';
 import type {PullRequestRef} from '../../../domain/session-work/pull-request-link';
 import type {DiffMode} from '../../state/session-work-slice';
-import {openPullRequestFullView} from './full-view';
+
+/** Opens a PR's full view; installed at start-up, so the peek's tests need no page behind it. */
+type FullViewOpener = (ref: PullRequestRef, url: string) => Promise<void>;
+
+let openFullView: FullViewOpener = () => Promise.reject(new Error("Couldn't open the full view"));
 
 /** Where a link goes: the peek for a PR, the browser for anything else. */
 export type LinkRoute = {kind: 'peek'; ref: PullRequestRef} | {kind: 'external'};
@@ -56,7 +60,7 @@ export function openPeekFullView(): void {
     const peek = getState().prPeek.peek;
     if (!peek) return;
     dispatch({type: 'prPeekClosed'});
-    void openPullRequestFullView(peek.ref, peek.url).catch((err: Error) => {
+    void openFullView(peek.ref, peek.url).catch((err: Error) => {
         dispatch({type: 'statusUpdate', text: err.message || "Couldn't open the full view", kind: 'error'});
     });
 }
@@ -82,6 +86,7 @@ export function togglePeekDiffMode(): void {
 }
 
 /** A PR link main caught in the main window (a stray anchor) opens the peek too. */
-export function installPullRequestPeek(): void {
+export function installPullRequestPeek(fullView: FullViewOpener): void {
+    openFullView = fullView;
     onEvent('pullRequestLinkOpened', (event) => openLink(event.url));
 }
