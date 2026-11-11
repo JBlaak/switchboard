@@ -323,3 +323,42 @@ test('a link cycle does not hang and puts the cycle where it would sit without i
     assert.ok(layout.levelOf(key(4)) >= 1);
     assert.deepEqual(layout.warnings, []);
 });
+
+test('a claimed ticket of a wayfinder map is in progress, on the frontier or blocked', () => {
+    /* Given */
+    const map: Plan = {
+        ...plan([issue(2), issue(3, {claimed: true}), issue(4, {claimed: true, blockedBy: [key(2)]}), issue(5)]),
+        wayfinder: true,
+    };
+
+    /* When */
+    const layout = layOutPlan(map);
+
+    /* Then */
+    assert.equal(layout.stateOf(key(2)), 'ready');
+    assert.equal(layout.stateOf(key(3)), 'claimed');
+    assert.equal(layout.stateOf(key(4)), 'claimed');
+    assert.equal(layout.stateOf(key(5)), 'ready');
+});
+
+test('an assigned issue of a plan that is no wayfinder map is not claimed', () => {
+    /* Given */
+    const epic = plan([issue(2, {claimed: true})]);
+
+    /* When */
+    const layout = layOutPlan(epic);
+
+    /* Then */
+    assert.equal(layout.stateOf(key(2)), 'ready');
+});
+
+test('a claimed ticket with an open PR shows its PR', () => {
+    /* Given */
+    const map: Plan = {...plan([issue(2, {claimed: true, pullRequests: [pr(9, 'open')]})]), wayfinder: true};
+
+    /* When */
+    const layout = layOutPlan(map);
+
+    /* Then */
+    assert.equal(layout.stateOf(key(2)), 'review');
+});

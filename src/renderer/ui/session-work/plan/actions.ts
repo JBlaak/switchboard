@@ -10,6 +10,7 @@ import {sessionMap} from '../../../state/session-store';
 import {startIssueSessionWith, type StartIssueSessionRequest, type StartIssueSessionSteps} from './start-issue-session';
 import {vmStartSteps} from '../../session-handoff/vm-start-steps';
 import type {IssueSessionStart} from '../../../../domain/plan/issue-session';
+import {startMapLauncherWith, type MapLauncherRequest} from './start-map-launcher';
 
 /**
  * Start a session on a plan's issue: a worktree on a branch named after it,
@@ -32,6 +33,13 @@ export const issueSessionSteps: StartIssueSessionSteps = {
     launch: (projectPath, options, how) => startClaudeSessionIn(projectPath, options, how),
     vm: vmStartSteps,
 };
+
+/** Start a wayfinder map's launcher: one session in the project with the launcher's skill. */
+export function startMapLauncher(
+    request: MapLauncherRequest,
+): Promise<{ok: true; sessionId: string} | {ok: false; reason: string}> {
+    return startMapLauncherWith(issueSessionSteps, request);
+}
 
 /** Put a session on screen, the way a click on its row does. False when no row goes by that id. */
 export async function jumpToSession(sessionId: string): Promise<boolean> {

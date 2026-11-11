@@ -8,6 +8,7 @@ import {layOutPlan} from '../../../../domain/plan/layout';
 import {sameIssue} from '../../../../domain/plan/model';
 import type {IssueKey, Plan} from '../../../../domain/plan/model';
 import {PlanHeader} from './PlanHeader';
+import {MapLaunchers} from './MapLaunchers';
 import {OtherPlans, PlanSwitcher} from './PlanSwitcher';
 import {PlanWarnings} from './PlanWarnings';
 import {PlanDiagram, PlanLegend} from './PlanDiagram';
@@ -80,6 +81,7 @@ export function PlanViewContent(
                     />
                     <PlanWarnings plan={plan} layout={layout} />
                     <LevelStart plan={plan} issueActions={props.issueActions} />
+                    {plan.wayfinder && <MapLaunchers plan={plan} issueActions={props.issueActions} />}
                     {plan.issues.length ? (
                         <PlanDiagram
                             plan={plan}
@@ -90,9 +92,11 @@ export function PlanViewContent(
                             arriving={props.arriving}
                         />
                     ) : (
-                        <div className="pv-none pv-empty">This plan has no sub-issues yet.</div>
+                        <div className="pv-none pv-empty">
+                            {plan.wayfinder ? 'This map has no tickets yet.' : 'This plan has no sub-issues yet.'}
+                        </div>
                     )}
-                    {plan.issues.length > 0 && <PlanLegend />}
+                    {plan.issues.length > 0 && <PlanLegend wayfinder={plan.wayfinder === true} />}
                 </div>
                 {selected && (
                     <IssueDetail

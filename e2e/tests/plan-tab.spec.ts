@@ -259,3 +259,45 @@ test.describe('an existing branch', () => {
         await expect(terminalHeader(page)).toContainText(LABEL.graphqlSpike);
     });
 });
+
+test.describe('wayfinder map', () => {
+    /** The login plan as a wayfinder map: #1303 claimed, #1302 without its PR, so on the frontier. */
+    const map = {
+        ...LOGIN_PLAN,
+        wayfinder: true,
+        issues: LOGIN_PLAN.issues.map((i) =>
+            i.number === 1302
+                ? {...i, pullRequests: [], ticketType: 'grilling' as const}
+                : i.number === 1303
+                  ? {...i, claimed: true, ticketType: 'research' as const}
+                  : i,
+        ),
+    };
+    test.use({stubs: {sessionWork: sessionWorkStub(), plans: plansStub(map)}});
+
+    test('a map offers its launchers instead of Start level, and Next ticket starts /wayfinder on it', async ({
+        page,
+        home,
+    }) => {
+        /* Given */
+        await openSession(page, home, LABEL.loginFix, S.loginFix);
+        await page.keyboard.press('Meta+g');
+        await workPage(page).getByRole('tab', {name: 'Plan'}).click();
+        const launchers = workPage(page).getByRole('group', {name: 'Wayfinder map'});
+        await expect(launchers).toBeVisible();
+        await expect(diagram(page).getByRole('button', {name: 'Start level'})).toHaveCount(0);
+        await expect(node(page, 1303)).toContainText('In progress');
+        await expect(node(page, 1302)).toContainText('grilling');
+        await page.screenshot({path: test.info().outputPath('wayfinder-map.png')});
+        const before = fs.readdirSync(home.controlDir);
+
+        /* When */
+        await launchers.getByRole('button', {name: 'Next ticket'}).click();
+
+        /* Then */
+        const startedSince = () => fs.readdirSync(home.controlDir).filter((key) => !before.includes(key));
+        await expect.poll(startedSince).toHaveLength(1);
+        const launch = await new FakeCli(home.controlDir, startedSince()[0]).launched();
+        expect(launch.argv[launch.argv.length - 1]).toBe('/wayfinder 1300');
+    });
+});

@@ -40,6 +40,36 @@ export function issueContinuePrompt(issue: IssueKey, plan: IssueKey): string {
     );
 }
 
+/**
+ * A ticket of a wayfinder map is worked with the wayfinder skill, not built to
+ * a PR: `/wayfinder <map> <ticket>`, by bare number since the session runs in
+ * the map's repository, and by URL for one in another. The skill picks up
+ * where an earlier session left off, so it is the prompt for continuing too.
+ */
+export function wayfinderTicketPrompt(issue: IssueKey, plan: IssueKey): string {
+    return `/wayfinder ${skillRef(plan, plan)} ${skillRef(issue, plan)}`;
+}
+
+/** What a wayfinder map's launchers start (Tern's launchers for a map). */
+export type MapLauncher = 'next' | 'orchestrate' | 'reconcile';
+
+export const MAP_LAUNCHERS: readonly MapLauncher[] = ['next', 'orchestrate', 'reconcile'];
+
+/** The prompt a map launcher starts its session with. */
+export function mapLauncherPrompt(launcher: MapLauncher, plan: IssueKey): string {
+    const ref = String(plan.number);
+    if (launcher === 'orchestrate') return '/orchestrate-map ' + ref;
+    if (launcher === 'reconcile') return '/reconciling-the-map ' + ref;
+    return '/wayfinder ' + ref;
+}
+
+/** An issue as a skill takes it: its number in the map's repository, its URL in another. */
+function skillRef(issue: IssueKey, plan: IssueKey): string {
+    return issue.repository === plan.repository
+        ? String(issue.number)
+        : `https://github.com/${issue.repository}/issues/${issue.number}`;
+}
+
 /** One issue of a level, its worktree made, as the level's session hands it to an agent. */
 export interface LevelAgent {
     issue: IssueKey;

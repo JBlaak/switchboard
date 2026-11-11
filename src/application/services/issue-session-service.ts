@@ -18,7 +18,7 @@ import {
     type IssueWorktreeResult,
 } from '../../domain/plan/issue-session';
 import {sameIssue, type IssueKey} from '../../domain/plan/model';
-import {issueBranchName, issueContinuePrompt, issueSessionPrompt} from '../../domain/plan/start';
+import {issueBranchName, issueContinuePrompt, issueSessionPrompt, wayfinderTicketPrompt} from '../../domain/plan/start';
 import type {SessionPullRequest} from '../../domain/session/session';
 import type {Clock} from '../ports/clock';
 import type {GitWorkspace, GitWorktrees} from '../ports/git-workspace';
@@ -227,6 +227,15 @@ export class IssueSessionService {
         const made = await this.worktrees.prepare({root, branch: issueBranchName(planIssue), existing, base});
         if (!made.ok) return made;
         const {worktreePath, branch} = made;
+        if (plan.wayfinder) {
+            return {
+                ok: true,
+                worktreePath,
+                branch,
+                prompt: wayfinderTicketPrompt(issue, plan),
+                ...(made.warnings.length ? {warning: made.warnings.join(' ')} : {}),
+            };
+        }
         if (made.reused) return {ok: true, worktreePath, branch, prompt: issueContinuePrompt(issue, plan)};
         return {
             ok: true,

@@ -520,3 +520,42 @@ test('of two sessions owning an issue, the more recently active one wins', async
     /* Then */
     assert.equal(owners[REPO + '#114'], 'newer');
 });
+
+// ── Wayfinder maps ──
+
+test('a ticket of a wayfinder map gets its worktree and starts /wayfinder on the map and the ticket', async () => {
+    /* Given */
+    const {service, git} = harness();
+    const map: Plan = {...plan([issue(114, 'Which store holds drafts')]), wayfinder: true};
+
+    /* When */
+    const result = await service.prepareIssueWorktree({projectPath: ROOT, issue: key(114), plan: map});
+
+    /* Then */
+    assert.deepEqual(result, {
+        ok: true,
+        worktreePath: ROOT + '/.claude/worktrees/114-which-store-holds-drafts',
+        branch: '114-which-store-holds-drafts',
+        prompt: '/wayfinder 112 114',
+    });
+    assert.equal(git.writes.length, 2);
+});
+
+test('continuing on a wayfinder ticket starts /wayfinder again, which picks up where it was left', async () => {
+    /* Given */
+    const {service, git} = harness();
+    git.branches.add('114-stage');
+    git.checkouts = [checkout('/elsewhere/114-stage', '114-stage')];
+    const map: Plan = {...plan([issue(114, 'Stage')]), wayfinder: true};
+
+    /* When */
+    const result = await service.prepareIssueWorktree({
+        projectPath: ROOT,
+        issue: key(114),
+        plan: map,
+        existing: 'reuse',
+    });
+
+    /* Then */
+    assert.equal(result.ok && result.prompt, '/wayfinder 112 114');
+});

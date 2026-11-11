@@ -1,13 +1,14 @@
 /**
  * A plan's progress as one bullet per level: done once every issue on it is
- * closed, in progress once any of them is closed or has a PR, open before.
+ * closed, in progress once any of them is closed, has a PR or is claimed, open
+ * before.
  */
 import type {NodeState} from './model';
 
 export type LevelBullet = 'done' | 'in-progress' | 'open';
 
 const CLOSED: readonly NodeState[] = ['merged', 'closed', 'not-planned'];
-const STARTED: readonly NodeState[] = [...CLOSED, 'review', 'draft'];
+const STARTED: readonly NodeState[] = [...CLOSED, 'review', 'draft', 'claimed'];
 
 /** One bullet per level, from the states of the issues on it. */
 export function levelBullets(levels: readonly (readonly NodeState[])[]): LevelBullet[] {

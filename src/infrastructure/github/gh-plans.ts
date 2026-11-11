@@ -13,11 +13,13 @@ import {summariseIssueBody} from '../../domain/plan/issue-body';
 import {
     issueKeyString,
     STANDALONE_PLAN_LABEL,
+    WAYFINDER_MAP_LABEL,
     type IssueKey,
     type Plan,
     type PlanIssue,
     type PlanPullRequest,
     type PlanSummary,
+    type WayfinderTicketType,
 } from '../../domain/plan/model';
 import type {PullRequestCloses} from '../../application/ports/github-cli';
 
@@ -31,17 +33,19 @@ export const SUB_ISSUES = 100;
  */
 export const PLANS_PER_REPOSITORY = 50;
 
+const LABELS = 'labels(first: 20) { nodes { name } }';
+
 const BLOCKER_FIELDS = 'number title state stateReason updatedAt repository { nameWithOwner }';
 
 /** What a plan issue is drawn from: the sub-issues, or a standalone issue itself. */
 const PLAN_ISSUE_FIELDS = `number title state stateReason updatedAt body
           repository { nameWithOwner }
+          ${LABELS}
+          assignees(first: 1) { totalCount }
           blockedBy(first: 50) { nodes { ${BLOCKER_FIELDS} } }
           closedByPullRequestsReferences(first: 20, includeClosedPrs: true) {
             nodes { number state isDraft additions deletions headRefName baseRefName }
           }`;
-
-const LABELS = 'labels(first: 20) { nodes { name } }';
 
 /** One plan: the issue, its parent, and each sub-issue with its blockers and closing PRs. */
 export function planQuery(number: number): string {
@@ -49,7 +53,6 @@ export function planQuery(number: number): string {
   repository(owner: $owner, name: $name) {
     issue(number: ${number}) {
       ${PLAN_ISSUE_FIELDS}
-      ${LABELS}
       parent { number title repository { nameWithOwner } }
       subIssues(first: ${SUB_ISSUES}) {
         nodes {
@@ -67,6 +70,7 @@ export function toPlan(data: any, repo: string): Plan | null {
     if (!node || typeof node.number !== 'number') return null;
     const repository = nameOf(node, repo);
     const members = membersOf(node);
+    const wayfinder = isWayfinderMap(node);
 
     const issues: PlanIssue[] = members.map((sub: any): PlanIssue => {
         const {summary, acceptance} = summariseIssueBody(typeof sub.body === 'string' ? sub.body : '');
@@ -76,6 +80,7 @@ export function toPlan(data: any, repo: string): Plan | null {
             pullRequests: (sub.closedByPullRequestsReferences?.nodes ?? []).filter(Boolean).map(toPullRequest),
             summary,
             acceptance,
+            ...(wayfinder ? {claimed: (sub.assignees?.totalCount ?? 0) > 0, ticketType: ticketTypeOf(sub)} : {}),
         };
     });
 
@@ -100,7 +105,15 @@ export function toPlan(data: any, repo: string): Plan | null {
         node.parent && typeof node.parent.number === 'number'
             ? {repository: nameOf(node.parent, repository), number: node.parent.number, title: node.parent.title ?? ''}
             : null;
-    return {repository, number: node.number, title: node.title ?? '', parent, issues, outside: [...outside.values()]};
+    return {
+        repository,
+        number: node.number,
+        title: node.title ?? '',
+        parent,
+        issues,
+        outside: [...outside.values()],
+        ...(wayfinder ? {wayfinder} : {}),
+    };
 }
 
 /** A repository's plans, by search, each with enough to lay it out. */
@@ -126,11 +139,12 @@ export const PLANS_QUERY = `query($search: String!) {
 }`;
 
 /**
- * The search `PLANS_QUERY` runs: issues with sub-issues and standalone
- * `ready-for-agent` issues, open ones only unless closed ones are wanted (F3).
+ * The search `PLANS_QUERY` runs: issues with sub-issues, wayfinder maps (with
+ * or without tickets yet) and standalone `ready-for-agent` issues, open ones
+ * only unless closed ones are wanted (F3).
  */
 export function plansSearch(repo: string, closed: boolean): string {
-    const plans = `(has:sub-issue OR (label:${STANDALONE_PLAN_LABEL} no:parent-issue))`;
+    const plans = `(has:sub-issue OR label:"${WAYFINDER_MAP_LABEL}" OR (label:${STANDALONE_PLAN_LABEL} no:parent-issue))`;
     return `repo:${repo} is:issue${closed ? '' : ' is:open'} ${plans} sort:updated-desc`;
 }
 
@@ -149,7 +163,8 @@ export function toPlanSummaries(data: any, repo: string): PlanSummary[] | null {
             summary: '',
             acceptance: [],
         }));
-        if (issues.length === 0) continue;
+        const wayfinder = isWayfinderMap(node);
+        if (issues.length === 0 && !wayfinder) continue;
         const layout = layOutPlan({
             repository,
             number: node.number,
@@ -168,6 +183,7 @@ export function toPlanSummaries(data: any, repo: string): PlanSummary[] | null {
             total: issues.length,
             current: layout.current,
             levels: layout.levels.length,
+            ...(wayfinder ? {wayfinder} : {}),
         });
     }
     return summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -238,7 +254,28 @@ function membersOf(node: any): any[] {
 }
 
 function isLabelled(node: any): boolean {
-    return (node.labels?.nodes ?? []).some((label: any) => label?.name === STANDALONE_PLAN_LABEL);
+    return labelsOf(node).includes(STANDALONE_PLAN_LABEL);
+}
+
+function isWayfinderMap(node: any): boolean {
+    return labelsOf(node).includes(WAYFINDER_MAP_LABEL);
+}
+
+const TICKET_TYPES: readonly WayfinderTicketType[] = ['research', 'prototype', 'grilling', 'task'];
+
+/** A ticket's kind, from its first `wayfinder:<type>` label that names one. */
+function ticketTypeOf(node: any): WayfinderTicketType | null {
+    for (const name of labelsOf(node)) {
+        const type = name.startsWith('wayfinder:') ? name.slice('wayfinder:'.length) : '';
+        if ((TICKET_TYPES as readonly string[]).includes(type)) return type as WayfinderTicketType;
+    }
+    return null;
+}
+
+function labelsOf(node: any): string[] {
+    return (node?.labels?.nodes ?? [])
+        .map((label: any) => label?.name)
+        .filter((name: unknown): name is string => typeof name === 'string');
 }
 
 function nameOf(node: any, fallback: string): string {

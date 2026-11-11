@@ -6,6 +6,7 @@
 import type {IssueKey, Plan, PlanSummary} from '../../../../domain/plan/model';
 import type {PlanLevelStart, PlanStart, SessionPlansAnswer} from '../../../state/plan-slice';
 import type {HandoffHost} from '../../../../application/services/project-handoff';
+import type {MapLauncher} from '../../../../domain/plan/start';
 
 /** The plan page's pin, which puts the plan at the top of the sidebar; the Plan tab has none. */
 export interface PlanPinControl {
@@ -99,6 +100,14 @@ export interface IssueActions {
     cancelLevelStart?(): void;
     /** Where Start level is, for any plan; the view shows it for its own. */
     readonly levelStart?: PlanLevelStart | null;
+    /**
+     * A wayfinder map's launcher pressed (Next ticket, Orchestrate, Reconcile):
+     * starts one session on the map, and answers its id or why it did not.
+     */
+    startMapLauncher?(
+        plan: Plan,
+        launcher: MapLauncher,
+    ): Promise<{ok: true; sessionId: string} | {ok: false; reason: string}>;
 }
 
 export const NO_HANDLERS: PlanHandlers = {
