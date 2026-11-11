@@ -4,8 +4,8 @@
  *
  * A round's titles, reasons and recommendations are Claude's prose: code
  * spans, bold and italics inline, links, paragraphs split by blank lines, and
- * now and then a list or a table. That is all this reads; anything else stays
- * as text.
+ * now and then a list, a table or a fenced code block. That is all this reads;
+ * anything else stays as text.
  */
 
 export type Inline =
@@ -17,11 +17,12 @@ export type Inline =
 
 export type Align = 'left' | 'center' | 'right' | null;
 
-/** A paragraph (its lines, each drawn on a line of its own), a list or a table. */
+/** A paragraph (its lines, each drawn on a line of its own), a list, a table or a code block. */
 export type Block =
     | {kind: 'paragraph'; lines: Inline[][]}
     | {kind: 'list'; ordered: boolean; items: Inline[][]}
-    | {kind: 'table'; align: Align[]; header: Inline[][]; rows: Inline[][][]};
+    | {kind: 'table'; align: Align[]; header: Inline[][]; rows: Inline[][][]}
+    | {kind: 'code'; lang: string | null; text: string};
 
 const INLINE = /`([^`]+)`|\*\*(.+?)\*\*|__(.+?)__|\*([^*\s](?:[^*]*[^*\s])?)\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
 
@@ -46,10 +47,45 @@ export function inlineMarkdown(text: string): Inline[] {
 const BULLET = /^\s*[-*•]\s+/;
 const NUMBERED = /^\s*\d+[.)]\s+/;
 
-/** A block of Markdown, as paragraphs, lists and tables. */
+/** A block of Markdown, as paragraphs, lists, tables and code blocks. */
 export function markdownBlocks(text: string): Block[] {
+    return fenced(text.trim()).flatMap((part) => (typeof part === 'string' ? proseBlocks(part) : [part]));
+}
+
+const FENCE_OPEN = /^(\s*)(`{3,}|~{3,})\s*([^\s`]*)/;
+
+/**
+ * The text split into prose and fenced code blocks, lifted out first so the
+ * blank lines and indentation inside a fence survive. A fence never closed
+ * runs to the end.
+ */
+function fenced(text: string): (string | Extract<Block, {kind: 'code'}>)[] {
+    const out: (string | Extract<Block, {kind: 'code'}>)[] = [];
+    const lines = text.split('\n');
+    let prose: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+        const open = FENCE_OPEN.exec(lines[i]!);
+        if (!open) {
+            prose.push(lines[i]!);
+            continue;
+        }
+        const [, indent, fence, lang] = open as unknown as [string, string, string, string];
+        const close = new RegExp(`^\\s*${fence[0] === '`' ? '`' : '~'}{${fence.length},}\\s*$`);
+        const body: string[] = [];
+        for (i++; i < lines.length && !close.test(lines[i]!); i++) {
+            const line = lines[i]!;
+            body.push(line.startsWith(indent) ? line.slice(indent.length) : line.trimStart());
+        }
+        if (prose.length > 0) out.push(prose.join('\n'));
+        prose = [];
+        out.push({kind: 'code', lang: lang || null, text: body.join('\n')});
+    }
+    if (prose.length > 0) out.push(prose.join('\n'));
+    return out;
+}
+
+function proseBlocks(text: string): Block[] {
     return text
-        .trim()
         .split(/\n\s*\n/)
         .map((chunk) => chunk.split('\n').filter((line) => line.trim() !== ''))
         .filter((lines) => lines.length > 0)
