@@ -60,9 +60,9 @@ export function waitWhatPrompt(label: string | number): string {
 export function askedQuestionLabel(prompt: string): string | null {
     const text = prompt.trim();
     // The prompt is trimmed, so an ask with nothing typed ends at its colon.
-    const ask = /^Before I answer the round, about Q(\d+[a-z]?):(?:\s|$)/.exec(text);
+    const ask = /^Before I answer the round, about Q(\d+[a-z]?['′″’]*):(?:\s|$)/.exec(text);
     if (ask) return ask[1];
-    const wait = /^\/wait-what Q(\d+[a-z]?)$/.exec(text);
+    const wait = /^\/wait-what Q(\d+[a-z]?['′″’]*)$/.exec(text);
     if (wait) return wait[1];
     return null;
 }
