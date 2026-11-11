@@ -434,3 +434,45 @@ test('a number split by a letter is read with its letter, next to plain numbers'
     );
     assert.equal(round?.preamble, '');
 });
+
+test('a primed number is read with its prime, as a question of its own', () => {
+    /* Given */
+    const text = [
+        '❓ **Q4 - Keep the old track**: Should the old track stay?',
+        '',
+        '➡️ Yes.',
+        '',
+        '---',
+        '',
+        "❓ **Q4' - Keep it for a release**: Revisiting Q4, for how long?",
+        '',
+        '➡️ One release.',
+        '',
+        '---',
+        '',
+        '❓ **Q5′ - Typographic prime**: Same, with ′.',
+        '',
+        '➡️ Fine.',
+        '',
+        '---',
+        '',
+        '❓ **Q2b’ - Letter and prime**: Both.',
+        '',
+        '➡️ Fine.',
+    ].join('\n');
+
+    /* When */
+    const round = parseRound(text);
+
+    /* Then */
+    assert.deepEqual(
+        round?.questions.map((q) => [q.number, q.suffix, q.title, q.recommendation]),
+        [
+            [4, undefined, 'Keep the old track', 'Yes.'],
+            [4, "'", 'Keep it for a release', 'One release.'],
+            [5, '′', 'Typographic prime', 'Fine.'],
+            [2, 'b’', 'Letter and prime', 'Fine.'],
+        ],
+    );
+    assert.equal(round?.preamble, '');
+});

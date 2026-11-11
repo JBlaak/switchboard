@@ -14,7 +14,7 @@
  * tolerant: the number may sit inside or outside the bold, the title may be
  * bold or run to the first colon, the separator may be a dash, colon or dot,
  * the number's prefix may be `Q`, Dutch `V`, `Vraag`, or nothing, the number
- * may be split by a letter (`Q2a`, `Q2b`), and the line may be a Markdown
+ * may be split by a letter (`Q2a`, `Q2b`) or primed (`Q4'`, `Q4′`), and the line may be a Markdown
  * heading. A `❓` line without a number is not a
  * question. Text before the first question is the round's preamble (usually
  * a recap of the last round); prose after the last recommendation, past a
@@ -38,9 +38,10 @@ const RULE = /^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/;
 
 /**
  * The number, after a prefix of up to eight letters (`Q`, `V`, `Vraag`) or
- * none, maybe split by one lower-case letter (`Q2a`, `Q2b`).
+ * none, maybe split by one lower-case letter (`Q2a`, `Q2b`) and maybe primed
+ * with an apostrophe, prime or right quote (`Q4'`, `Q4′`, `Q2a’`, `Q4''`).
  */
-const NUMBER = /^(?:\p{L}{1,8}[ \t]?)?(\d+)([a-z])?/u;
+const NUMBER = /^(?:\p{L}{1,8}[ \t]?)?(\d+)([a-z]?['′″’]*)/u;
 
 /** A separator between number and title: dash, en or em dash, colon or dot. */
 const SEPARATOR = /^[ \t]*[-–—:.]/;

@@ -103,6 +103,14 @@ test('an ask about a lettered question is recognised by its label', () => {
     assert.deepEqual(labels, ['2a', '2b']);
 });
 
+test('an ask about a primed question is recognised by its label', () => {
+    /* When */
+    const labels = [askedQuestionLabel(askPrompt("4'", 'why?')), askedQuestionLabel(waitWhatPrompt('2b′'))];
+
+    /* Then */
+    assert.deepEqual(labels, ["4'", '2b′']);
+});
+
 test('an ask comes back recognised with the whitespace the hook adds around it', () => {
     /* When */
     const numbers = [askedQuestionLabel(`\n${askPrompt(1, 'why?')}\n`), askedQuestionLabel(` ${waitWhatPrompt(5)} `)];
