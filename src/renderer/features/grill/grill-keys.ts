@@ -3,10 +3,10 @@
  * landed.
  *
  * On the card itself: Y accepts, N opens a note, O an answer of one's own,
- * 1–9 pick one of the question's inline choices, ↓/↑ step through the round
- * (↓ past the last question opens the review), A accepts the rest, ? asks
+ * 1–9 pick one of the question's inline choices, →/↓ and ←/↑ step through the
+ * round (→ or ↓ past the last question opens the review), A accepts the rest, ? asks
  * about the question, W asks Claude to re-pitch it, and T or Esc look at the
- * terminal. On the review only A, ↑/↓ and the terminal keys mean anything.
+ * terminal. On the review only A, the arrows and the terminal keys mean anything.
  *
  * In one of the card's fields the text is the field's: Enter keeps it and
  * goes on (or asks), Shift+Enter is a newline, Esc closes the field. ⌘↵ sends
@@ -96,8 +96,8 @@ export function grillKey(e: GrillKeyEvent, at: GrillKeyPlace): GrillKey {
 
     let action: GrillAction | undefined;
     if (e.key === 'Escape') action = 'peek';
-    else if (e.key === 'ArrowDown') action = 'next';
-    else if (e.key === 'ArrowUp') action = 'prev';
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') action = 'next';
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') action = 'prev';
     else action = CARD_KEYS[e.key.toLowerCase()];
 
     if (!action && /^[1-9]$/.test(e.key) && !at.onReview) {

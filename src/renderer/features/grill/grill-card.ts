@@ -136,7 +136,7 @@ export function sendGroup(view: Pick<GrillView, 'send' | 'agentsRunning'>): Send
     return view.agentsRunning > 0 ? 'research' : 'send';
 }
 
-/** One step through the round: ↓ past the last question lands on the review, ↑ stops at the first. */
+/** One step through the round: → past the last question lands on the review, ← stops at the first. */
 export function stepPlace(view: Pick<GrillView, 'questions'>, place: number, by: 1 | -1): number {
     return Math.max(0, Math.min(place + by, view.questions.length));
 }

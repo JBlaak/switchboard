@@ -119,6 +119,21 @@ test('in a field, the answering keys are only typing', () => {
     assert.deepEqual(pressed, Array(5).fill({does: 'keep'}));
 });
 
+test('left and right step through the round like up and down', () => {
+    /* When */
+    const onQuestion = ['ArrowRight', 'ArrowLeft'].map((key) => press(key));
+    const onReview = press('ArrowLeft', {onReview: true});
+    const inField = press('ArrowLeft', {inField: true});
+
+    /* Then */
+    assert.deepEqual(onQuestion, [
+        {does: 'act', action: 'next'},
+        {does: 'act', action: 'prev'},
+    ]);
+    assert.deepEqual(onReview, {does: 'act', action: 'prev'});
+    assert.deepEqual(inField, {does: 'keep'});
+});
+
 test('other modified keys, Tab and IME composition go on to the app', () => {
     /* When */
     const pressed = [
