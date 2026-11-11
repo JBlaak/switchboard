@@ -13,8 +13,9 @@
  * Claude does not write the header the same way every time, so the reader is
  * tolerant: the number may sit inside or outside the bold, the title may be
  * bold or run to the first colon, the separator may be a dash, colon or dot,
- * the number's prefix may be `Q`, Dutch `V`, `Vraag`, or nothing, and the
- * line may be a Markdown heading. A `❓` line without a number is not a
+ * the number's prefix may be `Q`, Dutch `V`, `Vraag`, or nothing, the number
+ * may be split by a letter (`Q2a`, `Q2b`), and the line may be a Markdown
+ * heading. A `❓` line without a number is not a
  * question. Text before the first question is the round's preamble (usually
  * a recap of the last round); prose after the last recommendation, past a
  * blank line, closes the turn and is not part of the round.
@@ -35,14 +36,18 @@ const RECOMMENDATION_LINE = /^[ \t]*(?:#{1,6}[ \t]*)?➡️?[ \t]*(.*)$/;
 /** A horizontal rule, as rounds put between questions. */
 const RULE = /^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/;
 
-/** The number, after a prefix of up to eight letters (`Q`, `V`, `Vraag`) or none. */
-const NUMBER = /^(?:\p{L}{1,8}[ \t]?)?(\d+)/u;
+/**
+ * The number, after a prefix of up to eight letters (`Q`, `V`, `Vraag`) or
+ * none, maybe split by one lower-case letter (`Q2a`, `Q2b`).
+ */
+const NUMBER = /^(?:\p{L}{1,8}[ \t]?)?(\d+)([a-z])?/u;
 
 /** A separator between number and title: dash, en or em dash, colon or dot. */
 const SEPARATOR = /^[ \t]*[-–—:.]/;
 
 interface Header {
     number: number;
+    suffix?: string;
     title: string;
     /** What follows the title on the header line. */
     reason: string;
@@ -123,7 +128,9 @@ function headerOf(line: string): Header | null {
     }
     title = title.trim().replace(/[ \t]*:$/, '');
     if (!title) return null;
-    return {number: Number(number[1]), title, reason: reason.replace(/^[ \t]*:/, '').trim()};
+    const header: Header = {number: Number(number[1]), title, reason: reason.replace(/^[ \t]*:/, '').trim()};
+    if (number[2]) header.suffix = number[2];
+    return header;
 }
 
 /** The text before and after the first `mark`; all of it before when there is none. */
@@ -154,6 +161,7 @@ function questionOf(header: Header, body: string[], last: boolean): RoundQuestio
     if (!recommendation) return null;
 
     const question: RoundQuestion = {number: header.number, title: header.title, reason, recommendation};
+    if (header.suffix) question.suffix = header.suffix;
     const choices = splitChoices(reason);
     if (choices) {
         question.choices = choices;

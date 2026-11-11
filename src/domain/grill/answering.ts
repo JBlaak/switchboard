@@ -7,7 +7,7 @@
  * some gone. The user may have started answering in between. A revision
  * keeps what still holds and shows what moved:
  *
- * - Questions are matched new to old, first by number and title, then by
+ * - Questions are matched new to old, first by label (`2`, `2a`) and title, then by
  *   title alone, since a revision often renumbers. Titles compare loosely:
  *   case, punctuation and spacing aside. A number reused with another title
  *   is a new question.
@@ -21,6 +21,7 @@
  *
  * Everything here returns new objects; nothing is changed in place.
  */
+import {questionLabel} from './model';
 import type {Answering, AnsweringQuestion, GrillAnswer, Round, RoundQuestion} from './model';
 
 /** A round as first posted: nothing answered, nothing marked. */
@@ -98,7 +99,7 @@ export function matchQuestions(from: readonly RoundQuestion[], to: readonly Roun
             matches[place] = found;
         });
     };
-    pass((a, b) => a.number === b.number && normalTitle(a.title) === normalTitle(b.title));
+    pass((a, b) => questionLabel(a) === questionLabel(b) && normalTitle(a.title) === normalTitle(b.title));
     pass((a, b) => normalTitle(a.title) === normalTitle(b.title));
     return matches;
 }

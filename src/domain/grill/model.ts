@@ -37,6 +37,8 @@ export interface Choices {
 export interface RoundQuestion {
     /** The number as the round printed it; may restart or repeat across rounds. */
     number: number;
+    /** The letter after the number when the round splits one (`Q2a`, `Q2b`); absent for a plain `Q2`. */
+    suffix?: string;
     /** Inline Markdown. */
     title: string;
     /** Markdown: the rest of the header line and every line up to the recommendation. */
@@ -47,6 +49,11 @@ export interface RoundQuestion {
     choices?: Choices;
     /** The letter the recommendation opens with, when it names one of the choices. */
     recommendedChoice?: string;
+}
+
+/** How the round printed a question's number, as answers and asks name it: `2`, `2a`. */
+export function questionLabel(question: Pick<RoundQuestion, 'number' | 'suffix'>): string {
+    return `${question.number}${question.suffix ?? ''}`;
 }
 
 export interface Round {

@@ -80,6 +80,8 @@ enum class GrillSendState {
 data class GrillQuestionView(
     /** The number as the round printed it; what the answer goes back under (`Q3: …`). */
     val number: Int,
+    /** The letter after the number when the round splits one (`Q2a`, `Q2b`); null for a plain `Q2`. */
+    val suffix: String? = null,
     /** Inline Markdown. */
     val title: String,
     /** Markdown: why Claude asks. */
@@ -98,7 +100,10 @@ data class GrillQuestionView(
     val asked: Boolean,
     /** The text of the turn that answered the ask, once it has ended. */
     val explanation: String?,
-)
+) {
+    /** How the round printed the number, as answers and asks name it: `2`, `2a`. */
+    val label: String get() = "$number${suffix.orEmpty()}"
+}
 
 /** A session's open round, as the Mac's grilling card has it. */
 @Serializable

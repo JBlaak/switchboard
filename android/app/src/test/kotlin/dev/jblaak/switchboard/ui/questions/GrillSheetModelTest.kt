@@ -236,6 +236,22 @@ class GrillSheetModelTest {
     }
 
     @Test
+    fun `a question whose number the round split by a letter goes back under its letter`() {
+        /* Given */
+        val questions = listOf(
+            question(2, "Default track", GrillAnswer.Accepted).copy(suffix = "a"),
+            question(2, "Override", GrillAnswer.Overridden("No")).copy(suffix = "b"),
+            question(3, "Release", GrillAnswer.Accepted),
+        )
+
+        /* When */
+        val prompt = answersPrompt(questions.map { it.label to it.answer })
+
+        /* Then */
+        assertEquals("Q2a: yes\nQ2b: No\nQ3: yes", prompt)
+    }
+
+    @Test
     fun `an answer given here shows until a view does`() = runTest(UnconfinedTestDispatcher()) {
         /* Given */
         val model = newModel()

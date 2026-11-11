@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
-import {answerText, answersPrompt, askPrompt, askedQuestionNumber, waitWhatPrompt} from '../src/domain/grill/reply';
+import {answerText, answersPrompt, askPrompt, askedQuestionLabel, waitWhatPrompt} from '../src/domain/grill/reply';
 
 /**
  * What Switchboard types into a grilling session: the answers to a round,
@@ -21,6 +21,21 @@ test('each answered question gets a line in the round’s own numbering', () => 
 
     /* Then */
     assert.equal(prompt, 'Q1: yes\nQ3: yes, note: keep it behind a flag\nQ4: (b) 30 days, then drop the row');
+});
+
+test('a question whose number the round split by a letter goes back under its letter', () => {
+    /* Given */
+    const questions = [
+        {number: 2, suffix: 'a', answer: {kind: 'accepted' as const}},
+        {number: 2, suffix: 'b', answer: {kind: 'overridden' as const, text: 'No'}},
+        {number: 3, answer: {kind: 'accepted' as const}},
+    ];
+
+    /* When */
+    const prompt = answersPrompt(questions);
+
+    /* Then */
+    assert.equal(prompt, 'Q2a: yes\nQ2b: No\nQ3: yes');
 });
 
 test('a question without an answer is left out', () => {
@@ -74,39 +89,44 @@ test('wait, what? asks for a re-pitch of one question', () => {
 
 test('Switchboard’s own asks are recognised by the question they name', () => {
     /* When */
-    const numbers = [
-        askedQuestionNumber(askPrompt(12, 'what does this cost?')),
-        askedQuestionNumber(waitWhatPrompt(4)),
-    ];
+    const numbers = [askedQuestionLabel(askPrompt(12, 'what does this cost?')), askedQuestionLabel(waitWhatPrompt(4))];
 
     /* Then */
-    assert.deepEqual(numbers, [12, 4]);
+    assert.deepEqual(numbers, ['12', '4']);
+});
+
+test('an ask about a lettered question is recognised by its label', () => {
+    /* When */
+    const labels = [askedQuestionLabel(askPrompt('2a', 'why?')), askedQuestionLabel(waitWhatPrompt('2b'))];
+
+    /* Then */
+    assert.deepEqual(labels, ['2a', '2b']);
 });
 
 test('an ask comes back recognised with the whitespace the hook adds around it', () => {
     /* When */
-    const numbers = [askedQuestionNumber(`\n${askPrompt(1, 'why?')}\n`), askedQuestionNumber(` ${waitWhatPrompt(5)} `)];
+    const numbers = [askedQuestionLabel(`\n${askPrompt(1, 'why?')}\n`), askedQuestionLabel(` ${waitWhatPrompt(5)} `)];
 
     /* Then */
-    assert.deepEqual(numbers, [1, 5]);
+    assert.deepEqual(numbers, ['1', '5']);
 });
 
 test('an ask with nothing typed is still recognised', () => {
     /* When */
-    const number = askedQuestionNumber(askPrompt(3, '  '));
+    const number = askedQuestionLabel(askPrompt(3, '  '));
 
     /* Then */
-    assert.equal(number, 3);
+    assert.equal(number, '3');
 });
 
 test('any other prompt is no ask', () => {
     /* When */
     const numbers = [
-        askedQuestionNumber('Q1: yes\nQ2: yes'),
-        askedQuestionNumber('/wait-what Q2 Q3'),
-        askedQuestionNumber('/wait-what'),
-        askedQuestionNumber('about Q3: why?'),
-        askedQuestionNumber('Before I answer the round, about Q: why?'),
+        askedQuestionLabel('Q1: yes\nQ2: yes'),
+        askedQuestionLabel('/wait-what Q2 Q3'),
+        askedQuestionLabel('/wait-what'),
+        askedQuestionLabel('about Q3: why?'),
+        askedQuestionLabel('Before I answer the round, about Q: why?'),
     ];
 
     /* Then */

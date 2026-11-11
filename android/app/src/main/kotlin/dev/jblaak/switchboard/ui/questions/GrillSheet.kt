@@ -186,7 +186,7 @@ private fun Pips(state: GrillSheetState, actions: GrillSheetActions) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         state.questions.forEachIndexed { place, question ->
             val answer = state.answerAt(place)
-            val label = stringResource(R.string.questions_grill_counter, question.number, place + 1, state.questions.size)
+            val label = stringResource(R.string.questions_grill_counter, question.label, place + 1, state.questions.size)
             Pip(
                 current = state.place == place,
                 modifier = Modifier
@@ -326,7 +326,7 @@ private fun QuestionCard(state: GrillSheetState, question: GrillQuestionView, ac
     val place = state.place
     Column {
         Text(
-            stringResource(R.string.questions_grill_counter, question.number, place + 1, state.questions.size).uppercase(),
+            stringResource(R.string.questions_grill_counter, question.label, place + 1, state.questions.size).uppercase(),
             style = MaterialTheme.typography.labelSmall,
             color = colors.textFaint,
         )
@@ -561,7 +561,7 @@ private fun ReviewRow(question: GrillQuestionView, answer: GrillAnswer?, onChang
         GrillMark.Changed -> stringResource(if (question.setAside != null) R.string.questions_grill_flag_changed_aside else R.string.questions_grill_flag_changed)
         null -> null
     }
-    val title = markdown("${question.number} · ${question.title}")
+    val title = markdown("${question.label} · ${question.title}")
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier

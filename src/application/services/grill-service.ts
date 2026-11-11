@@ -30,7 +30,8 @@
  * session has had.
  */
 import {answerAgainst, answerAt, carry, matchQuestions, revise, startAnswering} from '../../domain/grill/answering';
-import {answersPrompt, askPrompt, askedQuestionNumber, waitWhatPrompt} from '../../domain/grill/reply';
+import {answersPrompt, askPrompt, askedQuestionLabel, waitWhatPrompt} from '../../domain/grill/reply';
+import {questionLabel} from '../../domain/grill/model';
 import {roundOfTurn} from '../../domain/grill/round';
 import type {
     Answering,
@@ -259,11 +260,11 @@ export class GrillService implements HookReceiver {
         if (current === null) return {ok: false, error: QUESTION_GONE};
         if (this.deps.prompter.isBusy(grilling.key)) return {ok: false, error: BUSY_ASK};
 
-        const number = open.answering.questions[current].question.number;
-        const prompt = text === null ? waitWhatPrompt(number) : askPrompt(number, text);
+        const label = questionLabel(open.answering.questions[current].question);
+        const prompt = text === null ? waitWhatPrompt(label) : askPrompt(label, text);
         // Registered first: its echo through UserPromptSubmit must find it.
         open.asks.push({place: current, prompt});
-        this.deps.log.info(`[grill] session=${this.currentId(session, grilling)} asks about Q${number}`);
+        this.deps.log.info(`[grill] session=${this.currentId(session, grilling)} asks about Q${label}`);
         this.deps.prompter.send(grilling.key, prompt);
         return {ok: true};
     }
@@ -355,9 +356,9 @@ export class GrillService implements HookReceiver {
         const text = prompt.trim();
         const index = open.asks.findIndex((ask) => ask.prompt.trim() === text);
         if (index >= 0) return open.asks.splice(index, 1)[0].place;
-        const number = askedQuestionNumber(text);
-        if (number === null) return undefined;
-        const place = open.answering.questions.findIndex((q) => q.question.number === number);
+        const label = askedQuestionLabel(text);
+        if (label === null) return undefined;
+        const place = open.answering.questions.findIndex((q) => questionLabel(q.question) === label);
         return place < 0 ? undefined : place;
     }
 
@@ -382,7 +383,7 @@ export class GrillService implements HookReceiver {
     }
 
     private prompt(open: OpenRound): string {
-        return answersPrompt(open.answering.questions.map((q) => ({number: q.question.number, answer: q.answer})));
+        return answersPrompt(open.answering.questions.map((q) => ({...q.question, answer: q.answer})));
     }
 
     /** The place in the current revision of the question at `place` of `revision`; null when gone. */
@@ -510,7 +511,7 @@ export class GrillService implements HookReceiver {
 export function summaryQuestions(round: Round): Question[] {
     return round.questions.map((q) => ({
         question: q.title,
-        header: `Q${q.number}`,
+        header: `Q${questionLabel(q)}`,
         options: [
             {label: GRILL_YES_LABEL, description: q.recommendation},
             {label: WAIT_WHAT_LABEL, description: ''},

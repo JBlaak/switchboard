@@ -9,6 +9,9 @@
  *     Q2: (b) 30 days, then drop the row
  *     Q4: yes, note: keep it behind a flag
  *
+ * A question whose number the round split by a letter goes back under it:
+ * `Q2a: yes`.
+ *
  * A question without an answer is left out. An answer is collapsed onto its
  * line, since a newline inside it would read as the next question's answer.
  *
@@ -16,13 +19,16 @@
  * Switchboard recognises its own wording when it sees the prompt come back
  * through the UserPromptSubmit hook, so it does not mistake it for a reply.
  */
-import type {GrillAnswer} from './model';
+import {questionLabel} from './model';
+import type {GrillAnswer, RoundQuestion} from './model';
+
+type Answered = Pick<RoundQuestion, 'number' | 'suffix'> & {answer: GrillAnswer | null};
 
 /** The prompt that answers a round; '' when nothing is answered. */
-export function answersPrompt(questions: readonly {number: number; answer: GrillAnswer | null}[]): string {
+export function answersPrompt(questions: readonly Answered[]): string {
     return questions
-        .filter((q): q is {number: number; answer: GrillAnswer} => q.answer !== null)
-        .map((q) => `Q${q.number}: ${answerText(q.answer)}`)
+        .filter((q): q is Answered & {answer: GrillAnswer} => q.answer !== null)
+        .map((q) => `Q${questionLabel(q)}: ${answerText(q.answer)}`)
         .join('\n');
 }
 
@@ -40,24 +46,24 @@ export function answerText(answer: GrillAnswer): string {
 
 const ASK_PREFIX = 'Before I answer the round, about Q';
 
-/** Ask about this: a question about one question, with what the user typed. */
-export function askPrompt(number: number, text: string): string {
-    return `${ASK_PREFIX}${number}: ${oneLine(text)}`;
+/** Ask about this: a question about one question (by its label, `3` or `2a`), with what the user typed. */
+export function askPrompt(label: string | number, text: string): string {
+    return `${ASK_PREFIX}${label}: ${oneLine(text)}`;
 }
 
-/** Wait, what?: have Claude re-pitch one question in plain words. */
-export function waitWhatPrompt(number: number): string {
-    return `/wait-what Q${number}`;
+/** Wait, what?: have Claude re-pitch one question (by its label) in plain words. */
+export function waitWhatPrompt(label: string | number): string {
+    return `/wait-what Q${label}`;
 }
 
-/** The question number a prompt asks about, when it is one of Switchboard's asks; null for anything else. */
-export function askedQuestionNumber(prompt: string): number | null {
+/** The label of the question a prompt asks about (`3`, `2a`), when it is one of Switchboard's asks; null for anything else. */
+export function askedQuestionLabel(prompt: string): string | null {
     const text = prompt.trim();
     // The prompt is trimmed, so an ask with nothing typed ends at its colon.
-    const ask = /^Before I answer the round, about Q(\d+):(?:\s|$)/.exec(text);
-    if (ask) return Number(ask[1]);
-    const wait = /^\/wait-what Q(\d+)$/.exec(text);
-    if (wait) return Number(wait[1]);
+    const ask = /^Before I answer the round, about Q(\d+[a-z]?):(?:\s|$)/.exec(text);
+    if (ask) return ask[1];
+    const wait = /^\/wait-what Q(\d+[a-z]?)$/.exec(text);
+    if (wait) return wait[1];
     return null;
 }
 
