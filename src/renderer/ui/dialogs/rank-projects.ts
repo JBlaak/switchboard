@@ -6,7 +6,9 @@
  */
 import {fuzzyMatch} from '../../../domain/search/fuzzy';
 import {projectLabel} from '../../features/sessions/project-label';
+import {byRecency} from '../../../domain/project/project-recency';
 import type {Project} from '../../../domain/project/project';
+import type {SessionRecency} from '../../../domain/project/project-recency';
 
 /** One filtered project, with what the ranking used to get there. */
 export interface Candidate {
@@ -24,9 +26,11 @@ export interface Candidate {
  *
  * Anything the *label* matched comes first, however well a long path happened
  * to score — "sb" means switchboard, not the /Users/…/website whose path
- * happens to contain an s before a b. Then best score, then most recent.
+ * happens to contain an s before a b. Then the project with the most recent
+ * session (see `sessionRecency`), with or without a query, and only then the
+ * better score.
  */
-export function rankProjects(projects: readonly Project[], query: string): Candidate[] {
+export function rankProjects(projects: readonly Project[], query: string, recency: SessionRecency): Candidate[] {
     const matches: Candidate[] = [];
 
     for (const project of projects) {
@@ -43,23 +47,10 @@ export function rankProjects(projects: readonly Project[], query: string): Candi
         });
     }
 
-    matches.sort(
-        (a, b) =>
-            Number(b.onLabel) - Number(a.onLabel) ||
-            b.score - a.score ||
-            lastActivity(b.project) - lastActivity(a.project),
-    );
+    const mostRecent = byRecency(recency, (candidate: Candidate) => candidate.project.projectPath);
+    matches.sort((a, b) => Number(b.onLabel) - Number(a.onLabel) || mostRecent(a, b) || b.score - a.score);
 
     return matches;
-}
-
-function lastActivity(project: Project): number {
-    let newest = 0;
-    for (const session of project.sessions) {
-        const at = new Date(session.modified).getTime();
-        if (at > newest) newest = at;
-    }
-    return newest;
 }
 
 /** A stretch of a label, highlighted or not. */

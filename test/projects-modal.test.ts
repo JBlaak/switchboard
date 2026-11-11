@@ -6,6 +6,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {classifyQuery} from '../src/renderer/ui/dialogs/projects-query';
 import {projectsRows} from '../src/renderer/ui/dialogs/projects-rows';
+import {sessionRecency} from '../src/domain/project/project-recency';
 import {pickerKeyAction, rowMenuKeyAction} from '../src/renderer/ui/dialogs/picker-selection';
 import {canAddFolder, folderCheckLines, folderSummary} from '../src/renderer/ui/dialogs/add-project-request';
 import type {PickerKey} from '../src/renderer/ui/dialogs/picker-selection';
@@ -114,13 +115,13 @@ test('Add project… is the last row, after every project', () => {
     const projects = [project(APP, '2026-10-02T00:00:00Z'), project(OTHER, '2026-10-01T00:00:00Z')];
 
     /* When */
-    const rows = projectsRows(projects, classifyQuery(''));
+    const rows = projectsRows(projects, classifyQuery(''), sessionRecency(projects));
 
     /* Then */
     assert.deepEqual(describe(rows), [APP, OTHER, 'add project']);
 });
 
-test('a worktree is listed under its repository, however recently it was used', () => {
+test('a worktree is listed under its repository, which ranks by the worktree\'s sessions too', () => {
     /* Given */
     const projects = [
         project(APP_WORKTREE, '2026-10-05T00:00:00Z'),
@@ -129,10 +130,10 @@ test('a worktree is listed under its repository, however recently it was used', 
     ];
 
     /* When */
-    const rows = projectsRows(projects, classifyQuery(''));
+    const rows = projectsRows(projects, classifyQuery(''), sessionRecency(projects));
 
     /* Then */
-    assert.deepEqual(describe(rows), [OTHER, APP, '  ' + APP_WORKTREE, 'add project']);
+    assert.deepEqual(describe(rows), [APP, '  ' + APP_WORKTREE, OTHER, 'add project']);
 });
 
 test('a worktree whose repository is not listed stands on its own', () => {
@@ -140,7 +141,7 @@ test('a worktree whose repository is not listed stands on its own', () => {
     const projects = [project(APP_WORKTREE), project(OTHER)];
 
     /* When */
-    const rows = projectsRows(projects, classifyQuery('issue'));
+    const rows = projectsRows(projects, classifyQuery('issue'), sessionRecency(projects));
 
     /* Then */
     assert.deepEqual(describe(rows), [APP_WORKTREE, 'add project']);
@@ -151,7 +152,7 @@ test('a path puts an Add folder row on top', () => {
     const projects = [project(APP), project(OTHER)];
 
     /* When */
-    const rows = projectsRows(projects, classifyQuery('/code/rowlog'));
+    const rows = projectsRows(projects, classifyQuery('/code/rowlog'), sessionRecency(projects));
 
     /* Then */
     assert.equal(describe(rows)[0], 'add folder /code/rowlog');
@@ -160,7 +161,7 @@ test('a path puts an Add folder row on top', () => {
 
 test('an ssh target puts an Add remote row on top', () => {
     /* When */
-    const rows = projectsRows([project(APP)], classifyQuery('deploy@box:2222'));
+    const rows = projectsRows([project(APP)], classifyQuery('deploy@box:2222'), new Map());
 
     /* Then */
     assert.deepEqual(describe(rows), ['add remote deploy@box:2222', 'add project']);

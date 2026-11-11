@@ -10,6 +10,7 @@ import {rankProjects} from './rank-projects';
 import type {Candidate} from './rank-projects';
 import type {ProjectsQuery} from './projects-query';
 import type {Project} from '../../../domain/project/project';
+import type {SessionRecency} from '../../../domain/project/project-recency';
 
 export type ProjectsRow =
     /** Add the folder the search names. */
@@ -21,8 +22,8 @@ export type ProjectsRow =
     /** Open the add step. */
     | {readonly kind: 'add-project'};
 
-/** Every row, top to bottom, for the search as classified. */
-export function projectsRows(projects: readonly Project[], query: ProjectsQuery): ProjectsRow[] {
+/** Every row, top to bottom, for the search as classified, projects ordered by `recency`. */
+export function projectsRows(projects: readonly Project[], query: ProjectsQuery, recency: SessionRecency): ProjectsRow[] {
     const rows: ProjectsRow[] = [];
     let filter: string;
     switch (query.kind) {
@@ -38,7 +39,7 @@ export function projectsRows(projects: readonly Project[], query: ProjectsQuery)
             filter = query.text;
             break;
     }
-    for (const {candidate, nested} of nestWorktrees(rankProjects(projects, filter))) {
+    for (const {candidate, nested} of nestWorktrees(rankProjects(projects, filter, recency))) {
         rows.push({kind: 'project', candidate, nested});
     }
     rows.push({kind: 'add-project'});

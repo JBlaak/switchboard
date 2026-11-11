@@ -27,6 +27,7 @@ import {AddProjectStep} from './AddProjectStep';
 import {clampSelection, nextSelection, pickerKeyAction, rowMenuKeyAction} from './picker-selection';
 import {classifyQuery} from './projects-query';
 import {projectsRows} from './projects-rows';
+import {sessionRecency} from '../../../domain/project/project-recency';
 import {folderSummary} from './add-project-request';
 import {
     addLocalProject,
@@ -98,7 +99,9 @@ export function ProjectsModal({onClose, initialPrompt}: ProjectsModalProps): JSX
 
     const trimmed = query.trim();
     const classified = classifyQuery(query);
-    const rows = addStep ? [] : projectsRows(view.cachedProjects, classified);
+    // Ordered by every session Switchboard recorded, archived ones too: the
+    // list with them is the one that knows when a project was last worked in.
+    const rows = addStep ? [] : projectsRows(view.cachedProjects, classified, sessionRecency(view.cachedAllProjects));
     const count = rows.length;
     const current = clampSelection(selected, count);
     const highlightedRow = addStep ? undefined : rows[current];
