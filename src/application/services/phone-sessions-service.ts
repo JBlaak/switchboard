@@ -22,6 +22,7 @@
  */
 import {routeCandidates, folderName} from '../../domain/ask/route';
 import {parseRemoteProjectPath} from '../../domain/project/remote-target';
+import {byRecency, sessionRecency} from '../../domain/project/project-recency';
 import {isAgentPty} from './agent-client/agent-pty';
 import {defaultSessionOptions} from '../../domain/launch/session-options';
 import {MAC, NO_OWNERSHIP, acceptsInput, applyOwnership, ownerOf} from '../../domain/phone/ownership';
@@ -672,14 +673,18 @@ export class PhoneSessionsService {
         return {sessionId};
     }
 
-    /** The local projects Ask Patch may start in, with how many sessions run in each. */
+    /**
+     * The local projects Ask Patch may start in, with how many sessions run in
+     * each, the one with the most recent session first (archived ones count).
+     */
     private projects(): PhoneProject[] {
         const running = new Map<string, number>();
         for (const sessionId of this.deps.running.runningSessionIds()) {
             const path = this.deps.registry.get(sessionId)?.projectPath;
             if (path) running.set(path, (running.get(path) ?? 0) + 1);
         }
-        return routeCandidates(this.deps.projects.list(false)).map((candidate) => ({
+        const mostRecent = byRecency(sessionRecency(this.deps.projects.list(true)), (c: RouteCandidate) => c.projectPath);
+        return routeCandidates(this.deps.projects.list(false)).sort(mostRecent).map((candidate) => ({
             path: candidate.projectPath,
             folder: folderName(candidate.projectPath),
             running: running.get(candidate.projectPath) ?? 0,

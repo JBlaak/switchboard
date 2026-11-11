@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import {initialRendererState, rootReducer} from '../src/renderer/state/root';
 import {initialDialogState, dialogReducer} from '../src/renderer/state/dialog-slice';
 import {labelRuns, rankProjects} from '../src/renderer/ui/dialogs/rank-projects';
+import {sessionRecency} from '../src/domain/project/project-recency';
 import {
     DANGEROUS_SKIP,
     applyPermissionSelection,
@@ -110,7 +111,7 @@ test('with no query every project is listed, most recently active first', () => 
     ];
 
     /* When */
-    const ranked = rankProjects(projects, '');
+    const ranked = rankProjects(projects, '', sessionRecency(projects));
 
     /* Then */
     assert.deepStrictEqual(
@@ -122,12 +123,12 @@ test('with no query every project is listed, most recently active first', () => 
 test('a label match outranks a match on the full path alone', () => {
     /* Given */
     const projects = [
-        project('/srv/switchboard-data/website', '2026-03-01T00:00:00Z'),
+        project('/srv/sb-data/code/website', '2026-03-01T00:00:00Z'),
         project('/srv/code/sb', '2026-01-01T00:00:00Z'),
     ];
 
     /* When */
-    const ranked = rankProjects(projects, 'sb');
+    const ranked = rankProjects(projects, 'sb', sessionRecency(projects));
 
     /* Then */
     const sb = ranked.find((c) => c.project.projectPath === '/srv/code/sb');
@@ -135,12 +136,48 @@ test('a label match outranks a match on the full path alone', () => {
     assert.strictEqual(ranked[0], sb);
 });
 
+test('with a query, the label matches are listed most recently active first, not by best score', () => {
+    /* Given */
+    const projects = [
+        project('/srv/code/switchboard', '2026-01-01T00:00:00Z'),
+        project('/srv/code/sandbox-web', '2026-03-01T00:00:00Z'),
+    ];
+
+    /* When */
+    const ranked = rankProjects(projects, 'sb', sessionRecency(projects));
+
+    /* Then */
+    assert.deepStrictEqual(
+        ranked.map((c) => c.project.projectPath.split('/').pop()),
+        ['sandbox-web', 'switchboard'],
+    );
+});
+
+test('archived sessions count: a project whose recent sessions are all archived still ranks by them', () => {
+    /* Given the list the picker shows, without archived sessions, */
+    const shown = [project('/srv/code/old', '2026-01-01T00:00:00Z'), project('/srv/code/archived-today')];
+    /* and every session Switchboard recorded */
+    const recorded = [
+        project('/srv/code/old', '2026-01-01T00:00:00Z'),
+        project('/srv/code/archived-today', '2026-03-01T00:00:00Z'),
+    ];
+
+    /* When */
+    const ranked = rankProjects(shown, '', sessionRecency(recorded));
+
+    /* Then */
+    assert.deepStrictEqual(
+        ranked.map((c) => c.project.projectPath.split('/').pop()),
+        ['archived-today', 'old'],
+    );
+});
+
 test('a path-only match has nothing to highlight in the label', () => {
     /* Given */
     const projects = [project('/srv/zz-hidden/code/visible')];
 
     /* When */
-    const [only] = rankProjects(projects, 'zz');
+    const [only] = rankProjects(projects, 'zz', sessionRecency(projects));
 
     /* Then */
     assert.ok(only);
@@ -153,7 +190,7 @@ test('nothing matches, nothing is listed', () => {
     const projects = [project('/srv/code/sb')];
 
     /* When */
-    const ranked = rankProjects(projects, 'qqq');
+    const ranked = rankProjects(projects, 'qqq', sessionRecency(projects));
 
     /* Then */
     assert.deepStrictEqual(ranked, []);
