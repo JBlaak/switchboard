@@ -152,7 +152,12 @@ function harness() {
                     .filter(([, s]) => !s.exited)
                     .map(([id]) => id),
         },
-        projects: {list: () => projects},
+        projects: {
+            list: (showArchived: boolean) =>
+                showArchived
+                    ? projects
+                    : projects.map((p) => ({...p, sessions: p.sessions.filter((s) => !s.archived)})),
+        },
         questions,
         grill,
         router: () => new AskRouteService({cli: caller.cli, timers: routeTimers, log: silentLog, call: ASK_PATCH_CALL}),
@@ -1144,6 +1149,30 @@ test('list-projects answers the local projects with how many sessions run in eac
 
     /* Then */
     assert.deepEqual(phone.of('projects'), [{type: 'projects', projects: [{path: APP, folder: 'app', running: 2}]}]);
+});
+
+test('list-projects answers the project with the most recent session first, archived sessions included', () => {
+    /* Given */
+    const h = harness();
+    h.setProjects([
+        {projectPath: APP, folder: '-code-app', sessions: [row('a1', {modified: '2026-10-02T10:00:00.000Z'})]},
+        {
+            projectPath: SITE,
+            folder: '-code-site',
+            sessions: [row('s1', {projectPath: SITE, modified: '2026-10-03T10:00:00.000Z', archived: 1})],
+        },
+    ]);
+    const phone = h.connect();
+
+    /* When */
+    h.send(phone, {type: 'list-projects'});
+
+    /* Then */
+    const [answer] = phone.of('projects');
+    assert.deepEqual(
+        answer?.projects.map((p) => p.path),
+        [SITE, APP],
+    );
 });
 
 test('nothing is pushed while no phone is connected', () => {

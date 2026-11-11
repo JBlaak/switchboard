@@ -25,6 +25,7 @@ import {fakeClaude, launchedKeys, waitForNewLaunch} from '../support/fake-cli';
 import {failStopSession, setHostStub} from '../support/main-process';
 import {answerDialogs, dialogsShown} from '../support/native-dialogs';
 import {LABEL, P, S, standardFixture} from '../fixtures/standard';
+import {daysAgo, hoursAgo, sessionId} from '../support/fixture-home';
 import type {Locator, Page} from '@playwright/test';
 
 function openProjects(page: Page) {
@@ -324,6 +325,61 @@ test.describe('projects modal', () => {
         await expect(page.getByRole('region', {name: `Settings for ${P.acmeApi}`})).toBeVisible();
         await settle(page);
         expect(launchedKeys(home)).toEqual(before);
+    });
+});
+
+test.describe('projects modal order', () => {
+    test.use({
+        fixture: {
+            projects: [
+                {
+                    path: 'Development/older',
+                    sessions: [{id: sessionId('older'), prompt: 'Tidy the README', at: daysAgo(3)}],
+                },
+                {
+                    path: 'Development/archived-today',
+                    sessions: [{id: sessionId('archived'), prompt: 'Ship the fix', at: hoursAgo(1), archived: true}],
+                },
+                {
+                    path: 'Development/untouched',
+                    sessions: [{id: sessionId('untouched'), prompt: 'Set it up', at: daysAgo(30)}],
+                },
+            ],
+        },
+    });
+
+    /** The modal's project names, top to bottom. */
+    function order(page: Page) {
+        return projectsModal(page).locator('.project-picker-name').filter({hasNotText: 'Add project…'});
+    }
+
+    test('lists projects by their most recent session, archived ones too, and reorders once a session starts', async ({
+        page,
+        home,
+    }) => {
+        /* Given */
+        await openProjects(page);
+
+        /* Then */
+        await expect(order(page)).toHaveText([
+            'Development/archived-today',
+            'Development/older',
+            'Development/untouched',
+        ]);
+
+        /* When */
+        await page.keyboard.type('untouched');
+        const before = launchedKeys(home);
+        await page.keyboard.press('Enter');
+        await waitForNewLaunch(home, 'claude', before);
+        await openProjects(page);
+
+        /* Then */
+        await expect(order(page)).toHaveText([
+            'Development/untouched',
+            'Development/archived-today',
+            'Development/older',
+        ]);
     });
 });
 
