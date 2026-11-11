@@ -257,7 +257,9 @@
 .gc ul + p,
 .gc ol + p,
 .gc * + .gc-table,
-.gc .gc-table + * {
+.gc .gc-table + *,
+.gc * + .gc-codeblock,
+.gc .gc-codeblock + * {
     margin-top: 8px;
 }
 .gc ul,
@@ -286,6 +288,24 @@
     font-weight: 700;
     color: var(--sb-text-strong);
     background: rgba(var(--sb-overlay-rgb), 0.05);
+}
+
+.gc-codeblock {
+    max-width: 100%;
+    overflow-x: auto;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(var(--sb-overlay-rgb), 0.07);
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+.gc .gc-codeblock code {
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    font-size: inherit;
+    white-space: pre;
 }
 
 .gc-choices {

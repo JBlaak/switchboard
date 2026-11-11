@@ -1,6 +1,6 @@
 /**
  * A round's Markdown drawn as elements: a title's inline runs, or a reason's
- * paragraphs, lists and tables (see `grill-markdown`). A PR link opens the
+ * paragraphs, lists, tables and code blocks (see `grill-markdown`). A PR link opens the
  * peek, any other web link the browser; the window itself never navigates.
  */
 import {inlineMarkdown, markdownBlocks} from '../../features/grill/grill-markdown';
@@ -27,6 +27,10 @@ export function BlockMarkdown({text, className}: {text: string; className?: stri
                     </p>
                 ) : block.kind === 'table' ? (
                     <Table key={i} table={block} />
+                ) : block.kind === 'code' ? (
+                    <pre key={i} className="gc-codeblock" data-lang={block.lang ?? undefined}>
+                        <code>{block.text}</code>
+                    </pre>
                 ) : block.ordered ? (
                     <ol key={i}>
                         {block.items.map((item, j) => (

@@ -113,3 +113,46 @@ test('pipes without a divider row stay text', () => {
         {kind: 'paragraph', lines: [[{kind: 'text', text: 'a | b'}], [{kind: 'text', text: 'c | d'}]]},
     ]);
 });
+
+test('a fenced code block keeps its lines, indentation and blank lines as they are', () => {
+    /* Given */
+    const text =
+        "Public download API's shape for each entry?\n\n```graphql\ntype ScreenApp {\n  identifier: String! # `id`\n\n  role: **Role**\n}\n```\n\nThe ticket said so.";
+
+    /* When */
+    const blocks = markdownBlocks(text);
+
+    /* Then */
+    assert.deepEqual(blocks, [
+        {kind: 'paragraph', lines: [[{kind: 'text', text: "Public download API's shape for each entry?"}]]},
+        {
+            kind: 'code',
+            lang: 'graphql',
+            text: 'type ScreenApp {\n  identifier: String! # `id`\n\n  role: **Role**\n}',
+        },
+        {kind: 'paragraph', lines: [[{kind: 'text', text: 'The ticket said so.'}]]},
+    ]);
+});
+
+test('a fence with no blank line around it, indented or with tildes, is lifted out of its paragraph', () => {
+    /* When */
+    const blocks = markdownBlocks('Before\n  ~~~\n    a\n  b\n  ~~~\nAfter');
+
+    /* Then */
+    assert.deepEqual(blocks, [
+        {kind: 'paragraph', lines: [[{kind: 'text', text: 'Before'}]]},
+        {kind: 'code', lang: null, text: '  a\nb'},
+        {kind: 'paragraph', lines: [[{kind: 'text', text: 'After'}]]},
+    ]);
+});
+
+test('a fence that is never closed runs to the end of the text', () => {
+    /* When */
+    const blocks = markdownBlocks('See:\n\n```\nx = 1\n\ny = 2');
+
+    /* Then */
+    assert.deepEqual(blocks, [
+        {kind: 'paragraph', lines: [[{kind: 'text', text: 'See:'}]]},
+        {kind: 'code', lang: null, text: 'x = 1\n\ny = 2'},
+    ]);
+});
