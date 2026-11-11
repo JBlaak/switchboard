@@ -9,6 +9,7 @@
  * will receive — lives here, so the components only draw it.
  */
 import {answersPrompt} from '../../../domain/grill/reply';
+import {questionLabel} from '../../../domain/grill/model';
 import type {GrillAnswer, GrillQuestionView, GrillView, Mark} from '../../../domain/grill/model';
 
 /** How a question's tab is drawn: its answer's kind, asked about, or still open. */
@@ -95,7 +96,7 @@ export function acceptRest(view: Pick<GrillView, 'questions'>): PlacedAnswer[] {
  * on its question but never sent.
  */
 export function reviewPreview(view: Pick<GrillView, 'questions'>): string {
-    return answersPrompt(view.questions.map((q) => ({number: q.number, answer: q.answer})));
+    return answersPrompt(view.questions);
 }
 
 /** What a question's flag on the review says about a revision; '' when it has none. */
@@ -118,7 +119,7 @@ export function revisionNote(question: GrillQuestionView): string | null {
 /** The counter over a question's title: `Question 3 · 2 of 6`. */
 export function questionCounter(view: Pick<GrillView, 'questions'>, place: number): string {
     const question = view.questions[place];
-    return question ? `Question ${question.number} · ${place + 1} of ${view.questions.length}` : '';
+    return question ? `Question ${questionLabel(question)} · ${place + 1} of ${view.questions.length}` : '';
 }
 
 /**

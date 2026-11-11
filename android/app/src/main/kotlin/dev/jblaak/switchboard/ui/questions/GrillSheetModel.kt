@@ -323,7 +323,7 @@ data class GrillSheetState(
     val sendState: GrillSendState get() = sendShown ?: view?.send ?: GrillSendState.Idle
 
     /** Exactly the text Claude will receive. */
-    val reviewText: String get() = answersPrompt(questions.mapIndexed { place, question -> question.number to answerAt(place) })
+    val reviewText: String get() = answersPrompt(questions.mapIndexed { place, question -> question.label to answerAt(place) })
 
     val canSend: Boolean get() = answeredCount > 0 && phase == GrillPhase.Answering
 
@@ -402,10 +402,10 @@ internal fun choiceLetterOf(text: String): String? = Regex("""^\((\w)\)""").find
 
 /**
  * The prompt that answers a round, as `answersPrompt` in `src/domain/grill/reply.ts` writes it: a `Q<n>: …` line
- * per answered question, in the round's own numbering; unanswered ones left out. '' when nothing is answered.
+ * per answered question, in the round's own numbering (`Q2a` for a split number); unanswered ones left out. '' when nothing is answered.
  */
-fun answersPrompt(questions: List<Pair<Int, GrillAnswer?>>): String =
-    questions.mapNotNull { (number, answer) -> answer?.let { "Q$number: ${answerText(it)}" } }.joinToString("\n")
+fun answersPrompt(questions: List<Pair<String, GrillAnswer?>>): String =
+    questions.mapNotNull { (label, answer) -> answer?.let { "Q$label: ${answerText(it)}" } }.joinToString("\n")
 
 /** One answer as it goes on its line, after `Q<n>: `. */
 fun answerText(answer: GrillAnswer): String = when (answer) {

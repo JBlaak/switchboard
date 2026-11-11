@@ -19,6 +19,7 @@
  */
 import {bannerSeenFor} from './grill-banner';
 import type {BannerSeen} from './grill-banner';
+import {questionLabel} from '../../../domain/grill/model';
 import type {GrillAnswer, GrillQuestionView, GrillView, RoundQuestion} from '../../../domain/grill/model';
 
 export type FieldKind = 'note' | 'override' | 'ask';
@@ -60,14 +61,16 @@ export function normalisedTitle(title: string): string {
  * first, then by title alone. Null when the revision dropped it.
  */
 export function followQuestion(
-    before: readonly Pick<RoundQuestion, 'number' | 'title'>[],
-    after: readonly Pick<RoundQuestion, 'number' | 'title'>[],
+    before: readonly Pick<RoundQuestion, 'number' | 'suffix' | 'title'>[],
+    after: readonly Pick<RoundQuestion, 'number' | 'suffix' | 'title'>[],
     place: number,
 ): number | null {
     const question = before[place];
     if (!question) return null;
     const title = normalisedTitle(question.title);
-    const both = after.findIndex((q) => q.number === question.number && normalisedTitle(q.title) === title);
+    const both = after.findIndex(
+        (q) => questionLabel(q) === questionLabel(question) && normalisedTitle(q.title) === title,
+    );
     if (both >= 0) return both;
     const byTitle = after.findIndex((q) => normalisedTitle(q.title) === title);
     return byTitle >= 0 ? byTitle : null;

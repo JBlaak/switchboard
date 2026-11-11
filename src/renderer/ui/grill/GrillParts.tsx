@@ -6,6 +6,7 @@
 import {answerLabel, reviewFlag, reviewPreview, sendGroup, tabState} from '../../features/grill/grill-card';
 import {InlineMarkdown} from './Markdown';
 import type {JSX, Ref} from 'react';
+import {questionLabel} from '../../../domain/grill/model';
 import type {GrillView} from '../../../domain/grill/model';
 import type {FieldKind} from '../../features/grill/grill-ui';
 
@@ -32,11 +33,11 @@ export function GrillTabs({view, place, onGo}: GrillTabsProps): JSX.Element {
                         tabIndex={-1}
                         className={`gc-tab is-${tab.state}` + (current ? ' is-current' : '')}
                         aria-current={current ? 'step' : undefined}
-                        aria-label={`Question ${q.number}, ${tab.state}${tab.mark ? `, ${tab.mark}` : ''}`}
+                        aria-label={`Question ${questionLabel(q)}, ${tab.state}${tab.mark ? `, ${tab.mark}` : ''}`}
                         onClick={() => onGo(i)}>
                         <span className="gc-tab-bar" aria-hidden="true" />
                         <span className="gc-tab-label">
-                            {tab.mark && <span className="gc-mark" title={tab.mark} />}Q{q.number}
+                            {tab.mark && <span className="gc-mark" title={tab.mark} />}Q{questionLabel(q)}
                         </span>
                     </button>
                 );
@@ -74,7 +75,7 @@ export function GrillReview({view, blockRef, onGo}: GrillReviewProps): JSX.Eleme
                     return (
                         <div key={i} className="gc-row">
                             <span className="gc-row-title">
-                                {q.number} · <InlineMarkdown text={q.title} />
+                                {questionLabel(q)} · <InlineMarkdown text={q.title} />
                                 {flag && <span className="gc-row-flag">{flag}</span>}
                             </span>
                             <span className="gc-row-answer">{answerLabel(q.answer)}</span>

@@ -399,3 +399,38 @@ test('a turn without text has no round', () => {
     /* Then */
     assert.equal(posted, null);
 });
+
+test('a number split by a letter is read with its letter, next to plain numbers', () => {
+    /* Given */
+    const text = [
+        '❓ **Q2a - The App track is the default**: Should every App keep its own tracks?',
+        '',
+        '➡️ Yes.',
+        '',
+        '---',
+        '',
+        '❓ **Q2b - The override lives on the link**: Should the override sit on the row?',
+        '',
+        '➡️ Yes.',
+        '',
+        '---',
+        '',
+        '❓ **Q3 - Release owns the version**: Is a Release today’s row?',
+        '',
+        '➡️ Yes.',
+    ].join('\n');
+
+    /* When */
+    const round = parseRound(text);
+
+    /* Then */
+    assert.deepEqual(
+        round?.questions.map((q) => [q.number, q.suffix, q.title]),
+        [
+            [2, 'a', 'The App track is the default'],
+            [2, 'b', 'The override lives on the link'],
+            [3, undefined, 'Release owns the version'],
+        ],
+    );
+    assert.equal(round?.preamble, '');
+});
