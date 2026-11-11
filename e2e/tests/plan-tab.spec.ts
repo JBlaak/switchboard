@@ -8,11 +8,18 @@
  * clears between two polls celebrates once, Start level starts one
  * session that coordinates an agent per Ready issue, and a start refused
  * over an existing branch offers to continue on it, open its session, or
- * delete it and start again.
+ * delete it and start again. A start handed off to a VM shows each step
+ * main reports while it goes.
  */
 import {test, expect} from '../support/test';
-import {openSession, terminalHeader} from '../support/app';
-import {existingBranchAsks, openedExternally, setHostStub} from '../support/main-process';
+import {openSession, sessionRow, terminalHeader} from '../support/app';
+import {
+    existingBranchAsks,
+    openedExternally,
+    setHostStub,
+    STUB_HANDOFF,
+    STUB_HANDOFF_HOST,
+} from '../support/main-process';
 import {LABEL, P, S} from '../fixtures/standard';
 import {sessionWorkStub} from '../fixtures/session-work';
 import {LOGIN_PLAN, LOGIN_PLAN_ON_LEVEL_3, plansStub} from '../fixtures/plans';
@@ -257,6 +264,55 @@ test.describe('an existing branch', () => {
         /* Then */
         await new FakeCli(home.controlDir, S.graphqlSpike).launched();
         await expect(terminalHeader(page)).toContainText(LABEL.graphqlSpike);
+    });
+});
+
+test.describe('a start handed off to a VM', () => {
+    test.use({
+        stubs: {
+            sessionWork: sessionWorkStub(),
+            plans: {...plansStub(), prepareWorktrees: true},
+            handoff: {
+                ...STUB_HANDOFF,
+                lines: ['Connecting to joris@devbox.local', 'Handing acme-api off to joris@devbox.local'],
+                lineDelayMs: 600,
+                startResult: {ok: false, error: 'The VM went away'},
+            },
+        },
+    });
+
+    test('shows each step main reports while it goes, then why it stopped', async ({page, home}) => {
+        /* Given: with a VM about, the row's Hand off action sits over the label's middle, so click its start */
+        await sessionRow(page, LABEL.loginFix)
+            .first()
+            .click({position: {x: 4, y: 4}});
+        await new FakeCli(home.controlDir, S.loginFix).launched();
+        await page.keyboard.press('Meta+g');
+        await workPage(page).getByRole('tab', {name: 'Plan'}).click();
+        await node(page, 1303).click();
+        await detail(page).getByRole('button', {name: 'Start session on #1303'}).click();
+
+        /* When */
+        await detail(page)
+            .getByRole('button', {name: 'Hand off to ' + STUB_HANDOFF_HOST.label})
+            .click();
+
+        /* Then */
+        const progress = detail(page).getByRole('status', {name: 'Starting on ' + STUB_HANDOFF_HOST.label});
+        await expect(detail(page).getByRole('button', {name: 'Starting on joris@devbox.local…'})).toBeVisible();
+        await expect(progress.locator('[aria-current="step"]')).toHaveText(
+            'Handing acme-api off to joris@devbox.local…',
+        );
+        await expect(progress.locator('li.is-done')).toHaveText([
+            /Making the worktree on this Mac/,
+            /Getting the hand-off to joris@devbox\.local ready/,
+            /Connecting to joris@devbox\.local/,
+        ]);
+        await page.screenshot({path: test.info().outputPath('vm-start-progress.png')});
+
+        /* Then */
+        await expect(detail(page).getByRole('alert')).toContainText('The VM went away');
+        await expect(progress).toHaveCount(0);
     });
 });
 

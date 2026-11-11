@@ -13,7 +13,7 @@ import type {IssueKey, Plan} from '../../../../domain/plan/model';
 import type {IssueSessionStart, IssueWorktreeRequest, IssueWorktreeResult} from '../../../../domain/plan/issue-session';
 import type {SessionOptions} from '../../../../domain/launch/session-options';
 import type {HandoffHost} from '../../../../application/services/project-handoff';
-import {handOffWorktree, type VmStartSteps} from '../../session-handoff/start-on-vm';
+import {handOffWorktree, START_STEP, type VmStartSteps} from '../../session-handoff/start-on-vm';
 
 export interface StartIssueSessionSteps {
     prepare(request: IssueWorktreeRequest): Promise<IssueWorktreeResult>;
@@ -40,12 +40,15 @@ export interface StartIssueSessionRequest {
     existing?: IssueWorktreeRequest['existing'];
     /** Hand the start off to this VM: the worktree goes there and the session starts in its copy. */
     vm?: HandoffHost;
+    /** Hears each step of a start handed off to a VM, the latest last; a start here reports none. */
+    onStep?: (step: string) => void;
 }
 
 export async function startIssueSessionWith(
     steps: StartIssueSessionSteps,
-    {projectPath, issue, plan, show = true, existing, vm}: StartIssueSessionRequest,
+    {projectPath, issue, plan, show = true, existing, vm, onStep = () => {}}: StartIssueSessionRequest,
 ): Promise<IssueSessionStart> {
+    if (vm) onStep(START_STEP.worktree);
     let prepared: IssueWorktreeResult;
     try {
         prepared = await steps.prepare({projectPath, issue, plan, ...(existing ? {existing} : {})});
@@ -56,8 +59,9 @@ export async function startIssueSessionWith(
 
     let launched: Awaited<ReturnType<StartIssueSessionSteps['launch']>>;
     if (vm) {
-        const copy = await handOffWorktree(steps.vm, vm, projectPath, prepared.worktreePath);
+        const copy = await handOffWorktree(steps.vm, vm, projectPath, prepared.worktreePath, onStep);
         if (!copy.ok) return copy;
+        onStep(START_STEP.launch(vm));
         // The copy's own defaults, as a session started on its project page would get.
         const {
             worktree: _worktree,

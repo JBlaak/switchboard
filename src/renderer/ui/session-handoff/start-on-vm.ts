@@ -15,12 +15,16 @@ import type {HandoffHost, StartHandoffResult} from '../../../application/service
 
 /** What a start needs to go to a VM. */
 export interface VmStartSteps {
-    /** Hand the start's worktrees (and with `project`, the project) off to the host (`handOffForStart`). */
+    /**
+     * Hand the start's worktrees (and with `project`, the project) off to the
+     * host (`handOffForStart`); `onProgress` hears each step main reports on the way.
+     */
     handOff(
         localPath: string,
         hostKey: string,
         worktrees: string[],
         options: {project: boolean},
+        onProgress?: (line: string) => void,
     ): Promise<StartHandoffResult>;
     /** Start a Claude session in a VM folder (a copy's project path), put it on screen unless `show` is false. */
     launch(
@@ -35,17 +39,29 @@ export function notHandedOff(vm: HandoffHost, error: string): string {
     return `Couldn’t hand it off to ${vm.label}: ${error} The worktree is ready on this Mac.`;
 }
 
+/**
+ * The steps a start on a VM reports while it goes, so its button need not
+ * only say "Starting…" for the minute a hand-off can take.
+ */
+export const START_STEP = {
+    worktree: 'Making the worktree on this Mac',
+    handOff: (vm: HandoffHost) => `Getting the hand-off to ${vm.label} ready`,
+    launch: (vm: HandoffHost) => `Starting Claude on ${vm.label}`,
+} as const;
+
 /** Hand one start's worktree to `vm`: the worktree's copy there, or why it did not go. */
 export async function handOffWorktree(
     steps: VmStartSteps | undefined,
     vm: HandoffHost,
     projectPath: string,
     worktreePath: string,
+    onStep: (step: string) => void = () => {},
 ): Promise<{ok: true; copyPath: string} | {ok: false; reason: string}> {
     if (!steps) return {ok: false, reason: notHandedOff(vm, 'hand-off isn’t available here.')};
     let handed: StartHandoffResult;
+    onStep(START_STEP.handOff(vm));
     try {
-        handed = await steps.handOff(projectPath, vm.key, [worktreePath], {project: false});
+        handed = await steps.handOff(projectPath, vm.key, [worktreePath], {project: false}, onStep);
     } catch (err) {
         handed = {ok: false, error: (err as Error).message || 'the hand-off stopped.'};
     }

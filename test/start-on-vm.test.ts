@@ -39,8 +39,10 @@ function vmSteps(
     {refused = [] as string[], answer = null as StartHandoffResult | null, projectCopy = PROJECT_COPY} = {},
 ): VmStartSteps {
     return {
-        handOff: async (localPath, hostKey, worktrees, {project}) => {
+        handOff: async (localPath, hostKey, worktrees, {project}, onProgress) => {
             rec.order.push('hand off');
+            onProgress?.('Connecting to dev@vm.local');
+            onProgress?.('Handing app off to dev@vm.local');
             rec.handOffs.push({localPath, hostKey, worktrees, project});
             if (answer) return answer;
             return {
@@ -118,6 +120,68 @@ test('an issue start handed off sends its worktree to the VM and starts the sess
         },
     ]);
     assert.deepEqual(rec.localLaunches, []);
+});
+
+test('an issue start handed off reports each step as it goes, main’s hand-off lines among them', async () => {
+    /* Given */
+    const rec = recorder();
+    const steps = issueSteps(rec, vmSteps(rec));
+    const reported: string[] = [];
+
+    /* When */
+    await startIssueSessionWith(steps, {
+        projectPath: PROJECT,
+        issue: key(7),
+        plan: plan([]),
+        vm: VM,
+        onStep: (step) => reported.push(step),
+    });
+
+    /* Then */
+    assert.deepEqual(reported, [
+        'Making the worktree on this Mac',
+        'Getting the hand-off to dev@vm.local ready',
+        'Connecting to dev@vm.local',
+        'Handing app off to dev@vm.local',
+        'Starting Claude on dev@vm.local',
+    ]);
+});
+
+test('an issue start whose hand-off fails reports no launch step', async () => {
+    /* Given */
+    const rec = recorder();
+    const steps = issueSteps(rec, vmSteps(rec, {refused: [worktreeOf(7)]}));
+    const reported: string[] = [];
+
+    /* When */
+    await startIssueSessionWith(steps, {
+        projectPath: PROJECT,
+        issue: key(7),
+        plan: plan([]),
+        vm: VM,
+        onStep: (step) => reported.push(step),
+    });
+
+    /* Then */
+    assert.ok(!reported.includes('Starting Claude on dev@vm.local'));
+});
+
+test('an issue start here reports no steps', async () => {
+    /* Given */
+    const rec = recorder();
+    const steps = issueSteps(rec, vmSteps(rec));
+    const reported: string[] = [];
+
+    /* When */
+    await startIssueSessionWith(steps, {
+        projectPath: PROJECT,
+        issue: key(7),
+        plan: plan([]),
+        onStep: (step) => reported.push(step),
+    });
+
+    /* Then */
+    assert.deepEqual(reported, []);
 });
 
 test('an issue start whose hand-off fails starts nothing and says the worktree is still here', async () => {

@@ -6,6 +6,7 @@ import {layOutPlan} from '../src/domain/plan/layout';
 import {PlanViewContent} from '../src/renderer/ui/session-work/plan/PlanViewContent';
 import {hereLabel, levelStatus, warningText} from '../src/renderer/ui/session-work/plan/describe';
 import {deleteLine, existingLine, stackLine} from '../src/renderer/ui/session-work/plan/IssueDetail';
+import {elapsed} from '../src/renderer/ui/session-handoff/StartSteps';
 import type {IssueActions} from '../src/renderer/ui/session-work/plan/types';
 import type {ExistingIssueBranch} from '../src/domain/plan/issue-session';
 import {diamond, issue, key, merged, needs, plan, pr} from './support/plans';
@@ -177,6 +178,65 @@ test('a start refused over an existing branch offers to continue, open its sessi
     assert.match(html, /Branch 10-issue/);
     assert.doesNotMatch(html, /pv-inline is-error/);
     assert.doesNotMatch(html, /Start session on #10/);
+});
+
+test('a start on its way to a VM names the VM and shows its steps, done ones ticked and the current one spinning', () => {
+    /* Given */
+    const actions: IssueActions = {
+        startSession: () => {},
+        start: {
+            issue: key(12),
+            phase: 'starting',
+            vm: 'dev@vm.local',
+            steps: ['Making the worktree on this Mac', 'Connecting to dev@vm.local'],
+        },
+    };
+
+    /* When */
+    const html = renderToStaticMarkup(
+        createElement(PlanViewContent, {
+            plan: diamond(),
+            ui: {chosen: null, hovered: null, selected: key(12)},
+            issueActions: actions,
+        }),
+    );
+
+    /* Then */
+    assert.match(html, />Starting on dev@vm\.local…</);
+    assert.match(html, /<li class="is-done">.*✓.*Making the worktree on this Mac<\/li>/);
+    assert.match(
+        html,
+        /<li class="is-current" aria-current="step"><span class="sb-start-step-mark is-spinner"[^>]*><\/span>Connecting to dev@vm\.local…/,
+    );
+});
+
+test('a start here shows no steps, only Starting…', () => {
+    /* Given */
+    const actions: IssueActions = {startSession: () => {}, start: {issue: key(12), phase: 'starting', steps: []}};
+
+    /* When */
+    const html = renderToStaticMarkup(
+        createElement(PlanViewContent, {
+            plan: diamond(),
+            ui: {chosen: null, hovered: null, selected: key(12)},
+            issueActions: actions,
+        }),
+    );
+
+    /* Then */
+    assert.match(html, />Starting…</);
+    assert.doesNotMatch(html, /sb-start-steps/);
+});
+
+test('the time on a step reads as seconds, then minutes', () => {
+    /* Given */
+    const times = [7, 59, 60, 75, 600];
+
+    /* When */
+    const read = times.map(elapsed);
+
+    /* Then */
+    assert.deepEqual(read, ['7s', '59s', '1:00', '1:15', '10:00']);
 });
 
 test('an existing branch no session worked on offers no session to open', () => {

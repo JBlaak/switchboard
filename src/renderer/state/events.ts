@@ -311,7 +311,9 @@ export type LocalEvent =
     /** Which sessions own which issues (S1), asked with every load of the view. */
     | {type: 'planOwnersLoaded'; owner: string; owners: Record<string, string>}
     /** Start session pressed on the selected issue: `confirm` for a Locked one, which asks first (A3). */
-    | {type: 'planStartAsked'; issue: IssueKey; confirm: boolean}
+    | {type: 'planStartAsked'; issue: IssueKey; confirm: boolean; vm?: string}
+    /** A start handed off to a VM reached its next step (making the worktree, connecting, uploading, …). */
+    | {type: 'planStartStep'; issue: IssueKey; step: string}
     /** The confirmation was turned down. */
     | {type: 'planStartCancelled'}
     /** The start came back: the new session, with a warning, or why it did not start. */

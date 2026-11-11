@@ -64,9 +64,10 @@ async function start(
     existing?: 'replace' | 'reuse',
     vm?: HandoffHost,
 ): Promise<void> {
-    dispatch({type: 'planStartAsked', issue, confirm: false});
+    dispatch({type: 'planStartAsked', issue, confirm: false, ...(vm ? {vm: vm.label} : {})});
     startedOn.set(issueKeyString(issue), vm);
-    const result = await startIssueSession({projectPath, issue, plan, show, existing, vm}).catch((err: Error) => ({
+    const onStep = (step: string) => dispatch({type: 'planStartStep', issue, step});
+    const result = await startIssueSession({projectPath, issue, plan, show, existing, vm, onStep}).catch((err: Error) => ({
         ok: false as const,
         reason: err.message || 'Could not start the session',
     }));

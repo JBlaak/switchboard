@@ -44,6 +44,7 @@ import type {
     HandoffPreview,
     HandoffChoices,
     HandoffResult,
+    StartHandoffResult,
     ProjectCopy,
 } from '../../src/application/services/project-handoff';
 import type {ScheduleLocation} from '../../src/application/services/vm-schedules';
@@ -374,6 +375,8 @@ export interface HandoffStub {
     lineDelayMs: number;
     /** What Hand off answers once its lines are out. */
     result: HandoffResult;
+    /** What a start handed off to a VM (`handoff:for-start`) answers once `lines` are out. */
+    startResult: StartHandoffResult;
     /** A local project's copies, by its absolute path; a project not here has none. */
     copies: Record<string, ProjectCopy[]>;
     /** A copy's local project, by the copy's path; a remote not here isn't a copy. */
@@ -418,6 +421,7 @@ export const STUB_HANDOFF: HandoffStub = {
     lines: [],
     lineDelayMs: 0,
     result: {ok: true, copyPath: 'ssh://joris@devbox.local/~/projects/acme-api', reused: false},
+    startResult: {ok: false, error: 'The stub hands nothing off'},
     copies: {},
     origins: {},
     copyStatus: {branch: 'main', unpushed: [], uncommitted: []},
@@ -1088,6 +1092,16 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                     event.sender.send(events.handoffProgress, localPath, line);
                 }
                 return state.handoff.result;
+            });
+            ipcMain.removeHandler(channels.handoffForStart);
+            ipcMain.handle(channels.handoffForStart, async (event, path) => {
+                const localPath = String(path);
+                for (const line of state.handoff.lines) {
+                    await pause();
+                    event.sender.send(events.handoffProgress, localPath, line);
+                }
+                await pause();
+                return state.handoff.startResult;
             });
             replace(channels.handoffCopiesOf, (path) => state.handoff.copies[String(path)] ?? []);
             replace(channels.handoffOriginOf, (path) => state.handoff.origins[String(path)] ?? null);
