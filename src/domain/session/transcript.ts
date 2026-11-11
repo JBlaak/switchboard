@@ -110,13 +110,23 @@ function marksActivity(entry: TranscriptEntry): boolean {
  * label should come from.
  *
  * Local command echoes (`!` in the CLI) carry shell markup rather than intent,
- * so the label comes from the next real message instead. A scheduled run names
+ * so the label comes from the next real message instead. So does the `/clear`
+ * echo that opens every cleared session; other slash commands read as the
+ * command and its arguments. A scheduled run names
  * itself in the message, and that name is what the row should say.
  */
 export function summaryFromUserMessage(text: string): string {
     if (!text || /<bash-input>|<bash-stdout>|<local-command-caveat>/.test(text)) return '';
     const taskMatch = text.match(/<scheduled-task\s+name="([^"]+)"/);
-    return taskMatch ? 'Scheduled: ' + taskMatch[1] : text.slice(0, SUMMARY_LIMIT);
+    if (taskMatch) return 'Scheduled: ' + taskMatch[1];
+    const command = text.match(/<command-name>([^<]*)<\/command-name>/);
+    if (command) {
+        const name = command[1].trim();
+        if (name === '/clear') return '';
+        const args = text.match(/<command-args>([^<]*)<\/command-args>/)?.[1]?.trim();
+        return [name, args].filter(Boolean).join(' ').slice(0, SUMMARY_LIMIT);
+    }
+    return text.slice(0, SUMMARY_LIMIT);
 }
 
 /**
