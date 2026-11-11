@@ -589,6 +589,9 @@ a.pv-num:hover {
 .is-draft {
     --pv-ink: var(--sb-yellow);
 }
+.is-claimed {
+    --pv-ink: var(--sb-blue);
+}
 .is-ready {
     --pv-ink: var(--sb-accent);
 }
@@ -631,6 +634,9 @@ a.pv-num:hover {
     }
     &.is-draft {
         border-color: color-mix(in srgb, var(--sb-yellow) 50%, transparent);
+    }
+    &.is-claimed {
+        border-color: color-mix(in srgb, var(--sb-blue) 50%, transparent);
     }
     &.is-ready {
         background: var(--sb-mint);
@@ -709,6 +715,27 @@ a.pv-num:hover {
     &.is-working {
         color: var(--sb-green);
     }
+}
+
+/* A wayfinder ticket's kind, before the node's last line. */
+.pv-ticket-type {
+    margin-right: 6px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--sb-bg-panel);
+    color: var(--sb-text-muted);
+    font-weight: 600;
+}
+
+/* A wayfinder map's launchers, where Start level would be. */
+.pv-map-launchers {
+    position: sticky;
+    left: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 24px 0;
 }
 
 /* An outside blocker (P5): small and dimmed. */

@@ -11,7 +11,7 @@ export interface LevelProgress {
     readonly total: number;
     /** Merged, closed or not planned. */
     readonly done: number;
-    /** Open with a PR, draft or not. */
+    /** Open with a PR, draft or not, or a claimed wayfinder ticket. */
     readonly started: number;
     /** Open, unblocked and without a PR: ready to start. The rest are blocked. */
     readonly ready: number;
@@ -25,7 +25,7 @@ export interface PlanProgress {
 }
 
 const DONE: readonly NodeState[] = ['merged', 'closed', 'not-planned'];
-const STARTED: readonly NodeState[] = ['review', 'draft'];
+const STARTED: readonly NodeState[] = ['review', 'draft', 'claimed'];
 
 export function planProgress(plan: Plan): PlanProgress {
     const layout = layOutPlan(plan);

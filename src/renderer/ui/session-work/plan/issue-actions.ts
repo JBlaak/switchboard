@@ -20,7 +20,7 @@ import {layOutPlan} from '../../../../domain/plan/layout';
 import {issueKeyString, sameIssue} from '../../../../domain/plan/model';
 import type {IssueKey, Plan} from '../../../../domain/plan/model';
 import type {IdRecord} from '../../../state/records';
-import {issueSessionSteps, jumpToSession, startIssueSession} from './actions';
+import {issueSessionSteps, jumpToSession, startIssueSession, startMapLauncher} from './actions';
 import type {IssueActions, IssueSession} from './types';
 import {startLevelWith} from './start-level';
 import {reloadOwners} from './load';
@@ -143,6 +143,11 @@ export function useIssueActions(projectPath: string | null, {show = true}: {show
                 void startLevel(projectPath, plan, !show, vm);
             },
             cancelLevelStart: () => dispatch({type: 'planLevelStartCancelled'}),
+            startMapLauncher: async (plan, launcher) => {
+                const result = await startMapLauncher({projectPath, plan, launcher, show});
+                if (result.ok && !show) pulseSessionRow(result.sessionId);
+                return result;
+            },
         };
     }, [owners, busy, pending, levelStart, vmHosts, projectPath, show]);
 }

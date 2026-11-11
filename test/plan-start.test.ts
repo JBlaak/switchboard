@@ -2,7 +2,13 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {issueKeyString} from '../src/domain/plan/model';
-import {issueBranchName, issueSessionPrompt} from '../src/domain/plan/start';
+import {
+    issueBranchName,
+    issueSessionPrompt,
+    MAP_LAUNCHERS,
+    mapLauncherPrompt,
+    wayfinderTicketPrompt,
+} from '../src/domain/plan/start';
 import {issueFromBranch} from '../src/domain/session-work/issues';
 
 const REPO = 'JBlaak/switchboard';
@@ -86,4 +92,39 @@ test('an issue key reads as owner/repo#n', () => {
 
     /* Then */
     assert.equal(text, 'JBlaak/switchboard#122');
+});
+
+test('a wayfinder ticket starts /wayfinder with the map and the ticket by bare number', () => {
+    /* Given */
+    const map = {repository: REPO, number: 2241};
+    const ticket = {repository: REPO, number: 2250};
+
+    /* When */
+    const prompt = wayfinderTicketPrompt(ticket, map);
+
+    /* Then */
+    assert.equal(prompt, '/wayfinder 2241 2250');
+});
+
+test('a wayfinder ticket in another repository goes by its URL', () => {
+    /* Given */
+    const map = {repository: REPO, number: 2241};
+    const ticket = {repository: 'MoveLab-Studio/Other', number: 7};
+
+    /* When */
+    const prompt = wayfinderTicketPrompt(ticket, map);
+
+    /* Then */
+    assert.equal(prompt, '/wayfinder 2241 https://github.com/MoveLab-Studio/Other/issues/7');
+});
+
+test("a map's launchers start the next ticket, orchestrate it and reconcile it, in that order", () => {
+    /* Given */
+    const map = {repository: REPO, number: 2241};
+
+    /* When */
+    const prompts = MAP_LAUNCHERS.map((launcher) => mapLauncherPrompt(launcher, map));
+
+    /* Then */
+    assert.deepEqual(prompts, ['/wayfinder 2241', '/orchestrate-map 2241', '/reconciling-the-map 2241']);
 });

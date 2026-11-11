@@ -10,6 +10,16 @@
 /** The label that makes an issue with no parent and no sub-issues a plan of its own. */
 export const STANDALONE_PLAN_LABEL = 'ready-for-agent';
 
+/**
+ * The label of a wayfinder map: a plan whose tickets are decisions, worked
+ * with `/wayfinder` rather than built to a PR. A labelled issue is a plan even
+ * before it has a ticket.
+ */
+export const WAYFINDER_MAP_LABEL = 'wayfinder:map';
+
+/** A wayfinder ticket's kind, from its `wayfinder:<type>` label. */
+export type WayfinderTicketType = 'research' | 'prototype' | 'grilling' | 'task';
+
 /** A GitHub issue. `repository` is `owner/repo`; two keys are the same issue when both parts agree. */
 export interface IssueKey {
     repository: string;
@@ -37,6 +47,10 @@ export interface PlanIssue extends IssueKey {
     pullRequests: PlanPullRequest[];
     summary: string;
     acceptance: {text: string; done: boolean}[];
+    /** On a wayfinder map: someone is assigned, which is how a session claims a ticket. */
+    claimed?: boolean;
+    /** On a wayfinder map: the ticket's kind, when it carries a `wayfinder:<type>` label. */
+    ticketType?: WayfinderTicketType | null;
 }
 
 export interface Plan extends IssueKey {
@@ -46,6 +60,8 @@ export interface Plan extends IssueKey {
     issues: PlanIssue[];
     /** Blockers outside the plan, drawn as ghosts (P5). */
     outside: PlanIssue[];
+    /** Labelled `wayfinder:map`: its tickets start `/wayfinder`, and it has map launchers instead of Start level. */
+    wayfinder?: boolean;
 }
 
 export interface PlanSummary extends IssueKey {
@@ -56,10 +72,12 @@ export interface PlanSummary extends IssueKey {
     total: number;
     current: number | null;
     levels: number;
+    /** Labelled `wayfinder:map`. */
+    wayfinder?: boolean;
 }
 
 /** P7. */
-export type NodeState = 'merged' | 'closed' | 'not-planned' | 'review' | 'draft' | 'ready' | 'locked';
+export type NodeState = 'merged' | 'closed' | 'not-planned' | 'review' | 'draft' | 'claimed' | 'ready' | 'locked';
 
 export interface PlanLayout {
     /** Level 1 first; each row in drawing order (D1). */

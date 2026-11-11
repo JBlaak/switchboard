@@ -52,7 +52,9 @@ export function IssueDetail({
     const ticked = issue.acceptance.filter((item) => item.done).length;
     const pr = mainPullRequest(issue);
     const session = issueActions?.sessionFor?.(issue) ?? null;
-    const canStart = !!issueActions?.startSession && (state === 'ready' || state === 'locked') && !session;
+    // A wayfinder ticket is taken from the frontier only: a blocked one waits on a decision, not a PR.
+    const startable = plan.wayfinder ? state === 'ready' : state === 'ready' || state === 'locked';
+    const canStart = !!issueActions?.startSession && startable && !session;
     const start = issueActions?.start && sameIssue(issueActions.start.issue, issue) ? issueActions.start : null;
     const vmHosts = issueActions?.vmHosts ?? [];
     // Its options replace Start session, which would only be refused again.
@@ -95,6 +97,7 @@ export function IssueDetail({
                     <span className="pv-dot" aria-hidden="true" />
                     {STATE_LABEL[state]}
                 </span>
+                {issue.ticketType && <span className="pv-pill is-static">{issue.ticketType}</span>}
                 <span className="pv-pill is-static">{'Level ' + level}</span>
                 {isHolding(plan, layout, issue) && (
                     <span className="pv-pill is-static is-holding">{'Holding the plan at Level ' + level}</span>
@@ -250,7 +253,11 @@ export function IssueDetail({
                         onClick={() => {
                             if (start?.phase !== 'starting') issueActions!.startSession!(issue, plan);
                         }}>
-                        {start?.phase === 'starting' ? 'Starting…' : 'Start session on #' + issue.number}
+                        {start?.phase === 'starting'
+                            ? 'Starting…'
+                            : plan.wayfinder
+                              ? 'Start /wayfinder on #' + issue.number
+                              : 'Start session on #' + issue.number}
                     </button>
                 )}
                 <button type="button" className="sw-btn" onClick={() => on.open(issueUrl(issue))}>

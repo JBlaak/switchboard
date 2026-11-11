@@ -48,8 +48,11 @@ export function PlanDiagram({
             data-testid="plan-diagram">
             {geometry.bands.map((band) => {
                 const status = levelStatus(plan, layout, band.level);
+                // A wayfinder map's tickets are worked with you, not by agents: it has map launchers instead.
                 const ready =
-                    band.level === layout.current && issueActions?.startLevel ? readyOnLevel(layout, band.level) : [];
+                    band.level === layout.current && issueActions?.startLevel && !plan.wayfinder
+                        ? readyOnLevel(layout, band.level)
+                        : [];
                 return (
                     <div
                         key={band.level}
@@ -137,10 +140,14 @@ export function PlanDiagram({
                         <span className="pv-node-title">{issue.title}</span>
                         {session ? (
                             <span className={'pv-node-mini is-session' + (session.working ? ' is-working' : '')}>
+                                {issue.ticketType && <span className="pv-ticket-type">{issue.ticketType}</span>}
                                 {'Session ' + session.name + ' · ' + (session.working ? 'working' : 'idle')}
                             </span>
                         ) : (
-                            <span className="pv-node-mini">{nodeMiniLine(plan, issue)}</span>
+                            <span className="pv-node-mini">
+                                {issue.ticketType && <span className="pv-ticket-type">{issue.ticketType}</span>}
+                                {nodeMiniLine(plan, issue)}
+                            </span>
                         )}
                     </button>
                 );
@@ -197,8 +204,9 @@ export function StateIcon({state}: {state: NodeState}): JSX.Element {
 }
 
 /** The key under the diagram. */
-export function PlanLegend(): JSX.Element {
+export function PlanLegend({wayfinder = false}: {wayfinder?: boolean}): JSX.Element {
     const states: NodeState[] = ['merged', 'review', 'draft', 'ready', 'locked'];
+    if (wayfinder) states.splice(3, 0, 'claimed');
     return (
         <div className="pv-legend">
             {states.map((state) => (

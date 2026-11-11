@@ -354,3 +354,18 @@ test('an open issue, not blocked and without an owner, is startable; owned or cl
     assert.deepEqual(startable, {10: true, 11: false, 12: false});
     assert.equal(groups.plans[0].issues.find((row) => row.issue.number === 11)!.status, null);
 });
+
+test('a claimed ticket of a wayfinder map is not startable, and shows as in progress', () => {
+    /* Given */
+    const map = plan(1, [planIssue(10), planIssue(11, {claimed: true})]);
+    map.plan.wayfinder = true;
+
+    /* When */
+    const groups = groupOverview(input({plans: [map]}));
+
+    /* Then */
+    const rows = Object.fromEntries(
+        groups.plans[0].issues.map((row) => [row.issue.number, [row.startable, row.segment]]),
+    );
+    assert.deepEqual(rows, {10: [true, 'ready'], 11: [false, 'claimed']});
+});

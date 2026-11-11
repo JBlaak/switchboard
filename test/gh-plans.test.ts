@@ -341,7 +341,7 @@ test("a repository's plans come from one search, open ones only unless closed on
     /* Then */
     assert.equal(open.calls.length, 1);
     assert.match(queryOf(open.calls[0]), /search\(type: ISSUE_ADVANCED, query: \$search, first: 50\)/);
-    const plans = '(has:sub-issue OR (label:ready-for-agent no:parent-issue))';
+    const plans = '(has:sub-issue OR label:"wayfinder:map" OR (label:ready-for-agent no:parent-issue))';
     assert.deepEqual(open.calls[0].slice(-2), [
         '-f',
         `search=repo:JBlaak/switchboard is:issue is:open ${plans} sort:updated-desc`,
@@ -559,4 +559,74 @@ test('a repository that is not owner/repo is never written into a query', async 
     /* Then */
     assert.deepEqual(answers, [null, null, []]);
     assert.equal(run.calls.length, 0);
+});
+
+// ── Wayfinder maps ──
+
+test('a wayfinder map knows it is one, and each ticket whether it is claimed and its kind', async () => {
+    /* Given */
+    const copy = james22With(25, (node) => {
+        node.assignees = {totalCount: 1};
+        node.labels = {nodes: [{name: 'wayfinder:grilling'}]};
+    }) as any;
+    copy.data.repository.issue.labels = {nodes: [{name: 'wayfinder:map'}]};
+
+    /* When */
+    const plan = await new GhCli({run: answering(copy)}).plan('JBlaak/James', 22);
+
+    /* Then */
+    assert.equal(plan!.wayfinder, true);
+    const ticket = plan!.issues.find((issue) => issue.number === 25)!;
+    assert.equal(ticket.claimed, true);
+    assert.equal(ticket.ticketType, 'grilling');
+    const other = plan!.issues.find((issue) => issue.number !== 25)!;
+    assert.equal(other.claimed, false);
+    assert.equal(other.ticketType, null);
+});
+
+test('a plan without the wayfinder:map label is no map and reads no claims', async () => {
+    /* Given */
+    const copy = james22With(25, (node) => {
+        node.assignees = {totalCount: 1};
+    });
+
+    /* When */
+    const plan = await new GhCli({run: answering(copy)}).plan('JBlaak/James', 22);
+
+    /* Then */
+    assert.equal(plan!.wayfinder, undefined);
+    assert.equal(plan!.issues.find((issue) => issue.number === 25)!.claimed, undefined);
+});
+
+test('the plan query asks for every issue its labels and whether anyone is assigned', async () => {
+    /* Given */
+    const run = answering(james22);
+
+    /* When */
+    await new GhCli({run}).plan('JBlaak/James', 22);
+
+    /* Then */
+    const query = queryOf(run.calls[0]);
+    assert.match(
+        query,
+        /subIssues\(first: 100\) \{\s*nodes \{[^]*labels\(first: 20\)[^]*assignees\(first: 1\) \{ totalCount \}/,
+    );
+});
+
+test('a wayfinder map the search answers is a plan, even before it has a ticket', async () => {
+    /* Given */
+    const copy = structuredClone(switchboardPlans) as any;
+    Object.assign(copy.data.search.nodes[1], {
+        state: 'OPEN',
+        stateReason: null,
+        labels: {nodes: [{name: 'wayfinder:map'}]},
+        subIssues: {nodes: []},
+    });
+
+    /* When */
+    const plans = await new GhCli({run: answering(copy)}).plansIn('JBlaak/switchboard', {closed: true});
+
+    /* Then */
+    const map = plans!.find((summary) => summary.number === 112)!;
+    assert.deepEqual([map.wayfinder, map.open, map.total, map.current, map.levels], [true, 0, 0, null, 0]);
 });

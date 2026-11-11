@@ -71,7 +71,10 @@ export interface IssueRowFacts<P> {
     /** The newest open PR that closes it. */
     pullRequest: P | null;
     status: IssueRowStatus<P>;
-    /** Open, not waiting on an open issue and owned by no session: Start session is offered. */
+    /**
+     * Open, not waiting on an open issue, owned by no session and, on a
+     * wayfinder map, not claimed: Start session is offered.
+     */
     startable: boolean;
 }
 
@@ -185,6 +188,8 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
 
         const rows = levelOrder.map((issue): PlanIssueRow<P> => {
             const open = issue.state === 'open';
+            // A claimed wayfinder ticket is someone's already: it is not offered to start.
+            const takeable = open && layout.stateOf(issue) !== 'claimed';
             const waitsOn = issue.blockedBy
                 .filter((blocker) => issueKeyString(blocker) !== issueKeyString(issue))
                 .map((blocker) => known.get(issueKeyString(blocker)))
@@ -195,6 +200,7 @@ export function groupOverview<I extends OverviewIssue, P extends OverviewPullReq
                 level: layout.levelOf(issue),
                 segment: layout.stateOf(issue),
                 ...facts(issue, open, waitsOn),
+                ...(takeable ? {} : {startable: false}),
             };
         });
 

@@ -22,6 +22,7 @@ export const STATE_LABEL: Readonly<Record<NodeState, string>> = {
     'not-planned': 'Not planned',
     review: 'In review',
     draft: 'Draft PR',
+    claimed: 'In progress',
     ready: 'Ready',
     locked: 'Locked',
 };

@@ -21,8 +21,12 @@ function isClosed(issue: PlanIssue): boolean {
     return issue.state === 'closed';
 }
 
-/** P7. An open blocker, in the plan or outside it (P5), locks an open issue without a PR. */
-function nodeState(issue: PlanIssue, blockers: PlanIssue[]): NodeState {
+/**
+ * P7. An open blocker, in the plan or outside it (P5), locks an open issue
+ * without a PR. On a wayfinder map an open ticket someone is assigned to is
+ * claimed, which shows as in progress whether it is on the frontier or not.
+ */
+function nodeState(issue: PlanIssue, blockers: PlanIssue[], wayfinder: boolean): NodeState {
     if (issue.state === 'closed') {
         if (issue.closedAs === 'not_planned') return 'not-planned';
         return issue.pullRequests.some((pr) => pr.state === 'merged') ? 'merged' : 'closed';
@@ -30,6 +34,7 @@ function nodeState(issue: PlanIssue, blockers: PlanIssue[]): NodeState {
     const open = issue.pullRequests.filter((pr) => pr.state === 'open');
     if (open.some((pr) => !pr.draft)) return 'review';
     if (open.length > 0) return 'draft';
+    if (wayfinder && issue.claimed) return 'claimed';
     return blockers.every(isClosed) ? 'ready' : 'locked';
 }
 
@@ -109,13 +114,13 @@ export function layOutPlan(plan: Plan): PlanLayout {
     const states = new Map<string, NodeState>();
     for (const issue of plan.issues) {
         const key = issueKeyString(issue);
-        states.set(key, nodeState(issue, [...planBlockers.get(key)!, ...ghostsOf.get(key)!]));
+        states.set(key, nodeState(issue, [...planBlockers.get(key)!, ...ghostsOf.get(key)!], plan.wayfinder === true));
     }
     for (const [key, issue] of outside) {
         const blockers = issue.blockedBy
             .map((blocker) => inPlan.get(issueKeyString(blocker)) ?? outside.get(issueKeyString(blocker)))
             .filter((blocker): blocker is PlanIssue => blocker !== undefined && issueKeyString(blocker) !== key);
-        states.set(key, nodeState(issue, blockers));
+        states.set(key, nodeState(issue, blockers, false));
     }
 
     // P3: the lowest level that still has an open issue.
