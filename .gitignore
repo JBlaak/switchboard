@@ -19,3 +19,6 @@ dev-app-update.yml
 
 # The Linux node-pty builds the agent ships with, fetched by scripts/fetch-agent-pty.mjs.
 /build/agent-pty/
+
+# OmniDiff binaries, fetched by scripts/fetch-omnidiff.mjs on install.
+/vendor/

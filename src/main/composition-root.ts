@@ -47,6 +47,7 @@ import {setupTerminalCommand} from '../domain/agent/setup-script';
 import {AgentBundleBuilder, agentBundleSources, bundledAgentVersion} from '../infrastructure/ssh/agent-bundle';
 import {OpenSshProvisioner} from '../infrastructure/ssh/ssh-provisioner';
 import {NodeClaudeConfigSource} from '../infrastructure/fs/claude-config-source';
+import {noStructuralDiffer} from '../application/ports/structural-differ';
 import {QuestionService} from '../application/services/question-service';
 import {OnePasswordHeadsUpService} from '../application/services/onepassword-heads-up-service';
 import {ProjectListService} from '../application/services/project-list-service';
@@ -138,6 +139,8 @@ import {agentlessRemoteGuard} from '../domain/project/agentless-remote';
 import {RoutingTranscriptStore} from '../infrastructure/agent/routing-transcript-store';
 import {locateVmSession} from '../application/services/vm-session-location';
 import {SelfArchiveCatchUp} from '../application/services/self-archive-catch-up';
+import {OmnidiffDiffer} from '../infrastructure/omnidiff/omnidiff-differ';
+import {locateOmnidiff} from '../infrastructure/omnidiff/locate-omnidiff';
 import {GitCliWorkspace} from '../infrastructure/git/git-cli-workspace';
 import {GhCli, defaultGhRunner, type GhRunner} from '../infrastructure/github/gh-cli';
 import {loginShellEnv} from '../infrastructure/shell/login-shell-env';
@@ -830,7 +833,7 @@ export function buildContainer(): Container {
         log,
     });
 
-    const ghRun: GhRunner = async (args) => defaultGhRunner(await toolEnv())(args);
+    const ghRun: GhRunner = async (args, options) => defaultGhRunner(await toolEnv())(args, options);
     const github = new GhCli({run: ghRun});
     const vmLocation = {
         live: (id: string) => {
@@ -851,6 +854,15 @@ export function buildContainer(): Container {
         const remote = isRemoteProjectPath(live.projectPath);
         return {folder: remote ? null : encodeProjectPath(live.projectPath), projectPath: live.projectPath};
     };
+    // OmniDiff's finer marks inside changed lines, when the binary is bundled (or fetched into vendor/).
+    const omnidiff = locateOmnidiff({
+        packaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        appPath: app.getAppPath(),
+        arch: process.arch,
+    });
+    // One differ for both kinds of work page: a session's and a PR's own.
+    const differ = omnidiff ? new OmnidiffDiffer({binary: omnidiff, log}) : noStructuralDiffer;
     const sessionWork = new SessionWorkService({
         locate: locateSession,
         transcripts: routedTranscripts,
@@ -858,13 +870,14 @@ export function buildContainer(): Container {
         git: workspace,
         github,
         remotes: git,
+        differ,
         renderer,
         clock,
         timers,
         log,
     });
     // A PR no session opened has a page of its own, keyed `pull:owner/repo#N`.
-    const pullRequestPages = new PullRequestPageService({github, renderer, clock, timers, log});
+    const pullRequestPages = new PullRequestPageService({github, renderer, differ, clock, timers, log});
     const workPages = new WorkPageRouter(sessionWork, pullRequestPages);
     const sessionStats = new SessionStatsService({
         locate: locateSession,

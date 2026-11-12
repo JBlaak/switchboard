@@ -21,6 +21,7 @@ import {imageFormatOf, imagePaths, type ImageFormat} from '../../domain/session-
 import {byRepository, confirmedIssues} from '../../domain/session-work/issues';
 import {deriveWorkItems, workItemKey, type BranchFacts, type WorktreeChanges} from '../../domain/session-work/items';
 import {mergeWorkLocations} from '../../domain/session-work/locations';
+import type {FileRefinement} from '../../domain/session-work/refinement';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {gitHubRepository} from '../../domain/project/repo-url';
 import type {SessionPullRequest} from '../../domain/session/session';
@@ -44,7 +45,11 @@ import type {CiJobQueueCalls, GitHubCli, PlanReads, ProjectReads, QueueLabelWrit
 import type {GitRemotes} from '../ports/git-remotes';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
+import type {StructuralDiffer} from '../ports/structural-differ';
 import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
+import {DiffRefinements, gitHubSides, lazily, refinable, type DiffSideReader} from './diff-refinements';
+
+export {REFINE_MAX_BYTES} from './diff-refinements';
 
 /** How long git's watchers have to be quiet before the page is rebuilt. */
 export const WATCH_DEBOUNCE_MS = 300;
@@ -79,6 +84,8 @@ export interface SessionWorkServiceDeps {
     >;
     remotes: GitRemotes;
     renderer: Pick<RendererGateway, 'sessionWorkSnapshot'>;
+    /** OmniDiff, for the finer marks inside a file's changed lines; without it, none. */
+    differ?: StructuralDiffer;
     clock: Clock;
     timers: Timers;
     log: Logger;
@@ -116,11 +123,26 @@ interface DiffSides {
     after: string | null;
 }
 
-/** A parsed diff, and for a local one where its sides are read. */
+/**
+ * Where the two sides of a diff from GitHub are read, for refining it: the
+ * PR's repository at its head commit and the merge-base GitHub diffed it
+ * against, asked for once, when a file is first refined.
+ */
+interface GitHubSides {
+    repository: string;
+    head: string;
+    mergeBase: () => Promise<string | null>;
+}
+
+/** A parsed diff, and where its sides are read: a local one's with git, GitHub's from GitHub. */
 interface CachedDiff {
     files: FileDiff[];
     sides: DiffSides | null;
+    github?: GitHubSides;
 }
+
+/** The diff an item last answered with, and where its sides are read. */
+type ServedDiff = {files: FileDiff[]; sides: DiffSides} | {files: FileDiff[]; github: GitHubSides};
 
 /** The one open page. */
 interface Page {
@@ -151,10 +173,11 @@ interface Page {
     readonly diffErrors: Map<string, string>;
     readonly diffCache: Map<string, CachedDiff>;
     /**
-     * The local diff each item last answered with: the only files `image` will
-     * read, at the only commits it will read them at (L3).
+     * The diff each item last answered with: the only files `image` and
+     * `refinement` will read, at the only commits they will read them at (L3).
      */
-    readonly served: Map<string, {files: FileDiff[]; sides: DiffSides}>;
+    readonly served: Map<string, ServedDiff>;
+    readonly refinements: DiffRefinements;
     last: SessionWorkSnapshot | null;
     lastKey: string;
     closed: boolean;
@@ -231,6 +254,7 @@ export class SessionWorkService {
             diffErrors: new Map(),
             diffCache: new Map(),
             served: new Map(),
+            refinements: new DiffRefinements(this.deps, '[session-work]'),
             last: null,
             lastKey: '',
             closed: false,
@@ -317,14 +341,16 @@ export class SessionWorkService {
 
         let result: SessionWorkDiff;
         let sides: DiffSides | undefined;
+        let github: GitHubSides | undefined;
         try {
-            ({sides, ...result} = await this.diffOf(page, item));
+            ({sides, github, ...result} = await this.diffOf(page, item));
         } catch (err) {
             result = {files: [], source: null, error: (err as Error).message || 'The diff could not be read'};
         }
         if (page.closed) return result;
 
         if (sides) page.served.set(itemId, {files: result.files, sides});
+        else if (github) page.served.set(itemId, {files: result.files, github});
         else page.served.delete(itemId);
 
         const before = page.diffErrors.get(itemId);
@@ -353,7 +379,7 @@ export class SessionWorkService {
         if (!page || page.sessionId !== sessionId || !page.items.has(itemId)) return null;
         const served = page.served.get(itemId);
         const file = served?.files.find((candidate) => candidate.path === path && candidate.image);
-        if (!served || !file?.image) return null;
+        if (!served || !('sides' in served) || !file?.image) return null;
 
         const {git} = this.deps;
         const {worktree, before, after} = served.sides;
@@ -363,6 +389,42 @@ export class SessionWorkService {
         }
         if (side !== 'after' || !file.image.after || !paths.after) return null;
         return after ? git.blob(worktree, after, paths.after) : git.workingFile(worktree, paths.after);
+    }
+
+    /**
+     * OmniDiff's finer reading of one file in an item's diff: which parts of
+     * its changed lines changed. Null when there is none to have.
+     *
+     * The same guard as `image` (L3): only a file in the diff the item last
+     * answered with, read at that diff's commits. A local diff's sides are read
+     * with git; GitHub's from GitHub, at the PR's merge-base and head commit.
+     * Which files are refined, and what is kept, is `DiffRefinements`' to say.
+     */
+    public async refinement(sessionId: string, itemId: string, path: string): Promise<FileRefinement | null> {
+        const page = this.page;
+        if (!page || page.sessionId !== sessionId || !page.items.has(itemId)) return null;
+        const served = page.served.get(itemId);
+        const file = served?.files.find((candidate) => candidate.path === path);
+        if (!served || !file || !refinable(file)) return null;
+        const sides = 'sides' in served ? this.gitSides(served.sides) : await this.gitHubSides(served.github);
+        return sides ? page.refinements.refine(file, sides) : null;
+    }
+
+    /** A local diff's sides, read with git; null in a repository with no commits yet. */
+    private gitSides({worktree, before, after}: DiffSides): DiffSideReader | null {
+        const {git} = this.deps;
+        if (!before) return null;
+        return {
+            commits: after ? [worktree, before, after].join('\0') : null,
+            before: (path) => git.blob(worktree, before, path),
+            after: (path) => (after ? git.blob(worktree, after, path) : git.workingFile(worktree, path)),
+        };
+    }
+
+    /** A diff from GitHub's sides, read from GitHub; null when the merge-base could not be had. */
+    private async gitHubSides({repository, head, mergeBase}: GitHubSides): Promise<DiffSideReader | null> {
+        const base = await mergeBase();
+        return base ? gitHubSides(this.deps.github, repository, base, head) : null;
     }
 
     // ── Building the snapshot ──
@@ -631,7 +693,10 @@ export class SessionWorkService {
     // ── Diffs ──
 
     /** An item's diff, and for a local one where its sides are read. */
-    private async diffOf(page: Page, item: SessionWorkItem): Promise<SessionWorkDiff & {sides?: DiffSides}> {
+    private async diffOf(
+        page: Page,
+        item: SessionWorkItem,
+    ): Promise<SessionWorkDiff & {sides?: DiffSides; github?: GitHubSides}> {
         const {git, github} = this.deps;
         const failed = (error: string): SessionWorkDiff => ({files: [], source: null, error});
         if (item.kind === 'issue') return NO_DIFF;
@@ -690,17 +755,41 @@ export class SessionWorkService {
             const text = await github.pullRequestDiff(repository, pr.number);
             return text === null ? null : this.parse(page.projectRoot, text);
         };
-        const fromGitHub = (files: FileDiff[] | null | undefined): SessionWorkDiff =>
-            files
-                ? {files, source: 'github', ...(differs ? {note: LOCAL_DIFFERS} : {})}
+        const fromGitHub = (diff: CachedDiff | null | undefined): SessionWorkDiff & {github?: GitHubSides} =>
+            diff
+                ? {
+                      files: diff.files,
+                      source: 'github',
+                      ...(differs ? {note: LOCAL_DIFFERS} : {}),
+                      ...(diff.github ? {github: diff.github} : {}),
+                  }
                 : failed('GitHub did not send the diff');
-        if (!pr.headSha) return fromGitHub(await fetch());
-        const key = ['pr', repository, String(pr.number), pr.headSha].join('\0');
+        const {headSha, baseRef} = pr;
+        if (!headSha) {
+            const files = await fetch();
+            return fromGitHub(files && {files, sides: null});
+        }
+        const key = ['pr', repository, String(pr.number), headSha].join('\0');
         const cached = page.diffCache.get(key);
-        if (cached) return fromGitHub(cached.files);
+        if (cached) return fromGitHub(cached);
         const files = await fetch();
-        if (files && !page.closed) page.diffCache.set(key, {files, sides: null});
-        return fromGitHub(files);
+        if (!files) return fromGitHub(null);
+        // GitHub's diff is against the merge-base with the base branch, not its tip: its sides are read there.
+        const diff: CachedDiff = {
+            files,
+            sides: null,
+            ...(baseRef
+                ? {
+                      github: {
+                          repository,
+                          head: headSha,
+                          mergeBase: lazily(() => github.mergeBase(repository, baseRef, headSha)),
+                      },
+                  }
+                : {}),
+        };
+        if (!page.closed) page.diffCache.set(key, diff);
+        return fromGitHub(diff);
     }
 
     private async cached(page: Page, key: string, read: () => Promise<CachedDiff>): Promise<CachedDiff> {

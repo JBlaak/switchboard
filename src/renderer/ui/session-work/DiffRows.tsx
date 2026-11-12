@@ -14,12 +14,18 @@
  * does. Each chunk is memoised on its slice of the rows, so growing the file
  * only renders the new chunk, and `content-visibility` lets the browser skip
  * laying out chunks that are scrolled away.
+ *
+ * A local diff's file may also have OmniDiff's refinement: the stretches of
+ * its changed lines that really changed, painted a stronger tint inside the
+ * line's own (`support/change-marks`). It arrives after the lines, so each
+ * chunk redraws once when it lands; its highlighting is kept.
  */
 import {memo, startTransition, useEffect, useMemo, useState, useSyncExternalStore} from 'react';
 import type {CSSProperties, JSX} from 'react';
 import {hunkHeader, lineNumberDigits, splitRows, unifiedRows} from '../../../domain/session-work/diff-layout';
 import type {SplitRow, UnifiedRow} from '../../../domain/session-work/diff-layout';
 import type {DiffLine, FileDiff} from '../../../domain/session-work/model';
+import type {FileRefinement} from '../../../domain/session-work/refinement';
 import type {DiffMode} from '../../state/session-work-slice';
 import {commentAnchor} from '../../../domain/session-work/diff';
 import {noteKey} from './review-notes';
@@ -33,6 +39,7 @@ import {
     languageFor,
     subscribeLanguages,
 } from './support/highlight';
+import {markSplitRows, markUnifiedRows} from './support/change-marks';
 
 /** Rows per memoised chunk. */
 const CHUNK_ROWS = 100;
@@ -46,6 +53,7 @@ export const DiffRows = memo(function DiffRows({
     mode,
     eager,
     review = null,
+    refinement = null,
 }: {
     file: FileDiff;
     mode: DiffMode;
@@ -53,6 +61,8 @@ export const DiffRows = memo(function DiffRows({
     eager: boolean;
     /** The threads, pending comments and composer on its lines, and whether they take a `+`; null on a plain diff. */
     review?: FileReview | null;
+    /** OmniDiff's marks inside its changed lines; null when there are none (yet). */
+    refinement?: FileRefinement | null;
 }): JSX.Element {
     const rows = useMemo(() => (mode === 'split' ? splitRows(file) : unifiedRows(file)), [file, mode]);
     const language = useLanguage(file.path);
@@ -72,6 +82,7 @@ export const DiffRows = memo(function DiffRows({
                     language={language}
                     path={file.path}
                     review={review}
+                    refinement={refinement}
                 />
             ) : (
                 <UnifiedChunk
@@ -82,6 +93,7 @@ export const DiffRows = memo(function DiffRows({
                     language={language}
                     path={file.path}
                     review={review}
+                    refinement={refinement}
                 />
             ),
         );
@@ -107,6 +119,7 @@ const UnifiedChunk = memo(function UnifiedChunk({
     language,
     path,
     review,
+    refinement,
 }: {
     rows: readonly UnifiedRow[];
     start: number;
@@ -114,8 +127,13 @@ const UnifiedChunk = memo(function UnifiedChunk({
     language: string | null;
     path: string;
     review: FileReview | null;
+    refinement: FileRefinement | null;
 }): JSX.Element {
-    const html = useMemo(() => highlightUnifiedRows(rows, start, end, language), [rows, start, end, language]);
+    const highlighted = useMemo(() => highlightUnifiedRows(rows, start, end, language), [rows, start, end, language]);
+    const html = useMemo(
+        () => markUnifiedRows(rows, start, end, highlighted, refinement),
+        [rows, start, end, highlighted, refinement],
+    );
     const out: JSX.Element[] = [];
     for (let i = start; i < end; i++) {
         const row = rows[i];
@@ -156,6 +174,7 @@ const SplitChunk = memo(function SplitChunk({
     language,
     path,
     review,
+    refinement,
 }: {
     rows: readonly SplitRow[];
     start: number;
@@ -163,8 +182,13 @@ const SplitChunk = memo(function SplitChunk({
     language: string | null;
     path: string;
     review: FileReview | null;
+    refinement: FileRefinement | null;
 }): JSX.Element {
-    const html = useMemo(() => highlightSplitRows(rows, start, end, language), [rows, start, end, language]);
+    const highlighted = useMemo(() => highlightSplitRows(rows, start, end, language), [rows, start, end, language]);
+    const html = useMemo(
+        () => markSplitRows(rows, start, end, highlighted, refinement),
+        [rows, start, end, highlighted, refinement],
+    );
     const out: JSX.Element[] = [];
     for (let i = start; i < end; i++) {
         const row = rows[i];

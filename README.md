@@ -148,6 +148,15 @@ npm run build:mac      # or package a .dmg into dist/
 Building, testing and releasing are covered in [CONTRIBUTING.md](CONTRIBUTING.md), and how the code
 is laid out in [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Third-party software
+
+The macOS app bundles [OmniDiff](https://github.com/ivankovic/omnidiff) 0.3.0, unmodified, for
+finer diffs on the Session work page. OmniDiff is licensed under the
+[AGPL-3.0-only](https://github.com/ivankovic/omnidiff/blob/v0.3.0/LICENSE); its source is at
+[ivankovic/omnidiff@v0.3.0](https://github.com/ivankovic/omnidiff/tree/v0.3.0), and its licence and
+notices ship inside the app under `Contents/Resources/omnidiff/`. `npm install` fetches it into
+`vendor/omnidiff/`.
+
 ## Thanks
 
 Switchboard was created by [Doctly](https://github.com/doctly). Thank you to Ali Basiri and

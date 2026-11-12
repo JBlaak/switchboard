@@ -23,7 +23,7 @@
 import {memo, useMemo, useRef, useState} from 'react';
 import type {JSX} from 'react';
 import {expandFile, setDiffMode} from './actions';
-import {IMAGE_GITHUB_NOTE, collapsedText, diffSummary, fileStatusPill} from './describe';
+import {IMAGE_GITHUB_NOTE, collapsedText, diffSummary, fileStatusPill, refinementPill} from './describe';
 import {DiffRows} from './DiffRows';
 import {LineCounts} from './LineCounts';
 import {Pills} from './Pills';
@@ -37,6 +37,8 @@ import type {Background} from './image-compare/types';
 import type {ImageMode} from './image-compare/modes/types';
 import {fileReview} from './review-notes';
 import {OutdatedNotes, ReviewBar} from './ReviewNotes';
+import {refinable, useRefinement} from './refinement-load';
+import {DiffSkeleton} from './DiffSkeleton';
 
 /** How many cards draw their first lines at once; the rest fill in a frame later. */
 const EAGER_FILES = 3;
@@ -130,16 +132,6 @@ function ModeToggle({mode}: {mode: DiffMode}): JSX.Element {
     );
 }
 
-function DiffSkeleton(): JSX.Element {
-    return (
-        <div className="sw-diff-skeleton" aria-hidden="true">
-            <div className="sw-skeleton" />
-            <div className="sw-skeleton" />
-            <div className="sw-skeleton" />
-        </div>
-    );
-}
-
 const FileCard = memo(function FileCard({
     sessionId,
     itemId,
@@ -160,7 +152,7 @@ const FileCard = memo(function FileCard({
 }: {
     sessionId: string;
     itemId: string;
-    /** The item's diff as it was asked for, for an image card to load again when it changes. */
+    /** The item's diff as it was asked for, for an image card or a refinement to load again when it changes. */
     loadKey: string;
     /** The diff is GitHub's copy (D8): an image there has no bytes to compare (I4). */
     github: boolean;
@@ -192,6 +184,9 @@ const FileCard = memo(function FileCard({
     const [svgSource, setSvgSource] = useState(false);
     const svg = file.image?.format === 'svg';
     const imageCard = !!file.image && !(svg && svgSource);
+    // Asked for only once the file's lines are drawn: a collapsed file waits until it is opened.
+    const refinement = useRefinement(sessionId, itemId, file, loadKey, !collapsed && refinable(file, imageCard));
+    const pills = [pill, refinementPill(refinement?.summary)].filter((p): p is NonNullable<typeof p> => p !== null);
 
     const showDiff = (): void => {
         // The button goes as the lines come; the focus stays on this file, in the
@@ -211,7 +206,7 @@ const FileCard = memo(function FileCard({
                     {file.oldPath && <span className="sw-file-old">{file.oldPath} → </span>}
                     {file.path}
                 </span>
-                {pill && <Pills pills={[pill]} />}
+                <Pills pills={pills} />
                 {!file.binary && <LineCounts stats={file} />}
                 {svg && <SvgToggle source={svgSource} onChange={setSvgSource} />}
             </header>
@@ -243,7 +238,7 @@ const FileCard = memo(function FileCard({
             ) : file.hunks.length === 0 ? (
                 <div className="sw-file-row">No changes to the content</div>
             ) : (
-                <DiffRows file={file} mode={mode} eager={eager} review={review} />
+                <DiffRows file={file} mode={mode} eager={eager} review={review} refinement={refinement} />
             )}
         </section>
     );

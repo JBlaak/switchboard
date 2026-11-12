@@ -416,6 +416,9 @@ test("a write that cannot reach GitHub answers gh's error", async () => {
     assert.deepEqual(result, {ok: false, reason: 'error connecting to api.github.com'});
 });
 
+const SHA_A = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
+const SHA_B = 'b1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
+
 /** Every read GhCli offers, answered. */
 const everyRead = (gh: GhCli) =>
     Promise.all([
@@ -423,6 +426,8 @@ const everyRead = (gh: GhCli) =>
         gh.pullRequestDiff('acme/web', 12),
         gh.checkLogTail('acme/web', 'https://github.com/acme/web/actions/runs/1/job/2', 50),
         gh.issues('acme/web', [7]),
+        gh.fileAt('acme/web', SHA_A, 'src/a.ts'),
+        gh.mergeBase('acme/web', 'main', SHA_A),
     ]);
 
 test('missing gh: available says so', async () => {
@@ -444,7 +449,7 @@ test('missing gh: every call answers null without throwing', async () => {
     const reads = await everyRead(gh);
 
     /* Then */
-    assert.deepEqual(reads, [null, null, null, null]);
+    assert.deepEqual(reads, [null, null, null, null, null, null]);
 });
 
 test('signed out or revoked: available says unauthenticated', async () => {
@@ -469,7 +474,7 @@ test('signed out or revoked: every call answers null', async () => {
         const reads = await everyRead(new GhCli({run: scripted(answer)}));
 
         /* Then */
-        assert.deepEqual(reads, [null, null, null, null]);
+        assert.deepEqual(reads, [null, null, null, null, null, null]);
     }
 });
 
@@ -584,6 +589,92 @@ test('pullRequestDiff runs gh pr diff with plain output', async () => {
     /* Then */
     assert.equal(diff, 'diff --git a/x b/x\n');
     assert.deepEqual(run.calls[0], ['pr', 'diff', '12', '--repo', 'acme/web', '--color', 'never']);
+});
+
+test("fileAt reads a file's raw bytes at a commit, each part of its path escaped", async () => {
+    /* Given */
+    const bytes = new Uint8Array([0x63, 0x61, 0x66, 0xe9]);
+    const options: Array<{bytes?: boolean} | undefined> = [];
+    const calls: string[][] = [];
+    const run: GhRunner = async (args, opts) => {
+        calls.push([...args]);
+        options.push(opts);
+        return {missing: false, code: 0, stdout: '', stderr: '', bytes};
+    };
+
+    /* When */
+    const file = await new GhCli({run}).fileAt('acme/web', SHA_A, 'src/my file#1.ts');
+
+    /* Then */
+    assert.equal(file, bytes);
+    assert.deepEqual(calls[0], [
+        'api',
+        '-H',
+        'Accept: application/vnd.github.raw',
+        `repos/acme/web/contents/src/my%20file%231.ts?ref=${SHA_A}`,
+    ]);
+    assert.deepEqual(options[0], {bytes: true});
+});
+
+test('fileAt answers null for a file GitHub does not have', async () => {
+    /* Given */
+    const run = scripted(() => ({code: 1, stderr: 'gh: Not Found (HTTP 404)\n'}));
+
+    /* When */
+    const file = await new GhCli({run}).fileAt('acme/web', SHA_A, 'src/gone.ts');
+
+    /* Then */
+    assert.equal(file, null);
+});
+
+test('fileAt refuses a path or commit that could reach outside the file, without running gh', async () => {
+    /* Given */
+    const run = scripted(() => ({bytes: new Uint8Array([1])}));
+    const gh = new GhCli({run});
+
+    /* When */
+    const answers = await Promise.all([
+        gh.fileAt('acme/web', SHA_A, '../secrets'),
+        gh.fileAt('acme/web', SHA_A, '/etc/passwd'),
+        gh.fileAt('acme/web', SHA_A, 'src//a.ts'),
+        gh.fileAt('acme/web', 'main', 'src/a.ts'),
+        gh.fileAt('acme/web', SHA_A + '&x=1', 'src/a.ts'),
+        gh.fileAt('not a repo', SHA_A, 'src/a.ts'),
+    ]);
+
+    /* Then */
+    assert.deepEqual(answers, [null, null, null, null, null, null]);
+    assert.equal(run.calls.length, 0);
+});
+
+test("mergeBase compares the base branch with the head and answers GitHub's merge-base commit", async () => {
+    /* Given */
+    const run = scripted(() => ({stdout: JSON.stringify({merge_base_commit: {sha: SHA_B}, status: 'ahead'})}));
+
+    /* When */
+    const base = await new GhCli({run}).mergeBase('acme/web', 'release/2.x', SHA_A);
+
+    /* Then */
+    assert.equal(base, SHA_B);
+    assert.deepEqual(run.calls[0], ['api', `repos/acme/web/compare/release/2.x...${SHA_A}`]);
+});
+
+test('mergeBase answers null when GitHub has no merge-base to give, or the branch name is odd', async () => {
+    /* Given */
+    const run = scripted(() => ({stdout: JSON.stringify({merge_base_commit: null})}));
+    const gh = new GhCli({run});
+
+    /* When */
+    const answers = await Promise.all([
+        gh.mergeBase('acme/web', 'main', SHA_A),
+        gh.mergeBase('acme/web', 'a..b', SHA_A),
+        gh.mergeBase('acme/web', '-x', SHA_A),
+        gh.mergeBase('acme/web', 'main', 'feat/x'),
+    ]);
+
+    /* Then */
+    assert.deepEqual(answers, [null, null, null, null]);
+    assert.equal(run.calls.length, 1, 'only the valid request reaches gh');
 });
 
 test("checkLogTail reads the failed steps of an Actions job, without gh's prefixes", async () => {

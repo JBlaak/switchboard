@@ -20,7 +20,7 @@ import {openedExternally, pushEvent, sessionWorkClosed} from '../support/main-pr
 import {hasTerminal} from '../support/terminal';
 import {sessionItem} from '../support/session-list';
 import {LABEL, S} from '../fixtures/standard';
-import {BIG_FILE_LINES, sessionWorkStub} from '../fixtures/session-work';
+import {BIG_FILE_LINES, sessionWorkStub, sessionWorkStubWithRefinement} from '../fixtures/session-work';
 import {EVENT} from '../../src/ipc/channels';
 import type {Page} from '@playwright/test';
 
@@ -312,6 +312,31 @@ test.describe('the diff', () => {
         await expect(big.locator('.sw-dl.is-pair').last()).toContainText(
             `export const line${BIG_FILE_LINES} = ${BIG_FILE_LINES};`,
         );
+    });
+});
+
+test.describe('OmniDiff marks', () => {
+    test.use({stubs: {sessionWork: sessionWorkStubWithRefinement()}});
+
+    test('mark only the stretch of a changed line that changed, on both sides, when main answers with them', async ({
+        page,
+        home,
+    }) => {
+        /* Given */
+        await openLoginFixWork(page, home);
+        const session = workPage(page)
+            .getByTestId('session-work-diff')
+            .getByRole('region', {name: 'src/session.ts', exact: true});
+
+        /* Then */
+        // A mark is cut along the highlighter's tokens, so its pieces are read together.
+        const marked = (kind: string) =>
+            session
+                .locator(`.sw-dl[data-kind="${kind}"] .sw-ch`)
+                .allTextContents()
+                .then((parts) => parts.join(''));
+        await expect.poll(() => marked('add')).toBe('null');
+        await expect.poll(() => marked('delete')).toBe('redirect("/login")');
     });
 });
 
