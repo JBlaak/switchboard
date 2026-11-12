@@ -4,6 +4,7 @@
  * they are tested in node next to the slice.
  */
 import {levelBullets, type LevelBullet} from '../../../../domain/plan/level-progress';
+import {parseAutomergeStatus} from '../../../../domain/project/merge-queue';
 import {sameIssue} from '../../../../domain/plan/model';
 import type {
     IssueKey,
@@ -83,6 +84,54 @@ export function nodeMiniLine(plan: Plan, issue: PlanIssue): string {
 export function mainPullRequest(issue: PlanIssue): PlanIssue['pullRequests'][number] | null {
     const prs = issue.pullRequests;
     return prs.find((pr) => pr.state === 'open') ?? prs.find((pr) => pr.state === 'merged') ?? prs[0] ?? null;
+}
+
+/** Where an issue's PR stands in the merge queue, as its node shows it. */
+export interface PlanQueuePill {
+    kind: 'merging' | 'queued' | 'held' | 'failed' | 'outside';
+    text: string;
+    /** The queue's own sentence, for a tooltip. */
+    title: string;
+}
+
+/**
+ * The merge queue's word on an issue's open PR, when it is labelled
+ * `automerge:opt-in` (#315): its place, what holds it, or that it failed, in
+ * a pill short enough for a node. The queue's full sentence is its title.
+ */
+export function planQueuePill(issue: PlanIssue): PlanQueuePill | null {
+    const pr = mainPullRequest(issue);
+    if (!pr || pr.state !== 'open' || !pr.queue) return null;
+    const status = pr.queue.automerge;
+    if (!status) return {kind: 'queued', text: 'queue · waiting', title: 'Opted in; the queue has not taken it yet'};
+    const parsed = parseAutomergeStatus(status);
+    const on = parsed.member === null ? '' : ` on #${parsed.member}`;
+    const title = status.description || 'In the merge queue';
+    switch (parsed.status.kind) {
+        case 'head':
+            return {kind: 'merging', text: 'merging · 1st', title};
+        case 'queued':
+            return {kind: 'queued', text: `queued · ${ordinal(parsed.status.position)}`, title};
+        case 'held': {
+            const waitsFor = parsed.status.waitsFor;
+            const text = waitsFor.kind === 'review' ? `held · @${waitsFor.reviewer}` : 'held · approval';
+            return {kind: 'held', text: text + on, title};
+        }
+        case 'failed':
+            return {kind: 'failed', text: 'queue failed' + on, title};
+        case 'outside':
+            return {kind: 'outside', text: 'not queued', title};
+        case 'unknown':
+            return status.state === 'success'
+                ? {kind: 'merging', text: 'queue ✓', title}
+                : {kind: 'queued', text: 'queue', title};
+    }
+}
+
+function ordinal(n: number): string {
+    const tens = n % 100;
+    if (tens >= 11 && tens <= 13) return `${n}th`;
+    return `${n}${n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'}`;
 }
 
 /** `#12`, or `owner/repo#12` for an issue in another repository. */

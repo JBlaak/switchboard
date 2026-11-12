@@ -13,7 +13,7 @@ import type {JSX} from 'react';
 import {issueKeyString, sameIssue} from '../../../../domain/plan/model';
 import type {IssueKey, NodeState, Plan, PlanLayout} from '../../../../domain/plan/model';
 import {arrowInChain, chainOf, inChain, NODE_H, NODE_W, PAD, GHOST_H, planGeometry} from './geometry';
-import {issueIn, issueUrl, levelStatus, nodeMiniLine, shortRef, STATE_LABEL} from './describe';
+import {issueIn, issueUrl, levelStatus, nodeMiniLine, planQueuePill, shortRef, STATE_LABEL} from './describe';
 import {readyOnLevel} from './start-level';
 import type {IssueActions, PlanHandlers, PlanUi} from './types';
 
@@ -113,6 +113,12 @@ export function PlanDiagram({
                 const selected = !!ui.selected && sameIssue(ui.selected, issue);
                 const session = issueActions?.sessionFor?.(issue) ?? null;
                 const arrives = !!arriving?.some((candidate) => sameIssue(candidate, issue));
+                const queue = planQueuePill(issue);
+                const queueMark = queue && (
+                    <span className={'pv-queue is-' + queue.kind} title={queue.title}>
+                        {queue.text}
+                    </span>
+                );
                 const cls =
                     'pv-node is-' +
                     state +
@@ -126,7 +132,10 @@ export function PlanDiagram({
                         className={cls}
                         style={{left: box.x, top: box.y, width: NODE_W, height: NODE_H}}
                         data-plan-issue={issueKeyString(issue)}
-                        aria-label={`#${issue.number} ${issue.title}, ${STATE_LABEL[state]}`}
+                        aria-label={
+                            `#${issue.number} ${issue.title}, ${STATE_LABEL[state]}` +
+                            (queue ? `, merge queue: ${queue.title}` : '')
+                        }
                         aria-pressed={selected}
                         onMouseEnter={() => on.hover(issue)}
                         onMouseLeave={() => on.hover(null)}
@@ -140,11 +149,13 @@ export function PlanDiagram({
                         <span className="pv-node-title">{issue.title}</span>
                         {session ? (
                             <span className={'pv-node-mini is-session' + (session.working ? ' is-working' : '')}>
+                                {queueMark}
                                 {issue.ticketType && <span className="pv-ticket-type">{issue.ticketType}</span>}
                                 {'Session ' + session.name + ' · ' + (session.working ? 'working' : 'idle')}
                             </span>
                         ) : (
                             <span className="pv-node-mini">
+                                {queueMark}
                                 {issue.ticketType && <span className="pv-ticket-type">{issue.ticketType}</span>}
                                 {nodeMiniLine(plan, issue)}
                             </span>

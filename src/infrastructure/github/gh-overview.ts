@@ -239,7 +239,7 @@ export function toQueueReads(node: any, repository: string): PullRequestQueueRea
 }
 
 /** The queue's `automerge` status context; null when the commit has none. */
-function toAutomergeStatus(context: any): AutomergeStatus | null {
+export function toAutomergeStatus(context: any): AutomergeStatus | null {
     if (!context || typeof context.state !== 'string') return null;
     const state: AutomergeStatus['state'] =
         context.state === 'SUCCESS'

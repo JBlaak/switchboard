@@ -67,10 +67,12 @@ async function start(
     dispatch({type: 'planStartAsked', issue, confirm: false, ...(vm ? {vm: vm.label} : {})});
     startedOn.set(issueKeyString(issue), vm);
     const onStep = (step: string) => dispatch({type: 'planStartStep', issue, step});
-    const result = await startIssueSession({projectPath, issue, plan, show, existing, vm, onStep}).catch((err: Error) => ({
-        ok: false as const,
-        reason: err.message || 'Could not start the session',
-    }));
+    const result = await startIssueSession({projectPath, issue, plan, show, existing, vm, onStep}).catch(
+        (err: Error) => ({
+            ok: false as const,
+            reason: err.message || 'Could not start the session',
+        }),
+    );
     // Started without taking the screen: its new row says so instead.
     if (result.ok && !show) pulseSessionRow(result.sessionId);
     dispatch({type: 'planStartAnswered', issue, result});

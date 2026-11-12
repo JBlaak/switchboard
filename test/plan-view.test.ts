@@ -4,7 +4,7 @@ import {createElement} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {layOutPlan} from '../src/domain/plan/layout';
 import {PlanViewContent} from '../src/renderer/ui/session-work/plan/PlanViewContent';
-import {hereLabel, levelStatus, warningText} from '../src/renderer/ui/session-work/plan/describe';
+import {hereLabel, levelStatus, planQueuePill, warningText} from '../src/renderer/ui/session-work/plan/describe';
 import {deleteLine, existingLine, stackLine} from '../src/renderer/ui/session-work/plan/IssueDetail';
 import {elapsed} from '../src/renderer/ui/session-handoff/StartSteps';
 import type {IssueActions} from '../src/renderer/ui/session-work/plan/types';
@@ -347,4 +347,64 @@ test('the switcher and the other plans mark each plan that has a running session
     const rows = [...others.matchAll(/<li>(.*?)<\/li>/g)].map((m) => m[1]);
     assert.doesNotMatch(rows[0], /pv-live/);
     assert.match(rows[1], /1 running/);
+});
+
+test("an issue whose open PR is in the merge queue shows the queue's place on its node, the sentence as its title", () => {
+    /* Given */
+    const queued = {
+        ...pr(111, 'open'),
+        queue: {automerge: {state: 'pending' as const, description: 'Number 3 in the merge queue'}},
+    };
+    const shown = plan([issue(10, {pullRequests: [queued]})]);
+
+    /* When */
+    const html = renderToStaticMarkup(createElement(PlanViewContent, {plan: shown}));
+
+    /* Then */
+    assert.match(html, /<span class="pv-queue is-queued" title="Number 3 in the merge queue">queued · 3rd<\/span>/);
+    assert.match(html, /merge queue: Number 3 in the merge queue/);
+});
+
+test("the queue's statuses read as short pills on a node", () => {
+    /* Given */
+    const withStatus = (state: 'pending' | 'failure' | 'success', description: string) =>
+        issue(10, {pullRequests: [{...pr(111, 'open'), queue: {automerge: {state, description}}}]});
+
+    /* When */
+    const pills = [
+        planQueuePill(withStatus('pending', 'First in the merge queue; merges once CI passes')),
+        planQueuePill(withStatus('pending', 'Waits for a review by @sam')),
+        planQueuePill(withStatus('pending', '#12: Waits for an approval')),
+        planQueuePill(withStatus('failure', 'CI failed: lint')),
+        planQueuePill(withStatus('pending', 'A draft is not queued')),
+        planQueuePill(issue(10, {pullRequests: [{...pr(111, 'open'), queue: {automerge: null}}]})),
+    ];
+
+    /* Then */
+    assert.deepEqual(
+        pills.map((pill) => [pill?.kind, pill?.text]),
+        [
+            ['merging', 'merging · 1st'],
+            ['held', 'held · @sam'],
+            ['held', 'held · approval on #12'],
+            ['failed', 'queue failed'],
+            ['outside', 'not queued'],
+            ['queued', 'queue · waiting'],
+        ],
+    );
+});
+
+test('no queue pill for a PR not opted in, or one already merged', () => {
+    /* Given */
+    const plain = issue(10, {pullRequests: [pr(111, 'open')]});
+    const merged = issue(11, {
+        state: 'closed',
+        pullRequests: [{...pr(112, 'merged'), queue: {automerge: {state: 'success', description: 'Merged'}}}],
+    });
+
+    /* When */
+    const pills = [planQueuePill(plain), planQueuePill(merged)];
+
+    /* Then */
+    assert.deepEqual(pills, [null, null]);
 });
