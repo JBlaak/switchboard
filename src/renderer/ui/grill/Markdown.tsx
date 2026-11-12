@@ -1,7 +1,7 @@
 /**
  * A round's Markdown drawn as elements: a title's inline runs, or a reason's
- * paragraphs, lists, tables and code blocks (see `grill-markdown`). A PR link opens the
- * peek, any other web link the browser; the window itself never navigates.
+ * paragraphs, lists, tables and code blocks (see `grill-markdown`). A web link
+ * opens in the browser; the window itself never navigates.
  */
 import {inlineMarkdown, markdownBlocks} from '../../features/grill/grill-markdown';
 import type {JSX, MouseEvent} from 'react';

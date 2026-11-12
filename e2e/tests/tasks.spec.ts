@@ -29,6 +29,7 @@ import {FakeCli} from '../support/fake-cli';
 import {LABEL, P, S} from '../fixtures/standard';
 import {openSession, sidebar, terminalHeader} from '../support/app';
 import {sessionWorkStub} from '../fixtures/session-work';
+import {openedExternally} from '../support/main-process';
 import {fakeBlaakTasks, switchBlaakTasksOn, TASK, TITLE, TOKEN} from '../support/blaak-tasks';
 
 /** Make the project a git repository with one commit on `main`, as a real one would be. */
@@ -282,6 +283,7 @@ test.describe('the task on its session', () => {
     test('a linked session shows its task: the tray’s task row, the Task tab and the sidebar marker', async ({
         page,
         home,
+        app,
     }) => {
         /* Given: BlaakTasks on, and a session on screen with no task */
         const blaakTasks = await fakeBlaakTasks({
@@ -342,19 +344,11 @@ test.describe('the task on its session', () => {
             for (const name of ['Mark done', 'Snooze', 'Open in Notion'])
                 await expect(tab.getByRole('button', {name})).toBeVisible();
 
-            /* When: its PR is clicked, and the peek's Full view asked for */
+            /* When: its PR is clicked */
             await tab.getByRole('button', {name: '#1320 open'}).click();
-            const peek = page.getByTestId('pr-peek');
-            await expect(peek).toBeFocused();
-            await page.keyboard.press('Enter');
 
-            /* Then: the Work tab, with that PR selected */
-            await expect(peek).toHaveCount(0);
-            await expect(work.getByRole('tab', {name: 'Work'})).toHaveAttribute('aria-selected', 'true');
-            await expect(work.locator('.sw-item.is-selected')).toHaveAttribute(
-                'data-item-id',
-                'pr:https://github.com/acme/api/pull/1320',
-            );
+            /* Then: the PR opens in the browser */
+            await expect.poll(() => openedExternally(app)).toContain('https://github.com/acme/api/pull/1320');
 
             /* When: unlinked */
             await page.evaluate((sessionId) => window.api.unlinkSessionTask(sessionId), S.loginFix);

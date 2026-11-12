@@ -17,7 +17,6 @@ import type {SessionBringBackState} from './session-bring-back-slice';
 import {activityReducer, initialActivityState, rekeyActivity} from './activity-slice';
 import {archiveUndoReducer, initialArchiveUndoState, rekeyArchiveUndo} from './archive-undo-slice';
 import {dropUploadReducer, initialDropUploadState} from './drop-upload-slice';
-import {initialPrPeekState, prPeekReducer} from './pr-peek-slice';
 import {initialPagesState, pagesReducer, rekeyPages} from './pages-slice';
 import {initialMergeQueueState, mergeQueueReducer, rekeyMergeQueue} from './merge-queue-slice';
 import {initialSessionTrayState, rekeySessionTray, sessionTrayReducer} from './session-tray-slice';
@@ -52,7 +51,6 @@ import type {VmsState} from './vms-slice';
 import type {HandoffState} from './handoff-slice';
 import type {SessionHandoffState} from './session-handoff-slice';
 import type {DropUploadState} from './drop-upload-slice';
-import type {PrPeekState} from './pr-peek-slice';
 import type {PagesState} from './pages-slice';
 import type {MergeQueueState} from './merge-queue-slice';
 import type {SessionTrayState} from './session-tray-slice';
@@ -115,7 +113,6 @@ export interface RendererState {
     readonly pages: PagesState;
     readonly mergeQueue: MergeQueueState;
     readonly sessionTray: SessionTrayState;
-    readonly prPeek: PrPeekState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -154,7 +151,6 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         pages: initialPagesState,
         mergeQueue: initialMergeQueueState,
         sessionTray: initialSessionTrayState,
-        prPeek: initialPrPeekState,
     };
 }
 
@@ -201,7 +197,6 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const pages = pagesReducer(state.pages, event);
     const mergeQueue = mergeQueueReducer(state.mergeQueue, event);
     const sessionTray = sessionTrayReducer(state.sessionTray, event);
-    const prPeek = prPeekReducer(state.prPeek, event);
 
     return settle(state, {
         view,
@@ -238,7 +233,6 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         pages,
         mergeQueue,
         sessionTray,
-        prPeek,
     });
 }
 
@@ -310,8 +304,6 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         mergeQueue: rekeyMergeQueue(state.mergeQueue, oldId, newId),
         // The stats on screen stay the session's under its new id.
         sessionTray: rekeySessionTray(state.sessionTray, oldId, newId),
-        // Names no session: a peek is of a PR.
-        prPeek: state.prPeek,
     });
 }
 

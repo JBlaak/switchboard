@@ -8,8 +8,6 @@
  */
 import {BrowserWindow, screen, shell} from 'electron';
 import path from 'node:path';
-import {EVENT} from '../../ipc/channels';
-import {linkTarget} from './support/link-target';
 import {boundsToSave, MIN_BOUNDS, restorableBounds} from './support/window-bounds';
 import {windowChromeOptions} from './support/window-chrome';
 import type {WindowBounds} from '../../domain/settings/settings';
@@ -104,10 +102,8 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
     if (deps.inactive && !hiddenForE2e()) window.once('ready-to-show', () => window.showInactive());
     void window.loadFile(path.join(deps.appDir, 'renderer', 'index.html'));
 
-    // A stray PR link opens the app's own peek; the pop-ups send theirs to the browser.
-    containNavigation(window, {
-        onPullRequestLink: (url) => window.webContents.send(EVENT.pullRequestLinkOpened, url),
-    });
+    // A stray link goes to the browser, as the pop-ups' do.
+    containNavigation(window);
     // This window's alone: the shim opens links through `window.api`.
     window.webContents.on('did-finish-load', () => {
         void window.webContents.executeJavaScript(WINDOW_OPEN_SHIM);
@@ -120,21 +116,11 @@ export function createMainWindow(deps: MainWindowDeps): BrowserWindow {
     return window;
 }
 
-/** How a window treats the links it is asked to follow. */
-export interface ContainNavigationOptions {
-    /**
-     * A pull request link goes here instead of to the browser: the main window
-     * shows it in its own diff viewer. Without it, every web link opens in the browser.
-     */
-    onPullRequestLink?(url: string): void;
-}
-
 /** Keep the renderer inside itself. The Quick Ask pop-up is held the same way. */
-export function containNavigation(window: BrowserWindow, options: ContainNavigationOptions = {}): void {
+export function containNavigation(window: BrowserWindow): void {
+    // Web pages go to the browser; anything else (file://, custom schemes) nowhere.
     const follow = (url: string): void => {
-        const target = linkTarget(url, options.onPullRequestLink !== undefined);
-        if (target === 'pull-request') options.onPullRequestLink?.(url);
-        else if (target === 'browser') void shell.openExternal(url).catch(() => {});
+        if (/^https?:\/\//i.test(url)) void shell.openExternal(url).catch(() => {});
     };
 
     window.webContents.setWindowOpenHandler(({url}) => {

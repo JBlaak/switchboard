@@ -1,15 +1,11 @@
 /**
  * A pull request link, wherever the app meets one: a terminal, a chip, a
- * Markdown link, a project page row. Every one of them opens the app's own
- * diff viewer rather than the browser — first as a peek at the diff, then,
- * on request, the full view with its review threads and your review.
+ * Markdown link, a project page row. Every one of them opens in the browser.
  *
- * The full view of a PR that a session opened is that session's work page.
- * A PR no session opened gets a work page of its own, keyed by a page id
+ * A PR no session opened can have a work page of its own, keyed by a page id
  * that can never be a session's (`pullRequestPageId`): the page shows the PR
  * alone, its diff, its threads and your review, and hands nothing to Claude.
  */
-import type {FileDiff, PullRequestStatus} from './model';
 
 /** Which pull request: `owner/repo` and its number. */
 export interface PullRequestRef {
@@ -63,17 +59,4 @@ export function isPullRequestPageId(pageId: string): boolean {
 /** Two refs name the same PR. GitHub's owner and repo names are case-insensitive. */
 export function samePullRequest(a: PullRequestRef, b: PullRequestRef): boolean {
     return a.number === b.number && a.repository.toLowerCase() === b.repository.toLowerCase();
-}
-
-/**
- * What the peek shows: the PR's title and state as far as `gh` said, and its
- * diff from GitHub. `error` says why there is no diff (no `gh`, signed out,
- * not found); `pr` is null when `gh` said nothing about the PR itself.
- */
-export interface PullRequestPeek {
-    ref: PullRequestRef;
-    url: string;
-    pr: PullRequestStatus | null;
-    files: FileDiff[];
-    error?: string;
 }

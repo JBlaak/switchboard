@@ -19,7 +19,7 @@
  * self-hosted runners, by runner pool, each queued one with its expected
  * runner wait and, when queued jobs are ahead of it, Bump.
  *
- * Each entry is a cursor row (↵, or a click, opens its PR in the peek). What it
+ * Each entry is a cursor row (↵, or a click, opens its PR in the browser). What it
  * says is `merge-queue-view`; what its buttons do, `merge-queue-actions`.
  */
 import type {JSX, MouseEvent, ReactNode} from 'react';
@@ -140,7 +140,7 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
 
 // ── Pieces ──
 
-/** The props a cursor row carries: its id, its class, and a click that peeks at its PR. */
+/** The props a cursor row carries: its id, its class, and a click that opens its PR. */
 function rowProps(context: Context, number: number, className: string) {
     const key: IssueKey = {repository: context.repository, number};
     const id = cursorId.queueEntry(key);

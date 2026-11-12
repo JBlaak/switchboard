@@ -217,7 +217,7 @@ export function closeTaskDetail(): void {
     dispatch({type: 'tasksDetailClosed'});
 }
 
-/** One of the task's pull requests, in the peek. */
+/** One of the task's pull requests, in the browser. */
 export function openTaskPullRequest(url: string): void {
     openLink(url);
 }

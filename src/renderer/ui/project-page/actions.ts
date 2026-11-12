@@ -169,7 +169,7 @@ export async function startPageIssueSession(projectPath: string, issue: IssueKey
 
 // ── Pull requests, worktrees and the edge states (#175) ──
 
-/** A PR row's click or ↵: the pull request, in the peek. */
+/** A PR row's click or ↵: the pull request, in the browser. */
 export function openPullRequest(pullRequest: IssueKey): void {
     openLink(pullRequestUrl(pullRequest));
 }

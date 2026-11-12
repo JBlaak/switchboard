@@ -45,7 +45,6 @@ import type {HandoffEvent} from './handoff-slice';
 import type {SessionHandoffEvent} from './session-handoff-slice';
 import type {SessionBringBackEvent} from './session-bring-back-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
-import type {PrPeekEvent} from './pr-peek-slice';
 import type {PagesEvent} from './pages-slice';
 import type {MergeQueueEvent} from './merge-queue-slice';
 import type {SessionTrayEvent} from './session-tray-slice';
@@ -90,8 +89,6 @@ export type PushEvent =
     | {type: 'updateAvailable'; update: UpdateNotice}
     | {type: 'updateProgress'; progress: InstallProgress}
     | {type: 'sessionWorkSnapshot'; snapshot: SessionWorkSnapshot}
-    /** A PR link the main window was asked to navigate to: the peek opens it. */
-    | {type: 'pullRequestLinkOpened'; url: string}
     | {type: 'prStatusChanged'; change: PullRequestStatusChange}
     /** A repository's merge queue or its errands changed (#315). */
     | {type: 'mergeQueueChanged'; change: MergeQueueChange}
@@ -390,8 +387,7 @@ export type RendererEvent =
     | PagesEvent
     | MergeQueueEvent
     | GrillEvent
-    | SessionTrayEvent
-    | PrPeekEvent;
+    | SessionTrayEvent;
 
 /**
  * A compile-time check that `PushEvent` names every push channel but the

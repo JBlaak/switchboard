@@ -119,7 +119,6 @@ export const planHandlers: PlanHandlers = {
     step: (direction) => {
         stepIssue(direction);
     },
-    // An issue goes to the browser; a PR link would open the peek.
     open: (url) => openLink(url),
     pickOther,
     back,

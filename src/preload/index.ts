@@ -130,7 +130,6 @@ const api: SwitchboardApi = {
     // ── Session work ──
     openSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkOpen, sessionId),
     canOpenSessionWork: (sessionId) => ipcRenderer.invoke(INVOKE.sessionWorkCanOpen, sessionId),
-    peekPullRequest: (ref) => ipcRenderer.invoke(INVOKE.pullRequestPeek, ref),
 
     // ── Session links ──
     getSessionLinks: (sessionId) => ipcRenderer.invoke(INVOKE.sessionLinks, sessionId),
@@ -252,7 +251,6 @@ const api: SwitchboardApi = {
     onUpdateAvailable: (cb) => subscribe(EVENT.updateAvailable, (_e, update) => cb(update)),
     onUpdateProgress: (cb) => subscribe(EVENT.updateProgress, (_e, progress) => cb(progress)),
     onSessionWorkSnapshot: (cb) => subscribe(EVENT.sessionWorkSnapshot, (_e, snapshot) => cb(snapshot)),
-    onPullRequestLinkOpened: (cb) => subscribe(EVENT.pullRequestLinkOpened, (_e, url) => cb(url)),
     onPrStatusChanged: (cb) => subscribe(EVENT.prStatusChanged, (_e, change) => cb(change)),
     onMergeQueueChanged: (cb) => subscribe(EVENT.mergeQueueChanged, (_e, change) => cb(change)),
     onLaunchRequested: (cb) =>

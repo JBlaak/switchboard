@@ -98,7 +98,6 @@ export const INVOKE = {
     // Session work
     sessionWorkOpen: 'session-work:open',
     sessionWorkCanOpen: 'session-work:can-open',
-    pullRequestPeek: 'pull-request:peek',
     sessionWorkDiff: 'session-work:diff',
     sessionWorkImage: 'session-work:image',
     sessionWorkComment: 'session-work:comment',
@@ -244,7 +243,6 @@ export const EVENT = {
     updateAvailable: 'update-available',
     updateProgress: 'update-progress',
     sessionWorkSnapshot: 'session-work:snapshot',
-    pullRequestLinkOpened: 'pull-request:link-opened',
     prStatusChanged: 'pr-status:changed',
     mergeQueueChanged: 'merge-queue:changed',
     launchRequested: 'quick-ask:launch-requested',
