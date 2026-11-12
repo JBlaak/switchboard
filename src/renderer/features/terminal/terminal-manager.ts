@@ -395,7 +395,6 @@ export function createTerminalEntry(session: SessionRow): OpenSession {
         // in place.
         macOptionClickForcesSelection: true,
         linkHandler: {
-            // A PR link opens the peek; anything else the browser.
             activate: (_event, uri) => openLink(uri),
             allowNonHttpProtocols: true,
         },

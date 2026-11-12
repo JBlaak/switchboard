@@ -19,7 +19,6 @@ import type {Answers, PendingQuestions, QuestionsSettled} from '../domain/questi
 import type {ShellProfile} from '../domain/shell/shell-profile';
 import type {GrillAnswer, GrillChanged, GrillResult, GrillView} from '../domain/grill/model';
 import type {SessionWorkDiff, SessionWorkSnapshot} from '../domain/session-work/model';
-import type {PullRequestPeek, PullRequestRef} from '../domain/session-work/pull-request-link';
 import type {PullRequestStatusChange} from '../domain/session-work/status';
 import type {MergeQueueChange} from '../domain/project/queue-elsewhere';
 import type {BumpRequest, BumpResult, CiJobQueueAnswer} from '../domain/project/ci-job-queue';
@@ -268,11 +267,6 @@ export interface SwitchboardApi {
     openSessionWork(sessionId: string): Promise<SessionWorkSnapshot | null>;
     /** False for remote sessions and for sessions outside a git repository (D14). */
     canOpenSessionWork(sessionId: string): Promise<boolean>;
-    /**
-     * A PR's title, state and diff from GitHub, for the peek a PR link opens.
-     * Never rejects: what went wrong is in `error`.
-     */
-    peekPullRequest(ref: PullRequestRef): Promise<PullRequestPeek>;
 
     // ── Session links (#340) ──
     /**
@@ -595,8 +589,6 @@ export interface SwitchboardApi {
     /** An install moved on a step, or its download moved on. */
     onUpdateProgress(cb: (progress: InstallProgress) => void): Unsubscribe;
     onSessionWorkSnapshot(cb: (snapshot: SessionWorkSnapshot) => void): Unsubscribe;
-    /** A PR link the main window was asked to navigate to (a stray anchor): open it in the peek. */
-    onPullRequestLinkOpened(cb: (url: string) => void): Unsubscribe;
     /** A running session's PR chips changed colour (W4). */
     onPrStatusChanged(cb: (change: PullRequestStatusChange) => void): Unsubscribe;
     /** A repository's merge queue or its errands changed (#315). */

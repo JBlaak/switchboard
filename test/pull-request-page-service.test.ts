@@ -6,7 +6,6 @@ import {WorkPageRouter, type WorkPageBackend} from '../src/application/services/
 import {ReviewService} from '../src/application/services/review-service';
 import {GITHUB_REFRESH_MS} from '../src/application/services/session-work-service';
 import {pullRequestPageId} from '../src/domain/session-work/pull-request-link';
-import {linkTarget} from '../src/infrastructure/electron/support/link-target';
 import type {GitHubAvailability, PullRequestStatus, SessionWorkSnapshot} from '../src/domain/session-work/model';
 import type {Timers} from '../src/application/ports/clock';
 import {silentLog} from './support/fakes';
@@ -96,89 +95,6 @@ function setup({
     });
     return {service, world, pushed, timers};
 }
-
-// ── The peek ──
-
-test('the peek answers the PR status and its parsed diff from GitHub', async () => {
-    /* Given */
-    const {service} = setup();
-
-    /* When */
-    const peek = await service.peek({repository: REPO, number: 12});
-
-    /* Then */
-    assert.equal(peek.error, undefined);
-    assert.equal(peek.url, URL);
-    assert.deepEqual(peek.ref, {repository: REPO, number: 12});
-    assert.equal(peek.pr?.title, 'Rename things');
-    assert.deepEqual(
-        peek.files.map((file) => [file.path, file.additions, file.deletions]),
-        [['a.txt', 1, 1]],
-    );
-});
-
-test('the peek says gh is missing instead of rejecting', async () => {
-    /* Given */
-    const {service, world} = setup({gh: 'missing'});
-
-    /* When */
-    const peek = await service.peek({repository: REPO, number: 12});
-
-    /* Then */
-    assert.match(peek.error ?? '', /gh is not installed/);
-    assert.equal(peek.pr, null);
-    assert.deepEqual(peek.files, []);
-    assert.equal(world.statusCalls + world.diffCalls, 0);
-});
-
-test('the peek says gh is signed out', async () => {
-    /* Given */
-    const {service} = setup({gh: 'unauthenticated'});
-
-    /* When */
-    const peek = await service.peek({repository: REPO, number: 12});
-
-    /* Then */
-    assert.match(peek.error ?? '', /not signed in/);
-});
-
-test('the peek of a PR GitHub does not know says so', async () => {
-    /* Given */
-    const {service} = setup({prs: [], diff: null});
-
-    /* When */
-    const peek = await service.peek({repository: REPO, number: 12});
-
-    /* Then */
-    assert.match(peek.error ?? '', /does not know this PR/);
-    assert.equal(peek.pr, null);
-});
-
-test('the peek turns a failing gh into an error rather than a rejection', async () => {
-    /* Given */
-    const {service} = setup();
-    (service as unknown as {deps: {github: {available(): Promise<never>}}}).deps.github.available = async () => {
-        throw new Error('gh crashed');
-    };
-
-    /* When */
-    const peek = await service.peek({repository: REPO, number: 12});
-
-    /* Then */
-    assert.equal(peek.error, 'gh crashed');
-});
-
-test('the peek refuses a ref that is not a pull request', async () => {
-    /* Given */
-    const {service, world} = setup();
-
-    /* When */
-    const peek = await service.peek({repository: '../etc', number: -1});
-
-    /* Then */
-    assert.match(peek.error ?? '', /not a pull request/);
-    assert.equal(world.statusCalls + world.diffCalls, 0);
-});
 
 // ── The PR's own page ──
 
@@ -448,32 +364,4 @@ test('your review on a PR page can be submitted', async () => {
     /* Then */
     assert.deepEqual(plain, {ok: true});
     assert.deepEqual(submitted, ['PRR_1']);
-});
-
-// ── Stray links in the main window ──
-
-test('the main window keeps PR links for its own viewer; other links go to the browser', () => {
-    /* Given */
-    const files = URL + '/files';
-
-    /* When */
-    const routed = [
-        linkTarget(files, true),
-        linkTarget('https://github.com/o/app/issues/3', true),
-        linkTarget('file:///etc/passwd', true),
-    ];
-
-    /* Then */
-    assert.deepEqual(routed, ['pull-request', 'browser', null]);
-});
-
-test('a window that does not show PRs itself sends their links to the browser', () => {
-    /* Given */
-    const url = URL;
-
-    /* When */
-    const target = linkTarget(url, false);
-
-    /* Then */
-    assert.equal(target, 'browser');
 });

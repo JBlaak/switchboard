@@ -2,10 +2,9 @@
  * The Session work page: opening and closing it, whether it can open, an
  * item's diff and the images in it, and your review. Its snapshots are pushed, not
  * asked for. A page id is a session's, or a PR's own (`pull:owner/repo#N`) for a
- * PR no session opened; the router tells them apart. And the peek a PR link shows.
+ * PR no session opened; the router tells them apart.
  */
 import {INVOKE, SEND} from '../../ipc/channels';
-import type {PullRequestRef} from '../../domain/session-work/pull-request-link';
 import type {CommentRequest, ReviewRequest} from '../../domain/session-work/review';
 import type {Container} from '../composition-root';
 import type {IpcRegistrar} from './support/registrar';
@@ -13,7 +12,6 @@ import type {IpcRegistrar} from './support/registrar';
 export function registerSessionWorkHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.sessionWorkOpen, (sessionId: string) => app.workPages.open(sessionId));
     ipc.handle(INVOKE.sessionWorkCanOpen, (sessionId: string) => app.workPages.canOpen(sessionId));
-    ipc.handle(INVOKE.pullRequestPeek, (ref: PullRequestRef) => app.pullRequestPages.peek(ref));
     ipc.handle(INVOKE.sessionWorkDiff, (request: {sessionId: string; itemId: string}) =>
         app.workPages.diff(request.sessionId, request.itemId),
     );

@@ -81,7 +81,7 @@ export function openTaskInNotion(url: string): void {
     if (url) void window.api.openExternal(url);
 }
 
-/** One of the task's PRs, in the peek. */
+/** One of the task's PRs, in the browser. */
 export function openTaskPullRequest(url: string): void {
     openLink(url);
 }

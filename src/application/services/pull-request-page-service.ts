@@ -1,6 +1,5 @@
 /**
- * Pull requests no session opened: the peek a PR link shows, and the work
- * page of its own the peek opens on request.
+ * Pull requests no session opened: the work page of their own.
  *
  * Such a PR has no checkout and no session behind it, so everything here comes
  * from GitHub: its status and threads from `gh`, its diff from `gh pr diff`.
@@ -13,13 +12,7 @@
  */
 import {parseUnifiedDiff} from '../../domain/session-work/diff';
 import {workItemKey} from '../../domain/session-work/items';
-import {
-    pullRequestPageId,
-    pullRequestPageRef,
-    pullRequestUrl,
-    type PullRequestPeek,
-    type PullRequestRef,
-} from '../../domain/session-work/pull-request-link';
+import {pullRequestPageRef, pullRequestUrl, type PullRequestRef} from '../../domain/session-work/pull-request-link';
 import type {
     FileDiff,
     GitHubAvailability,
@@ -68,50 +61,6 @@ export class PullRequestPageService {
     private page: Page | null = null;
 
     constructor(private readonly deps: PullRequestPageServiceDeps) {}
-
-    /**
-     * What the peek shows: the PR's status and its diff from GitHub. Never
-     * rejects; when there is no diff, `error` says why.
-     */
-    public async peek(ref: PullRequestRef): Promise<PullRequestPeek> {
-        const valid = validRef(ref);
-        if (!valid) {
-            return {
-                ref: {repository: String(ref?.repository ?? ''), number: Number(ref?.number)},
-                url: '',
-                pr: null,
-                files: [],
-                error: 'That is not a pull request link',
-            };
-        }
-        const url = pullRequestUrl(valid);
-        const failed = (error: string, pr: PullRequestStatus | null = null): PullRequestPeek => ({
-            ref: valid,
-            url,
-            pr,
-            files: [],
-            error,
-        });
-        try {
-            const gh = await this.deps.github.available();
-            if (gh !== 'ok') return failed(unavailableReason(gh));
-            const [statuses, text] = await Promise.all([
-                this.deps.github.pullRequests(valid.repository, [valid.number]),
-                this.deps.github.pullRequestDiff(valid.repository, valid.number),
-            ]);
-            const pr = statuses?.find((status) => status.number === valid.number) ?? null;
-            if (text === null) {
-                return failed(
-                    pr ? 'GitHub did not send the diff' : 'GitHub does not know this PR, or could not be asked',
-                    pr,
-                );
-            }
-            return {ref: valid, url, pr, files: parseUnifiedDiff(text)};
-        } catch (err) {
-            this.deps.log.warn('[pull-request] peek failed:', (err as Error).message);
-            return failed((err as Error).message || 'GitHub could not be asked');
-        }
-    }
 
     /** Whether a page id is a PR's own page that can open. */
     public canOpen(pageId: string): boolean {
@@ -298,12 +247,6 @@ export class PullRequestPageService {
         page.poll = null;
         if (this.page === page) this.page = null;
     }
-}
-
-/** The ref as a valid PR, or null: what the renderer sent is checked, not trusted. */
-function validRef(ref: PullRequestRef | null | undefined): PullRequestRef | null {
-    if (!ref || typeof ref.repository !== 'string' || typeof ref.number !== 'number') return null;
-    return pullRequestPageRef(pullRequestPageId(ref));
 }
 
 /** The page's one item: the PR, in no checkout. */

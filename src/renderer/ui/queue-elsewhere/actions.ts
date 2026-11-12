@@ -43,9 +43,9 @@ export async function retryInQueue(failure: SessionQueueFailure): Promise<void> 
 }
 
 /**
- * The failed PR, in the peek. The queue's view names the failing check but not
- * its run, so for a CI failure the peek's Open on GitHub goes to the PR's
- * Checks tab, and for anything else to the PR.
+ * The failed PR, in the browser. The queue's view names the failing check but
+ * not its run, so for a CI failure it opens the PR's Checks tab, and for
+ * anything else the PR.
  */
 export function openTheRun(failure: SessionQueueFailure): void {
     const {url} = failedPullRequest(failure);

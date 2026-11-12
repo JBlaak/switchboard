@@ -22,9 +22,8 @@
  * detail before it closes the page, and ↑/↓ step through the issues while
  * the detail is open (D4).
  *
- * The same page is a pull request's full view: a session's page with that PR
- * selected, or for a PR no session opened a page of its own (`pull:…` id,
- * see `pr-view/full-view`) with the Work tab alone.
+ * A PR no session opened can have a page of its own (`pull:…` id) with the
+ * Work tab alone.
  */
 import {useLayoutEffect, useRef} from 'react';
 import type {JSX, KeyboardEvent} from 'react';

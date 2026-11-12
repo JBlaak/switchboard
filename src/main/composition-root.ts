@@ -213,7 +213,7 @@ export interface Container {
     readonly weather: WeatherService;
     readonly updates: UpdateService;
     readonly sessionWork: SessionWorkService;
-    /** PRs no session opened: the peek a PR link shows, and their own work page. */
+    /** PRs no session opened: their own work page. */
     readonly pullRequestPages: PullRequestPageService;
     /** The work page IPC and your review go through here: a session's page or a PR's own. */
     readonly workPages: WorkPageRouter;
