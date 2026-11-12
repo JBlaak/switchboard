@@ -56,6 +56,55 @@ test('hovering the bar opens the tray over the terminal, and ⌘1 types a saved 
     expect(claude.size()).toEqual(sizeBefore);
 });
 
+test('holding ⌘ shows the tray after 150 ms, letting go hides it, and a quick ⌘ shortcut never does', async ({
+    page,
+    home,
+}) => {
+    /* Given */
+    await openSession(page, home, LABEL.loginFix, S.loginFix);
+    const tray = page.getByRole('region', {name: 'Session tools'});
+    await page.mouse.move(600, 600);
+    await expect(tray).not.toHaveClass(/is-open/);
+    // When the tray's class turns open, from the moment ⌘ goes down.
+    await page.evaluate(() => {
+        const w = window as unknown as {cmdDownAt?: number; trayOpenAt?: number};
+        window.addEventListener('keydown', (e) => (e.key === 'Meta' ? (w.cmdDownAt = performance.now()) : 0), true);
+        const el = document.querySelector('.session-tray');
+        new MutationObserver(() => {
+            if (el?.classList.contains('is-open') && w.trayOpenAt === undefined) w.trayOpenAt = performance.now();
+        }).observe(el!, {attributes: true, attributeFilter: ['class']});
+    });
+
+    /* When */
+    await page.keyboard.down('Meta');
+
+    /* Then */
+    await expect(tray).toHaveClass(/is-open/);
+    await expect(tray.getByRole('button', {name: 'Send: Where are we?'})).toContainText('⌘1');
+    const waited = await page.evaluate(() => {
+        const w = window as unknown as {cmdDownAt: number; trayOpenAt: number};
+        return w.trayOpenAt - w.cmdDownAt;
+    });
+    console.log(`tray opened ${Math.round(waited)} ms after ⌘ went down`);
+    expect(waited).toBeGreaterThanOrEqual(140);
+    expect(waited).toBeLessThan(400);
+
+    /* When */
+    await page.keyboard.up('Meta');
+
+    /* Then */
+    await expect(tray).not.toHaveClass(/is-open/);
+
+    /* When */
+    await page.keyboard.down('Meta');
+    await page.keyboard.press('KeyK');
+    await page.waitForTimeout(300);
+
+    /* Then */
+    await expect(tray).not.toHaveClass(/is-open/);
+    await page.keyboard.up('Meta');
+});
+
 test.describe('a tray with more rows than fit', () => {
     const many = Array.from({length: 14}, (_, i) => ({
         id: 'p' + i,

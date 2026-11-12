@@ -9,6 +9,9 @@
  * pointer rests on it), and asks main for the session's prompts, links,
  * stats and editor each time the tray opens.
  *
+ * Holding ⌘ on its own for 150 ms shows it too, so the saved prompts' ⌘1–9
+ * can be read; letting go hides it.
+ *
  * The keyboard: the bar's "hover for tools" button (and Tab on it) opens the
  * tray and moves into it; focus landing anywhere in it opens it; Esc closes it
  * and goes back to the bar. Keyboard focus inside keeps it up when the pointer
@@ -163,6 +166,34 @@ export function SessionTray(): JSX.Element | null {
         header.addEventListener('keydown', keydown);
         return () => header.removeEventListener('keydown', keydown);
     }, []);
+
+    // ⌘ held on its own shows the tray, so its shortcuts (⌘1–9) can be read;
+    // letting go hides it again. Listened for on the window, before xterm.
+    useEffect(() => {
+        if (!sessionId) return;
+        const down = (e: KeyboardEvent): void => {
+            if (e.key !== 'Meta') {
+                if (e.metaKey) dispatch({type: 'trayKeyChorded'});
+                return;
+            }
+            if (e.repeat || e.shiftKey || e.altKey || e.ctrlKey) return;
+            if (document.getElementById('terminal-header')?.style.display === 'none') return;
+            dispatch({type: 'trayKeyHeld', at: Date.now()});
+        };
+        const up = (e: KeyboardEvent): void => {
+            if (e.key === 'Meta') dispatch({type: 'trayKeyReleased'});
+        };
+        // ⌘Tab away: the key-up goes to another app.
+        const blur = (): void => dispatch({type: 'trayKeyReleased'});
+        window.addEventListener('keydown', down, true);
+        window.addEventListener('keyup', up, true);
+        window.addEventListener('blur', blur);
+        return () => {
+            window.removeEventListener('keydown', down, true);
+            window.removeEventListener('keyup', up, true);
+            window.removeEventListener('blur', blur);
+        };
+    }, [sessionId]);
 
     useEffect(() => {
         const header = document.getElementById('terminal-header');

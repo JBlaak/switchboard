@@ -14,6 +14,11 @@
  *   flashes "Sent ✓" for 450 ms, then the tray closes without a grace. The
  *   pointer does not move it meanwhile.
  * - the keyboard (Tab into it, the bar's hint) opens it at once; Esc closes it.
+ * - ⌘ held on its own → `intent`, held by the key; 150 ms later → `open`, so
+ *   the saved prompts' ⌘1–9 can be read. Another key in that wait (a quick ⌘C)
+ *   drops it back to `closed`. While the key holds it, the pointer leaving does
+ *   not close it; letting go of ⌘ does, unless the pointer is on it, when it
+ *   stays open as if hovered.
  *
  * Pure: the time comes in on the events (`at`), and a timer firing names the
  * deadline it was set for, so a timer left over from a state since left
@@ -28,6 +33,8 @@ export const TRAY_INTENT_MS = 50;
 export const TRAY_GRACE_MS = 250;
 /** How long a sent prompt's row says "Sent ✓" before the tray closes. */
 export const TRAY_SENT_MS = 450;
+/** How long ⌘ is held on its own before the tray opens to show its shortcuts. */
+export const TRAY_KEY_HOLD_MS = 150;
 
 export type TrayPhase = 'closed' | 'intent' | 'open' | 'grace' | 'sent';
 
@@ -42,6 +49,12 @@ export type SessionTrayEvent =
     | {type: 'trayOpened'}
     /** Esc, focus leaving it, or an action that takes the user elsewhere. */
     | {type: 'trayClosed'}
+    /** ⌘ went down on its own while a session is on screen. */
+    | {type: 'trayKeyHeld'; at: number}
+    /** ⌘ came up, or the window lost the keyboard while it was down. */
+    | {type: 'trayKeyReleased'}
+    /** Another key went down with ⌘: a shortcut, not a look at the tray. */
+    | {type: 'trayKeyChorded'}
     /** A saved prompt was typed into the session (a click or ⌘1–9). */
     | {type: 'trayPromptSent'; promptId: string; at: number}
     /** The session's stats came back (`getSessionStats`). */
@@ -53,11 +66,22 @@ export interface SessionTrayState {
     readonly deadline: number | null;
     /** The prompt flashing "Sent ✓"; kept through the close so the label does not jump while the tray clips up. */
     readonly sent: string | null;
+    /** Whether ⌘ held down is what has it opening or open. */
+    readonly byKey: boolean;
+    /** Whether the pointer is on the bar, the tray, or the top of the terminal. */
+    readonly hovered: boolean;
     /** The last stats asked for, and whose they are. */
     readonly stats: {readonly sessionId: string; readonly stats: SessionStats} | null;
 }
 
-export const initialSessionTrayState: SessionTrayState = {phase: 'closed', deadline: null, sent: null, stats: null};
+export const initialSessionTrayState: SessionTrayState = {
+    phase: 'closed',
+    deadline: null,
+    sent: null,
+    byKey: false,
+    hovered: false,
+    stats: null,
+};
 
 /** Whether the tray is up (or on its way down after a grace or a send). */
 export function trayIsOpen(phase: TrayPhase): boolean {
@@ -66,25 +90,45 @@ export function trayIsOpen(phase: TrayPhase): boolean {
 
 export function sessionTrayReducer(state: SessionTrayState, event: RendererEvent): SessionTrayState {
     switch (event.type) {
-        case 'trayPointerEntered':
+        case 'trayPointerEntered': {
+            const hovered = state.hovered ? state : {...state, hovered: true};
             switch (state.phase) {
                 case 'closed':
-                    return {...state, phase: 'intent', deadline: event.at + TRAY_INTENT_MS, sent: null};
+                    return {...hovered, phase: 'intent', deadline: event.at + TRAY_INTENT_MS, sent: null};
                 case 'grace':
-                    return {...state, phase: 'open', deadline: null};
+                    return {...hovered, phase: 'open', deadline: null};
                 default:
-                    return state;
+                    return hovered;
             }
+        }
 
-        case 'trayPointerLeft':
+        case 'trayPointerLeft': {
+            const left = state.hovered ? {...state, hovered: false} : state;
+            // ⌘ still holds it: the pointer wandering off is not leaving it.
+            if (state.byKey) return left;
             switch (state.phase) {
                 case 'intent':
-                    return {...state, phase: 'closed', deadline: null};
+                    return {...left, phase: 'closed', deadline: null};
                 case 'open':
-                    return {...state, phase: 'grace', deadline: event.at + TRAY_GRACE_MS};
+                    return {...left, phase: 'grace', deadline: event.at + TRAY_GRACE_MS};
                 default:
-                    return state;
+                    return left;
             }
+        }
+
+        case 'trayKeyHeld':
+            if (state.phase !== 'closed') return state;
+            return {...state, phase: 'intent', deadline: event.at + TRAY_KEY_HOLD_MS, sent: null, byKey: true};
+
+        case 'trayKeyChorded':
+            if (!state.byKey || state.phase !== 'intent') return state;
+            return {...state, phase: 'closed', deadline: null, byKey: false};
+
+        case 'trayKeyReleased':
+            if (!state.byKey) return state;
+            // The pointer is on it: it stays, as a hover would have it.
+            if (state.hovered && state.phase === 'open') return {...state, byKey: false};
+            return {...state, phase: 'closed', deadline: null, byKey: false};
 
         case 'trayTimerFired':
             if (event.deadline !== state.deadline) return state;
@@ -100,18 +144,18 @@ export function sessionTrayReducer(state: SessionTrayState, event: RendererEvent
 
         case 'trayOpened':
             if (state.phase === 'open' || state.phase === 'sent') return state;
-            return {...state, phase: 'open', deadline: null, sent: null};
+            return {...state, phase: 'open', deadline: null, sent: null, byKey: false};
 
         case 'trayClosed':
-            return state.phase === 'closed' ? state : {...state, phase: 'closed', deadline: null};
+            return state.phase === 'closed' ? state : {...state, phase: 'closed', deadline: null, byKey: false};
 
         case 'trayPromptSent':
-            return {...state, phase: 'sent', deadline: event.at + TRAY_SENT_MS, sent: event.promptId};
+            return {...state, phase: 'sent', deadline: event.at + TRAY_SENT_MS, sent: event.promptId, byKey: false};
 
         // Another session on screen, or none: its tray goes with it.
         case 'sessionShown':
         case 'activeSessionChanged':
-            return state.phase === 'closed' ? state : {...state, phase: 'closed', deadline: null};
+            return state.phase === 'closed' ? state : {...state, phase: 'closed', deadline: null, byKey: false};
 
         case 'sessionStatsLoaded':
             return {...state, stats: {sessionId: event.sessionId, stats: event.stats}};
