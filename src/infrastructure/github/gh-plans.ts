@@ -21,7 +21,9 @@ import {
     type PlanSummary,
     type WayfinderTicketType,
 } from '../../domain/plan/model';
+import {AUTOMERGE_CONTEXT, QUEUE_LABELS} from '../../domain/project/merge-queue';
 import type {PullRequestCloses} from '../../application/ports/github-cli';
+import {toAutomergeStatus} from './gh-overview';
 
 /** Sub-issues per plan: the first 100, unpaged. */
 export const SUB_ISSUES = 100;
@@ -44,7 +46,10 @@ const PLAN_ISSUE_FIELDS = `number title state stateReason updatedAt body
           assignees(first: 1) { totalCount }
           blockedBy(first: 50) { nodes { ${BLOCKER_FIELDS} } }
           closedByPullRequestsReferences(first: 20, includeClosedPrs: true) {
-            nodes { number state isDraft additions deletions headRefName baseRefName }
+            nodes { number state isDraft additions deletions headRefName baseRefName
+              ${LABELS}
+              commits(last: 1) { nodes { commit { status { context(name: "${AUTOMERGE_CONTEXT}") { state description } } } } }
+            }
           }`;
 
 /** One plan: the issue, its parent, and each sub-issue with its blockers and closing PRs. */
@@ -324,5 +329,15 @@ function toPullRequest(node: any): PlanPullRequest {
         deletions: typeof node.deletions === 'number' ? node.deletions : 0,
         headRef: node.headRefName ?? '',
         baseRef: node.baseRefName ?? '',
+        ...(optedIn(node)
+            ? {queue: {automerge: toAutomergeStatus(node.commits?.nodes?.[0]?.commit?.status?.context)}}
+            : {}),
     };
+}
+
+/** Labelled `automerge:opt-in`, however GitHub cased it. */
+function optedIn(node: any): boolean {
+    return (node.labels?.nodes ?? []).some(
+        (label: any) => typeof label?.name === 'string' && label.name.toLowerCase() === QUEUE_LABELS.optIn,
+    );
 }

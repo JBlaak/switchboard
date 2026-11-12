@@ -630,3 +630,51 @@ test('a wayfinder map the search answers is a plan, even before it has a ticket'
     const map = plans!.find((summary) => summary.number === 112)!;
     assert.deepEqual([map.wayfinder, map.open, map.total, map.current, map.levels], [true, 0, 0, null, 0]);
 });
+
+test("a closing PR labelled automerge:opt-in carries the queue's automerge status; an unlabelled one none", async () => {
+    /* Given */
+    const base = {additions: 1, deletions: 0, headRefName: 'b', baseRefName: 'main', isDraft: false, state: 'OPEN'};
+    const response = james22With(25, (node) => {
+        node.closedByPullRequestsReferences.nodes = [
+            {
+                ...base,
+                number: 80,
+                labels: {nodes: [{name: 'automerge:opt-in'}]},
+                commits: {
+                    nodes: [
+                        {commit: {status: {context: {state: 'PENDING', description: 'Number 2 in the merge queue'}}}},
+                    ],
+                },
+            },
+            {...base, number: 81, labels: {nodes: [{name: 'Automerge:Opt-In'}]}, commits: {nodes: []}},
+            {...base, number: 82, labels: {nodes: [{name: 'bug'}]}},
+        ];
+    });
+
+    /* When */
+    const plan = await new GhCli({run: answering(response)}).plan('JBlaak/James', 22);
+
+    /* Then */
+    const prs = plan!.issues.find((candidate) => candidate.number === 25)!.pullRequests;
+    assert.deepEqual(
+        prs.map((pr) => [pr.number, pr.queue]),
+        [
+            [80, {automerge: {state: 'pending', description: 'Number 2 in the merge queue'}}],
+            [81, {automerge: null}],
+            [82, undefined],
+        ],
+    );
+});
+
+test('the plan query asks each closing PR for its labels and the automerge status', async () => {
+    /* Given */
+    const run = answering(james22);
+
+    /* When */
+    await new GhCli({run}).plan('JBlaak/James', 22);
+
+    /* Then */
+    const query = queryOf(run.calls[0]);
+    assert.match(query, /headRefName baseRefName\s+labels\(first: 20\)/);
+    assert.match(query, /context\(name: "automerge"\) \{ state description \}/);
+});

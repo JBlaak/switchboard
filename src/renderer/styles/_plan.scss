@@ -717,6 +717,36 @@ a.pv-num:hover {
     }
 }
 
+/* Where the issue's PR stands in the merge queue (#315), first on the node's last line. */
+.pv-queue {
+    margin-right: 6px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font: 700 11px var(--sb-font-head);
+    line-height: 15px;
+
+    &.is-merging {
+        background: var(--sb-accent);
+        color: var(--sb-bg-base);
+    }
+    &.is-queued {
+        background: rgba(var(--sb-accent-rgb), 0.12);
+        color: var(--sb-accent);
+    }
+    &.is-held {
+        background: color-mix(in srgb, var(--sb-yellow) 12%, transparent);
+        color: var(--sb-yellow);
+    }
+    &.is-failed {
+        background: rgba(var(--sb-red-rgb), 0.12);
+        color: var(--sb-red);
+    }
+    &.is-outside {
+        background: var(--sb-bg-panel);
+        color: var(--sb-text-muted);
+    }
+}
+
 /* A wayfinder ticket's kind, before the node's last line. */
 .pv-ticket-type {
     margin-right: 6px;

@@ -7,6 +7,8 @@
  * `layout.ts`.
  */
 
+import type {AutomergeStatus} from '../project/merge-queue';
+
 /** The label that makes an issue with no parent and no sub-issues a plan of its own. */
 export const STANDALONE_PLAN_LABEL = 'ready-for-agent';
 
@@ -35,6 +37,11 @@ export interface PlanPullRequest {
     deletions: number;
     headRef: string;
     baseRef: string;
+    /**
+     * Only on a PR labelled `automerge:opt-in`: what the merge queue (#315)
+     * last wrote on it, its `automerge` status, or null before its first pass.
+     */
+    queue?: {automerge: AutomergeStatus | null};
 }
 
 export interface PlanIssue extends IssueKey {
