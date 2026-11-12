@@ -30,6 +30,7 @@ import {blockersInPlan} from './geometry';
 import type {IssueActions, PlanHandlers} from './types';
 import {StartWhereButtons} from '../../session-handoff/StartWhereButtons';
 import {handOffQuestion} from '../../session-handoff/start-on-vm';
+import {StartSteps} from '../../session-handoff/StartSteps';
 
 export function IssueDetail({
     plan,
@@ -225,6 +226,9 @@ export function IssueDetail({
                     issueActions={issueActions!}
                 />
             )}
+            {start?.phase === 'starting' && start.vm && start.steps.length > 0 && (
+                <StartSteps vm={start.vm} steps={start.steps} />
+            )}
             {start?.phase === 'answered' && !start.result.ok && !existing && (
                 <div className="pv-inline is-error" role="alert">
                     {start.result.reason}
@@ -254,7 +258,9 @@ export function IssueDetail({
                             if (start?.phase !== 'starting') issueActions!.startSession!(issue, plan);
                         }}>
                         {start?.phase === 'starting'
-                            ? 'Starting…'
+                            ? start.vm
+                                ? 'Starting on ' + start.vm + '…'
+                                : 'Starting…'
                             : plan.wayfinder
                               ? 'Start /wayfinder on #' + issue.number
                               : 'Start session on #' + issue.number}

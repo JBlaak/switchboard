@@ -255,6 +255,35 @@ test('a start is answered on its issue, and stays while it is on its way', () =>
     });
 });
 
+test('a start handed off to a VM gathers its steps, the current one last, until it is answered', () => {
+    /* Given */
+    const starting = run(
+        loaded(),
+        {type: 'planIssueSelected', issue: key(12)},
+        {type: 'planStartAsked', issue: key(12), confirm: false, vm: 'dev@vm.local'},
+    );
+
+    /* When */
+    const stepped = run(
+        starting,
+        {type: 'planStartStep', issue: key(12), step: 'Making the worktree on this Mac'},
+        {type: 'planStartStep', issue: key(12), step: 'Connecting to dev@vm.local'},
+        {type: 'planStartStep', issue: key(12), step: 'Connecting to dev@vm.local'},
+        {type: 'planStartStep', issue: key(11), step: 'Not this issue'},
+    );
+    const answered = run(stepped, {type: 'planStartAnswered', issue: key(12), result: {ok: true, sessionId: 's9'}});
+    const late = run(answered, {type: 'planStartStep', issue: key(12), step: 'Too late'});
+
+    /* Then */
+    assert.deepEqual(stepped.plan.view?.start, {
+        issue: key(12),
+        phase: 'starting',
+        vm: 'dev@vm.local',
+        steps: ['Making the worktree on this Mac', 'Connecting to dev@vm.local'],
+    });
+    assert.equal(late, answered, 'a step after the answer changes nothing');
+});
+
 test('starting an issue that is not selected does nothing', () => {
     /* Given */
     const state = loaded();

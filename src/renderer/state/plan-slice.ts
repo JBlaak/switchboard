@@ -64,7 +64,15 @@ export interface PlanViewState {
 
 /** Where Start session on an issue is. A Locked issue asks first, saying what it stacks on (A3). */
 export type PlanStart =
-    | {readonly issue: IssueKey; readonly phase: 'confirm' | 'starting'}
+    | {readonly issue: IssueKey; readonly phase: 'confirm'}
+    | {
+          readonly issue: IssueKey;
+          readonly phase: 'starting';
+          /** The VM it is handed off to, by label; absent for a start here. */
+          readonly vm?: string;
+          /** The steps a start on a VM went through so far, the current one last. */
+          readonly steps: readonly string[];
+      }
     | {readonly issue: IssueKey; readonly phase: 'answered'; readonly result: IssueSessionStart};
 
 export interface PlanState {
@@ -118,7 +126,13 @@ export type PlanLevelStart =
           readonly failed: readonly {readonly issue: IssueKey; readonly reason: string}[];
       };
 
-export const initialPlanState: PlanState = {view: null, levelsSeen: {}, celebration: null, levelStart: null, progress: {}};
+export const initialPlanState: PlanState = {
+    view: null,
+    levelsSeen: {},
+    celebration: null,
+    levelStart: null,
+    progress: {},
+};
 
 /** A stable string for a source, to tell an answer for it from one for another. */
 export function planSourceKey(source: PlanSource): string {
@@ -306,8 +320,20 @@ function reduceView(state: PlanState, event: RendererEvent): PlanState {
             if (view.start && view.start.phase === 'starting') return state;
             return {
                 ...state,
-                view: {...view, start: {issue: key(event.issue), phase: event.confirm ? 'confirm' : 'starting'}},
+                view: {
+                    ...view,
+                    start: event.confirm
+                        ? {issue: key(event.issue), phase: 'confirm'}
+                        : {issue: key(event.issue), phase: 'starting', steps: [], ...(event.vm ? {vm: event.vm} : {})},
+                },
             };
+        }
+
+        case 'planStartStep': {
+            const start = view?.start;
+            if (start?.phase !== 'starting' || !sameIssue(start.issue, event.issue)) return state;
+            if (start.steps[start.steps.length - 1] === event.step) return state;
+            return {...state, view: {...view!, start: {...start, steps: [...start.steps, event.step]}}};
         }
 
         case 'planStartCancelled':

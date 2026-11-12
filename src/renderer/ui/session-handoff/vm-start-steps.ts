@@ -6,7 +6,18 @@ import {startClaudeSessionOnVm} from '../../features/sessions/session-actions';
 import type {VmStartSteps} from './start-on-vm';
 
 export const vmStartSteps: VmStartSteps = {
-    handOff: (localPath, hostKey, worktrees, options) =>
-        window.api.handOffForStart(localPath, hostKey, worktrees, options),
+    handOff: async (localPath, hostKey, worktrees, options, onProgress) => {
+        // Main reports the hand-off's steps per project; hear this one's while it runs.
+        const stop = onProgress
+            ? window.api.onHandoffProgress((path, line) => {
+                  if (path === localPath) onProgress(line);
+              })
+            : null;
+        try {
+            return await window.api.handOffForStart(localPath, hostKey, worktrees, options);
+        } finally {
+            stop?.();
+        }
+    },
     launch: (copyPath, options, how) => startClaudeSessionOnVm(copyPath, options, how),
 };

@@ -1019,6 +1019,54 @@ a.pv-num:hover {
         background: var(--sb-sun);
         color: var(--sb-yellow);
     }
+    &.is-progress {
+        background: var(--sb-bg-raised);
+    }
+}
+
+/* ---- A start handed off to a VM: its steps, the current one spinning ---- */
+.sb-start-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow-wrap: anywhere;
+    }
+    li.is-done {
+        color: var(--sb-text-muted);
+    }
+    li.is-current {
+        color: var(--sb-text);
+    }
+}
+
+.sb-start-step-mark {
+    flex: none;
+    width: 12px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--sb-green);
+
+    &.is-spinner {
+        height: 12px;
+        border: 1.5px solid var(--sb-accent);
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin-dot 0.8s linear infinite;
+    }
+}
+
+.sb-start-step-time {
+    margin-left: auto;
+    font: 500 11px var(--sb-font-mono);
+    color: var(--sb-text-muted);
 }
 
 /* ---- Start level (A1) ---- */
