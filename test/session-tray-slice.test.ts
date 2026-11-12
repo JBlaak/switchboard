@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
     TRAY_GRACE_MS,
     TRAY_INTENT_MS,
+    TRAY_KEY_HOLD_MS,
     TRAY_SENT_MS,
     initialSessionTrayState,
     rekeySessionTray,
@@ -107,7 +108,7 @@ test('sending a prompt flashes it for 450 ms, then closes without a grace, whate
     assert.equal(sent.phase, 'sent');
     assert.equal(sent.sent, 'p1');
     assert.equal(sent.deadline, T0 + 700 + TRAY_SENT_MS);
-    assert.equal(wandered, sent);
+    assert.deepEqual(wandered, sent);
     assert.equal(closed.phase, 'closed');
     // Kept while the tray clips up, so its row does not change label on the way out.
     assert.equal(closed.sent, 'p1');
@@ -181,4 +182,117 @@ test('stats are kept for the session they are for, and follow a re-key', () => {
     assert.equal(sessionStatsIn(loaded, 's2'), null);
     assert.equal(sessionStatsIn(rekeyed, 's9'), stats);
     assert.equal(sessionStatsIn(rekeyed, 's1'), null);
+});
+
+const hold = (at: number): RendererEvent => ({type: 'trayKeyHeld', at});
+const release: RendererEvent = {type: 'trayKeyReleased'};
+const chord: RendererEvent = {type: 'trayKeyChorded'};
+
+function heldOpen(): SessionTrayState {
+    const intent = run(initialSessionTrayState, hold(T0));
+    return run(intent, fire(intent));
+}
+
+test('holding ⌘ on its own opens the tray 150 ms later', () => {
+    /* Given */
+    const closed = initialSessionTrayState;
+
+    /* When */
+    const intent = run(closed, hold(T0));
+    const open = run(intent, fire(intent));
+
+    /* Then */
+    assert.equal(TRAY_KEY_HOLD_MS, 150);
+    assert.equal(intent.phase, 'intent');
+    assert.equal(intent.deadline, T0 + TRAY_KEY_HOLD_MS);
+    assert.equal(open.phase, 'open');
+    assert.equal(open.byKey, true);
+});
+
+test('letting go of ⌘ before 150 ms never opens it', () => {
+    /* Given */
+    const intent = run(initialSessionTrayState, hold(T0));
+    const stale = fire(intent);
+
+    /* When */
+    const after = run(intent, release, stale);
+
+    /* Then */
+    assert.equal(after.phase, 'closed');
+    assert.equal(after.byKey, false);
+});
+
+test('a ⌘ shortcut pressed in the wait never opens it', () => {
+    /* Given */
+    const intent = run(initialSessionTrayState, hold(T0));
+    const stale = fire(intent);
+
+    /* When */
+    const after = run(intent, chord, stale);
+
+    /* Then */
+    assert.equal(after.phase, 'closed');
+});
+
+test('letting go of ⌘ closes the tray it opened', () => {
+    /* Given */
+    const open = heldOpen();
+
+    /* When */
+    const after = run(open, release);
+
+    /* Then */
+    assert.equal(after.phase, 'closed');
+    assert.equal(after.byKey, false);
+});
+
+test('while ⌘ holds it, the pointer leaving does not close it', () => {
+    /* Given */
+    const open = run(heldOpen(), enter(T0 + 200));
+
+    /* When */
+    const after = run(open, leave(T0 + 300));
+
+    /* Then */
+    assert.equal(after.phase, 'open');
+    assert.equal(after.deadline, null);
+});
+
+test('letting go of ⌘ with the pointer on the tray keeps it open as a hover', () => {
+    /* Given */
+    const open = run(heldOpen(), enter(T0 + 200));
+
+    /* When */
+    const kept = run(open, release);
+    const left = run(kept, leave(T0 + 400));
+
+    /* Then */
+    assert.equal(kept.phase, 'open');
+    assert.equal(kept.byKey, false);
+    assert.equal(left.phase, 'grace');
+});
+
+test('⌘ does nothing to a tray the pointer already has open', () => {
+    /* Given */
+    const open = opened();
+
+    /* When */
+    const held = run(open, hold(T0 + 100));
+    const after = run(held, release);
+
+    /* Then */
+    assert.equal(held, open);
+    assert.equal(after.phase, 'open');
+});
+
+test('⌘1 sent while ⌘ holds it closes after the flash, not on the key-up', () => {
+    /* Given */
+    const open = heldOpen();
+
+    /* When */
+    const sent = run(open, {type: 'trayPromptSent', promptId: 'p1', at: T0 + 300}, release);
+
+    /* Then */
+    assert.equal(sent.phase, 'sent');
+    assert.equal(run(sent, fire(sent)).phase, 'closed');
 });
