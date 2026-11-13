@@ -362,3 +362,24 @@ test('a claimed ticket with an open PR shows its PR', () => {
     /* Then */
     assert.equal(layout.stateOf(key(2)), 'review');
 });
+
+test('a completed ticket of a wayfinder map is done, with or without a PR, and does not warn', () => {
+    /* Given */
+    const map: Plan = {
+        ...plan([
+            issue(2, {state: 'closed', closedAs: 'completed'}),
+            merged(3, [2]),
+            issue(4, {state: 'closed', closedAs: 'not_planned', blockedBy: [key(3)]}),
+        ]),
+        wayfinder: true,
+    };
+
+    /* When */
+    const layout = layOutPlan(map);
+
+    /* Then */
+    assert.equal(layout.stateOf(key(2)), 'done');
+    assert.equal(layout.stateOf(key(3)), 'done');
+    assert.equal(layout.stateOf(key(4)), 'not-planned');
+    assert.deepEqual(layout.warnings, []);
+});

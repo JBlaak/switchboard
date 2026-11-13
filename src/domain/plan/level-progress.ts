@@ -7,7 +7,7 @@ import type {NodeState} from './model';
 
 export type LevelBullet = 'done' | 'in-progress' | 'open';
 
-const CLOSED: readonly NodeState[] = ['merged', 'closed', 'not-planned'];
+const CLOSED: readonly NodeState[] = ['merged', 'closed', 'done', 'not-planned'];
 const STARTED: readonly NodeState[] = [...CLOSED, 'review', 'draft', 'claimed'];
 
 /** One bullet per level, from the states of the issues on it. */

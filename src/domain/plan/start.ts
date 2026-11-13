@@ -51,14 +51,13 @@ export function wayfinderTicketPrompt(issue: IssueKey, plan: IssueKey): string {
 }
 
 /** What a wayfinder map's launchers start (Tern's launchers for a map). */
-export type MapLauncher = 'next' | 'orchestrate' | 'reconcile';
+export type MapLauncher = 'next' | 'reconcile';
 
-export const MAP_LAUNCHERS: readonly MapLauncher[] = ['next', 'orchestrate', 'reconcile'];
+export const MAP_LAUNCHERS: readonly MapLauncher[] = ['next', 'reconcile'];
 
 /** The prompt a map launcher starts its session with. */
 export function mapLauncherPrompt(launcher: MapLauncher, plan: IssueKey): string {
     const ref = String(plan.number);
-    if (launcher === 'orchestrate') return '/orchestrate-map ' + ref;
     if (launcher === 'reconcile') return '/reconciling-the-map ' + ref;
     return '/wayfinder ' + ref;
 }

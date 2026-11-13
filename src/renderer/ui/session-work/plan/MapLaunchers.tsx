@@ -1,8 +1,7 @@
 /**
  * A wayfinder map's launchers above its diagram, in place of Start level:
  * Next ticket (`/wayfinder <map>`, which takes the first ticket on the
- * frontier), Orchestrate (`/orchestrate-map`) and Reconcile
- * (`/reconciling-the-map`). Each starts one session on the map; a refusal
+ * frontier) and Reconcile (`/reconciling-the-map`). Each starts one session on the map; a refusal
  * shows beside them until the next press.
  */
 import {useState} from 'react';
@@ -13,7 +12,6 @@ import type {IssueActions} from './types';
 
 const LABEL: Readonly<Record<MapLauncher, string>> = {
     next: 'Next ticket',
-    orchestrate: 'Orchestrate map',
     reconcile: 'Reconcile',
 };
 
