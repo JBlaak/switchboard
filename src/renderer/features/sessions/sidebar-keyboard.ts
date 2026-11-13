@@ -4,8 +4,9 @@
  * Cmd+L takes focus out of the terminal and puts a cursor on the row on
  * screen. The arrows (or J and K) move it, Enter does what a click would, R or
  * F2 renames, E archives (a group header archives the whole group; Cmd+E, from
- * anywhere, archives the open session), A (or Cmd+A, from anywhere) starts a
- * new session, and Escape goes back to the terminal.
+ * anywhere, archives the open session), L lands the row's PR (#436), A (or
+ * Cmd+A, from anywhere) starts a new session, and Escape goes back to the
+ * terminal.
  *
  * Where the cursor can go is read from the list's layout (`state/list-cursor`):
  * rows, group headers, the foldable section labels and the "more" toggles all take part, in the order the
@@ -42,6 +43,7 @@ import {
 } from '../../ui/session-list/actions';
 import {cursorElement, pressArchive, setListCursor} from '../../ui/session-list/cursor';
 import {highlightedSession} from '../../state/main-area-slice';
+import {landSessionPullRequest} from '../../ui/merge-manager/land-actions';
 import type {CursorTarget} from '../../state/list-cursor';
 
 export {isArchiveSessionKey, isSessionPickerKey, isSidebarFocusKey} from '../../lib/shortcut-keys';
@@ -104,6 +106,9 @@ function onKeyDown(e: KeyboardEvent): void {
             return;
         case 'archive':
             archiveAtCursor();
+            return;
+        case 'land':
+            landAtCursor();
             return;
         case 'newSession':
             openDialog({kind: 'projectPicker'});
@@ -198,6 +203,13 @@ function archiveAtCursor(): void {
     const next = targetAfterRemoval(before, cursor.name, shownTargets(targets()));
     if (next) moveCursorTo(next);
     else clearCursor();
+}
+
+/** L: land the PR of the row under the cursor (#436); a row without one says why in the toast. */
+function landAtCursor(): void {
+    const cursor = currentCursor();
+    if (cursor?.kind !== 'row') return;
+    void landSessionPullRequest(cursor.sessionId);
 }
 
 function backToTerminal(): void {

@@ -13,9 +13,10 @@
  *
  * Kept apart from the store so a test can draw it; `SessionTray` feeds it.
  */
-import type {CSSProperties, JSX, MouseEvent} from 'react';
+import {Fragment} from 'react';
+import type {CSSProperties, JSX, MouseEvent, ReactNode} from 'react';
 import type {ResolvedSavedPrompt} from '../../../domain/settings/saved-prompts';
-import type {SessionLink} from '../../../domain/session/links';
+import type {LinkedPr, SessionLink} from '../../../domain/session/links';
 import type {SessionStats} from '../../../domain/session/stats';
 import type {WorkspaceEditorInfo} from '../../../domain/workspace/model';
 import type {HandoffHost} from '../../../application/services/project-handoff';
@@ -63,6 +64,8 @@ export interface SessionTrayContentProps {
     copied: boolean;
     now: number;
     actions: SessionTrayActions;
+    /** What goes under a PR's link: Land it, or its landed stage (#436); a slot so the markup draws without the store. */
+    land?: (pr: LinkedPr) => ReactNode;
 }
 
 export function SessionTrayContent(props: SessionTrayContentProps): JSX.Element {
@@ -114,7 +117,7 @@ function AskGroup({prompts, sent, actions}: SessionTrayContentProps): JSX.Elemen
     );
 }
 
-function LinksGroup({links, now, actions}: SessionTrayContentProps): JSX.Element {
+function LinksGroup({links, now, actions, land}: SessionTrayContentProps): JSX.Element {
     return (
         <div className="tray-card tray-links" role="group" aria-labelledby="tray-links-label" style={order(1)}>
             <div className="tray-label" id="tray-links-label">
@@ -138,18 +141,21 @@ function LinksGroup({links, now, actions}: SessionTrayContentProps): JSX.Element
                     );
                     const url = linkUrl(link);
                     if (url) {
+                        const under = link.kind === 'pr' ? land?.(link) : null;
                         return (
-                            <a
-                                key={link.key}
-                                className="tray-link"
-                                href={url}
-                                title={url}
-                                onClick={(e: MouseEvent<HTMLAnchorElement>) => {
-                                    e.preventDefault();
-                                    actions.openLink(link);
-                                }}>
-                                {inside}
-                            </a>
+                            <Fragment key={link.key}>
+                                <a
+                                    className="tray-link"
+                                    href={url}
+                                    title={url}
+                                    onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+                                        e.preventDefault();
+                                        actions.openLink(link);
+                                    }}>
+                                    {inside}
+                                </a>
+                                {under && <div className="tray-land">{under}</div>}
+                            </Fragment>
                         );
                     }
                     return (

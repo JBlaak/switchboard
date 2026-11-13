@@ -21,7 +21,7 @@ import {initialPagesState, pagesReducer, rekeyPages} from './pages-slice';
 import {initialMergeQueueState, mergeQueueReducer, rekeyMergeQueue} from './merge-queue-slice';
 import {inboxReducer, initialInboxState} from './inbox-slice';
 import {initialIssueManagerState, issueManagerReducer} from './issue-manager-slice';
-import {initialMergeManagerState, mergeManagerReducer} from './merge-manager-slice';
+import {initialMergeManagerState, mergeManagerReducer, rekeyMergeManager} from './merge-manager-slice';
 import {initialSessionTrayState, rekeySessionTray, sessionTrayReducer} from './session-tray-slice';
 import {askReducer, initialAskState} from './ask-slice';
 import {answersReducer, followPending, initialAnswersState} from './answers-slice';
@@ -326,8 +326,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         inbox: state.inbox,
         // Inbox items, naming no session.
         issueManager: state.issueManager,
-        // Lanes of PRs, naming no session.
-        mergeManager: state.mergeManager,
+        // Lanes of PRs, and each session's PRs for Land it.
+        mergeManager: rekeyMergeManager(state.mergeManager, oldId, newId),
     });
 }
 

@@ -34,6 +34,11 @@ export interface LinkedPrStatus {
     checks: 'passing' | 'pending' | 'failing' | 'none';
     /** The sidebar chip's colour for it (`statusDot`). */
     dot: StatusDot;
+    /**
+     * The user `gh` signs in as opened it, for Land it (#436). A PR a session
+     * opened is taken as yours until GitHub says otherwise.
+     */
+    mine: boolean;
 }
 
 /** A pull request the session opened or linked. */
@@ -208,7 +213,7 @@ function linkedPr(pr: PullRequestStatus): LinkedPr {
         url: pr.url,
         repository: pr.repository,
         number: pr.number,
-        status: pr.state ? {state: pr.state, checks: checksOf(pr), dot: statusDot(pr)} : null,
+        status: pr.state ? {state: pr.state, checks: checksOf(pr), dot: statusDot(pr), mine: pr.mine ?? true} : null,
     };
 }
 

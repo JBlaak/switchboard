@@ -48,6 +48,8 @@ export interface RepositoryPullRequest {
     /** Closed without merging is read only when it closed lately, for Merged or closed today. */
     state: 'open' | 'merged' | 'closed';
     draft: boolean;
+    /** The user `gh` signs in as opened it: only then is it offered Land it (#436). */
+    mine: boolean;
     headRef: string;
     updatedAt: string;
     checks: CheckRollup;

@@ -264,6 +264,7 @@ function closing(number: number, fields: Partial<RepositoryPullRequest>): Reposi
         title: 'Fix the export',
         state: 'open',
         draft: false,
+        mine: true,
         headRef: '482-export',
         updatedAt: '',
         checks: {state: 'failing', failing: 1},

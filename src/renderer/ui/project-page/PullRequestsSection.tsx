@@ -9,6 +9,8 @@
  * In a repository with a merge queue (#315), an open PR's row carries its
  * queue pill ("merging · 1st", "queued · 2nd", "queue failed", "kept
  * rebased"), and an approved one that isn't queued offers + Queue.
+ * Your own open PRs offer Land it (#436) instead, disabled on a draft, and
+ * show their landed stage once landed; teammates' rows never get it.
  *
  * Which rows are on screen is `page-rows`, shared with the page's keys. Until
  * the first answer the section shimmers; when GitHub had nothing to say it is
@@ -24,6 +26,8 @@ import {SectionSkeleton} from './SectionSkeleton';
 import {optInToQueue} from './merge-queue-actions';
 import {queueActionKey} from '../../state/project-page-slice';
 import type {QueuePill} from '../../../domain/project/merge-queue';
+import {LandIt} from '../merge-manager/LandIt';
+import {landOffer, type LandCandidate} from '../../../domain/merge-manager/land-it';
 
 export function PullRequestsSection({projectPath}: {projectPath: string}): JSX.Element | null {
     const page = useStore((state) => state.projectPage);
@@ -100,6 +104,11 @@ function PullRequestRow({
     const id = cursorId.pullRequest(key);
     const state = pr.state !== 'open' ? pr.state : pr.draft ? 'draft' : 'open';
     const checks = pr.state === 'open' ? checksPill(pr.checks) : null;
+    const land: LandCandidate = {repository: pr.repository, number: pr.number, state, mine: pr.mine};
+    const lanes = useStore((s) => s.mergeManager.state);
+    const offer = landOffer(land, lanes);
+    // Land it takes + Queue's place (in a queue lane it adds the same label), and a landed PR's stage the queue's.
+    const showQueuePill = !!queuePill && (!offer || (offer.kind !== 'landed' && queuePill.kind !== 'queueable'));
     const reveal = (e: MouseEvent): void => {
         e.stopPropagation();
         if (plan) revealPlan(plan);
@@ -127,7 +136,8 @@ function PullRequestRow({
                         in #{plan.number}
                     </button>
                 )}
-                {queuePill && <QueuePillOf pill={queuePill} pr={key} />}
+                {showQueuePill && queuePill && <QueuePillOf pill={queuePill} pr={key} />}
+                {offer && <LandIt pr={land} size="sm" />}
                 {checks && <span className={'pp-pill is-checks-' + checks.tone}>{checks.text}</span>}
                 {wait.openPoint && (
                     <span className={'pp-open-point is-' + wait.group} title={wait.openPoint}>

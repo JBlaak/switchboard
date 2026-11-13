@@ -161,6 +161,7 @@ const recordedPullRequests = {
                         title: "Read a repository's open issues",
                         state: 'OPEN',
                         isDraft: false,
+                        viewerDidAuthor: true,
                         headRefName: 'issue-169-overview-reads',
                         updatedAt: '2026-10-22T11:00:00Z',
                         reviewDecision: 'CHANGES_REQUESTED',
@@ -336,7 +337,7 @@ test('merged pull requests are asked for only when wanted', async () => {
     assert.match(queryOf(run.calls[0]), /pullRequests\(states: \[OPEN, MERGED\]/);
 });
 
-test('a recorded answer maps to pull requests with their checks, review and closing issues, newest first', async () => {
+test('a recorded answer maps to pull requests with their checks, review, closing issues and whether you opened them, newest first', async () => {
     /* Given */
     const gh = new GhCli({run: answering(recordedPullRequests)});
 
@@ -351,6 +352,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             title: "Read a repository's open issues",
             state: 'open',
             draft: false,
+            mine: true,
             headRef: 'issue-169-overview-reads',
             updatedAt: '2026-10-22T11:00:00Z',
             checks: {state: 'failing', failing: 3},
@@ -368,6 +370,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             title: "Group a project's issues under their plans",
             state: 'open',
             draft: true,
+            mine: false,
             headRef: 'issue-170-grouping',
             updatedAt: '2026-10-22T10:30:00Z',
             checks: {state: 'running', failing: 0},
@@ -382,6 +385,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             title: 'Docs only',
             state: 'open',
             draft: false,
+            mine: false,
             headRef: 'docs',
             updatedAt: '2026-10-22T09:00:00Z',
             checks: {state: 'none', failing: 0},
@@ -396,6 +400,7 @@ test('a recorded answer maps to pull requests with their checks, review and clos
             title: 'Quick Ask: ⌘Enter starts a quick session without routing',
             state: 'merged',
             draft: false,
+            mine: false,
             headRef: 'quick-ask-cmd-enter',
             updatedAt: '2026-10-22T08:20:16Z',
             checks: {state: 'passing', failing: 0},
