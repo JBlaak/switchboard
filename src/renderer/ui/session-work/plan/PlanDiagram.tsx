@@ -168,7 +168,7 @@ export function PlanDiagram({
 }
 
 export function StateIcon({state}: {state: NodeState}): JSX.Element {
-    if (state === 'merged' || state === 'closed' || state === 'not-planned') {
+    if (state === 'merged' || state === 'closed' || state === 'done' || state === 'not-planned') {
         return (
             <svg
                 className="pv-icon"
@@ -216,8 +216,10 @@ export function StateIcon({state}: {state: NodeState}): JSX.Element {
 
 /** The key under the diagram. */
 export function PlanLegend({wayfinder = false}: {wayfinder?: boolean}): JSX.Element {
-    const states: NodeState[] = ['merged', 'review', 'draft', 'ready', 'locked'];
-    if (wayfinder) states.splice(3, 0, 'claimed');
+    // A wayfinder ticket ends in a decision, not a merged PR.
+    const states: NodeState[] = wayfinder
+        ? ['done', 'review', 'draft', 'claimed', 'ready', 'locked']
+        : ['merged', 'review', 'draft', 'ready', 'locked'];
     return (
         <div className="pv-legend">
             {states.map((state) => (

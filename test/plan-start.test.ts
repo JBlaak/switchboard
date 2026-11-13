@@ -118,7 +118,7 @@ test('a wayfinder ticket in another repository goes by its URL', () => {
     assert.equal(prompt, '/wayfinder 2241 https://github.com/MoveLab-Studio/Other/issues/7');
 });
 
-test("a map's launchers start the next ticket, orchestrate it and reconcile it, in that order", () => {
+test("a map's launchers start the next ticket and reconcile the map, in that order", () => {
     /* Given */
     const map = {repository: REPO, number: 2241};
 
@@ -126,5 +126,5 @@ test("a map's launchers start the next ticket, orchestrate it and reconcile it, 
     const prompts = MAP_LAUNCHERS.map((launcher) => mapLauncherPrompt(launcher, map));
 
     /* Then */
-    assert.deepEqual(prompts, ['/wayfinder 2241', '/orchestrate-map 2241', '/reconciling-the-map 2241']);
+    assert.deepEqual(prompts, ['/wayfinder 2241', '/reconciling-the-map 2241']);
 });

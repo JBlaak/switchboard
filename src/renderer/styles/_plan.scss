@@ -580,6 +580,9 @@ a.pv-num:hover {
 .is-closed {
     --pv-ink: var(--sb-purple);
 }
+.is-done {
+    --pv-ink: var(--sb-purple);
+}
 .is-not-planned {
     --pv-ink: var(--sb-text-faint);
 }

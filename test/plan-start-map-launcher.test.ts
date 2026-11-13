@@ -29,7 +29,7 @@ test("a map launcher starts one session in the project with its skill, on the pr
     const result = await startMapLauncherWith(fake, {
         projectPath: PROJECT,
         plan: MAP,
-        launcher: 'orchestrate',
+        launcher: 'reconcile',
         show: false,
     });
 
@@ -38,7 +38,7 @@ test("a map launcher starts one session in the project with its skill, on the pr
     assert.deepEqual(fake.launched, [
         {
             projectPath: PROJECT,
-            options: {worktree: true, model: 'opus', initialPrompt: '/orchestrate-map 2241'},
+            options: {worktree: true, model: 'opus', initialPrompt: '/reconciling-the-map 2241'},
             how: {show: false},
         },
     ]);
