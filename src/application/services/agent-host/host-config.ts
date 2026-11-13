@@ -308,6 +308,7 @@ function knownSettings(value: unknown): Partial<HostSettings> {
     if (typeof record.baseFolder === 'string' && record.baseFolder.trim()) known.baseFolder = record.baseFolder.trim();
     const scheduleDirs = record.scheduleDirs === undefined ? null : scheduleDirsOf(record.scheduleDirs);
     if (scheduleDirs) known.scheduleDirs = scheduleDirs;
+    if (typeof record.mergingHost === 'boolean') known.mergingHost = record.mergingHost;
     return known;
 }
 

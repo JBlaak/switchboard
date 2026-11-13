@@ -62,6 +62,13 @@ export interface AgentSessionInfo {
     alive: boolean;
     /** The last output chunk's sequence number; -1 before any output. */
     lastSeq: number;
+    /** Started by the agent itself, not by a client's `open` (#438). */
+    selfStarted?: boolean;
+    /**
+     * A fix errand the agent's Merge manager runs (#438). While one is alive
+     * the agent is not upgraded on its own, as for any live session.
+     */
+    errand?: boolean;
 }
 
 /**
@@ -81,6 +88,13 @@ export interface HostSettings {
      * the Mac is away. Absent means none.
      */
     scheduleDirs?: string[];
+    /**
+     * Whether this host is the Merging host (#432, #438): its agent runs the
+     * Merge manager's lanes and fix errands while the Mac is away. Absent
+     * means no; only one place merges at a time, and the hand-off (#442) is
+     * what sets it.
+     */
+    mergingHost?: boolean;
 }
 
 /** The tools the setup terminal installs and signs in to. */
@@ -580,6 +594,25 @@ export interface ForgetSelfArchivedMessage {
     sessionIds: string[];
 }
 
+// ── Mac → agent: sessions the agent started itself while the Mac was away (#438) ──
+
+/**
+ * Which sessions the agent started by itself (a fix errand) and the Mac has
+ * not caught up on; answered with `self-started`. Like the self-archive
+ * record, the Mac asks on connect and then sends `forget-self-started`.
+ */
+export interface ListSelfStartedMessage {
+    type: 'list-self-started';
+    requestId: string;
+}
+
+/** Drop these sessions from the agent's self-started record, once handled. Answered with `done`. */
+export interface ForgetSelfStartedMessage {
+    type: 'forget-self-started';
+    requestId: string;
+    sessionIds: string[];
+}
+
 export type MacMessage =
     | HelloMessage
     | OpenSessionMessage
@@ -616,6 +649,8 @@ export type MacMessage =
     | PlaceUploadMessage
     | ListSelfArchivedMessage
     | ForgetSelfArchivedMessage
+    | ListSelfStartedMessage
+    | ForgetSelfStartedMessage
     | ByeMessage;
 
 // ── Agent → Mac ──
@@ -919,6 +954,25 @@ export interface SelfArchivedMessage {
     sessions: SelfArchivedSession[];
 }
 
+// ── Agent → Mac (#438) ──
+
+/** One session the agent started by itself, for the Mac to show as "started while you were away". */
+export interface SelfStartedSession {
+    sessionId: string;
+    /** Its working directory on the VM, absolute. */
+    cwd: string;
+    /** When the agent started it, epoch ms. */
+    startedAt: number;
+    /** True for a fix errand of the Merge manager. */
+    errand?: boolean;
+}
+
+export interface SelfStartedMessage {
+    type: 'self-started';
+    requestId: string;
+    sessions: SelfStartedSession[];
+}
+
 export type AgentMessage =
     | WelcomeMessage
     | OpenedMessage
@@ -950,6 +1004,7 @@ export type AgentMessage =
     | TranscriptListMessage
     | PlacedMessage
     | SelfArchivedMessage
+    | SelfStartedMessage
     | ByeMessage;
 
 // ── Either way ──

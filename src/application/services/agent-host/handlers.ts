@@ -24,6 +24,8 @@ import type {
     ArchiveReplyMessage,
     ForgetSelfArchivedMessage,
     ListSelfArchivedMessage,
+    ForgetSelfStartedMessage,
+    ListSelfStartedMessage,
     CopyStatusMessage,
     HandoffMessage,
     PushBranchMessage,
@@ -54,7 +56,14 @@ interface ClientAware {
 }
 
 export type SessionHostMessage =
-    OpenSessionMessage | AttachMessage | InputMessage | ResizeMessage | SignalMessage | ListSessionsMessage;
+    | OpenSessionMessage
+    | AttachMessage
+    | InputMessage
+    | ResizeMessage
+    | SignalMessage
+    | ListSessionsMessage
+    | ListSelfStartedMessage
+    | ForgetSelfStartedMessage;
 
 /** The agent's sessions: their PTYs, commands and scrollback. */
 export interface SessionHostPart extends ClientAware {

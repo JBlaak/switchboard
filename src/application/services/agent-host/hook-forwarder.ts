@@ -48,6 +48,11 @@
  *   Mac's archive tool marks the session and archives it on the same notice.
  * A pending archive lives in memory only: the sessions are the agent's own
  * children, so an agent restart ends them along with what was pending.
+ *
+ * In-process listeners (#438). The agent's own services, the Merge manager's
+ * fix errands above all, need to hear a session's turn end and its
+ * `archive_session` call whether or not a Mac is connected. `subscribe` hands
+ * them both, beside (never instead of) what goes to the Mac.
  */
 import {archiveToolMcpConfig, ARCHIVE_TOOL_QUALIFIED_NAME} from '../../../domain/session/archive-tool';
 import type {ArchiveToolOutcome} from '../../../domain/session/archive-tool';
@@ -96,6 +101,14 @@ export interface SelfArchivedFile {
     read(): string | null;
     /** Replace the file's text, atomically and mode 0600; may throw. */
     write(text: string): void;
+}
+
+/** An agent-side service hearing sessions' turn ends and archive calls, Mac or no Mac (#438). */
+export interface SessionHookListener {
+    /** A session's turn ended (its Stop hook). */
+    turnEnded?(launchId: string): void;
+    /** A session called `archive_session`. */
+    archiveRequested?(launchId: string): void;
 }
 
 /** What the hook server hands archive tool calls and turn ends to; its `archiveTool` dep. */
@@ -147,6 +160,7 @@ export class HookForwarder implements HookForwarderPart {
     private readonly archives = new Map<string, HeldArchive>();
     /** Sessions (by launch id) whose archive call was accepted here, archived when their turn ends. */
     private readonly selfArchives = new Set<string>();
+    private readonly listeners: SessionHookListener[] = [];
 
     /** Give this to the agent's `QuestionHookServer` as its `receiver`. */
     public readonly receiver: HookReceiver = {
@@ -164,6 +178,11 @@ export class HookForwarder implements HookForwarderPart {
     };
 
     constructor(private readonly deps: HookForwarderDeps) {}
+
+    /** Hear every session's turn ends and archive calls in-process, whether or not a Mac is connected. */
+    public subscribe(listener: SessionHookListener): void {
+        this.listeners.push(listener);
+    }
 
     public clientConnected(client: ClientLink): void {
         if (!this.clients.includes(client)) this.clients.push(client);
@@ -257,6 +276,7 @@ export class HookForwarder implements HookForwarderPart {
     }
 
     private requestArchive(launchId: string): Promise<ArchiveToolOutcome> {
+        this.tell(launchId, 'archiveRequested');
         const client = this.current();
         if (!client) return Promise.resolve(this.acceptSelfArchive(launchId));
         const hookId = this.deps.ids.newId();
@@ -292,6 +312,7 @@ export class HookForwarder implements HookForwarderPart {
      * Mac archives it as if it had been there all along (see the file header).
      */
     private turnEnded(launchId: string): void {
+        this.tell(launchId, 'turnEnded');
         if (this.selfArchives.delete(launchId)) {
             const client = this.current();
             if (!client) {
@@ -364,6 +385,17 @@ export class HookForwarder implements HookForwarderPart {
         const client = this.current();
         if (client) client.send(message);
         else this.deps.log.debug(`[agent-hooks] no client; dropped ${message.type} for ${message.launchId}`);
+    }
+
+    /** Tell the in-process listeners; one that throws is logged and the rest still hear it. */
+    private tell(launchId: string, event: keyof SessionHookListener): void {
+        for (const listener of this.listeners) {
+            try {
+                listener[event]?.(launchId);
+            } catch (err) {
+                this.deps.log.error(`[agent-hooks] a listener failed on ${event} for ${launchId}`, err);
+            }
+        }
     }
 
     /** The most recently connected client whose link is still open. */

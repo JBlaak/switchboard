@@ -43,6 +43,20 @@ export const HOST_SETTINGS_FILE = `${AGENT_HOME}/host-settings.json`;
  */
 export const SELF_ARCHIVED_FILE = `${AGENT_HOME}/self-archived.json`;
 
+/**
+ * The sessions the agent started by itself (#438), as JSON:
+ * `[{sessionId, cwd, startedAt, errand?}]`. Mode 0600, written atomically;
+ * the Mac reads and clears it on connect, as it does SELF_ARCHIVED_FILE.
+ */
+export const SELF_STARTED_FILE = `${AGENT_HOME}/self-started.json`;
+
+/**
+ * The Merge manager's lane state while this VM is the Merging host (#438):
+ * landed pull requests and fix errand ownership (`domain/agent/lane-state`).
+ * Mode 0600, written atomically; read again after every agent start.
+ */
+export const LANE_STATE_FILE = `${AGENT_HOME}/lane-state.json`;
+
 /** The systemd user unit's name and file. */
 export const AGENT_UNIT = 'switchboard-agent.service';
 export const AGENT_UNIT_FILE = `$HOME/.config/systemd/user/${AGENT_UNIT}`;

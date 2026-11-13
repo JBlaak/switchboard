@@ -26,6 +26,14 @@
  * DROP_MAX_AGE_MS is removed whenever another is placed: they are for the
  * session that was handed them, not an archive.
  *
+ * The agent may also make a copy by itself (#438): the Merge manager's fix
+ * errands need one of a repository the Mac never handed off. `ensureCopy`
+ * clones it into `<baseFolder>/<name>` with the VM's own login (or fetches an
+ * existing copy), with the same marker and refusals as a hand-off but no
+ * bundle, patch or files, since a pull request's branch is already on origin.
+ * An errand then works in its own worktree detached at `origin/<branch>`
+ * (`errandWorktree`), so the copy's own checkout is never touched.
+ *
  * Everything a copy does runs through two small ports below (commands and
  * files) with Node adapters in `src/infrastructure/agent/`, and operations on
  * one copy's folder run one at a time, so a status read or a removal can never
@@ -162,6 +170,15 @@ const NO_PROMPTS: Record<string, string> = {
     GH_PROMPT_DISABLED: '1',
 };
 
+/** A repository the agent makes a copy of: as a hand-off names it. */
+export type CopyRepo = HandoffMessage['repo'];
+
+/** Where a copy the agent ensured is: as the host's settings name it, and absolute. */
+export type EnsuredCopy = {ok: true; dir: string; abs: string; reused: boolean} | {ok: false; error: string};
+
+/** A fix errand's worktree, absolute on the VM. */
+export type ErrandWorktree = {ok: true; abs: string} | {ok: false; error: string};
+
 export interface CopiesDeps {
     commands: CopyCommandRunner;
     files: CopiesFiles;
@@ -248,6 +265,75 @@ export class Copies implements CopiesPart {
             case 'place-upload':
                 return this.placeUpload(client, message);
         }
+    }
+
+    /**
+     * Make sure the VM has a copy of `repo` (#438): clone it into the base
+     * folder when there is none, fetch origin when there is. The copy's own
+     * checkout is left as it is. A folder there that Switchboard did not make
+     * is refused, as for a hand-off.
+     */
+    public async ensureCopy(repo: CopyRepo): Promise<EnsuredCopy> {
+        const refused = refuseRepo(repo);
+        if (refused) return {ok: false, error: refused};
+        const dir = joinDir(this.deps.hostSettings().baseFolder, repo.name);
+        const abs = expandHome(dir, this.deps.home);
+        let result: EnsuredCopy = {ok: false, error: 'not run'};
+        await this.exclusive(abs, async () => {
+            try {
+                const reused = await this.cloneOrFetch(
+                    repo,
+                    dir,
+                    abs,
+                    (line) => this.deps.log.info(`[copies] ${line}`),
+                    false,
+                );
+                result = {ok: true, dir, abs, reused};
+            } catch (err) {
+                const error = err instanceof StepFailed ? err.message : `could not make a copy: ${errorText(err)}`;
+                this.deps.log.warn(`[copies] ensuring a copy at ${abs}: ${error}`);
+                result = {ok: false, error};
+            }
+        });
+        return result;
+    }
+
+    /**
+     * A new worktree for a fix errand in the copy at `copyAbs`, detached at
+     * `origin/<branch>` as just fetched, at `<copy>/.claude/worktrees/<name>`.
+     * The errand pushes `HEAD:<branch>` from there; nothing is checked out on
+     * a branch, so the copy's other checkouts never clash with it.
+     */
+    public async errandWorktree(copyAbs: string, branch: string, name: string): Promise<ErrandWorktree> {
+        if (!isPlausibleBranch(branch)) return {ok: false, error: `"${branch}" is not a branch name`};
+        if (!isSafeWorktreeName(name)) return {ok: false, error: `"${name}" is not a worktree name`};
+        const abs = `${copyAbs.replace(/\/+$/, '')}/${WORKTREES_FOLDER}/${name}`;
+        let result: ErrandWorktree = {ok: false, error: 'not run'};
+        await this.exclusive(copyAbs, async () => {
+            try {
+                const step = `Fetching ${branch}`;
+                await this.must(
+                    step,
+                    copyAbs,
+                    ['fetch', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`],
+                    NETWORK_TIMEOUT_MS,
+                );
+                await this.must(`Making the worktree ${name}`, copyAbs, [
+                    'worktree',
+                    'add',
+                    '--detach',
+                    abs,
+                    `refs/remotes/origin/${branch}`,
+                ]);
+                result = {ok: true, abs};
+            } catch (err) {
+                const error =
+                    err instanceof StepFailed ? err.message : `could not make the worktree: ${errorText(err)}`;
+                this.deps.log.warn(`[copies] errand worktree ${abs}: ${error}`);
+                result = {ok: false, error};
+            }
+        });
+        return result;
     }
 
     /** How many uploads are held, for tests. */
@@ -359,7 +445,7 @@ export class Copies implements CopiesPart {
         uploads: {bundle: string | null; patch: string | null},
     ): Promise<boolean> {
         const {repo, branch, headOid, worktree} = message;
-        const copyReused = await this.cloneOrFetch(message, dir, abs, progress, worktree === undefined);
+        const copyReused = await this.cloneOrFetch(repo, dir, abs, progress, worktree === undefined);
         const fetched = await this.fetchBundle(abs, uploads.bundle, progress);
 
         const checkoutStep =
@@ -432,13 +518,12 @@ export class Copies implements CopiesPart {
      * folder does that, as a worktree hand-off never changes its checkout.
      */
     private async cloneOrFetch(
-        message: HandoffMessage,
+        repo: CopyRepo,
         dir: string,
         abs: string,
         progress: (line: string) => void,
         clearMain: boolean,
     ): Promise<boolean> {
-        const {repo} = message;
         if (this.deps.files.exists(abs)) {
             const step = `Checking the copy at ${dir}`;
             progress(step);
@@ -963,11 +1048,8 @@ export function parseMarkerState(text: string | null): CopyRecord | null {
 /** Why a hand-off is refused before anything runs, or null. */
 function refuseHandoff(message: HandoffMessage): string | null {
     const {repo, branch, headOid, files} = message;
-    if (!isSafeFolderName(repo.name)) return `"${repo.name}" is not a folder name a copy can have`;
-    if (repo.github !== undefined && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo.github)) {
-        return `"${repo.github}" is not an owner/repo name`;
-    }
-    if (repo.github === undefined && repo.origin.startsWith('-')) return `"${repo.origin}" is not a repository URL`;
+    const refusedRepo = refuseRepo(repo);
+    if (refusedRepo) return refusedRepo;
     if (!isPlausibleBranch(branch)) return `"${branch}" is not a branch name`;
     if (message.worktree !== undefined && !isSafeWorktreeName(message.worktree)) {
         return `"${message.worktree}" is not a worktree name`;
@@ -979,6 +1061,16 @@ function refuseHandoff(message: HandoffMessage): string | null {
     if (total > HANDOFF_FILES_CAP_BYTES) {
         return `the files add up to ${total} bytes; a hand-off carries at most ${HANDOFF_FILES_CAP_BYTES}`;
     }
+    return null;
+}
+
+/** Why a repository is refused as a copy before anything runs, or null. */
+function refuseRepo(repo: CopyRepo): string | null {
+    if (!isSafeFolderName(repo.name)) return `"${repo.name}" is not a folder name a copy can have`;
+    if (repo.github !== undefined && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo.github)) {
+        return `"${repo.github}" is not an owner/repo name`;
+    }
+    if (repo.github === undefined && repo.origin.startsWith('-')) return `"${repo.origin}" is not a repository URL`;
     return null;
 }
 

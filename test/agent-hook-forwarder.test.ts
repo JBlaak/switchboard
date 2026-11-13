@@ -621,3 +621,58 @@ test('the record on disk is mode 0600 and replaced whole', (t) => {
     assert.equal(fs.statSync(path.join(dir, 'nested', 'self-archived.json')).mode & 0o777, 0o600);
     assert.deepEqual(fs.readdirSync(path.join(dir, 'nested')), ['self-archived.json']);
 });
+
+// ── In-process listeners (#438) ──
+
+test('with no client, an in-process listener still hears the archive call and the turn end', async () => {
+    /* Given */
+    const h = harness();
+    const heard: string[] = [];
+    h.forwarder.subscribe({
+        turnEnded: (launchId) => void heard.push(`turn ${launchId}`),
+        archiveRequested: (launchId) => void heard.push(`archive ${launchId}`),
+    });
+
+    /* When */
+    await h.forwarder.archiveTool.request('errand-1');
+    h.forwarder.archiveTool.turnEnded('errand-1');
+
+    /* Then */
+    assert.deepEqual(heard, ['archive errand-1', 'turn errand-1']);
+    assert.deepEqual(h.stopped, ['errand-1']);
+});
+
+test('with a client, the listener hears the turn end and the Mac gets it too', () => {
+    /* Given */
+    const h = harness();
+    const mac = h.connect();
+    const heard: string[] = [];
+    h.forwarder.subscribe({turnEnded: (launchId) => void heard.push(launchId)});
+
+    /* When */
+    h.forwarder.archiveTool.turnEnded('launch-1');
+
+    /* Then */
+    assert.deepEqual(heard, ['launch-1']);
+    assert.deepEqual(mac.received, [{type: 'turn-ended', launchId: 'launch-1'}]);
+});
+
+test('a listener that throws does not keep the others or the Mac from hearing', () => {
+    /* Given */
+    const h = harness();
+    const mac = h.connect();
+    const heard: string[] = [];
+    h.forwarder.subscribe({
+        turnEnded: () => {
+            throw new Error('boom');
+        },
+    });
+    h.forwarder.subscribe({turnEnded: (launchId) => void heard.push(launchId)});
+
+    /* When */
+    h.forwarder.archiveTool.turnEnded('launch-1');
+
+    /* Then */
+    assert.deepEqual(heard, ['launch-1']);
+    assert.deepEqual(mac.received, [{type: 'turn-ended', launchId: 'launch-1'}]);
+});
