@@ -8,6 +8,9 @@
  * - **A lane**: the slim read the Merge manager polls every minute, landed
  *   PRs only, each an aliased `pullRequest(number:)`, with the trunk, its oid
  *   and its rules. About one point, against the project page's 67 (#421).
+ *   With each PR its node id and the workflow runs on its head commit, and
+ *   the merge methods the repository and its rules allow, for the lane
+ *   runner (#435).
  * - **The workflows**: the files in `.github/workflows` on the default
  *   branch, for the lane kind; read rarely, so their text is no burden.
  *
@@ -18,6 +21,8 @@ import {AUTOMERGE_CONTEXT, QUEUE_LABELS} from '../../domain/project/merge-queue'
 import {unresolvedThreadCount, type ReviewThreadFacts} from '../../domain/project/pull-request-wait';
 import type {
     LaneCheck,
+    LaneRun,
+    MergeMethod,
     LanePullRequestRead,
     LaneRead,
     TrunkRules,
@@ -44,6 +49,8 @@ export const QUEUED_PULL_REQUESTS_QUERY = `query($search: String!) {
 /** Checks read per PR, and review threads: enough for any real head commit. */
 const CHECKS_PER_PULL_REQUEST = 50;
 const THREADS_PER_PULL_REQUEST = 50;
+/** Check suites read per head commit, for their workflow runs. */
+const SUITES_PER_PULL_REQUEST = 20;
 
 /** The lane read of these PRs in one repository. */
 export function laneQuery(numbers: readonly number[]): string {
@@ -51,7 +58,7 @@ export function laneQuery(numbers: readonly number[]): string {
     return `query($owner: String!, $name: String!) {
   viewer { login }
   repository(owner: $owner, name: $name) {
-    nameWithOwner
+    nameWithOwner squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed
     defaultBranchRef {
       name
       target { oid }
@@ -60,7 +67,7 @@ export function laneQuery(numbers: readonly number[]): string {
           type
           parameters {
             ... on RequiredStatusChecksParameters { requiredStatusChecks { context } }
-            ... on PullRequestParameters { dismissStaleReviewsOnPush requireLastPushApproval }
+            ... on PullRequestParameters { dismissStaleReviewsOnPush requireLastPushApproval allowedMergeMethods }
           }
         }
       }
@@ -70,7 +77,7 @@ export function laneQuery(numbers: readonly number[]): string {
 }
 
 fragment laneFields on PullRequest {
-  number title url state isDraft mergedAt headRefName headRefOid baseRefName reviewDecision mergeStateStatus
+  id number title url state isDraft mergedAt headRefName headRefOid baseRefName reviewDecision mergeStateStatus
   author { login }
   labels(first: 20) { nodes { name } }
   reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { combinedSlug } } } }
@@ -80,6 +87,7 @@ fragment laneFields on PullRequest {
     nodes {
       commit {
         status { context(name: "${AUTOMERGE_CONTEXT}") { state description } }
+        checkSuites(first: ${SUITES_PER_PULL_REQUEST}) { nodes { status conclusion workflowRun { databaseId } } }
         statusCheckRollup {
           contexts(first: ${CHECKS_PER_PULL_REQUEST}) {
             nodes {
@@ -101,6 +109,40 @@ export const WORKFLOWS_QUERY = `query($owner: String!, $name: String!) {
     }
   }
 }`;
+
+// ── The lane runner's writes (#435) ──
+
+/** Rebase a PR's branch onto its base, only while its head is the expected one. */
+export const UPDATE_BRANCH_MUTATION = `mutation($pullRequestId: ID!, $expectedHeadOid: GitObjectID!) {
+  updatePullRequestBranch(input: { pullRequestId: $pullRequestId, expectedHeadOid: $expectedHeadOid, updateMethod: REBASE }) {
+    pullRequest { headRefOid }
+  }
+}`;
+
+/** The REST paths of a PR's merge and a run's force-cancel. */
+export const lanePaths = {
+    merge: (repo: string, number: number) => `repos/${repo}/pulls/${number}/merge`,
+    forceCancel: (repo: string, runId: number) => `repos/${repo}/actions/runs/${runId}/force-cancel`,
+};
+
+/** Why `gh` could not ask GitHub at all, as `GhCli`'s writes word it. */
+const UNAVAILABLE = /^(gh is not installed|gh is not signed in to github\.com|GitHub did not answer)$/;
+
+/** What a refused branch update means for the lane: a conflict, a head that moved, GitHub out of reach, or else. */
+export function toBranchUpdateFailure(reason: string): 'conflict' | 'moved' | 'unavailable' | 'refused' {
+    if (UNAVAILABLE.test(reason) || /timed? ?out|could not resolve host|connection/i.test(reason)) return 'unavailable';
+    if (/conflict/i.test(reason)) return 'conflict';
+    if (/expected.*(head|oid|sha)|head.*(does not|doesn't) match|head ref.*(changed|moved)|stale/i.test(reason)) {
+        return 'moved';
+    }
+    return 'refused';
+}
+
+/** The HTTP status `gh api` printed for a failed request (`… (HTTP 405)`); null when it printed none. */
+export function httpStatus(stderr: string): number | null {
+    const match = /\(HTTP (\d{3})\)/.exec(stderr) ?? /HTTP (\d{3})/.exec(stderr);
+    return match ? Number(match[1]) : null;
+}
 
 // ── Mapping ──
 
@@ -130,6 +172,7 @@ export function toLaneRead(data: any, repo: string, numbers: readonly number[]):
         trunk: trunk.name,
         trunkOid: typeof trunk.target?.oid === 'string' ? trunk.target.oid : '',
         rules: toTrunkRules(trunk.rules?.nodes),
+        mergeMethods: toRepositoryMergeMethods(repository),
         pullRequests,
     };
 }
@@ -139,6 +182,8 @@ export function toTrunkRules(nodes: any): TrunkRules {
     const rules = Array.isArray(nodes) ? nodes : [];
     const required = new Set<string>();
     let approvalLostOnPush = false;
+    let linearHistory = false;
+    let mergeMethods: MergeMethod[] | null = null;
     for (const rule of rules) {
         const parameters = rule?.parameters;
         if (rule?.type === 'REQUIRED_STATUS_CHECKS') {
@@ -151,9 +196,50 @@ export function toTrunkRules(nodes: any): TrunkRules {
             if (parameters?.dismissStaleReviewsOnPush === true || parameters?.requireLastPushApproval === true) {
                 approvalLostOnPush = true;
             }
+            // Every ruleset must allow a method: what they allow together.
+            if (Array.isArray(parameters?.allowedMergeMethods)) {
+                const allowed = toMergeMethods(parameters.allowedMergeMethods);
+                mergeMethods = mergeMethods ? mergeMethods.filter((method) => allowed.includes(method)) : allowed;
+            }
+        } else if (rule?.type === 'REQUIRED_LINEAR_HISTORY') {
+            linearHistory = true;
         }
     }
-    return {requiredChecks: [...required], approvalLostOnPush};
+    return {requiredChecks: [...required], approvalLostOnPush, mergeMethods, linearHistory};
+}
+
+/** The merge methods the repository's settings allow, in GitHub's order. */
+function toRepositoryMergeMethods(repository: any): MergeMethod[] {
+    const methods: MergeMethod[] = [];
+    if (repository?.squashMergeAllowed === true) methods.push('squash');
+    if (repository?.mergeCommitAllowed === true) methods.push('merge');
+    if (repository?.rebaseMergeAllowed === true) methods.push('rebase');
+    return methods;
+}
+
+function toMergeMethods(values: readonly unknown[]): MergeMethod[] {
+    const methods: MergeMethod[] = [];
+    for (const value of values) {
+        const method = typeof value === 'string' ? value.toLowerCase() : '';
+        if ((method === 'squash' || method === 'merge' || method === 'rebase') && !methods.includes(method)) {
+            methods.push(method);
+        }
+    }
+    return methods;
+}
+
+/** The workflow runs on a head commit, from its check suites; suites without a run (other apps) are left out. */
+function toLaneRuns(nodes: any): LaneRun[] {
+    if (!Array.isArray(nodes)) return [];
+    const runs: LaneRun[] = [];
+    for (const suite of nodes) {
+        const id = suite?.workflowRun?.databaseId;
+        if (!Number.isSafeInteger(id) || id <= 0 || runs.some((run) => run.id === id)) continue;
+        const state: LaneRun['state'] =
+            suite.status !== 'COMPLETED' ? 'unfinished' : suite.conclusion === 'CANCELLED' ? 'cancelled' : 'finished';
+        runs.push({id, state});
+    }
+    return runs;
 }
 
 export function toLanePullRequest(node: any, repository: string): LanePullRequestRead {
@@ -166,6 +252,7 @@ export function toLanePullRequest(node: any, repository: string): LanePullReques
             firstComment: typeof thread.comments?.nodes?.[0]?.body === 'string' ? thread.comments.nodes[0].body : '',
         }));
     return {
+        id: text(node.id),
         repository,
         number: node.number,
         title: text(node.title),
@@ -198,6 +285,7 @@ export function toLanePullRequest(node: any, repository: string): LanePullReques
         )
             .map(toLaneCheck)
             .filter((check: LaneCheck | null): check is LaneCheck => check !== null),
+        runs: toLaneRuns(commit?.checkSuites?.nodes),
     };
 }
 

@@ -119,10 +119,14 @@ export interface LaneOutcome {
     readonly setAside: SetAside | null;
 }
 
-/** Every PR's stage in one Switchboard lane, in land order. */
+/**
+ * Every PR's stage in one Switchboard lane, in land order. `conflicts` holds
+ * what a test rebase found for a waiting PR (#435), which outranks GitHub's
+ * `dirty`.
+ */
 export function switchboardLaneStages(
     entries: readonly LaneEntry[],
-    lane: {trunk: string; rules: TrunkRules; now: number},
+    lane: {trunk: string; rules: TrunkRules; now: number; conflicts?: ReadonlyMap<string, boolean>},
 ): LaneOutcome[] {
     const ordered = [...entries].sort(byLandOrder);
     const outcomes = new Map<string, LaneOutcome>();
@@ -135,7 +139,12 @@ export function switchboardLaneStages(
         if (stage) outcomes.set(landed.key, {key: landed.key, stage, setAside});
         else {
             up.push(entry);
-            outcomes.set(landed.key, {key: landed.key, stage: waiting(read, null), setAside});
+            const stage: LaneStage = {
+                kind: 'waiting',
+                willConflict: lane.conflicts?.get(landed.key) ?? read.mergeState === 'dirty',
+                position: null,
+            };
+            outcomes.set(landed.key, {key: landed.key, stage, setAside});
         }
     }
 

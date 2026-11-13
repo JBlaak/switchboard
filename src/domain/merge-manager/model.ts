@@ -98,8 +98,23 @@ export function landedKey(repository: string, number: number): string {
 /** A check on the PR's head commit: a check run, or a commit status other than the queue's own. */
 export type LaneCheck = QueueCheckRun;
 
+/** A merge method, as GitHub's REST merge endpoint names it. */
+export type MergeMethod = 'squash' | 'merge' | 'rebase';
+
+/**
+ * A workflow run on the PR's head commit (`checkSuites.workflowRun`), which
+ * the lane runner cancels behind the head and runs again on the head (#435).
+ */
+export interface LaneRun {
+    /** The run's `databaseId`, as the REST Actions endpoints take it. */
+    readonly id: number;
+    readonly state: 'unfinished' | 'cancelled' | 'finished';
+}
+
 /** One PR as the lane read sees it. */
 export interface LanePullRequestRead {
+    /** GitHub's node id, which the update mutation takes; empty when the read did not say. */
+    readonly id: string;
     readonly repository: string;
     readonly number: number;
     readonly title: string;
@@ -125,6 +140,8 @@ export interface LanePullRequestRead {
     /** GitHub's `mergeStateStatus`, lower case: `clean`, `behind`, `dirty`, `blocked`, `unstable`, `unknown`, … */
     readonly mergeState: string;
     readonly checks: readonly LaneCheck[];
+    /** The workflow runs on the head commit. */
+    readonly runs: readonly LaneRun[];
 }
 
 /** What a repository's trunk rules say, as far as the lane needs them. */
@@ -137,6 +154,10 @@ export interface TrunkRules {
      * the head loses its approval, so the lane would keep holding it.
      */
     readonly approvalLostOnPush: boolean;
+    /** The merge methods every active ruleset allows; null when none says. */
+    readonly mergeMethods: readonly MergeMethod[] | null;
+    /** A ruleset requires a linear history: no merge commits. */
+    readonly linearHistory: boolean;
 }
 
 /** One repository's lane read: its trunk, its rules, and the PRs asked for. */
@@ -147,6 +168,8 @@ export interface LaneRead {
     readonly trunk: string;
     readonly trunkOid: string;
     readonly rules: TrunkRules;
+    /** The merge methods the repository's settings allow. */
+    readonly mergeMethods: readonly MergeMethod[];
     /** The PRs asked for that GitHub knows. */
     readonly pullRequests: readonly LanePullRequestRead[];
 }
@@ -156,6 +179,15 @@ export interface WorkflowFile {
     readonly name: string;
     readonly text: string;
 }
+
+/**
+ * What the Switchboard lane runner did not spend CI on (#435): an update not
+ * pushed to a waiting PR when the trunk moved, a run cancelled behind the
+ * head, a conflict found by a test rebase rather than a push.
+ */
+export type LaneSaving = 'update-not-pushed' | 'run-cancelled' | 'conflict-found';
+
+export const LANE_SAVINGS: readonly LaneSaving[] = ['update-not-pushed', 'run-cancelled', 'conflict-found'];
 
 // ── What the renderer is shown ──
 

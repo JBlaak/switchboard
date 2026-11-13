@@ -47,6 +47,7 @@ import type {
     ProjectReads,
     IssueManagerCalls,
     LaneReads,
+    LaneWrites,
     QueueLabelWrites,
 } from '../ports/github-cli';
 import type {GitRemotes} from '../ports/git-remotes';
@@ -84,6 +85,7 @@ export interface SessionWorkServiceDeps {
         | 'inboxIssuesIn'
         | IssueManagerCalls
         | LaneReads
+        | LaneWrites
         | QueueLabelWrites
         | CiJobQueueCalls
         | PlanReads

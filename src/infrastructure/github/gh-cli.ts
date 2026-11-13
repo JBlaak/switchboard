@@ -20,7 +20,14 @@
  * injected so the tests can feed recorded responses without `gh` installed.
  */
 import {execFile} from 'node:child_process';
-import type {GitHubAvailability, GitHubCli, GitHubWrite, NewLineComment} from '../../application/ports/github-cli';
+import type {
+    BranchUpdate,
+    GitHubAvailability,
+    GitHubCli,
+    GitHubWrite,
+    MergeAnswer,
+    NewLineComment,
+} from '../../application/ports/github-cli';
 import type {PullRequestCloses} from '../../application/ports/github-cli';
 import type {IssueKey, Plan, PlanSummary} from '../../domain/plan/model';
 import {
@@ -49,13 +56,17 @@ import type {IssueThread} from '../../domain/inbox/issue-manager';
 import {
     QUEUED_PULL_REQUESTS_QUERY,
     QUEUED_SEARCH,
+    UPDATE_BRANCH_MUTATION,
     WORKFLOWS_QUERY,
+    httpStatus,
+    lanePaths,
     laneQuery,
     toLaneRead,
+    toBranchUpdateFailure,
     toQueuedPullRequests,
     toWorkflowFiles,
 } from './gh-lanes';
-import type {LaneRead, WorkflowFile} from '../../domain/merge-manager/model';
+import type {LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import {ciJobPaths, toActiveRuns, toCiJobs, toRunCompleted, toRunIds, toRunners, toTimedRun} from './gh-ci-jobs';
@@ -357,6 +368,53 @@ export class GhCli implements GitHubCli {
         return data ? toWorkflowFiles(data) : null;
     }
 
+    // ── The Switchboard lane runner's writes (#435) ──
+
+    public async updateBranch(pullRequestId: string, expectedHeadOid: string): Promise<BranchUpdate> {
+        if (!pullRequestId || !/^[0-9a-f]{7,64}$/i.test(expectedHeadOid)) {
+            return {ok: false, why: 'refused', reason: 'That pull request cannot be updated'};
+        }
+        const answer = await this.mutate(UPDATE_BRANCH_MUTATION, [
+            ['-f', 'pullRequestId', pullRequestId],
+            ['-f', 'expectedHeadOid', expectedHeadOid],
+        ]);
+        return answer.ok ? {ok: true} : {ok: false, why: toBranchUpdateFailure(answer.reason), reason: answer.reason};
+    }
+
+    public async mergePullRequest(
+        repo: string,
+        number: number,
+        sha: string,
+        method: MergeMethod,
+    ): Promise<MergeAnswer> {
+        if (
+            !issueRef(repo, number) ||
+            !/^[0-9a-f]{7,64}$/i.test(sha) ||
+            !['squash', 'merge', 'rebase'].includes(method)
+        ) {
+            return {ok: false, status: null, reason: 'That pull request cannot be merged'};
+        }
+        const result = await this.run([
+            'api',
+            '--method',
+            'PUT',
+            lanePaths.merge(repo, number),
+            '-f',
+            `sha=${sha}`,
+            '-f',
+            `merge_method=${method}`,
+        ]);
+        if (result.missing) return {ok: false, status: null, reason: 'gh is not installed'};
+        if (isAuthFailure(result)) return {ok: false, status: null, reason: 'gh is not signed in to github.com'};
+        if (result.code === 0) return {ok: true};
+        return {ok: false, status: httpStatus(result.stderr), reason: failureReason(result)};
+    }
+
+    public async forceCancelRun(repo: string, runId: number): Promise<GitHubWrite> {
+        if (!REPO.test(repo) || !isId(runId)) return {ok: false, reason: 'That run cannot be cancelled'};
+        return this.rest(['api', '--method', 'POST', lanePaths.forceCancel(repo, runId)]);
+    }
+
     // ── The merge queue's labels (#315) ──
 
     public async addLabel(repo: string, number: number, label: string): Promise<GitHubWrite> {
@@ -443,15 +501,7 @@ export class GhCli implements GitHubCli {
         if (result.missing) return {ok: false, reason: 'gh is not installed'};
         if (isAuthFailure(result)) return {ok: false, reason: 'gh is not signed in to github.com'};
         if (result.code === 0) return {ok: true};
-        let message: unknown = null;
-        try {
-            message = (JSON.parse(result.stdout) as {message?: unknown})?.message;
-        } catch {
-            message = null;
-        }
-        if (typeof message === 'string' && message) return {ok: false, reason: message};
-        const stderr = result.stderr.trim().split('\n').pop()?.replace(/^gh: /, '');
-        return {ok: false, reason: stderr || 'GitHub did not answer'};
+        return {ok: false, reason: failureReason(result)};
     }
 
     // ── Your review (C3) ──
@@ -581,6 +631,19 @@ export const DELETE_REVIEW = `mutation($reviewId: ID!) {
 export const SUBMIT_REVIEW = `mutation($reviewId: ID!, $event: PullRequestReviewEvent!) {
   submitPullRequestReview(input: { pullRequestReviewId: $reviewId, event: $event }) { pullRequestReview { id state } }
 }`;
+
+/** GitHub's reason a REST write failed: the body's `message`, else `gh`'s last line. */
+function failureReason(result: GhResult): string {
+    let message: unknown = null;
+    try {
+        message = (JSON.parse(result.stdout) as {message?: unknown})?.message;
+    } catch {
+        message = null;
+    }
+    if (typeof message === 'string' && message) return message;
+    const stderr = result.stderr.trim().split('\n').pop()?.replace(/^gh: /, '');
+    return stderr || 'GitHub did not answer';
+}
 
 /** The REST path of an issue's or PR's labels; null for a repository or number that is not one. */
 function issueRef(repo: string, number: number): boolean {

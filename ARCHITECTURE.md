@@ -72,7 +72,7 @@ Nothing here reads `Date.now()`, calls `setTimeout`, or touches a file directly.
 
 ### `src/infrastructure` — the adapters
 
-One implementation per port: `sqlite/` behind the repository, the index, the merge queue's errands and the Merge manager's landed PRs,
+One implementation per port: `sqlite/` behind the repository, the index, the merge queue's errands, the Merge manager's landed PRs and the lane runner's CI savings,
 `pty/` behind the terminal gateway and the session prompter, `fs/` behind the filesystem and the
 transcript store, `ssh/`-shaped logic inside the supervisor, `shell/` behind
 the shell profiles, `electron/` behind the window, the menu and the renderer
