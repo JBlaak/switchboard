@@ -275,6 +275,9 @@ function setup(overrides: Partial<World> = {}) {
         | 'inboxIssuesIn'
         | IssueManagerCalls
         | LaneReads
+        | 'pullRequestForBranch'
+        | 'recentTags'
+        | 'refContains'
         | QueueLabelWrites
         | CiJobQueueCalls
         | PlanReads

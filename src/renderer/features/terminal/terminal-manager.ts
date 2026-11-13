@@ -45,8 +45,9 @@ import {openDialog} from '../../ui/dialogs/actions';
 import {isQuickSessionKey, launchQuickSession} from '../sessions/quick-session';
 import {isSessionWorkKey, toggleSessionWork} from '../../ui/session-work/actions';
 import {toggleTasksPage} from '../../ui/tasks-page/actions';
-import {isIssueManagerKey, isTasksPageKey, savedPromptKey} from '../../lib/shortcut-keys';
+import {isBugPageKey, isIssueManagerKey, isTasksPageKey, savedPromptKey} from '../../lib/shortcut-keys';
 import {toggleIssueManager} from '../../ui/issue-manager/actions';
+import {toggleBugPage} from '../../ui/bug-manager/page-actions';
 import {sendSavedPromptOnScreen} from '../../ui/session-tray/actions';
 import {openSessions, sessionMap} from '../../state/session-store';
 import {remoteStatus} from '../../state/remote-status-store';
@@ -242,6 +243,16 @@ function setupTerminalKeyBindings(
                 e._handled = true;
                 e.preventDefault();
                 toggleIssueManager();
+            }
+            return false;
+        }
+
+        // Cmd+B: the Bug manager page (#414)
+        if (isBugPageKey(e)) {
+            if (e.type === 'keydown') {
+                e._handled = true;
+                e.preventDefault();
+                toggleBugPage();
             }
             return false;
         }

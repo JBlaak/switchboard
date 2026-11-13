@@ -43,6 +43,7 @@ import {installSessionTask} from '../ui/session-task/install-session-task';
 import {installInbox} from '../ui/inbox/install-inbox';
 import {installIssueManager} from '../ui/issue-manager/install-issue-manager';
 import {installMergeManager} from '../ui/merge-manager/install-merge-manager';
+import {installBugPage} from '../ui/bug-manager/install-bug-page';
 import type {GlobalSettings} from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -73,6 +74,7 @@ export function bootstrap(): void {
     installInbox();
     installIssueManager();
     installMergeManager();
+    installBugPage();
     followColorSchemeInTerminals();
     installTerminalProbe();
     // The surfaces that have moved to React portal out of it.
