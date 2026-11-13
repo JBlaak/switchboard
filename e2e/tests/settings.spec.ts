@@ -241,6 +241,7 @@ test.describe('global save', () => {
             removeWorktreeOnArchive: false,
             restoreSessions: true,
             blaakTasksUrl: 'https://tasks.example.com/mcp',
+            plannerUrl: '',
             terminalTheme: 'nord',
             terminalFontFamily: 'Menlo',
             terminalFontSize: 32,

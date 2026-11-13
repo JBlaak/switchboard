@@ -45,6 +45,15 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
             typeof url === 'string' && url.trim() !== '' && app.mcpServers.headersFor(blaakTasksEndpoint(url)) !== null,
     );
 
+    /** The managers' settings (#412): the Planner's cycle, the snooze options and Releases are tagged. */
+    ipc.handle(INVOKE.plannerCycle, (url: unknown) =>
+        typeof url === 'string' ? app.inboxSettings.plannerCycle(url) : null,
+    );
+    ipc.handle(INVOKE.inboxSnoozeOptions, () => app.inboxSettings.snoozeOptions());
+    ipc.handle(INVOKE.releaseTags, (projectPath: unknown) =>
+        typeof projectPath === 'string' && projectPath !== '' ? app.inboxSettings.releaseTags(projectPath) : null,
+    );
+
     /** Saved prompts (#339): read both lists, or replace one, merged into its blob in main. */
     ipc.handle(INVOKE.savedPrompts, (projectPath: unknown) => app.settings.savedPrompts(asProjectPath(projectPath)));
     ipc.handle(INVOKE.setSavedPrompts, (projectPath: unknown, prompts: unknown) =>

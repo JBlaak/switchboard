@@ -335,3 +335,11 @@
     font-weight: 400;
     overflow-wrap: anywhere;
 }
+
+/* A check that went through (#412): the Planner answered with its cycle. */
+.settings-ok {
+    display: block;
+    margin-top: 6px;
+    color: var(--sb-green);
+    font-weight: 700;
+}

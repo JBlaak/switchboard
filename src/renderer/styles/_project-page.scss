@@ -1734,3 +1734,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* Watch issues (#412): on, it reads as chosen, in the Issue manager's sun. */
+.sw-btn.pp-watch.is-on {
+    background: var(--sb-sun);
+    border-color: rgba(var(--sb-yellow-rgb), 0.35);
+    color: var(--sb-warning-text);
+}
+
+.sw-btn.pp-watch:disabled {
+    opacity: 0.6;
+    cursor: default;
+}

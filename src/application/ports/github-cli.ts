@@ -98,6 +98,12 @@ export interface GitHubCli {
     issuesIn(repo: string, options: {closed: boolean}): Promise<RepositoryIssue[] | null>;
 
     /**
+     * When `repo`'s newest tag was made (#412), for whether it tags its
+     * releases: `{at: null}` when it has no tags. Null when unavailable.
+     */
+    latestTag(repo: string): Promise<{at: string | null} | null>;
+
+    /**
      * The pull requests in `repo`, each with its checks taken together, its
      * review decision and the issues it closes, and what the merge queue reads
      * of it (#315: base, labels, `automerge` status, reviewers, check runs).

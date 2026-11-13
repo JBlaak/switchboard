@@ -77,6 +77,9 @@ export const INVOKE = {
     setAppearance: 'set-appearance',
     quickAskHotkeyStatus: 'quick-ask:hotkey-status',
     blaakTasksSetUp: 'blaak-tasks:set-up',
+    plannerCycle: 'planner:cycle',
+    inboxSnoozeOptions: 'inbox:snooze-options',
+    releaseTags: 'project:release-tags',
     savedPrompts: 'saved-prompts:get',
     setSavedPrompts: 'saved-prompts:set',
 
