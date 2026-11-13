@@ -1,0 +1,14 @@
+[
+    {
+        "id": "5f1a2b3c4d5e6f7a8b9c0d1e",
+        "name": "Example Studio",
+        "slug": "example-studio",
+        "creator": {"id": "5f1a2b3c4d5e6f7a8b9c0d00", "name": "Sam Example"},
+        "collaborators_url": "https://api.bugsnag.com/organizations/5f1a2b3c4d5e6f7a8b9c0d1e/collaborators",
+        "projects_url": "https://api.bugsnag.com/organizations/5f1a2b3c4d5e6f7a8b9c0d1e/projects",
+        "created_at": "2021-04-07T10:00:00.000Z",
+        "updated_at": "2026-10-01T09:00:00.000Z",
+        "auto_upgrade": true,
+        "upgrade_url": "https://app.bugsnag.com/settings/example-studio/plans-billing"
+    }
+]

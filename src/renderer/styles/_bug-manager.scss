@@ -1,0 +1,82 @@
+/* ========== BUG MANAGER SETTINGS (#411) ==========
+   Settings → Bug manager: the Bugsnag token, the projects with an opt-in and
+   a local project each, and the trending thresholds. Built from the settings
+   viewer's and Phone access's pieces (`settings-toggle`, `settings-select`,
+   `pa-btn`, `settings-warning`); only what they lack is here. */
+
+.bug-manager-token {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .settings-input {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+.bug-manager-masked {
+    flex: 1;
+    font-family: var(--sb-font-mono);
+    color: var(--sb-text-strong);
+    letter-spacing: 0.05em;
+}
+
+.bug-manager-ok {
+    display: block;
+    margin-top: 6px;
+    color: var(--sb-green);
+}
+
+.bug-manager-projects {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+}
+
+.bug-manager-project {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+
+    & + & {
+        border-top: 1px solid var(--sb-line);
+    }
+
+    .settings-select {
+        width: 200px;
+        flex: none;
+    }
+}
+
+.bug-manager-project-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--sb-text-strong);
+}
+
+.bug-manager-missing {
+    color: var(--sb-text-dim);
+}
+
+.bug-manager-trending {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--sb-text-dim);
+        white-space: nowrap;
+    }
+
+    .settings-input {
+        width: 72px;
+    }
+}

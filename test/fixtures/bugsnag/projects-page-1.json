@@ -1,0 +1,30 @@
+[
+    {
+        "id": "6a0000000000000000000001",
+        "organization_id": "5f1a2b3c4d5e6f7a8b9c0d1e",
+        "slug": "connect-api-production",
+        "name": "Connect API - Production",
+        "api_key": "00000000000000000000000000000001",
+        "type": "node",
+        "is_full_view": true,
+        "release_stages": ["production", "development"],
+        "language": "javascript",
+        "created_at": "2024-01-10T12:00:00.000Z",
+        "updated_at": "2026-11-01T08:00:00.000Z",
+        "errors_url": "https://api.bugsnag.com/projects/6a0000000000000000000001/errors",
+        "events_url": "https://api.bugsnag.com/projects/6a0000000000000000000001/events",
+        "url": "https://api.bugsnag.com/projects/6a0000000000000000000001",
+        "html_url": "https://app.bugsnag.com/example-studio/connect-api-production",
+        "open_error_count": 12,
+        "for_review_error_count": 0,
+        "collaborators_count": 3,
+        "global_grouping": [],
+        "location_grouping": [],
+        "discarded_app_versions": [],
+        "discarded_errors": [],
+        "resolve_on_deploy": false,
+        "url_whitelist": null,
+        "ignore_old_browsers": true,
+        "ignored_browser_versions": {}
+    }
+]

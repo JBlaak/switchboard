@@ -152,6 +152,9 @@ import {QuestionHookServer} from '../infrastructure/http/question-hook-server';
 import {ArchiveToolService} from '../application/services/archive-tool-service';
 import {PageToolService} from '../application/services/page-tool-service';
 import {OpensslIdentityStore} from '../infrastructure/phone/identity-store';
+import {EncryptedFileSecretStore} from '../infrastructure/fs/encrypted-secret-store';
+import {RestBugsnagApi} from '../infrastructure/bugsnag/rest-bugsnag-api';
+import {BugsnagConnectionService} from '../application/services/bugsnag-connection-service';
 import {DnsSdAdvertiser} from '../infrastructure/phone/dns-sd-advertiser';
 import {LanWatcher} from '../infrastructure/phone/lan-watcher';
 import {WhisperCliTranscriber} from '../infrastructure/voice/whisper-cli-transcriber';
@@ -247,6 +250,8 @@ export interface Container {
     readonly mcpServers: McpServers;
     /** BlaakTasks (#248): its services exist only while a URL is set in Settings. */
     readonly tasks: TasksService;
+    /** The Bug manager's Bugsnag connection (#411): the token in the Keychain, opted-in and linked projects. */
+    readonly bugsnag: BugsnagConnectionService;
     /**
      * VM hosts (#276): status, install, setup checks, host settings and the setup
      * terminal. Optional only until `buildContainer` builds it.
@@ -785,6 +790,25 @@ export function buildContainer(): Container {
     };
     // Captures read the user's MCP servers from `~/.claude.json` (C2).
     const mcpServers = new ClaudeJsonMcpServers({fs, homeDir: paths.homeDir, tempDir: os.tmpdir(), ids, log});
+    // The Bug manager's token (#411) is kept with safeStorage (the Keychain), never in settings.
+    // The e2e suite keeps it in plain files: a Keychain prompt would hang the run.
+    const bugsnag = new BugsnagConnectionService({
+        secrets: new EncryptedFileSecretStore(
+            path.join(app.getPath('userData'), 'secrets'),
+            process.env.SWITCHBOARD_E2E === '1' ? plainEncryption : keychainEncryption,
+            log,
+        ),
+        api: (token) => new RestBugsnagApi({token, log}),
+        settings,
+        mcpServers,
+        localProjects: () =>
+            projects
+                .list(false)
+                .filter((project) => !project.remote)
+                .map((project) => ({path: project.projectPath, name: path.basename(project.projectPath)}))
+                .sort((a, b) => a.name.localeCompare(b.name)),
+        log,
+    });
     // Its own routing service (R1): never cancels the empty-screen box's request.
     const quickAsk = new QuickAskService({
         router: new AskRouteService({cli: claudeCaller, timers, log, call: quickRouteCall(settings)}),
@@ -1346,6 +1370,7 @@ export function buildContainer(): Container {
         quickAsk,
         mcpServers,
         tasks,
+        bugsnag,
         quickAskWindow: () => quickAskWindow,
         prepareQuickAsk: () => {
             prepareQuickAsk();

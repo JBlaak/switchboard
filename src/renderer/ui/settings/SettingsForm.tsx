@@ -36,6 +36,7 @@ import {useBlaakTasksUrl} from './use-blaak-tasks-url';
 import {usePlannerUrl} from './use-planner-url';
 import {PhoneAccessSection} from '../phone-access/PhoneAccessSection';
 import {VmsSection} from '../vms/VmsSection';
+import {BugManagerSection} from '../bug-manager/BugManagerSection';
 import {SavedPromptsSection} from './SavedPromptsSection';
 import type {JSX} from 'react';
 import type {SettingsPanel} from '../../state/settings-slice';
@@ -327,6 +328,8 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
                     />
                 </AppField>
             </div>
+
+            <BugManagerSection />
 
             <div className="settings-section">
                 <div className="settings-section-title">Snoozing</div>
