@@ -9,6 +9,7 @@ import {
     isProjectSettingsKey,
     isSidebarFocusKey,
     isSidebarToggleKey,
+    isMergeManagerKey,
     isUndoArchiveKey,
     listCursorKey,
     savedPromptKey,
@@ -79,6 +80,23 @@ test('Cmd+L is the list key, and nothing else with L is', () => {
 
     /* Then */
     assert.deepEqual(listKeys, [true, false, false]);
+});
+
+test('Cmd+Shift+L opens the Merge manager from anywhere, the terminal and a text field included', () => {
+    /* Given */
+    const presses = [
+        keydown({code: 'KeyL', metaKey: true, shiftKey: true}),
+        keydown({code: 'KeyL', metaKey: true, shiftKey: true}, 'terminal'),
+        keydown({code: 'KeyL', metaKey: true, shiftKey: true}, 'textField'),
+        cmd('KeyL'),
+        keydown({code: 'KeyL', metaKey: true, shiftKey: true, altKey: true}),
+    ];
+
+    /* When */
+    const pageKeys = presses.map(isMergeManagerKey);
+
+    /* Then */
+    assert.deepEqual(pageKeys, [true, true, true, false, false]);
 });
 
 // ── Cmd+S ──

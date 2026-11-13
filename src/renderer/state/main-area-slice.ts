@@ -1,8 +1,8 @@
 /**
  * What the main area shows (#168): exactly one of a session's terminal, a
  * session's work page, a project, the app settings, the Tasks page (#249),
- * the Issue manager page (#415), the Bug manager page (#414), or the empty
- * screen.
+ * the Issue manager page (#415), the Bug manager page (#414), the Merge
+ * manager page (#439), or the empty screen.
  *
  * It is the one answer to "what is on screen", which is what the sidebar
  * highlight is derived from (`highlightedSession`). The active session id
@@ -34,6 +34,8 @@ export type MainAreaRoute =
     | {readonly kind: 'issueManager'}
     /** The Bug manager page (#414). */
     | {readonly kind: 'bugs'}
+    /** The Merge manager page (#439). */
+    | {readonly kind: 'mergeManager'}
     | {readonly kind: 'empty'};
 
 export interface MainAreaState {
@@ -102,6 +104,14 @@ export function mainAreaReducer(state: MainAreaState, event: RendererEvent, retu
 
         case 'bugPageClosed':
             return state.route.kind === 'bugs' ? routed(state, back(returnTo)) : state;
+
+        // ⌘⇧L, the Merge manager on the empty screen, Open in Merge manager (#439, #440).
+        case 'mergeManagerPageRequested':
+            return routed(state, {kind: 'mergeManager'});
+
+        // Esc or ⌘⇧L on the Merge manager page.
+        case 'mergeManagerPageClosed':
+            return state.route.kind === 'mergeManager' ? routed(state, back(returnTo)) : state;
 
         case 'blaakTasksSwitched':
             return !event.on && state.route.kind === 'tasks' ? routed(state, back(returnTo)) : state;

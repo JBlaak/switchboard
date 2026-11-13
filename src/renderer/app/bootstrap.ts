@@ -43,6 +43,7 @@ import {installSessionTask} from '../ui/session-task/install-session-task';
 import {installInbox} from '../ui/inbox/install-inbox';
 import {installIssueManager} from '../ui/issue-manager/install-issue-manager';
 import {installMergeManager} from '../ui/merge-manager/install-merge-manager';
+import {installMergeManagerPage} from '../ui/merge-manager/install-merge-manager-page';
 import {installBugPage} from '../ui/bug-manager/install-bug-page';
 import type {GlobalSettings} from '../../domain/settings/settings';
 
@@ -74,6 +75,7 @@ export function bootstrap(): void {
     installInbox();
     installIssueManager();
     installMergeManager();
+    installMergeManagerPage();
     installBugPage();
     followColorSchemeInTerminals();
     installTerminalProbe();

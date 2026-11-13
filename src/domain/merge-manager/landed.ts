@@ -20,6 +20,7 @@ import {QUEUE_LABELS} from '../project/merge-queue';
 import {byLandOrder, hasLabel, queueLaneStage, switchboardLaneStages} from './stages';
 import {landedKey} from './model';
 import type {
+    LandedFacts,
     LandedPullRequest,
     LandedView,
     LaneKind,
@@ -28,6 +29,7 @@ import type {
     LaneView,
     MergeManagerState,
     SetAside,
+    TeammateEntry,
     TrunkRules,
 } from './model';
 
@@ -184,16 +186,55 @@ function isMine(pr: LanePullRequestRead, viewer: string): boolean {
     return pr.author !== null && pr.author.toLowerCase() === viewer.toLowerCase();
 }
 
+// ── Teammates (#439) ──
+
+/**
+ * The teammates' entries in a queue lane, from a read of its open PRs that
+ * carry the queue's labels: everyone's but the viewer's own (those are
+ * landed), each staged as the queue says, in the queue's order (the head,
+ * then by number in the queue, then the rest by PR number). A failed one has
+ * left the queue and is not shown.
+ */
+export function teammateEntries(reads: readonly LanePullRequestRead[], viewer: string, now: number): TeammateEntry[] {
+    const entries = reads
+        .filter((pr) => pr.state === 'open' && !isMine(pr, viewer) && !hasLabel(pr, QUEUE_LABELS.failed))
+        .map((pr): TeammateEntry => {
+            const stage = queueLaneStage(pr, null, now);
+            const place = stage.kind === 'head' ? 1 : stage.kind === 'waiting' ? stage.position : null;
+            return {
+                key: landedKey(pr.repository, pr.number),
+                repository: pr.repository,
+                number: pr.number,
+                title: pr.title,
+                url: pr.url,
+                author: pr.author,
+                stage,
+                place,
+            };
+        })
+        .filter((entry) => entry.stage.kind !== 'fixing' && entry.stage.kind !== 'needsYou');
+    return entries.sort((a, b) => (a.place ?? Infinity) - (b.place ?? Infinity) || a.number - b.number);
+}
+
 // ── What the renderer is shown ──
+
+/** What a lane view carries beyond the landed PRs (#439), as the service last read it. */
+export interface LaneExtras {
+    /** Each landed PR's facts, by key. */
+    readonly facts?: ReadonlyMap<string, LandedFacts>;
+    /** Each queue lane's teammates' entries, by lower-case `owner/repo`. */
+    readonly teammates?: ReadonlyMap<string, readonly TeammateEntry[]>;
+}
 
 /**
  * Every lane with a landed PR, by repository, each in land order with its
  * merged PRs last, and the PRs that need you counted. `rules` are the
- * repositories' trunk rules as last read.
+ * repositories' trunk rules as last read; `extras` what the page shows besides.
  */
 export function mergeManagerState(
     prs: readonly LandedPullRequest[],
     rules: ReadonlyMap<string, TrunkRules>,
+    extras: LaneExtras = {},
 ): MergeManagerState {
     const byRepository = new Map<string, LandedPullRequest[]>();
     for (const pr of prs) {
@@ -201,29 +242,39 @@ export function mergeManagerState(
         byRepository.set(repository, [...(byRepository.get(repository) ?? []), pr]);
     }
     const lanes = [...byRepository.values()]
-        .map((lane) => laneView(lane, rules))
+        .map((lane) => laneView(lane, rules, extras))
         .sort((a, b) => a.repository.localeCompare(b.repository));
     return {lanes, needsYou: prs.filter((pr) => pr.stage.kind === 'needsYou').length};
 }
 
-function laneView(prs: readonly LandedPullRequest[], rules: ReadonlyMap<string, TrunkRules>): LaneView {
+function laneView(
+    prs: readonly LandedPullRequest[],
+    rules: ReadonlyMap<string, TrunkRules>,
+    extras: LaneExtras,
+): LaneView {
     const ordered = prs.map((pr) => ({landed: pr})).sort(byLandOrder);
     const open = ordered.filter(({landed}) => landed.stage.kind !== 'merged');
     const done = ordered.filter(({landed}) => landed.stage.kind === 'merged');
     const kind = (open[0] ?? ordered[0]).landed.lane;
     const repository = ordered[0].landed.repository;
     let next = open.some(({landed}) => landed.stage.kind === 'head') ? 2 : 1;
-    const placed = (pr: LandedPullRequest): LandedView => {
-        if (pr.stage.kind === 'head') return {...pr, place: 1};
-        if (pr.stage.kind !== 'waiting') return {...pr, place: null};
-        return {...pr, place: kind === 'queue' ? pr.stage.position : next++};
+    const place = (pr: LandedPullRequest): number | null => {
+        if (pr.stage.kind === 'head') return 1;
+        if (pr.stage.kind !== 'waiting') return null;
+        return kind === 'queue' ? pr.stage.position : next++;
     };
+    const placed = (pr: LandedPullRequest): LandedView => {
+        const facts = pr.stage.kind === 'merged' ? undefined : extras.facts?.get(pr.key);
+        return {...pr, place: place(pr), ...(facts ? {facts} : {})};
+    };
+    const teammates = kind === 'queue' ? (extras.teammates?.get(repository.toLowerCase()) ?? []) : [];
     return {
         repository,
         kind,
         approvalLostOnPush:
             kind === 'switchboard' && (rules.get(repository.toLowerCase())?.approvalLostOnPush ?? false),
         pullRequests: [...open, ...done].map(({landed}) => placed(landed)),
+        ...(teammates.length > 0 ? {teammates} : {}),
     };
 }
 

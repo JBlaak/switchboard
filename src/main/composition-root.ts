@@ -132,6 +132,7 @@ import {SqliteQueueErrandStore} from '../infrastructure/sqlite/queue-errand-stor
 import {SqliteInboxStore} from '../infrastructure/sqlite/inbox-store';
 import {SqliteLandedStore} from '../infrastructure/sqlite/landed-store';
 import {SqliteLaneSavings} from '../infrastructure/sqlite/lane-savings';
+import {MergeManagerPageService} from '../application/services/merge-manager-page-service';
 import {GitTestRebase} from '../infrastructure/git/git-test-rebase';
 import {LocalGitRunner} from '../infrastructure/git/git-runner';
 import {LaneRunner} from '../application/services/lane-runner';
@@ -262,6 +263,8 @@ export interface Container {
     readonly mergeManager: MergeManagerService;
     /** The Merge manager's fix errands (#437): started, finished and stopped by themselves; Try again. */
     readonly fixErrands: FixErrandService;
+    /** What the Merge manager's page shows besides the lanes (#439). */
+    readonly mergeManagerPage: MergeManagerPageService;
     readonly askRoute: AskRouteService<AskPatchResult>;
     readonly quickAskHotkey: QuickAskHotkey;
     readonly quickAskPanel: QuickAskPanel;
@@ -1138,13 +1141,14 @@ export function buildContainer(): Container {
     // The Switchboard lane runner (#435): updates, tests and merges each
     // Switchboard lane's head as the user, test-rebasing waiting PRs in bare
     // clones of their own.
+    const laneSavings = new SqliteLaneSavings(database.db);
     const laneRunner = new LaneRunner({
         github,
         testRebase: new GitTestRebase({
             git: new LocalGitRunner(toolEnv),
             directory: path.join(app.getPath('userData'), 'lane-clones'),
         }),
-        savings: new SqliteLaneSavings(database.db),
+        savings: laneSavings,
         clock,
         log,
     });
@@ -1192,21 +1196,24 @@ export function buildContainer(): Container {
         void archiveOnMerge.merged(transitions.merged);
     });
 
+    /** The local checkout of a GitHub repository (`owner/repo`), by its origin; null when there is none. */
+    const checkoutOf = async (wanted: string): Promise<string | null> => {
+        for (const project of projects.list(false)) {
+            if (project.remote || isRemoteProjectPath(project.projectPath)) continue;
+            const root = await workspace.mainCheckout(project.projectPath);
+            const origin = root ? await git.originUrl(root) : null;
+            if (root && origin && gitHubRepository(origin).toLowerCase() === wanted.toLowerCase()) return root;
+        }
+        return null;
+    };
+
     // Fix errands (#437): sessions the Merge manager starts by itself when a
     // lane's head fails out, in a detached worktree of the local checkout.
     const fixErrands = new FixErrandService({
         store: new SqliteFixErrandStore(database.db),
         manager: mergeManager,
         github,
-        checkoutOf: async (wanted) => {
-            for (const project of projects.list(false)) {
-                if (project.remote || isRemoteProjectPath(project.projectPath)) continue;
-                const root = await workspace.mainCheckout(project.projectPath);
-                const origin = root ? await git.originUrl(root) : null;
-                if (root && origin && gitHubRepository(origin).toLowerCase() === wanted.toLowerCase()) return root;
-            }
-            return null;
-        },
+        checkoutOf,
         git: workspace,
         sessions: {
             async start({sessionId, worktree, options}) {
@@ -1235,6 +1242,14 @@ export function buildContainer(): Container {
         runner: laneRunner,
     });
     mergeManager.onLaneRead((lane) => fixErrands.laneRead(lane));
+    // The Merge manager's page (#439): CI saved, the errands, each lane's checkout.
+    const mergeManagerPage = new MergeManagerPageService({
+        manager: mergeManager,
+        errands: fixErrands,
+        savings: laneSavings,
+        checkoutOf,
+        clock,
+    });
     archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
         fixErrands.turnEnded(sessionIds, archiving, currentId),
     );
@@ -1555,6 +1570,7 @@ export function buildContainer(): Container {
         mergeQueueWatch,
         mergeManager,
         fixErrands,
+        mergeManagerPage,
         askRoute,
         quickAskHotkey,
         quickAskPanel,

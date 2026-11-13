@@ -81,3 +81,19 @@ test('a count that is not one, or an unknown kind, is not kept; old rows go as n
     /* Then */
     assert.deepEqual(totals, {'update-not-pushed': 0, 'run-cancelled': 1, 'conflict-found': 0});
 });
+
+test('savings since a time are summed by repository too, whatever its case', () => {
+    /* When */
+    const byRepository = withSavings(`
+    savings.add('MoveLab/Connect', 'update-not-pushed', 3, 10 * ${DAY});
+    savings.add('movelab/connect', 'run-cancelled', 1, 10 * ${DAY});
+    savings.add('movelab/web', 'conflict-found', 2, 11 * ${DAY});
+    savings.add('movelab/web', 'conflict-found', 5, 2 * ${DAY});
+    return savings.byRepository(9 * ${DAY});`);
+
+    /* Then */
+    assert.deepEqual(byRepository, {
+        'movelab/connect': {'update-not-pushed': 3, 'run-cancelled': 1, 'conflict-found': 0},
+        'movelab/web': {'update-not-pushed': 0, 'run-cancelled': 0, 'conflict-found': 2},
+    });
+});

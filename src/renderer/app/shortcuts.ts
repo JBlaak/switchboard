@@ -18,7 +18,15 @@ import {openDialog} from '../ui/dialogs/actions';
 import {handleSessionNavKey} from '../features/terminal/session-nav';
 import {isSessionWorkKey, toggleSessionWork} from '../ui/session-work/actions';
 import {isSidebarToggleKey, toggleSidebar} from '../ui/toolbar/actions';
-import {isBugPageKey, isIssueManagerKey, isTasksPageKey, isUndoArchiveKey, savedPromptKey} from '../lib/shortcut-keys';
+import {
+    isBugPageKey,
+    isIssueManagerKey,
+    isMergeManagerKey,
+    isTasksPageKey,
+    isUndoArchiveKey,
+    savedPromptKey,
+} from '../lib/shortcut-keys';
+import {toggleMergeManager} from '../ui/merge-manager/page-actions';
 import {toggleBugPage} from '../ui/bug-manager/page-actions';
 import {sendSavedPromptOnScreen} from '../ui/session-tray/actions';
 import {undoArchive} from '../ui/archive-undo/actions';
@@ -83,6 +91,12 @@ export function installShortcuts(): void {
         if (isIssueManagerKey(e)) {
             e.preventDefault();
             toggleIssueManager();
+        }
+
+        // Cmd+Shift+L opens or closes the Merge manager page (#439).
+        if (isMergeManagerKey(e)) {
+            e.preventDefault();
+            toggleMergeManager();
         }
 
         // Cmd+B opens or closes the Bug manager page (#414).

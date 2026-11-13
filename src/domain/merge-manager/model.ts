@@ -198,8 +198,45 @@ export const LANE_SAVINGS: readonly LaneSaving[] = ['update-not-pushed', 'run-ca
 
 // ── What the renderer is shown ──
 
+/** A check that decides a PR's merge, as the Merge manager's page lists it (#439). */
+export interface DecidingCheck {
+    readonly name: string;
+    /** `missing` for a required check that has not reported on the head commit yet. */
+    readonly state: LaneCheck['state'] | 'missing';
+}
+
+/** What the last read said of a landed PR beyond its stage, for the Merge manager's page (#439). */
+export interface LandedFacts {
+    /** Logins that approved it. */
+    readonly approvedBy: readonly string[];
+    /** The checks that decide its merge: the required ones, or every check when the rules name none. */
+    readonly checks: readonly DecidingCheck[];
+}
+
 /** A landed PR with its place: 1 for the head, then the waiting ones; null for the rest. */
 export interface LandedView extends LandedPullRequest {
+    readonly place: number | null;
+    /** What the last read said of it; absent until this run read it. */
+    readonly facts?: LandedFacts;
+}
+
+/**
+ * A teammate's PR in a queue lane (#439): never landed (only the user's own
+ * PRs are), but it decides when the user's become the head, so the page shows
+ * it, faded, with Nudge only.
+ */
+export interface TeammateEntry {
+    /** `owner/repo#n` (`landedKey`). */
+    readonly key: string;
+    readonly repository: string;
+    readonly number: number;
+    readonly title: string;
+    readonly url: string;
+    /** The author's login; null for a deleted account. */
+    readonly author: string | null;
+    /** Read from the queue's labels and status, as the user's own are. */
+    readonly stage: LaneStage;
+    /** Its number in the queue: 1 for the head; null when the queue gave it none. */
     readonly place: number | null;
 }
 
@@ -210,6 +247,8 @@ export interface LaneView {
     readonly approvalLostOnPush: boolean;
     /** In land order, merged ones last. */
     readonly pullRequests: readonly LandedView[];
+    /** Teammates' entries in a queue lane, in the queue's order; absent or empty otherwise. */
+    readonly teammates?: readonly TeammateEntry[];
 }
 
 /** Every lane with a landed PR, and how many PRs need you. */

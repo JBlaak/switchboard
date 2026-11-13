@@ -46,6 +46,25 @@ export const QUEUED_PULL_REQUESTS_QUERY = `query($search: String!) {
   }
 }`;
 
+/** Queue entries read per repository (#439): one page. A longer queue than this is not a real case. */
+export const QUEUE_ENTRIES = 30;
+
+/** The search for a repository's queue entries, everyone's: open PRs with the queue's opt-in or next label. */
+export function queueEntriesSearch(repo: string): string {
+    return `repo:${repo} is:pr is:open label:"${QUEUE_LABELS.optIn}","${QUEUE_LABELS.next}"`;
+}
+
+/** A repository's queue entries, each with the lane read's fields. */
+export function queueEntriesQuery(): string {
+    return `query($search: String!) {
+  search(type: ISSUE, query: $search, first: ${QUEUE_ENTRIES}) {
+    nodes { ... on PullRequest { ...laneFields } }
+  }
+}
+
+${laneFragment()}`;
+}
+
 /** Checks read per PR, and review threads: enough for any real head commit. */
 const CHECKS_PER_PULL_REQUEST = 50;
 const THREADS_PER_PULL_REQUEST = 50;
@@ -76,7 +95,12 @@ export function laneQuery(numbers: readonly number[]): string {
   }
 }
 
-fragment laneFields on PullRequest {
+${laneFragment()}`;
+}
+
+/** What the lane read asks of each PR. */
+function laneFragment(): string {
+    return `fragment laneFields on PullRequest {
   id number title url state isDraft mergedAt headRefName headRefOid baseRefName baseRefOid reviewDecision mergeStateStatus
   author { login }
   labels(first: 20) { nodes { name } }
@@ -305,6 +329,15 @@ function toLaneCheck(node: any): LaneCheck | null {
         default:
             return {name: node.context, state: 'running', startedAt};
     }
+}
+
+/** The PRs a queue entries search found, as the lane read maps them; null when the answer holds no search. */
+export function toQueueEntries(data: any, repo: string): LanePullRequestRead[] | null {
+    const nodes = data?.search?.nodes;
+    if (!Array.isArray(nodes)) return null;
+    return nodes
+        .filter((node: any) => typeof node?.number === 'number')
+        .map((node: any) => toLanePullRequest(node, repo));
 }
 
 /** The files in `.github/workflows`: empty when the directory is missing; null when the answer holds no repository. */

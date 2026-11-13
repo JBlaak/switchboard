@@ -258,3 +258,22 @@ test('a projectâ€™s plan view has an owner of its own, apart from the Plan tabâ€
     assert.equal(owner, 'plan:acme/app#121');
     assert.ok(!owner.startsWith('session-work:'));
 });
+
+test('the Merge manager page takes the main area, and Esc goes back to the session to return to', () => {
+    /* Given */
+    const state = onScreen('a');
+
+    /* When */
+    const opened = run(state, {type: 'mergeManagerPageRequested', key: 'acme/app#7'});
+
+    /* Then */
+    assert.deepEqual(opened.mainArea.route, {kind: 'mergeManager'});
+    assert.equal(highlightedSession(opened.mainArea), null);
+    assert.equal(opened.mergeManager.page.selected, 'acme/app#7');
+
+    /* When */
+    const closed = run(opened, {type: 'mergeManagerPageClosed'});
+
+    /* Then */
+    assert.deepEqual(closed.mainArea.route, {kind: 'session', sessionId: 'a'});
+});

@@ -61,6 +61,11 @@ export function isIssueManagerKey(e: KeyboardEvent): boolean {
     return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyI';
 }
 
+/** Cmd+Shift+L: the Merge manager page (#439), open or closed, from anywhere, the terminal included. */
+export function isMergeManagerKey(e: KeyboardEvent): boolean {
+    return e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyL';
+}
+
 /** Cmd+B: the Bug manager page (#414), open or closed. */
 export function isBugPageKey(e: KeyboardEvent): boolean {
     return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyB';

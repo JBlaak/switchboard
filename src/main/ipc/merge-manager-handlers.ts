@@ -1,6 +1,7 @@
 /**
  * The Merge manager (#434): its lanes, Land and Unland from the renderer, and
- * Try again on a fix errand that gave up (#437). Setting a PR aside and
+ * Try again on a fix errand that gave up (#437), and what its page shows
+ * besides the lanes (#439). Setting a PR aside and
  * linking its errand are main's own, from the lane runner and the fix errands
  * (#435, #437).
  */
@@ -19,6 +20,7 @@ export function registerMergeManagerHandlers(ipc: IpcRegistrar, app: Container):
     ipc.handle(INVOKE.mergeManagerTryAgain, (repository: unknown, number: unknown, note: unknown) =>
         app.fixErrands.tryAgain(asRepository(repository), asNumber(number), typeof note === 'string' ? note : null),
     );
+    ipc.handle(INVOKE.mergeManagerPage, () => app.mergeManagerPage.facts());
 }
 
 function asRepository(repository: unknown): string {
