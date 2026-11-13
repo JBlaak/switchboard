@@ -394,6 +394,7 @@ export class FakeStartGit {
         },
         worktrees: async () => this.checkouts,
         checkoutWorktree: async (_repo, path, branch) => this.write('checkout', `worktree add ${path} ${branch}`),
+        addDetachedWorktree: async (_repo, path, ref) => this.write('detached', `worktree add --detach ${path} ${ref}`),
         removeWorktree: async (_repo, path, options) =>
             this.write('remove', `worktree remove ${options?.force ? '--force ' : ''}${path}`),
         pruneWorktrees: async () => this.write('prune', 'worktree prune'),

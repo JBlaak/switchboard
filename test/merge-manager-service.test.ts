@@ -424,3 +424,21 @@ test('it polls on start, every minute and on focus; never once stopped', async (
     assert.equal(polls(), 3);
     assert.equal(timers.pending, 0);
 });
+
+// ── For the fix errands (#437) ──
+
+test('each lane read, once folded in, goes to whoever follows the lanes', async () => {
+    /* Given */
+    const {service} = setup({prs: {[REPO]: {7: prRead(7, {mergeState: 'dirty'})}}});
+    await service.land(REPO, 7);
+    const heard: Array<{repository: string; stages: string[]}> = [];
+    service.onLaneRead((lane) =>
+        heard.push({repository: lane.repository, stages: lane.landed.map((pr) => pr.stage.kind)}),
+    );
+
+    /* When */
+    await service.poll();
+
+    /* Then */
+    assert.deepEqual(heard, [{repository: REPO, stages: ['fixing']}]);
+});

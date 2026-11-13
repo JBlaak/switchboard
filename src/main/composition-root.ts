@@ -78,6 +78,7 @@ import {InboxSettingsService} from '../application/services/inbox-settings-servi
 import {InboxService} from '../application/services/inbox-service';
 import {IssueManagerService} from '../application/services/issue-manager-service';
 import {MergeManagerService} from '../application/services/merge-manager-service';
+import {FixErrandService} from '../application/services/fix-errand-service';
 import {ASK_PATCH_CALL, AskRouteService, EMPTY_SCREEN_CALL} from '../application/services/ask-route-service';
 import type {AskPatchResult} from '../domain/ask/model';
 import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/quick-ask-hotkey';
@@ -127,6 +128,8 @@ import {SqliteTaskLinkStore} from '../infrastructure/sqlite/task-link-store';
 import {SqliteQueueErrandStore} from '../infrastructure/sqlite/queue-errand-store';
 import {SqliteInboxStore} from '../infrastructure/sqlite/inbox-store';
 import {SqliteLandedStore} from '../infrastructure/sqlite/landed-store';
+import {SqliteFixErrandStore} from '../infrastructure/sqlite/fix-errand-store';
+import {gitHubRepository} from '../domain/project/repo-url';
 import {McpBlaakTasks} from '../infrastructure/blaaktasks/mcp-blaak-tasks';
 import {openDatabase} from '../infrastructure/sqlite/database';
 import {resolveClaudePaths} from '../infrastructure/fs/claude-paths';
@@ -250,6 +253,8 @@ export interface Container {
     readonly mergeQueueWatch: MergeQueueWatchService;
     /** The Merge manager (#434): landed PRs, their lanes and stages, Land and Unland, read every minute. */
     readonly mergeManager: MergeManagerService;
+    /** The Merge manager's fix errands (#437): started, finished and stopped by themselves; Try again. */
+    readonly fixErrands: FixErrandService;
     readonly askRoute: AskRouteService<AskPatchResult>;
     readonly quickAskHotkey: QuickAskHotkey;
     readonly quickAskPanel: QuickAskPanel;
@@ -403,11 +408,13 @@ export function buildContainer(): Container {
             cliStateChanged: (sessionId, session, change) => {
                 prompter.cliStateChanged(sessionId, session, change);
                 backgroundTasks.cliStateChanged(sessionId, session, change);
+                if (change.kind === 'needs-attention') fixErrands.needsAttention(sessionId);
             },
             sessionEnded: (sessionId, session) => {
                 prompter.sessionEnded(sessionId, session);
                 backgroundTasks.sessionEnded(sessionId);
                 sessionRestore.ended(sessionId, session);
+                fixErrands.sessionEnded(sessionId);
             },
         },
     });
@@ -433,6 +440,11 @@ export function buildContainer(): Container {
         },
         // A session showing the user a page (`show_page`), over its terminal.
         pageTool: new PageToolService({registry, renderer, clock, log}),
+        // A fix errand finishing itself (`finish_errand`, #437), offered to errands only.
+        errandTool: {
+            isErrand: (launchId) => fixErrands.isErrand(launchId),
+            finish: (launchId, args) => fixErrands.finish(launchId, args),
+        },
         onePassword: {receive: (...args) => onePasswordHeadsUp.receive(...args)},
         log,
     });
@@ -1120,6 +1132,52 @@ export function buildContainer(): Container {
         log,
     });
 
+    // Fix errands (#437): sessions the Merge manager starts by itself when a
+    // lane's head fails out, in a detached worktree of the local checkout.
+    const fixErrands = new FixErrandService({
+        store: new SqliteFixErrandStore(database.db),
+        manager: mergeManager,
+        github,
+        checkoutOf: async (wanted) => {
+            for (const project of projects.list(false)) {
+                if (project.remote || isRemoteProjectPath(project.projectPath)) continue;
+                const root = await workspace.mainCheckout(project.projectPath);
+                const origin = root ? await git.originUrl(root) : null;
+                if (root && origin && gitHubRepository(origin).toLowerCase() === wanted.toLowerCase()) return root;
+            }
+            return null;
+        },
+        git: workspace,
+        sessions: {
+            async start({sessionId, worktree, options}) {
+                // The project's own launch settings, but in auto mode and in this worktree.
+                const {
+                    worktree: _worktree,
+                    worktreeName: _worktreeName,
+                    dangerouslySkipPermissions: _skip,
+                    ...defaults
+                } = defaultSessionOptions(settings.effective(worktree));
+                const opened = await launcher.open({
+                    sessionId,
+                    projectPath: worktree,
+                    isNew: true,
+                    options: {...defaults, ...options},
+                });
+                if (!opened.ok) return {ok: false, reason: opened.error ?? 'the session did not start'};
+                renderer.sessionStarted(sessionId, worktree);
+                return {ok: true};
+            },
+        },
+        archive: archiveTool,
+        ids,
+        clock,
+        log,
+    });
+    mergeManager.onLaneRead((lane) => fixErrands.laneRead(lane));
+    archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
+        fixErrands.turnEnded(sessionIds, archiving, currentId),
+    );
+
     // The project page (#172): one answer, plans through PlanService's cache.
     // Whether a repository has a merge queue is its lane kind (#434).
     const projectOverview = new ProjectOverviewService({
@@ -1413,6 +1471,7 @@ export function buildContainer(): Container {
         projectOverview,
         mergeQueueWatch,
         mergeManager,
+        fixErrands,
         askRoute,
         quickAskHotkey,
         quickAskPanel,

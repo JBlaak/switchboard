@@ -256,3 +256,20 @@ test('a queue lane takes its places from the queue, and never warns about approv
         ],
     );
 });
+
+test("a stacked PR's base tip is kept, and stays once the PR is based on the trunk", () => {
+    /* Given */
+    const stacked = syncLane(
+        [landedPr(7, 10)],
+        laneRead([prRead(7, {baseRef: 'base-branch', baseOid: 'tip-1'})]),
+        'switchboard',
+        NOW,
+    );
+
+    /* When */
+    const rebased = syncLane(stacked.landed, laneRead([prRead(7, {baseOid: 'trunk-1'})]), 'switchboard', NOW);
+
+    /* Then */
+    assert.equal(stacked.landed[0].stackBaseTip, 'tip-1');
+    assert.equal(rebased.landed[0].stackBaseTip, 'tip-1');
+});

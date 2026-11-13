@@ -10,7 +10,9 @@
  * is there and when it merges; a stack lists its members bottom-up, and a
  * held entry waiting for a review offers Nudge <reviewer>. Out of the queue,
  * in red, the failed entries with the queue's reason, Fix in session and
- * Retry; then the PRs the queue could not be read for, in its own words.
+ * Retry; a landed one's are the Merge manager's fix errand instead (Open
+ * errand, or Open and Try again once it gave up, #437); then the PRs the
+ * queue could not be read for, in its own words.
  * A queue with failed entries and nothing else that can move says it is
  * stalled, in red. Estimates from place 3 on are rough: rounded to 5 minutes
  * and faded.
@@ -32,7 +34,14 @@ import {nudgePullRequest, reviewerOf, type QueueErrandView} from '../../../domai
 import type {IssueKey} from '../../../domain/plan/model';
 import {cursorId} from './page-rows';
 import {openProjectSession, openPullRequest} from './actions';
-import {bumpCiJob, fixInSession, openCiJob, nudgeReviewer, retryQueueEntry} from './merge-queue-actions';
+import {
+    bumpCiJob,
+    fixInSession,
+    openCiJob,
+    nudgeReviewer,
+    retryQueueEntry,
+    tryAgainErrand,
+} from './merge-queue-actions';
 import {
     approvedText,
     clockTime,
@@ -43,12 +52,14 @@ import {
     headSteps,
     isEmptyQueue,
     jobRowView,
+    landedFixStatus,
     mergeQueueOf,
     minutesOf,
     nudgeStatus,
     poolBusyText,
     STALLED_TEXT,
     type ExpectedText,
+    type LandedFixStatus,
 } from './merge-queue-view';
 import {bumpedRuns, type JobPool, type JobQueueRow} from '../../../domain/project/ci-job-queue';
 import {pullRequestSession} from './project-sessions';
@@ -379,6 +390,13 @@ function NudgeButton({pr, reviewer, context}: {pr: NudgedPr; reviewer: string; c
 }
 
 function FailedRow({entry, context}: {entry: FailedEntry; context: Context}): JSX.Element {
+    const lanes = useStore((state) => state.mergeManager.state);
+    const landed = landedFixStatus(
+        lanes,
+        context.repository,
+        entry.members.map((member) => member.number),
+    );
+    if (landed) return <LandedFailedRow entry={entry} landed={landed} context={context} />;
     const fix = fixStatus(
         context.errands,
         entry.members.map((member) => member.number),
@@ -437,6 +455,65 @@ function FailedRow({entry, context}: {entry: FailedEntry; context: Context}): JS
                     onClick={() => void retryQueueEntry(context.repository, entry.number)}>
                     {retryAction?.phase === 'busy' ? 'Retrying…' : 'Retry'}
                 </RowButton>
+            </span>
+        </div>
+    );
+}
+
+/** A failed entry whose PR is landed: the Merge manager's fix errand has it (#437). */
+function LandedFailedRow({
+    entry,
+    landed,
+    context,
+}: {
+    entry: FailedEntry;
+    landed: LandedFixStatus;
+    context: Context;
+}): JSX.Element {
+    const tryAgain = context.actions[queueActionKey('try-again', landed.number)];
+    return (
+        <div {...rowProps(context, entry.number, 'pp-mq-entry is-failed')}>
+            <span className="pp-mq-pos">!</span>
+            <span className="pp-mq-text">
+                <TitleLine title={entry.title} number={entry.number} />
+                <span className="pp-mq-reason">
+                    <span className="pp-mq-failure">{failureLabel(entry.kind)}</span>
+                    {' · '}
+                    {entry.reason}
+                </span>
+                {landed.kind === 'fixing' ? (
+                    <span className="pp-mq-note is-running">
+                        {landed.sessionId ? (
+                            <>
+                                A fix errand is on it in <SessionLink sessionId={landed.sessionId} />
+                            </>
+                        ) : (
+                            'A fix errand starts by itself'
+                        )}
+                    </span>
+                ) : (
+                    <span className="pp-mq-note is-needs-you">Needs you: the fix errand stopped without finishing</span>
+                )}
+                {tryAgain?.phase === 'failed' && <span className="pp-mq-note is-failed">{tryAgain.reason}</span>}
+            </span>
+            <span className="pp-mq-side">
+                {landed.kind === 'fixing' && landed.sessionId && (
+                    <RowButton accent onClick={() => openProjectSession(landed.sessionId!)}>
+                        Open errand
+                    </RowButton>
+                )}
+                {landed.kind === 'needs-you' && landed.sessionId && (
+                    <RowButton accent onClick={() => openProjectSession(landed.sessionId!)}>
+                        Open
+                    </RowButton>
+                )}
+                {landed.kind === 'needs-you' && (
+                    <RowButton
+                        disabled={tryAgain?.phase === 'busy'}
+                        onClick={() => void tryAgainErrand(context.repository, landed.number)}>
+                        {tryAgain?.phase === 'busy' ? 'Starting…' : 'Try again'}
+                    </RowButton>
+                )}
             </span>
         </div>
     );

@@ -32,6 +32,12 @@ export interface SessionOptions {
      */
     initialPrompt?: string;
     /**
+     * Permission allow rules for this launch only, added to `--allowedTools`
+     * beside Switchboard's own tools: a fix errand's, scoped to its branch
+     * (#437). Never a stored setting.
+     */
+    allowedTools?: string[];
+    /**
      * For a shell on an agent host only (#276): a command the agent types into
      * the shell once it is up, as the setup terminal runs its setup script.
      */

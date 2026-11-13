@@ -16,6 +16,7 @@ import {
 } from '../../../domain/project/merge-queue';
 import {expectedWaitMs, jobOn, type JobPool, type JobQueueRow} from '../../../domain/project/ci-job-queue';
 import type {QueueErrandView} from '../../../domain/project/queue-errands';
+import type {MergeManagerState} from '../../../domain/merge-manager/model';
 import type {ProjectPageState} from '../../state/project-page-slice';
 
 /** The overview's merge queue for `projectPath`; null while there is none to show (no answer, no queue). */
@@ -171,6 +172,33 @@ export function fixStatus(errands: readonly QueueErrandView[], numbers: readonly
     return errand.state === 'needs-you'
         ? {kind: 'needs-you', sessionId: errand.sessionId}
         : {kind: 'running', sessionId: errand.sessionId};
+}
+
+/**
+ * Where a failed entry stands when the PR is landed (#437): the Merge
+ * manager's fix errand has it, so Fix in session and Retry give way to it.
+ * `fixing` while an errand works on it (or is about to start), `needs-you`
+ * once one gave up (Open and Try again). Null when none of `numbers` is
+ * landed, or when what stops it is not an errand's to fix.
+ */
+export type LandedFixStatus =
+    | {readonly kind: 'fixing'; readonly number: number; readonly sessionId: string | null}
+    | {readonly kind: 'needs-you'; readonly number: number; readonly sessionId: string | null};
+
+export function landedFixStatus(
+    state: MergeManagerState,
+    repository: string,
+    numbers: readonly number[],
+): LandedFixStatus | null {
+    const lane = state.lanes.find((candidate) => candidate.repository.toLowerCase() === repository.toLowerCase());
+    for (const pr of lane?.pullRequests ?? []) {
+        if (!numbers.includes(pr.number)) continue;
+        if (pr.stage.kind === 'fixing') return {kind: 'fixing', number: pr.number, sessionId: pr.errand};
+        if (pr.stage.kind === 'needsYou' && pr.stage.reason.kind === 'errand-stopped') {
+            return {kind: 'needs-you', number: pr.number, sessionId: pr.errand};
+        }
+    }
+    return null;
 }
 
 /** "14:52", in local time. */

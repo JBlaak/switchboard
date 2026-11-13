@@ -130,6 +130,8 @@ const api: SwitchboardApi = {
     mergeManagerState: () => ipcRenderer.invoke(INVOKE.mergeManagerState),
     mergeManagerLand: (repository, number) => ipcRenderer.invoke(INVOKE.mergeManagerLand, repository, number),
     mergeManagerUnland: (repository, number) => ipcRenderer.invoke(INVOKE.mergeManagerUnland, repository, number),
+    mergeManagerTryAgain: (repository, number, note) =>
+        ipcRenderer.invoke(INVOKE.mergeManagerTryAgain, repository, number, note),
     releaseTags: (projectPath) => ipcRenderer.invoke(INVOKE.releaseTags, projectPath),
     bugsnagConnection: () => ipcRenderer.invoke(INVOKE.bugsnagConnection),
     bugsnagSaveToken: (token) => ipcRenderer.invoke(INVOKE.bugsnagSaveToken, token),

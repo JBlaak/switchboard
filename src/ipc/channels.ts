@@ -95,6 +95,7 @@ export const INVOKE = {
     mergeManagerState: 'merge-manager:state',
     mergeManagerLand: 'merge-manager:land',
     mergeManagerUnland: 'merge-manager:unland',
+    mergeManagerTryAgain: 'merge-manager:try-again',
     releaseTags: 'project:release-tags',
     bugsnagConnection: 'bugsnag:connection',
     bugsnagSaveToken: 'bugsnag:save-token',

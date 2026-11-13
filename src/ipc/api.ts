@@ -82,6 +82,7 @@ import type {IssueThread} from '../domain/inbox/issue-manager';
 import type {IssueStartPrepared, IssueWriteResult, PolishResult} from '../application/services/issue-manager-service';
 import type {MergeManagerState} from '../domain/merge-manager/model';
 import type {LandResult} from '../application/services/merge-manager-service';
+import type {TryAgainResult} from '../application/services/fix-errand-service';
 import type {GitHubWrite} from '../application/ports/github-cli';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
@@ -274,6 +275,8 @@ export interface SwitchboardApi {
     mergeManagerLand(repository: string, number: number): Promise<LandResult>;
     /** Unland a PR: it leaves its lane without merging. */
     mergeManagerUnland(repository: string, number: number): Promise<GitHubWrite>;
+    /** Try again (#437): a new fix errand for a PR an errand gave up on, with an optional note for it. */
+    mergeManagerTryAgain(repository: string, number: number, note: string | null): Promise<TryAgainResult>;
     /** Releases are tagged for a project (#412): what its tags say, its own override, and what counts. */
     releaseTags(projectPath: string): Promise<ReleaseTagsView>;
     /**
