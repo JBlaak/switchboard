@@ -100,3 +100,20 @@ test('a resumed session is never handed a first prompt', () => {
     /* Then */
     assert.deepEqual(args, ['--resume', 'abc']);
 });
+
+test("a launch's own allow rules join Switchboard's tools in one --allowedTools", () => {
+    /* When */
+    const args = buildClaudeArgs(
+        {sessionId: 's1', isNew: true},
+        {allowedTools: ['Bash(git push origin HEAD:fix)', 'Bash(a,b)']},
+        undefined,
+        {mcpConfig: '{}', allowedTools: ['mcp__switchboard__archive_session']},
+    );
+
+    /* Then */
+    assert.equal(args.filter((arg) => arg === '--allowedTools').length, 1);
+    assert.equal(
+        args[args.indexOf('--allowedTools') + 1],
+        'mcp__switchboard__archive_session,Bash(git push origin HEAD:fix)',
+    );
+});

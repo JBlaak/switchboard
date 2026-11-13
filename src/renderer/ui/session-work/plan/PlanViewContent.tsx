@@ -15,6 +15,7 @@ import {PlanDiagram, PlanLegend} from './PlanDiagram';
 import {IssueDetail} from './IssueDetail';
 import {LevelStart} from './LevelStart';
 import {NO_HANDLERS, NO_PLAN_UI} from './types';
+import type {MergeManagerState} from '../../../../domain/merge-manager/model';
 import type {
     IssueActions,
     PlanData,
@@ -37,6 +38,8 @@ export function PlanViewContent(
         readonly refresh?: PlanRefresh | null;
         /** Which sessions own which issues and run on this Mac; absent, no plan is marked. */
         readonly live?: PlanLiveSessions | null;
+        /** The Merge manager's lanes, for landed PRs' stages on the nodes (#441); absent, none is landed. */
+        readonly merge?: MergeManagerState;
     },
 ): JSX.Element {
     const ui = props.ui ?? NO_PLAN_UI;
@@ -90,6 +93,7 @@ export function PlanViewContent(
                             on={on}
                             issueActions={props.issueActions}
                             arriving={props.arriving}
+                            merge={props.merge}
                         />
                     ) : (
                         <div className="pv-none pv-empty">

@@ -16,12 +16,18 @@ export const REPO = 'movelab/connect';
 export const NOW = Date.parse('2026-11-13T12:00:00Z');
 export const MIN = 60_000;
 
-export const NO_RULES: TrunkRules = {requiredChecks: [], approvalLostOnPush: false};
-export const RULES: TrunkRules = {requiredChecks: ['Unit tests'], approvalLostOnPush: false};
+export const NO_RULES: TrunkRules = {
+    requiredChecks: [],
+    approvalLostOnPush: false,
+    mergeMethods: null,
+    linearHistory: false,
+};
+export const RULES: TrunkRules = {...NO_RULES, requiredChecks: ['Unit tests']};
 
 /** My open, approved PR on main, up to date with green checks. */
 export function prRead(number: number, overrides: Partial<LanePullRequestRead> = {}): LanePullRequestRead {
     return {
+        id: `PR_${number}`,
         repository: REPO,
         number,
         title: `PR ${number}`,
@@ -41,12 +47,21 @@ export function prRead(number: number, overrides: Partial<LanePullRequestRead> =
         unresolvedThreads: 0,
         mergeState: 'clean',
         checks: [{name: 'Unit tests', state: 'passed', startedAt: NOW - 10 * MIN}],
+        runs: [{id: 1000 + number, state: 'finished'}],
         ...overrides,
     };
 }
 
 export function laneRead(pullRequests: LanePullRequestRead[], rules: TrunkRules = RULES): LaneRead {
-    return {repository: REPO, viewer: ME, trunk: 'main', trunkOid: 'trunk-1', rules, pullRequests};
+    return {
+        repository: REPO,
+        viewer: ME,
+        trunk: 'main',
+        trunkOid: 'trunk-1',
+        rules,
+        mergeMethods: ['squash', 'merge'],
+        pullRequests,
+    };
 }
 
 /** A PR landed `minutesAgo` before NOW, at `stage`. */

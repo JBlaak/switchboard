@@ -109,12 +109,12 @@ test('keys: ⏎ starts an issue in the inbox and opens the session of a started 
     assert.deepEqual(issueKeyAction('j', null), {kind: 'step', step: 1});
 });
 
-test('choosing the Issue manager on the empty screen opens its page; the Bug manager leaves it be', () => {
+test('choosing a manager on the empty screen opens its page', () => {
     /* When */
     const issue = rootReducer(initialRendererState(), {type: 'managerPageRequested', manager: 'issue'});
     const bug = rootReducer(initialRendererState(), {type: 'managerPageRequested', manager: 'bug'});
 
     /* Then */
     assert.deepEqual(issue.mainArea.route, {kind: 'issueManager'});
-    assert.deepEqual(bug.mainArea.route, {kind: 'empty'});
+    assert.deepEqual(bug.mainArea.route, {kind: 'bugs'});
 });

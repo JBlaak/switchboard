@@ -104,6 +104,7 @@ export class InboxService {
     private pushed = '';
     /** What was watched when last looked, so a change to it polls at once. */
     private watching = '';
+    private lastPolledAt: number | null = null;
 
     constructor(private readonly deps: InboxServiceDeps) {
         for (const item of deps.store.all()) this.items.set(item.key, item);
@@ -131,6 +132,11 @@ export class InboxService {
                 this.polling = null;
             });
         return this.polling;
+    }
+
+    /** When the last poll finished, epoch ms; null before one did. The pages' "checked N min ago". */
+    public polledAt(): number | null {
+        return this.lastPolledAt;
     }
 
     /** Both managers' counts, and which of them are set up. */
@@ -209,6 +215,11 @@ export class InboxService {
         return (await this.watchedRepositories()).get(repository) ?? null;
     }
 
+    /** Any change to one item, written and pushed when it changed something (the Fix flow's, #414). */
+    public update(key: string, apply: (item: InboxItem) => InboxItem): InboxItem | null {
+        return this.change(key, apply);
+    }
+
     private change(key: string, apply: (item: InboxItem) => InboxItem): InboxItem | null {
         const before = this.items.get(key);
         if (!before) return null;
@@ -225,6 +236,7 @@ export class InboxService {
         const now = this.deps.clock.now();
         const items = [...this.items.values()];
         this.commit(wakeDue(items, now), expired(items, now));
+        this.lastPolledAt = now;
     }
 
     private async pollBugs(): Promise<void> {

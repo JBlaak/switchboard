@@ -158,6 +158,13 @@ export type ProjectGitHubOverview =
           plansPending: boolean;
           /** The repository's merge queue (#315); null when it does not use one. */
           mergeQueue: MergeQueue | null;
+          /**
+           * A Switchboard lane (#432): Switchboard merges its landed PRs itself,
+           * and its Merge queue section shows them from the Merge manager (#441).
+           * `runMs` is one CI run, the median of the green ones; null with too
+           * few. Null or absent for any other repository.
+           */
+          switchboardLane?: {readonly runMs: number | null} | null;
       } & ProjectOverviewGroups<ProjectIssue, ProjectPullRequest>)
     | {ok: false; reason: GitHubUnavailableReason};
 

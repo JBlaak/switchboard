@@ -93,6 +93,65 @@ export interface BugSignals {
     readonly regressed: boolean;
 }
 
+/** A PR a Fix or Start session opened, as far as the managers' pages show it. */
+export interface WorkPullRequestRef {
+    readonly number: number;
+    readonly url: string;
+}
+
+/**
+ * A bug's Fix (#414): where its session runs, the branch it works on and
+ * what came of it. Kept after the work ends, for Done's merge, the seen-again
+ * judgement and the "Tried, no PR" mark.
+ */
+export interface BugFix {
+    /** The local project the session works in. */
+    readonly projectPath: string;
+    /** `owner/repo` of that project; the branch's PR is looked up there. */
+    readonly repository: string;
+    readonly branch: string;
+    /** The worktree the session runs in. */
+    readonly worktree: string;
+    /** The session's id; null until it is known. */
+    readonly sessionId: string | null;
+    readonly startedAt: number;
+    /** The branch's PR, once opened. */
+    readonly pr: WorkPullRequestRef | null;
+    /** Its place in the merge queue, from 1, while it is queued. */
+    readonly queuePosition: number | null;
+    /** Its checks: how many passed, of how many, and the failing ones' names. */
+    readonly checks: {readonly passed: number; readonly total: number; readonly failing: readonly string[]} | null;
+    /** The session ended (it exited); it may have opened a PR before. */
+    readonly sessionEnded: boolean;
+    /** How the work ended without a merge: a session that left no PR, or Stop working on it. */
+    readonly ended: 'noPr' | 'stopped' | null;
+    /** When the PR merged, and its merge commit. */
+    readonly mergedAt: number | null;
+    readonly mergeCommit: string | null;
+    /** Bugsnag was told the error is fixed (a bug's merge), so it is told only once. */
+    readonly markedFixed: boolean;
+    /** Events before this time are settled: the merge, or the last Close again. */
+    readonly quietSince: number | null;
+    /** The events after the merge that asked you, while they wait for an answer. */
+    readonly seenAgain: SeenAgainNotice | null;
+    /** What happened, in order, for the detail's timeline. */
+    readonly timeline: readonly WorkStep[];
+}
+
+/** One step of the work's timeline. */
+export interface WorkStep {
+    readonly at: number;
+    readonly text: string;
+}
+
+/** Events after a merge that came from a release without the fix (or could not be told). */
+export interface SeenAgainNotice {
+    readonly events: number;
+    readonly version: string | null;
+    readonly tag: string | null;
+    readonly tagged: boolean;
+}
+
 export interface InboxItem {
     /** `bug:<projectId>:<errorId>` or `issue:<owner/repo>#<n>`; see `inboxKey`. */
     readonly key: string;
@@ -114,6 +173,8 @@ export interface InboxItem {
     readonly seenComments?: number;
     /** The Fix or Start session's work on it (#414, #415), while in progress and once done. */
     readonly work?: InboxWork | null;
+    /** A bug's Fix as the Bug manager page follows it (#414); absent before any. Kept after the work ends. */
+    readonly fix?: BugFix | null;
 }
 
 /** What a Fix or Start session works on: its branch, the session, and the PR it opened. */

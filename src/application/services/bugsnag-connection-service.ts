@@ -79,6 +79,11 @@ export class BugsnagConnectionService {
         return resolveBugsnagSettings(this.deps.settings.global());
     }
 
+    /** Whether `~/.claude.json` lacks the `bugsnag` MCP server a Fix session links its PR with. */
+    public mcpMissing(): boolean {
+        return !this.deps.mcpServers.has('bugsnag');
+    }
+
     /** Settings → Bug manager as it stands, asking Bugsnag for the projects the token sees. */
     public async view(): Promise<BugsnagConnectionView> {
         const token = this.token();
@@ -159,7 +164,7 @@ export class BugsnagConnectionService {
             projects: projectRows(settings, listed),
             localProjects: this.deps.localProjects(),
             trending: settings.trending,
-            mcpMissing: !this.deps.mcpServers.has('bugsnag'),
+            mcpMissing: this.mcpMissing(),
         };
     }
 

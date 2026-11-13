@@ -1,7 +1,8 @@
 /**
- * The Merge manager (#434): its lanes, and Land and Unland from the renderer.
- * Setting a PR aside and linking its errand are main's own, from the lane
- * runner and the fix errands (#435, #437).
+ * The Merge manager (#434): its lanes, Land and Unland from the renderer, and
+ * Try again on a fix errand that gave up (#437). Setting a PR aside and
+ * linking its errand are main's own, from the lane runner and the fix errands
+ * (#435, #437).
  */
 import {INVOKE} from '../../ipc/channels';
 import type {Container} from '../composition-root';
@@ -14,6 +15,9 @@ export function registerMergeManagerHandlers(ipc: IpcRegistrar, app: Container):
     );
     ipc.handle(INVOKE.mergeManagerUnland, (repository: unknown, number: unknown) =>
         app.mergeManager.unland(asRepository(repository), asNumber(number)),
+    );
+    ipc.handle(INVOKE.mergeManagerTryAgain, (repository: unknown, number: unknown, note: unknown) =>
+        app.fixErrands.tryAgain(asRepository(repository), asNumber(number), typeof note === 'string' ? note : null),
     );
 }
 

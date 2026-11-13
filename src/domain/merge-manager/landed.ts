@@ -92,9 +92,16 @@ export interface LaneSync {
 /**
  * Fold a lane read into the repository's landed PRs (`known`, any order).
  * A landed PR the read left out keeps what it had; a merged one is not read
- * again and keeps its stage.
+ * again and keeps its stage. `conflicts` is what test rebases found of
+ * waiting PRs in a Switchboard lane (#435), by key.
  */
-export function syncLane(known: readonly LandedPullRequest[], read: LaneRead, kind: LaneKind, now: number): LaneSync {
+export function syncLane(
+    known: readonly LandedPullRequest[],
+    read: LaneRead,
+    kind: LaneKind,
+    now: number,
+    conflicts?: ReadonlyMap<string, boolean>,
+): LaneSync {
     const reads = new Map(read.pullRequests.map((pr) => [landedKey(pr.repository, pr.number), pr]));
     const removed: string[] = [];
     const kept: LandedPullRequest[] = [];
@@ -119,11 +126,20 @@ export function syncLane(known: readonly LandedPullRequest[], read: LaneRead, ki
         else if (kind === 'queue' && fresh.state === 'open' && !QUEUE_LANE_LABELS.some((l) => hasLabel(fresh, l))) {
             removed.push(pr.key);
         } else {
-            kept.push({...pr, title: fresh.title, url: fresh.url, headRef: fresh.headRef, lane: kind});
+            const stacked = fresh.baseRef && fresh.baseRef !== read.trunk && fresh.baseOid;
+            kept.push({
+                ...pr,
+                title: fresh.title,
+                url: fresh.url,
+                headRef: fresh.headRef,
+                lane: kind,
+                ...(stacked ? {stackBaseTip: fresh.baseOid} : {}),
+            });
         }
     }
 
-    const staged = kind === 'queue' ? stageQueueLane(kept, reads, now) : stageSwitchboardLane(kept, reads, read, now);
+    const staged =
+        kind === 'queue' ? stageQueueLane(kept, reads, now) : stageSwitchboardLane(kept, reads, read, now, conflicts);
     return {landed: staged, removed};
 }
 
@@ -145,12 +161,13 @@ function stageSwitchboardLane(
     reads: ReadonlyMap<string, LanePullRequestRead>,
     read: LaneRead,
     now: number,
+    conflicts: ReadonlyMap<string, boolean> | undefined,
 ): LandedPullRequest[] {
     const entries = prs
         .filter((pr) => pr.stage.kind !== 'merged' && reads.has(pr.key))
         .map((pr) => ({landed: pr, read: reads.get(pr.key)!}));
     const outcomes = new Map(
-        switchboardLaneStages(entries, {trunk: read.trunk, rules: read.rules, now}).map((o) => [o.key, o]),
+        switchboardLaneStages(entries, {trunk: read.trunk, rules: read.rules, now, conflicts}).map((o) => [o.key, o]),
     );
     return prs.map((pr) => {
         const outcome = outcomes.get(pr.key);

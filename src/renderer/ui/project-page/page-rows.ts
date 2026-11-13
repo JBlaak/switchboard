@@ -379,6 +379,14 @@ export function mergeQueueRows(repository: string, queue: MergeQueue): PageRow[]
     });
 }
 
+/** A Switchboard lane's cursor rows (#441), in the order its section shows them. */
+export function switchboardLaneRows(repository: string, numbers: readonly number[]): PageRow[] {
+    return numbers.map((number) => {
+        const key: IssueKey = {repository, number};
+        return {kind: 'pull-request', id: cursorId.queueEntry(key), pullRequest: key};
+    });
+}
+
 // ── Worktrees (#175) ──
 
 /** A worktree as the section shows it. */

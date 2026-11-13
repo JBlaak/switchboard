@@ -37,6 +37,7 @@ import type {SessionListEvent} from './session-list-slice';
 import type {ProjectPageEvent} from './project-page-slice';
 import type {TasksPageEvent} from './tasks-slice';
 import type {IssueManagerEvent} from './issue-manager-slice';
+import type {BugPageEvent} from './bug-page-slice';
 import type {PhoneAccessEvent} from './phone-access-slice';
 import type {SessionTaskEvent} from './session-task-slice';
 import type {ArchiveUndoEvent} from './archive-undo-slice';
@@ -389,6 +390,7 @@ export type RendererEvent =
     | SessionTaskEvent
     | TasksPageEvent
     | IssueManagerEvent
+    | BugPageEvent
     | ArchiveUndoEvent
     | AgentHostEvent
     | VmsEvent

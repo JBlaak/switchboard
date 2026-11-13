@@ -20,7 +20,14 @@
  * injected so the tests can feed recorded responses without `gh` installed.
  */
 import {execFile} from 'node:child_process';
-import type {GitHubAvailability, GitHubCli, GitHubWrite, NewLineComment} from '../../application/ports/github-cli';
+import type {
+    BranchUpdate,
+    GitHubAvailability,
+    GitHubCli,
+    GitHubWrite,
+    MergeAnswer,
+    NewLineComment,
+} from '../../application/ports/github-cli';
 import type {PullRequestCloses} from '../../application/ports/github-cli';
 import type {IssueKey, Plan, PlanSummary} from '../../domain/plan/model';
 import {
@@ -43,25 +50,31 @@ import {
     toRepositoryPullRequests,
 } from './gh-overview';
 import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/overview';
-import {LATEST_TAG_QUERY, toLatestTag} from './gh-tags';
+import {LATEST_TAG_QUERY, RECENT_TAGS_QUERY, toLatestTag, toTags} from './gh-tags';
+import {toCheck} from './gh-checks';
+import {BRANCH_PULL_REQUEST_QUERY, toBranchPullRequest} from './gh-branch-pr';
 import {INBOX_ISSUES_QUERY, ISSUE_THREAD_QUERY, toInboxIssues, toIssueThread} from './gh-inbox';
 import type {IssueThread} from '../../domain/inbox/issue-manager';
 import {
     QUEUED_PULL_REQUESTS_QUERY,
     QUEUED_SEARCH,
+    UPDATE_BRANCH_MUTATION,
     WORKFLOWS_QUERY,
+    httpStatus,
+    lanePaths,
     laneQuery,
     toLaneRead,
+    toBranchUpdateFailure,
     toQueuedPullRequests,
     toWorkflowFiles,
 } from './gh-lanes';
-import type {LaneRead, WorkflowFile} from '../../domain/merge-manager/model';
+import type {LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
+import type {BranchPullRequest} from '../../domain/inbox/stage';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import {ciJobPaths, toActiveRuns, toCiJobs, toRunCompleted, toRunIds, toRunners, toTimedRun} from './gh-ci-jobs';
 import type {ReviewEvent} from '../../domain/session-work/review';
 import type {
-    CheckRun,
     DiffSide,
     IssueRef,
     IssueStatus,
@@ -278,6 +291,29 @@ export class GhCli implements GitHubCli {
         return data ? toLatestTag(data) : null;
     }
 
+    public async pullRequestForBranch(repo: string, branch: string): Promise<{pr: BranchPullRequest | null} | null> {
+        const parts = REPO.exec(repo);
+        if (!parts || !branch) return null;
+        const data = await this.graphql(BRANCH_PULL_REQUEST_QUERY, {owner: parts[1], name: parts[2], branch});
+        return data ? toBranchPullRequest(data) : null;
+    }
+
+    public async recentTags(repo: string): Promise<{name: string; at: string}[] | null> {
+        const parts = REPO.exec(repo);
+        if (!parts) return null;
+        const data = await this.graphql(RECENT_TAGS_QUERY, {owner: parts[1], name: parts[2]});
+        return data ? toTags(data) : null;
+    }
+
+    public async refContains(repo: string, ref: string, sha: string): Promise<boolean | null> {
+        if (!REPO.test(repo) || !/^[0-9a-f]{7,40}$/i.test(sha) || !ref) return null;
+        const body = await this.getJson(`repos/${repo}/compare/${sha}...${encodeURIComponent(ref)}`);
+        const status = body?.status;
+        if (typeof status !== 'string') return null;
+        // The tag is ahead of the commit, or is it: the commit is in the tag.
+        return status === 'ahead' || status === 'identical';
+    }
+
     public async inboxIssuesIn(repo: string): Promise<InboxIssuesAnswer | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
@@ -355,6 +391,53 @@ export class GhCli implements GitHubCli {
         if (!parts) return null;
         const data = await this.graphql(WORKFLOWS_QUERY, {owner: parts[1], name: parts[2]});
         return data ? toWorkflowFiles(data) : null;
+    }
+
+    // ── The Switchboard lane runner's writes (#435) ──
+
+    public async updateBranch(pullRequestId: string, expectedHeadOid: string): Promise<BranchUpdate> {
+        if (!pullRequestId || !/^[0-9a-f]{7,64}$/i.test(expectedHeadOid)) {
+            return {ok: false, why: 'refused', reason: 'That pull request cannot be updated'};
+        }
+        const answer = await this.mutate(UPDATE_BRANCH_MUTATION, [
+            ['-f', 'pullRequestId', pullRequestId],
+            ['-f', 'expectedHeadOid', expectedHeadOid],
+        ]);
+        return answer.ok ? {ok: true} : {ok: false, why: toBranchUpdateFailure(answer.reason), reason: answer.reason};
+    }
+
+    public async mergePullRequest(
+        repo: string,
+        number: number,
+        sha: string,
+        method: MergeMethod,
+    ): Promise<MergeAnswer> {
+        if (
+            !issueRef(repo, number) ||
+            !/^[0-9a-f]{7,64}$/i.test(sha) ||
+            !['squash', 'merge', 'rebase'].includes(method)
+        ) {
+            return {ok: false, status: null, reason: 'That pull request cannot be merged'};
+        }
+        const result = await this.run([
+            'api',
+            '--method',
+            'PUT',
+            lanePaths.merge(repo, number),
+            '-f',
+            `sha=${sha}`,
+            '-f',
+            `merge_method=${method}`,
+        ]);
+        if (result.missing) return {ok: false, status: null, reason: 'gh is not installed'};
+        if (isAuthFailure(result)) return {ok: false, status: null, reason: 'gh is not signed in to github.com'};
+        if (result.code === 0) return {ok: true};
+        return {ok: false, status: httpStatus(result.stderr), reason: failureReason(result)};
+    }
+
+    public async forceCancelRun(repo: string, runId: number): Promise<GitHubWrite> {
+        if (!REPO.test(repo) || !isId(runId)) return {ok: false, reason: 'That run cannot be cancelled'};
+        return this.rest(['api', '--method', 'POST', lanePaths.forceCancel(repo, runId)]);
     }
 
     // ── The merge queue's labels (#315) ──
@@ -443,15 +526,7 @@ export class GhCli implements GitHubCli {
         if (result.missing) return {ok: false, reason: 'gh is not installed'};
         if (isAuthFailure(result)) return {ok: false, reason: 'gh is not signed in to github.com'};
         if (result.code === 0) return {ok: true};
-        let message: unknown = null;
-        try {
-            message = (JSON.parse(result.stdout) as {message?: unknown})?.message;
-        } catch {
-            message = null;
-        }
-        if (typeof message === 'string' && message) return {ok: false, reason: message};
-        const stderr = result.stderr.trim().split('\n').pop()?.replace(/^gh: /, '');
-        return {ok: false, reason: stderr || 'GitHub did not answer'};
+        return {ok: false, reason: failureReason(result)};
     }
 
     // ── Your review (C3) ──
@@ -582,6 +657,19 @@ export const SUBMIT_REVIEW = `mutation($reviewId: ID!, $event: PullRequestReview
   submitPullRequestReview(input: { pullRequestReviewId: $reviewId, event: $event }) { pullRequestReview { id state } }
 }`;
 
+/** GitHub's reason a REST write failed: the body's `message`, else `gh`'s last line. */
+function failureReason(result: GhResult): string {
+    let message: unknown = null;
+    try {
+        message = (JSON.parse(result.stdout) as {message?: unknown})?.message;
+    } catch {
+        message = null;
+    }
+    if (typeof message === 'string' && message) return message;
+    const stderr = result.stderr.trim().split('\n').pop()?.replace(/^gh: /, '');
+    return stderr || 'GitHub did not answer';
+}
+
 /** The REST path of an issue's or PR's labels; null for a repository or number that is not one. */
 function issueRef(repo: string, number: number): boolean {
     return REPO.test(repo) && Number.isSafeInteger(number) && number >= 1;
@@ -701,31 +789,6 @@ function behindBase(node: any): number | undefined {
     if (!defaultBranch || node.baseRefName !== defaultBranch) return undefined;
     const aheadBy = node.headRef?.compare?.aheadBy;
     return typeof aheadBy === 'number' ? aheadBy : undefined;
-}
-
-function toCheck(node: any): CheckRun {
-    if (node.__typename === 'StatusContext') {
-        const state: CheckRun['state'] =
-            node.state === 'SUCCESS'
-                ? 'passing'
-                : node.state === 'PENDING' || node.state === 'EXPECTED'
-                  ? 'pending'
-                  : 'failing';
-        return withUrl({name: node.context ?? '', state}, node.targetUrl);
-    }
-    let state: CheckRun['state'];
-    if (node.status !== 'COMPLETED') state = 'pending';
-    else if (node.conclusion === 'SUCCESS' || node.conclusion === 'NEUTRAL') state = 'passing';
-    else if (node.conclusion === 'SKIPPED') state = 'skipped';
-    // FAILURE, CANCELLED, TIMED_OUT, ACTION_REQUIRED, STARTUP_FAILURE, STALE:
-    // someone has to act on each.
-    else state = 'failing';
-    return withUrl({name: node.name ?? '', state}, node.detailsUrl);
-}
-
-function withUrl(check: CheckRun, url: unknown): CheckRun {
-    if (typeof url === 'string' && url) check.url = url;
-    return check;
 }
 
 /** A bot is a `Bot` actor, or an app account whose login says so. */

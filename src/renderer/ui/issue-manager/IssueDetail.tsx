@@ -11,6 +11,7 @@ import {formatDate} from '../../lib/format';
 import {THREAD_SHOWN} from '../../../domain/inbox/issue-manager';
 import type {InboxItem, InboxStage} from '../../../domain/inbox/model';
 import type {IssueManagerState} from '../../state/issue-manager-slice';
+import {inProgressPill, landedForItem} from '../../../domain/merge-manager/stage-words';
 import {
     askStopWork,
     backlogIssue,
@@ -31,21 +32,17 @@ import {
     typeNotes,
 } from './actions';
 
-const STAGE_LABELS: Record<InboxStage, string> = {
-    working: 'Working',
-    needsYou: 'Needs you',
-    prCi: 'PR · CI',
-    ciFailing: 'CI failing',
-    ready: 'Ready',
-    queue: 'Queue',
-    merged: 'Merged',
-};
-
-export function StagePill({stage}: {stage: InboxStage}): JSX.Element {
+/**
+ * An in-progress item's stage: once its PR is landed, the Merge manager's
+ * stage in the words every place shares (#441); its own stage before.
+ */
+export function StagePill({item, stage}: {item: InboxItem; stage: InboxStage}): JSX.Element {
+    const merge = useStore((state) => state.mergeManager.state);
+    const pill = inProgressPill(stage, landedForItem(merge, item));
     return (
-        <span className={'im-stage is-' + stage}>
+        <span className={'im-stage is-' + pill.kind} title={pill.title ?? undefined}>
             <i aria-hidden="true" />
-            {STAGE_LABELS[stage]}
+            {pill.label}
         </span>
     );
 }
@@ -85,7 +82,7 @@ export function IssueDetail({
     return (
         <aside className="im-detail" aria-label="Issue detail">
             <div className="im-meta">
-                {working && <StagePill stage={(item.state as {stage: InboxStage}).stage} />}
+                {working && <StagePill item={item} stage={(item.state as {stage: InboxStage}).stage} />}
                 <span>
                     {facts.repository} #{facts.number}
                 </span>
