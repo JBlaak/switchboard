@@ -23,6 +23,10 @@ _Avoid_: GitHub merge queue (that is GitHub's native feature, which is not used)
 **Switchboard lane**:
 A lane that Switchboard runs itself, for a repository without the merge-queue Action, following the same rules as the queue.
 
+**Lane runner**:
+What coordinates a Switchboard lane: it picks the head, brings it up to date, waits for its required checks and merges it. A queue lane has no lane runner; the merge-queue Action coordinates it.
+_Avoid_: Orchestrator, merge loop
+
 **Head**:
 The one pull request in a lane that is brought up to date, tested and merged. No other pull request in the lane is updated or tested.
 _Avoid_: Front, current
