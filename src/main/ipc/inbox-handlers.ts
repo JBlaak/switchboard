@@ -2,7 +2,7 @@
  * The managers' inbox (#413): both managers' counts, a manager's items, and
  * what the pages do to an item from the renderer (seen, snooze, backlog,
  * notes). Starting, staging and finishing an item are main's own, from the
- * Fix and Start flows (#414, #415).
+ * Fix and Start flows (#414, #415): the Issue manager's are here too.
  */
 import {INVOKE} from '../../ipc/channels';
 import type {Container} from '../composition-root';
@@ -26,6 +26,30 @@ export function registerInboxHandlers(ipc: IpcRegistrar, app: Container): void {
         if (typeof notes !== 'string') throw new Error('notes are text');
         return app.inbox.setNotes(asKey(key), notes);
     });
+
+    // The Issue manager page (#415): its thread, comments, Start and Stop.
+    ipc.handle(INVOKE.issueManagerThread, (key: unknown) => app.issueManager.thread(asKey(key)));
+    ipc.handle(INVOKE.issueManagerPolish, (key: unknown, notes: unknown) =>
+        app.issueManager.polish(asKey(key), asText(notes)),
+    );
+    ipc.handle(INVOKE.issueManagerPost, (key: unknown, body: unknown) =>
+        app.issueManager.post(asKey(key), asText(body)),
+    );
+    ipc.handle(INVOKE.issueManagerPolishAndPost, (key: unknown, notes: unknown) =>
+        app.issueManager.polishAndPost(asKey(key), asText(notes)),
+    );
+    ipc.handle(INVOKE.issueManagerPrepareStart, (key: unknown) => app.issueManager.prepareStart(asKey(key)));
+    ipc.handle(INVOKE.issueManagerStarted, (key: unknown, branch: unknown, sessionId: unknown) =>
+        app.issueManager.started(asKey(key), asText(branch), typeof sessionId === 'string' ? sessionId : null),
+    );
+    ipc.handle(INVOKE.issueManagerStopWork, (key: unknown, unassign: unknown) =>
+        app.issueManager.stopWork(asKey(key), unassign === true),
+    );
+}
+
+function asText(value: unknown): string {
+    if (typeof value !== 'string') throw new Error('expected text');
+    return value;
 }
 
 function asKey(key: unknown): string {

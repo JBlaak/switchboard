@@ -39,6 +39,7 @@ import type {
     InboxStage,
     InboxState,
     InboxSummary,
+    InboxWork,
     IssueFacts,
     ManagerCounts,
 } from './model';
@@ -165,9 +166,12 @@ export function unwatched(items: readonly InboxItem[], manager: InboxManager, wa
 
 // ── What you do to an item ──
 
-/** Seen: an unread item turns read. Any other state stays. */
+/** Seen: an unread item turns read, an issue keeping how many comments it had. Any other state stays. */
 export function markRead(item: InboxItem): InboxItem {
-    return item.state.kind === 'unread' ? {...item, state: READ} : item;
+    if (item.state.kind !== 'unread') return item;
+    return item.facts.kind === 'issue'
+        ? {...item, state: READ, seenComments: item.facts.comments}
+        : {...item, state: READ};
 }
 
 /** Put away until `until` (epoch ms), or until it changes (null). Only from the inbox's own states. */
@@ -200,9 +204,14 @@ export function finish(item: InboxItem, at: number): InboxItem {
     };
 }
 
-/** Stop working on it, or a session that ended without a PR: back in the inbox, read. */
+/** Stop working on it, or a session that ended without a PR: back in the inbox, read, its work let go. */
 export function returnToInbox(item: InboxItem): InboxItem {
-    return item.state.kind === 'inProgress' || item.state.kind === 'done' ? {...item, state: READ} : item;
+    return item.state.kind === 'inProgress' || item.state.kind === 'done' ? {...item, state: READ, work: null} : item;
+}
+
+/** What the session working on an item is on. */
+export function setWork(item: InboxItem, work: InboxWork | null): InboxItem {
+    return {...item, work};
 }
 
 /**

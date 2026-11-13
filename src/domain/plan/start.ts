@@ -41,6 +41,61 @@ export function issueContinuePrompt(issue: IssueKey, plan: IssueKey): string {
 }
 
 /**
+ * A loose issue as its session starts on it (#415): the ticket, the newest of
+ * its thread, and your notes from the Issue manager.
+ */
+export interface LooseIssueTicket {
+    title: string;
+    body: string;
+    /** Login; null for a deleted account. */
+    author: string | null;
+    /** The newest comments, oldest first. */
+    comments: readonly {author: string | null; body: string}[];
+    /** Your notes; empty for none. */
+    notes: string;
+}
+
+/**
+ * The prompt of a session on a loose issue (#415): no plan, so no epic to
+ * read; your notes first, as the context you want it read in, then the
+ * ticket and its thread between tags, so they read as material rather than
+ * as the request. On a branch that exists already (`continuing`) the work
+ * so far is read first.
+ */
+export function looseIssueSessionPrompt(issue: IssueKey, ticket: LooseIssueTicket, continuing = false): string {
+    const n = issue.number;
+    const opening = continuing
+        ? `Continue work on #${n}, a loose issue in no plan: this branch already has earlier work on it. ` +
+          'Read the issue below, then what the branch has so far (its commits, and any uncommitted changes) before going on. ' +
+          `Open a PR titled with a short summary of what you implemented, with "Closes #${n}" in its description, unless one is open already.`
+        : `Work on #${n}, a loose issue in no plan. Read the issue below first. ` +
+          `Open a PR titled with a short summary of what you implemented, with "Closes #${n}" in its description.`;
+    const parts = [opening];
+    const notes = ticket.notes.trim();
+    if (notes) parts.push(['My notes on it:', '<notes>', notes, '</notes>'].join('\n'));
+    parts.push(
+        [
+            'The issue:',
+            `<issue number="${n}" author="${ticket.author ?? 'ghost'}">`,
+            '# ' + ticket.title,
+            ...(ticket.body.trim() ? ['', ticket.body.trim()] : []),
+            '</issue>',
+        ].join('\n'),
+    );
+    if (ticket.comments.length > 0) {
+        parts.push(
+            [
+                'Its newest comments, oldest first:',
+                ...ticket.comments.map(
+                    (comment) => `<comment author="${comment.author ?? 'ghost'}">\n${comment.body.trim()}\n</comment>`,
+                ),
+            ].join('\n'),
+        );
+    }
+    return parts.join('\n\n');
+}
+
+/**
  * A ticket of a wayfinder map is worked with the wayfinder skill, not built to
  * a PR: `/wayfinder <map> <ticket>`, by bare number since the session runs in
  * the map's repository, and by URL for one in another. The skill picks up

@@ -16,6 +16,7 @@ import type {
     GitHubCli,
     PlanReads,
     ProjectReads,
+    IssueManagerCalls,
     QueueLabelWrites,
     CiJobQueueCalls,
 } from '../src/application/ports/github-cli';
@@ -271,6 +272,7 @@ function setup(overrides: Partial<World> = {}) {
         | 'submitPendingReview'
         | 'latestTag'
         | 'inboxIssuesIn'
+        | IssueManagerCalls
         | QueueLabelWrites
         | CiJobQueueCalls
         | PlanReads

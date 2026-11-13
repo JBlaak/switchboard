@@ -20,6 +20,7 @@ import path from 'node:path';
 import electronPath from 'electron';
 import {stableUuid, transcriptLines} from './transcript';
 import type {FixturePullRequest} from './transcript';
+import type {InboxItem} from '../../src/domain/inbox/model';
 
 /**
  * The moment every fixture is built around, and what the renderer's clock reads.
@@ -121,6 +122,8 @@ export interface FixtureSpec {
     settings?: Record<string, unknown>;
     /** Per-project overrides, keyed by the project path relative to home. */
     projectSettings?: Record<string, Record<string, unknown>>;
+    /** The managers' inbox (#413), as main finds it at launch; the suite never polls. */
+    inboxItems?: readonly InboxItem[];
 }
 
 /** What a built fixture tells the rest of the harness. */
@@ -308,6 +311,8 @@ interface SeedFile {
     meta: {sessionId: string; name?: string; starred?: boolean; archived?: boolean}[];
     /** Rows of the `vm_transcripts` table, as the app's store writes them. */
     vmTranscripts: {session_id: string; host_key: string; cwd: string; mtime_ms: number; transcript: string}[];
+    /** Rows of the `inbox_items` table. */
+    inboxItems: {key: string; manager: string; item: string; updated_at: number}[];
 }
 
 function seedDatabase(
@@ -316,7 +321,17 @@ function seedDatabase(
     spec: FixtureSpec,
     projectPath: (relative: string) => string,
 ): void {
-    const seed: SeedFile = {settings: {}, meta: [], vmTranscripts: []};
+    const seed: SeedFile = {
+        settings: {},
+        meta: [],
+        vmTranscripts: [],
+        inboxItems: (spec.inboxItems ?? []).map((item) => ({
+            key: item.key,
+            manager: item.manager,
+            item: JSON.stringify(item),
+            updated_at: item.createdAt,
+        })),
+    };
 
     const remoteProjects = (spec.remotes ?? []).map((remote) => ({
         user: remote.user,

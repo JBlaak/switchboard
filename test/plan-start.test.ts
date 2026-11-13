@@ -5,6 +5,7 @@ import {issueKeyString} from '../src/domain/plan/model';
 import {
     issueBranchName,
     issueSessionPrompt,
+    looseIssueSessionPrompt,
     MAP_LAUNCHERS,
     mapLauncherPrompt,
     wayfinderTicketPrompt,
@@ -127,4 +128,80 @@ test("a map's launchers start the next ticket and reconcile the map, in that ord
 
     /* Then */
     assert.deepEqual(prompts, ['/wayfinder 2241', '/reconciling-the-map 2241']);
+});
+
+// ── A loose issue, without a plan (#415) ──
+
+const TICKET = {
+    title: 'Export on the coach page',
+    body: 'The export button does nothing.',
+    author: 'pieter',
+    comments: [
+        {author: 'pieter', body: 'Also maybe the numbers were off?'},
+        {author: 'marieke', body: 'Chrome on Windows, the athletes list.'},
+    ],
+    notes: 'It is the CSV export (ExportDialog). Ignore the numbers, that is #455.',
+};
+
+test('a loose issue is started without an epic, with your notes above the ticket and its thread', () => {
+    /* Given */
+    const issue = {repository: REPO, number: 482};
+
+    /* When */
+    const prompt = looseIssueSessionPrompt(issue, TICKET);
+
+    /* Then */
+    assert.equal(
+        prompt,
+        [
+            'Work on #482, a loose issue in no plan. Read the issue below first. Open a PR titled with a short summary of what you implemented, with "Closes #482" in its description.',
+            '',
+            'My notes on it:\n<notes>\nIt is the CSV export (ExportDialog). Ignore the numbers, that is #455.\n</notes>',
+            '',
+            'The issue:\n<issue number="482" author="pieter">\n# Export on the coach page\n\nThe export button does nothing.\n</issue>',
+            '',
+            'Its newest comments, oldest first:\n<comment author="pieter">\nAlso maybe the numbers were off?\n</comment>\n<comment author="marieke">\nChrome on Windows, the athletes list.\n</comment>',
+        ].join('\n'),
+    );
+    assert.doesNotMatch(prompt, /epic/);
+});
+
+test('a loose issue without notes or comments has just the ticket', () => {
+    /* Given */
+    const issue = {repository: REPO, number: 7};
+
+    /* When */
+    const prompt = looseIssueSessionPrompt(issue, {...TICKET, notes: '  ', comments: [], author: null});
+
+    /* Then */
+    assert.doesNotMatch(prompt, /<notes>|<comment/);
+    assert.match(prompt, /<issue number="7" author="ghost">/);
+});
+
+test('continuing a loose issue on its branch reads the work so far first', () => {
+    /* Given */
+    const issue = {repository: REPO, number: 482};
+
+    /* When */
+    const prompt = looseIssueSessionPrompt(issue, TICKET, true);
+
+    /* Then */
+    assert.match(
+        prompt,
+        /^Continue work on #482, a loose issue in no plan: this branch already has earlier work on it\./,
+    );
+    assert.match(prompt, /"Closes #482" in its description, unless one is open already\./);
+    assert.match(prompt, /<notes>/);
+});
+
+test("a loose issue gets the same branch as a plan's issue, which names it back", () => {
+    /* Given */
+    const issue = {repository: REPO, number: 482, title: TICKET.title};
+
+    /* When */
+    const branch = issueBranchName(issue);
+
+    /* Then */
+    assert.equal(branch, '482-export-on-the-coach-page');
+    assert.deepEqual(issueFromBranch(branch, REPO), {repository: REPO, number: 482});
 });

@@ -31,6 +31,7 @@ import type {BumpResult, CiJobQueueAnswer} from '../../src/domain/project/ci-job
 import type {Usage} from '../../src/domain/usage/usage';
 import type {Weather, WeatherLocation} from '../../src/domain/weather/weather';
 import type {Plan, PlanSummary} from '../../src/domain/plan/model';
+import type {IssueThread} from '../../src/domain/inbox/issue-manager';
 import type {SessionPlans} from '../../src/application/services/plan-service';
 import type {ProjectOverview} from '../../src/domain/project/overview';
 import type {AgentHostStatus, AgentHostsResult} from '../../src/application/services/agent-hosts';
@@ -117,6 +118,12 @@ export interface HostStubs {
      * service, which finds no repository in the fixture home.
      */
     plans: PlansStub | null;
+    /**
+     * The Issue manager's back end (#415), standing in for `gh` and git: an
+     * issue's thread, and Start's worktree, made under the project at this
+     * path relative to home; null leaves the real service.
+     */
+    issueManager: IssueManagerStub | null;
     /**
      * What `projectOverview` answers, standing in for git and `gh`, by the end of
      * the project's path (`Development/acme-api`); null leaves the real service,
@@ -491,6 +498,14 @@ export const STUB_AGENT: AgentStub = {
     setupTerminal: {ok: false, error: 'No setup terminal in the harness'},
 };
 
+/** What the Issue manager's GitHub-facing channels answer (#415). */
+export interface IssueManagerStub {
+    /** The project Start makes the worktree in, relative to home. */
+    project: string;
+    /** Each issue's thread, by its inbox key; one not listed is not read. */
+    threads?: Record<string, IssueThread>;
+}
+
 /** What the plan channels answer: a session's plans, one plan by its issue, and the sessions that own issues. */
 export interface PlansStub {
     /** By session id; a session not here answers null, as one outside a repository does. */
@@ -613,6 +628,7 @@ export const DEFAULT_STUBS: HostStubs = {
     geocode: {},
     sessionWork: null,
     plans: null,
+    issueManager: null,
     projectOverview: null,
     mergeQueue: null,
     agent: STUB_AGENT,
@@ -772,6 +788,26 @@ export async function installHostStubs(app: ElectronApplication, stubs: HostStub
                         },
                     );
                 }
+            }
+
+            if (state.issueManager) {
+                const issues = state.issueManager;
+                ipcMain.removeHandler(channels.issueManagerThread);
+                ipcMain.handle(channels.issueManagerThread, (_event, key) => issues.threads?.[String(key)] ?? null);
+                // The real one assigns you on GitHub and makes a worktree with git; the session still starts for real.
+                ipcMain.removeHandler(channels.issueManagerPrepareStart);
+                ipcMain.handle(channels.issueManagerPrepareStart, (_event, key) => {
+                    const number = Number(/#(\d+)$/.exec(String(key))?.[1]);
+                    const projectPath = process.env.HOME + '/' + issues.project;
+                    const branch = number + '-issue';
+                    return {
+                        ok: true,
+                        projectPath,
+                        worktreePath: projectPath + '/.claude/worktrees/' + branch,
+                        branch,
+                        prompt: 'Work on #' + number + ', a loose issue in no plan.',
+                    };
+                });
             }
 
             if (state.projectOverview) {

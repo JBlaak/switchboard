@@ -35,6 +35,7 @@ import {
     returnToInbox,
     setNotes,
     setStage,
+    setWork,
     snooze,
     startWork,
     syncSource,
@@ -55,6 +56,7 @@ import type {
     InboxManager,
     InboxStage,
     InboxSummary,
+    InboxWork,
 } from '../../domain/inbox/model';
 import type {BugsnagError} from '../../domain/bugsnag/model';
 import type {BugsnagApi, ErrorQuery} from '../ports/bugsnag-api';
@@ -197,6 +199,16 @@ export class InboxService {
         return this.change(key, markRegressed);
     }
 
+    /** What the session working on an item is on (its branch, the session, its PR). */
+    public setWork(key: string, work: InboxWork | null): InboxItem | null {
+        return this.change(key, (item) => setWork(item, work));
+    }
+
+    /** The local project with Watch issues on whose repository is `repository`; null for none. */
+    public async projectFor(repository: string): Promise<string | null> {
+        return (await this.watchedRepositories()).get(repository) ?? null;
+    }
+
     private change(key: string, apply: (item: InboxItem) => InboxItem): InboxItem | null {
         const before = this.items.get(key);
         if (!before) return null;
@@ -243,7 +255,7 @@ export class InboxService {
     }
 
     private async pollIssues(): Promise<void> {
-        const repositories = await this.watchedRepositories();
+        const repositories = [...(await this.watchedRepositories()).keys()];
         this.commit([], unwatched([...this.items.values()], 'issue', new Set(repositories)));
         for (const repository of repositories) {
             const answer = await this.deps.github.inboxIssuesIn(repository);
@@ -258,16 +270,16 @@ export class InboxService {
         }
     }
 
-    /** The GitHub repositories of the local projects with Watch issues on, each once. */
-    private async watchedRepositories(): Promise<string[]> {
-        const repositories = new Set<string>();
+    /** The GitHub repositories of the local projects with Watch issues on, each once, with the first such project. */
+    private async watchedRepositories(): Promise<Map<string, string>> {
+        const repositories = new Map<string, string>();
         for (const projectPath of this.watchedProjects()) {
             const root = await this.deps.git.worktreeRoot(projectPath);
             const origin = root ? await this.deps.remotes.originUrl(root) : null;
             const repository = origin ? gitHubRepository(origin) : '';
-            if (repository) repositories.add(repository);
+            if (repository && !repositories.has(repository)) repositories.set(repository, projectPath);
         }
-        return [...repositories];
+        return repositories;
     }
 
     /** The local projects with Watch issues on that `gh` can be asked about. */

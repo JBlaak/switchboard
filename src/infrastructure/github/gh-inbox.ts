@@ -13,6 +13,7 @@
  */
 import type {IssueLabel} from '../../domain/project/overview';
 import type {InboxIssueRead, InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
+import type {IssueThread} from '../../domain/inbox/issue-manager';
 
 /** Open issues read per repository: the 100 most recently updated, one page. */
 export const INBOX_ISSUES_PER_REPOSITORY = 100;
@@ -92,4 +93,34 @@ function toLabel(label: any): IssueLabel {
 function nameOf(node: any, fallback: string): string {
     const name = node?.repository?.nameWithOwner;
     return typeof name === 'string' && name ? name : fallback;
+}
+
+/** Comments an issue's thread is read with: the newest, for the detail and a Start prompt. */
+export const ISSUE_THREAD_COMMENTS = 20;
+
+/** An issue's body and newest comments (#415), and who `gh` signs in as. */
+export const ISSUE_THREAD_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  viewer { login }
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      body
+      comments(last: ${ISSUE_THREAD_COMMENTS}) { totalCount nodes { author { login } body createdAt } }
+    }
+  }
+}`;
+
+/** The answer in `ISSUE_THREAD_QUERY`'s data; null when it holds no issue. */
+export function toIssueThread(data: any): IssueThread | null {
+    const issue = data?.repository?.issue;
+    if (!issue || typeof issue !== 'object') return null;
+    const nodes: any[] = Array.isArray(issue.comments?.nodes) ? issue.comments.nodes : [];
+    const comments = nodes
+        .filter((node) => node && typeof node.body === 'string')
+        .map((node) => ({author: loginOf(node.author), body: node.body as string, createdAt: text(node.createdAt)}));
+    return {
+        body: text(issue.body),
+        comments,
+        total: Math.max(count(issue.comments?.totalCount), comments.length),
+        viewer: loginOf(data?.viewer),
+    };
 }

@@ -18,7 +18,15 @@ import {
     type IssueWorktreeResult,
 } from '../../domain/plan/issue-session';
 import {sameIssue, type IssueKey} from '../../domain/plan/model';
-import {issueBranchName, issueContinuePrompt, issueSessionPrompt, wayfinderTicketPrompt} from '../../domain/plan/start';
+import {
+    issueBranchName,
+    issueContinuePrompt,
+    issueSessionPrompt,
+    looseIssueSessionPrompt,
+    wayfinderTicketPrompt,
+    type LooseIssueTicket,
+} from '../../domain/plan/start';
+import type {ExistingBranchChoice} from '../../domain/project/branch-worktree';
 import type {SessionPullRequest} from '../../domain/session/session';
 import type {Clock} from '../ports/clock';
 import type {GitWorkspace, GitWorktrees} from '../ports/git-workspace';
@@ -27,6 +35,15 @@ import type {GitRemotes} from '../ports/git-remotes';
 import type {Logger} from '../ports/logger';
 import type {AwaitableTranscriptStore} from '../ports/transcript-queries';
 import {BranchWorktrees, WORKTREES_DIR, type ChosenBase} from './support/branch-worktrees';
+
+/** What the Issue manager hands over to prepare a loose issue's worktree (#415). */
+export interface LooseIssueWorktreeRequest {
+    /** The project to start in: any directory of the repository. */
+    projectPath: string;
+    issue: IssueKey;
+    ticket: LooseIssueTicket;
+    existing?: ExistingBranchChoice;
+}
 
 /** How long a PR's closing references are trusted before `gh` is asked again. */
 export const CLOSING_REFS_TTL_MS = 5 * 60_000;
@@ -179,17 +196,9 @@ export class IssueSessionService {
         existing,
     }: IssueWorktreeRequest): Promise<IssueWorktreeResult> {
         const {git} = this.deps;
-        if (this.agentless(projectPath)) {
-            return fail('A session on an issue can only start in a local project or on a VM');
-        }
-        const root = await git.mainCheckout(projectPath);
-        if (!root) return fail('Not a git repository: ' + projectPath);
-        const origin = await this.deps.remotes.originUrl(root);
-        const repository = (origin && gitHubRepository(origin)) || null;
-        if (!repository) return fail('Not a GitHub repository: its origin is not on github.com');
-        if (issue.repository !== repository) {
-            return fail(`#${issue.number} is in ${issue.repository}, not in this project's ${repository}`);
-        }
+        const checkout = await this.checkoutFor(projectPath, issue);
+        if (!checkout.ok) return checkout;
+        const {root, repository} = checkout;
         const planIssue = plan.issues.find((candidate) => sameIssue(candidate, issue));
         if (!planIssue) return fail(`#${issue.number} is not part of plan #${plan.number}`);
 
@@ -246,9 +255,52 @@ export class IssueSessionService {
             ...(made.warnings.length ? {warning: made.warnings.join(' ')} : {}),
         };
     }
+
+    /**
+     * Make the worktree a session on a loose issue starts in (#415): no plan,
+     * so no blockers to stack on; a branch named after the issue, off the
+     * default branch. The prompt carries the ticket, its thread and your
+     * notes. An existing branch is handled as `prepareIssueWorktree` does.
+     */
+    public async prepareLooseIssueWorktree({
+        projectPath,
+        issue,
+        ticket,
+        existing,
+    }: LooseIssueWorktreeRequest): Promise<IssueWorktreeResult> {
+        const checkout = await this.checkoutFor(projectPath, issue);
+        if (!checkout.ok) return checkout;
+        const made = await this.worktrees.prepare({
+            root: checkout.root,
+            branch: issueBranchName({...issue, title: ticket.title}),
+            existing,
+        });
+        if (!made.ok) return made;
+        const {worktreePath, branch} = made;
+        return {ok: true, worktreePath, branch, prompt: looseIssueSessionPrompt(issue, ticket, made.reused)};
+    }
+
+    /** The main checkout of the project an issue's session starts in, when the issue is its repository's. */
+    private async checkoutFor(
+        projectPath: string,
+        issue: IssueKey,
+    ): Promise<{ok: true; root: string; repository: string} | {ok: false; reason: string}> {
+        if (this.agentless(projectPath)) {
+            return fail('A session on an issue can only start in a local project or on a VM');
+        }
+        const root = await this.deps.git.mainCheckout(projectPath);
+        if (!root) return fail('Not a git repository: ' + projectPath);
+        const origin = await this.deps.remotes.originUrl(root);
+        const repository = (origin && gitHubRepository(origin)) || null;
+        if (!repository) return fail('Not a GitHub repository: its origin is not on github.com');
+        if (issue.repository !== repository) {
+            return fail(`#${issue.number} is in ${issue.repository}, not in this project's ${repository}`);
+        }
+        return {ok: true, root, repository};
+    }
 }
 
-function fail(reason: string): IssueWorktreeResult {
+function fail(reason: string): IssueWorktreeResult & {ok: false} {
     return {ok: false, reason};
 }
 

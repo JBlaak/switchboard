@@ -48,7 +48,7 @@ remote-status rules the main process does instead of a parallel copy.
 | `power/`                                      | reading `pmset`'s SleepDisabled flag for the toolbar's sleep switch                                                                                                                                                                                             |
 | `weather/`                                    | folding a WMO weather code into the four skies the empty-state mascot dresses for, and parsing the forecast and geocoding responses                                                                                                                             |
 | `bugsnag/`                                    | the Bug manager's Bugsnag connection: which projects are opted in and linked to a local project, the trending thresholds, and how the Data Access API's answers parse                                                                                           |
-| `inbox/`                                      | the Bug and Issue managers' inbox: an item's states, a bug's signals (new, trending), the wake rules and leaving, which issues are loose and yours, and the snooze dates and cycles                                                                             |
+| `inbox/`                                      | the managers' inbox: an item's states, a bug's signals, the wake rules and leaving, which issues are loose and yours, the snooze dates and cycles, the pages' tabs, the Issue manager's chips, tiles, polished comment and stages                               |
 | `update/`                                     | whether a published release is newer than the running app, and which zip this Mac's architecture installs from                                                                                                                                                  |
 | `search/`, `settings/`, `schedule/`, `usage/` | the rules for each of those, similarly                                                                                                                                                                                                                          |
 
@@ -154,7 +154,7 @@ modules in `features/`:
 - **The main area's panel swap.** What the main area shows is one route
   (`state/main-area-slice`): a session, a session's work page, a project
   (so far the Plan view without a session), the app settings, the Tasks page
-  (while BlaakTasks is on), or the empty screen. The panels are shown and hidden by style (`lib/dom`), following
+  (while BlaakTasks is on), the Issue manager page, or the empty screen. The panels are shown and hidden by style (`lib/dom`), following
   that route in one place (`ui/main-area/install-main-area`), because a
   terminal can only take focus or be refitted once its panel has a layout
   box, synchronously. Surfaces only dispatch what they want on screen; none
