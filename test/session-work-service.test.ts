@@ -270,6 +270,7 @@ function setup(overrides: Partial<World> = {}) {
         | 'deletePendingReview'
         | 'submitPendingReview'
         | 'latestTag'
+        | 'inboxIssuesIn'
         | QueueLabelWrites
         | CiJobQueueCalls
         | PlanReads
