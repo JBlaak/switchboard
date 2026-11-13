@@ -11,14 +11,18 @@
  * The managers beside Patch (#416) take their pose from the inbox's counts,
  * which is unit tested (test/inbox-slice.test.ts); these check that a manager
  * stands there only once it is set up, follows the counts main pushes, and
- * where it stands on a tall and a short window.
+ * where it stands on a tall and a short window. The Merge manager (#440)
+ * stands fourth from day one; its pose, counter and bubble from the lanes are
+ * unit tested (test/merge-manager-figure.test.ts).
  */
 import {test, expect, forEachAppearance} from '../support/test';
 import {expectScreen, openSession, searchBox, sidebar, terminalStatus} from '../support/app';
 import {hostStubCalls, pushEvent, setContentSize} from '../support/main-process';
 import {LABEL, P, S, emptyFixture, standardFixture} from '../fixtures/standard';
+import {FIXTURE_NOW} from '../support/fixture-home';
 import type {Page} from '@playwright/test';
 import type {InboxSummary} from '../../src/domain/inbox/model';
+import type {LandedView, LaneStage, MergeManagerState} from '../../src/domain/merge-manager/model';
 
 test.use({fixture: emptyFixture()});
 
@@ -198,7 +202,7 @@ test.describe('patch', () => {
 const manager = (page: Page, name: string | RegExp) => page.getByTestId('patch-managers').getByRole('button', {name});
 
 /** The scene element a manager's pose is drawn from. */
-const pose = (page: Page, kind: 'bug' | 'issue') => page.locator(`[data-manager="${kind}"] .patch-mgr-scene`);
+const pose = (page: Page, kind: 'bug' | 'issue' | 'merge') => page.locator(`[data-manager="${kind}"] .patch-mgr-scene`);
 
 /** Main's push after a poll, for both managers set up. */
 function summary(bug: [number, number], issue: number): InboxSummary {
@@ -206,6 +210,28 @@ function summary(bug: [number, number], issue: number): InboxSummary {
         bug: {unread: bug[0], urgent: bug[1]},
         issue: {unread: issue, urgent: 0},
         configured: {bug: true, issue: true},
+    };
+}
+
+/** Main's push of one Switchboard lane, its PRs #1, #2, … at these stages. */
+function lanes(...stages: LaneStage[]): MergeManagerState {
+    const pullRequests: LandedView[] = stages.map((stage, index) => ({
+        key: `movelab/connect#${index + 1}`,
+        repository: 'movelab/connect',
+        number: index + 1,
+        title: `PR ${index + 1}`,
+        url: `https://github.com/movelab/connect/pull/${index + 1}`,
+        headRef: `branch-${index + 1}`,
+        lane: 'switchboard',
+        landedAt: FIXTURE_NOW - (60 - index) * 60_000,
+        stage,
+        setAside: null,
+        errand: null,
+        place: null,
+    }));
+    return {
+        lanes: [{repository: 'movelab/connect', kind: 'switchboard', approvalLostOnPush: false, pullRequests}],
+        needsYou: stages.filter((stage) => stage.kind === 'needsYou').length,
     };
 }
 
@@ -217,7 +243,7 @@ test.describe('managers', () => {
         }) => {
             /* Given */
             await expect(says(page, FIRST_LINE)).toBeVisible();
-            await expect(page.getByTestId('patch-managers')).toHaveCount(0);
+            await expect(manager(page, /Bug manager|Issue manager/)).toHaveCount(0);
 
             /* When */
             await pushEvent(app, 'inbox:changed', summary([3, 1], 2));
@@ -269,7 +295,54 @@ test.describe('managers', () => {
         await pushEvent(app, 'inbox:changed', {...summary([2, 0], 5), configured: {bug: false, issue: false}});
 
         /* Then */
-        await expect(page.getByTestId('patch-managers')).toHaveCount(0);
+        await expect(manager(page, /Bug manager|Issue manager/)).toHaveCount(0);
+        await expect(manager(page, 'Merge manager')).toBeVisible();
+    });
+
+    test('the Merge manager stands fourth on the floor from day one, posed and counted as the lanes say', async ({
+        page,
+        app,
+    }) => {
+        /* Given */
+        await expect(says(page, FIRST_LINE)).toBeVisible();
+        await expect(manager(page, 'Merge manager')).toBeVisible();
+        await expect(pose(page, 'merge')).toHaveClass(/patch-mgr-s-idle/);
+
+        /* When */
+        await pushEvent(app, 'inbox:changed', summary([0, 0], 0));
+
+        /* Then: Bug manager, Patch, Issue manager, Merge manager, left to right */
+        const left = async (locator: ReturnType<Page['locator']>) => (await locator.boundingBox())!.x;
+        const row = page.getByTestId('patch-managers');
+        const xs = [
+            await left(row.locator('[data-manager="bug"]')),
+            await left(row.getByText('Ask Patch')),
+            await left(row.locator('[data-manager="issue"]')),
+            await left(row.locator('[data-manager="merge"]')),
+        ];
+        expect([...xs].sort((a, b) => a - b)).toEqual(xs);
+
+        /* When */
+        await pushEvent(
+            app,
+            'merge-manager:changed',
+            lanes({kind: 'head', step: 'checks'}, {kind: 'waiting', willConflict: false, position: null}),
+        );
+
+        /* Then */
+        await expect(pose(page, 'merge')).toHaveClass(/patch-mgr-s-moving/);
+
+        /* When */
+        await pushEvent(
+            app,
+            'merge-manager:changed',
+            lanes({kind: 'needsYou', reason: {kind: 'changes-requested'}}, {kind: 'merged', at: FIXTURE_NOW - 60_000}),
+        );
+
+        /* Then */
+        await expect(manager(page, 'Merge manager, 1 needs you')).toBeVisible();
+        await expect(pose(page, 'merge')).toHaveClass(/patch-mgr-s-needsYou/);
+        await expect(row.getByRole('status')).toHaveText('#2 merged');
     });
 
     test.describe('with a project on Watch issues', () => {

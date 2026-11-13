@@ -106,6 +106,8 @@ import {MacWorkspaceLauncher} from '../infrastructure/electron/workspace-launche
 import {WorkspaceActionService} from '../application/services/workspace-action-service';
 import {ElectronWindowDrag} from '../infrastructure/electron/window-drag';
 import {ElectronDockAttention} from '../infrastructure/electron/dock-attention';
+import {ArchiveOnMergeService} from '../application/services/archive-on-merge-service';
+import {bouncesDock} from '../domain/merge-manager/transitions';
 import {E2eGlobalHotkey, ElectronGlobalHotkey} from '../infrastructure/electron/global-hotkey';
 import {QuickAskWindow} from '../infrastructure/electron/quick-ask-window';
 import {HeadsUpWindow} from '../infrastructure/electron/heads-up-window';
@@ -1156,6 +1158,38 @@ export function buildContainer(): Container {
         timers,
         log,
         runner: laneRunner,
+    });
+    // What the Merge manager tells (#440): the Dock bounces once when a PR goes
+    // to Needs you, and a merged PR's session is archived (at the end of its
+    // turn when busy, never with uncommitted changes).
+    const archiveOnMerge = new ArchiveOnMergeService({
+        sessions: sessionCandidates,
+        prompter,
+        locate: locateSession,
+        transcripts: routedTranscripts,
+        git: workspace,
+        archiver: {
+            archive: (sessionId) =>
+                sessionArchiver({
+                    registry,
+                    remote,
+                    lifecycle,
+                    terminals,
+                    repository,
+                    renderer,
+                    worktreeCleanup,
+                    tasks,
+                }).archive(sessionId),
+        },
+        log,
+        agentlessRemote,
+    });
+    archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
+        archiveOnMerge.turnEnded(sessionIds, archiving, currentId),
+    );
+    mergeManager.onTransitions((transitions) => {
+        if (bouncesDock(transitions)) dockAttention.bounceOnce();
+        void archiveOnMerge.merged(transitions.merged);
     });
 
     // Fix errands (#437): sessions the Merge manager starts by itself when a

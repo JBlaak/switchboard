@@ -36,7 +36,9 @@
  * same poll.
  *
  * Nothing here notifies: the Merge manager's page, its figure and the Dock
- * show what happened (#439, #440).
+ * show what happened (#439, #440). Whoever needs to act on a PR merging or
+ * going to Needs you hears it through `onTransitions` (#440): the Dock's one
+ * bounce, and archiving a merged PR's session.
  */
 import {laneKindOf} from '../../domain/merge-manager/lane-kind';
 import {
@@ -51,6 +53,7 @@ import {
     unlandLabels,
 } from '../../domain/merge-manager/landed';
 import {landedKey} from '../../domain/merge-manager/model';
+import {landedTransitions, type LandedTransitions} from '../../domain/merge-manager/transitions';
 import type {
     LandedPullRequest,
     LandedView,
@@ -108,6 +111,7 @@ export class MergeManagerService {
     private again = false;
     /** What was last pushed. */
     private published: string | null = null;
+    private readonly followers: Array<(transitions: LandedTransitions) => void> = [];
     /** Who hears each lane read once it is folded in (the fix errands). */
     private readonly laneFollowers: Array<(lane: FoldedLane) => void> = [];
 
@@ -148,6 +152,14 @@ export class MergeManagerService {
                 }
             });
         return this.polling;
+    }
+
+    /**
+     * Hear each change that merged a landed PR or sent one to Needs you. PRs
+     * already there when the app starts are not told again.
+     */
+    public onTransitions(fn: (transitions: LandedTransitions) => void): void {
+        this.followers.push(fn);
     }
 
     /** Every lane with a landed PR, and how many need you. */
@@ -368,9 +380,18 @@ export class MergeManagerService {
     private commit(save: readonly LandedPullRequest[], remove: readonly string[]): void {
         const removing = remove.filter((key) => this.landed.has(key));
         if (save.length === 0 && removing.length === 0) return;
+        const transitions = landedTransitions(this.landed, save);
         this.deps.store.apply(save, removing);
         for (const pr of save) this.landed.set(pr.key, pr);
         for (const key of removing) this.landed.delete(key);
+        if (transitions.merged.length === 0 && transitions.needsYou.length === 0) return;
+        for (const fn of this.followers) {
+            try {
+                fn(transitions);
+            } catch (err) {
+                this.deps.log.error('[merge-manager] a transition follower failed:', (err as Error).message);
+            }
+        }
     }
 
     /** Push the state when what it shows changed. */
