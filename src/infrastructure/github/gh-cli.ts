@@ -46,6 +46,16 @@ import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/
 import {LATEST_TAG_QUERY, toLatestTag} from './gh-tags';
 import {INBOX_ISSUES_QUERY, ISSUE_THREAD_QUERY, toInboxIssues, toIssueThread} from './gh-inbox';
 import type {IssueThread} from '../../domain/inbox/issue-manager';
+import {
+    QUEUED_PULL_REQUESTS_QUERY,
+    QUEUED_SEARCH,
+    WORKFLOWS_QUERY,
+    laneQuery,
+    toLaneRead,
+    toQueuedPullRequests,
+    toWorkflowFiles,
+} from './gh-lanes';
+import type {LaneRead, WorkflowFile} from '../../domain/merge-manager/model';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import {ciJobPaths, toActiveRuns, toCiJobs, toRunCompleted, toRunIds, toRunners, toTimedRun} from './gh-ci-jobs';
@@ -323,6 +333,28 @@ export class GhCli implements GitHubCli {
         } catch {
             return null;
         }
+    }
+
+    // ── The Merge manager (#434): the queries and their mapping are in `gh-lanes.ts` ──
+
+    public async queuedPullRequests(): Promise<{repository: string; number: number}[] | null> {
+        const data = await this.graphql(QUEUED_PULL_REQUESTS_QUERY, {search: QUEUED_SEARCH});
+        return data ? toQueuedPullRequests(data) : null;
+    }
+
+    public async laneRead(repo: string, numbers: readonly number[]): Promise<LaneRead | null> {
+        const parts = REPO.exec(repo);
+        if (!parts) return null;
+        const wanted = validNumbers(numbers);
+        const data = await this.graphql(laneQuery(wanted), {owner: parts[1], name: parts[2]});
+        return data ? toLaneRead(data, repo, wanted) : null;
+    }
+
+    public async workflowFiles(repo: string): Promise<WorkflowFile[] | null> {
+        const parts = REPO.exec(repo);
+        if (!parts) return null;
+        const data = await this.graphql(WORKFLOWS_QUERY, {owner: parts[1], name: parts[2]});
+        return data ? toWorkflowFiles(data) : null;
     }
 
     // ── The merge queue's labels (#315) ──

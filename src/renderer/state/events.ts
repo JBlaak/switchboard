@@ -64,6 +64,7 @@ import type {AskPatchResult} from '../../domain/ask/model';
 import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {ShownPage} from '../../domain/session/page-tool';
 import type {InboxManager, InboxSummary} from '../../domain/inbox/model';
+import type {MergeManagerState} from '../../domain/merge-manager/model';
 
 // ── Pushed by the main process ──
 
@@ -112,6 +113,8 @@ export type PushEvent =
     | {type: 'sessionTaskChanged'; sessionId: string; taskId: string | null}
     /** The managers' inbox changed (#413): both managers' counts. */
     | {type: 'inboxChanged'; summary: InboxSummary}
+    /** The Merge manager's lanes changed (#434): every lane, and how many PRs need you. */
+    | {type: 'mergeManagerChanged'; state: MergeManagerState}
     /** One line of an agent install's progress (#276), for the VM it installs on (its `user@host:port` key). */
     | {type: 'agentInstallProgress'; hostKey: string; line: string}
     /** One line of a project hand-off's progress (#276), for the local project. */

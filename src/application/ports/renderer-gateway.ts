@@ -21,6 +21,7 @@ import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {ShownPage} from '../../domain/session/page-tool';
 import type {InboxSummary} from '../../domain/inbox/model';
+import type {MergeManagerState} from '../../domain/merge-manager/model';
 
 export interface RendererGateway {
     /** True while there is a window listening; every send is a no-op without one. */
@@ -112,4 +113,8 @@ export interface RendererGateway {
     // ── The managers' inbox (#413) ──
     /** The inbox changed after a poll or an action: both managers' counts. Its items are asked for (`inboxItems`). */
     inboxChanged(summary: InboxSummary): void;
+
+    // ── The Merge manager (#434) ──
+    /** The landed PRs' lanes changed after a poll or an action: every lane, and how many PRs need you. */
+    mergeManagerChanged(state: MergeManagerState): void;
 }

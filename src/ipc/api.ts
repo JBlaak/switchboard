@@ -80,6 +80,9 @@ import type {ReleaseTagsView, SnoozeOptionView} from '../application/services/in
 import type {InboxItem, InboxManager, InboxSummary} from '../domain/inbox/model';
 import type {IssueThread} from '../domain/inbox/issue-manager';
 import type {IssueStartPrepared, IssueWriteResult, PolishResult} from '../application/services/issue-manager-service';
+import type {MergeManagerState} from '../domain/merge-manager/model';
+import type {LandResult} from '../application/services/merge-manager-service';
+import type {GitHubWrite} from '../application/ports/github-cli';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
 export type {Editor, WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
@@ -265,6 +268,12 @@ export interface SwitchboardApi {
     issueManagerStarted(key: string, branch: string, sessionId: string | null): Promise<InboxItem | null>;
     /** Stop working on it: back in the inbox, and off the issue on GitHub when `unassign`. */
     issueManagerStopWork(key: string, unassign: boolean): Promise<{item: InboxItem | null; warning?: string}>;
+    /** The Merge manager's lanes (#434), as `onMergeManagerChanged` pushes them. */
+    mergeManagerState(): Promise<MergeManagerState>;
+    /** Land your own open, non-draft PR: it joins its repository's lane. */
+    mergeManagerLand(repository: string, number: number): Promise<LandResult>;
+    /** Unland a PR: it leaves its lane without merging. */
+    mergeManagerUnland(repository: string, number: number): Promise<GitHubWrite>;
     /** Releases are tagged for a project (#412): what its tags say, its own override, and what counts. */
     releaseTags(projectPath: string): Promise<ReleaseTagsView>;
     /**
@@ -667,6 +676,8 @@ export interface SwitchboardApi {
     onSessionTaskChanged(cb: (sessionId: string, taskId: string | null) => void): Unsubscribe;
     /** The managers' inbox changed (#413): both managers' counts. */
     onInboxChanged(cb: (summary: InboxSummary) => void): Unsubscribe;
+    /** The Merge manager's lanes changed (#434): every lane, and how many PRs need you. */
+    onMergeManagerChanged(cb: (state: MergeManagerState) => void): Unsubscribe;
     /** One line of an agent install's progress, for the project whose host it is. */
     onAgentInstallProgress(cb: (projectPath: string, line: string) => void): Unsubscribe;
     /** One line of a hand-off's progress, for the local project being handed off. */

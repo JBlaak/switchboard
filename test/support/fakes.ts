@@ -231,6 +231,7 @@ export function fakeRenderer(): FakeRenderer {
         tasksChanged: record('tasksChanged'),
         sessionTaskChanged: record('sessionTaskChanged'),
         inboxChanged: record('inboxChanged'),
+        mergeManagerChanged: record('mergeManagerChanged'),
     };
 }
 

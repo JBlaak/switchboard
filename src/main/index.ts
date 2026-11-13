@@ -133,6 +133,8 @@ async function start(container: Container): Promise<void> {
         container.prWatch.start();
         // The merge queue (#315) reads GitHub too; the suite pushes its queues instead.
         container.mergeQueueWatch.start();
+        // The Merge manager (#434) reads every landed PR's lane on GitHub.
+        container.mergeManager.start();
         // The managers' inbox (#413) asks Bugsnag and GitHub; the suite seeds its items instead.
         container.inbox.start();
         // …and follows the PRs of the issues started from it (#415).
@@ -181,6 +183,7 @@ function openWindow(container: Container, {inactive = false} = {}): void {
         onFocus: () => {
             container.prWatch.focused();
             container.mergeQueueWatch.focused();
+            container.mergeManager.focused();
         },
         onClosed: () => {
             // On macOS the app stays in the dock after its last window closes. Kill

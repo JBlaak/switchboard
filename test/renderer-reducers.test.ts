@@ -110,6 +110,7 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
         type: 'inboxChanged',
         summary: {bug: {unread: 2, urgent: 1}, issue: {unread: 0, urgent: 0}, configured: {bug: true, issue: false}},
     },
+    mergeManagerChanged: {type: 'mergeManagerChanged', state: {lanes: [], needsYou: 1}},
 };
 
 test('every push event reduces without mutating the state it was given', () => {

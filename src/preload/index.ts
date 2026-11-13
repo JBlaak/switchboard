@@ -127,6 +127,9 @@ const api: SwitchboardApi = {
     issueManagerStarted: (key, branch, sessionId) =>
         ipcRenderer.invoke(INVOKE.issueManagerStarted, key, branch, sessionId),
     issueManagerStopWork: (key, unassign) => ipcRenderer.invoke(INVOKE.issueManagerStopWork, key, unassign),
+    mergeManagerState: () => ipcRenderer.invoke(INVOKE.mergeManagerState),
+    mergeManagerLand: (repository, number) => ipcRenderer.invoke(INVOKE.mergeManagerLand, repository, number),
+    mergeManagerUnland: (repository, number) => ipcRenderer.invoke(INVOKE.mergeManagerUnland, repository, number),
     releaseTags: (projectPath) => ipcRenderer.invoke(INVOKE.releaseTags, projectPath),
     bugsnagConnection: () => ipcRenderer.invoke(INVOKE.bugsnagConnection),
     bugsnagSaveToken: (token) => ipcRenderer.invoke(INVOKE.bugsnagSaveToken, token),
@@ -288,6 +291,7 @@ const api: SwitchboardApi = {
     onTasksChanged: (cb) => subscribe(EVENT.tasksChanged, (_e, update) => cb(update)),
     onSessionTaskChanged: (cb) => subscribe(EVENT.sessionTaskChanged, (_e, sessionId, taskId) => cb(sessionId, taskId)),
     onInboxChanged: (cb) => subscribe(EVENT.inboxChanged, (_e, summary) => cb(summary)),
+    onMergeManagerChanged: (cb) => subscribe(EVENT.mergeManagerChanged, (_e, state) => cb(state)),
     onAgentInstallProgress: (cb) =>
         subscribe(EVENT.agentInstallProgress, (_e, projectPath, line) => cb(projectPath, line)),
     onHandoffProgress: (cb) => subscribe(EVENT.handoffProgress, (_e, localPath, line) => cb(localPath, line)),

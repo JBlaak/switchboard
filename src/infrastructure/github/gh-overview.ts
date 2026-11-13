@@ -406,7 +406,7 @@ function countOf(counts: any, states: ReadonlySet<string>): number {
     );
 }
 
-function toReviewDecision(decision: unknown): ReviewDecision {
+export function toReviewDecision(decision: unknown): ReviewDecision {
     if (decision === 'APPROVED') return 'approved';
     if (decision === 'CHANGES_REQUESTED') return 'changes_requested';
     if (decision === 'REVIEW_REQUIRED') return 'review_required';

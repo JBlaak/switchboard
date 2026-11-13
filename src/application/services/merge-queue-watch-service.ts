@@ -1,8 +1,8 @@
 /**
  * The merge queue outside the project page (#315): the queue of every
  * repository a running session is in, kept up to date whether or not its
- * project page is open, for the sidebar's pills, the session header's panel
- * and the notifications.
+ * project page is open, for the sidebar's pills and the session header's
+ * panel.
  *
  * On the CI watch's cadence (once a minute, and when the window gets focus)
  * it asks the project overview for each running session's project, without
@@ -23,27 +23,15 @@
  * whose review request is no longer among the held entries may go again, so
  * a re-requested review offers Nudge again without the project page open.
  *
- * Between two readings of a repository's queue it notifies about the user's
- * own PRs (the ones their sessions linked): merged, up next, failed as the
- * head (`queueNotices`). The first reading after launch notifies nothing.
- * A merge is inferred from the head no longer being open, so only when the
- * open PRs read are all of them: fewer than PULL_REQUESTS_PER_REPOSITORY. In
- * a repository with more, a head outside the read would look merged, so its
- * merge is not notified.
+ * It notifies nothing: what merged and what needs you is the Merge manager's
+ * to show (#432), never a macOS notification.
  */
 import {PR_WATCH_INTERVAL_MS} from './pr-watch-service';
-import {
-    pullRequestRepository,
-    queueChangeSignature,
-    queueNotices,
-    type MergeQueueChange,
-    type QueueNotice,
-} from '../../domain/project/queue-elsewhere';
+import {queueChangeSignature, type MergeQueueChange} from '../../domain/project/queue-elsewhere';
 import type {MergeQueue} from '../../domain/project/merge-queue';
 import {heldForReview} from '../../domain/project/queue-errands';
 import type {SessionPullRequest} from '../../domain/session/session';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
-import {PULL_REQUESTS_PER_REPOSITORY} from '../ports/github-cli';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
 import type {ProjectOverviewService} from './project-overview-service';
@@ -67,17 +55,9 @@ export interface QueueWatchedSession {
 export interface MergeQueueWatchServiceDeps {
     /** The running Claude sessions (local and VM ones; not on an agentless remote). */
     sessions(): QueueWatchedSession[];
-    /**
-     * Every PR the user's sessions linked, running or not: whose queue events
-     * are notified. Without it, the running sessions' PRs.
-     */
-    ownPullRequests?(): readonly SessionPullRequest[];
     overview: Pick<ProjectOverviewService, 'overview'>;
     errands: Pick<QueueErrandService, 'errands' | 'settleNudges'>;
-    renderer: Pick<
-        RendererGateway,
-        'mergeQueueChanged' | 'statusUpdate' | 'terminalNotification' | 'sessionNeedsAttention'
-    >;
+    renderer: Pick<RendererGateway, 'mergeQueueChanged'>;
     timers: Timers;
     clock: Clock;
     log: Logger;
@@ -92,8 +72,6 @@ export class MergeQueueWatchService {
     private readonly repositoryOf = new Map<string, string | null>();
     /** What was last pushed per repository (`queueChangeSignature`). */
     private readonly published = new Map<string, string>();
-    /** The last queue read per repository, for the notifications. */
-    private readonly last = new Map<string, MergeQueue>();
     /** Repositories whose open PRs showed no queue, by when (epoch ms): read again after QUEUE_RECHECK_MS. */
     private readonly withoutQueue = new Map<string, number>();
 
@@ -156,13 +134,7 @@ export class MergeQueueWatchService {
                 if (!answer.github?.ok) continue;
                 if (answer.github.mergeQueue) this.withoutQueue.delete(repository);
                 else this.withoutQueue.set(repository, this.deps.clock.now());
-                const openRows = answer.github.pullRequests.filter((row) => row.pullRequest.state === 'open');
-                // As many as the read takes: there may be more, and the head among them.
-                const open =
-                    openRows.length < PULL_REQUESTS_PER_REPOSITORY
-                        ? new Set(openRows.map((row) => row.pullRequest.number))
-                        : null;
-                this.take(repository, answer.github.mergeQueue, open, sessions);
+                this.take(repository, answer.github.mergeQueue);
             } catch (err) {
                 this.deps.log.error(`[merge-queue] reading ${path} failed:`, (err as Error).message);
                 if (known) seen.add(known);
@@ -170,7 +142,7 @@ export class MergeQueueWatchService {
         }
         // Nothing runs in it any more: its pills go.
         for (const repository of [...this.published.keys()]) {
-            if (!seen.has(repository)) this.take(repository, null, new Set(), sessions);
+            if (!seen.has(repository)) this.take(repository, null);
         }
     }
 
@@ -180,23 +152,8 @@ export class MergeQueueWatchService {
         return at !== undefined && this.deps.clock.now() - at < QUEUE_RECHECK_MS;
     }
 
-    /** One repository's fresh queue: notify, and push it when it changed. */
-    private take(
-        repository: string,
-        queue: MergeQueue | null,
-        /** The open PRs, when they are all of them; null when the read may have stopped short. */
-        open: ReadonlySet<number> | null,
-        sessions: readonly QueueWatchedSession[],
-    ): void {
-        const before = this.last.get(repository);
-        if (queue && before) {
-            for (const notice of queueNotices(repository, before, queue, this.mine(repository, sessions), open)) {
-                this.notify(notice, sessions);
-            }
-        }
-        if (queue) this.last.set(repository, queue);
-        else this.last.delete(repository);
-
+    /** One repository's fresh queue: push it when it changed. */
+    private take(repository: string, queue: MergeQueue | null): void {
         // Before its errands are read, so a nudge whose request changed is pushed settled.
         if (queue) this.deps.errands.settleNudges(repository, heldForReview(queue));
         const errands = queue ? this.deps.errands.errands(repository) : [];
@@ -207,32 +164,5 @@ export class MergeQueueWatchService {
         else this.published.delete(repository);
         const change: MergeQueueChange = {repository, queue, errands};
         this.deps.renderer.mergeQueueChanged(change);
-    }
-
-    /** The user's own PRs in a repository: the ones their sessions linked. */
-    private mine(repository: string, sessions: readonly QueueWatchedSession[]): Set<number> {
-        const prs = this.deps.ownPullRequests?.() ?? sessions.flatMap((session) => session.pullRequests);
-        const wanted = repository.toLowerCase();
-        return new Set(prs.filter((pr) => pullRequestRepository(pr).toLowerCase() === wanted).map((pr) => pr.number));
-    }
-
-    /**
-     * Through the app's own ways of saying so: the footer's status line, and
-     * the header notice of the running session that linked the PR. A PR that
-     * failed as the head flags that session as needing you.
-     */
-    private notify(notice: QueueNotice, sessions: readonly QueueWatchedSession[]): void {
-        const line = `${notice.text} · ${notice.detail}`;
-        this.deps.log.info(`[merge-queue] ${notice.repository}: ${line}`);
-        this.deps.renderer.statusUpdate(line, 'done');
-        const wanted = notice.repository.toLowerCase();
-        const owner = sessions.find((session) =>
-            session.pullRequests.some(
-                (pr) => pr.number === notice.number && pullRequestRepository(pr).toLowerCase() === wanted,
-            ),
-        );
-        if (!owner) return;
-        this.deps.renderer.terminalNotification(owner.sessionId, line);
-        if (notice.kind === 'failed') this.deps.renderer.sessionNeedsAttention(owner.sessionId);
     }
 }

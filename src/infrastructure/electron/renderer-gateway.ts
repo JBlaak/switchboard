@@ -30,6 +30,7 @@ import type {RendererGateway} from '../../application/ports/renderer-gateway';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {InboxSummary} from '../../domain/inbox/model';
+import type {MergeManagerState} from '../../domain/merge-manager/model';
 import type {ShownPage} from '../../domain/session/page-tool';
 
 export class ElectronRendererGateway implements RendererGateway {
@@ -188,6 +189,10 @@ export class ElectronRendererGateway implements RendererGateway {
 
     public inboxChanged(summary: InboxSummary): void {
         this.send(EVENT.inboxChanged, summary);
+    }
+
+    public mergeManagerChanged(state: MergeManagerState): void {
+        this.send(EVENT.mergeManagerChanged, state);
     }
 
     private sendWhenReady(channel: string, ...args: unknown[]): void {

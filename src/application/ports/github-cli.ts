@@ -18,6 +18,7 @@ import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {IssueThread} from '../../domain/inbox/issue-manager';
+import type {LaneRead, WorkflowFile} from '../../domain/merge-manager/model';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
 export type {GitHubAvailability};
@@ -148,7 +149,29 @@ export interface GitHubCli {
      */
     ciRunDurations(repo: string): Promise<number[] | null>;
 
-    // ── The merge queue's labels (#315): only `automerge:opt-in` added, `automerge:failed` removed ──
+    // ── The Merge manager (#434): one GraphQL request each ──
+
+    /**
+     * Your open PRs, across GitHub, that carry a queue label
+     * (`automerge:opt-in`, `automerge:next` or `automerge:failed`), by
+     * repository and number. Null when unavailable.
+     */
+    queuedPullRequests(): Promise<{repository: string; number: number}[] | null>;
+
+    /**
+     * The lane read of these PRs in `repo`: the trunk, its oid and its rules,
+     * and each PR with what decides its stage. A number GitHub does not know
+     * is left out. Null when unavailable.
+     */
+    laneRead(repo: string, numbers: readonly number[]): Promise<LaneRead | null>;
+
+    /**
+     * The files in `.github/workflows` on `repo`'s default branch, with their
+     * text: empty when it has none. Null when unavailable.
+     */
+    workflowFiles(repo: string): Promise<WorkflowFile[] | null>;
+
+    // ── The merge queue's labels (#315, #434): `automerge:opt-in` added, the queue's labels and `autorebase:opt-in` removed ──
 
     /** Add `label` to PR (or issue) `number` in `repo`. */
     addLabel(repo: string, number: number, label: string): Promise<GitHubWrite>;
@@ -213,6 +236,9 @@ export type IssueManagerCalls = 'issueThread' | 'assignSelf' | 'unassignSelf' | 
 
 /** The merge queue's label writes (#315). */
 export type QueueLabelWrites = 'addLabel' | 'removeLabel';
+
+/** What the Merge manager reads (#434). */
+export type LaneReads = 'queuedPullRequests' | 'laneRead' | 'workflowFiles';
 
 /** What the CI job queue reads and a Bump writes. */
 export type CiJobQueueCalls =
