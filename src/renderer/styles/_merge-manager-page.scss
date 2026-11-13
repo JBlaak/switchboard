@@ -1,0 +1,320 @@
+/* ========== THE MERGE MANAGER PAGE (#439) ==========
+   ⌘⇧L: the Merge manager's head and where merging runs, the tiles over the
+   landed PRs, every lane grouped by repository with the head as a card, and
+   the selected row's detail beside them. The header, tiles, list, detail and
+   keys are the Issue manager's and the Tasks page's (.sw-header, .im-tiles,
+   .im-body, .im-detail, .tk-keys); the stage pills are the shared stage
+   words' (.pp-stage.is-landed-*). Its own: the host pill, the lane label,
+   the head card's steps, the faded teammates' rows and the timelines. */
+
+#merge-manager-page {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--sb-bg-base);
+}
+
+/* ---- Where merging runs ---- */
+.mm-host {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-left: auto;
+    padding: 6px 11px;
+    border-radius: 999px;
+    background: var(--sb-bg-raised);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    font: 700 12px var(--sb-font-head);
+    color: var(--sb-text-muted);
+    white-space: nowrap;
+
+    i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--sb-green);
+    }
+}
+
+/* ---- Tiles: counts only, the CI saved one in mint at the end ---- */
+.mm-tile {
+    min-width: 108px;
+    cursor: default;
+
+    &:hover {
+        box-shadow: inset 0 0 0 1px var(--sb-line);
+    }
+    &.is-green .im-tile-n {
+        color: var(--sb-green);
+    }
+    &.is-purple .im-tile-n {
+        color: var(--sb-purple);
+    }
+    &.is-muted .im-tile-n {
+        color: var(--sb-text-muted);
+    }
+    &.is-saved {
+        margin-left: auto;
+        background: var(--sb-mint);
+        box-shadow: inset 0 0 0 1px rgba(var(--sb-accent-rgb), 0.25);
+
+        .im-tile-n {
+            color: var(--sb-accent);
+        }
+    }
+}
+
+/* ---- A lane's heading ---- */
+.mm-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.mm-lane {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--sb-bg-raised);
+    box-shadow: inset 0 0 0 1px var(--sb-line);
+    font: 700 11.5px var(--sb-font-head);
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--sb-text-muted);
+
+    &.is-switchboard {
+        color: var(--sb-accent);
+    }
+}
+
+.mm-lane-warn {
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--sb-yellow);
+}
+
+.mm-group-meta {
+    margin-left: auto;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--sb-text-faint);
+}
+
+/* ---- A row ---- */
+.mm-row {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 9px 10px;
+    border-radius: var(--sb-r-row);
+    cursor: pointer;
+
+    &:hover {
+        background: rgba(var(--sb-overlay-rgb), 0.04);
+    }
+    &.is-selected,
+    &.is-selected:hover {
+        background: var(--sb-bg-raised);
+        box-shadow: inset 0 0 0 1px var(--sb-line);
+    }
+    &.is-theirs {
+        opacity: 0.55;
+    }
+    &.is-merged {
+        cursor: default;
+
+        &:hover {
+            background: none;
+        }
+        .mm-row-title {
+            color: var(--sb-text-dim);
+            font-weight: 600;
+        }
+    }
+}
+
+.mm-place {
+    font: 800 12px var(--sb-font-head);
+    color: var(--sb-text-faint);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+
+    &.is-merged {
+        color: var(--sb-purple);
+    }
+}
+
+.mm-row-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.mm-row-title {
+    overflow: hidden;
+    font: 700 13.5px var(--sb-font-head);
+    color: var(--sb-text-strong);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.mm-row-meta {
+    overflow: hidden;
+    font-size: 12px;
+    color: var(--sb-text-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+/* ---- The head, as a card with its three steps ---- */
+.mm-headcard {
+    margin: 2px 0 4px;
+    border-radius: var(--sb-r-row);
+    background: rgba(var(--sb-purple-rgb), 0.08);
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-purple-rgb), 0.22);
+
+    .mm-row:hover {
+        background: transparent;
+    }
+    &.is-theirs .mm-steps {
+        opacity: 0.55;
+    }
+}
+
+.mm-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0 12px 12px 48px;
+    list-style: none;
+}
+
+.mm-step {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11.5px;
+    color: var(--sb-text-muted);
+
+    &.is-done {
+        color: var(--sb-text-dim);
+    }
+    &.is-active {
+        color: var(--sb-text-strong);
+        font-weight: 700;
+    }
+}
+
+.mm-bar {
+    height: 4px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--sb-line);
+
+    span {
+        display: block;
+        height: 100%;
+        background: var(--sb-purple);
+    }
+}
+
+/* ---- The detail ---- */
+.mm-vstep {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: start;
+    padding: 2px 0;
+    font-size: 12.5px;
+    color: var(--sb-text-dim);
+
+    i {
+        width: 10px;
+        height: 10px;
+        margin-top: 4px;
+        border-radius: 50%;
+        background: var(--sb-line);
+    }
+    b {
+        font-family: var(--sb-font-head);
+        color: var(--sb-text);
+    }
+    > span {
+        color: var(--sb-text-faint);
+        font-variant-numeric: tabular-nums;
+    }
+    &.is-purple i {
+        background: var(--sb-purple);
+    }
+    &.is-yellow i {
+        background: var(--sb-yellow);
+    }
+    &.is-green i {
+        background: var(--sb-green);
+    }
+    &.is-red i {
+        background: var(--sb-red);
+    }
+}
+
+.mm-checks {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12.5px;
+
+    > div {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        color: var(--sb-text-muted);
+    }
+    .is-passed,
+    .is-skipped {
+        color: var(--sb-green);
+    }
+    .is-failed {
+        color: var(--sb-red);
+    }
+    .is-running,
+    .is-queued,
+    .is-missing {
+        color: var(--sb-yellow);
+    }
+    span {
+        color: var(--sb-text-dim);
+    }
+}
+
+.mm-detail p {
+    margin: 0;
+}
+
+.mm-warn {
+    color: var(--sb-yellow);
+}
+
+.mm-quiet {
+    font-size: 12px;
+    color: var(--sb-text-faint);
+}
+
+.mm-empty {
+    padding: 28px 10px;
+    max-width: 62ch;
+    font-size: 13.5px;
+    color: var(--sb-text-dim);
+
+    p {
+        margin: 0;
+    }
+    b {
+        color: var(--sb-text-strong);
+    }
+}

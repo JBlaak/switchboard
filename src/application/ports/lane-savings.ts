@@ -9,4 +9,6 @@ export interface LaneSavings {
     add(repository: string, kind: LaneSaving, count: number, at: number): void;
     /** Every saving of each kind since `at`, all repositories together. */
     since(at: number): Record<LaneSaving, number>;
+    /** Every saving of each kind since `at`, by lower-case `owner/repo` (#439). */
+    byRepository(at: number): Record<string, Record<LaneSaving, number>>;
 }

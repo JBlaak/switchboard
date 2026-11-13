@@ -45,9 +45,16 @@ import {openDialog} from '../../ui/dialogs/actions';
 import {isQuickSessionKey, launchQuickSession} from '../sessions/quick-session';
 import {isSessionWorkKey, toggleSessionWork} from '../../ui/session-work/actions';
 import {toggleTasksPage} from '../../ui/tasks-page/actions';
-import {isBugPageKey, isIssueManagerKey, isTasksPageKey, savedPromptKey} from '../../lib/shortcut-keys';
+import {
+    isBugPageKey,
+    isIssueManagerKey,
+    isMergeManagerKey,
+    isTasksPageKey,
+    savedPromptKey,
+} from '../../lib/shortcut-keys';
 import {toggleIssueManager} from '../../ui/issue-manager/actions';
 import {toggleBugPage} from '../../ui/bug-manager/page-actions';
+import {toggleMergeManager} from '../../ui/merge-manager/page-actions';
 import {sendSavedPromptOnScreen} from '../../ui/session-tray/actions';
 import {openSessions, sessionMap} from '../../state/session-store';
 import {remoteStatus} from '../../state/remote-status-store';
@@ -243,6 +250,16 @@ function setupTerminalKeyBindings(
                 e._handled = true;
                 e.preventDefault();
                 toggleIssueManager();
+            }
+            return false;
+        }
+
+        // Cmd+Shift+L: the Merge manager page (#439)
+        if (isMergeManagerKey(e)) {
+            if (e.type === 'keydown') {
+                e._handled = true;
+                e.preventDefault();
+                toggleMergeManager();
             }
             return false;
         }

@@ -89,6 +89,15 @@ function setup(
                 pullRequests: prs,
             };
         },
+        queueEntries: async (repo) => {
+            calls.push(`entries ${repo}`);
+            if (state.unreachable.has(repo)) return null;
+            return Object.values(state.prs[repo] ?? {}).filter(
+                (pr) =>
+                    pr.state === 'open' &&
+                    pr.labels.some((label) => label === QUEUE_LABELS.optIn || label === QUEUE_LABELS.next),
+            );
+        },
         workflowFiles: async (repo) => {
             calls.push(`workflows ${repo}`);
             if (state.unreachable.has(repo)) return null;
@@ -289,8 +298,10 @@ test('landed PRs survive a restart, landed time and stage included', async () =>
     /* When */
     const again = setup({prs: first.state.prs, now: first.state.now}, first.store);
 
-    /* Then */
-    assert.deepEqual(again.service.state(), first.service.state());
+    /* Then: what a read said beyond the stage (the page's facts) comes with the next read */
+    const kept = (state: MergeManagerState) =>
+        state.lanes.map((lane) => ({...lane, pullRequests: lane.pullRequests.map(({facts: _facts, ...pr}) => pr)}));
+    assert.deepEqual(kept(again.service.state()), kept(first.service.state()));
     assert.equal(again.service.pullRequest(REPO, 1)?.landedAt, NOW);
 });
 
@@ -556,4 +567,87 @@ test('a fix errand that stopped sends its PR to Needs you, and that is told on t
 
     /* Then */
     assert.deepEqual(told, [['movelab/connect#1']]);
+});
+
+// ── What the page shows besides (#439) ──
+
+test("a queue lane's teammates' entries are read with each poll and shown in the queue's order, mine left out", async () => {
+    /* Given */
+    const {service} = setup({
+        prs: {
+            [QUEUE_REPO]: {
+                7: inQueue(7, {
+                    labels: [QUEUE_LABELS.optIn],
+                    automerge: {state: 'pending', description: 'Number 3 in the merge queue'},
+                }),
+                8: inQueue(8, {
+                    author: 'sam',
+                    labels: [QUEUE_LABELS.optIn],
+                    automerge: {state: 'pending', description: 'Number 2 in the merge queue'},
+                }),
+                9: inQueue(9, {
+                    author: 'ana',
+                    labels: [QUEUE_LABELS.optIn],
+                    automerge: {state: 'pending', description: 'First in the merge queue'},
+                }),
+            },
+        },
+    });
+
+    /* When */
+    await service.poll();
+
+    /* Then */
+    const lane = service.state().lanes[0];
+    assert.deepEqual(
+        lane.teammates?.map((entry) => [entry.number, entry.author, entry.stage.kind, entry.place]),
+        [
+            [9, 'ana', 'head', 1],
+            [8, 'sam', 'waiting', 2],
+        ],
+    );
+    assert.deepEqual(
+        lane.pullRequests.map((pr) => pr.number),
+        [7],
+    );
+});
+
+test('a Switchboard lane reads no teammates', async () => {
+    /* Given */
+    const {service, calls} = setup({prs: {[REPO]: {1: prRead(1)}}});
+    await service.land(REPO, 1);
+    calls.length = 0;
+
+    /* When */
+    await service.poll();
+
+    /* Then */
+    assert.equal(
+        calls.some((call) => call.startsWith('entries')),
+        false,
+    );
+    assert.equal(service.state().lanes[0].teammates, undefined);
+});
+
+test('a landed PR carries who approved it and how its required checks stand', async () => {
+    /* Given */
+    const {service} = setup({
+        prs: {
+            [REPO]: {
+                1: prRead(1, {
+                    approvedBy: ['ana'],
+                    checks: [{name: 'Unit tests', state: 'running', startedAt: NOW - MIN}],
+                }),
+            },
+        },
+    });
+
+    /* When */
+    await service.land(REPO, 1);
+
+    /* Then */
+    assert.deepEqual(service.state().lanes[0].pullRequests[0].facts, {
+        approvedBy: ['ana'],
+        checks: [{name: 'Unit tests', state: 'running'}],
+    });
 });

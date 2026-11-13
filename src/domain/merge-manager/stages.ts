@@ -34,8 +34,10 @@
  */
 import {QUEUE_LABELS, failureKind, parseAutomergeStatus} from '../project/merge-queue';
 import type {
+    DecidingCheck,
     HeadStep,
     HeldReason,
+    LandedFacts,
     LandedPullRequest,
     LanePullRequestRead,
     LaneStage,
@@ -210,6 +212,22 @@ function failOut(read: LanePullRequestRead, rules: TrunkRules): 'conflict' | 'ch
     if (read.mergeState === 'dirty') return 'conflict';
     if (read.mergeState === 'behind') return null;
     return deciding(read, rules).some((check) => check.state === 'failed') ? 'checks' : null;
+}
+
+/**
+ * What a read says of a landed PR beyond its stage, for the Merge manager's
+ * page (#439): who approved it and its deciding checks, a required one that
+ * has not reported yet as `missing`.
+ */
+export function landedFacts(read: LanePullRequestRead, rules: TrunkRules): LandedFacts {
+    const checks: DecidingCheck[] =
+        rules.requiredChecks.length === 0
+            ? read.checks.map(({name, state}) => ({name, state}))
+            : rules.requiredChecks.map((name) => ({
+                  name,
+                  state: read.checks.find((check) => check.name === name)?.state ?? 'missing',
+              }));
+    return {approvedBy: read.approvedBy, checks};
 }
 
 /**

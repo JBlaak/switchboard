@@ -44,6 +44,9 @@ class MemorySavings implements LaneSavings {
         for (const row of this.rows) totals[row.kind] += row.count;
         return totals;
     }
+    public byRepository(): Record<string, Record<LaneSaving, number>> {
+        return {};
+    }
 }
 
 interface World {
@@ -73,6 +76,7 @@ function setup(prs: LanePullRequestRead[], world: Partial<World> = {}) {
     const github: Pick<GitHubCli, LaneReads | QueueLabelWrites | LaneWrites> = {
         queuedPullRequests: async () => [],
         workflowFiles: async () => [],
+        queueEntries: async () => [],
         laneRead: async (repo, numbers) => ({
             repository: repo,
             viewer: 'joris',

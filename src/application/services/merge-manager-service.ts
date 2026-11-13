@@ -11,7 +11,12 @@
  * 2. per repository with a landed or queued PR, its lane kind, from its
  *    workflow files and kept `LANE_KIND_RECHECK_MS` (`laneKind`);
  * 3. per repository, one slim read of its landed PRs only, with the trunk and
- *    its rules (`laneRead`), folded in by the domain (`syncLane`).
+ *    its rules (`laneRead`), folded in by the domain (`syncLane`);
+ * 4. per queue lane, its teammates' entries (`queueEntries`), which only the
+ *    Merge manager's page shows (#439).
+ *
+ * What each read said of a landed PR beyond its stage (who approved it, its
+ * deciding checks) is kept beside it for the page too (`LandedFacts`).
  *
  * A repository that could not be read keeps what it had. Merged PRs are not
  * read again, and go `MERGED_KEPT_MS` after they merged. Every change is
@@ -50,17 +55,21 @@ import {
     mergeManagerState,
     setAside,
     syncLane,
+    teammateEntries,
     unlandLabels,
 } from '../../domain/merge-manager/landed';
+import {landedFacts} from '../../domain/merge-manager/stages';
 import {landedKey} from '../../domain/merge-manager/model';
 import {landedTransitions, type LandedTransitions} from '../../domain/merge-manager/transitions';
 import type {
+    LandedFacts,
     LandedPullRequest,
     LandedView,
     LaneKind,
     LaneRead,
     MergeManagerState,
     SetAside,
+    TeammateEntry,
     TrunkRules,
 } from '../../domain/merge-manager/model';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
@@ -105,6 +114,10 @@ export class MergeManagerService {
     private readonly kinds = new Map<string, {kind: LaneKind; at: number}>();
     /** Each repository's trunk rules, as last read. */
     private readonly rules = new Map<string, TrunkRules>();
+    /** What the last read said of each landed PR beyond its stage, for the page (#439). */
+    private readonly facts = new Map<string, LandedFacts>();
+    /** Each queue lane's teammates' entries (by lower-case `owner/repo`), as last read. */
+    private readonly teammates = new Map<string, readonly TeammateEntry[]>();
     private interval: TimerHandle | null = null;
     private polling: Promise<void> | null = null;
     /** A poll asked for while one ran: run once more after it. */
@@ -164,7 +177,10 @@ export class MergeManagerService {
 
     /** Every lane with a landed PR, and how many need you. */
     public state(): MergeManagerState {
-        return mergeManagerState([...this.landed.values()], this.rules);
+        return mergeManagerState([...this.landed.values()], this.rules, {
+            facts: this.facts,
+            teammates: this.teammates,
+        });
     }
 
     /** A landed PR, or null when it is not landed. */
@@ -306,6 +322,7 @@ export class MergeManagerService {
             }
             this.fold(repository, read, kind, []);
             if (kind === 'switchboard') await this.runLane(repository, read);
+            else await this.readTeammates(repository, read.viewer);
         }
 
         const now = this.deps.clock.now();
@@ -324,6 +341,16 @@ export class MergeManagerService {
         const read = await this.deps.github.laneRead(repository, [...numbers]).catch(() => null);
         if (read) this.rules.set(repository.toLowerCase(), read.rules);
         return read;
+    }
+
+    /**
+     * A queue lane's teammates' entries, for the page (#439). One that could
+     * not be read keeps what it had.
+     */
+    private async readTeammates(repository: string, viewer: string): Promise<void> {
+        const entries = await this.deps.github.queueEntries(repository).catch(() => null);
+        if (entries)
+            this.teammates.set(repository.toLowerCase(), teammateEntries(entries, viewer, this.deps.clock.now()));
     }
 
     /**
@@ -359,6 +386,11 @@ export class MergeManagerService {
         ];
         const conflicts = kind === 'switchboard' ? this.deps.runner?.conflicts(read) : undefined;
         const sync = syncLane(known, read, kind, this.deps.clock.now(), conflicts);
+        const landedKeys = new Set(sync.landed.map((pr) => pr.key));
+        for (const pr of read.pullRequests) {
+            const key = landedKey(pr.repository, pr.number);
+            if (landedKeys.has(key)) this.facts.set(key, landedFacts(pr, read.rules));
+        }
         const changed = sync.landed.filter((pr) => JSON.stringify(this.landed.get(pr.key)) !== JSON.stringify(pr));
         this.commit(changed, sync.removed);
         const lane: FoldedLane = {repository, kind, read, landed: this.inRepository(repository)};
@@ -383,7 +415,10 @@ export class MergeManagerService {
         const transitions = landedTransitions(this.landed, save);
         this.deps.store.apply(save, removing);
         for (const pr of save) this.landed.set(pr.key, pr);
-        for (const key of removing) this.landed.delete(key);
+        for (const key of removing) {
+            this.landed.delete(key);
+            this.facts.delete(key);
+        }
         if (transitions.merged.length === 0 && transitions.needsYou.length === 0) return;
         for (const fn of this.followers) {
             try {

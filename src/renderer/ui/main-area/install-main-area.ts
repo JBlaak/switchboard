@@ -20,6 +20,7 @@ import {
     settingsViewer,
     tasksPagePanel,
     bugPagePanel,
+    mergeManagerPanel,
     terminalArea,
 } from '../../lib/dom';
 import {showEmptyScreen} from '../../features/patch/patch';
@@ -50,6 +51,7 @@ function swapTo(route: MainAreaRoute): void {
     tasksPagePanel.style.display = route.kind === 'tasks' ? '' : 'none';
     issueManagerPanel.style.display = route.kind === 'issueManager' ? '' : 'none';
     bugPagePanel.style.display = route.kind === 'bugs' ? '' : 'none';
+    mergeManagerPanel.style.display = route.kind === 'mergeManager' ? '' : 'none';
     if (route.kind === 'empty') showEmptyScreen();
     else placeholder.style.display = 'none';
 }

@@ -34,6 +34,7 @@ import {MarkDoneOffer} from './session-task/MarkDoneOffer';
 import {ArchiveUndoToast} from './archive-undo/ArchiveUndoToast';
 import {DropUploadToast} from './terminal/DropUploadToast';
 import {LandToast} from './merge-manager/LandToast';
+import {MergeManagerPage} from './merge-manager/MergeManagerPage';
 import {QueueFailurePanel} from './queue-elsewhere/QueueFailurePanel';
 import type {JSX} from 'react';
 import type {Root as ReactRoot} from 'react-dom/client';
@@ -62,6 +63,9 @@ export function Root(): JSX.Element | null {
             </Portal>
             <Portal target="bug-page">
                 <BugManagerPage />
+            </Portal>
+            <Portal target="merge-manager-page">
+                <MergeManagerPage />
             </Portal>
             <Portal target="sidebar-footer">
                 <Footer />

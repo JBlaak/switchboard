@@ -27,6 +27,9 @@
  * trunk → Checks → Merge), and each landed PR with its stage pill. In a
  * queue lane, the user's landed PRs carry the same stage pills.
  *
+ * Once one of the user's PRs is landed here, the heading offers Open in Merge
+ * manager → (#439): the page, with it selected.
+ *
  * Each entry is a cursor row (↵, or a click, opens its PR in the browser). What it
  * says is `merge-queue-view`; what its buttons do, `merge-queue-actions`.
  */
@@ -72,7 +75,8 @@ import {
     type LandedFixStatus,
     type SwitchboardLaneSection,
 } from './merge-queue-view';
-import type {LandedView, MergeManagerState} from '../../../domain/merge-manager/model';
+import type {LandedView, LaneView, MergeManagerState} from '../../../domain/merge-manager/model';
+import {openMergeManager} from '../merge-manager/page-actions';
 import {findLanded, landedWords, type StageWords} from '../../../domain/merge-manager/stage-words';
 import {bumpedRuns, type JobPool, type JobQueueRow} from '../../../domain/project/ci-job-queue';
 import {pullRequestSession} from './project-sessions';
@@ -124,6 +128,9 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
                         Clears in about <strong>{clears.text.slice(1)}</strong>
                     </span>
                 )}
+                <OpenInMergeManager
+                    lane={merge.lanes.find((lane) => lane.repository.toLowerCase() === repository.toLowerCase())}
+                />
             </div>
             <div className="pp-card pp-mq-card">
                 {isEmptyQueue(queue) && <div className="pp-quiet">Nothing queued.</div>}
@@ -171,6 +178,20 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
 
 // ── Pieces ──
 
+/**
+ * "Open in Merge manager →" (#439), once one of the user's PRs is landed in
+ * this repository: the page, with the first of them selected.
+ */
+function OpenInMergeManager({lane}: {lane: LaneView | undefined}): JSX.Element | null {
+    const first = lane?.pullRequests.find((pr) => pr.stage.kind !== 'merged') ?? lane?.pullRequests[0];
+    if (!first) return null;
+    return (
+        <button type="button" className="pp-link pp-mq-open" onClick={() => openMergeManager(first.key)}>
+            Open in Merge manager →
+        </button>
+    );
+}
+
 /** A stage, as a pill in the words every place shares (#441). */
 function StagePill({words}: {words: StageWords}): JSX.Element {
     return (
@@ -213,6 +234,7 @@ function SwitchboardLane({lane, cursor}: {lane: SwitchboardLaneSection; cursor: 
                         Clears in about <strong>{clears.text.slice(1)}</strong>
                     </span>
                 )}
+                <OpenInMergeManager lane={lane.lane} />
             </div>
             <div className="pp-card pp-mq-card">
                 {lane.rows.map((pr) => {

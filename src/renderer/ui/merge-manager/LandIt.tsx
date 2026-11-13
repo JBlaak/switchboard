@@ -2,7 +2,7 @@
  * Land it (#436), as each of its four places draws it: the button on your own
  * open PR, disabled with "Mark it ready for review first" on a draft, and,
  * once the PR is landed, its stage: "Landed · 2nd in switchboard ▾", whose
- * menu has Unland.
+ * menu has Open in Merge manager (#439) and Unland.
  *
  * `LandItControl` is the markup from what it is given, so a test can draw it;
  * `LandIt` feeds it from the store.
@@ -13,6 +13,8 @@ import {landOffer, landedPillText, type LandCandidate, type LandOffer} from '../
 import {landBusy, type LandAction} from '../../state/merge-manager-slice';
 import {useStore} from '../use-store';
 import {landPullRequest, unlandPullRequest} from './land-actions';
+import {openMergeManager} from './page-actions';
+import {landedKey} from '../../../domain/merge-manager/model';
 
 export interface LandItProps {
     pr: LandCandidate;
@@ -32,6 +34,7 @@ export function LandIt({pr, size}: LandItProps): JSX.Element | null {
             size={size}
             onLand={() => void landPullRequest(pr.repository, pr.number)}
             onUnland={() => void unlandPullRequest(pr.repository, pr.number)}
+            onOpen={() => openMergeManager(landedKey(pr.repository, pr.number))}
         />
     );
 }
@@ -42,13 +45,23 @@ export interface LandItControlProps {
     size?: 'sm';
     onLand(): void;
     onUnland(): void;
+    /** Open in Merge manager: its page, with this PR selected. */
+    onOpen?(): void;
 }
 
-export function LandItControl({offer, busy, size, onLand, onUnland}: LandItControlProps): JSX.Element | null {
+export function LandItControl({offer, busy, size, onLand, onUnland, onOpen}: LandItControlProps): JSX.Element | null {
     if (!offer) return null;
     const sized = size ? ' is-' + size : '';
     if (offer.kind === 'landed') {
-        return <LandedPill text={landedPillText(offer.landed)} sized={sized} busy={busy} onUnland={onUnland} />;
+        return (
+            <LandedPill
+                text={landedPillText(offer.landed)}
+                sized={sized}
+                busy={busy}
+                onUnland={onUnland}
+                onOpen={onOpen}
+            />
+        );
     }
     const draft = offer.kind === 'draft';
     return (
@@ -72,11 +85,13 @@ function LandedPill({
     sized,
     busy,
     onUnland,
+    onOpen,
 }: {
     text: string;
     sized: string;
     busy: LandAction | null;
     onUnland(): void;
+    onOpen?(): void;
 }): JSX.Element {
     const [open, setOpen] = useState(false);
     const host = useRef<HTMLSpanElement>(null);
@@ -117,6 +132,20 @@ function LandedPill({
             </button>
             {open && (
                 <span className="landed-menu" role="menu">
+                    {onOpen && (
+                        <button
+                            type="button"
+                            role="menuitem"
+                            className="landed-menu-item"
+                            onClick={(e: MouseEvent) => {
+                                e.stopPropagation();
+                                setOpen(false);
+                                onOpen();
+                            }}>
+                            Open in Merge manager
+                            <span className="landed-menu-hint">⌘⇧L</span>
+                        </button>
+                    )}
                     <button
                         type="button"
                         role="menuitem"

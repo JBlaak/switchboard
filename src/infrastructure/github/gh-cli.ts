@@ -64,11 +64,14 @@ import {
     lanePaths,
     laneQuery,
     toLaneRead,
+    toQueueEntries,
+    queueEntriesQuery,
+    queueEntriesSearch,
     toBranchUpdateFailure,
     toQueuedPullRequests,
     toWorkflowFiles,
 } from './gh-lanes';
-import type {LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
+import type {LanePullRequestRead, LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {BranchPullRequest} from '../../domain/inbox/stage';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
@@ -384,6 +387,12 @@ export class GhCli implements GitHubCli {
         const wanted = validNumbers(numbers);
         const data = await this.graphql(laneQuery(wanted), {owner: parts[1], name: parts[2]});
         return data ? toLaneRead(data, repo, wanted) : null;
+    }
+
+    public async queueEntries(repo: string): Promise<LanePullRequestRead[] | null> {
+        if (!REPO.test(repo)) return null;
+        const data = await this.graphql(queueEntriesQuery(), {search: queueEntriesSearch(repo)});
+        return data ? toQueueEntries(data, repo) : null;
     }
 
     public async workflowFiles(repo: string): Promise<WorkflowFile[] | null> {

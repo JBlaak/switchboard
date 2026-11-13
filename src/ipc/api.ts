@@ -81,6 +81,7 @@ import type {InboxItem, InboxManager, InboxSummary} from '../domain/inbox/model'
 import type {IssueThread} from '../domain/inbox/issue-manager';
 import type {IssueStartPrepared, IssueWriteResult, PolishResult} from '../application/services/issue-manager-service';
 import type {MergeManagerState} from '../domain/merge-manager/model';
+import type {MergeManagerPageFacts} from '../domain/merge-manager/page';
 import type {LandResult} from '../application/services/merge-manager-service';
 import type {TryAgainResult} from '../application/services/fix-errand-service';
 import type {GitHubWrite} from '../application/ports/github-cli';
@@ -278,6 +279,8 @@ export interface SwitchboardApi {
     mergeManagerUnland(repository: string, number: number): Promise<GitHubWrite>;
     /** Try again (#437): a new fix errand for a PR an errand gave up on, with an optional note for it. */
     mergeManagerTryAgain(repository: string, number: number, note: string | null): Promise<TryAgainResult>;
+    /** What the Merge manager's page shows besides the lanes (#439): CI saved this week, the errands, the checkouts. */
+    mergeManagerPage(): Promise<MergeManagerPageFacts>;
     /** When the inbox last polled Bugsnag and GitHub, epoch ms (#414); null before it did. */
     inboxPolledAt(): Promise<number | null>;
     /** Fix (#414): the worktree and prompt of a Fix session on a bug, or why not ("Link a project first"). */
