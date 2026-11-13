@@ -119,7 +119,15 @@ export function syncLane(known: readonly LandedPullRequest[], read: LaneRead, ki
         else if (kind === 'queue' && fresh.state === 'open' && !QUEUE_LANE_LABELS.some((l) => hasLabel(fresh, l))) {
             removed.push(pr.key);
         } else {
-            kept.push({...pr, title: fresh.title, url: fresh.url, headRef: fresh.headRef, lane: kind});
+            const stacked = fresh.baseRef && fresh.baseRef !== read.trunk && fresh.baseOid;
+            kept.push({
+                ...pr,
+                title: fresh.title,
+                url: fresh.url,
+                headRef: fresh.headRef,
+                lane: kind,
+                ...(stacked ? {stackBaseTip: fresh.baseOid} : {}),
+            });
         }
     }
 
