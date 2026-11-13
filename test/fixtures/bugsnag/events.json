@@ -11,7 +11,11 @@
         "context": "GET /api/workouts",
         "app": {"version": "4.12.1", "releaseStage": "production", "type": "node", "duration": 16276946},
         "device": {"hostname": "web-1", "runtime_versions": {"node": "22.11.0"}},
-        "exceptions": [{"error_class": "TypeError", "message": "Cannot read properties of undefined (reading 'rows')", "stacktrace": []}]
+        "exceptions": [{"error_class": "TypeError", "message": "Cannot read properties of undefined (reading 'rows')", "stacktrace": [
+            {"file": "node_modules/pg/lib/result.js", "line_number": 70, "method": "Result.parse", "in_project": false},
+            {"file": "src/workouts/list.ts", "line_number": 41, "method": "listWorkouts", "in_project": true},
+            {"file": "src/http/routes.ts", "line_number": 12, "method": "handle", "in_project": true}
+        ]}]
     },
     {
         "id": "6c0000000000000000000102",

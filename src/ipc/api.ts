@@ -83,6 +83,7 @@ import type {IssueStartPrepared, IssueWriteResult, PolishResult} from '../applic
 import type {MergeManagerState} from '../domain/merge-manager/model';
 import type {LandResult} from '../application/services/merge-manager-service';
 import type {GitHubWrite} from '../application/ports/github-cli';
+import type {BugDetail, FixPreparation} from '../application/services/bug-fix-service';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
 export type {Editor, WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
@@ -274,6 +275,22 @@ export interface SwitchboardApi {
     mergeManagerLand(repository: string, number: number): Promise<LandResult>;
     /** Unland a PR: it leaves its lane without merging. */
     mergeManagerUnland(repository: string, number: number): Promise<GitHubWrite>;
+    /** When the inbox last polled Bugsnag and GitHub, epoch ms (#414); null before it did. */
+    inboxPolledAt(): Promise<number | null>;
+    /** Fix (#414): the worktree and prompt of a Fix session on a bug, or why not ("Link a project first"). */
+    bugPrepareFix(key: string): Promise<FixPreparation>;
+    /** The Fix session `bugPrepareFix` prepared started: the bug moves to In progress. */
+    bugFixStarted(key: string, sessionId: string): Promise<InboxItem | null>;
+    /** Stop working on a bug: back in the inbox, read. */
+    bugStopWorking(key: string): Promise<InboxItem | null>;
+    /** Seen again from an older release: mark it fixed in Bugsnag again and keep it in Done. */
+    bugCloseAgain(key: string): Promise<InboxItem | null>;
+    /** Seen again after the merge, taken as a regression: back in the inbox, unread. */
+    bugTreatAsRegressed(key: string): Promise<InboxItem | null>;
+    /** A bug's detail from Bugsnag: its 7-day trend, first and last release, top frames, dashboard link. */
+    bugDetail(key: string): Promise<BugDetail | null>;
+    /** A bug's events per day for the last 7 days, oldest first, for its row's sparkline. */
+    bugTrend(key: string): Promise<number[]>;
     /** Releases are tagged for a project (#412): what its tags say, its own override, and what counts. */
     releaseTags(projectPath: string): Promise<ReleaseTagsView>;
     /**

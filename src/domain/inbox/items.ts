@@ -31,6 +31,7 @@ import {bugSignals} from './signals';
 import {inboxKey, isUrgent, managerOf, sourceOf} from './model';
 import type {
     BugFacts,
+    BugFix,
     BugSignals,
     ConfiguredManagers,
     InboxFacts,
@@ -121,6 +122,7 @@ function arrived(facts: InboxFacts, context: SyncContext): InboxItem {
         facts,
         signals: facts.kind === 'bug' ? signalsOf(facts, context, false) : null,
         notes: '',
+        work: null,
     };
 }
 
@@ -189,6 +191,13 @@ export function startWork(item: InboxItem, stage: InboxStage = 'working'): Inbox
     return {...item, state: {kind: 'inProgress', stage}};
 }
 
+/** A bug's Fix changed: its session, PR, checks, merge or timeline (#414). Without a Fix it stays. */
+export function updateFix(item: InboxItem, change: (fix: BugFix) => BugFix): InboxItem {
+    if (!item.fix) return item;
+    const fix = change(item.fix);
+    return fix === item.fix ? item : {...item, fix};
+}
+
 /** An in-progress item moved on a stage. Any other state stays. */
 export function setStage(item: InboxItem, stage: InboxStage): InboxItem {
     if (item.state.kind !== 'inProgress' || item.state.stage === stage) return item;
@@ -204,9 +213,14 @@ export function finish(item: InboxItem, at: number): InboxItem {
     };
 }
 
-/** Stop working on it, or a session that ended without a PR: back in the inbox, read, its work let go. */
-export function returnToInbox(item: InboxItem): InboxItem {
-    return item.state.kind === 'inProgress' || item.state.kind === 'done' ? {...item, state: READ, work: null} : item;
+/**
+ * Stop working on it, or a session that ended without a PR: back in the
+ * inbox, read, its work let go. A bug's Fix keeps how it ended (`noPr` shows
+ * "Tried, no PR").
+ */
+export function returnToInbox(item: InboxItem, ended: 'noPr' | 'stopped' = 'stopped'): InboxItem {
+    if (item.state.kind !== 'inProgress' && item.state.kind !== 'done') return item;
+    return {...item, state: READ, work: null, ...(item.fix ? {fix: {...item.fix, ended}} : {})};
 }
 
 /** What the session working on an item is on. */

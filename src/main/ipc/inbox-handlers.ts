@@ -1,8 +1,10 @@
 /**
  * The managers' inbox (#413): both managers' counts, a manager's items, and
  * what the pages do to an item from the renderer (seen, snooze, backlog,
- * notes). Starting, staging and finishing an item are main's own, from the
- * Fix and Start flows (#414, #415): the Issue manager's are here too.
+ * notes), the Issue manager's thread, comments, Start and Stop (#415), and
+ * the Bug manager page's Fix (#414): preparing it, the session that started,
+ * Stop working on it, and the answers to "seen again". Staging and finishing
+ * an item are main's own, from following its PR.
  */
 import {INVOKE} from '../../ipc/channels';
 import type {Container} from '../composition-root';
@@ -26,6 +28,17 @@ export function registerInboxHandlers(ipc: IpcRegistrar, app: Container): void {
         if (typeof notes !== 'string') throw new Error('notes are text');
         return app.inbox.setNotes(asKey(key), notes);
     });
+    ipc.handle(INVOKE.inboxPolledAt, () => app.inbox.polledAt());
+    ipc.handle(INVOKE.bugPrepareFix, (key: unknown) => app.bugFix.prepareFix(asKey(key)));
+    ipc.handle(INVOKE.bugFixStarted, (key: unknown, sessionId: unknown) => {
+        if (typeof sessionId !== 'string' || sessionId === '') throw new Error('a session id is text');
+        return app.bugFix.fixStarted(asKey(key), sessionId);
+    });
+    ipc.handle(INVOKE.bugStopWorking, (key: unknown) => app.bugFix.stopWorking(asKey(key)));
+    ipc.handle(INVOKE.bugCloseAgain, (key: unknown) => app.bugFix.closeAgain(asKey(key)));
+    ipc.handle(INVOKE.bugTreatAsRegressed, (key: unknown) => app.bugFix.treatAsRegressed(asKey(key)));
+    ipc.handle(INVOKE.bugDetail, (key: unknown) => app.bugFix.detail(asKey(key)));
+    ipc.handle(INVOKE.bugTrend, (key: unknown) => app.bugFix.trend(asKey(key)));
 
     // The Issue manager page (#415): its thread, comments, Start and Stop.
     ipc.handle(INVOKE.issueManagerThread, (key: unknown) => app.issueManager.thread(asKey(key)));
