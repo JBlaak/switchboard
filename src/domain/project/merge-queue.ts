@@ -634,38 +634,3 @@ function pillsOf(
 function hasLabel(pr: QueuePullRequest, label: string): boolean {
     return pr.labels.some((name) => name.toLowerCase() === label.toLowerCase());
 }
-
-// ── What changed, for notifications ──
-
-export interface QueueEvent {
-    kind: 'merged' | 'head' | 'failed';
-    number: number;
-    title: string;
-}
-
-/**
- * What happened to the user's own PRs between two readings of the queue: one
- * became the head, the head failed, the head merged. Moving up a place is not
- * an event. `merged` are the numbers GitHub now reports merged.
- */
-export function queueEvents(
-    before: MergeQueue,
-    after: MergeQueue,
-    mine: ReadonlySet<number>,
-    merged: ReadonlySet<number>,
-): QueueEvent[] {
-    const events: QueueEvent[] = [];
-    const wasHead = before.head;
-    if (wasHead && mine.has(wasHead.number)) {
-        if (merged.has(wasHead.number)) {
-            events.push({kind: 'merged', number: wasHead.number, title: wasHead.title});
-        } else if (after.failed.some((entry) => entry.number === wasHead.number)) {
-            events.push({kind: 'failed', number: wasHead.number, title: wasHead.title});
-        }
-    }
-    const nowHead = after.head;
-    if (nowHead && mine.has(nowHead.number) && nowHead.number !== wasHead?.number) {
-        events.push({kind: 'head', number: nowHead.number, title: nowHead.title});
-    }
-    return events;
-}

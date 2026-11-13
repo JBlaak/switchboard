@@ -156,6 +156,15 @@ const TABLES = [
     source TEXT PRIMARY KEY,
     watching_since INTEGER NOT NULL
   )`,
+    // The Merge manager's landed PRs (#434): one row per PR, its lane, landed
+    // time, stage, set-aside and errand as JSON, read and written whole. The
+    // key is `owner/repo#n`, lower case. Epoch ms.
+    `CREATE TABLE IF NOT EXISTS landed_pull_requests (
+    key TEXT PRIMARY KEY,
+    repository TEXT NOT NULL,
+    pull_request TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
 ];
 
 const INDEXES = [

@@ -8,7 +8,6 @@ import {
 } from '../src/application/services/merge-queue-watch-service';
 import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
 import {errand, failed, head, held, MIN, NOW, prUrl, queued, queueOf, REPO} from './support/merge-queue-fixtures';
-import {PULL_REQUESTS_PER_REPOSITORY} from '../src/application/ports/github-cli';
 import type {MergeQueue} from '../src/domain/project/merge-queue';
 import type {ProjectOverview, ProjectOverviewOptions} from '../src/domain/project/overview';
 import type {QueueErrandView} from '../src/domain/project/queue-errands';
@@ -261,28 +260,9 @@ test('an unreachable GitHub keeps what was pushed last', async () => {
     assert.equal(pushes().length, 1);
 });
 
-test('my PR becoming the head is notified in the footer and on its session; others’ PRs are not', async () => {
+test('my PR becoming the head, failing as the head or merging notifies nothing (#434)', async () => {
     /* Given */
-    const {watch, repos, renderer} = setup([session('s1', ROOT, [2])]);
-    repos.set(REPO, {queue: queueOf([head(1), queued(2, 2), queued(3, 3)])});
-    await watch.poll();
-    assert.deepEqual(renderer.only('statusUpdate'), []);
-
-    /* When */
-    repos.set(REPO, {queue: queueOf([head(2), queued(3, 2)])});
-    await watch.poll();
-
-    /* Then */
-    assert.deepEqual(renderer.only('statusUpdate'), [['statusUpdate', 'Your PR is up next · #2 PR 2', 'done']]);
-    assert.deepEqual(renderer.only('terminalNotification'), [
-        ['terminalNotification', 's1', 'Your PR is up next · #2 PR 2'],
-    ]);
-    assert.deepEqual(renderer.only('sessionNeedsAttention'), []);
-});
-
-test('my head failing flags its session as needing me; my next head merging is notified', async () => {
-    /* Given */
-    const {watch, repos, renderer} = setup([session('s1', ROOT, [1, 5])]);
+    const {watch, repos, renderer, pushes} = setup([session('s1', ROOT, [1, 5])]);
     repos.set(REPO, {queue: queueOf([head(1), queued(5, 2), queued(6, 3)])});
     await watch.poll();
 
@@ -293,61 +273,10 @@ test('my head failing flags its session as needing me; my next head merging is n
     await watch.poll();
 
     /* Then */
-    assert.deepEqual(
-        renderer.only('statusUpdate').map((event) => event[1]),
-        [
-            '#1 failed as the head · Unit tests · the queue moved on to #5',
-            'Your PR is up next · #5 PR 5',
-            '#5 merged · #6 is the head now · 1 left',
-        ],
-    );
-    assert.deepEqual(renderer.only('sessionNeedsAttention'), [['sessionNeedsAttention', 's1']]);
-});
-
-test('with as many open PRs as the read takes, a head gone from them is not taken to have merged', async () => {
-    /* Given */
-    const {watch, repos, renderer} = setup([session('s1', ROOT, [1, 2])]);
-    const others = Array.from({length: PULL_REQUESTS_PER_REPOSITORY - 1}, (_, i) => 100 + i);
-    repos.set(REPO, {queue: queueOf([head(1), queued(2, 2)]), open: [1, 2, ...others]});
-    await watch.poll();
-
-    /* When */
-    repos.set(REPO, {queue: queueOf([head(2)]), open: [2, ...others]});
-    await watch.poll();
-
-    /* Then */
-    assert.deepEqual(
-        renderer.only('statusUpdate').map((event) => event[1]),
-        ['Your PR is up next · #2 PR 2'],
-    );
-});
-
-test('the PRs of sessions no longer running are mine too, when the own-PR source says so', async () => {
-    /* Given */
-    const renderer = fakeRenderer();
-    let queue = queueOf([head(1), queued(2, 2)]);
-    const watch = new MergeQueueWatchService({
-        sessions: () => [session('s1', ROOT)],
-        ownPullRequests: () => [{number: 2, url: prUrl(2), repository: ''}],
-        overview: {overview: async (path) => overviewOf(path, REPO, {queue})},
-        errands: {errands: () => [], settleNudges: () => {}},
-        renderer,
-        timers: fakeTimers(),
-        clock: {now: () => NOW},
-        log: silentLog,
-    });
-    await watch.poll();
-
-    /* When */
-    queue = queueOf([head(2)]);
-    await watch.poll();
-
-    /* Then */
-    assert.deepEqual(
-        renderer.only('statusUpdate').map((event) => event[1]),
-        ['Your PR is up next · #2 PR 2'],
-    );
+    assert.equal(pushes().length, 3);
+    assert.deepEqual(renderer.only('statusUpdate'), []);
     assert.deepEqual(renderer.only('terminalNotification'), []);
+    assert.deepEqual(renderer.only('sessionNeedsAttention'), []);
 });
 
 test('it polls on start, every minute and on focus; never once stopped', async () => {

@@ -7,7 +7,6 @@ import {
     medianRunMs,
     mergeQueue,
     parseAutomergeStatus,
-    queueEvents,
     usesMergeQueue,
     QUEUE_LABELS,
     QUEUE_STEP_MS,
@@ -442,39 +441,6 @@ test('every queued PR gets a pill, stack members included', () => {
     assert.equal(pills[6].text, '+ Queue');
     assert.equal(pills[7].text, 'kept rebased');
     assert.equal(pills[8].text, 'conflicts with main');
-});
-
-// ── Notifications ──
-
-test('only my own PRs make events: up next, failed as the head, merged', () => {
-    /* Given */
-    const before = mergeQueue(input([HEAD, queued(2, 2), queued(3, 3)]));
-    const second = pr(2, {
-        labels: [QUEUE_LABELS.optIn, QUEUE_LABELS.head],
-        automerge: pending('First in the merge queue; merges once CI passes'),
-    });
-    const afterMerge = mergeQueue(input([second, queued(3, 2)]));
-    const failedHead = pr(1, {labels: [QUEUE_LABELS.failed], automerge: {state: 'failure', description: 'CI failed'}});
-    const afterFail = mergeQueue(input([failedHead, second, queued(3, 2)]));
-
-    /* When */
-    const merged = queueEvents(before, afterMerge, new Set([1, 2]), new Set([1]));
-    const failed = queueEvents(before, afterFail, new Set([1]), new Set());
-    const notMine = queueEvents(before, afterMerge, new Set([3]), new Set([1]));
-
-    /* Then */
-    assert.deepEqual(
-        merged.map((event) => [event.kind, event.number]),
-        [
-            ['merged', 1],
-            ['head', 2],
-        ],
-    );
-    assert.deepEqual(
-        failed.map((event) => [event.kind, event.number]),
-        [['failed', 1]],
-    );
-    assert.deepEqual(notMine, []);
 });
 
 // ── Expected merge time ──

@@ -1,6 +1,6 @@
 /**
- * The merge queue outside the project page (#315): what a sidebar row, a
- * session's header and a notification make of a repository's queue.
+ * The merge queue outside the project page (#315): what a sidebar row and a
+ * session's header make of a repository's queue.
  *
  * Main reads the queue of every repository a running session is in, whether
  * or not its project page is open, and pushes it (`MergeQueueChange`) when it
@@ -10,14 +10,12 @@
  *   held, failed) with the queue's sentence as its tooltip, and an errand's
  *   session is marked as one (`sessionQueueMark`);
  * - a session whose PR left the queue gets a panel over its terminal
- *   (`sessionQueueFailure`);
- * - the user's own PRs get a notification when one merges, becomes the head or
- *   fails as the head (`queueNotices`), never for moving up a place.
+ *   (`sessionQueueFailure`).
  *
  * Pure, so main and the renderer share it and the tests hold it still.
  */
 import {ERRAND_LABEL, type QueueErrandView} from './queue-errands';
-import {queueEvents, type FailedEntry, type MergeQueue, type QueueEntry, type QueueEvent} from './merge-queue';
+import type {FailedEntry, MergeQueue, QueueEntry} from './merge-queue';
 import type {SessionPullRequest} from '../session/session';
 
 /** What main pushes for one repository: its queue (null: it no longer uses one, or nothing runs in it) and its errands. */
@@ -197,72 +195,4 @@ export function failedPullRequest(failure: SessionQueueFailure): {
  */
 export function retriedPullRequest(failure: SessionQueueFailure): number {
     return failure.entry.number;
-}
-
-// ── Notifications ──
-
-/** A notification for one of the user's own PRs. */
-export interface QueueNotice {
-    kind: QueueEvent['kind'];
-    repository: string;
-    number: number;
-    /** The line it leads with: "#2271 merged", "Your PR is up next", "#2262 failed as the head". */
-    text: string;
-    /** The line under it. */
-    detail: string;
-}
-
-/**
- * The notifications between two readings of a repository's queue, for the
- * user's own PRs only (`mine`): merged, became the head, failed as the head.
- * Moving up a place says nothing.
- *
- * Whether the old head merged is read off the open PRs: the queue only lets
- * a PR go by merging it or by failing it, so a head that is no longer open
- * and is not in `failed` is taken to have merged. (A head closed by hand in
- * the minute between two reads would be reported merged too; the overview's
- * open PRs cannot tell the two apart.) `openNumbers` is null when the open
- * PRs read may not be all of them (the read stops at a limit): a head missing
- * from them may just be cut off, so no merge is inferred at all.
- */
-export function queueNotices(
-    repository: string,
-    before: MergeQueue,
-    after: MergeQueue,
-    mine: ReadonlySet<number>,
-    openNumbers: ReadonlySet<number> | null,
-): QueueNotice[] {
-    const merged = new Set<number>();
-    const wasHead = before.head;
-    if (
-        wasHead &&
-        openNumbers !== null &&
-        !openNumbers.has(wasHead.number) &&
-        !after.failed.some((entry) => hasMember(entry, wasHead.number))
-    ) {
-        merged.add(wasHead.number);
-    }
-    return queueEvents(before, after, mine, merged).map((event) => notice(repository, event, after));
-}
-
-function notice(repository: string, event: QueueEvent, after: MergeQueue): QueueNotice {
-    const base = {kind: event.kind, repository, number: event.number};
-    // The head counts as queued.
-    const left = after.counts.queued;
-    switch (event.kind) {
-        case 'merged':
-            return {
-                ...base,
-                text: `#${event.number} merged`,
-                detail: after.head ? `#${after.head.number} is the head now · ${left} left` : event.title,
-            };
-        case 'head':
-            return {...base, text: 'Your PR is up next', detail: `#${event.number} ${event.title}`};
-        case 'failed': {
-            const entry = after.failed.find((candidate) => hasMember(candidate, event.number));
-            const why = entry?.failingCheck ?? entry?.reason ?? event.title;
-            const movedOn = after.head ? ` · the queue moved on to #${after.head.number}` : '';
-            return {...base, text: `#${event.number} failed as the head`, detail: why + movedOn};
-        }
-    }
 }

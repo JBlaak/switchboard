@@ -77,6 +77,7 @@ import {WeatherService} from '../application/services/weather-service';
 import {InboxSettingsService} from '../application/services/inbox-settings-service';
 import {InboxService} from '../application/services/inbox-service';
 import {IssueManagerService} from '../application/services/issue-manager-service';
+import {MergeManagerService} from '../application/services/merge-manager-service';
 import {ASK_PATCH_CALL, AskRouteService, EMPTY_SCREEN_CALL} from '../application/services/ask-route-service';
 import type {AskPatchResult} from '../domain/ask/model';
 import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/quick-ask-hotkey';
@@ -125,6 +126,7 @@ import {SqliteSettingsStore} from '../infrastructure/sqlite/settings-store';
 import {SqliteTaskLinkStore} from '../infrastructure/sqlite/task-link-store';
 import {SqliteQueueErrandStore} from '../infrastructure/sqlite/queue-errand-store';
 import {SqliteInboxStore} from '../infrastructure/sqlite/inbox-store';
+import {SqliteLandedStore} from '../infrastructure/sqlite/landed-store';
 import {McpBlaakTasks} from '../infrastructure/blaaktasks/mcp-blaak-tasks';
 import {openDatabase} from '../infrastructure/sqlite/database';
 import {resolveClaudePaths} from '../infrastructure/fs/claude-paths';
@@ -244,8 +246,10 @@ export interface Container {
     readonly worktreeCleanup: WorktreeCleanupService;
     readonly plans: PlanService;
     readonly projectOverview: ProjectOverviewService;
-    /** The merge queue outside the project page (#315): the sidebar's pills, the header panel, the notifications. */
+    /** The merge queue outside the project page (#315): the sidebar's pills and the header panel. */
     readonly mergeQueueWatch: MergeQueueWatchService;
+    /** The Merge manager (#434): landed PRs, their lanes and stages, Land and Unland, read every minute. */
+    readonly mergeManager: MergeManagerService;
     readonly askRoute: AskRouteService<AskPatchResult>;
     readonly quickAskHotkey: QuickAskHotkey;
     readonly quickAskPanel: QuickAskPanel;
@@ -1106,7 +1110,18 @@ export function buildContainer(): Container {
         log,
     });
 
+    // The Merge manager (#434): every landed PR's lane, read every minute.
+    const mergeManager = new MergeManagerService({
+        store: new SqliteLandedStore(database.db),
+        github,
+        renderer,
+        clock,
+        timers,
+        log,
+    });
+
     // The project page (#172): one answer, plans through PlanService's cache.
+    // Whether a repository has a merge queue is its lane kind (#434).
     const projectOverview = new ProjectOverviewService({
         plans,
         owners: issueSessions,
@@ -1119,19 +1134,15 @@ export function buildContainer(): Container {
         worktreeWrites: workspace,
         remotes: git,
         github,
+        laneKind: (repository) => mergeManager.laneKind(repository),
         clock,
         agentlessRemote,
     });
 
     // The merge queue of every running session's repository (#315), page or no
-    // page, on the CI watch's cadence. Every session's PRs, running or not, are
-    // the user's own for its notifications.
+    // page, on the CI watch's cadence.
     const mergeQueueWatch = new MergeQueueWatchService({
         sessions: runningClaudeSessions,
-        ownPullRequests: () => [
-            ...repository.getAllCached().flatMap((cached) => cached.pullRequests ?? []),
-            ...runningClaudeSessions().flatMap((session) => session.pullRequests),
-        ],
         overview: projectOverview,
         errands: queueErrands,
         renderer,
@@ -1401,6 +1412,7 @@ export function buildContainer(): Container {
         plans,
         projectOverview,
         mergeQueueWatch,
+        mergeManager,
         askRoute,
         quickAskHotkey,
         quickAskPanel,
@@ -1442,6 +1454,7 @@ export function buildContainer(): Container {
             projectsWatcher.stop();
             prWatch.stop();
             mergeQueueWatch.stop();
+            mergeManager.stop();
             inbox.stop();
             issueManager.stop();
             sessionWork.closeAll();

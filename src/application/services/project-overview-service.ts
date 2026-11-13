@@ -44,6 +44,7 @@ import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {gitHubRepository} from '../../domain/project/repo-url';
 import {groupOverview, type OverviewPlanSource} from '../../domain/plan/project-overview';
 import {mergeQueue, usesMergeQueue, type QueuePullRequest} from '../../domain/project/merge-queue';
+import type {LaneKind} from '../../domain/merge-manager/model';
 import {superfluousWorktrees} from '../../domain/project/superfluous-worktrees';
 import type {Plan} from '../../domain/plan/model';
 import type {
@@ -83,6 +84,13 @@ export interface ProjectOverviewServiceDeps {
     worktreeWrites: Pick<GitWorktrees, 'mainCheckout' | 'removeWorktree' | 'pruneWorktrees'>;
     remotes: GitRemotes;
     github: Pick<GitHubCli, 'available' | ProjectReads>;
+    /**
+     * A repository's lane kind (#434), from its workflow files: a queue lane
+     * shows the merge queue, even with no labelled PR. Null when it could not
+     * be read; then, and without it, a queue label or status on an open PR
+     * says so (`usesMergeQueue`).
+     */
+    laneKind?: (repository: string) => Promise<LaneKind | null>;
     clock: Clock;
     /**
      * Whether a path is on a remote with no Switchboard agent, which gets the
@@ -304,8 +312,8 @@ export class ProjectOverviewService {
     }
 
     /**
-     * The merge queue's reads, from the open PRs: null when none of them shows
-     * the queue, and otherwise the trunk and the CI run durations besides.
+     * The merge queue's reads, from the open PRs: null when the repository is
+     * not a queue lane, and otherwise the trunk and the CI run durations besides.
      *
      * Only the open PRs `pullRequestsIn` read count: the 50 most recently
      * updated (PULL_REQUESTS_PER_REPOSITORY). In a repository with more open
@@ -320,7 +328,8 @@ export class ProjectOverviewService {
         pullRequests: RepositoryPullRequest[],
     ): Promise<QueueReads | null> {
         const open = pullRequests.filter((pr) => pr.state === 'open').map(queuePullRequest);
-        if (!usesMergeQueue(open)) return null;
+        const kind = (await this.deps.laneKind?.(repository).catch(() => null)) ?? null;
+        if (kind === 'switchboard' || (kind === null && !usesMergeQueue(open))) return null;
         const [trunk, durations] = await Promise.all([
             this.deps.git.defaultBranch(root),
             this.deps.github.ciRunDurations(repository).catch(() => null),

@@ -6,6 +6,7 @@ import {ProjectOverviewService, type RunningSession} from '../src/application/se
 import type {GitHubAvailability} from '../src/application/ports/github-cli';
 import type {GitWrite} from '../src/application/ports/git-workspace';
 import type {Plan, PlanIssue, PlanSummary} from '../src/domain/plan/model';
+import type {LaneKind} from '../src/domain/merge-manager/model';
 import type {
     ProjectGitHubOverview,
     PullRequestQueueReads,
@@ -144,6 +145,8 @@ interface World {
     /** False: every `gh` read answers null. */
     gh: boolean;
     availability: GitHubAvailability;
+    /** The repository's lane kind (#434); undefined: none is given, null: it could not be read. */
+    laneKind?: LaneKind | null;
 }
 
 function setUp(overrides: Partial<World> = {}) {
@@ -248,6 +251,7 @@ function setUp(overrides: Partial<World> = {}) {
         worktreeWrites,
         remotes,
         github,
+        laneKind: world.laneKind === undefined ? undefined : async () => world.laneKind ?? null,
         clock,
     });
 
@@ -817,6 +821,25 @@ test('a repository that does not use the merge queue answers none, and its CI ru
     /* Then */
     assert.equal(github.mergeQueue, null);
     assert.ok(!calls.includes('ciRunDurations'));
+});
+
+test('a queue lane shows its merge queue without any labelled PR; a Switchboard lane none, labels or not (#434)', async () => {
+    /* Given */
+    const queueLane = setUp({pullRequests: [pullRequest(119, [])], laneKind: 'queue'});
+    const labelled = pullRequest(120, [], 'open', {labels: ['automerge:opt-in']});
+    const switchboardLane = setUp({pullRequests: [labelled], laneKind: 'switchboard'});
+    const unknown = setUp({pullRequests: [labelled], laneKind: null});
+
+    /* When */
+    const queue = answered((await queueLane.service.overview(PROJECT)).github).mergeQueue;
+    const none = answered((await switchboardLane.service.overview(PROJECT)).github).mergeQueue;
+    const fallback = answered((await unknown.service.overview(PROJECT)).github).mergeQueue;
+
+    /* Then */
+    assert.ok(queue);
+    assert.equal(queue.head, null);
+    assert.equal(none, null);
+    assert.ok(fallback);
 });
 
 test('a merged PR that carried a queue label does not make the repository a queue one', async () => {

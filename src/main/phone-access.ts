@@ -33,6 +33,7 @@ import type {UpdateNotice} from '../domain/update/release';
 import type {InstallProgress} from '../domain/update/progress';
 import type {TasksUpdate} from '../domain/tasks/surface';
 import type {InboxSummary} from '../domain/inbox/model';
+import type {MergeManagerState} from '../domain/merge-manager/model';
 import type {ShownPage} from '../domain/session/page-tool';
 import type {BatteryGauge} from '../application/ports/battery';
 import type {Clock, Timers} from '../application/ports/clock';
@@ -217,6 +218,11 @@ export class PhoneEventTee implements RendererGateway {
     // The managers' inbox is the Mac's alone for now (#409).
     public inboxChanged(summary: InboxSummary): void {
         this.inner.inboxChanged(summary);
+    }
+
+    // The Merge manager is the Mac's alone (#432).
+    public mergeManagerChanged(state: MergeManagerState): void {
+        this.inner.mergeManagerChanged(state);
     }
 }
 

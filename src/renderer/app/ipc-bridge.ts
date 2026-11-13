@@ -64,6 +64,7 @@ export function installIpcBridge(
         api.onTasksChanged((update) => send({type: 'tasksChanged', update})),
         api.onSessionTaskChanged((sessionId, taskId) => send({type: 'sessionTaskChanged', sessionId, taskId})),
         api.onInboxChanged((summary) => send({type: 'inboxChanged', summary})),
+        api.onMergeManagerChanged((state) => send({type: 'mergeManagerChanged', state})),
         // Main names the host by the path the install was asked with; the store keys VMs by `user@host:port`.
         api.onAgentInstallProgress((path, line) =>
             send({type: 'agentInstallProgress', hostKey: hostKeyOfPath(path) ?? path, line}),

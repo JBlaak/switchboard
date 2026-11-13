@@ -49,6 +49,7 @@ remote-status rules the main process does instead of a parallel copy.
 | `weather/`                                    | folding a WMO weather code into the four skies the empty-state mascot dresses for, and parsing the forecast and geocoding responses                                                                                                                             |
 | `bugsnag/`                                    | the Bug manager's Bugsnag connection: which projects are opted in and linked to a local project, the trending thresholds, and how the Data Access API's answers parse                                                                                           |
 | `inbox/`                                      | the managers' inbox: an item's states, a bug's signals, the wake rules and leaving, which issues are loose and yours, the snooze dates and cycles, the pages' tabs, the Issue manager's chips, tiles, polished comment and stages                               |
+| `merge-manager/`                              | the Merge manager: which PRs are landed, a repository's lane kind (queue or Switchboard, from its workflows), the one stage model both lanes read into (waiting, held, head, fixing, needs you, merged) and land order                                          |
 | `update/`                                     | whether a published release is newer than the running app, and which zip this Mac's architecture installs from                                                                                                                                                  |
 | `search/`, `settings/`, `schedule/`, `usage/` | the rules for each of those, similarly                                                                                                                                                                                                                          |
 
@@ -71,7 +72,7 @@ Nothing here reads `Date.now()`, calls `setTimeout`, or touches a file directly.
 
 ### `src/infrastructure` — the adapters
 
-One implementation per port: `sqlite/` behind the repository, the index and the merge queue's errands,
+One implementation per port: `sqlite/` behind the repository, the index, the merge queue's errands and the Merge manager's landed PRs,
 `pty/` behind the terminal gateway and the session prompter, `fs/` behind the filesystem and the
 transcript store, `ssh/`-shaped logic inside the supervisor, `shell/` behind
 the shell profiles, `electron/` behind the window, the menu and the renderer

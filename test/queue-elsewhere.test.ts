@@ -5,7 +5,6 @@ import {
     failedPullRequest,
     NO_QUEUE_MARK,
     queueChangeSignature,
-    queueNotices,
     retriedPullRequest,
     sessionQueueFailure,
     sessionQueueMark,
@@ -173,84 +172,6 @@ test('a failure without a named check says the queue’s reason', () => {
     /* Then */
     assert.equal(failure?.summary, 'Conflicts with main');
     assert.equal(failure?.entry.kind, 'conflict');
-});
-
-// ── Notifications ──
-
-test('my PR becoming the head says it is up next; one moving up a place says nothing', () => {
-    /* Given */
-    const before = queueOf([head(1), queued(2, 2), queued(3, 3), queued(4, 4)]);
-    const after = queueOf([head(2), queued(3, 2), queued(4, 3)]);
-    const open = new Set([2, 3, 4]);
-
-    /* When */
-    const notices = queueNotices(REPO, before, after, new Set([2, 4]), open);
-
-    /* Then */
-    assert.deepEqual(
-        notices.map((notice) => [notice.kind, notice.number, notice.text]),
-        [['head', 2, 'Your PR is up next']],
-    );
-    assert.equal(notices[0].detail, '#2 PR 2');
-});
-
-test('my head that is no longer open and did not fail is reported merged', () => {
-    /* Given */
-    const before = queueOf([head(1), queued(2, 2), queued(3, 3)]);
-    const after = queueOf([head(2), queued(3, 2)]);
-
-    /* When */
-    const notices = queueNotices(REPO, before, after, new Set([1]), new Set([2, 3]));
-
-    /* Then */
-    assert.deepEqual(
-        notices.map((notice) => [notice.kind, notice.text, notice.detail]),
-        [['merged', '#1 merged', '#2 is the head now · 2 left']],
-    );
-});
-
-test('a head missing from open PRs that may not be all of them is not reported merged', () => {
-    /* Given */
-    const before = queueOf([head(1), queued(2, 2)]);
-    const after = queueOf([head(2)]);
-
-    /* When */
-    const notices = queueNotices(REPO, before, after, new Set([1, 2]), null);
-
-    /* Then */
-    assert.deepEqual(
-        notices.map((notice) => notice.kind),
-        ['head'],
-    );
-});
-
-test('my head that is still open but out of the queue failed as the head', () => {
-    /* Given */
-    const before = queueOf([head(1), queued(2, 2)]);
-    const after = queueOf([failed(1), head(2)]);
-
-    /* When */
-    const notices = queueNotices(REPO, before, after, new Set([1]), new Set([1, 2]));
-
-    /* Then */
-    assert.deepEqual(
-        notices.map((notice) => [notice.kind, notice.text, notice.detail]),
-        [['failed', '#1 failed as the head', 'Unit tests · the queue moved on to #2']],
-    );
-});
-
-test('nothing for other people’s PRs, and nothing when the queue did not move', () => {
-    /* Given */
-    const before = queueOf([head(1), queued(2, 2)]);
-    const after = queueOf([head(2)]);
-
-    /* When */
-    const others = queueNotices(REPO, before, after, new Set([7]), new Set([2]));
-    const still = queueNotices(REPO, before, before, new Set([1, 2]), new Set([1, 2]));
-
-    /* Then */
-    assert.deepEqual(others, []);
-    assert.deepEqual(still, []);
 });
 
 // ── When a push is due ──
