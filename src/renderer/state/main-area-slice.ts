@@ -1,7 +1,8 @@
 /**
  * What the main area shows (#168): exactly one of a session's terminal, a
  * session's work page, a project, the app settings, the Tasks page (#249),
- * the Issue manager page (#415), or the empty screen.
+ * the Issue manager page (#415), the Bug manager page (#414), or the empty
+ * screen.
  *
  * It is the one answer to "what is on screen", which is what the sidebar
  * highlight is derived from (`highlightedSession`). The active session id
@@ -31,6 +32,8 @@ export type MainAreaRoute =
     | {readonly kind: 'tasks'}
     /** The Issue manager page (#415). */
     | {readonly kind: 'issueManager'}
+    /** The Bug manager page (#414). */
+    | {readonly kind: 'bugs'}
     | {readonly kind: 'empty'};
 
 export interface MainAreaState {
@@ -86,13 +89,19 @@ export function mainAreaReducer(state: MainAreaState, event: RendererEvent, retu
         case 'issueManagerOpened':
             return routed(state, {kind: 'issueManager'});
 
-        // The Issue manager chosen on the empty screen (#416).
+        // A manager chosen on the empty screen (#416): its page.
         case 'managerPageRequested':
-            return event.manager === 'issue' ? routed(state, {kind: 'issueManager'}) : state;
+            return routed(state, event.manager === 'issue' ? {kind: 'issueManager'} : {kind: 'bugs'});
 
         // Esc or ⌘I on the Issue manager page.
         case 'issueManagerClosed':
             return state.route.kind === 'issueManager' ? routed(state, back(returnTo)) : state;
+
+        case 'bugPageOpened':
+            return routed(state, {kind: 'bugs'});
+
+        case 'bugPageClosed':
+            return state.route.kind === 'bugs' ? routed(state, back(returnTo)) : state;
 
         case 'blaakTasksSwitched':
             return !event.on && state.route.kind === 'tasks' ? routed(state, back(returnTo)) : state;

@@ -34,3 +34,31 @@ export function toLatestTag(data: any): {at: string | null} | null {
     const at = target.tagger?.date ?? target.committedDate ?? target.target?.committedDate ?? null;
     return {at: typeof at === 'string' ? at : null};
 }
+
+/** The repository's newest tags by their commit's date, for the first one that contains a merge (#414). */
+export const RECENT_TAGS_QUERY = `query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    refs(refPrefix: "refs/tags/", first: 30, orderBy: { field: TAG_COMMIT_DATE, direction: DESC }) {
+      nodes {
+        name
+        target {
+          ... on Commit { committedDate }
+          ... on Tag { tagger { date } target { ... on Commit { committedDate } } }
+        }
+      }
+    }
+  }
+}`;
+
+/** The tags in `RECENT_TAGS_QUERY`'s data with when each was made, newest first; null without a repository. */
+export function toTags(data: any): {name: string; at: string}[] | null {
+    const nodes = data?.repository?.refs?.nodes;
+    if (!Array.isArray(nodes)) return null;
+    const tags: {name: string; at: string}[] = [];
+    for (const node of nodes) {
+        const target = node?.target;
+        const at = target?.tagger?.date ?? target?.committedDate ?? target?.target?.committedDate;
+        if (typeof node?.name === 'string' && typeof at === 'string') tags.push({name: node.name, at});
+    }
+    return tags;
+}

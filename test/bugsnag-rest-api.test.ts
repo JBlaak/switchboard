@@ -227,6 +227,40 @@ test('events since a time come back with their app version, full report or summa
     assert.equal(calls[0].url.searchParams.get('full_reports'), 'true');
 });
 
+test("an error's newest event comes with its stack, in-project frames marked", async () => {
+    /* Given */
+    const {fetch, calls} = fakeFetch({
+        [`/projects/${PROJECT}/errors/${ERROR}/events`]: [{body: fixture('events.json')}],
+    });
+
+    /* When */
+    const event = await api(fetch).eventDetail(PROJECT, ERROR, 'latest');
+
+    /* Then */
+    assert.equal(event?.appVersion, '4.12.1');
+    assert.deepEqual(event?.frames, [
+        {file: 'node_modules/pg/lib/result.js', line: 70, method: 'Result.parse', inProject: false},
+        {file: 'src/workouts/list.ts', line: 41, method: 'listWorkouts', inProject: true},
+        {file: 'src/http/routes.ts', line: 12, method: 'handle', inProject: true},
+    ]);
+    assert.equal(calls[0].url.searchParams.get('per_page'), '1');
+    assert.equal(calls[0].url.searchParams.get('direction'), 'desc');
+});
+
+test("an error's oldest event is asked for oldest first", async () => {
+    /* Given */
+    const {fetch, calls} = fakeFetch({
+        [`/projects/${PROJECT}/errors/${ERROR}/events`]: [{body: '[]'}],
+    });
+
+    /* When */
+    const event = await api(fetch).eventDetail(PROJECT, ERROR, 'first');
+
+    /* Then */
+    assert.equal(event, null);
+    assert.equal(calls[0].url.searchParams.get('direction'), 'asc');
+});
+
 test('fix and link_issue are sent as operations on the error', async () => {
     /* Given */
     const {fetch, calls} = fakeFetch({[`/projects/${PROJECT}/errors/${ERROR}`]: [{body: '{}'}]});

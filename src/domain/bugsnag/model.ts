@@ -58,6 +58,22 @@ export interface BugsnagEvent {
     releaseStage: string | null;
 }
 
+/** One frame of an event's stack trace. */
+export interface StackFrame {
+    file: string;
+    /** null when the notifier sent none. */
+    line: number | null;
+    method: string;
+    /** In the app's own code, not a library's. */
+    inProject: boolean;
+}
+
+/** One event with what the Bug manager's detail shows of it: its release and its stack. */
+export interface BugsnagEventDetail extends BugsnagEvent {
+    /** The first exception's stack trace, top frame first. */
+    frames: StackFrame[];
+}
+
 function record(value: unknown): Record<string, unknown> | null {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
         ? (value as Record<string, unknown>)
@@ -179,6 +195,41 @@ export function parseEvents(body: unknown): BugsnagEvent[] {
         });
     }
     return events;
+}
+
+/** Events with their first exception's stack, as `full_reports=true` answers them. */
+export function parseEventDetails(body: unknown): BugsnagEventDetail[] {
+    const events = parseEvents(body);
+    const raw = list(body);
+    return events.map((event) => {
+        const source = raw.map(record).find((item) => text(item?.id) === event.id);
+        return {...event, frames: framesOf(source ?? null)};
+    });
+}
+
+function framesOf(event: Record<string, unknown> | null): StackFrame[] {
+    const exceptions = Array.isArray(event?.exceptions) ? event.exceptions : [];
+    const stacktrace = record(exceptions[0])?.stacktrace;
+    if (!Array.isArray(stacktrace)) return [];
+    const frames: StackFrame[] = [];
+    for (const item of stacktrace) {
+        const frame = record(item);
+        if (!frame) continue;
+        const line = frame.line_number ?? frame.lineNumber;
+        frames.push({
+            file: text(frame.file),
+            line: typeof line === 'number' && Number.isFinite(line) ? line : null,
+            method: text(frame.method),
+            inProject: frame.in_project === true || frame.inProject === true,
+        });
+    }
+    return frames;
+}
+
+/** A frame as one line: `file:line  method()`. */
+export function frameLine(frame: StackFrame): string {
+    const where = frame.line === null ? frame.file : `${frame.file}:${frame.line}`;
+    return frame.method ? `${where}  ${frame.method}()` : where;
 }
 
 /**

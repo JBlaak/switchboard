@@ -84,6 +84,9 @@ export interface SessionWorkServiceDeps {
         | 'inboxIssuesIn'
         | IssueManagerCalls
         | LaneReads
+        | 'pullRequestForBranch'
+        | 'recentTags'
+        | 'refContains'
         | QueueLabelWrites
         | CiJobQueueCalls
         | PlanReads
