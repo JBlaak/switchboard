@@ -31,6 +31,10 @@ A lane that Switchboard runs itself, for a repository without the merge-queue Ac
 What coordinates a Switchboard lane: it picks the head, brings it up to date, waits for its required checks and merges it. A queue lane has no lane runner; the merge-queue Action coordinates it.
 _Avoid_: Orchestrator, merge loop
 
+**Merging host**:
+The one machine that runs the Merge manager's lane runners and fix errands: the Mac, or a VM that merging was handed off to. There is never more than one.
+_Avoid_: Merge server, runner machine
+
 **Head**:
 The one pull request in a lane that is brought up to date, tested and merged. No other pull request in the lane is updated or tested.
 _Avoid_: Front, current
