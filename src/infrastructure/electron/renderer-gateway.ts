@@ -29,6 +29,7 @@ import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
 import type {RendererGateway} from '../../application/ports/renderer-gateway';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {TasksUpdate} from '../../domain/tasks/surface';
+import type {InboxSummary} from '../../domain/inbox/model';
 import type {ShownPage} from '../../domain/session/page-tool';
 
 export class ElectronRendererGateway implements RendererGateway {
@@ -183,6 +184,10 @@ export class ElectronRendererGateway implements RendererGateway {
 
     public sessionTaskChanged(sessionId: string, taskId: string | null): void {
         this.send(EVENT.sessionTaskChanged, sessionId, taskId);
+    }
+
+    public inboxChanged(summary: InboxSummary): void {
+        this.send(EVENT.inboxChanged, summary);
     }
 
     private sendWhenReady(channel: string, ...args: unknown[]): void {

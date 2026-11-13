@@ -75,6 +75,7 @@ import {WorktreeCleanupService} from '../application/services/worktree-cleanup-s
 import {UpdateService} from '../application/services/update-service';
 import {WeatherService} from '../application/services/weather-service';
 import {InboxSettingsService} from '../application/services/inbox-settings-service';
+import {InboxService} from '../application/services/inbox-service';
 import {ASK_PATCH_CALL, AskRouteService, EMPTY_SCREEN_CALL} from '../application/services/ask-route-service';
 import type {AskPatchResult} from '../domain/ask/model';
 import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/quick-ask-hotkey';
@@ -122,6 +123,7 @@ import {SqliteSessionRepository} from '../infrastructure/sqlite/session-reposito
 import {SqliteSettingsStore} from '../infrastructure/sqlite/settings-store';
 import {SqliteTaskLinkStore} from '../infrastructure/sqlite/task-link-store';
 import {SqliteQueueErrandStore} from '../infrastructure/sqlite/queue-errand-store';
+import {SqliteInboxStore} from '../infrastructure/sqlite/inbox-store';
 import {McpBlaakTasks} from '../infrastructure/blaaktasks/mcp-blaak-tasks';
 import {openDatabase} from '../infrastructure/sqlite/database';
 import {resolveClaudePaths} from '../infrastructure/fs/claude-paths';
@@ -252,6 +254,8 @@ export interface Container {
     readonly tasks: TasksService;
     /** The Bug manager's Bugsnag connection (#411): the token in the Keychain, opted-in and linked projects. */
     readonly bugsnag: BugsnagConnectionService;
+    /** The managers' inbox (#413): bugs and loose issues, their states, polled every five minutes. */
+    readonly inbox: InboxService;
     /**
      * VM hosts (#276): status, install, setup checks, host settings and the setup
      * terminal. Optional only until `buildContainer` builds it.
@@ -1069,6 +1073,26 @@ export function buildContainer(): Container {
         agentlessRemote,
     });
 
+    // The managers' inbox (#413): opted-in Bugsnag projects and watched repositories.
+    const inbox = new InboxService({
+        store: new SqliteInboxStore(database.db),
+        bugsnag,
+        github,
+        projects: () =>
+            projects
+                .list(false)
+                .filter((project) => !project.remote)
+                .map((project) => project.projectPath),
+        settings,
+        git: workspace,
+        remotes: git,
+        renderer,
+        clock,
+        timers,
+        log,
+        agentlessRemote,
+    });
+
     // The project page (#172): one answer, plans through PlanService's cache.
     const projectOverview = new ProjectOverviewService({
         plans,
@@ -1371,6 +1395,7 @@ export function buildContainer(): Container {
         mcpServers,
         tasks,
         bugsnag,
+        inbox,
         quickAskWindow: () => quickAskWindow,
         prepareQuickAsk: () => {
             prepareQuickAsk();
@@ -1403,6 +1428,7 @@ export function buildContainer(): Container {
             projectsWatcher.stop();
             prWatch.stop();
             mergeQueueWatch.stop();
+            inbox.stop();
             sessionWork.closeAll();
             pullRequestPages.closeAll();
             claudeCaller.close();

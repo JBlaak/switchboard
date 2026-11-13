@@ -73,6 +73,7 @@ export interface SessionWorkServiceDeps {
         | 'deletePendingReview'
         | 'submitPendingReview'
         | 'latestTag'
+        | 'inboxIssuesIn'
         | QueueLabelWrites
         | CiJobQueueCalls
         | PlanReads

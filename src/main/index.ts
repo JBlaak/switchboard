@@ -133,6 +133,8 @@ async function start(container: Container): Promise<void> {
         container.prWatch.start();
         // The merge queue (#315) reads GitHub too; the suite pushes its queues instead.
         container.mergeQueueWatch.start();
+        // The managers' inbox (#413) asks Bugsnag and GitHub; the suite seeds its items instead.
+        container.inbox.start();
     }
 
     // Phone access, if it was left on (#194). Its failures land in its own

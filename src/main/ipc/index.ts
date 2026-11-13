@@ -36,6 +36,7 @@ import {registerDroppedFilesHandlers} from './dropped-files-handlers';
 import {registerVmRegistryHandlers} from './vm-registry-handlers';
 import {registerWorkspaceHandlers} from './workspace-handlers';
 import {registerBugsnagHandlers} from './bugsnag-handlers';
+import {registerInboxHandlers} from './inbox-handlers';
 import type {Container} from '../composition-root';
 
 export function registerIpcHandlers(app: Container): void {
@@ -70,4 +71,5 @@ export function registerIpcHandlers(app: Container): void {
     registerVmRegistryHandlers(ipc, app);
     registerWorkspaceHandlers(ipc, app);
     registerBugsnagHandlers(ipc, app);
+    registerInboxHandlers(ipc, app);
 }

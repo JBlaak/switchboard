@@ -106,6 +106,7 @@ const SAMPLES: {[K in PushEvent['type']]: Extract<PushEvent, {type: K}>} = {
         update: {watchId: 'w1', query: {view: 'today'}, state: 'ok', rows: [], fetchedAt: 5},
     },
     sessionTaskChanged: {type: 'sessionTaskChanged', sessionId: 's9', taskId: null},
+    inboxChanged: {type: 'inboxChanged', summary: {bug: {unread: 2, urgent: 1}, issue: {unread: 0, urgent: 0}}},
 };
 
 test('every push event reduces without mutating the state it was given', () => {

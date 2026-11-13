@@ -44,6 +44,8 @@ import {
 } from './gh-overview';
 import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/overview';
 import {LATEST_TAG_QUERY, toLatestTag} from './gh-tags';
+import {INBOX_ISSUES_QUERY, toInboxIssues} from './gh-inbox';
+import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import {ciJobPaths, toActiveRuns, toCiJobs, toRunCompleted, toRunIds, toRunners, toTimedRun} from './gh-ci-jobs';
 import type {ReviewEvent} from '../../domain/session-work/review';
@@ -263,6 +265,13 @@ export class GhCli implements GitHubCli {
         if (!parts) return null;
         const data = await this.graphql(LATEST_TAG_QUERY, {owner: parts[1], name: parts[2]});
         return data ? toLatestTag(data) : null;
+    }
+
+    public async inboxIssuesIn(repo: string): Promise<InboxIssuesAnswer | null> {
+        const parts = REPO.exec(repo);
+        if (!parts) return null;
+        const data = await this.graphql(INBOX_ISSUES_QUERY, {owner: parts[1], name: parts[2]});
+        return data ? toInboxIssues(data, repo) : null;
     }
 
     public async pullRequestsIn(repo: string, options: {merged: boolean}): Promise<RepositoryPullRequest[] | null> {

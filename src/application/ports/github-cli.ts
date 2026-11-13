@@ -16,6 +16,7 @@ import type {ReviewEvent} from '../../domain/session-work/review';
 import type {IssueKey, Plan, PlanSummary} from '../../domain/plan/model';
 import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/overview';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
+import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
 export type {GitHubAvailability};
@@ -102,6 +103,15 @@ export interface GitHubCli {
      * releases: `{at: null}` when it has no tags. Null when unavailable.
      */
     latestTag(repo: string): Promise<{at: string | null} | null>;
+
+    /**
+     * The open issues in `repo` as the Issue manager reads them (#413): each
+     * with its author, assignees, labels, parent, sub-issue count, comments
+     * and referencing commits, and the user `gh` signs in as. The 100 most
+     * recently updated; `complete` when that was all of them. Null when
+     * unavailable.
+     */
+    inboxIssuesIn(repo: string): Promise<InboxIssuesAnswer | null>;
 
     /**
      * The pull requests in `repo`, each with its checks taken together, its

@@ -141,6 +141,21 @@ const TABLES = [
     created_at INTEGER NOT NULL,
     settled_at INTEGER
   )`,
+    // The managers' inbox (#413): one row per bug or issue, its state, notes
+    // and last-read facts as JSON, read and written whole. The key is
+    // `bug:<project>:<error>` or `issue:<owner/repo>#<n>`. Epoch ms.
+    `CREATE TABLE IF NOT EXISTS inbox_items (
+    key TEXT PRIMARY KEY,
+    manager TEXT NOT NULL,
+    item TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+    // When each inbox source (a Bugsnag project, an `owner/repo`) was first
+    // synced, so a bug first seen after it counts as new. Epoch ms.
+    `CREATE TABLE IF NOT EXISTS inbox_sources (
+    source TEXT PRIMARY KEY,
+    watching_since INTEGER NOT NULL
+  )`,
 ];
 
 const INDEXES = [

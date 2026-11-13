@@ -77,6 +77,7 @@ import type {ShownPage} from '../domain/session/page-tool';
 import type {SessionLink} from '../domain/session/links';
 import type {SessionStats} from '../domain/session/stats';
 import type {ReleaseTagsView, SnoozeOptionView} from '../application/services/inbox-settings-service';
+import type {InboxItem, InboxManager, InboxSummary} from '../domain/inbox/model';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
 export type {Editor, WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
@@ -232,6 +233,18 @@ export interface SwitchboardApi {
     plannerCycle(url: string): Promise<{number: number} | null>;
     /** The managers' snooze options open now (#412), with the cycle ones when the Planner answers within 5 s. */
     inboxSnoozeOptions(): Promise<SnoozeOptionView[]>;
+    /** Both managers' unread and urgent counts (#413), as `onInboxChanged` pushes them. */
+    inboxSummary(): Promise<InboxSummary>;
+    /** A manager's inbox items, in every state. */
+    inboxItems(manager: InboxManager): Promise<InboxItem[]>;
+    /** An unread item was seen; the item after, or null for a key the inbox does not hold. */
+    inboxMarkRead(key: string): Promise<InboxItem | null>;
+    /** Snooze an item until a time (ISO), or until it changes (null). */
+    inboxSnooze(key: string, until: string | null): Promise<InboxItem | null>;
+    /** Put an item in the backlog, until it changes. */
+    inboxBacklog(key: string): Promise<InboxItem | null>;
+    /** Your notes on an item, saved as you type. */
+    inboxSetNotes(key: string, notes: string): Promise<InboxItem | null>;
     /** Releases are tagged for a project (#412): what its tags say, its own override, and what counts. */
     releaseTags(projectPath: string): Promise<ReleaseTagsView>;
     /**
@@ -632,6 +645,8 @@ export interface SwitchboardApi {
     onTasksChanged(cb: (update: TasksUpdate) => void): Unsubscribe;
     /** A session's task changed: a task id when it was linked, null when unlinked. */
     onSessionTaskChanged(cb: (sessionId: string, taskId: string | null) => void): Unsubscribe;
+    /** The managers' inbox changed (#413): both managers' counts. */
+    onInboxChanged(cb: (summary: InboxSummary) => void): Unsubscribe;
     /** One line of an agent install's progress, for the project whose host it is. */
     onAgentInstallProgress(cb: (projectPath: string, line: string) => void): Unsubscribe;
     /** One line of a hand-off's progress, for the local project being handed off. */

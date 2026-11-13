@@ -62,6 +62,7 @@ import type {ShellProfile} from '../../domain/shell/shell-profile';
 import type {AskPatchResult} from '../../domain/ask/model';
 import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {ShownPage} from '../../domain/session/page-tool';
+import type {InboxSummary} from '../../domain/inbox/model';
 
 // ── Pushed by the main process ──
 
@@ -108,6 +109,8 @@ export type PushEvent =
     | {type: 'tasksChanged'; update: TasksUpdate}
     /** A session's task changed: a task id when linked, null when unlinked. */
     | {type: 'sessionTaskChanged'; sessionId: string; taskId: string | null}
+    /** The managers' inbox changed (#413): both managers' counts. */
+    | {type: 'inboxChanged'; summary: InboxSummary}
     /** One line of an agent install's progress (#276), for the VM it installs on (its `user@host:port` key). */
     | {type: 'agentInstallProgress'; hostKey: string; line: string}
     /** One line of a project hand-off's progress (#276), for the local project. */

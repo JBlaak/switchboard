@@ -230,6 +230,7 @@ export function fakeRenderer(): FakeRenderer {
         sessionArchived: record('sessionArchived'),
         tasksChanged: record('tasksChanged'),
         sessionTaskChanged: record('sessionTaskChanged'),
+        inboxChanged: record('inboxChanged'),
     };
 }
 

@@ -20,6 +20,7 @@ import type {MergeQueueChange} from '../../domain/project/queue-elsewhere';
 import type {PhoneAccessState, TerminalOwner} from '../../domain/phone/state';
 import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {ShownPage} from '../../domain/session/page-tool';
+import type {InboxSummary} from '../../domain/inbox/model';
 
 export interface RendererGateway {
     /** True while there is a window listening; every send is a no-op without one. */
@@ -107,4 +108,8 @@ export interface RendererGateway {
     tasksChanged(update: TasksUpdate): void;
     /** A session's task changed: linked at a start, by detection or by hand (a task id), or unlinked (null). */
     sessionTaskChanged(sessionId: string, taskId: string | null): void;
+
+    // ── The managers' inbox (#413) ──
+    /** The inbox changed after a poll or an action: both managers' counts. Its items are asked for (`inboxItems`). */
+    inboxChanged(summary: InboxSummary): void;
 }
