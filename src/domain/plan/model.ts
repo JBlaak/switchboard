@@ -84,7 +84,8 @@ export interface PlanSummary extends IssueKey {
 }
 
 /** P7. */
-export type NodeState = 'merged' | 'closed' | 'not-planned' | 'review' | 'draft' | 'claimed' | 'ready' | 'locked';
+export type NodeState =
+    'merged' | 'closed' | 'done' | 'not-planned' | 'review' | 'draft' | 'claimed' | 'ready' | 'locked';
 
 export interface PlanLayout {
     /** Level 1 first; each row in drawing order (D1). */

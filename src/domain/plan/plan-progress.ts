@@ -24,7 +24,7 @@ export interface PlanProgress {
     readonly levels: readonly LevelProgress[];
 }
 
-const DONE: readonly NodeState[] = ['merged', 'closed', 'not-planned'];
+const DONE: readonly NodeState[] = ['merged', 'closed', 'done', 'not-planned'];
 const STARTED: readonly NodeState[] = ['review', 'draft', 'claimed'];
 
 export function planProgress(plan: Plan): PlanProgress {

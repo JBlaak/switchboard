@@ -20,6 +20,7 @@ import type {
 export const STATE_LABEL: Readonly<Record<NodeState, string>> = {
     merged: 'Merged',
     closed: 'Closed · no PR',
+    done: 'Done',
     'not-planned': 'Not planned',
     review: 'In review',
     draft: 'Draft PR',

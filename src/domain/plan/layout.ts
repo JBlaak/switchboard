@@ -24,11 +24,13 @@ function isClosed(issue: PlanIssue): boolean {
 /**
  * P7. An open blocker, in the plan or outside it (P5), locks an open issue
  * without a PR. On a wayfinder map an open ticket someone is assigned to is
- * claimed, which shows as in progress whether it is on the frontier or not.
+ * claimed, which shows as in progress whether it is on the frontier or not, and
+ * a completed ticket is done: its outcome is a decision, not a PR.
  */
 function nodeState(issue: PlanIssue, blockers: PlanIssue[], wayfinder: boolean): NodeState {
     if (issue.state === 'closed') {
         if (issue.closedAs === 'not_planned') return 'not-planned';
+        if (wayfinder) return 'done';
         return issue.pullRequests.some((pr) => pr.state === 'merged') ? 'merged' : 'closed';
     }
     const open = issue.pullRequests.filter((pr) => pr.state === 'open');
