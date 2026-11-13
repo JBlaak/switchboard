@@ -19,6 +19,7 @@ import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {IssueThread} from '../../domain/inbox/issue-manager';
 import type {LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
+import type {BranchPullRequest} from '../../domain/inbox/stage';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
 export type {GitHubAvailability};
@@ -105,6 +106,18 @@ export interface GitHubCli {
      * releases: `{at: null}` when it has no tags. Null when unavailable.
      */
     latestTag(repo: string): Promise<{at: string | null} | null>;
+
+    /**
+     * The newest PR opened from `branch` in `repo` (#414): `{pr: null}` when
+     * it has none. Null when `gh` could not be asked.
+     */
+    pullRequestForBranch(repo: string, branch: string): Promise<{pr: BranchPullRequest | null} | null>;
+
+    /** The repository's newest 30 tags with when each was made, newest first (#414). Null when unavailable. */
+    recentTags(repo: string): Promise<{name: string; at: string}[] | null>;
+
+    /** Whether `ref` (a tag) contains commit `sha`, by GitHub's compare (#414). Null when unavailable. */
+    refContains(repo: string, ref: string, sha: string): Promise<boolean | null>;
 
     /**
      * The open issues in `repo` as the Issue manager reads them (#413): each

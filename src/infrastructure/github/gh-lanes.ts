@@ -77,7 +77,7 @@ export function laneQuery(numbers: readonly number[]): string {
 }
 
 fragment laneFields on PullRequest {
-  id number title url state isDraft mergedAt headRefName headRefOid baseRefName reviewDecision mergeStateStatus
+  id number title url state isDraft mergedAt headRefName headRefOid baseRefName baseRefOid reviewDecision mergeStateStatus
   author { login }
   labels(first: 20) { nodes { name } }
   reviewRequests(first: 20) { nodes { requestedReviewer { ... on User { login } ... on Team { combinedSlug } } } }
@@ -264,6 +264,7 @@ export function toLanePullRequest(node: any, repository: string): LanePullReques
         headRef: text(node.headRefName),
         headOid: text(node.headRefOid),
         baseRef: text(node.baseRefName),
+        ...(text(node.baseRefOid) ? {baseOid: text(node.baseRefOid)} : {}),
         labels: names(node.labels?.nodes, (label) => label?.name),
         automerge: toAutomergeStatus(commit?.status?.context),
         review: toReviewDecision(node.reviewDecision),

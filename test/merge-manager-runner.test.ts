@@ -200,6 +200,17 @@ test('a run still going after it was cancelled is force-cancelled once', () => {
     assert.deepEqual(laneActions(input, forced), []);
 });
 
+test('the runs a fix errand started again on a waiting PR are not cancelled, until its head moves', () => {
+    /* Given */
+    const input = lane([entry(1, head('checks')), entry(2, WAITING, {runs: [{id: 21, state: 'unfinished'}]})]);
+    const spared = memory({spared: new Map([['movelab/connect#2', 'oid-2']])});
+    const pushedSince = memory({spared: new Map([['movelab/connect#2', 'oid-2-old']])});
+
+    /* Then */
+    assert.deepEqual(laneActions(input, spared), []);
+    assert.equal(laneActions(input, pushedSince)[0]?.kind, 'cancel');
+});
+
 test('nothing is cancelled in a lane without a head', () => {
     /* Given */
     const input = lane([entry(2, WAITING, {runs: [{id: 21, state: 'unfinished'}]})]);

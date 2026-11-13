@@ -50,7 +50,9 @@ import {
     toRepositoryPullRequests,
 } from './gh-overview';
 import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/overview';
-import {LATEST_TAG_QUERY, toLatestTag} from './gh-tags';
+import {LATEST_TAG_QUERY, RECENT_TAGS_QUERY, toLatestTag, toTags} from './gh-tags';
+import {toCheck} from './gh-checks';
+import {BRANCH_PULL_REQUEST_QUERY, toBranchPullRequest} from './gh-branch-pr';
 import {INBOX_ISSUES_QUERY, ISSUE_THREAD_QUERY, toInboxIssues, toIssueThread} from './gh-inbox';
 import type {IssueThread} from '../../domain/inbox/issue-manager';
 import {
@@ -68,11 +70,11 @@ import {
 } from './gh-lanes';
 import type {LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
+import type {BranchPullRequest} from '../../domain/inbox/stage';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import {ciJobPaths, toActiveRuns, toCiJobs, toRunCompleted, toRunIds, toRunners, toTimedRun} from './gh-ci-jobs';
 import type {ReviewEvent} from '../../domain/session-work/review';
 import type {
-    CheckRun,
     DiffSide,
     IssueRef,
     IssueStatus,
@@ -287,6 +289,29 @@ export class GhCli implements GitHubCli {
         if (!parts) return null;
         const data = await this.graphql(LATEST_TAG_QUERY, {owner: parts[1], name: parts[2]});
         return data ? toLatestTag(data) : null;
+    }
+
+    public async pullRequestForBranch(repo: string, branch: string): Promise<{pr: BranchPullRequest | null} | null> {
+        const parts = REPO.exec(repo);
+        if (!parts || !branch) return null;
+        const data = await this.graphql(BRANCH_PULL_REQUEST_QUERY, {owner: parts[1], name: parts[2], branch});
+        return data ? toBranchPullRequest(data) : null;
+    }
+
+    public async recentTags(repo: string): Promise<{name: string; at: string}[] | null> {
+        const parts = REPO.exec(repo);
+        if (!parts) return null;
+        const data = await this.graphql(RECENT_TAGS_QUERY, {owner: parts[1], name: parts[2]});
+        return data ? toTags(data) : null;
+    }
+
+    public async refContains(repo: string, ref: string, sha: string): Promise<boolean | null> {
+        if (!REPO.test(repo) || !/^[0-9a-f]{7,40}$/i.test(sha) || !ref) return null;
+        const body = await this.getJson(`repos/${repo}/compare/${sha}...${encodeURIComponent(ref)}`);
+        const status = body?.status;
+        if (typeof status !== 'string') return null;
+        // The tag is ahead of the commit, or is it: the commit is in the tag.
+        return status === 'ahead' || status === 'identical';
     }
 
     public async inboxIssuesIn(repo: string): Promise<InboxIssuesAnswer | null> {
@@ -764,31 +789,6 @@ function behindBase(node: any): number | undefined {
     if (!defaultBranch || node.baseRefName !== defaultBranch) return undefined;
     const aheadBy = node.headRef?.compare?.aheadBy;
     return typeof aheadBy === 'number' ? aheadBy : undefined;
-}
-
-function toCheck(node: any): CheckRun {
-    if (node.__typename === 'StatusContext') {
-        const state: CheckRun['state'] =
-            node.state === 'SUCCESS'
-                ? 'passing'
-                : node.state === 'PENDING' || node.state === 'EXPECTED'
-                  ? 'pending'
-                  : 'failing';
-        return withUrl({name: node.context ?? '', state}, node.targetUrl);
-    }
-    let state: CheckRun['state'];
-    if (node.status !== 'COMPLETED') state = 'pending';
-    else if (node.conclusion === 'SUCCESS' || node.conclusion === 'NEUTRAL') state = 'passing';
-    else if (node.conclusion === 'SKIPPED') state = 'skipped';
-    // FAILURE, CANCELLED, TIMED_OUT, ACTION_REQUIRED, STARTUP_FAILURE, STALE:
-    // someone has to act on each.
-    else state = 'failing';
-    return withUrl({name: node.name ?? '', state}, node.detailsUrl);
-}
-
-function withUrl(check: CheckRun, url: unknown): CheckRun {
-    if (typeof url === 'string' && url) check.url = url;
-    return check;
 }
 
 /** A bot is a `Bot` actor, or an app account whose login says so. */

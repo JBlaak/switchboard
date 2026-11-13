@@ -21,6 +21,7 @@ import {INBOX_TABS, INBOX_TAB_LABELS, tabCounts} from '../../../domain/inbox/tab
 import {issueChip, issueTiles, shownLabels, type IssueFilter} from '../../../domain/inbox/issue-manager';
 import type {InboxItem} from '../../../domain/inbox/model';
 import {IssueDetail, StagePill} from './IssueDetail';
+import {needsYouInProgress} from '../../../domain/merge-manager/stage-words';
 import {issueKeyAction} from './page-keys';
 import {
     backlogIssue,
@@ -51,6 +52,8 @@ function IssueManagerView(): JSX.Element {
     const items = page.items ?? [];
     const counts = tabCounts(items);
     const tiles = issueTiles(items);
+    const merge = useStore((state) => state.mergeManager.state);
+    const inProgressNeedsYou = needsYouInProgress(items, merge);
     const repositories = new Set(items.map((item) => item.source)).size;
 
     // Into the page as it opens, so its keys reach it without a click.
@@ -178,6 +181,9 @@ function IssueManagerView(): JSX.Element {
                         }}>
                         {INBOX_TAB_LABELS[tab]}
                         {counts[tab] > 0 && <span className="im-tab-count">{counts[tab]}</span>}
+                        {tab === 'inProgress' && inProgressNeedsYou && (
+                            <span className="im-tab-dot" aria-label="A landed PR needs you" />
+                        )}
                     </button>
                 ))}
             </nav>
@@ -321,7 +327,7 @@ function IssueRow({
             <span className="im-dot" aria-label={chip ? 'Unread' : undefined} />
             <span className="im-chip-slot">
                 {chip && <span className={'im-chip is-' + chip}>{CHIP_LABELS[chip]}</span>}
-                {item.state.kind === 'inProgress' && <StagePill stage={item.state.stage} />}
+                {item.state.kind === 'inProgress' && <StagePill item={item} stage={item.state.stage} />}
                 {item.state.kind === 'done' && <span className="im-chip is-done">Done</span>}
             </span>
             <span className="im-row-text">

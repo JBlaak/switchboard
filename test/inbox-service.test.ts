@@ -86,6 +86,7 @@ function setup(overrides: Partial<World> = {}) {
         },
         errorTrend: async () => [],
         eventsSince: async () => [],
+        eventDetail: async () => null,
         fix: async () => {},
         linkIssue: async () => {},
     };

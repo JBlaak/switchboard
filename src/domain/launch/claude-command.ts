@@ -49,10 +49,9 @@ export function buildClaudeArgs(
     // options still gets them. Both flags take any number of values, so each is
     // followed by another flag, never by a bare value.
     if (settings) args.push('--settings', settings);
-    if (tools) {
-        args.push('--mcp-config', tools.mcpConfig);
-        if (tools.allowedTools.length) args.push('--allowedTools', tools.allowedTools.join(','));
-    }
+    if (tools) args.push('--mcp-config', tools.mcpConfig);
+    const allowed = [...(tools?.allowedTools ?? []), ...launchAllowedTools(options)];
+    if (allowed.length) args.push('--allowedTools', allowed.join(','));
 
     if (target.isNew) {
         args.push('--session-id', String(target.sessionId));
@@ -96,6 +95,13 @@ export function buildClaudeArgs(
     }
 
     return args;
+}
+
+/** A launch's own allow rules (`SessionOptions.allowedTools`): strings only, none with a comma, which would split one. */
+function launchAllowedTools(options?: SessionOptions): string[] {
+    const rules = options?.allowedTools;
+    if (!Array.isArray(rules)) return [];
+    return rules.filter((rule): rule is string => typeof rule === 'string' && rule.length > 0 && !rule.includes(','));
 }
 
 /** Everything that shapes the final command string. */

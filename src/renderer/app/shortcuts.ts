@@ -18,7 +18,8 @@ import {openDialog} from '../ui/dialogs/actions';
 import {handleSessionNavKey} from '../features/terminal/session-nav';
 import {isSessionWorkKey, toggleSessionWork} from '../ui/session-work/actions';
 import {isSidebarToggleKey, toggleSidebar} from '../ui/toolbar/actions';
-import {isIssueManagerKey, isTasksPageKey, isUndoArchiveKey, savedPromptKey} from '../lib/shortcut-keys';
+import {isBugPageKey, isIssueManagerKey, isTasksPageKey, isUndoArchiveKey, savedPromptKey} from '../lib/shortcut-keys';
+import {toggleBugPage} from '../ui/bug-manager/page-actions';
 import {sendSavedPromptOnScreen} from '../ui/session-tray/actions';
 import {undoArchive} from '../ui/archive-undo/actions';
 import {toggleTasksPage} from '../ui/tasks-page/actions';
@@ -82,6 +83,12 @@ export function installShortcuts(): void {
         if (isIssueManagerKey(e)) {
             e.preventDefault();
             toggleIssueManager();
+        }
+
+        // Cmd+B opens or closes the Bug manager page (#414).
+        if (isBugPageKey(e)) {
+            e.preventDefault();
+            toggleBugPage();
         }
 
         // Cmd+1…9 sends the session on screen its saved prompt on that key (#343).

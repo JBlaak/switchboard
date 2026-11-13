@@ -142,6 +142,13 @@ export interface GitWorktrees {
     checkoutWorktree(repository: string, path: string, branch: string): Promise<GitWrite>;
 
     /**
+     * `git worktree add --detach <path> <ref>`: a worktree on no branch, at
+     * `ref` (a fix errand's, at `origin/<branch>`, #437), so no local branch is
+     * made or taken.
+     */
+    addDetachedWorktree(repository: string, path: string, ref: string): Promise<GitWrite>;
+
+    /**
      * `git worktree remove <path>`: git refuses a worktree with uncommitted or
      * untracked changes, or a locked one, and says why, unless `force` (asked
      * for only when the user chose to throw those changes away). Its branch is

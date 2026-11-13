@@ -30,6 +30,11 @@
  * next PR up becomes the head in the same poll; when a PR merged or a head
  * moved, the lanes are read again at once.
  *
+ * Each lane read, once folded in, goes to whoever follows the lanes
+ * (`onLaneRead`): the fix errands (#437) start from it. A head the runner set
+ * aside as Fixing is folded in again at once, so its errand starts in the
+ * same poll.
+ *
  * Nothing here notifies: the Merge manager's page, its figure and the Dock
  * show what happened (#439, #440).
  */
@@ -79,6 +84,15 @@ export interface MergeManagerServiceDeps {
     runner?: Pick<LaneRunner, 'run' | 'conflicts'>;
 }
 
+/** One repository's lane just after a read was folded in: what the fix errands start from (#437). */
+export interface FoldedLane {
+    readonly repository: string;
+    readonly kind: LaneKind;
+    readonly read: LaneRead;
+    /** Every landed PR of the repository, as the read left it. */
+    readonly landed: readonly LandedPullRequest[];
+}
+
 /** Land's answer: the PR in its lane, place and all, or why it did not land. */
 export type LandResult = {ok: true; landed: LandedView} | {ok: false; reason: string};
 
@@ -94,6 +108,8 @@ export class MergeManagerService {
     private again = false;
     /** What was last pushed. */
     private published: string | null = null;
+    /** Who hears each lane read once it is folded in (the fix errands). */
+    private readonly laneFollowers: Array<(lane: FoldedLane) => void> = [];
 
     constructor(private readonly deps: MergeManagerServiceDeps) {
         for (const pr of deps.store.all()) this.landed.set(pr.key, pr);
@@ -223,6 +239,11 @@ export class MergeManagerService {
 
     // ── For the lane runner and the fix errands (#435, #437) ──
 
+    /** Hear every lane read once it is folded in, after a poll or a Land. */
+    public onLaneRead(fn: (lane: FoldedLane) => void): void {
+        this.laneFollowers.push(fn);
+    }
+
     /** Set a landed PR aside (Fixing, Needs you) on a commit, or clear it (null). Null for a PR that is not landed. */
     public setAside(key: string, aside: SetAside | null): LandedPullRequest | null {
         return this.change(key, (pr) => setAside(pr, aside));
@@ -328,6 +349,14 @@ export class MergeManagerService {
         const sync = syncLane(known, read, kind, this.deps.clock.now(), conflicts);
         const changed = sync.landed.filter((pr) => JSON.stringify(this.landed.get(pr.key)) !== JSON.stringify(pr));
         this.commit(changed, sync.removed);
+        const lane: FoldedLane = {repository, kind, read, landed: this.inRepository(repository)};
+        for (const fn of this.laneFollowers) {
+            try {
+                fn(lane);
+            } catch (err) {
+                this.deps.log.error('[merge-manager] a lane follower failed:', (err as Error).message);
+            }
+        }
     }
 
     private inRepository(repository: string): LandedPullRequest[] {

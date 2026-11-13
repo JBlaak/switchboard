@@ -22,7 +22,8 @@
  * the heads-up pop-up; any other is let go at once.
  *
  * And `POST /mcp/<launchId>` serves the session Switchboard's own MCP server,
- * with `archive_session` and, where a page tool is given, `show_page`.
+ * with `archive_session` and, where a page tool is given, `show_page`; to a
+ * fix errand (#437), `finish_errand` as well.
  *
  * Loopback only, on a random port, behind a per-run secret: any local process
  * can reach 127.0.0.1, and without the token one could answer a session's
@@ -42,6 +43,7 @@ import {
 import {parseOnePasswordHookInput} from '../../domain/onepassword/heads-up';
 import {archiveToolReply, type ArchiveToolOutcome, type McpTool} from '../../domain/session/archive-tool';
 import {pageTool, type PageInput} from '../../domain/session/page-tool';
+import {finishErrandTool} from '../../domain/merge-manager/errands';
 import {parseQuestionHookInput, QUESTION_HOOK_TOKEN_HEADER} from '../../domain/questions/question';
 import type {Logger} from '../../application/ports/logger';
 import type {HookReceiver, QuestionHookEndpoint} from '../../application/ports/question-hook';
@@ -80,6 +82,11 @@ export interface QuestionHookServerDeps {
      * VM) the tool is not offered.
      */
     pageTool?: {show(launchId: string, page: PageInput): ArchiveToolOutcome};
+    /**
+     * Fix errands (#437): `finish_errand` is offered to a session only while
+     * it is one. Without it (the agent on a VM) the tool is not offered.
+     */
+    errandTool?: {isErrand(launchId: string): boolean; finish(launchId: string, args: unknown): ArchiveToolOutcome};
     /**
      * Where Bash calls that will reach 1Password go, held. Without one (the
      * agent on a VM) every Bash call is let go at once.
@@ -258,7 +265,11 @@ export class QuestionHookServer implements QuestionHookEndpoint {
         // around the settled outcome; a synchronous outcome replies at once,
         // exactly as before.
         const page = this.deps.pageTool;
-        const extra: McpTool[] = page ? [pageTool((input) => page.show(launchId, input))] : [];
+        const errands = this.deps.errandTool;
+        const extra: McpTool[] = [
+            ...(page ? [pageTool((input) => page.show(launchId, input))] : []),
+            ...(errands?.isErrand(launchId) ? [finishErrandTool((args) => errands.finish(launchId, args))] : []),
+        ];
         const call: {pending?: Promise<ArchiveToolOutcome>} = {};
         const reply = archiveToolReply(
             body,
@@ -277,7 +288,7 @@ export class QuestionHookServer implements QuestionHookEndpoint {
                     return {ok: false, message: 'Switchboard could not archive this session.'};
                 })
                 .then((outcome) => {
-                    // Only an archive call is ever pending, so the page tool is not called again.
+                    // Only an archive call is ever pending, so the other tools are not called again.
                     const settled = archiveToolReply(body, () => outcome, extra);
                     if (settled) this.json(res, settled);
                 });

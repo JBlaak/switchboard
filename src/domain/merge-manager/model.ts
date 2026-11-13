@@ -87,6 +87,11 @@ export interface LandedPullRequest {
     readonly setAside: SetAside | null;
     /** The session of the fix errand working on it, or that last did; null without one. */
     readonly errand: string | null;
+    /**
+     * The last tip seen of the branch it is stacked on, while it was: once that
+     * merged, a fix errand rebases with `--onto` past its commits (#437).
+     */
+    readonly stackBaseTip?: string;
 }
 
 export function landedKey(repository: string, number: number): string {
@@ -128,6 +133,8 @@ export interface LanePullRequestRead {
     readonly headRef: string;
     readonly headOid: string;
     readonly baseRef: string;
+    /** The base branch's tip; absent when GitHub did not say. */
+    readonly baseOid?: string;
     readonly labels: readonly string[];
     /** The queue's `automerge` status on the head commit; null without one. */
     readonly automerge: AutomergeStatus | null;

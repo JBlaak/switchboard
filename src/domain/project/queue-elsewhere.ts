@@ -8,7 +8,8 @@
  *
  * - a session row whose PR is in the queue gets a short pill (merging, 2nd,
  *   held, failed) with the queue's sentence as its tooltip, and an errand's
- *   session is marked as one (`sessionQueueMark`);
+ *   session is marked as one (`sessionQueueMark`); a landed PR's pill says
+ *   its Merge manager stage instead, in either lane (`stage-words`, #441);
  * - a session whose PR left the queue gets a panel over its terminal
  *   (`sessionQueueFailure`).
  *
@@ -17,6 +18,8 @@
 import {ERRAND_LABEL, type QueueErrandView} from './queue-errands';
 import type {FailedEntry, MergeQueue, QueueEntry} from './merge-queue';
 import type {SessionPullRequest} from '../session/session';
+import {EMPTY_MERGE_MANAGER_STATE, type LaneStageKind, type MergeManagerState} from '../merge-manager/model';
+import {findLanded, landedWords} from '../merge-manager/stage-words';
 
 /** What main pushes for one repository: its queue (null: it no longer uses one, or nothing runs in it) and its errands. */
 export interface MergeQueueChange {
@@ -67,13 +70,24 @@ function hasMember(entry: QueueEntry, number: number): boolean {
 
 // ── The sidebar row ──
 
-/** The pill a session row shows for its PR's place in the queue. */
+/** The pill a session row shows for its PR's place in the queue, or its landed stage. */
 export interface SidebarQueuePill {
-    kind: 'merging' | 'queued' | 'held' | 'failed';
-    /** "merging", "2nd", "held", "failed". */
+    /** The queue's own kinds, or `landed-<stage>` for a landed PR. */
+    kind: 'merging' | 'queued' | 'held' | 'failed' | `landed-${LaneStageKind}`;
+    /** "merging", "2nd", "held", "failed"; for a landed PR "landed · 2nd", "held · @ana", "fixing", … */
     text: string;
-    /** The queue's full sentence. */
+    /** The queue's full sentence, or the landed stage's. */
     title: string;
+    /** "will conflict" on a waiting landed PR that will; absent otherwise. */
+    flag?: string | null;
+}
+
+/** The sidebar's pill for a landed PR: the stage words every place shares (#441). */
+export function landedPill(merge: MergeManagerState, repository: string, number: number): SidebarQueuePill | null {
+    const found = findLanded(merge, repository, number);
+    if (!found) return null;
+    const words = landedWords(found);
+    return {kind: `landed-${words.kind}`, text: words.pill, title: words.title, flag: words.flag};
 }
 
 /** What a session row shows of the queue: its PR's pill, and whether the session is an errand. */
@@ -113,21 +127,22 @@ export function sidebarPill(queue: MergeQueue, number: number): SidebarQueuePill
 }
 
 /**
- * What a session row shows: the pill of its newest PR that is in its
- * repository's queue, and the errand marker when the session is one that has
- * not finished. Nothing at all for a session the queue knows nothing of, so
- * such a row renders exactly as it did before.
+ * What a session row shows: the pill of its newest PR that is landed (its
+ * stage) or in its repository's queue, and the errand marker when the
+ * session is one that has not finished. Nothing at all for a session neither
+ * knows anything of, so such a row renders exactly as it did before.
  */
 export function sessionQueueMark(
     sessionId: string,
     prs: readonly SessionPullRequest[],
     queues: Readonly<Record<string, MergeQueue>>,
     errands: Readonly<Record<string, readonly QueueErrandView[]>>,
+    merge: MergeManagerState = EMPTY_MERGE_MANAGER_STATE,
 ): SessionQueueMark {
     let pill: SidebarQueuePill | null = null;
     for (const {pr, repository} of newestFirst(prs)) {
         const queue = queues[repository];
-        pill = queue ? sidebarPill(queue, pr.number) : null;
+        pill = landedPill(merge, repository, pr.number) ?? (queue ? sidebarPill(queue, pr.number) : null);
         if (pill) break;
     }
     const errand = Object.values(errands).some((list) =>

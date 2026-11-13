@@ -71,11 +71,13 @@ export class LaneRunner {
         rerun: Set<number>;
         cancelled: Map<number, {at: number; forced: boolean}>;
         testRebases: Map<string, TestRebaseResult>;
+        spared: Map<string, string>;
     } = {
         updated: new Map(EMPTY_MEMORY.updated),
         rerun: new Set(EMPTY_MEMORY.rerun),
         cancelled: new Map(EMPTY_MEMORY.cancelled),
         testRebases: new Map(EMPTY_MEMORY.testRebases),
+        spared: new Map(EMPTY_MEMORY.spared),
     };
     /** Each lane's trunk commit as last seen, by lower-case repository. */
     private readonly trunks = new Map<string, string>();
@@ -92,6 +94,14 @@ export class LaneRunner {
             read.trunkOid,
             this.remembered(),
         );
+    }
+
+    /**
+     * A fix errand ran a PR's failed runs again on `headOid` (#437): leave
+     * those runs be while it waits behind the head, rather than cancel them.
+     */
+    public spare(key: string, headOid: string): void {
+        this.memory.spared.set(key, headOid);
     }
 
     /** CI runs saved since `at`, by kind. */
@@ -281,6 +291,7 @@ export class LaneRunner {
         }
         for (const key of [...this.memory.updated.keys()]) if (!open.has(key)) this.memory.updated.delete(key);
         for (const key of [...this.memory.testRebases.keys()]) if (!open.has(key)) this.memory.testRebases.delete(key);
+        for (const key of [...this.memory.spared.keys()]) if (!open.has(key)) this.memory.spared.delete(key);
     }
 
     private count(repository: string, kind: LaneSaving, count: number): void {

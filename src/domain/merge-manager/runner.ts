@@ -16,7 +16,8 @@
  *   commit (not under a linear history), else rebase.
  * - **Behind the head**, the unfinished runs of approved PRs that wait are
  *   cancelled; one still going `FORCE_CANCEL_AFTER_MS` later is
- *   force-cancelled. Nothing waiting is ever pushed.
+ *   force-cancelled. Nothing waiting is ever pushed. A PR a fix errand just
+ *   ran again (`spared`) keeps its runs on that commit.
  * - **Will conflict**: GitHub's `dirty` on a waiting PR is confirmed by a test
  *   rebase once per head and trunk commit; it is only flagged.
  *
@@ -65,6 +66,12 @@ export interface RunnerMemory {
     readonly cancelled: ReadonlyMap<number, {readonly at: number; readonly forced: boolean}>;
     /** The last test rebase of each waiting PR, by key. */
     readonly testRebases: ReadonlyMap<string, TestRebaseResult>;
+    /**
+     * PRs a fix errand judged flaky and ran again (#437), by key: the head
+     * commit it did so on. Their runs are left to finish behind the head, so
+     * the errand's retry is not cancelled straight after.
+     */
+    readonly spared: ReadonlyMap<string, string>;
 }
 
 export const EMPTY_MEMORY: RunnerMemory = {
@@ -72,6 +79,7 @@ export const EMPTY_MEMORY: RunnerMemory = {
     rerun: new Set(),
     cancelled: new Map(),
     testRebases: new Map(),
+    spared: new Map(),
 };
 
 /** One Switchboard lane after a poll placed it. */
@@ -117,7 +125,7 @@ export function laneActions(lane: LaneInput, memory: RunnerMemory): LaneAction[]
     for (const {landed, read} of lane.entries) {
         if (landed.stage.kind !== 'waiting') continue;
         // Only the head spends CI: what runs for a PR waiting behind it is stopped.
-        if (head) {
+        if (head && memory.spared.get(landed.key) !== read.headOid) {
             for (const run of read.runs) {
                 if (run.state !== 'unfinished') continue;
                 const cancelled = memory.cancelled.get(run.id);

@@ -74,6 +74,8 @@ export class MergeQueueWatchService {
     private readonly published = new Map<string, string>();
     /** Repositories whose open PRs showed no queue, by when (epoch ms): read again after QUEUE_RECHECK_MS. */
     private readonly withoutQueue = new Map<string, number>();
+    /** The last queue read per repository, for a Fix's place in it (#414). */
+    private readonly last = new Map<string, MergeQueue>();
 
     constructor(private readonly deps: MergeQueueWatchServiceDeps) {}
 
@@ -90,6 +92,20 @@ export class MergeQueueWatchService {
     }
 
     /** The window got focus: poll once more, when the watch is on. */
+    /**
+     * A PR's place in `repository`'s merge queue as last read: 1 for the head,
+     * then the queue's own numbers; null when it is not in it, or the queue
+     * was not read (#414).
+     */
+    public placeOf(repository: string, number: number): number | null {
+        const queue = this.last.get(repository);
+        if (!queue) return null;
+        const inEntry = (entry: {number: number; members: {number: number}[]}): boolean =>
+            entry.number === number || entry.members.some((member) => member.number === number);
+        if (queue.head && inEntry(queue.head)) return 1;
+        return queue.entries.find(inEntry)?.position ?? null;
+    }
+
     public focused(): void {
         if (this.interval) void this.poll();
     }
@@ -156,6 +172,8 @@ export class MergeQueueWatchService {
     private take(repository: string, queue: MergeQueue | null): void {
         // Before its errands are read, so a nudge whose request changed is pushed settled.
         if (queue) this.deps.errands.settleNudges(repository, heldForReview(queue));
+        if (queue) this.last.set(repository, queue);
+        else this.last.delete(repository);
         const errands = queue ? this.deps.errands.errands(repository) : [];
         const signature = queueChangeSignature(queue, errands);
         const pushed = this.published.get(repository);

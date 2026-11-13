@@ -136,7 +136,7 @@ export interface ProjectCiJobQueue {
  * for a nudge); a bump's is the bumped CI job's id.
  */
 export function queueActionKey(
-    job: 'nudge' | 'fix' | 'retry' | 'opt-in' | 'bump',
+    job: 'nudge' | 'fix' | 'retry' | 'opt-in' | 'bump' | 'try-again',
     number: number,
     reviewer?: string,
 ): string {
