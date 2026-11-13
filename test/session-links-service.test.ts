@@ -116,7 +116,7 @@ test("once gh has answered behind it, the next answer has the PR's status", asyn
     /* Then */
     assert.deepEqual(
         links.map((link) => [link.title, link.status]),
-        [['Add the tray', {state: 'open', checks: 'none', dot: 'green'}]],
+        [['Add the tray', {state: 'open', checks: 'none', dot: 'green', mine: true}]],
     );
 });
 
@@ -152,7 +152,7 @@ test("what the CI watch heard about a PR is used before gh's own answer arrives"
     /* Then */
     assert.deepEqual(
         links.map((link) => link.status),
-        [{state: 'merged', checks: 'none', dot: 'merged'}],
+        [{state: 'merged', checks: 'none', dot: 'merged', mine: true}],
     );
 });
 

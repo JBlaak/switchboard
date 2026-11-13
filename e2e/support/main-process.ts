@@ -50,6 +50,8 @@ import type {
 import type {ScheduleLocation} from '../../src/application/services/vm-schedules';
 import type {SessionHandoffPhase, SessionHandoffPreview} from '../../src/application/services/session-handoff';
 import type {SessionBringBackPhase, SessionBringBackPreview} from '../../src/application/services/session-bring-back';
+import type {SessionLink} from '../../src/domain/session/links';
+import type {LandedView, MergeManagerState} from '../../src/domain/merge-manager/model';
 
 /**
  * The usage the gauges show unless a test says otherwise: fixed numbers, with
@@ -1613,5 +1615,62 @@ export async function closeMainWindow(app: ElectronApplication): Promise<void> {
         BrowserWindow.getAllWindows()
             .find((w) => !w.webContents.getURL().includes('/quick-ask/'))!
             .close();
+    });
+}
+
+/**
+ * Land it's back end (#436), standing in for `gh` and the Merge manager:
+ * every session's links are `links`, and landing answers `landed` (the PR in
+ * its lane) after pushing `lanes`, as the real service pushes the lanes it
+ * just changed. Unland pushes the empty lanes back. Each Land it and Unland
+ * is remembered (`landRequests`).
+ */
+export async function stubLandIt(
+    app: ElectronApplication,
+    stub: {links: SessionLink[]; lanes: MergeManagerState; landed: LandedView},
+): Promise<void> {
+    await app.evaluate(
+        ({ipcMain, BrowserWindow}, {channels, stub}) => {
+            const state = (globalThis as typeof globalThis & {__switchboardE2E: {landRequests?: string[]}})
+                .__switchboardE2E;
+            state.landRequests = [];
+            const push = (lanes: unknown): void => {
+                BrowserWindow.getAllWindows()
+                    .find((w) => !w.webContents.getURL().includes('/quick-ask/'))
+                    ?.webContents.send(channels.changed, lanes);
+            };
+            ipcMain.removeHandler(channels.links);
+            ipcMain.handle(channels.links, () => stub.links);
+            ipcMain.removeHandler(channels.land);
+            ipcMain.handle(channels.land, (_event, repository, number) => {
+                state.landRequests!.push(`land ${repository}#${number}`);
+                push(stub.lanes);
+                return {ok: true, landed: stub.landed};
+            });
+            ipcMain.removeHandler(channels.unland);
+            ipcMain.handle(channels.unland, (_event, repository, number) => {
+                state.landRequests!.push(`unland ${repository}#${number}`);
+                push({lanes: [], needsYou: 0});
+                return {ok: true};
+            });
+        },
+        {
+            channels: {
+                links: INVOKE.sessionLinks,
+                land: INVOKE.mergeManagerLand,
+                unland: INVOKE.mergeManagerUnland,
+                changed: EVENT.mergeManagerChanged,
+            },
+            stub,
+        },
+    );
+}
+
+/** Every Land it and Unland since `stubLandIt`, as `land owner/repo#n`. */
+export async function landRequests(app: ElectronApplication): Promise<string[]> {
+    return await app.evaluate(() => {
+        const state = (globalThis as typeof globalThis & {__switchboardE2E: {landRequests?: string[]}})
+            .__switchboardE2E;
+        return [...(state.landRequests ?? [])];
     });
 }

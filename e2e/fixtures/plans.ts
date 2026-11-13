@@ -157,6 +157,7 @@ export function overviewPullRequest(
         title,
         state: 'open',
         draft: false,
+        mine: false,
         headRef,
         updatedAt: '2026-10-17T10:00:00Z',
         checks: {state: 'passing', failing: 0},

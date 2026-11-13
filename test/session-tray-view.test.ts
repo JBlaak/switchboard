@@ -112,7 +112,7 @@ function tray(overrides: Partial<SessionTrayContentProps> = {}): string {
                 {id: 'a', label: 'Where are we?', text: 'Where are we?', mode: 'send', scope: 'global', key: 1},
                 {id: 'b', label: 'Commit + PR', text: 'Commit {branch}', mode: 'input', scope: 'project', key: 2},
             ],
-            links: trayLinks([pr(331, {state: 'open', checks: 'passing', dot: 'green'}), task], null),
+            links: trayLinks([pr(331, {state: 'open', checks: 'passing', dot: 'green', mine: true}), task], null),
             stats,
             editor: {available: true, directory: '/w', editor: 'phpstorm', app: 'PhpStorm'},
             handOffHosts: null,
@@ -210,8 +210,8 @@ test('the meta line leaves out what is unknown', () => {
 test('a PR row says how it is doing, as the sidebar chip does', () => {
     /* When */
     const metas = [
-        linkMeta(pr(1, {state: 'merged', checks: 'passing', dot: 'merged'}), NOW),
-        linkMeta(pr(2, {state: 'open', checks: 'failing', dot: 'red'}), NOW),
+        linkMeta(pr(1, {state: 'merged', checks: 'passing', dot: 'merged', mine: true}), NOW),
+        linkMeta(pr(2, {state: 'open', checks: 'failing', dot: 'red', mine: true}), NOW),
         linkMeta(pr(3, null), NOW),
     ];
 

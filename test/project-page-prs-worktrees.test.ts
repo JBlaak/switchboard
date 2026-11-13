@@ -107,6 +107,7 @@ function pullRequest(
         title,
         state: 'open',
         draft: false,
+        mine: true,
         headRef,
         updatedAt: '2026-10-17T00:00:00Z',
         checks: {state: 'passing', failing: 0},

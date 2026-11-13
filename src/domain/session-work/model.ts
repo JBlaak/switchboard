@@ -108,6 +108,8 @@ export interface PullRequestStatus {
     mergeable?: 'mergeable' | 'conflicting' | 'unknown';
     /** GitHub's auto-merge is on: it merges once its checks pass. */
     autoMerge?: true;
+    /** Whether the user `gh` signs in as opened it; absent until `gh` has said. */
+    mine?: boolean;
     threads?: ReviewThread[];
     pendingReview?: PendingComment[];
     /**

@@ -30,6 +30,7 @@ import {HandoffMarker} from '../session-handoff/HandoffMarker';
 import {loadSessionStats} from '../session-tray/actions';
 import {SESSION_TRAY_ID, focusTray} from '../session-tray/focus';
 import {installDragSpace} from '../session-list/drag-space';
+import {HeaderLandIt} from '../merge-manager/HeaderLandIt';
 
 /** What in the bar keeps its press: controls, and text that can be selected. */
 const KEEPS_PRESS = 'button, input, a, [role="button"], #terminal-header-info > span, #terminal-header-questions';
@@ -85,6 +86,7 @@ export function TerminalHeaderInfo(): JSX.Element {
                 )
             }
             branch={branch}
+            land={onScreen && <HeaderLandIt sessionId={onScreen} />}
             trayOpen={open}
         />
     );
@@ -97,6 +99,8 @@ export interface TerminalHeaderInfoContentProps {
     /** The project, as a way into its page (#173); a slot so the markup draws without the store. */
     project: ReactNode;
     branch: string | null;
+    /** Land it for the session's PR (#436), or its landed stage; a slot like `project`. */
+    land?: ReactNode;
     trayOpen: boolean;
 }
 
@@ -106,6 +110,7 @@ export function TerminalHeaderInfoContent({
     title,
     project,
     branch,
+    land,
     trayOpen,
 }: TerminalHeaderInfoContentProps): JSX.Element {
     return (
@@ -119,6 +124,7 @@ export function TerminalHeaderInfoContent({
                     {branch}
                 </span>
             )}
+            {land}
             <button
                 type="button"
                 id="terminal-header-tray-hint"

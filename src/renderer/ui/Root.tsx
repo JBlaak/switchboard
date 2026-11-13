@@ -33,6 +33,7 @@ import {PairConfirmDialog} from './phone-access/PairConfirmDialog';
 import {MarkDoneOffer} from './session-task/MarkDoneOffer';
 import {ArchiveUndoToast} from './archive-undo/ArchiveUndoToast';
 import {DropUploadToast} from './terminal/DropUploadToast';
+import {LandToast} from './merge-manager/LandToast';
 import {QueueFailurePanel} from './queue-elsewhere/QueueFailurePanel';
 import type {JSX} from 'react';
 import type {Root as ReactRoot} from 'react-dom/client';
@@ -96,10 +97,11 @@ export function Root(): JSX.Element | null {
             <Portal target="sidebar-content">
                 <SessionList />
             </Portal>
-            {/* At the foot of the main area: a drop's upload note, then what an archive brings (Undo above the Mark done offer). */}
+            {/* At the foot of the main area: a drop's upload note, a Land it's toast, then what an archive brings (Undo above the Mark done offer). */}
             <Portal target="main">
                 <div className="main-floats">
                     <DropUploadToast />
+                    <LandToast />
                     <ArchiveUndoToast />
                     <MarkDoneOffer />
                 </div>

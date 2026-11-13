@@ -259,7 +259,7 @@ test("a PR carries gh's title and state, with its checks folded and the sidebar'
             url: 'https://github.com/acme/web/pull/11',
             repository: REPO,
             number: 11,
-            status: {state: 'merged', checks: 'none', dot: 'merged'},
+            status: {state: 'merged', checks: 'none', dot: 'merged', mine: true},
         },
         {
             kind: 'pr',
@@ -268,9 +268,20 @@ test("a PR carries gh's title and state, with its checks folded and the sidebar'
             url: 'https://github.com/acme/web/pull/10',
             repository: REPO,
             number: 10,
-            status: {state: 'open', checks: 'pending', dot: 'amber'},
+            status: {state: 'open', checks: 'pending', dot: 'amber', mine: true},
         },
     ]);
+});
+
+test('a PR gh says someone else opened is not yours, for Land it (#436)', () => {
+    /* Given */
+    const theirs: PullRequestStatus = {...pr(10), title: 'Theirs', state: 'open', mine: false, closes: []};
+
+    /* When */
+    const links = sessionLinks(facts({pullRequests: [pr(10)], pullRequestStatuses: [theirs]}));
+
+    /* Then */
+    assert.equal(links[0].kind === 'pr' && links[0].status?.mine, false);
 });
 
 test('without gh a PR comes back without status', () => {

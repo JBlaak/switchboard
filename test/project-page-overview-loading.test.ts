@@ -99,6 +99,7 @@ const PR: ProjectPullRequest = {
     title: 'Stop the redirect loop',
     state: 'open',
     draft: false,
+    mine: true,
     headRef: 'fix/redirect',
     updatedAt: '2026-10-17T00:00:00Z',
     checks: {state: 'passing', failing: 0},

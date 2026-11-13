@@ -116,6 +116,16 @@ test('auto-merge is on for a PR GitHub has an auto-merge request on, and unknown
     assert.equal(draft.autoMerge, undefined);
 });
 
+test('whether you opened a PR is what GitHub says, and unknown when it did not say (#436)', async () => {
+    /* When */
+    const [yours, theirs, unsaid] = await recordedPullRequests([12, 13, 14]);
+
+    /* Then */
+    assert.equal(yours.mine, true);
+    assert.equal(theirs.mine, false);
+    assert.equal(unsaid.mine, undefined);
+});
+
 test('check runs and status contexts fold into the four states', async () => {
     /* When */
     const [pr] = await recordedPullRequests([12]);

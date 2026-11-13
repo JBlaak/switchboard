@@ -692,7 +692,7 @@ function validNumbers(numbers: readonly number[]): number[] {
 
 const PULL_REQUEST_FIELDS = `
   id
-  number url title state isDraft isCrossRepository mergeable additions deletions
+  number url title state isDraft isCrossRepository mergeable additions deletions viewerDidAuthor
   autoMergeRequest { enabledAt }
   headRefName headRefOid baseRefName
   repository {
@@ -754,6 +754,7 @@ function toPullRequest(node: any, repo: string, viewer: string): PullRequestStat
     if (typeof node.additions === 'number') pr.additions = node.additions;
     if (typeof node.deletions === 'number') pr.deletions = node.deletions;
     if (node.autoMergeRequest) pr.autoMerge = true;
+    if (typeof node.viewerDidAuthor === 'boolean') pr.mine = node.viewerDidAuthor;
 
     const behindBy = behindBase(node);
     if (behindBy !== undefined) pr.behindBy = behindBy;

@@ -1,0 +1,239 @@
+/* ========== LAND IT (#436, epic #432) ==========
+   Land it on your own open PR, and its landed stage once the Merge manager
+   owns it, in the four places that offer it: the session header, the session
+   tray, the sidebar row and the project page's PR rows. Purple is the Merge
+   manager's stage colour (the design's Land it section). */
+
+/* ---- The button, and the landed pill with its menu ---- */
+.land-it,
+.landed-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: var(--sb-r-control);
+    font-family: var(--sb-font-head);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 16px;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:focus-visible {
+        outline: 2px solid var(--sb-accent);
+        outline-offset: 1px;
+    }
+
+    &.is-sm {
+        padding: 1px 8px;
+        font-size: 11.5px;
+    }
+}
+
+.land-it {
+    background: rgba(var(--sb-purple-rgb), 0.2);
+    color: var(--sb-purple);
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-purple-rgb), 0.4);
+
+    &:hover:not(:disabled) {
+        background: rgba(var(--sb-purple-rgb), 0.28);
+    }
+
+    &:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+}
+
+.landed-pill {
+    background: rgba(var(--sb-purple-rgb), 0.12);
+    color: var(--sb-purple);
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-purple-rgb), 0.3);
+
+    &:disabled {
+        cursor: progress;
+    }
+}
+
+.landed-pill-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.landed-pill-caret {
+    font-size: 9px;
+    opacity: 0.7;
+}
+
+.landed-pill-host {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+}
+
+/* Over the session tray, which drops from the same bar. */
+.landed-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+    padding: 6px;
+    border-radius: var(--sb-r-row);
+    background: var(--sb-bg-raised);
+    box-shadow: var(--sb-edge), var(--sb-lift);
+}
+
+.landed-menu-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: var(--sb-text);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+        background: rgba(var(--sb-overlay-rgb), 0.06);
+        outline: none;
+    }
+}
+
+.landed-menu-hint {
+    font-size: 12px;
+    color: var(--sb-text-faint);
+}
+
+/* ---- The session header: the PR's pill, then Land it ---- */
+.header-land {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+
+.header-pr-pill {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(var(--sb-blue-rgb), 0.12);
+    color: var(--sb-blue);
+    font-family: var(--sb-font-head);
+    font-size: 11.5px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+/* ---- The session tray: under its PR's link ---- */
+.tray-land {
+    display: flex;
+    padding: 0 10px 6px;
+}
+
+/* ---- The sidebar row: its stage pill, and the Land it button ---- */
+.session-land-pill {
+    display: inline-flex;
+    align-items: center;
+    align-self: center;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-family: var(--sb-font-head);
+    font-weight: 700;
+    line-height: 15px;
+    white-space: nowrap;
+    cursor: default;
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-purple-rgb), 0.3);
+    color: var(--sb-purple);
+
+    &.is-head,
+    &.is-merged {
+        background: rgba(var(--sb-purple-rgb), 0.18);
+        box-shadow: none;
+    }
+    &.is-held {
+        box-shadow: var(--sb-edge);
+        background: rgba(var(--sb-overlay-rgb), 0.06);
+        color: var(--sb-text-muted);
+    }
+    &.is-fixing {
+        box-shadow: none;
+        background: rgba(var(--sb-green-rgb), 0.14);
+        color: var(--sb-green);
+    }
+    &.is-needsYou {
+        box-shadow: none;
+        background: rgba(var(--sb-orange-rgb), 0.16);
+        color: var(--sb-orange);
+    }
+}
+
+/* ---- The toast: in the Undo toast's card ---- */
+.land-toast {
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px 8px 14px;
+    border-radius: var(--sb-r-card);
+    background: var(--sb-bg-raised);
+    box-shadow: var(--sb-edge), var(--sb-lift);
+    font-size: 13px;
+    color: var(--sb-text-strong);
+    animation: st-offer-in 0.22s ease-out both;
+
+    &.is-failed {
+        color: var(--sb-red);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .land-toast {
+        animation: none;
+    }
+}
+
+.land-toast-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.land-toast-btn {
+    flex: none;
+
+    &:focus-visible {
+        outline: 2px solid var(--sb-accent);
+        outline-offset: 1px;
+    }
+}
+
+.land-toast-close {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: var(--sb-r-control);
+    background: none;
+    color: var(--sb-text-faint);
+    font-size: 11px;
+    cursor: pointer;
+
+    &:hover {
+        color: var(--sb-text-strong);
+    }
+    &:focus-visible {
+        outline: 2px solid var(--sb-accent);
+        outline-offset: 1px;
+    }
+}

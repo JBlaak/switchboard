@@ -18,7 +18,7 @@
  * wanders off.
  */
 import {useCallback, useEffect, useRef, useState} from 'react';
-import type {JSX} from 'react';
+import type {JSX, ReactNode} from 'react';
 import {dispatch} from '../../state/app-store';
 import {shallowEqual} from '../../state/store';
 import {sessionMap} from '../../state/session-store';
@@ -37,9 +37,10 @@ import {focusTray, focusTrayHint} from './focus';
 import {trayLinks} from './tray-view';
 import {inHeaderBox, inTerminalTopZone} from './hover-zone';
 import {SessionTrayContent} from './SessionTrayContent';
+import {LandIt} from '../merge-manager/LandIt';
 import type {SessionTrayActions} from './SessionTrayContent';
 import type {ResolvedSavedPrompt} from '../../../domain/settings/saved-prompts';
-import type {SessionLink} from '../../../domain/session/links';
+import type {LinkedPr, SessionLink} from '../../../domain/session/links';
 import type {WorkspaceEditorInfo} from '../../../domain/workspace/model';
 import {openLink as followLink} from '../pr-view/actions';
 
@@ -213,7 +214,12 @@ export function SessionTray(): JSX.Element | null {
             .catch(() => [])
             .then((prompts) => update({prompts}));
         if (shown) {
-            void loadSessionLinks(sessionId).then((links) => update({links}));
+            void loadSessionLinks(sessionId).then((links) => {
+                update({links});
+                // The header's Land it reads them too (#436).
+                const pullRequests = links.filter((link): link is LinkedPr => link.kind === 'pr');
+                dispatch({type: 'sessionPullRequestsLoaded', sessionId, pullRequests});
+            });
             void loadSessionStats(sessionId);
             void window.api
                 .workspaceEditor({sessionId})
@@ -315,6 +321,7 @@ export function SessionTray(): JSX.Element | null {
                 copied={copied}
                 now={Date.now()}
                 actions={actions}
+                land={trayLand}
             />
         </div>
     );
@@ -324,4 +331,15 @@ export function SessionTray(): JSX.Element | null {
 function keyboardInside(section: HTMLElement | null): boolean {
     const active = document.activeElement;
     return !!section && !!active && section.contains(active) && active.matches(':focus-visible');
+}
+
+/** Land it under a PR's link, or its landed stage; nothing for one that is neither yours and open nor landed. */
+function trayLand(pr: LinkedPr): ReactNode {
+    if (!pr.status || !pr.repository) return null;
+    return (
+        <LandIt
+            pr={{repository: pr.repository, number: pr.number, state: pr.status.state, mine: pr.status.mine}}
+            size="sm"
+        />
+    );
 }

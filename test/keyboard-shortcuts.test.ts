@@ -271,17 +271,17 @@ test('in the list, the arrows and J/K step, Enter activates and Escape lets go',
     assert.deepEqual(actions, ['down', 'down', 'up', 'up', 'activate', 'leave']);
 });
 
-test('in the list, R or F2 renames, E archives and A starts a new session', () => {
+test("in the list, R or F2 renames, E archives, L lands the row's PR and A starts a new session", () => {
     /* When */
-    const actions = ['r', 'F2', 'e', 'a'].map((key) => listCursorKey(keydown({key})));
+    const actions = ['r', 'F2', 'e', 'l', 'a'].map((key) => listCursorKey(keydown({key})));
 
     /* Then */
-    assert.deepEqual(actions, ['rename', 'rename', 'archive', 'newSession']);
+    assert.deepEqual(actions, ['rename', 'rename', 'archive', 'land', 'newSession']);
 });
 
-test('in the list, J, K, R, E and A are left alone with Cmd, Ctrl or Alt held', () => {
+test('in the list, J, K, R, E, L and A are left alone with Cmd, Ctrl or Alt held', () => {
     /* Given */
-    const chorded = ['j', 'k', 'r', 'F2', 'e', 'a'].flatMap((key) => [
+    const chorded = ['j', 'k', 'r', 'F2', 'e', 'l', 'a'].flatMap((key) => [
         keydown({key, metaKey: true}),
         keydown({key, ctrlKey: true}),
         keydown({key, altKey: true}),

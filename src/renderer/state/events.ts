@@ -49,6 +49,7 @@ import type {SessionBringBackEvent} from './session-bring-back-slice';
 import type {DropUploadEvent} from './drop-upload-slice';
 import type {PagesEvent} from './pages-slice';
 import type {MergeQueueEvent} from './merge-queue-slice';
+import type {MergeManagerEvent} from './merge-manager-slice';
 import type {SessionTrayEvent} from './session-tray-slice';
 import type {GrillEvent} from './grill-slice';
 import type {GrillChanged} from '../../domain/grill/model';
@@ -400,6 +401,7 @@ export type RendererEvent =
     | DropUploadEvent
     | PagesEvent
     | MergeQueueEvent
+    | MergeManagerEvent
     | GrillEvent
     | SessionTrayEvent;
 

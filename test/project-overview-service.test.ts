@@ -79,6 +79,7 @@ function pullRequest(
         title: 'PR ' + number,
         state,
         draft: false,
+        mine: true,
         headRef: 'branch-' + number,
         updatedAt: '2026-10-01T00:00:00Z',
         checks: {state: 'passing', failing: 0},

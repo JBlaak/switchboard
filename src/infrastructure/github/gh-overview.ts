@@ -120,7 +120,7 @@ export function pullRequestsInQuery(merged: boolean): string {
 }
 
 fragment pullRequestFields on PullRequest {
-  number title state isDraft headRefName baseRefName url updatedAt closedAt reviewDecision mergeable mergeStateStatus
+  number title state isDraft viewerDidAuthor headRefName baseRefName url updatedAt closedAt reviewDecision mergeable mergeStateStatus
   repository { nameWithOwner }
   statusCheckRollup {
     state
@@ -164,6 +164,7 @@ export function toRepositoryPullRequests(data: any, repo: string): RepositoryPul
                 title: node.title ?? '',
                 state: node.state === 'MERGED' ? 'merged' : node.state === 'CLOSED' ? 'closed' : 'open',
                 draft: node.isDraft === true,
+                mine: node.viewerDidAuthor === true,
                 headRef: node.headRefName ?? '',
                 updatedAt: node.updatedAt ?? '',
                 checks: toCheckRollup(node.statusCheckRollup),

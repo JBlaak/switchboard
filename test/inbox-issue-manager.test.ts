@@ -28,6 +28,7 @@ function pr(number: number, fields: Partial<RepositoryPullRequest> = {}): Reposi
         title: 'Fix',
         state: 'open',
         draft: false,
+        mine: true,
         headRef: '482-export',
         updatedAt: '2026-11-13T10:00:00Z',
         checks: {state: 'passing', failing: 0},
