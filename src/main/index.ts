@@ -139,6 +139,8 @@ async function start(container: Container): Promise<void> {
         container.inbox.start();
         // …and follows the PRs of the issues started from it (#415).
         container.issueManager.start();
+        // Following a Fix's PR (#414) asks GitHub and Bugsnag too.
+        container.bugFix.start();
     }
 
     // Phone access, if it was left on (#194). Its failures land in its own

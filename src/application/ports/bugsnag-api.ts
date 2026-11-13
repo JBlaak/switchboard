@@ -8,7 +8,13 @@
  * Every call rejects with a `BugsnagApiError` when Bugsnag can't be asked or
  * says no, so the caller can tell a wrong token from a dropped connection.
  */
-import type {BugsnagError, BugsnagEvent, BugsnagProject, TrendBucket} from '../../domain/bugsnag/model';
+import type {
+    BugsnagError,
+    BugsnagEvent,
+    BugsnagEventDetail,
+    BugsnagProject,
+    TrendBucket,
+} from '../../domain/bugsnag/model';
 import type {BugsnagFailure} from '../../domain/bugsnag/connection';
 
 /** What to list: Bugsnag's filters, sort and paging. Absent filters aren't sent. */
@@ -44,6 +50,11 @@ export interface BugsnagApi {
     errorTrend(projectId: string, errorId: string, days: number): Promise<TrendBucket[]>;
     /** An error's events received since `since`, newest first, with their app version. */
     eventsSince(projectId: string, errorId: string, since: Date): Promise<BugsnagEvent[]>;
+    /**
+     * An error's newest event (`'latest'`) or its oldest (`'first'`), with its
+     * stack trace; null when it has none.
+     */
+    eventDetail(projectId: string, errorId: string, which: 'latest' | 'first'): Promise<BugsnagEventDetail | null>;
     /** Mark an error fixed. */
     fix(projectId: string, errorId: string): Promise<void>;
     /** Link an issue or pull request URL on an error. */

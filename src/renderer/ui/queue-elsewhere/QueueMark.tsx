@@ -1,6 +1,7 @@
 /**
  * The merge queue on a sidebar row (#315): a short pill when the session's PR
- * is in its repository's queue (merging, 2nd, held, failed), the queue's
+ * is landed (its stage, in the words every place shares, #441) or in its
+ * repository's queue (merging, 2nd, held, failed), the queue's
  * sentence on hover, and "errand · archives itself" on a Nudge or Fix in
  * session errand's row. Nothing at all for a row the queue knows nothing of.
  */
@@ -12,7 +13,8 @@ import type {SessionRow} from '../../../domain/session/session';
 export function QueueMark({session}: {session: SessionRow}): JSX.Element | null {
     const queues = useStore((state) => state.mergeQueue.queues);
     const errands = useStore((state) => state.mergeQueue.errands);
-    const {pill, errand} = sessionQueueMark(session.sessionId, session.pullRequests ?? [], queues, errands);
+    const merge = useStore((state) => state.mergeManager.state);
+    const {pill, errand} = sessionQueueMark(session.sessionId, session.pullRequests ?? [], queues, errands, merge);
     if (!pill && !errand) return null;
     return (
         <>
@@ -22,6 +24,7 @@ export function QueueMark({session}: {session: SessionRow}): JSX.Element | null 
                     data-testid="session-queue-pill"
                     title={pill.title}>
                     {pill.text}
+                    {pill.flag && <span className="session-queue-flag"> · {pill.flag}</span>}
                 </span>
             )}
             {errand && (

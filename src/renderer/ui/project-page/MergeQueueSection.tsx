@@ -21,6 +21,12 @@
  * self-hosted runners, by runner pool, each queued one with its expected
  * runner wait and, when queued jobs are ahead of it, Bump.
  *
+ * A Switchboard-lane repository (#441) gets the section too, from the Merge
+ * manager's lane once anything in it is landed: its lane label, the counts
+ * and the estimate in the heading, the head's three steps (Updated on the
+ * trunk → Checks → Merge), and each landed PR with its stage pill. In a
+ * queue lane, the user's landed PRs carry the same stage pills.
+ *
  * Each entry is a cursor row (↵, or a click, opens its PR in the browser). What it
  * says is `merge-queue-view`; what its buttons do, `merge-queue-actions`.
  */
@@ -53,14 +59,21 @@ import {
     isEmptyQueue,
     jobRowView,
     landedFixStatus,
+    laneCountsText,
+    laneEstimates,
+    laneHeadSteps,
     mergeQueueOf,
     minutesOf,
     nudgeStatus,
     poolBusyText,
     STALLED_TEXT,
+    switchboardLaneOf,
     type ExpectedText,
     type LandedFixStatus,
+    type SwitchboardLaneSection,
 } from './merge-queue-view';
+import type {LandedView, MergeManagerState} from '../../../domain/merge-manager/model';
+import {findLanded, landedWords, type StageWords} from '../../../domain/merge-manager/stage-words';
 import {bumpedRuns, type JobPool, type JobQueueRow} from '../../../domain/project/ci-job-queue';
 import {pullRequestSession} from './project-sessions';
 
@@ -70,6 +83,7 @@ interface Context {
     readonly cursor: string | null;
     readonly errands: readonly QueueErrandView[];
     readonly actions: Readonly<Record<string, QueueActionState>>;
+    readonly merge: MergeManagerState;
 }
 
 export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Element | null {
@@ -77,9 +91,14 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
     // The head's owning session is read from the cached projects, which change with the list's redraws.
     useStore((state) => state.sessionList.revision);
     const now = useStore((state) => state.sessionList.now) || Date.now();
+    const merge = useStore((state) => state.mergeManager.state);
     const queue = mergeQueueOf(page, projectPath);
     const repository = page.overview?.repository ?? null;
-    if (!queue || !repository) return null;
+    if (!queue) {
+        const lane = switchboardLaneOf(page, projectPath, merge);
+        return lane ? <SwitchboardLane lane={lane} cursor={page.cursor} /> : null;
+    }
+    if (!repository) return null;
 
     const context: Context = {
         projectPath,
@@ -87,6 +106,7 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
         cursor: page.cursor,
         errands: page.queueErrands?.repository === repository ? page.queueErrands.errands : [],
         actions: page.queueActions,
+        merge,
     };
     const counts = countsText(queue.counts);
     const clears = expectedText(queue.clearsInMs, queue.clearsAtPlace ?? 1);
@@ -150,6 +170,134 @@ export function MergeQueueSection({projectPath}: {projectPath: string}): JSX.Ele
 }
 
 // ── Pieces ──
+
+/** A stage, as a pill in the words every place shares (#441). */
+function StagePill({words}: {words: StageWords}): JSX.Element {
+    return (
+        <span className={'pp-stage is-landed-' + words.kind} title={words.title}>
+            <i aria-hidden="true" />
+            {words.label}
+        </span>
+    );
+}
+
+/** A queue entry's stage pill, when it is one of the user's landed PRs; nothing otherwise. */
+function LandedStage({context, number}: {context: Context; number: number}): JSX.Element | null {
+    const found = findLanded(context.merge, context.repository, number);
+    return found ? <StagePill words={landedWords(found)} /> : null;
+}
+
+/** A Switchboard lane's section (#441): the Merge manager's landed PRs in this repository. */
+function SwitchboardLane({lane, cursor}: {lane: SwitchboardLaneSection; cursor: string | null}): JSX.Element {
+    const counts = laneCountsText(lane.rows);
+    const estimates = laneEstimates(lane.rows, lane.runMs);
+    const last = Math.max(0, ...estimates.keys());
+    const clears = last ? expectedText(estimates.get(last)!, last) : null;
+    const rowProps = (number: number, className: string) => {
+        const key: IssueKey = {repository: lane.repository, number};
+        const id = cursorId.queueEntry(key);
+        return {
+            className: className + (cursor === id ? ' is-cursor' : ''),
+            'data-cursor-id': id,
+            onClick: () => openPullRequest(key),
+        };
+    };
+    return (
+        <section className="pp-section pp-mq" aria-labelledby="pp-mq-heading">
+            <div className="pp-section-head">
+                <h2 id="pp-mq-heading">Merge queue</h2>
+                <span className="pp-mq-lane">Switchboard lane</span>
+                {counts && <span className="pp-count">{counts}</span>}
+                {clears && (
+                    <span className={'pp-mq-clears' + (clears.rough ? ' is-rough' : '')}>
+                        Clears in about <strong>{clears.text.slice(1)}</strong>
+                    </span>
+                )}
+            </div>
+            <div className="pp-card pp-mq-card">
+                {lane.rows.map((pr) => {
+                    const words = landedWords({pullRequest: pr, lane: lane.lane});
+                    const estimate = pr.place === null ? null : expectedText(estimates.get(pr.place) ?? null, pr.place);
+                    const head = pr.stage.kind === 'head' ? pr.stage : null;
+                    const line = (
+                        <>
+                            <span className={head ? 'pp-mq-badge' : 'pp-mq-pos'}>{pr.place ?? '·'}</span>
+                            <span className="pp-mq-text">
+                                <TitleLine title={pr.title} number={pr.number}>
+                                    {words.flag && <span className="pp-stage-flag">· {words.flag}</span>}
+                                </TitleLine>
+                                <span className="pp-mq-meta">
+                                    <span className="pp-mono">{pr.headRef}</span>
+                                </span>
+                            </span>
+                            <span className="pp-mq-side">
+                                {estimate && <Estimate estimate={estimate} />}
+                                <StagePill words={words} />
+                                <ErrandButtons repository={lane.repository} pr={pr} />
+                            </span>
+                        </>
+                    );
+                    if (!head) {
+                        return (
+                            <div
+                                key={pr.key}
+                                {...rowProps(pr.number, 'pp-mq-entry' + (pr.place === null ? ' is-held' : ''))}>
+                                {line}
+                            </div>
+                        );
+                    }
+                    return (
+                        <div key={pr.key} {...rowProps(pr.number, 'pp-mq-head')}>
+                            <div className="pp-mq-line">{line}</div>
+                            <ol className="pp-mq-steps is-lane" aria-label="Where the head is">
+                                {laneHeadSteps(head.step).map((step) => (
+                                    <li key={step.label} className={'pp-mq-step is-' + step.state}>
+                                        <span className="pp-mq-bar">
+                                            <span style={{width: Math.round(step.progress * 100) + '%'}} />
+                                        </span>
+                                        <span className="pp-mq-step-label">
+                                            {step.state === 'done' && <span className="pp-mq-tick">✓ </span>}
+                                            {step.label}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ol>
+                        </div>
+                    );
+                })}
+            </div>
+        </section>
+    );
+}
+
+/**
+ * A Switchboard lane row's fix errand (#437): Open errand while one works on
+ * it, Open and Try again once it gave up; nothing otherwise.
+ */
+function ErrandButtons({repository, pr}: {repository: string; pr: LandedView}): JSX.Element | null {
+    const tryAgain = useStore((state) => state.projectPage.queueActions[queueActionKey('try-again', pr.number)]);
+    const stopped = pr.stage.kind === 'needsYou' && pr.stage.reason.kind === 'errand-stopped';
+    if (pr.stage.kind === 'fixing') {
+        return pr.errand ? (
+            <RowButton accent onClick={() => openProjectSession(pr.errand!)}>
+                Open errand
+            </RowButton>
+        ) : null;
+    }
+    if (!stopped) return null;
+    return (
+        <>
+            {pr.errand && (
+                <RowButton accent onClick={() => openProjectSession(pr.errand!)}>
+                    Open
+                </RowButton>
+            )}
+            <RowButton disabled={tryAgain?.phase === 'busy'} onClick={() => void tryAgainErrand(repository, pr.number)}>
+                {tryAgain?.phase === 'busy' ? 'Starting…' : 'Try again'}
+            </RowButton>
+        </>
+    );
+}
 
 /** The props a cursor row carries: its id, its class, and a click that opens its PR. */
 function rowProps(context: Context, number: number, className: string) {
@@ -263,6 +411,7 @@ function HeadCard({head, context, now}: {head: QueueHead; context: Context; now:
                 <span className="pp-mq-text">
                     <TitleLine title={head.title} number={head.number}>
                         {head.next && <span className="pp-pill is-queue-next">next</span>}
+                        <LandedStage context={context} number={head.number} />
                     </TitleLine>
                     <span className="pp-mq-meta">
                         <span className="pp-mono">{head.headRef}</span>
@@ -321,6 +470,7 @@ function EntryRow({entry, context}: {entry: QueuedEntry; context: Context}): JSX
                 ) : (
                     <TitleLine title={entry.title} number={entry.number}>
                         {entry.next && <span className="pp-pill is-queue-next">next</span>}
+                        <LandedStage context={context} number={entry.number} />
                     </TitleLine>
                 )}
                 {entry.stack && <StackMembers members={entry.members} />}
@@ -390,9 +540,8 @@ function NudgeButton({pr, reviewer, context}: {pr: NudgedPr; reviewer: string; c
 }
 
 function FailedRow({entry, context}: {entry: FailedEntry; context: Context}): JSX.Element {
-    const lanes = useStore((state) => state.mergeManager.state);
     const landed = landedFixStatus(
-        lanes,
+        context.merge,
         context.repository,
         entry.members.map((member) => member.number),
     );
@@ -407,7 +556,9 @@ function FailedRow({entry, context}: {entry: FailedEntry; context: Context}): JS
         <div {...rowProps(context, entry.number, 'pp-mq-entry is-failed')}>
             <span className="pp-mq-pos">!</span>
             <span className="pp-mq-text">
-                <TitleLine title={entry.title} number={entry.number} />
+                <TitleLine title={entry.title} number={entry.number}>
+                    <LandedStage context={context} number={entry.number} />
+                </TitleLine>
                 <span className="pp-mq-reason">
                     <span className="pp-mq-failure">
                         {failureLabel(entry.kind)}
@@ -475,7 +626,9 @@ function LandedFailedRow({
         <div {...rowProps(context, entry.number, 'pp-mq-entry is-failed')}>
             <span className="pp-mq-pos">!</span>
             <span className="pp-mq-text">
-                <TitleLine title={entry.title} number={entry.number} />
+                <TitleLine title={entry.title} number={entry.number}>
+                    <LandedStage context={context} number={landed.number} />
+                </TitleLine>
                 <span className="pp-mq-reason">
                     <span className="pp-mq-failure">{failureLabel(entry.kind)}</span>
                     {' · '}

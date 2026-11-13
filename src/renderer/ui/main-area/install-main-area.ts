@@ -19,6 +19,7 @@ import {
     sessionWorkPanel,
     settingsViewer,
     tasksPagePanel,
+    bugPagePanel,
     terminalArea,
 } from '../../lib/dom';
 import {showEmptyScreen} from '../../features/patch/patch';
@@ -48,6 +49,7 @@ function swapTo(route: MainAreaRoute): void {
     projectPagePanel.style.display = route.kind === 'project' ? '' : 'none';
     tasksPagePanel.style.display = route.kind === 'tasks' ? '' : 'none';
     issueManagerPanel.style.display = route.kind === 'issueManager' ? '' : 'none';
+    bugPagePanel.style.display = route.kind === 'bugs' ? '' : 'none';
     if (route.kind === 'empty') showEmptyScreen();
     else placeholder.style.display = 'none';
 }

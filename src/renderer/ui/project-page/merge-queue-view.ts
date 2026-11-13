@@ -9,6 +9,8 @@
  */
 import {
     expectedMinutes,
+    MIN_ESTIMATE_MS,
+    QUEUE_STEP_MS,
     type FailureKind,
     type HeadStage,
     type MergeQueue,
@@ -16,8 +18,13 @@ import {
 } from '../../../domain/project/merge-queue';
 import {expectedWaitMs, jobOn, type JobPool, type JobQueueRow} from '../../../domain/project/ci-job-queue';
 import type {QueueErrandView} from '../../../domain/project/queue-errands';
-import type {MergeManagerState} from '../../../domain/merge-manager/model';
 import type {ProjectPageState} from '../../state/project-page-slice';
+import type {
+    HeadStep as LaneHeadStep,
+    LandedView,
+    LaneView,
+    MergeManagerState,
+} from '../../../domain/merge-manager/model';
 
 /** The overview's merge queue for `projectPath`; null while there is none to show (no answer, no queue). */
 export function mergeQueueOf(page: ProjectPageState, projectPath: string): MergeQueue | null {
@@ -263,4 +270,99 @@ export function jobRowView(row: JobQueueRow, now: number): JobRowView {
         wait,
         times: parts.length ? parts.join(' · ') : null,
     };
+}
+
+// ── A Switchboard lane (#441) ──
+
+/**
+ * A Switchboard lane as the Merge queue section shows it: the lane's landed
+ * PRs that have not merged, head first, then in land order.
+ */
+export interface SwitchboardLaneSection {
+    readonly repository: string;
+    readonly lane: LaneView;
+    readonly rows: readonly LandedView[];
+    /** One CI run, the median of the green ones; null with too few. */
+    readonly runMs: number | null;
+}
+
+/**
+ * The Switchboard lane the page's repository merges through, once anything
+ * in it is landed; null for a queue lane (it has its own section), a
+ * repository whose lane is not known yet, or a lane with nothing landed.
+ */
+export function switchboardLaneOf(
+    page: ProjectPageState,
+    projectPath: string,
+    merge: MergeManagerState,
+): SwitchboardLaneSection | null {
+    const overview = page.overview?.projectPath === projectPath ? page.overview : null;
+    const github = overview?.github;
+    if (!overview?.repository || !github?.ok || !github.switchboardLane || github.mergeQueue) return null;
+    const repository = overview.repository.toLowerCase();
+    const lane = merge.lanes.find(
+        (candidate) => candidate.kind === 'switchboard' && candidate.repository.toLowerCase() === repository,
+    );
+    const rows = lane ? laneRows(lane) : [];
+    if (!lane || rows.length === 0) return null;
+    return {repository: overview.repository, lane, rows, runMs: github.switchboardLane.runMs};
+}
+
+/** The rows of a lane: the head, then those with a place, then the rest in land order; merged ones left out. */
+export function laneRows(lane: LaneView): LandedView[] {
+    const open = lane.pullRequests.filter((pr) => pr.stage.kind !== 'merged');
+    const placed = open.filter((pr) => pr.place !== null).sort((a, b) => a.place! - b.place!);
+    return [...placed, ...open.filter((pr) => pr.place === null)];
+}
+
+/** The heading's counts: "1 head · 1 waiting · 2 held", leaving out the parts that are none. */
+export function laneCountsText(rows: readonly LandedView[]): string {
+    const count = (kind: LandedView['stage']['kind']): number => rows.filter((pr) => pr.stage.kind === kind).length;
+    const parts: [number, string][] = [
+        [count('head'), 'head'],
+        [count('waiting'), 'waiting'],
+        [count('held'), 'held'],
+        [count('fixing'), 'fixing'],
+        [count('needsYou'), 'need you'],
+    ];
+    return parts
+        .filter(([n]) => n > 0)
+        .map(([n, word]) => (word === 'need you' && n === 1 ? '1 needs you' : `${n} ${word}`))
+        .join(' · ');
+}
+
+/**
+ * How long until each PR with a place merges, by place: the head what is left
+ * of it (a whole run and a step while it is updated, half a run while its
+ * checks run, a minute once it merges), and every PR waiting behind it one
+ * more run and one step. Empty without a run time to go by.
+ */
+export function laneEstimates(rows: readonly LandedView[], runMs: number | null): Map<number, number> {
+    const out = new Map<number, number>();
+    if (runMs === null) return out;
+    let at = 0;
+    for (const pr of rows) {
+        if (pr.place === null) continue;
+        if (pr.stage.kind === 'head') {
+            at =
+                pr.stage.step === 'updating'
+                    ? runMs + QUEUE_STEP_MS
+                    : pr.stage.step === 'checks'
+                      ? runMs / 2
+                      : MIN_ESTIMATE_MS;
+        } else at += runMs + QUEUE_STEP_MS;
+        out.set(pr.place, Math.max(MIN_ESTIMATE_MS, at));
+    }
+    return out;
+}
+
+/** Updated on the trunk → Checks → Merge, from where a Switchboard lane's head is. */
+export function laneHeadSteps(step: LaneHeadStep): HeadStep[] {
+    const at = step === 'updating' ? 0 : step === 'checks' ? 1 : 2;
+    return ['Updated on the trunk', 'Checks', 'Merge'].map((label, index) => ({
+        label,
+        detail: null,
+        state: index < at ? 'done' : index === at ? 'active' : 'todo',
+        progress: index < at ? 1 : 0,
+    }));
 }

@@ -13,13 +13,14 @@
 import {
     nextPageUrl,
     parseErrors,
+    parseEventDetails,
     parseEvents,
     parseOrganizationIds,
     parseProjects,
     parseTrend,
 } from '../../domain/bugsnag/model';
 import {BugsnagApiError} from '../../application/ports/bugsnag-api';
-import type {BugsnagEvent, BugsnagProject, TrendBucket} from '../../domain/bugsnag/model';
+import type {BugsnagEvent, BugsnagEventDetail, BugsnagProject, TrendBucket} from '../../domain/bugsnag/model';
 import type {BugsnagApi, ErrorPage, ErrorQuery} from '../../application/ports/bugsnag-api';
 import type {Logger} from '../../application/ports/logger';
 
@@ -109,6 +110,19 @@ export class RestBugsnagApi implements BugsnagApi {
             ...filter('event.since', since.toISOString()),
         });
         return this.allPages(url, parseEvents);
+    }
+
+    public async eventDetail(
+        projectId: string,
+        errorId: string,
+        which: 'latest' | 'first',
+    ): Promise<BugsnagEventDetail | null> {
+        const url = this.url(`${this.errorPath(projectId, errorId)}/events`, {
+            full_reports: 'true',
+            per_page: '1',
+            direction: which === 'latest' ? 'desc' : 'asc',
+        });
+        return parseEventDetails((await this.request('GET', url)).body)[0] ?? null;
     }
 
     public async fix(projectId: string, errorId: string): Promise<void> {

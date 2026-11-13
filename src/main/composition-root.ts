@@ -79,6 +79,7 @@ import {InboxService} from '../application/services/inbox-service';
 import {IssueManagerService} from '../application/services/issue-manager-service';
 import {MergeManagerService} from '../application/services/merge-manager-service';
 import {FixErrandService} from '../application/services/fix-errand-service';
+import {BugFixService} from '../application/services/bug-fix-service';
 import {ASK_PATCH_CALL, AskRouteService, EMPTY_SCREEN_CALL} from '../application/services/ask-route-service';
 import type {AskPatchResult} from '../domain/ask/model';
 import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/quick-ask-hotkey';
@@ -268,6 +269,8 @@ export interface Container {
     readonly inbox: InboxService;
     /** The Issue manager page (#415): threads, polished comments, Start and claim, and where started issues stand. */
     readonly issueManager: IssueManagerService;
+    /** The Bug manager page's Fix (#414): its worktree and prompt, the PR it follows, the merge and seen again. */
+    readonly bugFix: BugFixService;
     /**
      * VM hosts (#276): status, install, setup checks, host settings and the setup
      * terminal. Optional only until `buildContainer` builds it.
@@ -396,6 +399,8 @@ export function buildContainer(): Container {
     // What a turn ended with still running in the background, for the sidebar's
     // status tone; told every CLI state change after the Session work queue.
     const backgroundTasks = new BackgroundTaskService({transcripts, renderer, log});
+    // Built after the inbox and the merge queue watch, below; told every CLI state change and end.
+    let bugFix: BugFixService | null = null;
     const lifecycle = new SessionLifecycle({
         registry,
         terminals,
@@ -409,8 +414,10 @@ export function buildContainer(): Container {
                 prompter.cliStateChanged(sessionId, session, change);
                 backgroundTasks.cliStateChanged(sessionId, session, change);
                 if (change.kind === 'needs-attention') fixErrands.needsAttention(sessionId);
+                bugFix?.cliStateChanged(sessionId, session, change);
             },
             sessionEnded: (sessionId, session) => {
+                bugFix?.sessionEnded(sessionId, session);
                 prompter.sessionEnded(sessionId, session);
                 backgroundTasks.sessionEnded(sessionId);
                 sessionRestore.ended(sessionId, session);
@@ -1209,6 +1216,28 @@ export function buildContainer(): Container {
         log,
     });
 
+    // The Bug manager page's Fix (#414): a worktree session per bug, followed through its PR.
+    const bugFixService = new BugFixService({
+        sessions: sessionCandidates,
+        transcripts: routedTranscripts,
+        agentlessRemote,
+        git: workspace,
+        remotes: git,
+        inbox,
+        bugsnag,
+        github,
+        mergeQueue: mergeQueueWatch,
+        sessionIn: (worktree) =>
+            registry
+                .snapshot()
+                .some(([, session]) => !session.exited && !session.isPlainTerminal && session.projectPath === worktree),
+        releasesTagged: (projectPath) => inboxSettings.releasesTagged(projectPath),
+        clock,
+        timers,
+        log,
+    });
+    bugFix = bugFixService;
+
     // BlaakTasks (#248): built only while a URL is set, and again when it changes.
     // Starting from a task routes with its own Ask Patch, never cancelling the
     // empty screen's request; the writes read a PR's state as the CI watch heard it.
@@ -1481,6 +1510,7 @@ export function buildContainer(): Container {
         bugsnag,
         inbox,
         issueManager,
+        bugFix: bugFixService,
         quickAskWindow: () => quickAskWindow,
         prepareQuickAsk: () => {
             prepareQuickAsk();
@@ -1516,6 +1546,7 @@ export function buildContainer(): Container {
             mergeManager.stop();
             inbox.stop();
             issueManager.stop();
+            bugFixService.stop();
             sessionWork.closeAll();
             pullRequestPages.closeAll();
             claudeCaller.close();
