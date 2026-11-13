@@ -20,6 +20,7 @@ import {dropUploadReducer, initialDropUploadState} from './drop-upload-slice';
 import {initialPagesState, pagesReducer, rekeyPages} from './pages-slice';
 import {initialMergeQueueState, mergeQueueReducer, rekeyMergeQueue} from './merge-queue-slice';
 import {inboxReducer, initialInboxState} from './inbox-slice';
+import {initialIssueManagerState, issueManagerReducer} from './issue-manager-slice';
 import {initialSessionTrayState, rekeySessionTray, sessionTrayReducer} from './session-tray-slice';
 import {askReducer, initialAskState} from './ask-slice';
 import {answersReducer, followPending, initialAnswersState} from './answers-slice';
@@ -55,6 +56,7 @@ import type {DropUploadState} from './drop-upload-slice';
 import type {PagesState} from './pages-slice';
 import type {MergeQueueState} from './merge-queue-slice';
 import type {InboxSliceState} from './inbox-slice';
+import type {IssueManagerState} from './issue-manager-slice';
 import type {SessionTrayState} from './session-tray-slice';
 import type {ArchiveUndoState} from './archive-undo-slice';
 import type {AskState} from './ask-slice';
@@ -116,6 +118,7 @@ export interface RendererState {
     readonly mergeQueue: MergeQueueState;
     readonly sessionTray: SessionTrayState;
     readonly inbox: InboxSliceState;
+    readonly issueManager: IssueManagerState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -155,6 +158,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         mergeQueue: initialMergeQueueState,
         sessionTray: initialSessionTrayState,
         inbox: initialInboxState,
+        issueManager: initialIssueManagerState,
     };
 }
 
@@ -202,6 +206,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const mergeQueue = mergeQueueReducer(state.mergeQueue, event);
     const sessionTray = sessionTrayReducer(state.sessionTray, event);
     const inbox = inboxReducer(state.inbox, event);
+    const issueManager = issueManagerReducer(state.issueManager, event);
 
     return settle(state, {
         view,
@@ -239,6 +244,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         mergeQueue,
         sessionTray,
         inbox,
+        issueManager,
     });
 }
 
@@ -312,6 +318,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         sessionTray: rekeySessionTray(state.sessionTray, oldId, newId),
         // Counts, naming no session.
         inbox: state.inbox,
+        // Inbox items, naming no session.
+        issueManager: state.issueManager,
     });
 }
 

@@ -78,6 +78,8 @@ import type {SessionLink} from '../domain/session/links';
 import type {SessionStats} from '../domain/session/stats';
 import type {ReleaseTagsView, SnoozeOptionView} from '../application/services/inbox-settings-service';
 import type {InboxItem, InboxManager, InboxSummary} from '../domain/inbox/model';
+import type {IssueThread} from '../domain/inbox/issue-manager';
+import type {IssueStartPrepared, IssueWriteResult, PolishResult} from '../application/services/issue-manager-service';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
 export type {Editor, WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
@@ -245,6 +247,24 @@ export interface SwitchboardApi {
     inboxBacklog(key: string): Promise<InboxItem | null>;
     /** Your notes on an item, saved as you type. */
     inboxSetNotes(key: string, notes: string): Promise<InboxItem | null>;
+    /** An Issue manager issue's ticket and newest comments (#415); null when GitHub did not answer. */
+    issueManagerThread(key: string): Promise<IssueThread | null>;
+    /** Your notes polished into a comment by Claude, for the preview, with the line posting adds. */
+    issueManagerPolish(key: string, notes: string): Promise<PolishResult>;
+    /** Post a comment on the issue, the footer added after it. */
+    issueManagerPost(key: string, body: string): Promise<IssueWriteResult>;
+    /** Polish your notes and post the comment straight away. */
+    issueManagerPolishAndPost(key: string, notes: string): Promise<IssueWriteResult>;
+    /**
+     * Start and claim: assign you, then make the issue's worktree and the
+     * prompt with its ticket, thread and your notes. The renderer starts the
+     * session there and says so with `issueManagerStarted`.
+     */
+    issueManagerPrepareStart(key: string): Promise<IssueStartPrepared>;
+    /** A Start session is running on the issue: it is in progress, on that branch. */
+    issueManagerStarted(key: string, branch: string, sessionId: string | null): Promise<InboxItem | null>;
+    /** Stop working on it: back in the inbox, and off the issue on GitHub when `unassign`. */
+    issueManagerStopWork(key: string, unassign: boolean): Promise<{item: InboxItem | null; warning?: string}>;
     /** Releases are tagged for a project (#412): what its tags say, its own override, and what counts. */
     releaseTags(projectPath: string): Promise<ReleaseTagsView>;
     /**

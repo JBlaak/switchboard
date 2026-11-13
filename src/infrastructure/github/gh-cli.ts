@@ -44,7 +44,8 @@ import {
 } from './gh-overview';
 import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/overview';
 import {LATEST_TAG_QUERY, toLatestTag} from './gh-tags';
-import {INBOX_ISSUES_QUERY, toInboxIssues} from './gh-inbox';
+import {INBOX_ISSUES_QUERY, ISSUE_THREAD_QUERY, toInboxIssues, toIssueThread} from './gh-inbox';
+import type {IssueThread} from '../../domain/inbox/issue-manager';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import {ciJobPaths, toActiveRuns, toCiJobs, toRunCompleted, toRunIds, toRunners, toTimedRun} from './gh-ci-jobs';
@@ -274,6 +275,35 @@ export class GhCli implements GitHubCli {
         return data ? toInboxIssues(data, repo) : null;
     }
 
+    public async issueThread(repo: string, number: number): Promise<IssueThread | null> {
+        const parts = REPO.exec(repo);
+        if (!parts || !Number.isSafeInteger(number) || number < 1) return null;
+        const data = await this.graphqlWith(ISSUE_THREAD_QUERY, [
+            ['-f', 'owner', parts[1]],
+            ['-f', 'name', parts[2]],
+            ['-F', 'number', String(number)],
+        ]);
+        return data ? toIssueThread(data) : null;
+    }
+
+    // ── The Issue manager's writes (#415) ──
+
+    public async assignSelf(repo: string, number: number): Promise<GitHubWrite> {
+        if (!issueRef(repo, number)) return {ok: false, reason: 'That issue cannot be assigned'};
+        return this.rest(['issue', 'edit', String(number), '--repo', repo, '--add-assignee', '@me']);
+    }
+
+    public async unassignSelf(repo: string, number: number): Promise<GitHubWrite> {
+        if (!issueRef(repo, number)) return {ok: false, reason: 'That issue cannot be unassigned'};
+        return this.rest(['issue', 'edit', String(number), '--repo', repo, '--remove-assignee', '@me']);
+    }
+
+    public async commentOnIssue(repo: string, number: number, body: string): Promise<GitHubWrite> {
+        if (!issueRef(repo, number) || !body.trim()) return {ok: false, reason: 'That comment cannot be posted'};
+        // `--body=` keeps a body that starts with a dash from being read as a flag.
+        return this.rest(['issue', 'comment', String(number), '--repo', repo, '--body=' + body]);
+    }
+
     public async pullRequestsIn(repo: string, options: {merged: boolean}): Promise<RepositoryPullRequest[] | null> {
         const parts = REPO.exec(repo);
         if (!parts) return null;
@@ -473,8 +503,19 @@ export class GhCli implements GitHubCli {
      * answer.
      */
     private async graphql(query: string, variables: Record<string, string>): Promise<any | null> {
+        return this.graphqlWith(
+            query,
+            Object.entries(variables).map(([key, value]) => ['-f', key, value] as const),
+        );
+    }
+
+    /** `graphql` with typed variables: `-F` makes a number an Int. */
+    private async graphqlWith(
+        query: string,
+        variables: ReadonlyArray<readonly ['-f' | '-F', string, string]>,
+    ): Promise<any | null> {
         const args = ['api', 'graphql', '-f', 'query=' + query];
-        for (const [key, value] of Object.entries(variables)) args.push('-f', `${key}=${value}`);
+        for (const [flag, key, value] of variables) args.push(flag, `${key}=${value}`);
         const result = await this.run(args);
         if (result.missing || isAuthFailure(result)) return null;
         try {
@@ -510,6 +551,10 @@ export const SUBMIT_REVIEW = `mutation($reviewId: ID!, $event: PullRequestReview
 }`;
 
 /** The REST path of an issue's or PR's labels; null for a repository or number that is not one. */
+function issueRef(repo: string, number: number): boolean {
+    return REPO.test(repo) && Number.isSafeInteger(number) && number >= 1;
+}
+
 function labelsPath(repo: string, number: number): string | null {
     if (!REPO.test(repo) || !Number.isSafeInteger(number) || number < 1) return null;
     return `repos/${repo}/issues/${number}/labels`;

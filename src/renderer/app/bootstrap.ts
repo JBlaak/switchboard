@@ -41,6 +41,7 @@ import {installPhoneAccess} from '../ui/phone-access/install-phone-access';
 import {installVms} from '../ui/vms/install-vms';
 import {installSessionTask} from '../ui/session-task/install-session-task';
 import {installInbox} from '../ui/inbox/install-inbox';
+import {installIssueManager} from '../ui/issue-manager/install-issue-manager';
 import type {GlobalSettings} from '../../domain/settings/settings';
 
 export function bootstrap(): void {
@@ -69,6 +70,7 @@ export function bootstrap(): void {
     installVms();
     installSessionTask();
     installInbox();
+    installIssueManager();
     followColorSchemeInTerminals();
     installTerminalProbe();
     // The surfaces that have moved to React portal out of it.

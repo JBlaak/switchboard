@@ -45,7 +45,8 @@ import {openDialog} from '../../ui/dialogs/actions';
 import {isQuickSessionKey, launchQuickSession} from '../sessions/quick-session';
 import {isSessionWorkKey, toggleSessionWork} from '../../ui/session-work/actions';
 import {toggleTasksPage} from '../../ui/tasks-page/actions';
-import {isTasksPageKey, savedPromptKey} from '../../lib/shortcut-keys';
+import {isIssueManagerKey, isTasksPageKey, savedPromptKey} from '../../lib/shortcut-keys';
+import {toggleIssueManager} from '../../ui/issue-manager/actions';
 import {sendSavedPromptOnScreen} from '../../ui/session-tray/actions';
 import {openSessions, sessionMap} from '../../state/session-store';
 import {remoteStatus} from '../../state/remote-status-store';
@@ -231,6 +232,16 @@ function setupTerminalKeyBindings(
                 e._handled = true;
                 e.preventDefault();
                 toggleTasksPage();
+            }
+            return false;
+        }
+
+        // Cmd+I: the Issue manager page (#415)
+        if (isIssueManagerKey(e)) {
+            if (e.type === 'keydown') {
+                e._handled = true;
+                e.preventDefault();
+                toggleIssueManager();
             }
             return false;
         }

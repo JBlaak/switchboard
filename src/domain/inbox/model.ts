@@ -107,6 +107,22 @@ export interface InboxItem {
     readonly signals: BugSignals | null;
     /** Your notes on it, put in a Start session's prompt (#415). Kept across snooze and backlog. */
     readonly notes: string;
+    /**
+     * An issue's comment count when it was last seen (#415): an unread issue
+     * with more has new comments; one never seen is new. Absent until seen.
+     */
+    readonly seenComments?: number;
+    /** The Fix or Start session's work on it (#414, #415), while in progress and once done. */
+    readonly work?: InboxWork | null;
+}
+
+/** What a Fix or Start session works on: its branch, the session, and the PR it opened. */
+export interface InboxWork {
+    readonly branch: string;
+    /** The session started on it; null when not known. */
+    readonly sessionId: string | null;
+    /** The PR that closes it, once one is open; null before. */
+    readonly pullRequest: number | null;
 }
 
 /** An item's key. */

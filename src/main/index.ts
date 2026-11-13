@@ -135,6 +135,8 @@ async function start(container: Container): Promise<void> {
         container.mergeQueueWatch.start();
         // The managers' inbox (#413) asks Bugsnag and GitHub; the suite seeds its items instead.
         container.inbox.start();
+        // …and follows the PRs of the issues started from it (#415).
+        container.issueManager.start();
     }
 
     // Phone access, if it was left on (#194). Its failures land in its own

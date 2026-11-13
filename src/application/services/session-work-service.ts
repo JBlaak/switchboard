@@ -40,7 +40,14 @@ import type {
 } from '../../domain/session-work/model';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {Disposable, GitWorkspace} from '../ports/git-workspace';
-import type {CiJobQueueCalls, GitHubCli, PlanReads, ProjectReads, QueueLabelWrites} from '../ports/github-cli';
+import type {
+    CiJobQueueCalls,
+    GitHubCli,
+    PlanReads,
+    ProjectReads,
+    IssueManagerCalls,
+    QueueLabelWrites,
+} from '../ports/github-cli';
 import type {GitRemotes} from '../ports/git-remotes';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
@@ -74,6 +81,7 @@ export interface SessionWorkServiceDeps {
         | 'submitPendingReview'
         | 'latestTag'
         | 'inboxIssuesIn'
+        | IssueManagerCalls
         | QueueLabelWrites
         | CiJobQueueCalls
         | PlanReads

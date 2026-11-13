@@ -76,6 +76,7 @@ import {UpdateService} from '../application/services/update-service';
 import {WeatherService} from '../application/services/weather-service';
 import {InboxSettingsService} from '../application/services/inbox-settings-service';
 import {InboxService} from '../application/services/inbox-service';
+import {IssueManagerService} from '../application/services/issue-manager-service';
 import {ASK_PATCH_CALL, AskRouteService, EMPTY_SCREEN_CALL} from '../application/services/ask-route-service';
 import type {AskPatchResult} from '../domain/ask/model';
 import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/quick-ask-hotkey';
@@ -256,6 +257,8 @@ export interface Container {
     readonly bugsnag: BugsnagConnectionService;
     /** The managers' inbox (#413): bugs and loose issues, their states, polled every five minutes. */
     readonly inbox: InboxService;
+    /** The Issue manager page (#415): threads, polished comments, Start and claim, and where started issues stand. */
+    readonly issueManager: IssueManagerService;
     /**
      * VM hosts (#276): status, install, setup checks, host settings and the setup
      * terminal. Optional only until `buildContainer` builds it.
@@ -1093,6 +1096,16 @@ export function buildContainer(): Container {
         agentlessRemote,
     });
 
+    // The Issue manager page (#415).
+    const issueManager = new IssueManagerService({
+        inbox,
+        github,
+        issueSessions,
+        cli: claudeCaller,
+        timers,
+        log,
+    });
+
     // The project page (#172): one answer, plans through PlanService's cache.
     const projectOverview = new ProjectOverviewService({
         plans,
@@ -1396,6 +1409,7 @@ export function buildContainer(): Container {
         tasks,
         bugsnag,
         inbox,
+        issueManager,
         quickAskWindow: () => quickAskWindow,
         prepareQuickAsk: () => {
             prepareQuickAsk();
@@ -1429,6 +1443,7 @@ export function buildContainer(): Container {
             prWatch.stop();
             mergeQueueWatch.stop();
             inbox.stop();
+            issueManager.stop();
             sessionWork.closeAll();
             pullRequestPages.closeAll();
             claudeCaller.close();

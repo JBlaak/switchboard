@@ -10,9 +10,9 @@
  * The database is opened through the app's own built `app/database.js`, so the
  * schema is exactly the one the app will find, and only rows go in: the
  * settings blobs the settings service reads and the `session_meta` rows
- * behind pinning, archiving and renaming, and the `vm_transcripts` cache a
+ * behind pinning, archiving and renaming, the `vm_transcripts` cache a
  * VM session's row takes its title from (nothing on disk can rebuild that
- * one). Everything derived from local transcripts is left for the app's own
+ * one), and the managers' `inbox_items`, which only a poll would bring. Everything derived from local transcripts is left for the app's own
  * indexer to build.
  */
 const fs = require('node:fs');
@@ -34,6 +34,9 @@ const putMeta = db.prepare(`
   ON CONFLICT(sessionId) DO UPDATE SET
     name = excluded.name, starred = excluded.starred, archived = excluded.archived
 `);
+const putInboxItem = db.prepare(`
+  INSERT INTO inbox_items (key, manager, item, updated_at) VALUES (@key, @manager, @item, @updated_at)
+`);
 const putVmTranscript = db.prepare(`
   INSERT INTO vm_transcripts (session_id, host_key, cwd, mtime_ms, transcript)
   VALUES (@session_id, @host_key, @cwd, @mtime_ms, @transcript)
@@ -48,6 +51,9 @@ db.transaction(() => {
     }
     for (const row of seed.vmTranscripts || []) {
         putVmTranscript.run(row);
+    }
+    for (const row of seed.inboxItems || []) {
+        putInboxItem.run(row);
     }
 })();
 

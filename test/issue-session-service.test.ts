@@ -559,3 +559,60 @@ test('continuing on a wayfinder ticket starts /wayfinder again, which picks up w
     /* Then */
     assert.equal(result.ok && result.prompt, '/wayfinder 112 114');
 });
+
+// ── A loose issue, without a plan (#415) ──
+
+const LOOSE_TICKET = {
+    title: 'Export on the coach page',
+    body: 'Nothing happens.',
+    author: 'pieter',
+    comments: [],
+    notes: 'CSV export',
+};
+
+test('a loose issue gets a worktree on its own branch off the default branch, its ticket and notes in the prompt', async () => {
+    /* Given */
+    const {service, git} = harness();
+
+    /* When */
+    const result = await service.prepareLooseIssueWorktree({projectPath: ROOT, issue: key(482), ticket: LOOSE_TICKET});
+
+    /* Then */
+    assert.equal(result.ok && result.branch, '482-export-on-the-coach-page');
+    assert.equal(result.ok && result.worktreePath, ROOT + '/.claude/worktrees/482-export-on-the-coach-page');
+    assert.match(result.ok ? result.prompt : '', /^Work on #482, a loose issue in no plan\./);
+    assert.match(result.ok ? result.prompt : '', /<notes>\nCSV export\n<\/notes>/);
+    assert.deepEqual(git.writes, [
+        'fetch main',
+        `worktree add -b 482-export-on-the-coach-page ${ROOT}/.claude/worktrees/482-export-on-the-coach-page origin/main`,
+    ]);
+});
+
+test('a loose issue continued on its existing branch is asked to read the work so far', async () => {
+    /* Given */
+    const {service, git} = harness();
+    git.branches.add('482-export-on-the-coach-page');
+
+    /* When */
+    const result = await service.prepareLooseIssueWorktree({
+        projectPath: ROOT,
+        issue: key(482),
+        ticket: LOOSE_TICKET,
+        existing: 'reuse',
+    });
+
+    /* Then */
+    assert.match(result.ok ? result.prompt : '', /^Continue work on #482/);
+});
+
+test('a loose issue of another repository is refused', async () => {
+    /* When */
+    const result = await harness().service.prepareLooseIssueWorktree({
+        projectPath: ROOT,
+        issue: {repository: 'someone/else', number: 4},
+        ticket: LOOSE_TICKET,
+    });
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, reason: "#4 is in someone/else, not in this project's JBlaak/switchboard"});
+});

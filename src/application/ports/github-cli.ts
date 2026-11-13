@@ -17,6 +17,7 @@ import type {IssueKey, Plan, PlanSummary} from '../../domain/plan/model';
 import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/overview';
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
+import type {IssueThread} from '../../domain/inbox/issue-manager';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
 export type {GitHubAvailability};
@@ -114,6 +115,24 @@ export interface GitHubCli {
     inboxIssuesIn(repo: string): Promise<InboxIssuesAnswer | null>;
 
     /**
+     * An issue's body and its newest comments (oldest first), with how many
+     * it has in all and the user `gh` signs in as, for the Issue manager's
+     * detail and a Start prompt (#415). Null when unavailable.
+     */
+    issueThread(repo: string, number: number): Promise<IssueThread | null>;
+
+    // ── The Issue manager's writes (#415), each from you pressing something ──
+
+    /** Start and claim: assign the issue to the user `gh` signs in as. */
+    assignSelf(repo: string, number: number): Promise<GitHubWrite>;
+
+    /** Stop working on it, when asked: take that user off the issue again. */
+    unassignSelf(repo: string, number: number): Promise<GitHubWrite>;
+
+    /** Post a comment on the issue, as it is. */
+    commentOnIssue(repo: string, number: number, body: string): Promise<GitHubWrite>;
+
+    /**
      * The pull requests in `repo`, each with its checks taken together, its
      * review decision and the issues it closes, and what the merge queue reads
      * of it (#315: base, labels, `automerge` status, reviewers, check runs).
@@ -188,6 +207,9 @@ export type PlanReads = 'plan' | 'plansIn' | 'plansOf' | 'closingIssues';
 
 /** The reads the project page makes. */
 export type ProjectReads = 'issuesIn' | 'pullRequestsIn' | 'ciRunDurations';
+
+/** What the Issue manager reads and writes (#415). */
+export type IssueManagerCalls = 'issueThread' | 'assignSelf' | 'unassignSelf' | 'commentOnIssue';
 
 /** The merge queue's label writes (#315). */
 export type QueueLabelWrites = 'addLabel' | 'removeLabel';

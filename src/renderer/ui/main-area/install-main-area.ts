@@ -13,6 +13,7 @@ import {dispatch, getState, store} from '../../state/app-store';
 import {openSessions} from '../../state/session-store';
 import {clearNotifications} from '../../state/activity-store';
 import {
+    issueManagerPanel,
     placeholder,
     projectPagePanel,
     sessionWorkPanel,
@@ -46,6 +47,7 @@ function swapTo(route: MainAreaRoute): void {
     sessionWorkPanel.style.display = route.kind === 'sessionWork' ? '' : 'none';
     projectPagePanel.style.display = route.kind === 'project' ? '' : 'none';
     tasksPagePanel.style.display = route.kind === 'tasks' ? '' : 'none';
+    issueManagerPanel.style.display = route.kind === 'issueManager' ? '' : 'none';
     if (route.kind === 'empty') showEmptyScreen();
     else placeholder.style.display = 'none';
 }

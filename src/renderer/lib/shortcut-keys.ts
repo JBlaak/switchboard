@@ -56,6 +56,11 @@ export function isTasksPageKey(e: KeyboardEvent): boolean {
     return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyT';
 }
 
+/** Cmd+I opens or closes the Issue manager page (#415), from anywhere, the terminal included. */
+export function isIssueManagerKey(e: KeyboardEvent): boolean {
+    return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyI';
+}
+
 /**
  * Cmd+1 … Cmd+9 send the session on screen its saved prompt on that key
  * (#343): the key's number, or null for any other key. In the terminal too,
