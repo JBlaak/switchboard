@@ -12,6 +12,10 @@ _Avoid_: Merge bot, auto-merger, shipper
 To hand a pull request to the Merge manager, with the intent that it merges once it is approved and green.
 _Avoid_: Ship it, merge when green, auto-merge
 
+**Unland**:
+To take a landed pull request back from the Merge manager, so it leaves its lane without merging.
+_Avoid_: Dequeue, cancel
+
 **Lane**:
 The serial line a landed pull request waits in to merge, one per repository. A repository's lane is either a queue lane or a Switchboard lane.
 _Avoid_: Pipeline, train
@@ -32,8 +36,22 @@ The one pull request in a lane that is brought up to date, tested and merged. No
 _Avoid_: Front, current
 
 **Held**:
-A pull request that keeps its place in a lane but is passed over until it is approved or a requested review is given.
+A landed pull request that keeps its place in a lane but is passed over until it is approved, a requested review is given, or the pull request it is stacked on merges.
 _Avoid_: Blocked, paused
+
+**Waiting**:
+A landed pull request with a place in its lane, waiting to become the head.
+_Avoid_: Queued, pending
+
+**Fixing**:
+A landed pull request that a fix errand is working on. It keeps its place in the lane.
+
+**Needs you**:
+A landed pull request stopped by something only its author can settle, such as requested changes, an unresolved review thread or a fix errand that could not finish. It keeps its place and goes back to waiting once the cause is gone.
+_Avoid_: Failed, stuck
+
+**Merged**:
+A landed pull request that has merged; the Merge manager's work on it is done.
 
 **Fix errand**:
 A session the Merge manager starts by itself in its own worktree to fix what stops a landed pull request (a conflict or a failed check). It pushes to the pull request's branch and archives itself.
