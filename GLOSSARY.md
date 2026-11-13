@@ -58,5 +58,5 @@ _Avoid_: Failed, stuck
 A landed pull request that has merged; the Merge manager's work on it is done.
 
 **Fix errand**:
-A session the Merge manager starts by itself in its own worktree to fix what stops a landed pull request (a conflict or a failed check). It pushes to the pull request's branch and archives itself.
+A session the Merge manager starts by itself, in its own worktree, when the head fails out on a conflict or a failed check. It ends by pushing a fix to the pull request's branch, or by judging the failure flaky so the Merge manager retries it; one that stops without either leaves the pull request Needs you. There is at most one per pull request.
 _Avoid_: Auto-fix, Fix CI
