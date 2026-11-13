@@ -6,6 +6,9 @@
 import {levelBullets, type LevelBullet} from '../../../../domain/plan/level-progress';
 import {parseAutomergeStatus} from '../../../../domain/project/merge-queue';
 import {sameIssue} from '../../../../domain/plan/model';
+import {EMPTY_MERGE_MANAGER_STATE} from '../../../../domain/merge-manager/model';
+import type {LaneStageKind, MergeManagerState} from '../../../../domain/merge-manager/model';
+import {findLanded, landedWords, ordinal} from '../../../../domain/merge-manager/stage-words';
 import type {
     IssueKey,
     NodeState,
@@ -87,22 +90,37 @@ export function mainPullRequest(issue: PlanIssue): PlanIssue['pullRequests'][num
     return prs.find((pr) => pr.state === 'open') ?? prs.find((pr) => pr.state === 'merged') ?? prs[0] ?? null;
 }
 
-/** Where an issue's PR stands in the merge queue, as its node shows it. */
+/** Where an issue's PR stands in the merge queue, or its lane once landed, as its node shows it. */
 export interface PlanQueuePill {
-    kind: 'merging' | 'queued' | 'held' | 'failed' | 'outside';
+    /** The queue's own kinds, or `landed-<stage>` for a landed PR. */
+    kind: 'merging' | 'queued' | 'held' | 'failed' | 'outside' | `landed-${LaneStageKind}`;
     text: string;
-    /** The queue's own sentence, for a tooltip. */
+    /** The queue's own sentence, or the landed stage's, for a tooltip. */
     title: string;
 }
 
 /**
- * The merge queue's word on an issue's open PR, when it is labelled
- * `automerge:opt-in` (#315): its place, what holds it, or that it failed, in
- * a pill short enough for a node. The queue's full sentence is its title.
+ * The word on an issue's open PR, in a pill short enough for a node. Once
+ * the PR is landed (#432), in either lane, its Merge manager stage in the
+ * words every place shares (`stage-words`, #441): "landed · 2nd", "held ·
+ * @ana", "merging", "fixing", "needs you". Otherwise, when it is labelled
+ * `automerge:opt-in` (#315), the merge queue's: its place, what holds it, or
+ * that it failed, as a teammate's queued PR still reads. The full sentence
+ * is its title.
  */
-export function planQueuePill(issue: PlanIssue): PlanQueuePill | null {
+export function planQueuePill(
+    issue: PlanIssue,
+    merge: MergeManagerState = EMPTY_MERGE_MANAGER_STATE,
+): PlanQueuePill | null {
     const pr = mainPullRequest(issue);
-    if (!pr || pr.state !== 'open' || !pr.queue) return null;
+    if (!pr || pr.state !== 'open') return null;
+    const landed = findLanded(merge, issue.repository, pr.number);
+    if (landed) {
+        const words = landedWords(landed);
+        const text = words.flag ? `${words.pill} · ${words.flag}` : words.pill;
+        return {kind: `landed-${words.kind}`, text, title: words.title};
+    }
+    if (!pr.queue) return null;
     const status = pr.queue.automerge;
     if (!status) return {kind: 'queued', text: 'queue · waiting', title: 'Opted in; the queue has not taken it yet'};
     const parsed = parseAutomergeStatus(status);
@@ -127,12 +145,6 @@ export function planQueuePill(issue: PlanIssue): PlanQueuePill | null {
                 ? {kind: 'merging', text: 'queue ✓', title}
                 : {kind: 'queued', text: 'queue', title};
     }
-}
-
-function ordinal(n: number): string {
-    const tens = n % 100;
-    if (tens >= 11 && tens <= 13) return `${n}th`;
-    return `${n}${n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'}`;
 }
 
 /** `#12`, or `owner/repo#12` for an issue in another repository. */

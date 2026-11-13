@@ -1,0 +1,103 @@
+/* ---- A landed PR's stage, the same in every place (#441) ----
+ * The sidebar's pill, a plan card's, the Issue manager's In progress pill and
+ * the project page's Merge queue rows colour a landed PR's stage alike:
+ * waiting and the head in purple, held quiet, fixing mint, needs you peach.
+ */
+.session-queue-pill,
+.pv-queue,
+.im-stage,
+.pp-stage {
+    &.is-landed-waiting {
+        background: rgba(var(--sb-purple-rgb), 0.1);
+        box-shadow: inset 0 0 0 1px rgba(var(--sb-purple-rgb), 0.25);
+        color: var(--sb-purple);
+    }
+    &.is-landed-held {
+        background: var(--sb-bg-raised);
+        box-shadow: inset 0 0 0 1px rgba(var(--sb-overlay-rgb), 0.08);
+        color: var(--sb-text-muted);
+    }
+    &.is-landed-head {
+        background: rgba(var(--sb-purple-rgb), 0.18);
+        color: var(--sb-purple);
+    }
+    &.is-landed-fixing {
+        background: var(--sb-mint);
+        color: var(--sb-green);
+    }
+    &.is-landed-needsYou {
+        background: var(--sb-peach);
+        color: var(--sb-orange);
+    }
+    &.is-landed-merged {
+        background: rgba(var(--sb-purple-rgb), 0.12);
+        color: var(--sb-purple);
+    }
+}
+
+/* A waiting PR's dot is hollow. */
+.im-stage.is-landed-waiting i,
+.pp-stage.is-landed-waiting i {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+/* "will conflict" beside a waiting PR's place. */
+.session-queue-flag,
+.pp-stage-flag {
+    color: var(--sb-yellow);
+    font-weight: 700;
+}
+
+/* The In progress tab's peach dot: a landed PR needs you. */
+.im-tab-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-left: 6px;
+    border-radius: 50%;
+    background: var(--sb-orange);
+    vertical-align: middle;
+}
+
+/* A stage pill on the project page's Merge queue rows. */
+.pp-stage {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font: 700 11.5px var(--sb-font-head);
+    white-space: nowrap;
+
+    i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .im-stage.is-landed-head i,
+    .im-stage.is-landed-fixing i,
+    .pp-stage.is-landed-head i,
+    .pp-stage.is-landed-fixing i {
+        animation: im-pulse 1.4s ease-in-out infinite;
+    }
+}
+
+/* A Switchboard lane on the project page: its label, and the head's three steps. */
+.pp-mq-lane {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--sb-bg-raised);
+    box-shadow: inset 0 0 0 1px rgba(var(--sb-overlay-rgb), 0.08);
+    color: var(--sb-accent);
+    font: 700 11.5px var(--sb-font-head);
+}
+
+.pp-mq-steps.is-lane {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}

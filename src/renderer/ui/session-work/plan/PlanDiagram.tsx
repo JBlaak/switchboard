@@ -15,6 +15,7 @@ import type {IssueKey, NodeState, Plan, PlanLayout} from '../../../../domain/pla
 import {arrowInChain, chainOf, inChain, NODE_H, NODE_W, PAD, GHOST_H, planGeometry} from './geometry';
 import {issueIn, issueUrl, levelStatus, nodeMiniLine, planQueuePill, shortRef, STATE_LABEL} from './describe';
 import {readyOnLevel} from './start-level';
+import type {MergeManagerState} from '../../../../domain/merge-manager/model';
 import type {IssueActions, PlanHandlers, PlanUi} from './types';
 
 export function PlanDiagram({
@@ -24,6 +25,7 @@ export function PlanDiagram({
     on,
     issueActions,
     arriving,
+    merge,
 }: {
     plan: Plan;
     layout: PlanLayout;
@@ -32,6 +34,8 @@ export function PlanDiagram({
     issueActions?: IssueActions;
     /** Issues a level-up just made Ready, which animate from Locked (A4). */
     arriving?: readonly IssueKey[];
+    /** The Merge manager's lanes, for a landed PR's stage on its node (#441); absent, none is landed. */
+    merge?: MergeManagerState;
 }): JSX.Element {
     const geometry = useMemo(() => planGeometry(plan, layout), [plan, layout]);
     const focus = ui.hovered ?? ui.selected;
@@ -113,7 +117,7 @@ export function PlanDiagram({
                 const selected = !!ui.selected && sameIssue(ui.selected, issue);
                 const session = issueActions?.sessionFor?.(issue) ?? null;
                 const arrives = !!arriving?.some((candidate) => sameIssue(candidate, issue));
-                const queue = planQueuePill(issue);
+                const queue = planQueuePill(issue, merge);
                 const queueMark = queue && (
                     <span className={'pv-queue is-' + queue.kind} title={queue.title}>
                         {queue.text}

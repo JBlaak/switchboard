@@ -4,11 +4,12 @@
  * while anything is, frantic while something unread trends or regressed.
  */
 import {useEffect, useRef, type JSX} from 'react';
-import {mountManager, type ManagerHandle, type ManagerKind} from '@jblaak/patch';
+import {mountManager, type ManagerHandle} from '@jblaak/patch';
 import '@jblaak/patch/manager.css';
 import type {ManagerCounts} from '../../../domain/inbox/model';
 
-export function ManagerFigure({kind, counts}: {kind: ManagerKind; counts: ManagerCounts}): JSX.Element {
+/** The inbox managers only: the Merge manager's figure is posed by its own states. */
+export function ManagerFigure({kind, counts}: {kind: 'bug' | 'issue'; counts: ManagerCounts}): JSX.Element {
     const host = useRef<HTMLDivElement>(null);
     const handle = useRef<ManagerHandle | null>(null);
 

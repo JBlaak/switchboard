@@ -35,9 +35,18 @@ export function PlanView(props: PlanViewProps): JSX.Element {
     const refresh = useStore((state) => (state.plan.view ? planRefresh(state.plan.view) : null));
     const cheer = useCheer();
     const live = useLiveSessions();
+    const merge = useStore((state) => state.mergeManager.state);
     return (
         <>
-            <PlanViewContent {...props} ui={ui} on={on} arriving={cheer?.arriving} refresh={refresh} live={live} />
+            <PlanViewContent
+                {...props}
+                ui={ui}
+                on={on}
+                arriving={cheer?.arriving}
+                refresh={refresh}
+                live={live}
+                merge={merge}
+            />
             {cheer && <PlanCheer cheer={cheer} />}
         </>
     );
