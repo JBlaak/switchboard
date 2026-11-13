@@ -152,10 +152,10 @@ export function GrillFooter(props: GrillFooterProps): JSX.Element {
         <div className="gc-footer">
             <span className="gc-hints">
                 {reviewing ? (
-                    <Hint keys={['↑']} does="back to the questions" />
+                    <Hint keys={['←']} does="back to the questions" />
                 ) : (
                     <>
-                        <Hint keys={['↑', '↓']} does="back · skip" />
+                        <Hint keys={['←', '→']} does="back · skip" />
                         {choices > 0 && <Hint keys={[choices > 1 ? `1–${choices}` : '1']} does="pick a choice" />}
                     </>
                 )}
