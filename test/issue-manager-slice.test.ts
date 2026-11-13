@@ -8,6 +8,7 @@ import {
     visibleGroups,
     visibleRows,
 } from '../src/renderer/state/issue-manager-slice';
+import {initialRendererState, rootReducer} from '../src/renderer/state/root';
 import {issueKeyAction} from '../src/renderer/ui/issue-manager/page-keys';
 import {markRead, startWork, syncSource} from '../src/domain/inbox/items';
 import type {InboxItem} from '../src/domain/inbox/model';
@@ -106,4 +107,14 @@ test('keys: ⏎ starts an issue in the inbox and opens the session of a started 
     assert.equal(issueKeyAction('m', unread!)?.kind, 'comment');
     assert.equal(issueKeyAction('c', unread!)?.kind, 'notes');
     assert.deepEqual(issueKeyAction('j', null), {kind: 'step', step: 1});
+});
+
+test('choosing the Issue manager on the empty screen opens its page; the Bug manager leaves it be', () => {
+    /* When */
+    const issue = rootReducer(initialRendererState(), {type: 'managerPageRequested', manager: 'issue'});
+    const bug = rootReducer(initialRendererState(), {type: 'managerPageRequested', manager: 'bug'});
+
+    /* Then */
+    assert.deepEqual(issue.mainArea.route, {kind: 'issueManager'});
+    assert.deepEqual(bug.mainArea.route, {kind: 'empty'});
 });

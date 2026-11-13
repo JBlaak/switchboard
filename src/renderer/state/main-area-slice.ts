@@ -86,6 +86,10 @@ export function mainAreaReducer(state: MainAreaState, event: RendererEvent, retu
         case 'issueManagerOpened':
             return routed(state, {kind: 'issueManager'});
 
+        // The Issue manager chosen on the empty screen (#416).
+        case 'managerPageRequested':
+            return event.manager === 'issue' ? routed(state, {kind: 'issueManager'}) : state;
+
         // Esc or ⌘I on the Issue manager page.
         case 'issueManagerClosed':
             return state.route.kind === 'issueManager' ? routed(state, back(returnTo)) : state;

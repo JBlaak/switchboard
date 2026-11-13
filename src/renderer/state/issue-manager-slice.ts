@@ -97,6 +97,11 @@ export function issueManagerReducer(state: IssueManagerState, event: RendererEve
         case 'issueManagerOpened':
             return {...state, comment: null, snooze: null, stop: null, notice: null};
 
+        case 'managerPageRequested':
+            return event.manager === 'issue'
+                ? {...state, comment: null, snooze: null, stop: null, notice: null}
+                : state;
+
         case 'issueManagerItemsLoaded':
             return {...state, items: event.items};
 
