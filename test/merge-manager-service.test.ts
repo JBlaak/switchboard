@@ -74,7 +74,15 @@ function setup(world: Partial<World> = {}, store = new MemoryLandedStore()) {
             calls.push(`lane ${repo} ${[...numbers].sort((a, b) => a - b).join(',')}`);
             if (state.unreachable.has(repo)) return null;
             const prs = numbers.map((number) => state.prs[repo]?.[number]).filter((pr) => pr !== undefined);
-            return {repository: repo, viewer: 'joris', trunk: 'main', trunkOid: 't', rules: RULES, pullRequests: prs};
+            return {
+                repository: repo,
+                viewer: 'joris',
+                trunk: 'main',
+                trunkOid: 't',
+                rules: RULES,
+                mergeMethods: ['squash'],
+                pullRequests: prs,
+            };
         },
         workflowFiles: async (repo) => {
             calls.push(`workflows ${repo}`);

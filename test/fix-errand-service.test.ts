@@ -45,6 +45,7 @@ function setup(landed: LandedPullRequest[], reads: LanePullRequestRead[]) {
     const gitWrites: string[] = [];
     const github: string[] = [];
     const archived: string[] = [];
+    const spared: string[] = [];
     let id = 0;
     const checks: PullRequestStatus['checks'] = [{name: 'Unit tests', state: 'failing', url: RUN_URL}];
     const ok: GitHubWrite = {ok: true};
@@ -106,6 +107,7 @@ function setup(landed: LandedPullRequest[], reads: LanePullRequestRead[]) {
         ids: {newId: () => `id-${String(++id).padStart(8, '0')}`},
         clock: {now: () => world.now},
         log: silentLog,
+        runner: {spare: (key, headOid) => spared.push(`${key} at ${headOid}`)},
     });
 
     const lane = (kind: 'switchboard' | 'queue' = 'switchboard'): FoldedLane => ({
@@ -114,7 +116,7 @@ function setup(landed: LandedPullRequest[], reads: LanePullRequestRead[]) {
         read: laneRead([...world.reads.values()]),
         landed: [...prs.values()],
     });
-    return {service, prs, world, asides, links, started, gitWrites, github, archived, lane};
+    return {service, prs, world, asides, links, started, gitWrites, github, archived, spared, lane};
 }
 
 const settle = async (): Promise<void> => {
@@ -237,7 +239,7 @@ test('pushed without the head moving leaves the PR Needs you', async () => {
 
 test('retry in a Switchboard lane re-runs the failed run and sends the PR back', async () => {
     /* Given */
-    const {service, sessionId, github, asides} = await withErrand();
+    const {service, sessionId, github, asides, spared} = await withErrand();
 
     /* When */
     service.finish(sessionId, {outcome: 'retry', note: 'runner died'});
@@ -246,6 +248,8 @@ test('retry in a Switchboard lane re-runs the failed run and sends the PR back',
     /* Then */
     assert.deepEqual(github, ['rerun 555']);
     assert.deepEqual(asides, [{key: KEY, aside: null}]);
+    // The lane runner leaves the runs started again be while the PR waits behind the head.
+    assert.deepEqual(spared, [`${KEY} at oid-7`]);
 });
 
 test('retry in a queue lane takes automerge:failed off', async () => {

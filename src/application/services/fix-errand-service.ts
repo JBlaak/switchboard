@@ -17,7 +17,8 @@
  *   and its set-aside is cleared so it goes back to its place; a head that
  *   did not move is Needs you. `retry`: the failed Actions runs are run again
  *   (Switchboard lane) or `automerge:failed` comes off (queue lane), and the
- *   set-aside is cleared. A conflict, or a check failure with no run to run
+ *   set-aside is cleared; the lane runner is told to leave those runs be
+ *   while the PR waits behind the head (#435). A conflict, or a check failure with no run to run
  *   again, has nothing to retry: Needs you.
  * - **Stopped.** A turn that ends without `finish_errand`, a session that
  *   asks for attention (a permission prompt) or one that ends: the PR is
@@ -89,6 +90,8 @@ export interface FixErrandServiceDeps {
     ids: IdGenerator;
     clock: Clock;
     log: Logger;
+    /** The Switchboard lane runner (#435), told of a retry so it does not cancel the runs started again. */
+    runner?: {spare(key: string, headOid: string): void};
 }
 
 export type StartOutcome = {ok: true} | {ok: false; reason: string};
@@ -367,7 +370,9 @@ export class FixErrandService {
             if (written.ok) rerun++;
             else this.deps.log.warn(`[fix-errands] ${errand.key}: run ${runId} not re-run:`, written.reason);
         }
-        return rerun > 0 ? {ok: true} : {ok: false, reason: 'no failed run could be run again'};
+        if (rerun === 0) return {ok: false, reason: 'no failed run could be run again'};
+        this.deps.runner?.spare(errand.key, errand.headOid);
+        return {ok: true};
     }
 
     // ── Stopped ──

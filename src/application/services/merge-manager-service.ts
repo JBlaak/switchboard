@@ -23,8 +23,17 @@
  * in its lane from the same read. **Unland** takes the queue's labels off in
  * a queue lane and drops the PR in both; running CI and errands are left alone.
  *
+ * **The lane runner** (#435), when wired, takes each Switchboard lane after
+ * its read is folded in: it updates, tests and merges the head, cancels CI
+ * behind it and test-rebases waiting PRs. What it sets aside (Fixing, Needs
+ * you) is written here and the lane placed again from the same read, so the
+ * next PR up becomes the head in the same poll; when a PR merged or a head
+ * moved, the lanes are read again at once.
+ *
  * Each lane read, once folded in, goes to whoever follows the lanes
- * (`onLaneRead`): the fix errands (#437) start from it.
+ * (`onLaneRead`): the fix errands (#437) start from it. A head the runner set
+ * aside as Fixing is folded in again at once, so its errand starts in the
+ * same poll.
  *
  * Nothing here notifies: the Merge manager's page, its figure and the Dock
  * show what happened (#439, #440).
@@ -54,6 +63,7 @@ import type {
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {GitHubCli, GitHubWrite, LaneReads, QueueLabelWrites} from '../ports/github-cli';
 import type {LandedStore} from '../ports/landed-store';
+import type {LaneRunner} from './lane-runner';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
 
@@ -70,6 +80,8 @@ export interface MergeManagerServiceDeps {
     clock: Clock;
     timers: Timers;
     log: Logger;
+    /** Updates, tests and merges each Switchboard lane's head (#435); without it the lanes are only read. */
+    runner?: Pick<LaneRunner, 'run' | 'conflicts'>;
 }
 
 /** One repository's lane just after a read was folded in: what the fix errands start from (#437). */
@@ -281,6 +293,7 @@ export class MergeManagerService {
                 continue;
             }
             this.fold(repository, read, kind, []);
+            if (kind === 'switchboard') await this.runLane(repository, read);
         }
 
         const now = this.deps.clock.now();
@@ -301,13 +314,39 @@ export class MergeManagerService {
         return read;
     }
 
+    /**
+     * Hand a Switchboard lane to the lane runner, and fold in what it set
+     * aside or found. A runner that fails leaves the lane as it was read.
+     */
+    private async runLane(repository: string, read: LaneRead): Promise<void> {
+        const runner = this.deps.runner;
+        if (!runner) return;
+        const pass = await runner.run(read, this.inRepository(repository)).catch((err) => {
+            this.deps.log.error(`[merge-manager] the lane runner failed on ${repository}:`, (err as Error).message);
+            return null;
+        });
+        if (!pass) return;
+        const asides = pass.asides
+            .map(({key, aside}) => {
+                const pr = this.landed.get(key);
+                return pr ? setAside(pr, aside) : null;
+            })
+            .filter((pr): pr is LandedPullRequest => pr !== null);
+        this.commit(asides, []);
+        // The next PR up becomes the head, and a confirmed conflict shows, without another read.
+        if (asides.length > 0 || pass.conflictsChanged) this.fold(repository, read, 'switchboard', []);
+        // A PR set aside hands the head on: read again so the new head is acted on at once.
+        if (pass.reread || asides.length > 0) this.again = true;
+    }
+
     /** Fold a lane read into its repository's landed PRs, with `newcomers` just landed. */
     private fold(repository: string, read: LaneRead, kind: LaneKind, newcomers: readonly LandedPullRequest[]): void {
         const known = [
             ...this.inRepository(repository).filter((pr) => !newcomers.some((n) => n.key === pr.key)),
             ...newcomers,
         ];
-        const sync = syncLane(known, read, kind, this.deps.clock.now());
+        const conflicts = kind === 'switchboard' ? this.deps.runner?.conflicts(read) : undefined;
+        const sync = syncLane(known, read, kind, this.deps.clock.now(), conflicts);
         const changed = sync.landed.filter((pr) => JSON.stringify(this.landed.get(pr.key)) !== JSON.stringify(pr));
         this.commit(changed, sync.removed);
         const lane: FoldedLane = {repository, kind, read, landed: this.inRepository(repository)};

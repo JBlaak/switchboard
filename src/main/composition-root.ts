@@ -129,6 +129,10 @@ import {SqliteTaskLinkStore} from '../infrastructure/sqlite/task-link-store';
 import {SqliteQueueErrandStore} from '../infrastructure/sqlite/queue-errand-store';
 import {SqliteInboxStore} from '../infrastructure/sqlite/inbox-store';
 import {SqliteLandedStore} from '../infrastructure/sqlite/landed-store';
+import {SqliteLaneSavings} from '../infrastructure/sqlite/lane-savings';
+import {GitTestRebase} from '../infrastructure/git/git-test-rebase';
+import {LocalGitRunner} from '../infrastructure/git/git-runner';
+import {LaneRunner} from '../application/services/lane-runner';
 import {SqliteFixErrandStore} from '../infrastructure/sqlite/fix-errand-store';
 import {gitHubRepository} from '../domain/project/repo-url';
 import {McpBlaakTasks} from '../infrastructure/blaaktasks/mcp-blaak-tasks';
@@ -1129,6 +1133,20 @@ export function buildContainer(): Container {
         log,
     });
 
+    // The Switchboard lane runner (#435): updates, tests and merges each
+    // Switchboard lane's head as the user, test-rebasing waiting PRs in bare
+    // clones of their own.
+    const laneRunner = new LaneRunner({
+        github,
+        testRebase: new GitTestRebase({
+            git: new LocalGitRunner(toolEnv),
+            directory: path.join(app.getPath('userData'), 'lane-clones'),
+        }),
+        savings: new SqliteLaneSavings(database.db),
+        clock,
+        log,
+    });
+
     // The Merge manager (#434): every landed PR's lane, read every minute.
     const mergeManager = new MergeManagerService({
         store: new SqliteLandedStore(database.db),
@@ -1137,6 +1155,7 @@ export function buildContainer(): Container {
         clock,
         timers,
         log,
+        runner: laneRunner,
     });
 
     // Fix errands (#437): sessions the Merge manager starts by itself when a
@@ -1179,6 +1198,7 @@ export function buildContainer(): Container {
         ids,
         clock,
         log,
+        runner: laneRunner,
     });
     mergeManager.onLaneRead((lane) => fixErrands.laneRead(lane));
     archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
