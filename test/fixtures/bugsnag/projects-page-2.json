@@ -1,0 +1,14 @@
+[
+    {
+        "id": "6a0000000000000000000002",
+        "organization_id": "5f1a2b3c4d5e6f7a8b9c0d1e",
+        "slug": "connect-web-production",
+        "name": "Connect Web - Production",
+        "api_key": "00000000000000000000000000000002",
+        "type": "js",
+        "release_stages": ["production"],
+        "url": "https://api.bugsnag.com/projects/6a0000000000000000000002",
+        "html_url": "https://app.bugsnag.com/example-studio/connect-web-production",
+        "open_error_count": 4
+    }
+]

@@ -44,6 +44,8 @@ import type {
 } from '../domain/project/queue-errands';
 import type {PhoneAccessState, TerminalOwner} from '../domain/phone/state';
 import type {BlaakTasksResult, TaskDetail, TaskRow} from '../domain/tasks/model';
+import type {BugsnagProjectChange, TrendingThresholds} from '../domain/bugsnag/connection';
+import type {BugsnagConnectionView} from '../application/services/bugsnag-connection-service';
 import type {
     MarkDoneOffer,
     TaskChange,
@@ -232,6 +234,20 @@ export interface SwitchboardApi {
     inboxSnoozeOptions(): Promise<SnoozeOptionView[]>;
     /** Releases are tagged for a project (#412): what its tags say, its own override, and what counts. */
     releaseTags(projectPath: string): Promise<ReleaseTagsView>;
+    /**
+     * Settings → Bug manager (#411): the token's last four characters, what
+     * trying it said, the projects it sees with their opt-in and link, the
+     * trending thresholds. The token itself never comes here.
+     */
+    bugsnagConnection(): Promise<BugsnagConnectionView>;
+    /** Try a Bugsnag token and save it in the Keychain when Bugsnag accepts it; the view after. */
+    bugsnagSaveToken(token: string): Promise<BugsnagConnectionView>;
+    /** Forget the Bugsnag token; the view after. */
+    bugsnagRemoveToken(): Promise<BugsnagConnectionView>;
+    /** Opt a Bugsnag project in or out, or link it to a local project (null unlinks). */
+    bugsnagSetProject(id: string, change: BugsnagProjectChange, name?: string): Promise<IpcResult>;
+    /** Store the trending thresholds; answers them as stored. */
+    bugsnagSetTrending(trending: TrendingThresholds): Promise<TrendingThresholds>;
     /**
      * The saved prompts (#339): the global list, and the project's when a path
      * is given. Order them for the tray with `resolveSavedPrompts`.

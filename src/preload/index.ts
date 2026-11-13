@@ -114,6 +114,11 @@ const api: SwitchboardApi = {
     plannerCycle: (url) => ipcRenderer.invoke(INVOKE.plannerCycle, url),
     inboxSnoozeOptions: () => ipcRenderer.invoke(INVOKE.inboxSnoozeOptions),
     releaseTags: (projectPath) => ipcRenderer.invoke(INVOKE.releaseTags, projectPath),
+    bugsnagConnection: () => ipcRenderer.invoke(INVOKE.bugsnagConnection),
+    bugsnagSaveToken: (token) => ipcRenderer.invoke(INVOKE.bugsnagSaveToken, token),
+    bugsnagRemoveToken: () => ipcRenderer.invoke(INVOKE.bugsnagRemoveToken),
+    bugsnagSetProject: (id, change, name) => ipcRenderer.invoke(INVOKE.bugsnagSetProject, id, change, name),
+    bugsnagSetTrending: (trending) => ipcRenderer.invoke(INVOKE.bugsnagSetTrending, trending),
     savedPrompts: (projectPath) => ipcRenderer.invoke(INVOKE.savedPrompts, projectPath),
     setSavedPrompts: (projectPath, prompts) => ipcRenderer.invoke(INVOKE.setSavedPrompts, projectPath, prompts),
 

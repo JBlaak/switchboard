@@ -47,6 +47,7 @@ remote-status rules the main process does instead of a parallel copy.
 | `launch/`                                     | the `claude` command line, session options, the child environment                                                                                                                                                                                               |
 | `power/`                                      | reading `pmset`'s SleepDisabled flag for the toolbar's sleep switch                                                                                                                                                                                             |
 | `weather/`                                    | folding a WMO weather code into the four skies the empty-state mascot dresses for, and parsing the forecast and geocoding responses                                                                                                                             |
+| `bugsnag/`                                    | the Bug manager's Bugsnag connection: which projects are opted in and linked to a local project, the trending thresholds, and how the Data Access API's answers parse                                                                                           |
 | `update/`                                     | whether a published release is newer than the running app, and which zip this Mac's architecture installs from                                                                                                                                                  |
 | `search/`, `settings/`, `schedule/`, `usage/` | the rules for each of those, similarly                                                                                                                                                                                                                          |
 
@@ -75,7 +76,7 @@ transcript store, `ssh/`-shaped logic inside the supervisor, `shell/` behind
 the shell profiles, `electron/` behind the window, the menu and the renderer
 gateway, `claude-cli/` behind usage and scheduled runs, `worker/` behind
 the cold-start scanner, `weather/` (Open-Meteo) behind the weather source, `system/` (`pmset`) behind
-the sleep switch and (a bundle swap) behind the app installer, `github/` behind the release feed
+the sleep switch and (a bundle swap) behind the app installer, `bugsnag/` (Bugsnag's REST API, with the token kept by `fs/`'s encrypted secret store) behind the Bug manager, `github/` behind the release feed
 and (the user's own `gh`) behind the Session work page's PRs and issues and the Plan tab's plans, `git/` (the `git` CLI)
 behind the remotes and the session's worktrees.
 

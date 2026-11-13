@@ -1,0 +1,32 @@
+[
+    {
+        "id": "6c0000000000000000000101",
+        "url": "https://api.bugsnag.com/projects/6a0000000000000000000001/events/6c0000000000000000000101",
+        "project_url": "https://api.bugsnag.com/projects/6a0000000000000000000001",
+        "is_full_report": true,
+        "error_id": "6b0000000000000000000011",
+        "received_at": "2026-11-13T08:02:41.512Z",
+        "severity": "error",
+        "unhandled": true,
+        "context": "GET /api/workouts",
+        "app": {"version": "4.12.1", "releaseStage": "production", "type": "node", "duration": 16276946},
+        "device": {"hostname": "web-1", "runtime_versions": {"node": "22.11.0"}},
+        "exceptions": [{"error_class": "TypeError", "message": "Cannot read properties of undefined (reading 'rows')", "stacktrace": []}]
+    },
+    {
+        "id": "6c0000000000000000000102",
+        "is_full_report": true,
+        "error_id": "6b0000000000000000000011",
+        "received_at": "2026-11-13T07:40:00.000Z",
+        "app": {"releaseStage": "production", "type": "node"},
+        "exceptions": []
+    },
+    {
+        "id": "6c0000000000000000000103",
+        "is_full_report": false,
+        "error_id": "6b0000000000000000000011",
+        "received_at": "2026-11-13T07:12:09.000Z",
+        "app_version": "4.11.0",
+        "release_stage": "staging"
+    }
+]

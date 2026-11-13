@@ -80,6 +80,11 @@ export const INVOKE = {
     plannerCycle: 'planner:cycle',
     inboxSnoozeOptions: 'inbox:snooze-options',
     releaseTags: 'project:release-tags',
+    bugsnagConnection: 'bugsnag:connection',
+    bugsnagSaveToken: 'bugsnag:save-token',
+    bugsnagRemoveToken: 'bugsnag:remove-token',
+    bugsnagSetProject: 'bugsnag:set-project',
+    bugsnagSetTrending: 'bugsnag:set-trending',
     savedPrompts: 'saved-prompts:get',
     setSavedPrompts: 'saved-prompts:set',
 
