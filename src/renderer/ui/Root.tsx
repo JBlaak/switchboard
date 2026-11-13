@@ -18,6 +18,7 @@ import {ProjectPage} from './project-page/ProjectPage';
 import {TasksPage} from './tasks-page/TasksPage';
 import {EmptyScreenFamily} from './patch/EmptyScreenFamily';
 import {EmptyScreenPatch} from './patch/EmptyScreenPatch';
+import {EmptyScreenManagers} from './patch/EmptyScreenManagers';
 import {AskBox} from './ask/AskBox';
 import {Questions} from './questions/Questions';
 import {ReadingPage} from './reading-page/ReadingPage';
@@ -81,6 +82,7 @@ export function Root(): JSX.Element | null {
             <Portal target="placeholder">
                 <EmptyScreenFamily />
                 <EmptyScreenPatch />
+                <EmptyScreenManagers />
                 <AskBox />
             </Portal>
             <Portal target="sidebar-content">

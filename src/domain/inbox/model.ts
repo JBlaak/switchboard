@@ -136,10 +136,25 @@ export interface ManagerCounts {
     readonly urgent: number;
 }
 
-/** Both managers' counts, as main pushes them to the renderer. */
+/**
+ * Which managers are set up (#416): the Bug manager with a saved token and
+ * at least one opted-in project, the Issue manager with at least one project
+ * on Watch issues. A manager only stands on the empty screen once it is.
+ */
+export interface ConfiguredManagers {
+    readonly bug: boolean;
+    readonly issue: boolean;
+}
+
+/** Both managers' counts and which of them are set up, as main pushes them to the renderer. */
 export interface InboxSummary {
     readonly bug: ManagerCounts;
     readonly issue: ManagerCounts;
+    readonly configured: ConfiguredManagers;
 }
 
-export const EMPTY_INBOX_SUMMARY: InboxSummary = {bug: {unread: 0, urgent: 0}, issue: {unread: 0, urgent: 0}};
+export const EMPTY_INBOX_SUMMARY: InboxSummary = {
+    bug: {unread: 0, urgent: 0},
+    issue: {unread: 0, urgent: 0},
+    configured: {bug: false, issue: false},
+};

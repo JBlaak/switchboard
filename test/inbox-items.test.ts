@@ -459,8 +459,15 @@ test('urgent counts the unread bugs that are trending or regressed', () => {
     const readTrending = markRead(arrive(bug('t2', {events24h: 40, events7d: 50}))[0]!);
 
     /* When */
-    const summary = inboxSummary([trending!, calm!, markRegressed(regressed!), readTrending, ...arrive(issue(1))]);
+    const summary = inboxSummary([trending!, calm!, markRegressed(regressed!), readTrending, ...arrive(issue(1))], {
+        bug: true,
+        issue: true,
+    });
 
     /* Then */
-    assert.deepEqual(summary, {bug: {unread: 3, urgent: 2}, issue: {unread: 1, urgent: 0}});
+    assert.deepEqual(summary, {
+        bug: {unread: 3, urgent: 2},
+        issue: {unread: 1, urgent: 0},
+        configured: {bug: true, issue: true},
+    });
 });

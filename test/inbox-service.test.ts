@@ -11,7 +11,7 @@ import type {InboxStore} from '../src/application/ports/inbox-store';
 import type {BugsnagSettings} from '../src/domain/bugsnag/connection';
 import type {BugsnagError} from '../src/domain/bugsnag/model';
 import type {InboxIssuesAnswer} from '../src/domain/inbox/loose-issues';
-import type {InboxItem} from '../src/domain/inbox/model';
+import type {InboxItem, InboxSummary} from '../src/domain/inbox/model';
 import {fakeRenderer, fakeTimers, silentLog} from './support/fakes';
 import {DAY, HOUR, ME, NOW, PROJECT, REPO, THRESHOLDS, bugsnagError, issueRead} from './support/inbox-fixtures';
 
@@ -127,7 +127,7 @@ test("a project's first poll lists its open errors unread and counts them", asyn
     assert.deepEqual(inbox.summary().bug, {unread: 2, urgent: 0});
     assert.deepEqual(renderer.only('inboxChanged').at(-1), [
         'inboxChanged',
-        {bug: {unread: 2, urgent: 0}, issue: {unread: 0, urgent: 0}},
+        {bug: {unread: 2, urgent: 0}, issue: {unread: 0, urgent: 0}, configured: {bug: true, issue: false}},
     ]);
 });
 
@@ -420,5 +420,69 @@ test('a poll that changes nothing writes nothing and pushes nothing', async () =
 
     /* Then */
     assert.equal(store.writes, writes);
+    assert.equal(renderer.only('inboxChanged').length, pushes);
+});
+
+// ── Which managers are set up (#416) ──
+
+test('the Bug manager is set up with a token and an opted-in project, the Issue manager with a watched project', () => {
+    /* Given */
+    const {inbox} = setup({watched: {[LOCAL]: REPO}});
+
+    /* When */
+    const configured = inbox.summary().configured;
+
+    /* Then */
+    assert.deepEqual(configured, {bug: true, issue: true});
+});
+
+test('without a token, or with every project opted out, the Bug manager is not set up', () => {
+    /* Given */
+    const tokenless = setup({token: false});
+    const optedOut = setup({
+        bugsnag: {
+            projects: [{id: PROJECT, name: 'Connect API', optedIn: false, localProject: LOCAL}],
+            trending: THRESHOLDS,
+        },
+    });
+
+    /* When */
+    const configured = [tokenless.inbox.summary().configured.bug, optedOut.inbox.summary().configured.bug];
+
+    /* Then */
+    assert.deepEqual(configured, [false, false]);
+});
+
+test('a project put on Watch issues brings the Issue manager at once, and its repository is read without waiting', async () => {
+    /* Given */
+    const {inbox, world, renderer} = setup();
+    inbox.start();
+    await inbox.poll();
+    world.watched[LOCAL] = REPO;
+    world.issues[REPO] = {viewer: ME, issues: [issueRead(1)], complete: true};
+
+    /* When */
+    inbox.settingsChanged();
+    const atOnce = (renderer.only('inboxChanged').at(-1)![1] as InboxSummary).configured;
+    // The poll the change started.
+    await inbox.poll();
+
+    /* Then */
+    assert.deepEqual(atOnce, {bug: true, issue: true});
+    assert.deepEqual(states(inbox), {'issue:movelab/connect#1': 'unread'});
+});
+
+test('a settings change that changes nothing watched pushes nothing', async () => {
+    /* Given */
+    const {inbox, world, renderer} = setup();
+    world.errors[PROJECT] = [{error: bugsnagError('a')}];
+    inbox.start();
+    await inbox.poll();
+    const pushes = renderer.only('inboxChanged').length;
+
+    /* When */
+    inbox.settingsChanged();
+
+    /* Then */
     assert.equal(renderer.only('inboxChanged').length, pushes);
 });

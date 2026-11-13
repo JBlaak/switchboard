@@ -1369,6 +1369,18 @@ export async function clipboardImages(app: ElectronApplication): Promise<string[
     });
 }
 
+/** Resize the main window's content, as dragging its edge would. */
+export async function setContentSize(app: ElectronApplication, width: number, height: number): Promise<void> {
+    await app.evaluate(
+        ({BrowserWindow}, size) => {
+            BrowserWindow.getAllWindows()
+                .find((w) => !w.webContents.getURL().includes('/quick-ask/'))!
+                .setContentSize(size.width, size.height);
+        },
+        {width, height},
+    );
+}
+
 /** Send the renderer an event, as main would. */
 export async function pushEvent(app: ElectronApplication, channel: string, ...args: unknown[]): Promise<void> {
     await app.evaluate(

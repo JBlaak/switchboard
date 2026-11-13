@@ -7,12 +7,18 @@
  * (test/patch-mood.test.ts, test/patch-calendar.test.ts). These check that
  * the board reaches Patch: each appearance, the weather and usage from main,
  * the running count, and a reaction beating a slow gather.
+ *
+ * The managers beside Patch (#416) take their pose from the inbox's counts,
+ * which is unit tested (test/inbox-slice.test.ts); these check that a manager
+ * stands there only once it is set up, follows the counts main pushes, and
+ * where it stands on a tall and a short window.
  */
 import {test, expect, forEachAppearance} from '../support/test';
 import {expectScreen, openSession, searchBox, sidebar, terminalStatus} from '../support/app';
-import {hostStubCalls} from '../support/main-process';
-import {LABEL, S, emptyFixture, standardFixture} from '../fixtures/standard';
+import {hostStubCalls, pushEvent, setContentSize} from '../support/main-process';
+import {LABEL, P, S, emptyFixture, standardFixture} from '../fixtures/standard';
 import type {Page} from '@playwright/test';
+import type {InboxSummary} from '../../src/domain/inbox/model';
 
 test.use({fixture: emptyFixture()});
 
@@ -182,6 +188,98 @@ test.describe('patch', () => {
 
             /* Then */
             await expect(says(page, line!)).toBeVisible();
+        });
+    });
+});
+
+// ── The managers (#416) ──
+
+/** A manager's figure, by its accessible name. */
+const manager = (page: Page, name: string | RegExp) => page.getByTestId('patch-managers').getByRole('button', {name});
+
+/** The scene element a manager's pose is drawn from. */
+const pose = (page: Page, kind: 'bug' | 'issue') => page.locator(`[data-manager="${kind}"] .patch-mgr-scene`);
+
+/** Main's push after a poll, for both managers set up. */
+function summary(bug: [number, number], issue: number): InboxSummary {
+    return {
+        bug: {unread: bug[0], urgent: bug[1]},
+        issue: {unread: issue, urgent: 0},
+        configured: {bug: true, issue: true},
+    };
+}
+
+test.describe('managers', () => {
+    forEachAppearance(() => {
+        test('stand on the floor beside Patch once set up, posed and counted as the inbox says', async ({
+            page,
+            app,
+        }) => {
+            /* Given */
+            await expect(says(page, FIRST_LINE)).toBeVisible();
+            await expect(page.getByTestId('patch-managers')).toHaveCount(0);
+
+            /* When */
+            await pushEvent(app, 'inbox:changed', summary([3, 1], 2));
+
+            /* Then */
+            await expect(manager(page, 'Bug manager, 3 unread')).toBeVisible();
+            await expect(pose(page, 'bug')).toHaveClass(/patch-mgr-s-urgent/);
+            await expect(manager(page, 'Issue manager, 2 unread')).toBeVisible();
+            await expect(pose(page, 'issue')).toHaveClass(/patch-mgr-s-unread/);
+            await expect(page.getByTestId('patch-managers').getByText('Ask Patch')).toBeVisible();
+            await expectScreen(page, 'empty-screen-managers');
+
+            /* When */
+            await pushEvent(app, 'inbox:changed', summary([0, 0], 0));
+
+            /* Then */
+            await expect(manager(page, 'Bug manager')).toBeVisible();
+            await expect(pose(page, 'bug')).toHaveClass(/patch-mgr-s-calm/);
+            await expect(manager(page, 'Issue manager')).toBeVisible();
+            await expect(pose(page, 'issue')).toHaveClass(/patch-mgr-s-calm/);
+            await expectScreen(page, 'empty-screen-managers-calm');
+        });
+    });
+
+    test('stand beside the box in a window too short for the family card', async ({page, app}) => {
+        /* Given */
+        await expect(says(page, FIRST_LINE)).toBeVisible();
+        await pushEvent(app, 'inbox:changed', summary([1, 0], 4));
+
+        /* When */
+        await setContentSize(app, 1280, 700);
+
+        /* Then */
+        await expect(page.getByTestId('patch-family')).toBeHidden();
+        await expect(manager(page, 'Bug manager, 1 unread')).toBeVisible();
+        await expect(manager(page, 'Issue manager, 4 unread')).toBeVisible();
+        await expectScreen(page, 'empty-screen-managers-short');
+    });
+
+    test('only the manager that is set up stands there, and goes when it is not any more', async ({page, app}) => {
+        /* When */
+        await pushEvent(app, 'inbox:changed', {...summary([2, 0], 5), configured: {bug: true, issue: false}});
+
+        /* Then */
+        await expect(manager(page, 'Bug manager, 2 unread')).toBeVisible();
+        await expect(manager(page, /Issue manager/)).toHaveCount(0);
+
+        /* When */
+        await pushEvent(app, 'inbox:changed', {...summary([2, 0], 5), configured: {bug: false, issue: false}});
+
+        /* Then */
+        await expect(page.getByTestId('patch-managers')).toHaveCount(0);
+    });
+
+    test.describe('with a project on Watch issues', () => {
+        test.use({fixture: {...standardFixture(), projectSettings: {[P.acmeApi]: {watchIssues: true}}}});
+
+        test('the Issue manager stands there from launch, calm with nothing read yet', async ({page}) => {
+            /* Then */
+            await expect(manager(page, 'Issue manager')).toBeVisible();
+            await expect(pose(page, 'issue')).toHaveClass(/patch-mgr-s-calm/);
+            await expect(manager(page, /Bug manager/)).toHaveCount(0);
         });
     });
 });
