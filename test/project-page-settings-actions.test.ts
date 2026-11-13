@@ -6,7 +6,12 @@
 import {beforeEach, test} from 'node:test';
 import assert from 'node:assert/strict';
 import {dispatch} from '../src/renderer/state/app-store';
-import {changeProjectSetting, resetProjectSettings} from '../src/renderer/ui/project-page/settings-actions';
+import {
+    changeProjectSetting,
+    resetProjectSettings,
+    setReleasesTagged,
+    setWatchIssues,
+} from '../src/renderer/ui/project-page/settings-actions';
 import {projectSettingsKey} from '../src/domain/settings/settings';
 
 const APP = '/Users/me/code/app';
@@ -52,4 +57,38 @@ test('resetting to the global settings keeps the project’s saved prompts', asy
 
     /* Then */
     assert.deepEqual(main.writes, [[KEY, {savedPrompts: PROMPTS}]]);
+});
+
+test('switching Watch issues on from the page keeps the rest of the project’s blob', async () => {
+    /* Given */
+    const main = installMain({[KEY]: {worktree: true, savedPrompts: PROMPTS}});
+
+    /* When */
+    await setWatchIssues(APP, true);
+
+    /* Then */
+    assert.deepEqual(main.writes, [[KEY, {worktree: true, savedPrompts: PROMPTS, watchIssues: true}]]);
+});
+
+test('Watch issues is written for a project whose settings view is not open', async () => {
+    /* Given */
+    const OTHER = '/Users/me/code/other';
+    const main = installMain({});
+
+    /* When */
+    await setWatchIssues(OTHER, true);
+
+    /* Then */
+    assert.deepEqual(main.writes, [[projectSettingsKey(OTHER), {watchIssues: true}]]);
+});
+
+test('setting Releases are tagged back to detected drops the project’s say', async () => {
+    /* Given */
+    const main = installMain({[KEY]: {releasesTagged: false, chrome: true}});
+
+    /* When */
+    await setReleasesTagged(APP, null);
+
+    /* Then */
+    assert.deepEqual(main.writes, [[KEY, {chrome: true}]]);
 });

@@ -269,6 +269,7 @@ function setup(overrides: Partial<World> = {}) {
         | 'addPendingComment'
         | 'deletePendingReview'
         | 'submitPendingReview'
+        | 'latestTag'
         | QueueLabelWrites
         | CiJobQueueCalls
         | PlanReads

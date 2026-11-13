@@ -74,6 +74,7 @@ import {SettingsService} from '../application/services/settings-service';
 import {WorktreeCleanupService} from '../application/services/worktree-cleanup-service';
 import {UpdateService} from '../application/services/update-service';
 import {WeatherService} from '../application/services/weather-service';
+import {InboxSettingsService} from '../application/services/inbox-settings-service';
 import {ASK_PATCH_CALL, AskRouteService, EMPTY_SCREEN_CALL} from '../application/services/ask-route-service';
 import type {AskPatchResult} from '../domain/ask/model';
 import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/quick-ask-hotkey';
@@ -126,6 +127,7 @@ import {openDatabase} from '../infrastructure/sqlite/database';
 import {resolveClaudePaths} from '../infrastructure/fs/claude-paths';
 import {systemTimers} from '../infrastructure/system/timers';
 import {OpenMeteoWeatherSource} from '../infrastructure/weather/open-meteo';
+import {PlannerCycleProvider} from '../infrastructure/planner/planner-cycle-provider';
 import {PmsetSleepControl} from '../infrastructure/system/pmset-sleep-control';
 import {PmsetBatteryGauge} from '../infrastructure/system/pmset-battery-gauge';
 import {BundleInstaller} from '../infrastructure/system/bundle-installer';
@@ -211,6 +213,8 @@ export interface Container {
     readonly usage: OAuthUsageService;
     readonly schedules: ScheduleService;
     readonly weather: WeatherService;
+    /** The managers' settings (#412): Planner cycles for snoozes, Releases are tagged. */
+    readonly inboxSettings: InboxSettingsService;
     readonly updates: UpdateService;
     readonly sessionWork: SessionWorkService;
     /** PRs no session opened: their own work page. */
@@ -1031,6 +1035,16 @@ export function buildContainer(): Container {
         log,
     });
 
+    const inboxSettings = new InboxSettingsService({
+        settings,
+        cycles: new PlannerCycleProvider(log),
+        github,
+        git: workspace,
+        remotes: git,
+        clock,
+        agentlessRemote,
+    });
+
     // The project page (#172): one answer, plans through PlanService's cache.
     const projectOverview = new ProjectOverviewService({
         plans,
@@ -1309,6 +1323,7 @@ export function buildContainer(): Container {
         usage,
         schedules,
         weather,
+        inboxSettings,
         updates,
         sessionWork,
         pullRequestPages,

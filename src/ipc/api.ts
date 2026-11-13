@@ -74,6 +74,7 @@ import type {VmHostView} from '../application/services/vm-registry';
 import type {ShownPage} from '../domain/session/page-tool';
 import type {SessionLink} from '../domain/session/links';
 import type {SessionStats} from '../domain/session/stats';
+import type {ReleaseTagsView, SnoozeOptionView} from '../application/services/inbox-settings-service';
 
 export type {AgentHostStatus, AgentHostsResult, VmHostView};
 export type {Editor, WorkspaceActionResult, WorkspaceEditorInfo, WorkspaceTarget} from '../domain/workspace/model';
@@ -225,6 +226,12 @@ export interface SwitchboardApi {
     quickAskHotkeyStatus(): Promise<{registered: boolean; missing: CaptureTarget[]}>;
     /** Whether a server in `~/.claude.json` has this BlaakTasks URL (#252). Never the token itself. */
     blaakTasksSetUp(url: string): Promise<boolean>;
+    /** The cycle the Planner at `url` says today is in (#412), for the Settings field's "✓ cycle N"; null when it gave none. */
+    plannerCycle(url: string): Promise<{number: number} | null>;
+    /** The managers' snooze options open now (#412), with the cycle ones when the Planner answers within 5 s. */
+    inboxSnoozeOptions(): Promise<SnoozeOptionView[]>;
+    /** Releases are tagged for a project (#412): what its tags say, its own override, and what counts. */
+    releaseTags(projectPath: string): Promise<ReleaseTagsView>;
     /**
      * The saved prompts (#339): the global list, and the project's when a path
      * is given. Order them for the tray with `resolveSavedPrompts`.

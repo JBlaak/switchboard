@@ -16,7 +16,7 @@
  * the base folder are the VM's, shared by every project on it, so they are
  * set there.
  */
-import {useLayoutEffect, useRef} from 'react';
+import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import type {JSX, KeyboardEvent, ReactNode} from 'react';
 import {useStore} from '../use-store';
 import {projectLabel} from '../../features/sessions/project-label';
@@ -27,7 +27,17 @@ import {
     projectFieldStates,
 } from '../../../domain/settings/project-overrides';
 import {backToProject, closeProject, isRemoteProject} from './actions';
-import {changeProjectSetting, resetProjectSettings} from './settings-actions';
+import {
+    changeProjectSetting,
+    readReleaseTags,
+    resetProjectSettings,
+    setReleasesTagged,
+    setWatchIssues,
+} from './settings-actions';
+import {releasesTaggedOverride, resolveWatchIssues} from '../../../domain/settings/inbox-settings';
+import {releaseTagsHelp} from './release-tags-view';
+import type {ReleaseTagsView} from '../../../application/services/inbox-settings-service';
+import type {SettingsRecord} from '../../state/settings-slice';
 import {hideProjectFromPage} from './hide-project';
 import {isVmProjectIn} from '../../state/agent-host-slice';
 import {CommitText} from '../settings/CommitInputs';
@@ -123,6 +133,7 @@ export function ProjectSettings({projectPath}: {projectPath: string}): JSX.Eleme
                 {view && (
                     <SettingsFields
                         projectPath={projectPath}
+                        current={view.current}
                         fields={projectFieldStates(view.globalSettings, view.current)}
                         canReset={hasOverrides(view.globalSettings, view.current)}
                     />
@@ -134,11 +145,13 @@ export function ProjectSettings({projectPath}: {projectPath: string}): JSX.Eleme
 
 interface FieldsProps {
     projectPath: string;
+    /** The project's own blob, for the settings that are not launch overrides. */
+    current: SettingsRecord;
     fields: Readonly<Record<ProjectSettingField, ProjectFieldState>>;
     canReset: boolean;
 }
 
-function SettingsFields({projectPath, fields, canReset}: FieldsProps): JSX.Element {
+function SettingsFields({projectPath, current, fields, canReset}: FieldsProps): JSX.Element {
     const change = (field: ProjectSettingField) => (value: unknown) =>
         void changeProjectSetting(projectPath, field, value);
     const mode = fields.permissionMode;
@@ -248,6 +261,8 @@ function SettingsFields({projectPath, fields, canReset}: FieldsProps): JSX.Eleme
                 </div>
             </section>
 
+            {(vm || !isRemoteProject(projectPath)) && <InboxSection projectPath={projectPath} current={current} />}
+
             {vm && <ThisVmSection projectPath={projectPath} />}
 
             {!isRemoteProject(projectPath) && (
@@ -275,6 +290,77 @@ function SettingsFields({projectPath, fields, canReset}: FieldsProps): JSX.Eleme
                 </section>
             )}
         </div>
+    );
+}
+
+/**
+ * Inbox (#412): what the managers on the empty screen read from the
+ * project. Watch issues puts its loose issues in the Issue manager; Releases
+ * are tagged follows the project's tags unless it is set to Tagged or Not
+ * tagged. Neither is a launch setting, so neither has a global default.
+ */
+function InboxSection({projectPath, current}: {projectPath: string; current: SettingsRecord}): JSX.Element {
+    const watching = resolveWatchIssues(current);
+    const override = releasesTaggedOverride(current);
+    const [tags, setTags] = useState<ReleaseTagsView | null | undefined>(undefined);
+    useEffect(() => {
+        let live = true;
+        setTags(undefined);
+        void readReleaseTags(projectPath).then((answer) => {
+            if (live) setTags(answer);
+        });
+        return () => {
+            live = false;
+        };
+    }, [projectPath]);
+    const choices: {value: boolean | null; label: string}[] = [
+        {value: null, label: 'Detect'},
+        {value: true, label: 'Tagged'},
+        {value: false, label: 'Not tagged'},
+    ];
+    return (
+        <section className="ps-section" aria-labelledby="ps-inbox">
+            <h2 className="ps-section-title" id="ps-inbox">
+                Inbox
+            </h2>
+            <div className="ps-group">
+                <div className="ps-field">
+                    <div className="ps-field-text">
+                        <span className="ps-label">Watch issues</span>
+                        <div className="ps-help">
+                            The Issue manager lists this project’s loose issues that are unassigned or assigned to you.
+                        </div>
+                    </div>
+                    <Switch
+                        label="Watch issues"
+                        on={watching}
+                        onChange={(on) => void setWatchIssues(projectPath, on)}
+                    />
+                </div>
+                <div className="ps-field">
+                    <div className="ps-field-text">
+                        <span className="ps-label">Releases are tagged</span>
+                        <div className="ps-help">
+                            The Bug manager compares events after a fix with the first tag that contains it.{' '}
+                            <span className="ps-inherit">{releaseTagsHelp(tags)}</span>
+                        </div>
+                    </div>
+                    <div className="ps-seg" role="radiogroup" aria-label="Releases are tagged">
+                        {choices.map((choice) => (
+                            <button
+                                key={String(choice.value)}
+                                type="button"
+                                role="radio"
+                                aria-checked={override === choice.value}
+                                className={override === choice.value ? 'is-on' : undefined}
+                                onClick={() => void setReleasesTagged(projectPath, choice.value)}>
+                                {choice.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </section>
     );
 }
 
