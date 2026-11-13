@@ -62,7 +62,7 @@ import type {ShellProfile} from '../../domain/shell/shell-profile';
 import type {AskPatchResult} from '../../domain/ask/model';
 import type {TasksUpdate} from '../../domain/tasks/surface';
 import type {ShownPage} from '../../domain/session/page-tool';
-import type {InboxSummary} from '../../domain/inbox/model';
+import type {InboxManager, InboxSummary} from '../../domain/inbox/model';
 
 // ── Pushed by the main process ──
 
@@ -174,6 +174,8 @@ export type LocalEvent =
     | {type: 'answersDelivered'; toolUseId: string}
     /** The empty screen came into view; Patch appears on it. A prompt to act; no state changes. */
     | {type: 'emptyScreenShown'}
+    /** A manager on the empty screen was chosen (#416): its page opens (⌘B, ⌘I; #414, #415). A prompt to act; no state changes. */
+    | {type: 'managerPageRequested'; manager: InboxManager}
     /** Open a modal dialog, replacing any that is open. */
     | {type: 'dialogOpened'; request: DialogRequest}
     /** Close the dialog opened as `seq`; a stale close from a replaced one does nothing. */

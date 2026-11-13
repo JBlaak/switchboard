@@ -14,6 +14,8 @@ export function registerSettingsHandlers(ipc: IpcRegistrar, app: Container): voi
     ipc.handle(INVOKE.getSetting, (key: string) => app.settings.get(key));
     ipc.handle(INVOKE.setSetting, (key: string, value: unknown) => {
         app.settings.set(key, value);
+        // A project's Watch issues brings the Issue manager onto the empty screen, or takes it off (#416).
+        app.inbox.settingsChanged();
         // Saving registers or lets go of ⌥Space, and swaps the Dock icon, at once, no restart (H2).
         if (key === GLOBAL_SETTINGS_KEY) {
             app.quickAskHotkey.apply();

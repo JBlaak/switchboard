@@ -70,18 +70,19 @@
    centred over the box, and it is held to the card's right half. Its top sits
    on the floor, below the scene (the scene's foot is 58px below the card's
    edge: 290px held, 232px tucked under), so a longer line grows down, not into
-   the outing. */
+   the outing. With the managers out (below), the bubble stays above Patch,
+   where it always talks without the family. */
 @media (min-height: 721px) {
-    .placeholder-family + .placeholder-patch {
+    #placeholder:not(:has(.placeholder-managers)) .placeholder-family + .placeholder-patch {
         align-self: stretch;
         container-type: inline-size;
     }
 
-    .placeholder-family + .placeholder-patch .patch-scene {
+    #placeholder:not(:has(.placeholder-managers)) .placeholder-family + .placeholder-patch .patch-scene {
         position: relative;
     }
 
-    .placeholder-family + .placeholder-patch .patch-bubble {
+    #placeholder:not(:has(.placeholder-managers)) .placeholder-family + .placeholder-patch .patch-bubble {
         position: absolute;
         left: calc(100% - 34px);
         top: calc(100% - 80px);
@@ -91,7 +92,7 @@
         transform-origin: 0 50%;
     }
 
-    .placeholder-family + .placeholder-patch .patch-bubble::after {
+    #placeholder:not(:has(.placeholder-managers)) .placeholder-family + .placeholder-patch .patch-bubble::after {
         left: -5px;
         top: 13px;
         bottom: auto;
@@ -108,6 +109,99 @@
 
     .placeholder-family + .placeholder-patch {
         margin-top: 0;
+    }
+}
+
+/* The managers (ui/patch/EmptyScreenManagers, #416): the Bug manager to
+   Patch's left and the Issue manager to its right, hung off a row between
+   Patch and the box. With the family card, all three stand on the card's
+   floor with their feet on Patch's: the floor grows to hold them and Patch's
+   bubble above them, Patch steps up inside the card, and the row is the
+   strip their names sit in. A short window has no card, so the row takes no
+   room and the managers stand smaller beside the box, feet on its foot. Each
+   manager's name is 17px under its feet (4px gap, 13px line). */
+.placeholder-managers {
+    position: relative;
+    align-self: stretch;
+    height: 0;
+    pointer-events: none;
+}
+
+.placeholder-manager {
+    position: absolute;
+    pointer-events: auto;
+}
+
+.placeholder-manager .patch-manager {
+    --patch-font: var(--sb-font-head);
+    --patch-manager-width: 150px;
+}
+
+.placeholder-manager.is-bug {
+    right: calc(50% + 92px);
+}
+
+.placeholder-manager.is-issue {
+    left: calc(50% + 92px);
+}
+
+.placeholder-patch-label {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font: 700 11px/1.2 var(--sb-font-head);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #85837f;
+    white-space: nowrap;
+}
+
+@media (min-height: 721px) {
+    #placeholder:has(.placeholder-managers) .placeholder-family-floor {
+        height: 242px;
+    }
+
+    /* Patch's feet 30px up inside the card, on the managers' line; the row
+       gives those 30px back, so the box keeps its gap under the card. */
+    #placeholder:has(.placeholder-managers) .placeholder-family + .placeholder-patch {
+        margin-top: -320px;
+    }
+
+    .placeholder-family + .placeholder-patch + .placeholder-managers {
+        height: 30px;
+    }
+
+    .placeholder-family + .placeholder-patch + .placeholder-managers .placeholder-manager {
+        top: 0;
+        transform: translateY(calc(-100% + 17px));
+    }
+
+    .placeholder-family + .placeholder-patch + .placeholder-managers .placeholder-patch-label {
+        top: 4px;
+    }
+}
+
+@media (max-height: 720px) {
+    .placeholder-patch-label {
+        display: none;
+    }
+
+    .placeholder-manager .patch-manager {
+        --patch-manager-width: 110px;
+    }
+
+    /* The box is 12px under the row and 46px tall. */
+    .placeholder-manager {
+        top: 12px;
+        transform: translateY(calc(-100% + 46px + 17px));
+    }
+
+    .placeholder-manager.is-bug {
+        right: calc(50% + 278px);
+    }
+
+    .placeholder-manager.is-issue {
+        left: calc(50% + 278px);
     }
 }
 
@@ -131,6 +225,19 @@
         --patch-wood: #d9ad45;
         --patch-bubble-edge: rgba(20, 30, 50, 0.08);
         --patch-bubble-shadow: rgba(20, 30, 50, 0.22);
+        --patch-shadow: rgba(20, 30, 50, 0.12);
+    }
+}
+
+/* Off the card (a short window), the managers stand on the app's own
+   background: their tag and name follow its palette. */
+@media (prefers-color-scheme: light) and (max-height: 720px) {
+    .placeholder-manager .patch-manager {
+        --patch-count-bg: var(--sb-bg-raised);
+        --patch-count-text: var(--sb-text-strong);
+        --patch-count-edge: rgba(20, 30, 50, 0.08);
+        --patch-count-shadow: rgba(20, 30, 50, 0.22);
+        --patch-label: var(--sb-text-muted);
         --patch-shadow: rgba(20, 30, 50, 0.12);
     }
 }

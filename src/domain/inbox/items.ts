@@ -32,6 +32,7 @@ import {inboxKey, isUrgent, managerOf, sourceOf} from './model';
 import type {
     BugFacts,
     BugSignals,
+    ConfiguredManagers,
     InboxFacts,
     InboxItem,
     InboxManager,
@@ -248,6 +249,6 @@ export function managerCounts(items: readonly InboxItem[], manager: InboxManager
     return {unread, urgent};
 }
 
-export function inboxSummary(items: readonly InboxItem[]): InboxSummary {
-    return {bug: managerCounts(items, 'bug'), issue: managerCounts(items, 'issue')};
+export function inboxSummary(items: readonly InboxItem[], configured: ConfiguredManagers): InboxSummary {
+    return {bug: managerCounts(items, 'bug'), issue: managerCounts(items, 'issue'), configured};
 }

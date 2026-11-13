@@ -12,14 +12,21 @@ import type {IpcRegistrar} from './support/registrar';
 
 export function registerBugsnagHandlers(ipc: IpcRegistrar, app: Container): void {
     ipc.handle(INVOKE.bugsnagConnection, () => app.bugsnag.view());
-    ipc.handle(INVOKE.bugsnagSaveToken, (token: unknown) => {
+    ipc.handle(INVOKE.bugsnagSaveToken, async (token: unknown) => {
         if (typeof token !== 'string') throw new Error('a token is text');
-        return app.bugsnag.saveToken(token);
+        const view = await app.bugsnag.saveToken(token);
+        app.inbox.settingsChanged();
+        return view;
     });
-    ipc.handle(INVOKE.bugsnagRemoveToken, () => app.bugsnag.removeToken());
+    ipc.handle(INVOKE.bugsnagRemoveToken, () => {
+        const view = app.bugsnag.removeToken();
+        app.inbox.settingsChanged();
+        return view;
+    });
     ipc.handle(INVOKE.bugsnagSetProject, (id: unknown, change: unknown, name: unknown) => {
         if (typeof id !== 'string' || id === '') throw new Error('a Bugsnag project id is text');
         app.bugsnag.setProject(id, asChange(change), typeof name === 'string' ? name : undefined);
+        app.inbox.settingsChanged();
         return {ok: true};
     });
     ipc.handle(INVOKE.bugsnagSetTrending, (trending: unknown) => app.bugsnag.setTrending(trending));

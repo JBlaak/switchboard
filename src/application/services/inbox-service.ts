@@ -19,8 +19,11 @@
  * still in the inbox's own states. After the sources, timed snoozes that are
  * up wake and done items older than seven days go.
  *
- * Every change is pushed to the renderer as both managers' counts
- * (`inboxChanged`); the pages ask for the items themselves.
+ * Every change is pushed to the renderer as both managers' counts and which
+ * of them are set up (`inboxChanged`); the pages ask for the items
+ * themselves. Settings → Bug manager and a project's Watch issues say when
+ * what is watched may have changed (`settingsChanged`): a manager that came
+ * or went is pushed at once, and new sources are polled without waiting.
  */
 import {bugFacts} from '../../domain/inbox/bugs';
 import {
@@ -45,7 +48,14 @@ import {gitHubRepository} from '../../domain/project/repo-url';
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {resolveWatchIssues} from '../../domain/settings/inbox-settings';
 import type {SyncContext} from '../../domain/inbox/items';
-import type {InboxFacts, InboxItem, InboxManager, InboxStage, InboxSummary} from '../../domain/inbox/model';
+import type {
+    ConfiguredManagers,
+    InboxFacts,
+    InboxItem,
+    InboxManager,
+    InboxStage,
+    InboxSummary,
+} from '../../domain/inbox/model';
 import type {BugsnagError} from '../../domain/bugsnag/model';
 import type {BugsnagApi, ErrorQuery} from '../ports/bugsnag-api';
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
@@ -88,6 +98,10 @@ export class InboxService {
     private readonly items = new Map<string, InboxItem>();
     private interval: TimerHandle | null = null;
     private polling: Promise<void> | null = null;
+    /** The summary last pushed, so a settings change that changes nothing is not pushed. */
+    private pushed = '';
+    /** What was watched when last looked, so a change to it polls at once. */
+    private watching = '';
 
     constructor(private readonly deps: InboxServiceDeps) {
         for (const item of deps.store.all()) this.items.set(item.key, item);
@@ -96,6 +110,7 @@ export class InboxService {
     /** Poll now and every five minutes after. */
     public start(): void {
         if (this.interval) return;
+        this.watching = this.watchedSources();
         this.interval = this.deps.timers.setInterval(() => void this.poll(), INBOX_POLL_INTERVAL_MS);
         void this.poll();
     }
@@ -116,9 +131,22 @@ export class InboxService {
         return this.polling;
     }
 
-    /** Both managers' counts. */
+    /** Both managers' counts, and which of them are set up. */
     public summary(): InboxSummary {
-        return inboxSummary([...this.items.values()]);
+        return inboxSummary([...this.items.values()], this.configured());
+    }
+
+    /**
+     * The token, a Bugsnag project's opt-in or a project's Watch issues may
+     * have changed: push a manager that came or went, and poll when what is
+     * watched changed.
+     */
+    public settingsChanged(): void {
+        this.push();
+        const watching = this.watchedSources();
+        if (watching === this.watching) return;
+        this.watching = watching;
+        if (this.interval) void this.poll();
     }
 
     /** A manager's items, or both managers' when none is named. */
@@ -232,16 +260,42 @@ export class InboxService {
 
     /** The GitHub repositories of the local projects with Watch issues on, each once. */
     private async watchedRepositories(): Promise<string[]> {
-        const agentless = this.deps.agentlessRemote ?? isRemoteProjectPath;
         const repositories = new Set<string>();
-        for (const projectPath of this.deps.projects()) {
-            if (!resolveWatchIssues(this.deps.settings.project(projectPath)) || agentless(projectPath)) continue;
+        for (const projectPath of this.watchedProjects()) {
             const root = await this.deps.git.worktreeRoot(projectPath);
             const origin = root ? await this.deps.remotes.originUrl(root) : null;
             const repository = origin ? gitHubRepository(origin) : '';
             if (repository) repositories.add(repository);
         }
         return [...repositories];
+    }
+
+    /** The local projects with Watch issues on that `gh` can be asked about. */
+    private watchedProjects(): string[] {
+        const agentless = this.deps.agentlessRemote ?? isRemoteProjectPath;
+        return this.deps
+            .projects()
+            .filter(
+                (projectPath) => resolveWatchIssues(this.deps.settings.project(projectPath)) && !agentless(projectPath),
+            );
+    }
+
+    /** The opted-in Bugsnag projects, when there is a token to read them with. */
+    private optedInBugs(): string[] {
+        if (!this.deps.bugsnag.api()) return [];
+        return this.deps.bugsnag
+            .settings()
+            .projects.filter((project) => project.optedIn)
+            .map((project) => project.id);
+    }
+
+    private configured(): ConfiguredManagers {
+        return {bug: this.optedInBugs().length > 0, issue: this.watchedProjects().length > 0};
+    }
+
+    /** What is watched, as one comparable line. */
+    private watchedSources(): string {
+        return JSON.stringify([this.optedInBugs(), this.watchedProjects()]);
     }
 
     /** Fold one source's answer in and write it. */
@@ -276,7 +330,16 @@ export class InboxService {
         this.deps.store.apply(save, removing);
         for (const item of save) this.items.set(item.key, item);
         for (const key of removing) this.items.delete(key);
-        this.deps.renderer.inboxChanged(this.summary());
+        this.push(true);
+    }
+
+    /** Tell the renderer the summary: after a change to the items always, else only when it differs. */
+    private push(always = false): void {
+        const summary = this.summary();
+        const line = JSON.stringify(summary);
+        if (!always && line === this.pushed) return;
+        this.pushed = line;
+        this.deps.renderer.inboxChanged(summary);
     }
 }
 
