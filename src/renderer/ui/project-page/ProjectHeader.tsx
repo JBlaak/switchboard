@@ -15,10 +15,16 @@
  * The pin before the name puts the project under Pinned projects at the top
  * of the sidebar, above the pinned plans.
  *
+ * Watch issues (#412) puts the project's loose issues in the Issue manager
+ * on the empty screen; it shows where the GitHub button does.
+ *
  * Hand-off (#276 stage 2): a local project offers Hand off to… once there is
  * a VM host, and a copy on a VM says which local project it is a copy of.
  */
+import {useEffect, useState} from 'react';
 import type {JSX} from 'react';
+import {resolveWatchIssues} from '../../../domain/settings/inbox-settings';
+import {readProjectBlob, setWatchIssues} from './settings-actions';
 import {projectLabel} from '../../features/sessions/project-label';
 import {useStore} from '../use-store';
 import {formatDate} from '../../lib/format';
@@ -101,6 +107,56 @@ function HostBadge({projectPath}: {projectPath: string}): JSX.Element | null {
     );
 }
 
+/** Watch issues (#412): the Issue manager lists the project's loose issues, or not. */
+function WatchIssuesToggle({projectPath}: {projectPath: string}): JSX.Element {
+    const [on, setOn] = useState<boolean | null>(null);
+    useEffect(() => {
+        let live = true;
+        setOn(null);
+        void readProjectBlob(projectPath)
+            .then((blob) => {
+                if (live) setOn(resolveWatchIssues(blob));
+            })
+            .catch(() => undefined);
+        return () => {
+            live = false;
+        };
+    }, [projectPath]);
+    const toggle = (): void => {
+        if (on === null) return;
+        setOn(!on);
+        void setWatchIssues(projectPath, !on);
+    };
+    return (
+        <button
+            type="button"
+            className={'sw-btn pp-watch' + (on ? ' is-on' : '')}
+            aria-pressed={on === true}
+            disabled={on === null}
+            title={
+                on
+                    ? 'The Issue manager lists this project’s loose issues. Click to stop.'
+                    : 'List this project’s loose issues in the Issue manager'
+            }
+            onClick={toggle}>
+            <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true">
+                <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+                <circle cx="12" cy="12" r="3" />
+            </svg>
+            {on ? 'Watching issues' : 'Watch issues'}
+        </button>
+    );
+}
+
 /** The pin before the name: the project at the top of the sidebar, or not. */
 function ProjectPin({projectPath}: {projectPath: string}): JSX.Element {
     // The pins live on the cached projects, outside the store; every pin or
@@ -170,6 +226,7 @@ export function ProjectHeader({projectPath}: {projectPath: string}): JSX.Element
                     ) : (
                         remote && <span className="pp-host">{remoteHost(projectPath)}</span>
                     )}
+                    {opensGitHub(projectPath, vm) && !noGitHub && <WatchIssuesToggle projectPath={projectPath} />}
                     {opensGitHub(projectPath, vm) && !noGitHub && (
                         <button type="button" className="sw-btn" onClick={() => openProjectOnGitHub(projectPath)}>
                             <svg

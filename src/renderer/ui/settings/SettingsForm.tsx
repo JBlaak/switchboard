@@ -10,6 +10,7 @@ import {useRef, useState} from 'react';
 import {PERMISSION_MODES} from '../../../domain/launch/session-options';
 import {
     resolveBlaakTasksUrl,
+    resolvePlannerUrl,
     resolveQuickAskEnabled,
     resolveRemoveWorktreeOnArchive,
     resolveRestoreSessions,
@@ -32,6 +33,7 @@ import {closeSettings, saveSettings} from './actions';
 import {AppField, LaunchField} from './SettingsField';
 import {useWeatherCity} from './use-weather-city';
 import {useBlaakTasksUrl} from './use-blaak-tasks-url';
+import {usePlannerUrl} from './use-planner-url';
 import {PhoneAccessSection} from '../phone-access/PhoneAccessSection';
 import {VmsSection} from '../vms/VmsSection';
 import {SavedPromptsSection} from './SavedPromptsSection';
@@ -69,6 +71,7 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
     const [fontWarning, setFontWarning] = useState(() => fontWarningFor(fontFamilyValue));
     const weather = useWeatherCity(resolveWeatherLocation(current));
     const blaakTasks = useBlaakTasksUrl(resolveBlaakTasksUrl(current));
+    const planner = usePlannerUrl(resolvePlannerUrl(current));
 
     const permMode = useRef<HTMLSelectElement>(null);
     const worktree = useRef<HTMLInputElement>(null);
@@ -106,6 +109,7 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
         settings.restoreSessions = restoreSessions.current!.checked;
         settings.appIcon = normaliseAppIcon(appIcon.current!.value);
         settings.blaakTasksUrl = blaakTasks.urlRef.current!.value.trim();
+        settings.plannerUrl = planner.urlRef.current!.value.trim();
         settings.visibleSessionCount = parseInt(visibleCount.current!.value) || 25;
         settings.sessionMaxAgeDays = parseInt(maxAge.current!.value) || 3;
         settings.terminalTheme = terminalTheme.current!.value || 'switchboard';
@@ -320,6 +324,38 @@ export function SettingsForm({panel}: {panel: SettingsPanel}): JSX.Element {
                         ref={blaakTasks.urlRef}
                         placeholder="https://tasks.example.com/mcp"
                         defaultValue={resolveBlaakTasksUrl(current)}
+                    />
+                </AppField>
+            </div>
+
+            <div className="settings-section">
+                <div className="settings-section-title">Snoozing</div>
+
+                <AppField
+                    wide
+                    label="Planner URL"
+                    description={
+                        <>
+                            Turns on the cycle snoozes in the Bug and Issue managers. Empty means they&apos;re hidden
+                            {planner.checked && typeof planner.answer === 'object' && (
+                                <span id="sv-planner-ok" className="settings-ok">
+                                    ✓ cycle {planner.answer.number}
+                                </span>
+                            )}
+                            {planner.checked && planner.answer === 'none' && (
+                                <span id="sv-planner-warning" className="settings-warning">
+                                    The Planner gave no cycle, so the cycle snoozes stay hidden
+                                </span>
+                            )}
+                        </>
+                    }>
+                    <input
+                        type="text"
+                        className="settings-input"
+                        id="sv-planner-url"
+                        ref={planner.urlRef}
+                        placeholder="https://planner.example.com"
+                        defaultValue={resolvePlannerUrl(current)}
                     />
                 </AppField>
             </div>

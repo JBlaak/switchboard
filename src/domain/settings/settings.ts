@@ -79,6 +79,12 @@ export interface GlobalSettings {
      */
     blaakTasksUrl?: string;
     /**
+     * Global only. The Planner's address, e.g. `https://planner.example.com`
+     * (#412): with it set, the managers' snooze menus offer the cycle snoozes.
+     * Empty, the default, hides them. Read it through `resolvePlannerUrl`.
+     */
+    plannerUrl?: string;
+    /**
      * The saved prompts every project's session tray offers (#339); a
      * project's blob holds its own under the same key. Read and written
      * through `SettingsService.savedPrompts` / `setSavedPrompts`.
@@ -245,6 +251,12 @@ export function resolveRestoreSessions(global: Record<string, unknown> | null | 
 export function resolveBlaakTasksUrl(global: Record<string, unknown> | null | undefined): string {
     const url = global?.blaakTasksUrl;
     return typeof url === 'string' ? url.trim() : '';
+}
+
+/** The Planner's address, trimmed and without a trailing slash; '' while it is not set, which it is unless one is entered. */
+export function resolvePlannerUrl(global: Record<string, unknown> | null | undefined): string {
+    const url = global?.plannerUrl;
+    return typeof url === 'string' ? url.trim().replace(/\/+$/, '') : '';
 }
 
 /** Where to fetch the weather for: the stored location if it is a valid one. */

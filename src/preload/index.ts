@@ -111,6 +111,9 @@ const api: SwitchboardApi = {
     setAppearance: (mode) => ipcRenderer.invoke(INVOKE.setAppearance, mode),
     quickAskHotkeyStatus: () => ipcRenderer.invoke(INVOKE.quickAskHotkeyStatus),
     blaakTasksSetUp: (url) => ipcRenderer.invoke(INVOKE.blaakTasksSetUp, url),
+    plannerCycle: (url) => ipcRenderer.invoke(INVOKE.plannerCycle, url),
+    inboxSnoozeOptions: () => ipcRenderer.invoke(INVOKE.inboxSnoozeOptions),
+    releaseTags: (projectPath) => ipcRenderer.invoke(INVOKE.releaseTags, projectPath),
     savedPrompts: (projectPath) => ipcRenderer.invoke(INVOKE.savedPrompts, projectPath),
     setSavedPrompts: (projectPath, prompts) => ipcRenderer.invoke(INVOKE.setSavedPrompts, projectPath, prompts),
 

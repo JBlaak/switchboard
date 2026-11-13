@@ -96,3 +96,8 @@ export function geocodeCity(name: string): Promise<WeatherLocation | null> {
 export function blaakTasksSetUp(url: string): Promise<boolean> {
     return window.api.blaakTasksSetUp(url).catch(() => true);
 }
+
+/** The cycle the Planner at this URL says today is in (#412); null when it gave none or could not be asked. */
+export function plannerCycle(url: string): Promise<{number: number} | null> {
+    return window.api.plannerCycle(url).catch(() => null);
+}
