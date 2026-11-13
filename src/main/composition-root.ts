@@ -22,7 +22,7 @@ import path from 'node:path';
 import {systemClock} from '../application/ports/clock';
 import {uuidGenerator} from '../application/ports/ids';
 import {AgentAwareTerminals} from '../application/services/agent-client/agent-aware-terminals';
-import {AgentClient} from '../application/services/agent-client/agent-client';
+import {AgentClient, agentHostKey} from '../application/services/agent-client/agent-client';
 import {isAgentPty} from '../application/services/agent-client/agent-pty';
 import {ConfigCopyService, manifestStoreOn} from '../application/services/config-copy-service';
 import {SshAgentDialer} from '../infrastructure/agent/ssh-agent-dialer';
@@ -179,6 +179,11 @@ import {SqliteDeviceRegistry} from '../infrastructure/sqlite/device-registry';
 import {bonjourHostName, computerName} from '../infrastructure/system/computer-name';
 import {PhoneEventTee, buildPhoneAccess} from './phone-access';
 import {sessionArchiver, stopSession} from './stop-session';
+import {MergingHostService} from '../application/services/merging-host-service';
+import type {VmChoice} from '../domain/merge-manager/merging-host';
+import {parseVmHostKey, vmHostKey, type VmHost} from '../domain/agent/vm-paths';
+import {SelfStartedCatchUp} from '../application/services/self-started-catch-up';
+import {vmHostLabel} from '../domain/settings/vm-hosts';
 import type {PhoneAccessService} from '../application/services/phone-access-service';
 import type {PhoneSessionsService} from '../application/services/phone-sessions-service';
 import type {DeviceRegistry, ServiceAdvertiser} from '../application/ports/phone-access';
@@ -265,6 +270,8 @@ export interface Container {
     readonly fixErrands: FixErrandService;
     /** What the Merge manager's page shows besides the lanes (#439). */
     readonly mergeManagerPage: MergeManagerPageService;
+    /** Where merging runs, this Mac or a VM (#442): what the renderer's Merge manager calls go through. */
+    readonly mergingHost: MergingHostService;
     readonly askRoute: AskRouteService<AskPatchResult>;
     readonly quickAskHotkey: QuickAskHotkey;
     readonly quickAskPanel: QuickAskPanel;
@@ -1154,10 +1161,12 @@ export function buildContainer(): Container {
     });
 
     // The Merge manager (#434): every landed PR's lane, read every minute.
+    // What it pushes goes through the Merging host (#442), which says where merging runs.
+    let mergingHost: MergingHostService | null = null;
     const mergeManager = new MergeManagerService({
         store: new SqliteLandedStore(database.db),
         github,
-        renderer,
+        renderer: {mergeManagerChanged: (state) => mergingHost?.localChanged(state)},
         clock,
         timers,
         log,
@@ -1191,10 +1200,6 @@ export function buildContainer(): Container {
     archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
         archiveOnMerge.turnEnded(sessionIds, archiving, currentId),
     );
-    mergeManager.onTransitions((transitions) => {
-        if (bouncesDock(transitions)) dockAttention.bounceOnce();
-        void archiveOnMerge.merged(transitions.merged);
-    });
 
     /** The local checkout of a GitHub repository (`owner/repo`), by its origin; null when there is none. */
     const checkoutOf = async (wanted: string): Promise<string | null> => {
@@ -1253,6 +1258,74 @@ export function buildContainer(): Container {
     archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
         fixErrands.turnEnded(sessionIds, archiving, currentId),
     );
+
+    // The Merging host (#442): this Mac, or a VM merging was handed off to. The
+    // renderer's Merge manager calls go through it, and so do the merges and
+    // Needs you it tells (the Dock's one bounce, archive on merge), wherever
+    // they happened.
+    const vmChoices = (): VmChoice[] =>
+        settings.vmHosts().map((vm) => ({
+            key: vmHostKey({user: vm.user, host: vm.host, port: Number(vm.port) || 22}),
+            name: vmHostLabel(vm),
+        }));
+    // The errands a VM started by itself become rows here (#438, #442), on every
+    // connect and every read of a merging VM's lanes.
+    const selfStarted = new SelfStartedCatchUp({settings, renderer, appVersion: agentVersion, log});
+    const catchUpSelfStarted = (host: VmHost): void => {
+        const connection = agents.connection(host);
+        if (!connection.connected) return;
+        void selfStarted.catchUp({
+            host,
+            home: connection.home,
+            agentVersion: connection.agentVersion,
+            listSelfStarted: () => connection.listSelfStarted(),
+            forgetSelfStarted: (ids) => connection.forgetSelfStarted(ids),
+        });
+    };
+    agents.onConnected((connection) =>
+        catchUpSelfStarted({
+            user: connection.host.user,
+            host: connection.host.host,
+            port: Number(connection.host.port) || 22,
+        }),
+    );
+    mergingHost = new MergingHostService({
+        local: mergeManager,
+        errands: fixErrands,
+        page: mergeManagerPage,
+        vms: vmChoices,
+        link: (key) => {
+            const host = parseVmHostKey(key);
+            if (!host || !vmChoices().some((vm) => vm.key === key)) return null;
+            const connection = agents.connection(host);
+            return {
+                get connected() {
+                    return connection.connected;
+                },
+                get home() {
+                    return connection.home;
+                },
+                whenConnected: () => connection.whenConnected(),
+                runTool: (tool, cwd, args, options) => connection.runTool(tool, cwd, args, options),
+                mergeCall: (method, args, timeoutMs) => connection.mergeCall(method, args, timeoutMs),
+            };
+        },
+        onConnected: (listener) => agents.onConnected((connection) => listener(agentHostKey(connection.host))),
+        record: {read: () => settings.mergingHost(), write: (record) => settings.setMergingHost(record)},
+        remoteRead: (key) => {
+            const host = parseVmHostKey(key);
+            if (host) catchUpSelfStarted(host);
+        },
+        stopSession: (sessionId) => void stopSession({registry, remote, lifecycle, terminals}, sessionId),
+        renderer,
+        clock,
+        timers,
+        log,
+    });
+    mergingHost.onTransitions((transitions) => {
+        if (bouncesDock(transitions)) dockAttention.bounceOnce();
+        void archiveOnMerge.merged(transitions.merged);
+    });
 
     // The project page (#172): one answer, plans through PlanService's cache.
     // Whether a repository has a merge queue is its lane kind (#434).
@@ -1571,6 +1644,7 @@ export function buildContainer(): Container {
         mergeManager,
         fixErrands,
         mergeManagerPage,
+        mergingHost,
         askRoute,
         quickAskHotkey,
         quickAskPanel,
@@ -1614,6 +1688,7 @@ export function buildContainer(): Container {
             prWatch.stop();
             mergeQueueWatch.stop();
             mergeManager.stop();
+            mergingHost?.stop();
             inbox.stop();
             issueManager.stop();
             bugFixService.stop();

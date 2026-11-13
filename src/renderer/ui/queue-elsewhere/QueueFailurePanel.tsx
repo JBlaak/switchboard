@@ -1,7 +1,8 @@
 /**
  * The strip between a session's header and its terminal when the session's
  * own PR left the merge queue (#315): "#N left the queue", the failing check
- * and the queue's reason, and Fix in session, Open the PR and Retry.
+ * and the queue's reason, and Fix in session, Open the PR and Retry. Not for
+ * a PR landed with the Merge manager, whose fix errand has it (#437).
  *
  * It renders into `#terminal-queue-panel`, a sibling of `#terminals`, and
  * shows and hides that container itself; the terminal on screen is refitted
@@ -10,6 +11,7 @@
 import {useLayoutEffect} from 'react';
 import type {JSX} from 'react';
 import {sessionQueueFailure} from '../../../domain/project/queue-elsewhere';
+import {findLanded} from '../../../domain/merge-manager/stage-words';
 import {queueActionKey} from '../../state/merge-queue-slice';
 import {sessionMap} from '../../state/session-store';
 import {refitOpenTerminals} from '../../features/terminal/terminal-manager';
@@ -20,9 +22,14 @@ export function QueueFailurePanel(): JSX.Element | null {
     const onScreen = useStore((state) => state.terminal.onScreen);
     const queues = useStore((state) => state.mergeQueue.queues);
     const actions = useStore((state) => state.mergeQueue.actions);
+    const merge = useStore((state) => state.mergeManager.state);
     // The row is shared; its PRs change with a re-fetch, which a queue push follows.
     const row = onScreen ? sessionMap.get(onScreen) : undefined;
-    const failure = row ? sessionQueueFailure(row.pullRequests ?? [], queues) : null;
+    const failure = row
+        ? sessionQueueFailure(row.pullRequests ?? [], queues, (repository, number) =>
+              Boolean(findLanded(merge, repository, number)),
+          )
+        : null;
     const shown = failure !== null;
 
     useLayoutEffect(() => {

@@ -21,7 +21,7 @@ import {landedKey} from '../src/domain/merge-manager/model';
 import type {LandedView, LaneStage, LaneView, MergeManagerState} from '../src/domain/merge-manager/model';
 import type {InboxItem, InboxStage} from '../src/domain/inbox/model';
 import {issue as planIssue, pr as planPr} from './support/plans';
-import {issue as inboxIssue} from './support/inbox-fixtures';
+import {bug as inboxBug, issue as inboxIssue} from './support/inbox-fixtures';
 import {queueOf, queued} from './support/merge-queue-fixtures';
 import {HEAD, landedPr, MIN, REPO} from './support/merge-manager-fixtures';
 
@@ -322,4 +322,49 @@ test('a Switchboard lane’s head goes Updated on the trunk → Checks → Merge
             ['Merge', 'todo'],
         ],
     );
+});
+
+test("a bug's Fix PR, once landed, says its stage in the same words; before, Queue names its place", () => {
+    /* Given */
+    const merge = state(lane([landed(51, {kind: 'needsYou', reason: {kind: 'changes-requested'}}, null)]));
+    const facts = inboxBug('err-1');
+    const fixed = (pr: number | null): InboxItem =>
+        ({
+            key: 'bug:err-1',
+            manager: 'bug',
+            source: 'connect',
+            createdAt: 0,
+            state: {kind: 'inProgress', stage: 'queue'},
+            facts,
+            signals: null,
+            notes: '',
+            fix: {
+                projectPath: '/code/connect',
+                repository: REPO,
+                branch: 'fix/err-1',
+                worktree: '/code/connect/.claude/worktrees/fix',
+                sessionId: null,
+                startedAt: 0,
+                pr: pr === null ? null : {number: pr, url: ''},
+                queuePosition: 2,
+                checks: null,
+                sessionEnded: false,
+            },
+        }) as InboxItem;
+
+    /* When */
+    const pills = [
+        inProgressPill('queue', landedForItem(merge, fixed(51)), 2),
+        inProgressPill('queue', landedForItem(merge, fixed(52)), 2),
+    ];
+
+    /* Then */
+    assert.deepEqual(
+        pills.map((pill) => [pill.kind, pill.label]),
+        [
+            ['landed-needsYou', 'Needs you'],
+            ['queue', 'Queue · 2nd'],
+        ],
+    );
+    assert.equal(needsYouInProgress([fixed(51)], merge), true);
 });

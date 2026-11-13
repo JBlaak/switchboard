@@ -42,6 +42,8 @@ import type {
     HandoffMessage,
     HostSettings,
     MacMessage,
+    MergeAnswerMessage,
+    MergeCallMethod,
     OpenedMessage,
     OpenSessionMessage,
     PlacedMessage,
@@ -600,6 +602,26 @@ export class AgentConnection {
             requestId,
             sessionIds,
         }));
+    }
+
+    // ── The Merge manager on this host (#442) ──
+
+    /**
+     * Ask the agent's Merge manager; answers the method's result as the agent
+     * sent it (JSON). Rejects with the agent's error when it refused or failed.
+     */
+    public async mergeCall(
+        method: MergeCallMethod,
+        args: Record<string, unknown> = {},
+        timeoutMs?: number,
+    ): Promise<unknown> {
+        const reply = await this.request<MergeAnswerMessage>(
+            'merge-answer',
+            (requestId) => ({type: 'merge-call', requestId, method, args}),
+            timeoutMs,
+        );
+        if (!reply.ok) throw new Error(reply.error || `the agent could not answer ${method}`);
+        return reply.result;
     }
 
     // ── The pages' git and files (stage 4) ──

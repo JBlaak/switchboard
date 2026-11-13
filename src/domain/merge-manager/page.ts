@@ -281,7 +281,7 @@ export function selectedRow(lanes: readonly PageLane[], key: string | null): Pag
 export interface RowActions {
     /** ⏎: the PR's own session, or the fix errand's; null for a teammate's row. */
     readonly open: {readonly kind: 'session'} | {readonly kind: 'errand'; readonly sessionId: string} | null;
-    /** T: a new fix errand, once one gave up. */
+    /** T: Try again, for any Needs you: a new fix errand once one gave up, else back to its place. */
     readonly tryAgain: boolean;
     /** N: the reviewer it waits on, who can be nudged (a user, not a team); null otherwise. */
     readonly nudge: string | null;
@@ -298,7 +298,8 @@ export function rowActions(row: PageRow): RowActions {
     const stopped = stage.kind === 'needsYou' && stage.reason.kind === 'errand-stopped';
     const open: RowActions['open'] =
         errand && (stage.kind === 'fixing' || stopped) ? {kind: 'errand', sessionId: errand} : {kind: 'session'};
-    return {open, tryAgain: stopped, nudge, unland: stage.kind !== 'merged'};
+    // Try again clears Needs you for any reason (#432 story 14).
+    return {open, tryAgain: stage.kind === 'needsYou', nudge, unland: stage.kind !== 'merged'};
 }
 
 /** The errand working on a PR, or that last did: the newest the facts know of. */

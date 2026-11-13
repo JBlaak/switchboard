@@ -296,3 +296,21 @@ test("an Actions check's page names its run; any other check names none", () => 
     /* Then */
     assert.deepEqual(ids, [123, null, null]);
 });
+
+test('an errand on a VM is told to decide for itself, and that a workflow fix cannot be pushed there (#442)', () => {
+    /* When */
+    const prompt = errandPrompt(promptRequest({unattended: true, noWorkflowScope: true}));
+
+    /* Then */
+    assert.match(prompt, /decide for yourself/);
+    assert.match(prompt, /ask it as one question and stop/);
+    assert.match(prompt, /cannot push changes to files in \.github\/workflows/);
+});
+
+test('an errand on the Mac is told nothing of the VM', () => {
+    /* When */
+    const prompt = errandPrompt(promptRequest());
+
+    /* Then */
+    assert.doesNotMatch(prompt, /decide for yourself|\.github\/workflows/);
+});

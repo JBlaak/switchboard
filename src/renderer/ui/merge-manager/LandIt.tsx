@@ -55,7 +55,7 @@ export function LandItControl({offer, busy, size, onLand, onUnland, onOpen}: Lan
     if (offer.kind === 'landed') {
         return (
             <LandedPill
-                text={landedPillText(offer.landed)}
+                text={landedPillText(offer.landed, offer.lane)}
                 sized={sized}
                 busy={busy}
                 onUnland={onUnland}

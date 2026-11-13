@@ -1,7 +1,8 @@
 /**
  * The Merge manager's page (#439, ⌘⇧L): what the main area shows while its
  * route is `mergeManager`. Its figure and where merging runs ("Merging on
- * this Mac") in the header; tiles that count the user's landed PRs by stage
+ * this Mac" or on a VM, with the hand-off and bring-back, #442) in the
+ * header, and what happened while merging was on a VM under the tiles; tiles that count the user's landed PRs by stage
  * and the CI runs saved this week; every lane, grouped by repository with its
  * kind, the head on top as a card with three steps and the rest in the lane's
  * order (teammates' queue entries faded); Merged today at the bottom; and the
@@ -42,6 +43,7 @@ import {
 import type {LandedView} from '../../../domain/merge-manager/model';
 import type {MergeManagerPageState} from '../../state/merge-manager-slice';
 import {mergeKeyAction} from './page-keys';
+import {AwaySummaryBox, MergingHostPill} from './MergingHost';
 import {
     closeMergeManager,
     nudgeFromPage,
@@ -53,6 +55,9 @@ import {
     typeTryAgainNote,
     unlandFromPage,
 } from './page-actions';
+
+/** The letters the page's keys use (`page-keys`). */
+const PAGE_LETTERS = new Set(['j', 'k', 't', 'n', 'u', 'o']);
 
 export function MergeManagerPage(): JSX.Element | null {
     const open = useStore((state) => state.mainArea.route.kind === 'mergeManager');
@@ -103,9 +108,13 @@ function MergeManagerView(): JSX.Element {
         if (e.shiftKey) return;
         const state = getState().mergeManager;
         const action = mergeKeyAction(e.key, selectedRow(pageLanes(state.state), state.page.selected));
+        // The page's letters are its own even where a row does not offer them: N is Nudge, never a quick session.
+        if (PAGE_LETTERS.has(e.key.toLowerCase())) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (!action) return;
         e.preventDefault();
-        // N here is Nudge, not a quick session.
         e.stopPropagation();
         switch (action.kind) {
             case 'step':
@@ -167,10 +176,7 @@ function MergeManagerView(): JSX.Element {
                             <span>{pageSubline(lanes)}</span>
                         </div>
                     </div>
-                    <span className="mm-host" title="The lane runner and the fix errands run here">
-                        <i aria-hidden="true" />
-                        Merging on this Mac
-                    </span>
+                    <MergingHostPill />
                 </div>
             </header>
 
@@ -198,6 +204,8 @@ function MergeManagerView(): JSX.Element {
                     title={savedText(page.facts?.savedThisWeek) ?? 'Nothing saved yet this week'}
                 />
             </div>
+
+            <AwaySummaryBox />
 
             {page.notice && (
                 <div className="tk-status" role="status">
@@ -718,7 +726,7 @@ function NeedsYouBody({row}: {row: PageRow}): JSX.Element {
             ? 'Review feedback is never fixed by an errand. Push a change or resolve the thread and it goes back to its place by itself.'
             : reason.kind === 'errand-stopped'
               ? 'Answer the errand in its session, push a commit, or Try again with a note for the next errand.'
-              : 'Push a commit and it goes back to its place by itself.';
+              : 'Push a commit and it goes back to its place by itself, or Try again: with a note a fix errand takes it on.';
     return (
         <Box label="Needs you · keeps its place">
             <p>
@@ -732,24 +740,32 @@ function NeedsYouBody({row}: {row: PageRow}): JSX.Element {
 function TryAgainBox({row, page}: {row: PageRow; page: MergeManagerPageState}): JSX.Element {
     const busy = page.tryAgain[row.key]?.phase === 'busy';
     const failed = page.tryAgain[row.key];
+    // Review feedback is never an errand's: Try again only reads it again.
+    const review =
+        row.stage.kind === 'needsYou' &&
+        (row.stage.reason.kind === 'changes-requested' || row.stage.reason.kind === 'unresolved-thread');
     return (
         <div className="im-box mm-try">
-            <label className="im-box-label" htmlFor={'mm-note-' + row.number}>
-                A note for the next errand (optional)
-            </label>
-            <textarea
-                id={'mm-note-' + row.number}
-                className="im-notes"
-                placeholder="What it should know, or try differently"
-                value={page.notes[row.key] ?? ''}
-                onChange={(e) => typeTryAgainNote(row.key, e.target.value)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                        e.preventDefault();
-                        void tryAgainFromPage(row);
-                    }
-                }}
-            />
+            {!review && (
+                <label className="im-box-label" htmlFor={'mm-note-' + row.number}>
+                    A note for the next errand (optional)
+                </label>
+            )}
+            {!review && (
+                <textarea
+                    id={'mm-note-' + row.number}
+                    className="im-notes"
+                    placeholder="What it should know, or try differently"
+                    value={page.notes[row.key] ?? ''}
+                    onChange={(e) => typeTryAgainNote(row.key, e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                            e.preventDefault();
+                            void tryAgainFromPage(row);
+                        }
+                    }}
+                />
+            )}
             {failed?.phase === 'failed' && <p className="is-error">{failed.reason}</p>}
             <div className="im-actions">
                 <button type="button" className="sw-btn" disabled={busy} onClick={() => void tryAgainFromPage(row)}>

@@ -38,7 +38,10 @@ class MemoryErrandStore implements FixErrandStore {
 
 function setup(landed: LandedPullRequest[], reads: LanePullRequestRead[]) {
     const prs = new Map(landed.map((pr) => [pr.key, pr]));
-    const world = {reads: new Map(reads.map((read) => [read.number, read])), now: NOW};
+    const world: {reads: Map<number, LanePullRequestRead>; now: number; onPoll?: () => void} = {
+        reads: new Map(reads.map((read) => [read.number, read])),
+        now: NOW,
+    };
     const asides: Array<{key: string; aside: SetAside | null}> = [];
     const links: Array<{key: string; sessionId: string | null}> = [];
     const started: Array<{sessionId: string; worktree: string; options: SessionOptions}> = [];
@@ -64,7 +67,7 @@ function setup(landed: LandedPullRequest[], reads: LanePullRequestRead[]) {
                 links.push({key, sessionId});
                 return prs.get(key) ?? null;
             },
-            poll: async () => undefined,
+            poll: async () => world.onPoll?.(),
         },
         github: {
             laneRead: async (_repo, numbers) =>
@@ -396,4 +399,93 @@ test('an errand is forgotten once its PR leaves the lane', async () => {
 
     /* Then */
     assert.deepEqual(service.errands(), []);
+});
+
+// ── Questions, Try again for any Needs you, and the hand-off (#442, #432 story 14) ──
+
+test('an errand that asks a question leaves the PR Needs you with the question', async () => {
+    /* Given */
+    const {service, sessionId, asides} = await withErrand();
+
+    /* When */
+    service.needsAttention(sessionId, 'Keep the old snapshot or take the new one?');
+
+    /* Then */
+    assert.deepEqual(asides, [
+        {
+            key: KEY,
+            aside: {
+                kind: 'needsYou',
+                cause: 'checks',
+                reason: {kind: 'errand-stopped', question: 'Keep the old snapshot or take the new one?'},
+                headOid: 'oid-7',
+            },
+        },
+    ]);
+});
+
+test('Try again on review feedback reads the lane again, and says what GitHub still shows', async () => {
+    /* Given */
+    const needsYou = {kind: 'needsYou', reason: {kind: 'changes-requested'}} as const;
+    const {service, started, world} = setup([landedPr(7, 10, 'switchboard', needsYou)], [prRead(7)]);
+    let polled = 0;
+    world.onPoll = () => void polled++;
+
+    /* When */
+    const answer = await service.tryAgain(REPO, 7, null);
+
+    /* Then */
+    assert.equal(polled, 1);
+    assert.equal(started.length, 0);
+    assert.deepEqual(answer, {
+        ok: false,
+        reason: 'GitHub still shows it: changes are requested. Push a change, and it goes back to its place by itself.',
+    });
+});
+
+test('Try again on a refused merge takes its set-aside off and sends it back to its place', async () => {
+    /* Given */
+    const refused = {kind: 'needsYou', reason: {kind: 'merge-refused', reason: 'Base branch was modified'}} as const;
+    const aside: SetAside = {kind: 'needsYou', cause: null, reason: refused.reason, headOid: 'oid-7'};
+    const {service, prs, asides, world} = setup(
+        [landedPr(7, 10, 'switchboard', refused, {setAside: aside})],
+        [prRead(7)],
+    );
+    world.onPoll = () =>
+        prs.set(KEY, {...prs.get(KEY)!, stage: {kind: 'waiting', willConflict: false, position: null}});
+
+    /* When */
+    const answer = await service.tryAgain(REPO, 7, null);
+
+    /* Then */
+    assert.deepEqual(asides, [{key: KEY, aside: null}]);
+    assert.deepEqual(answer, {ok: true, sessionId: null});
+});
+
+test('Try again with a note on a refused merge that failed on its checks starts an errand with the note', async () => {
+    /* Given */
+    const refused = {kind: 'needsYou', reason: {kind: 'merge-refused', reason: 'Required check failed'}} as const;
+    const aside: SetAside = {kind: 'needsYou', cause: 'checks', reason: refused.reason, headOid: 'oid-7'};
+    const {service, started} = setup([landedPr(7, 10, 'switchboard', refused, {setAside: aside})], [prRead(7)]);
+
+    /* When */
+    const answer = await service.tryAgain(REPO, 7, 'the e2e job is flaky on macOS');
+
+    /* Then */
+    assert.equal(answer.ok, true);
+    assert.match(String(started[0].options.initialPrompt), /the e2e job is flaky on macOS/);
+});
+
+test('a hand-off forgets the running errands, so stopping their sessions does not send the PR to Needs you', async () => {
+    /* Given */
+    const {service, sessionId, asides} = await withErrand();
+
+    /* When */
+    const handed = service.handOver();
+    service.sessionEnded(sessionId);
+
+    /* Then */
+    assert.deepEqual(handed, [sessionId]);
+    assert.deepEqual(service.errands(), []);
+    assert.deepEqual(asides, []);
 });

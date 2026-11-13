@@ -1,3 +1,4 @@
+/** The VM's lane state file (#438, #442): read defensively, written whole, and what a restart leaves behind. */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,157 +7,122 @@ import path from 'node:path';
 
 import {
     EMPTY_LANE_STATE,
-    landPr,
-    laneOrder,
+    SAVINGS_KEPT_MS,
+    deadErrands,
     parseLaneState,
-    recoveryPlan,
     serializeLaneState,
-    unlandPr,
-    withErrand,
-    withoutErrandSession,
-    type LaneErrand,
     type LaneState,
 } from '../src/domain/agent/lane-state';
+import {LaneStateStore} from '../src/application/services/agent-host/lane-store';
 import {NodeRecordFile} from '../src/infrastructure/agent/node-record-file';
+import type {FixErrand} from '../src/domain/merge-manager/errands';
+import {silentLog} from './support/fakes';
+import {NOW, landedPr} from './support/merge-manager-fixtures';
 
-/**
- * The lane state a VM keeps while it is the Merging host (#438): what survives
- * an agent restart, how a damaged file reads, and what recovery does with
- * each errand.
- */
+function errand(id: string, overrides: Partial<FixErrand> = {}): FixErrand {
+    return {
+        id,
+        key: 'movelab/connect#7',
+        repository: 'movelab/connect',
+        number: 7,
+        branch: 'branch-7',
+        lane: 'switchboard',
+        cause: 'checks',
+        headOid: 'oid-7',
+        sessionId: `session-${id}`,
+        currentId: `session-${id}`,
+        worktree: '/home/dev/projects/connect/.claude/worktrees/errand-7',
+        startedAt: NOW,
+        finished: null,
+        stoppedAt: null,
+        ...overrides,
+    };
+}
 
-const landed = (number: number, landedAt: number, repo = 'JBlaak/switchboard') => ({
-    repo,
-    number,
-    branch: `branch-${number}`,
-    landedAt,
-});
+const STATE: LaneState = {
+    landed: [landedPr(7, 10, 'switchboard', {kind: 'fixing', cause: 'checks'})],
+    errands: [errand('a')],
+    savings: [{repository: 'movelab/connect', kind: 'run-cancelled', count: 2, at: NOW}],
+    noWorkflowScope: true,
+};
 
-const errand = (number: number, sessionId: string, repo = 'JBlaak/switchboard'): LaneErrand => ({
-    repo,
-    number,
-    branch: `branch-${number}`,
-    sessionId,
-    dir: `/home/dev/projects/switchboard/.claude/worktrees/errand-${number}`,
-    prompt: `Fix #${number}`,
-    startedAt: 10,
-});
-
-test('the state round-trips through its file text', () => {
-    /* Given */
-    const state: LaneState = {landed: [landed(432, 1), landed(433, 2)], errands: [errand(432, 's1')]};
-
+test('the lane state reads back as it was written', () => {
     /* When */
-    const read = parseLaneState(serializeLaneState(state));
+    const read = parseLaneState(serializeLaneState(STATE));
 
     /* Then */
-    assert.deepEqual(read, state);
+    assert.deepEqual(read, STATE);
 });
 
-test('the state round-trips through the real file, written 0600', (t) => {
-    /* Given */
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-lane-'));
-    t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
-    const file = path.join(dir, 'lane-state.json');
-    const state: LaneState = {landed: [landed(432, 1)], errands: [errand(432, 's1')]};
-
-    /* When */
-    new NodeRecordFile(file).write(serializeLaneState(state));
-    const read = parseLaneState(new NodeRecordFile(file).read());
-
+test('a missing, malformed or older lane state file reads as empty', () => {
     /* Then */
-    assert.deepEqual(read, state);
-    assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+    assert.deepEqual(parseLaneState(null), EMPTY_LANE_STATE);
+    assert.deepEqual(parseLaneState('{not json'), EMPTY_LANE_STATE);
+    assert.deepEqual(parseLaneState(JSON.stringify({landed: [], errands: []})), EMPTY_LANE_STATE);
 });
 
-test('a missing, garbled or wrongly shaped file reads as empty', () => {
-    /* When */
-    const states = [null, '{not json', '[]', '"x"', '{"landed": 3}'].map(parseLaneState);
-
-    /* Then */
-    for (const state of states) assert.deepEqual(state, EMPTY_LANE_STATE);
-});
-
-test('malformed entries and repeats of a pull request are skipped, the first one kept', () => {
+test('a malformed entry is skipped and the rest is kept', () => {
     /* Given */
     const text = JSON.stringify({
-        landed: [landed(1, 5), {repo: 'not a repo', number: 2, branch: 'b', landedAt: 1}, landed(1, 9), {number: 3}],
-        errands: [errand(1, 's1'), {...errand(4, 's4'), prompt: ''}, {...errand(1, 's9'), repo: 'jblaak/SWITCHBOARD'}],
+        version: 2,
+        landed: [{key: 'x'}, STATE.landed[0]],
+        errands: [{id: 'b'}, STATE.errands[0]],
+        savings: [{repository: 'movelab/connect', kind: 'nonsense', count: 1, at: NOW}],
     });
 
     /* When */
-    const state = parseLaneState(text);
+    const read = parseLaneState(text);
 
     /* Then */
-    assert.deepEqual(state, {landed: [landed(1, 5)], errands: [errand(1, 's1')]});
+    assert.deepEqual(read, {...STATE, savings: [], noWorkflowScope: false});
 });
 
-test('landing again keeps the first landed time, so the pull request keeps its place', () => {
-    /* Given */
-    const state = landPr(landPr(EMPTY_LANE_STATE, landed(1, 100)), landed(2, 200));
-
-    /* When */
-    const next = landPr(state, landed(1, 300));
-
-    /* Then */
-    assert.equal(next, state);
-});
-
-test('a lane is in land order and holds only its own repository', () => {
+test('after a restart the running errands whose session is gone are the dead ones', () => {
     /* Given */
     const state: LaneState = {
-        landed: [landed(3, 300), landed(1, 100), landed(9, 50, 'JBlaak/patch'), landed(2, 200)],
-        errands: [],
+        ...STATE,
+        errands: [
+            errand('gone'),
+            errand('alive'),
+            errand('stopped', {stoppedAt: NOW}),
+            errand('done', {finished: {outcome: 'pushed', note: '', at: NOW}}),
+        ],
     };
 
     /* When */
-    const lane = laneOrder(state, 'jblaak/switchboard');
+    const dead = deadErrands(state, (sessionId) => sessionId === 'session-alive');
 
     /* Then */
     assert.deepEqual(
-        lane.map((pr) => pr.number),
-        [1, 2, 3],
+        dead.map((e) => e.id),
+        ['gone'],
     );
 });
 
-test('unlanding takes the pull request out and drops its errand ownership', () => {
+test('the store keeps landed PRs, errands and savings in one file, 0600, that a new store reads back', () => {
     /* Given */
-    const state: LaneState = {landed: [landed(1, 1), landed(2, 2)], errands: [errand(1, 's1'), errand(2, 's2')]};
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-state-'));
+    const file = new NodeRecordFile(path.join(dir, 'lane-state.json'));
+    const store = new LaneStateStore({file, clock: {now: () => NOW}, log: silentLog});
 
     /* When */
-    const next = unlandPr(state, {repo: 'JBlaak/switchboard', number: 1});
+    store.apply([landedPr(7, 10), landedPr(8, 5)], []);
+    store.apply([], ['movelab/connect#8']);
+    store.errandStore.save(errand('a'));
+    store.add('movelab/connect', 'conflict-found', 1, NOW);
+    store.add('movelab/connect', 'conflict-found', 1, NOW - SAVINGS_KEPT_MS - 1);
+    const again = new LaneStateStore({file, clock: {now: () => NOW}, log: silentLog});
 
     /* Then */
-    assert.deepEqual(next, {landed: [landed(2, 2)], errands: [errand(2, 's2')]});
-});
-
-test("a pull request's new errand replaces its earlier one, and a session's end forgets it", () => {
-    /* Given */
-    const state = withErrand({landed: [landed(1, 1)], errands: []}, errand(1, 's1'));
-
-    /* When */
-    const replaced = withErrand(state, errand(1, 's2'));
-    const ended = withoutErrandSession(replaced, 's2');
-
-    /* Then */
-    assert.deepEqual(replaced.errands, [errand(1, 's2')]);
-    assert.deepEqual(ended.errands, []);
-});
-
-test('after a restart, errands of landed pull requests start again and the others are dropped', () => {
-    /* Given */
-    const state: LaneState = {
-        landed: [landed(1, 1), landed(2, 2), landed(3, 3)],
-        errands: [errand(1, 'gone'), errand(2, 'running'), errand(4, 'unlanded')],
-    };
-
-    /* When */
-    const plan = recoveryPlan(state, (sessionId) => sessionId === 'running');
-
-    /* Then */
-    assert.deepEqual(plan, {
-        running: [errand(2, 'running')],
-        restart: [errand(1, 'gone')],
-        drop: [errand(4, 'unlanded')],
-    });
+    assert.deepEqual(
+        again.all().map((pr) => pr.number),
+        [7],
+    );
+    assert.deepEqual(
+        again.errandStore.all().map((e) => e.id),
+        ['a'],
+    );
+    assert.deepEqual(again.since(NOW - 1000), {'update-not-pushed': 0, 'run-cancelled': 0, 'conflict-found': 1});
+    assert.equal(fs.statSync(path.join(dir, 'lane-state.json')).mode & 0o777, 0o600);
+    fs.rmSync(dir, {recursive: true, force: true});
 });

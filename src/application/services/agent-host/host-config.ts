@@ -150,6 +150,11 @@ export class HostConfig implements HostConfigPart {
      * Schedule folders with a bad entry are left out of the merge (and
      * logged), so the reply shows the folders still in force.
      */
+    /** Change settings from within the agent (the Merge host's `mergingHost`, #442), as a `set-host-settings` would. */
+    public change(settings: Partial<HostSettings>): HostSettings {
+        return this.update({type: 'set-host-settings', requestId: '', settings});
+    }
+
     private update(message: SetHostSettingsMessage): HostSettings {
         const sent: unknown = message.settings.scheduleDirs;
         if (sent !== undefined && scheduleDirsOf(sent) === null) {

@@ -8,7 +8,9 @@
  * pushes them (`managerFigureOf`). The Merge manager always stands there,
  * idle with nothing landed; its pose and peach Needs you tag follow the lanes
  * (`mergeFigureOf`), and its bubble says what merged lately (`mergedBubble`).
- * Choosing a manager, by click or by focus and Enter, opens its page. Patch
+ * Choosing a manager, by click or by focus and Enter, opens its page; the
+ * Merge manager's right-click menu also hands merging off to a VM and brings
+ * it back (#442). Patch
  * gets a name label too, so the four read as a row.
  *
  * Where they stand is the stylesheet's: on the floor beside Patch, or beside
@@ -26,6 +28,9 @@ import type {JSX} from 'react';
 import type {ManagerHandle, ManagerScene} from '@jblaak/patch';
 import type {MergeFigure} from '../../../domain/merge-manager/figure';
 import type {MergeManagerState} from '../../../domain/merge-manager/model';
+import type {MergingHostView} from '../../../domain/merge-manager/merging-host';
+import {bringMergingBack, handOffMerging} from '../merge-manager/merging-actions';
+import {dispatch} from '../../state/app-store';
 import type {ManagerFigure} from '../../state/inbox-slice';
 
 function sameFigure(a: ManagerFigure | null, b: ManagerFigure | null): boolean {
@@ -41,6 +46,7 @@ export function EmptyScreenManagers(): JSX.Element {
     const issue = useStore((state) => managerFigureOf(state.inbox, 'issue'), sameFigure);
     const merge = useStore((state) => mergeFigureOf(state.mergeManager.state), sameMergeFigure);
     const lanes = useStore((state) => state.mergeManager.state);
+    const [menu, setMenu] = useState<{x: number; y: number} | null>(null);
     return (
         <div className="placeholder-managers" data-testid="patch-managers">
             {bug && (
@@ -63,8 +69,12 @@ export function EmptyScreenManagers(): JSX.Element {
             <Manager
                 kind="merge"
                 scene={{kind: 'merge', state: merge.pose, count: merge.count}}
-                onSelect={openMergeManagerPage}>
-                <MergedBubble lanes={lanes} />
+                onSelect={openMergeManagerPage}
+                onMenu={(at) => setMenu(at)}>
+                <>
+                    <MergedBubble lanes={lanes} />
+                    {menu && <MergeFigureMenu at={menu} host={lanes.merging} onClose={() => setMenu(null)} />}
+                </>
             </Manager>
         </div>
     );
@@ -74,11 +84,14 @@ function Manager({
     kind,
     scene,
     onSelect,
+    onMenu,
     children,
 }: {
     kind: ManagerScene['kind'];
     scene: ManagerScene;
     onSelect: () => void;
+    /** Its menu, on a right click, at the click within the figure. */
+    onMenu?: (at: {x: number; y: number}) => void;
     children?: JSX.Element;
 }): JSX.Element {
     const slot = useRef<HTMLDivElement>(null);
@@ -102,10 +115,91 @@ function Manager({
     }, [kind, state, count]);
 
     return (
-        <div ref={slot} className={`placeholder-manager is-${kind}`} data-manager={kind} data-state={state}>
+        <div
+            ref={slot}
+            className={`placeholder-manager is-${kind}`}
+            data-manager={kind}
+            data-state={state}
+            onContextMenu={
+                onMenu
+                    ? (e) => {
+                          e.preventDefault();
+                          const box = e.currentTarget.getBoundingClientRect();
+                          onMenu({x: e.clientX - box.left, y: e.clientY - box.top});
+                      }
+                    : undefined
+            }>
             {children}
         </div>
     );
+}
+
+/**
+ * The Merge manager's menu (#442), on a right click: open its page, and hand
+ * merging off to a VM or bring it back. Esc, a click elsewhere or a choice
+ * closes it.
+ */
+function MergeFigureMenu({
+    at,
+    host,
+    onClose,
+}: {
+    at: {x: number; y: number};
+    host: MergingHostView | undefined;
+    onClose: () => void;
+}): JSX.Element {
+    const menu = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        menu.current?.querySelector('button')?.focus();
+        const away = (e: MouseEvent): void => {
+            if (!menu.current?.contains(e.target as Node)) onClose();
+        };
+        document.addEventListener('mousedown', away);
+        return () => document.removeEventListener('mousedown', away);
+    }, []);
+    const choose = (act: () => void) => () => {
+        onClose();
+        act();
+    };
+    const vms =
+        host?.kind === 'mac'
+            ? [...(host.offered ? [host.offered] : []), ...host.vms.filter((vm) => vm.key !== host.offered?.key)]
+            : [];
+    return (
+        <div
+            ref={menu}
+            className="placeholder-manager-menu"
+            role="menu"
+            style={{left: at.x, top: at.y}}
+            onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                    e.stopPropagation();
+                    onClose();
+                }
+            }}>
+            <button type="button" role="menuitem" onClick={choose(openMergeManagerPage)}>
+                Open Merge manager
+            </button>
+            {vms.map((vm) => (
+                <button key={vm.key} type="button" role="menuitem" onClick={choose(() => void handOffFromMenu(vm.key))}>
+                    Hand off merging to {vm.name}
+                </button>
+            ))}
+            {host?.kind === 'vm' && (
+                <button type="button" role="menuitem" onClick={choose(() => void bringMergingBack())}>
+                    Bring merging back from {host.vm.name}
+                </button>
+            )}
+        </div>
+    );
+}
+
+/** Hand off from the menu; one refused opens the page, which says why and how to fix it. */
+async function handOffFromMenu(vmKey: string): Promise<void> {
+    const answer = await handOffMerging(vmKey);
+    if (answer.ok && !answer.text) return;
+    openMergeManagerPage();
+    dispatch({type: 'mergeManagerPageNoticed', notice: [answer.text, answer.fix].filter(Boolean).join(' ')});
 }
 
 /** What merged lately, over the Merge manager's head; it goes when the last of those merges ages out. */

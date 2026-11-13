@@ -180,7 +180,7 @@ export type LocalEvent =
     | {type: 'answersDelivered'; toolUseId: string}
     /** The empty screen came into view; Patch appears on it. A prompt to act; no state changes. */
     | {type: 'emptyScreenShown'}
-    /** A manager on the empty screen was chosen (#416): its page opens (⌘B, ⌘I; #414, #415). A prompt to act; no state changes. */
+    /** A manager on the empty screen was chosen (#416): its page opens, fresh (⌘B, ⌘I; #414, #415). */
     | {type: 'managerPageRequested'; manager: InboxManager}
     /** Open a modal dialog, replacing any that is open. */
     | {type: 'dialogOpened'; request: DialogRequest}

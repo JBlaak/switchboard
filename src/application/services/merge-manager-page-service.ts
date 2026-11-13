@@ -41,7 +41,7 @@ export class MergeManagerPageService {
     }
 }
 
-function errandView(errand: FixErrand): ErrandView {
+export function errandView(errand: FixErrand): ErrandView {
     return {
         key: errand.key,
         sessionId: errand.currentId,

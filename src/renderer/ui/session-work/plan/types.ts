@@ -101,7 +101,7 @@ export interface IssueActions {
     /** Where Start level is, for any plan; the view shows it for its own. */
     readonly levelStart?: PlanLevelStart | null;
     /**
-     * A wayfinder map's launcher pressed (Next ticket, Orchestrate, Reconcile):
+     * A wayfinder map's launcher pressed (Next ticket, Reconcile):
      * starts one session on the map, and answers its id or why it did not.
      */
     startMapLauncher?(

@@ -324,7 +324,8 @@ test('each stage offers its actions; a teammate’s row only Nudge', () => {
         {open: {kind: 'errand', sessionId: 'errand-2'}, tryAgain: false, nudge: null, unland: true},
         {open: {kind: 'errand', sessionId: 'errand-3'}, tryAgain: true, nudge: null, unland: true},
         {open: {kind: 'session'}, tryAgain: false, nudge: 'ana', unland: true},
-        {open: {kind: 'session'}, tryAgain: false, nudge: null, unland: true},
+        // Try again clears Needs you for any reason (#432 story 14).
+        {open: {kind: 'session'}, tryAgain: true, nudge: null, unland: true},
         {open: null, tryAgain: false, nudge: 'ana', unland: false},
     ]);
 });

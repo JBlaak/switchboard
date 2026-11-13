@@ -1,127 +1,103 @@
 /**
- * The Merge manager on a VM's agent (#438, epic #432): what lets the agent run
- * lanes and fix errands with no Mac connected, while this VM is the Merging
- * host.
+ * The Merge manager on a VM's agent (#438, #442, epic #432): what runs the
+ * lanes and the fix errands with no Mac connected, while this VM is the
+ * Merging host.
  *
- * It is wired into the agent's composition root (`src/agent/parts.ts`) the way
- * the host's schedules are, started once the agent listens and stopped on
- * shutdown, and does nothing unless the host's settings say this VM is the
- * Merging host (`HostSettings.mergingHost`, set by the hand-off, #442). Only
- * one place merges at a time.
+ * The lanes are run by the same application services as on the Mac, wired
+ * into the agent's composition root (`src/agent/parts.ts`): the Merge
+ * manager (`MergeManagerService`), its Switchboard lane runner (`LaneRunner`)
+ * and its fix errands (`FixErrandService`), over the VM's own `gh` login and
+ * one lane state file (`LaneStateStore`). This part drives them:
  *
- * What it owns:
- * - **The lane state file** (LANE_STATE_FILE, `domain/agent/lane-state`):
- *   landed pull requests and which errand session belongs to which pull
- *   request. Everything else is read from GitHub again by the lane runner.
- * - **Fix errands as real sessions.** An errand is a Claude session the agent
- *   starts by itself (`SessionHost.startSelf`) in its own worktree, detached
- *   at `origin/<branch>`, in a copy of the repository the agent makes itself
- *   when it has none (`Copies.ensureCopy`). The Mac can attach to it later.
- * - **Hearing errands with nobody at the Mac.** Turn ends come from the hook
- *   forwarder's in-process listener, session ends from the session host's;
- *   both reach the lane runner whether or not a Mac is connected.
+ * - **Only while merging.** `HostSettings.mergingHost` says whether this VM
+ *   is the Merging host; nothing is read or run otherwise. Only one place
+ *   merges at a time.
+ * - **Ticks** every MERGE_TICK_MS: one poll of every lane, which updates,
+ *   tests and merges the heads and starts the errands that are wanted.
+ * - **Hearing errands with nobody at the Mac.** Turn ends from the hook
+ *   forwarder's in-process listener and session ends from the session host's
+ *   reach the errands, Mac or no Mac. An errand that asks a question is
+ *   stopped: its PR goes to Needs you with the question (the CLI keeps
+ *   asking in its terminal, so answering it from the Mac resumes it).
  * - **Recovery.** The sessions are the agent's own children, so a restart
  *   (crash, upgrade) ends every errand. On the first tick as Merging host the
- *   file is read and each errand whose session is gone gets a fresh session
- *   if its pull request is still landed, or is forgotten if not.
+ *   errands whose session is gone are forgotten, and the poll that follows
+ *   starts a fresh one for each PR still at Fixing.
+ * - **The Mac's calls** (`merge-call`): the lanes' state; `take` (the
+ *   hand-off: the Mac's landed PRs, then merging here); `release` (bring
+ *   back: the step under way finishes, never mid-merge, the errands stop and
+ *   the landed PRs go back); `stand-down` (the Mac took merging back while
+ *   this VM was away); and Land it, Unland and Try again, forwarded.
  *
- * The lane runner itself (update, test and merge the head: #435) plugs in as
- * the `runner` port and is ticked every 60 s while this VM merges.
- *
- * An orderly shutdown (`stop`) stops listening before the sessions are
- * terminated, so the errands ended by the shutdown stay in the file and are
- * recovered on the next start, rather than being taken for errands that
- * finished.
+ * An orderly shutdown (`start`'s stop) stops listening before the sessions
+ * are terminated, so the errands ended by the shutdown are not read as
+ * errands that gave up; recovery starts them again.
  */
-import {
-    errandOfSession,
-    landPr,
-    laneOrder,
-    parseLaneState,
-    recoveryPlan,
-    samePr,
-    serializeLaneState,
-    unlandPr,
-    withErrand,
-    withoutErrandSession,
-    type LandedPr,
-    type LaneErrand,
-    type LanePrRef,
-    type LaneState,
-} from '../../../domain/agent/lane-state';
-import type {HostSettings} from '../../../domain/agent/protocol';
-import type {SessionOptions} from '../../../domain/launch/session-options';
-import type {Clock, TimerHandle, Timers} from '../../ports/clock';
-import type {IdGenerator} from '../../ports/ids';
+import {deadErrands} from '../../../domain/agent/lane-state';
+import type {HostSettings, MergeCallMessage, MergeCallMethod} from '../../../domain/agent/protocol';
+import type {LandedPullRequest} from '../../../domain/merge-manager/model';
+import type {ClientLink} from '../../ports/agent-link';
+import type {TimerHandle, Timers} from '../../ports/clock';
 import type {Logger} from '../../ports/logger';
-import type {RecordFile} from '../../ports/record-file';
-import type {Copies} from './copies';
+import type {FixErrandService} from '../fix-errand-service';
+import type {MergeManagerService} from '../merge-manager-service';
+import type {MergePart} from './handlers';
 import type {HookForwarder} from './hook-forwarder';
+import type {LaneStateStore} from './lane-store';
 import type {SessionHost} from './session-host';
 
 /** How often the lanes are looked at while this VM merges, as on the Mac. */
 export const MERGE_TICK_MS = 60_000;
 
-/** The lane runner (#435), as the agent's Merge manager drives it. */
-export interface LaneRunner {
-    /** One pass over the lanes; called every MERGE_TICK_MS while this VM is the Merging host. */
-    tick(): Promise<void>;
-    /** An errand's session ended its turn. */
-    errandTurnEnded?(errand: LaneErrand): void;
-    /** An errand's session ended; it is no longer in the lane state. */
-    errandEnded?(errand: LaneErrand, exitCode: number): void;
-}
-
-/** What a fix errand is started on. */
-export interface ErrandRequest extends LanePrRef {
-    branch: string;
-    /** The errand's whole first prompt (#437 builds it). */
-    prompt: string;
-}
-
-export type ErrandStart = {ok: true; errand: LaneErrand} | {ok: false; error: string};
-
 export interface MergeHostDeps {
-    laneFile: RecordFile;
-    sessions: Pick<SessionHost, 'startSelf' | 'isAlive' | 'onExit'>;
+    manager: Pick<MergeManagerService, 'poll' | 'pause' | 'resume' | 'adopt' | 'all' | 'state' | 'land' | 'unland'>;
+    errands: Pick<
+        FixErrandService,
+        'errands' | 'isErrand' | 'handOver' | 'turnEnded' | 'sessionEnded' | 'needsAttention' | 'tryAgain'
+    >;
+    store: Pick<LaneStateStore, 'current' | 'removeErrands' | 'byRepository' | 'setNoWorkflowScope'>;
+    sessions: Pick<SessionHost, 'isAlive' | 'onExit' | 'stop'>;
     hooks: Pick<HookForwarder, 'subscribe'>;
-    copies: Pick<Copies, 'ensureCopy' | 'errandWorktree'>;
     /** The host's settings now: `mergingHost` switches all of this on. */
     hostSettings: () => HostSettings;
-    ids: IdGenerator;
-    clock: Clock;
+    /** Save `mergingHost`, as a `set-host-settings` would. */
+    setMerging(on: boolean): void;
     timers: Timers;
     log: Logger;
-    /** The lane runner; absent until #435 wires it, and then only errands and recovery run. */
-    runner?: LaneRunner;
 }
 
-/** The launch options of an errand's session: auto mode, starting on its prompt. */
-export function errandOptions(prompt: string): SessionOptions {
-    return {permissionMode: 'auto', initialPrompt: prompt};
+/** What `state` answers: the lanes as this VM runs them, for the Mac to show. */
+export interface MergeHostState {
+    merging: boolean;
+    state: ReturnType<MergeManagerService['state']>;
+    landed: LandedPullRequest[];
+    errands: ReturnType<FixErrandService['errands']>;
+    /** Savings since the `since` the Mac asked from, by lower-case repository. */
+    savedByRepository: ReturnType<LaneStateStore['byRepository']>;
 }
 
-/** The prompt a recovered errand starts on: its old one, and why it starts again. */
-export function recoveredPrompt(errand: LaneErrand): string {
-    return (
-        `${errand.prompt}\n\n` +
-        `An earlier errand session for this pull request ended when the Switchboard agent restarted. ` +
-        `This is a fresh worktree at origin/${errand.branch}; anything it pushed is here, anything it did not push is gone.`
-    );
-}
-
-export class MergeHost {
-    private state: LaneState | null = null;
+export class MergeHost implements MergePart {
     /** Whether recovery ran since this VM became the Merging host. */
     private recovered = false;
-    private ticking = false;
+    private ticking: Promise<void> | null = null;
     private stopped = false;
-    /** Pull requests whose errand is being started, so a second start waits its turn rather than doubling it. */
-    private readonly starting = new Set<string>();
 
     constructor(private readonly deps: MergeHostDeps) {
-        deps.hooks.subscribe({turnEnded: (launchId) => this.turnEnded(launchId)});
-        deps.sessions.onExit((sessionId, exitCode) => this.exited(sessionId, exitCode));
+        deps.hooks.subscribe({
+            turnEnded: (launchId) => {
+                if (!this.stopped) deps.errands.turnEnded([launchId], false);
+            },
+            asked: (launchId, asked) => {
+                if (this.stopped || !this.merging || !deps.errands.isErrand(launchId)) return false;
+                deps.errands.needsAttention(launchId, asked.questions[0]?.question ?? null);
+                return true;
+            },
+        });
+        // A shutdown's own SIGTERM is not an errand giving up: keep it for recovery.
+        deps.sessions.onExit((sessionId) => {
+            if (!this.stopped) deps.errands.sessionEnded(sessionId);
+        });
+        if (!this.merging) void deps.manager.pause();
     }
 
     /** Whether this VM is the Merging host now. */
@@ -142,160 +118,131 @@ export class MergeHost {
 
     /**
      * One pass: nothing unless this VM merges; recovery on the first pass as
-     * Merging host; then the lane runner. Passes never overlap. Never throws.
+     * Merging host; then every lane. Passes never overlap. Never throws.
      */
-    public async tick(): Promise<void> {
-        if (this.stopped || this.ticking) return;
+    public tick(): Promise<void> {
+        if (this.stopped) return Promise.resolve();
         if (!this.merging) {
             this.recovered = false;
-            return;
+            return Promise.resolve();
         }
-        this.ticking = true;
+        this.ticking ??= this.pass().finally(() => (this.ticking = null));
+        return this.ticking;
+    }
+
+    private async pass(): Promise<void> {
         try {
             if (!this.recovered) {
                 this.recovered = true;
-                await this.recover();
+                this.recover();
             }
-            await this.deps.runner?.tick();
+            this.deps.manager.resume();
+            await this.deps.manager.poll();
         } catch (err) {
             this.deps.log.error('[merge-host] a pass failed', err);
-        } finally {
-            this.ticking = false;
         }
     }
 
-    /** The lane state as it is now. */
-    public current(): LaneState {
-        this.state ??= parseLaneState(this.deps.laneFile.read());
-        return this.state;
-    }
-
-    /** A repository's landed pull requests, in land order. */
-    public lane(repo: string): LandedPr[] {
-        return laneOrder(this.current(), repo);
-    }
-
-    /** Land a pull request in its Switchboard lane; already landed keeps its place. */
-    public land(pr: LandedPr): void {
-        this.save(landPr(this.current(), pr));
-    }
-
-    /** Take a pull request out of its lane; its errand's session, if any, runs on unowned. */
-    public unland(pr: LanePrRef): void {
-        this.save(unlandPr(this.current(), pr));
-    }
-
-    /**
-     * Start a fix errand for a landed pull request: a copy of its repository
-     * (made if the VM has none), a worktree detached at `origin/<branch>`, and
-     * a Claude session the agent starts by itself in it, recorded as the pull
-     * request's errand. An errand already running for it is refused.
-     */
-    public async startErrand(request: ErrandRequest): Promise<ErrandStart> {
-        const key = `${request.repo.toLowerCase()}#${request.number}`;
-        const running = this.current().errands.find((errand) => samePr(errand, request));
-        if (running && this.deps.sessions.isAlive(running.sessionId)) {
-            return {ok: false, error: `#${request.number} already has an errand (session ${running.sessionId})`};
-        }
-        if (this.starting.has(key)) return {ok: false, error: `#${request.number}'s errand is already starting`};
-        this.starting.add(key);
-        try {
-            return await this.launchErrand(request);
-        } finally {
-            this.starting.delete(key);
+    /** Errands whose session is gone (a restart ended them) are forgotten; the next poll starts fresh ones. */
+    private recover(): void {
+        const dead = deadErrands(this.deps.store.current(), (id) => this.deps.sessions.isAlive(id));
+        if (dead.length === 0) return;
+        this.deps.store.removeErrands(dead.map((errand) => errand.id));
+        for (const errand of dead) {
+            this.deps.log.info(`[merge-host] ${errand.key}'s errand ended with the agent; a fresh one starts`);
         }
     }
 
-    private async launchErrand(request: ErrandRequest): Promise<ErrandStart> {
-        const {copies, sessions, ids, clock, log} = this.deps;
-        const name = request.repo.split('/')[1] ?? request.repo;
-        const copy = await copies.ensureCopy({
-            name,
-            origin: `https://github.com/${request.repo}.git`,
-            github: request.repo,
-        });
-        if (!copy.ok) return copy;
+    // ── The Mac's calls ──
 
-        const sessionId = ids.newId();
-        const worktree = await copies.errandWorktree(
-            copy.abs,
-            request.branch,
-            `errand-${request.number}-${sessionId.slice(0, 8)}`,
+    public clientConnected(_client: ClientLink): void {}
+
+    public clientGone(_client: ClientLink): void {}
+
+    public handle(client: ClientLink, message: MergeCallMessage): void {
+        const {requestId, method} = message;
+        this.call(method, message.args).then(
+            (result) => {
+                if (!client.closed) client.send({type: 'merge-answer', requestId, ok: true, result: result ?? null});
+            },
+            (err: unknown) => {
+                const error = err instanceof Error ? err.message : String(err);
+                if (!client.closed) client.send({type: 'merge-answer', requestId, ok: false, error});
+            },
         );
-        if (!worktree.ok) return worktree;
+    }
 
-        const started = await sessions.startSelf({
-            sessionId,
-            dir: worktree.abs,
-            options: errandOptions(request.prompt),
-            errand: true,
-        });
-        if (!started.ok) return started;
+    /** One call from the Mac; rejects with what to tell the user. */
+    public async call(method: MergeCallMethod, args: Record<string, unknown>): Promise<unknown> {
+        switch (method) {
+            case 'state':
+                return this.state(typeof args.since === 'number' ? args.since : 0);
+            case 'take':
+                return this.take(args);
+            case 'release':
+                return {landed: await this.release('merging was brought back to the Mac')};
+            case 'stand-down':
+                await this.release('the Mac took merging back');
+                return {};
+        }
+        if (!this.merging) throw new Error('this VM is not the Merging host');
+        const repository = typeof args.repository === 'string' ? args.repository : '';
+        const number = typeof args.number === 'number' ? args.number : 0;
+        if (!/^[^/\s]+\/[^/\s]+$/.test(repository) || !Number.isInteger(number) || number <= 0) {
+            throw new Error('not a pull request');
+        }
+        switch (method) {
+            case 'land':
+                return this.deps.manager.land(repository, number);
+            case 'unland':
+                return this.deps.manager.unland(repository, number);
+            case 'try-again':
+                return this.deps.errands.tryAgain(repository, number, typeof args.note === 'string' ? args.note : null);
+        }
+    }
 
-        const errand: LaneErrand = {
-            repo: request.repo,
-            number: request.number,
-            branch: request.branch,
-            sessionId,
-            dir: worktree.abs,
-            prompt: request.prompt,
-            startedAt: clock.now(),
+    private state(since: number): MergeHostState {
+        return {
+            merging: this.merging,
+            state: this.deps.manager.state(),
+            landed: this.deps.manager.all(),
+            errands: this.deps.errands.errands(),
+            savedByRepository: this.deps.store.byRepository(since),
         };
-        this.save(withErrand(this.current(), errand));
-        log.info(`[merge-host] errand for ${request.repo}#${request.number} started as session=${sessionId}`);
-        return {ok: true, errand};
     }
 
     /**
-     * After a restart, or when this VM becomes the Merging host: errands whose
-     * session is gone start again if their pull request is still landed, and
-     * are forgotten if not. One that cannot start again is forgotten and
-     * logged; the lane runner sees its pull request still stuck and decides.
+     * The hand-off: the Mac's landed PRs replace what this VM kept, and it
+     * becomes the Merging host. Errands left over from an earlier turn here
+     * are let go first; the first pass starts fresh ones.
      */
-    private async recover(): Promise<void> {
-        const plan = recoveryPlan(this.current(), (sessionId) => this.deps.sessions.isAlive(sessionId));
-        for (const errand of plan.drop) {
-            this.save(withoutErrandSession(this.current(), errand.sessionId));
-            this.deps.log.info(`[merge-host] ${errand.repo}#${errand.number} is no longer landed; forgot its errand`);
-        }
-        for (const errand of plan.restart) {
-            this.save(withoutErrandSession(this.current(), errand.sessionId));
-            const started = await this.startErrand({...errand, prompt: recoveredPrompt(errand)});
-            if (started.ok) {
-                this.deps.log.info(`[merge-host] recovered the errand for ${errand.repo}#${errand.number}`);
-            } else {
-                this.deps.log.warn(
-                    `[merge-host] could not recover the errand for ${errand.repo}#${errand.number}: ${started.error}`,
-                );
-            }
-        }
+    private take(args: Record<string, unknown>): {ok: true} {
+        const landed = Array.isArray(args.landed) ? (args.landed as LandedPullRequest[]) : [];
+        this.stopErrands();
+        this.deps.store.setNoWorkflowScope(args.noWorkflowScope === true);
+        this.deps.manager.adopt(landed);
+        this.deps.setMerging(true);
+        this.recovered = false;
+        this.deps.log.info(`[merge-host] merging handed off here with ${landed.length} landed PR(s)`);
+        void this.tick();
+        return {ok: true};
     }
 
-    private turnEnded(launchId: string): void {
-        if (this.stopped) return;
-        const errand = errandOfSession(this.current(), launchId);
-        if (errand) this.deps.runner?.errandTurnEnded?.(errand);
+    /**
+     * Stop merging: no new pass, the one under way finishes its step (never
+     * mid-merge), the errands are let go and their sessions stopped. Answers
+     * the landed PRs as they are now.
+     */
+    private async release(why: string): Promise<LandedPullRequest[]> {
+        this.deps.setMerging(false);
+        await this.ticking;
+        await this.deps.manager.pause();
+        this.stopErrands();
+        this.deps.log.info(`[merge-host] stopped merging: ${why}`);
+        return this.deps.manager.all();
     }
 
-    /** An errand's session ended for good: no longer owned, and the runner is told. */
-    private exited(sessionId: string, exitCode: number): void {
-        // A shutdown's own SIGTERM is not an errand finishing: keep it for recovery.
-        if (this.stopped) return;
-        const errand = errandOfSession(this.current(), sessionId);
-        if (!errand) return;
-        this.save(withoutErrandSession(this.current(), sessionId));
-        this.deps.log.info(`[merge-host] errand for ${errand.repo}#${errand.number} ended (exit ${exitCode})`);
-        this.deps.runner?.errandEnded?.(errand, exitCode);
-    }
-
-    /** Keep the state and write it whole; a failed write is logged and the state held for this run. */
-    private save(next: LaneState): void {
-        if (next === this.state) return;
-        this.state = next;
-        try {
-            this.deps.laneFile.write(serializeLaneState(next));
-        } catch (err) {
-            this.deps.log.error('[merge-host] could not save the lane state', err);
-        }
+    private stopErrands(): void {
+        for (const sessionId of this.deps.errands.handOver()) this.deps.sessions.stop(sessionId);
     }
 }

@@ -21,10 +21,19 @@
  *   while the PR waits behind the head (#435). A conflict, or a check failure with no run to run
  *   again, has nothing to retry: Needs you.
  * - **Stopped.** A turn that ends without `finish_errand`, a session that
- *   asks for attention (a permission prompt) or one that ends: the PR is
- *   Needs you on the commit it failed on. A later `finish_errand`, any new
- *   commit or Try again (`tryAgain`) clears it; archiving the errand by hand
- *   does not.
+ *   asks for attention (a permission prompt, or a question, which is kept
+ *   for the page) or one that ends: the PR is Needs you on the commit it
+ *   failed on. A later `finish_errand`, any new commit or Try again
+ *   (`tryAgain`) clears it; archiving the errand by hand does not.
+ * - **Try again** (epic #432, story 14) clears Needs you for any reason:
+ *   after an errand stopped, or a merge refused for a reason it can fix, a
+ *   new errand starts with the user's optional note; otherwise the set-aside
+ *   comes off and the lane is read again, so the PR goes back to its place
+ *   unless GitHub still shows what needs the user (review feedback is never
+ *   an errand's).
+ * - **Hand-off** (#442): when merging moves to another host, `handOver`
+ *   forgets the running errands before their sessions are stopped, so the
+ *   stop does not read as an errand giving up; the new host starts fresh ones.
  *
  * Errands for a PR that left its lane are forgotten.
  */
@@ -48,6 +57,7 @@ import type {
     LandedPullRequest,
     LaneKind,
     LanePullRequestRead,
+    NeedsYouReason,
     SetAside,
 } from '../../domain/merge-manager/model';
 import type {ArchiveToolOutcome} from '../../domain/session/archive-tool';
@@ -92,12 +102,16 @@ export interface FixErrandServiceDeps {
     log: Logger;
     /** The Switchboard lane runner (#435), told of a retry so it does not cancel the runs started again. */
     runner?: {spare(key: string, headOid: string): void};
+    /** Errands run with nobody at the Mac: on a VM merging was handed off to (#442). */
+    unattended?: boolean;
+    /** Whether this host's GitHub login lacks the `workflow` scope, so the prompt says so (#442). */
+    noWorkflowScope?: () => boolean;
 }
 
 export type StartOutcome = {ok: true} | {ok: false; reason: string};
 
-/** Try again's answer: the errand's session, or why none started. */
-export type TryAgainResult = {ok: true; sessionId: string} | {ok: false; reason: string};
+/** Try again's answer: the errand's session (null when no errand was needed), or why it did not help. */
+export type TryAgainResult = {ok: true; sessionId: string | null} | {ok: false; reason: string};
 
 export class FixErrandService {
     /** PRs whose errand is being started, so a second read does not start another. */
@@ -139,7 +153,13 @@ export class FixErrandService {
         }
     }
 
-    /** Try again: a new errand for a PR an errand gave up on (or that is failing with none), with an optional note. */
+    /**
+     * Try again, for any Needs you (epic #432, story 14). After an errand
+     * stopped, or a refused merge with a failure an errand can fix: a new
+     * errand, with the user's note. Otherwise: the set-aside comes off and
+     * the lane is read again, and the PR goes back to its place unless GitHub
+     * still shows what needs the user.
+     */
     public async tryAgain(repository: string, number: number, note: string | null): Promise<TryAgainResult> {
         const pr = this.deps.manager.pullRequest(repository, number);
         if (!pr) return {ok: false, reason: `#${number} is not landed`};
@@ -147,12 +167,21 @@ export class FixErrandService {
         const lane = await this.deps.github.laneRead(pr.repository, [number]).catch(() => null);
         const read = lane?.pullRequests.find((candidate) => candidate.number === number) ?? null;
         if (!lane || !read) return {ok: false, reason: `#${number} could not be read from GitHub`};
+        const running = this.errands().some((e) => e.key === pr.key && fixErrandState(e) === 'running');
+        if (running) return {ok: false, reason: `#${number} has an errand running`};
         const wanted = errandWanted(pr, read, this.errands(), {force: true});
-        if (!wanted) {
-            const running = this.errands().some((e) => e.key === pr.key && fixErrandState(e) === 'running');
-            return {ok: false, reason: running ? `#${number} has an errand running` : `#${number} has nothing to fix`};
+        if (wanted) return this.start(pr, read, lane.trunk, wanted.cause, note?.trim() || null);
+        const refusedCause =
+            pr.stage.kind === 'needsYou' && pr.stage.reason.kind === 'merge-refused' ? pr.setAside?.cause : null;
+        if (refusedCause && note?.trim()) return this.start(pr, read, lane.trunk, refusedCause, note.trim());
+        if (pr.stage.kind !== 'needsYou') return {ok: false, reason: `#${number} has nothing to fix`};
+        if (pr.setAside) this.deps.manager.setAside(pr.key, null);
+        await this.deps.manager.poll();
+        const after = this.deps.manager.pullRequest(repository, number);
+        if (after?.stage.kind === 'needsYou') {
+            return {ok: false, reason: `GitHub still shows it: ${needsYouWords(after.stage.reason)}`};
         }
-        return this.start(pr, read, lane.trunk, wanted.cause, note?.trim() || null);
+        return {ok: true, sessionId: null};
     }
 
     private async start(
@@ -212,6 +241,8 @@ export class FixErrandService {
             oldBaseTip: cause === 'conflict' && read.baseRef === trunk ? (pr.stackBaseTip ?? null) : null,
             earlier: earlierErrands(this.errands(), pr.key),
             userNote,
+            unattended: this.deps.unattended === true,
+            noWorkflowScope: this.deps.noWorkflowScope?.() === true,
         });
         const errand: FixErrand = {
             id,
@@ -394,13 +425,26 @@ export class FixErrandService {
         }
     }
 
-    /** A session is blocked on the user (a permission prompt, a question). */
-    public needsAttention(sessionId: string): void {
+    /** A session is blocked on the user (a permission prompt, a question, kept with the PR when known). */
+    public needsAttention(sessionId: string, question: string | null = null): void {
         for (const errand of this.errands()) {
             if (isErrandSession(errand, sessionId) && fixErrandState(errand) === 'running') {
-                this.stop(errand, 'it is waiting for you');
+                this.stop(errand, question ? `it asked: ${question}` : 'it is waiting for you', question);
             }
         }
+    }
+
+    /**
+     * Merging moves to another host (#442): forget every running errand, so
+     * stopping its session is not read as the errand giving up, and answer
+     * their sessions for the caller to stop. Their PRs stay Fixing; the new
+     * host starts fresh errands for them.
+     */
+    public handOver(): string[] {
+        const running = this.errands().filter((errand) => fixErrandState(errand) === 'running');
+        if (running.length) this.deps.store.remove(running.map((errand) => errand.id));
+        for (const errand of running) this.deps.log.info(`[fix-errands] ${errand.key} errand handed over`);
+        return running.map((errand) => errand.currentId);
     }
 
     /** A session ended. */
@@ -412,10 +456,10 @@ export class FixErrandService {
         }
     }
 
-    private stop(errand: FixErrand, why: string): void {
+    private stop(errand: FixErrand, why: string, question: string | null = null): void {
         this.deps.store.save({...errand, stoppedAt: this.deps.clock.now()});
         this.deps.log.info(`[fix-errands] ${errand.key} errand stopped: ${why}`);
-        this.deps.manager.setAside(errand.key, stopped(errand.cause, errand.headOid));
+        this.deps.manager.setAside(errand.key, stopped(errand.cause, errand.headOid, question));
     }
 }
 
@@ -423,6 +467,24 @@ function fixing(cause: FixingCause, headOid: string): SetAside {
     return {kind: 'fixing', cause, reason: null, headOid};
 }
 
-function stopped(cause: FixingCause, headOid: string): SetAside {
-    return {kind: 'needsYou', cause, reason: {kind: 'errand-stopped'}, headOid};
+function stopped(cause: FixingCause, headOid: string, question: string | null = null): SetAside {
+    return {
+        kind: 'needsYou',
+        cause,
+        reason: question ? {kind: 'errand-stopped', question} : {kind: 'errand-stopped'},
+        headOid,
+    };
+}
+
+function needsYouWords(reason: NeedsYouReason): string {
+    switch (reason.kind) {
+        case 'changes-requested':
+            return 'changes are requested. Push a change, and it goes back to its place by itself.';
+        case 'unresolved-thread':
+            return 'a review thread is open. Resolve it, and it goes back to its place by itself.';
+        case 'errand-stopped':
+            return 'the fix errand stopped.';
+        case 'merge-refused':
+            return reason.reason;
+    }
 }

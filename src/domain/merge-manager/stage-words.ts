@@ -125,7 +125,9 @@ function needsYouTitle(reason: Extract<LaneStage, {kind: 'needsYou'}>['reason'])
         case 'unresolved-thread':
             return 'Needs you: a review thread is open';
         case 'errand-stopped':
-            return 'Needs you: the fix errand stopped without a fix';
+            return reason.question
+                ? `Needs you: the fix errand asked "${reason.question}"`
+                : 'Needs you: the fix errand stopped without a fix';
         case 'merge-refused':
             return 'Needs you: ' + reason.reason;
     }
@@ -163,24 +165,42 @@ export interface InProgressPill {
     readonly title: string | null;
 }
 
-/** An in-progress item's pill: the landed stage's words once its PR is landed, its own stage otherwise. */
-export function inProgressPill(stage: InboxStage, landed: LandedLookup | null): InProgressPill {
-    if (!landed || stage === 'merged') return {kind: stage, label: INBOX_STAGE_LABELS[stage], title: null};
+/**
+ * An in-progress item's pill: the landed stage's words once its PR is landed,
+ * its own stage otherwise (Queue with its place when one is known).
+ */
+export function inProgressPill(
+    stage: InboxStage,
+    landed: LandedLookup | null,
+    queuePosition: number | null = null,
+): InProgressPill {
+    if (!landed || stage === 'merged') {
+        const label = INBOX_STAGE_LABELS[stage];
+        return {
+            kind: stage,
+            label: stage === 'queue' && queuePosition ? `${label} · ${ordinal(queuePosition)}` : label,
+            title: null,
+        };
+    }
     const said = landedWords(landed);
     return {kind: 'landed-' + said.kind, label: said.label, title: said.title};
 }
 
 /**
- * The landed PR an in-progress item's work opened, when it is landed. Only
- * an issue says the repository its PR is in; a bug's PR is not looked up.
+ * The landed PR an in-progress item's work opened, when it is landed: an
+ * issue's in the issue's repository, a bug's Fix in the repository its
+ * project is (`BugFix.repository`).
  */
 export function landedForItem(merge: MergeManagerState, item: InboxItem): LandedLookup | null {
-    const number = item.work?.pullRequest;
-    if (!number || item.facts.kind !== 'issue') return null;
-    return findLanded(merge, item.facts.repository, number);
+    if (item.facts.kind === 'issue') {
+        const number = item.work?.pullRequest;
+        return number ? findLanded(merge, item.facts.repository, number) : null;
+    }
+    const fix = item.fix;
+    return fix?.pr ? findLanded(merge, fix.repository, fix.pr.number) : null;
 }
 
-/** Whether an in-progress item's landed PR needs you: the In progress tab's peach dot. */
+/** Whether an in-progress item's landed PR needs you: the In progress tab's peach dot, on both managers' pages. */
 export function needsYouInProgress(items: readonly InboxItem[], merge: MergeManagerState): boolean {
     return items.some(
         (item) => item.state.kind === 'inProgress' && landedForItem(merge, item)?.pullRequest.stage.kind === 'needsYou',

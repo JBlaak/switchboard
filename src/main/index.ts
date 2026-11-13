@@ -6,7 +6,7 @@
  * decision this used to make is now behind a service — what is left is the
  * order things happen in, which is the one thing an entry point should own.
  */
-import {app, globalShortcut, powerMonitor} from 'electron';
+import {app, dialog, globalShortcut, powerMonitor} from 'electron';
 import log from 'electron-log';
 import {buildContainer, isolateUserDataIfRequested} from './composition-root';
 import {registerIpcHandlers} from './ipc';
@@ -16,6 +16,7 @@ import {systemTimers} from '../infrastructure/system/timers';
 import {normaliseAppIcon} from '../domain/settings/app-icon';
 import {normaliseAppearance} from '../domain/settings/appearance';
 import type {Container} from './composition-root';
+import type {VmChoice} from '../domain/merge-manager/merging-host';
 
 // Must happen before anything reads a path off `app`.
 isolateUserDataIfRequested();
@@ -64,7 +65,22 @@ function main(): void {
     // last window closes, and a Mac app stays running in the Dock instead.
     app.on('window-all-closed', () => {});
 
-    app.on('before-quit', () => {
+    // Quitting with landed PRs in a Switchboard lane asks to hand merging off
+    // to a VM first (#442); asked once per quit, and never in the e2e suite.
+    let mergingAsked = false;
+    app.on('before-quit', (event) => {
+        if (!mergingAsked && process.env.SWITCHBOARD_E2E !== '1' && container.getWindow()) {
+            const prompt = container.mergingHost.quitPrompt();
+            if (prompt) {
+                mergingAsked = true;
+                event.preventDefault();
+                void askHandOffOnQuit(container, prompt).then((quit) => {
+                    if (quit) app.quit();
+                    else mergingAsked = false;
+                });
+                return;
+            }
+        }
         // Phone access first. The advertisement goes synchronously, so no
         // `dns-sd` outlives the app; the phones are told "going away" while the
         // windows close, and a connection still closing when the process ends
@@ -91,6 +107,44 @@ function main(): void {
     });
 
     void app.whenReady().then(() => start(container));
+}
+
+/**
+ * "Hand off merging to <VM>?" on quit (#442): one button per VM, the last
+ * choice first. A refused hand-off says why and how to fix it, and lets the
+ * quit go on or not. Answers whether to quit.
+ */
+async function askHandOffOnQuit(
+    container: Container,
+    prompt: {vm: VmChoice; vms: readonly VmChoice[]},
+): Promise<boolean> {
+    const vms = [prompt.vm, ...prompt.vms.filter((vm) => vm.key !== prompt.vm.key)];
+    const window = container.getWindow();
+    const options = {
+        type: 'question' as const,
+        message: `Hand off merging to ${prompt.vm.name}?`,
+        detail:
+            'Landed pull requests wait in a Switchboard lane. On a VM they keep moving and their fix errands keep ' +
+            'running while this Mac is closed; otherwise they pause until Switchboard runs again.',
+        buttons: [...vms.map((vm) => `Hand Off to ${vm.name}`), 'Quit Without', 'Cancel'],
+        defaultId: 0,
+        cancelId: vms.length + 1,
+    };
+    const answer = window ? await dialog.showMessageBox(window, options) : await dialog.showMessageBox(options);
+    if (answer.response === vms.length + 1) return false;
+    if (answer.response === vms.length) return true;
+    const handed = await container.mergingHost.handOff(vms[answer.response].key);
+    if (handed.ok) return true;
+    const failed = {
+        type: 'warning' as const,
+        message: 'Merging was not handed off',
+        detail: handed.reason + (handed.fix ? `\n\n${handed.fix}` : ''),
+        buttons: ['Quit Anyway', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+    };
+    const again = window ? await dialog.showMessageBox(window, failed) : await dialog.showMessageBox(failed);
+    return again.response === 0;
 }
 
 async function start(container: Container): Promise<void> {
@@ -133,8 +187,9 @@ async function start(container: Container): Promise<void> {
         container.prWatch.start();
         // The merge queue (#315) reads GitHub too; the suite pushes its queues instead.
         container.mergeQueueWatch.start();
-        // The Merge manager (#434) reads every landed PR's lane on GitHub.
-        container.mergeManager.start();
+        // The Merge manager (#434) reads every landed PR's lane on GitHub, here
+        // or, once merging was handed off, on the VM it follows (#442).
+        container.mergingHost.start();
         // The managers' inbox (#413) asks Bugsnag and GitHub; the suite seeds its items instead.
         container.inbox.start();
         // …and follows the PRs of the issues started from it (#415).
@@ -185,7 +240,7 @@ function openWindow(container: Container, {inactive = false} = {}): void {
         onFocus: () => {
             container.prWatch.focused();
             container.mergeQueueWatch.focused();
-            container.mergeManager.focused();
+            container.mergingHost.focused();
         },
         onClosed: () => {
             // On macOS the app stays in the dock after its last window closes. Kill

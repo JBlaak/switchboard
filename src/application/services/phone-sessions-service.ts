@@ -683,12 +683,17 @@ export class PhoneSessionsService {
             const path = this.deps.registry.get(sessionId)?.projectPath;
             if (path) running.set(path, (running.get(path) ?? 0) + 1);
         }
-        const mostRecent = byRecency(sessionRecency(this.deps.projects.list(true)), (c: RouteCandidate) => c.projectPath);
-        return routeCandidates(this.deps.projects.list(false)).sort(mostRecent).map((candidate) => ({
-            path: candidate.projectPath,
-            folder: folderName(candidate.projectPath),
-            running: running.get(candidate.projectPath) ?? 0,
-        }));
+        const mostRecent = byRecency(
+            sessionRecency(this.deps.projects.list(true)),
+            (c: RouteCandidate) => c.projectPath,
+        );
+        return routeCandidates(this.deps.projects.list(false))
+            .sort(mostRecent)
+            .map((candidate) => ({
+                path: candidate.projectPath,
+                folder: folderName(candidate.projectPath),
+                running: running.get(candidate.projectPath) ?? 0,
+            }));
     }
 
     // ── The list ──

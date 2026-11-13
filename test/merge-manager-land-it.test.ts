@@ -115,6 +115,23 @@ test('a PR landed before its approval says it is held, as it has no place yet', 
     assert.equal(landedPillText(view!), 'Landed · held · approval');
 });
 
+test('a stacked PR names the landed PR it waits on, as every other place does (#441)', () => {
+    /* Given */
+    const state = mergeManagerState(
+        [
+            landedPr(1, 10, 'switchboard', WAITING),
+            landedPr(4, 5, 'switchboard', {kind: 'held', reason: {kind: 'base', base: 'branch-1'}}),
+        ],
+        new Map(),
+    );
+    const offer = landOffer(candidate(4), state);
+    const view = offer?.kind === 'landed' ? offer : null;
+
+    /* Then */
+    assert.equal(landedPillText(view!.landed, view!.lane), 'Landed · held · on #1');
+    assert.equal(landedToastText(view!.landed, view!.lane), "Landed #4 · held · on #1 in connect's lane");
+});
+
 // ── A session's PRs ──
 
 test('a session offers Land it for its newest open PR, a merged one after it left out', () => {

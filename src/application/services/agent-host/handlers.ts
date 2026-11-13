@@ -8,6 +8,7 @@
  */
 import type {ClientLink} from '../../ports/agent-link';
 import type {
+    MergeCallMessage,
     ListTranscriptsMessage,
     PlaceUploadMessage,
     ReadFileMessage,
@@ -146,4 +147,12 @@ export type ToolsMessage =
  */
 export interface ToolsPart extends ClientAware {
     handle(client: ClientLink, message: ToolsMessage): void;
+}
+
+/**
+ * The Merge manager while this VM is the Merging host (#442): what the Mac
+ * asks of it, the hand-off and the bring-back included.
+ */
+export interface MergePart extends ClientAware {
+    handle(client: ClientLink, message: MergeCallMessage): void;
 }

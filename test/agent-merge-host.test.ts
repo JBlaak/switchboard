@@ -1,362 +1,265 @@
+/**
+ * The Merge manager on the agent (#438, #442): the Merge host driving a Merge
+ * manager and fix errands that record what they are told, a real hook
+ * forwarder, and sessions as a test sets them. Nothing here has a Mac
+ * connected unless a test says so.
+ */
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 
 import {HookForwarder} from '../src/application/services/agent-host/hook-forwarder';
-import {
-    MERGE_TICK_MS,
-    MergeHost,
-    recoveredPrompt,
-    type LaneRunner,
-} from '../src/application/services/agent-host/merge-host';
-import {SessionHost} from '../src/application/services/agent-host/session-host';
-import type {Copies, CopyRepo} from '../src/application/services/agent-host/copies';
-import {parseLaneState, serializeLaneState, type LaneErrand} from '../src/domain/agent/lane-state';
-import type {HostSettings} from '../src/domain/agent/protocol';
-import {fakeTerminals, fakeTimers, resizingPty, silentLog, type FakePty} from './support/fakes';
+import {MERGE_TICK_MS, MergeHost, type MergeHostDeps} from '../src/application/services/agent-host/merge-host';
+import {EMPTY_LANE_STATE, type LaneState} from '../src/domain/agent/lane-state';
+import type {AgentMessage, HostSettings} from '../src/domain/agent/protocol';
+import type {AskedQuestions} from '../src/domain/questions/question';
+import type {FixErrand} from '../src/domain/merge-manager/errands';
+import {mergeManagerState} from '../src/domain/merge-manager/landed';
+import type {LandedPullRequest} from '../src/domain/merge-manager/model';
+import {linkPair} from './support/agent-link';
+import {fakeTimers, silentLog} from './support/fakes';
+import {NOW, landedPr} from './support/merge-manager-fixtures';
 
-/**
- * The Merge manager on the agent (#438), wired as `src/agent/parts.ts` wires
- * it: a real session host and hook forwarder over fake PTYs, a fake copies
- * part, and the lane state in memory. Nothing here has a Mac connected.
- */
-
-const HOME = '/home/dev';
-const REPO = 'JBlaak/switchboard';
-
-/** A text file in memory, shared by hosts made over it (an agent restart). */
-function memoryFile(text: string | null = null) {
-    const file = {
-        text,
-        read: () => file.text,
-        write: (next: string) => void (file.text = next),
+function errand(id: string, sessionId: string): FixErrand {
+    return {
+        id,
+        key: 'movelab/connect#7',
+        repository: 'movelab/connect',
+        number: 7,
+        branch: 'branch-7',
+        lane: 'switchboard',
+        cause: 'checks',
+        headOid: 'oid-7',
+        sessionId,
+        currentId: sessionId,
+        worktree: '/home/dev/projects/connect/.claude/worktrees/errand-7',
+        startedAt: NOW,
+        finished: null,
+        stoppedAt: null,
     };
-    return file;
 }
 
-type MemoryFile = ReturnType<typeof memoryFile>;
-
-function harness({
-    lane = memoryFile(),
-    merging = true,
-    runner,
-    copiesFail,
-}: {lane?: MemoryFile; merging?: boolean; runner?: LaneRunner; copiesFail?: string} = {}) {
-    const terminals = fakeTerminals();
-    const ptys: FakePty[] = [];
-    let pid = 1;
-    const spawn = terminals.spawn.bind(terminals);
-    terminals.spawn = (spec) => {
-        const pty = resizingPty(pid++);
-        ptys.push(pty);
-        terminals.nextPty = pty;
-        return spawn(spec);
-    };
-    const timers = fakeTimers();
-    let nextId = 0;
-    const ids = {newId: () => `session-${++nextId}-0000`};
+function harness({merging = true, state = EMPTY_LANE_STATE as LaneState} = {}) {
+    const told: string[] = [];
     const settings: HostSettings = {instructions: '', copyConfig: true, baseFolder: '~/projects', mergingHost: merging};
-
-    let sessions: SessionHost | null = null;
+    let landed: LandedPullRequest[] = [];
+    let lane = state;
+    const alive = new Set<string>();
+    const exits: Array<(sessionId: string, code: number) => void> = [];
+    const timers = fakeTimers();
     const hooks = new HookForwarder({
         endpoint: {url: 'http://127.0.0.1:4100', token: 'tok'},
         timers,
-        ids,
+        ids: {newId: () => 'hook-1'},
         log: silentLog,
-        stop: (launchId) => void sessions?.stop(launchId),
-        selfArchived: memoryFile(),
-        clock: {now: () => 1},
+        stop: () => {},
+        selfArchived: {read: () => null, write: () => {}},
+        clock: {now: () => NOW},
     });
-    sessions = new SessionHost({
-        terminals,
-        loginShell: '/bin/bash',
+    const errandSessions = new Set(lane.errands.map((e) => e.currentId));
+    const deps: MergeHostDeps = {
+        manager: {
+            poll: async () => void told.push('poll'),
+            pause: async () => void told.push('pause'),
+            resume: () => void told.push('resume'),
+            adopt: (prs) => {
+                landed = [...prs];
+                told.push(`adopt ${prs.map((pr) => pr.number).join(',')}`);
+            },
+            all: () => landed,
+            state: () => mergeManagerState(landed, new Map()),
+            land: async (repository, number) => {
+                told.push(`land ${repository}#${number}`);
+                return {ok: false, reason: 'test'};
+            },
+            unland: async () => ({ok: true}),
+        },
+        errands: {
+            errands: () => lane.errands,
+            isErrand: (id) => errandSessions.has(id),
+            handOver: () => {
+                told.push('handOver');
+                return [...errandSessions];
+            },
+            turnEnded: (ids) => void told.push(`turnEnded ${ids.join(',')}`),
+            sessionEnded: (id) => void told.push(`sessionEnded ${id}`),
+            needsAttention: (id, question) => void told.push(`needsAttention ${id}: ${question}`),
+            tryAgain: async () => ({ok: true, sessionId: null}),
+        },
+        store: {
+            current: () => lane,
+            removeErrands: (ids) => {
+                told.push(`forget ${ids.join(',')}`);
+                lane = {...lane, errands: lane.errands.filter((e) => !ids.includes(e.id))};
+            },
+            byRepository: () => ({}),
+            setNoWorkflowScope: (value) => void told.push(`noWorkflowScope ${value}`),
+        },
+        sessions: {
+            isAlive: (id) => alive.has(id),
+            onExit: (listener) => void exits.push(listener),
+            stop: (id) => {
+                told.push(`stop ${id}`);
+                return true;
+            },
+        },
         hooks,
         hostSettings: () => settings,
-        git: {worktreeRoot: async (cwd) => cwd},
-        home: HOME,
-        selfStarted: memoryFile(),
-        clock: {now: () => 1},
+        setMerging: (on) => {
+            settings.mergingHost = on;
+            told.push(`merging ${on}`);
+        },
         timers,
         log: silentLog,
-    });
-
-    const ensured: CopyRepo[] = [];
-    const worktrees: [string, string, string][] = [];
-    const copies: Pick<Copies, 'ensureCopy' | 'errandWorktree'> = {
-        ensureCopy: async (repo) => {
-            ensured.push(repo);
-            if (copiesFail) return {ok: false, error: copiesFail};
-            const dir = `~/projects/${repo.name}`;
-            return {ok: true, dir, abs: `${HOME}/projects/${repo.name}`, reused: false};
-        },
-        errandWorktree: async (copyAbs, branch, name) => {
-            worktrees.push([copyAbs, branch, name]);
-            return {ok: true, abs: `${copyAbs}/.claude/worktrees/${name}`};
-        },
     };
-
-    const merge = new MergeHost({
-        laneFile: lane,
-        sessions,
+    const merge = new MergeHost(deps);
+    return {
+        merge,
+        told,
+        settings,
+        alive,
         hooks,
-        copies,
-        hostSettings: () => settings,
-        ids,
-        clock: {now: () => 7_000},
         timers,
-        log: silentLog,
-        runner,
-    });
-    return {merge, sessions, hooks, terminals, ptys, timers, lane, ensured, worktrees, settings};
-}
-
-/** A runner that records what it heard. */
-function recordingRunner() {
-    const heard: string[] = [];
-    const runner: LaneRunner = {
-        tick: async () => void heard.push('tick'),
-        errandTurnEnded: (errand) => void heard.push(`turn #${errand.number}`),
-        errandEnded: (errand, exitCode) => void heard.push(`ended #${errand.number} (${exitCode})`),
+        errandSessions,
+        exit: (id: string) => exits.forEach((fn) => fn(id, 0)),
     };
-    return {heard, runner};
 }
 
-const errandRequest = {repo: REPO, number: 432, branch: 'fix-lanes', prompt: 'Fix the conflict on #432'};
+const asked: AskedQuestions = {
+    toolUseId: 'tu-1',
+    questions: [{question: 'Keep the old snapshot?', header: 'Snapshot', options: [], multiSelect: false}],
+    toolInput: {questions: []},
+};
 
-async function settle(): Promise<void> {
-    await new Promise((resolve) => setImmediate(resolve));
-}
+test('a VM that is not the Merging host reads and runs nothing', async () => {
+    /* Given */
+    const h = harness({merging: false});
 
-// ── Errands with no Mac ──
+    /* When */
+    await h.merge.tick();
 
-test('a fix errand starts as a session of its own in a detached worktree of a copy the agent makes', async () => {
+    /* Then */
+    assert.deepEqual(h.told, ['pause']);
+});
+
+test('while it merges, every tick polls the lanes, every MERGE_TICK_MS', async () => {
     /* Given */
     const h = harness();
-    h.merge.land({repo: REPO, number: 432, branch: 'fix-lanes', landedAt: 1});
-
-    /* When */
-    const started = await h.merge.startErrand(errandRequest);
-
-    /* Then */
-    const dir = `${HOME}/projects/switchboard/.claude/worktrees/errand-432-session-`;
-    assert.equal(started.ok, true);
-    assert.deepEqual(h.ensured, [{name: 'switchboard', origin: `https://github.com/${REPO}.git`, github: REPO}]);
-    assert.deepEqual(h.worktrees, [[`${HOME}/projects/switchboard`, 'fix-lanes', 'errand-432-session-']]);
-    assert.equal(h.terminals.spawns[0].cwd, dir);
-    assert.match(h.terminals.spawns[0].args[3], /'--permission-mode' 'auto'.*'--' 'Fix the conflict on #432'$/);
-    assert.equal(h.sessions.isAlive('session-1-0000'), true);
-    assert.deepEqual(parseLaneState(h.lane.text).errands, [
-        {...errandRequest, sessionId: 'session-1-0000', dir, startedAt: 7_000},
-    ]);
-});
-
-test("with no Mac connected, the runner hears an errand's turn end and its end", async () => {
-    /* Given */
-    const {heard, runner} = recordingRunner();
-    const h = harness({runner});
-    h.merge.land({repo: REPO, number: 432, branch: 'fix-lanes', landedAt: 1});
-    await h.merge.startErrand(errandRequest);
-
-    /* When */
-    h.hooks.archiveTool.turnEnded('session-1-0000');
-    h.ptys[0].emitExit(0);
-
-    /* Then */
-    assert.deepEqual(heard, ['turn #432', 'ended #432 (0)']);
-    assert.deepEqual(parseLaneState(h.lane.text).errands, []);
-});
-
-test('an errand that archives itself with no Mac is stopped on its turn end, and the runner hears it end', async () => {
-    /* Given */
-    const {heard, runner} = recordingRunner();
-    const h = harness({runner});
-    h.merge.land({repo: REPO, number: 432, branch: 'fix-lanes', landedAt: 1});
-    await h.merge.startErrand(errandRequest);
-    await h.hooks.archiveTool.request('session-1-0000');
-
-    /* When */
-    h.hooks.archiveTool.turnEnded('session-1-0000');
-    h.ptys[0].emitExit(143);
-
-    /* Then */
-    assert.deepEqual(h.terminals.signals, [[1, 'SIGTERM']]);
-    assert.deepEqual(heard, ['turn #432', 'ended #432 (143)']);
-});
-
-test("turn ends and ends of sessions that are not errands are not the runner's", async () => {
-    /* Given */
-    const {heard, runner} = recordingRunner();
-    const h = harness({runner});
-    await h.sessions.startSelf({sessionId: 'someone-else', dir: '~/x'});
-
-    /* When */
-    h.hooks.archiveTool.turnEnded('someone-else');
-    h.ptys[0].emitExit(0);
-
-    /* Then */
-    assert.deepEqual(heard, []);
-});
-
-test('a second errand for a pull request whose errand runs is refused', async () => {
-    /* Given */
-    const h = harness();
-    h.merge.land({repo: REPO, number: 432, branch: 'fix-lanes', landedAt: 1});
-    await h.merge.startErrand(errandRequest);
-
-    /* When */
-    const again = await h.merge.startErrand(errandRequest);
-
-    /* Then */
-    assert.deepEqual(again, {ok: false, error: '#432 already has an errand (session session-1-0000)'});
-    assert.equal(h.terminals.spawns.length, 1);
-});
-
-test('an errand whose copy cannot be made answers why, and starts and records nothing', async () => {
-    /* Given */
-    const h = harness({copiesFail: 'Cloning JBlaak/switchboard failed: no access'});
-
-    /* When */
-    const started = await h.merge.startErrand(errandRequest);
-
-    /* Then */
-    assert.deepEqual(started, {ok: false, error: 'Cloning JBlaak/switchboard failed: no access'});
-    assert.equal(h.terminals.spawns.length, 0);
-    assert.equal(h.lane.text, null);
-});
-
-// ── Ticks ──
-
-test('while this VM is not the Merging host, nothing runs', async () => {
-    /* Given */
-    const {heard, runner} = recordingRunner();
-    const h = harness({merging: false, runner});
-
-    /* When */
-    h.merge.start();
-    await settle();
-    h.timers.tick();
-    await settle();
-
-    /* Then */
-    assert.deepEqual(heard, []);
-});
-
-test('as Merging host the runner is ticked at start and every minute', async () => {
-    /* Given */
-    const {heard, runner} = recordingRunner();
-    const h = harness({runner});
-
-    /* When */
-    h.merge.start();
-    await settle();
-    h.timers.tick();
-    await settle();
-
-    /* Then */
-    assert.equal(MERGE_TICK_MS, 60_000);
-    assert.deepEqual(heard, ['tick', 'tick']);
-});
-
-// ── Recovery after a restart ──
-
-function stateAfterCrash(): MemoryFile {
-    const errand = (number: number, sessionId: string): LaneErrand => ({
-        repo: REPO,
-        number,
-        branch: `branch-${number}`,
-        sessionId,
-        dir: `/old/errand-${number}`,
-        prompt: `Fix #${number}`,
-        startedAt: 1,
-    });
-    return memoryFile(
-        serializeLaneState({
-            landed: [{repo: REPO, number: 432, branch: 'branch-432', landedAt: 1}],
-            errands: [errand(432, 'died-with-agent'), errand(500, 'unlanded-meanwhile')],
-        }),
-    );
-}
-
-test('after a restart, the lane state is read again and a landed pull request gets a fresh errand', async () => {
-    /* Given */
-    const h = harness({lane: stateAfterCrash()});
-
-    /* When */
-    await h.merge.tick();
-
-    /* Then */
-    const state = parseLaneState(h.lane.text);
-    assert.deepEqual(state.landed, [{repo: REPO, number: 432, branch: 'branch-432', landedAt: 1}]);
-    assert.equal(state.errands.length, 1);
-    assert.equal(state.errands[0].number, 432);
-    assert.equal(state.errands[0].sessionId, 'session-1-0000');
-    assert.equal(h.sessions.isAlive('session-1-0000'), true);
-    assert.deepEqual(h.worktrees, [[`${HOME}/projects/switchboard`, 'branch-432', 'errand-432-session-']]);
-    assert.ok(h.terminals.spawns[0].args[3].includes('ended when the Switchboard agent restarted'));
-});
-
-test('recovery runs once, and the runner then ticks with the lanes as they were', async () => {
-    /* Given */
-    const {heard, runner} = recordingRunner();
-    const h = harness({lane: stateAfterCrash(), runner});
-
-    /* When */
-    await h.merge.tick();
-    await h.merge.tick();
-
-    /* Then */
-    assert.equal(h.terminals.spawns.length, 1);
-    assert.deepEqual(heard, ['tick', 'tick']);
-    assert.deepEqual(
-        h.merge.lane(REPO).map((pr) => pr.number),
-        [432],
-    );
-});
-
-test('an errand that cannot start again is forgotten, and the lanes still run', async () => {
-    /* Given */
-    const {heard, runner} = recordingRunner();
-    const h = harness({lane: stateAfterCrash(), runner, copiesFail: 'no network'});
-
-    /* When */
-    await h.merge.tick();
-
-    /* Then */
-    assert.deepEqual(parseLaneState(h.lane.text).errands, []);
-    assert.deepEqual(heard, ['tick']);
-});
-
-test("an orderly shutdown keeps the errands it ends, for the next start's recovery", async () => {
-    /* Given */
-    const {heard, runner} = recordingRunner();
-    const h = harness({runner});
-    h.merge.land({repo: REPO, number: 432, branch: 'fix-lanes', landedAt: 1});
-    await h.merge.startErrand(errandRequest);
     const stop = h.merge.start();
-    await settle();
+    await new Promise((resolve) => setImmediate(resolve));
 
     /* When */
-    stop();
-    h.sessions.terminateAll();
-    h.ptys[0].emitExit(143);
+    h.timers.tick();
+    await new Promise((resolve) => setImmediate(resolve));
 
     /* Then */
-    assert.equal(parseLaneState(h.lane.text).errands.length, 1);
-    assert.deepEqual(heard, ['tick']);
+    assert.equal(h.told.filter((t) => t === 'poll').length, 2);
+    assert.equal(MERGE_TICK_MS, 60_000);
+    stop();
 });
 
-test('the recovered prompt keeps the old one and says why it starts again', () => {
+test('after a restart the errands that died with the agent are forgotten, so fresh ones start', async () => {
+    /* Given */
+    const h = harness({state: {...EMPTY_LANE_STATE, errands: [errand('a', 'gone'), errand('b', 'alive')]}});
+    h.alive.add('alive');
+
     /* When */
-    const prompt = recoveredPrompt({
-        repo: REPO,
-        number: 432,
-        branch: 'fix-lanes',
-        sessionId: 's',
-        dir: '/d',
-        prompt: 'Fix it',
-        startedAt: 1,
-    });
+    await h.merge.tick();
 
     /* Then */
-    assert.ok(prompt.startsWith('Fix it\n\n'));
-    assert.match(prompt, /fresh worktree at origin\/fix-lanes/);
+    assert.deepEqual(h.told.slice(0, 3), ['forget a', 'resume', 'poll']);
+});
+
+test('the hand-off takes the landed PRs, makes this VM the Merging host and runs a pass', async () => {
+    /* Given */
+    const h = harness({merging: false});
+    h.told.length = 0;
+
+    /* When */
+    await h.merge.call('take', {landed: [landedPr(7, 10), landedPr(8, 5)], noWorkflowScope: true});
+    await h.merge.tick();
+
+    /* Then */
+    assert.deepEqual(h.told.slice(0, 4), ['handOver', 'noWorkflowScope true', 'adopt 7,8', 'merging true']);
+    assert.ok(h.told.includes('poll'));
+    assert.equal(h.merge.merging, true);
+});
+
+test('bring back finishes the step, stops the errands and answers the landed PRs', async () => {
+    /* Given */
+    const h = harness({state: {...EMPTY_LANE_STATE, errands: [errand('a', 'errand-1')]}});
+    h.alive.add('errand-1');
+    await h.merge.call('take', {landed: [landedPr(7, 10)]});
+    h.told.length = 0;
+
+    /* When */
+    const answer = (await h.merge.call('release', {})) as {landed: LandedPullRequest[]};
+
+    /* Then */
+    assert.deepEqual(h.told, ['merging false', 'pause', 'handOver', 'stop errand-1']);
+    assert.deepEqual(
+        answer.landed.map((pr) => pr.number),
+        [7],
+    );
+    assert.equal(h.merge.merging, false);
+});
+
+test('Land it from the Mac is run here while this VM merges, and refused when it does not', async () => {
+    /* Given */
+    const h = harness();
+    const idle = harness({merging: false});
+
+    /* When */
+    await h.merge.call('land', {repository: 'movelab/connect', number: 9});
+    const refused = await idle.merge.call('land', {repository: 'movelab/connect', number: 9}).catch((e: Error) => e);
+
+    /* Then */
+    assert.ok(h.told.includes('land movelab/connect#9'));
+    assert.match(String(refused), /not the Merging host/);
+});
+
+test('an errand that asks a question stops with it, and no Mac is asked', () => {
+    /* Given */
+    const h = harness();
+    h.errandSessions.add('errand-1');
+    const replies: unknown[] = [];
+
+    /* When */
+    h.hooks.receiver.receive('errand-1', asked, (json) => void replies.push(json));
+
+    /* Then */
+    assert.ok(h.told.includes('needsAttention errand-1: Keep the old snapshot?'));
+    assert.deepEqual(replies, [{}]);
+});
+
+test("errands' turn ends and session ends reach the errands, but not ones a shutdown ended", () => {
+    /* Given */
+    const h = harness();
+    const stop = h.merge.start();
+
+    /* When */
+    h.hooks.archiveTool.turnEnded('errand-1');
+    h.exit('errand-1');
+    stop();
+    h.exit('errand-2');
+
+    /* Then */
+    assert.ok(h.told.includes('turnEnded errand-1'));
+    assert.ok(h.told.includes('sessionEnded errand-1'));
+    assert.ok(!h.told.includes('sessionEnded errand-2'));
+});
+
+test('a call from the Mac is answered over its link', async () => {
+    /* Given */
+    const h = harness();
+    const pair = linkPair();
+    const received: AgentMessage[] = [];
+    pair.mac.onMessage((message) => received.push(message));
+
+    /* When */
+    h.merge.handle(pair.agent, {type: 'merge-call', requestId: 'r1', method: 'state', args: {since: 0}});
+    await new Promise((resolve) => setImmediate(resolve));
+
+    /* Then */
+    assert.equal(received[0]?.type, 'merge-answer');
+    assert.equal(received[0]?.type === 'merge-answer' && received[0].ok, true);
 });

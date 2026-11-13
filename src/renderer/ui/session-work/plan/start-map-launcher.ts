@@ -1,5 +1,5 @@
 /**
- * A wayfinder map's launchers (Next ticket, Orchestrate, Reconcile): one
+ * A wayfinder map's launchers (Next ticket, Reconcile): one
  * session in the project, started the way a new session there starts, with
  * the launcher's skill as its first prompt. It is about the map, not one
  * ticket, so it gets no ticket worktree; the project's own options decide
