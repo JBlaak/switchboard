@@ -10,6 +10,10 @@
  * - An agent on the same protocol but another **version** is upgraded only
  *   while it has no live session. Otherwise it keeps serving, and the project
  *   page's Update agent does it when the user chooses.
+ * - A fix errand the agent's Merge manager runs while the VM is the Merging
+ *   host (#438) is a live session like any other, so it holds the upgrade
+ *   too, though nobody on the Mac opened it. Landed pull requests merely
+ *   waiting in a lane do not: the lane state outlives the restart.
  *
  * One upgrade per host at a time.
  */
@@ -58,10 +62,12 @@ export class AgentUpgrades {
             log.warn(`[agent] could not list sessions on ${agent.target}: ${(err as Error).message}`);
             return;
         }
-        const live = sessions.filter((session) => session.alive).length;
-        if (live > 0) {
+        const live = sessions.filter((session) => session.alive);
+        if (live.length > 0) {
+            const errands = live.filter((session) => session.errand).length;
             log.info(
-                `[agent] ${agent.target} runs ${running}; ${live} live session(s), not upgrading to ${appVersion}`,
+                `[agent] ${agent.target} runs ${running}; ${live.length} live session(s)` +
+                    `${errands ? `, ${errands} of them fix errands` : ''}, not upgrading to ${appVersion}`,
             );
             return;
         }

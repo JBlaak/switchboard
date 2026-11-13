@@ -81,6 +81,7 @@ const hostSettingsPatch = shape({
     copyConfig: optional(boolean),
     baseFolder: optional(string),
     scheduleDirs: optional(arrayOf(nonEmptyString)),
+    mergingHost: optional(boolean),
 });
 
 /**
@@ -146,6 +147,8 @@ const MESSAGE_FIELDS: Record<MacMessage['type'], Record<string, Check>> = {
     'place-upload': {requestId: nonEmptyString, uploadId: nonEmptyString, name: nonEmptyString},
     'list-self-archived': {requestId: nonEmptyString},
     'forget-self-archived': {requestId: nonEmptyString, sessionIds: arrayOf(nonEmptyString)},
+    'list-self-started': {requestId: nonEmptyString},
+    'forget-self-started': {requestId: nonEmptyString, sessionIds: arrayOf(nonEmptyString)},
     'get-transcript': {requestId: nonEmptyString, sessionId: nonEmptyString},
     'transcript-tail': {requestId: nonEmptyString, sessionId: nonEmptyString, bytes: integer},
     'set-transcript-aside': {requestId: nonEmptyString, sessionId: nonEmptyString},

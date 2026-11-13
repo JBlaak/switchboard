@@ -10,6 +10,9 @@
  *
  * The schedule service (stage 5) is built here but not started: the entry
  * starts its cron loop once the agent is listening, and stops it on shutdown.
+ * The Merge manager's host (#438) is the same: built here, started by the
+ * entry, idle unless this VM is the Merging host. It reaches GitHub through
+ * the VM's own `gh` login, in the same login-shell environment.
  *
  * The hook server is started, and awaited, before the parts are handed back:
  * a launch asks it for its address, and one made before it listens would get
@@ -23,6 +26,7 @@ import {uuidGenerator} from '../application/ports/ids';
 import {Copies} from '../application/services/agent-host/copies';
 import {HookForwarder} from '../application/services/agent-host/hook-forwarder';
 import {HostConfig} from '../application/services/agent-host/host-config';
+import {MergeHost} from '../application/services/agent-host/merge-host';
 import {hostScheduleService} from '../application/services/agent-host/host-schedules';
 import {SessionHost} from '../application/services/agent-host/session-host';
 import {Tools} from '../application/services/agent-host/tools';
@@ -36,6 +40,8 @@ import {NodeGitTreeWatcher} from '../infrastructure/agent/node-git-tree-watcher'
 import {NodeDropFiles} from '../infrastructure/agent/node-drop-files';
 import {NodeHostSettingsFile} from '../infrastructure/agent/node-host-settings-file';
 import {NodeSelfArchivedFile} from '../infrastructure/agent/node-self-archived-file';
+import {NodeRecordFile} from '../infrastructure/agent/node-record-file';
+import {LANE_STATE_FILE, SELF_STARTED_FILE} from '../domain/agent/layout';
 import {NodeScheduleRunner} from '../infrastructure/agent/node-schedule-runner';
 import {NodeToolRunner} from '../infrastructure/agent/node-tool-runner';
 import {NodeTranscriptFiles} from '../infrastructure/agent/node-transcript-files';
@@ -73,6 +79,8 @@ export function vmLoginShell(): string {
 export interface AgentWiring extends AgentParts {
     /** Not started: `main` starts its cron loop and stops it on shutdown. */
     schedules: ScheduleService;
+    /** Not started: `main` starts it, and stops it before the sessions on shutdown. */
+    merge: MergeHost;
 }
 
 /** The agent's parts, ready to serve; the hook server is listening when this resolves. */
@@ -123,6 +131,8 @@ export async function createParts({log}: PartsContext): Promise<AgentWiring> {
         hostSettings: () => config.current(),
         git: new GitCliWorkspace(async () => env),
         home: os.homedir(),
+        selfStarted: new NodeRecordFile(SELF_STARTED_FILE),
+        clock: systemClock,
         timers: systemTimers,
         log,
     });
@@ -179,7 +189,21 @@ export async function createParts({log}: PartsContext): Promise<AgentWiring> {
         commandsDir: path.join(os.homedir(), '.claude', 'commands'),
     });
 
+    // The Merge manager while this VM is the Merging host: its lane state, its
+    // fix errands as self-started sessions, and their recovery after a restart.
+    const merge = new MergeHost({
+        laneFile: new NodeRecordFile(LANE_STATE_FILE),
+        sessions,
+        hooks,
+        copies,
+        hostSettings: () => config.current(),
+        ids: uuidGenerator,
+        clock: systemClock,
+        timers: systemTimers,
+        log,
+    });
+
     // The hook server needs no stop of its own: it lives as long as the
     // process, which exits right after the sessions are terminated.
-    return {sessions, hooks, config, copies, transcripts, tools, schedules};
+    return {sessions, hooks, config, copies, transcripts, tools, schedules, merge};
 }

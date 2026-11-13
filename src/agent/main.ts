@@ -69,6 +69,8 @@ export async function main(): Promise<void> {
     const agent = await startAgent({parts, socketPath: agentSocketPath(), agentVersion: AGENT_VERSION, log});
     // The copies in the host's schedule folders run their schedules from the next minute on.
     const stopSchedules = parts.schedules.start();
+    // The Merge manager runs its lanes and errands here while this VM is the Merging host.
+    const stopMerge = parts.merge.start();
 
     let shuttingDown = false;
     const shutdown = (signal: NodeJS.Signals) => {
@@ -77,6 +79,8 @@ export async function main(): Promise<void> {
         log.info(`agent: ${signal}, shutting down`);
         // No new runs; one already going is its own process and ends with the unit.
         stopSchedules();
+        // Before the sessions: errands ended by the shutdown stay in the lane state, for recovery.
+        stopMerge();
         parts.sessions.terminateAll();
         agent.stop().then(
             () => process.exit(0),

@@ -201,6 +201,19 @@ test('schedule folders are saved, answered and read back after a restart', () =>
     assert.deepEqual(harness({file: h.file.text}).part.current(), expected);
 });
 
+test('the Merging host switch is saved, answered and read back after a restart', () => {
+    /* Given */
+    const h = harness();
+
+    /* When */
+    h.pair.mac.send({type: 'set-host-settings', requestId: 's1', settings: {mergingHost: true}});
+
+    /* Then */
+    const expected = {...DEFAULTS, mergingHost: true};
+    assert.deepEqual(h.received, [{type: 'host-settings', requestId: 's1', settings: expected}]);
+    assert.deepEqual(harness({file: h.file.text}).part.current(), expected);
+});
+
 test('an empty schedule folder list is saved as none', () => {
     /* Given */
     const h = harness({file: JSON.stringify({scheduleDirs: ['~/projects/app']})});

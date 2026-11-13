@@ -10,6 +10,14 @@
  * A session belongs to the machine, not to a client. It keeps running with no
  * client at all, which is the point of offloading work to a VM, and a client
  * going away only stops what is sent to it.
+ *
+ * The agent may also start a session by itself (#438), with no client: the
+ * Merge manager's fix errands, while the VM is the Merging host. Such a
+ * session is the same PTY session as one a client opened, so the Mac can
+ * attach to it later. Each one is recorded (SELF_STARTED_FILE) until a Mac
+ * has caught up on it (`list-self-started`, then `forget-self-started`), so
+ * the Mac can show it as started while it was away even after an agent
+ * restart. In-process services hear every session's end through `onExit`.
  */
 import {buildClaudeCommand} from '../../../domain/launch/claude-command';
 import {claudeSessionEnv} from '../../../domain/launch/terminal-env';
@@ -19,14 +27,17 @@ import {Scrollback} from './scrollback';
 import type {ClientLink} from '../../ports/agent-link';
 import type {GitWorkspace} from '../../ports/git-workspace';
 import type {Logger} from '../../ports/logger';
-import type {Timers} from '../../ports/clock';
+import type {Clock, Timers} from '../../ports/clock';
+import type {RecordFile} from '../../ports/record-file';
 import type {PtyHandle, TerminalGateway} from '../../ports/terminal-gateway';
 import type {
     AgentSessionInfo,
     AgentSessionKind,
     AttachMessage,
+    ForgetSelfStartedMessage,
     HostSettings,
     OpenSessionMessage,
+    SelfStartedSession,
     SignalMessage,
 } from '../../../domain/agent/protocol';
 import type {SessionOptions} from '../../../domain/launch/session-options';
@@ -49,6 +60,26 @@ export const SHELL_COMMAND_DELAY_MS = 300;
  */
 export const MAX_ENDED_SESSIONS = 50;
 
+/** The terminal size a self-started session gets until a client attaches and resizes it. */
+export const SELF_STARTED_SIZE = {cols: 120, rows: 40} as const;
+
+/** What an agent-side service asks for when it starts a session by itself. */
+export interface SelfStartRequest {
+    /** The new session's id; the caller makes it, as the Mac does for an `open`. */
+    sessionId: string;
+    /** Where it runs on the VM; `~` is expanded. */
+    dir: string;
+    /** Its launch options, `initialPrompt` included. */
+    options?: SessionOptions;
+    /** A fix errand of the Merge manager. */
+    errand?: boolean;
+}
+
+export type SelfStartResult = {ok: true} | {ok: false; error: string};
+
+/** Told when a session's process ends, whoever started it. */
+export type SessionExitListener = (sessionId: string, exitCode: number) => void;
+
 export interface SessionHostDeps {
     terminals: TerminalGateway;
     /** The VM user's login shell, as an absolute path. */
@@ -61,6 +92,10 @@ export interface SessionHostDeps {
     git: Pick<GitWorkspace, 'worktreeRoot'>;
     /** The VM user's home folder, for `~` in a session's directory. */
     home: string;
+    /** Where self-started sessions are recorded until a Mac catches up on them. */
+    selfStarted: RecordFile;
+    /** For a self-started session's `startedAt`. */
+    clock: Clock;
     timers: Timers;
     log: Logger;
 }
@@ -74,6 +109,10 @@ interface HostedSession {
     scrollback: Scrollback;
     /** The clients that opened or attached to it, and so get its output. */
     clients: Set<ClientLink>;
+    /** Started by the agent itself (#438). */
+    selfStarted?: boolean;
+    /** A fix errand of the Merge manager (#438). */
+    errand?: boolean;
 }
 
 /**
@@ -95,7 +134,8 @@ export function withoutWorktree(options: SessionOptions): SessionOptions {
 export class SessionHost implements SessionHostPart {
     private readonly sessions = new Map<string, HostedSession>();
     /** Opens still waiting on the git check, so a second open for the same id waits rather than spawning twice. */
-    private readonly opening = new Map<string, Promise<void>>();
+    private readonly opening = new Map<string, Promise<unknown>>();
+    private readonly exitListeners: SessionExitListener[] = [];
 
     constructor(private readonly deps: SessionHostDeps) {}
 
@@ -128,7 +168,54 @@ export class SessionHost implements SessionHostPart {
             case 'list-sessions':
                 client.send({type: 'sessions', requestId: message.requestId, sessions: this.list()});
                 return;
+            case 'list-self-started':
+                client.send({type: 'self-started', requestId: message.requestId, sessions: this.readRecords()});
+                return;
+            case 'forget-self-started':
+                this.forget(client, message);
+                return;
         }
+    }
+
+    /**
+     * Start a Claude session with no client (#438), for an agent-side service
+     * such as the Merge manager's fix errands. It runs exactly as one a client
+     * opened, is recorded for the Mac to catch up on, and a client may attach
+     * to it later by its id. An id already running is refused: the caller
+     * makes a fresh id for every session it starts.
+     */
+    public async startSelf(request: SelfStartRequest): Promise<SelfStartResult> {
+        const {sessionId} = request;
+        if (this.liveSession(sessionId) || this.opening.has(sessionId)) {
+            return {ok: false, error: `session ${sessionId} is already running`};
+        }
+        const message: OpenSessionMessage = {
+            type: 'open',
+            requestId: '',
+            sessionId,
+            kind: 'claude',
+            dir: request.dir,
+            isNew: true,
+            ...SELF_STARTED_SIZE,
+            ...(request.options ? {options: request.options} : {}),
+        };
+        const started = this.start(message, {selfStarted: true, errand: request.errand}).finally(() =>
+            this.opening.delete(sessionId),
+        );
+        this.opening.set(sessionId, started);
+        const result = await started;
+        if (result.ok) this.record(sessionId, request.errand === true);
+        return result;
+    }
+
+    /** Hear every session's end, in-process, whether or not a client is connected (#438). */
+    public onExit(listener: SessionExitListener): void {
+        this.exitListeners.push(listener);
+    }
+
+    /** Whether a session by that id is running now. */
+    public isAlive(sessionId: string): boolean {
+        return this.liveSession(sessionId) !== undefined;
     }
 
     /**
@@ -167,9 +254,17 @@ export class SessionHost implements SessionHostPart {
             return;
         }
 
-        const started = this.start(client, message).finally(() => this.opening.delete(message.sessionId));
+        const started = this.start(message, {}).finally(() => this.opening.delete(message.sessionId));
         this.opening.set(message.sessionId, started);
-        await started;
+        const outcome = await started;
+        const {requestId} = message;
+        client.send(
+            outcome.ok
+                ? {type: 'opened', requestId, ok: true, reattached: false}
+                : {type: 'opened', requestId, ok: false, error: outcome.error},
+        );
+        // Only after `opened`, so the client never gets output before the answer.
+        if (outcome.ok) this.sessions.get(message.sessionId)?.clients.add(client);
     }
 
     /**
@@ -183,8 +278,15 @@ export class SessionHost implements SessionHostPart {
         session.clients.add(client);
     }
 
-    private async start(client: ClientLink, message: OpenSessionMessage): Promise<void> {
-        const {sessionId, requestId} = message;
+    /**
+     * Spawn a session and keep it, with no client yet; answers whether it
+     * started. The caller adds the client that opened it, if any.
+     */
+    private async start(
+        message: OpenSessionMessage,
+        origin: Pick<HostedSession, 'selfStarted' | 'errand'>,
+    ): Promise<SelfStartResult> {
+        const {sessionId} = message;
         const cwd = expandHome(message.dir, this.deps.home);
 
         let pty: PtyHandle;
@@ -195,8 +297,7 @@ export class SessionHost implements SessionHostPart {
                     : this.spawnShell(cwd, message);
         } catch (err) {
             this.deps.log.warn(`[agent] open ${sessionId} failed: ${(err as Error).message}`);
-            client.send({type: 'opened', requestId, ok: false, error: (err as Error).message});
-            return;
+            return {ok: false, error: (err as Error).message};
         }
 
         const session: HostedSession = {
@@ -206,14 +307,15 @@ export class SessionHost implements SessionHostPart {
             alive: true,
             scrollback: new Scrollback(),
             clients: new Set(),
+            ...(origin.selfStarted ? {selfStarted: true} : {}),
+            ...(origin.errand ? {errand: true} : {}),
         };
         // A fresh start replaces whatever an earlier run of the same id left behind.
         this.sessions.delete(sessionId);
         this.sessions.set(sessionId, session);
         this.wire(sessionId, session);
 
-        client.send({type: 'opened', requestId, ok: true, reattached: false});
-        session.clients.add(client);
+        return {ok: true};
     }
 
     /**
@@ -299,6 +401,13 @@ export class SessionHost implements SessionHostPart {
             }
             session.clients.clear();
             this.forgetOldEnded();
+            for (const listener of this.exitListeners) {
+                try {
+                    listener(sessionId, exitCode);
+                } catch (err) {
+                    this.deps.log.error(`[agent] an exit listener failed for ${sessionId}`, err);
+                }
+            }
         });
     }
 
@@ -365,7 +474,70 @@ export class SessionHost implements SessionHostPart {
             cwd: session.cwd,
             alive: session.alive,
             lastSeq: session.scrollback.lastSeq,
+            ...(session.selfStarted ? {selfStarted: true} : {}),
+            ...(session.errand ? {errand: true} : {}),
         }));
+    }
+
+    /** Add a self-started session to the record; a failed write is logged, the session runs on. */
+    private record(sessionId: string, errand: boolean): void {
+        const session = this.sessions.get(sessionId);
+        if (!session) return;
+        const records = this.readRecords().filter((entry) => entry.sessionId !== sessionId);
+        records.push({
+            sessionId,
+            cwd: session.cwd,
+            startedAt: this.deps.clock.now(),
+            ...(errand ? {errand: true} : {}),
+        });
+        try {
+            this.writeRecords(records);
+        } catch (err) {
+            this.deps.log.error(`[agent] could not record self-started session=${sessionId}`, err);
+        }
+    }
+
+    /** Drop the sessions the Mac has handled from the record; answered with `done`. */
+    private forget(client: ClientLink, message: ForgetSelfStartedMessage): void {
+        const forgotten = new Set(message.sessionIds);
+        const records = this.readRecords();
+        const kept = records.filter((entry) => !forgotten.has(entry.sessionId));
+        try {
+            if (kept.length !== records.length) this.writeRecords(kept);
+            client.send({type: 'done', requestId: message.requestId, ok: true});
+        } catch (err) {
+            client.send({type: 'done', requestId: message.requestId, ok: false, error: (err as Error).message});
+        }
+    }
+
+    /**
+     * The self-started record. A missing, unreadable or malformed file reads
+     * as empty, and malformed entries are skipped: it is a convenience for the
+     * Mac's rows and must never stop a session from starting.
+     */
+    private readRecords(): SelfStartedSession[] {
+        const text = this.deps.selfStarted.read();
+        if (!text) return [];
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(text);
+        } catch {
+            this.deps.log.warn('[agent] the self-started record is not JSON; reading it as empty');
+            return [];
+        }
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter(
+            (entry): entry is SelfStartedSession =>
+                typeof entry === 'object' &&
+                entry !== null &&
+                typeof (entry as SelfStartedSession).sessionId === 'string' &&
+                typeof (entry as SelfStartedSession).cwd === 'string' &&
+                typeof (entry as SelfStartedSession).startedAt === 'number',
+        );
+    }
+
+    private writeRecords(records: SelfStartedSession[]): void {
+        this.deps.selfStarted.write(JSON.stringify(records, null, 2) + '\n');
     }
 
     /** Drop the oldest ended sessions past the limit; the map keeps start order. */

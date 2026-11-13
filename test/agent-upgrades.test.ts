@@ -72,6 +72,28 @@ test('an older agent with a live session is left running', async () => {
     assert.deepEqual(installs, []);
 });
 
+test('an older agent running a fix errand is left running, though no Mac opened it', async () => {
+    /* Given */
+    const {upgrades, installs} = harness();
+
+    /* When */
+    await upgrades.connected(agent('2.12.0', [{alive: true, selfStarted: true, errand: true}]));
+
+    /* Then */
+    assert.deepEqual(installs, []);
+});
+
+test('an older agent whose fix errand has ended is upgraded', async () => {
+    /* Given */
+    const {upgrades, installs} = harness();
+
+    /* When */
+    await upgrades.connected(agent('2.12.0', [{alive: false, selfStarted: true, errand: true}]));
+
+    /* Then */
+    assert.deepEqual(installs, ['ssh://dev@vm.local/apps/site']);
+});
+
 test('an agent at the app version is left alone', async () => {
     /* Given */
     const {upgrades, installs} = harness();

@@ -47,6 +47,8 @@ import type {
     PlacedMessage,
     SelfArchivedMessage,
     SelfArchivedSession,
+    SelfStartedMessage,
+    SelfStartedSession,
     TerminalOutput,
     ToolCheck,
     ToolResultMessage,
@@ -575,6 +577,26 @@ export class AgentConnection {
     public async forgetSelfArchived(sessionIds: string[]): Promise<DoneMessage> {
         return this.request<DoneMessage>('done', (requestId) => ({
             type: 'forget-self-archived',
+            requestId,
+            sessionIds,
+        }));
+    }
+
+    // ── Sessions the agent started itself while the Mac was away (#438) ──
+
+    /** The sessions on this host the agent started by itself (fix errands) that the Mac has not caught up on. */
+    public async listSelfStarted(): Promise<SelfStartedSession[]> {
+        const reply = await this.request<SelfStartedMessage>('self-started', (requestId) => ({
+            type: 'list-self-started',
+            requestId,
+        }));
+        return reply.sessions;
+    }
+
+    /** Drop these sessions from the agent's self-started record, once handled. */
+    public async forgetSelfStarted(sessionIds: string[]): Promise<DoneMessage> {
+        return this.request<DoneMessage>('done', (requestId) => ({
+            type: 'forget-self-started',
             requestId,
             sessionIds,
         }));

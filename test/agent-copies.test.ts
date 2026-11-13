@@ -935,6 +935,105 @@ describe('copies against real git', {concurrency: true}, () => {
         /* Then */
         assert.equal(h.part.uploadCount, 1);
     });
+
+    // ── A copy the agent makes itself (#438) ──
+
+    test('ensuring a copy of a repository the VM has none of clones it and marks it', async () => {
+        /* Given */
+        const w = world();
+        const h = harness(w.home);
+
+        /* When */
+        const ensured = await h.part.ensureCopy({name: 'proj', origin: w.origin});
+
+        /* Then */
+        const copy = copyOf(w.home);
+        assert.deepEqual(ensured, {ok: true, dir: '~/projects/proj', abs: copy, reused: false});
+        assert.equal(git(copy, ['rev-parse', 'origin/main']).trim(), git(w.origin, ['rev-parse', 'main']).trim());
+        assert.ok(fs.existsSync(path.join(copy, '.git', COPY_MARKER)));
+        assert.deepEqual(h.received, [], 'a copy the agent makes itself tells no client');
+    });
+
+    test('ensuring a copy that exists fetches origin and leaves its checkout alone', async () => {
+        /* Given */
+        const w = world();
+        const h = harness(w.home);
+        await h.part.ensureCopy({name: 'proj', origin: w.origin});
+        const copy = copyOf(w.home);
+        write(path.join(copy, 'README.md'), 'work on the VM\n');
+        git(w.mac, ['push', '-q', 'origin', 'feature']);
+
+        /* When */
+        const ensured = await h.part.ensureCopy({name: 'proj', origin: w.origin});
+
+        /* Then */
+        assert.deepEqual(ensured, {ok: true, dir: '~/projects/proj', abs: copy, reused: true});
+        assert.equal(git(copy, ['rev-parse', 'origin/feature']).trim(), git(w.mac, ['rev-parse', 'HEAD']).trim());
+        assert.equal(fs.readFileSync(path.join(copy, 'README.md'), 'utf8'), 'work on the VM\n');
+    });
+
+    test('ensuring a copy where a folder Switchboard did not make stands is refused, and the folder untouched', async () => {
+        /* Given */
+        const w = world();
+        const h = harness(w.home);
+        write(path.join(copyOf(w.home), 'mine.txt'), 'keep\n');
+
+        /* When */
+        const ensured = await h.part.ensureCopy({name: 'proj', origin: w.origin});
+
+        /* Then */
+        assert.equal(ensured.ok, false);
+        assert.match(!ensured.ok ? ensured.error : '', /is not a copy Switchboard made/);
+        assert.deepEqual(fs.readdirSync(copyOf(w.home)), ['mine.txt']);
+    });
+
+    test("an errand's worktree is detached at the branch as origin has it now", async () => {
+        /* Given */
+        const w = world();
+        const h = harness(w.home);
+        await h.part.ensureCopy({name: 'proj', origin: w.origin});
+        git(w.mac, ['push', '-q', 'origin', 'feature']);
+
+        /* When */
+        const made = await h.part.errandWorktree(copyOf(w.home), 'feature', 'errand-7-abc');
+
+        /* Then */
+        const wt = worktreeOf(w.home, 'errand-7-abc');
+        assert.deepEqual(made, {ok: true, abs: wt});
+        assert.equal(git(wt, ['rev-parse', 'HEAD']).trim(), git(w.mac, ['rev-parse', 'HEAD']).trim());
+        assert.throws(() => git(wt, ['symbolic-ref', '-q', 'HEAD']), 'detached, on no branch');
+        assert.equal(git(copyOf(w.home), ['symbolic-ref', '--short', 'HEAD']).trim(), 'main');
+    });
+});
+
+test('ensuring a copy with a name that is not one safe segment is refused before anything runs', async () => {
+    /* Given */
+    const ran: string[] = [];
+    const h = harness('/home/dev', {
+        commands: {run: (command) => (ran.push(command), Promise.resolve({exitCode: 0, stdout: '', stderr: ''}))},
+    });
+
+    /* When */
+    const ensured = await h.part.ensureCopy({name: '../etc', origin: 'https://example.com/x.git'});
+
+    /* Then */
+    assert.deepEqual(ensured, {ok: false, error: '"../etc" is not a folder name a copy can have'});
+    assert.deepEqual(ran, []);
+});
+
+test('an errand worktree for a branch git would refuse is refused before anything runs', async () => {
+    /* Given */
+    const ran: string[] = [];
+    const h = harness('/home/dev', {
+        commands: {run: (command) => (ran.push(command), Promise.resolve({exitCode: 0, stdout: '', stderr: ''}))},
+    });
+
+    /* When */
+    const made = await h.part.errandWorktree('/home/dev/projects/proj', '--upload-pack=x', 'errand-1');
+
+    /* Then */
+    assert.deepEqual(made, {ok: false, error: '"--upload-pack=x" is not a branch name'});
+    assert.deepEqual(ran, []);
 });
 
 // ── Rules ──

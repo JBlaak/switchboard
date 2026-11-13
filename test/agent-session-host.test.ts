@@ -25,7 +25,10 @@ const ARCHIVE_TOOL = 'mcp__switchboard__archive_session';
 
 type Pty = FakePty & {readonly resizes: [number, number][]};
 
-function harness({gitRepos = [`${HOME}/app`]}: {gitRepos?: string[]} = {}) {
+function harness({
+    gitRepos = [`${HOME}/app`],
+    record = memoryRecord(),
+}: {gitRepos?: string[]; record?: MemoryRecord} = {}) {
     const terminals = fakeTerminals([1, 2, 3]);
     const timers = fakeTimers();
     const ptys: Pty[] = [];
@@ -48,6 +51,8 @@ function harness({gitRepos = [`${HOME}/app`]}: {gitRepos?: string[]} = {}) {
         hostSettings: () => ({instructions: INSTRUCTIONS, copyConfig: true, baseFolder: '~/projects'}),
         git: {worktreeRoot: async (cwd) => (gitRepos.includes(cwd) ? cwd : null)},
         home: HOME,
+        selfStarted: record,
+        clock: {now: () => 5_000},
         timers,
         log: silentLog,
     });
@@ -77,7 +82,23 @@ function harness({gitRepos = [`${HOME}/app`]}: {gitRepos?: string[]} = {}) {
         };
     }
 
-    return {host, terminals, timers, ptys, client};
+    return {host, terminals, timers, ptys, client, record};
+}
+
+/** The self-started record in memory, shared by hosts made over it (an agent restart). */
+interface MemoryRecord {
+    text: string | null;
+    read(): string | null;
+    write(text: string): void;
+}
+
+function memoryRecord(text: string | null = null): MemoryRecord {
+    const record: MemoryRecord = {
+        text,
+        read: () => record.text,
+        write: (next) => void (record.text = next),
+    };
+    return record;
 }
 
 async function settle(): Promise<void> {
@@ -598,4 +619,164 @@ test('scrollback with nothing missed replays nothing and does not reset', () => 
 
     /* Then */
     assert.deepEqual(replay, {reset: false, chunks: []});
+});
+
+// ── Self-started sessions (#438) ──
+
+test('the agent starts a claude session with no client, with the hooks, tools and its prompt', async () => {
+    /* Given */
+    const {host, terminals} = harness();
+
+    /* When */
+    const result = await host.startSelf({
+        sessionId: 'errand-1',
+        dir: '~/app',
+        options: {permissionMode: 'auto', initialPrompt: 'Fix the conflict'},
+        errand: true,
+    });
+
+    /* Then */
+    assert.deepEqual(result, {ok: true});
+    assert.equal(terminals.spawns.length, 1);
+    assert.equal(terminals.spawns[0].cwd, `${HOME}/app`);
+    assert.match(terminals.spawns[0].args[3], /'--settings' '\{"hooks":"errand-1"\}'/);
+    assert.match(terminals.spawns[0].args[3], /'--session-id' 'errand-1' '--permission-mode' 'auto'/);
+    assert.match(terminals.spawns[0].args[3], /'--' 'Fix the conflict'$/);
+    assert.equal(host.isAlive('errand-1'), true);
+});
+
+test('a self-started session is listed as such, and a Mac can attach to what it printed', async () => {
+    /* Given */
+    const {host, ptys, client} = harness();
+    await host.startSelf({sessionId: 'errand-1', dir: '~/app', errand: true});
+    ptys[0].emitData('working on it');
+    const mac = client();
+
+    /* When */
+    await mac.send({type: 'list-sessions', requestId: 'l'});
+    await mac.send({type: 'attach', sessionId: 'errand-1', since: -1, cols: 80, rows: 24});
+
+    /* Then */
+    assert.deepEqual(mac.messages, [
+        {
+            type: 'sessions',
+            requestId: 'l',
+            sessions: [
+                {
+                    sessionId: 'errand-1',
+                    kind: 'claude',
+                    cwd: `${HOME}/app`,
+                    alive: true,
+                    lastSeq: 0,
+                    selfStarted: true,
+                    errand: true,
+                },
+            ],
+        },
+        {type: 'attached', sessionId: 'errand-1', alive: true, reset: false},
+    ]);
+    assert.deepEqual(mac.output, [{sessionId: 'errand-1', seq: 0, data: 'working on it'}]);
+});
+
+test('starting an id that is already running is refused and spawns nothing more', async () => {
+    /* Given */
+    const {host, terminals} = harness();
+    await host.startSelf({sessionId: 'errand-1', dir: '~/app'});
+
+    /* When */
+    const again = await host.startSelf({sessionId: 'errand-1', dir: '~/app'});
+
+    /* Then */
+    assert.deepEqual(again, {ok: false, error: 'session errand-1 is already running'});
+    assert.equal(terminals.spawns.length, 1);
+});
+
+test('a self-start whose launch options cannot be made safe answers the error and records nothing', async () => {
+    /* Given */
+    const {host, terminals, record} = harness();
+
+    /* When */
+    const result = await host.startSelf({sessionId: 'errand-1', dir: '~/app', options: {preLaunchCmd: 'x\ny'}});
+
+    /* Then */
+    assert.deepEqual(result, {ok: false, error: 'preLaunchCmd must not contain newlines'});
+    assert.equal(terminals.spawns.length, 0);
+    assert.equal(record.text, null);
+});
+
+test('in-process listeners hear every session end, with no client connected', async () => {
+    /* Given */
+    const {host, ptys, client} = harness();
+    const ends: [string, number][] = [];
+    host.onExit((sessionId, exitCode) => void ends.push([sessionId, exitCode]));
+    await host.startSelf({sessionId: 'errand-1', dir: '~/app'});
+    await client().send(open({sessionId: 'opened-by-mac'}));
+
+    /* When */
+    ptys[0].emitExit(0);
+    ptys[1].emitExit(3);
+
+    /* Then */
+    assert.deepEqual(ends, [
+        ['errand-1', 0],
+        ['opened-by-mac', 3],
+    ]);
+    assert.equal(host.isAlive('errand-1'), false);
+});
+
+test('a connecting Mac lists the self-started sessions, then forgets the ones it names', async () => {
+    /* Given */
+    const {host, client} = harness();
+    await host.startSelf({sessionId: 'errand-1', dir: '~/app', errand: true});
+    await host.startSelf({sessionId: 'other', dir: '/srv'});
+    const mac = client();
+
+    /* When */
+    await mac.send({type: 'list-self-started', requestId: 'r1'});
+    await mac.send({type: 'forget-self-started', requestId: 'r2', sessionIds: ['errand-1']});
+    await mac.send({type: 'list-self-started', requestId: 'r3'});
+
+    /* Then */
+    assert.deepEqual(mac.messages, [
+        {
+            type: 'self-started',
+            requestId: 'r1',
+            sessions: [
+                {sessionId: 'errand-1', cwd: `${HOME}/app`, startedAt: 5_000, errand: true},
+                {sessionId: 'other', cwd: '/srv', startedAt: 5_000},
+            ],
+        },
+        {type: 'done', requestId: 'r2', ok: true},
+        {type: 'self-started', requestId: 'r3', sessions: [{sessionId: 'other', cwd: '/srv', startedAt: 5_000}]},
+    ]);
+});
+
+test('the self-started record survives a new host, as it does an agent restart', async () => {
+    /* Given */
+    const record = memoryRecord();
+    await harness({record}).host.startSelf({sessionId: 'errand-1', dir: '~/app', errand: true});
+    const mac = harness({record}).client();
+
+    /* When */
+    await mac.send({type: 'list-self-started', requestId: 'r1'});
+
+    /* Then */
+    assert.deepEqual(mac.messages, [
+        {
+            type: 'self-started',
+            requestId: 'r1',
+            sessions: [{sessionId: 'errand-1', cwd: `${HOME}/app`, startedAt: 5_000, errand: true}],
+        },
+    ]);
+});
+
+test('a missing or malformed self-started record lists as empty', async () => {
+    /* Given */
+    const mac = harness({record: memoryRecord('{not json')}).client();
+
+    /* When */
+    await mac.send({type: 'list-self-started', requestId: 'r1'});
+
+    /* Then */
+    assert.deepEqual(mac.messages, [{type: 'self-started', requestId: 'r1', sessions: []}]);
 });
