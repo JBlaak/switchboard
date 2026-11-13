@@ -1,0 +1,801 @@
+<title>Merge manager design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mulish:wght@500;700;800&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap">
+<style>
+/* Layout: one long design board in Switchboard's own graphite tokens (dark by choice, like the app and the inbox design): figure, floor, page, entry points, rocket, project page, everywhere else. */
+:root {
+  color-scheme: dark;
+  --bg: #141517; --panel: #1c1d20; --raised: #212226; --line: #2e2f33;
+  --edge: inset 0 0 0 1px rgba(255,255,255,.07);
+  --lift: 0 22px 44px -14px rgba(0,0,0,.7);
+  --strong: #ecebe8; --text: #d9d7d2; --dim: #c2c0bb; --muted: #a09e99; --faint: #85837f; --dimmest: #6e6d69;
+  --accent: #8fd8bf; --mint: #1a2a25; --blue-tint: #1b2530; --peach: #2d211d; --sun: #2a2518; --lav: #241f2d; --lav-ink: #c8b8e8;
+  --green: #6cc4a1; --blue: #9cc5e8; --red: #ee8b8b; --yellow: #f0cf7e; --orange: #eeab94; --purple: #b79cf0; --purple-tint: #231e30;
+  --action: #ecebe8; --action-text: #141517;
+  --head: 'Mulish', system-ui, sans-serif; --body: 'Nunito Sans', system-ui, sans-serif; --mono: 'SF Mono', Menlo, monospace;
+  --r-control: 10px; --r-row: 12px; --r-card: 16px; --r-panel: 22px;
+  --p-ink: #141517; --p-cheek: #eeab94; --p-paper: #f4f3ef; --p-paper-line: #a09e99; --p-spider: #2b2c30; --p-glass: rgba(156,197,232,.18);
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font: 15px/1.55 var(--body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+h1, h2, h3 { font-family: var(--head); color: var(--strong); text-wrap: balance; margin: 0; }
+h1 { font-size: 34px; font-weight: 800; letter-spacing: -.01em; }
+h2 { font-size: 24px; font-weight: 800; }
+h3 { font-size: 16px; font-weight: 700; }
+p { margin: 0; max-width: 72ch; }
+.eyebrow { font: 700 11px/1 var(--head); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.lede { color: var(--dim); font-size: 16px; }
+.muted { color: var(--muted); }
+section { display: flex; flex-direction: column; gap: 20px; }
+.sec-head { display: flex; flex-direction: column; gap: 8px; }
+code { font: 12.5px var(--mono); color: var(--dim); background: var(--raised); padding: 1px 6px; border-radius: 6px; }
+kbd { font: 600 11px var(--mono); color: var(--dim); background: var(--raised); box-shadow: var(--edge); padding: 2px 6px; border-radius: 6px; }
+.decisions { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.dec { background: var(--panel); box-shadow: var(--edge); border-radius: var(--r-card); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dec h3 { font-size: 14px; }
+.dec p { font-size: 13.5px; color: var(--dim); }
+.dec.q { box-shadow: var(--edge), inset 3px 0 0 var(--orange); }
+
+/* figures */
+.fig { position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+.fig svg { display: block; overflow: visible; }
+.fig .name { font: 700 11px var(--head); letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.fig .count { position: absolute; top: 6%; right: 6%; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; background: var(--raised); box-shadow: var(--edge), 0 6px 14px -6px rgba(0,0,0,.8); font: 800 12px/24px var(--head); color: var(--strong); text-align: center; font-variant-numeric: tabular-nums; }
+.fig .count.hot { background: var(--peach); color: var(--orange); }
+.fig .count.calm { display: none; }
+.fig .away { position: absolute; top: -4px; left: 50%; transform: translateX(-50%); font: 800 10.5px var(--head); letter-spacing: .04em; color: var(--blue); background: var(--blue-tint); box-shadow: var(--edge); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+@media (prefers-reduced-motion: no-preference) {
+  .bob { animation: bob 3.2s ease-in-out infinite; transform-origin: 100px 166px; }
+  .raise { animation: raise 1.6s ease-in-out infinite; }
+  .dangle { animation: dangle 2.4s ease-in-out infinite; transform-box: view-box; }
+  .wave-l { animation: wavel 1.1s ease-in-out infinite; transform-box: view-box; transform-origin: 60px 124px; }
+  .wave-r { animation: waver 1.1s ease-in-out infinite; transform-box: view-box; transform-origin: 140px 124px; }
+  .glide { animation: glide 3.4s ease-in-out infinite; transform-box: view-box; }
+  .flutter { animation: flutter .7s ease-in-out infinite; transform-box: fill-box; transform-origin: 0 50%; }
+  .st-run i, .st-head i, .st-fix i { animation: pulse 1.4s ease-in-out infinite; }
+}
+@keyframes bob { 50% { transform: translateY(-3px) scaleY(1.01); } }
+@keyframes raise { 50% { transform: translateY(-5px); } }
+@keyframes dangle { 50% { transform: translateY(10px); } }
+@keyframes wavel { 50% { transform: rotate(-14deg); } }
+@keyframes waver { 50% { transform: rotate(14deg); } }
+@keyframes glide { 0% { transform: translate(-40px, 10px); opacity: 0; } 25% { opacity: 1; } 100% { transform: translate(40px, 34px); opacity: 0; } }
+@keyframes flutter { 50% { transform: skewY(-8deg) scaleX(.92); } }
+@keyframes pulse { 50% { opacity: .35; } }
+
+.switch { display: inline-flex; background: var(--panel); box-shadow: var(--edge); border-radius: 999px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+.switch button { font: 700 12.5px var(--head); color: var(--muted); background: none; border: 0; padding: 7px 14px; border-radius: 999px; cursor: pointer; }
+.switch button[aria-pressed="true"] { background: var(--raised); color: var(--strong); box-shadow: var(--edge); }
+.switch button:focus-visible, .btn:focus-visible, .opt-tab:focus-visible, .row-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch .star { color: var(--accent); }
+.controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.controls .clbl { font: 700 10.5px var(--head); letter-spacing: .1em; text-transform: uppercase; color: var(--dimmest); }
+
+.poses { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.pose { background: var(--panel); box-shadow: var(--edge); border-radius: var(--r-card); padding: 18px 16px 16px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.pose p { font-size: 13px; color: var(--dim); align-self: stretch; }
+.pose h3 { font-size: 14px; align-self: stretch; }
+
+/* screens */
+.opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.opt-tab { font: 700 13px var(--head); color: var(--muted); background: var(--panel); box-shadow: var(--edge); border: 0; border-radius: var(--r-control); padding: 9px 14px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.opt-tab[aria-selected="true"] { color: var(--strong); background: var(--raised); box-shadow: inset 0 0 0 1px rgba(143,216,191,.5); }
+.opt-tab .rec { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.wide-scroll { overflow-x: auto; padding-bottom: 6px; border-radius: var(--r-panel); }
+.screen { width: 1100px; height: 600px; background: var(--bg); border-radius: var(--r-panel); box-shadow: var(--edge), var(--lift); display: grid; grid-template-columns: 220px 1fr; overflow: hidden; }
+.side { background: var(--panel); padding: 14px 12px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--line); }
+.side .dots { display: flex; gap: 6px; padding: 2px 4px 10px; } .side .dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
+.srow { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--dim); padding: 6px 8px; border-radius: 8px; min-width: 0; }
+.srow > i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; }
+.srow.blue > i { background: var(--blue); } .srow.peach > i { background: var(--orange); } .srow.idle > i { background: var(--dimmest); }
+.srow .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.side .lbl { font: 700 10px var(--head); letter-spacing: .1em; text-transform: uppercase; color: var(--dimmest); padding: 12px 8px 4px; }
+.main { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; position: relative; }
+.family { width: 700px; border-radius: var(--r-card); background: linear-gradient(180deg, #1d2430 0%, #1b2027 60%, #1a1c1f 100%); box-shadow: var(--edge); position: relative; overflow: hidden; }
+.family .stars i { position: absolute; width: 2px; height: 2px; background: #ecebe8; border-radius: 50%; opacity: .6; }
+.family .member { position: absolute; width: 26px; height: 22px; border-radius: 13px 13px 9px 9px; background: #8fd8bf; }
+.family .member::before, .family .member::after { content: ""; position: absolute; top: 9px; width: 3px; height: 4px; border-radius: 2px; background: var(--p-ink); } .family .member::before { left: 8px; } .family .member::after { right: 8px; }
+.family .fire { position: absolute; width: 22px; height: 22px; border-radius: 50% 50% 40% 40%; background: radial-gradient(circle at 50% 70%, #f0cf7e, #f39a3c 60%, transparent 70%); }
+.floor { position: absolute; left: 0; right: 0; bottom: 0; background: #232428; border-top: 1px solid #2e2f33; }
+.on-floor { position: absolute; bottom: 4px; left: 0; right: 0; display: flex; justify-content: center; align-items: flex-end; gap: 30px; }
+.runway { position: absolute; bottom: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; padding-bottom: 14px; }
+.runway i { display: block; width: 6px; height: 6px; border-radius: 50%; background: #f0cf7e; opacity: .55; box-shadow: 0 0 8px #f0cf7e; }
+.askbox { margin-top: 18px; width: 460px; height: 44px; border-radius: 14px; background: var(--raised); box-shadow: var(--edge); display: flex; align-items: center; padding: 0 16px; color: var(--faint); font-size: 14px; gap: 10px; }
+.askbox kbd { margin-left: auto; }
+.bubble { position: absolute; background: var(--raised); box-shadow: var(--edge), var(--lift); border-radius: 14px; padding: 8px 12px; font-size: 12.5px; color: var(--strong); white-space: nowrap; }
+.annot { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.annot div { font-size: 13.5px; color: var(--dim); background: var(--panel); box-shadow: var(--edge); border-radius: var(--r-row); padding: 12px 14px; min-width: 0; }
+.annot b { color: var(--strong); font-family: var(--head); }
+
+/* the page */
+.page { width: 1140px; height: 760px; background: var(--bg); border-radius: var(--r-panel); box-shadow: var(--edge), var(--lift); display: grid; grid-template-rows: auto auto auto 1fr; overflow: hidden; }
+.pg-head { display: flex; align-items: center; gap: 16px; padding: 14px 22px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.pg-head .mini { width: 56px; height: 52px; flex: none; }
+.pg-head h2 { font-size: 20px; }
+.pg-head .sub { font-size: 12.5px; color: var(--muted); }
+.pg-head .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.hostpill { display: inline-flex; gap: 7px; align-items: center; font: 700 12px var(--head); color: var(--muted); background: var(--raised); box-shadow: var(--edge); border-radius: 999px; padding: 6px 11px; }
+.hostpill i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.hostpill.vm { color: var(--blue); background: var(--blue-tint); } .hostpill.vm i { background: var(--blue); }
+.summary { display: flex; gap: 10px; padding: 12px 22px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tile { display: flex; flex-direction: column; gap: 2px; padding: 9px 14px; border-radius: var(--r-row); background: var(--panel); box-shadow: var(--edge); min-width: 112px; }
+.tile .n { font: 800 21px/1.1 var(--head); color: var(--strong); font-variant-numeric: tabular-nums; }
+.tile .l { font: 700 10.5px var(--head); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.tile .hint { font-size: 11.5px; color: var(--faint); }
+.tile.saved { margin-left: auto; background: var(--mint); box-shadow: inset 0 0 0 1px rgba(143,216,191,.25); }
+.tile.saved .n { color: var(--accent); }
+.away-sum { margin: 0; padding: 12px 22px; background: var(--blue-tint); border-bottom: 1px solid var(--line); display: flex; gap: 18px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--dim); }
+.away-sum b { color: var(--strong); font-family: var(--head); }
+.away-sum .x { margin-left: auto; display: flex; gap: 8px; }
+.split { display: grid; grid-template-columns: 1fr 420px; min-height: 0; }
+.list { overflow: auto; padding: 6px 12px 20px; border-right: 1px solid var(--line); min-width: 0; }
+.group { font: 700 11px var(--head); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 16px 10px 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.group .lane { text-transform: none; letter-spacing: 0; font-weight: 700; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; background: var(--raised); box-shadow: var(--edge); color: var(--muted); }
+.group .lane.sb { color: var(--accent); }
+.group .meta { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--dimmest); margin-left: auto; }
+.row-btn { all: unset; box-sizing: border-box; display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; align-items: center; padding: 9px 10px; border-radius: var(--r-row); cursor: pointer; width: 100%; }
+.row-btn:hover { background: var(--panel); }
+.row-btn.sel { background: var(--raised); box-shadow: var(--edge); }
+.row-btn.theirs { opacity: .55; }
+.row-btn .place { font: 800 12px var(--head); color: var(--faint); text-align: center; font-variant-numeric: tabular-nums; }
+.row-btn .t { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.row-btn .t b { font: 700 13.5px var(--head); color: var(--strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-btn .t span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.headcard { margin: 2px 0 4px; border-radius: var(--r-row); background: var(--purple-tint); box-shadow: inset 0 0 0 1px rgba(183,156,240,.22); }
+.headcard .row-btn:hover { background: transparent; }
+.hsteps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 12px 12px 48px; }
+.hstep { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--muted); }
+.hstep .bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.hstep .bar i { display: block; height: 100%; background: var(--purple); }
+.hstep.done { color: var(--dim); } .hstep.active { color: var(--strong); font-weight: 700; }
+
+.stage { display: inline-flex; align-items: center; gap: 6px; font: 700 11.5px var(--head); padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.stage i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.st-wait { background: var(--purple-tint); color: var(--purple); box-shadow: inset 0 0 0 1px rgba(183,156,240,.25); }
+.st-wait i { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+.st-held { background: var(--raised); color: var(--muted); box-shadow: var(--edge); }
+.st-head { background: rgba(183,156,240,.18); color: var(--purple); }
+.st-fix { background: var(--mint); color: var(--green); }
+.st-need { background: var(--peach); color: var(--orange); }
+.st-merged { background: rgba(183,156,240,.12); color: var(--purple); }
+.st-run { background: var(--mint); color: var(--green); }
+.st-ci { background: rgba(240,207,126,.1); color: var(--yellow); }
+.st-fail { background: rgba(238,139,139,.12); color: var(--red); }
+.st-ready { background: var(--blue-tint); color: var(--blue); }
+.st-done { background: var(--raised); color: var(--muted); box-shadow: var(--edge); }
+.warn-flag { color: var(--yellow); font-weight: 700; }
+
+.detail { overflow: auto; padding: 18px 20px 22px; display: flex; flex-direction: column; gap: 14px; min-width: 0; background: #17181a; }
+.detail h3 { font-size: 17px; line-height: 1.3; }
+.detail .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--muted); }
+.box { background: var(--panel); box-shadow: var(--edge); border-radius: var(--r-row); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.box .bl { font: 700 10.5px var(--head); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+.box p { font-size: 13px; color: var(--dim); }
+.vstep { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: start; font-size: 12.5px; color: var(--dim); padding: 2px 0; }
+.vstep i { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; background: var(--c, var(--line)); }
+.vstep b { color: var(--text); font-family: var(--head); }
+.vstep span { color: var(--faint); font-variant-numeric: tabular-nums; }
+.checks { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.checks div { display: flex; gap: 8px; align-items: center; color: var(--dim); }
+.checks .ok { color: var(--green); } .checks .bad { color: var(--red); } .checks .run { color: var(--yellow); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { font: 700 13px var(--head); border: 0; border-radius: var(--r-control); padding: 8px 13px; cursor: pointer; background: var(--raised); color: var(--text); box-shadow: var(--edge); display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.btn.primary { background: var(--action); color: var(--action-text); box-shadow: none; }
+.btn.land { background: rgba(183,156,240,.2); color: var(--purple); box-shadow: inset 0 0 0 1px rgba(183,156,240,.4); }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+.btn kbd { background: rgba(0,0,0,.1); box-shadow: none; padding: 0 5px; color: inherit; opacity: .7; }
+.btn.ghost { background: none; box-shadow: none; color: var(--muted); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.out { flex: none; font: 700 12.5px var(--head); color: var(--text); text-decoration: none; background: var(--raised); box-shadow: var(--edge); border-radius: 8px; padding: 5px 10px; white-space: nowrap; }
+.keys { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--faint); }
+.example-tag { font: 700 10.5px var(--head); letter-spacing: .08em; text-transform: uppercase; color: var(--dimmest); }
+
+/* entry points */
+.entries { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+.entry { background: var(--panel); box-shadow: var(--edge); border-radius: var(--r-card); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.entry .canvas { background: var(--bg); border-radius: var(--r-row); box-shadow: var(--edge); padding: 12px; display: flex; flex-direction: column; gap: 8px; overflow-x: auto; }
+.entry p { font-size: 13px; color: var(--dim); }
+.whead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.whead b { font: 800 14px var(--head); color: var(--strong); }
+.prpill { font: 700 11.5px var(--head); color: var(--blue); background: var(--blue-tint); padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+.landed { display: inline-flex; align-items: center; gap: 6px; font: 700 12px var(--head); color: var(--purple); background: var(--purple-tint); box-shadow: inset 0 0 0 1px rgba(183,156,240,.3); padding: 6px 10px; border-radius: var(--r-control); white-space: nowrap; }
+.menu { background: var(--raised); box-shadow: var(--edge), var(--lift); border-radius: var(--r-row); padding: 6px; display: flex; flex-direction: column; min-width: 230px; align-self: flex-start; }
+.menu div { display: flex; justify-content: space-between; gap: 16px; padding: 6px 10px; border-radius: 8px; font-size: 13px; color: var(--text); }
+.menu div.hl { background: var(--panel); }
+.menu div span { color: var(--faint); font-size: 12px; }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
+.spill { font: 700 10.5px var(--head); padding: 2px 7px; border-radius: 999px; white-space: nowrap; flex: none; }
+.toast { align-self: flex-start; background: var(--raised); box-shadow: var(--edge), var(--lift); border-radius: var(--r-row); padding: 9px 13px; font-size: 13px; color: var(--strong); display: flex; gap: 12px; align-items: center; }
+.toast a { color: var(--purple); font-weight: 700; text-decoration: none; }
+.tray { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: var(--panel); box-shadow: var(--edge); border-radius: var(--r-row); padding: 10px 12px; font-size: 12.5px; color: var(--dim); }
+.tray .lk { color: var(--text); background: var(--raised); box-shadow: var(--edge); border-radius: 7px; padding: 4px 9px; font: 700 12px var(--head); white-space: nowrap; }
+.tray .lk.land { color: var(--purple); background: var(--purple-tint); }
+.prrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--panel); font-size: 12.5px; }
+.prrow b { font: 700 13px var(--head); color: var(--strong); }
+.prrow span { color: var(--muted); }
+
+/* rocket */
+.rk-stage { position: relative; width: 100%; max-width: 560px; height: 300px; background: var(--panel); box-shadow: var(--edge); border-radius: var(--r-card); overflow: hidden; padding: 16px; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
+.rk-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; background: var(--bg); box-shadow: var(--edge); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; color: var(--dim); position: relative; }
+.rk-row.gone { opacity: 0; transform: translateX(-20px); transition: opacity .35s, transform .35s; }
+.fx { position: absolute; pointer-events: none; }
+.puff { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: rgba(236,235,232,.35); }
+
+/* tables */
+.tbl-wrap { overflow-x: auto; background: var(--panel); box-shadow: var(--edge); border-radius: var(--r-card); }
+table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 13px; }
+th, td { text-align: left; padding: 10px 14px; border-top: 1px solid var(--line); vertical-align: middle; }
+th { font: 700 10.5px var(--head); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); border-top: 0; }
+td { color: var(--dim); }
+td b { color: var(--strong); font-family: var(--head); }
+
+/* project page section */
+.ppage { width: 1000px; background: var(--bg); border-radius: var(--r-panel); box-shadow: var(--edge), var(--lift); padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 12px; }
+.pp-h { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.pp-h h3 { font-size: 15px; }
+.pp-h .c { font-size: 12.5px; color: var(--muted); }
+.pp-h a { margin-left: auto; font: 700 12.5px var(--head); color: var(--purple); text-decoration: none; }
+.qrow { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 10px; font-size: 12.5px; }
+.qrow:nth-child(odd) { background: var(--panel); }
+.qrow b { font: 700 13px var(--head); color: var(--strong); }
+.qrow .place { font: 800 12px var(--head); color: var(--faint); text-align: center; }
+.qrow .who { color: var(--muted); }
+.qrow.theirs b { color: var(--dim); font-weight: 600; }
+</style>
+
+<div class="wrap">
+
+<header class="sec-head" style="gap:12px">
+  <span class="eyebrow">Switchboard · design · 13 Nov 2026 · prototype for the Merge manager map</span>
+  <h1>The Merge manager</h1>
+  <p class="lede">A third manager joins the floor. You press <b>Land it</b> on a reviewed pull request, and from then on the Merge manager owns it: it waits its turn in its repo's lane, gets updated and tested only as the head, gets fixed by an errand when it fails out, and merges. This board shows the figure, its page, every place merging shows up, and the open questions for you at the bottom.</p>
+</header>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">Already decided on the map</span><h2>What the design has to carry</h2></div>
+  <div class="decisions">
+    <div class="dec"><h3>Two lanes, one model</h3><p>Queue repos keep the merge-queue Action as the merger; others get a Switchboard lane. Both show the same stages: <b>Waiting · Held · Head · Fixing · Needs you · Merged</b>.</p></div>
+    <div class="dec"><h3>Land it</h3><p>Per pull request, never on drafts, only your own. In a queue repo it adds <code>automerge:opt-in</code>. Unland takes it back.</p></div>
+    <div class="dec"><h3>Fix errands</h3><p>Only when the head fails out on a conflict or a failed check. Review feedback goes to Needs you. Fixing rows show their errand; Needs you rows offer Open and Try again.</p></div>
+    <div class="dec"><h3>Merging host</h3><p>The Mac, or one VM you hand merging off to. While a VM merges, the page shows its state with a badge and keeps a "While merging was on…" summary.</p></div>
+    <div class="dec"><h3>Fewest CI runs</h3><p>Waiting branches are never updated; unfinished CI behind the head is cancelled; conflicts are found by a local test rebase. The page shows what that saved.</p></div>
+    <div class="dec"><h3>The session</h3><p>Archived on merge, with a rocket instead of confetti. A busy session archives at the end of its turn; one with uncommitted changes stays and shows Merged.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">The figure</span><h2>A Patch that brings pull requests in to land</h2>
+    <p class="muted">Two costumes to compare. The marshaller fits the word "land": ear defenders, a hi-vis vest and two lit wands. The signaller fits "lane": a peaked cap and a flag. Each has four poses. The counter control compares two meanings for the badge.</p>
+  </div>
+  <div class="controls">
+    <span class="clbl">Costume</span>
+    <div class="switch" role="group" aria-label="Costume" id="cossw">
+      <button data-cos="marshal" aria-pressed="false">Marshaller</button>
+      <button data-cos="signal" aria-pressed="true">Signaller <span class="star">✓</span></button>
+    </div>
+    <span class="clbl">Colour</span>
+    <div class="switch" role="group" aria-label="Colour" id="palsw">
+      <button data-pal="#f2a7c3" aria-pressed="false">Rose</button>
+      <button data-pal="#9cc5e8" aria-pressed="true">Sky <span class="star">✓</span></button>
+      <button data-pal="#b4bccb" aria-pressed="false">Steel</button>
+    </div>
+    <span class="clbl">Counter</span>
+    <div class="switch" role="group" aria-label="Counter" id="cntsw">
+      <button data-cnt="needs" aria-pressed="true">Needs you only <span class="star">✓</span></button>
+      <button data-cnt="all" aria-pressed="false">Everything landed</button>
+    </div>
+  </div>
+  <div class="poses" id="poses"></div>
+  <p class="muted" style="font-size:13.5px">Chosen (✓): the <b style="color:var(--text)">signaller in sky</b>, with a counter of Needs you only. Sky is the same blue as "ready"; the navy cap and the flag keep the figure from reading as a status, and purple stays reserved for the stage pills.</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">The empty screen · pick one</span><h2>Four on the floor</h2>
+    <p class="muted">The family card, the floor and the ask box stay. The Merge manager joins the two inbox managers. Its bubble is the short form of what changed: "#432 merged", or, after a VM hand-off, "3 merged · 1 needs you".</p>
+  </div>
+  <div class="opts" role="tablist" aria-label="Floor layout">
+    <button class="opt-tab" role="tab" aria-selected="true" data-opt="A">A · Four in a row <span class="rec">recommended</span></button>
+    <button class="opt-tab" role="tab" aria-selected="false" data-opt="B">B · Merge manager on its runway</button>
+  </div>
+  <div class="wide-scroll"><div class="screen" id="screen"></div></div>
+  <div class="annot" id="optnote"></div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">⌘⇧L · Merge manager page</span><h2>Every lane in one look</h2>
+    <p class="muted">Tiles first, then every project's lane in land order with its head on top, and a detail pane for the selected pull request. Click rows to see each stage's detail. The host switch shows the page while a VM merges. The grouping switch compares lanes against stages.</p>
+  </div>
+  <div class="controls">
+    <span class="clbl">Group by</span>
+    <div class="switch" role="group" aria-label="Group by" id="grpsw">
+      <button data-grp="lane" aria-pressed="true">Lane <span class="star">✓</span></button>
+      <button data-grp="stage" aria-pressed="false">Stage</button>
+    </div>
+    <span class="clbl">Merging host</span>
+    <div class="switch" role="group" aria-label="Merging host" id="hostsw">
+      <button data-host="mac" aria-pressed="true">This Mac</button>
+      <button data-host="vm" aria-pressed="false">dev-vm</button>
+    </div>
+  </div>
+  <div class="wide-scroll"><div class="page" id="mmpage"></div></div>
+  <div class="annot">
+    <div><b>Keys.</b> <kbd>J</kbd>/<kbd>K</kbd> move, <kbd>⏎</kbd> opens the session or the errand, <kbd>T</kbd> Try again, <kbd>N</kbd> Nudge, <kbd>U</kbd> Unland, <kbd>O</kbd> opens the PR on GitHub.</div>
+    <div><b>Teammates' PRs</b> show in a queue lane, faded, because they decide when yours becomes the head. They have no buttons except Nudge.</div>
+    <div><b>CI saved</b> counts three things this week: updates not pushed to Waiting PRs (one run each), unfinished runs cancelled behind the head, and conflicts found by a local test rebase instead of a push. It is an estimate and says so.</div>
+    <div><b>Empty lanes</b> are left out. With nothing landed anywhere, the page shows what Land it does and where to find it.</div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Land it</span><h2>Four places to land a pull request</h2>
+    <p class="muted">The same action everywhere, offered only on your own open, non-draft PRs. After landing, each place shows the stage instead of the button. It replaces typing "merge after CI is green" into a session.</p>
+  </div>
+  <div class="entries">
+    <div class="entry">
+      <h3>Session header</h3>
+      <div class="canvas">
+        <div class="whead"><b>Land it from the session header</b><span class="prpill">PR #432 · approved · CI ✓</span><button class="btn land sm" style="margin-left:auto">Land it</button></div>
+        <div class="whead"><b>Land it from the session header</b><span class="prpill">PR #432</span><span class="landed" style="margin-left:auto">● Landed · 2nd in switchboard ▾</span></div>
+        <div class="whead"><b>Rocket for landed sessions</b><span class="prpill">PR #436 · draft</span><button class="btn land sm" style="margin-left:auto" disabled title="Mark it ready for review first">Land it</button></div>
+      </div>
+      <p>Beside the PR pill. Once landed it becomes the stage, and its menu has <b>Open in Merge manager</b> and <b>Unland</b>. A draft shows it disabled with "Mark it ready for review first".</p>
+    </div>
+    <div class="entry">
+      <h3>Sidebar row</h3>
+      <div class="canvas" style="flex-direction:row;gap:14px;align-items:flex-start;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;gap:2px;width:250px">
+          <div class="srow"><i></i><span class="nm">Land it from the session header</span><span class="spill st-head">merging</span></div>
+          <div class="srow idle"><i></i><span class="nm">Stage pills on plan cards</span><span class="spill st-wait">landed · 2nd</span></div>
+          <div class="srow idle"><i></i><span class="nm">Errand: fix #1281</span><span class="spill st-fix">fixing</span></div>
+          <div class="srow peach"><i></i><span class="nm">Tray shows the land stage</span><span class="spill st-need">needs you</span></div>
+        </div>
+        <div class="menu"><div>Rename <span>R</span></div><div class="hl">Land it <span>L</span></div><div>Archive <span>⌫</span></div></div>
+      </div>
+      <p>The pill replaces today's queue pill on landed rows, with the same words in both lanes. <b>L</b> lands from the row's menu and keyboard.</p>
+    </div>
+    <div class="entry">
+      <h3>Session tray</h3>
+      <div class="canvas">
+        <div class="tray"><span>PR #432 · approved by ana · CI ✓</span><span class="lk">Open PR ↗</span><span class="lk">IDE</span><span class="lk land">Land it</span></div>
+        <div class="tray"><span>PR #432 · <span style="color:var(--purple);font-weight:700">Head · checks 9 of 14</span></span><span class="lk">Open PR ↗</span><span class="lk">Merge manager</span></div>
+      </div>
+      <p>The tray gets the same link, and once landed it shows the stage with a link to the page.</p>
+    </div>
+    <div class="entry">
+      <h3>Pull request row on the project page</h3>
+      <div class="canvas">
+        <div class="prrow"><div><b>#437 Show CI saved on the page</b><br><span>yours · approved · CI ✓</span></div><button class="btn land sm">Land it</button></div>
+        <div class="prrow"><div><b>#1290 Rate-limit partner webhooks</b><br><span>sam · in the merge queue</span></div><span class="muted" style="font-size:12px">not yours</span></div>
+      </div>
+      <p>Lands PRs that have no session, such as ones opened by hand. Teammates' rows never get it.</p>
+    </div>
+  </div>
+  <div class="toast">Landed #432 · 2nd in switchboard's lane <a href="#mmpage">Open Merge manager</a><a href="#" style="color:var(--muted)">Undo</a></div>
+  <div class="annot">
+    <div><b>Not approved yet?</b> Landing is free before approval (it costs no CI). The PR shows <i>Held · approval</i> and keeps its land-order place.</div>
+    <div><b>Queue repos.</b> Land it adds <code>automerge:opt-in</code> and drops <code>autorebase:opt-in</code>. A PR you opted in on GitHub shows as landed too.</div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Archive</span><h2>A rocket instead of confetti</h2>
+    <p class="muted">Archiving any session throws confetti from the row's centre. Archiving a landed session, by hand or on merge, launches a small rocket from the same spot. Try both.</p>
+  </div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+    <div class="rk-stage" id="rkstage">
+      <div class="rk-row" id="rk1"><span><b style="color:var(--strong);font-family:var(--head)">Tidy the plan tab</b> · PR #428 merged by hand</span><button class="btn sm" data-fx="confetti" data-row="rk1">Archive</button></div>
+      <div class="rk-row" id="rk2"><span><b style="color:var(--strong);font-family:var(--head)">Land it from the session header</b> · <span style="color:var(--purple)">Merged</span></span><button class="btn sm" data-fx="rocket" data-row="rk2">Archive</button></div>
+      <button class="btn ghost sm" id="rkreset" style="align-self:flex-start">Reset</button>
+    </div>
+    <div class="annot" style="flex:1;min-width:260px;grid-template-columns:1fr">
+      <div><b>On merge</b> the Merge manager archives the session itself. Idle: right away, with the rocket. Busy: at the end of its turn.</div>
+      <div><b>Uncommitted changes</b> keep the session open; its row shows <span class="spill st-merged">merged</span> until you archive it.</div>
+      <div><b>Reduced motion</b> skips both, as confetti does today.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Project page</span><h2>The Merge queue section stays, for one repo</h2>
+    <p class="muted">The project page keeps its section as the per-repo view of the same lane. A Switchboard-lane repo gets the section too. Landed rows use the Merge manager's stage pills; Fix in session and Retry give way to the errand and Try again.</p>
+  </div>
+  <div class="wide-scroll"><div class="ppage">
+    <div class="pp-h"><h3>Merge queue</h3><span class="group" style="padding:0"><span class="lane sb">Switchboard lane</span></span><span class="c">1 head · 1 waiting · 2 held · ~9 min</span><a href="#mmpage">Open in Merge manager →</a></div>
+    <div class="hsteps" style="padding:4px 0 6px;grid-template-columns:repeat(3,minmax(0,220px))">
+      <div class="hstep done"><span>Updated on the trunk</span><span class="bar"><i style="width:100%"></i></span></div>
+      <div class="hstep active"><span>Checks 9 of 14 · e2e</span><span class="bar"><i style="width:64%"></i></span></div>
+      <div class="hstep"><span>Merge · squash</span><span class="bar"><i style="width:0"></i></span></div>
+    </div>
+    <div>
+      <div class="qrow"><span class="place">1</span><span><b>#432 Land it from the session header</b></span><span class="who">approved by ana</span><span class="stage st-head"><i></i>Head · checks</span></div>
+      <div class="qrow"><span class="place">2</span><span><b>#433 Stage pills on plan cards</b> <span class="warn-flag">· will conflict</span></span><span class="who">approved by sam</span><span class="stage st-wait"><i></i>Waiting</span></div>
+      <div class="qrow"><span class="place">3</span><span><b>#430 Merge manager figure</b></span><span class="who"><button class="btn sm">Nudge ana</button></span><span class="stage st-held"><i></i>Held · @ana</span></div>
+      <div class="qrow"><span class="place">4</span><span><b>#434 Rocket on archive</b></span><span class="who">stacked on #433</span><span class="stage st-held"><i></i>Held · on #433</span></div>
+    </div>
+  </div></div>
+  <div class="annot">
+    <div><b>Queue repos</b> look as they do today, with the queue's own steps (Rebased → Pushed → Checks → Merge) and teammates' entries. Only your landed rows change.</div>
+    <div><b>While a VM merges</b>, the section carries the same "Merging on dev-vm" badge as the page. Land it, Unland and Nudge are forwarded.</div>
+    <div><b>No Switchboard lane estimate yet?</b> The "~9 min" uses the same median-of-recent-runs estimate as the queue section.</div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="eyebrow">Everywhere else</span><h2>One stage, the same words in every place</h2>
+    <p class="muted">A landed PR's stage replaces what each place says today about its queue. PRs that are not landed keep their current wording.</p>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Stage</th><th>Merge manager row</th><th>Sidebar and plan card pill</th><th>Bug / Issue manager · In progress</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><b>Waiting</b></td><td><span class="stage st-wait"><i></i>Waiting</span> 2nd</td><td><span class="spill st-wait">landed · 2nd</span></td><td><span class="stage st-wait"><i></i>Landed · 2nd</span></td><td>"will conflict" added in yellow when the test rebase finds one</td></tr>
+      <tr><td><b>Held</b></td><td><span class="stage st-held"><i></i>Held · @ana</span></td><td><span class="spill st-held">held · @ana</span></td><td><span class="stage st-held"><i></i>Held · @ana</span></td><td>or "approval", or "on #433" for a stack</td></tr>
+      <tr><td><b>Head</b></td><td><span class="stage st-head"><i></i>Head · checks</span> + steps</td><td><span class="spill st-head">merging</span></td><td><span class="stage st-head"><i></i>Merging</span></td><td>today's plan pill says "merging · 1st"; the place is dropped</td></tr>
+      <tr><td><b>Fixing</b></td><td><span class="stage st-fix"><i></i>Fixing</span> + errand</td><td><span class="spill st-fix">fixing</span></td><td><span class="stage st-fix"><i></i>Fixing</span></td><td>replaces "queue failed" and "CI failing" on landed PRs</td></tr>
+      <tr><td><b>Needs you</b></td><td><span class="stage st-need"><i></i>Needs you</span> + reason</td><td><span class="spill st-need">needs you</span></td><td><span class="stage st-need"><i></i>Needs you</span></td><td>adds the peach dot to the In progress tab, as #409 does</td></tr>
+      <tr><td><b>Merged</b></td><td>Merged today, then gone</td><td>session archived</td><td><span class="stage st-done"><i></i>Fixed</span> → Done</td><td>a bug is marked fixed in Bugsnag at the merge, as before</td></tr>
+    </tbody>
+  </table></div>
+  <div class="annot">
+    <div><b>In progress, #409.</b> The "Ready" and "Queue · 2nd" steps of a bug's or issue's flow become the landed stages once you press Land it. Until then it shows Ready as designed.</div>
+    <div><b>Plan cards.</b> <code>planQueuePill</code> learns the Switchboard lane. A queue-lane PR that is not yours keeps today's words.</div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="eyebrow">Settled 13 Nov 2026</span><h2>Your answers</h2></div>
+  <div class="decisions">
+    <div class="dec"><h3>Figure</h3><p>The signaller in sky: peaked cap, flag furled when idle, green flag waving while lanes move, peach flag up for Needs you, a radio while a VM merges.</p></div>
+    <div class="dec"><h3>The counter</h3><p>Needs you only, in peach. A busy lane shows in the pose, not a number.</p></div>
+    <div class="dec"><h3>Being told</h3><p>No system notifications. The Dock icon bounces once when a PR goes to Needs you. Merges show only in the bubble and the rocket.</p></div>
+    <div class="dec"><h3>Floor and page</h3><p>Four in a row on the floor. The page groups by lane, head on top. <kbd>⌘⇧L</kbd> opens it.</p></div>
+  </div>
+</section>
+
+</div>
+
+<script>
+/* ---------- Patch figures, drawn from @jblaak/patch's body shapes ---------- */
+const BODY = 'M50 138 C 46 96, 72 68, 100 68 C 132 68, 152 96, 148 138 C 146 158, 128 166, 100 166 C 70 166, 52 158, 50 138 Z';
+const SMILE = 'M93 134 Q100 140 107 134';
+let uid = 0;
+function face(mood) {
+  const eyes = mood === 'happy'
+    ? '<path d="M81 121 Q86 113 91 121" stroke="var(--p-ink)" stroke-width="3" stroke-linecap="round"/><path d="M109 121 Q114 113 119 121" stroke="var(--p-ink)" stroke-width="3" stroke-linecap="round"/>'
+    : mood === 'up'
+      ? '<ellipse cx="88" cy="114" rx="5" ry="7" fill="var(--p-ink)"/><ellipse cx="116" cy="114" rx="5" ry="7" fill="var(--p-ink)"/>'
+      : mood === 'right'
+        ? '<ellipse cx="90" cy="117" rx="5" ry="7" fill="var(--p-ink)"/><ellipse cx="118" cy="117" rx="5" ry="7" fill="var(--p-ink)"/>'
+        : '<ellipse cx="86" cy="118" rx="5" ry="7" fill="var(--p-ink)"/><ellipse cx="114" cy="118" rx="5" ry="7" fill="var(--p-ink)"/>';
+  return `<path d="M68 96 C 74 84, 86 78, 96 78" stroke="rgba(255,255,255,.35)" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="76" cy="134" r="5" fill="var(--p-cheek)" opacity=".35"/><circle cx="124" cy="134" r="5" fill="var(--p-cheek)" opacity=".35"/>
+    ${eyes}<path d="${SMILE}" stroke="var(--p-ink)" stroke-width="3" stroke-linecap="round"/>`;
+}
+const arm = (d, c) => `<path d="${d}" stroke="${c}" stroke-width="10" stroke-linecap="round"/>`;
+function spider(x, y, s = 1) {
+  const legs = [-1, 1].map(side => [0, 1, 2, 3].map(i => {
+    const a = (i - 1.5) * 0.5; const dx = side * 9; const ex = side * (16 + i % 2 * 2); const ey = -6 + i * 5;
+    return `M${dx * .4} ${a * 4} Q${dx} ${ey - 5} ${ex} ${ey}`;
+  }).join(' ')).join(' ');
+  return `<g transform="translate(${x} ${y}) scale(${s})"><path d="${legs}" stroke="var(--p-spider)" stroke-width="2" stroke-linecap="round" fill="none"/>
+    <ellipse cx="0" cy="2" rx="8" ry="9" fill="var(--p-spider)"/><circle cx="0" cy="-7" r="5.5" fill="var(--p-spider)"/>
+    <circle cx="-2" cy="-8" r="1.4" fill="#ecebe8"/><circle cx="2" cy="-8" r="1.4" fill="#ecebe8"/></g>`;
+}
+function svgWrap(w, back, bodyColor, inner, arms, front) {
+  return `<svg width="${w}" height="${w * 200 / 220}" viewBox="-10 -10 220 200" fill="none" aria-hidden="true">${back}
+    <ellipse cx="100" cy="170" rx="46" ry="6" fill="rgba(0,0,0,.35)"/>
+    <g class="bob"><path d="${BODY}" fill="${bodyColor}"/>${inner}</g>${arms}${front}</svg>`;
+}
+/* Ask Patch, Bug manager, Issue manager: as designed in the inbox board */
+function askSVG(w) {
+  const c = '#8fd8bf';
+  return svgWrap(w, '', c, face('happy'), arm('M60 132 Q46 140 42 150', c) + arm('M138 130 Q156 116 160 98', c), '');
+}
+function bugSVG(w) {
+  const c = '#c8b8e8';
+  const hat = `<path d="M54 128 Q88 156 124 150" stroke="#8a5a35" stroke-width="4" stroke-linecap="round"/>
+    <g transform="translate(122 140) rotate(-8)"><rect x="0" y="0" width="24" height="18" rx="4" fill="#b97a45"/><path d="M0 6 H24" stroke="#8a5a35" stroke-width="2"/></g>
+    <path d="M68 86 C 66 54, 134 54, 132 86 Z" fill="#d8c79c"/><path d="M68 80 C 88 76, 112 76, 132 80" stroke="#8a7650" stroke-width="5"/><ellipse cx="100" cy="87" rx="47" ry="7" fill="#c4b083"/>`;
+  const back = `<g transform="translate(176 128)"><rect x="-20" y="-24" width="40" height="44" rx="8" fill="var(--p-glass)" stroke="rgba(156,197,232,.5)" stroke-width="2"/><rect x="-22" y="-30" width="44" height="8" rx="3" fill="#a09e99"/>${spider(0, 6, .6)}</g>`;
+  return svgWrap(w, back, c, face('calm') + hat, arm('M60 132 Q46 140 42 150', c) + arm('M140 132 Q150 138 152 148', c), '');
+}
+function issueSVG(w) {
+  const c = '#f0cf7e';
+  const g = `<g transform="translate(140 96) rotate(38)"><rect x="-3" y="-16" width="6" height="24" rx="1" fill="#3f6fc4"/><path d="M-3 8 L0 15 L3 8 Z" fill="#e9c46a"/></g>
+    <path d="M62 94 C 80 84, 120 84, 138 94" stroke="#2f6b4c" stroke-width="6" stroke-linecap="round"/>
+    <path d="M70 94 C 86 106, 114 106, 130 94 C 114 99, 86 99, 70 94 Z" fill="rgba(111,191,143,.85)"/>
+    <g stroke="#141517" stroke-width="2.2" fill="rgba(255,255,255,.14)"><circle cx="86" cy="118" r="9.5"/><circle cx="114" cy="118" r="9.5"/></g><path d="M95.5 118 Q100 114 104.5 118" stroke="#141517" stroke-width="2.2"/>`;
+  const front = `<g transform="translate(146 114) rotate(10)"><rect x="-2" y="0" width="30" height="38" rx="3" fill="#8f3f3f"/><rect x="-2" y="0" width="6" height="38" rx="2" fill="#6e2f2f"/><rect x="9" y="9" width="14" height="8" rx="1.5" fill="#f4f3ef"/></g>`;
+  return svgWrap(w, '', c, face('calm') + g, arm('M60 132 Q46 140 42 150', c) + front + arm('M140 132 Q154 140 158 146', c), '');
+}
+
+/* The Merge manager */
+let costume = 'signal', mmColor = '#9cc5e8', countMode = 'needs';
+const wand = (x1, y1, x2, y2) => `<path d="M${x1} ${y1} L${x2} ${y2}" stroke="#f39a3c" stroke-width="7" stroke-linecap="round"/><path d="M${x1 + (x2 - x1) * .55} ${y1 + (y2 - y1) * .55} L${x2} ${y2}" stroke="#ffd27a" stroke-width="7" stroke-linecap="round"/><circle cx="${x2}" cy="${y2}" r="8" fill="#ffd27a" opacity=".22"/>`;
+const walkie = `<g transform="translate(136 96) rotate(-12)"><rect x="0" y="0" width="13" height="24" rx="3" fill="#2b2c30"/><rect x="3" y="4" width="7" height="6" rx="1" fill="#9cc5e8"/><path d="M10 0 V-12" stroke="#2b2c30" stroke-width="2.5" stroke-linecap="round"/></g>`;
+function flag(x, y, color, furled, angle = -8) {
+  if (furled) return `<g transform="translate(${x} ${y}) rotate(${angle})"><path d="M0 0 V34" stroke="#8a5a35" stroke-width="4" stroke-linecap="round"/><path d="M0 2 Q8 8 2 26 Z" fill="${color}"/></g>`;
+  return `<g transform="translate(${x} ${y}) rotate(${angle})"><path d="M0 0 V-46" stroke="#8a5a35" stroke-width="4" stroke-linecap="round"/><path class="flutter" d="M2 -46 H30 Q26 -38 30 -30 H2 Z" fill="${color}"/></g>`;
+}
+function mergeSVG(pose, w) {
+  const c = mmColor;
+  const id = 'v' + (++uid);
+  let gear = '', arms = '', back = '', front = '', mood = 'calm';
+  if (costume === 'marshal') {
+    gear = `<clipPath id="${id}"><path d="${BODY}"/></clipPath>
+      <g clip-path="url(#${id})"><rect x="40" y="142" width="120" height="30" fill="#d4ec5c"/><rect x="40" y="151" width="120" height="6" fill="#eef2f4" opacity=".85"/><path d="M100 142 V170" stroke="#a9c03e" stroke-width="2"/></g>
+      <path d="M58 106 C 56 50, 144 50, 142 106" stroke="#3a3b40" stroke-width="7" stroke-linecap="round"/>
+      <rect x="45" y="98" width="15" height="26" rx="7" fill="#3a3b40"/><rect x="140" y="98" width="15" height="26" rx="7" fill="#3a3b40"/>
+      <rect x="49" y="104" width="7" height="14" rx="3.5" fill="#f39a3c"/><rect x="144" y="104" width="7" height="14" rx="3.5" fill="#f39a3c"/>`;
+  } else {
+    gear = `<path d="M64 92 C 66 64, 134 64, 136 92 Z" fill="#2c3e66"/><rect x="64" y="84" width="72" height="7" fill="#f0cf7e"/><ellipse cx="100" cy="93" rx="42" ry="5.5" fill="#1d2a45"/><circle cx="100" cy="76" r="4" fill="#f0cf7e"/>
+      <path d="M86 150 Q100 156 114 150" stroke="#c4c2bc" stroke-width="2"/><rect x="96" y="150" width="8" height="10" rx="2" fill="#c4c2bc"/>`;
+  }
+  const L = (d) => arm(d, c);
+  if (pose === 'idle') {
+    arms = L('M60 132 Q46 140 42 150') + L('M140 132 Q154 140 158 150');
+    front = costume === 'marshal' ? wand(42, 152, 32, 174) + wand(158, 152, 168, 174) : flag(160, 140, '#6cc4a1', true);
+  } else if (pose === 'busy') {
+    mood = 'happy';
+    if (costume === 'marshal') {
+      arms = `<g class="wave-l">${L('M60 124 Q44 104 40 84')}${wand(40, 84, 28, 52)}</g><g class="wave-r">${L('M140 124 Q156 104 160 84')}${wand(160, 84, 172, 52)}</g>`;
+      back = `<g class="glide"><path d="M88 12 L118 22 L92 30 L96 22 Z" fill="#ecebe8"/><path d="M96 22 L118 22" stroke="#a09e99" stroke-width="1.5"/></g>`;
+    } else {
+      arms = L('M60 132 Q46 140 42 150') + L('M140 124 Q156 104 160 88');
+      front = flag(160, 88, '#6cc4a1', false, 6);
+    }
+  } else if (pose === 'needs') {
+    mood = 'happy';
+    if (costume === 'marshal') {
+      arms = L('M60 132 Q46 140 42 150') + wand(42, 152, 32, 174) + `<g class="raise">${L('M140 126 Q158 98 152 70')}${wand(152, 70, 156, 36)}</g>`;
+    } else {
+      arms = L('M60 132 Q46 140 42 150') + `<g class="raise">${L('M140 126 Q158 98 152 72')}${flag(152, 72, '#eeab94', false, 4)}</g>`;
+    }
+  } else { // vm
+    mood = 'right';
+    arms = L('M60 132 Q46 140 42 150') + L('M140 132 Q156 124 148 116');
+    front = walkie + (costume === 'marshal' ? wand(42, 152, 32, 174) : '');
+  }
+  return svgWrap(w, back, c, face(mood) + gear, arms, front);
+}
+const POSES = [
+  {k: 'idle', h: 'Nothing landed', p: 'Wands down. No counter. The figure always shows once a project has a lane, so you can find the page.', n: 0, all: 0},
+  {k: 'busy', h: 'Lanes moving', p: 'Waving a pull request in. A paper plane glides past while any head is updating, testing or merging.', n: 0, all: 5},
+  {k: 'needs', h: 'Needs you', p: 'One wand up, smiling as it asks (blocked Patches smile). Counter in peach.', n: 1, all: 6},
+  {k: 'vm', h: 'Merging on dev-vm', p: 'On the radio to the VM. The badge names it; the bubble says what happened while you were away.', n: 1, all: 6, vm: true},
+];
+function mmFigure(pose, w = 150, name = true) {
+  const p = POSES.find(x => x.k === pose);
+  const n = countMode === 'needs' ? p.n : p.all;
+  const hot = countMode === 'needs' ? n > 0 : pose === 'needs' || pose === 'vm';
+  const away = p.vm ? `<span class="away">on dev-vm</span>` : '';
+  return `<div class="fig">${away}${mergeSVG(pose, w)}<span class="count ${n === 0 ? 'calm' : ''} ${hot ? 'hot' : ''}">${n}</span>${name ? '<span class="name">Merge manager</span>' : ''}</div>`;
+}
+function drawPoses() {
+  document.getElementById('poses').innerHTML = POSES.map(p => `<div class="pose">${mmFigure(p.k, 170, false)}<h3>${p.h}</h3><p>${p.p}</p></div>`).join('');
+}
+
+/* ---------- the empty screen ---------- */
+let opt = 'A';
+const sideHTML = `<div class="side"><div class="dots"><i></i><i></i><i></i></div>
+  <div class="lbl">Pinned projects</div><div class="srow"><i></i><span class="nm">api</span></div><div class="srow blue"><i></i><span class="nm">switchboard</span></div>
+  <div class="lbl">Sessions</div>
+  <div class="srow"><i></i><span class="nm">Land it from the session header</span><span class="spill st-head">merging</span></div>
+  <div class="srow idle"><i></i><span class="nm">Stage pills on plan cards</span><span class="spill st-wait">landed · 2nd</span></div>
+  <div class="srow peach"><i></i><span class="nm">Tray shows the land stage</span><span class="spill st-need">needs you</span></div>
+  <div class="srow blue"><i></i><span class="nm">Export CSV on coach page</span></div></div>`;
+function familyCard(inner, floorH) {
+  const stars = Array.from({length: 22}, (_, i) => `<i style="left:${(i * 53) % 690}px;top:${(i * 29) % 70 + 8}px"></i>`).join('');
+  const top = 330 - floorH;
+  const members = [260, 298, 390, 426].map(x => `<span class="member" style="left:${x}px;top:${top - 34}px"></span>`).join('');
+  return `<div class="family" style="height:330px"><div class="stars">${stars}</div>${members}<span class="fire" style="left:342px;top:${top - 34}px"></span><div class="floor" style="height:${floorH}px">${inner}</div></div>`;
+}
+const NOTES = {
+  A: ['<b>One row:</b> Bug manager, Ask Patch, Issue manager, Merge manager. The card widens by one figure; Ask Patch sits just left of centre.', '<b>Reads as one team.</b> The Merge manager is the only one whose job starts after the work, so it stands last.', '<b>Short windows:</b> as decided for #409, the managers move beside the ask box when the card hides.'],
+  B: ['<b>Inbox managers flank Ask Patch;</b> the Merge manager stands apart on a strip of runway lights at the floor\'s right edge.', '<b>Tells the story:</b> work comes in from the left, leaves on the right.', '<b>Cost:</b> one more element on the floor, and Ask Patch stays exactly centred only because the runway takes the right-hand space.'],
+};
+function drawScreen() {
+  let floor;
+  if (opt === 'A') {
+    floor = `<div class="on-floor">${`<div class="fig">${bugSVG(128)}<span class="name">Bug manager</span></div>`}${`<div class="fig">${askSVG(146)}</div>`}${`<div class="fig">${issueSVG(128)}<span class="name">Issue manager</span></div>`}${mmFigure('busy', 128)}</div>
+      <span class="bubble" style="right:22px;top:6px">#432 merged</span>`;
+  } else {
+    floor = `<div class="on-floor" style="justify-content:flex-start;padding-left:120px">${`<div class="fig">${bugSVG(124)}<span class="name">Bug manager</span></div>`}${`<div class="fig">${askSVG(146)}</div>`}${`<div class="fig">${issueSVG(124)}<span class="name">Issue manager</span></div>`}</div>
+      <div class="runway" style="right:150px"><i></i><i></i><i></i><i></i></div><div class="runway" style="right:22px"><i></i><i></i><i></i><i></i></div>
+      <div style="position:absolute;right:36px;bottom:4px">${mmFigure('busy', 124)}</div>
+      <span class="bubble" style="right:30px;top:6px">#432 merged</span>`;
+  }
+  document.getElementById('screen').innerHTML = sideHTML + `<div class="main">${familyCard(floor, 210)}<div class="askbox">Ask Patch to start something… <kbd>⏎</kbd></div></div>`;
+  document.getElementById('optnote').innerHTML = NOTES[opt].map(t => `<div>${t}</div>`).join('');
+}
+
+/* ---------- the page (example data) ---------- */
+const LANES = [
+  {repo: 'switchboard', lane: 'sb', meta: '~9 min to clear · 14 required checks', rows: [
+    {id: 432, t: 'Land it from the session header', s: 'head', sub: 'approved by ana · updated 4 min ago · squash', place: 1, sess: 'Land it from the session header', steps: [1, .64, 0], running: 'e2e (3 of 8 shards)'},
+    {id: 433, t: 'Stage pills on plan cards', s: 'wait', sub: 'approved by sam · not updated since it landed', place: 2, conflict: true, sess: 'Stage pills on plan cards'},
+    {id: 430, t: 'Merge manager figure', s: 'held', heldText: 'Held · @ana', sub: 'review requested from ana 2 h ago', place: 3, sess: 'Merge manager figure'},
+    {id: 434, t: 'Rocket on archive', s: 'held', heldText: 'Held · on #433', sub: 'stacked on #433; joins when it merges', place: 4},
+  ]},
+  {repo: 'api', lane: 'q', meta: 'merge-queue Action · 3 in the queue', rows: [
+    {id: 1290, t: 'Rate-limit partner webhooks', s: 'head', sub: 'sam · first in the merge queue', place: 1, theirs: true, steps: [1, .4, 0]},
+    {id: 1288, t: 'Paginate the sessions export', s: 'wait', sub: 'approved by ana · number 2 in the merge queue', place: 2, sess: 'Paginate the sessions export'},
+    {id: 1281, t: 'Move workout sync to the new mapper', s: 'fix', sub: 'conflict with #1286 · errand running for 6 min', place: 3, errand: 'Errand: fix #1281'},
+  ]},
+  {repo: 'web-app', lane: 'q', meta: 'merge-queue Action · 1 in the queue', rows: [
+    {id: 877, t: 'Tray shows the land stage', s: 'need', sub: 'changes requested by ana · 1 unresolved thread', place: 1, sess: 'Tray shows the land stage'},
+  ]},
+];
+const MERGED = [
+  {id: 429, repo: 'switchboard', t: 'VM hand-off for merging', at: '14:02'},
+  {id: 1284, repo: 'api', t: 'Retry partner timeouts once', at: '11:40'},
+  {id: 15, repo: 'patch', t: 'Merge manager figure art', at: '09:15'},
+];
+const STAGE = {
+  head: ['st-head', 'Head · checks'], wait: ['st-wait', 'Waiting'], held: ['st-held', 'Held'], fix: ['st-fix', 'Fixing'], need: ['st-need', 'Needs you'], merged: ['st-merged', 'Merged'],
+};
+let grp = 'lane', host = 'mac', selId = 432;
+function stagePill(r) {
+  const [cls, txt] = STAGE[r.s];
+  const label = r.s === 'held' ? r.heldText : r.s === 'head' && r.theirs ? 'Head · not yours' : txt;
+  return `<span class="stage ${cls}"><i></i>${label}</span>`;
+}
+function rowHTML(r, repoTag) {
+  const conflict = r.conflict ? ' <span class="warn-flag">· will conflict</span>' : '';
+  const tag = repoTag ? `<i class="example-tag" style="font-style:normal;margin-right:6px">${r.repo}</i>` : '';
+  return `<button class="row-btn ${selId === r.id ? 'sel' : ''} ${r.theirs ? 'theirs' : ''}" data-id="${r.id}"><span class="place">${r.place}</span><span class="t"><b>#${r.id} ${r.t}${conflict}</b><span>${tag}${r.sub}</span></span>${stagePill(r)}</button>`;
+}
+function headCard(r, repoTag) {
+  const [u, c, m] = r.steps;
+  const step = (lbl, v, state) => `<div class="hstep ${state}"><span>${lbl}</span><span class="bar"><i style="width:${v * 100}%"></i></span></div>`;
+  const checkLbl = r.theirs ? 'Checks (the queue)' : 'Checks 9 of 14';
+  return `<div class="headcard">${rowHTML(r, repoTag)}<div class="hsteps">${step(r.theirs ? 'Rebased' : 'Updated on the trunk', u, 'done')}${step(checkLbl, c, 'active')}${step('Merge', m, '')}</div></div>`;
+}
+function allRows() { return LANES.flatMap(l => l.rows.map(r => ({...r, repo: l.repo, lane: l.lane}))); }
+function listHTML() {
+  if (grp === 'lane') {
+    return LANES.map(l => `<div class="group">${l.repo}<span class="lane ${l.lane === 'sb' ? 'sb' : ''}">${l.lane === 'sb' ? 'Switchboard lane' : 'Queue lane'}</span>${host === 'vm' && l.lane === 'sb' ? '<span class="lane" style="color:var(--blue)">on dev-vm</span>' : ''}<span class="meta">${l.meta}</span></div>` +
+      l.rows.map(r => r.s === 'head' ? headCard({...r, repo: l.repo}) : rowHTML({...r, repo: l.repo})).join('')).join('') + mergedHTML();
+  }
+  const order = [['need', 'Needs you'], ['fix', 'Fixing'], ['head', 'Head'], ['wait', 'Waiting'], ['held', 'Held']];
+  return order.map(([s, label]) => {
+    const rows = allRows().filter(r => r.s === s);
+    if (!rows.length) return '';
+    return `<div class="group">${label}<span class="meta">${rows.length}</span></div>` + rows.map(r => s === 'head' ? headCard(r, true) : rowHTML(r, true)).join('');
+  }).join('') + mergedHTML();
+}
+function mergedHTML() {
+  return `<div class="group">Merged today<span class="meta">sessions archived</span></div>` + MERGED.map(m => `<div class="row-btn" style="cursor:default"><span class="place" style="color:var(--purple)">✓</span><span class="t"><b style="color:var(--dim);font-weight:600">#${m.id} ${m.t}</b><span>${m.repo} · merged ${m.at}</span></span><span class="stage st-merged"><i></i>Merged</span></div>`).join('');
+}
+function detailHTML() {
+  const r = allRows().find(x => x.id === selId) || allRows()[0];
+  const laneTxt = r.lane === 'sb' ? 'Switchboard lane' : 'Queue lane';
+  const head = `<div class="meta">${stagePill(r)}<span>${r.repo} · ${laneTxt} · ${ordinal(r.place)} in land order</span></div>
+    <h3>#${r.id} ${r.t}</h3><div class="actions"><a class="out" href="#">Open PR #${r.id} on GitHub ↗</a></div>`;
+  let body = '', acts = '';
+  const unland = `<button class="btn ghost">Unland <kbd>U</kbd></button>`;
+  if (r.s === 'head' && r.theirs) {
+    body = `<div class="box"><span class="bl">Not yours</span><p>sam's pull request is the queue's head. Yours behind it wait without updates, so they cost no CI until it merges or fails out.</p></div>`;
+    acts = `<button class="btn">Nudge sam <kbd>N</kbd></button>`;
+  } else if (r.s === 'head') {
+    body = `<div class="box"><span class="bl">Where it is</span>
+        <div class="vstep" style="--c:var(--purple)"><i></i><div><b>Landed</b> from the session header</div><span>13:12</span></div>
+        <div class="vstep" style="--c:var(--purple)"><i></i><div><b>Waited</b> behind #429 · no CI spent</div><span>13:12–14:02</span></div>
+        <div class="vstep" style="--c:var(--purple)"><i></i><div><b>Head</b> · updated on the trunk (rebase)</div><span>14:03</span></div>
+        <div class="vstep" style="--c:var(--yellow)"><i></i><div><b>Checks 9 of 14</b> · ${r.running}</div><span>14:04</span></div>
+        <div class="vstep"><i></i><div style="color:var(--faint)">Merge · squash · session archives with the rocket</div><span>~5 min</span></div></div>
+      <div class="box"><span class="bl">Required checks · 9 of 14 passed</span><div class="checks"><div class="run">◌ <span>e2e · shards 4–8 running</span></div><div class="ok">✓ <span>unit · 1,204 tests</span></div><div class="ok">✓ <span>lint, types, build</span></div></div></div>
+      <div class="box"><span class="bl">CI this saved</span><p>#433 and #430 were not updated when #429 merged: 2 runs not started. #433's conflict was found by a local test rebase, without a push.</p></div>`;
+    acts = `<button class="btn primary">Open session <kbd>⏎</kbd></button>${unland}`;
+  } else if (r.s === 'wait') {
+    body = `<div class="box"><span class="bl">Waiting</span><p>${r.lane === 'sb' ? 'Becomes the head when #432 merges or fails out. Not updated until then.' : 'Number 2 in the merge queue. The Action cancels its CI while it waits behind the head.'}</p>${r.conflict ? '<p style="color:var(--yellow)">A local test rebase on the trunk conflicts in <code>plan/describe.ts</code>. A fix errand starts only once it is the head, so the fix is not stale by then.</p>' : ''}</div>`;
+    acts = `<button class="btn primary">Open session <kbd>⏎</kbd></button>${unland}`;
+  } else if (r.s === 'held') {
+    body = r.heldText.includes('#')
+      ? `<div class="box"><span class="bl">Stacked</span><p>Waits for #433 to merge. Then it is retargeted to the trunk with no push, and an errand rebases it with <code>--onto</code> only if squashing leaves conflicts.</p></div>`
+      : `<div class="box"><span class="bl">Held · keeps its place</span><p>Review requested from ana 2 h ago. Passed over until she reviews; then it goes back to 3rd.</p><p class="muted" style="font-size:12px">Nudged? Not yet.</p></div>`;
+    acts = r.heldText.includes('#') ? unland : `<button class="btn primary">Nudge ana <kbd>N</kbd></button>${unland}`;
+  } else if (r.s === 'fix') {
+    body = `<div class="box"><span class="bl">Fix errand · running 6 min</span>
+        <div class="vstep" style="--c:var(--red)"><i></i><div><b>Failed out as the head</b> · conflict with #1286 in <code>WorkoutMapper.php</code></div><span>13:51</span></div>
+        <div class="vstep" style="--c:var(--green)"><i></i><div><b>Errand</b> rebasing in its own worktree, running the tests</div><span>13:52</span></div>
+        <div class="vstep"><i></i><div style="color:var(--faint)">Push with lease → back to Waiting, 3rd</div><span></span></div></div>
+      <div class="box"><span class="bl">${host === 'vm' ? 'Runs on dev-vm' : 'Runs on this Mac'}</span><p>It may force-push this branch, rebase and run the tests. It never merges, labels, reviews or touches another branch.</p></div>`;
+    acts = `<button class="btn primary">Open errand <kbd>⏎</kbd></button>${unland}`;
+  } else if (r.s === 'need') {
+    body = `<div class="box"><span class="bl">Needs you · keeps its place</span><p><b style="color:var(--text)">ana requested changes</b>: "Pill text clips at 188 px in the tray, can we shorten it?" and 1 unresolved thread.</p><p class="muted" style="font-size:12px">Review feedback is never fixed by an errand. Push a change or resolve the thread and it goes back to Waiting by itself.</p></div>`;
+    acts = `<button class="btn primary">Open session <kbd>⏎</kbd></button><button class="btn">Try again <kbd>T</kbd></button>${unland}`;
+  }
+  return head + body + `<div class="actions">${acts}</div>`;
+}
+function ordinal(n) { return n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'); }
+function drawPage() {
+  const vm = host === 'vm';
+  const away = vm ? `<div class="away-sum"><span><b>While merging was on dev-vm</b> · since 23:10</span><span><b>3</b> merged</span><span style="color:var(--orange)"><b style="color:var(--orange)">1</b> needs you: #877</span><span><b>1</b> errand running: #1281</span><span class="x"><button class="btn sm">Dismiss</button></span></div>` : '';
+  const right = vm
+    ? `<span class="hostpill vm"><i></i>Merging on dev-vm</span><button class="btn sm">Bring merging back</button>`
+    : `<span class="hostpill"><i></i>Merging on this Mac</span><button class="btn sm">Hand off merging to dev-vm</button>`;
+  document.getElementById('mmpage').innerHTML = `
+    <div class="pg-head"><div class="mini">${mergeSVG(vm ? 'vm' : 'needs', 56)}</div><div><h2>Merge manager</h2><div class="sub">2 Switchboard lanes, 2 queue lanes · 8 landed <span class="example-tag">· example data</span></div></div><div class="right">${right}</div></div>
+    <div class="summary">
+      <div class="tile"><span class="n" style="color:var(--orange)">1</span><span class="l">Needs you</span><span class="hint">changes requested</span></div>
+      <div class="tile"><span class="n" style="color:var(--green)">1</span><span class="l">Fixing</span><span class="hint">1 errand running</span></div>
+      <div class="tile"><span class="n" style="color:var(--purple)">1</span><span class="l">Merging</span><span class="hint">yours as head</span></div>
+      <div class="tile"><span class="n">2</span><span class="l">Waiting</span><span class="hint">1 will conflict</span></div>
+      <div class="tile"><span class="n" style="color:var(--muted)">2</span><span class="l">Held</span><span class="hint">review · stack</span></div>
+      <div class="tile"><span class="n" style="color:var(--purple)">3</span><span class="l">Merged today</span><span class="hint">last 14:02</span></div>
+      <div class="tile saved"><span class="n">23</span><span class="l">CI runs saved</span><span class="hint">this week · estimate</span></div>
+    </div>
+    ${away || '<div></div>'}
+    <div class="split"><div class="list">${listHTML()}</div><div class="detail">${detailHTML()}</div></div>`;
+  document.querySelectorAll('#mmpage .row-btn[data-id]').forEach(b => b.addEventListener('click', () => { selId = +b.dataset.id; drawPage(); }));
+}
+
+/* ---------- switches ---------- */
+function bindSwitch(sel, fn) {
+  document.querySelectorAll(sel + ' button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll(sel + ' button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    fn(b);
+  }));
+}
+function redrawFigures() { drawPoses(); drawScreen(); drawPage(); }
+bindSwitch('#cossw', b => { costume = b.dataset.cos; redrawFigures(); });
+bindSwitch('#palsw', b => { mmColor = b.dataset.pal; redrawFigures(); });
+bindSwitch('#cntsw', b => { countMode = b.dataset.cnt; redrawFigures(); });
+bindSwitch('#grpsw', b => { grp = b.dataset.grp; drawPage(); });
+bindSwitch('#hostsw', b => { host = b.dataset.host; drawPage(); });
+document.querySelectorAll('.opt-tab').forEach(b => b.addEventListener('click', () => {
+  opt = b.dataset.opt;
+  document.querySelectorAll('.opt-tab').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+  drawScreen();
+}));
+
+/* ---------- confetti and the rocket ---------- */
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ROCKET = `<svg width="34" height="54" viewBox="0 0 34 54" fill="none"><path d="M17 2 C 27 12, 28 28, 25 38 H9 C 6 28, 7 12, 17 2 Z" fill="#ecebe8"/><circle cx="17" cy="20" r="5" fill="#9cc5e8" stroke="#2b2c30" stroke-width="2"/><path d="M9 30 L2 42 L9 40 Z M25 30 L32 42 L25 40 Z" fill="#9cc5e8"/><path d="M11 38 Q17 54 23 38 Z" fill="#f39a3c"/><path d="M14 38 Q17 48 20 38 Z" fill="#ffd27a"/></svg>`;
+function launch(kind, rowId) {
+  const stage = document.getElementById('rkstage');
+  const row = document.getElementById(rowId);
+  const sr = stage.getBoundingClientRect(), rr = row.getBoundingClientRect();
+  const x = rr.left - sr.left + rr.width / 2, y = rr.top - sr.top + rr.height / 2;
+  row.classList.add('gone');
+  if (reduced) return;
+  if (kind === 'confetti') {
+    const cols = ['#8fd8bf', '#9cc5e8', '#c8b8e8', '#eeab94', '#f5c86b'];
+    for (let i = 0; i < 28; i++) {
+      const el = document.createElement('span'); el.className = 'fx';
+      Object.assign(el.style, {left: x + 'px', top: y + 'px', width: '7px', height: '10px', background: cols[i % 5], borderRadius: '2px'});
+      stage.appendChild(el);
+      const a = -Math.PI / 2 + (Math.random() - .5) * 2.2, v = 160 + Math.random() * 160;
+      el.animate([{transform: 'translate(0,0) rotate(0)', opacity: 1}, {transform: `translate(${Math.cos(a) * v}px, ${Math.sin(a) * v + 160}px) rotate(${Math.random() * 720}deg)`, opacity: 0}], {duration: 1200 + Math.random() * 400, easing: 'cubic-bezier(.2,.7,.4,1)', fill: 'forwards'});
+      setTimeout(() => el.remove(), 1700);
+    }
+  } else {
+    const el = document.createElement('div'); el.className = 'fx'; el.innerHTML = ROCKET;
+    Object.assign(el.style, {left: (x - 17) + 'px', top: (y - 27) + 'px'});
+    stage.appendChild(el);
+    el.animate([{transform: 'translate(0,0) scale(.6)'}, {transform: 'translate(0,-10px) scale(1)', offset: .15}, {transform: 'translate(30px,-360px) rotate(8deg) scale(.8)'}], {duration: 1400, easing: 'cubic-bezier(.5,0,.8,.4)', fill: 'forwards'});
+    for (let i = 0; i < 14; i++) setTimeout(() => {
+      const p = document.createElement('span'); p.className = 'puff fx';
+      const t = i / 14, py = y + 20 - 360 * Math.pow(t, 2.2), px = x - 5 + 30 * Math.pow(t, 2.2);
+      Object.assign(p.style, {left: px + 'px', top: py + 'px'});
+      stage.appendChild(p);
+      p.animate([{transform: 'scale(.6)', opacity: .9}, {transform: `scale(${2 + Math.random()}) translateY(8px)`, opacity: 0}], {duration: 900, fill: 'forwards'});
+      setTimeout(() => p.remove(), 950);
+    }, i * 70);
+    setTimeout(() => el.remove(), 1500);
+  }
+}
+document.querySelectorAll('[data-fx]').forEach(b => b.addEventListener('click', () => launch(b.dataset.fx, b.dataset.row)));
+document.getElementById('rkreset').addEventListener('click', () => document.querySelectorAll('.rk-row').forEach(r => r.classList.remove('gone')));
+
+drawPoses(); drawScreen(); drawPage();
+</script>
