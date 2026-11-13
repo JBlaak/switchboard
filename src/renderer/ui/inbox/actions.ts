@@ -9,3 +9,11 @@ import type {InboxManager} from '../../../domain/inbox/model';
 export function openManagerPage(manager: InboxManager): void {
     dispatch({type: 'managerPageRequested', manager});
 }
+
+/**
+ * The Merge manager chosen on the empty screen (#440): its page (⌘⇧L, #439),
+ * which takes `mergeManagerPageRequested`.
+ */
+export function openMergeManagerPage(): void {
+    dispatch({type: 'mergeManagerPageRequested'});
+}

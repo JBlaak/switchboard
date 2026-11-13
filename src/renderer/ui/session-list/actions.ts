@@ -23,7 +23,7 @@ import {
 } from '../../features/sessions/session-actions';
 import {doze, wakeUp} from '../../lib/motion/sleep';
 import {pollActiveSessions} from '../../features/sessions/session-poller';
-import {celebrateFrom, isLeaving, leave} from './leave';
+import {archiveFrom, isLeaving, leave} from './leave';
 import {offerArchiveUndo, sessionOnScreen} from '../archive-undo/actions';
 import type {SessionRow} from '../../../domain/session/session';
 
@@ -161,7 +161,7 @@ export function toggleArchive(el: HTMLElement, rowId: string, sessionId: string,
         void archiveSessionRow(session, 0).then(() => loadProjects());
         return;
     }
-    celebrateFrom(button);
+    archiveFrom(button, [sessionId]);
     const onScreen = sessionOnScreen();
     leave(el, rowId, async () => {
         if (!(await archiveSessionRow(session, 1))) return false;
@@ -217,7 +217,10 @@ export function archiveGroup(
     const sessions = sessionIds.map((id) => sessionMap.get(id)).filter((s): s is SessionRow => !!s && !s.archived);
     if (!sessions.length) return;
 
-    celebrateFrom(button);
+    archiveFrom(
+        button,
+        sessions.map((session) => session.sessionId),
+    );
     const onScreen = sessionOnScreen();
     leave(el, groupId, async () => {
         let ok = true;

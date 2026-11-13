@@ -424,3 +424,53 @@ test('it polls on start, every minute and on focus; never once stopped', async (
     assert.equal(polls(), 3);
     assert.equal(timers.pending, 0);
 });
+
+// ── What it tells (#440) ──
+
+test('a PR going to Needs you is told once, however many polls it stays there', async () => {
+    /* Given */
+    const {service, state} = setup({prs: {[REPO]: {1: prRead(1)}}});
+    await service.land(REPO, 1);
+    const told: string[][] = [];
+    service.onTransitions((transitions) => told.push(transitions.needsYou.map((pr) => pr.key)));
+
+    /* When */
+    state.prs[REPO][1] = prRead(1, {review: 'changes_requested'});
+    await service.poll();
+    await service.poll();
+
+    /* Then */
+    assert.deepEqual(told, [['movelab/connect#1']]);
+});
+
+test('a PR merging is told once, with the PR', async () => {
+    /* Given */
+    const {service, state} = setup({prs: {[REPO]: {1: prRead(1)}}});
+    await service.land(REPO, 1);
+    const merged: number[][] = [];
+    service.onTransitions((transitions) => merged.push(transitions.merged.map((pr) => pr.number)));
+
+    /* When */
+    state.prs[REPO][1] = prRead(1, {state: 'merged', mergedAt: new Date(NOW).toISOString()});
+    await service.poll();
+    await service.poll();
+
+    /* Then */
+    assert.deepEqual(merged, [[1]]);
+});
+
+test('PRs already in Needs you when the app starts are not told again', async () => {
+    /* Given */
+    const store = new MemoryLandedStore();
+    const first = setup({prs: {[REPO]: {1: prRead(1, {review: 'changes_requested'})}}}, store);
+    await first.service.land(REPO, 1);
+    const {service} = setup({prs: {[REPO]: {1: prRead(1, {review: 'changes_requested'})}}}, store);
+    let told = 0;
+    service.onTransitions(() => told++);
+
+    /* When */
+    await service.poll();
+
+    /* Then */
+    assert.equal(told, 0);
+});
