@@ -21,6 +21,44 @@
     will-change: transform, opacity;
 }
 
+/* The rocket a landed session leaves with when it is archived
+   (lib/motion/rocket.ts, #440), instead of the confetti. */
+.rocket-launch {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.rocket-launch__rocket {
+    position: absolute;
+    will-change: transform;
+}
+
+.rocket-launch__rocket svg {
+    display: block;
+}
+
+.rocket-launch__puff {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(236, 235, 232, 0.35);
+    will-change: transform, opacity;
+}
+
+@media (prefers-color-scheme: light) {
+    .rocket-launch__rocket {
+        filter: drop-shadow(0 1px 1.5px rgba(20, 30, 50, 0.35));
+    }
+
+    .rocket-launch__puff {
+        background: rgba(20, 30, 50, 0.18);
+    }
+}
+
 .motion-ghost {
     will-change: transform, opacity;
 }

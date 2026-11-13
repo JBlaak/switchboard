@@ -3,6 +3,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
     initialMergeManagerState,
+    isLandedSession,
     landBusy,
     mergeManagerReducer,
     needsYouCount,
@@ -11,7 +12,7 @@ import {
 } from '../src/renderer/state/merge-manager-slice';
 import {landedView, mergeManagerState} from '../src/domain/merge-manager/landed';
 import {landedKey} from '../src/domain/merge-manager/model';
-import {HEAD, REPO, landedPr} from './support/merge-manager-fixtures';
+import {HEAD, NOW, REPO, landedPr} from './support/merge-manager-fixtures';
 
 test('a push replaces the lanes, and the Needs you count follows it', () => {
     /* Given */
@@ -146,4 +147,22 @@ test('a re-keyed session keeps its PRs for Land it', () => {
 
     /* Then */
     assert.deepEqual(Object.keys(next.sessionPullRequests), ['new']);
+});
+
+test('a session whose PR was landed, merged since or not, is a landed session; others are not (#440)', () => {
+    /* Given */
+    const slice = mergeManagerReducer(initialMergeManagerState, {
+        type: 'mergeManagerChanged',
+        state: mergeManagerState(
+            [landedPr(1, 30, 'switchboard', HEAD), landedPr(2, 20, 'switchboard', {kind: 'merged', at: NOW})],
+            new Map(),
+        ),
+    });
+    const pr = (number: number) => ({number, url: `https://github.com/${REPO}/pull/${number}`, repository: REPO});
+
+    /* Then */
+    assert.equal(isLandedSession(slice, [{pullRequests: [pr(1)]}]), true);
+    assert.equal(isLandedSession(slice, [{pullRequests: [pr(3)]}, {pullRequests: [pr(2)]}]), true);
+    assert.equal(isLandedSession(slice, [{pullRequests: [pr(3)]}, {}]), false);
+    assert.equal(isLandedSession(initialMergeManagerState, [{pullRequests: [pr(1)]}]), false);
 });

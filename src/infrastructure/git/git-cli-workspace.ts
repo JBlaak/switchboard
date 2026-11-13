@@ -348,6 +348,13 @@ export class GitCliWorkspace implements GitWorkspace, GitWorktrees {
         return this.gitWrite(repository, ['worktree', 'add', '--quiet', target, branch], FETCH_TIMEOUT_MS);
     }
 
+    public async addDetachedWorktree(repository: string, worktree: string, ref: string): Promise<GitWrite> {
+        if (!isSafeRef(ref)) return {ok: false, reason: 'Not a ref: ' + ref};
+        const target = this.hostPath(worktree);
+        if (target === null) return notHere(worktree);
+        return this.gitWrite(repository, ['worktree', 'add', '--quiet', '--detach', target, ref], FETCH_TIMEOUT_MS);
+    }
+
     public async removeWorktree(
         repository: string,
         worktree: string,

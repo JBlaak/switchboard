@@ -9,6 +9,7 @@ import {
     LANE_KIND_RECHECK_MS,
     MERGE_MANAGER_INTERVAL_MS,
     MergeManagerService,
+    type MergeManagerServiceDeps,
 } from '../src/application/services/merge-manager-service';
 import type {GitHubCli, GitHubWrite, LaneReads, QueueLabelWrites} from '../src/application/ports/github-cli';
 import type {LandedStore} from '../src/application/ports/landed-store';
@@ -45,7 +46,11 @@ interface World {
     now: number;
 }
 
-function setup(world: Partial<World> = {}, store = new MemoryLandedStore()) {
+function setup(
+    world: Partial<World> = {},
+    store = new MemoryLandedStore(),
+    runner?: MergeManagerServiceDeps['runner'],
+) {
     const state: World = {
         prs: {},
         queueRepos: new Set([QUEUE_REPO]),
@@ -74,7 +79,15 @@ function setup(world: Partial<World> = {}, store = new MemoryLandedStore()) {
             calls.push(`lane ${repo} ${[...numbers].sort((a, b) => a - b).join(',')}`);
             if (state.unreachable.has(repo)) return null;
             const prs = numbers.map((number) => state.prs[repo]?.[number]).filter((pr) => pr !== undefined);
-            return {repository: repo, viewer: 'joris', trunk: 'main', trunkOid: 't', rules: RULES, pullRequests: prs};
+            return {
+                repository: repo,
+                viewer: 'joris',
+                trunk: 'main',
+                trunkOid: 't',
+                rules: RULES,
+                mergeMethods: ['squash'],
+                pullRequests: prs,
+            };
         },
         workflowFiles: async (repo) => {
             calls.push(`workflows ${repo}`);
@@ -99,6 +112,7 @@ function setup(world: Partial<World> = {}, store = new MemoryLandedStore()) {
         clock: {now: () => state.now},
         timers,
         log: silentLog,
+        ...(runner ? {runner} : {}),
     });
     const pushes = () => renderer.only('mergeManagerChanged').map((event) => event[1] as MergeManagerState);
     const stages = () =>
@@ -423,4 +437,123 @@ test('it polls on start, every minute and on focus; never once stopped', async (
     assert.equal(beforeStart, 0);
     assert.equal(polls(), 3);
     assert.equal(timers.pending, 0);
+});
+
+// ── For the fix errands (#437) ──
+
+test('each lane read, once folded in, goes to whoever follows the lanes', async () => {
+    /* Given */
+    const {service} = setup({prs: {[REPO]: {7: prRead(7, {mergeState: 'dirty'})}}});
+    await service.land(REPO, 7);
+    const heard: Array<{repository: string; stages: string[]}> = [];
+    service.onLaneRead((lane) =>
+        heard.push({repository: lane.repository, stages: lane.landed.map((pr) => pr.stage.kind)}),
+    );
+
+    /* When */
+    await service.poll();
+
+    /* Then */
+    assert.deepEqual(heard, [{repository: REPO, stages: ['fixing']}]);
+});
+
+// ── What it tells (#440) ──
+
+test('a PR going to Needs you is told once, however many polls it stays there', async () => {
+    /* Given */
+    const {service, state} = setup({prs: {[REPO]: {1: prRead(1)}}});
+    await service.land(REPO, 1);
+    const told: string[][] = [];
+    service.onTransitions((transitions) => told.push(transitions.needsYou.map((pr) => pr.key)));
+
+    /* When */
+    state.prs[REPO][1] = prRead(1, {review: 'changes_requested'});
+    await service.poll();
+    await service.poll();
+
+    /* Then */
+    assert.deepEqual(told, [['movelab/connect#1']]);
+});
+
+test('a PR merging is told once, with the PR', async () => {
+    /* Given */
+    const {service, state} = setup({prs: {[REPO]: {1: prRead(1)}}});
+    await service.land(REPO, 1);
+    const merged: number[][] = [];
+    service.onTransitions((transitions) => merged.push(transitions.merged.map((pr) => pr.number)));
+
+    /* When */
+    state.prs[REPO][1] = prRead(1, {state: 'merged', mergedAt: new Date(NOW).toISOString()});
+    await service.poll();
+    await service.poll();
+
+    /* Then */
+    assert.deepEqual(merged, [[1]]);
+});
+
+test('PRs already in Needs you when the app starts are not told again', async () => {
+    /* Given */
+    const store = new MemoryLandedStore();
+    const first = setup({prs: {[REPO]: {1: prRead(1, {review: 'changes_requested'})}}}, store);
+    await first.service.land(REPO, 1);
+    const {service} = setup({prs: {[REPO]: {1: prRead(1, {review: 'changes_requested'})}}}, store);
+    let told = 0;
+    service.onTransitions(() => told++);
+
+    /* When */
+    await service.poll();
+
+    /* Then */
+    assert.equal(told, 0);
+});
+
+test('a merge the lane runner had refused sends its PR to Needs you, and that is told in the same poll', async () => {
+    /* Given */
+    let refused = false;
+    const runner: MergeManagerServiceDeps['runner'] = {
+        conflicts: () => new Map(),
+        run: async (read) => {
+            if (refused) return {asides: [], conflictsChanged: false, reread: false};
+            refused = true;
+            const reason = {kind: 'merge-refused' as const, reason: 'Repository rule violations found'};
+            return {
+                asides: read.pullRequests.map((pr) => ({
+                    key: `${REPO}#${pr.number}`,
+                    aside: {kind: 'needsYou' as const, cause: null, reason, headOid: pr.headOid},
+                })),
+                conflictsChanged: false,
+                reread: false,
+            };
+        },
+    };
+    const {service} = setup({prs: {[REPO]: {1: prRead(1)}}}, new MemoryLandedStore(), runner);
+    await service.land(REPO, 1);
+    const told: string[][] = [];
+    service.onTransitions((transitions) => told.push(transitions.needsYou.map((pr) => pr.key)));
+
+    /* When */
+    await service.poll();
+
+    /* Then */
+    assert.deepEqual(told, [['movelab/connect#1']]);
+});
+
+test('a fix errand that stopped sends its PR to Needs you, and that is told on the next poll', async () => {
+    /* Given */
+    const {service} = setup({prs: {[REPO]: {1: prRead(1)}}});
+    await service.land(REPO, 1);
+    const told: string[][] = [];
+    service.onTransitions((transitions) => told.push(transitions.needsYou.map((pr) => pr.key)));
+
+    /* When */
+    service.setAside('movelab/connect#1', {
+        kind: 'needsYou',
+        cause: 'checks',
+        reason: {kind: 'errand-stopped'},
+        headOid: 'oid-1',
+    });
+    await service.poll();
+
+    /* Then */
+    assert.deepEqual(told, [['movelab/connect#1']]);
 });

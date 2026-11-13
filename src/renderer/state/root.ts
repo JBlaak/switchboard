@@ -22,6 +22,7 @@ import {initialMergeQueueState, mergeQueueReducer, rekeyMergeQueue} from './merg
 import {inboxReducer, initialInboxState} from './inbox-slice';
 import {initialIssueManagerState, issueManagerReducer} from './issue-manager-slice';
 import {initialMergeManagerState, mergeManagerReducer, rekeyMergeManager} from './merge-manager-slice';
+import {bugPageReducer, initialBugPageState} from './bug-page-slice';
 import {initialSessionTrayState, rekeySessionTray, sessionTrayReducer} from './session-tray-slice';
 import {askReducer, initialAskState} from './ask-slice';
 import {answersReducer, followPending, initialAnswersState} from './answers-slice';
@@ -59,6 +60,7 @@ import type {MergeQueueState} from './merge-queue-slice';
 import type {InboxSliceState} from './inbox-slice';
 import type {IssueManagerState} from './issue-manager-slice';
 import type {MergeManagerSliceState} from './merge-manager-slice';
+import type {BugPageState} from './bug-page-slice';
 import type {SessionTrayState} from './session-tray-slice';
 import type {ArchiveUndoState} from './archive-undo-slice';
 import type {AskState} from './ask-slice';
@@ -122,6 +124,8 @@ export interface RendererState {
     readonly inbox: InboxSliceState;
     readonly issueManager: IssueManagerState;
     readonly mergeManager: MergeManagerSliceState;
+    /** The Bug manager page (#414): its items, tab, filter, cursor and Bugsnag reads. */
+    readonly bugPage: BugPageState;
 }
 
 export function initialRendererState(activeSessionId: string | null = null): RendererState {
@@ -163,6 +167,7 @@ export function initialRendererState(activeSessionId: string | null = null): Ren
         inbox: initialInboxState,
         issueManager: initialIssueManagerState,
         mergeManager: initialMergeManagerState,
+        bugPage: initialBugPageState,
     };
 }
 
@@ -212,6 +217,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
     const inbox = inboxReducer(state.inbox, event);
     const issueManager = issueManagerReducer(state.issueManager, event);
     const mergeManager = mergeManagerReducer(state.mergeManager, event);
+    const bugPage = bugPageReducer(state.bugPage, event);
 
     return settle(state, {
         view,
@@ -251,6 +257,7 @@ export function rootReducer(state: RendererState, event: RendererEvent): Rendere
         inbox,
         issueManager,
         mergeManager,
+        bugPage,
     });
 }
 
@@ -328,6 +335,8 @@ export function rekeyState(state: RendererState, oldId: string, newId: string): 
         issueManager: state.issueManager,
         // Lanes of PRs, and each session's PRs for Land it.
         mergeManager: rekeyMergeManager(state.mergeManager, oldId, newId),
+        // Keyed by inbox key; a Fix session is found by its worktree.
+        bugPage: state.bugPage,
     });
 }
 

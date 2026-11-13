@@ -23,8 +23,22 @@
  * in its lane from the same read. **Unland** takes the queue's labels off in
  * a queue lane and drops the PR in both; running CI and errands are left alone.
  *
+ * **The lane runner** (#435), when wired, takes each Switchboard lane after
+ * its read is folded in: it updates, tests and merges the head, cancels CI
+ * behind it and test-rebases waiting PRs. What it sets aside (Fixing, Needs
+ * you) is written here and the lane placed again from the same read, so the
+ * next PR up becomes the head in the same poll; when a PR merged or a head
+ * moved, the lanes are read again at once.
+ *
+ * Each lane read, once folded in, goes to whoever follows the lanes
+ * (`onLaneRead`): the fix errands (#437) start from it. A head the runner set
+ * aside as Fixing is folded in again at once, so its errand starts in the
+ * same poll.
+ *
  * Nothing here notifies: the Merge manager's page, its figure and the Dock
- * show what happened (#439, #440).
+ * show what happened (#439, #440). Whoever needs to act on a PR merging or
+ * going to Needs you hears it through `onTransitions` (#440): the Dock's one
+ * bounce, and archiving a merged PR's session.
  */
 import {laneKindOf} from '../../domain/merge-manager/lane-kind';
 import {
@@ -39,6 +53,7 @@ import {
     unlandLabels,
 } from '../../domain/merge-manager/landed';
 import {landedKey} from '../../domain/merge-manager/model';
+import {landedTransitions, type LandedTransitions} from '../../domain/merge-manager/transitions';
 import type {
     LandedPullRequest,
     LandedView,
@@ -51,6 +66,7 @@ import type {
 import type {Clock, TimerHandle, Timers} from '../ports/clock';
 import type {GitHubCli, GitHubWrite, LaneReads, QueueLabelWrites} from '../ports/github-cli';
 import type {LandedStore} from '../ports/landed-store';
+import type {LaneRunner} from './lane-runner';
 import type {Logger} from '../ports/logger';
 import type {RendererGateway} from '../ports/renderer-gateway';
 
@@ -67,6 +83,17 @@ export interface MergeManagerServiceDeps {
     clock: Clock;
     timers: Timers;
     log: Logger;
+    /** Updates, tests and merges each Switchboard lane's head (#435); without it the lanes are only read. */
+    runner?: Pick<LaneRunner, 'run' | 'conflicts'>;
+}
+
+/** One repository's lane just after a read was folded in: what the fix errands start from (#437). */
+export interface FoldedLane {
+    readonly repository: string;
+    readonly kind: LaneKind;
+    readonly read: LaneRead;
+    /** Every landed PR of the repository, as the read left it. */
+    readonly landed: readonly LandedPullRequest[];
 }
 
 /** Land's answer: the PR in its lane, place and all, or why it did not land. */
@@ -84,6 +111,9 @@ export class MergeManagerService {
     private again = false;
     /** What was last pushed. */
     private published: string | null = null;
+    private readonly followers: Array<(transitions: LandedTransitions) => void> = [];
+    /** Who hears each lane read once it is folded in (the fix errands). */
+    private readonly laneFollowers: Array<(lane: FoldedLane) => void> = [];
 
     constructor(private readonly deps: MergeManagerServiceDeps) {
         for (const pr of deps.store.all()) this.landed.set(pr.key, pr);
@@ -122,6 +152,14 @@ export class MergeManagerService {
                 }
             });
         return this.polling;
+    }
+
+    /**
+     * Hear each change that merged a landed PR or sent one to Needs you. PRs
+     * already there when the app starts are not told again.
+     */
+    public onTransitions(fn: (transitions: LandedTransitions) => void): void {
+        this.followers.push(fn);
     }
 
     /** Every lane with a landed PR, and how many need you. */
@@ -213,6 +251,11 @@ export class MergeManagerService {
 
     // ── For the lane runner and the fix errands (#435, #437) ──
 
+    /** Hear every lane read once it is folded in, after a poll or a Land. */
+    public onLaneRead(fn: (lane: FoldedLane) => void): void {
+        this.laneFollowers.push(fn);
+    }
+
     /** Set a landed PR aside (Fixing, Needs you) on a commit, or clear it (null). Null for a PR that is not landed. */
     public setAside(key: string, aside: SetAside | null): LandedPullRequest | null {
         return this.change(key, (pr) => setAside(pr, aside));
@@ -262,6 +305,7 @@ export class MergeManagerService {
                 continue;
             }
             this.fold(repository, read, kind, []);
+            if (kind === 'switchboard') await this.runLane(repository, read);
         }
 
         const now = this.deps.clock.now();
@@ -282,15 +326,49 @@ export class MergeManagerService {
         return read;
     }
 
+    /**
+     * Hand a Switchboard lane to the lane runner, and fold in what it set
+     * aside or found. A runner that fails leaves the lane as it was read.
+     */
+    private async runLane(repository: string, read: LaneRead): Promise<void> {
+        const runner = this.deps.runner;
+        if (!runner) return;
+        const pass = await runner.run(read, this.inRepository(repository)).catch((err) => {
+            this.deps.log.error(`[merge-manager] the lane runner failed on ${repository}:`, (err as Error).message);
+            return null;
+        });
+        if (!pass) return;
+        const asides = pass.asides
+            .map(({key, aside}) => {
+                const pr = this.landed.get(key);
+                return pr ? setAside(pr, aside) : null;
+            })
+            .filter((pr): pr is LandedPullRequest => pr !== null);
+        this.commit(asides, []);
+        // The next PR up becomes the head, and a confirmed conflict shows, without another read.
+        if (asides.length > 0 || pass.conflictsChanged) this.fold(repository, read, 'switchboard', []);
+        // A PR set aside hands the head on: read again so the new head is acted on at once.
+        if (pass.reread || asides.length > 0) this.again = true;
+    }
+
     /** Fold a lane read into its repository's landed PRs, with `newcomers` just landed. */
     private fold(repository: string, read: LaneRead, kind: LaneKind, newcomers: readonly LandedPullRequest[]): void {
         const known = [
             ...this.inRepository(repository).filter((pr) => !newcomers.some((n) => n.key === pr.key)),
             ...newcomers,
         ];
-        const sync = syncLane(known, read, kind, this.deps.clock.now());
+        const conflicts = kind === 'switchboard' ? this.deps.runner?.conflicts(read) : undefined;
+        const sync = syncLane(known, read, kind, this.deps.clock.now(), conflicts);
         const changed = sync.landed.filter((pr) => JSON.stringify(this.landed.get(pr.key)) !== JSON.stringify(pr));
         this.commit(changed, sync.removed);
+        const lane: FoldedLane = {repository, kind, read, landed: this.inRepository(repository)};
+        for (const fn of this.laneFollowers) {
+            try {
+                fn(lane);
+            } catch (err) {
+                this.deps.log.error('[merge-manager] a lane follower failed:', (err as Error).message);
+            }
+        }
     }
 
     private inRepository(repository: string): LandedPullRequest[] {
@@ -302,9 +380,18 @@ export class MergeManagerService {
     private commit(save: readonly LandedPullRequest[], remove: readonly string[]): void {
         const removing = remove.filter((key) => this.landed.has(key));
         if (save.length === 0 && removing.length === 0) return;
+        const transitions = landedTransitions(this.landed, save);
         this.deps.store.apply(save, removing);
         for (const pr of save) this.landed.set(pr.key, pr);
         for (const key of removing) this.landed.delete(key);
+        if (transitions.merged.length === 0 && transitions.needsYou.length === 0) return;
+        for (const fn of this.followers) {
+            try {
+                fn(transitions);
+            } catch (err) {
+                this.deps.log.error('[merge-manager] a transition follower failed:', (err as Error).message);
+            }
+        }
     }
 
     /** Push the state when what it shows changed. */

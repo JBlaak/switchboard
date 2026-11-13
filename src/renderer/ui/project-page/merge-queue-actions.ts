@@ -205,6 +205,13 @@ export function retryQueueEntry(repository: string, number: number): Promise<voi
     return labelWrite(queueActionKey('retry', number), () => window.api.queueRetry(repository, number));
 }
 
+/** Try again on a landed PR whose fix errand gave up (#437): a new errand starts. */
+export function tryAgainErrand(repository: string, number: number): Promise<void> {
+    return labelWrite(queueActionKey('try-again', number), () =>
+        window.api.mergeManagerTryAgain(repository, number, null),
+    );
+}
+
 /** + Queue (a PR row): `automerge:opt-in` added. */
 export function optInToQueue(repository: string, number: number): Promise<void> {
     return labelWrite(queueActionKey('opt-in', number), () => window.api.queueOptIn(repository, number));

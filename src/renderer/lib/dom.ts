@@ -39,3 +39,4 @@ export const projectPagePanel = el('project-page');
 /** The Tasks page (#249). */
 export const tasksPagePanel = el('tasks-page');
 export const issueManagerPanel = el('issue-manager-page');
+export const bugPagePanel = el('bug-page');

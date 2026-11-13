@@ -78,6 +78,8 @@ import {InboxSettingsService} from '../application/services/inbox-settings-servi
 import {InboxService} from '../application/services/inbox-service';
 import {IssueManagerService} from '../application/services/issue-manager-service';
 import {MergeManagerService} from '../application/services/merge-manager-service';
+import {FixErrandService} from '../application/services/fix-errand-service';
+import {BugFixService} from '../application/services/bug-fix-service';
 import {ASK_PATCH_CALL, AskRouteService, EMPTY_SCREEN_CALL} from '../application/services/ask-route-service';
 import type {AskPatchResult} from '../domain/ask/model';
 import {QUICK_ASK_ACCELERATOR, QuickAskHotkey} from '../application/services/quick-ask-hotkey';
@@ -104,6 +106,8 @@ import {MacWorkspaceLauncher} from '../infrastructure/electron/workspace-launche
 import {WorkspaceActionService} from '../application/services/workspace-action-service';
 import {ElectronWindowDrag} from '../infrastructure/electron/window-drag';
 import {ElectronDockAttention} from '../infrastructure/electron/dock-attention';
+import {ArchiveOnMergeService} from '../application/services/archive-on-merge-service';
+import {bouncesDock} from '../domain/merge-manager/transitions';
 import {E2eGlobalHotkey, ElectronGlobalHotkey} from '../infrastructure/electron/global-hotkey';
 import {QuickAskWindow} from '../infrastructure/electron/quick-ask-window';
 import {HeadsUpWindow} from '../infrastructure/electron/heads-up-window';
@@ -127,6 +131,12 @@ import {SqliteTaskLinkStore} from '../infrastructure/sqlite/task-link-store';
 import {SqliteQueueErrandStore} from '../infrastructure/sqlite/queue-errand-store';
 import {SqliteInboxStore} from '../infrastructure/sqlite/inbox-store';
 import {SqliteLandedStore} from '../infrastructure/sqlite/landed-store';
+import {SqliteLaneSavings} from '../infrastructure/sqlite/lane-savings';
+import {GitTestRebase} from '../infrastructure/git/git-test-rebase';
+import {LocalGitRunner} from '../infrastructure/git/git-runner';
+import {LaneRunner} from '../application/services/lane-runner';
+import {SqliteFixErrandStore} from '../infrastructure/sqlite/fix-errand-store';
+import {gitHubRepository} from '../domain/project/repo-url';
 import {McpBlaakTasks} from '../infrastructure/blaaktasks/mcp-blaak-tasks';
 import {openDatabase} from '../infrastructure/sqlite/database';
 import {resolveClaudePaths} from '../infrastructure/fs/claude-paths';
@@ -250,6 +260,8 @@ export interface Container {
     readonly mergeQueueWatch: MergeQueueWatchService;
     /** The Merge manager (#434): landed PRs, their lanes and stages, Land and Unland, read every minute. */
     readonly mergeManager: MergeManagerService;
+    /** The Merge manager's fix errands (#437): started, finished and stopped by themselves; Try again. */
+    readonly fixErrands: FixErrandService;
     readonly askRoute: AskRouteService<AskPatchResult>;
     readonly quickAskHotkey: QuickAskHotkey;
     readonly quickAskPanel: QuickAskPanel;
@@ -263,6 +275,8 @@ export interface Container {
     readonly inbox: InboxService;
     /** The Issue manager page (#415): threads, polished comments, Start and claim, and where started issues stand. */
     readonly issueManager: IssueManagerService;
+    /** The Bug manager page's Fix (#414): its worktree and prompt, the PR it follows, the merge and seen again. */
+    readonly bugFix: BugFixService;
     /**
      * VM hosts (#276): status, install, setup checks, host settings and the setup
      * terminal. Optional only until `buildContainer` builds it.
@@ -391,6 +405,8 @@ export function buildContainer(): Container {
     // What a turn ended with still running in the background, for the sidebar's
     // status tone; told every CLI state change after the Session work queue.
     const backgroundTasks = new BackgroundTaskService({transcripts, renderer, log});
+    // Built after the inbox and the merge queue watch, below; told every CLI state change and end.
+    let bugFix: BugFixService | null = null;
     const lifecycle = new SessionLifecycle({
         registry,
         terminals,
@@ -403,11 +419,15 @@ export function buildContainer(): Container {
             cliStateChanged: (sessionId, session, change) => {
                 prompter.cliStateChanged(sessionId, session, change);
                 backgroundTasks.cliStateChanged(sessionId, session, change);
+                if (change.kind === 'needs-attention') fixErrands.needsAttention(sessionId);
+                bugFix?.cliStateChanged(sessionId, session, change);
             },
             sessionEnded: (sessionId, session) => {
+                bugFix?.sessionEnded(sessionId, session);
                 prompter.sessionEnded(sessionId, session);
                 backgroundTasks.sessionEnded(sessionId);
                 sessionRestore.ended(sessionId, session);
+                fixErrands.sessionEnded(sessionId);
             },
         },
     });
@@ -433,6 +453,11 @@ export function buildContainer(): Container {
         },
         // A session showing the user a page (`show_page`), over its terminal.
         pageTool: new PageToolService({registry, renderer, clock, log}),
+        // A fix errand finishing itself (`finish_errand`, #437), offered to errands only.
+        errandTool: {
+            isErrand: (launchId) => fixErrands.isErrand(launchId),
+            finish: (launchId, args) => fixErrands.finish(launchId, args),
+        },
         onePassword: {receive: (...args) => onePasswordHeadsUp.receive(...args)},
         log,
     });
@@ -1110,6 +1135,20 @@ export function buildContainer(): Container {
         log,
     });
 
+    // The Switchboard lane runner (#435): updates, tests and merges each
+    // Switchboard lane's head as the user, test-rebasing waiting PRs in bare
+    // clones of their own.
+    const laneRunner = new LaneRunner({
+        github,
+        testRebase: new GitTestRebase({
+            git: new LocalGitRunner(toolEnv),
+            directory: path.join(app.getPath('userData'), 'lane-clones'),
+        }),
+        savings: new SqliteLaneSavings(database.db),
+        clock,
+        log,
+    });
+
     // The Merge manager (#434): every landed PR's lane, read every minute.
     const mergeManager = new MergeManagerService({
         store: new SqliteLandedStore(database.db),
@@ -1118,7 +1157,87 @@ export function buildContainer(): Container {
         clock,
         timers,
         log,
+        runner: laneRunner,
     });
+    // What the Merge manager tells (#440): the Dock bounces once when a PR goes
+    // to Needs you, and a merged PR's session is archived (at the end of its
+    // turn when busy, never with uncommitted changes).
+    const archiveOnMerge = new ArchiveOnMergeService({
+        sessions: sessionCandidates,
+        prompter,
+        locate: locateSession,
+        transcripts: routedTranscripts,
+        git: workspace,
+        archiver: {
+            archive: (sessionId) =>
+                sessionArchiver({
+                    registry,
+                    remote,
+                    lifecycle,
+                    terminals,
+                    repository,
+                    renderer,
+                    worktreeCleanup,
+                    tasks,
+                }).archive(sessionId),
+        },
+        log,
+        agentlessRemote,
+    });
+    archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
+        archiveOnMerge.turnEnded(sessionIds, archiving, currentId),
+    );
+    mergeManager.onTransitions((transitions) => {
+        if (bouncesDock(transitions)) dockAttention.bounceOnce();
+        void archiveOnMerge.merged(transitions.merged);
+    });
+
+    // Fix errands (#437): sessions the Merge manager starts by itself when a
+    // lane's head fails out, in a detached worktree of the local checkout.
+    const fixErrands = new FixErrandService({
+        store: new SqliteFixErrandStore(database.db),
+        manager: mergeManager,
+        github,
+        checkoutOf: async (wanted) => {
+            for (const project of projects.list(false)) {
+                if (project.remote || isRemoteProjectPath(project.projectPath)) continue;
+                const root = await workspace.mainCheckout(project.projectPath);
+                const origin = root ? await git.originUrl(root) : null;
+                if (root && origin && gitHubRepository(origin).toLowerCase() === wanted.toLowerCase()) return root;
+            }
+            return null;
+        },
+        git: workspace,
+        sessions: {
+            async start({sessionId, worktree, options}) {
+                // The project's own launch settings, but in auto mode and in this worktree.
+                const {
+                    worktree: _worktree,
+                    worktreeName: _worktreeName,
+                    dangerouslySkipPermissions: _skip,
+                    ...defaults
+                } = defaultSessionOptions(settings.effective(worktree));
+                const opened = await launcher.open({
+                    sessionId,
+                    projectPath: worktree,
+                    isNew: true,
+                    options: {...defaults, ...options},
+                });
+                if (!opened.ok) return {ok: false, reason: opened.error ?? 'the session did not start'};
+                renderer.sessionStarted(sessionId, worktree);
+                return {ok: true};
+            },
+        },
+        archive: archiveTool,
+        ids,
+        clock,
+        log,
+        runner: laneRunner,
+    });
+    mergeManager.onLaneRead((lane) => fixErrands.laneRead(lane));
+    archiveTool.onTurnEnded((sessionIds, archiving, currentId) =>
+        fixErrands.turnEnded(sessionIds, archiving, currentId),
+    );
 
     // The project page (#172): one answer, plans through PlanService's cache.
     // Whether a repository has a merge queue is its lane kind (#434).
@@ -1150,6 +1269,28 @@ export function buildContainer(): Container {
         clock,
         log,
     });
+
+    // The Bug manager page's Fix (#414): a worktree session per bug, followed through its PR.
+    const bugFixService = new BugFixService({
+        sessions: sessionCandidates,
+        transcripts: routedTranscripts,
+        agentlessRemote,
+        git: workspace,
+        remotes: git,
+        inbox,
+        bugsnag,
+        github,
+        mergeQueue: mergeQueueWatch,
+        sessionIn: (worktree) =>
+            registry
+                .snapshot()
+                .some(([, session]) => !session.exited && !session.isPlainTerminal && session.projectPath === worktree),
+        releasesTagged: (projectPath) => inboxSettings.releasesTagged(projectPath),
+        clock,
+        timers,
+        log,
+    });
+    bugFix = bugFixService;
 
     // BlaakTasks (#248): built only while a URL is set, and again when it changes.
     // Starting from a task routes with its own Ask Patch, never cancelling the
@@ -1413,6 +1554,7 @@ export function buildContainer(): Container {
         projectOverview,
         mergeQueueWatch,
         mergeManager,
+        fixErrands,
         askRoute,
         quickAskHotkey,
         quickAskPanel,
@@ -1422,6 +1564,7 @@ export function buildContainer(): Container {
         bugsnag,
         inbox,
         issueManager,
+        bugFix: bugFixService,
         quickAskWindow: () => quickAskWindow,
         prepareQuickAsk: () => {
             prepareQuickAsk();
@@ -1457,6 +1600,7 @@ export function buildContainer(): Container {
             mergeManager.stop();
             inbox.stop();
             issueManager.stop();
+            bugFixService.stop();
             sessionWork.closeAll();
             pullRequestPages.closeAll();
             claudeCaller.close();

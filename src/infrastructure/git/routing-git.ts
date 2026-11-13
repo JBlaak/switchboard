@@ -173,6 +173,10 @@ export class RoutingGitWorkspace implements GitWorkspace, GitWorktrees {
         return this.on(repository).checkoutWorktree(repository, worktree, branch);
     }
 
+    public addDetachedWorktree(repository: string, worktree: string, ref: string): Promise<GitWrite> {
+        return this.on(repository).addDetachedWorktree(repository, worktree, ref);
+    }
+
     public removeWorktree(repository: string, worktree: string, options?: {force?: boolean}): Promise<GitWrite> {
         return this.on(repository).removeWorktree(repository, worktree, options);
     }

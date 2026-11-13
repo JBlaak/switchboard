@@ -33,7 +33,7 @@ import {PlansSection} from './PlansSection';
 import {SessionsSection, sessionsShown} from './SessionsSection';
 import {PullRequestsSection} from './PullRequestsSection';
 import {MergeQueueSection} from './MergeQueueSection';
-import {mergeQueueOf} from './merge-queue-view';
+import {mergeQueueOf, switchboardLaneOf} from './merge-queue-view';
 import {WorktreesSection} from './WorktreesSection';
 import {TasksSection} from './TasksSection';
 import {GitHubMessage, RemoteNote, StaleLine} from './EdgeStates';
@@ -53,6 +53,7 @@ import {
 import {openProjectTaskDetail, startProjectTask} from './project-tasks';
 import {
     mergeQueueRows,
+    switchboardLaneRows,
     pageRows,
     planRows,
     plansViewOf,
@@ -90,8 +91,17 @@ function currentRows(projectPath: string): PageRow[] {
     const worktrees = answered && showsWorktrees(answered, projectPath, vm) ? worktreesView(answered, page.filter) : [];
     const tasks = state.tasks.enabled && showsTasks(projectPath, vm) ? tasksViewOf(page, projectPath) : null;
     const queue = mergeQueueOf(page, projectPath);
+    const lane = switchboardLaneOf(page, projectPath, state.mergeManager.state);
     return pageRows({
-        mergeQueue: queue && answered?.repository ? mergeQueueRows(answered.repository, queue) : [],
+        mergeQueue:
+            queue && answered?.repository
+                ? mergeQueueRows(answered.repository, queue)
+                : lane
+                  ? switchboardLaneRows(
+                        lane.repository,
+                        lane.rows.map((pr) => pr.number),
+                    )
+                  : [],
         plans: plans ? planRows(plans) : [],
         pullRequests: pullRequests ? pullRequestRows(pullRequests) : [],
         tasks: tasks ? taskRows(tasks) : [],

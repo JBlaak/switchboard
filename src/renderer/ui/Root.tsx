@@ -17,6 +17,7 @@ import {SessionWorkPage} from './session-work/SessionWorkPage';
 import {ProjectPage} from './project-page/ProjectPage';
 import {TasksPage} from './tasks-page/TasksPage';
 import {IssueManagerPage} from './issue-manager/IssueManagerPage';
+import {BugManagerPage} from './bug-manager/BugManagerPage';
 import {EmptyScreenFamily} from './patch/EmptyScreenFamily';
 import {EmptyScreenPatch} from './patch/EmptyScreenPatch';
 import {EmptyScreenManagers} from './patch/EmptyScreenManagers';
@@ -58,6 +59,9 @@ export function Root(): JSX.Element | null {
             </Portal>
             <Portal target="issue-manager-page">
                 <IssueManagerPage />
+            </Portal>
+            <Portal target="bug-page">
+                <BugManagerPage />
             </Portal>
             <Portal target="sidebar-footer">
                 <Footer />

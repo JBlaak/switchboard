@@ -61,6 +61,11 @@ export function isIssueManagerKey(e: KeyboardEvent): boolean {
     return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyI';
 }
 
+/** Cmd+B: the Bug manager page (#414), open or closed. */
+export function isBugPageKey(e: KeyboardEvent): boolean {
+    return e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyB';
+}
+
 /**
  * Cmd+1 … Cmd+9 send the session on screen its saved prompt on that key
  * (#343): the key's number, or null for any other key. In the terminal too,

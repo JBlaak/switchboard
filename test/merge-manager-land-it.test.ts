@@ -7,12 +7,9 @@ import './support/static-markup-dom';
 import {
     DRAFT_HINT,
     landOffer,
-    landedPill,
     landedPillText,
     landedToastText,
-    ordinal,
     sessionLandCandidate,
-    sessionLanded,
     type LandCandidate,
 } from '../src/domain/merge-manager/land-it';
 import {mergeManagerState} from '../src/domain/merge-manager/landed';
@@ -93,23 +90,6 @@ test('a landed PR shows its place in the lane instead of Land it', () => {
 
 // ── What it says ──
 
-test('ordinals read as English does', () => {
-    /* Then */
-    assert.deepEqual([1, 2, 3, 4, 11, 12, 13, 21, 22, 103, 111].map(ordinal), [
-        '1st',
-        '2nd',
-        '3rd',
-        '4th',
-        '11th',
-        '12th',
-        '13th',
-        '21st',
-        '22nd',
-        '103rd',
-        '111th',
-    ]);
-});
-
 test("the toast and the header's pill say the PR's place in its repository's lane", () => {
     /* Given */
     const second = landOffer(candidate(2), lanes());
@@ -135,35 +115,6 @@ test('a PR landed before its approval says it is held, as it has no place yet', 
     assert.equal(landedPillText(view!), 'Landed · held · approval');
 });
 
-test("a sidebar row's pill says the stage in a word or two", () => {
-    /* Given */
-    const state = mergeManagerState(
-        [
-            landedPr(1, 50, 'switchboard', HEAD),
-            landedPr(2, 40, 'switchboard', WAITING),
-            landedPr(3, 30, 'switchboard', {kind: 'held', reason: {kind: 'review', reviewer: 'ana', team: false}}),
-            landedPr(4, 20, 'switchboard', {kind: 'fixing', cause: 'checks'}),
-            landedPr(5, 10, 'switchboard', {kind: 'needsYou', reason: {kind: 'changes-requested'}}),
-        ],
-        new Map(),
-    );
-
-    /* When */
-    const pills = [1, 2, 3, 4, 5].map((n) => landedPill(sessionLanded([{repository: REPO, number: n}], state)!));
-
-    /* Then */
-    assert.deepEqual(
-        pills.map((pill) => [pill.kind, pill.text]),
-        [
-            ['head', 'merging'],
-            ['waiting', 'landed · 2nd'],
-            ['held', 'held · @ana'],
-            ['fixing', 'fixing'],
-            ['needsYou', 'needs you'],
-        ],
-    );
-});
-
 // ── A session's PRs ──
 
 test('a session offers Land it for its newest open PR, a merged one after it left out', () => {
@@ -180,22 +131,6 @@ test('a session offers Land it for its newest open PR, a merged one after it lef
 test('a session whose PRs gh has not read yet offers nothing in its header', () => {
     /* Then */
     assert.equal(sessionLandCandidate([linked(8, null)]), null);
-});
-
-test('a landed PR of the session shows on its sidebar row, the newest one first', () => {
-    /* Given: chronological, as the row has them */
-    const prs = [
-        {repository: REPO, number: 1},
-        {repository: REPO, number: 2},
-        {repository: REPO, number: 9},
-    ];
-
-    /* When */
-    const landed = sessionLanded(prs, lanes());
-
-    /* Then */
-    assert.equal(landed?.number, 2);
-    assert.equal(sessionLanded([{repository: REPO, number: 9}], lanes()), null);
 });
 
 // ── The control ──

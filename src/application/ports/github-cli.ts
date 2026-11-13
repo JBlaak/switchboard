@@ -18,7 +18,8 @@ import type {RepositoryIssue, RepositoryPullRequest} from '../../domain/project/
 import type {CiJob, Runner, TimedRun} from '../../domain/project/ci-job-queue';
 import type {InboxIssuesAnswer} from '../../domain/inbox/loose-issues';
 import type {IssueThread} from '../../domain/inbox/issue-manager';
-import type {LaneRead, WorkflowFile} from '../../domain/merge-manager/model';
+import type {LaneRead, MergeMethod, WorkflowFile} from '../../domain/merge-manager/model';
+import type {BranchPullRequest} from '../../domain/inbox/stage';
 
 /** Whether `gh` can be asked anything: installed, and signed in to github.com. */
 export type {GitHubAvailability};
@@ -107,6 +108,18 @@ export interface GitHubCli {
     latestTag(repo: string): Promise<{at: string | null} | null>;
 
     /**
+     * The newest PR opened from `branch` in `repo` (#414): `{pr: null}` when
+     * it has none. Null when `gh` could not be asked.
+     */
+    pullRequestForBranch(repo: string, branch: string): Promise<{pr: BranchPullRequest | null} | null>;
+
+    /** The repository's newest 30 tags with when each was made, newest first (#414). Null when unavailable. */
+    recentTags(repo: string): Promise<{name: string; at: string}[] | null>;
+
+    /** Whether `ref` (a tag) contains commit `sha`, by GitHub's compare (#414). Null when unavailable. */
+    refContains(repo: string, ref: string, sha: string): Promise<boolean | null>;
+
+    /**
      * The open issues in `repo` as the Issue manager reads them (#413): each
      * with its author, assignees, labels, parent, sub-issue count, comments
      * and referencing commits, and the user `gh` signs in as. The 100 most
@@ -170,6 +183,21 @@ export interface GitHubCli {
      * text: empty when it has none. Null when unavailable.
      */
     workflowFiles(repo: string): Promise<WorkflowFile[] | null>;
+
+    // ── The Switchboard lane runner's writes (#435), as the user, each pinned to a head SHA ──
+
+    /**
+     * Rebase PR `pullRequestId` onto its base (GraphQL
+     * `updatePullRequestBranch`, `REBASE`), only while its head is still
+     * `expectedHeadOid`.
+     */
+    updateBranch(pullRequestId: string, expectedHeadOid: string): Promise<BranchUpdate>;
+
+    /** Merge PR `number` in `repo` with `method`, only while its head is still `sha` (`PUT …/pulls/{n}/merge`). */
+    mergePullRequest(repo: string, number: number, sha: string, method: MergeMethod): Promise<MergeAnswer>;
+
+    /** Cancel a workflow run that `cancelRun` did not stop (`…/force-cancel`). */
+    forceCancelRun(repo: string, runId: number): Promise<GitHubWrite>;
 
     // ── The merge queue's labels (#315, #434): `automerge:opt-in` added, the queue's labels and `autorebase:opt-in` removed ──
 
@@ -239,6 +267,20 @@ export type QueueLabelWrites = 'addLabel' | 'removeLabel';
 
 /** What the Merge manager reads (#434). */
 export type LaneReads = 'queuedPullRequests' | 'laneRead' | 'workflowFiles';
+
+/** What the Switchboard lane runner writes (#435). */
+export type LaneWrites = 'updateBranch' | 'mergePullRequest' | 'cancelRun' | 'forceCancelRun' | 'rerunFailedJobs';
+
+/**
+ * An update of a PR's branch: done, or why not. `conflict` when it does not
+ * rebase cleanly; `moved` when its head is no longer the expected one;
+ * `unavailable` when GitHub could not be asked; `refused` for anything else.
+ */
+export type BranchUpdate =
+    {ok: true} | {ok: false; why: 'conflict' | 'moved' | 'unavailable' | 'refused'; reason: string};
+
+/** A merge: done, or GitHub's HTTP status (null when it gave none) and reason. */
+export type MergeAnswer = {ok: true} | {ok: false; status: number | null; reason: string};
 
 /** What the CI job queue reads and a Bump writes. */
 export type CiJobQueueCalls =

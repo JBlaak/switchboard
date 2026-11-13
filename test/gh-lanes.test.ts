@@ -7,7 +7,9 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
     QUEUED_SEARCH,
+    httpStatus,
     laneQuery,
+    toBranchUpdateFailure,
     toLaneRead,
     toQueuedPullRequests,
     toTrunkRules,
@@ -16,6 +18,7 @@ import {
 import {GhCli} from '../src/infrastructure/github/gh-cli';
 
 const PR_NODE = {
+    id: 'PR_kwDOAbc',
     number: 2450,
     title: 'Add equipment categories',
     url: 'https://github.com/MoveLab-Studio/Connect/pull/2450',
@@ -44,6 +47,14 @@ const PR_NODE = {
             {
                 commit: {
                     status: {context: {state: 'FAILURE', description: 'it conflicts with main'}},
+                    checkSuites: {
+                        nodes: [
+                            {status: 'IN_PROGRESS', conclusion: null, workflowRun: {databaseId: 901}},
+                            {status: 'COMPLETED', conclusion: 'CANCELLED', workflowRun: {databaseId: 902}},
+                            {status: 'COMPLETED', conclusion: 'SUCCESS', workflowRun: {databaseId: 903}},
+                            {status: 'QUEUED', conclusion: null, workflowRun: null},
+                        ],
+                    },
                     statusCheckRollup: {
                         contexts: {
                             nodes: [
@@ -75,6 +86,9 @@ const LANE_DATA = {
     viewer: {login: 'JBlaak'},
     repository: {
         nameWithOwner: 'MoveLab-Studio/Connect',
+        squashMergeAllowed: true,
+        mergeCommitAllowed: true,
+        rebaseMergeAllowed: false,
         defaultBranchRef: {
             name: 'main',
             target: {oid: '954e4ca'},
@@ -117,9 +131,16 @@ test('a lane read maps every field the stage model needs, and leaves out a numbe
     assert.equal(read?.viewer, 'JBlaak');
     assert.equal(read?.trunk, 'main');
     assert.equal(read?.trunkOid, '954e4ca');
-    assert.deepEqual(read?.rules, {requiredChecks: ['Unit tests', 'Lint'], approvalLostOnPush: false});
+    assert.deepEqual(read?.rules, {
+        requiredChecks: ['Unit tests', 'Lint'],
+        approvalLostOnPush: false,
+        mergeMethods: null,
+        linearHistory: false,
+    });
+    assert.deepEqual(read?.mergeMethods, ['squash', 'merge']);
     assert.equal(read?.pullRequests.length, 1);
     assert.deepEqual(read?.pullRequests[0], {
+        id: 'PR_kwDOAbc',
         repository: 'MoveLab-Studio/Connect',
         number: 2450,
         title: 'Add equipment categories',
@@ -143,6 +164,11 @@ test('a lane read maps every field the stage model needs, and leaves out a numbe
             {name: 'Lint', state: 'running', startedAt: Date.parse('2026-11-13T10:01:00Z')},
             {name: 'merge-queue/ci', state: 'running', startedAt: Date.parse('2026-11-13T10:02:00Z')},
             {name: 'deploy', state: 'failed', startedAt: null},
+        ],
+        runs: [
+            {id: 901, state: 'unfinished'},
+            {id: 902, state: 'cancelled'},
+            {id: 903, state: 'finished'},
         ],
     });
 });
@@ -179,6 +205,119 @@ test('a rule that dismisses or blocks an approval on a push is read as losing th
         rules.map((rule) => rule.approvalLostOnPush),
         [true, true, false],
     );
+});
+
+test('the merge methods every ruleset allows are taken together, and a linear history is read', () => {
+    /* Given */
+    const nodes = [
+        {type: 'PULL_REQUEST', parameters: {allowedMergeMethods: ['MERGE', 'SQUASH', 'REBASE']}},
+        {type: 'PULL_REQUEST', parameters: {allowedMergeMethods: ['SQUASH', 'REBASE']}},
+        {type: 'REQUIRED_LINEAR_HISTORY', parameters: null},
+    ];
+
+    /* When */
+    const rules = toTrunkRules(nodes);
+
+    /* Then */
+    assert.deepEqual(rules.mergeMethods, ['squash', 'rebase']);
+    assert.equal(rules.linearHistory, true);
+});
+
+test("the lane query asks for the node id, the head commit's workflow runs and the merge settings", () => {
+    /* When */
+    const query = laneQuery([1]);
+
+    /* Then */
+    assert.match(query, /laneFields on PullRequest \{\n {2}id number/);
+    assert.match(query, /checkSuites\(first: 20\) \{ nodes \{ status conclusion workflowRun \{ databaseId \} \} \}/);
+    assert.match(query, /squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed/);
+    assert.match(query, /allowedMergeMethods/);
+});
+
+// ── The lane runner's writes (#435) ──
+
+test('a refused branch update reads as a conflict, a moved head, GitHub out of reach, or a refusal', () => {
+    /* When */
+    const reasons = [
+        'Cannot update PR branch due to conflicts',
+        'Expected head oid does not match the current head',
+        'GitHub did not answer',
+        'gh is not signed in to github.com',
+        'Resource not accessible by integration',
+    ].map(toBranchUpdateFailure);
+
+    /* Then */
+    assert.deepEqual(reasons, ['conflict', 'moved', 'unavailable', 'unavailable', 'refused']);
+});
+
+test('the HTTP status gh printed is read from its error line', () => {
+    /* Then */
+    assert.equal(httpStatus('gh: Pull Request is not mergeable (HTTP 405)\n'), 405);
+    assert.equal(httpStatus('gh: Head branch was modified. Review and try the merge again. (HTTP 409)'), 409);
+    assert.equal(httpStatus('connection reset'), null);
+});
+
+test('a merge is asked with the head SHA and the method, and a refusal answers its HTTP status', async () => {
+    /* Given */
+    const asked: string[][] = [];
+    const gh = new GhCli({
+        run: async (args) => {
+            asked.push([...args]);
+            return {
+                missing: false,
+                code: 1,
+                stdout: JSON.stringify({message: 'Pull Request is not mergeable'}),
+                stderr: 'gh: Pull Request is not mergeable (HTTP 405)\n',
+            };
+        },
+    });
+
+    /* When */
+    const answer = await gh.mergePullRequest('MoveLab-Studio/Connect', 2450, 'e445365', 'squash');
+    const refused = await gh.mergePullRequest('MoveLab-Studio/Connect', 2450, 'not a sha', 'squash');
+
+    /* Then */
+    assert.deepEqual(asked, [
+        [
+            'api',
+            '--method',
+            'PUT',
+            'repos/MoveLab-Studio/Connect/pulls/2450/merge',
+            '-f',
+            'sha=e445365',
+            '-f',
+            'merge_method=squash',
+        ],
+    ]);
+    assert.deepEqual(answer, {ok: false, status: 405, reason: 'Pull Request is not mergeable'});
+    assert.equal(refused.ok, false);
+});
+
+test('a branch update is the REBASE mutation pinned to the expected head, and a conflict reads as one', async () => {
+    /* Given */
+    const asked: string[][] = [];
+    const gh = new GhCli({
+        run: async (args) => {
+            asked.push([...args]);
+            return {
+                missing: false,
+                code: 1,
+                stdout: JSON.stringify({errors: [{message: 'Cannot update PR branch due to conflicts'}]}),
+                stderr: '',
+            };
+        },
+    });
+
+    /* When */
+    const answer = await gh.updateBranch('PR_kwDOAbc', 'e445365');
+
+    /* Then */
+    assert.match(
+        asked[0][3],
+        /updatePullRequestBranch\(input: \{.*expectedHeadOid: \$expectedHeadOid, updateMethod: REBASE \}/,
+    );
+    assert.deepEqual(asked[0].slice(4), ['-f', 'pullRequestId=PR_kwDOAbc', '-f', 'expectedHeadOid=e445365']);
+    assert.deepEqual(answer, {ok: false, why: 'conflict', reason: 'Cannot update PR branch due to conflicts'});
 });
 
 test('the queued search finds my open PRs with any queue label, and maps each to its repository', () => {

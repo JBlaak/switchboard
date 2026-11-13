@@ -165,9 +165,28 @@ const TABLES = [
     pull_request TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
+    // The Merge manager's fix errands (#437): one row per errand, the PR it
+    // works on (`owner/repo#n`, lower case), its session, the commit it failed
+    // out on and how it finished, as JSON, read and written whole. Epoch ms.
+    `CREATE TABLE IF NOT EXISTS fix_errands (
+    id TEXT PRIMARY KEY,
+    landed_key TEXT NOT NULL,
+    errand TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+    // What the Switchboard lane runner did not spend CI on (#435): one row per
+    // count, by repository and kind, summed for the "CI runs saved" estimate.
+    // Epoch ms.
+    `CREATE TABLE IF NOT EXISTS lane_savings (
+    repository TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    at INTEGER NOT NULL
+  )`,
 ];
 
 const INDEXES = [
+    'CREATE INDEX IF NOT EXISTS idx_lane_savings_at ON lane_savings(at)',
     'CREATE INDEX IF NOT EXISTS idx_session_cache_folder ON session_cache(folder)',
     'CREATE INDEX IF NOT EXISTS idx_session_cache_slug ON session_cache(slug)',
     'CREATE INDEX IF NOT EXISTS idx_search_map_type_id ON search_map(type, id)',

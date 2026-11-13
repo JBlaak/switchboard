@@ -43,7 +43,7 @@
 import {isRemoteProjectPath} from '../../domain/project/remote-target';
 import {gitHubRepository} from '../../domain/project/repo-url';
 import {groupOverview, type OverviewPlanSource} from '../../domain/plan/project-overview';
-import {mergeQueue, usesMergeQueue, type QueuePullRequest} from '../../domain/project/merge-queue';
+import {medianRunMs, mergeQueue, usesMergeQueue, type QueuePullRequest} from '../../domain/project/merge-queue';
 import type {LaneKind} from '../../domain/merge-manager/model';
 import {superfluousWorktrees} from '../../domain/project/superfluous-worktrees';
 import type {Plan} from '../../domain/plan/model';
@@ -108,6 +108,8 @@ interface GitHubReads {
     pullRequests: ProjectPullRequest[];
     /** What the merge queue is worked out from; null when the repository does not use one. */
     queue: QueueReads | null;
+    /** A Switchboard lane's CI run durations (#441), for its estimate; null in any other repository. */
+    lane: {ciRunDurationsMs: number[]} | null;
 }
 
 /** A merge queue's reads: everything `mergeQueue` takes but the time. */
@@ -243,6 +245,7 @@ export class ProjectOverviewService {
             stale: fresh === null,
             plansPending: !withPlans,
             mergeQueue: reads.queue ? mergeQueue({...reads.queue, now: this.deps.clock.now()}) : null,
+            switchboardLane: reads.lane ? {runMs: medianRunMs(reads.lane.ciRunDurationsMs)} : null,
             ...groups,
             // Grouped without plans, an issue with sub-issues stands as an unlevelled plan: not shown until the plans are read.
             plans: withPlans ? groups.plans : [],
@@ -280,6 +283,7 @@ export class ProjectOverviewService {
             issues: issues.map((issue) => projectIssue(issue, repository)),
             pullRequests: pullRequests.prs.map((pr) => projectPullRequest(pr, repository)),
             queue: pullRequests.queue,
+            lane: pullRequests.lane,
         };
     }
 
@@ -298,6 +302,7 @@ export class ProjectOverviewService {
             issues: issues.map((issue) => projectIssue(issue, repository)),
             pullRequests: pullRequests.prs.map((pr) => projectPullRequest(pr, repository)),
             queue: pullRequests.queue,
+            lane: pullRequests.lane,
         };
     }
 
@@ -306,14 +311,18 @@ export class ProjectOverviewService {
         root: string,
         repository: string,
         merged: boolean,
-    ): Promise<{prs: RepositoryPullRequest[]; queue: QueueReads | null} | null> {
+    ): Promise<{prs: RepositoryPullRequest[]; queue: QueueReads | null; lane: GitHubReads['lane']} | null> {
         const prs = await this.deps.github.pullRequestsIn(repository, {merged});
-        return prs ? {prs, queue: await this.queueReads(root, repository, prs)} : null;
+        if (!prs) return null;
+        const reads = await this.queueReads(root, repository, prs);
+        return {prs, queue: reads.queue, lane: reads.lane};
     }
 
     /**
      * The merge queue's reads, from the open PRs: null when the repository is
      * not a queue lane, and otherwise the trunk and the CI run durations besides.
+     * A Switchboard lane gets its CI run durations alone, for the estimate on
+     * its Merge queue section (#441).
      *
      * Only the open PRs `pullRequestsIn` read count: the 50 most recently
      * updated (PULL_REQUESTS_PER_REPOSITORY). In a repository with more open
@@ -326,15 +335,19 @@ export class ProjectOverviewService {
         root: string,
         repository: string,
         pullRequests: RepositoryPullRequest[],
-    ): Promise<QueueReads | null> {
+    ): Promise<{queue: QueueReads | null; lane: GitHubReads['lane']}> {
         const open = pullRequests.filter((pr) => pr.state === 'open').map(queuePullRequest);
         const kind = (await this.deps.laneKind?.(repository).catch(() => null)) ?? null;
-        if (kind === 'switchboard' || (kind === null && !usesMergeQueue(open))) return null;
+        if (kind === 'switchboard') {
+            const durations = await this.deps.github.ciRunDurations(repository).catch(() => null);
+            return {queue: null, lane: {ciRunDurationsMs: durations ?? []}};
+        }
+        if (kind === null && !usesMergeQueue(open)) return {queue: null, lane: null};
         const [trunk, durations] = await Promise.all([
             this.deps.git.defaultBranch(root),
             this.deps.github.ciRunDurations(repository).catch(() => null),
         ]);
-        return {trunk, pullRequests: open, ciRunDurationsMs: durations ?? []};
+        return {queue: {trunk, pullRequests: open, ciRunDurationsMs: durations ?? []}, lane: null};
     }
 
     /** Why `gh` could not answer: it is missing, signed out, or GitHub was not reached. */

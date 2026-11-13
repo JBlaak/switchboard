@@ -843,6 +843,21 @@ test('a queue lane shows its merge queue without any labelled PR; a Switchboard 
     assert.ok(fallback);
 });
 
+test('a Switchboard lane answers its CI run time for its section’s estimate; any other repository none (#441)', async () => {
+    /* Given */
+    const runs = [MINUTE, 3 * MINUTE, 5 * MINUTE];
+    const switchboardLane = setUp({pullRequests: [pullRequest(119, [])], laneKind: 'switchboard', runDurations: runs});
+    const queueLane = setUp({pullRequests: [pullRequest(119, [])], laneKind: 'queue', runDurations: runs});
+
+    /* When */
+    const lane = answered((await switchboardLane.service.overview(PROJECT)).github).switchboardLane;
+    const queue = answered((await queueLane.service.overview(PROJECT)).github).switchboardLane;
+
+    /* Then */
+    assert.deepEqual(lane, {runMs: 3 * MINUTE});
+    assert.equal(queue, null);
+});
+
 test('a merged PR that carried a queue label does not make the repository a queue one', async () => {
     /* Given */
     const merged = pullRequest(95, [], 'merged', {labels: ['automerge:opt-in']});

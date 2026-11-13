@@ -18,6 +18,7 @@ import type {
     ProjectReads,
     IssueManagerCalls,
     LaneReads,
+    LaneWrites,
     QueueLabelWrites,
     CiJobQueueCalls,
 } from '../src/application/ports/github-cli';
@@ -275,6 +276,10 @@ function setup(overrides: Partial<World> = {}) {
         | 'inboxIssuesIn'
         | IssueManagerCalls
         | LaneReads
+        | LaneWrites
+        | 'pullRequestForBranch'
+        | 'recentTags'
+        | 'refContains'
         | QueueLabelWrites
         | CiJobQueueCalls
         | PlanReads
