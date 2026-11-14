@@ -87,6 +87,8 @@ test('while a VM merges it takes its remote pose, still counting Needs you, and 
             since: NOW - 60 * MIN,
             warning: null,
             reachable: true,
+            reconnecting: false,
+            trouble: null,
             vms: [],
             summary: {
                 vm: 'devbox',

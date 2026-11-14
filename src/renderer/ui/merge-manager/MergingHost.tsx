@@ -7,8 +7,9 @@
  *   several VMs a picker beside it, the last choice first. A refused hand-off
  *   says why, with the command that fixes it.
  * - On a VM: "Merging on <VM>", the hand-off's warning when there was one,
- *   and Bring merging back; Take back anyway while the VM cannot be reached
- *   or did not answer.
+ *   and Bring merging back. While the VM cannot be reached: why, in words,
+ *   with Reconnect and Take back anyway; "Reconnecting to <VM>…" while its
+ *   link is dialled again.
  */
 import {useState, type JSX} from 'react';
 import {useStore} from '../use-store';
@@ -17,6 +18,7 @@ import {
     bringMergingBack,
     dismissAwaySummary,
     handOffMerging,
+    reconnectMerging,
     takeMergingBack,
     type MoveAnswer,
 } from './merging-actions';
@@ -27,16 +29,17 @@ const MAC: MergingHostView = {kind: 'mac', vms: [], offered: null};
 export function MergingHostPill(): JSX.Element {
     const host = useStore((state) => state.mergeManager.state.merging ?? MAC);
     const [chosen, setChosen] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
+    /** The move under way, by its action, so only its own button says so. */
+    const [busy, setBusy] = useState<(() => Promise<MoveAnswer>) | null>(null);
     const [answer, setAnswer] = useState<MoveAnswer | null>(null);
 
     const run = async (move: () => Promise<MoveAnswer>): Promise<void> => {
-        setBusy(true);
+        setBusy(() => move);
         setAnswer(null);
         try {
             setAnswer(await move());
         } finally {
-            setBusy(false);
+            setBusy(null);
         }
     };
 
@@ -65,7 +68,7 @@ export function MergingHostPill(): JSX.Element {
                     <button
                         type="button"
                         className="sw-btn"
-                        disabled={busy}
+                        disabled={busy !== null}
                         onClick={() => void run(() => handOffMerging(vm.key))}>
                         {busy ? 'Handing off…' : `Hand off merging to ${vm.name}`}
                     </button>
@@ -75,7 +78,10 @@ export function MergingHostPill(): JSX.Element {
         );
     }
 
-    const offerTakeBack = !host.reachable || answer?.unreachable === true;
+    const away = !host.reachable || answer?.unreachable === true;
+    const reconnecting = host.reconnecting;
+    // A failed move says why itself; otherwise the VM's trouble is the note.
+    const trouble = away && !reconnecting && !answer?.text ? host.trouble : null;
     return (
         <div className="mm-host-row">
             <span
@@ -84,25 +90,43 @@ export function MergingHostPill(): JSX.Element {
                 title={
                     host.reachable
                         ? `The lane runner and the fix errands run on ${host.vm.name}`
-                        : `${host.vm.name} has not answered lately`
+                        : (host.trouble ?? `${host.vm.name} has not answered lately`)
                 }>
                 <i aria-hidden="true" />
-                Merging on {host.vm.name}
+                {reconnecting ? `Reconnecting to ${host.vm.name}…` : `Merging on ${host.vm.name}`}
             </span>
-            <button type="button" className="sw-btn" disabled={busy} onClick={() => void run(bringMergingBack)}>
-                {busy ? 'Bringing back…' : 'Bring merging back'}
-            </button>
-            {offerTakeBack && (
+            {away && (
                 <button
                     type="button"
                     className="sw-btn"
-                    disabled={busy}
+                    disabled={busy !== null || reconnecting}
+                    onClick={() => void run(reconnectMerging)}>
+                    {reconnecting || busy === reconnectMerging ? 'Reconnecting…' : 'Reconnect'}
+                </button>
+            )}
+            <button
+                type="button"
+                className="sw-btn"
+                disabled={busy !== null}
+                onClick={() => void run(bringMergingBack)}>
+                {busy === bringMergingBack ? 'Bringing back…' : 'Bring merging back'}
+            </button>
+            {away && (
+                <button
+                    type="button"
+                    className="sw-btn"
+                    disabled={busy !== null}
                     title={`${host.vm.name} stands down when it reconnects`}
                     onClick={() => void run(takeMergingBack)}>
                     Take back anyway
                 </button>
             )}
-            {host.warning && !answer && <span className="mm-host-note">{host.warning}</span>}
+            {host.warning && !answer && !trouble && <span className="mm-host-note">{host.warning}</span>}
+            {trouble && (
+                <span className="mm-host-note is-error" role="status">
+                    {trouble}
+                </span>
+            )}
             <MoveNote answer={answer} />
         </div>
     );

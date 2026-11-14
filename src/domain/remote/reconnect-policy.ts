@@ -64,8 +64,17 @@ export function isRetryableSshExit(exitCode: number, signal?: number | string | 
 const FATAL_SSH_OUTPUT =
     /Permission denied|Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED|tmux is not installed/i;
 
+/**
+ * The Mac's own ssh-agent (1Password) failed to sign, so no key was offered
+ * and ssh ends with "Permission denied" all the same. That is not the host
+ * refusing the key: an approval prompt that timed out, or an agent not ready
+ * yet after a launch, and the next attempt usually gets through.
+ */
+const LOCAL_AGENT_FAILED = /communication with agent failed|agent refused operation|signing failed for .* from agent/i;
+
 export function isFatalSshOutput(text: unknown): boolean {
-    return FATAL_SSH_OUTPUT.test(String(text || ''));
+    const said = String(text || '');
+    return FATAL_SSH_OUTPUT.test(said) && !LOCAL_AGENT_FAILED.test(said);
 }
 
 /**

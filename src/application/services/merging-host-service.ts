@@ -29,6 +29,7 @@ import {
     dismissedSummary,
     ghAuthCheck,
     handedOff,
+    linkTrouble,
     mergingHostView,
     onVmConnected,
     pickVm,
@@ -65,12 +66,20 @@ export const BRING_BACK_TIMEOUT_MS = 5 * 60_000;
 /** How long the hand-off waits for the VM's link and its `gh auth status`. */
 export const REACH_TIMEOUT_MS = 20_000;
 
+/** How long Reconnect waits for the link: ssh may be waiting on a 1Password approval. */
+export const RECONNECT_TIMEOUT_MS = 90_000;
+
+/** How long Land it, Unland and Try again wait for a link being dialled again before saying so. */
+export const ACTION_REACH_MS = 10_000;
+
 /** The link to a VM's agent, as far as merging needs it. */
 export interface MergingLink {
     readonly connected: boolean;
     /** The VM user's home, where `gh auth status` runs. */
     readonly home: string | null;
     whenConnected(): Promise<void>;
+    /** Dial again now, also after the link gave up; a no-op while connected or dialling. */
+    retryNow(): void;
     runTool(
         tool: 'gh',
         cwd: string,
@@ -116,11 +125,17 @@ export type HandOffResult = {ok: true; warning: string | null} | {ok: false; rea
 
 export type MergingBringBackResult = {ok: true} | {ok: false; reason: string; unreachable: boolean};
 
+export type ReconnectResult = {ok: true} | {ok: false; reason: string};
+
 export class MergingHostService {
     private record: MergingHostRecord;
     /** The VM's last read while it merges. */
     private remote: RemoteRead | null = null;
     private reachable = true;
+    /** Why the VM last failed to answer, as the link said it. */
+    private reason: string | null = null;
+    /** A Reconnect under way, joined by anything else that needs the link. */
+    private reconnecting: Promise<ReconnectResult> | null = null;
     private remoteTimer: TimerHandle | null = null;
     private refreshing: Promise<void> | null = null;
     /** A hand-off or bring-back under way: one at a time. */
@@ -150,7 +165,11 @@ export class MergingHostService {
 
     /** The window got focus. */
     public focused(): void {
-        if (this.record.kind === 'mac') this.deps.local.focused();
+        if (this.record.kind === 'mac') {
+            this.deps.local.focused();
+            return;
+        }
+        if (this.deps.link(this.record.vm.key)?.connected === false) void this.reconnect();
         else void this.refresh();
     }
 
@@ -243,6 +262,7 @@ export class MergingHostService {
             }
             this.remote = {state: this.deps.local.state(), landed, errands: [], savedByRepository: {}};
             this.reachable = true;
+            this.reason = null;
             this.save(handedOff(vm, check.warning, this.deps.clock.now()));
             this.deps.log.info(`[merging-host] handed merging off to ${vm.name}`);
             this.followRemote();
@@ -261,6 +281,7 @@ export class MergingHostService {
         if (!link) return {ok: false, reason: `${vm.name} is not registered any more.`, unreachable: true};
         if (this.moving) return {ok: false, reason: 'Merging is already moving.', unreachable: false};
         this.moving = true;
+        if (!link.connected) link.retryNow();
         try {
             const answer = await this.within(
                 link.mergeCall('release', {}, BRING_BACK_TIMEOUT_MS),
@@ -269,9 +290,9 @@ export class MergingHostService {
                 .then((result) => ({ok: true as const, result}))
                 .catch((err: Error) => ({ok: false as const, error: err.message}));
             if (!answer.ok) {
-                this.reachable = false;
+                this.unreachable(answer.error);
                 this.publish();
-                return {ok: false, reason: `${vm.name} did not answer: ${answer.error}`, unreachable: true};
+                return {ok: false, reason: linkTrouble(vm.name, answer.error), unreachable: true};
             }
             const landed = (answer.result as {landed?: LandedPullRequest[]} | null)?.landed;
             this.takeOver(Array.isArray(landed) ? landed : (this.remote?.landed ?? this.deps.local.all()));
@@ -297,6 +318,26 @@ export class MergingHostService {
         return {ok: true};
     }
 
+    /**
+     * Dial the VM that merges again, and read its lanes once it answers.
+     *
+     * A link that gave up (out of attempts, or a sign-in that failed) is not
+     * dialled again by itself, and the minute's read does not dial it either.
+     * The Reconnect button, the window getting focus, and Land it, Unland and
+     * Try again do. One at a time: a second ask joins the first.
+     */
+    public reconnect(): Promise<ReconnectResult> {
+        if (this.record.kind !== 'vm') return Promise.resolve({ok: true});
+        const vm = this.record.vm;
+        const link = this.deps.link(vm.key);
+        if (!link) return Promise.resolve({ok: false, reason: `${vm.name} is not registered any more.`});
+        this.reconnecting ??= this.dialAgain(vm.name, link).finally(() => {
+            this.reconnecting = null;
+            this.publish();
+        });
+        return this.reconnecting;
+    }
+
     public dismissSummary(): void {
         this.save(dismissedSummary(this.record));
         this.publish();
@@ -304,10 +345,30 @@ export class MergingHostService {
 
     // ── Inside ──
 
+    private async dialAgain(vm: string, link: MergingLink): Promise<ReconnectResult> {
+        this.deps.log.info(`[merging-host] reconnecting to ${vm}`);
+        if (!link.connected) link.retryNow();
+        this.publish();
+        try {
+            await this.within(link.whenConnected(), RECONNECT_TIMEOUT_MS);
+        } catch (err) {
+            this.unreachable((err as Error).message);
+            return {ok: false, reason: linkTrouble(vm, this.reason)};
+        }
+        await this.refresh();
+        return this.reachable ? {ok: true} : {ok: false, reason: linkTrouble(vm, this.reason)};
+    }
+
+    private unreachable(reason: string): void {
+        this.reachable = false;
+        this.reason = reason;
+    }
+
     private takeOver(landed: readonly LandedPullRequest[]): void {
         this.stop();
         this.remote = null;
         this.reachable = true;
+        this.reason = null;
         this.deps.local.adopt(landed);
         this.deps.local.start();
     }
@@ -315,11 +376,31 @@ export class MergingHostService {
     private async route<T>(method: MergeCallMethod, args: Record<string, unknown>, here: () => Promise<T>): Promise<T> {
         const where = actionRoute(this.record);
         if (where.to === 'mac') return here();
-        const link = this.deps.link(where.vm.key);
-        if (!link) throw new Error(`${where.vm.name} is not registered`);
-        const result = (await link.mergeCall(method, args)) as T;
+        const vm = where.vm;
+        const link = this.deps.link(vm.key);
+        if (!link) throw new Error(`${vm.name} is not registered`);
+        if (!link.connected) {
+            const reconnecting = this.reconnect();
+            const up = await this.within(reconnecting, ACTION_REACH_MS).catch(() => null);
+            if (!up?.ok) return this.cannotReach(vm.name, up ? up.reason : null) as T;
+        }
+        let result: T;
+        try {
+            result = (await link.mergeCall(method, args)) as T;
+        } catch (err) {
+            if (link.connected) throw err;
+            this.unreachable((err as Error).message);
+            this.publish();
+            return this.cannotReach(vm.name, linkTrouble(vm.name, this.reason)) as T;
+        }
         void this.refresh();
         return result;
+    }
+
+    /** A forwarded button's answer while the VM cannot be reached, in the shape all three share. */
+    private cannotReach(vm: string, trouble: string | null): {ok: false; reason: string} {
+        if (this.reconnecting) return {ok: false, reason: `${vm} cannot be reached right now. Reconnecting…`};
+        return {ok: false, reason: trouble ?? `${vm} cannot be reached right now.`};
     }
 
     private followRemote(): void {
@@ -339,21 +420,24 @@ export class MergingHostService {
         if (this.record.kind !== 'vm') return;
         const vm = this.record.vm;
         const link = this.deps.link(vm.key);
+        let failure = `${vm.name} is not registered any more`;
         const read = link
             ? await this.within(link.mergeCall('state', {since: weekStart(this.deps.clock.now())}), REACH_TIMEOUT_MS)
                   .then((result) => result as RemoteRead)
                   .catch((err: Error) => {
                       this.deps.log.warn(`[merging-host] ${vm.name}'s lanes not read: ${err.message}`);
+                      failure = err.message;
                       return null;
                   })
             : null;
         if (this.record.kind !== 'vm' || this.record.vm.key !== vm.key) return;
         if (!read || !Array.isArray(read.landed) || !read.state) {
-            this.reachable = false;
+            this.unreachable(read ? 'the agent answered something unreadable' : failure);
         } else {
             const before = new Map((this.remote?.landed ?? []).map((pr) => [pr.key, pr]));
             this.remote = read;
             this.reachable = true;
+            this.reason = null;
             this.deps.remoteRead?.(vm.key);
             if (before.size > 0) this.tell(landedTransitions(before, read.landed));
         }
@@ -388,7 +472,8 @@ export class MergingHostService {
     }
 
     private decorate(state: MergeManagerState): MergeManagerState {
-        return {...state, merging: mergingHostView(this.record, state, this.deps.vms(), this.reachable)};
+        const link = {reachable: this.reachable, reconnecting: this.reconnecting !== null, reason: this.reason};
+        return {...state, merging: mergingHostView(this.record, state, this.deps.vms(), link)};
     }
 
     private publish(): void {

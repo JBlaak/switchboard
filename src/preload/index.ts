@@ -136,6 +136,7 @@ const api: SwitchboardApi = {
     mergeManagerHandOff: (vmKey) => ipcRenderer.invoke(INVOKE.mergeManagerHandOff, vmKey),
     mergeManagerBringBack: () => ipcRenderer.invoke(INVOKE.mergeManagerBringBack),
     mergeManagerTakeBack: () => ipcRenderer.invoke(INVOKE.mergeManagerTakeBack),
+    mergeManagerReconnect: () => ipcRenderer.invoke(INVOKE.mergeManagerReconnect),
     mergeManagerDismissAway: () => ipcRenderer.invoke(INVOKE.mergeManagerDismissAway),
     inboxPolledAt: () => ipcRenderer.invoke(INVOKE.inboxPolledAt),
     bugPrepareFix: (key) => ipcRenderer.invoke(INVOKE.bugPrepareFix, key),

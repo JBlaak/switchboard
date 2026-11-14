@@ -6,7 +6,11 @@
  * rather than a runtime `undefined`. The main process registers handlers named
  * from the same channel table, so the two sides cannot drift apart silently.
  */
-import type {MergingBringBackResult, HandOffResult} from '../application/services/merging-host-service';
+import type {
+    MergingBringBackResult,
+    HandOffResult,
+    ReconnectResult,
+} from '../application/services/merging-host-service';
 import type {Project} from '../domain/project/project';
 import type {RemoteConfig} from '../domain/project/remote-target';
 import type {ProjectFolderCheck} from '../domain/project/folder-check';
@@ -288,6 +292,8 @@ export interface SwitchboardApi {
     mergeManagerBringBack(): Promise<MergingBringBackResult>;
     /** Take merging back while the VM cannot be reached; it stands down when it reconnects. */
     mergeManagerTakeBack(): Promise<{ok: true}>;
+    /** Dial the VM that merges again, also after its link gave up; says why when it still cannot be reached. */
+    mergeManagerReconnect(): Promise<ReconnectResult>;
     /** Dismiss the "While merging was on <VM>" summary. */
     mergeManagerDismissAway(): Promise<void>;
     /** When the inbox last polled Bugsnag and GitHub, epoch ms (#414); null before it did. */

@@ -28,6 +28,7 @@ export function registerMergeManagerHandlers(ipc: IpcRegistrar, app: Container):
     );
     ipc.handle(INVOKE.mergeManagerBringBack, () => app.mergingHost.bringBack());
     ipc.handle(INVOKE.mergeManagerTakeBack, () => app.mergingHost.takeBackAnyway());
+    ipc.handle(INVOKE.mergeManagerReconnect, () => app.mergingHost.reconnect());
     ipc.handle(INVOKE.mergeManagerDismissAway, () => app.mergingHost.dismissSummary());
 }
 

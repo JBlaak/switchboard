@@ -42,6 +42,15 @@ export async function takeMergingBack(): Promise<MoveAnswer> {
     }
 }
 
+export async function reconnectMerging(): Promise<MoveAnswer> {
+    try {
+        const answer = await window.api.mergeManagerReconnect();
+        return answer.ok ? {ok: true, text: null} : {ok: false, text: answer.reason, unreachable: true};
+    } catch (err) {
+        return {ok: false, text: (err as Error).message, unreachable: true};
+    }
+}
+
 export async function dismissAwaySummary(): Promise<void> {
     try {
         await window.api.mergeManagerDismissAway();
