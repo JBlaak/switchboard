@@ -329,6 +329,31 @@
     color: var(--sb-text-muted);
 }
 
+.im-close {
+    appearance: none;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    margin: -4px -6px -4px auto;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--sb-text-muted);
+    cursor: pointer;
+
+    &:hover {
+        background: var(--sb-bg-raised);
+        color: var(--sb-text);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--sb-accent);
+        outline-offset: 1px;
+    }
+}
+
 .im-titlerow {
     display: flex;
     align-items: flex-start;

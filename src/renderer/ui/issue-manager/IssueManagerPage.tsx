@@ -7,7 +7,8 @@
  * detail beside it.
  *
  * Its keys, while it has the focus and never in a field, are `page-keys`;
- * Esc puts away what is open (a menu, a question), then closes the page.
+ * Esc puts away what is open (a menu, a question, the issue's detail), then
+ * closes the page.
  *
  * Rendered into `#issue-manager-page`, which `ui/main-area/install-main-area`
  * shows and hides with the route.
@@ -86,6 +87,7 @@ function IssueManagerView(): JSX.Element {
                 closeSnooze();
                 root.current?.focus({preventScroll: true});
             } else if (state.stop) dismissStopWork();
+            else if (selectedItem(state)) selectIssue(null);
             else closeIssueManager();
             return;
         }

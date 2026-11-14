@@ -3,7 +3,7 @@
  * in GitHub, the newest of its thread, your notes (saved as you type),
  * Comment… with its editable preview, and what you can do with it: Start
  * and claim, Snooze and Backlog in the inbox; Open session and Stop working
- * on it once started.
+ * on it once started. Its × (or Esc) puts it away until another row is picked.
  */
 import {useEffect, useRef, type JSX} from 'react';
 import {useStore} from '../use-store';
@@ -26,6 +26,7 @@ import {
     openPullRequest,
     openSnooze,
     postComment,
+    selectIssue,
     snoozeIssue,
     startIssue,
     toggleStopUnassign,
@@ -90,6 +91,28 @@ export function IssueDetail({
                 <span>
                     {facts.author ?? 'ghost'} · {facts.comments} {facts.comments === 1 ? 'comment' : 'comments'}
                 </span>
+                <button
+                    type="button"
+                    className="im-close"
+                    aria-label="Close the issue (Esc)"
+                    title="Close (Esc)"
+                    onClick={() => {
+                        selectIssue(null);
+                        onFocusRows();
+                    }}>
+                    <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                </button>
             </div>
             <div className="im-titlerow">
                 <h2 className="im-title">{facts.title}</h2>
