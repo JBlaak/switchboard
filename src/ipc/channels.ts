@@ -100,6 +100,7 @@ export const INVOKE = {
     mergeManagerHandOff: 'merge-manager:hand-off',
     mergeManagerBringBack: 'merge-manager:bring-back',
     mergeManagerTakeBack: 'merge-manager:take-back',
+    mergeManagerReconnect: 'merge-manager:reconnect',
     mergeManagerDismissAway: 'merge-manager:dismiss-away',
     inboxPolledAt: 'inbox:polled-at',
     bugPrepareFix: 'bug:prepare-fix',

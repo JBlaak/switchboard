@@ -11,6 +11,7 @@ import {
     dismissedSummary,
     ghAuthCheck,
     handedOff,
+    linkTrouble,
     mergingHostView,
     onVmConnected,
     parseMergingHostRecord,
@@ -188,16 +189,27 @@ test('the away summary goes once dismissed or once merging is back', () => {
 
 test('the view names the VM, and says when it has not answered', () => {
     /* When */
-    const view = mergingHostView(handedOff(DEVBOX, null, NOW), awayState(), [DEVBOX], false);
+    const view = mergingHostView(handedOff(DEVBOX, null, NOW), awayState(), [DEVBOX], {
+        reachable: false,
+        reconnecting: false,
+        reason: 'ssh: connect to host 10.0.0.2 port 22: Operation timed out',
+    });
 
     /* Then */
     assert.equal(view.kind, 'vm');
     assert.equal(view.kind === 'vm' && view.reachable, false);
-    assert.deepEqual(mergingHostView(MAC_HOST, awayState(), [DEVBOX], true), {
-        kind: 'mac',
-        vms: [DEVBOX],
-        offered: DEVBOX,
-    });
+    assert.equal(
+        view.kind === 'vm' && view.trouble,
+        'devbox cannot be reached over the network. Check the network or VPN.',
+    );
+    assert.deepEqual(
+        mergingHostView(MAC_HOST, awayState(), [DEVBOX], {reachable: true, reconnecting: false, reason: null}),
+        {
+            kind: 'mac',
+            vms: [DEVBOX],
+            offered: DEVBOX,
+        },
+    );
 });
 
 test('an away PR says which repository it came from, without the owner', () => {
@@ -209,4 +221,31 @@ test('an away PR says which repository it came from, without the owner', () => {
 
     /* Then */
     assert.equal(ref, 'switchboard #461');
+});
+
+test('a link failure is said in words, with what fixes it', () => {
+    /* Given */
+    const said = {
+        signing:
+            'sign_and_send_pubkey: signing failed for ED25519 "/Users/joris/.ssh/vm.pub" from agent: communication with agent failed dev@devbox: Permission denied (publickey).',
+        refused: 'dev@devbox: Permission denied (publickey).',
+        network: 'ssh: connect to host 10.0.0.2 port 22: Operation timed out',
+        name: 'ssh: Could not resolve hostname devbox.local: nodename nor servname provided',
+        quiet: 'no answer in 20s',
+        odd: 'something else entirely',
+    };
+
+    /* When */
+    const words = Object.fromEntries(Object.entries(said).map(([k, reason]) => [k, linkTrouble('devbox', reason)]));
+
+    /* Then */
+    assert.deepEqual(words, {
+        signing: '1Password did not sign in to devbox with your ssh key. Approve it in 1Password, then reconnect.',
+        refused: 'devbox refused your ssh key.',
+        network: 'devbox cannot be reached over the network. Check the network or VPN.',
+        name: "devbox's address was not found. Check the network or VPN.",
+        quiet: 'devbox did not answer in time.',
+        odd: 'devbox did not answer: something else entirely',
+    });
+    assert.equal(linkTrouble('devbox', null), 'devbox has not answered lately.');
 });

@@ -274,17 +274,29 @@ export type MergingHostView =
           readonly vm: VmChoice;
           readonly since: number;
           readonly warning: string | null;
-          /** Whether its agent answered lately; when not, Take back anyway is offered. */
+          /** Whether its agent answered lately; when not, Reconnect and Take back anyway are offered. */
           readonly reachable: boolean;
+          /** The link to it is being dialled again. */
+          readonly reconnecting: boolean;
+          /** Why it has not answered, in words (`linkTrouble`); null while it answers. */
+          readonly trouble: string | null;
           readonly summary: AwaySummary | null;
           readonly vms: readonly VmChoice[];
       };
+
+/** How the link to the VM that merges stands. */
+export interface MergingLinkHealth {
+    readonly reachable: boolean;
+    readonly reconnecting: boolean;
+    /** The last failure as the link said it (ssh's words), or null. */
+    readonly reason: string | null;
+}
 
 export function mergingHostView(
     record: MergingHostRecord,
     state: MergeManagerState,
     vms: readonly VmChoice[],
-    reachable: boolean,
+    link: MergingLinkHealth,
 ): MergingHostView {
     if (record.kind === 'mac') return {kind: 'mac', vms, offered: pickVm(vms, record.lastVm)};
     return {
@@ -292,8 +304,34 @@ export function mergingHostView(
         vm: record.vm,
         since: record.since,
         warning: record.warning,
-        reachable,
+        reachable: link.reachable,
+        reconnecting: link.reconnecting,
+        trouble: link.reachable ? null : linkTrouble(record.vm.name, link.reason),
         summary: awaySummary(record, state),
         vms,
     };
+}
+
+/**
+ * Why a VM's link failed, in words for the page instead of ssh's: what went
+ * wrong and, where there is one, what fixes it.
+ */
+export function linkTrouble(vm: string, reason: string | null): string {
+    const said = reason ?? '';
+    if (!said.trim()) return `${vm} has not answered lately.`;
+    if (/communication with agent failed|agent refused operation|signing failed for .* from agent/i.test(said)) {
+        return `1Password did not sign in to ${vm} with your ssh key. Approve it in 1Password, then reconnect.`;
+    }
+    if (/Permission denied/i.test(said)) return `${vm} refused your ssh key.`;
+    if (/Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(said)) {
+        return `${vm}'s host key changed. Check ~/.ssh/known_hosts.`;
+    }
+    if (/Could not resolve hostname/i.test(said)) return `${vm}'s address was not found. Check the network or VPN.`;
+    if (/timed out|No route to host|Host is down|Connection refused|Network is unreachable/i.test(said)) {
+        return `${vm} cannot be reached over the network. Check the network or VPN.`;
+    }
+    if (/not installed/i.test(said)) return `The Switchboard agent is not installed on ${vm}.`;
+    if (/no answer in|^closed$/i.test(said.trim())) return `${vm} did not answer in time.`;
+    if (/link dropped|connection is closed/i.test(said)) return `The link to ${vm} dropped.`;
+    return `${vm} did not answer: ${said}`;
 }

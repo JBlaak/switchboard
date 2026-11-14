@@ -25,6 +25,8 @@ function setup({record = MAC_HOST, gh = LOGGED_IN, ghCode = 0, reachable = true}
     const redials: string[] = [];
     const vm = {
         reachable,
+        /** Dialling again brings it back. */
+        comesBack: false,
         landed: [landedPr(1, 10, 'switchboard', WAITING)] as LandedPullRequest[],
         answer: {} as Record<string, unknown>,
     };
@@ -34,7 +36,10 @@ function setup({record = MAC_HOST, gh = LOGGED_IN, ghCode = 0, reachable = true}
         },
         home: '/home/dev',
         whenConnected: () => (vm.reachable ? Promise.resolve() : Promise.reject(new Error('down'))),
-        retryNow: () => void redials.push('retry'),
+        retryNow: () => {
+            redials.push('retry');
+            if (vm.comesBack) vm.reachable = true;
+        },
         runTool: async () => ({code: ghCode, stdout: Buffer.from(gh), stderr: ''}),
         mergeCall: async (method, args = {}) => {
             calls.push({method, args});
@@ -260,19 +265,65 @@ test('focusing the window dials a VM link that gave up again', async () => {
     assert.deepEqual(redials, ['retry']);
 });
 
-test('Land it while merging is on a VM whose link gave up dials it again before forwarding', async () => {
+test('Land it while merging is on a VM whose link gave up dials it again, then forwards', async () => {
     /* Given */
-    const {service, redials, calls} = setup({record: handedOff(DEVBOX, null, NOW), reachable: false});
+    const {service, redials, calls, vm} = setup({record: handedOff(DEVBOX, null, NOW), reachable: false});
+    vm.comesBack = true;
 
     /* When */
-    await service.land('JBlaak/switchboard', 7).catch(() => null);
+    const answer = await service.land('JBlaak/switchboard', 7);
 
     /* Then */
+    assert.deepEqual(answer, {ok: true});
     assert.deepEqual(redials, ['retry']);
-    assert.deepEqual(
-        calls.map((call) => call.method),
-        ['land'],
-    );
+    assert.ok(calls.some((call) => call.method === 'land'));
+});
+
+test('Land it while the VM stays unreachable says so in words instead of throwing ssh at you', async () => {
+    /* Given */
+    const {service, calls} = setup({record: handedOff(DEVBOX, null, NOW), reachable: false});
+
+    /* When */
+    const answer = await service.land('JBlaak/switchboard', 7);
+
+    /* Then */
+    assert.deepEqual(answer, {ok: false, reason: 'devbox did not answer: down'});
+    assert.deepEqual(calls, []);
+});
+
+test('Reconnect brings the VM back and clears why it was away', async () => {
+    /* Given */
+    const {service, vm, pushed} = setup({record: handedOff(DEVBOX, null, NOW), reachable: false});
+    service.start();
+    await settle();
+    const before = service.state().merging;
+    vm.comesBack = true;
+
+    /* When */
+    const answer = await service.reconnect();
+
+    /* Then */
+    assert.equal(before?.kind === 'vm' && before.trouble, 'The link to devbox dropped.');
+    assert.deepEqual(answer, {ok: true});
+    const after = service.state().merging;
+    assert.equal(after?.kind === 'vm' && after.reachable, true);
+    assert.equal(after?.kind === 'vm' && after.trouble, null);
+    assert.ok(pushed.some((state) => state.merging?.kind === 'vm' && state.merging.reconnecting));
+    service.stop();
+});
+
+test('Reconnect to a VM that stays down says why, and is not left reconnecting', async () => {
+    /* Given */
+    const {service} = setup({record: handedOff(DEVBOX, null, NOW), reachable: false});
+
+    /* When */
+    const answer = await service.reconnect();
+
+    /* Then */
+    assert.deepEqual(answer, {ok: false, reason: 'devbox did not answer: down'});
+    const view = service.state().merging;
+    assert.equal(view?.kind === 'vm' && view.reconnecting, false);
+    assert.equal(view?.kind === 'vm' && view.trouble, 'devbox did not answer: down');
 });
 
 test("the minute's read of a VM does not dial a link that gave up", async () => {
