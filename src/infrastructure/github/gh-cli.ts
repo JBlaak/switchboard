@@ -406,6 +406,13 @@ export class GhCli implements GitHubCli {
         return answer.ok ? {ok: true} : {ok: false, why: toBranchUpdateFailure(answer.reason), reason: answer.reason};
     }
 
+    public async headBehind(repo: string, base: string, headOid: string): Promise<boolean | null> {
+        if (!REPO.test(repo) || !/^[0-9a-f]{7,64}$/i.test(headOid) || !/^[\w./-]+$/.test(base)) return null;
+        const body = await this.getJson(`repos/${repo}/compare/${base}...${headOid}`);
+        const behindBy = body?.behind_by;
+        return typeof behindBy === 'number' ? behindBy > 0 : null;
+    }
+
     public async mergePullRequest(
         repo: string,
         number: number,

@@ -47,6 +47,7 @@ import type {
     ProjectReads,
     IssueManagerCalls,
     LaneReads,
+    LaneMergeChecks,
     LaneWrites,
     QueueLabelWrites,
 } from '../ports/github-cli';
@@ -86,6 +87,7 @@ export interface SessionWorkServiceDeps {
         | IssueManagerCalls
         | LaneReads
         | LaneWrites
+        | LaneMergeChecks
         | 'pullRequestForBranch'
         | 'recentTags'
         | 'refContains'

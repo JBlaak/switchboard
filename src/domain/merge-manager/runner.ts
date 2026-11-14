@@ -21,6 +21,10 @@
  * - **Will conflict**: GitHub's `dirty` on a waiting PR is confirmed by a test
  *   rebase once per head and trunk commit; it is only flagged.
  *
+ * - **Right before the merge** the head is compared with the trunk once more
+ *   (`beforeMerge`): one behind goes back to being updated, and one that
+ *   could not be compared waits for the next pass rather than merge unchecked.
+ *
  * What the writes answer decides the next step (`afterUpdate`, `afterMerge`):
  * a 409 or a head that moved reads the lane again, a 405 updates the head
  * again, a conflict sets it aside as Fixing, and a refusal nothing here
@@ -258,6 +262,17 @@ export function afterUpdate(answer: {ok: true} | {ok: false; why: string; reason
         default:
             return {kind: 'needsYou', reason: {kind: 'merge-refused', reason: answer.reason}};
     }
+}
+
+/**
+ * Right before a merge, what a fresh compare of the head with the trunk
+ * decides: merge (null) only when it is up to date; update it when it is
+ * behind; try again next pass when the compare could not be made.
+ */
+export function beforeMerge(behind: boolean | null): FollowUp | null {
+    if (behind === false) return null;
+    if (behind === true) return {kind: 'update'};
+    return {kind: 'wait'};
 }
 
 /**

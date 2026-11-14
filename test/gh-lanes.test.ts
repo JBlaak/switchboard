@@ -257,6 +257,38 @@ test('the HTTP status gh printed is read from its error line', () => {
     assert.equal(httpStatus('connection reset'), null);
 });
 
+test('right before a merge the head is compared with the trunk: behind, up to date, or unknown', async () => {
+    /* Given */
+    const asked: string[][] = [];
+    const answers = [
+        {behind_by: 2, ahead_by: 1},
+        {behind_by: 0, ahead_by: 3},
+    ];
+    const gh = new GhCli({
+        run: async (args) => {
+            asked.push([...args]);
+            const body = answers.shift();
+            return body
+                ? {missing: false, code: 0, stdout: JSON.stringify(body), stderr: ''}
+                : {missing: false, code: 1, stdout: '', stderr: 'gh: Not Found (HTTP 404)'};
+        },
+    });
+
+    /* When */
+    const behind = await gh.headBehind('MoveLab-Studio/Connect', 'main', 'e445365');
+    const upToDate = await gh.headBehind('MoveLab-Studio/Connect', 'main', 'e445365');
+    const unknown = await gh.headBehind('MoveLab-Studio/Connect', 'main', 'e445365');
+    const refused = await gh.headBehind('MoveLab-Studio/Connect', 'main; rm', 'e445365');
+
+    /* Then */
+    assert.deepEqual(asked[0], ['api', 'repos/MoveLab-Studio/Connect/compare/main...e445365']);
+    assert.equal(asked.length, 3);
+    assert.equal(behind, true);
+    assert.equal(upToDate, false);
+    assert.equal(unknown, null);
+    assert.equal(refused, null);
+});
+
 test('a merge is asked with the head SHA and the method, and a refusal answers its HTTP status', async () => {
     /* Given */
     const asked: string[][] = [];
