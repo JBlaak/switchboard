@@ -215,7 +215,7 @@ function MergeManagerView(): JSX.Element {
 
             <div className={'im-body' + (selected ? ' has-detail' : '')}>
                 <div className="im-list" role="listbox" aria-label="Lanes">
-                    {lanes.length === 0 && <EmptyLine />}
+                    {lanes.length === 0 && <EmptyLine figure={figure} />}
                     {lanes.map((lane) => (
                         <Lane
                             key={lane.repository}
@@ -287,15 +287,20 @@ function Tile({
     );
 }
 
-function EmptyLine(): JSX.Element {
+/** Nothing landed: the Merge manager large, with how to land a pull request. */
+function EmptyLine({figure}: {figure: MergeFigure}): JSX.Element {
     return (
         <div className="mm-empty">
+            <SceneFigure
+                scene={{kind: 'merge', state: figure.pose, count: figure.count, label: ''}}
+                className="bm-figure mm-empty-figure"
+            />
+            <h2 className="mm-empty-title">Nothing to land yet</h2>
             <p>
-                <b>Nothing landed.</b> Press <b>Land it</b> on one of your own open pull requests: in the session
-                header, a sidebar row&apos;s menu (<kbd className="sw-kbd">L</kbd>), the session tray or a project
-                page&apos;s pull requests. From then on the Merge manager takes it to merged: it waits its turn in its
-                repository&apos;s lane, is updated and tested only as the head, and is fixed by an errand when it fails
-                out.
+                Press <b>Land it</b> on one of your own open pull requests: in the session header, a sidebar row&apos;s
+                menu (<kbd className="sw-kbd">L</kbd>), the session tray or a project page&apos;s pull requests. From
+                then on the Merge manager takes it to merged: it waits its turn in its repository&apos;s lane, is
+                updated and tested only as the head, and is fixed by an errand when it fails out.
             </p>
         </div>
     );
