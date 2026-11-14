@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {
     installConfirmation,
+    runningLabel,
     quotaGaugeView,
     updateNoticeView,
     updateOutcomeView,
@@ -235,4 +236,26 @@ test('installing with sessions running asks first, counting them', () => {
         'Restarting to update stops 1 running session. Install now?',
         'Restarting to update stops 2 running sessions. Install now?',
     ]);
+});
+
+test('runningLabel counts the running sessions', () => {
+    /* Given */
+    const running = 7;
+
+    /* When */
+    const label = runningLabel(running);
+
+    /* Then */
+    assert.equal(label, '7 running');
+});
+
+test('runningLabel says nothing when no session is running', () => {
+    /* Given */
+    const running = 0;
+
+    /* When */
+    const label = runningLabel(running);
+
+    /* Then */
+    assert.equal(label, '');
 });

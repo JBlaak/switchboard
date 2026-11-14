@@ -240,16 +240,14 @@ test.describe('update notice', () => {
             home,
         }) => {
             /* Given */
-            await openSession(page, home, LABEL.loginFix, S.loginFix);
             await setHostStub(app, 'installUpdate', {
                 ok: false,
                 failure: {step: 'downloading', reason: 'GitHub answered 404.'},
             });
 
             /* When */
-            // The count is taken after a load; reloading the window loads again with
-            // the session still running in main.
-            await page.reload();
+            // Started after the list loaded: the count follows the poll, no reload.
+            await openSession(page, home, LABEL.loginFix, S.loginFix);
 
             /* Then */
             await expect(sidebarFooter(page).getByText('1 running', {exact: true})).toBeVisible();

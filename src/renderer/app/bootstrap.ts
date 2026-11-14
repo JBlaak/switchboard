@@ -26,7 +26,6 @@ import {TERMINAL_THEMES, applyTerminalTheme, followColorSchemeInTerminals} from 
 import {installQuestions} from '../ui/questions/actions';
 import {installGrill} from '../ui/grill/actions';
 import {mountReactRoot} from '../ui/Root';
-import {countRunning} from '../ui/footer/actions';
 import {installFooter} from '../ui/footer/install-footer';
 import {installToolbar} from '../ui/toolbar/actions';
 import {installSessionList} from '../ui/session-list/install-session-list';
@@ -90,7 +89,6 @@ export function bootstrap(): void {
 
     void applyStoredSettings();
     void loadProjects().then(() => {
-        countRunning();
         restoreView();
         // What main held for this window, a Quick Ask launch, can come now (R4).
         window.api.rendererReady();
