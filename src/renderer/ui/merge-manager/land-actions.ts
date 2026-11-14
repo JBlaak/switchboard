@@ -11,6 +11,7 @@ import {dispatch, getState} from '../../state/app-store';
 import {sessionMap} from '../../state/session-store';
 import {landOffer, sessionLandCandidate} from '../../../domain/merge-manager/land-it';
 import type {LinkedPr} from '../../../domain/session/links';
+import {failureReason} from './failure-reason';
 
 /** Hand a PR to the Merge manager. */
 export async function landPullRequest(repository: string, number: number): Promise<void> {
@@ -22,7 +23,9 @@ export async function landPullRequest(repository: string, number: number): Promi
             repository,
             number,
             action: 'land',
-            result: result.ok ? {ok: true, landed: result.landed} : result,
+            result: result.ok
+                ? {ok: true, landed: result.landed}
+                : {ok: false, reason: failureReason(result, 'GitHub did not say why')},
         });
     } catch (err) {
         dispatch({type: 'landFinished', repository, number, action: 'land', result: failed(err)});
@@ -39,7 +42,9 @@ export async function unlandPullRequest(repository: string, number: number): Pro
             repository,
             number,
             action: 'unland',
-            result: result.ok ? {ok: true, landed: null} : {ok: false, reason: result.reason},
+            result: result.ok
+                ? {ok: true, landed: null}
+                : {ok: false, reason: failureReason(result, 'GitHub did not say why')},
         });
     } catch (err) {
         dispatch({type: 'landFinished', repository, number, action: 'unland', result: failed(err)});
