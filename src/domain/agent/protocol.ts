@@ -107,6 +107,12 @@ export interface ToolCheck {
     version?: string;
     /** Signed in: `claude` has credentials, `gh auth status` passes. Absent for git, which has no login. */
     loggedIn?: boolean;
+    /**
+     * For gh: the scopes Switchboard needs that its token lacks (see
+     * `REQUIRED_GH_SCOPES`). Absent when it has them, when it is signed out,
+     * or when the token's scopes can't be read (a fine-grained token).
+     */
+    missingScopes?: string[];
 }
 
 /** One file of the global config copy, relative to `~/.claude`. */

@@ -1066,7 +1066,8 @@
         color: var(--sb-green);
     }
 
-    &.is-signed-out .pp-tool-mark {
+    &.is-signed-out .pp-tool-mark,
+    &.is-limited .pp-tool-mark {
         color: var(--sb-yellow);
     }
 
